@@ -1,0 +1,119 @@
+# Minecraft実況AI "ドキドキドギド"
+
+Minecraft のゲーム状況を読み取り、怖がりな AI キャラクター「ドギド」が実況・警告・雑談を行うための設計メモです。
+
+このプロジェクトでは、主に以下の既存資産をベースとして使います。
+
+- [yukincom/yuno-chan-api](https://github.com/yukincom/yuno-chan-api)
+- [mindcraft-bots/mindcraft](https://github.com/mindcraft-bots/mindcraft)
+- [yukincom/m5stack-push-avatar](https://github.com/yukincom/m5stack-push-avatar)
+
+`yuno-chan-api` を主な改造対象とし、`mindcraft` からは Minecraft データ取得部分を切り出して利用、`m5stack-push-avatar` は音声再生先として再利用する想定です。
+
+## ドキュメント構成
+
+- [プロジェクト概要](docs/project-overview.md)
+- [現行仕様](docs/current-spec.md)
+- [イベントスキーマ](docs/event-schema.md)
+- [受信 API 仕様](docs/adapter-api.md)
+- [サンプルイベントログ収集ケース](docs/sample-event-log-cases.md)
+- [モンスター定義スキーマ](docs/monster-schema.md)
+- [`py_trees` 統合メモ](docs/py-trees-integration.md)
+- [実行時依存ライブラリ](docs/runtime-dependencies.md)
+- [状態機械](docs/state-machine.md)
+- [連携構成](docs/integration-architecture.md)
+- [挙動仕様](docs/behavior-spec.md)
+- [技術課題](docs/technical-risks.md)
+
+## 読む順番
+
+1. [プロジェクト概要](docs/project-overview.md)
+2. [現行仕様](docs/current-spec.md)
+3. [イベントスキーマ](docs/event-schema.md)
+4. [受信 API 仕様](docs/adapter-api.md)
+5. [サンプルイベントログ収集ケース](docs/sample-event-log-cases.md)
+6. [モンスター定義スキーマ](docs/monster-schema.md)
+7. [`py_trees` 統合メモ](docs/py-trees-integration.md)
+8. [実行時依存ライブラリ](docs/runtime-dependencies.md)
+9. [状態機械](docs/state-machine.md)
+10. [連携構成](docs/integration-architecture.md)
+11. [挙動仕様](docs/behavior-spec.md)
+12. [技術課題](docs/technical-risks.md)
+
+## 現時点の方針
+
+- Minecraft 側は AI アバター制御を捨て、イベント取得に専念する
+- `mindcraft` は主に参考実装として扱い、Minecraft 本体の観測は別アダプタ化を前提とする
+- AI のキャラクター性は LLM に任せきらず、状態管理をコード側で持つ
+- 音声基盤より先に、イベント入力と優先制御の仕様を固める
+
+## 実装状況
+
+- `dogido_server/`
+  - `FastAPI` の受信 API
+  - `event schema` の `Pydantic` モデル
+  - `normal / alert / panic / suppressed_panic / aftermath` の状態機械
+  - `py_trees` ベースの action policy
+  - `aftermath / ambient / death` の LLM leaf
+  - `VOICEVOX / say / afplay` の PC 音声バックエンド
+  - `fixtures/` を流す replay CLI
+- `tests/`
+  - state machine と API の最小テスト
+- `adapter/minecraft-fabric/`
+  - Minecraft Java 1.21.11 / Fabric 用の最小 client adapter
+  - `status_snapshot / threat_approaching / hostile_audio_detected / player_died / combat_ended` を `dogido-server` に送る
+
+## 起動メモ
+
+依存を入れる:
+
+```bash
+pip install -e .
+```
+
+設定ファイルを作る:
+
+```bash
+cp .env.example .env
+```
+
+サーバー起動:
+
+```bash
+python -m dogido_server
+```
+
+fixture replay:
+
+```bash
+python -m dogido_server.replay fixtures --no-audio
+```
+
+初回スモークテスト:
+
+```bash
+python -m dogido_server.smoke_test --mode all
+```
+
+実際に PC で鳴らす:
+
+```bash
+python -m dogido_server.smoke_test --mode all --audio
+```
+
+## Minecraft Adapter
+
+Fabric adapter の詳細は [adapter/minecraft-fabric/README.md](adapter/minecraft-fabric/README.md) を参照。
+
+ビルド:
+
+```bash
+cd /Users/yukin_co/Documents/DokiDoki-Dogido/adapter/minecraft-fabric
+./gradlew build
+```
+
+出力 jar:
+
+```text
+/Users/yukin_co/Documents/DokiDoki-Dogido/adapter/minecraft-fabric/build/libs/dogido-fabric-client-0.1.0.jar
+```

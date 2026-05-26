@@ -1,0 +1,160 @@
+schema_version: 1
+id: enderman
+
+identity:
+  name_ja: エンダーマン
+  name_en: Enderman
+  category: overworld_neutral
+  family: ender
+  default_disposition: neutral
+  dimensions:
+    - overworld
+    - nether
+    - end
+
+source:
+  primary_urls:
+    - "https://minecraft.wiki/w/Tutorial:Combat"
+    - "https://minecraft.wiki/w/Tutorial:Things_not_to_do"
+    - "https://minecraft.wiki/w/Tutorial:Hitboxes"
+    - "https://minecraft.wiki/w/Talk:Enderman/Archive_4"
+  extraction_notes:
+    - "目を合わせてすぐではなく少し保持で敵対する設計を入れる"
+    - "5 game ticks は talk ページ由来なので confidence は low"
+    - "水でダメージを受ける"
+  last_reviewed: "2026-05-25"
+  overall_confidence: medium
+
+canonical:
+  stats:
+    health: 40
+    armor: null
+    size:
+      width: 0.6
+      height: 2.9
+    attack_damage:
+      easy: 4.5
+      normal: 7
+      hard: 10.5
+
+  spawn:
+    light_rule:
+      type: varies_by_dimension
+      max_block_light: null
+    player_distance:
+      min: null
+      max: null
+    group_size: null
+    special_cases: []
+
+  aggro:
+    detection_range: 64
+    triggers:
+      - type: eye_contact
+        target: player
+        max_distance: 64
+        trigger_delay:
+          game_ticks: 5
+          confidence: low
+        break_on_lost_contact: true
+      - type: attacked
+        target: player
+        max_distance: null
+        trigger_delay:
+          game_ticks: 0
+          confidence: high
+        break_on_lost_contact: false
+    loses_aggro_conditions:
+      - "carved_pumpkin_prevents_eye_contact_aggro"
+
+  movement:
+    primary_style: teleport
+    speed:
+      qualitative: fast
+      numeric_blocks_per_sec: null
+    special_movement:
+      - type: teleport
+        purpose: close_distance
+        trigger: during_combat
+        confidence: high
+      - type: teleport
+        purpose: evade_damage
+        trigger: when_damaged
+        confidence: high
+    pathing_notes:
+      - "接近戦では背後や側面へ回り込みやすい"
+      - "2 ブロック高の穴には入れない"
+
+  attacks:
+    primary:
+      type: melee
+      range: close
+    secondary: []
+
+  difficulty_overrides:
+    easy: []
+    normal: []
+    hard: []
+
+  special_behaviors:
+    - id: block_pickup
+      effect: can_pick_up_blocks
+      confidence: medium
+    - id: projectile_avoidance
+      effect: usually_avoids_projectiles_by_teleport
+      confidence: high
+    - id: water_damage
+      effect: damaged_by_water_and_rain
+      confidence: high
+
+  weaknesses:
+    - water
+    - low_ceiling
+
+  resistances:
+    - projectile_pressure
+
+adapter_hints:
+  visual_signals:
+    - "mouth_open_when_angry"
+    - "stare_targeting"
+    - "teleport_reappearance"
+  audio_signals:
+    - "minecraft:entity.enderman.stare"
+    - "minecraft:entity.enderman.ambient"
+    - "minecraft:entity.enderman.teleport"
+  derived_metrics:
+    - "eye_contact_hold_ticks"
+    - "teleport_recently"
+    - "is_provoked"
+  must_detect:
+    - visual_distance
+    - visual_direction
+    - eye_contact
+  nice_to_have:
+    - "eye_contact_duration_ticks"
+    - "teleport_destination_relative_direction"
+
+dogido:
+  threat_class: teleport
+  priority: high
+  rear_warning_range: 8
+  panic_range: 7
+  audio_name_safe: false
+  callouts:
+    seen:
+      - "エンダーマンや！目ぇ合わせたらあかん！"
+      - "うわ、飛んで詰めてくるやつや！"
+    heard:
+      - "近くに変なんおる気がする"
+      - "テレポートの音したで"
+    aftermath:
+      - "エンダーマンは気ぃ抜けへんわ・・・"
+  notes:
+    - "視線トリガーの遅延を再現すると雰囲気が出る"
+
+quality:
+  status: draft
+  missing_fields:
+    - "スポーン条件の詳細"
+    - "視線トリガー 5 tick の実測再確認"

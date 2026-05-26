@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dogido-server"
+version = "0.1.0"
+description = "Realtime event-driven voice server for DokiDoki Dogido"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "httpx>=0.27",
+  "orjson>=3.10",
+  "PyYAML>=6.0",
+  "mlx-lm",
+  "py_trees>=2.4.0",
+]
+
+[project.scripts]
+dogido-server = "dogido_server.app:main"
+dogido-replay = "dogido_server.replay:main"
+dogido-smoke-test = "dogido_server.smoke_test:main"
+
+[tool.setuptools.packages.find]
+include = ["dogido_server*"]

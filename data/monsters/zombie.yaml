@@ -1,0 +1,138 @@
+schema_version: 1
+id: zombie
+
+identity:
+  name_ja: ゾンビ
+  name_en: Zombie
+  category: overworld_hostile
+  family: undead
+  default_disposition: hostile
+  dimensions:
+    - overworld
+
+source:
+  primary_urls:
+    - "https://minecraft-japan.fandom.com/ja/wiki/%E7%94%9F%E7%89%A9/%E3%83%A2%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%BC"
+    - "https://minecraft.wiki/w/Tutorial:Combat"
+    - "https://minecraft.wiki/w/Tutorial:Safe_home"
+  extraction_notes:
+    - "Hard で木のドア破壊あり"
+    - "Hard で増援ゾンビ発生あり"
+    - "日光で燃えるが、ヘルメット装備なら燃えない"
+  last_reviewed: "2026-05-25"
+  overall_confidence: medium
+
+canonical:
+  stats:
+    health: 20
+    armor: 2
+    size:
+      width: 0.6
+      height: 1.95
+    attack_damage:
+      easy: 2
+      normal: 3
+      hard: 4
+
+  spawn:
+    light_rule:
+      type: threshold
+      max_block_light: 7
+    player_distance:
+      min: 24
+      max: 128
+    group_size: null
+    special_cases:
+      - "一部の個体は武器や防具を装備してスポーン"
+
+  aggro:
+    detection_range: 40
+    triggers:
+      - type: sight
+        target: player
+        max_distance: 40
+        trigger_delay:
+          game_ticks: 0
+          confidence: high
+        break_on_lost_contact: false
+    loses_aggro_conditions: []
+
+  movement:
+    primary_style: walk
+    speed:
+      qualitative: medium
+      numeric_blocks_per_sec: null
+    special_movement: []
+    pathing_notes:
+      - "視認したプレイヤーへ直進寄り"
+
+  attacks:
+    primary:
+      type: melee
+      range: close
+    secondary: []
+
+  difficulty_overrides:
+    easy: []
+    normal: []
+    hard:
+      - id: break_wooden_door
+        effect: can_break_wooden_doors
+        confidence: medium
+      - id: call_reinforcements
+        effect: can_spawn_reinforcements_when_hit
+        confidence: medium
+
+  special_behaviors:
+    - id: sunlight_burn
+      effect: burns_in_daylight
+      confidence: high
+    - id: helmet_daylight_protection
+      effect: helmet_can_prevent_burning
+      confidence: medium
+
+  weaknesses:
+    - sunlight
+
+  resistances: []
+
+adapter_hints:
+  visual_signals:
+    - "arms_out_forward"
+    - "daylight_burning"
+  audio_signals:
+    - "minecraft:entity.zombie.ambient"
+    - "minecraft:entity.zombie.attack_wooden_door"
+    - "minecraft:entity.zombie.break_wooden_door"
+  derived_metrics:
+    - "is_burning"
+    - "is_bashing_door"
+  must_detect:
+    - visual_distance
+    - visual_direction
+    - hostile_count
+  nice_to_have:
+    - "door_break_attempt"
+
+dogido:
+  threat_class: melee
+  priority: high
+  rear_warning_range: 8
+  panic_range: 7
+  audio_name_safe: false
+  callouts:
+    seen:
+      - "後ろ！ゾンビや！"
+      - "うわっ、近い近い！"
+    heard:
+      - "なんかうめき声するで"
+      - "近くにおる気がする"
+    aftermath:
+      - "まだおるかもしれんから油断したらあかん"
+  notes:
+    - "Hard のドア破壊は家の安全アドバイスに使える"
+
+quality:
+  status: draft
+  missing_fields:
+    - "正確な移動速度"

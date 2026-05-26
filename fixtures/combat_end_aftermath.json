@@ -1,0 +1,35 @@
+{
+  "schema_version": "2026-05-24",
+  "game": "minecraft-java",
+  "adapter": "dogido-fabric-client",
+  "observed_at": "2026-05-25T21:10:12+09:00",
+  "sequence": 1004,
+  "event": {
+    "name": "combat_ended",
+    "source_kind": "system",
+    "priority_hint": "normal",
+    "certainty": "high"
+  },
+  "player": {
+    "name": "main_player",
+    "health": 17,
+    "hunger": 14
+  },
+  "world": {
+    "time_of_day": 13800,
+    "time_phase": "night",
+    "weather": "clear",
+    "biome": "plains",
+    "local_light": 11,
+    "sky_visible": false,
+    "danger_darkness_score": 0.31
+  },
+  "combat": {
+    "recent_damage_ms": 6200,
+    "recent_hostile_visual_ms": 6100,
+    "recent_hostile_audio_ms": 6300,
+    "hostiles_within_7": 0,
+    "hostiles_within_10": 0,
+    "combat_active_hint": false
+  }
+}

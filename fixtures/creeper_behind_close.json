@@ -1,0 +1,60 @@
+{
+  "schema_version": "2026-05-24",
+  "game": "minecraft-java",
+  "adapter": "dogido-fabric-client",
+  "observed_at": "2026-05-25T21:10:01+09:00",
+  "sequence": 1001,
+  "event": {
+    "name": "threat_approaching",
+    "source_kind": "visual",
+    "priority_hint": "urgent",
+    "certainty": "high"
+  },
+  "player": {
+    "name": "main_player",
+    "yaw": 180.0,
+    "pitch": 0.0,
+    "health": 20,
+    "hunger": 18,
+    "dimension": "minecraft:overworld",
+    "held_item": "stone_sword"
+  },
+  "world": {
+    "time_of_day": 13000,
+    "time_phase": "night",
+    "weather": "clear",
+    "biome": "plains",
+    "local_light": 7,
+    "sky_visible": false,
+    "ceiling_height": 3,
+    "enclosure_score": 0.68,
+    "connected_dark_volume": 42,
+    "nearest_dark_spawn_distance": 5.5,
+    "danger_darkness_score": 0.81
+  },
+  "visual_threats": [
+    {
+      "type": "creeper",
+      "distance": 5.8,
+      "direction": {
+        "horizontal": "back",
+        "vertical": "same"
+      },
+      "approaching": true,
+      "certainty": "high"
+    }
+  ],
+  "inventory": {
+    "torch": 0,
+    "coal": 3,
+    "stick": 5
+  },
+  "combat": {
+    "recent_damage_ms": 4000,
+    "recent_hostile_visual_ms": 200,
+    "recent_hostile_audio_ms": 500,
+    "hostiles_within_7": 1,
+    "hostiles_within_10": 1,
+    "combat_active_hint": true
+  }
+}

@@ -1,0 +1,145 @@
+schema_version: 1
+id: elder_guardian
+
+identity:
+  name_ja: エルダーガーディアン
+  name_en: Elder Guardian
+  category: aquatic_hostile
+  family: guardian_elder
+  default_disposition: hostile
+  dimensions:
+    - overworld
+
+source:
+  primary_urls:
+    - "https://minecraft.wiki/w/Elder_Guardian"
+    - "https://minecraft.wiki/w/Tutorial:Defeating_an_ocean_monument"
+    - "https://minecraft.wiki/w/Tutorial:Combat"
+  extraction_notes:
+    - "Mining Fatigue の違和感を最初のフックに使う"
+    - "悲鳴は最初だけにして、その後は monument 攻略助言を優先する"
+  last_reviewed: "2026-05-25"
+  overall_confidence: medium
+
+canonical:
+  stats:
+    health: 80
+    armor: null
+    size:
+      width: null
+      height: null
+    attack_damage:
+      easy: null
+      normal: null
+      hard: null
+
+  spawn:
+    light_rule:
+      type: structure_guardian
+      max_block_light: null
+    player_distance:
+      min: null
+      max: null
+    group_size: 1
+    special_cases:
+      - "ocean monument に 3 体配置"
+      - "採掘速度低下を定期付与"
+
+  aggro:
+    detection_range: null
+    triggers:
+      - type: sight
+        target: player
+        max_distance: null
+        trigger_delay:
+          game_ticks: 0
+          confidence: high
+        break_on_lost_contact: true
+    loses_aggro_conditions: []
+
+  movement:
+    primary_style: swim
+    speed:
+      qualitative: medium
+      numeric_blocks_per_sec: null
+    special_movement:
+      - type: laser_charge
+        purpose: ranged_attack
+        trigger: line_of_sight
+        confidence: high
+    pathing_notes:
+      - "水中でレーザー射線を通し、隠れると解除される"
+
+  attacks:
+    primary:
+      type: laser
+      range: mid
+    secondary:
+      - type: mining_fatigue_curse
+        range: area
+
+  difficulty_overrides:
+    easy: []
+    normal: []
+    hard: []
+
+  special_behaviors:
+    - id: mining_fatigue_curse
+      effect: applies_mining_fatigue_to_players_in_range
+      confidence: high
+    - id: thorns_like_spikes
+      effect: damages_attackers_when_spikes_extended
+      confidence: medium
+
+  weaknesses:
+    - break_line_of_sight
+    - water_prep
+
+  resistances:
+    - hasty_block_mining
+
+adapter_hints:
+  visual_signals:
+    - "mining_fatigue_overlay"
+    - "guardian_laser_charge"
+    - "elder_guardian_body_confirmed"
+  audio_signals:
+    - "minecraft:entity.elder_guardian.curse"
+    - "minecraft:entity.guardian.attack"
+    - "minecraft:entity.elder_guardian.ambient"
+  derived_metrics:
+    - "mining_fatigue_recently_applied"
+    - "laser_targeting_player"
+    - "monument_room_progress"
+  must_detect:
+    - visual_distance
+    - visual_direction
+    - line_of_sight
+  nice_to_have:
+    - "curse_source_direction"
+
+dogido:
+  threat_class: ranged
+  priority: critical
+  panic_policy: reveal_only
+  rear_warning_range: 12
+  panic_range: 7
+  audio_name_safe: true
+  callouts:
+    seen:
+      - "エルダーガーディアンや！！"
+      - "レーザーくる、隠れろ！"
+    heard:
+      - "ん？なんかおかしいで？？？"
+      - "今の呪いや、近いぞ"
+    aftermath:
+      - "あの呪いは心臓に悪いわ・・・"
+  notes:
+    - "Mining Fatigue 付与を最初の jumpscare cue として扱う"
+    - "最初だけ悲鳴を許可し、その後は射線切りと monument 攻略助言を優先する"
+
+quality:
+  status: draft
+  missing_fields:
+    - "curse の正確な再付与タイミング"
+    - "top と side room の探索順ヒントを別仕様に切り出すか未決"

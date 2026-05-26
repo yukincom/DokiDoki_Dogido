@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "dogido_client_adapter",
+  "version": "${version}",
+  "name": "Dogido Client Adapter",
+  "description": "Minecraft client adapter for dogido-server.",
+  "authors": [
+    "yukin_co"
+  ],
+  "contact": {
+    "sources": "https://github.com/yukincom"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.yukinco.dogido.fabric.DogidoClientAdapter"
+    ]
+  },
+  "mixins": [
+    "dogido-fabric-client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

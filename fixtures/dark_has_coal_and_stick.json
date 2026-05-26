@@ -1,0 +1,48 @@
+{
+  "schema_version": "2026-05-24",
+  "game": "minecraft-java",
+  "adapter": "dogido-fabric-client",
+  "observed_at": "2026-05-25T21:10:05+09:00",
+  "sequence": 1003,
+  "event": {
+    "name": "danger_darkness_changed",
+    "source_kind": "inferred",
+    "priority_hint": "normal",
+    "certainty": "high"
+  },
+  "player": {
+    "name": "main_player",
+    "health": 20,
+    "hunger": 18
+  },
+  "world": {
+    "time_of_day": 12800,
+    "time_phase": "night",
+    "weather": "clear",
+    "biome": "cave",
+    "local_light": 8,
+    "sky_visible": false,
+    "ceiling_height": 12,
+    "enclosure_score": 0.42,
+    "connected_dark_volume": 120,
+    "nearest_dark_spawn_distance": 4.0,
+    "danger_darkness_score": 0.88
+  },
+  "inventory": {
+    "torch": 0,
+    "coal": 4,
+    "stick": 6,
+    "bed": 0
+  },
+  "nearby_resources": [
+    {
+      "type": "block",
+      "name": "oak_log",
+      "distance": 7.0,
+      "direction": {
+        "horizontal": "front",
+        "vertical": "same"
+      }
+    }
+  ]
+}

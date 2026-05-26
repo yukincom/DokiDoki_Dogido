@@ -1,0 +1,15 @@
+
+/mindcraft-develop
+__pycache__/
+*.pyc
+.env
+.dogido_tmp/
+adapter/minecraft-fabric/.gradle/
+adapter/minecraft-fabric/build/
+adapter/minecraft-fabric/run/
+/資料
+.Ds_store
+/docs
+/dogido-llm
+/tests
+/dogido_server.egg-info
