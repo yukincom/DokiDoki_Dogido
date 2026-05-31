@@ -1,6 +1,6 @@
 # mob 一覧
 
-JAVA版<br>
+Minecraft JAVA版<br>
 wikiを頼りに個人的にまとめたものです<br>
 日英対応がリストにまとまったものがなさそうなので共有<br>
 一部、bedrock版から取ってるデータもあります。<br>
