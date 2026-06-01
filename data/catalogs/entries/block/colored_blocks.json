@@ -1,0 +1,109 @@
+{
+  "colored_blocks": {
+    "label": "色付きブロック",
+    "english": "Colored Blocks",
+    "groups": {
+      "wool": {
+        "label": "羊毛",
+        "items": {
+          "white_wool": "白色の羊毛",
+          "orange_wool": "橙色の羊毛",
+          "magenta_wool": "赤紫色の羊毛",
+          "light_blue_wool": "空色の羊毛",
+          "yellow_wool": "黄色の羊毛",
+          "lime_wool": "黄緑色の羊毛",
+          "pink_wool": "桃色の羊毛",
+          "gray_wool": "灰色の羊毛",
+          "light_gray_wool": "薄灰色の羊毛",
+          "cyan_wool": "青緑色の羊毛",
+          "purple_wool": "紫色の羊毛",
+          "blue_wool": "青色の羊毛",
+          "brown_wool": "茶色の羊毛",
+          "green_wool": "緑色の羊毛",
+          "red_wool": "赤色の羊毛",
+          "black_wool": "黒色の羊毛"
+        }
+      },
+      "carpets": {
+        "label": "カーペット",
+        "items": {
+          "white_carpet": "白色のカーペット",
+          "orange_carpet": "橙色のカーペット",
+          "magenta_carpet": "赤紫色のカーペット",
+          "light_blue_carpet": "空色のカーペット",
+          "yellow_carpet": "黄色のカーペット",
+          "lime_carpet": "黄緑色のカーペット",
+          "pink_carpet": "桃色のカーペット",
+          "gray_carpet": "灰色のカーペット",
+          "light_gray_carpet": "薄灰色のカーペット",
+          "cyan_carpet": "青緑色のカーペット",
+          "purple_carpet": "紫色のカーペット",
+          "blue_carpet": "青色のカーペット",
+          "brown_carpet": "茶色のカーペット",
+          "green_carpet": "緑色のカーペット",
+          "red_carpet": "赤色のカーペット",
+          "black_carpet": "黒色のカーペット",
+          "moss_carpet": "苔のカーペット",
+          "pale_moss_carpet": "色あせた苔のカーペット"
+        }
+      },
+      "banners": {
+        "label": "旗",
+        "items": {
+          "white_banner": "白色の旗",
+          "orange_banner": "橙色の旗",
+          "magenta_banner": "赤紫色の旗",
+          "light_blue_banner": "空色の旗",
+          "yellow_banner": "黄色の旗",
+          "lime_banner": "黄緑色の旗",
+          "pink_banner": "桃色の旗",
+          "gray_banner": "灰色の旗",
+          "light_gray_banner": "薄灰色の旗",
+          "cyan_banner": "青緑色の旗",
+          "purple_banner": "紫色の旗",
+          "blue_banner": "青色の旗",
+          "brown_banner": "茶色の旗",
+          "green_banner": "緑色の旗",
+          "red_banner": "赤色の旗",
+          "black_banner": "黒色の旗",
+          "white_wall_banner": "壁に掛けられた白色の旗",
+          "orange_wall_banner": "壁に掛けられた橙色の旗",
+          "magenta_wall_banner": "壁に掛けられた赤紫色の旗",
+          "light_blue_wall_banner": "壁に掛けられた空色の旗",
+          "yellow_wall_banner": "壁に掛けられた黄色の旗",
+          "lime_wall_banner": "壁に掛けられた黄緑色の旗",
+          "pink_wall_banner": "壁に掛けられた桃色の旗",
+          "gray_wall_banner": "壁に掛けられた灰色の旗",
+          "light_gray_wall_banner": "壁に掛けられた薄灰色の旗",
+          "cyan_wall_banner": "壁に掛けられた青緑色の旗",
+          "purple_wall_banner": "壁に掛けられた紫色の旗",
+          "blue_wall_banner": "壁に掛けられた青色の旗",
+          "brown_wall_banner": "壁に掛けられた茶色の旗",
+          "green_wall_banner": "壁に掛けられた緑色の旗",
+          "red_wall_banner": "壁に掛けられた赤色の旗",
+          "black_wall_banner": "壁に掛けられた黒色の旗"
+        }
+      },
+      "beds": {
+        "label": "ベッド",
+        "items": {
+          "white_bed": "白色のベッド",
+          "orange_bed": "橙色のベッド",
+          "magenta_bed": "赤紫色のベッド",
+          "light_blue_bed": "空色のベッド",
+          "yellow_bed": "黄色のベッド",
+          "lime_bed": "黄緑色のベッド",
+          "pink_bed": "桃色のベッド",
+          "gray_bed": "灰色のベッド",
+          "light_gray_bed": "薄灰色のベッド",
+          "cyan_bed": "青緑色のベッド",
+          "purple_bed": "紫色のベッド",
+          "blue_bed": "青色のベッド",
+          "brown_bed": "茶色のベッド",
+          "green_bed": "緑色のベッド",
+          "red_bed": "赤色のベッド",
+          "black_bed": "黒色のベッド"
+        }
+      }
+    }  }
+}
