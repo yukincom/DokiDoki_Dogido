@@ -1,0 +1,230 @@
+{
+  "redstone_components": {
+    "label": "レッドストーン回路部品",
+    "english": "Redstone Components",
+    "groups": {
+      "wiring_and_inputs": {
+        "label": "配線・入力",
+        "items": {
+          "redstone_dust": "レッドストーンダスト",
+          "lever": "レバー",
+          "tripwire": "トリップワイヤー",
+          "tripwire_hook": "トリップワイヤーフック",
+          "target": "的"
+        }
+      },
+      "buttons_and_pressure_plates": {
+        "label": "ボタン・感圧板",
+        "groups": {
+          "wooden_buttons": {
+            "label": "木・竹・ネザー木材のボタン",
+            "items": {
+              "oak_button": "オークのボタン",
+              "spruce_button": "トウヒのボタン",
+              "birch_button": "シラカバのボタン",
+              "jungle_button": "ジャングルのボタン",
+              "acacia_button": "アカシアのボタン",
+              "dark_oak_button": "ダークオークのボタン",
+              "mangrove_button": "マングローブのボタン",
+              "cherry_button": "サクラのボタン",
+              "pale_oak_button": "ペールオークのボタン",
+              "bamboo_button": "竹のボタン",
+              "crimson_button": "真紅のボタン",
+              "warped_button": "歪んだボタン"
+            },
+            "source_rule": "building系の木材・竹材素材セットから生成"
+          },
+          "wooden_pressure_plates": {
+            "label": "木・竹・ネザー木材の感圧板",
+            "items": {
+              "oak_pressure_plate": "オークの感圧板",
+              "spruce_pressure_plate": "トウヒの感圧板",
+              "birch_pressure_plate": "シラカバの感圧板",
+              "jungle_pressure_plate": "ジャングルの感圧板",
+              "acacia_pressure_plate": "アカシアの感圧板",
+              "dark_oak_pressure_plate": "ダークオークの感圧板",
+              "mangrove_pressure_plate": "マングローブの感圧板",
+              "cherry_pressure_plate": "サクラの感圧板",
+              "pale_oak_pressure_plate": "ペールオークの感圧板",
+              "bamboo_pressure_plate": "竹の感圧板",
+              "crimson_pressure_plate": "真紅の感圧板",
+              "warped_pressure_plate": "歪んだ感圧板"
+            },
+            "source_rule": "building系の木材・竹材素材セットから生成"
+          },
+          "stone_buttons": {
+            "label": "石系ボタン",
+            "items": {
+              "stone_button": "石のボタン",
+              "polished_blackstone_button": "磨かれたブラックストーンのボタン"
+            },
+            "source_rule": "building系の石材セットから生成"
+          },
+          "stone_pressure_plates": {
+            "label": "石系感圧板",
+            "items": {
+              "stone_pressure_plate": "石の感圧板",
+              "polished_blackstone_pressure_plate": "磨かれたブラックストーンの感圧板"
+            },
+            "source_rule": "building系の石材セットから生成"
+          },
+          "weighted_pressure_plates": {
+            "label": "重量感圧板",
+            "items": {
+              "light_weighted_pressure_plate": "軽量用感圧板",
+              "heavy_weighted_pressure_plate": "重量用感圧板"
+            },
+            "source_rule": "金属素材由来のレッドストーン部品"
+          }
+        },
+        "notes": [
+          "素材派生のボタン・感圧板は、手入力ではなく building 系の素材セットから生成/参照する方針。",
+          "新しい樹種や木材セットが追加された場合、building 側に素材セットを追加すれば redstone 側も追従しやすい。",
+          "感圧板は建材ではなくレッドストーン/機能系として扱う。"
+        ]
+      },
+      "logic_and_power": {
+        "label": "信号・論理部品",
+        "items": {
+          "redstone_repeater": "レッドストーンリピーター",
+          "redstone_comparator": "レッドストーンコンパレーター",
+          "observer": "オブザーバー",
+          "redstone_lamp": "レッドストーンランプ",
+          "block_of_redstone": "レッドストーンブロック",
+          "copper_bulb": "銅の電球",
+          "exposed_copper_bulb": "風化した銅の電球",
+          "weathered_copper_bulb": "錆びた銅の電球",
+          "oxidized_copper_bulb": "酸化した銅の電球",
+          "waxed_copper_bulb": "錆止めされた銅の電球",
+          "waxed_exposed_copper_bulb": "錆止めされた風化した銅の電球",
+          "waxed_weathered_copper_bulb": "錆止めされた錆びた銅の電球",
+          "waxed_oxidized_copper_bulb": "錆止めされた酸化した銅の電球"
+        }
+      },
+      "pistons_and_mechanics": {
+        "label": "ピストン・機械部品",
+        "items": {
+          "piston": "ピストン",
+          "sticky_piston": "粘着ピストン",
+          "piston_head": "ピストンヘッド",
+          "moving_piston": "作動中のピストン",
+          "slime_block": "スライムブロック",
+          "honey_block": "ハチミツブロック"
+        }
+      },
+      "rails_and_transport": {
+        "label": "レール・輸送",
+        "items": {
+          "powered_rail": "パワードレール",
+          "detector_rail": "ディテクターレール",
+          "activator_rail": "アクティベーターレール",
+          "hopper": "ホッパー",
+          "dispenser": "ディスペンサー",
+          "dropper": "ドロッパー"
+        }
+      },
+      "redstone_doors_traps": {
+        "label": "ドア・トラップ系",
+        "groups": {
+          "wooden_fence_gates": {
+            "label": "木・竹・ネザー木材のフェンスゲート",
+            "items": {
+              "oak_fence_gate": "オークのフェンスゲート",
+              "spruce_fence_gate": "トウヒのフェンスゲート",
+              "birch_fence_gate": "シラカバのフェンスゲート",
+              "jungle_fence_gate": "ジャングルのフェンスゲート",
+              "acacia_fence_gate": "アカシアのフェンスゲート",
+              "dark_oak_fence_gate": "ダークオークのフェンスゲート",
+              "mangrove_fence_gate": "マングローブのフェンスゲート",
+              "cherry_fence_gate": "サクラのフェンスゲート",
+              "pale_oak_fence_gate": "ペールオークのフェンスゲート",
+              "bamboo_fence_gate": "竹のフェンスゲート",
+              "crimson_fence_gate": "真紅のフェンスゲート",
+              "warped_fence_gate": "歪んだフェンスゲート"
+            }
+          },
+          "wooden_doors": {
+            "label": "木・竹・ネザー木材のドア",
+            "items": {
+              "oak_door": "オークのドア",
+              "spruce_door": "トウヒのドア",
+              "birch_door": "シラカバのドア",
+              "jungle_door": "ジャングルのドア",
+              "acacia_door": "アカシアのドア",
+              "dark_oak_door": "ダークオークのドア",
+              "mangrove_door": "マングローブのドア",
+              "cherry_door": "サクラのドア",
+              "pale_oak_door": "ペールオークのドア",
+              "bamboo_door": "竹のドア",
+              "crimson_door": "真紅のドア",
+              "warped_door": "歪んだドア"
+            }
+          },
+          "wooden_trapdoors": {
+            "label": "木・竹・ネザー木材のトラップドア",
+            "items": {
+              "oak_trapdoor": "オークのトラップドア",
+              "spruce_trapdoor": "トウヒのトラップドア",
+              "birch_trapdoor": "シラカバのトラップドア",
+              "jungle_trapdoor": "ジャングルのトラップドア",
+              "acacia_trapdoor": "アカシアのトラップドア",
+              "dark_oak_trapdoor": "ダークオークのトラップドア",
+              "mangrove_trapdoor": "マングローブのトラップドア",
+              "cherry_trapdoor": "サクラのトラップドア",
+              "pale_oak_trapdoor": "ペールオークのトラップドア",
+              "bamboo_trapdoor": "竹のトラップドア",
+              "crimson_trapdoor": "真紅のトラップドア",
+              "warped_trapdoor": "歪んだトラップドア"
+            }
+          },
+          "iron_doors_trapdoors": {
+            "label": "鉄のドア・トラップドア",
+            "items": {
+              "iron_door": "鉄のドア",
+              "iron_trapdoor": "鉄のトラップドア"
+            }
+          },
+          "copper_doors": {
+            "label": "銅のドア",
+            "items": {
+              "copper_door": "銅のドア",
+              "exposed_copper_door": "風化した銅のドア",
+              "weathered_copper_door": "錆びた銅のドア",
+              "oxidized_copper_door": "酸化した銅のドア",
+              "waxed_copper_door": "錆止めされた銅のドア",
+              "waxed_exposed_copper_door": "錆止めされた風化した銅のドア",
+              "waxed_weathered_copper_door": "錆止めされた錆びた銅のドア",
+              "waxed_oxidized_copper_door": "錆止めされた酸化した銅のドア"
+            }
+          },
+          "copper_trapdoors": {
+            "label": "銅のトラップドア",
+            "items": {
+              "copper_trapdoor": "銅のトラップドア",
+              "exposed_copper_trapdoor": "風化した銅のトラップドア",
+              "weathered_copper_trapdoor": "錆びた銅のトラップドア",
+              "oxidized_copper_trapdoor": "酸化した銅のトラップドア",
+              "waxed_copper_trapdoor": "錆止めされた銅のトラップドア",
+              "waxed_exposed_copper_trapdoor": "錆止めされた風化した銅のトラップドア",
+              "waxed_weathered_copper_trapdoor": "錆止めされた錆びた銅のトラップドア",
+              "waxed_oxidized_copper_trapdoor": "錆止めされた酸化した銅のトラップドア"
+            }
+          },
+          "special_traps": {
+            "label": "特殊トラップ・自動作業",
+            "items": {
+              "tnt": "TNT",
+              "crafter": "自動作業台"
+            }
+          }
+        },
+        "notes": [
+          "木材系のドア・トラップドア・フェンスゲートは一般建築ブロックJSONから取得。",
+          "鉄・銅系のドア・トラップドアはメタル系ブロックJSONから取得。",
+          "旧データの oak_door: 木のドア / oak_trapdoor: 木のトラップドア / oak_fence_gate: フェンスゲート のような集合名的な値を、個別名に置き換え。"
+        ]
+      }
+    }
+  }
+  }
+}
