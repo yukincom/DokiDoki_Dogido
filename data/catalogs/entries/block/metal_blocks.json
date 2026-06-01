@@ -1,4 +1,8 @@
 {
+  "building_blocks": {
+    "label": "建築ブロック",
+    "english": "Building Blocks",  
+        "groups": {
   "metal_blocks": {
     "label": "メタル系ブロック",
     "english": "Metal Blocks",
@@ -158,3 +162,4 @@
     "iron_items_count": 3
   }
 }
+  }}
