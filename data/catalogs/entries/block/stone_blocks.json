@@ -272,27 +272,7 @@
               "sulfur_brick_wall": "硫黄レンガの塀"
             }
           }
-        },
-        "notes": [
-          "素材ごとに、ブロック→階段→ハーフブロック→塀を基本順序として整理。",
-          "並びは石→石レンガ→砂岩→深層岩→凝灰岩→レンガ/泥/樹脂→海洋石材→ネザー系→ブラックストーン系を意識。"
-        ]
       }
     }
-  },
-  "meta": {
-    "source_file": "minecraft_category_general_building_blocks_v3_inventory_order.json",
-    "note": "wood_and_bamboo は minecraft_category_wood_and_bamboo.json に独立分離。",
-    "image_reference": "スクリーンショット 2026-06-01 16.34.14.png",
-    "unplaced_counts": {
-      "wood": 0,
-      "stone": 0,
-      "metal": 0
-    },
-    "cut_copper_slabs_and_stairs_patch": {
-      "added_to": "building_blocks.groups.metal_building.groups.copper.groups.cut_copper_slabs_and_stairs",
-      "count": 16
-    },
-    "removed_category": "wood_and_bamboo"
   }
 }
