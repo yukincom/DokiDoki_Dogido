@@ -1,0 +1,160 @@
+{
+  "metal_blocks": {
+    "label": "メタル系ブロック",
+    "english": "Metal Blocks",
+    "groups": {
+      "iron": {
+        "label": "鉄系",
+        "items": {
+          "iron_bars": "鉄格子",
+          "iron_door": "鉄のドア",
+          "iron_trapdoor": "鉄のトラップドア"
+        }
+      },
+      "copper_by_oxidation_stage": {
+        "label": "銅系・酸化段階別",
+        "groups": {
+          "unoxidized": {
+            "label": "銅",
+            "items": {
+              "copper_block": "銅ブロック",
+              "chiseled_copper": "模様入りの銅",
+              "copper_grate": "銅の金網",
+              "cut_copper": "切り込み入りの銅",
+              "cut_copper_stairs": "切り込み入りの銅の階段",
+              "cut_copper_slab": "切り込み入りの銅のハーフブロック",
+              "copper_bars": "銅格子",
+              "copper_door": "銅のドア",
+              "copper_trapdoor": "銅のトラップドア",
+              "copper_bulb": "銅の電球",
+              "copper_chain": "銅の鎖"
+            }
+          },
+          "exposed": {
+            "label": "風化した銅",
+            "items": {
+              "exposed_copper": "風化した銅",
+              "exposed_chiseled_copper": "風化した模様入りの銅",
+              "exposed_copper_grate": "風化した銅の金網",
+              "exposed_cut_copper": "風化した切り込み入りの銅",
+              "exposed_cut_copper_stairs": "風化した切り込み入りの銅の階段",
+              "exposed_cut_copper_slab": "風化した切り込み入りの銅のハーフブロック",
+              "exposed_copper_bars": "風化した銅格子",
+              "exposed_copper_door": "風化した銅のドア",
+              "exposed_copper_trapdoor": "風化した銅のトラップドア",
+              "exposed_copper_bulb": "風化した銅の電球",
+              "exposed_copper_chain": "風化した銅の鎖"
+            }
+          },
+          "weathered": {
+            "label": "錆びた銅",
+            "items": {
+              "weathered_copper": "錆びた銅",
+              "weathered_chiseled_copper": "錆びた模様入りの銅",
+              "weathered_copper_grate": "錆びた銅の金網",
+              "weathered_cut_copper": "錆びた切り込み入りの銅",
+              "weathered_cut_copper_stairs": "錆びた切り込み入りの銅の階段",
+              "weathered_cut_copper_slab": "錆びた切り込み入りの銅のハーフブロック",
+              "weathered_copper_bars": "錆びた銅格子",
+              "weathered_copper_door": "錆びた銅のドア",
+              "weathered_copper_trapdoor": "錆びた銅のトラップドア",
+              "weathered_copper_bulb": "錆びた銅の電球",
+              "weathered_copper_chain": "錆びた銅の鎖"
+            }
+          },
+          "oxidized": {
+            "label": "酸化した銅",
+            "items": {
+              "oxidized_copper": "酸化した銅",
+              "oxidized_chiseled_copper": "酸化した模様入りの銅",
+              "oxidized_copper_grate": "酸化した銅の金網",
+              "oxidized_cut_copper": "酸化した切り込み入りの銅",
+              "oxidized_cut_copper_stairs": "酸化した切り込み入りの銅の階段",
+              "oxidized_cut_copper_slab": "酸化した切り込み入りの銅のハーフブロック",
+              "oxidized_copper_bars": "酸化した銅格子",
+              "oxidized_copper_door": "酸化した銅のドア",
+              "oxidized_copper_trapdoor": "酸化した銅のトラップドア",
+              "oxidized_copper_bulb": "酸化した銅の電球",
+              "oxidized_copper_chain": "酸化した銅の鎖"
+            }
+          },
+          "waxed_unoxidized": {
+            "label": "錆止めされた銅",
+            "items": {
+              "waxed_copper_block": "錆止めされた銅ブロック",
+              "waxed_chiseled_copper": "錆止めされた模様入りの銅",
+              "waxed_copper_grate": "錆止めされた銅の金網",
+              "waxed_cut_copper": "錆止めされた切り込み入りの銅",
+              "waxed_cut_copper_stairs": "錆止めされた切り込み入りの銅の階段",
+              "waxed_cut_copper_slab": "錆止めされた切り込み入りの銅のハーフブロック",
+              "waxed_copper_bars": "錆止めされた銅格子",
+              "waxed_copper_door": "錆止めされた銅のドア",
+              "waxed_copper_trapdoor": "錆止めされた銅のトラップドア",
+              "waxed_copper_bulb": "錆止めされた銅の電球",
+              "waxed_copper_chain": "錆止めされた銅の鎖"
+            }
+          },
+          "waxed_exposed": {
+            "label": "錆止めされた風化した銅",
+            "items": {
+              "waxed_exposed_copper": "錆止めされた風化した銅",
+              "waxed_exposed_chiseled_copper": "錆止めされた風化した模様入りの銅",
+              "waxed_exposed_copper_grate": "錆止めされた風化した銅の金網",
+              "waxed_exposed_cut_copper": "錆止めされた風化した切り込み入りの銅",
+              "waxed_exposed_cut_copper_stairs": "錆止めされた風化した切り込み入りの銅の階段",
+              "waxed_exposed_cut_copper_slab": "錆止めされた風化した切り込み入りの銅のハーフブロック",
+              "waxed_exposed_copper_bars": "錆止めされた風化した銅格子",
+              "waxed_exposed_copper_door": "錆止めされた風化した銅のドア",
+              "waxed_exposed_copper_trapdoor": "錆止めされた風化した銅のトラップドア",
+              "waxed_exposed_copper_bulb": "錆止めされた風化した銅の電球",
+              "waxed_exposed_copper_chain": "錆止めされた風化した銅の鎖"
+            }
+          },
+          "waxed_weathered": {
+            "label": "錆止めされた錆びた銅",
+            "items": {
+              "waxed_weathered_copper": "錆止めされた錆びた銅",
+              "waxed_weathered_chiseled_copper": "錆止めされた錆びた模様入りの銅",
+              "waxed_weathered_copper_grate": "錆止めされた錆びた銅の金網",
+              "waxed_weathered_cut_copper": "錆止めされた錆びた切り込み入りの銅",
+              "waxed_weathered_cut_copper_stairs": "錆止めされた錆びた切り込み入りの銅の階段",
+              "waxed_weathered_cut_copper_slab": "錆止めされた錆びた切り込み入りの銅のハーフブロック",
+              "waxed_weathered_copper_bars": "錆止めされた錆びた銅格子",
+              "waxed_weathered_copper_door": "錆止めされた錆びた銅のドア",
+              "waxed_weathered_copper_trapdoor": "錆止めされた錆びた銅のトラップドア",
+              "waxed_weathered_copper_bulb": "錆止めされた錆びた銅の電球",
+              "waxed_weathered_copper_chain": "錆止めされた錆びた銅の鎖"
+            }
+          },
+          "waxed_oxidized": {
+            "label": "錆止めされた酸化した銅",
+            "items": {
+              "waxed_oxidized_copper": "錆止めされた酸化した銅",
+              "waxed_oxidized_chiseled_copper": "錆止めされた酸化した模様入りの銅",
+              "waxed_oxidized_copper_grate": "錆止めされた酸化した銅の金網",
+              "waxed_oxidized_cut_copper": "錆止めされた酸化した切り込み入りの銅",
+              "waxed_oxidized_cut_copper_stairs": "錆止めされた酸化した切り込み入りの銅の階段",
+              "waxed_oxidized_cut_copper_slab": "錆止めされた酸化した切り込み入りの銅のハーフブロック",
+              "waxed_oxidized_copper_bars": "錆止めされた酸化した銅格子",
+              "waxed_oxidized_copper_door": "錆止めされた酸化した銅のドア",
+              "waxed_oxidized_copper_trapdoor": "錆止めされた酸化した銅のトラップドア",
+              "waxed_oxidized_copper_bulb": "錆止めされた酸化した銅の電球",
+              "waxed_oxidized_copper_chain": "錆止めされた酸化した銅の鎖"
+            }
+          }
+        },
+        "notes": [
+          "銅系は製品別ではなく、酸化段階ごとに並べる。",
+          "各段階内の順序は、銅→模様入り→金網→切り込み入り→階段→ハーフブロック→格子→ドア→トラップドア→電球→鎖。",
+          "錆止め版も同じ順序で並べる。"
+        ]
+      }
+    }
+  },
+  "meta": {
+    "source_file": "minecraft_category_general_building_blocks_v4_cut_copper_slabs_stairs.json",
+    "reason": "銅系バリエーションが多く、建築/装飾/レッドストーンにまたがるため、メタル系として独立。",
+    "copper_items_count": 88,
+    "iron_items_count": 3
+  }
+}
