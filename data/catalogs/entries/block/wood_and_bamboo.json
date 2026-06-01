@@ -1,0 +1,249 @@
+{
+  "building_blocks": {
+    "label": "一般建築ブロック",
+    "english": "General Building Blocks",  
+        "groups": {
+  "wood_and_bamboo": {
+    "label": "木材・竹材",
+    "english": "Wood and Bamboo",
+    "groups": {
+      "oak": {
+        "label": "オーク",
+        "items": {
+          "oak_wood": "オークの木",
+          "oak_log": "オークの原木",
+          "oak_planks": "オークの板材",
+          "stripped_oak_wood": "樹皮を剥いだオークの木",
+          "stripped_oak_log": "樹皮を剥いだオークの原木",
+          "oak_stairs": "オークの階段",
+          "oak_slab": "オークのハーフブロック",
+          "oak_fence": "オークのフェンス",
+          "oak_fence_gate": "オークのフェンスゲート",
+          "oak_door": "オークのドア",
+          "oak_trapdoor": "オークのトラップドア",
+          "oak_pressure_plate": "オークの感圧板",
+          "oak_button": "オークのボタン"
+        }
+      },
+      "spruce": {
+        "label": "トウヒ",
+        "items": {
+          "spruce_wood": "トウヒの木",
+          "spruce_log": "トウヒの原木",
+          "spruce_planks": "トウヒの板材",
+          "stripped_spruce_wood": "樹皮を剥いだトウヒの木",
+          "stripped_spruce_log": "樹皮を剥いだトウヒの原木",
+          "spruce_stairs": "トウヒの階段",
+          "spruce_slab": "トウヒのハーフブロック",
+          "spruce_fence": "トウヒのフェンス",
+          "spruce_fence_gate": "トウヒのフェンスゲート",
+          "spruce_door": "トウヒのドア",
+          "spruce_trapdoor": "トウヒのトラップドア",
+          "spruce_pressure_plate": "トウヒの感圧板",
+          "spruce_button": "トウヒのボタン"
+        }
+      },
+      "birch": {
+        "label": "シラカバ",
+        "items": {
+          "birch_wood": "シラカバの木",
+          "birch_log": "シラカバの原木",
+          "birch_planks": "シラカバの板材",
+          "stripped_birch_wood": "樹皮を剥いだシラカバの木",
+          "stripped_birch_log": "樹皮を剥いだシラカバの原木",
+          "birch_stairs": "シラカバの階段",
+          "birch_slab": "シラカバのハーフブロック",
+          "birch_fence": "シラカバのフェンス",
+          "birch_fence_gate": "シラカバのフェンスゲート",
+          "birch_door": "シラカバのドア",
+          "birch_trapdoor": "シラカバのトラップドア",
+          "birch_pressure_plate": "シラカバの感圧板",
+          "birch_button": "シラカバのボタン"
+        }
+      },
+      "jungle": {
+        "label": "ジャングル",
+        "items": {
+          "jungle_wood": "ジャングルの木",
+          "jungle_log": "ジャングルの原木",
+          "jungle_planks": "ジャングルの板材",
+          "stripped_jungle_wood": "樹皮を剥いだジャングルの木",
+          "stripped_jungle_log": "樹皮を剥いだジャングルの原木",
+          "jungle_stairs": "ジャングルの階段",
+          "jungle_slab": "ジャングルのハーフブロック",
+          "jungle_fence": "ジャングルのフェンス",
+          "jungle_fence_gate": "ジャングルのフェンスゲート",
+          "jungle_door": "ジャングルのドア",
+          "jungle_trapdoor": "ジャングルのトラップドア",
+          "jungle_pressure_plate": "ジャングルの感圧板",
+          "jungle_button": "ジャングルのボタン"
+        }
+      },
+      "acacia": {
+        "label": "アカシア",
+        "items": {
+          "acacia_wood": "アカシアの木",
+          "acacia_log": "アカシアの原木",
+          "acacia_planks": "アカシアの板材",
+          "stripped_acacia_wood": "樹皮を剥いだアカシアの木",
+          "stripped_acacia_log": "樹皮を剥いだアカシアの原木",
+          "acacia_stairs": "アカシアの階段",
+          "acacia_slab": "アカシアのハーフブロック",
+          "acacia_fence": "アカシアのフェンス",
+          "acacia_fence_gate": "アカシアのフェンスゲート",
+          "acacia_door": "アカシアのドア",
+          "acacia_trapdoor": "アカシアのトラップドア",
+          "acacia_pressure_plate": "アカシアの感圧板",
+          "acacia_button": "アカシアのボタン"
+        }
+      },
+      "dark_oak": {
+        "label": "ダークオーク",
+        "items": {
+          "dark_oak_wood": "ダークオークの木",
+          "dark_oak_log": "ダークオークの原木",
+          "dark_oak_planks": "ダークオークの板材",
+          "stripped_dark_oak_wood": "樹皮を剥いだダークオークの木",
+          "stripped_dark_oak_log": "樹皮を剥いだダークオークの原木",
+          "dark_oak_stairs": "ダークオークの階段",
+          "dark_oak_slab": "ダークオークのハーフブロック",
+          "dark_oak_fence": "ダークオークのフェンス",
+          "dark_oak_fence_gate": "ダークオークのフェンスゲート",
+          "dark_oak_door": "ダークオークのドア",
+          "dark_oak_trapdoor": "ダークオークのトラップドア",
+          "dark_oak_pressure_plate": "ダークオークの感圧板",
+          "dark_oak_button": "ダークオークのボタン"
+        }
+      },
+      "mangrove": {
+        "label": "マングローブ",
+        "items": {
+          "mangrove_wood": "マングローブの木",
+          "mangrove_log": "マングローブの原木",
+          "mangrove_planks": "マングローブの板材",
+          "stripped_mangrove_wood": "樹皮を剥いだマングローブの木",
+          "stripped_mangrove_log": "樹皮を剥いだマングローブの原木",
+          "mangrove_stairs": "マングローブの階段",
+          "mangrove_slab": "マングローブのハーフブロック",
+          "mangrove_fence": "マングローブのフェンス",
+          "mangrove_fence_gate": "マングローブのフェンスゲート",
+          "mangrove_door": "マングローブのドア",
+          "mangrove_trapdoor": "マングローブのトラップドア",
+          "mangrove_pressure_plate": "マングローブの感圧板",
+          "mangrove_button": "マングローブのボタン"
+        }
+      },
+      "cherry": {
+        "label": "サクラ",
+        "items": {
+          "cherry_wood": "サクラの木",
+          "cherry_log": "サクラの原木",
+          "cherry_planks": "サクラの板材",
+          "stripped_cherry_wood": "樹皮を剥いだサクラの木",
+          "stripped_cherry_log": "樹皮を剥いだサクラの原木",
+          "cherry_stairs": "サクラの階段",
+          "cherry_slab": "サクラのハーフブロック",
+          "cherry_fence": "サクラのフェンス",
+          "cherry_fence_gate": "サクラのフェンスゲート",
+          "cherry_door": "サクラのドア",
+          "cherry_trapdoor": "サクラのトラップドア",
+          "cherry_pressure_plate": "サクラの感圧板",
+          "cherry_button": "サクラのボタン"
+        }
+      },
+      "pale_oak": {
+        "label": "ペールオーク",
+        "items": {
+          "pale_oak_wood": "ペールオークの木",
+          "pale_oak_log": "ペールオークの原木",
+          "pale_oak_planks": "ペールオークの板材",
+          "stripped_pale_oak_wood": "樹皮を剥いだペールオークの木",
+          "stripped_pale_oak_log": "樹皮を剥いだペールオークの原木",
+          "pale_oak_stairs": "ペールオークの階段",
+          "pale_oak_slab": "ペールオークのハーフブロック",
+          "pale_oak_fence": "ペールオークのフェンス",
+          "pale_oak_fence_gate": "ペールオークのフェンスゲート",
+          "pale_oak_door": "ペールオークのドア",
+          "pale_oak_trapdoor": "ペールオークのトラップドア",
+          "pale_oak_pressure_plate": "ペールオークの感圧板",
+          "pale_oak_button": "ペールオークのボタン"
+        }
+      },
+      "bamboo": {
+        "label": "竹",
+        "items": {
+          "block_of_bamboo": "竹ブロック",
+          "block_of_stripped_bamboo": "表皮を剥いだ竹ブロック",
+          "bamboo_planks": "竹の板材",
+          "bamboo_mosaic": "竹細工",
+          "bamboo_stairs": "竹の階段",
+          "bamboo_mosaic_stairs": "竹細工の階段",
+          "bamboo_slab": "竹のハーフブロック",
+          "bamboo_mosaic_slab": "竹細工のハーフブロック",
+          "bamboo_fence": "竹のフェンス",
+          "bamboo_fence_gate": "竹のフェンスゲート",
+          "bamboo_door": "竹のドア",
+          "bamboo_trapdoor": "竹のトラップドア",
+          "bamboo_pressure_plate": "竹の感圧板",
+          "bamboo_button": "竹のボタン"
+        }
+      },
+      "crimson": {
+        "label": "真紅",
+        "items": {
+          "crimson_stem": "真紅の幹",
+          "crimson_hyphae": "真紅の菌糸",
+          "stripped_crimson_stem": "表皮を剥いだ真紅の幹",
+          "stripped_crimson_hyphae": "表皮を剥いだ真紅の菌糸",
+          "crimson_planks": "真紅の板材",
+          "crimson_stairs": "真紅の階段",
+          "crimson_slab": "真紅のハーフブロック",
+          "crimson_fence": "真紅のフェンス",
+          "crimson_fence_gate": "真紅のフェンスゲート",
+          "crimson_door": "真紅のドア",
+          "crimson_trapdoor": "真紅のトラップドア",
+          "crimson_pressure_plate": "真紅の感圧板",
+          "crimson_button": "真紅のボタン"
+        }
+      },
+      "warped": {
+        "label": "歪んだ",
+        "items": {
+          "warped_stem": "歪んだ幹",
+          "warped_hyphae": "歪んだ菌糸",
+          "stripped_warped_stem": "表皮を剥いだ歪んだ幹",
+          "stripped_warped_hyphae": "表皮を剥いだ歪んだ菌糸",
+          "warped_planks": "歪んだ板材",
+          "warped_stairs": "歪んだ階段",
+          "warped_slab": "歪んだハーフブロック",
+          "warped_fence": "歪んだフェンス",
+          "warped_fence_gate": "歪んだフェンスゲート",
+          "warped_door": "歪んだドア",
+          "warped_trapdoor": "歪んだトラップドア",
+          "warped_pressure_plate": "歪んだ感圧板",
+          "warped_button": "歪んだボタン"
+        }
+      },
+      "special_wood": {
+        "label": "特殊木材",
+        "items": {
+          "petrified_oak_slab": "石化したオークのハーフブロック"
+        }
+      }
+    },
+    "notes": [
+      "一般建築ブロックから独立させた木材・竹材カテゴリ。",
+      "通常木材は 木→原木→板材→樹皮を剥いだ木→樹皮を剥いだ原木→階段→ハーフブロック→フェンス→フェンスゲート→ドア→トラップドア→感圧板→ボタン の順。",
+      "竹は 竹ブロック→表皮を剥いだ竹ブロック→竹の板材→竹細工→竹の階段→竹細工の階段→竹のハーフブロック→竹細工のハーフブロック→フェンス→フェンスゲート→ドア→トラップドア→感圧板→ボタン の順。",
+      "真紅・歪んだ系は 幹→菌糸→表皮を剥いだ幹→表皮を剥いだ菌糸→板材→階段→ハーフブロック→フェンス→フェンスゲート→ドア→トラップドア→感圧板→ボタン の順。"
+    ]
+  },
+  "meta": {
+    "source_file": "general_building_blocks_no_metal.json",
+    "split_from": "building_blocks.groups.wood_and_bamboo",
+    "added_material_derivatives": [
+      "pressure_plate",
+      "button"
+    ]
+  }
+        }}}
