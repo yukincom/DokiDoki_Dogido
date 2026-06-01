@@ -317,19 +317,6 @@
         ]
       }
     }
-  },
-  "meta": {
-    "source_file": "colored_blocks.json",
-    "policy": [
-      "装飾ブロックとの境が曖昧なものは colored_blocks に統合。",
-      "鎖類は metal_blocks 側にすでに独立しているため、colored_blocks には含めない。",
-      "ろうそくは通常1種＋16色を candles に追加。",
-      "添付ファイルは groups が二重に出てJSON構文が崩れていたため、有効なJSONとして再構成。"
-    ],
-    "cake_patch": {
-      "added_group": "cakes",
-      "entries": 18,
-      "source_file": "minecraft_category_colored_blocks_v2_with_candles.json"
-    }
+  }
   }
 }
