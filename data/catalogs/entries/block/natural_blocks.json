@@ -23,8 +23,13 @@
           "soul_soil": "ソウルソイル",
           "crimson_nylium": "真紅のナイリウム",
           "warped_nylium": "歪んだナイリウム",
+          "frosted_ice": "薄氷",
+          "ice": "氷",
+          "packed_ice": "氷塊",
+          "blue_ice": "青氷",
           "powder_snow": "粉雪",
-          "frosted_ice": "薄氷"
+          "snow_block": "雪ブロック",
+          "snow": "雪"
         }
       },
       "stone_and_ores": {
@@ -32,32 +37,51 @@
         "items": {
           "stone": "石",
           "deepslate": "深層岩",
+          "granite":"花崗岩",
+          "diorite": "閃緑岩",
+          "andesite": "安山岩",
           "tuff": "凝灰岩",
           "calcite": "方解石",
           "dripstone_block": "鍾乳石ブロック",
+          "dripstone": "鍾乳石",
+          "prismarine": "プラズマリン",
           "magma_block": "マグマブロック",
-          "glowstone": "グロウストーン",
+          "obsidian": "黒曜石",
+          "crying_obsidian": "泣く黒曜石",
+          "netherrack": "ネザーラック",
+          "bone_block": "骨ブロック",
+          "blackstone": "ブラックストーン",
+          "basalt": "玄武岩",
+          "smooth_basalt": "滑らかな玄武岩",
+          "end_stone": "エンドストーン",
           "coal_ore": "石炭鉱石",
           "deepslate_coal_ore": "深層石炭鉱石",
-          "copper_ore": "銅鉱石",
-          "deepslate_copper_ore": "深層銅鉱石",
-          "diamond_ore": "ダイヤモンド鉱石",
-          "deepslate_diamond_ore": "深層ダイヤモンド鉱石",
-          "emerald_ore": "エメラルド鉱石",
-          "deepslate_emerald_ore": "深層エメラルド鉱石",
-          "gold_ore": "金鉱石",
-          "deepslate_gold_ore": "深層金鉱石",
-          "nether_gold_ore": "ネザー金鉱石",
           "iron_ore": "鉄鉱石",
           "deepslate_iron_ore": "深層鉄鉱石",
-          "lapis_lazuli_ore": "ラピスラズリ鉱石",
-          "deepslate_lapis_lazuli_ore": "深層ラピスラズリ鉱石",
-          "nether_quartz_ore": "ネザークォーツ鉱石",
+          "copper_ore": "銅鉱石",
+          "deepslate_copper_ore": "深層銅鉱石",
+          "gold_ore": "金鉱石",
+          "deepslate_gold_ore": "深層金鉱石",
           "redstone_ore": "レッドストーン鉱石",
           "deepslate_redstone_ore": "深層レッドストーン鉱石",
+          "emerald_ore": "エメラルド鉱石",
+          "deepslate_emerald_ore": "深層エメラルド鉱石",
+          "lapis_lazuli_ore": "ラピスラズリ鉱石",
+          "deepslate_lapis_lazuli_ore": "深層ラピスラズリ鉱石",
+          "diamond_ore": "ダイヤモンド鉱石",
+          "deepslate_diamond_ore": "深層ダイヤモンド鉱石",
+          "nether_gold_ore": "ネザー金鉱石",
+          "nether_quartz_ore": "ネザークォーツ鉱石",
           "ancient_debris": "古代の残骸",
+          "iron_ore_block": "鉄の原石ブロック",
+          "copper_ore_block": "銅の原石ブロック",
+          "gold_ore_block": "金の原石ブロック",
+          "glowstone": "グロウストーン",
+          "amethyst_block": "アメジストブロック",          
           "budding_amethyst": "芽生えたアメジスト",
-          "medium_amethyst_bud": "アメジストの芽",
+          "small_amethyst_bud": "小さなアメジストの芽",
+          "medium_amethyst_bud": "中くらいのアメジストの芽",
+          "large_amethyst_bud": "大きなアメジストの芽",
           "amethyst_cluster": "アメジストの塊"
         }
       },
@@ -177,8 +201,8 @@
             "items": {
               "seagrass": "海草",
               "tall_seagrass": "背の高い海草",
-              "kelp": "コンブ",
               "lily_pad": "スイレンの葉",
+              "sugar_cane": "サトウキビ",              
               "firefly_bush": "ホタルの茂み"
             },
             "notes": [
@@ -243,12 +267,31 @@
           "sweet_berry_bush": "スイートベリーの低木",
           "torchflower_crop": "未成熟なトーチフラワー",
           "pitcher_crop": "未成熟なウツボカズラ",
-          "nether_wart": "ネザーウォート",
           "sugar_cane": "サトウキビ",
           "cactus": "サボテン",
           "hay_bale": "干草の俵",
-          "chorus_fruit": "コーラスフルーツ",
-          "glow_berries": "グロウベリー"
+          "bee_nest":"ミツバチの巣",
+          "honeycomb":"ハニカム",
+          "honeycomb_block":"ハニカムブロック"
+        }},
+      "egg_and_seeds": {
+        "label": "種・卵",
+        "items": {          
+          "turtle_egg": "カメの卵",
+          "frogspawn": "カエルの卵",
+          "sniffer_egg": "スニッファーの卵",
+          "dried_ghast": "乾燥したガスト",
+          "weat_seeds": "小麦の種",
+          "cacao_beans": "カカオ豆",
+          "pumpkin_seeds": "カボチャの種",
+          "melon_seeds": "スイカの種",
+          "beetroots_seeds": "ビートルートの種",
+          "torchflower_seeds": "トーチフラワーの種",
+          "pitcher_plant_pod": "ウツボカズラのさや",
+          "sweet_berry_seeds": "スイートベリー",          
+          "glow_berries": "グロウベリー",
+          "nether_wart": "ネザーウォート",
+          "chorus_fruit": "コーラスフルーツ"                    
         }
       },
       "fungi": {
@@ -311,6 +354,7 @@
           "dead_horn_coral_wall_fan": "壁付きの死んだシカツノウチワサンゴ",
           "sea_pickle": "シーピクルス",
           "frogspawn": "カエルの卵",
+          "kelp": "コンブ",
           "dried_kelp_block": "乾燥した昆布ブロック",
           "sponge": "スポンジ",
           "wet_sponge": "濡れたスポンジ"
@@ -330,9 +374,12 @@
       "natural_misc": {
         "label": "その他天然物",
         "items": {
+          "pearlescent_froglight": "真珠色のフロッグライト",
+          "verdant_froglight": "新緑色のフロッグライト",
+          "ochre_froglight": "黄土色のフロッグライト",
           "resin_clump": "樹脂の塊",
-          "turtle_egg": "カメの卵",
-          "frogspawn": "カエルの卵"
+          "spider_nest": "クモの巣",
+          "bedrock": "岩盤"
         }
       }
     }
