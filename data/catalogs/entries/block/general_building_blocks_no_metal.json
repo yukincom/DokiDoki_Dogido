@@ -1,0 +1,507 @@
+{
+  "building_blocks": {
+    "label": "一般建築ブロック",
+    "english": "General Building Blocks",
+    "groups": {
+      "wood_and_bamboo": {
+        "label": "木材・竹材",
+        "groups": {
+          "oak": {
+            "label": "オーク",
+            "items": {
+              "oak_wood": "オークの木",
+              "oak_log": "オークの原木",
+              "oak_planks": "オークの板材",
+              "stripped_oak_wood": "樹皮を剥いだオークの木",
+              "stripped_oak_log": "樹皮を剥いだオークの原木",
+              "oak_stairs": "オークの階段",
+              "oak_slab": "オークのハーフブロック",
+              "oak_fence": "オークのフェンス",
+              "oak_fence_gate": "オークのフェンスゲート",
+              "oak_door": "オークのドア",
+              "oak_trapdoor": "オークのトラップドア"
+            }
+          },
+          "spruce": {
+            "label": "トウヒ",
+            "items": {
+              "spruce_wood": "トウヒの木",
+              "spruce_log": "トウヒの原木",
+              "spruce_planks": "トウヒの板材",
+              "stripped_spruce_wood": "樹皮を剥いだトウヒの木",
+              "stripped_spruce_log": "樹皮を剥いだトウヒの原木",
+              "spruce_stairs": "トウヒの階段",
+              "spruce_slab": "トウヒのハーフブロック",
+              "spruce_fence": "トウヒのフェンス",
+              "spruce_fence_gate": "トウヒのフェンスゲート",
+              "spruce_door": "トウヒのドア",
+              "spruce_trapdoor": "トウヒのトラップドア"
+            }
+          },
+          "birch": {
+            "label": "シラカバ",
+            "items": {
+              "birch_wood": "シラカバの木",
+              "birch_log": "シラカバの原木",
+              "birch_planks": "シラカバの板材",
+              "stripped_birch_wood": "樹皮を剥いだシラカバの木",
+              "stripped_birch_log": "樹皮を剥いだシラカバの原木",
+              "birch_stairs": "シラカバの階段",
+              "birch_slab": "シラカバのハーフブロック",
+              "birch_fence": "シラカバのフェンス",
+              "birch_fence_gate": "シラカバのフェンスゲート",
+              "birch_door": "シラカバのドア",
+              "birch_trapdoor": "シラカバのトラップドア"
+            }
+          },
+          "jungle": {
+            "label": "ジャングル",
+            "items": {
+              "jungle_wood": "ジャングルの木",
+              "jungle_log": "ジャングルの原木",
+              "jungle_planks": "ジャングルの板材",
+              "stripped_jungle_wood": "樹皮を剥いだジャングルの木",
+              "stripped_jungle_log": "樹皮を剥いだジャングルの原木",
+              "jungle_stairs": "ジャングルの階段",
+              "jungle_slab": "ジャングルのハーフブロック",
+              "jungle_fence": "ジャングルのフェンス",
+              "jungle_fence_gate": "ジャングルのフェンスゲート",
+              "jungle_door": "ジャングルのドア",
+              "jungle_trapdoor": "ジャングルのトラップドア"
+            }
+          },
+          "acacia": {
+            "label": "アカシア",
+            "items": {
+              "acacia_wood": "アカシアの木",
+              "acacia_log": "アカシアの原木",
+              "acacia_planks": "アカシアの板材",
+              "stripped_acacia_wood": "樹皮を剥いだアカシアの木",
+              "stripped_acacia_log": "樹皮を剥いだアカシアの原木",
+              "acacia_stairs": "アカシアの階段",
+              "acacia_slab": "アカシアのハーフブロック",
+              "acacia_fence": "アカシアのフェンス",
+              "acacia_fence_gate": "アカシアのフェンスゲート",
+              "acacia_door": "アカシアのドア",
+              "acacia_trapdoor": "アカシアのトラップドア"
+            }
+          },
+          "dark_oak": {
+            "label": "ダークオーク",
+            "items": {
+              "dark_oak_wood": "ダークオークの木",
+              "dark_oak_log": "ダークオークの原木",
+              "dark_oak_planks": "ダークオークの板材",
+              "stripped_dark_oak_wood": "樹皮を剥いだダークオークの木",
+              "stripped_dark_oak_log": "樹皮を剥いだダークオークの原木",
+              "dark_oak_stairs": "ダークオークの階段",
+              "dark_oak_slab": "ダークオークのハーフブロック",
+              "dark_oak_fence": "ダークオークのフェンス",
+              "dark_oak_fence_gate": "ダークオークのフェンスゲート",
+              "dark_oak_door": "ダークオークのドア",
+              "dark_oak_trapdoor": "ダークオークのトラップドア"
+            }
+          },
+          "mangrove": {
+            "label": "マングローブ",
+            "items": {
+              "mangrove_wood": "マングローブの木",
+              "mangrove_log": "マングローブの原木",
+              "mangrove_planks": "マングローブの板材",
+              "stripped_mangrove_wood": "樹皮を剥いだマングローブの木",
+              "stripped_mangrove_log": "樹皮を剥いだマングローブの原木",
+              "mangrove_stairs": "マングローブの階段",
+              "mangrove_slab": "マングローブのハーフブロック",
+              "mangrove_fence": "マングローブのフェンス",
+              "mangrove_fence_gate": "マングローブのフェンスゲート",
+              "mangrove_door": "マングローブのドア",
+              "mangrove_trapdoor": "マングローブのトラップドア"
+            }
+          },
+          "cherry": {
+            "label": "サクラ",
+            "items": {
+              "cherry_wood": "サクラの木",
+              "cherry_log": "サクラの原木",
+              "cherry_planks": "サクラの板材",
+              "stripped_cherry_wood": "樹皮を剥いだサクラの木",
+              "stripped_cherry_log": "樹皮を剥いだサクラの原木",
+              "cherry_stairs": "サクラの階段",
+              "cherry_slab": "サクラのハーフブロック",
+              "cherry_fence": "サクラのフェンス",
+              "cherry_fence_gate": "サクラのフェンスゲート",
+              "cherry_door": "サクラのドア",
+              "cherry_trapdoor": "サクラのトラップドア"
+            }
+          },
+          "pale_oak": {
+            "label": "ペールオーク",
+            "items": {
+              "pale_oak_wood": "ペールオークの木",
+              "pale_oak_log": "ペールオークの原木",
+              "pale_oak_planks": "ペールオークの板材",
+              "stripped_pale_oak_wood": "樹皮を剥いだペールオークの木",
+              "stripped_pale_oak_log": "樹皮を剥いだペールオークの原木",
+              "pale_oak_stairs": "ペールオークの階段",
+              "pale_oak_slab": "ペールオークのハーフブロック",
+              "pale_oak_fence": "ペールオークのフェンス",
+              "pale_oak_fence_gate": "ペールオークのフェンスゲート",
+              "pale_oak_door": "ペールオークのドア",
+              "pale_oak_trapdoor": "ペールオークのトラップドア"
+            }
+          },
+          "bamboo": {
+            "label": "竹",
+            "items": {
+              "block_of_bamboo": "竹ブロック",
+              "block_of_stripped_bamboo": "表皮を剥いだ竹ブロック",
+              "bamboo_planks": "竹の板材",
+              "bamboo_mosaic": "竹細工",
+              "bamboo_stairs": "竹の階段",
+              "bamboo_mosaic_stairs": "竹細工の階段",
+              "bamboo_slab": "竹のハーフブロック",
+              "bamboo_mosaic_slab": "竹細工のハーフブロック",
+              "bamboo_fence": "竹のフェンス",
+              "bamboo_fence_gate": "竹のフェンスゲート",
+              "bamboo_door": "竹のドア",
+              "bamboo_trapdoor": "竹のトラップドア"
+            }
+          },
+          "crimson": {
+            "label": "真紅",
+            "items": {
+              "crimson_stem": "真紅の幹",
+              "crimson_hyphae": "真紅の菌糸",
+              "stripped_crimson_stem": "表皮を剥いだ真紅の幹",
+              "stripped_crimson_hyphae": "表皮を剥いだ真紅の菌糸",
+              "crimson_planks": "真紅の板材",
+              "crimson_stairs": "真紅の階段",
+              "crimson_slab": "真紅のハーフブロック",
+              "crimson_fence": "真紅のフェンス",
+              "crimson_fence_gate": "真紅のフェンスゲート",
+              "crimson_door": "真紅のドア",
+              "crimson_trapdoor": "真紅のトラップドア"
+            }
+          },
+          "warped": {
+            "label": "歪んだ",
+            "items": {
+              "warped_stem": "歪んだ幹",
+              "warped_hyphae": "歪んだ菌糸",
+              "stripped_warped_stem": "表皮を剥いだ歪んだ幹",
+              "stripped_warped_hyphae": "表皮を剥いだ歪んだ菌糸",
+              "warped_planks": "歪んだ板材",
+              "warped_stairs": "歪んだ階段",
+              "warped_slab": "歪んだハーフブロック",
+              "warped_fence": "歪んだフェンス",
+              "warped_fence_gate": "歪んだフェンスゲート",
+              "warped_door": "歪んだドア",
+              "warped_trapdoor": "歪んだトラップドア"
+            }
+          },
+          "special_wood": {
+            "label": "特殊木材",
+            "items": {
+              "petrified_oak_slab": "石化したオークのハーフブロック"
+            }
+          }
+        },
+        "notes": [
+          "クリエイティブインベントリの見た目に寄せ、樹種ごとにグループ化。",
+          "通常木材は 木→原木→板材→樹皮を剥いだ木→樹皮を剥いだ原木→階段→ハーフブロック→フェンス→フェンスゲート→ドア→トラップドア の順。",
+          "感圧板とボタンは機能系/レッドストーン系として扱うため除外。"
+        ]
+      },
+      "stone_materials": {
+        "label": "石材",
+        "groups": {
+          "stone": {
+            "label": "石",
+            "items": {
+              "stone": "石",
+              "stone_stairs": "石の階段",
+              "stone_slab": "石のハーフブロック",
+              "smooth_stone": "滑らかな石",
+              "smooth_stone_stairs": "滑らかな石の階段",
+              "smooth_stone_slab": "滑らかな石のハーフブロック"
+            }
+          },
+          "cobblestone": {
+            "label": "丸石",
+            "items": {
+              "cobblestone": "丸石",
+              "cobblestone_stairs": "丸石の階段",
+              "cobblestone_slab": "丸石のハーフブロック",
+              "cobblestone_wall": "丸石の塀",
+              "mossy_cobblestone": "苔むした丸石",
+              "mossy_cobblestone_wall": "苔むした丸石の塀"
+            }
+          },
+          "stone_bricks": {
+            "label": "石レンガ",
+            "items": {
+              "stone_bricks": "石レンガ",
+              "stone_brick_stairs": "石レンガの階段",
+              "stone_brick_slab": "石レンガのハーフブロック",
+              "stone_brick_wall": "石レンガの塀",
+              "chiseled_stone_bricks": "模様入りの石レンガ",
+              "cracked_stone_bricks": "ひび割れた石レンガ",
+              "mossy_stone_bricks": "苔むした石レンガ",
+              "mossy_stone_brick_stairs": "苔むした石レンガの階段",
+              "mossy_stone_brick_slab": "苔むした石レンガのハーフブロック",
+              "mossy_stone_brick_wall": "苔むした石レンガの塀"
+            }
+          },
+          "granite": {
+            "label": "花崗岩",
+            "items": {
+              "granite": "花崗岩",
+              "granite_stairs": "花崗岩の階段",
+              "granite_slab": "花崗岩のハーフブロック",
+              "granite_wall": "花崗岩の塀",
+              "polished_granite": "磨かれた花崗岩",
+              "polished_granite_stairs": "磨かれた花崗岩の階段",
+              "polished_granite_slab": "磨かれた花崗岩のハーフブロック"
+            }
+          },
+          "diorite": {
+            "label": "閃緑岩",
+            "items": {
+              "diorite": "閃緑岩",
+              "diorite_stairs": "閃緑岩の階段",
+              "diorite_slab": "閃緑岩のハーフブロック",
+              "diorite_wall": "閃緑岩の塀",
+              "polished_diorite": "磨かれた閃緑岩",
+              "polished_diorite_stairs": "磨かれた閃緑岩の階段",
+              "polished_diorite_slab": "磨かれた閃緑岩のハーフブロック"
+            }
+          },
+          "andesite": {
+            "label": "安山岩",
+            "items": {
+              "andesite": "安山岩",
+              "andesite_stairs": "安山岩の階段",
+              "andesite_slab": "安山岩のハーフブロック",
+              "andesite_wall": "安山岩の塀",
+              "polished_andesite": "磨かれた安山岩",
+              "polished_andesite_stairs": "磨かれた安山岩の階段",
+              "polished_andesite_slab": "磨かれた安山岩のハーフブロック"
+            }
+          },
+          "sandstone": {
+            "label": "砂岩・赤い砂岩",
+            "items": {
+              "sandstone": "砂岩",
+              "cut_sandstone": "研がれた砂岩",
+              "chiseled_sandstone": "模様入りの砂岩",
+              "smooth_sandstone": "滑らかな砂岩",
+              "red_sandstone": "赤い砂岩",
+              "cut_red_sandstone": "研がれた赤い砂岩",
+              "chiseled_red_sandstone": "模様入りの赤い砂岩",
+              "smooth_red_sandstone": "滑らかな赤い砂岩",
+              "sandstone_slab": "砂岩のハーフブロック",
+              "sandstone_wall": "砂岩の塀",
+              "cut_sandstone_slab": "研がれた砂岩のハーフブロック",
+              "smooth_sandstone_slab": "滑らかな砂岩のハーフブロック",
+              "red_sandstone_slab": "赤い砂岩のハーフブロック",
+              "red_sandstone_wall": "赤い砂岩の塀",
+              "cut_red_sandstone_slab": "研がれた赤い砂岩のハーフブロック",
+              "smooth_red_sandstone_slab": "滑らかな赤い砂岩のハーフブロック",
+              "sandstone_stairs": "砂岩の階段",
+              "cut_sandstone_stairs": "研がれた砂岩の階段",
+              "smooth_sandstone_stairs": "滑らかな砂岩の階段",
+              "red_sandstone_stairs": "赤い砂岩の階段",
+              "cut_red_sandstone_stairs": "研がれた赤い砂岩の階段",
+              "smooth_red_sandstone_stairs": "滑らかな赤い砂岩の階段"
+            }
+          },
+          "deepslate": {
+            "label": "深層岩",
+            "items": {
+              "deepslate": "深層岩",
+              "cobbled_deepslate": "深層岩の丸石",
+              "cobbled_deepslate_stairs": "深層岩の丸石の階段",
+              "cobbled_deepslate_slab": "深層岩の丸石のハーフブロック",
+              "cobbled_deepslate_wall": "深層岩の丸石の塀",
+              "polished_deepslate": "磨かれた深層岩",
+              "polished_deepslate_stairs": "磨かれた深層岩の階段",
+              "polished_deepslate_slab": "磨かれた深層岩のハーフブロック",
+              "polished_deepslate_wall": "磨かれた深層岩の塀",
+              "chiseled_deepslate": "模様入りの深層岩",
+              "deepslate_bricks": "深層岩レンガ",
+              "deepslate_brick_stairs": "深層岩レンガの階段",
+              "deepslate_brick_slab": "深層岩レンガのハーフブロック",
+              "deepslate_brick_wall": "深層岩レンガの塀",
+              "cracked_deepslate_bricks": "ひび割れた深層岩レンガ",
+              "deepslate_tiles": "深層岩タイル",
+              "deepslate_tile_stairs": "深層岩タイルの階段",
+              "deepslate_tile_slab": "深層岩タイルのハーフブロック",
+              "deepslate_tile_wall": "深層岩タイルの塀",
+              "cracked_deepslate_tiles": "ひび割れた深層岩タイル",
+              "reinforced_deepslate": "強化された深層岩"
+            }
+          },
+          "tuff": {
+            "label": "凝灰岩",
+            "items": {
+              "tuff": "凝灰岩",
+              "tuff_stairs": "凝灰岩の階段",
+              "tuff_slab": "凝灰岩のハーフブロック",
+              "tuff_wall": "凝灰岩の塀",
+              "polished_tuff": "磨かれた凝灰岩",
+              "polished_tuff_stairs": "磨かれた凝灰岩の階段",
+              "polished_tuff_slab": "磨かれた凝灰岩のハーフブロック",
+              "polished_tuff_wall": "磨かれた凝灰岩の塀",
+              "chiseled_tuff": "模様入りの凝灰岩",
+              "tuff_bricks": "凝灰岩レンガ",
+              "tuff_brick_stairs": "凝灰岩レンガの階段",
+              "tuff_brick_slab": "凝灰岩レンガのハーフブロック",
+              "tuff_brick_wall": "凝灰岩レンガの塀",
+              "chiseled_tuff_bricks": "模様入りの凝灰岩レンガ"
+            }
+          },
+          "bricks_mud_resin": {
+            "label": "レンガ・泥・樹脂",
+            "items": {
+              "bricks": "レンガ",
+              "brick_stairs": "レンガの階段",
+              "brick_slab": "レンガのハーフブロック",
+              "brick_wall": "レンガの塀",
+              "packed_mud": "固めた泥",
+              "mud_bricks": "泥レンガ",
+              "mud_brick_stairs": "泥レンガの階段",
+              "mud_brick_slab": "泥レンガのハーフブロック",
+              "mud_brick_wall": "泥レンガの塀",
+              "block_of_resin": "樹脂ブロック",
+              "resin_bricks": "樹脂レンガ",
+              "resin_brick_stairs": "樹脂レンガの階段",
+              "resin_brick_slab": "樹脂レンガのハーフブロック",
+              "resin_brick_wall": "樹脂レンガの塀",
+              "chiseled_resin_bricks": "模様入りの樹脂レンガ"
+            }
+          },
+          "prismarine": {
+            "label": "海洋石材",
+            "items": {
+              "prismarine": "プリズマリン",
+              "prismarine_stairs": "プリズマリンの階段",
+              "prismarine_slab": "プリズマリンのハーフブロック",
+              "prismarine_wall": "プリズマリンの塀",
+              "prismarine_bricks": "プリズマリンレンガ",
+              "prismarine_brick_stairs": "プリズマリンレンガの階段",
+              "prismarine_brick_slab": "プリズマリンレンガのハーフブロック",
+              "dark_prismarine": "ダークプリズマリン",
+              "dark_prismarine_stairs": "ダークプリズマリンの階段",
+              "dark_prismarine_slab": "ダークプリズマリンのハーフブロック"
+            }
+          },
+          "quartz_purpur": {
+            "label": "クォーツ・プルプァ",
+            "items": {
+              "block_of_quartz": "クォーツブロック",
+              "quartz_stairs": "クォーツの階段",
+              "quartz_slab": "クォーツのハーフブロック",
+              "smooth_quartz_block": "滑らかなクォーツブロック",
+              "smooth_quartz_stairs": "滑らかなクォーツの階段",
+              "smooth_quartz_slab": "滑らかなクォーツのハーフブロック",
+              "quartz_bricks": "クォーツレンガ",
+              "chiseled_quartz_block": "模様入りのクォーツブロック",
+              "quartz_pillar": "クォーツの柱",
+              "purpur_block": "プルプァブロック",
+              "purpur_stairs": "プルプァの階段",
+              "purpur_slab": "プルプァのハーフブロック",
+              "purpur_pillar": "プルプァの柱"
+            }
+          },
+          "nether": {
+            "label": "ネザー系",
+            "items": {
+              "netherrack": "ネザーラック",
+              "nether_bricks": "ネザーレンガ",
+              "nether_brick_stairs": "ネザーレンガの階段",
+              "nether_brick_slab": "ネザーレンガのハーフブロック",
+              "nether_brick_wall": "ネザーレンガの塀",
+              "chiseled_nether_bricks": "模様入りのネザーレンガ",
+              "cracked_nether_bricks": "ひび割れたネザーレンガ",
+              "red_nether_bricks": "赤いネザーレンガ",
+              "red_nether_brick_wall": "赤いネザーレンガの塀",
+              "basalt": "玄武岩",
+              "polished_basalt": "磨かれた玄武岩",
+              "smooth_basalt": "滑らかな玄武岩"
+            }
+          },
+          "blackstone": {
+            "label": "ブラックストーン",
+            "items": {
+              "blackstone": "ブラックストーン",
+              "blackstone_stairs": "ブラックストーンの階段",
+              "blackstone_slab": "ブラックストーンのハーフブロック",
+              "blackstone_wall": "ブラックストーンの塀",
+              "polished_blackstone": "磨かれたブラックストーン",
+              "polished_blackstone_stairs": "磨かれたブラックストーンの階段",
+              "polished_blackstone_slab": "磨かれたブラックストーンのハーフブロック",
+              "polished_blackstone_wall": "磨かれたブラックストーンの塀",
+              "chiseled_polished_blackstone": "模様入りの磨かれたブラックストーン",
+              "polished_blackstone_bricks": "磨かれたブラックストーンレンガ",
+              "polished_blackstone_brick_stairs": "磨かれたブラックストーンレンガの階段",
+              "polished_blackstone_brick_slab": "磨かれたブラックストーンレンガのハーフブロック",
+              "polished_blackstone_brick_wall": "磨かれたブラックストーンレンガの塀",
+              "cracked_polished_blackstone_bricks": "ひび割れた磨かれたブラックストーンレンガ"
+            }
+          },
+          "end_stone": {
+            "label": "エンドストーン",
+            "items": {
+              "end_stone": "エンドストーン",
+              "end_stone_bricks": "エンドストーンレンガ",
+              "end_stone_brick_stairs": "エンドストーンレンガの階段",
+              "end_stone_brick_slab": "エンドストーンレンガのハーフブロック",
+              "end_stone_brick_wall": "エンドストーンレンガの塀"
+            }
+          },
+          "special_stone": {
+            "label": "特殊石材",
+            "items": {
+              "bedrock": "岩盤",
+              "obsidian": "黒曜石",
+              "crying_obsidian": "泣く黒曜石",
+              "calcite": "方解石",
+              "dripstone_block": "鍾乳石ブロック",
+              "pointed_dripstone_down_tip_merge": "鍾乳石"
+            }
+          },
+          "future_stone": {
+            "label": "追加予定・要確認石材",
+            "items": {
+              "cinnabar_wall": "辰砂の塀",
+              "polished_cinnabar_wall": "磨かれた辰砂の塀",
+              "cinnabar_brick_wall": "辰砂レンガの塀",
+              "sulfur_wall": "硫黄の塀",
+              "polished_sulfur_wall": "磨かれた硫黄の塀",
+              "sulfur_brick_wall": "硫黄レンガの塀"
+            }
+          }
+        },
+        "notes": [
+          "素材ごとに、ブロック→階段→ハーフブロック→塀を基本順序として整理。",
+          "並びは石→石レンガ→砂岩→深層岩→凝灰岩→レンガ/泥/樹脂→海洋石材→ネザー系→ブラックストーン系を意識。"
+        ]
+      }
+    }
+  },
+  "meta": {
+    "source_file": "minecraft_category_general_building_blocks_v3_inventory_order.json",
+    "note": "metal_building は minecraft_category_metal_blocks.json に独立分離。",
+    "image_reference": "スクリーンショット 2026-06-01 16.34.14.png",
+    "unplaced_counts": {
+      "wood": 0,
+      "stone": 0,
+      "metal": 0
+    },
+    "cut_copper_slabs_and_stairs_patch": {
+      "added_to": "building_blocks.groups.metal_building.groups.copper.groups.cut_copper_slabs_and_stairs",
+      "count": 16
+    },
+    "removed_category": "metal_building"
+  }
+}
