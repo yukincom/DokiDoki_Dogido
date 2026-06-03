@@ -1,0 +1,1138 @@
+{
+  "label": "友好Mob",
+  "recommended_fields": [
+    "label",
+    "aquatic",
+    "dies_on_land",
+    "burns_in_daylight",
+    "poetic"
+  ],
+  "items": {
+    "agent": {
+      "label": "エージェント",
+      "poetic": {
+        "visual_tags": [
+          "人工",
+          "補助",
+          "青い影"
+        ],
+        "sound_tags": [
+          "しん"
+        ],
+        "motion_tags": [
+          "ついてくる",
+          "作業する"
+        ],
+        "scene_tags": [
+          "教育版",
+          "実験",
+          "作業場"
+        ],
+        "reaction_tags": [
+          "妙やな",
+          "手伝ってほしい"
+        ],
+        "comic_tags": [
+          "人やないのに働き者"
+        ],
+        "role": "人工の相棒"
+      }
+    },
+    "allay": {
+      "label": "アレイ",
+      "poetic": {
+        "visual_tags": [
+          "青い",
+          "小さい",
+          "羽"
+        ],
+        "sound_tags": [
+          "りんりん"
+        ],
+        "motion_tags": [
+          "ふわふわ"
+        ],
+        "scene_tags": [
+          "空中",
+          "アイテム",
+          "光"
+        ],
+        "reaction_tags": [
+          "助かる",
+          "かわいい"
+        ],
+        "comic_tags": [
+          "働き者の妖精"
+        ],
+        "role": "軽さを運ぶ小さな相棒"
+      }
+    },
+    "armadillo": {
+      "label": "アルマジロ",
+      "poetic": {
+        "visual_tags": [
+          "甲羅",
+          "丸まる",
+          "砂色"
+        ],
+        "sound_tags": [
+          "ころっ"
+        ],
+        "motion_tags": [
+          "とことこ"
+        ],
+        "scene_tags": [
+          "乾いた草地",
+          "昼",
+          "のんびり"
+        ],
+        "reaction_tags": [
+          "かわいい",
+          "ウロコが欲しい"
+        ],
+        "comic_tags": [
+          "防御力が高い"
+        ],
+        "role": "ころんと収まる小動物"
+      }
+    },
+    "axolotl": {
+      "label": "ウーパールーパー",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "ひらひら",
+          "ファニーフェイス",
+          "水槽みたい"
+        ],
+        "sound_tags": [
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "ゆらゆら"
+        ],
+        "scene_tags": [
+          "繁茂した洞窟",
+          "水辺",
+          "静けさ"
+        ],
+        "reaction_tags": [
+          "見とれる",
+          "水中戦では頼もしい"
+        ],
+        "comic_tags": [
+          "かわいさが強い",
+          "意外にも肉食"          
+        ],
+        "role": "愛らしいサラマンダー"
+      }
+    },
+    "bat": {
+      "label": "コウモリ",
+      "poetic": {
+        "visual_tags": [
+          "黒い影",
+          "小さい羽",
+          "洞窟"
+        ],
+        "sound_tags": [
+          "ぱたぱた"
+        ],
+        "motion_tags": [
+          "ひらひら",
+          "ぶら下がる"
+        ],
+        "scene_tags": [
+          "洞窟",
+          "くらがり",
+          "天井"
+        ],
+        "reaction_tags": [
+          "びっくり",
+          "実害はない"
+        ],
+        "comic_tags": [
+          "気配だけは一人前",
+          "ちょっと邪魔"
+        ],
+        "role": "暗がりをそれっぽくする影"
+      }
+    },
+    "camel": {
+      "label": "ラクダ",
+      "poetic": {
+        "visual_tags": [
+          "背こぶ",
+          "長い脚",
+          "砂色"
+        ],
+        "sound_tags": [
+          "もそっ"
+        ],
+        "motion_tags": [
+          "のっしのっし",
+          "ぴょん"
+        ],
+        "scene_tags": [
+          "砂漠",
+          "長旅"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "頼もしい"
+        ],
+        "comic_tags": [
+          "座るとでかい",
+          "ふたりで乗れる",
+          "巨体に似合わぬジャンプ力"
+        ],
+        "role": "乾いた土地の相棒"
+      }
+    },
+    "cat": {
+      "label": "ネコ",
+      "poetic": {
+        "visual_tags": [
+          "しなやか",
+          "ひげ",
+          "細い目"
+        ],
+        "sound_tags": [
+          "にゃあ"
+        ],
+        "motion_tags": [
+          "すたすた",
+          "丸くなる"
+        ],
+        "scene_tags": [
+          "村",
+          "魚"
+        ],
+        "reaction_tags": [
+          "かわいい",
+          "気ままやな"
+        ],
+        "comic_tags": [
+          "クリーパーの苦手なもの"          
+        ],
+        "role": "くつろぎの象徴"
+      }
+    },
+    "chicken": {
+      "label": "ニワトリ",
+      "poetic": {
+        "visual_tags": [
+          "白い羽",
+          "赤いとさか",
+          "小さな脚"
+        ],
+        "sound_tags": [
+          "こっこ",
+          "ぱたぱた"
+        ],
+        "motion_tags": [
+          "ちょこちょこ"
+        ],
+        "scene_tags": [
+          "畑",
+          "村"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "たまご産まないかな"
+        ],
+        "comic_tags": [
+          "飛びそうで飛ばん"
+        ],
+        "role": "元気な牧場の仲間"
+      }
+    },
+    "cod": {
+      "label": "タラ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "大きい魚",
+          "水面",
+          "群れ"
+        ],
+        "sound_tags": [
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "すいすい"
+        ],
+        "scene_tags": [
+          "川",
+          "海",
+          "浅瀬"
+        ],
+        "reaction_tags": [
+          "おさかなや",
+          "静かやな"
+        ],
+        "comic_tags": [
+          "おいしそう"
+        ],
+        "role": "水辺のムニエル"
+      }
+    },
+    "copper_golem": {
+      "label": "銅のゴーレム",
+      "poetic": {
+        "visual_tags": [
+          "銅",
+          "小さな巨体",
+          "緑青"
+        ],
+        "sound_tags": [
+          "こん",
+          "こつこつ"
+        ],
+        "motion_tags": [
+          "てくてく",
+          "ボタンを押す"
+        ],
+        "scene_tags": [
+          "工房",
+          "装置",
+          "発明品"
+        ],
+        "reaction_tags": [
+          "妙にかわいい",
+          "仲間"
+        ],
+        "comic_tags": [
+          "金属なのに愛嬌がある"
+        ],
+        "role": "工作感のある小さな仲間"
+      }
+    },
+    "cow": {
+      "label": "ウシ",
+      "poetic": {
+        "visual_tags": [
+          "まだら",
+          "四角い顔",
+          "大きい体"
+        ],
+        "sound_tags": [
+          "もー"
+        ],
+        "motion_tags": [
+          "のっそり"
+        ],
+        "scene_tags": [
+          "草地",
+          "柵",
+          "牧場"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "平和やな"
+        ],
+        "comic_tags": [
+          "草食っとる"
+        ],
+        "role": "牧場の落ち着きを作る役"
+      }
+    },
+    "frog": {
+      "label": "カエル",
+      "poetic": {
+        "visual_tags": [
+          "ぴょこ",
+          "丸い目",
+          "湿り気"
+        ],
+        "sound_tags": [
+          "けろけろ"
+        ],
+        "motion_tags": [
+          "ぴょんぴょん"
+        ],
+        "scene_tags": [
+          "沼",
+          "水辺",
+          "雨上がり"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "見守りたい"
+        ],
+        "comic_tags": [
+          "舌が仕事人"
+        ],
+        "role": "大食な水辺の歌い手"
+      }
+    },
+    "glow_squid": {
+      "label": "ヒカリイカ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "青い光",
+          "水中",
+          "ゆらぐ"
+        ],
+        "sound_tags": [
+          "しん"
+        ],
+        "motion_tags": [
+          "ふわり"
+        ],
+        "scene_tags": [
+          "暗い水底",
+          "洞窟湖",
+          "夜"
+        ],
+        "reaction_tags": [
+          "きれい",
+          "顔が怖い"
+        ],
+        "comic_tags": [
+          "不気味に光る"
+        ],
+        "role": "暗所の静かな灯り"
+      }
+    },
+    "happy_ghast": {
+      "label": "ハッピーガスト",
+      "poetic": {
+        "visual_tags": [
+          "白い顔",
+          "ふわふわ",
+          "笑顔"
+        ],
+        "sound_tags": [
+          "ふよ",
+          "やわらかい声"
+        ],
+        "motion_tags": [
+          "ただよう"
+        ],
+        "scene_tags": [
+          "空",
+          "雲",
+          "平和なネザー"
+        ],
+        "reaction_tags": [
+          "きもかわ",
+          "でかい"
+        ],
+        "comic_tags": [
+          "ガストなのに平和"
+        ],
+        "role": "既知の恐怖を裏切る和み役"
+      }
+    },
+    "horse": {
+      "label": "ウマ",
+      "poetic": {
+        "visual_tags": [
+          "たてがみ",
+          "脚",
+          "駆ける姿"
+        ],
+        "sound_tags": [
+          "ひひん",
+          "ぱかぱか"
+        ],
+        "motion_tags": [
+          "走る",
+          "駆け抜ける"
+        ],
+        "scene_tags": [
+          "平原",
+          "夕方",
+          "旅路"
+        ],
+        "reaction_tags": [
+          "乗りたい",
+          "いろんな模様"
+        ],
+        "comic_tags": [
+          "速さが頼もしい"
+        ],
+        "role": "旅情を運ぶ足"
+      }
+    },
+    "map_marker": {
+      "label": "マップマーカー",
+      "poetic": {
+        "visual_tags": [
+          "印",
+          "地図",
+          "目印"
+        ],
+        "sound_tags": [
+          "しん"
+        ],
+        "motion_tags": [
+          "動かへん"
+        ],
+        "scene_tags": [
+          "地図",
+          "冒険",
+          "位置情報"
+        ],
+        "reaction_tags": [
+          "助かる",
+          "見失いたくない"
+        ],
+        "comic_tags": [
+          "Mobというより記号"
+        ],
+        "role": "場所を示す記号"
+      }
+    },
+    "mooshroom": {
+      "label": "ムーシュルーム",
+      "poetic": {
+        "visual_tags": [
+          "赤いキノコ",
+          "牛",
+          "不思議"
+        ],
+        "sound_tags": [
+          "もー"
+        ],
+        "motion_tags": [
+          "のっそり"
+        ],
+        "scene_tags": [
+          "キノコ島",
+          "菌糸",
+          "霧"
+        ],
+        "reaction_tags": [
+          "妙やな",
+          "見入る"
+        ],
+        "comic_tags": [
+          "牛とキノコが合体"
+        ],
+        "role": "異界感そのもの"
+      }
+    },
+    "mule": {
+      "label": "ラバ",
+      "poetic": {
+        "visual_tags": [
+          "荷物",
+          "耳",
+          "丈夫そう"
+        ],
+        "sound_tags": [
+          "ぶるる"
+        ],
+        "motion_tags": [
+          "こつこつ歩く"
+        ],
+        "scene_tags": [
+          "山道",
+          "旅路",
+          "拠点帰り"
+        ],
+        "reaction_tags": [
+          "頼もしい",
+          "荷物持って"
+        ],
+        "comic_tags": [
+          "働き者感が強い"
+        ],
+        "role": "運ぶことに向いた相棒"
+      }
+    },
+    "npc": {
+      "label": "NPC",
+      "poetic": {
+        "visual_tags": [
+          "人影",
+          "固定",
+          "案内役"
+        ],
+        "sound_tags": [
+          "しん"
+        ],
+        "motion_tags": [
+          "立ち止まる"
+        ],
+        "scene_tags": [
+          "町",
+          "会話",
+          "物語"
+        ],
+        "reaction_tags": [
+          "話しかけたい",
+          "ちょっと不思議"
+        ],
+        "comic_tags": [
+          "急にゲーム感が増す"
+        ],
+        "role": "世界のにぎやかし"
+      }
+    },
+    "ocelot": {
+      "label": "ヤマネコ",
+      "poetic": {
+        "visual_tags": [
+          "斑点",
+          "細身",
+          "黄土色"
+        ],
+        "sound_tags": [
+          "するり"
+        ],
+        "motion_tags": [
+          "すばやい",
+          "忍び足"
+        ],
+        "scene_tags": [
+          "ジャングル",
+          "葉陰"
+        ],
+        "reaction_tags": [
+          "見失う",
+          "気品ある"
+        ],
+        "comic_tags": [
+          "近いようで遠い",
+          "かわいいがなつかない",
+          "クリーパーが苦手なもの"
+        ],
+        "role": "葉陰を横切る静かな気品"
+      }
+    },
+    "parrot": {
+      "label": "オウム",
+      "poetic": {
+        "visual_tags": [
+          "羽色",
+          "小さい嘴",
+          "肩のり"
+        ],
+        "sound_tags": [
+          "ぴー",
+          "まね声"
+        ],
+        "motion_tags": [
+          "ぱたぱた",
+          "止まり木にのる",
+          "踊る"
+        ],
+        "scene_tags": [
+          "ジャングル",
+          "枝先",
+          "昼"
+        ],
+        "reaction_tags": [
+          "にぎやか",
+          "肩に乗せたい"
+        ],
+        "comic_tags": [
+          "おどり上手"
+        ],
+        "role": "はなやかな踊り子"
+      }
+    },
+    "pig": {
+      "label": "ブタ",
+      "poetic": {
+        "visual_tags": [
+          "桃色",
+          "鼻",
+          "ころん"
+        ],
+        "sound_tags": [
+          "ぶひ"
+        ],
+        "motion_tags": [
+          "とことこ"
+        ],
+        "scene_tags": [
+          "草地",
+          "畑"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "にんじん欲しそう"
+        ],
+        "comic_tags": [
+          "素朴さが強い",
+          "肉くれ"
+        ],
+        "role": "平和な日常の象徴"
+      }
+    },
+    "pufferfish": {
+      "label": "フグ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "まるい",
+          "棘",
+          "小さい口"
+        ],
+        "sound_tags": [
+          "しん",
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "ふくらむ",
+          "ただよう"
+        ],
+        "scene_tags": [
+          "暖かい海",
+          "珊瑚",
+          "浅瀬"
+        ],
+        "reaction_tags": [
+          "面白い姿",
+          "オウムガイの餌"
+        ],
+        "comic_tags": [
+          "怒るとすぐ丸い"
+        ],
+        "role": "水中の小さな警戒心"
+      }
+    },
+    "rabbit": {
+      "label": "ウサギ",
+      "poetic": {
+        "visual_tags": [
+          "白",
+          "耳",
+          "小さい"
+        ],
+        "sound_tags": [
+          "ぴょこ"
+        ],
+        "motion_tags": [
+          "ぴょんぴょん"
+        ],
+        "scene_tags": [
+          "草むら",
+          "ひらけたとこにおる"
+        ],
+        "reaction_tags": [
+          "かわいい",
+          "追いかけたい"
+        ],
+        "comic_tags": [
+          "なかなか捕まらない"
+        ],
+        "role": "軽快な警戒者"
+      }
+    },
+    "salmon": {
+      "label": "サケ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "銀色",
+          "川の大物",
+          "群れ"
+        ],
+        "sound_tags": [
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "さかのぼる",
+          "すいすい"
+        ],
+        "scene_tags": [
+          "川",
+          "海",
+          "水辺"
+        ],
+        "reaction_tags": [
+          "おおきい",
+          "おいしそう"
+        ],
+        "comic_tags": [
+          "流れに逆らうごちそう"
+        ],
+        "role": "流れに向かう気配"
+      }
+    },
+    "sheep": {
+      "label": "ヒツジ",
+      "poetic": {
+        "visual_tags": [
+          "白い",
+          "もこもこ",
+          "群れ"
+        ],
+        "sound_tags": [
+          "めえめえ"
+        ],
+        "motion_tags": [
+          "のそのそ"
+        ],
+        "scene_tags": [
+          "草地",
+          "柵のそば"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "平和"
+        ],
+        "comic_tags": [
+          "草ばっか食う"
+        ],
+        "role": "平原ののどかさ担当"
+      }
+    },
+    "skeleton_horse": {
+      "label": "スケルトンホース",
+      "burns_in_daylight": false,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "骨馬",
+          "白い骨",
+          "空っぽの目"
+        ],
+        "sound_tags": [
+          "かたかた",
+          "ひひん"
+        ],
+        "motion_tags": [
+          "駆ける",
+          "佇む"
+        ],
+        "scene_tags": [
+          "雷雨",
+          "夜",
+          "平原"
+        ],
+        "reaction_tags": [
+          "不吉",
+          "乗れたら妙"
+        ],
+        "comic_tags": [
+          "骨だけなのに頑丈"
+        ],
+        "role": "不吉を運ぶ影"
+      }
+    },
+    "sniffer": {
+      "label": "スニッファー",
+      "poetic": {
+        "visual_tags": [
+          "古代",
+          "鼻先",
+          "大きい"
+        ],
+        "sound_tags": [
+          "ずもっ"
+        ],
+        "motion_tags": [
+          "もっさり",
+          "嗅ぐ"
+        ],
+        "scene_tags": [
+          "土",
+          "花",
+          "遺跡気分"
+        ],
+        "reaction_tags": [
+          "不思議",
+          "見れば見るほど鼻"
+        ],
+        "comic_tags": [
+          "鼻が主役"
+        ],
+        "role": "古代の香りがする巨体"
+      }
+    },
+    "snow_golem": {
+      "label": "スノウゴーレム",
+      "poetic": {
+        "visual_tags": [
+          "雪だるま",
+          "白",
+          "かぼちゃ"
+        ],
+        "sound_tags": [
+          "しん",
+          "ぽすぽす"
+        ],
+        "motion_tags": [
+          "とことこ",
+          "雪をのこす"
+        ],
+        "scene_tags": [
+          "雪原",
+          "村",
+          "白い道"
+        ],
+        "reaction_tags": [
+          "けなげ",
+          "ちょっと守りたい"
+        ],
+        "comic_tags": [
+          "ハロウィンの生き残り",
+          "秋と冬のあいのこ"
+        ],
+        "role": "冬景色の見張り役"
+      }
+    },
+    "squid": {
+      "label": "イカ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "墨",
+          "触手",
+          "黒い影"
+        ],
+        "sound_tags": [
+          "しん",
+          "みずおと"
+        ],
+        "motion_tags": [
+          "ふわふわ",
+          "ただよう"
+        ],
+        "scene_tags": [
+          "川",
+          "海",
+          "水中"
+        ],
+        "reaction_tags": [
+          "のんびり",
+          "ちょっと不思議"
+        ],
+        "comic_tags": [
+          "口が怖い",
+          "でかい"
+        ],
+        "role": "水辺の静けさ担当"
+      }
+    },
+    "strider": {
+      "label": "ストライダー",
+      "poetic": {
+        "visual_tags": [
+          "毛なびく",
+          "赤い",
+          "熱に強い"
+        ],
+        "sound_tags": [
+          "ぶるぶる"
+        ],
+        "motion_tags": [
+          "とことこ"
+        ],
+        "scene_tags": [
+          "溶岩湖",
+          "ネザー",
+          "灼熱"
+        ],
+        "reaction_tags": [
+          "乗ると助かる",
+          "見た目が妙"
+        ],
+        "comic_tags": [
+          "暑いと元気"
+        ],
+        "role": "灼熱を渡る奇妙な足"
+      }
+    },
+    "tadpole": {
+      "label": "オタマジャクシ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "しっぽ",
+          "小さい影",
+          "水たまり"
+        ],
+        "sound_tags": [
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "ぴこぴこ",
+          "群れる"
+        ],
+        "scene_tags": [
+          "浅瀬",
+          "沼"
+        ],
+        "reaction_tags": [
+          "かえるのこ",
+          "まだちいさい"
+        ],
+        "comic_tags": [
+          "さかなではない"
+        ],
+        "role": "先を感じる小さな命"
+      }
+    },
+    "tropical_fish": {
+      "label": "熱帯魚",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "色とりどり",
+          "ひらひら",
+          "水の花"
+        ],
+        "sound_tags": [
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "すいすい"
+        ],
+        "scene_tags": [
+          "暖かい海",
+          "珊瑚",
+          "洞窟湖"
+        ],
+        "reaction_tags": [
+          "きれい",
+          "見とれる"
+        ],
+        "comic_tags": [
+          "色も形も多様で集めたくなる"
+        ],
+        "role": "水中の彩り担当"
+      }
+    },
+    "turtle": {
+      "label": "カメ",
+      "aquatic": true,
+      "dies_on_land": false,
+      "poetic": {
+        "visual_tags": [
+          "甲羅",
+          "浜辺",
+          "ゆっくり"
+        ],
+        "sound_tags": [
+          "しゃり"
+        ],
+        "motion_tags": [
+          "のそのそ"
+        ],
+        "scene_tags": [
+          "砂浜",
+          "海",
+          "朝日"
+        ],
+        "reaction_tags": [
+          "のどか",
+          "見守りたい"
+        ],
+        "comic_tags": [
+          "急がへん感じがええ"
+        ],
+        "role": "浜辺のゆっくり担当"
+      }
+    },
+    "villager": {
+      "label": "村人",
+      "poetic": {
+        "visual_tags": [
+          "日常",
+          "ローブ",
+          "村"
+        ],
+        "sound_tags": [
+          "ふんふん"
+        ],
+        "motion_tags": [
+          "うろうろ"
+        ],
+        "scene_tags": [
+          "村",
+          "畑",
+          "夕暮れ"
+        ],
+        "reaction_tags": [
+          "住人",
+          "ほっとする"
+        ],
+        "comic_tags": [
+          "商売優先"
+        ],
+        "role": "生活感を運ぶ人影"
+      }
+    },
+    "wandering_trader": {
+      "label": "行商人",
+      "poetic": {
+        "visual_tags": [
+          "青い装束",
+          "旅姿",
+          "荷物"
+        ],
+        "sound_tags": [
+          "ふんふん"
+        ],
+        "motion_tags": [
+          "ふらりと来る",
+          "立ち止まる"
+        ],
+        "scene_tags": [
+          "道ばた",
+          "拠点前",
+          "神出鬼没"
+        ],
+        "reaction_tags": [
+          "何売っとるん",
+          "儲かりまっか",
+          "透明ポーション"
+        ],
+        "comic_tags": [
+          "エメラルド大好き"
+        ],
+        "role": "世界を横切る旅の匂い"
+      }
+    },
+    "zombie_horse": {
+      "label": "ゾンビホース",
+      "burns_in_daylight": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "腐敗",
+          "夜の影",
+          "緑色"
+        ],
+        "sound_tags": [
+          "ひひん",
+          "うめき"
+        ],
+        "motion_tags": [
+          "よろめく",
+          "駆ける"
+        ],
+        "scene_tags": [
+          "夜",
+          "墓場みたいな空気",
+          "荒地"
+        ],
+        "reaction_tags": [
+          "妙やな",
+          "金りんごで生き返らんかな"
+        ],
+        "comic_tags": [
+          "馬までゾンビ化",
+          "スケルトンホースになる？"
+        ],
+        "role": "旅情を引きずる影"
+      }
+    }
+  }
+}

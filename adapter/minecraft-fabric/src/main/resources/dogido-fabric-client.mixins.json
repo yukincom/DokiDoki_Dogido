@@ -1,6 +1,6 @@
 {
   "required": true,
-  "package": "com.yukinco.dogido.fabric.mixin",
+  "package": "dogido.fabric.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
     "ClientPlayNetworkHandlerMixin"

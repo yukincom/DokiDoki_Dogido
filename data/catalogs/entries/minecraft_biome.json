@@ -1,0 +1,493 @@
+{
+  "groups": {
+    "snowy": {
+      "label": "氷雪バイオーム",
+      "description": "Snowy biomes",
+      "biomes": {
+        "snowy_plains": {
+          "japanese": "雪原",
+          "temperature": 0.0,
+          "downfall": 0.5
+        },
+        "ice_spikes": {
+          "japanese": "氷樹",
+          "temperature": 0.0,
+          "downfall": 0.5
+        },
+        "snowy_taiga": {
+          "japanese": "雪のタイガ",
+          "temperature": -0.5,
+          "downfall": 0.4
+        },
+        "grove": {
+          "japanese": "林",
+          "temperature": -0.2,
+          "downfall": 0.8
+        },
+        "snowy_slopes": {
+          "japanese": "雪の斜面",
+          "temperature": -0.3,
+          "downfall": 0.9
+        },
+        "jagged_peaks": {
+          "japanese": "尖った山頂",
+          "temperature": -0.7,
+          "downfall": 0.9
+        },
+        "frozen_peaks": {
+          "japanese": "凍った山頂",
+          "temperature": -0.7,
+          "downfall": 0.9
+        }
+      }
+    },
+    "cold": {
+      "label": "冷帯バイオーム",
+      "description": "Cold biomes",
+      "snow_rule_summary": "吹きさらしの丘や石だらけの海岸ではY=113以上、タイガやトウヒの原生林ではY=153以上、マツの原生林ではY=193以上で雪が降り始め、それ以外では雨が降る。",
+      "biomes": {
+        "windswept_hills": {
+          "japanese": "吹きさらしの丘",
+          "temperature": 0.2,
+          "downfall": 0.3,
+          "snow_starts_at_y": 113
+        },
+        "windswept_gravelly_hills": {
+          "japanese": "吹きさらしの砂利の丘",
+          "temperature": 0.2,
+          "downfall": 0.3,
+          "snow_starts_at_y": 113
+        },
+        "windswept_forest": {
+          "japanese": "吹きさらしの森",
+          "temperature": 0.2,
+          "downfall": 0.3,
+          "snow_starts_at_y": null
+        },
+        "taiga": {
+          "japanese": "タイガ",
+          "temperature": 0.25,
+          "downfall": 0.8,
+          "snow_starts_at_y": 153
+        },
+        "old_growth_pine_taiga": {
+          "japanese": "マツの原生林",
+          "temperature": 0.3,
+          "downfall": 0.8,
+          "snow_starts_at_y": 193
+        },
+        "old_growth_spruce_taiga": {
+          "japanese": "トウヒの原生林",
+          "temperature": 0.25,
+          "downfall": 0.8,
+          "snow_starts_at_y": 153
+        },
+        "stony_shore": {
+          "japanese": "石だらけの海岸",
+          "temperature": 0.2,
+          "downfall": 0.3,
+          "snow_starts_at_y": 113
+        }
+      }
+    },
+    "temperate": {
+      "label": "温帯バイオーム",
+      "description": "Medium/lush biomes",
+      "notes": [
+        "植物や草は、沼地や暗い森を除き、鮮やかな黄緑色。水は青色。",
+        "ペールガーデンは気温・降水量の記載が見当たらないため null とした。"
+      ],
+      "biomes": {
+        "plains": {
+          "japanese": "平原",
+          "temperature": 0.8,
+          "downfall": 0.4
+        },
+        "sunflower_plains": {
+          "japanese": "ヒマワリ平原",
+          "temperature": 0.8,
+          "downfall": 0.4
+        },
+        "forest": {
+          "japanese": "森林",
+          "temperature": 0.7,
+          "downfall": 0.8
+        },
+        "flower_forest": {
+          "japanese": "花の森",
+          "temperature": 0.7,
+          "downfall": 0.8
+        },
+        "birch_forest": {
+          "japanese": "シラカバの森",
+          "temperature": 0.6,
+          "downfall": 0.6
+        },
+        "old_growth_birch_forest": {
+          "japanese": "シラカバの原生林",
+          "temperature": {
+            "java": 0.6,
+            "bedrock": 0.7
+          },
+          "downfall": {
+            "java": 0.6,
+            "bedrock": 0.8
+          }
+        },
+        "dark_forest": {
+          "japanese": "暗い森",
+          "temperature": 0.7,
+          "downfall": 0.8
+        },
+        "swamp": {
+          "japanese": "沼地",
+          "temperature": 0.8,
+          "downfall": {
+            "java": 0.9,
+            "bedrock": 0.5
+          }
+        },
+        "mangrove_swamp": {
+          "japanese": "マングローブの沼地",
+          "temperature": 0.8,
+          "downfall": {
+            "java": 0.9,
+            "bedrock": 0.5
+          }
+        },
+        "jungle": {
+          "japanese": "ジャングル",
+          "temperature": 0.95,
+          "downfall": 0.9
+        },
+        "sparse_jungle": {
+          "japanese": "まばらなジャングル",
+          "temperature": 0.95,
+          "downfall": 0.8
+        },
+        "bamboo_jungle": {
+          "japanese": "竹林",
+          "temperature": 0.95,
+          "downfall": 0.9
+        },
+        "pale_garden": {
+          "japanese": "ペールガーデン",
+          "temperature": null,
+          "downfall": null
+        },
+        "beach": {
+          "japanese": "砂浜",
+          "temperature": 0.8,
+          "downfall": 0.4
+        },
+        "mushroom_fields": {
+          "japanese": "キノコ島",
+          "temperature": 0.9,
+          "downfall": 1.0
+        },
+        "meadow": {
+          "japanese": "草地",
+          "temperature": {
+            "java": 0.5,
+            "bedrock": 0.3
+          },
+          "downfall": 0.8
+        },
+        "cherry_grove": {
+          "japanese": "サクラの林",
+          "temperature": 0.5,
+          "downfall": 0.8
+        },
+        "stony_peaks": {
+          "japanese": "石だらけの山頂",
+          "temperature": 1.0,
+          "downfall": 0.3
+        }
+      }
+    },
+    "dry": {
+      "label": "乾燥帯バイオーム",
+      "description": "Dry/warm biomes",
+      "precipitation_rule_summary": "降雪も降雨も全くないが、悪天候の時には空が曇る。",
+      "vegetation_color_summary": "荒野バイオームの茶色の草を除き、植物や草はオリーブ色。",
+      "water_color_summary": "水は水色。",
+      "sky_color_summary": "砂漠や荒野では、空はより明るい色となる。",
+      "biomes": {
+        "desert": {
+          "japanese": "砂漠",
+          "temperature": 2.0,
+          "downfall": 0.0
+        },
+        "savanna": {
+          "japanese": "サバンナ",
+          "temperature": 2.0,
+          "downfall": 0.0
+        },
+        "savanna_plateau": {
+          "japanese": "サバンナの高原",
+          "temperature": 2.0,
+          "downfall": 0.0
+        },
+        "windswept_savanna": {
+          "japanese": "吹きさらしのサバンナ",
+          "temperature": 2.0,
+          "downfall": {
+            "java": 0.0,
+            "bedrock": 0.5
+          }
+        },
+        "badlands": {
+          "japanese": "荒野",
+          "temperature": 2.0,
+          "downfall": 0.0
+        },
+        "eroded_badlands": {
+          "japanese": "侵食された荒野",
+          "temperature": 2.0,
+          "downfall": 0.0
+        },
+        "wooded_badlands": {
+          "japanese": "森のある荒野",
+          "temperature": 2.0,
+          "downfall": 0.0
+        }
+      }
+    },
+    "aquatic": {
+      "label": "水性バイオーム",
+      "description": "Neutral and other biomes",
+      "overview": "海洋はY=63までの水のみで構成された大きくて開放的なバイオーム。海底には小さな山や平原などの水中地形がある。オーバーワールドの地表の約60%は海洋に覆われている。",
+      "biomes": {
+        "frozen_river": {
+          "japanese": "凍った川",
+          "temperature": 0.0,
+          "downfall": 0.5
+        },
+        "river": {
+          "japanese": "河川",
+          "temperature": 0.5,
+          "downfall": 0.9
+        },
+        "snowy_beach": {
+          "japanese": "雪の砂浜",
+          "temperature": 0.05,
+          "downfall": 0.3
+        },
+        "warm_ocean": {
+          "japanese": "暖かい海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "lukewarm_ocean": {
+          "japanese": "ぬるい海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "deep_lukewarm_ocean": {
+          "japanese": "ぬるい深海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "ocean": {
+          "japanese": "海洋",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "deep_ocean": {
+          "japanese": "深海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "cold_ocean": {
+          "japanese": "冷たい海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "deep_cold_ocean": {
+          "japanese": "冷たい深海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        },
+        "frozen_ocean": {
+          "japanese": "凍った海",
+          "temperature": 0.0,
+          "downfall": 0.5
+        },
+        "deep_frozen_ocean": {
+          "japanese": "凍った深海",
+          "temperature": 0.5,
+          "downfall": 0.5
+        }
+      }
+    },
+    "cave": {
+      "label": "洞窟バイオーム",
+      "description": "Cave Biomes",
+      "overview": "これらのバイオームは洞窟に生成される。その配置は立体的であり、まったく別のバイオームが生成されている地下に独立して配置されることができる。",
+      "biomes": {
+        "deep_dark": {
+          "japanese": "ディープダーク",
+          "temperature": 0.8,
+          "downfall": 0.4
+        },
+        "dripstone_caves": {
+          "japanese": "鍾乳洞",
+          "temperature": {
+            "java": 0.8,
+            "bedrock": 0.2
+          },
+          "downfall": {
+            "java": 0.4,
+            "bedrock": 0.0
+          }
+        },
+        "lush_caves": {
+          "japanese": "繁茂した洞窟",
+          "temperature": {
+            "java": 0.5,
+            "bedrock": 0.9
+          },
+          "downfall": {
+            "java": 0.5,
+            "bedrock": 0.0
+          }
+        }
+      }
+    },
+    "neutral_other": {
+      "label": "中性バイオーム",
+      "description": "Neutral and other biomes",
+      "biomes": {
+        "the_void": {
+          "japanese": "奈落",
+          "temperature": 0.5,
+          "downfall": 0.5,
+          "edition": [
+            "java"
+          ]
+        }
+      }
+    },
+    "nether": {
+      "label": "ネザーバイオーム",
+      "description": "Nether biomes",
+      "dimension": "the_nether",
+      "overview": "ネザーは異なるディメンションとして扱われ、オーバーワールドとはネザーポータルで行き来できる。",
+      "environment_rules": {
+        "is_dry": true,
+        "water_behavior": "水を置くとすぐに蒸発する。ただしコマンドを使用すれば設置できる。",
+        "water_color_bedrock": "赤褐色",
+        "lava_sea_y": {
+          "max_y": 31,
+          "description": "Y=31以下には溶岩海が広がっている。"
+        },
+        "general_danger": "溶岩の泉や敵対的Mobが多くスポーンするため非常に危険。"
+      },
+      "biomes": {
+        "nether_wastes": {
+          "japanese": "ネザーの荒地",
+          "temperature": 2.0,
+          "downfall": 0.0,
+          "notes": [
+            "このバイオームでベッドを使用すると爆発する。"
+          ]
+        },
+        "soul_sand_valley": {
+          "japanese": "ソウルサンドの谷",
+          "temperature": 2.0,
+          "downfall": 0.0,
+          "notes": [
+            "ソウルサンドで移動速度が低下する。"
+          ]
+        },
+        "crimson_forest": {
+          "japanese": "真紅の森",
+          "temperature": 2.0,
+          "downfall": 0.0
+        },
+        "warped_forest": {
+          "japanese": "歪んだ森",
+          "temperature": 2.0,
+          "downfall": 0.0,
+          "notes": [
+            "敵対Mobが自然出現しないため、ネザー内では比較的安全。"
+          ]
+        },
+        "basalt_deltas": {
+          "japanese": "玄武岩の三角州",
+          "temperature": 2.0,
+          "downfall": 0.0,
+          "notes": [
+            "地形が不規則ででこぼこしており、横断や構築がやや困難。",
+            "溶岩池が多い。"
+          ]
+        }
+      }
+    },
+    "end": {
+      "label": "ジ・エンドのバイオーム",
+      "description": "The End biomes",
+      "dimension": "the_end",
+      "overview": "ジ・エンドは異なるディメンションとして扱われ、要塞に生成されるエンドポータルを使ってオーバーワールドから行き来できる。",
+      "environment_rules": {
+        "water_color_bedrock": "ライラック色",
+        "precipitation": "降雨も降雪もない。",
+        "terrain_summary": "中央島と外島に分かれ、外島はエンドゲートウェイポータルを使って到達する。"
+      },
+      "biomes": {
+        "the_end": {
+          "japanese": "ジ・エンド",
+          "temperature": 0.5,
+          "downfall": 0.5,
+          "environment_notes": [
+            "中央島はこの範囲の中心に生成され、周囲は外縁まで空虚になっている。",
+            "黒曜石の柱、出現土台、出口ポータル、中央エンドゲートウェイポータルが生成される。"
+          ]
+        },
+        "small_end_islands": {
+          "japanese": "小さなエンド島",
+          "temperature": 0.5,
+          "downfall": 0.5,
+          "edition": [
+            "java"
+          ],
+          "environment_notes": [
+            "大きな島々の間にある空間に、小さな円形の島々が存在する。"
+          ]
+        },
+        "end_midlands": {
+          "japanese": "エンドの内陸部",
+          "temperature": 0.5,
+          "downfall": 0.5,
+          "edition": [
+            "java"
+          ],
+          "environment_notes": [
+            "各島の丘の上から端の断崖までの緩やかな傾斜を表す。"
+          ]
+        },
+        "end_highlands": {
+          "japanese": "エンドの高地",
+          "temperature": 0.5,
+          "downfall": 0.5,
+          "edition": [
+            "java"
+          ]
+        },
+        "end_barrens": {
+          "japanese": "エンドのやせ地",
+          "temperature": 0.5,
+          "downfall": 0.5,
+          "edition": [
+            "java"
+          ],
+          "environment_notes": [
+            "外島の一部として生成される。",
+            "各島の外縁部を表し、下には急峻な崖がある。",
+            "エンドシティもコーラスの木も生成されない。"
+          ]
+        }
+      }
+    }
+  }
+}

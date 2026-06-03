@@ -1,0 +1,634 @@
+{
+  "materials": {
+    "label": "材料",
+    "english": "Materials",
+    "groups": {
+      "basic_materials": {
+        "label": "基本素材・鉱物",
+        "items": {
+          "coal": "石炭",
+          "charcoal": "木炭",
+          "raw_iron": "鉄の原石",
+          "raw_copper": "銅の原石",
+          "raw_gold": "金の原石",
+          "diamond": "ダイヤモンド",
+          "emerald": "エメラルド",
+          "lapis_lazuli": "ラピスラズリ",
+          "ancient_debris": "古代の残骸",
+          "nether_quartz": "ネザークォーツ",
+          "amethyst_shard": "アメジストの欠片",
+          "copper_nugget": "銅塊",
+          "iron_nugget": "鉄塊",
+          "gold_nugget": "金塊",
+          "iron_ingot": "鉄インゴット",
+          "copper_ingot": "銅インゴット",
+          "gold_ingot": "金インゴット",
+          "netherite_scrap": "ネザライトの欠片",
+          "netherite_ingot": "ネザライトインゴット"
+        }
+      },
+      "common_crafting_materials": {
+        "label": "一般クラフト素材",
+        "items": {
+          "stick": "棒",
+          "flint": "火打石",
+          "wheat": "小麦",
+          "feather": "羽根",
+          "string": "糸",
+          "bone": "骨",
+          "bone_meal": "骨粉",
+          "snowball": "雪玉",
+          "egg": "卵",
+          "blue_egg": "青色の卵",
+          "brown_egg": "茶色の卵",
+          "leather": "革",
+          "rabbit_hide": "ウサギの皮",
+          "honeycomb": "ハニカム",
+          "resin_clump": "樹脂の塊",
+          "ink_sac": "イカスミ",
+          "glow_ink_sac": "輝くイカスミ",
+          "turtle_scute": "カメのウロコ",
+          "armadillo_scute": "アルマジロのウロコ",
+          "slimeball": "スライムボール",
+          "clay_ball": "粘土だま",
+          "prismarine_shard": "プリズマリンの欠片",
+          "prismarine_crystals": "プリズマリンクリスタル",
+          "nautilus_shell": "オウムガイの殻",
+          "heart_of_the_sea": "海洋の心"
+        }
+      },
+      "special_materials": {
+        "label": "特殊素材",
+        "items": {
+          "fire_charge": "ファイヤーチャージ",
+          "blaze_rod": "ブレイズロッド",
+          "breeze_rod": "ブリーズロッド",
+          "heavy_core": "ヘビーコア",
+          "nether_star": "ネザースター",
+          "ender_pearl": "エンダーパール",
+          "eye_of_ender": "エンダーアイ",
+          "shulker_shell": "シュルカーの殻",
+          "popped_chorus_fruit": "焼いたコーラスフルーツ",
+          "echo_shard": "残響の欠片",
+          "disc_fragment": "レコードの破片"
+        }
+      },
+      "dyes": {
+        "label": "染料",
+        "items": {
+          "white_dye": "白色の染料",
+          "orange_dye": "橙色の染料",
+          "magenta_dye": "赤紫色の染料",
+          "light_blue_dye": "空色の染料",
+          "yellow_dye": "黄色の染料",
+          "lime_dye": "黄緑色の染料",
+          "pink_dye": "桃色の染料",
+          "gray_dye": "灰色の染料",
+          "light_gray_dye": "薄灰色の染料",
+          "cyan_dye": "青緑色の染料",
+          "purple_dye": "紫色の染料",
+          "blue_dye": "青色の染料",
+          "brown_dye": "茶色の染料",
+          "green_dye": "緑色の染料",
+          "red_dye": "赤色の染料",
+          "black_dye": "黒色の染料"
+        }
+      },
+      "crafted_materials": {
+        "label": "加工素材",
+        "items": {
+          "bowl": "ボウル",
+          "brick": "レンガ",
+          "nether_brick": "ネザーレンガ",
+          "resin_brick": "樹脂レンガ"
+        }
+      },
+      "paper_bottle_and_firework_materials": {
+        "label": "紙・瓶・花火素材",
+        "items": {
+          "paper": "紙",
+          "book": "本",
+          "firework_star": "花火の星",
+          "glass_bottle": "ガラス瓶"
+        }
+      },
+      "brewing_materials": {
+        "label": "醸造素材",
+        "items": {
+          "nether_wart": "ネザーウォート",
+          "redstone_dust": "レッドストーンダスト",
+          "glowstone_dust": "グロウストーンダスト",
+          "gunpowder": "火薬",
+          "dragons_breath": "ドラゴンブレス",
+          "fermented_spider_eye": "発酵したクモの目",
+          "blaze_powder": "ブレイズパウダー",
+          "sugar": "砂糖",
+          "rabbits_foot": "ウサギの足",
+          "glistering_melon_slice": "きらめくスイカの薄切り",
+          "spider_eye": "クモの目",
+          "pufferfish": "フグ",
+          "magma_cream": "マグマクリーム",
+          "golden_carrot": "金のニンジン",
+          "ghast_tear": "ガストの涙",
+          "turtle_shell": "カメの甲羅",
+          "phantom_membrane": "ファントムの皮膜"
+        }
+      },
+      "banner_patterns": {
+        "label": "旗の模様",
+        "items": {
+          "field_masoned_banner_pattern": "レンガの旗の模様",
+          "bordure_indented_banner_pattern": "山形波の縁取りの旗の模様",
+          "flower_charge_banner_pattern": "花の旗の模様",
+          "creeper_charge_banner_pattern": "クリーパーの旗の模様",
+          "skull_charge_banner_pattern": "骸骨の旗の模様",
+          "thing_banner_pattern": "何かの旗の模様",
+          "globe_banner_pattern": "地球の旗の模様",
+          "snout_banner_pattern": "ブタの鼻の旗の模様",
+          "flow_banner_pattern": "渦巻きの旗の模様",
+          "guster_banner_pattern": "風巻く者の旗の模様"
+        }
+      },
+      "pottery_sherds": {
+        "label": "壺の欠片",
+        "items": {
+          "angler_pottery_sherd": "釣り人の壺の欠片",
+          "archer_pottery_sherd": "射手の壺の欠片",
+          "arms_up_pottery_sherd": "両腕を上げた人の壺の欠片",
+          "blade_pottery_sherd": "剣の壺の欠片",
+          "brewer_pottery_sherd": "醸造家の壺の欠片",
+          "burn_pottery_sherd": "炎の壺の欠片",
+          "danger_pottery_sherd": "脅威の壺の欠片",
+          "explorer_pottery_sherd": "探検家の壺の欠片",
+          "flow_pottery_sherd": "渦巻きの壺の欠片",
+          "friend_pottery_sherd": "友の壺の欠片",
+          "guster_pottery_sherd": "風巻く者の壺の欠片",
+          "heart_pottery_sherd": "心の壺の欠片",
+          "heartbreak_pottery_sherd": "傷心の壺の欠片",
+          "howl_pottery_sherd": "遠吠えの壺の欠片",
+          "miner_pottery_sherd": "鉱夫の壺の欠片",
+          "mourner_pottery_sherd": "哀悼者の壺の欠片",
+          "plenty_pottery_sherd": "富の壺の欠片",
+          "prize_pottery_sherd": "宝物の壺の欠片",
+          "scrape_pottery_sherd": "斧の壺の欠片",
+          "sheaf_pottery_sherd": "麦束の壺の欠片",
+          "shelter_pottery_sherd": "木陰の壺の欠片",
+          "skull_pottery_sherd": "頭蓋骨の壺の欠片",
+          "snort_pottery_sherd": "鼻を鳴らす動物の壺の欠片"
+        }
+      },
+      "smithing_templates_and_armor_trims": {
+        "label": "防具装飾・鍛冶型",
+        "items": {
+          "netherite_upgrade": "ネザライト強化",
+          "sentry_armor_trim": "略奪者風の装飾",
+          "vex_armor_trim": "ヴェックス風の装飾",
+          "wild_armor_trim": "大自然風の装飾",
+          "coast_armor_trim": "海洋風の装飾",
+          "dune_armor_trim": "砂丘風の装飾",
+          "wayfinder_armor_trim": "先駆者風の装飾",
+          "raiser_armor_trim": "牧者風の装飾",
+          "shaper_armor_trim": "職人風の装飾",
+          "host_armor_trim": "主人風の装飾",
+          "ward_armor_trim": "監獄風の装飾",
+          "silence_armor_trim": "静寂の装飾",
+          "tide_armor_trim": "潮流風の装飾",
+          "snout_armor_trim": "ブタの鼻風の装飾",
+          "rib_armor_trim": "あばら模様の装飾",
+          "eye_armor_trim": "エンダーアイ風の装飾",
+          "spire_armor_trim": "尖塔風の装飾",
+          "flow_armor_trim": "旋風の装飾",
+          "bolt_armor_trim": "ネジ止め風の装飾"
+        }
+      },
+      "special_consumables_and_keys": {
+        "label": "特殊アイテム・鍵",
+        "items": {
+          "bottle_o_enchanting": "エンチャントの瓶",
+          "trial_key": "試練の鍵",
+          "ominous_trial_key": "不吉な試練の鍵"
+        }
+      },
+      "enchanted_books": {
+        "label": "エンチャントの本",
+        "items": {
+          "protection": {
+            "label": "ダメージ軽減",
+            "english": "Protection",
+            "max_level": 10,
+            "is_treasure": false,
+            "applies_to": [
+              "armor"
+            ]
+          },
+          "feather_falling": {
+            "label": "落下耐性",
+            "english": "Feather Falling",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "boots"
+            ]
+          },
+          "fire_protection": {
+            "label": "火炎",
+            "english": "Fire Protection",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "armor"
+            ]
+          },
+          "projectile_protection": {
+            "label": "飛び道具耐性",
+            "english": "Projectile Protection",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "armor"
+            ]
+          },
+          "aqua_affinity": {
+            "label": "水中採掘",
+            "english": "Aqua Affinity",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "helmet"
+            ]
+          },
+          "blast_protection": {
+            "label": "爆発耐性",
+            "english": "Blast Protection",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "armor"
+            ]
+          },
+          "respiration": {
+            "label": "水中呼吸",
+            "english": "Respiration",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "helmet"
+            ]
+          },
+          "depth_strider": {
+            "label": "水中歩行",
+            "english": "Depth Strider",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "boots"
+            ]
+          },
+          "frost_walker": {
+            "label": "氷渡り",
+            "english": "Frost Walker",
+            "max_level": 2,
+            "is_treasure": true,
+            "applies_to": [
+              "boots"
+            ]
+          },
+          "thorns": {
+            "label": "棘の鎧",
+            "english": "Thorns",
+            "max_level": 1,
+            "is_treasure": false,
+            "applies_to": [
+              "armor"
+            ]
+          },
+          "swift_sneak": {
+            "label": "スニーク速度上昇",
+            "english": "Swift Sneak",
+            "max_level": 1,
+            "is_treasure": true,
+            "applies_to": [
+              "leggings"
+            ]
+          },
+          "curse_of_binding": {
+            "label": "束縛の呪い",
+            "english": "Curse of Binding",
+            "max_level": 1,
+            "is_treasure": true,
+            "applies_to": [
+              "armor"
+            ]
+          },
+          "soul_speed": {
+            "label": "ソウルスピード",
+            "english": "Soul Speed",
+            "max_level": 1,
+            "is_treasure": true,
+            "applies_to": [
+              "boots"
+            ]
+          },
+          "sharpness": {
+            "label": "ダメージ増加",
+            "english": "Sharpness",
+            "max_level": 10,
+            "is_treasure": false,
+            "applies_to": [
+              "sword",
+              "spear"
+            ]
+          },
+          "bane_of_arthropods": {
+            "label": "虫特効",
+            "english": "Bane of Arthropods",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "sword",
+              "spear"
+            ]
+          },
+          "knockback": {
+            "label": "ノックバック",
+            "english": "Knockback",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "sword",
+              "spear"
+            ]
+          },
+          "smite": {
+            "label": "アンデッド特効",
+            "english": "Smite",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "sword",
+              "spear"
+            ]
+          },
+          "fire_aspect": {
+            "label": "火属性",
+            "english": "Fire Aspect",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "sword",
+              "spear"
+            ]
+          },
+          "looting": {
+            "label": "ドロップ増加",
+            "english": "Looting",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "sword",
+              "spear"
+            ]
+          },
+          "sweeping_edge": {
+            "label": "範囲ダメージ増加",
+            "english": "Sweeping Edge",
+            "max_level": 2,
+            "is_treasure": false,
+            "edition": "JE only",
+            "applies_to": [
+              "sword"
+            ]
+          },
+          "lunge": {
+            "label": "突進",
+            "english": "Lunge",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "spear"
+            ]
+          },
+          "efficiency": {
+            "label": "効率強化",
+            "english": "Efficiency",
+            "max_level": 10,
+            "is_treasure": false,
+            "applies_to": [
+              "pickaxe",
+              "shovel",
+              "axe",
+              "hoe",
+              "shears"
+            ]
+          },
+          "fortune": {
+            "label": "幸運",
+            "english": "Fortune",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "pickaxe",
+              "shovel",
+              "axe",
+              "hoe"
+            ]
+          },
+          "silk_touch": {
+            "label": "シルクタッチ",
+            "english": "Silk Touch",
+            "max_level": 1,
+            "is_treasure": false,
+            "applies_to": [
+              "pickaxe",
+              "shovel",
+              "axe",
+              "hoe"
+            ]
+          },
+          "power": {
+            "label": "射撃ダメージ増加",
+            "english": "Power",
+            "max_level": 10,
+            "is_treasure": false,
+            "applies_to": [
+              "bow"
+            ]
+          },
+          "flame": {
+            "label": "フレイム",
+            "english": "Flame",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "bow"
+            ]
+          },
+          "punch": {
+            "label": "パンチ",
+            "english": "Punch",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "bow"
+            ]
+          },
+          "infinity": {
+            "label": "無限",
+            "english": "Infinity",
+            "max_level": 1,
+            "is_treasure": false,
+            "applies_to": [
+              "bow"
+            ]
+          },
+          "luck_of_the_sea": {
+            "label": "宝釣り",
+            "english": "Luck of the Sea",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "fishing_rod"
+            ]
+          },
+          "lure": {
+            "label": "入れ食い",
+            "english": "Lure",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "fishing_rod"
+            ]
+          },
+          "loyalty": {
+            "label": "忠誠",
+            "english": "Loyalty",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "trident"
+            ]
+          },
+          "impaling": {
+            "label": "水生特効",
+            "english": "Impaling",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "trident"
+            ]
+          },
+          "riptide": {
+            "label": "激流",
+            "english": "Riptide",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "trident"
+            ]
+          },
+          "channeling": {
+            "label": "召雷",
+            "english": "Channeling",
+            "max_level": 1,
+            "is_treasure": false,
+            "applies_to": [
+              "trident"
+            ]
+          },
+          "piercing": {
+            "label": "貫通",
+            "english": "Piercing",
+            "max_level": 10,
+            "is_treasure": false,
+            "applies_to": [
+              "crossbow"
+            ]
+          },
+          "quick_charge": {
+            "label": "高速装填",
+            "english": "Quick Charge",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "crossbow"
+            ]
+          },
+          "multishot": {
+            "label": "拡散",
+            "english": "Multishot",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "crossbow"
+            ]
+          },
+          "breach": {
+            "label": "防具貫通",
+            "english": "Breach",
+            "max_level": 2,
+            "is_treasure": false,
+            "applies_to": [
+              "mace"
+            ]
+          },
+          "density": {
+            "label": "重撃",
+            "english": "Density",
+            "max_level": 10,
+            "is_treasure": false,
+            "applies_to": [
+              "mace"
+            ]
+          },
+          "wind_burst": {
+            "label": "ウィンドバースト",
+            "english": "Wind Burst",
+            "max_level": 2,
+            "is_treasure": true,
+            "applies_to": [
+              "mace"
+            ]
+          },
+          "unbreaking": {
+            "label": "耐久力",
+            "english": "Unbreaking",
+            "max_level": 5,
+            "is_treasure": false,
+            "applies_to": [
+              "general"
+            ]
+          },
+          "mending": {
+            "label": "修繕",
+            "english": "Mending",
+            "max_level": 2,
+            "is_treasure": true,
+            "applies_to": [
+              "general"
+            ]
+          },
+          "curse_of_vanishing": {
+            "label": "消滅の呪い",
+            "english": "Curse of Vanishing",
+            "max_level": 1,
+            "is_treasure": true,
+            "applies_to": [
+              "general"
+            ]
+          },
+          "cleaving": {
+            "label": "裂き",
+            "english": "Cleaving",
+            "max_level": null,
+            "is_treasure": null,
+            "edition": "JE only",
+            "status": "incomplete_source_line",
+            "applies_to": [
+              "axe"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

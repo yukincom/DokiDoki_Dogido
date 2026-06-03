@@ -1,0 +1,1312 @@
+{
+  "paintings": {
+    "label": "絵画",
+    "english": "Paintings",
+    "id_rule": "正式IDが不明なため painting_<resource> の仮ID。",
+    "unknown_response_policy": {
+      "unknown_value": "不明",
+      "unknown_response_hint": "そこは俺もよーわからんな…"
+    },
+    "size_classes": {
+      "小": [
+        "1×1ブロック",
+        "1×2ブロック",
+        "2×1ブロック"
+      ],
+      "中": [
+        "2×2ブロック"
+      ],
+      "大": [
+        "3×3ブロック",
+        "4×2ブロック"
+      ],
+      "特大": [
+        "3×4ブロック",
+        "4×3ブロック",
+        "4×4ブロック"
+      ]
+    },
+    "items": {
+      "painting_kebab": {
+        "id_status": "provisional",
+        "title": "Kebab med tre pepperoni",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "リノリウム・油画",
+        "summary": "3つの緑唐辛子添えケバブ。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_aztec": {
+        "id_status": "provisional",
+        "title": "de_aztec",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "ゲーム『カウンターストライク』のマップ de_aztec をNoclipモードで見たもの。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_alban": {
+        "id_status": "provisional",
+        "title": "Albanian",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "ボール紙・油画",
+        "summary": "家と低木の傍に佇む、緑のトルコ帽を被った男性。題からすると背景はアルバニアの風景と思われる。",
+        "minecraft_size": {
+          "class": "小"
+        },
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_aztec2": {
+        "id_status": "provisional",
+        "title": "de_aztec",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "MDF・油画",
+        "summary": "ゲーム『カウンターストライク』のマップ de_aztec をNoclipモードで見たもの。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_bomb": {
+        "id_status": "provisional",
+        "title": "Target Successfully Bombed",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "MDF・油画",
+        "summary": "ゲーム『カウンターストライク』のマップ de_dust2。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_plant": {
+        "id_status": "provisional",
+        "title": "Paradisträd",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "リノリウム・油画",
+        "summary": "二つの鉢植えを描いた静物画。Paradisträd はスウェーデン語で金の生る木を指す通称。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_wasteland": {
+        "id_status": "provisional",
+        "title": "Wasteland",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "パネル・油画",
+        "summary": "窓枠に座るウサギと、その外に広がる荒野の風景。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_meditative": {
+        "id_status": "provisional",
+        "title": "Meditative",
+        "author": "Sarah Boeving",
+        "medium": "不明",
+        "summary": "ダリ作『瞑想する薔薇』の薔薇を、Minecraftにかつて存在したバラに置き換えたもの。",
+        "minecraft_size": {
+          "class": "小"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_wanderer": {
+        "id_status": "provisional",
+        "title": "Wanderer",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "フリードリヒ作『雲海の上の旅人』のアレンジ。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_graham": {
+        "id_status": "provisional",
+        "title": "Graham",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "パネル・油画",
+        "summary": "ゲーム『King’s Quest』の主人公King Grahamの絵。元絵はコターン作の静物画の中に彼を描いたもの。",
+        "minecraft_size": {
+          "class": "小"
+        },
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_prairie_ride": {
+        "id_status": "provisional",
+        "title": "Prairie Ride",
+        "author": "Sarah Boeving",
+        "medium": "不明",
+        "summary": "レミントン作『カウボーイ』のカウボーイをノールに置き換えたもの。",
+        "minecraft_size": {
+          "class": "小"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_pool": {
+        "id_status": "provisional",
+        "title": "The Pool",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "プール付きの直方体の上で過ごす全裸の男女。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_courbet": {
+        "id_status": "provisional",
+        "title": "Bonjour Monsieur Courbet",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "紙・鉛筆画",
+        "summary": "クールベによる『こんにちは、クールベさん』の右の男を向かい合わせに描いたもの。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_sunset": {
+        "id_status": "provisional",
+        "title": "sunset_dense",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "MDF・油画",
+        "summary": "山稜に沈む太陽。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_sea": {
+        "id_status": "provisional",
+        "title": "Seaside",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "赤い実の生った植物・山々の写真が置かれた窓枠と、窓の外に広がる海と山の景色。Alpha v1.1.1でテクスチャが一度変更されている。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_creebet": {
+        "id_status": "provisional",
+        "title": "Creebet",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "Seasideの植物がクリーパーに置き換わったもの。",
+        "minecraft_size": {
+          "class": "小"
+        }
+      },
+      "painting_match": {
+        "id_status": "provisional",
+        "title": "Match",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "マッチを持ち白い四角のガス暖炉に火をつける手。",
+        "minecraft_size": {
+          "class": "中"
+        }
+      },
+      "painting_bust": {
+        "id_status": "provisional",
+        "title": "Bust",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "卵テンペラ／キャンバス・油画",
+        "summary": "炎に囲まれたマルクス・アウレリウスの胸像。",
+        "minecraft_size": {
+          "class": "中"
+        }
+      },
+      "painting_stage": {
+        "id_status": "provisional",
+        "title": "The Stage Is Set",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "ゲーム『Space Quest I』の一場面に『King’s Quest』の主人公Grahamを加えたもの。Alpha v1.1.1でテクスチャが一度変更されている。",
+        "minecraft_size": {
+          "class": "中"
+        }
+      },
+      "painting_void": {
+        "id_status": "provisional",
+        "title": "The void",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "卵テンペラ／キャンバス・油画",
+        "summary": "炎の燃える奈落に向かって祈りを捧げる天使。",
+        "minecraft_size": {
+          "class": "中"
+        }
+      },
+      "painting_skull_and_roses": {
+        "id_status": "provisional",
+        "title": "Skull and Roses",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "前景に薔薇の添えられたドクロの絵。元絵はゲーム内のものとやや異なる。",
+        "minecraft_size": {
+          "class": "中"
+        }
+      },
+      "painting_wither": {
+        "id_status": "provisional",
+        "title": "Wither",
+        "author": "Mojang（Jens Bergensten）",
+        "medium": "不明",
+        "summary": "ウィザーの召喚方法を示した図。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_baroque": {
+        "id_status": "provisional",
+        "title": "Baroque",
+        "author": "Sarah Boeving",
+        "medium": "不明",
+        "summary": "バロック風に描かれた、白いテーブルに乗った飾り壺・ケーキ・ヒマワリ。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_humble": {
+        "id_status": "provisional",
+        "title": "Humble",
+        "author": "Sarah Boeving",
+        "medium": "不明",
+        "summary": "グラント・ウッド作『アメリカン・ゴシック』のアレンジ。2人の村人が平原の村の家の前に立っている。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_endboss": {
+        "id_status": "provisional",
+        "title": "Endboss",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "レンガ造りのアーチの下にいるドクロ。King’s Questの主人公Grahamの白いシルエットも右側に描かれている。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_tides": {
+        "id_status": "provisional",
+        "title": "Tides",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "ビニール・エアブラシ／キャンバス・油画",
+        "summary": "海岸で、胎児のような姿勢で座る裸の男性。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_fern": {
+        "id_status": "provisional",
+        "title": "Fern",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "不明",
+        "summary": "机に置かれたシダの鉢植えと小さな炎。",
+        "minecraft_size": {
+          "class": "大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_sunflowers": {
+        "id_status": "provisional",
+        "title": "Sunflowers",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "不明",
+        "summary": "机に乗った向日葵の鉢と絵画、そして2次元の向日葵。",
+        "minecraft_size": {
+          "class": "大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_cotan": {
+        "id_status": "provisional",
+        "title": "Cotán",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "不明",
+        "summary": "コターン作の静物画のような構図で、金のリンゴときらめくスイカの薄切りを描いたもの。",
+        "minecraft_size": {
+          "class": "大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_owlemons": {
+        "id_status": "provisional",
+        "title": "Owlemons",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "箱から覗く二次元のフクロウと、レモンの絵。背景はギルランダイオ作『老人と孫』に拠っている。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_cavebird": {
+        "id_status": "provisional",
+        "title": "Cavebird",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "不明",
+        "summary": "一洞の洞窟の空いた崖と、その手前を舞う一羽の鳥。",
+        "minecraft_size": {
+          "class": "大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_bouquet": {
+        "id_status": "provisional",
+        "title": "Bouquet",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "不明",
+        "summary": "一束の花とその傍に座る人。その後ろには山岳の描かれた壁と階段がある。",
+        "minecraft_size": {
+          "class": "大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_dennis": {
+        "id_status": "provisional",
+        "title": "Dennis / Good Boy",
+        "author": "Sarah Boeving",
+        "medium": "不明",
+        "summary": "A Minecraft Movieに登場するデニスを描いた絵を元に作成された白色のオオカミの絵。",
+        "minecraft_size": {
+          "class": "大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_backyard": {
+        "id_status": "provisional",
+        "title": "Backyard",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "レンガ造りの通路と、裏庭に座りこむ二人の女性。風景はホーホ作『デルフトの家の中庭』に拠る。",
+        "minecraft_size": {
+          "class": "特大"
+        }
+      },
+      "painting_pond": {
+        "id_status": "provisional",
+        "title": "Pond",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "ビニール・エアブラシ／キャンバス・油画",
+        "summary": "池の中に座る乙女と、池に半身浸かった骸骨。死と乙女のモチーフに由来する。",
+        "minecraft_size": {
+          "class": "特大"
+        }
+      },
+      "painting_fighters": {
+        "id_status": "provisional",
+        "title": "Fighters",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "道着を着て構えを取った、ゲーム『International Karate +』のファイターを模した紙人形の絵。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_passage": {
+        "id_status": "provisional",
+        "title": "Passage",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "海岸を背景にした廃坑のような通路にいる人とメガテリウムの骸骨をシュルレアリスムにより描いた絵。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_changing": {
+        "id_status": "provisional",
+        "title": "Changing",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "セットの背景が陰鬱な山岳から晴れ渡った田舎の風景に切り替わる中、服を着替える人の絵。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_finding": {
+        "id_status": "provisional",
+        "title": "Finding",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "ビニール・インク・エアブラシ／キャンバス・油画",
+        "summary": "古代ギリシャ風の遺跡の中で、照明で照らしながら新しく掘った穴を覗く人の絵。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_lowmist": {
+        "id_status": "provisional",
+        "title": "Lowmist",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "MDF・油画",
+        "summary": "Noclipモードで見た山の3Dモデル。",
+        "minecraft_size": {
+          "class": "大"
+        }
+      },
+      "painting_skeleton": {
+        "id_status": "provisional",
+        "title": "Mortal Coil",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "パネル・油画",
+        "summary": "アドベンチャーゲーム『Grim Fandango』のBruno Martinezの絵。",
+        "minecraft_size": {
+          "class": "特大"
+        },
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_donkey_kong": {
+        "id_status": "provisional",
+        "title": "Kong",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "パネル・油画",
+        "summary": "レンガ造りの窓に置かれた、アーケード版ドンキーコングのステージ『100m』の紙工作。",
+        "minecraft_size": {
+          "class": "特大"
+        },
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_pointer": {
+        "id_status": "provisional",
+        "title": "Pointer",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "ゲーム『International Karate +』のキャラクターが、大きな手に指を差されて構えを取っている様子。",
+        "minecraft_size": {
+          "class": "特大"
+        }
+      },
+      "painting_pigscene": {
+        "id_status": "provisional",
+        "title": "Pigscene",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "キャンバスに描かれたブタの絵を指さす女の子。元絵ではRGBカラーモデルを示す三つの四角が描かれている。",
+        "minecraft_size": {
+          "class": "特大"
+        }
+      },
+      "painting_burning_skull": {
+        "id_status": "provisional",
+        "title": "Skull On Fire",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "燃えているドクロ。背景には澄んだ夜空に月が浮かんでいる。",
+        "minecraft_size": {
+          "class": "特大"
+        }
+      },
+      "painting_unpacked": {
+        "id_status": "provisional",
+        "title": "Unpacked",
+        "author": "Sarah Boeving",
+        "medium": "不明",
+        "summary": "Minecraftの崖と滝、そして手前の海に浮かぶブタを描いた絵。pack.pngに拠って描かれたもの。",
+        "minecraft_size": {
+          "class": "特大"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…"
+      },
+      "painting_orb": {
+        "id_status": "provisional",
+        "title": "Orb",
+        "author": "Kristoffer Zetterstrand",
+        "medium": "キャンバス・油画",
+        "summary": "夜のイタリアの風景の中に浮かぶ光球。ベッリーニ作『法悦の聖フランシスコ』に基づいて描かれている。",
+        "minecraft_size": {
+          "class": "特大"
+        }
+      },
+      "painting_earth": {
+        "id_status": "provisional",
+        "title": "Earth",
+        "author": "Mojang（作者不詳）",
+        "medium": "不明",
+        "summary": "四元素の一つ『土』の抽象図。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…",
+        "notes": [
+          "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+        ]
+      },
+      "painting_wind": {
+        "id_status": "provisional",
+        "title": "Wind",
+        "author": "Mojang（作者不詳）",
+        "medium": "不明",
+        "summary": "四元素の一つ『空気』の抽象図。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…",
+        "notes": [
+          "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+        ]
+      },
+      "painting_water": {
+        "id_status": "provisional",
+        "title": "Water",
+        "author": "Mojang（作者不詳）",
+        "medium": "不明",
+        "summary": "四元素の一つ『水』の抽象図。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…",
+        "notes": [
+          "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+        ]
+      },
+      "painting_fire": {
+        "id_status": "provisional",
+        "title": "Fire",
+        "author": "Mojang（作者不詳）",
+        "medium": "不明",
+        "summary": "四元素の一つ『火』の抽象図。",
+        "minecraft_size": {
+          "class": "中"
+        },
+        "unknown_fields": [
+          "medium"
+        ],
+        "unknown_response_hint": "そこは俺もよーわからんな…",
+        "notes": [
+          "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+        ]
+      }
+    },
+    "groups": {
+      "by_size_class": {
+        "label": "サイズ分類",
+        "groups": {
+          "small": {
+            "label": "小",
+            "items": {
+              "painting_kebab": {
+                "id_status": "provisional",
+                "title": "Kebab med tre pepperoni",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "リノリウム・油画",
+                "summary": "3つの緑唐辛子添えケバブ。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_aztec": {
+                "id_status": "provisional",
+                "title": "de_aztec",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "ゲーム『カウンターストライク』のマップ de_aztec をNoclipモードで見たもの。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_alban": {
+                "id_status": "provisional",
+                "title": "Albanian",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "ボール紙・油画",
+                "summary": "家と低木の傍に佇む、緑のトルコ帽を被った男性。題からすると背景はアルバニアの風景と思われる。",
+                "minecraft_size": {
+                  "class": "小"
+                },
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_aztec2": {
+                "id_status": "provisional",
+                "title": "de_aztec",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "MDF・油画",
+                "summary": "ゲーム『カウンターストライク』のマップ de_aztec をNoclipモードで見たもの。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_bomb": {
+                "id_status": "provisional",
+                "title": "Target Successfully Bombed",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "MDF・油画",
+                "summary": "ゲーム『カウンターストライク』のマップ de_dust2。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_plant": {
+                "id_status": "provisional",
+                "title": "Paradisträd",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "リノリウム・油画",
+                "summary": "二つの鉢植えを描いた静物画。Paradisträd はスウェーデン語で金の生る木を指す通称。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_wasteland": {
+                "id_status": "provisional",
+                "title": "Wasteland",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "パネル・油画",
+                "summary": "窓枠に座るウサギと、その外に広がる荒野の風景。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_meditative": {
+                "id_status": "provisional",
+                "title": "Meditative",
+                "author": "Sarah Boeving",
+                "medium": "不明",
+                "summary": "ダリ作『瞑想する薔薇』の薔薇を、Minecraftにかつて存在したバラに置き換えたもの。",
+                "minecraft_size": {
+                  "class": "小"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_wanderer": {
+                "id_status": "provisional",
+                "title": "Wanderer",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "フリードリヒ作『雲海の上の旅人』のアレンジ。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_graham": {
+                "id_status": "provisional",
+                "title": "Graham",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "パネル・油画",
+                "summary": "ゲーム『King’s Quest』の主人公King Grahamの絵。元絵はコターン作の静物画の中に彼を描いたもの。",
+                "minecraft_size": {
+                  "class": "小"
+                },
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_prairie_ride": {
+                "id_status": "provisional",
+                "title": "Prairie Ride",
+                "author": "Sarah Boeving",
+                "medium": "不明",
+                "summary": "レミントン作『カウボーイ』のカウボーイをノールに置き換えたもの。",
+                "minecraft_size": {
+                  "class": "小"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_pool": {
+                "id_status": "provisional",
+                "title": "The Pool",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "プール付きの直方体の上で過ごす全裸の男女。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_courbet": {
+                "id_status": "provisional",
+                "title": "Bonjour Monsieur Courbet",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "紙・鉛筆画",
+                "summary": "クールベによる『こんにちは、クールベさん』の右の男を向かい合わせに描いたもの。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_sunset": {
+                "id_status": "provisional",
+                "title": "sunset_dense",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "MDF・油画",
+                "summary": "山稜に沈む太陽。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_sea": {
+                "id_status": "provisional",
+                "title": "Seaside",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "赤い実の生った植物・山々の写真が置かれた窓枠と、窓の外に広がる海と山の景色。Alpha v1.1.1でテクスチャが一度変更されている。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              },
+              "painting_creebet": {
+                "id_status": "provisional",
+                "title": "Creebet",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "Seasideの植物がクリーパーに置き換わったもの。",
+                "minecraft_size": {
+                  "class": "小"
+                }
+              }
+            }
+          },
+          "medium": {
+            "label": "中",
+            "items": {
+              "painting_match": {
+                "id_status": "provisional",
+                "title": "Match",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "マッチを持ち白い四角のガス暖炉に火をつける手。",
+                "minecraft_size": {
+                  "class": "中"
+                }
+              },
+              "painting_bust": {
+                "id_status": "provisional",
+                "title": "Bust",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "卵テンペラ／キャンバス・油画",
+                "summary": "炎に囲まれたマルクス・アウレリウスの胸像。",
+                "minecraft_size": {
+                  "class": "中"
+                }
+              },
+              "painting_stage": {
+                "id_status": "provisional",
+                "title": "The Stage Is Set",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "ゲーム『Space Quest I』の一場面に『King’s Quest』の主人公Grahamを加えたもの。Alpha v1.1.1でテクスチャが一度変更されている。",
+                "minecraft_size": {
+                  "class": "中"
+                }
+              },
+              "painting_void": {
+                "id_status": "provisional",
+                "title": "The void",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "卵テンペラ／キャンバス・油画",
+                "summary": "炎の燃える奈落に向かって祈りを捧げる天使。",
+                "minecraft_size": {
+                  "class": "中"
+                }
+              },
+              "painting_skull_and_roses": {
+                "id_status": "provisional",
+                "title": "Skull and Roses",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "前景に薔薇の添えられたドクロの絵。元絵はゲーム内のものとやや異なる。",
+                "minecraft_size": {
+                  "class": "中"
+                }
+              },
+              "painting_wither": {
+                "id_status": "provisional",
+                "title": "Wither",
+                "author": "Mojang（Jens Bergensten）",
+                "medium": "不明",
+                "summary": "ウィザーの召喚方法を示した図。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_baroque": {
+                "id_status": "provisional",
+                "title": "Baroque",
+                "author": "Sarah Boeving",
+                "medium": "不明",
+                "summary": "バロック風に描かれた、白いテーブルに乗った飾り壺・ケーキ・ヒマワリ。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_humble": {
+                "id_status": "provisional",
+                "title": "Humble",
+                "author": "Sarah Boeving",
+                "medium": "不明",
+                "summary": "グラント・ウッド作『アメリカン・ゴシック』のアレンジ。2人の村人が平原の村の家の前に立っている。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_earth": {
+                "id_status": "provisional",
+                "title": "Earth",
+                "author": "Mojang（作者不詳）",
+                "medium": "不明",
+                "summary": "四元素の一つ『土』の抽象図。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…",
+                "notes": [
+                  "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+                ]
+              },
+              "painting_wind": {
+                "id_status": "provisional",
+                "title": "Wind",
+                "author": "Mojang（作者不詳）",
+                "medium": "不明",
+                "summary": "四元素の一つ『空気』の抽象図。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…",
+                "notes": [
+                  "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+                ]
+              },
+              "painting_water": {
+                "id_status": "provisional",
+                "title": "Water",
+                "author": "Mojang（作者不詳）",
+                "medium": "不明",
+                "summary": "四元素の一つ『水』の抽象図。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…",
+                "notes": [
+                  "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+                ]
+              },
+              "painting_fire": {
+                "id_status": "provisional",
+                "title": "Fire",
+                "author": "Mojang（作者不詳）",
+                "medium": "不明",
+                "summary": "四元素の一つ『火』の抽象図。",
+                "minecraft_size": {
+                  "class": "中"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…",
+                "notes": [
+                  "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+                ]
+              }
+            }
+          },
+          "large": {
+            "label": "大",
+            "items": {
+              "painting_endboss": {
+                "id_status": "provisional",
+                "title": "Endboss",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "レンガ造りのアーチの下にいるドクロ。King’s Questの主人公Grahamの白いシルエットも右側に描かれている。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_tides": {
+                "id_status": "provisional",
+                "title": "Tides",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "ビニール・エアブラシ／キャンバス・油画",
+                "summary": "海岸で、胎児のような姿勢で座る裸の男性。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_fern": {
+                "id_status": "provisional",
+                "title": "Fern",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "不明",
+                "summary": "机に置かれたシダの鉢植えと小さな炎。",
+                "minecraft_size": {
+                  "class": "大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_sunflowers": {
+                "id_status": "provisional",
+                "title": "Sunflowers",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "不明",
+                "summary": "机に乗った向日葵の鉢と絵画、そして2次元の向日葵。",
+                "minecraft_size": {
+                  "class": "大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_cotan": {
+                "id_status": "provisional",
+                "title": "Cotán",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "不明",
+                "summary": "コターン作の静物画のような構図で、金のリンゴときらめくスイカの薄切りを描いたもの。",
+                "minecraft_size": {
+                  "class": "大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_owlemons": {
+                "id_status": "provisional",
+                "title": "Owlemons",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "箱から覗く二次元のフクロウと、レモンの絵。背景はギルランダイオ作『老人と孫』に拠っている。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_cavebird": {
+                "id_status": "provisional",
+                "title": "Cavebird",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "不明",
+                "summary": "一洞の洞窟の空いた崖と、その手前を舞う一羽の鳥。",
+                "minecraft_size": {
+                  "class": "大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_bouquet": {
+                "id_status": "provisional",
+                "title": "Bouquet",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "不明",
+                "summary": "一束の花とその傍に座る人。その後ろには山岳の描かれた壁と階段がある。",
+                "minecraft_size": {
+                  "class": "大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_dennis": {
+                "id_status": "provisional",
+                "title": "Dennis / Good Boy",
+                "author": "Sarah Boeving",
+                "medium": "不明",
+                "summary": "A Minecraft Movieに登場するデニスを描いた絵を元に作成された白色のオオカミの絵。",
+                "minecraft_size": {
+                  "class": "大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_fighters": {
+                "id_status": "provisional",
+                "title": "Fighters",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "道着を着て構えを取った、ゲーム『International Karate +』のファイターを模した紙人形の絵。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_passage": {
+                "id_status": "provisional",
+                "title": "Passage",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "海岸を背景にした廃坑のような通路にいる人とメガテリウムの骸骨をシュルレアリスムにより描いた絵。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_changing": {
+                "id_status": "provisional",
+                "title": "Changing",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "セットの背景が陰鬱な山岳から晴れ渡った田舎の風景に切り替わる中、服を着替える人の絵。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_finding": {
+                "id_status": "provisional",
+                "title": "Finding",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "ビニール・インク・エアブラシ／キャンバス・油画",
+                "summary": "古代ギリシャ風の遺跡の中で、照明で照らしながら新しく掘った穴を覗く人の絵。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              },
+              "painting_lowmist": {
+                "id_status": "provisional",
+                "title": "Lowmist",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "MDF・油画",
+                "summary": "Noclipモードで見た山の3Dモデル。",
+                "minecraft_size": {
+                  "class": "大"
+                }
+              }
+            }
+          },
+          "extra_large": {
+            "label": "特大",
+            "items": {
+              "painting_backyard": {
+                "id_status": "provisional",
+                "title": "Backyard",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "レンガ造りの通路と、裏庭に座りこむ二人の女性。風景はホーホ作『デルフトの家の中庭』に拠る。",
+                "minecraft_size": {
+                  "class": "特大"
+                }
+              },
+              "painting_pond": {
+                "id_status": "provisional",
+                "title": "Pond",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "ビニール・エアブラシ／キャンバス・油画",
+                "summary": "池の中に座る乙女と、池に半身浸かった骸骨。死と乙女のモチーフに由来する。",
+                "minecraft_size": {
+                  "class": "特大"
+                }
+              },
+              "painting_skeleton": {
+                "id_status": "provisional",
+                "title": "Mortal Coil",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "パネル・油画",
+                "summary": "アドベンチャーゲーム『Grim Fandango』のBruno Martinezの絵。",
+                "minecraft_size": {
+                  "class": "特大"
+                },
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_donkey_kong": {
+                "id_status": "provisional",
+                "title": "Kong",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "パネル・油画",
+                "summary": "レンガ造りの窓に置かれた、アーケード版ドンキーコングのステージ『100m』の紙工作。",
+                "minecraft_size": {
+                  "class": "特大"
+                },
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_pointer": {
+                "id_status": "provisional",
+                "title": "Pointer",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "ゲーム『International Karate +』のキャラクターが、大きな手に指を差されて構えを取っている様子。",
+                "minecraft_size": {
+                  "class": "特大"
+                }
+              },
+              "painting_pigscene": {
+                "id_status": "provisional",
+                "title": "Pigscene",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "キャンバスに描かれたブタの絵を指さす女の子。元絵ではRGBカラーモデルを示す三つの四角が描かれている。",
+                "minecraft_size": {
+                  "class": "特大"
+                }
+              },
+              "painting_burning_skull": {
+                "id_status": "provisional",
+                "title": "Skull On Fire",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "燃えているドクロ。背景には澄んだ夜空に月が浮かんでいる。",
+                "minecraft_size": {
+                  "class": "特大"
+                }
+              },
+              "painting_unpacked": {
+                "id_status": "provisional",
+                "title": "Unpacked",
+                "author": "Sarah Boeving",
+                "medium": "不明",
+                "summary": "Minecraftの崖と滝、そして手前の海に浮かぶブタを描いた絵。pack.pngに拠って描かれたもの。",
+                "minecraft_size": {
+                  "class": "特大"
+                },
+                "unknown_fields": [
+                  "medium"
+                ],
+                "unknown_response_hint": "そこは俺もよーわからんな…"
+              },
+              "painting_orb": {
+                "id_status": "provisional",
+                "title": "Orb",
+                "author": "Kristoffer Zetterstrand",
+                "medium": "キャンバス・油画",
+                "summary": "夜のイタリアの風景の中に浮かぶ光球。ベッリーニ作『法悦の聖フランシスコ』に基づいて描かれている。",
+                "minecraft_size": {
+                  "class": "特大"
+                }
+              }
+            }
+          }
+        }
+      },
+      "unused": {
+        "label": "未使用の絵画",
+        "items": {
+          "painting_earth": {
+            "id_status": "provisional",
+            "title": "Earth",
+            "author": "Mojang（作者不詳）",
+            "medium": "不明",
+            "summary": "四元素の一つ『土』の抽象図。",
+            "minecraft_size": {
+              "class": "中"
+            },
+            "unknown_fields": [
+              "medium"
+            ],
+            "unknown_response_hint": "そこは俺もよーわからんな…",
+            "notes": [
+              "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+            ]
+          },
+          "painting_wind": {
+            "id_status": "provisional",
+            "title": "Wind",
+            "author": "Mojang（作者不詳）",
+            "medium": "不明",
+            "summary": "四元素の一つ『空気』の抽象図。",
+            "minecraft_size": {
+              "class": "中"
+            },
+            "unknown_fields": [
+              "medium"
+            ],
+            "unknown_response_hint": "そこは俺もよーわからんな…",
+            "notes": [
+              "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+            ]
+          },
+          "painting_water": {
+            "id_status": "provisional",
+            "title": "Water",
+            "author": "Mojang（作者不詳）",
+            "medium": "不明",
+            "summary": "四元素の一つ『水』の抽象図。",
+            "minecraft_size": {
+              "class": "中"
+            },
+            "unknown_fields": [
+              "medium"
+            ],
+            "unknown_response_hint": "そこは俺もよーわからんな…",
+            "notes": [
+              "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+            ]
+          },
+          "painting_fire": {
+            "id_status": "provisional",
+            "title": "Fire",
+            "author": "Mojang（作者不詳）",
+            "medium": "不明",
+            "summary": "四元素の一つ『火』の抽象図。",
+            "minecraft_size": {
+              "class": "中"
+            },
+            "unknown_fields": [
+              "medium"
+            ],
+            "unknown_response_hint": "そこは俺もよーわからんな…",
+            "notes": [
+              "未使用の絵画。コマンドや管理者用アイテムタブから取得・設置可能な場合がある。"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

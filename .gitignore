@@ -11,5 +11,6 @@ adapter/minecraft-fabric/run/
 .Ds_store
 /docs
 /dogido-llm
-/tests
+/tests/*
+!/tests/test_haiku.py
 /dogido_server.egg-info

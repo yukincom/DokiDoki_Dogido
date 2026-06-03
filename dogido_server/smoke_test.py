@@ -53,7 +53,23 @@ def diagnose(settings: Settings) -> None:
     print(f"  - decision_policy: {settings.decision_policy}")
     print(f"  - llm_enabled: {settings.llm_enabled}")
     print(f"  - llm_backend: {settings.llm_backend}")
+    print(f"  - llm_provider: {settings.llm_provider}")
     print(f"  - mlx_model_id: {settings.mlx_model_id}")
+    print(f"  - llm_base_url: {settings.llm_base_url}")
+    print(f"  - llm_resolved_base_url: {settings.llm_resolved_base_url}")
+    print(f"  - llm_model: {settings.llm_model}")
+    chat_settings = settings.llm_route_settings("chat")
+    haiku_settings = settings.llm_route_settings("haiku")
+    print(
+        "  - llm_chat_route: "
+        f"backend={chat_settings.llm_effective_backend} provider={chat_settings.llm_provider} "
+        f"model={chat_settings.llm_model or chat_settings.mlx_model_id or 'unset'}"
+    )
+    print(
+        "  - llm_haiku_route: "
+        f"backend={haiku_settings.llm_effective_backend} provider={haiku_settings.llm_provider} "
+        f"model={haiku_settings.llm_model or haiku_settings.mlx_model_id or 'unset'}"
+    )
     print(f"  - tts_backend: {settings.tts_backend}")
     print(f"  - cue_backend: {settings.cue_backend}")
     print(f"  - cue_audio_dir: {settings.cue_audio_dir}")

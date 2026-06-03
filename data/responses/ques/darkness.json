@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "emergency_shelter": {
+    "advice": "もう無理や！緊急シェルターつくるで！3ブロック掘ってあたまんとこ塞げ！  ちょっかぼりは普段、あかんねんけど、今はいそぎや！",
+    "morning_release": "朝や！出よ！"
+  },
+  "sleep": {
+    "near_respawn_bed": "さ。ねよねよ！",
+    "nearby_bed": "ベッドあるし、寝よか。"
+  },
+  "night_warning": {
+    "surface_evening": "夕方や！あと1分もしないうちにモンスター出るで！",
+    "cave_or_submerged": "そろそろ{phase_label}やなー。今から地上に出るとモンスターとかち合うなー"
+  },
+  "darkness": {
+    "submerged_entry": "……暗いのは、にがてなんやけど……。"
+  }
+}

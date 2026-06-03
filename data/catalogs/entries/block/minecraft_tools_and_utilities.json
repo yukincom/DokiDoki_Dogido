@@ -1,0 +1,247 @@
+{
+  "tools_and_utilities": {
+    "label": "道具と実用品",
+    "english": "Tools and Utilities",
+    "groups": {
+      "tools_by_material": {
+        "label": "道具（素材別）",
+        "items": {
+          "wooden_pickaxe": "木のツルハシ",
+          "wooden_axe": "木の斧",
+          "wooden_shovel": "木のシャベル",
+          "wooden_hoe": "木のクワ",
+          "stone_pickaxe": "石のツルハシ",
+          "stone_axe": "石の斧",
+          "stone_shovel": "石のシャベル",
+          "stone_hoe": "石のクワ",
+          "copper_pickaxe": "銅のツルハシ",
+          "copper_axe": "銅の斧",
+          "copper_shovel": "銅のシャベル",
+          "copper_hoe": "銅のクワ",
+          "iron_pickaxe": "鉄のツルハシ",
+          "iron_axe": "鉄の斧",
+          "iron_shovel": "鉄のシャベル",
+          "iron_hoe": "鉄のクワ",
+          "golden_pickaxe": "金のツルハシ",
+          "golden_axe": "金の斧",
+          "golden_shovel": "金のシャベル",
+          "golden_hoe": "金のクワ",
+          "diamond_pickaxe": "ダイヤモンドのツルハシ",
+          "diamond_axe": "ダイヤモンドの斧",
+          "diamond_shovel": "ダイヤモンドのシャベル",
+          "diamond_hoe": "ダイヤモンドのクワ",
+          "netherite_pickaxe": "ネザライトのツルハシ",
+          "netherite_axe": "ネザライトの斧",
+          "netherite_shovel": "ネザライトのシャベル",
+          "netherite_hoe": "ネザライトのクワ"
+        },
+        "notes": [
+          "斧は戦闘タブの武器側にも重複所属する。"
+        ]
+      },
+      "buckets": {
+        "label": "バケツ・入りバケツ",
+        "items": {
+          "bucket": "バケツ",
+          "water_bucket": "水入りバケツ",
+          "lava_bucket": "溶岩入りバケツ",
+          "powder_snow_bucket": "粉雪入りバケツ",
+          "milk_bucket": "ミルク入りバケツ",
+          "bucket_of_axolotl": "ウーパールーパー入りバケツ",
+          "bucket_of_cod": "タラ入りバケツ",
+          "bucket_of_pufferfish": "フグ入りバケツ",
+          "bucket_of_salmon": "サケ入りバケツ",
+          "bucket_of_tadpole": "オタマジャクシ入りバケツ",
+          "bucket_of_tropical_fish": "熱帯魚入りバケツ"
+        },
+        "pending": {
+          "bucket_of_sulfur_cube": {
+            "label": "サルファーキューブ入りバケツ",
+            "status": "not_yet_available"
+          }
+        }
+      },
+      "utility_items": {
+        "label": "実用品",
+        "items": {
+          "fishing_rod": "釣竿",
+          "fire_charge": "ファイヤーチャージ",
+          "flint_and_steel": "火打石と打ち金",
+          "brush": "ブラシ",
+          "shears": "ハサミ",
+          "bone_meal": "骨粉",
+          "name_tag": "名札",
+          "lead": "リード"
+        }
+      },
+      "bundles": {
+        "label": "バンドル",
+        "items": {
+          "bundle": "バンドル",
+          "white_bundle": "白色のバンドル",
+          "light_gray_bundle": "薄灰色のバンドル",
+          "gray_bundle": "灰色のバンドル",
+          "black_bundle": "黒色のバンドル",
+          "brown_bundle": "茶色のバンドル",
+          "red_bundle": "赤色のバンドル",
+          "orange_bundle": "橙色のバンドル",
+          "yellow_bundle": "黄色のバンドル",
+          "lime_bundle": "黄緑色のバンドル",
+          "green_bundle": "緑色のバンドル",
+          "cyan_bundle": "青緑色のバンドル",
+          "light_blue_bundle": "空色のバンドル",
+          "blue_bundle": "青色のバンドル",
+          "purple_bundle": "紫色のバンドル",
+          "magenta_bundle": "赤紫色のバンドル",
+          "pink_bundle": "桃色のバンドル"
+        }
+      },
+      "navigation_books_and_instruments": {
+        "label": "本・地図・コンパス・計器",
+        "items": {
+          "written_book": "記入済みの本",
+          "empty_map": "白紙の地図",
+          "filled_map": "地図",
+          "filled_map_mansion": "森林探検家の地図",
+          "filled_map_ocean": "海洋探検家の地図",
+          "filled_map_buried_treasure": "宝の地図",
+          "filled_map_trial_chambers": "試練の間の地図",
+          "filled_map_village_desert": "砂漠の村の地図",
+          "filled_map_village_plains": "平原の村の地図",
+          "filled_map_village_savanna": "サバンナの村の地図",
+          "filled_map_village_snowy": "雪原の村の地図",
+          "filled_map_village_taiga": "タイガの村の地図",
+          "filled_map_explorer_jungle": "密林探検家の地図",
+          "filled_map_explorer_swamp": "沼地探検家の地図",
+          "compass": "コンパス",
+          "recovery_compass": "リカバリーコンパス",
+          "clock": "時計",
+          "spyglass": "望遠鏡",
+          "paper": "紙",
+          "book": "本",
+          "book_and_quill": "本と羽根ペン"
+            }
+      },
+      "mobility_and_riding": {
+        "label": "移動・騎乗補助",
+        "items": {
+          "ender_pearl": "エンダーパール",
+          "eye_of_ender": "エンダーアイ",
+          "elytra": "エリトラ",
+          "firework_rocket": "ロケット花火",
+          "saddle": "鞍",
+          "carrot_on_a_stick": "ニンジン付きの棒",
+          "warped_fungus_on_a_stick": "歪んだキノコ付きの棒"
+        }
+      },
+      "harnesses": {
+        "label": "ハーネス",
+        "items": {
+          "white_harness": "白色のハーネス",
+          "light_gray_harness": "薄灰色のハーネス",
+          "gray_harness": "灰色のハーネス",
+          "black_harness": "黒色のハーネス",
+          "brown_harness": "茶色のハーネス",
+          "red_harness": "赤色のハーネス",
+          "orange_harness": "橙色のハーネス",
+          "yellow_harness": "黄色のハーネス",
+          "lime_harness": "黄緑色のハーネス",
+          "green_harness": "緑色のハーネス",
+          "cyan_harness": "青緑色のハーネス",
+          "light_blue_harness": "空色のハーネス",
+          "blue_harness": "青色のハーネス",
+          "purple_harness": "紫色のハーネス",
+          "magenta_harness": "赤紫色のハーネス",
+          "pink_harness": "桃色のハーネス"
+        }
+      },
+      "boats_and_rafts": {
+        "label": "ボート・チェスト付きボート・竹のイカダ",
+        "items": {
+          "oak_boat": "オークのボート",
+          "oak_boat_with_chest": "チェスト付きのオークのボート",
+          "spruce_boat": "トウヒのボート",
+          "spruce_boat_with_chest": "チェスト付きのトウヒのボート",
+          "birch_boat": "シラカバのボート",
+          "birch_boat_with_chest": "チェスト付きのシラカバのボート",
+          "jungle_boat": "ジャングルのボート",
+          "jungle_boat_with_chest": "チェスト付きのジャングルのボート",
+          "acacia_boat": "アカシアのボート",
+          "acacia_boat_with_chest": "チェスト付きのアカシアのボート",
+          "dark_oak_boat": "ダークオークのボート",
+          "dark_oak_boat_with_chest": "チェスト付きのダークオークのボート",
+          "mangrove_boat": "マングローブのボート",
+          "mangrove_boat_with_chest": "チェスト付きのマングローブのボート",
+          "cherry_boat": "サクラのボート",
+          "cherry_boat_with_chest": "チェスト付きのサクラのボート",
+          "pale_oak_boat": "ペールオークのボート",
+          "pale_oak_boat_with_chest": "チェスト付きのペールオークのボート",
+          "bamboo_raft": "竹のイカダ",
+          "bamboo_raft_with_chest": "チェスト付きの竹のイカダ"
+        }
+      },
+      "minecarts_and_rails": {
+        "label": "トロッコ・レール",
+        "items": {
+          "rail": "レール",
+          "powered_rail": "パワードレール",
+          "detector_rail": "ディテクターレール",
+          "activator_rail": "アクティベーターレール",
+          "minecart": "トロッコ",
+          "minecart_with_chest": "チェスト付きのトロッコ",
+          "minecart_with_command_block": "コマンドブロック付きのトロッコ",
+          "minecart_with_furnace": "かまど付きのトロッコ",
+          "minecart_with_hopper": "ホッパー付きのトロッコ",
+          "minecart_with_tnt": "TNT付きのトロッコ"
+        }
+      },
+      "goat_horns": {
+        "label": "ヤギの角笛",
+        "items": {
+          "goat_horn": "ヤギの角笛"
+        },
+        "variants": {
+          "goat_horn_variants": {
+            "label": "ヤギの角笛の音色",
+            "items": {
+              "ponder_goat_horn": "沈思のヤギの角笛",
+              "sing_goat_horn": "歌声のヤギの角笛",
+              "seek_goat_horn": "探求のヤギの角笛",
+              "feel_goat_horn": "感覚のヤギの角笛",
+              "admire_goat_horn": "称賛のヤギの角笛",
+              "call_goat_horn": "号令のヤギの角笛",
+              "yearn_goat_horn": "憧憬のヤギの角笛",
+              "dream_goat_horn": "夢想のヤギの角笛"
+            }
+          }
+        }
+      },
+      "music_discs": {
+        "label": "レコード",
+        "items": {
+          "music_disc_13": "レコード（13）",
+          "music_disc_cat": "レコード（cat）",
+          "music_disc_blocks": "レコード（blocks）",
+          "music_disc_chirp": "レコード（chirp）",
+          "music_disc_far": "レコード（far）",
+          "music_disc_mall": "レコード（mall）",
+          "music_disc_mellohi": "レコード（mellohi）",
+          "music_disc_stal": "レコード（stal）",
+          "music_disc_strad": "レコード（strad）",
+          "music_disc_ward": "レコード（ward）",
+          "music_disc_11": "レコード（11）",
+          "music_disc_creator_music_box": "レコード（Creator（オルゴール））",
+          "music_disc_wait": "レコード（wait）",
+          "music_disc_creator": "レコード（Creator）",
+          "music_disc_precipice": "レコード（Precipice）",
+          "music_disc_otherside": "レコード（otherside）",
+          "music_disc_relic": "レコード（Relic）",
+          "music_disc_5": "レコード（5）",
+          "music_disc_pigstep": "レコード（Pigstep）",
+          "music_disc_tears": "レコード（Tears）",
+          "music_disc_lava_chicken": "レコード（Lava Chicken）"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "calls": {
+    "classic_ushiro_call": "志村！うしろ！うしろ〜！",
+    "named_ushiro_call": "{player_name}うしろ！うしろ〜！",
+    "charged_creeper": "うわああっ！帯電クリーパーや！！逃げろぉ！！"
+  },
+  "pressure": {
+    "stalled_visual_suppressed": "まだ減ってへん……。",
+    "stalled_visual": "いやや〜！まだモンスターおるやん！死にたないわ〜！俺はまだ死にたないわ〜！ゲームやけどポインってなりとうないねん！",
+    "hostile_massive": "モンスターがぎょうさんおるで！",
+    "hostile_massive_suppressed": "モンスターがぎょうさんおる……。"
+  },
+  "daylight": {
+    "water_generic": "おいおいおい！水、入ったら燃えへんやろ！！燃えるとこ行けや！！！",
+    "rain_started": "あ！？なんでここで雨がふるねん！！燃えてくれやーー！！",
+    "dry_overcast": "あ！？なんでここで空だけどんよりすんねん！！燃えてくれやーー！！",
+    "dry_thunder": "あ！？なんでここで雷まで鳴るねん！！燃えてくれやーー！！"
+  },
+  "auditory_presence": {
+    "single_named": "{direction}で{label}の声する！",
+    "single_unknown": "なんか{direction}で声する！",
+    "persistent_named": "まだ{label}おるで！ 怖いわー！",
+    "persistent_unknown": "まだおるで！ 怖いわー！",
+    "shadowing_named": "なあ……まだ{label}おるみたいやけど……こっち来んよな？",
+    "shadowing_unknown": "なあ……まだおるみたいやけど……こっち来んよな？",
+    "chasing_named": "やっこさん、まだ{label}で追ってきよるよ！",
+    "chasing_unknown": "やっこさん、まだ追ってきよるよ！"
+  }
+}

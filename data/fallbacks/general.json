@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "sleep": {
+    "sleeping_neighbor": "……寝てる人がおるな。"
+  },
+  "darkness": {
+    "darkness_escape": "{prefix}これはちょっと危なすぎるわ……ほんま落ち着かへんし、怖すぎるって……。",
+    "occluded_entry_with_light": "え、{prefix}ここ急に暗ない？ ん……あかりは持っとるな!早速、設置や！",
+    "occluded_entry_no_light": "え、{prefix}その暗さでほんまに入るん？ ちょっと怖いわ……。",
+    "dark_push_no_light": "{prefix}手元、見えへんの怖いわ……ほんま心臓が縮むって……。",
+    "dark_push_after_breath_default": "{prefix}心臓に悪いわ、マジで心臓に悪いわ……。",
+    "dark_push_after_breath_evening": "もう夜かいな。一難去ってまた一難や！",
+    "dark_push_after_breath_night": "まだ夜かいな。一難去ってまた一難や！",
+    "light_crafted": "っしゃ！ {prefix}あかりできたやん、これでさっきよりだいぶ安心できるわ！"
+  },
+  "combat": {
+    "daylight_water_skeleton": "うわっ！スケルトンが水入ってしもた！頼むから陸に寄って燃えてくれ〜〜！頼むわ！",
+    "newly_burning_visual": "っしゃ！もえろもえろおお！"
+  },
+  "weather_transition": {
+    "clear_after_bad_weather": "ふぅ……ようやく晴れたな。ちょっと落ち着けるかも……でも油断したらあかんぞ。",
+    "overcast_after_thunder": "雷はやんだみたいやけど……まだ空どんよりしとるな。油断はできへんで。",
+    "overcast_started": "うわっ……空がどんよりしてきたで！ 暗うなったらモンスター湧きやすなるし、怖いわぁ！",
+    "snow_after_thunder": "雪や！きれいやけど……おっさんには辛いわぁ……。",
+    "snow_started": "雪や……寒いし暗いし……このまま夜になってしもたらツラいわぁ！家帰りとーなってきたわ。",
+    "rain_after_thunder": "雷は止まったな……まあまだ油断できへん。きいつけよや！",
+    "rain_started": "うわっ……雨降ってきたで！くろぉなったらまたモンスター湧きやすなるで……怖いわぁ！",
+    "dry_thunder_after_overcast": "うわっ、雷まで鳴り出したやん！ 雨はなくても怖さは増すって……。",
+    "dry_thunder_started": "うわああっ！砂漠で雷てなんやねん！空だけ荒れてて余計こわいわ！",
+    "blizzard_after_snow": "ふぶいてきたわ〜〜！視界わるぅ！雷も落ちよるし……おっさんにはキツいわぁ。",
+    "blizzard_started": "ぐわー！なんじゃこの天気は！！",
+    "thunder_after_rain": "はぁはぁ……雷鳴ってる！めっちゃ暗いし雷の音が怖すぎるわ！あかん、隠れなあかん！",
+    "thunder_started": "うわああっ！雷や！雷落ちてくるで！くわばらくわばら！！"
+  }
+}

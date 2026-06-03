@@ -14,7 +14,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "com.yukinco.dogido.fabric.DogidoClientAdapter"
+      "dogido.fabric.DogidoClientAdapter"
     ]
   },
   "mixins": [

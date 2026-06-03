@@ -17,12 +17,14 @@ Minecraft のゲーム状況を読み取り、怖がりな AI キャラクター
 - [イベントスキーマ](docs/event-schema.md)
 - [受信 API 仕様](docs/adapter-api.md)
 - [サンプルイベントログ収集ケース](docs/sample-event-log-cases.md)
+- [デバッグチェックリスト](docs/debug-checklist.md)
 - [モンスター定義スキーマ](docs/monster-schema.md)
 - [`py_trees` 統合メモ](docs/py-trees-integration.md)
 - [実行時依存ライブラリ](docs/runtime-dependencies.md)
 - [状態機械](docs/state-machine.md)
 - [連携構成](docs/integration-architecture.md)
 - [挙動仕様](docs/behavior-spec.md)
+- [川柳アーキテクチャ](docs/haiku-architecture.md)
 - [技術課題](docs/technical-risks.md)
 
 ## 読む順番
@@ -38,7 +40,8 @@ Minecraft のゲーム状況を読み取り、怖がりな AI キャラクター
 9. [状態機械](docs/state-machine.md)
 10. [連携構成](docs/integration-architecture.md)
 11. [挙動仕様](docs/behavior-spec.md)
-12. [技術課題](docs/technical-risks.md)
+12. [川柳アーキテクチャ](docs/haiku-architecture.md)
+13. [技術課題](docs/technical-risks.md)
 
 ## 現時点の方針
 
@@ -100,6 +103,73 @@ python -m dogido_server.smoke_test --mode all
 ```bash
 python -m dogido_server.smoke_test --mode all --audio
 ```
+
+## LLM Routes
+
+低レイテンシの戦況報告は state machine とキャッシュ音声で処理し、LLM は使いません。
+
+- 雑談・助言
+  - `chat` route
+  - ローカル MLX でもクラウド API でもよい
+- 川柳
+  - `haiku` route
+  - まず軽い route で矛盾候補を抽出し、最後の句だけ `haiku` route のモデルで生成する
+
+`mlx_lm.server` のようなローカル互換サーバーでも、OpenAI / OpenRouter / Claude / Grok / Gemini の API でも、route ごとに切り替えられます。
+
+```bash
+mlx_lm.server \
+  --model mlx-community/Qwen3.6-35B-A3B-4bit-DWQ \
+  --host 127.0.0.1 \
+  --port 8080
+```
+
+`.env` 側は例えばこうです。
+
+```env
+DOGIDO_LLM_BACKEND=chat_completions
+DOGIDO_LLM_PROVIDER=local
+DOGIDO_LLM_BASE_URL=http://127.0.0.1:8080/v1
+DOGIDO_LLM_MODEL=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
+```
+
+OpenAI を使うなら、`base_url` は省略できます。
+
+```env
+DOGIDO_LLM_BACKEND=chat_completions
+DOGIDO_LLM_PROVIDER=openai
+DOGIDO_LLM_MODEL=gpt-4.1-mini
+DOGIDO_LLM_API_KEY=...
+```
+
+OpenRouter を使うなら、`HTTP-Referer` と `X-Title` も設定できます。
+
+```env
+DOGIDO_LLM_BACKEND=chat_completions
+DOGIDO_LLM_PROVIDER=openrouter
+DOGIDO_LLM_MODEL=openai/gpt-4.1-mini
+DOGIDO_LLM_API_KEY=...
+DOGIDO_LLM_HTTP_REFERER=https://example.com
+DOGIDO_LLM_APPLICATION_NAME=Dogido
+```
+
+雑談と川柳を分けるなら、route override を使います。
+
+```env
+DOGIDO_LLM_BACKEND=mlx
+DOGIDO_LLM_PROVIDER=local
+DOGIDO_MLX_MODEL_ID=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
+
+DOGIDO_LLM_CHAT_PROVIDER=local
+DOGIDO_LLM_CHAT_BASE_URL=http://127.0.0.1:8080/v1
+DOGIDO_LLM_CHAT_MODEL=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
+
+DOGIDO_LLM_HAIKU_PROVIDER=openai
+DOGIDO_LLM_HAIKU_MODEL=gpt-4.1
+DOGIDO_LLM_HAIKU_API_KEY=...
+```
+
+`backend` を route ごとに明示しなくても、`provider=claude|grok|gemini|openai|openrouter` のときは API family を自動解決します。
 
 ## Minecraft Adapter
 

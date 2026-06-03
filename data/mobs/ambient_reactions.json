@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "generic_templates": [
+    "お！ {mob}おるやん！",
+    "{mob}げんきそうやな〜！"
+  ],
+  "mobs": {
+    "allay": {
+      "specific_lines": [
+        "アレイちゃん。おつかれさんですわ"
+      ]
+    },
+    "copper_golem": {
+      "specific_lines": [
+        "ゴーレムのにいさん、お疲れさんですわ"
+      ]
+    },
+    "dolphin": {
+      "specific_lines": [
+        "イルカちゃんや！"
+      ],
+      "conditional_lines": [
+        {
+          "requires_inventory_any": [
+            "cod",
+            "cooked_cod",
+            "salmon",
+            "cooked_salmon",
+            "pufferfish",
+            "tropical_fish"
+          ],
+          "line": "餌やろうや！"
+        }
+      ]
+    },
+    "happy_ghast": {
+      "specific_lines": [
+        "乗って空のお散歩やな！"
+      ]
+    },
+    "iron_golem": {
+      "specific_lines": [
+        "ゴーレムのにいさん、お疲れさんですわ"
+      ]
+    },
+    "sniffer": {
+      "specific_lines": [
+        "見れば見るほど不思議な生き物やなー"
+      ]
+    },
+    "snow_golem": {
+      "specific_lines": [
+        "ゴーレムのにいさん、お疲れさんですわ"
+      ]
+    },
+    "strider": {
+      "specific_lines": [
+        "けがなびいとるな・・・"
+      ]
+    },
+    "villager": {
+      "specific_lines": [
+        "こんちはー！"
+      ]
+    },
+    "wandering_trader": {
+      "specific_lines": [
+        "どもども！いつもお世話になっとります！"
+      ]
+    },
+    "wolf": {
+      "specific_lines": [
+        "わんちゃん！…いやオオカミやった！"
+      ]
+    }
+  }
+}

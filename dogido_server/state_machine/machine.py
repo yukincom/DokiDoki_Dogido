@@ -1,0 +1,81 @@
+# state_machine/machine.py
+from __future__ import annotations
+
+from dogido_server.config import Settings
+from dogido_server.llm import LLMFrontend
+from dogido_server.models import GameEvent
+from dogido_server.player_input import PlayerInputContext, route_player_input
+from dogido_server.py_tree_policy import PyTreeActionPolicy
+from dogido_server.state_machine.mixins.action_builder import ActionBuilderMixin
+from dogido_server.state_machine.mixins.auditory import AuditoryMixin
+from dogido_server.state_machine.mixins.common import CommonMixin
+from dogido_server.state_machine.mixins.cue_reactions import CueReactionsMixin
+from dogido_server.state_machine.mixins.environmental_reactions import EnvironmentalReactionsMixin
+from dogido_server.state_machine.mixins.haiku import HaikuMixin
+from dogido_server.state_machine.mixins.inventory import InventoryMixin
+from dogido_server.state_machine.mixins.narration import NarrationMixin
+from dogido_server.state_machine.mixins.state_updates import StateUpdatesMixin
+from dogido_server.state_machine.mixins.threat_interrupts import ThreatInterruptsMixin
+from dogido_server.state_machine.mixins.visual_reports import VisualReportsMixin
+from dogido_server.state_machine.mixins.visual_targets import VisualTargetsMixin
+from dogido_server.state_machine.mixins.world_analysis import WorldAnalysisMixin
+from dogido_server.state_machine.types import RuntimeState, StateMachineResult
+
+
+class DogidoStateMachine(
+    StateUpdatesMixin,
+    ActionBuilderMixin,
+    CommonMixin,
+    CueReactionsMixin,
+    EnvironmentalReactionsMixin,
+    HaikuMixin,
+    ThreatInterruptsMixin,
+    NarrationMixin,
+    VisualTargetsMixin,
+    VisualReportsMixin,
+    AuditoryMixin,
+    WorldAnalysisMixin,
+    InventoryMixin,
+):
+    def __init__(self, settings: Settings, llm: LLMFrontend | None = None) -> None:
+        self.settings = settings
+        self.state = RuntimeState()
+        self.llm = llm
+        self.player_input = PlayerInputContext()
+        self.policy_tree = PyTreeActionPolicy() if settings.decision_policy == "py_trees" else None
+
+    def process(self, event: GameEvent) -> StateMachineResult:
+        now = event.observed_at
+        previous_mode = self.state.mode
+        self.player_input = route_player_input(event.meta.user_text)
+        newly_burning_visual = self._find_newly_burning_visual(event)
+        weather_transition = self._weather_transition(event)
+        entered_occluded_dark_zone = self._entered_occluded_dark_zone(event)
+        entered_safe_zone_with_door = self._entered_safe_zone_with_door(event)
+        exited_safe_zone_with_door = self._exited_safe_zone_with_door(event)
+        entered_submerged_dark_zone = self._entered_submerged_dark_zone(event)
+        light_source_crafted = self._light_source_crafted(event)
+
+        self._update_memory(event, now)
+        signals = self._derive_signals(event, now)
+        signals.newly_burning_visual = newly_burning_visual
+        signals.entered_occluded_dark_zone = entered_occluded_dark_zone
+        signals.entered_safe_zone_with_door = entered_safe_zone_with_door
+        signals.exited_safe_zone_with_door = exited_safe_zone_with_door
+        signals.entered_submerged_dark_zone = entered_submerged_dark_zone
+        signals.light_source_crafted = light_source_crafted
+        signals.weather_transition_from = weather_transition[0] if weather_transition is not None else None
+        signals.weather_transition_to = weather_transition[1] if weather_transition is not None else None
+        signals.cold_weather_biome = self._is_cold_weather_biome(event.world.biome)
+        signals.dry_weather_biome = self._is_dry_weather_biome(event.world.biome)
+        self.state.emergency_shelter_active = signals.emergency_shelter
+        next_mode = self._resolve_mode(event, signals, now)
+        self._apply_mode_transition(previous_mode, next_mode, now)
+        actions = self._build_actions(event, previous_mode, next_mode, signals, now)
+        self._update_silence_break_state(event, actions, now)
+        for threat in event.visual_threats:
+            self.state.seen_visual_keys[self._visual_identity_key(threat)] = now
+        self.state.last_foliage_shade_context = self._is_foliage_shade_context(event)
+
+        combat_active = next_mode in {"panic", "suppressed_panic"} or signals.combat_active_hint
+        return StateMachineResult(state=self.state, combat_active=combat_active, actions=actions)

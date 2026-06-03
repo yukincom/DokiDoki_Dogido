@@ -94,9 +94,29 @@ class NormalEnvironmentEvent(_Condition):
             return False
         return (
             context.signals.light_source_crafted
+            or context.machine.state.pending_special_biome_line is not None
+            or context.signals.entered_safe_zone_with_door
+            or context.signals.exited_safe_zone_with_door
+            or context.signals.safe_zone_with_door
+            or context.signals.emergency_shelter
+            or context.signals.entered_submerged_dark_zone
             or context.signals.entered_occluded_dark_zone
+            or context.signals.weather_transition_to is not None
+            or context.machine._is_foliage_shade_context(context.event)
+            or (
+                getattr(context.event.world.time_phase, "value", context.event.world.time_phase) == "night"
+                and (context.event.world.nearby_firefly_bush_count or 0) > 0
+            )
+            or context.machine._should_consider_night_warning(context.event)
+            or context.machine._should_emit_sleep_prompt(context.event, context.now)
+            or context.machine._should_emit_sleeping_neighbor_comment(context.event, context.now)
+            or context.machine._should_emit_haiku(context.event, context.now)
+            or context.machine._should_emit_emergency_shelter_advice(context.event, context.signals)
+            or context.machine._should_emit_emergency_shelter_morning_call(context.event, context.signals)
+            or context.machine.state.pending_dark_push_after_breath_until is not None
             or context.machine._should_warn_dark_push_no_light(context.event, context.signals, context.now)
-            or context.machine._should_stop_dark_push_audio(context.signals)
+            or context.machine._should_continue_dark_push_breath(context.event, context.signals, context.now)
+            or context.machine._should_stop_dark_push_audio(context.event, context.signals)
         )
 
 
@@ -119,6 +139,13 @@ class EmitPanicActions(_Action):
         super().__init__(name="EmitPanicActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        actions.extend(
+            context.machine._threat_dark_push_stop_actions(
+                context.event,
+                context.signals,
+                context.now,
+            )
+        )
         callout = context.machine._panic_callout(context.event, context.signals)
         entry_cue = context.machine._panic_entry_cue(
             context.event,
@@ -135,8 +162,9 @@ class EmitPanicActions(_Action):
             actions.append(
                 context.machine._audio_action(
                     layer="callout",
-                    interrupt=True,
+                    interrupt=False,
                     text=callout,
+                    protect_ms=context.machine._callout_protect_ms(callout),
                 )
             )
 
@@ -146,7 +174,14 @@ class EmitSuppressedPanicActions(_Action):
         super().__init__(name="EmitSuppressedPanicActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
-        cue = context.machine._suppressed_entry_cue(context.previous_mode, context.now)
+        actions.extend(
+            context.machine._threat_dark_push_stop_actions(
+                context.event,
+                context.signals,
+                context.now,
+            )
+        )
+        cue = context.machine._suppressed_entry_cue(context.event, context.previous_mode, context.now)
         if cue is not None:
             actions.append(cue)
             return
@@ -156,8 +191,9 @@ class EmitSuppressedPanicActions(_Action):
             actions.append(
                 context.machine._audio_action(
                     layer="callout",
-                    interrupt=True,
+                    interrupt=False,
                     text=callout,
+                    protect_ms=context.machine._callout_protect_ms(callout),
                 )
             )
 
@@ -167,6 +203,13 @@ class EmitAlertActions(_Action):
         super().__init__(name="EmitAlertActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        actions.extend(
+            context.machine._threat_dark_push_stop_actions(
+                context.event,
+                context.signals,
+                context.now,
+            )
+        )
         threat_callout = context.machine._alert_callout(context.event, context.signals)
         cue = context.machine._alert_entry_cue(
             context.event,
@@ -183,8 +226,9 @@ class EmitAlertActions(_Action):
             actions.append(
                 context.machine._audio_action(
                     layer="callout",
-                    interrupt=True,
+                    interrupt=False,
                     text=threat_callout,
+                    protect_ms=context.machine._callout_protect_ms(threat_callout),
                 )
             )
             return

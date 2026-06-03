@@ -33,16 +33,5 @@
     "coal": 4,
     "stick": 6,
     "bed": 0
-  },
-  "nearby_resources": [
-    {
-      "type": "block",
-      "name": "oak_log",
-      "distance": 7.0,
-      "direction": {
-        "horizontal": "front",
-        "vertical": "same"
-      }
-    }
-  ]
+  }
 }

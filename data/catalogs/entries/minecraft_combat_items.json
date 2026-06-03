@@ -1,0 +1,202 @@
+{
+  "combat": {
+    "label": "戦闘",
+    "english": "Combat",
+    "groups": {
+     "melee_weapons_and_shield": {
+        "label": "近距離武器・盾",
+        "items": {
+          "wooden_sword": "木の剣",
+          "wooden_spear": "木の槍",
+          "wooden_axe": "木の斧",
+          "stone_sword": "石の剣",
+          "stone_spear": "石の槍",
+          "stone_axe": "石の斧",
+          "copper_sword": "銅の剣",
+          "copper_spear": "銅の槍",
+          "copper_axe": "銅の斧",
+          "iron_sword": "鉄の剣",
+          "iron_spear": "鉄の槍",
+          "iron_axe": "鉄の斧",
+          "golden_sword": "金の剣",
+          "golden_spear": "金の槍",
+          "golden_axe": "金の斧",
+          "diamond_sword": "ダイヤモンドの剣",
+          "diamond_spear": "ダイヤモンドの槍",
+          "diamond_axe": "ダイヤモンドの斧",
+          "netherite_sword": "ネザライトの剣",
+          "netherite_spear": "ネザライトの槍",
+          "netherite_axe": "ネザライトの斧",
+          "trident": "トライデント",
+          "mace": "メイス",
+          "shield": "盾"          
+        }
+      },
+      "ranged_weapons": {
+        "label": "遠隔武器",
+        "items": {
+          "bow": "弓",
+          "crossbow": "クロスボウ",
+          "arrow": "矢",
+          "spectral_arrow": "光の矢",
+          "tipped_arrow": "効能付きの矢"
+        },
+        "variants": {
+          "tipped_arrows": {
+            "label": "効能付きの矢",
+            "items": {
+              "arrow_of_mundane": "ありふれた矢",
+              "arrow_of_thick": "濃厚な矢",
+              "arrow_of_awkward": "奇妙な矢",
+              "arrow_of_regeneration": "再生の矢",
+              "arrow_of_swiftness": "俊敏の矢",
+              "arrow_of_fire_resistance": "耐火の矢",
+              "arrow_of_healing": "治癒の矢",
+              "arrow_of_night_vision": "暗視の矢",
+              "arrow_of_strength": "力の矢",
+              "arrow_of_leaping": "跳躍の矢",
+              "arrow_of_invisibility": "透明化の矢",
+              "arrow_of_poison": "毒の矢",
+              "arrow_of_weakness": "弱化の矢",
+              "arrow_of_slowness": "鈍化の矢",
+              "arrow_of_harming": "負傷の矢",
+              "arrow_of_water_breathing": "水中呼吸の矢",
+              "arrow_of_luck": "幸運の矢",
+              "arrow_of_decay": "衰弱の矢",
+              "arrow_of_the_turtle_master": "タートルマスターの矢",
+              "arrow_of_slow_falling": "低速落下の矢",
+              "arrow_of_wind_charging": "蓄風の矢",
+              "arrow_of_weaving": "巣張りの矢",
+              "arrow_of_oozing": "滲出の矢",
+              "arrow_of_infested": "虫食いの矢"
+            },
+            "edition_notes": {
+              "arrow_of_luck": "JE限定",
+              "arrow_of_decay": "BE限定"
+            }
+          }
+        }
+      },
+      "armor": {
+        "label": "防具",
+        "items": {
+          "chainmail_helmet": "チェーンのヘルメット",
+          "chainmail_chestplate": "チェーンのチェストプレート",
+          "chainmail_leggings": "チェーンのレギンス",
+          "chainmail_boots": "チェーンのブーツ",
+          "copper_helmet": "銅のヘルメット",
+          "copper_chestplate": "銅のチェストプレート",
+          "copper_leggings": "銅のレギンス",
+          "copper_boots": "銅のブーツ",
+          "iron_helmet": "鉄のヘルメット",
+          "iron_chestplate": "鉄のチェストプレート",
+          "iron_leggings": "鉄のレギンス",
+          "iron_boots": "鉄のブーツ",
+          "golden_helmet": "金のヘルメット",
+          "golden_chestplate": "金のチェストプレート",
+          "golden_leggings": "金のレギンス",
+          "golden_boots": "金のブーツ",
+          "diamond_helmet": "ダイヤモンドのヘルメット",
+          "diamond_chestplate": "ダイヤモンドのチェストプレート",
+          "diamond_leggings": "ダイヤモンドのレギンス",
+          "diamond_boots": "ダイヤモンドのブーツ",
+          "netherite_helmet": "ネザライトのヘルメット",
+          "netherite_chestplate": "ネザライトのチェストプレート",
+          "netherite_leggings": "ネザライトのレギンス",
+          "netherite_boots": "ネザライトのブーツ",
+          "leather_cap": "革の帽子",
+          "leather_tunic": "革の上着",
+          "leather_pants": "革のズボン",
+          "leather_boots": "革のブーツ",
+          "turtle_shell": "カメの甲羅"
+                }
+      },
+      "horse_armor": {
+        "label": "馬鎧",
+        "items": {
+          "leather_horse_armor": "革の馬鎧",
+          "copper_horse_armor": "銅の馬鎧",
+          "iron_horse_armor": "鉄の馬鎧",
+          "golden_horse_armor": "金の馬鎧",
+          "diamond_horse_armor": "ダイヤモンドの馬鎧"
+        }
+      },
+      "companion_armor": {
+        "label": "コンパニオン装備",
+        "items": {
+          "wolf_armor": "オオカミの鎧",
+          "copper_nautilus_armor": "銅のオウムガイの鎧",
+          "iron_nautilus_armor": "鉄のオウムガイの鎧",
+          "gold_nautilus_armor": "金のオウムガイの鎧",
+          "netherite_nautilus_armor": "ネザライトのオウムガイの鎧"
+        }
+      },
+      "combat_consumables_and_traps": {
+        "label": "戦闘用消耗品・設置物",
+        "items": {
+          "totem_of_undying": "不死のトーテム",
+          "tnt": "TNT",
+          "end_crystal": "エンドクリスタル",
+          "snowball": "雪玉",
+          "egg": "卵",
+          "blue_egg": "青色の卵",
+          "brown_egg": "茶色の卵",
+          "wind_charge": "ウィンドチャージ",
+          "firework_rocket": "ロケット花火"
+        },
+        "variants": {},
+        "notes": [
+          "ロケット花火は、飛行時間・形状・色・フェード色などの組み合わせが多いため、個別JSON展開せず firework_rocket 本体のみを保持する。"
+        ],
+        "firework_rocket_properties": {
+          "label": "ロケット花火の可変要素",
+          "enumerate_variants": false,
+          "variant_reason": "組み合わせ数が多すぎるため、川柳・コメント用データでは個別展開しない。",
+          "properties": {
+            "flight_duration": {
+              "label": "飛行時間",
+              "source": "火薬の数",
+              "values": [
+                1,
+                2,
+                3
+              ]
+            },
+            "shape": {
+              "label": "形状",
+              "source": "Firework Star Type",
+              "values": {
+                "0": "小玉",
+                "1": "大玉",
+                "2": "星型",
+                "3": "mobの頭部型７種（スケルトン,ウィザースケルトン,ゾンビ,プレイヤー,クリーパー,ドラゴン,ピグリン）",
+                "4": "破裂"
+              },
+              "extra_sources": [
+                "mob_head_variants"
+              ]
+            },
+            "color": {
+              "label": "色",
+              "source": "染料",
+              "values": "16色以上から1〜2種以上の組み合わせ"
+            },
+            "fade_color": {
+              "label": "フェード色",
+              "source": "染料",
+              "values": "任意の追加色"
+            }
+          },
+          "poetic_use": [
+            "花火",
+            "色とりどり",
+            "夜空",
+            "打ち上げ",
+            "爆ぜる",
+            "ドーン"
+          ]
+        }
+      }
+    }
+  }
+}

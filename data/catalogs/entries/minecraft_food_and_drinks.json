@@ -1,0 +1,536 @@
+{
+  "food_and_drinks": {
+    "label": "食べ物と飲み物",
+    "english": "The Food and Drinks",
+    "groups": {
+      "raw_protein": {
+        "label": "食料：生もの",
+        "items": {
+          "raw_beef": "生の牛肉",
+          "raw_chicken": "生の鶏肉",
+          "raw_cod": "生鱈",
+          "raw_mutton": "生の羊肉",
+          "raw_porkchop": "生の豚肉",
+          "raw_rabbit": "生の兎肉",
+          "raw_salmon": "生鮭",
+          "pufferfish": "フグ",
+          "tropical_fish": "熱帯魚",
+          "rotten_flesh": "腐った肉",
+          "spider_eye": "クモの目"
+
+        }
+      },
+      "protein": {
+        "label": "食料：タンパク質",
+        "items": {
+          "steak": "ステーキ",
+          "cooked_chicken": "焼き鳥",
+          "cooked_cod": "焼き鱈",
+          "cooked_mutton": "焼き羊肉",
+          "cooked_porkchop": "焼き豚",
+          "cooked_rabbit": "焼き兎肉",
+          "cooked_salmon": "焼き鮭"
+      }},
+      "carbohydrates": {
+        "label": "食料：炭水化物",
+        "items": {
+          "wheat": "小麦",      
+          "potato": "ジャガイモ",
+          "poisonous_potato": "青くなったジャガイモ",          
+          "baked_potato": "ベイクドポテト",
+          "bread": "パン",
+          "cookie": "クッキー",
+          "pumpkin_pie": "パンプキンパイ",
+          "cake": "ケーキ"
+        }
+      },
+      "vitamins": {
+        "label": "食料：野菜・果物",
+        "items": {
+          "apple": "リンゴ",
+          "golden_apple": "金のリンゴ",
+          "enchanted_golden_apple": "エンチャントされた金のリンゴ",
+          "melon_slice": "スイカの薄切り",
+          "glistering_melon_slice": "きらめくスイカの薄切り",
+          "chorus_fruit": "コーラスフルーツ",
+          "beetroot": "ビートルート",
+          "carrot": "ニンジン",
+          "golden_carrot": "金のニンジン",
+          "sweet_berries": "スイートベリー",
+          "glow_berries": "グロウベリー",
+          "dried_kelp": "乾燥した昆布"       
+        }
+      },
+      "soups_and_stews": {
+        "label": "食料：スープ・シチュー",
+        "items": {
+          "beetroot_soup": "ビートルートスープ",
+          "mushroom_stew": "キノコシチュー",
+          "rabbit_stew": "ウサギシチュー",
+          "suspicious_stew": "怪しげなシチュー"
+        },
+        "variants": {
+          "suspicious_stew_by_flower": {
+            "label": "怪しげなシチュー：材料の花別",
+            "items": {
+              "allium": {
+                "flower": "アリウム",
+                "effect": "fire_resistance",
+                "effect_label": "火炎耐性",
+                "duration_je_seconds": 3,
+                "duration_be_seconds": 3
+              },
+              "azure_bluet": {
+                "flower": "ヒナソウ",
+                "effect": "blindness",
+                "effect_label": "盲目",
+                "duration_je_seconds": 11,
+                "duration_be_seconds": 7
+              },
+              "open_eyeblossom": {
+                "flower": "開いたヒトミソウ",
+                "effect": "blindness",
+                "effect_label": "盲目",
+                "duration_je_seconds": 11,
+                "duration_be_seconds": 7
+              },
+              "blue_orchid": {
+                "flower": "ヒスイラン",
+                "effect": "saturation",
+                "effect_label": "満腹度回復",
+                "duration_je_seconds": 0.35,
+                "duration_be_seconds": 0.3
+              },
+              "dandelion": {
+                "flower": "タンポポ",
+                "effect": "saturation",
+                "effect_label": "満腹度回復",
+                "duration_je_seconds": 0.35,
+                "duration_be_seconds": 0.3
+              },
+              "golden_dandelion": {
+                "flower": "金のタンポポ",
+                "effect": "saturation",
+                "effect_label": "満腹度回復",
+                "duration_je_seconds": 0.35,
+                "duration_be_seconds": 0.3
+              },
+              "closed_eyeblossom": {
+                "flower": "閉じたヒトミソウ",
+                "effect": "nausea",
+                "effect_label": "吐き気",
+                "duration_je_seconds": 7,
+                "duration_be_seconds": 7
+              },
+              "cornflower": {
+                "flower": "ヤグルマギク",
+                "effect": "jump_boost",
+                "effect_label": "跳躍力上昇",
+                "duration_je_seconds": 5,
+                "duration_be_seconds": 5
+              },
+              "lily_of_the_valley": {
+                "flower": "スズラン",
+                "effect": "poison",
+                "effect_label": "毒",
+                "duration_je_seconds": 11,
+                "duration_be_seconds": 11
+              },
+              "oxeye_daisy": {
+                "flower": "フランスギク",
+                "effect": "regeneration",
+                "effect_label": "再生能力",
+                "duration_je_seconds": 7,
+                "duration_be_seconds": 7
+              },
+              "poppy": {
+                "flower": "ポピー",
+                "effect": "night_vision",
+                "effect_label": "暗視",
+                "duration_je_seconds": 5,
+                "duration_be_seconds": 5
+              },
+              "torchflower": {
+                "flower": "トーチフラワー",
+                "effect": "night_vision",
+                "effect_label": "暗視",
+                "duration_je_seconds": 5,
+                "duration_be_seconds": 5
+              },
+              "tulips": {
+                "flower": "チューリップ",
+                "effect": "weakness",
+                "effect_label": "弱体化",
+                "duration_je_seconds": 7,
+                "duration_be_seconds": 8,
+                "includes": [
+                  "red_tulip",
+                  "orange_tulip",
+                  "white_tulip",
+                  "pink_tulip"
+                ]
+              },
+              "wither_rose": {
+                "flower": "ウィザーローズ",
+                "effect": "wither",
+                "effect_label": "衰弱",
+                "duration_je_seconds": 7,
+                "duration_be_seconds": 7
+              }
+            }
+          },
+          "suspicious_stew_by_effect": {
+            "label": "怪しげなシチュー：効果別索引",
+            "items": {
+              "fire_resistance": {
+                "effect_label": "火炎耐性",
+                "flowers": [
+                  "allium"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 3,
+                    "duration_be_seconds": 3
+                  }
+                ]
+              },
+              "blindness": {
+                "effect_label": "盲目",
+                "flowers": [
+                  "azure_bluet",
+                  "open_eyeblossom"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 11,
+                    "duration_be_seconds": 7
+                  }
+                ]
+              },
+              "saturation": {
+                "effect_label": "満腹度回復",
+                "flowers": [
+                  "blue_orchid",
+                  "dandelion",
+                  "golden_dandelion"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 0.35,
+                    "duration_be_seconds": 0.3
+                  }
+                ]
+              },
+              "nausea": {
+                "effect_label": "吐き気",
+                "flowers": [
+                  "closed_eyeblossom"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 7,
+                    "duration_be_seconds": 7
+                  }
+                ]
+              },
+              "jump_boost": {
+                "effect_label": "跳躍力上昇",
+                "flowers": [
+                  "cornflower"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 5,
+                    "duration_be_seconds": 5
+                  }
+                ]
+              },
+              "poison": {
+                "effect_label": "毒",
+                "flowers": [
+                  "lily_of_the_valley"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 11,
+                    "duration_be_seconds": 11
+                  }
+                ]
+              },
+              "regeneration": {
+                "effect_label": "再生能力",
+                "flowers": [
+                  "oxeye_daisy"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 7,
+                    "duration_be_seconds": 7
+                  }
+                ]
+              },
+              "night_vision": {
+                "effect_label": "暗視",
+                "flowers": [
+                  "poppy",
+                  "torchflower"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 5,
+                    "duration_be_seconds": 5
+                  }
+                ]
+              },
+              "weakness": {
+                "effect_label": "弱体化",
+                "flowers": [
+                  "tulips"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 7,
+                    "duration_be_seconds": 8
+                  }
+                ]
+              },
+              "wither": {
+                "effect_label": "衰弱",
+                "flowers": [
+                  "wither_rose"
+                ],
+                "duration_patterns": [
+                  {
+                    "duration_je_seconds": 7,
+                    "duration_be_seconds": 7
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "basic_drinks": {
+        "label": "飲料・瓶",
+        "items": {
+          "honey_bottle": "ハチミツ入りの瓶",
+          "milk_bucket": "ミルク入りバケツ"
+        }
+      },
+      "potions": {
+        "label": "ポーション類",
+        "items": {
+          "potion": "ポーション",
+          "splash_potion": "スプラッシュポーション",
+          "lingering_potion": "残留ポーション"
+        },
+        "effect_variants": {
+
+          "water": {
+            "label": "水入り瓶",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "mundane": {
+            "label": "ありふれたポーション",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "thick": {
+            "label": "濃厚なポーション",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "awkward": {
+            "label": "奇妙なポーション",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "night_vision": {
+            "label": "暗視のポーション",
+            "effect_label": "暗視",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "invisibility": {
+            "label": "透明化のポーション",
+            "effect_label": "透明化",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "leaping": {
+            "label": "跳躍のポーション",
+            "effect_label": "跳躍力上昇",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "fire_resistance": {
+            "label": "耐火のポーション",
+            "effect_label": "火炎耐性",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "swiftness": {
+            "label": "俊敏のポーション",
+            "effect_label": "移動速度上昇",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "slowness": {
+            "label": "鈍化のポーション",
+            "effect_label": "移動速度低下",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "water_breathing": {
+            "label": "水中呼吸のポーション",
+            "effect_label": "水中呼吸",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "healing": {
+            "label": "治癒のポーション",
+            "effect_label": "即時回復",
+            "levels": [
+              "normal",
+              "strong"
+            ]
+          },
+          "harming": {
+            "label": "負傷のポーション",
+            "effect_label": "即時ダメージ",
+            "levels": [
+              "normal",
+              "strong"
+            ]
+          },
+          "poison": {
+            "label": "毒のポーション",
+            "effect_label": "毒",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "regeneration": {
+            "label": "再生のポーション",
+            "effect_label": "再生能力",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "strength": {
+            "label": "力のポーション",
+            "effect_label": "攻撃力上昇",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "weakness": {
+            "label": "弱化のポーション",
+            "effect_label": "弱体化",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "luck": {
+            "label": "幸運のポーション",
+            "effect_label": "幸運",
+            "levels": [
+              "normal"
+            ]
+          },
+          "turtle_master": {
+            "label": "タートルマスターのポーション",
+            "effect_label": "移動速度低下・耐性",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "slow_falling": {
+            "label": "低速落下のポーション",
+            "effect_label": "落下速度低下",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "wind_charged": {
+            "label": "蓄風のポーション",
+            "effect_label": "蓄風",
+            "levels": [
+              "normal"
+            ]
+          },
+          "weaving": {
+            "label": "巣張りのポーション",
+            "effect_label": "巣張り",
+            "levels": [
+              "normal"
+            ]
+          },
+          "oozing": {
+            "label": "滲出のポーション",
+            "effect_label": "滲出",
+            "levels": [
+              "normal"
+            ]
+          },
+          "infested": {
+            "label": "虫食いのポーション",
+            "effect_label": "虫食い",
+            "levels": [
+              "normal"
+            ]
+          }
+        }
+      },
+      "ominous_bottles": {
+        "label": "不吉な瓶",
+        "items": {
+          "ominous_bottle": "不吉な瓶"
+        },
+        "levels": {
+          "ominous_bottle_1": "不吉な瓶 I",
+          "ominous_bottle_2": "不吉な瓶 II",
+          "ominous_bottle_3": "不吉な瓶 III",
+          "ominous_bottle_4": "不吉な瓶 IV",
+          "ominous_bottle_5": "不吉な瓶 V"
+        }
+      }
+    }
+  }
+}

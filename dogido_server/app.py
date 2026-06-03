@@ -1,5 +1,7 @@
+# app.py
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 import uvicorn
@@ -24,15 +26,30 @@ from dogido_server.service import DogidoService
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    # settings を外から注入できるようにしている（テスト時にモック設定を渡すため）
     resolved_settings = settings or get_settings()
     service = DogidoService(resolved_settings)
 
-    app = FastAPI(title=resolved_settings.service_name, version=resolved_settings.service_version)
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        # アプリ起動時に LLM の preload とフォールバック音声の prewarm を走らせる
+        service.warmup()
+        yield
+        # yield 後はシャットダウン処理を書く場所（現時点では何もしない）
+
+    app = FastAPI(
+        title=resolved_settings.service_name,
+        version=resolved_settings.service_version,
+        lifespan=lifespan,
+    )
+    # app.state にサービスを格納しておくと、テストや将来のミドルウェアから参照できる
     app.state.settings = resolved_settings
     app.state.service = service
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_error_handler(_, exc: RequestValidationError) -> JSONResponse:
+        # Pydantic のバリデーションエラーをそのまま返す
+        # body も一緒に返すことでデバッグ時にアダプタ側が原因特定しやすくなる
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
@@ -43,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/healthz", response_model=HealthResponse)
     async def healthz() -> HealthResponse:
+        # Kubernetes / Docker ヘルスチェック用エンドポイント
         return HealthResponse(
             ok=True,
             service=resolved_settings.service_name,
@@ -54,6 +72,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         payload: AdapterSessionCreateRequest,
         authorization: Annotated[str | None, Header()] = None,
     ) -> AdapterSessionCreateResponse:
+        # Fabric アダプタ起動時にセッションを登録する
+        # セッション ID はこの後の game-events / heartbeat に必要
         _ensure_authorized(resolved_settings, authorization)
         return service.create_session(payload)
 
@@ -70,9 +90,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             session_id=x_dogido_session_id,
             idempotency_key=idempotency_key,
         )
+        # アクションがあればその場で dispatch する（TTS・M5Stack送信など）
         if result.actions:
             service.dispatch_actions(result.actions)
 
+        # 重複扱いのイベントは 200、新規受付は 202 を返す
         status_code = status.HTTP_200_OK if result.response.deduplicated else status.HTTP_202_ACCEPTED
         return Response(
             content=result.response.model_dump_json(),
@@ -86,7 +108,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         authorization: Annotated[str | None, Header()] = None,
         x_dogido_session_id: Annotated[str | None, Header()] = None,
     ) -> BatchAcceptedResponse:
+        # バッチ送信は WebSocket 移行前の暫定手段として設けている
         _ensure_authorized(resolved_settings, authorization)
+        # 過大なバッチを拒否して処理詰まりを防ぐ
         if len(payload.events) > resolved_settings.max_batch_size:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         payload: HeartbeatRequest,
         authorization: Annotated[str | None, Header()] = None,
     ) -> HeartbeatResponse:
+        # アダプタが生きているかの死活確認と、最後に受け取ったシーケンス番号の記録
         _ensure_authorized(resolved_settings, authorization)
         if session_id not in service.sessions:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown session_id")
@@ -113,6 +138,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         session_id: str,
         authorization: Annotated[str | None, Header()] = None,
     ) -> CloseSessionResponse:
+        # アダプタ正常終了時にセッションを明示クローズする
+        # 異常終了時はハートビートのタイムアウトで検知する想定
         _ensure_authorized(resolved_settings, authorization)
         return service.close_session(session_id)
 
@@ -120,6 +147,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 def _ensure_authorized(settings: Settings, authorization: str | None) -> None:
+    # auth_token が未設定なら認証スキップ（ローカル開発環境向け）
     if not settings.auth_token:
         return
     expected = f"Bearer {settings.auth_token}"
@@ -131,11 +159,15 @@ def main() -> None:
     settings = get_settings()
     uvicorn.run(
         "dogido_server.app:create_app",
+        # create_app を factory として呼ぶ（リロード時に再生成される）
         factory=True,
         host=settings.bind_host,
         port=settings.bind_port,
+        # 本番運用では reload=False 固定
         reload=False,
     )
 
 
+# `uvicorn dogido_server.app:app` で直接起動するときのモジュールレベルインスタンス
+# テスト・開発時は create_app() を呼んで設定を注入するほうが推奨
 app = create_app()

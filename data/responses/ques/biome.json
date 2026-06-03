@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "line_groups": {
+    "forest_shade": [
+      "むぅ！こういうとこは夜にわいたやつが生き残ってたりするんや！きいひきしめていこか！",
+      "木がしげっているとこは暗いわー。こういうとこはおひさんでとってもモンスターが残っとるんやで……。"
+    ],
+    "green_camo": [
+      "むうっ！緑っ！クリーパーおるんとちゃう？",
+      "むぅ！こういうとこは夜にわいたやつが生き残ってたりするんや！きいひきしめていこか！",
+      "木がしげっているとこは暗いわー。こういうとこはおひさんでとってもモンスターが残っとるんやで……。"
+    ]
+  },
+  "reactions": {
+    "mushroom_fields": {
+      "day": {
+        "lines": [
+          "ほんに、妙なところやなぁ。モンスターの気配がせえへんわ。"
+        ]
+      },
+      "night": {
+        "lines": [
+          "夜やのに全然モンスターおらん……安全すぎて逆に怖いわ〜。上から来たりせんかなー"
+        ]
+      }
+    },
+    "forest": {
+      "day": {
+        "line_group": "forest_shade"
+      }
+    },
+    "old_growth_birch_forest": {
+      "day": {
+        "line_group": "forest_shade"
+      }
+    },
+    "old_growth_pine_taiga": {
+      "day": {
+        "line_group": "forest_shade"
+      }
+    },
+    "old_growth_spruce_taiga": {
+      "day": {
+        "line_group": "forest_shade"
+      }
+    },
+    "dark_forest": {
+      "default": {
+        "lines": [
+          "暗い森や……昼間でも薄暗うて、どうも落ち着かんなー"
+        ]
+      }
+    },
+    "grove": {
+      "day": {
+        "line_group": "green_camo"
+      }
+    },
+    "bamboo_jungle": {
+      "day": {
+        "line_group": "green_camo"
+      }
+    },
+    "jungle": {
+      "day": {
+        "line_group": "green_camo"
+      }
+    },
+    "dripstone_caves": {
+      "default": {
+        "lines": [
+          "このたけのこ、落ちてきそうでちょっとこわいわ……"
+        ]
+      }
+    },
+    "lush_caves": {
+      "default": {
+        "lines": [
+          "お……綺麗やな……俺が周りを見とったる。しばらく見とれときや。"
+        ]
+      }
+    },
+    "deep_dark": {
+      "default": {
+        "lines": [
+          "しずかやな……"
+        ]
+      }
+    },
+    "pale_garden": {
+      "day": {
+        "lines": [
+          "昼間やのに暗いなー！ほんに不気味なところやなー"
+        ]
+      },
+      "night": {
+        "lines": [
+          "いかにもお化けの森って感じやな……"
+        ]
+      }
+    }
+  }
+}

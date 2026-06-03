@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
-from dogido_server.llm import DogidoLLM
+from dogido_server.llm import DogidoLLMRouter
 from dogido_server.models import (
     AcceptedEventResponse,
     AdapterSessionCreateRequest,
@@ -20,7 +20,12 @@ from dogido_server.models import (
     OutputFlags,
     StateResponse,
 )
-from dogido_server.state_machine import AudioAction, DogidoStateMachine
+from dogido_server.state_machine import (
+    AudioAction,
+    DogidoStateMachine,
+)
+from dogido_server.state_machine.fallback_catalog import fallback_prewarm_texts
+from dogido_server.state_machine.response_catalog import response_prewarm_texts
 
 
 def _new_id(prefix: str) -> str:
@@ -36,6 +41,7 @@ class SessionInfo:
     game: str
     player_name: str
     profile_name: str | None
+    call_name: str | None
     capabilities: list[str]
     created_at: datetime
     machine: DogidoStateMachine
@@ -79,7 +85,11 @@ class DogidoService:
         self.settings = settings
         self.sessions: dict[str, SessionInfo] = {}
         self.audio = AudioDispatcher(settings)
-        self.llm = DogidoLLM(settings)
+        self.llm = DogidoLLMRouter(settings)
+
+    def warmup(self) -> None:
+        self.llm.preload()
+        self.audio.prewarm_speech_texts(self._fallback_speech_catalog(self.settings.default_call_name))
 
     def create_session(self, request: AdapterSessionCreateRequest) -> AdapterSessionCreateResponse:
         now = datetime.now().astimezone()
@@ -92,10 +102,12 @@ class DogidoService:
             game=request.game,
             player_name=request.player_name,
             profile_name=request.profile_name,
+            call_name=request.call_name or self.settings.default_call_name,
             capabilities=request.capabilities,
             created_at=now,
             machine=DogidoStateMachine(self.settings, llm=self.llm),
         )
+        self.audio.prewarm_speech_texts(self._fallback_speech_catalog(request.call_name or self.settings.default_call_name))
         return AdapterSessionCreateResponse(
             session_id=session_id,
             accepted_schema_version=self.settings.accepted_schema_version,
@@ -113,6 +125,12 @@ class DogidoService:
         idempotency_key: str | None = None,
     ) -> ProcessedEvent:
         session = self._ensure_session(event, session_id)
+        if not getattr(event.meta, "call_name", None) and session.call_name:
+            event = event.model_copy(
+                update={
+                    "meta": event.meta.model_copy(update={"call_name": session.call_name}),
+                }
+            )
         session.last_seen_at = event.observed_at
 
         deduplicated = False
@@ -206,9 +224,13 @@ class DogidoService:
                 game=event.game,
                 player_name=event.player.name or "unknown",
                 profile_name=event.meta.profile_name,
+                call_name=event.meta.call_name or self.settings.default_call_name,
                 capabilities=[],
                 created_at=datetime.now().astimezone(),
                 machine=DogidoStateMachine(self.settings, llm=self.llm),
+            )
+            self.audio.prewarm_speech_texts(
+                self._fallback_speech_catalog(event.meta.call_name or self.settings.default_call_name)
             )
         return self.sessions[implicit_id]
 
@@ -227,3 +249,14 @@ class DogidoService:
             elif action.layer == "speech":
                 flags.speech_enqueued = True
         return flags
+
+    def _fallback_speech_catalog(self, call_name: str | None) -> list[str]:
+        texts = response_prewarm_texts(call_name)
+        texts.extend(fallback_prewarm_texts(call_name))
+        seen: set[str] = set()
+        result: list[str] = []
+        for text in texts:
+            if text and text not in seen:
+                seen.add(text)
+                result.append(text)
+        return result

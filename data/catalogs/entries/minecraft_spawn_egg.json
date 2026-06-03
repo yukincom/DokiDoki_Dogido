@@ -1,0 +1,115 @@
+{
+  "spawn_eggs": {
+    "label": "スポーンエッグ",
+    "groups": {
+      "hostile": {
+        "label": "敵対Mobのスポーンエッグ",
+        "items": {
+          "blaze_spawn_egg": "ブレイズのスポーンエッグ",
+          "bogged_spawn_egg": "ボグドのスポーンエッグ",
+          "breeze_spawn_egg": "ブリーズのスポーンエッグ",
+          
+          "creeper_spawn_egg": "クリーパーのスポーンエッグ",
+
+          "elder_guardian_spawn_egg": "エルダーガーディアンのスポーンエッグ",
+          "ender_dragon_spawn_egg": "エンダードラゴンのスポーンエッグ",
+          
+          "endermite_spawn_egg": "エンダーマイトのスポーンエッグ",
+          "evoker_spawn_egg": "エヴォーカーのスポーンエッグ",
+          "ghast_spawn_egg": "ガストのスポーンエッグ",
+          "guardian_spawn_egg": "ガーディアンのスポーンエッグ",
+          "hoglin_spawn_egg": "ホグリンのスポーンエッグ",
+          "husk_spawn_egg": "ハスクのスポーンエッグ",
+          "magma_cube_spawn_egg": "マグマキューブのスポーンエッグ",
+          "phantom_spawn_egg": "ファントムのスポーンエッグ",
+          "piglin_brute_spawn_egg": "ピグリンブルートのスポーンエッグ",
+          "pillager_spawn_egg": "ピリジャーのスポーンエッグ",
+          "ravager_spawn_egg": "ラヴェジャーのスポーンエッグ",
+          "shulker_spawn_egg": "シュルカーのスポーンエッグ",
+          "silverfish_spawn_egg": "シルバーフィッシュのスポーンエッグ",
+          "skeleton_spawn_egg": "スケルトンのスポーンエッグ",
+          "slime_spawn_egg": "スライムのスポーンエッグ",
+          
+          "stray_spawn_egg": "ストレイのスポーンエッグ",
+          "vex_spawn_egg": "ヴェックスのスポーンエッグ",
+          "vindicator_spawn_egg": "ヴィンディケーターのスポーンエッグ",
+          "warden_spawn_egg": "ウォーデンのスポーンエッグ",
+          "witch_spawn_egg": "ウィッチのスポーンエッグ",
+          "wither_skeleton_spawn_egg": "ウィザースケルトンのスポーンエッグ",
+          "wither_spawn_egg": "ウィザーのスポーンエッグ",
+          "zoglin_spawn_egg": "ゾグリンのスポーンエッグ",
+          "zombie_spawn_egg": "ゾンビのスポーンエッグ",
+          "zombie_villager_spawn_egg": "村人ゾンビのスポーンエッグ",
+          "creaking_spawn_egg": "クリーキングのスポーンエッグ",          
+          "sulfur_cube_spawn_egg": "サルファーキューブのスポーンエッグ"          
+        }
+      },
+      "passive": {
+        "label": "友好Mobのスポーンエッグ",
+        "items": {
+          "armadillo_spawn_egg": "アルマジロのスポーンエッグ",
+          "allay_spawn_egg": "アレイのスポーンエッグ",
+          "axolotl_spawn_egg": "ウーパールーパーのスポーンエッグ",
+          "bat_spawn_egg": "コウモリのスポーンエッグ",
+          "camel_spawn_egg": "ラクダのスポーンエッグ",
+          "cat_spawn_egg": "ネコのスポーンエッグ",
+          "chicken_spawn_egg": "ニワトリのスポーンエッグ",
+          "cod_spawn_egg": "タラのスポーンエッグ",
+          "cow_spawn_egg": "ウシのスポーンエッグ",
+          "donkey_spawn_egg": "ロバのスポーンエッグ",
+          "frog_spawn_egg": "カエルのスポーンエッグ",
+          "glow_squid_spawn_egg": "ヒカリイカのスポーンエッグ",
+          "happy_ghast_spawn_egg": "ハッピーガストのスポーンエッグ",
+          "horse_spawn_egg": "ウマのスポーンエッグ",
+          "mooshroom_spawn_egg": "ムーシュルームのスポーンエッグ",
+          "mule_spawn_egg": "ラバのスポーンエッグ",
+          "ocelot_spawn_egg": "ヤマネコのスポーンエッグ",
+          "parrot_spawn_egg": "オウムのスポーンエッグ",
+          "pig_spawn_egg": "ブタのスポーンエッグ",
+          "pufferfish_spawn_egg": "フグのスポーンエッグ",
+          "rabbit_spawn_egg": "ウサギのスポーンエッグ",
+          "salmon_spawn_egg": "サケのスポーンエッグ",
+          "sheep_spawn_egg": "ヒツジのスポーンエッグ",
+          "skeleton_horse_spawn_egg": "スケルトンホースのスポーンエッグ",
+          "sniffer_spawn_egg": "スニッファーのスポーンエッグ",
+          "snow_golem_spawn_egg": "スノウゴーレムのスポーンエッグ",
+          "squid_spawn_egg": "イカのスポーンエッグ",
+          "strider_spawn_egg": "ストライダーのスポーンエッグ",
+          "tadpole_spawn_egg": "オタマジャクシのスポーンエッグ",
+          "tropical_fish_spawn_egg": "熱帯魚のスポーンエッグ",
+          "turtle_spawn_egg": "カメのスポーンエッグ",
+          "villager_spawn_egg": "村人のスポーンエッグ",
+          "wandering_trader_spawn_egg": "行商人のスポーンエッグ",
+          "zombie_horse_spawn_egg": "ゾンビホースのスポーンエッグ",          
+          "agent_spawn_egg": "エージェントのスポーンエッグ",
+          "map_marker_spawn_egg": "マップマーカーのスポーンエッグ",
+          "spawn_npc": "NPCのスポーンエッグ"
+        }
+      },
+      "neutral_mob": {
+        "label": "中立的Mobのスポーンエッグ",
+        "items": {
+          "iron_golem_spawn_egg": "アイアンゴーレムのスポーンエッグ",
+          "dolphin_spawn_egg": "イルカのスポーンエッグ",
+          "enderman_spawn_egg": "エンダーマンのスポーンエッグ",
+          "nautilus_spawn_egg": "オウムガイのスポーンエッグ",
+          "wolf_spawn_egg": "オオカミのスポーンエッグ",  
+          "fox_spawn_egg": "キツネのスポーンエッグ",   
+          "spider_spawn_egg": "クモのスポーンエッグ",  
+          "trader_llama_spawn_egg": "商人のラマのスポーンエッグ",
+          "polar_bear_spawn_egg": "シロクマのスポーンエッグ", 
+          "zombie_nautilus_spawn_egg": "ゾンビオウムガイのスポーンエッグ",
+          "zombified_piglin_spawn_egg": "ゾンビピグリンのスポーンエッグ",  
+          "cave_spider_spawn_egg": "洞窟グモのスポーンエッグ",
+          "drowned_spawn_egg": "ドラウンドのスポーンエッグ",          
+          "panda_spawn_egg": "パンダのスポーンエッグ", 
+          "bee_spawn_egg": "ミツバチのスポーンエッグ",
+          "goat_spawn_egg": "ヤギのスポーンエッグ",         
+          "piglin_spawn_egg": "ピグリンのスポーンエッグ",
+          "llama_spawn_egg": "ラマのスポーンエッグ"
+
+        }
+      }
+    }
+  }
+}

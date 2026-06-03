@@ -1,0 +1,64 @@
+{
+  "command_only_items": {
+    "label": "コマンド入手アイテム",
+    "english": "Command-only Items",
+    "groups": {
+      "special_items": {
+        "label": "特殊アイテム",
+        "items": {
+          "knowledge_book": "知恵の本",
+          "debug_stick": "デバッグ棒"
+        }
+      },
+      "invisible_or_technical_blocks": {
+        "label": "不可視・技術系ブロック",
+        "items": {
+          "barrier": "バリアブロック",
+          "structure_void": "ストラクチャーヴォイド"
+        }
+      },
+      "command_blocks": {
+        "label": "コマンドブロック",
+        "items": {
+          "command_block": "コマンドブロック",
+          "chain_command_block": "チェーンコマンドブロック",
+          "repeating_command_block": "リピートコマンドブロック"
+        }
+      },
+      "structure_and_test_blocks": {
+        "label": "構造物・テスト系ブロック",
+        "items": {
+          "jigsaw_block": "ジグソーブロック",
+          "structure_block": "ストラクチャーブロック",
+          "test_block_start": {
+            "label": "テストブロック",
+            "type": "game_test",
+            "role": "テストの開始・ログ・成否判定"
+          },
+          "test_instance_block": {
+            "label": "テストインスタンスブロック",
+            "type": "game_test",
+            "role": "テスト全体の管理・設定"
+          }
+        }
+      },
+      "portal_blocks": {
+        "label": "ポータル系ブロック",
+        "items": {
+          "nether_portal": "ネザーポータルブロック",
+          "end_portal": "エンドポータルブロック",
+          "end_gateway": "エンドゲートウェイ"
+        }
+      },
+      "spawner_and_vault_blocks": {
+        "label": "スポナー・宝物庫系",
+        "items": {
+          "monster_spawner": "モンスタースポナー",
+          "trial_spawner": "試練のスポナー",
+          "ominous_trial_spawner": "不吉な試練のスポナー",
+          "ominous_vault": "不吉な宝物庫"
+        }
+      }
+    }
+  }
+}

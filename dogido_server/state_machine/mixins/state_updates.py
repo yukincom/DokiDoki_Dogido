@@ -1,0 +1,254 @@
+# state_machine/mixins/state_updates.py
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from math import inf
+
+from dogido_server.models import EventName, GameEvent, HorizontalDirection
+from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals
+
+
+class StateUpdatesMixin:
+    def _update_memory(self, event: GameEvent, now: datetime) -> None:
+        self._prune_comment_memory(now)
+        self._update_special_biome_context(event)
+        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        if self.state.last_non_silent_at is None:
+            self.state.last_non_silent_at = now
+        if time_phase == "morning" and self.state.last_time_phase != "morning":
+            self.state.haiku_emitted_this_cycle = False
+        self.state.last_time_phase = time_phase
+        if time_phase != "night":
+            self.state.firefly_reacted_this_night = False
+        if time_phase in {"morning", "day"}:
+            self.state.night_warning_pending = False
+            self.state.night_warning_emitted_this_cycle = False
+        elif (
+            not self.state.night_warning_emitted_this_cycle
+            and self._should_schedule_night_warning(event)
+        ):
+            self.state.night_warning_pending = True
+        if self._is_emergency_shelter_morning(event):
+            self.state.emergency_shelter_reset_ready = True
+        if time_phase == "night" and self.state.emergency_shelter_reset_ready:
+            self.state.emergency_shelter_advised_this_cycle = False
+            self.state.emergency_shelter_morning_announced = False
+            self.state.emergency_shelter_reset_ready = False
+        self.state.prior_recent_visual_ms = self._recent_ms(now, self.state.last_visual_threat_at)
+        self.state.prior_recent_audio_ms = self._recent_ms(now, self.state.last_audio_threat_at)
+
+        if event.visual_threats:
+            self.state.last_non_silent_at = now
+            self.state.last_visual_threat_at = now
+            self.state.last_confirmed_hostiles = [threat.type for threat in event.visual_threats]
+            self.state.last_known_hostile_directions = [
+                threat.direction.horizontal.value
+                for threat in event.visual_threats
+                if threat.direction.horizontal is not None
+            ]
+            signature = self._visual_group_signature(event.visual_threats)
+            if signature != self.state.stalled_visual_signature:
+                self.state.stalled_visual_signature = signature
+                self.state.stalled_visual_started_at = now
+        else:
+            self.state.stalled_visual_signature = ""
+            self.state.stalled_visual_started_at = None
+
+        unseen_auditory_threats = self._unseen_auditory_threats(event.visual_threats, event.auditory_threats)
+        if unseen_auditory_threats:
+            self.state.last_non_silent_at = now
+            self.state.last_audio_threat_at = now
+            for threat in unseen_auditory_threats:
+                key = self._auditory_comment_key(threat)
+                state = self.state.auditory_presence_states.get(key)
+                recent_ms = self._recent_ms(now, state.last_seen_at) if state is not None else None
+                if state is None or recent_ms is None or recent_ms >= self.settings.hostile_comment_cooldown_ms:
+                    state = AuditoryPresenceState(
+                        count=0,
+                        last_seen_at=None,
+                        first_x=event.player.position.x,
+                        first_z=event.player.position.z,
+                    )
+                    self.state.auditory_presence_states[key] = state
+                state.count += 1
+                state.last_seen_at = now
+
+        if event.combat.recent_damage_ms is not None:
+            self.state.last_damage_at = now - timedelta(milliseconds=event.combat.recent_damage_ms)
+
+        if self.player_input.wants_quiet:
+            self.state.shut_up_count += 1
+        if self.player_input.breaks_silence:
+            self.state.last_non_silent_at = now
+
+        if event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}:
+            self.state.last_combat_end_at = now
+        if event.event.name == EventName.COMBAT_ENDED:
+            self.state.pending_safe_aftermath = True
+        if event.event.name == EventName.PLAYER_DIED:
+            self.state.pending_safe_aftermath = False
+
+        self.state.burning_visual_keys = {
+            self._visual_identity_key(threat)
+            for threat in event.visual_threats
+            if threat.on_fire
+        }
+        self.state.last_occluded_dark_zone = self._is_occluded_dark_zone_event(event)
+        self.state.last_safe_zone_with_door = self._is_safe_zone_with_door_event(event)
+        self.state.last_submerged_dark_zone = self._is_submerged_dark_zone_event(event)
+        self.state.last_light_source_count = self._light_source_count(event.inventory)
+        self.state.last_weather = self._weather_value(event.world.weather)
+        self.state.inventory_initialized = True
+
+    def _derive_signals(self, event: GameEvent, now: datetime) -> DerivedSignals:
+        visual_distances = [threat.distance for threat in event.visual_threats if threat.distance is not None]
+        nearest_visual = min(visual_distances, default=inf)
+
+        visual_within_7 = sum(
+            1 for threat in event.visual_threats if threat.distance is not None and threat.distance <= 7.0
+        )
+        visual_within_10 = sum(
+            1 for threat in event.visual_threats if threat.distance is not None and threat.distance <= 10.0
+        )
+        has_approaching = any(threat.approaching for threat in event.visual_threats)
+
+        recent_audio_ms = self._recent_ms(now, self.state.last_audio_threat_at)
+        recent_visual_ms = self._recent_ms(now, self.state.last_visual_threat_at)
+        recent_damage_ms = self._recent_ms(now, self.state.last_damage_at)
+
+        if event.combat.recent_hostile_audio_ms is not None:
+            recent_audio_ms = event.combat.recent_hostile_audio_ms
+        if event.combat.recent_hostile_visual_ms is not None:
+            recent_visual_ms = event.combat.recent_hostile_visual_ms
+        if event.combat.recent_damage_ms is not None:
+            recent_damage_ms = event.combat.recent_damage_ms
+        if event.combat.hostiles_within_7 is not None:
+            visual_within_7 = event.combat.hostiles_within_7
+        if event.combat.hostiles_within_10 is not None:
+            visual_within_10 = event.combat.hostiles_within_10
+
+        rear_high_risk = any(
+            threat.distance is not None
+            and threat.distance <= self.settings.rear_warning_distance
+            and threat.direction.horizontal in {
+                HorizontalDirection.BACK,
+                HorizontalDirection.BACK_LEFT,
+                HorizontalDirection.BACK_RIGHT,
+            }
+            for threat in event.visual_threats
+        )
+
+        combat_active_hint = bool(event.combat.combat_active_hint)
+        if not combat_active_hint:
+            combat_active_hint = bool(event.visual_threats or event.auditory_threats)
+            combat_active_hint = combat_active_hint or (
+                recent_damage_ms is not None and recent_damage_ms <= self.settings.recent_damage_window_ms
+            )
+
+        combat_end_candidate = event.event.name == EventName.COMBAT_ENDED
+        if not combat_end_candidate:
+            combat_end_candidate = (
+                visual_within_10 == 0
+                and self._older_than(recent_damage_ms, self.settings.combat_clear_time_ms)
+                and self._older_than(recent_visual_ms, self.settings.combat_clear_time_ms)
+                and self._older_than(recent_audio_ms, self.settings.combat_clear_time_ms)
+            )
+
+        occluded_dark_zone = self._is_occluded_dark_zone_event(event)
+        safe_zone_with_door = self._is_safe_zone_with_door_event(event)
+        submerged = bool(event.world.is_submerged)
+        submerged_dark_zone = self._is_submerged_dark_zone_event(event)
+
+        return DerivedSignals(
+            nearest_visual_threat_distance=nearest_visual,
+            visual_threat_count_within_7=visual_within_7,
+            visual_threat_count_within_10=visual_within_10,
+            has_approaching_visual_threat=has_approaching,
+            recent_hostile_audio_ms=recent_audio_ms,
+            recent_hostile_visual_ms=recent_visual_ms,
+            recent_damage_ms=recent_damage_ms,
+            combat_active_hint=combat_active_hint,
+            combat_end_candidate=combat_end_candidate,
+            danger_darkness_score=event.world.danger_darkness_score or 0.0,
+            torch_available=self._has_torch(event.inventory),
+            torch_craftable=self._torch_craftable(event.inventory),
+            bed_available=self._has_bed(event.inventory),
+            bed_craftable=self._bed_craftable(event.inventory),
+            torch_near_craftable=self._torch_near_craftable(event.inventory, event.nearby_resources),
+            bed_near_craftable=self._bed_near_craftable(event.inventory, event.nearby_resources),
+            torch_materials_nearby=self._torch_materials_nearby(event.nearby_resources),
+            bed_materials_nearby=self._bed_materials_nearby(event.nearby_resources),
+            high_cost_material_owned=self._has_high_cost_shelter_materials(event.inventory),
+            home_or_respawn_return_is_unrealistic=self._home_or_respawn_return_is_unrealistic(event),
+            rear_high_risk=rear_high_risk,
+            occluded_dark_zone=occluded_dark_zone,
+            submerged=submerged,
+            emergency_shelter=self._is_emergency_shelter_event(event),
+            safe_zone_with_door=safe_zone_with_door,
+            submerged_dark_zone=submerged_dark_zone,
+        )
+
+    def _resolve_mode(self, event: GameEvent, signals: DerivedSignals, now: datetime) -> str:
+        if event.event.name == EventName.PLAYER_DIED:
+            return "aftermath"
+
+        if (
+            self.state.pending_safe_aftermath
+            and signals.entered_safe_zone_with_door
+            and not event.visual_threats
+            and not event.auditory_threats
+        ):
+            return "aftermath"
+
+        panic_condition = (
+            signals.nearest_visual_threat_distance <= self.settings.panic_distance
+            or signals.visual_threat_count_within_10 >= 2
+            or (
+                signals.recent_damage_ms is not None
+                and signals.recent_damage_ms <= self.settings.recent_damage_window_ms
+            )
+            or signals.rear_high_risk
+        )
+
+        alert_condition = (
+            bool(event.visual_threats)
+            or bool(event.auditory_threats)
+            or (
+                not signals.submerged
+                and (
+                    signals.danger_darkness_score >= self.settings.darkness_alert_threshold
+                    or signals.entered_occluded_dark_zone
+                    or signals.occluded_dark_zone
+                )
+            )
+        )
+
+        if panic_condition:
+            if self.state.shut_up_count >= 3 and signals.combat_active_hint:
+                return "suppressed_panic"
+            return "panic"
+
+        if alert_condition:
+            return "alert"
+
+        if self.state.mode == "aftermath" and self.state.aftermath_until and now < self.state.aftermath_until:
+            return "aftermath"
+
+        return "normal"
+
+    def _apply_mode_transition(self, previous_mode: str, next_mode: str, now: datetime) -> None:
+        self.state.mode = next_mode
+
+        if previous_mode != next_mode and next_mode == "suppressed_panic":
+            self.state.suppression_started_at = now
+            self.state.suppression_until = now + timedelta(milliseconds=self.settings.suppression_time_ms)
+
+        if previous_mode != next_mode and next_mode == "aftermath":
+            self.state.aftermath_until = now + timedelta(milliseconds=self.settings.aftermath_time_ms)
+            self.state.last_combat_end_at = now
+            self.state.pending_safe_aftermath = False
+
+        if previous_mode == "aftermath" and next_mode == "normal":
+            self.state.shut_up_count = 0
+            self.state.suppression_started_at = None
+            self.state.suppression_until = None

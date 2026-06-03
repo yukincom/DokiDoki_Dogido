@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "under_construction_line": "今、考え中やねん…",
+  "biome_groups": {
+    "ocean": [
+      "ocean",
+      "cold_ocean",
+      "frozen_ocean",
+      "lukewarm_ocean",
+      "warm_ocean",
+      "deep_ocean",
+      "deep_cold_ocean",
+      "deep_frozen_ocean",
+      "deep_lukewarm_ocean"
+    ],
+    "taiga_family": [
+      "taiga",
+      "old_growth_pine_taiga",
+      "old_growth_spruce_taiga",
+      "snowy_taiga"
+    ]
+  },
+  "rules": [
+    {
+      "line": "エンダーマン　見るな光るな　あっちいけ",
+      "visual_threat_types_any": ["enderman"]
+    },
+    {
+      "line": "しんそうや　ダイヤはどこや　怖いわぁ",
+      "player_y_max": 16
+    },
+    {
+      "line": "ふるいけや　ウーパー飛び込み　ほねうかぶ",
+      "biomes": ["lush_caves"],
+      "peaceful_mob_types_any": ["axolotl"]
+    },
+    {
+      "line": "おさかなさん　色とりどりの　水の花",
+      "peaceful_mob_types_any": ["tropical_fish"]
+    },
+    {
+      "line": "野にいでて　ひつじめえめえ　草がベリ！",
+      "peaceful_mob_types_any": ["sheep"],
+      "weather": "clear",
+      "time_phase": "day"
+    },
+    {
+      "line": "昆布かた！　その速度では　食えへんが",
+      "biome_groups": ["ocean"],
+      "weather": "clear",
+      "time_phase": "day"
+    },
+    {
+      "line": "しらかばの　ふしめがちょっと　目にみえる",
+      "nearby_resource_names_any": ["birch_leaves"],
+      "nearby_resource_distance_max": 32,
+      "weather": "clear",
+      "time_phase": "day"
+    },
+    {
+      "line": "森やねん　いけどもいけど　森やねん",
+      "biome_groups": ["taiga_family"]
+    }
+  ],
+  "defaults": {
+    "ice_spikes": "氷のトゲ　あの上に　立ってみたいが　サバイバル",
+    "frozen_river": "うすごおり　これはゲームだ　こわないで",
+    "snowy_beach": "しらすなの　肌を隠して　雪化粧",
+    "snowy_plains": "鮮やかに　白いキャンパス　花のぞく",
+    "frozen_ocean": "スイーっ！パリン！　ラピスラズリ　顔をだす",
+    "deep_frozen_ocean": "スイーっ！パリン！　ラピスラズリ　顔をだす",
+    "stony_peaks": "ギザギザを　ばくはしても　破片なし",
+    "stony_shore": "まる石か　ここはジャバ版　たからなし",
+    "forest": "ふみだして　風にたなびく　葉の香り",
+    "mushroom_fields": "デカキノコ　ここは不思議の　国やった",
+    "cherry_grove": "限られた　花のめざめを　とじこめて",
+    "bamboo_jungle": "かぐや姫　おったらはじまる　別ゲーム",
+    "sparse_jungle": "みどり濃く　みえにくいやん　クリーパー",
+    "jungle": "みどり濃く　みえにくいやん　クリーパー",
+    "windswept_forest": "ひらけとる　かぜのしゅうらく　あすもまた",
+    "windswept_hills": "うすぎりの　たべかけケーキ　ぎんいろの",
+    "windswept_gravelly_hills": "砂利のまる　ランドデザイン　おりべふう",
+    "desert": "砂集め　燃えろやハスク　ガラス吹き",
+    "badlands": "赤い砂　おまえは山の　生まれかい？",
+    "eroded_badlands": "テラコッタ　おまえは砂の　おやごさん？",
+    "wooded_badlands": "うれしいな　もりのなかまに　またあえた",
+    "river": "五月雨を　集めてはやし　シミュレート",
+    "beach": "砂浜に　ギャルはおらんな　健全や",
+    "swamp": "ゲコゲココ　カエルにスライム　ドウランド",
+    "dripstone_caves": "たけのこが　うえにもしたにも　はえちょるな"
+  }
+}
