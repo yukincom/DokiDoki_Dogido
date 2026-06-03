@@ -9,6 +9,14 @@ from typing import Any
 
 ENTRIES_DIR = Path(__file__).resolve().parents[1] / "data" / "catalogs" / "entries"
 LOGGER = logging.getLogger("uvicorn.error")
+ITEM_CATALOG_FILES = (
+    "minecraft_tools_and_utilities",
+    "minecraft_combat_items",
+    "minecraft_food_and_drinks",
+    "minecraft_materials",
+    "minecraft_spawn_egg",
+    "minecraft_command_only_items",
+)
 
 
 @lru_cache(maxsize=None)
@@ -66,7 +74,37 @@ def _entry_catalog_file(name: str) -> Path:
 
 
 def item_labels() -> dict[str, str]:
-    return dict(load_entry_catalog("item"))
+    return {
+        item_id: str(entry.get("label", item_id))
+        for item_id, entry in item_entries().items()
+    }
+
+
+def item_entries() -> dict[str, dict[str, Any]]:
+    entries: dict[str, dict[str, Any]] = {}
+    for catalog_name in ITEM_CATALOG_FILES:
+        catalog = load_entry_catalog(catalog_name)
+        for section_id, section_payload in catalog.items():
+            if not isinstance(section_payload, dict):
+                continue
+            _collect_grouped_entry_payloads(
+                section_payload,
+                entries,
+                root_section=section_id,
+            )
+    return entries
+
+
+def item_entry(item_id: str | None) -> dict[str, Any] | None:
+    if not item_id:
+        return None
+    normalized = str(item_id).split(":")[-1].strip().lower()
+    if not normalized:
+        return None
+    entry = item_entries().get(normalized)
+    if entry is None:
+        return None
+    return dict(entry)
 
 
 def block_labels() -> dict[str, str]:
@@ -80,6 +118,42 @@ def block_labels() -> dict[str, str]:
             if isinstance(payload, dict):
                 _collect_grouped_block_labels(payload, labels)
     return labels
+
+
+def block_entries() -> dict[str, dict[str, Any]]:
+    entries: dict[str, dict[str, Any]] = {}
+    for catalog_name, catalog in load_named_entry_catalog_documents("block").items():
+        direct_labels = catalog.get("direct_labels", {})
+        if isinstance(direct_labels, dict):
+            for item_id, label in direct_labels.items():
+                entries[str(item_id)] = _entry_payload_from_value(
+                    label,
+                    root_section=catalog_name,
+                    group_path=("direct_labels",),
+                ) or {"label": str(label), "japanese": str(label), "section": catalog_name, "group_path": ["direct_labels"]}
+        for section_id, section_payload in catalog.items():
+            if section_id in {"direct_labels", "meta"}:
+                continue
+            if not isinstance(section_payload, dict):
+                continue
+            _collect_grouped_entry_payloads(
+                section_payload,
+                entries,
+                root_section=section_id,
+            )
+    return entries
+
+
+def block_entry(block_id: str | None) -> dict[str, Any] | None:
+    if not block_id:
+        return None
+    normalized = str(block_id).split(":")[-1].strip().lower()
+    if not normalized:
+        return None
+    entry = block_entries().get(normalized)
+    if entry is None:
+        return None
+    return dict(entry)
 
 
 def biome_entries() -> dict[str, dict[str, Any]]:
@@ -261,13 +335,80 @@ def _merge_mob_entry_maps(*maps: dict[str, dict[str, Any]]) -> dict[str, dict[st
 def _collect_grouped_block_labels(node: dict[str, Any], labels: dict[str, str]) -> None:
     items = node.get("items", {})
     if isinstance(items, dict):
-        for item_id, label in items.items():
-            _merge_block_label(labels, str(item_id), str(label))
+        for item_id, payload in items.items():
+            label = _entry_label_from_payload(payload)
+            if label:
+                _merge_block_label(labels, str(item_id), label)
     groups = node.get("groups", {})
     if isinstance(groups, dict):
         for payload in groups.values():
             if isinstance(payload, dict):
                 _collect_grouped_block_labels(payload, labels)
+
+
+def _collect_grouped_entry_payloads(
+    node: dict[str, Any],
+    entries: dict[str, dict[str, Any]],
+    *,
+    root_section: str,
+    group_path: tuple[str, ...] = (),
+) -> None:
+    items = node.get("items", {})
+    if isinstance(items, dict):
+        for item_id, payload in items.items():
+            entry = _entry_payload_from_value(
+                payload,
+                root_section=root_section,
+                group_path=group_path,
+            )
+            if entry is None:
+                continue
+            entries[str(item_id)] = entry
+    groups = node.get("groups", {})
+    if isinstance(groups, dict):
+        for group_id, payload in groups.items():
+            if isinstance(payload, dict):
+                _collect_grouped_entry_payloads(
+                    payload,
+                    entries,
+                    root_section=root_section,
+                    group_path=(*group_path, str(group_id)),
+                )
+
+
+def _entry_payload_from_value(
+    payload: Any,
+    *,
+    root_section: str,
+    group_path: tuple[str, ...],
+) -> dict[str, Any] | None:
+    label = _entry_label_from_payload(payload)
+    if not label:
+        return None
+    if isinstance(payload, dict):
+        entry = dict(payload)
+    else:
+        entry = {}
+    entry["label"] = label
+    entry.setdefault("japanese", label)
+    entry.setdefault("role", "")
+    entry.setdefault("note", "")
+    entry.setdefault("section", root_section)
+    entry.setdefault("group_path", list(group_path))
+    return entry
+
+
+def _entry_label_from_payload(payload: Any) -> str | None:
+    if isinstance(payload, str):
+        return payload
+    if isinstance(payload, dict):
+        japanese = payload.get("japanese")
+        if japanese:
+            return str(japanese)
+        label = payload.get("label")
+        if label:
+            return str(label)
+    return None
 
 
 def _merge_block_label(labels: dict[str, str], item_id: str, candidate: str) -> None:

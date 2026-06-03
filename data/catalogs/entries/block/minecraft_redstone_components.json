@@ -6,11 +6,20 @@
       "wiring_and_inputs": {
         "label": "配線・入力",
         "items": {
-          "redstone_dust": "レッドストーンダスト",
+          "redstone_dust": {
+            "japanese": "レッドストーンダスト",
+            "note": "レッドストーン信号を伝達。設置されたものはレッドストーンワイヤーと呼ぶ。"
+          },
           "lever": "レバー",
           "tripwire": "トリップワイヤー",
-          "tripwire_hook": "トリップワイヤーフック",
-          "target": "的"
+          "tripwire_hook": {
+            "japanese": "トリップワイヤーフック",
+            "note": "糸を踏む・破壊で作動。ハサミで装置解除。2個セットで使用。水に流れる。溶岩流で消滅。"
+          },
+          "target": {
+            "japanese": "的",
+            "note": "投擲物が命中するとレッドストーン信号を発する。"
+          }
         }
       },
       "buttons_and_pressure_plates": {
@@ -19,36 +28,36 @@
           "wooden_buttons": {
             "label": "木・竹・ネザー木材のボタン",
             "items": {
-              "oak_button": "オークのボタン",
-              "spruce_button": "トウヒのボタン",
-              "birch_button": "シラカバのボタン",
-              "jungle_button": "ジャングルのボタン",
-              "acacia_button": "アカシアのボタン",
-              "dark_oak_button": "ダークオークのボタン",
-              "mangrove_button": "マングローブのボタン",
-              "cherry_button": "サクラのボタン",
-              "pale_oak_button": "ペールオークのボタン",
-              "bamboo_button": "竹のボタン",
-              "crimson_button": "真紅のボタン",
-              "warped_button": "歪んだボタン"
+              "oak_button": {"japanese": "オークのボタン", "note": "矢でも起動。"},
+              "spruce_button": {"japanese": "トウヒのボタン", "note": "矢でも起動。"},
+              "birch_button": {"japanese": "シラカバのボタン", "note": "矢でも起動。"},
+              "jungle_button": {"japanese": "ジャングルのボタン", "note": "矢でも起動。"},
+              "acacia_button": {"japanese": "アカシアのボタン", "note": "矢でも起動。"},
+              "dark_oak_button": {"japanese": "ダークオークのボタン", "note": "矢でも起動。"},
+              "mangrove_button": {"japanese": "マングローブのボタン", "note": "矢でも起動。"},
+              "cherry_button": {"japanese": "サクラのボタン", "note": "矢でも起動。"},
+              "pale_oak_button": {"japanese": "ペールオークのボタン", "note": "矢でも起動。"},
+              "bamboo_button": {"japanese": "竹のボタン", "note": "矢でも起動。"},
+              "crimson_button": {"japanese": "真紅のボタン", "note": "巨大キノコの一部。ネザー。矢でも起動。"},
+              "warped_button": {"japanese": "歪んだボタン", "note": "巨大キノコの一部。ネザー。矢でも起動。"}
             },
             "source_rule": "building系の木材・竹材素材セットから生成"
           },
           "wooden_pressure_plates": {
             "label": "木・竹・ネザー木材の感圧板",
             "items": {
-              "oak_pressure_plate": "オークの感圧板",
-              "spruce_pressure_plate": "トウヒの感圧板",
-              "birch_pressure_plate": "シラカバの感圧板",
-              "jungle_pressure_plate": "ジャングルの感圧板",
-              "acacia_pressure_plate": "アカシアの感圧板",
-              "dark_oak_pressure_plate": "ダークオークの感圧板",
-              "mangrove_pressure_plate": "マングローブの感圧板",
-              "cherry_pressure_plate": "サクラの感圧板",
-              "pale_oak_pressure_plate": "ペールオークの感圧板",
-              "bamboo_pressure_plate": "竹の感圧板",
-              "crimson_pressure_plate": "真紅の感圧板",
-              "warped_pressure_plate": "歪んだ感圧板"
+              "oak_pressure_plate": {"japanese": "オークの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "spruce_pressure_plate": {"japanese": "トウヒの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "birch_pressure_plate": {"japanese": "シラカバの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "jungle_pressure_plate": {"japanese": "ジャングルの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "acacia_pressure_plate": {"japanese": "アカシアの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "dark_oak_pressure_plate": {"japanese": "ダークオークの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "mangrove_pressure_plate": {"japanese": "マングローブの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "cherry_pressure_plate": {"japanese": "サクラの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "pale_oak_pressure_plate": {"japanese": "ペールオークの感圧板", "note": "アイテムでも「入」状態になる。"},
+              "bamboo_pressure_plate": {"japanese": "竹の感圧板", "note": "アイテムでも「入」状態になる。"},
+              "crimson_pressure_plate": {"japanese": "真紅の感圧板", "note": "巨大キノコの一部。ネザー。アイテムでも「入」状態になる。"},
+              "warped_pressure_plate": {"japanese": "歪んだ感圧板", "note": "巨大キノコの一部。ネザー。アイテムでも「入」状態になる。"}
             },
             "source_rule": "building系の木材・竹材素材セットから生成"
           },
@@ -81,11 +90,27 @@
       "logic_and_power": {
         "label": "信号・論理部品",
         "items": {
-          "redstone_repeater": "レッドストーンリピーター",
-          "redstone_comparator": "レッドストーンコンパレーター",
+          "redstone_repeater": {
+            "japanese": "レッドストーンリピーター",
+            "note": "後ろから前にのみ信号を伝達。横からの信号で変更可能。詳細はwikiで確認。"
+          },
+          "redstone_comparator": {
+            "japanese": "レッドストーンコンパレーター",
+            "note": "レッドストーン信号を比較、減算する。矢印が向いている方が前。前のトーチが消灯：比較モード。前のトーチが点灯：減算モード。容器の中身の量を信号化する。"
+          },
+          "daylight_detector": {
+            "japanese": "日照センサー",
+            "note": "日光の照度に応じてレッドストーン信号を発する。"
+          },
           "observer": "オブザーバー",
-          "redstone_lamp": "レッドストーンランプ",
-          "block_of_redstone": "レッドストーンブロック",
+          "redstone_lamp": {
+            "japanese": "レッドストーンランプ",
+            "note": "レッドストーン信号が通っているかを目で確認できるブロック。光ると綺麗。"
+          },
+          "block_of_redstone": {
+            "japanese": "レッドストーンブロック",
+            "note": "ブロック形態のレッドストーン。レッドストーン信号の動力源。"
+          },
           "copper_bulb": "銅の電球",
           "exposed_copper_bulb": "風化した銅の電球",
           "weathered_copper_bulb": "錆びた銅の電球",
@@ -99,8 +124,14 @@
       "pistons_and_mechanics": {
         "label": "ピストン・機械部品",
         "items": {
-          "piston": "ピストン",
-          "sticky_piston": "粘着ピストン",
+          "piston": {
+            "japanese": "ピストン",
+            "note": "レッドストーン信号を受信するとブロックやエンティティを押し出す。"
+          },
+          "sticky_piston": {
+            "japanese": "粘着ピストン",
+            "note": "ピストンに似ているが、押すのは勿論、引くこともできる。"
+          },
           "piston_head": "ピストンヘッド",
           "moving_piston": "作動中のピストン",
           "slime_block": "スライムブロック",
@@ -108,20 +139,45 @@
         }
       },
         "rails": {
-          "label": "レール",
-          "items": {
-          "powered_rail": "パワードレール",
-          "detector_rail": "ディテクターレール",
-          "activator_rail": "アクティベーターレール"
+        "label": "レール",
+        "items": {
+          "rail": {
+            "japanese": "レール",
+            "note": "トロッコの通り道。"
+          },
+          "powered_rail": {
+            "japanese": "パワードレール",
+            "note": "トロッコの速度を増減させるレール。"
+          },
+          "detector_rail": {
+            "japanese": "ディテクターレール",
+            "note": "トロッコにのみ反応する感圧装置。"
+          },
+          "activator_rail": {
+            "japanese": "アクティベーターレール",
+            "note": "一部のトロッコに対して特定のアクションを起こすレール。くわしくはwiki。"
+          }
           }
         },
         "containers_and_inventory_io": {
-          "label": "収納・アイテム入出力",
-          "items": {
-          "trapped_chest": "トラップチェスト",
-          "hopper": "ホッパー",
-          "dispenser": "ディスペンサー",
-          "dropper": "ドロッパー"
+        "label": "収納・アイテム入出力",
+        "items": {
+          "trapped_chest": {
+            "japanese": "トラップチェスト",
+            "note": "音符ブロックを置くとベース音が鳴る。プレイヤーがチェストを開けたことを検出し、レッドストーン信号を発信。"
+          },
+          "hopper": {
+            "japanese": "ホッパー",
+            "note": "アイテムを吸い込み、送り込む。くわしくはwiki。"
+          },
+          "dispenser": {
+            "japanese": "ディスペンサー",
+            "note": "アイテムを射出する。アイテムによって作用が異なる。くわしくはwiki。"
+          },
+          "dropper": {
+            "japanese": "ドロッパー",
+            "note": "アイテムをドロップする。くわしくはwiki。"
+          }
         }
       },
       "redstone_doors_traps": {
@@ -140,8 +196,8 @@
               "cherry_fence_gate": "サクラのフェンスゲート",
               "pale_oak_fence_gate": "ペールオークのフェンスゲート",
               "bamboo_fence_gate": "竹のフェンスゲート",
-              "crimson_fence_gate": "真紅のフェンスゲート",
-              "warped_fence_gate": "歪んだフェンスゲート"
+              "crimson_fence_gate": {"japanese": "真紅のフェンスゲート", "note": "巨大キノコの一部。ネザー。"},
+              "warped_fence_gate": {"japanese": "歪んだフェンスゲート", "note": "巨大キノコの一部。ネザー。"}
             }
           },
           "wooden_doors": {
@@ -157,8 +213,8 @@
               "cherry_door": "サクラのドア",
               "pale_oak_door": "ペールオークのドア",
               "bamboo_door": "竹のドア",
-              "crimson_door": "真紅のドア",
-              "warped_door": "歪んだドア"
+              "crimson_door": {"japanese": "真紅のドア", "note": "巨大キノコの一部。ネザー。"},
+              "warped_door": {"japanese": "歪んだドア", "note": "巨大キノコの一部。ネザー。"}
             }
           },
           "wooden_trapdoors": {
@@ -174,8 +230,8 @@
               "cherry_trapdoor": "サクラのトラップドア",
               "pale_oak_trapdoor": "ペールオークのトラップドア",
               "bamboo_trapdoor": "竹のトラップドア",
-              "crimson_trapdoor": "真紅のトラップドア",
-              "warped_trapdoor": "歪んだトラップドア"
+              "crimson_trapdoor": {"japanese": "真紅のトラップドア", "note": "巨大キノコの一部。ネザー。"},
+              "warped_trapdoor": {"japanese": "歪んだトラップドア", "note": "巨大キノコの一部。ネザー。"}
             }
           },
           "iron_doors_trapdoors": {
@@ -215,7 +271,10 @@
             "label": "特殊トラップ・自動作業",
             "items": {
               "tnt": "TNT",
-              "crafter": "自動作業台"
+              "crafter": {
+                "japanese": "自動作業台",
+                "note": "レッドストーン信号で自動クラフトする。ホッパーやドロッパーで材料を自動投入できる。スロットを無効化してレシピの形を固定できる。くわしくはwiki。"
+              }
             }
           }
         }

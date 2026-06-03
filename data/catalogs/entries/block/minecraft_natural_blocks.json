@@ -21,8 +21,8 @@
           "red_sand": "赤い砂",
           "soul_sand": "ソウルサンド",
           "soul_soil": "ソウルソイル",
-          "crimson_nylium": "真紅のナイリウム",
-          "warped_nylium": "歪んだナイリウム",
+          "crimson_nylium": {"japanese": "真紅のナイリウム", "note": "巨大キノコの一部。ネザー。"},
+          "warped_nylium": {"japanese": "歪んだナイリウム", "note": "巨大キノコの一部。ネザー。"},
           "frosted_ice": "薄氷",
           "ice": "氷",
           "packed_ice": "氷塊",
@@ -60,29 +60,68 @@
           "deepslate_iron_ore": "深層鉄鉱石",
           "copper_ore": "銅鉱石",
           "deepslate_copper_ore": "深層銅鉱石",
-          "gold_ore": "金鉱石",
-          "deepslate_gold_ore": "深層金鉱石",
-          "redstone_ore": "レッドストーン鉱石",
-          "deepslate_redstone_ore": "深層レッドストーン鉱石",
+          "gold_ore": {
+            "japanese": "金鉱石",
+            "note": "ピグリンが好きなもの。"
+          },
+          "deepslate_gold_ore": {
+            "japanese": "深層金鉱石",
+            "note": "ピグリンが好きなもの。"
+          },
+          "redstone_ore": {
+            "japanese": "レッドストーン鉱石",
+            "note": "レッドストーンダストが得られる鉱石ブロック。"
+          },
+          "deepslate_redstone_ore": {
+            "japanese": "深層レッドストーン鉱石",
+            "note": "レッドストーンダストが得られる鉱石ブロック。"
+          },
           "emerald_ore": "エメラルド鉱石",
           "deepslate_emerald_ore": "深層エメラルド鉱石",
           "lapis_lazuli_ore": "ラピスラズリ鉱石",
           "deepslate_lapis_lazuli_ore": "深層ラピスラズリ鉱石",
           "diamond_ore": "ダイヤモンド鉱石",
           "deepslate_diamond_ore": "深層ダイヤモンド鉱石",
-          "nether_gold_ore": "ネザー金鉱石",
+          "nether_gold_ore": {
+            "japanese": "ネザー金鉱石",
+            "note": "ピグリンが好きなもの。"
+          },
           "nether_quartz_ore": "ネザークォーツ鉱石",
-          "ancient_debris": "古代の残骸",
-          "iron_ore_block": "鉄の原石ブロック",
-          "copper_ore_block": "銅の原石ブロック",
-          "gold_ore_block": "金の原石ブロック",
-          "glowstone": "グロウストーン",
-          "amethyst_block": "アメジストブロック",          
+          "ancient_debris": {
+            "japanese": "古代の残骸",
+            "note": "ネザーに生成される珍しい鉱石。非常に高い爆発耐久値を持っている。"
+          },
+          "raw_iron_block": "鉄の原石ブロック",
+          "raw_copper_block": "銅の原石ブロック",
+          "raw_gold_block": {
+            "japanese": "金の原石ブロック",
+            "note": "ピグリンが好きなもの。"
+          },
+          "glowstone": {
+            "japanese": "グロウストーン",
+            "note": "レッドストーン信号を斜め下から受け取ることができる。常に眩しく光っている。ネザーに発生。"
+          },
+          "amethyst_block": {
+            "japanese": "アメジストブロック",
+            "note": "紫色の綺麗なブロック。スカルクセンサーの信号を伝えることができる。"
+          },
           "budding_amethyst": "芽生えたアメジスト",
-          "small_amethyst_bud": "小さなアメジストの芽",
-          "medium_amethyst_bud": "中くらいのアメジストの芽",
-          "large_amethyst_bud": "大きなアメジストの芽",
-          "amethyst_cluster": "アメジストの塊"
+          "small_amethyst_bud": {
+            "japanese": "小さなアメジストの芽",
+            "note": "わずかだが光を放つ。キラキラしている。"
+          },
+          "medium_amethyst_bud": {
+            "japanese": "中くらいのアメジストの芽",
+            "note": "わずかだが光を放つ。キラキラしている。"
+          },
+          "large_amethyst_bud": {
+            "japanese": "大きなアメジストの芽",
+            "note": "わずかだが光を放つ。キラキラしている。"
+          },
+          "amethyst_cluster": {
+            "japanese": "アメジストの塊",
+            "note": "わずかだが光を放つ。キラキラしている。"
+          }
         }
       },
       "plants": {
@@ -100,8 +139,8 @@
               "mangrove_log": "マングローブの原木",
               "cherry_log": "サクラの原木",
               "pale_oak_log": "ペールオークの原木",
-              "crimson_stem": "真紅の幹",
-              "warped_stem": "歪んだ幹",
+              "crimson_stem": {"japanese": "真紅の幹", "note": "巨大キノコの一部。ネザー。"},
+              "warped_stem": {"japanese": "歪んだ幹", "note": "巨大キノコの一部。ネザー。"},
               "bamboo": "竹"
             },
             "notes": [
@@ -119,7 +158,10 @@
               "acacia_leaves": "アカシアの葉",
               "dark_oak_leaves": "ダークオークの葉",
               "mangrove_leaves": "マングローブの葉",
-              "cherry_leaves": "サクラの葉",
+              "cherry_leaves": {
+                "japanese": "サクラの葉",
+                "note": "ピンク色の花が咲いている。花びらが舞う。"
+              },
               "pale_oak_leaves": "ペールオークの葉"
             }
           },
@@ -135,7 +177,10 @@
               "cherry_sapling": "サクラの苗木",
               "pale_oak_sapling": "ペールオークの苗木",
               "mangrove_propagule": "マングローブの芽",
-              "bamboo_shoot": "タケノコ"
+              "bamboo_shoot": {
+                "japanese": "タケノコ",
+                "note": "プレイヤーは食べることができない。"
+              }
             },
             "notes": [
               "タケノコは苗木に近い若い植物としてここに置く。"
@@ -144,8 +189,14 @@
           "shrubs": {
             "label": "低木",
             "items": {
-              "azalea": "ツツジ",
-              "flowering_azalea": "開花したツツジ",
+              "azalea": {
+                "japanese": "ツツジ",
+                "note": "ピンク色の可愛らしい花が咲く。"
+              },
+              "flowering_azalea": {
+                "japanese": "開花したツツジ",
+                "note": "ピンク色の可愛らしい花が咲く。"
+              },
               "azalea_leaves": "ツツジの葉",
               "flowering_azalea_leaves": "開花したツツジの葉"
             },
@@ -201,6 +252,10 @@
             "items": {
               "seagrass": "海草",
               "tall_seagrass": "背の高い海草",
+              "bubble_column": {
+                "japanese": "気泡柱",
+                "note": "水中に発生。エンティティを沈めたり持ち上げる。空気を補充できる。"
+              },
               "lily_pad": "スイレンの葉",
               "sugar_cane": "サトウキビ",              
               "firefly_bush": "ホタルの茂み"
@@ -216,10 +271,16 @@
               "pale_moss_block": "色あせた苔ブロック",
               "moss_carpet": "苔のカーペット",
               "pale_moss_carpet": "色あせた苔のカーペット",
-              "glow_lichen": "ヒカリゴケ",
+              "glow_lichen": {
+                "japanese": "ヒカリゴケ",
+                "note": "ハサミで入手可能。渓谷によくみられる。"
+              },
               "spore_blossom": "胞子の花",
               "small_dripleaf": "小さなドリップリーフ",
-              "big_dripleaf": "大きなドリップリーフ",
+              "big_dripleaf": {
+                "japanese": "大きなドリップリーフ",
+                "note": "上に乗ることができる大きな葉っぱ。"
+              },
               "big_dripleaf_stem": "大きなドリップリーフの茎"
             }
           },
@@ -241,13 +302,15 @@
             "label": "ネザー・エンド植物",
             "items": {
               "nether_sprouts": "ネザースプラウト",
-              "crimson_roots": "真紅の根",
-              "warped_roots": "歪んだ根",
-              "weeping_vines": "しだれツタ",
-              "twisting_vines": "ねじれツタ",
-              "chorus_plant": "コーラスプラント",
-              "chorus_flower": "コーラスフラワー",
-              "chorus_tree": "コーラスの木"
+              "crimson_roots": {"japanese": "真紅の根", "note": "巨大キノコの一部。ネザー。おどろおどろしい"},
+              "warped_roots": {"japanese": "歪んだ根", "note": "巨大キノコの一部。ネザー。青緑色"},
+              "weeping_vines": {"japanese": "しだれツタ","note": "巨大キノコから垂れ下がるツタ。おどろおどろしい赤い色。"},
+              "twisting_vines": {"japanese": "ねじれツタ","note": "巨大キノコから垂れ下がるツタ。青緑色。"},
+              "chorus_plant":  {"japanese": "コーラスプラント","note":"エンド高地に生える植物。濃い紫色の奇妙な形の木"},
+              "chorus_flower": {
+                "japanese":"コーラスフラワー",
+                "note": "エンド外縁諸島に多く自生する植物、コーラスの花。ペールピンクの大きな花。",
+              "chorus_tree": {"japanese":"コーラスの木","note":"エンドの高地。プルプァブロックの原料、コーラスフルーツを産出。エンドストーンに生える。濃い赤紫色の幹をもつ奇妙な木"
             }
           }
         }
@@ -260,7 +323,10 @@
           "potatoes": "ジャガイモ",
           "beetroots": "ビートルート",
           "pumpkin": "カボチャ",
-          "carved_pumpkin": "くり抜かれたカボチャ",
+          "carved_pumpkin": {
+            "japanese": "くり抜かれたカボチャ",
+            "note": "防御力はない。エンダーマン・クリーキングとの敵対を防ぐ。"
+          },
           "pumpkin_stem": "カボチャの茎",
           "melon": "スイカ",
           "melon_stem": "スイカの茎",
@@ -268,9 +334,15 @@
           "torchflower_crop": "未成熟なトーチフラワー",
           "pitcher_crop": "未成熟なウツボカズラ",
           "sugar_cane": "サトウキビ",
-          "cactus": "サボテン",
+          "cactus": {
+            "japanese": "サボテン",
+            "note": "触れるとダメージを受ける。"
+          },
           "hay_bale": "干草の俵",
-          "bee_nest":"ミツバチの巣",
+          "bee_nest":{
+            "japanese": "ミツバチの巣",
+            "note": "焚き火があれば、収穫時にミツバチが敵対しない。"
+          },
           "honeycomb":"ハニカム",
           "honeycomb_block":"ハニカムブロック"
         }},
@@ -289,7 +361,10 @@
           "torchflower_seeds": "トーチフラワーの種",
           "pitcher_plant_pod": "ウツボカズラのさや",
           "sweet_berry_seeds": "スイートベリー",          
-          "glow_berries": "グロウベリー",
+          "glow_berries": {
+            "japanese": "グロウベリー",
+            "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。キツネの好物。"
+          },
           "nether_wart": "ネザーウォート",
           "chorus_fruit": "コーラスフルーツ"                    
         }
@@ -297,15 +372,18 @@
       "fungi": {
         "label": "菌類",
         "items": {
-          "brown_mushroom": "茶色のキノコ",
+          "brown_mushroom": {
+            "japanese": "茶色のキノコ",
+            "note": "わずかに光る。"
+          },
           "red_mushroom": "赤色のキノコ",
-          "crimson_fungus": "真紅のキノコ",
-          "warped_fungus": "歪んだキノコ",
+          "crimson_fungus": {"japanese": "真紅のキノコ", "note": "巨大キノコの一部。ネザー。"},
+          "warped_fungus": {"japanese": "歪んだキノコ", "note": "巨大キノコの一部。ネザー。"},
           "brown_mushroom_block": "茶色のキノコブロック",
           "red_mushroom_block": "赤色のキノコブロック",
           "mushroom_stem": "キノコの柄",
           "nether_wart_block": "ネザーウォートブロック",
-          "warped_wart_block": "歪んだウォートブロック",
+          "warped_wart_block": {"japanese": "歪んだウォートブロック", "note": "巨大キノコの一部。ネザー。"},
           "shroomlight": "シュルームライト"
         }
       },
@@ -365,17 +443,32 @@
           "sculk": "スカルク",
           "sculk_vein": "スカルクヴェイン",
           "sculk_catalyst": "スカルクカタリスト",
-          "sculk_sensor": "スカルクセンサー",
-          "calibrated_sculk_sensor": "調律されたスカルクセンサー",
+          "sculk_sensor": {
+            "japanese": "スカルクセンサー",
+            "note": "振動検知・伝達。羊毛で封じることができる。アメジストブロックと共鳴。レッドストーンコンバーターとの接続で振動をレッドストーン信号に変換可能。"
+          },
+          "calibrated_sculk_sensor": {
+            "japanese": "調律されたスカルクセンサー",
+            "note": "振動検知・伝達。羊毛で封じることができる。アメジストブロックと共鳴。レッドストーンコンバーターとの接続で振動をレッドストーン信号に変換可能。"
+          },
           "sculk_shrieker": "スカルクシュリーカー"
         }
       },
       "natural_misc": {
         "label": "その他天然物",
         "items": {
-          "pearlescent_froglight": "真珠色のフロッグライト",
-          "verdant_froglight": "新緑色のフロッグライト",
-          "ochre_froglight": "黄土色のフロッグライト",
+          "pearlescent_froglight": {
+            "japanese": "真珠色のフロッグライト",
+            "note": "カエルが小さいマグマキューブを捕食したときにドロップする天然の光源。熱帯種のカエルがドロップする。"
+          },
+          "verdant_froglight": {
+            "japanese": "新緑色のフロッグライト",
+            "note": "カエルが小さいマグマキューブを捕食したときにドロップする天然の光源。冷帯種のカエルがドロップする。"
+          },
+          "ochre_froglight": {
+            "japanese": "黄土色のフロッグライト",
+            "note": "カエルが小さいマグマキューブを捕食したときにドロップする天然の光源。温帯種のカエルがドロップする。"
+          },
           "resin_clump": "樹脂の塊",
           "spider_nest": "クモの巣",
           "bedrock": "岩盤"

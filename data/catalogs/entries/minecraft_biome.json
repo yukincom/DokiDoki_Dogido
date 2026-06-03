@@ -7,37 +7,44 @@
         "snowy_plains": {
           "japanese": "雪原",
           "temperature": 0.0,
-          "downfall": 0.5
+          "downfall": 0.5,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "ice_spikes": {
           "japanese": "氷樹",
           "temperature": 0.0,
-          "downfall": 0.5
+          "downfall": 0.5,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "snowy_taiga": {
           "japanese": "雪のタイガ",
           "temperature": -0.5,
-          "downfall": 0.4
+          "downfall": 0.4,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "grove": {
           "japanese": "林",
           "temperature": -0.2,
-          "downfall": 0.8
+          "downfall": 0.8,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "snowy_slopes": {
           "japanese": "雪の斜面",
           "temperature": -0.3,
-          "downfall": 0.9
+          "downfall": 0.9,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "jagged_peaks": {
           "japanese": "尖った山頂",
           "temperature": -0.7,
-          "downfall": 0.9
+          "downfall": 0.9,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "frozen_peaks": {
           "japanese": "凍った山頂",
           "temperature": -0.7,
-          "downfall": 0.9
+          "downfall": 0.9,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         }
       }
     },
@@ -261,7 +268,8 @@
         "frozen_river": {
           "japanese": "凍った川",
           "temperature": 0.0,
-          "downfall": 0.5
+          "downfall": 0.5,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "river": {
           "japanese": "河川",
@@ -271,7 +279,8 @@
         "snowy_beach": {
           "japanese": "雪の砂浜",
           "temperature": 0.05,
-          "downfall": 0.3
+          "downfall": 0.3,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "warm_ocean": {
           "japanese": "暖かい海",
@@ -311,7 +320,8 @@
         "frozen_ocean": {
           "japanese": "凍った海",
           "temperature": 0.0,
-          "downfall": 0.5
+          "downfall": 0.5,
+          "note": "雪が降ると地上にある全ての葉が徐々に白く変化する。雷雨の場合、霜が降りたような見た目に変化する。"
         },
         "deep_frozen_ocean": {
           "japanese": "凍った深海",

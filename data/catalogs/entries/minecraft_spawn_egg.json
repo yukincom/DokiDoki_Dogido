@@ -40,8 +40,8 @@
           "zoglin_spawn_egg": "ゾグリンのスポーンエッグ",
           "zombie_spawn_egg": "ゾンビのスポーンエッグ",
           "zombie_villager_spawn_egg": "村人ゾンビのスポーンエッグ",
-          "creaking_spawn_egg": "クリーキングのスポーンエッグ",          
-          "sulfur_cube_spawn_egg": "サルファーキューブのスポーンエッグ"          
+          "creaking_spawn_egg": "クリーキングのスポーンエッグ",
+          "sulfur_cube_spawn_egg": "サルファーキューブのスポーンエッグ"
         }
       },
       "passive": {
@@ -80,7 +80,7 @@
           "turtle_spawn_egg": "カメのスポーンエッグ",
           "villager_spawn_egg": "村人のスポーンエッグ",
           "wandering_trader_spawn_egg": "行商人のスポーンエッグ",
-          "zombie_horse_spawn_egg": "ゾンビホースのスポーンエッグ",          
+          "zombie_horse_spawn_egg": "ゾンビホースのスポーンエッグ",
           "agent_spawn_egg": "エージェントのスポーンエッグ",
           "map_marker_spawn_egg": "マップマーカーのスポーンエッグ",
           "spawn_npc": "NPCのスポーンエッグ"
@@ -97,7 +97,7 @@
           "fox_spawn_egg": "キツネのスポーンエッグ",   
           "spider_spawn_egg": "クモのスポーンエッグ",  
           "trader_llama_spawn_egg": "商人のラマのスポーンエッグ",
-          "polar_bear_spawn_egg": "シロクマのスポーンエッグ", 
+          "polar_bear_spawn_egg": "シロクマのスポーンエッグ",
           "zombie_nautilus_spawn_egg": "ゾンビオウムガイのスポーンエッグ",
           "zombified_piglin_spawn_egg": "ゾンビピグリンのスポーンエッグ",  
           "cave_spider_spawn_egg": "洞窟グモのスポーンエッグ",

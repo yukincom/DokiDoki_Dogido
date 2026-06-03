@@ -7,33 +7,72 @@
         "label": "道具（素材別）",
         "items": {
           "wooden_pickaxe": "木のツルハシ",
-          "wooden_axe": "木の斧",
+          "wooden_axe": {
+            "japanese": "木の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "wooden_shovel": "木のシャベル",
           "wooden_hoe": "木のクワ",
           "stone_pickaxe": "石のツルハシ",
-          "stone_axe": "石の斧",
+          "stone_axe": {
+            "japanese": "石の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "stone_shovel": "石のシャベル",
           "stone_hoe": "石のクワ",
           "copper_pickaxe": "銅のツルハシ",
-          "copper_axe": "銅の斧",
+          "copper_axe": {
+            "japanese": "銅の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "copper_shovel": "銅のシャベル",
           "copper_hoe": "銅のクワ",
           "iron_pickaxe": "鉄のツルハシ",
-          "iron_axe": "鉄の斧",
+          "iron_axe": {
+            "japanese": "鉄の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "iron_shovel": "鉄のシャベル",
           "iron_hoe": "鉄のクワ",
-          "golden_pickaxe": "金のツルハシ",
-          "golden_axe": "金の斧",
-          "golden_shovel": "金のシャベル",
-          "golden_hoe": "金のクワ",
+          "golden_pickaxe": {
+            "japanese": "金のツルハシ",
+            "note": "ピグリンが好きなもの。"
+          },
+          "golden_axe": {
+            "japanese": "金の斧",
+            "note": "銅の酸化を還元する。ピグリンが好きなもの。"
+          },
+          "golden_shovel": {
+            "japanese": "金のシャベル",
+            "note": "ピグリンが好きなもの。"
+          },
+          "golden_hoe": {
+            "japanese": "金のクワ",
+            "note": "ピグリンが好きなもの。"
+          },
           "diamond_pickaxe": "ダイヤモンドのツルハシ",
-          "diamond_axe": "ダイヤモンドの斧",
+          "diamond_axe": {
+            "japanese": "ダイヤモンドの斧",
+            "note": "銅の酸化を還元する。"
+          },
           "diamond_shovel": "ダイヤモンドのシャベル",
           "diamond_hoe": "ダイヤモンドのクワ",
-          "netherite_pickaxe": "ネザライトのツルハシ",
-          "netherite_axe": "ネザライトの斧",
-          "netherite_shovel": "ネザライトのシャベル",
-          "netherite_hoe": "ネザライトのクワ"
+          "netherite_pickaxe": {
+            "japanese": "ネザライトのツルハシ",
+            "note": "溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_axe": {
+            "japanese": "ネザライトの斧",
+            "note": "銅の酸化を還元する。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_shovel": {
+            "japanese": "ネザライトのシャベル",
+            "note": "溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_hoe": {
+            "japanese": "ネザライトのクワ",
+            "note": "溶岩では消滅しないが、サボテンで消滅。"
+          }
         },
         "notes": [
           "斧は戦闘タブの武器側にも重複所属する。"
@@ -115,7 +154,10 @@
           "filled_map_explorer_swamp": "沼地探検家の地図",
           "compass": "コンパス",
           "recovery_compass": "リカバリーコンパス",
-          "clock": "時計",
+          "clock": {
+            "japanese": "時計",
+            "note": "ピグリンが好きなもの。"
+          },
           "spyglass": "望遠鏡",
           "paper": "紙",
           "book": "本",
@@ -131,7 +173,10 @@
           "firework_rocket": "ロケット花火",
           "saddle": "鞍",
           "carrot_on_a_stick": "ニンジン付きの棒",
-          "warped_fungus_on_a_stick": "歪んだキノコ付きの棒"
+          "warped_fungus_on_a_stick": {
+            "japanese": "歪んだキノコ付きの棒",
+            "note": "巨大キノコの一部。ネザー。"
+          }
         }
       },
       "harnesses": {
@@ -192,7 +237,11 @@
           "minecart_with_command_block": "コマンドブロック付きのトロッコ",
           "minecart_with_furnace": "かまど付きのトロッコ",
           "minecart_with_hopper": "ホッパー付きのトロッコ",
-          "minecart_with_tnt": "TNT付きのトロッコ"
+          "minecart_with_tnt": "TNT付きのトロッコ",
+          "detector_rail": {
+            "japanese": "ディテクターレール",
+            "note": "トロッコにのみ反応する感圧装置。"
+          }
         }
       },
       "goat_horns": {

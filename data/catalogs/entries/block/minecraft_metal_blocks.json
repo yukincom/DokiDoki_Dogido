@@ -16,6 +16,19 @@
           "iron_chain": "鉄の鎖"
         }
       },
+      "gold": {
+        "label": "金系",
+        "items": {
+          "gold_block": {
+            "japanese": "金ブロック",
+            "note": "ピグリンが好きなもの。"
+          },
+          "gilded_blackstone": {
+            "japanese": "きらめくブラックストーン",
+            "note": "ピグリンが好きなもの。"
+          }
+        }
+      },
       "copper_by_oxidation_stage": {
         "label": "銅系・酸化段階別",
         "groups": {

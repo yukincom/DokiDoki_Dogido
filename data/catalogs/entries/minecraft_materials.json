@@ -10,21 +10,36 @@
           "charcoal": "木炭",
           "raw_iron": "鉄の原石",
           "raw_copper": "銅の原石",
-          "raw_gold": "金の原石",
+          "raw_gold": {
+            "japanese": "金の原石",
+            "note": "ピグリンが好きなもの。"
+          },
           "diamond": "ダイヤモンド",
           "emerald": "エメラルド",
           "lapis_lazuli": "ラピスラズリ",
-          "ancient_debris": "古代の残骸",
+          "ancient_debris": {
+            "japanese": "古代の残骸",
+            "note": "ネザーに生成される珍しい鉱石。非常に高い爆発耐久値を持っている。"
+          },
           "nether_quartz": "ネザークォーツ",
           "amethyst_shard": "アメジストの欠片",
           "copper_nugget": "銅塊",
           "iron_nugget": "鉄塊",
-          "gold_nugget": "金塊",
+          "gold_nugget": {
+            "japanese": "金塊",
+            "note": "ピグリンが好きなもの。"
+          },
           "iron_ingot": "鉄インゴット",
           "copper_ingot": "銅インゴット",
-          "gold_ingot": "金インゴット",
+          "gold_ingot": {
+            "japanese": "金インゴット",
+            "note": "ピグリンが好きなもの。"
+          },
           "netherite_scrap": "ネザライトの欠片",
-          "netherite_ingot": "ネザライトインゴット"
+          "netherite_ingot": {
+            "japanese": "ネザライトインゴット",
+            "note": "ネザーで産出する珍しい鉱石。ダイヤモンドより硬い。"
+          }
         }
       },
       "common_crafting_materials": {
@@ -38,9 +53,18 @@
           "bone": "骨",
           "bone_meal": "骨粉",
           "snowball": "雪玉",
-          "egg": "卵",
-          "blue_egg": "青色の卵",
-          "brown_egg": "茶色の卵",
+          "egg": {
+            "japanese": "卵",
+            "note": "温帯種のニワトリ産。"
+          },
+          "blue_egg": {
+            "japanese": "青色の卵",
+            "note": "冷帯種のニワトリ産。"
+          },
+          "brown_egg": {
+            "japanese": "茶色の卵",
+            "note": "熱帯種のニワトリ産。"
+          },
           "leather": "革",
           "rabbit_hide": "ウサギの皮",
           "honeycomb": "ハニカム",
@@ -116,7 +140,10 @@
         "label": "醸造素材",
         "items": {
           "nether_wart": "ネザーウォート",
-          "redstone_dust": "レッドストーンダスト",
+          "redstone_dust": {
+            "japanese": "レッドストーンダスト",
+            "note": "レッドストーン信号を伝達。設置されたものはレッドストーンワイヤーと呼ぶ。"
+          },
           "glowstone_dust": "グロウストーンダスト",
           "gunpowder": "火薬",
           "dragons_breath": "ドラゴンブレス",
@@ -124,11 +151,17 @@
           "blaze_powder": "ブレイズパウダー",
           "sugar": "砂糖",
           "rabbits_foot": "ウサギの足",
-          "glistering_melon_slice": "きらめくスイカの薄切り",
+          "glistering_melon_slice": {
+            "japanese": "きらめくスイカの薄切り",
+            "note": "ピグリンが好きなもの。"
+          },
           "spider_eye": "クモの目",
           "pufferfish": "フグ",
           "magma_cream": "マグマクリーム",
-          "golden_carrot": "金のニンジン",
+          "golden_carrot": {
+            "japanese": "金のニンジン",
+            "note": "ピグリンが好きなもの。"
+          },
           "ghast_tear": "ガストの涙",
           "turtle_shell": "カメの甲羅",
           "phantom_membrane": "ファントムの皮膜"

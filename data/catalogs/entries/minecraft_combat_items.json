@@ -8,25 +8,55 @@
         "items": {
           "wooden_sword": "木の剣",
           "wooden_spear": "木の槍",
-          "wooden_axe": "木の斧",
+          "wooden_axe": {
+            "japanese": "木の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "stone_sword": "石の剣",
           "stone_spear": "石の槍",
-          "stone_axe": "石の斧",
+          "stone_axe": {
+            "japanese": "石の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "copper_sword": "銅の剣",
           "copper_spear": "銅の槍",
-          "copper_axe": "銅の斧",
+          "copper_axe": {
+            "japanese": "銅の斧",
+            "note": "銅の酸化を還元する。"
+          },
           "iron_sword": "鉄の剣",
           "iron_spear": "鉄の槍",
-          "iron_axe": "鉄の斧",
-          "golden_sword": "金の剣",
+          "iron_axe": {
+            "japanese": "鉄の斧",
+            "note": "銅の酸化を還元する。"
+          },
+          "golden_sword": {
+            "japanese": "金の剣",
+            "note": "ピグリンが好きなもの。"
+          },
           "golden_spear": "金の槍",
-          "golden_axe": "金の斧",
+          "golden_axe": {
+            "japanese": "金の斧",
+            "note": "銅の酸化を還元する。ピグリンが好きなもの。"
+          },
           "diamond_sword": "ダイヤモンドの剣",
           "diamond_spear": "ダイヤモンドの槍",
-          "diamond_axe": "ダイヤモンドの斧",
-          "netherite_sword": "ネザライトの剣",
-          "netherite_spear": "ネザライトの槍",
-          "netherite_axe": "ネザライトの斧",
+          "diamond_axe": {
+            "japanese": "ダイヤモンドの斧",
+            "note": "銅の酸化を還元する。"
+          },
+          "netherite_sword": {
+            "japanese": "ネザライトの剣",
+            "note": "溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_spear": {
+            "japanese": "ネザライトの槍",
+            "note": "溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_axe": {
+            "japanese": "ネザライトの斧",
+            "note": "銅の酸化を還元する。溶岩では消滅しないが、サボテンで消滅。"
+          },
           "trident": "トライデント",
           "mace": "メイス",
           "shield": "盾"          
@@ -92,43 +122,103 @@
           "iron_chestplate": "鉄のチェストプレート",
           "iron_leggings": "鉄のレギンス",
           "iron_boots": "鉄のブーツ",
-          "golden_helmet": "金のヘルメット",
-          "golden_chestplate": "金のチェストプレート",
-          "golden_leggings": "金のレギンス",
-          "golden_boots": "金のブーツ",
+          "golden_helmet": {
+            "japanese": "金のヘルメット",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "golden_chestplate": {
+            "japanese": "金のチェストプレート",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "golden_leggings": {
+            "japanese": "金のレギンス",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "golden_boots": {
+            "japanese": "金のブーツ",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
           "diamond_helmet": "ダイヤモンドのヘルメット",
           "diamond_chestplate": "ダイヤモンドのチェストプレート",
           "diamond_leggings": "ダイヤモンドのレギンス",
           "diamond_boots": "ダイヤモンドのブーツ",
-          "netherite_helmet": "ネザライトのヘルメット",
-          "netherite_chestplate": "ネザライトのチェストプレート",
-          "netherite_leggings": "ネザライトのレギンス",
-          "netherite_boots": "ネザライトのブーツ",
-          "leather_cap": "革の帽子",
-          "leather_tunic": "革の上着",
-          "leather_pants": "革のズボン",
-          "leather_boots": "革のブーツ",
-          "turtle_shell": "カメの甲羅"
+          "netherite_helmet": {
+            "japanese": "ネザライトのヘルメット",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_chestplate": {
+            "japanese": "ネザライトのチェストプレート",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_leggings": {
+            "japanese": "ネザライトのレギンス",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_boots": {
+            "japanese": "ネザライトのブーツ",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "leather_cap": {
+            "japanese": "革の帽子",
+            "note": "粉雪の凍結ダメージを防ぐ効果。"
+          },
+          "leather_tunic": {
+            "japanese": "革の上着",
+            "note": "粉雪の凍結ダメージを防ぐ効果。"
+          },
+          "leather_pants": {
+            "japanese": "革のズボン",
+            "note": "粉雪の凍結ダメージを防ぐ効果。"
+          },
+          "leather_boots": {
+            "japanese": "革のブーツ",
+            "note": "粉雪の凍結ダメージを防ぐ効果。粉雪に沈みにくくなる効果。"
+          },
+          "turtle_shell": {
+            "japanese": "カメの甲羅",
+            "note": "入水から10秒間、水中呼吸の効果。"
+          }
                 }
       },
       "horse_armor": {
         "label": "馬鎧",
         "items": {
-          "leather_horse_armor": "革の馬鎧",
+          "leather_horse_armor": {
+            "japanese": "革の馬鎧",
+            "note": "凍傷防止"
+          },
           "copper_horse_armor": "銅の馬鎧",
           "iron_horse_armor": "鉄の馬鎧",
-          "golden_horse_armor": "金の馬鎧",
+          "golden_horse_armor": {
+            "japanese": "金の馬鎧",
+            "note": "ピグリンが好きなもの。"
+          },
           "diamond_horse_armor": "ダイヤモンドの馬鎧"
         }
       },
       "companion_armor": {
         "label": "コンパニオン装備",
         "items": {
-          "wolf_armor": "オオカミの鎧",
-          "copper_nautilus_armor": "銅のオウムガイの鎧",
-          "iron_nautilus_armor": "鉄のオウムガイの鎧",
-          "gold_nautilus_armor": "金のオウムガイの鎧",
-          "netherite_nautilus_armor": "ネザライトのオウムガイの鎧"
+          "wolf_armor": {
+            "japanese": "オオカミの鎧",
+            "note": "オオカミ用の鎧。アルマジロのウロコから作成。"
+          },
+          "copper_nautilus_armor": {
+            "japanese": "銅のオウムガイの鎧",
+            "note": "オウムガイ用の鎧"
+          },
+          "iron_nautilus_armor": {
+            "japanese": "鉄のオウムガイの鎧",
+            "note": "オウムガイ用の鎧"
+          },
+          "gold_nautilus_armor": {
+            "japanese": "金のオウムガイの鎧",
+            "note": "オウムガイ用の鎧。ピグリンが好きなもの。"
+          },
+          "netherite_nautilus_armor": {
+            "japanese": "ネザライトのオウムガイの鎧",
+            "note": "オウムガイ用の鎧。溶岩では消滅しないが、サボテンで消滅。"
+          }
         }
       },
       "combat_consumables_and_traps": {

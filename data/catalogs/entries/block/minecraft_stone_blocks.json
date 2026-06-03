@@ -35,7 +35,10 @@
               "stone_brick_stairs": "石レンガの階段",
               "stone_brick_slab": "石レンガのハーフブロック",
               "stone_brick_wall": "石レンガの塀",
-              "chiseled_stone_bricks": "模様入りの石レンガ",
+              "chiseled_stone_bricks": {
+                "japanese": "模様入りの石レンガ",
+                "note": "マトのような模様が描かれている。"
+              },
               "cracked_stone_bricks": "ひび割れた石レンガ",
               "mossy_stone_bricks": "苔むした石レンガ",
               "mossy_stone_brick_stairs": "苔むした石レンガの階段",
@@ -84,11 +87,17 @@
             "items": {
               "sandstone": "砂岩",
               "cut_sandstone": "研がれた砂岩",
-              "chiseled_sandstone": "模様入りの砂岩",
+              "chiseled_sandstone": {
+                "japanese": "模様入りの砂岩",
+                "note": "クリーパーのような模様が描かれている。"
+              },
               "smooth_sandstone": "滑らかな砂岩",
               "red_sandstone": "赤い砂岩",
               "cut_red_sandstone": "研がれた赤い砂岩",
-              "chiseled_red_sandstone": "模様入りの赤い砂岩",
+              "chiseled_red_sandstone": {
+                "japanese": "模様入りの赤い砂岩",
+                "note": "ウィザーのような模様が描かれている。"
+              },
               "smooth_red_sandstone": "滑らかな赤い砂岩",
               "sandstone_slab": "砂岩のハーフブロック",
               "sandstone_wall": "砂岩の塀",
@@ -109,26 +118,26 @@
           "deepslate": {
             "label": "深層岩",
             "items": {
-              "deepslate": "深層岩",
-              "cobbled_deepslate": "深層岩の丸石",
-              "cobbled_deepslate_stairs": "深層岩の丸石の階段",
-              "cobbled_deepslate_slab": "深層岩の丸石のハーフブロック",
-              "cobbled_deepslate_wall": "深層岩の丸石の塀",
-              "polished_deepslate": "磨かれた深層岩",
-              "polished_deepslate_stairs": "磨かれた深層岩の階段",
-              "polished_deepslate_slab": "磨かれた深層岩のハーフブロック",
-              "polished_deepslate_wall": "磨かれた深層岩の塀",
-              "chiseled_deepslate": "模様入りの深層岩",
-              "deepslate_bricks": "深層岩レンガ",
-              "deepslate_brick_stairs": "深層岩レンガの階段",
-              "deepslate_brick_slab": "深層岩レンガのハーフブロック",
-              "deepslate_brick_wall": "深層岩レンガの塀",
-              "cracked_deepslate_bricks": "ひび割れた深層岩レンガ",
-              "deepslate_tiles": "深層岩タイル",
-              "deepslate_tile_stairs": "深層岩タイルの階段",
-              "deepslate_tile_slab": "深層岩タイルのハーフブロック",
-              "deepslate_tile_wall": "深層岩タイルの塀",
-              "cracked_deepslate_tiles": "ひび割れた深層岩タイル",
+              "deepslate": {"japanese": "深層岩", "note": "通常の石の2倍、硬い。黒い。"},
+              "cobbled_deepslate": {"japanese": "深層岩の丸石", "note": "通常の石の2倍、硬い。黒い。"},
+              "cobbled_deepslate_stairs": {"japanese": "深層岩の丸石の階段", "note": "通常の石の2倍、硬い。黒い。"},
+              "cobbled_deepslate_slab": {"japanese": "深層岩の丸石のハーフブロック", "note": "通常の石の2倍、硬い。黒い。"},
+              "cobbled_deepslate_wall": {"japanese": "深層岩の丸石の塀", "note": "通常の石の2倍、硬い。黒い。"},
+              "polished_deepslate": {"japanese": "磨かれた深層岩", "note": "通常の石の2倍、硬い。黒い。"},
+              "polished_deepslate_stairs": {"japanese": "磨かれた深層岩の階段", "note": "通常の石の2倍、硬い。黒い。"},
+              "polished_deepslate_slab": {"japanese": "磨かれた深層岩のハーフブロック", "note": "通常の石の2倍、硬い。黒い。"},
+              "polished_deepslate_wall": {"japanese": "磨かれた深層岩の塀", "note": "通常の石の2倍、硬い。黒い。"},
+              "chiseled_deepslate": {"japanese": "模様入りの深層岩", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_bricks": {"japanese": "深層岩レンガ", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_brick_stairs": {"japanese": "深層岩レンガの階段", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_brick_slab": {"japanese": "深層岩レンガのハーフブロック", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_brick_wall": {"japanese": "深層岩レンガの塀", "note": "通常の石の2倍、硬い。黒い。"},
+              "cracked_deepslate_bricks": {"japanese": "ひび割れた深層岩レンガ", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_tiles": {"japanese": "深層岩タイル", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_tile_stairs": {"japanese": "深層岩タイルの階段", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_tile_slab": {"japanese": "深層岩タイルのハーフブロック", "note": "通常の石の2倍、硬い。黒い。"},
+              "deepslate_tile_wall": {"japanese": "深層岩タイルの塀", "note": "通常の石の2倍、硬い。黒い。"},
+              "cracked_deepslate_tiles": {"japanese": "ひび割れた深層岩タイル", "note": "通常の石の2倍、硬い。黒い。"},
               "reinforced_deepslate": "強化された深層岩"
             }
           },
@@ -143,12 +152,18 @@
               "polished_tuff_stairs": "磨かれた凝灰岩の階段",
               "polished_tuff_slab": "磨かれた凝灰岩のハーフブロック",
               "polished_tuff_wall": "磨かれた凝灰岩の塀",
-              "chiseled_tuff": "模様入りの凝灰岩",
+              "chiseled_tuff": {
+                "japanese": "模様入りの凝灰岩",
+                "note": "ラーメンどんぶりのような模様が描かれている。"
+              },
               "tuff_bricks": "凝灰岩レンガ",
               "tuff_brick_stairs": "凝灰岩レンガの階段",
               "tuff_brick_slab": "凝灰岩レンガのハーフブロック",
               "tuff_brick_wall": "凝灰岩レンガの塀",
-              "chiseled_tuff_bricks": "模様入りの凝灰岩レンガ"
+              "chiseled_tuff_bricks": {
+                "japanese": "模様入りの凝灰岩レンガ",
+                "note": "開いたジッパーのような模様が描かれている。"
+              }
             }
           },
           "bricks_mud_resin": {
@@ -168,7 +183,10 @@
               "resin_brick_stairs": "樹脂レンガの階段",
               "resin_brick_slab": "樹脂レンガのハーフブロック",
               "resin_brick_wall": "樹脂レンガの塀",
-              "chiseled_resin_bricks": "模様入りの樹脂レンガ"
+              "chiseled_resin_bricks": {
+                "japanese": "模様入りの樹脂レンガ",
+                "note": "クリーキングのような模様が描かれている。"
+              }
             }
           },
           "prismarine": {
@@ -189,14 +207,20 @@
           "quartz_purpur": {
             "label": "クォーツ・プルプァ",
             "items": {
-              "block_of_quartz": "クォーツブロック",
+              "block_of_quartz": {
+                "japanese": "クォーツブロック",
+                "note": "白いブロック。爆発に弱い。"
+              },
               "quartz_stairs": "クォーツの階段",
               "quartz_slab": "クォーツのハーフブロック",
               "smooth_quartz_block": "滑らかなクォーツブロック",
               "smooth_quartz_stairs": "滑らかなクォーツの階段",
               "smooth_quartz_slab": "滑らかなクォーツのハーフブロック",
               "quartz_bricks": "クォーツレンガ",
-              "chiseled_quartz_block": "模様入りのクォーツブロック",
+              "chiseled_quartz_block": {
+                "japanese": "模様入りのクォーツブロック",
+                "note": "コンジットのような模様が描かれている。"
+              },
               "quartz_pillar": "クォーツの柱",
               "purpur_block": "プルプァブロック",
               "purpur_stairs": "プルプァの階段",
@@ -212,7 +236,10 @@
               "nether_brick_stairs": "ネザーレンガの階段",
               "nether_brick_slab": "ネザーレンガのハーフブロック",
               "nether_brick_wall": "ネザーレンガの塀",
-              "chiseled_nether_bricks": "模様入りのネザーレンガ",
+              "chiseled_nether_bricks": {
+                "japanese": "模様入りのネザーレンガ",
+                "note": "不燃性でガストの火の玉でも破壊されない。ウィザースケルトンの模様が刻まれている。"
+              },
               "cracked_nether_bricks": "ひび割れたネザーレンガ",
               "red_nether_bricks": "赤いネザーレンガ",
               "red_nether_brick_wall": "赤いネザーレンガの塀",
@@ -232,7 +259,10 @@
               "polished_blackstone_stairs": "磨かれたブラックストーンの階段",
               "polished_blackstone_slab": "磨かれたブラックストーンのハーフブロック",
               "polished_blackstone_wall": "磨かれたブラックストーンの塀",
-              "chiseled_polished_blackstone": "模様入りの磨かれたブラックストーン",
+              "chiseled_polished_blackstone": {
+                "japanese": "模様入りの磨かれたブラックストーン",
+                "note": "ピグリンの鼻のような模様が彫られている。"
+              },
               "polished_blackstone_bricks": "磨かれたブラックストーンレンガ",
               "polished_blackstone_brick_stairs": "磨かれたブラックストーンレンガの階段",
               "polished_blackstone_brick_slab": "磨かれたブラックストーンレンガのハーフブロック",

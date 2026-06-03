@@ -48,16 +48,31 @@
         "label": "食料：野菜・果物",
         "items": {
           "apple": "リンゴ",
-          "golden_apple": "金のリンゴ",
-          "enchanted_golden_apple": "エンチャントされた金のリンゴ",
+          "golden_apple": {
+            "japanese": "金のリンゴ",
+            "note": "ピグリンが好きなもの。"
+          },
+          "enchanted_golden_apple": {
+            "japanese": "エンチャントされた金のリンゴ",
+            "note": "ピグリンが好きなもの。"
+          },
           "melon_slice": "スイカの薄切り",
-          "glistering_melon_slice": "きらめくスイカの薄切り",
+          "glistering_melon_slice": {
+            "japanese": "きらめくスイカの薄切り",
+            "note": "ピグリンが好きなもの。"
+          },
           "chorus_fruit": "コーラスフルーツ",
           "beetroot": "ビートルート",
           "carrot": "ニンジン",
-          "golden_carrot": "金のニンジン",
+          "golden_carrot": {
+            "japanese": "金のニンジン",
+            "note": "ピグリンが好きなもの。"
+          },
           "sweet_berries": "スイートベリー",
-          "glow_berries": "グロウベリー",
+          "glow_berries": {
+            "japanese": "グロウベリー",
+            "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。キツネの好物。"
+          },
           "dried_kelp": "乾燥した昆布"       
         }
       },
