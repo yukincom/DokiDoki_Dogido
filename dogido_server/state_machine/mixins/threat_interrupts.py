@@ -12,6 +12,17 @@ LOGGER = logging.getLogger("uvicorn.error")
 
 
 class ThreatInterruptsMixin:
+    def _should_suppress_dark_push_relief_line(
+        self,
+        event: GameEvent,
+        signals: DerivedSignals,
+    ) -> bool:
+        if signals.safe_zone_with_door or signals.emergency_shelter or self._is_cramped_dark_burrow_event(event):
+            return True
+        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        local_light = event.world.local_light if event.world.local_light is not None else 0
+        return time_phase in {"morning", "day"} and bool(event.world.sky_visible) and local_light >= 10
+
     def _threat_dark_push_stop_actions(
         self,
         event: GameEvent,
@@ -100,7 +111,7 @@ class ThreatInterruptsMixin:
             return [AudioAction(layer="control", interrupt=True)]
 
         self.state.pending_dark_push_after_breath_until = None
-        if signals.safe_zone_with_door or signals.emergency_shelter:
+        if self._should_suppress_dark_push_relief_line(event, signals):
             self._log_darkness_decision("dark_push_stop_safe_zone", event, signals)
             return [AudioAction(layer="control", interrupt=True)]
         self._log_darkness_decision("dark_push_stop", event, signals)
@@ -140,6 +151,9 @@ class ThreatInterruptsMixin:
         if signals.emergency_shelter:
             self.state.pending_dark_push_after_breath_until = None
             return []
+        if self._should_suppress_dark_push_relief_line(event, signals):
+            self.state.pending_dark_push_after_breath_until = None
+            return []
         self.state.pending_dark_push_after_breath_until = None
         return [
             AudioAction(
@@ -157,7 +171,7 @@ class ThreatInterruptsMixin:
         signals: DerivedSignals,
     ) -> None:
         LOGGER.warning(
-            "darkness_decision=%s event=%s sky_visible=%s enclosure=%.2f local_light=%s danger=%.2f biome=%s cover=%s ceiling=%s submerged=%s safe_door=%s occluded=%s entered=%s torch=%s",
+            "darkness_decision=%s event=%s sky_visible=%s enclosure=%.2f local_light=%s danger=%.2f biome=%s cover=%s ceiling=%s walls=%s open2h=%s drafty=%s dark_volume=%s light_sources=%s nearest_light=%s submerged=%s safe_door=%s shelter=%s occluded=%s entered=%s torch=%s",
             reason,
             getattr(event.event.name, "value", event.event.name),
             event.world.sky_visible,
@@ -167,8 +181,15 @@ class ThreatInterruptsMixin:
             event.world.biome or "unknown",
             event.world.overhead_cover_type or "unknown",
             event.world.ceiling_height,
+            event.world.cardinal_wall_count,
+            event.world.double_height_open_side_count,
+            event.world.drafty_opening_count,
+            event.world.connected_dark_volume,
+            event.world.nearby_light_source_count,
+            event.world.nearest_light_source_distance,
             signals.submerged,
             signals.safe_zone_with_door,
+            signals.emergency_shelter,
             signals.occluded_dark_zone,
             signals.entered_occluded_dark_zone,
             signals.torch_available,

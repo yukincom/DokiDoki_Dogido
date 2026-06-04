@@ -11,11 +11,13 @@
     "dark_push_after_breath_default": "{prefix}心臓に悪いわ、マジで心臓に悪いわ……。",
     "dark_push_after_breath_evening": "もう夜かいな。一難去ってまた一難や！",
     "dark_push_after_breath_night": "まだ夜かいな。一難去ってまた一難や！",
+    "emergency_shelter_relief": "{prefix}よし！シャルターやな！これで安心や！",
     "light_crafted": "っしゃ！ {prefix}あかりできたやん、これでさっきよりだいぶ安心できるわ！"
   },
   "combat": {
     "daylight_water_skeleton": "うわっ！スケルトンが水入ってしもた！頼むから陸に寄って燃えてくれ〜〜！頼むわ！",
-    "newly_burning_visual": "っしゃ！もえろもえろおお！"
+    "newly_burning_visual": "っしゃ！もえろもえろおお！",
+    "occluded_hostile_presence": "敵対モブがおるな……ちょっと気になるわ。"
   },
   "weather_transition": {
     "clear_after_bad_weather": "ふぅ……ようやく晴れたな。ちょっと落ち着けるかも……でも油断したらあかんぞ。",

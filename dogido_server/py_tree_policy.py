@@ -102,6 +102,7 @@ class NormalEnvironmentEvent(_Condition):
             or context.signals.entered_submerged_dark_zone
             or context.signals.entered_occluded_dark_zone
             or context.signals.weather_transition_to is not None
+            or context.machine._has_pending_weather_transition()
             or context.machine._is_foliage_shade_context(context.event)
             or (
                 getattr(context.event.world.time_phase, "value", context.event.world.time_phase) == "night"
@@ -264,7 +265,7 @@ class EmitAmbientMobActions(_Action):
         super().__init__(name="EmitAmbientMobActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
-        line = context.machine._render_ambient_mob_line(context.event.peaceful_mobs)
+        line = context.machine._render_ambient_mob_line(context.event, context.event.peaceful_mobs)
         if line:
             actions.append(
                 context.machine._audio_action(

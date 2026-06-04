@@ -28,11 +28,13 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "ambient": _build_ambient_messages,
         "death": _build_death_messages,
         "hostile_callout": _build_hostile_callout_messages,
+        "occluded_hostile_presence": _build_occluded_hostile_presence_messages,
         "darkness_escape": _build_darkness_escape_messages,
         "occluded_entry_with_light": _build_occluded_entry_with_light_messages,
         "occluded_entry_no_light": _build_occluded_entry_no_light_messages,
         "dark_push_no_light": _build_dark_push_no_light_messages,
         "dark_push_after_breath": _build_dark_push_after_breath_messages,
+        "emergency_shelter_relief": _build_emergency_shelter_relief_messages,
         "light_crafted": _build_light_crafted_messages,
         "daylight_water_skeleton": _build_daylight_water_skeleton_messages,
         "newly_burning_visual": _build_newly_burning_visual_messages,
@@ -57,6 +59,8 @@ def _build_haiku_messages(request: Any) -> list[dict[str, str]]:
 
 def _build_haiku_irony_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_irony_messages(request.details)
+
+
 def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     hostiles = "、".join(details.get("hostiles", [])) or "敵"
@@ -64,36 +68,48 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
         "参考傾向:\n"
         "- 戦闘直後で、まだ気が抜けていない\n"
         "- 安心しきれず、少し怯えが残る\n"
-        "- 大げさすぎず、会話として自然に\n\n"
+        "- 大げさすぎず、会話として自然に\n"
+        "- 助言・説教・次の行動指示はしない\n\n"
         "/no_think\n"
         "本番:\n"
         "戦闘直後で、まだ少し怯えている。"
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけその呼び名を入れてよい。\n"
         f"直前の敵は{hostiles}。\n"
-        f"現在体力は{details.get('health', 'unknown')}。\n"
+        f"プレイヤーの消耗具合は{details.get('health_state', '不明')}。\n"
         "見えていたことや確実に分かることだけを話す。"
         "未確認の爆発音や攻撃描写を勝手に足さない。"
-        "例文の言い回しをそのまま使わず、会話っぽく28〜40文字くらいで一言だけ返す。"
+        "体力の数値やHPを言わない。"
+        "『次は逃げよう』『油断するな』『回復しよう』のような助言や指示を言わない。"
+        "例文の言い回しをそのまま使わず、会話っぽく24〜34文字くらいで一言だけ返す。"
     )
     return _dialog_messages(user_prompt)
 def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     candidates = details.get("fallback_candidates") or []
     candidate_lines = " / ".join(str(candidate) for candidate in candidates[:4]) or "なし"
+    mob_tags = "、".join(str(tag) for tag in details.get("mob_tags", [])[:6]) or "なし"
+    mob_role = str(details.get("mob_role", "")).strip() or "なし"
     user_prompt = (
         "参考傾向:\n"
         "- かわいい、親しみやすい、少し安心する\n"
+        "- Mobの見た目、動き、雰囲気に軽く触れてよい\n"
         "- 怖がりでも、昼の平和な空気では表情がやわらぐ\n"
         "- 言い回しは軽く、自然に\n\n"
         "/no_think\n"
         "本番:\n"
-        "昼に平和モブを見つけた。"
+        "敵ではないMobを見つけた。"
         f"モブは{details.get('mob', 'mob')}。\n"
         f"方向は{details.get('direction', '近く')}。\n"
         f"見えている数は{details.get('mob_count', 1)}体。\n"
+        f"距離は{details.get('distance', 'unknown')}マスくらい。\n"
+        f"場所は{details.get('biome', 'そのへん')}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"/mobs のヒント語は{mob_tags}。\n"
+        f"/mobs の役割ヒントは{mob_role}。\n"
         f"参考候補は{candidate_lines}。\n"
-        "かわいさや親しみを優先し、参考候補をそのままコピペせず、会話っぽく28〜40文字くらいで一言だけ返す。"
+        "かわいさや親しみを優先し、参考候補をそのままコピペせず、"
+        "見た目や動きの印象を少し混ぜてもよいので、会話っぽく20〜36文字くらいで一言だけ返す。"
     )
     return _dialog_messages(user_prompt)
 def _build_death_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -129,6 +145,33 @@ def _build_hostile_callout_messages(request: LeafGenerationRequest) -> list[dict
         f"状態は{details.get('mode', 'alert')}。\n"
         "かなり怖がりで、関西弁で、ちょっと狼狽えながら16〜22文字くらいで一言だけ返して。"
         "名前は基本的に元の名前を使う。少し崩すのはたまにだけ。例文の語句をそのまま使い回さない。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_occluded_hostile_presence_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    user_prompt = (
+        "参考傾向:\n"
+        "- 壁や床の向こうに敵対モブの気配を感じて、少し気になる\n"
+        "- 悲鳴ではなく、小さく気にする程度の反応\n"
+        "- 音だけなので、見えた・確定したとは言わない\n"
+        "- 避難指示や命令はしない\n"
+        "- 関西弁は自然に、会話っぽく\n\n"
+        "/no_think\n"
+        "本番:\n"
+        "壁や遮蔽物の向こうから、敵対モブの音がする。"
+        f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
+        "自然なら一度だけその呼び名を入れてよい。\n"
+        f"場所は{details.get('biome', 'そのへん')}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"方向は{details.get('direction', '近く')}。\n"
+        f"敵の呼び方は{details.get('hostile', '敵対モブ')}。\n"
+        f"近さの目安は{details.get('distance_band', 'unknown')}。\n"
+        "見えている敵の実況ではない。"
+        "『見えた』『来てる』『目の前』『逃げろ』のような言い方は禁止。"
+        "悲鳴や大げさな狼狽えは避けて、"
+        "ちょっと気になるな、くらいの自然な一言を18〜30文字くらいで返す。"
     )
     return _dialog_messages(user_prompt)
 def _build_darkness_escape_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -263,6 +306,30 @@ def _build_dark_push_after_breath_messages(request: LeafGenerationRequest) -> li
         "かなり怖がっている感じで、例文をそのまま使わず、『心臓に悪い』か『一難去ってまた一難』系の会話っぽい一言を20〜30文字くらいで返す。"
         "比喩や文学的な表現は使わず、口語の関西弁で短く言う。"
         "『だよ』『なんだよね』『みたいだ』『凍りつく』のような表現は使わない。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_emergency_shelter_relief_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    user_prompt = (
+        "参考傾向:\n"
+        "- 急ごしらえのシェルターに入って、少しだけ安心する\n"
+        "- 外はまだ危ないので、安心しきってはいない\n"
+        "- ほっとした一言を自然な関西弁で短く言う\n"
+        "- 大げさな勝利宣言や説明口調にはしない\n\n"
+        "/no_think\n"
+        "本番:\n"
+        "プレイヤーが狭い避難場所に入れた。"
+        f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
+        "自然なら一度だけその呼び名を入れてよい。\n"
+        f"場所は{details.get('biome', 'unknown')}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"天井の低さは{details.get('ceiling_height', 'unknown')}。\n"
+        f"囲まれ具合は{details.get('enclosure_score', 'unknown')}。\n"
+        "暗い場所に入って怖がる台詞ではなく、避難できてひとまず助かった感じを優先する。"
+        "例文をそのまま使わず、会話っぽく20〜32文字くらいで一言だけ返す。"
+        "『だよ』『みたいだ』『なんだが』のような標準語の説明口調は使わない。"
     )
     return _dialog_messages(user_prompt)
 

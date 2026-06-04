@@ -52,6 +52,7 @@ class DogidoStateMachine(
         weather_transition = self._weather_transition(event)
         entered_occluded_dark_zone = self._entered_occluded_dark_zone(event)
         entered_safe_zone_with_door = self._entered_safe_zone_with_door(event)
+        entered_emergency_shelter = self._entered_emergency_shelter(event)
         exited_safe_zone_with_door = self._exited_safe_zone_with_door(event)
         entered_submerged_dark_zone = self._entered_submerged_dark_zone(event)
         light_source_crafted = self._light_source_crafted(event)
@@ -61,17 +62,22 @@ class DogidoStateMachine(
         signals.newly_burning_visual = newly_burning_visual
         signals.entered_occluded_dark_zone = entered_occluded_dark_zone
         signals.entered_safe_zone_with_door = entered_safe_zone_with_door
+        signals.entered_emergency_shelter = entered_emergency_shelter
         signals.exited_safe_zone_with_door = exited_safe_zone_with_door
         signals.entered_submerged_dark_zone = entered_submerged_dark_zone
         signals.light_source_crafted = light_source_crafted
         signals.weather_transition_from = weather_transition[0] if weather_transition is not None else None
         signals.weather_transition_to = weather_transition[1] if weather_transition is not None else None
+        if weather_transition is not None:
+            self.state.pending_weather_transition_from = weather_transition[0]
+            self.state.pending_weather_transition_to = weather_transition[1]
         signals.cold_weather_biome = self._is_cold_weather_biome(event.world.biome)
         signals.dry_weather_biome = self._is_dry_weather_biome(event.world.biome)
         self.state.emergency_shelter_active = signals.emergency_shelter
         next_mode = self._resolve_mode(event, signals, now)
         self._apply_mode_transition(previous_mode, next_mode, now)
         actions = self._build_actions(event, previous_mode, next_mode, signals, now)
+        self._log_emitted_actions(event, previous_mode, next_mode, actions)
         self._update_silence_break_state(event, actions, now)
         for threat in event.visual_threats:
             self.state.seen_visual_keys[self._visual_identity_key(threat)] = now

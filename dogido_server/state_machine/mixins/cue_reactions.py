@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
 
 from dogido_server.models import EventName, GameEvent, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.types import AudioAction, DerivedSignals
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class CueReactionsMixin:
@@ -24,6 +27,12 @@ class CueReactionsMixin:
         if not self._can_emit_panic_cue(now):
             return None
         cue_id, cue_text = self._suppressed_cue(previous_mode)
+        self._log_panic_cue_decision(
+            cue_id,
+            "suppressed_panic_entry" if previous_mode != "suppressed_panic" else "suppressed_panic_breath_loop",
+            event,
+            interrupt=False,
+        )
         return self._build_cue_action(cue_id, cue_text, now, interrupt=False)
 
     def _alert_entry_cue(
@@ -44,15 +53,42 @@ class CueReactionsMixin:
     ) -> AudioAction | None:
         if self._should_suppress_panic_cues(event) or not self._can_emit_panic_cue(now):
             return None
-        if self._consume_ushiro_ambush_target(event, now) is not None:
+        ushiro_target = self._consume_ushiro_ambush_target(event, now)
+        if ushiro_target is not None:
+            self._log_panic_cue_decision("ushiro_scream", "ushiro_ambush", event, threat=ushiro_target)
             return self._build_cue_action("ushiro_scream", "ぎゃー！", now, protect_ms=2000)
-        if self._consume_dark_push_forward_ambush_target(event, now) is not None:
+        front_spawn_target = self._consume_dark_push_forward_ambush_target(event, now)
+        if front_spawn_target is not None:
+            self._log_panic_cue_decision(
+                "front_spawn_scream",
+                "dark_push_forward_ambush",
+                event,
+                threat=front_spawn_target,
+            )
             return self._build_cue_action("front_spawn_scream", "ぎゃー！", now, protect_ms=1600)
-        if self._consume_new_close_visual_ambush_target(event, now) is not None:
+        new_close_target = self._consume_new_close_visual_ambush_target(event, now)
+        if new_close_target is not None:
+            self._log_panic_cue_decision(
+                "panic_scream_start",
+                "new_close_visual_ambush",
+                event,
+                threat=new_close_target,
+            )
             return self._build_cue_action("panic_scream_start", "きゃー！", now)
-        if self._should_emit_scream_only(event, signals):
+        scream_only_reason = self._scream_only_reason(event, signals)
+        if scream_only_reason is not None:
+            self._log_panic_cue_decision("panic_scream_start", scream_only_reason, event)
             return self._build_cue_action("panic_scream_start", "きゃー！", now)
+        if has_callout and self._is_occluded_hostile_presence_context(event, event.auditory_threats):
+            return None
         if has_callout:
+            self._log_panic_cue_decision(
+                "spot_hostile_gasp",
+                "hostile_spotted_gasp",
+                event,
+                threat=self._highest_priority_visual(event.visual_threats),
+                interrupt=False,
+            )
             return self._build_cue_action("spot_hostile_gasp", "ハッ", now, interrupt=False)
         return None
 
@@ -70,13 +106,49 @@ class CueReactionsMixin:
         return AudioAction(layer="panic_cue", interrupt=interrupt, text=text, cue_id=cue_id, protect_ms=protect_ms)
 
     def _should_emit_scream_only(self, event: GameEvent, signals: DerivedSignals) -> bool:
-        return (
-            self._is_close_audio_ambush(event)
-            or self._is_skeleton_damage_ambush(event, signals)
-        )
+        return self._scream_only_reason(event, signals) is not None
+
+    def _scream_only_reason(self, event: GameEvent, signals: DerivedSignals) -> str | None:
+        reasons: list[str] = []
+        if self._is_skeleton_damage_ambush(event, signals):
+            reasons.append("skeleton_damage_ambush")
+        if not reasons:
+            return None
+        return "+".join(reasons)
 
     def _should_suppress_panic_cues(self, event: GameEvent) -> bool:
         return self._normalized_biome(event.world.biome) == "deep_dark"
+
+    def _log_panic_cue_decision(
+        self,
+        cue_id: str,
+        reason: str,
+        event: GameEvent,
+        *,
+        threat: VisualThreat | None = None,
+        interrupt: bool = True,
+    ) -> None:
+        horizontal = None
+        vertical = None
+        if threat is not None and threat.direction is not None:
+            horizontal = getattr(threat.direction.horizontal, "value", threat.direction.horizontal)
+            vertical = getattr(threat.direction.vertical, "value", threat.direction.vertical)
+        LOGGER.warning(
+            "panic_cue_decision cue_id=%s reason=%s event=%s sequence=%s threat=%s entity_id=%s distance=%s horizontal=%s vertical=%s approaching=%s interrupt=%s visual_count=%s audio_count=%s",
+            cue_id,
+            reason,
+            getattr(event.event.name, "value", event.event.name),
+            event.sequence,
+            threat.type if threat is not None else None,
+            threat.entity_id if threat is not None else None,
+            threat.distance if threat is not None else None,
+            horizontal,
+            vertical,
+            threat.approaching if threat is not None else None,
+            interrupt,
+            len(event.visual_threats),
+            len(event.auditory_threats),
+        )
 
     def _panic_callout(self, event: GameEvent, signals: DerivedSignals) -> str | None:
         return self._threat_callout(

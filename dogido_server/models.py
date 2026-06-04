@@ -206,12 +206,15 @@ class WorldState(DogidoModel):
     respawn_point_set: bool | None = None  # リスポーン地点が設定済みか
     respawn_distance: float | None = None  # リスポーン地点までの距離
     cardinal_wall_count: int | None = None  # 東西南北4方向の壁の数（0〜4, 屋内度の補助）
+    double_height_open_side_count: int | None = None  # 足元+頭上の2マスが連続で開いている横開口数
     safe_zone_with_door: bool | None = None  # ドア付きの安全区画にいるか
     # ---- 暗所危険度スコア群（仕様 §6 / §10）----
     enclosure_score: float | None = None  # 屋内・地下っぽさの補助指標（0.0〜1.0）
     connected_dark_volume: int | None = None  # 周辺とつながっている暗い空間の広さ（ブロック数）
     nearest_dark_spawn_distance: float | None = None  # 最近の暗所湧きポイントまでの距離
     danger_darkness_score: float | None = None  # 総合暗所危険度（0.0〜1.0, 最優先で参照）
+    nearby_light_source_count: int | None = None  # 周辺の実光源ブロック数
+    nearest_light_source_distance: float | None = None  # 最近傍の実光源までの距離
     nearby_firefly_bush_count: int | None = None  # 周辺のホタルブッシュ数（雰囲気演出用）
 
 

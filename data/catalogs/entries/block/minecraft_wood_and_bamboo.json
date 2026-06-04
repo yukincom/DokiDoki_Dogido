@@ -8,7 +8,7 @@
     "english": "Wood and Bamboo",
     "groups": {
       "oak": {
-        "label": "オーク",
+        "label": {"japanese":"オーク","note":"いわゆるどんぐりの木。世界中に様々なオークの木があるが。この世界のオークからはどんぐりは取れないようだ。"},
         "items": {
           "oak_wood": "オークの木",
           "oak_log": "オークの原木",
@@ -26,7 +26,7 @@
         }
       },
       "spruce": {
-        "label": "トウヒ",
+        "label": {"japanese":"トウヒ","note":"松の仲間の針葉樹。やや寒冷な地に生える。"},
         "items": {
           "spruce_wood": "トウヒの木",
           "spruce_log": "トウヒの原木",
@@ -44,7 +44,7 @@
         }
       },
       "birch": {
-        "label": "シラカバ",
+        "label": {"japanese":"シラカバ","note":"白い樹皮に黒い目のような節目がある。香りが良い。"},
         "items": {
           "birch_wood": "シラカバの木",
           "birch_log": "シラカバの原木",
@@ -62,7 +62,7 @@
         }
       },
       "jungle": {
-        "label": "ジャングル",
+        "label": {"japanese":"ジャングル","note":"樹種は不明。原木にカカオ豆を植えるとカカオの実が収穫できる。この世界のカカオは寄生植物らしい。"},
         "items": {
           "jungle_wood": "ジャングルの木",
           "jungle_log": "ジャングルの原木",
@@ -80,7 +80,7 @@
         }
       },
       "acacia": {
-        "label": "アカシア",
+        "label": {"japanese":"アカシア","note":"やや斜めに映える性質を持つ木。黒い樹皮がおしゃれ。"},
         "items": {
           "acacia_wood": "アカシアの木",
           "acacia_log": "アカシアの原木",
@@ -98,7 +98,7 @@
         }
       },
       "dark_oak": {
-        "label": "ダークオーク",
+        "label":{"japanese": "ダークオーク","note":"黒い森にのみ自生する特殊な木。黒い幹、濃い茶色の木目を持つ"},
         "items": {
           "dark_oak_wood": "ダークオークの木",
           "dark_oak_log": "ダークオークの原木",
@@ -116,7 +116,7 @@
         }
       },
       "mangrove": {
-        "label": "マングローブ",
+        "label": {"japanese":"マングローブ","note":"水流に強い木。水の中にも植えることができる。"},
         "items": {
           "mangrove_wood": "マングローブの木",
           "mangrove_log": "マングローブの原木",
@@ -134,7 +134,7 @@
         }
       },
       "cherry": {
-        "label": "サクラ",
+        "label": {"japanese":"サクラ","note":"木部がピンク色で美しい。良い香りがする"},
         "items": {
           "cherry_wood": "サクラの木",
           "cherry_log": "サクラの原木",
@@ -152,7 +152,7 @@
         }
       },
       "pale_oak": {
-        "label": "ペールオーク",
+        "label": {"japanese":"ペールオーク","note":"涼しげな色合いの木材。森は不気味だが、木部は真珠のように白く、とても美しい。"},
         "items": {
           "pale_oak_wood": "ペールオークの木",
           "pale_oak_log": "ペールオークの原木",
@@ -170,7 +170,7 @@
         }
       },
       "bamboo": {
-        "label": "竹",
+        "label": {"japanese":"竹","note":"細長くしなやかな材。堆肥にはならない。"},
         "items": {
           "block_of_bamboo": "竹ブロック",
           "block_of_stripped_bamboo": "表皮を剥いだ竹ブロック",
@@ -189,61 +189,68 @@
         }
       },
       "crimson": {
-        "label": "真紅",
+        "label": {"japanese":  "真紅","note": "巨大キノコの一部。ネザーで産出。毒々しい赤い色"},
         "items": {
-          "crimson_stem": {"japanese": "真紅の幹", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_hyphae": {"japanese": "真紅の菌糸", "note": "巨大キノコの一部。ネザー。"},
-          "stripped_crimson_stem": {"japanese": "表皮を剥いだ真紅の幹", "note": "巨大キノコの一部。ネザー。"},
-          "stripped_crimson_hyphae": {"japanese": "表皮を剥いだ真紅の菌糸", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_planks": {"japanese": "真紅の板材", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_stairs": {"japanese": "真紅の階段", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_slab": {"japanese": "真紅のハーフブロック", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_fence": {"japanese": "真紅のフェンス", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_fence_gate": {"japanese": "真紅のフェンスゲート", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_door": {"japanese": "真紅のドア", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_trapdoor": {"japanese": "真紅のトラップドア", "note": "巨大キノコの一部。ネザー。"},
-          "crimson_pressure_plate": {"japanese": "真紅の感圧板", "note": "巨大キノコの一部。ネザー。アイテムでも「入」状態になる。"},
-          "crimson_button": {"japanese": "真紅のボタン", "note": "巨大キノコの一部。ネザー。矢でも起動。"}
+          "crimson_stem": {"japanese": "真紅の幹", "note":  "縞瑪瑙のような赤い模様が入った断面をしている。"},
+          "crimson_hyphae": {"japanese": "真紅の菌糸", "note": "赤い色の筋が怪しく煌めいている"},
+          "stripped_crimson_stem": {"japanese": "表皮を剥いだ真紅の幹", "note": "赤い色の筋が怪しく煌めいている。"},
+          "stripped_crimson_hyphae": {"japanese": "表皮を剥いだ真紅の菌糸", "note": "薄紅色の肉が露出している"},
+          "crimson_planks": "真紅の板材",
+          "crimson_stairs": "真紅の階段",
+          "crimson_slab": "真紅のハーフブロック",
+          "crimson_fence":  "真紅のフェンス", 
+          "crimson_fence_gate":  "真紅のフェンスゲート",
+          "crimson_door": "真紅のドア", 
+          "crimson_trapdoor":"真紅のトラップドア", 
+          "crimson_pressure_plate": {"japanese": "真紅の感圧板", "note": "アイテムでも「入」状態になる。"},
+          "crimson_button": {"japanese": "真紅のボタン", "note": "矢でも起動。"}
         }
       },
       "warped": {
-        "label": "歪んだ",
+        "label":{"japanese": "歪んだ", "note": "巨大キノコの一部。ネザーで産出。色はピーコックグリーン。"},
         "items": {
-          "warped_stem": {"japanese": "歪んだ幹", "note": "巨大キノコの一部。ネザー。"},
-          "warped_hyphae": {"japanese": "歪んだ菌糸", "note": "巨大キノコの一部。ネザー。"},
-          "stripped_warped_stem": {"japanese": "表皮を剥いだ歪んだ幹", "note": "巨大キノコの一部。ネザー。"},
-          "stripped_warped_hyphae": {"japanese": "表皮を剥いだ歪んだ菌糸", "note": "巨大キノコの一部。ネザー。"},
-          "warped_planks": {"japanese": "歪んだ板材", "note": "巨大キノコの一部。ネザー。"},
-          "warped_stairs": {"japanese": "歪んだ階段", "note": "巨大キノコの一部。ネザー。"},
-          "warped_slab": {"japanese": "歪んだハーフブロック", "note": "巨大キノコの一部。ネザー。"},
-          "warped_fence": {"japanese": "歪んだフェンス", "note": "巨大キノコの一部。ネザー。"},
-          "warped_fence_gate": {"japanese": "歪んだフェンスゲート", "note": "巨大キノコの一部。ネザー。"},
-          "warped_door": {"japanese": "歪んだドア", "note": "巨大キノコの一部。ネザー。"},
-          "warped_trapdoor": {"japanese": "歪んだトラップドア", "note": "巨大キノコの一部。ネザー。"},
-          "warped_pressure_plate": {"japanese": "歪んだ感圧板", "note": "巨大キノコの一部。ネザー。アイテムでも「入」状態になる。"},
-          "warped_button": {"japanese": "歪んだボタン", "note": "巨大キノコの一部。ネザー。矢でも起動。"}
+          "warped_stem": {"japanese": "歪んだ幹","note":"孔雀石のような縞模様の断面が見える"},
+          "warped_hyphae": {"japanese": "歪んだ菌糸","note": "緑色の筋が怪しく煌めいている。"},
+          "stripped_warped_stem": {"japanese": "表皮を剥いだ歪んだ幹", "note": "孔雀色の肉が露出している"},
+          "stripped_warped_hyphae": {"japanese": "表皮を剥いだ歪んだ菌糸", "note": "孔雀色の肉が露出している"},
+          "warped_planks": "歪んだ板材",
+          "warped_stairs":  "歪んだ階段", 
+          "warped_slab": "歪んだハーフブロック",
+          "warped_fence": "歪んだフェンス", 
+          "warped_fence_gate": "歪んだフェンスゲート", 
+          "warped_door": "歪んだドア", 
+          "warped_trapdoor":"歪んだトラップドア", 
+          "warped_pressure_plate": {"japanese": "歪んだ感圧板", "note": "アイテムでも「入」状態になる。"},
+          "warped_button": {"japanese": "歪んだボタン", "note": "矢でも起動。"}
         }
       },
-      "special_wood": {
-        "label": "特殊木材",
-        "items": {
-          "petrified_oak_slab": "石化したオークのハーフブロック"
-        }
-      }
-    },
-    "notes": [
-      "一般建築ブロックから独立させた木材・竹材カテゴリ。",
-      "通常木材は 木→原木→板材→樹皮を剥いだ木→樹皮を剥いだ原木→階段→ハーフブロック→フェンス→フェンスゲート→ドア→トラップドア→感圧板→ボタン の順。",
-      "竹は 竹ブロック→表皮を剥いだ竹ブロック→竹の板材→竹細工→竹の階段→竹細工の階段→竹のハーフブロック→竹細工のハーフブロック→フェンス→フェンスゲート→ドア→トラップドア→感圧板→ボタン の順。",
-      "真紅・歪んだ系は 幹→菌糸→表皮を剥いだ幹→表皮を剥いだ菌糸→板材→階段→ハーフブロック→フェンス→フェンスゲート→ドア→トラップドア→感圧板→ボタン の順。"
-    ]
-  },
-  "meta": {
-    "source_file": "general_building_blocks_no_metal.json",
-    "split_from": "building_blocks.groups.wood_and_bamboo",
-    "added_material_derivatives": [
-      "pressure_plate",
-      "button"
-    ]
+      "purpur": {
+            "label": {"japanese": "プルプァ","note":"コーラスフルーツから作られる薄紫色の建材"},
+            "items": {
+              "purpur_block": "プルプァブロック",
+              "purpur_stairs": "プルプァの階段",
+              "purpur_slab": "プルプァのハーフブロック",
+              "purpur_pillar": "プルプァの柱"
+            }
+          },
+      "resin": {
+            "label": {"japanese": "樹脂","note":"クリーキングが落とした樹脂の塊から作られた材。鮮やかなオレンジ色。"},
+            "items": {          
+              "block_of_resin": {"japanese":"樹脂ブロック","note":"樹脂の塊を練り固めたもの。表面がぼこぼこしている。"},
+              "resin_bricks": "樹脂レンガ","ntoe":"樹脂の塊を温めて整形したもの。艶やかで艶やかなオレンジ色。防具の装飾に使える"},
+              "resin_brick_stairs": "樹脂レンガの階段",
+              "resin_brick_slab": "樹脂レンガのハーフブロック",
+              "resin_brick_wall": "樹脂レンガの塀",
+              "chiseled_resin_bricks": {
+                "japanese": "模様入りの樹脂レンガ",
+                "note": "クリーキングのような模様が描かれている。"
+              }   
+            }
+          },
+      "petrified_oak_slab": {
+  "japanese": "石化したオークのハーフブロック",
+  "note": "木材でありながら石のような性質を持つ特殊なブロック。開発中のテストアイテムが残ったものだろうか。"
+}
+    }
   }
-        }}}
+        }}

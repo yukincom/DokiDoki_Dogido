@@ -52,6 +52,13 @@ class CommonMixin:
             return None
         return previous, current
 
+    def _has_pending_weather_transition(self) -> bool:
+        return (
+            self.state.pending_weather_transition_from is not None
+            and self.state.pending_weather_transition_to is not None
+            and self.state.pending_weather_transition_from != self.state.pending_weather_transition_to
+        )
+
     def _is_cold_weather_biome(self, biome: str | None) -> bool:
         return self._normalized_biome(biome) in COLD_WEATHER_BIOMES
 
@@ -92,10 +99,13 @@ class CommonMixin:
         return line
 
     def _is_overworld_dimension(self, event: GameEvent) -> bool:
-        dimension = (event.player.dimension or "").strip().lower()
+        dimension = self._normalized_dimension(event)
         if not dimension:
             return True
         return dimension in {"overworld", "minecraft:overworld"}
+
+    def _normalized_dimension(self, event: GameEvent) -> str:
+        return (event.player.dimension or "").strip().lower()
 
     def _is_cave_biome(self, biome: str | None) -> bool:
         normalized = self._normalized_biome(biome)

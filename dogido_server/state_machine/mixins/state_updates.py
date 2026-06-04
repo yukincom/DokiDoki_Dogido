@@ -11,6 +11,7 @@ from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSign
 class StateUpdatesMixin:
     def _update_memory(self, event: GameEvent, now: datetime) -> None:
         self._prune_comment_memory(now)
+        self._handle_dimension_change(event)
         self._update_special_biome_context(event)
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
         if self.state.last_non_silent_at is None:
@@ -30,8 +31,11 @@ class StateUpdatesMixin:
             self.state.night_warning_pending = True
         if self._is_emergency_shelter_morning(event):
             self.state.emergency_shelter_reset_ready = True
+        if time_phase in {"evening", "night"} and self._is_emergency_shelter_event(event):
+            self.state.emergency_shelter_seen_this_cycle = True
         if time_phase == "night" and self.state.emergency_shelter_reset_ready:
             self.state.emergency_shelter_advised_this_cycle = False
+            self.state.emergency_shelter_seen_this_cycle = False
             self.state.emergency_shelter_morning_announced = False
             self.state.emergency_shelter_reset_ready = False
         self.state.prior_recent_visual_ms = self._recent_ms(now, self.state.last_visual_threat_at)
@@ -95,10 +99,46 @@ class StateUpdatesMixin:
         }
         self.state.last_occluded_dark_zone = self._is_occluded_dark_zone_event(event)
         self.state.last_safe_zone_with_door = self._is_safe_zone_with_door_event(event)
+        self.state.last_emergency_shelter = self._is_emergency_shelter_event(event)
         self.state.last_submerged_dark_zone = self._is_submerged_dark_zone_event(event)
         self.state.last_light_source_count = self._light_source_count(event.inventory)
         self.state.last_weather = self._weather_value(event.world.weather)
         self.state.inventory_initialized = True
+
+    def _handle_dimension_change(self, event: GameEvent) -> None:
+        current_dimension = self._normalized_dimension(event) or None
+        if current_dimension == self.state.current_dimension:
+            return
+        self.state.current_dimension = current_dimension
+        if current_dimension is None:
+            return
+        self.state.last_visual_threat_at = None
+        self.state.last_audio_threat_at = None
+        self.state.last_confirmed_hostiles = []
+        self.state.last_known_hostile_directions = []
+        self.state.commented_visual_keys.clear()
+        self.state.commented_auditory_keys.clear()
+        self.state.auditory_presence_states.clear()
+        self.state.announced_hostile_counts.clear()
+        self.state.burning_visual_keys.clear()
+        self.state.daylight_water_comment_keys.clear()
+        self.state.screamed_visual_keys.clear()
+        self.state.seen_visual_keys.clear()
+        self.state.stalled_visual_signature = ""
+        self.state.stalled_visual_started_at = None
+        self.state.pending_dark_push_after_breath_until = None
+        self.state.dark_push_active = False
+        self.state.dark_push_stage = 0
+        self.state.dark_push_breath_ready_at = None
+        self.state.last_dark_push_breath_at = None
+        self.state.dark_push_entry_x = None
+        self.state.dark_push_entry_z = None
+        self.state.pending_weather_transition_from = None
+        self.state.pending_weather_transition_to = None
+        self.state.night_warning_pending = False
+        if not self._is_overworld_dimension(event):
+            self.state.night_warning_emitted_this_cycle = False
+            self.state.firefly_reacted_this_night = False
 
     def _derive_signals(self, event: GameEvent, now: datetime) -> DerivedSignals:
         visual_distances = [threat.distance for threat in event.visual_threats if threat.distance is not None]

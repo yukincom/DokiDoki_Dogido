@@ -42,6 +42,7 @@ class RuntimeState:
     last_foliage_darkness_advice_at: datetime | None = None
     last_submerged_darkness_advice_at: datetime | None = None
     panic_scream_cooldown_until: datetime | None = None
+    last_occluded_hostile_presence_comment_at: datetime | None = None
     last_confirmed_hostiles: list[str] = field(default_factory=list)
     last_known_hostile_directions: list[str] = field(default_factory=list)
     prior_recent_visual_ms: int | None = None
@@ -85,18 +86,23 @@ class RuntimeState:
     dark_push_active: bool = False
     pending_safe_aftermath: bool = False
     last_safe_zone_with_door: bool | None = None
+    last_emergency_shelter: bool | None = None
     last_submerged_dark_zone: bool | None = None
     last_foliage_shade_context: bool | None = None
     last_weather: str | None = None
     firefly_reacted_this_night: bool = False
     night_warning_pending: bool = False
     night_warning_emitted_this_cycle: bool = False
+    pending_weather_transition_from: str | None = None
+    pending_weather_transition_to: str | None = None
     last_sleep_prompt_at: datetime | None = None
     last_sleeping_neighbor_comment_at: datetime | None = None
     emergency_shelter_active: bool = False
     emergency_shelter_advised_this_cycle: bool = False
+    emergency_shelter_seen_this_cycle: bool = False
     emergency_shelter_reset_ready: bool = False
     emergency_shelter_morning_announced: bool = False
+    current_dimension: str | None = None
     current_biome: str | None = None
     pending_special_biome_line: str | None = None
 
@@ -130,6 +136,7 @@ class DerivedSignals:
     light_source_crafted: bool = False
     submerged: bool = False
     emergency_shelter: bool = False
+    entered_emergency_shelter: bool = False
     safe_zone_with_door: bool = False
     entered_safe_zone_with_door: bool = False
     exited_safe_zone_with_door: bool = False

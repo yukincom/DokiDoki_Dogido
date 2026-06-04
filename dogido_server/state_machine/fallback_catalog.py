@@ -60,6 +60,7 @@ def fallback_prewarm_texts(call_name: str | None) -> list[str]:
         fallback_text("general", "darkness", "dark_push_after_breath_default", prefix=prefix),
         fallback_text("general", "darkness", "dark_push_after_breath_evening", prefix=prefix),
         fallback_text("general", "darkness", "dark_push_after_breath_night", prefix=prefix),
+        fallback_text("general", "darkness", "emergency_shelter_relief", prefix=prefix),
         fallback_text("general", "darkness", "light_crafted", prefix=prefix),
         fallback_text("general", "combat", "daylight_water_skeleton"),
         fallback_text("general", "combat", "newly_burning_visual"),

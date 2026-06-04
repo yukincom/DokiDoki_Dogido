@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 
+from dogido_server.llm.sanitize import summarize_for_log
 from dogido_server.models import AuditoryThreat, GameEvent, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.fallback_catalog import fallback_text
 from dogido_server.state_machine.response_catalog import response_text
 from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class AuditoryMixin:
@@ -181,8 +185,8 @@ class AuditoryMixin:
         event: GameEvent,
         signals: DerivedSignals,
     ) -> str | None:
-        weather_from = signals.weather_transition_from
-        weather_to = signals.weather_transition_to
+        weather_from = self.state.pending_weather_transition_from
+        weather_to = self.state.pending_weather_transition_to
         if weather_from is None or weather_to is None or weather_from == weather_to:
             return None
 
@@ -193,8 +197,10 @@ class AuditoryMixin:
             signals.dry_weather_biome,
         )
         if scene is None or fallback is None:
+            self.state.pending_weather_transition_from = None
+            self.state.pending_weather_transition_to = None
             return None
-        return self._generate_leaf_text(
+        line = self._generate_leaf_text(
             kind="weather_transition",
             fallback_text=fallback,
             details={
@@ -209,6 +215,9 @@ class AuditoryMixin:
             },
             temperature=0.66,
         )
+        self.state.pending_weather_transition_from = None
+        self.state.pending_weather_transition_to = None
+        return line
 
     def _weather_transition_scene(
         self,
@@ -333,19 +342,30 @@ class AuditoryMixin:
         direction = self._direction_label(target)
         count = presence.count
         distance_rank = self._distance_band_rank(target.distance_band)
-        self.state.commented_auditory_keys[key] = (now, distance_rank)
+
+        if self._is_occluded_hostile_presence_context(event, threats):
+            return self._emit_occluded_hostile_presence_comment(
+                event,
+                target,
+                key=key,
+                distance_rank=distance_rank,
+                now=now,
+            )
 
         if count == 1:
+            self.state.commented_auditory_keys[key] = (now, distance_rank)
             if label:
                 return response_text("combat", "auditory_presence", "single_named", direction=direction, label=label)
             return response_text("combat", "auditory_presence", "single_unknown", direction=direction)
 
         if count == 4:
+            self.state.commented_auditory_keys[key] = (now, distance_rank)
             if label:
                 return response_text("combat", "auditory_presence", "persistent_named", label=label)
             return response_text("combat", "auditory_presence", "persistent_unknown")
 
         if count == 10:
+            self.state.commented_auditory_keys[key] = (now, distance_rank)
             moved = self._player_distance_from_auditory_origin(event, presence)
             if moved <= self.settings.auditory_ignore_distance:
                 if label:
@@ -356,6 +376,53 @@ class AuditoryMixin:
             return response_text("combat", "auditory_presence", "chasing_unknown")
 
         return None
+
+    def _is_occluded_hostile_presence_context(
+        self,
+        event: GameEvent,
+        threats: list[AuditoryThreat],
+    ) -> bool:
+        return not event.visual_threats and bool(threats) and self._is_occluded_environment(event)
+
+    def _emit_occluded_hostile_presence_comment(
+        self,
+        event: GameEvent,
+        threat: AuditoryThreat,
+        *,
+        key: str,
+        distance_rank: int,
+        now: datetime,
+    ) -> str | None:
+        recent_ms = self._recent_ms(now, self.state.last_occluded_hostile_presence_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.occluded_hostile_presence_comment_cooldown_ms:
+            return None
+        line = self._generate_leaf_text(
+            kind="occluded_hostile_presence",
+            fallback_text=fallback_text("general", "combat", "occluded_hostile_presence"),
+            details={
+                "player_name": self._player_call_name(event),
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "direction": self._direction_label(threat),
+                "hostile": self._auditory_hostile_label(threat) or "敵対モブ",
+                "distance_band": getattr(threat.distance_band, "value", threat.distance_band) or "unknown",
+                "certainty": getattr(threat.certainty, "value", threat.certainty) or "unknown",
+            },
+            temperature=0.42,
+            route="chat",
+        )
+        self.state.last_occluded_hostile_presence_comment_at = now
+        self.state.commented_auditory_keys[key] = (now, distance_rank)
+        LOGGER.info(
+            "auditory_presence_decision reason=occluded_hostile_presence event=%s sequence=%s direction=%s hostile=%s distance_band=%s text=%s",
+            getattr(event.event.name, "value", event.event.name),
+            event.sequence,
+            self._direction_label(threat),
+            self._auditory_hostile_label(threat) or "敵対モブ",
+            getattr(threat.distance_band, "value", threat.distance_band),
+            summarize_for_log(line),
+        )
+        return line
 
     def _next_auditory_comment_target(self, threats: list[AuditoryThreat], now: datetime) -> AuditoryThreat | None:
         ordered = sorted(threats, key=lambda threat: self._distance_band_rank(threat.distance_band))

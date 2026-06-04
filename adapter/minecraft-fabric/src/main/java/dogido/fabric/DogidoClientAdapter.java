@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -24,6 +25,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -53,6 +55,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final String GAME = "minecraft-java";
     private static final String ADAPTER = "dogido-fabric-client";
     private static final int SOUND_OBSERVATION_TTL_TICKS = 12;
+    private static final int LIT_INTERIOR_SAFE_LIGHT_THRESHOLD = 9;
+    private static final int LIT_INTERIOR_SAFE_MAX_CONNECTED_VOLUME = 24;
+    private static final double LIT_INTERIOR_SAFE_MIN_SPAWN_DISTANCE = 4.0;
+    private static final double LIT_INTERIOR_SAFE_MAX_CEILING_HEIGHT = 5.0;
+    private static final int OCCLUDED_AUDIO_HORIZONTAL_BLOCKS = 8;
+    private static final int OCCLUDED_AUDIO_VERTICAL_BLOCKS = 5;
+    private static final double AMBIENT_MOB_DISTANCE = 12.0;
+    private static final Set<String> AMBIENT_NEUTRAL_MONSTER_IDS = Set.of(
+        "enderman",
+        "piglin",
+        "zombified_piglin"
+    );
     private static DogidoClientAdapter INSTANCE;
 
     private DogidoConfig config;
@@ -67,6 +81,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private long lastSnapshotTick = -1;
     private long lastThreatTick = -1;
     private long lastAudioEventTick = -1;
+    private long lastAmbientMobEventTick = -1;
     private long lastAudioDispatchObservationTick = -1;
     private long lastDamageTick = -1000;
     private long lastVisualThreatObservedTick = -1000;
@@ -75,12 +90,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private float lastHealth = 20.0f;
     private String lastThreatSignature = "";
     private String lastAudioSignature = "";
+    private String lastAmbientMobSignature = "";
     private boolean combatActive = false;
     private boolean wasDead = false;
     private boolean wasSleeping = false;
     private boolean respawnPointObserved = false;
     private BlockPos observedRespawnPos = null;
     private String observedRespawnDimension = null;
+    private String lastDimensionId = null;
     private String pendingUserText = null;
 
     @Override
@@ -121,6 +138,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.resetTransientState();
             return;
         }
+        String currentDimensionId = world.getRegistryKey().getValue().toString();
+        if (this.lastDimensionId != null && !this.lastDimensionId.equals(currentDimensionId)) {
+            resetThreatStateForDimensionChange();
+        }
+        this.lastDimensionId = currentDimensionId;
 
         this.tickCounter += 1;
         this.eventClient.ensureSession(resolvePlayerName(player));
@@ -143,36 +165,44 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<ThreatObservation> visibleThreats = filterVisibleThreats(threats);
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
+        List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
 
         if (shouldSendSnapshot()) {
-            JsonObject snapshot = buildStatusSnapshot(player, world, visibleThreats, audioThreats);
+            JsonObject snapshot = buildStatusSnapshot(player, world, visibleThreats, audioThreats, ambientMobs);
             this.eventClient.postEvent(snapshot);
             this.lastSnapshotTick = this.tickCounter;
         }
 
         if (shouldSendThreatEvent(visibleThreats)) {
-            JsonObject threatEvent = buildThreatApproaching(player, world, visibleThreats, audioThreats);
+            JsonObject threatEvent = buildThreatApproaching(player, world, visibleThreats, audioThreats, ambientMobs);
             this.eventClient.postEvent(threatEvent);
             this.lastThreatTick = this.tickCounter;
             this.lastThreatSignature = threatSignature(visibleThreats);
         }
 
         if (shouldSendAudioThreatEvent(unseenAudioThreats)) {
-            JsonObject audioEvent = buildHostileAudioDetected(player, world, unseenAudioThreats);
+            JsonObject audioEvent = buildHostileAudioDetected(player, world, unseenAudioThreats, ambientMobs);
             this.eventClient.postEvent(audioEvent);
             this.lastAudioEventTick = this.tickCounter;
             this.lastAudioDispatchObservationTick = latestAudioObservationTick(unseenAudioThreats);
             this.lastAudioSignature = audioThreatSignature(unseenAudioThreats);
         }
 
+        if (shouldSendAmbientMobEvent(ambientMobs, visibleThreats, unseenAudioThreats, deadNow)) {
+            JsonObject ambientEvent = buildAmbientMobDetected(player, world, ambientMobs);
+            this.eventClient.postEvent(ambientEvent);
+            this.lastAmbientMobEventTick = this.tickCounter;
+            this.lastAmbientMobSignature = ambientMobSignature(ambientMobs);
+        }
+
         if (deadNow && !this.wasDead) {
-            JsonObject deathEvent = buildPlayerDied(player, world, visibleThreats, audioThreats);
+            JsonObject deathEvent = buildPlayerDied(player, world, visibleThreats, audioThreats, ambientMobs);
             this.eventClient.postEvent(deathEvent);
             this.combatActive = false;
         } else if (shouldSendCombatEnded(visibleThreats, audioThreats, deadNow)) {
-            JsonObject combatEndedEvent = buildCombatEnded(player, world);
+            JsonObject combatEndedEvent = buildCombatEnded(player, world, ambientMobs);
             this.eventClient.postEvent(combatEndedEvent);
             this.combatActive = false;
         }
@@ -186,6 +216,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastSnapshotTick = -1;
         this.lastThreatTick = -1;
         this.lastAudioEventTick = -1;
+        this.lastAmbientMobEventTick = -1;
         this.lastAudioDispatchObservationTick = -1;
         this.lastDamageTick = -1000;
         this.lastVisualThreatObservedTick = -1000;
@@ -194,13 +225,35 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastHealth = 20.0f;
         this.lastThreatSignature = "";
         this.lastAudioSignature = "";
+        this.lastAmbientMobSignature = "";
         this.combatActive = false;
         this.wasDead = false;
         this.wasSleeping = false;
         this.respawnPointObserved = false;
         this.observedRespawnPos = null;
         this.observedRespawnDimension = null;
+        this.lastDimensionId = null;
         this.pendingUserText = null;
+        this.lastThreatDistances.clear();
+        this.lastThreatSeenTicks.clear();
+        this.lineOfSightStartedTicks.clear();
+        this.confirmedVisibleTicks.clear();
+        this.recentSoundObservations.clear();
+    }
+
+    private void resetThreatStateForDimensionChange() {
+        this.lastThreatTick = -1;
+        this.lastAudioEventTick = -1;
+        this.lastAmbientMobEventTick = -1;
+        this.lastAudioDispatchObservationTick = -1;
+        this.lastDamageTick = -1000;
+        this.lastVisualThreatObservedTick = -1000;
+        this.lastAudioThreatObservedTick = -1000;
+        this.lastCombatSignalTick = -1000;
+        this.lastThreatSignature = "";
+        this.lastAudioSignature = "";
+        this.lastAmbientMobSignature = "";
+        this.combatActive = false;
         this.lastThreatDistances.clear();
         this.lastThreatSeenTicks.clear();
         this.lineOfSightStartedTicks.clear();
@@ -250,6 +303,31 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         String signature = audioThreatSignature(audioThreats);
         return !signature.equals(this.lastAudioSignature);
+    }
+
+    private boolean shouldSendAmbientMobEvent(
+        List<AmbientMobObservation> ambientMobs,
+        List<ThreatObservation> visibleThreats,
+        List<AudioThreatObservation> unseenAudioThreats,
+        boolean deadNow
+    ) {
+        if (ambientMobs.isEmpty() || deadNow) {
+            return false;
+        }
+        if (!visibleThreats.isEmpty() || !unseenAudioThreats.isEmpty()) {
+            return false;
+        }
+        if (this.combatActive || this.tickCounter - this.lastDamageTick <= this.config.combatEndedQuietTicks) {
+            return false;
+        }
+        if (
+            this.lastAmbientMobEventTick >= 0
+            && this.tickCounter - this.lastAmbientMobEventTick < this.config.ambientMobIntervalTicks
+        ) {
+            return false;
+        }
+        String signature = ambientMobSignature(ambientMobs);
+        return !signature.equals(this.lastAmbientMobSignature);
     }
 
     private List<AudioThreatObservation> filterUnseenAudioThreats(
@@ -370,6 +448,52 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return audioThreats;
     }
 
+    private List<AmbientMobObservation> scanAmbientMobs(ClientPlayerEntity player, ClientWorld world) {
+        List<Entity> entities = world.getOtherEntities(
+            player,
+            player.getBoundingBox().expand(AMBIENT_MOB_DISTANCE),
+            this::isAmbientMobCandidate
+        );
+
+        List<AmbientMobObservation> mobs = new ArrayList<>();
+        for (Entity entity : entities) {
+            double distance = Math.sqrt(player.squaredDistanceTo(entity));
+            if (distance > AMBIENT_MOB_DISTANCE) {
+                continue;
+            }
+            if (!hasLineOfSight(player, world, entity)) {
+                continue;
+            }
+
+            Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
+            mobs.add(
+                new AmbientMobObservation(
+                    entity.getUuid(),
+                    entityTypeName(entity),
+                    distance,
+                    classifyHorizontal(player, entityPosition),
+                    classifyVertical(player, entityPosition)
+                )
+            );
+        }
+
+        mobs.sort(Comparator.comparingDouble(AmbientMobObservation::distance));
+        return mobs;
+    }
+
+    private boolean isAmbientMobCandidate(Entity entity) {
+        if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
+            return false;
+        }
+        if (entity instanceof PlayerEntity) {
+            return false;
+        }
+        if (entity instanceof HostileEntity) {
+            return AMBIENT_NEUTRAL_MONSTER_IDS.contains(entityTypeName(entity));
+        }
+        return true;
+    }
+
     private List<ThreatObservation> filterVisibleThreats(List<ThreatObservation> threats) {
         List<ThreatObservation> visibleThreats = new ArrayList<>();
         int lineOfSightCount = 0;
@@ -469,7 +593,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         ClientPlayerEntity player,
         ClientWorld world,
         List<ThreatObservation> threats,
-        List<AudioThreatObservation> audioThreats
+        List<AudioThreatObservation> audioThreats,
+        List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("status_snapshot", "system", "background", "high");
@@ -478,7 +603,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("world", buildWorld(player, world));
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
-        root.add("peaceful_mobs", new JsonArray());
+        root.add("peaceful_mobs", buildPeacefulMobs(ambientMobs));
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
         root.add("combat", buildCombat(threats, audioThreats));
@@ -490,7 +615,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         ClientPlayerEntity player,
         ClientWorld world,
         List<ThreatObservation> threats,
-        List<AudioThreatObservation> audioThreats
+        List<AudioThreatObservation> audioThreats,
+        List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("threat_approaching", "visual", "urgent", "high");
@@ -499,7 +625,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("world", buildWorld(player, world));
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
-        root.add("peaceful_mobs", new JsonArray());
+        root.add("peaceful_mobs", buildPeacefulMobs(ambientMobs));
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
         root.add("combat", buildCombat(threats, audioThreats));
@@ -510,7 +636,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildHostileAudioDetected(
         ClientPlayerEntity player,
         ClientWorld world,
-        List<AudioThreatObservation> audioThreats
+        List<AudioThreatObservation> audioThreats,
+        List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("hostile_audio_detected", "auditory", "normal", "medium");
@@ -519,10 +646,30 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("world", buildWorld(player, world));
         root.add("visual_threats", new JsonArray());
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
-        root.add("peaceful_mobs", new JsonArray());
+        root.add("peaceful_mobs", buildPeacefulMobs(ambientMobs));
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
         root.add("combat", buildCombat(List.of(), audioThreats));
+        root.add("meta", buildMeta(null));
+        return root;
+    }
+
+    private JsonObject buildAmbientMobDetected(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<AmbientMobObservation> ambientMobs
+    ) {
+        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject root = baseEnvelope("ambient_mob_detected", "visual", "background", "high");
+        root.addProperty("sequence", this.eventClient.nextSequence());
+        root.add("player", buildPlayer(player, world));
+        root.add("world", buildWorld(player, world));
+        root.add("visual_threats", new JsonArray());
+        root.add("auditory_threats", new JsonArray());
+        root.add("peaceful_mobs", buildPeacefulMobs(ambientMobs));
+        root.add("inventory", buildInventory(player));
+        root.add("nearby_resources", nearbyResources);
+        root.add("combat", buildCombat(List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
     }
@@ -531,7 +678,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         ClientPlayerEntity player,
         ClientWorld world,
         List<ThreatObservation> threats,
-        List<AudioThreatObservation> audioThreats
+        List<AudioThreatObservation> audioThreats,
+        List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("player_died", "system", "urgent", "high");
@@ -540,7 +688,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("world", buildWorld(player, world));
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
-        root.add("peaceful_mobs", new JsonArray());
+        root.add("peaceful_mobs", buildPeacefulMobs(ambientMobs));
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
         root.add("combat", buildCombat(threats, audioThreats));
@@ -548,7 +696,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return root;
     }
 
-    private JsonObject buildCombatEnded(ClientPlayerEntity player, ClientWorld world) {
+    private JsonObject buildCombatEnded(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<AmbientMobObservation> ambientMobs
+    ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("combat_ended", "system", "normal", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
@@ -556,7 +708,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("world", buildWorld(player, world));
         root.add("visual_threats", new JsonArray());
         root.add("auditory_threats", new JsonArray());
-        root.add("peaceful_mobs", new JsonArray());
+        root.add("peaceful_mobs", buildPeacefulMobs(ambientMobs));
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
         root.add("combat", buildCombat(List.of(), List.of()));
@@ -610,13 +762,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         long timeOfDay = world.getTimeOfDay() % 24000L;
         boolean submerged = isWaterContext(player);
 
-        json.addProperty("time_of_day", (int) timeOfDay);
-        json.addProperty("time_phase", classifyTimePhase(timeOfDay));
+        if (usesDayNightCycle(world)) {
+            json.addProperty("time_of_day", (int) timeOfDay);
+            json.addProperty("time_phase", classifyTimePhase(timeOfDay));
+        }
         json.addProperty("weather", classifyWeather(world));
         json.addProperty("biome", resolveBiomeName(world, pos));
         json.addProperty("local_light", world.getLightLevel(pos));
         json.addProperty("sky_visible", world.isSkyVisible(pos));
         double ceilingHeight = estimateCeilingHeight(world, pos);
+        String overheadCoverType = classifyOverheadCover(world, pos);
         double enclosureScore = estimateEnclosureScore(world, pos);
         int nearbyDoorCount = countNearbyDoors(world, pos);
         int openDoorCount = countOpenDoors(world, pos);
@@ -626,9 +781,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         int submergedDepthBlocks = estimateSubmergedDepthBlocks(world, pos, submerged);
         int nearbyFireflyBushCount = countNearbyFireflyBushes(world, pos);
         int cardinalWallCount = countCardinalWalls(world, pos);
+        int doubleHeightOpenSideCount = countDoubleHeightOpenSides(world, pos);
+        int nearbyLightSourceCount = countNearbyLightSources(world, pos);
+        double nearestLightSourceDistance = estimateNearestLightSourceDistance(world, pos);
         Double respawnDistance = estimateRespawnDistance(world, pos);
         json.addProperty("ceiling_height", round(ceilingHeight));
-        json.addProperty("overhead_cover_type", classifyOverheadCover(world, pos));
+        json.addProperty("overhead_cover_type", overheadCoverType);
         json.addProperty("is_submerged", submerged);
         json.addProperty("submerged_depth_blocks", submergedDepthBlocks);
         json.addProperty("air_supply", player.getAir());
@@ -640,6 +798,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("nearby_firefly_bush_count", nearbyFireflyBushCount);
         json.addProperty("respawn_point_set", this.respawnPointObserved);
         json.addProperty("cardinal_wall_count", cardinalWallCount);
+        json.addProperty("double_height_open_side_count", doubleHeightOpenSideCount);
         if (respawnDistance != null) {
             json.addProperty("respawn_distance", round(respawnDistance));
         }
@@ -650,11 +809,24 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         int connectedDarkVolume = estimateConnectedDarkVolume(world, pos);
         double nearestDarkSpawnDistance = estimateNearestDarkSpawnDistance(world, pos);
-        double darknessScore = estimateDangerDarkness(world, pos, enclosureScore, connectedDarkVolume, nearestDarkSpawnDistance);
+        double darknessScore = estimateDangerDarkness(
+            world,
+            pos,
+            overheadCoverType,
+            enclosureScore,
+            connectedDarkVolume,
+            nearestDarkSpawnDistance,
+            nearbyLightSourceCount,
+            nearestLightSourceDistance,
+            cardinalWallCount,
+            ceilingHeight
+        );
 
         json.addProperty("enclosure_score", round(enclosureScore));
         json.addProperty("connected_dark_volume", connectedDarkVolume);
         json.addProperty("nearest_dark_spawn_distance", round(nearestDarkSpawnDistance));
+        json.addProperty("nearby_light_source_count", nearbyLightSourceCount);
+        json.addProperty("nearest_light_source_distance", round(nearestLightSourceDistance));
         json.addProperty("danger_darkness_score", round(darknessScore));
         return json;
     }
@@ -697,6 +869,26 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             entry.addProperty("distance_band", threat.distanceBand());
             entry.addProperty("certainty", threat.certainty());
             entry.addProperty("spoken_name_allowed", threat.spokenNameAllowed());
+            array.add(entry);
+        }
+        return array;
+    }
+
+    private JsonArray buildPeacefulMobs(List<AmbientMobObservation> ambientMobs) {
+        JsonArray array = new JsonArray();
+        int limit = Math.min(ambientMobs.size(), 4);
+        for (int index = 0; index < limit; index += 1) {
+            AmbientMobObservation mob = ambientMobs.get(index);
+            JsonObject entry = new JsonObject();
+            entry.addProperty("type", mob.type());
+            entry.addProperty("distance", round(mob.distance()));
+
+            JsonObject direction = new JsonObject();
+            direction.addProperty("horizontal", mob.horizontalDirection());
+            direction.addProperty("vertical", mob.verticalRelation());
+            entry.add("direction", direction);
+
+            entry.addProperty("certainty", "high");
             array.add(entry);
         }
         return array;
@@ -943,6 +1135,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String sourceId = resolveSoundSourceId(world, source, hostileLabel, soundEventId);
         recordSoundObservation(
             player,
+            world,
             soundEventId,
             hostileLabel,
             source,
@@ -972,6 +1165,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             if (entity != null) {
                 recordSoundObservation(
                     player,
+                    world,
                     soundEventId,
                     fallbackLabel,
                     new Vec3d(entity.getX(), entity.getY(), entity.getZ()),
@@ -984,6 +1178,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         recordSoundObservation(
             player,
+            world,
             soundEventId,
             entityTypeName(hostileEntity),
             new Vec3d(hostileEntity.getX(), hostileEntity.getY(), hostileEntity.getZ()),
@@ -994,6 +1189,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private void recordSoundObservation(
         ClientPlayerEntity player,
+        ClientWorld world,
         String soundEventId,
         String hostileLabel,
         Vec3d source,
@@ -1002,6 +1198,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     ) {
         double distance = Math.sqrt(player.squaredDistanceTo(source));
         if (distance > this.config.audioThreatDistance) {
+            return;
+        }
+        if (!shouldObserveOccludedAudio(player, world, source)) {
             return;
         }
 
@@ -1078,6 +1277,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return "evening";
         }
         return "night";
+    }
+
+    private boolean usesDayNightCycle(ClientWorld world) {
+        return "minecraft:overworld".equals(world.getRegistryKey().getValue().toString());
     }
 
     private double estimateCeilingHeight(ClientWorld world, BlockPos origin) {
@@ -1187,17 +1390,133 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private double estimateDangerDarkness(
         ClientWorld world,
         BlockPos origin,
+        String overheadCoverType,
         double enclosureScore,
         int connectedDarkVolume,
-        double nearestDarkSpawnDistance
+        double nearestDarkSpawnDistance,
+        int nearbyLightSourceCount,
+        double nearestLightSourceDistance,
+        int cardinalWallCount,
+        double ceilingHeight
     ) {
-        double lightPenalty = (15.0 - world.getLightLevel(origin)) / 15.0;
+        int localLight = world.getLightLevel(origin);
+        double lightPenalty = (15.0 - localLight) / 15.0;
         double darkVolumeScore = Math.min(1.0, connectedDarkVolume / 80.0);
         double spawnDistanceScore = nearestDarkSpawnDistance >= 99.0
             ? 0.0
             : Math.max(0.0, (12.0 - nearestDarkSpawnDistance) / 12.0);
+        double nearbyLightSourceRelief = nearbyLightSourceCount <= 0 || nearestLightSourceDistance >= 99.0
+            ? 0.0
+            : Math.max(0.0, (4.0 - nearestLightSourceDistance) / 4.0);
         double skyPenalty = world.isSkyVisible(origin) ? 0.0 : 0.15;
-        return clamp01(lightPenalty * 0.35 + enclosureScore * 0.2 + darkVolumeScore * 0.3 + spawnDistanceScore * 0.15 + skyPenalty);
+        boolean litInteriorPocket = isLitInteriorSafePocket(
+            world,
+            origin,
+            localLight,
+            overheadCoverType,
+            connectedDarkVolume,
+            nearestDarkSpawnDistance,
+            nearbyLightSourceCount,
+            nearestLightSourceDistance,
+            ceilingHeight
+        );
+        if (litInteriorPocket) {
+            return clamp01(
+                lightPenalty * 0.18
+                    + darkVolumeScore * 0.12
+                    + spawnDistanceScore * 0.08
+                    - nearbyLightSourceRelief * 0.25
+            );
+        }
+        boolean crampedDarkBurrow = !world.isSkyVisible(origin)
+            && ceilingHeight <= 3.0
+            && cardinalWallCount >= 3
+            && connectedDarkVolume <= 12;
+        if (crampedDarkBurrow) {
+            return clamp01(
+                lightPenalty * 0.15
+                    + darkVolumeScore * 0.25
+                    + spawnDistanceScore * 0.1
+                    - nearbyLightSourceRelief * 0.2
+            );
+        }
+        return clamp01(
+            lightPenalty * 0.35
+                + enclosureScore * 0.2
+                + darkVolumeScore * 0.3
+                + spawnDistanceScore * 0.15
+                + skyPenalty
+                - nearbyLightSourceRelief * 0.3
+        );
+    }
+
+    private boolean isLitInteriorSafePocket(
+        ClientWorld world,
+        BlockPos origin,
+        int localLight,
+        String overheadCoverType,
+        int connectedDarkVolume,
+        double nearestDarkSpawnDistance,
+        int nearbyLightSourceCount,
+        double nearestLightSourceDistance,
+        double ceilingHeight
+    ) {
+        if (world.isSkyVisible(origin)) {
+            return false;
+        }
+        boolean nearbyLightSource = nearbyLightSourceCount > 0
+            && nearestLightSourceDistance <= LIT_INTERIOR_SAFE_MIN_SPAWN_DISTANCE;
+        if (localLight < LIT_INTERIOR_SAFE_LIGHT_THRESHOLD && !nearbyLightSource) {
+            return false;
+        }
+        if ("foliage".equals(overheadCoverType) || "fluid".equals(overheadCoverType)) {
+            return false;
+        }
+        if (ceilingHeight > LIT_INTERIOR_SAFE_MAX_CEILING_HEIGHT) {
+            return false;
+        }
+        if (connectedDarkVolume > LIT_INTERIOR_SAFE_MAX_CONNECTED_VOLUME) {
+            return false;
+        }
+        return nearestDarkSpawnDistance >= LIT_INTERIOR_SAFE_MIN_SPAWN_DISTANCE;
+    }
+
+    private int countNearbyLightSources(ClientWorld world, BlockPos origin) {
+        int count = 0;
+        for (int dx = -4; dx <= 4; dx += 1) {
+            for (int dy = -3; dy <= 3; dy += 1) {
+                for (int dz = -4; dz <= 4; dz += 1) {
+                    BlockPos sample = origin.add(dx, dy, dz);
+                    if (isNearbyLightSource(world.getBlockState(sample))) {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    private double estimateNearestLightSourceDistance(ClientWorld world, BlockPos origin) {
+        double nearest = 999.0;
+        for (int dx = -4; dx <= 4; dx += 1) {
+            for (int dy = -3; dy <= 3; dy += 1) {
+                for (int dz = -4; dz <= 4; dz += 1) {
+                    BlockPos sample = origin.add(dx, dy, dz);
+                    if (!isNearbyLightSource(world.getBlockState(sample))) {
+                        continue;
+                    }
+                    double distance = Math.sqrt(sample.getSquaredDistance(origin));
+                    if (distance < nearest) {
+                        nearest = distance;
+                    }
+                }
+            }
+        }
+        return nearest == 999.0 ? 99.0 : nearest;
+    }
+
+    private boolean isNearbyLightSource(BlockState state) {
+        return state.getLuminance() >= 10;
     }
 
     private boolean isWaterContext(ClientPlayerEntity player) {
@@ -1349,6 +1668,27 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return isShelterWallBlock(world.getBlockState(foot)) && isShelterWallBlock(world.getBlockState(head));
     }
 
+    private int countDoubleHeightOpenSides(ClientWorld world, BlockPos origin) {
+        int count = 0;
+        for (Direction direction : new Direction[] {
+            Direction.NORTH,
+            Direction.SOUTH,
+            Direction.EAST,
+            Direction.WEST,
+        }) {
+            if (isDoubleHeightOpenSide(world, origin, direction)) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private boolean isDoubleHeightOpenSide(ClientWorld world, BlockPos origin, Direction direction) {
+        BlockPos foot = origin.offset(direction);
+        BlockPos head = foot.up();
+        return isOpenMedium(world.getBlockState(foot)) && isOpenMedium(world.getBlockState(head));
+    }
+
     private boolean isShelterWallBlock(BlockState state) {
         if (isOpenMedium(state)) {
             return false;
@@ -1428,7 +1768,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private boolean hasLineOfSight(ClientPlayerEntity player, ClientWorld world, Entity entity) {
-        Vec3d start = player.getEyePos();
         double height = Math.max(entity.getHeight(), 0.5);
         Vec3d[] samplePoints = new Vec3d[] {
             new Vec3d(entity.getX(), entity.getY() + height * 0.25, entity.getZ()),
@@ -1436,20 +1775,162 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             new Vec3d(entity.getX(), entity.getY() + height * 0.85, entity.getZ()),
         };
         for (Vec3d end : samplePoints) {
-            HitResult hit = world.raycast(
-                new RaycastContext(
-                    start,
-                    end,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
-                    player
-                )
-            );
-            if (hit.getType() == HitResult.Type.MISS) {
+            if (hasDirectLineOfSight(player, world, end) || hasAdjacentWindowLineOfSight(player, world, end)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private boolean shouldObserveOccludedAudio(ClientPlayerEntity player, ClientWorld world, Vec3d source) {
+        if (hasDirectLineOfSight(player, world, source)) {
+            return true;
+        }
+        if (hasAdjacentAcousticOpeningToward(player, world, source)) {
+            return true;
+        }
+        BlockPos playerPos = player.getBlockPos();
+        BlockPos sourcePos = BlockPos.ofFloored(source);
+        return Math.abs(sourcePos.getX() - playerPos.getX()) <= OCCLUDED_AUDIO_HORIZONTAL_BLOCKS
+            && Math.abs(sourcePos.getZ() - playerPos.getZ()) <= OCCLUDED_AUDIO_HORIZONTAL_BLOCKS
+            && Math.abs(sourcePos.getY() - playerPos.getY()) <= OCCLUDED_AUDIO_VERTICAL_BLOCKS;
+    }
+
+    private boolean hasDirectLineOfSight(ClientPlayerEntity player, ClientWorld world, Vec3d end) {
+        HitResult hit = world.raycast(
+            new RaycastContext(
+                player.getEyePos(),
+                end,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                player
+            )
+        );
+        return hit.getType() == HitResult.Type.MISS;
+    }
+
+    private boolean hasAdjacentWindowLineOfSight(ClientPlayerEntity player, ClientWorld world, Vec3d end) {
+        Vec3d start = player.getEyePos();
+        for (Direction side : Direction.Type.HORIZONTAL) {
+            if (!isTargetOnSide(player, end, side)) {
+                continue;
+            }
+            if (!hasAdjacentViewThroughBlock(world, player.getBlockPos(), side)) {
+                continue;
+            }
+            if (hasLineThroughAdjacentViewBlocks(world, player.getBlockPos(), start, end, side)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasAdjacentAcousticOpeningToward(ClientPlayerEntity player, ClientWorld world, Vec3d source) {
+        BlockPos origin = player.getBlockPos();
+        for (Direction side : Direction.Type.HORIZONTAL) {
+            if (!isTargetOnSide(player, source, side)) {
+                continue;
+            }
+            if (hasAdjacentAcousticOpening(world, origin, side)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasLineThroughAdjacentViewBlocks(
+        ClientWorld world,
+        BlockPos playerBlock,
+        Vec3d start,
+        Vec3d end,
+        Direction side
+    ) {
+        Vec3d delta = end.subtract(start);
+        double distance = delta.length();
+        if (distance <= 0.0001) {
+            return true;
+        }
+        int steps = Math.max(8, (int) Math.ceil(distance * 8.0));
+        Vec3d step = delta.multiply(1.0 / steps);
+        boolean passedAdjacentViewBlock = false;
+
+        for (int index = 1; index <= steps; index += 1) {
+            Vec3d point = start.add(step.multiply(index));
+            BlockPos sample = BlockPos.ofFloored(point);
+            if (sample.equals(playerBlock) || sample.equals(playerBlock.up())) {
+                continue;
+            }
+            BlockState state = world.getBlockState(sample);
+            if (isVisuallyEmpty(world, sample, state)) {
+                continue;
+            }
+            if (!passedAdjacentViewBlock) {
+                if (!isImmediateSideBlock(playerBlock, sample, side) || !isViewThroughBlock(state)) {
+                    return false;
+                }
+                passedAdjacentViewBlock = true;
+                continue;
+            }
+            if (!isViewThroughBlock(state)) {
+                return false;
+            }
+        }
+        return passedAdjacentViewBlock;
+    }
+
+    private boolean hasAdjacentAcousticOpening(ClientWorld world, BlockPos origin, Direction side) {
+        return isAcousticOpeningBlock(world.getBlockState(origin.offset(side)))
+            || isAcousticOpeningBlock(world.getBlockState(origin.up().offset(side)));
+    }
+
+    private boolean hasAdjacentViewThroughBlock(ClientWorld world, BlockPos origin, Direction side) {
+        return isViewThroughBlock(world.getBlockState(origin.offset(side)))
+            || isViewThroughBlock(world.getBlockState(origin.up().offset(side)));
+    }
+
+    private boolean isImmediateSideBlock(BlockPos origin, BlockPos sample, Direction side) {
+        return sample.equals(origin.offset(side)) || sample.equals(origin.up().offset(side));
+    }
+
+    private boolean isTargetOnSide(ClientPlayerEntity player, Vec3d target, Direction side) {
+        return switch (side) {
+            case EAST -> target.x > player.getX();
+            case WEST -> target.x < player.getX();
+            case SOUTH -> target.z > player.getZ();
+            case NORTH -> target.z < player.getZ();
+            default -> false;
+        };
+    }
+
+    private boolean isVisuallyEmpty(ClientWorld world, BlockPos pos, BlockState state) {
+        return state.isAir() || state.getCollisionShape(world, pos).isEmpty();
+    }
+
+    private boolean isAcousticOpeningBlock(BlockState state) {
+        if (state.isAir()) {
+            return false;
+        }
+        String path = Registries.BLOCK.getId(state.getBlock()).getPath();
+        if (state.getBlock() instanceof DoorBlock) {
+            return true;
+        }
+        return path.endsWith("_bars")
+            || path.contains("grate")
+            || path.contains("lattice");
+    }
+
+    private boolean isViewThroughBlock(BlockState state) {
+        if (state.isAir()) {
+            return false;
+        }
+        String path = Registries.BLOCK.getId(state.getBlock()).getPath();
+        if (state.getBlock() instanceof DoorBlock) {
+            return true;
+        }
+        return path.contains("glass")
+            || path.endsWith("_bars")
+            || path.contains("grate")
+            || path.contains("lattice");
     }
 
     private boolean isPlayerDead(ClientPlayerEntity player) {
@@ -1546,6 +2027,21 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return Math.max(0.0, Math.min(1.0, value));
     }
 
+    private String ambientMobSignature(List<AmbientMobObservation> ambientMobs) {
+        StringBuilder builder = new StringBuilder();
+        int limit = Math.min(ambientMobs.size(), 2);
+        for (int index = 0; index < limit; index += 1) {
+            AmbientMobObservation mob = ambientMobs.get(index);
+            if (index > 0) {
+                builder.append("|");
+            }
+            builder.append(mob.type())
+                .append("@")
+                .append(mob.horizontalDirection());
+        }
+        return builder.toString();
+    }
+
     private record ThreatObservation(
         UUID uuid,
         String type,
@@ -1570,6 +2066,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String certainty,
         boolean spokenNameAllowed,
         long observedTick
+    ) {
+    }
+
+    private record AmbientMobObservation(
+        UUID uuid,
+        String type,
+        double distance,
+        String horizontalDirection,
+        String verticalRelation
     ) {
     }
 

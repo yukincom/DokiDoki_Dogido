@@ -133,8 +133,17 @@ class Settings(BaseSettings):
     panic_scream_cooldown_ms: int = 1200
     recent_damage_window_ms: int = 3000
     darkness_alert_threshold: float = 0.72
-    occluded_entry_darkness_threshold: float = 0.45
-    occluded_entry_light_threshold: int = 11
+    occluded_entry_darkness_threshold: float = 0.9
+    occluded_entry_light_threshold: int = 3
+    lit_interior_safe_light_threshold: int = 9
+    lit_interior_safe_max_connected_volume: int = 24
+    lit_interior_safe_min_spawn_distance: float = 4.0
+    lit_interior_safe_max_ceiling_height: float = 5.0
+    lit_interior_safe_light_source_distance: float = 4.0
+    cramped_dark_burrow_max_connected_volume: int = 12
+    cramped_dark_burrow_max_ceiling_height: float = 3.0
+    cramped_dark_burrow_min_wall_count: int = 3
+    cramped_dark_burrow_min_enclosure_score: float = 0.85
     darkness_llm_comment_cooldown_ms: int = 300000
     foliage_darkness_comment_cooldown_ms: int = 600000
     submerged_darkness_comment_cooldown_ms: int = 600000
@@ -144,7 +153,7 @@ class Settings(BaseSettings):
     dark_push_breath_delay_ms: int = 5000
     dark_push_after_breath_defer_ms: int = 8000
     dark_push_progress_distance: float = 1.0
-    dark_push_escalation_light_threshold: int = 8
+    dark_push_escalation_light_threshold: int = 1
     dark_push_escalation_darkness_threshold: float = 0.7
     dark_push_worse_light_delta: int = 2
     dark_push_worse_darkness_delta: float = 0.12
@@ -158,6 +167,7 @@ class Settings(BaseSettings):
     sleeping_neighbor_comment_cooldown_ms: int = 60000
     haiku_silence_time_ms: int = 300000
     hostile_comment_cooldown_ms: int = 60000
+    occluded_hostile_presence_comment_cooldown_ms: int = 300000
     daylight_water_comment_cooldown_ms: int = 120000
     burning_visual_comment_cooldown_ms: int = 10000
     multi_hostile_comment_cooldown_ms: int = 30000

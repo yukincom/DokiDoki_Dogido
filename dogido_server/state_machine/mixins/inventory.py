@@ -56,6 +56,13 @@ class InventoryMixin:
             previous=self.state.last_safe_zone_with_door,
         )
 
+    def _entered_emergency_shelter(self, event: GameEvent) -> bool:
+        return self._entered_snapshot_state(
+            event,
+            current=self._is_emergency_shelter_event(event),
+            previous=self.state.last_emergency_shelter,
+        )
+
     def _exited_safe_zone_with_door(self, event: GameEvent) -> bool:
         if not self._is_status_snapshot(event):
             return False
@@ -155,11 +162,16 @@ class InventoryMixin:
     def _is_immediately_severe_dark_push_entry(self, event: GameEvent) -> bool:
         current_light = event.world.local_light
         current_darkness = event.world.danger_darkness_score
-        if current_light is not None and current_light <= 3:
-            return True
-        if current_darkness is not None and current_darkness >= 0.9:
-            return True
-        return False
+        if current_light is not None:
+            return current_light <= self.settings.dark_push_escalation_light_threshold
+        return (
+            current_darkness is not None
+            and current_darkness
+            >= max(
+                self.settings.occluded_entry_darkness_threshold,
+                self.settings.dark_push_escalation_darkness_threshold,
+            )
+        )
 
     def _dark_push_progressed(self, event: GameEvent) -> bool:
         if self._dark_push_moved_forward(event):
@@ -171,17 +183,12 @@ class InventoryMixin:
     def _dark_push_is_scary_enough(self, event: GameEvent) -> bool:
         current_light = event.world.local_light
         current_darkness = event.world.danger_darkness_score
-        light_scary = (
-            current_light is not None
-            and current_light <= self.settings.dark_push_escalation_light_threshold
-        )
-        darkness_scary = (
+        if current_light is not None:
+            return current_light <= self.settings.dark_push_escalation_light_threshold
+        return (
             current_darkness is not None
             and current_darkness >= self.settings.dark_push_escalation_darkness_threshold
         )
-        if current_light is not None and current_darkness is not None:
-            return light_scary and darkness_scary
-        return light_scary or darkness_scary
 
     def _dark_push_moved_forward(self, event: GameEvent) -> bool:
         entry_x = self.state.dark_push_entry_x

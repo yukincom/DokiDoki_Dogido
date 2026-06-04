@@ -94,6 +94,7 @@ def is_style_acceptable(kind: str, text: str) -> bool:
     if kind not in {
         "aftermath",
         "darkness_escape",
+        "occluded_hostile_presence",
         "occluded_entry_no_light",
         "dark_push_no_light",
         "dark_push_after_breath",
@@ -114,7 +115,20 @@ def is_style_acceptable(kind: str, text: str) -> bool:
         "凍りつく",
     ]
     if kind == "aftermath":
-        banned_patterns.extend(["爆発音"])
+        banned_patterns.extend([
+            "爆発音",
+            "体力",
+            "HP",
+            "ｈｐ",
+            "次は",
+            "絶対",
+            "逃げよう",
+            "逃げたほう",
+            "回復",
+            "油断するな",
+        ])
+        if re.search(r"\d", text):
+            return False
     if kind == "darkness_escape":
         banned_patterns.extend([
             "闇夜",
@@ -143,6 +157,19 @@ def is_style_acceptable(kind: str, text: str) -> bool:
             "ほんとう",
             "助かったね",
             "めっちゃ燃えてる",
+        ])
+    if kind == "occluded_hostile_presence":
+        banned_patterns.extend([
+            "きゃー",
+            "ぎゃー",
+            "うわあ",
+            "見えた",
+            "見えてる",
+            "目の前",
+            "逃げろ",
+            "逃げよう",
+            "来てる",
+            "来よる",
         ])
     if kind == "daylight_water_skeleton":
         banned_patterns.extend([

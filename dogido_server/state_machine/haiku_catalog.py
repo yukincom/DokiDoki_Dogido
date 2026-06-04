@@ -30,13 +30,18 @@ def load_haiku_catalog() -> dict[str, Any]:
 
 def resolve_fallback_haiku(context: HaikuFallbackContext) -> str:
     catalog = load_haiku_catalog()
+    biome_groups = catalog.get("biome_groups", {})
     for rule in catalog.get("rules", []):
-        if _matches_rule(context, rule, catalog.get("biome_groups", {})):
+        if _matches_rule(context, rule, biome_groups):
             return str(rule["line"])
 
     defaults = catalog.get("defaults", {})
     if context.biome in defaults:
         return str(defaults[context.biome])
+
+    for rule in catalog.get("group_defaults", []):
+        if _matches_rule(context, rule, biome_groups):
+            return str(rule["line"])
     return str(catalog.get("under_construction_line", "今、考え中やねん…"))
 
 

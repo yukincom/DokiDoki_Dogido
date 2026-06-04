@@ -41,6 +41,22 @@ class VisualTargetsMixin:
             return "spot_hostile_gasp"
         return None
 
+    def _should_emit_spotted_hostile_gasp(self, event: GameEvent) -> bool:
+        threat = self._highest_priority_visual(event.visual_threats)
+        if threat is None:
+            return False
+        if threat.distance is None:
+            return False
+        if threat.direction.horizontal in {
+            HorizontalDirection.BACK,
+            HorizontalDirection.BACK_LEFT,
+            HorizontalDirection.BACK_RIGHT,
+        } and threat.distance <= self.settings.rear_warning_distance:
+            return True
+        if threat.type in RANGED_HOSTILES:
+            return threat.distance <= HOSTILE_EFFECTIVE_RANGE.get(threat.type, 6.0) + 1.5
+        return threat.distance <= 6.0 or (threat.approaching and threat.distance <= 7.0)
+
     def _suppressed_cue(self, previous_mode: str) -> tuple[str, str]:
         if previous_mode != "suppressed_panic":
             return ("suppressed_gasp", "ひいっ！")

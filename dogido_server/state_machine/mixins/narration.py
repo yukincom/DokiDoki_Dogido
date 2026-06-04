@@ -1,6 +1,7 @@
 # state_machine/mixins/narration.py
 from __future__ import annotations
 
+from dogido_server.entry_catalog import mob_entry, mob_poetic_tags
 from dogido_server.models import GameEvent, PeacefulMob
 from dogido_server.state_machine.ambient_mob_catalog import (
     AmbientMobReactionContext,
@@ -26,6 +27,9 @@ class NarrationMixin:
             return fallback
         mob = mobs[0]
         direction = self._direction_label(mob)
+        entry = mob_entry(mob.type) or {}
+        poetic = entry.get("poetic") if isinstance(entry, dict) else {}
+        role = poetic.get("role") if isinstance(poetic, dict) else ""
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,
@@ -33,6 +37,11 @@ class NarrationMixin:
                 "mob": self._mob_label(mob.type),
                 "direction": direction,
                 "mob_count": len(mobs),
+                "distance": mob.distance,
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "mob_tags": list(mob_poetic_tags(mob.type))[:8],
+                "mob_role": str(role) if role else "",
                 "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
             },
         )
@@ -78,13 +87,22 @@ class NarrationMixin:
 
     def _render_aftermath_line(self, event: GameEvent) -> str:
         fallback = fallback_text("aftermath", "line")
+        health = event.player.health
+        if health is None:
+            health_state = "不明"
+        elif health <= 8:
+            health_state = "かなり減ってる"
+        elif health <= 14:
+            health_state = "少し減ってる"
+        else:
+            health_state = "まだ余力はある"
         return self._generate_leaf_text(
             kind="aftermath",
             fallback_text=fallback,
             details={
                 "player_name": self._player_call_name(event),
                 "hostiles": list(self.state.last_confirmed_hostiles),
-                "health": event.player.health,
+                "health_state": health_state,
             },
         )
 
@@ -131,6 +149,25 @@ class NarrationMixin:
             return None
         self.state.last_submerged_darkness_advice_at = now
         return response_text("darkness", "darkness", "submerged_entry")
+
+    def _render_emergency_shelter_relief_line(self, event: GameEvent) -> str:
+        return self._generate_leaf_text(
+            kind="emergency_shelter_relief",
+            fallback_text=fallback_text(
+                "general",
+                "darkness",
+                "emergency_shelter_relief",
+                prefix=self._player_call_prefix(event),
+            ),
+            details={
+                "player_name": self._player_call_name(event),
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "ceiling_height": event.world.ceiling_height,
+                "enclosure_score": event.world.enclosure_score,
+            },
+            temperature=0.5,
+        )
 
     def _render_occluded_entry_line(self, event: GameEvent, signals: DerivedSignals) -> str | None:
         if signals.torch_available:

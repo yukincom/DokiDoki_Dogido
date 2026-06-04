@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 
 from dogido_server.llm import LeafGenerationRequest
+from dogido_server.llm.sanitize import summarize_for_log
 from dogido_server.models import EventName, GameEvent
 from dogido_server.py_tree_policy import PolicyContext
 from dogido_server.state_machine.constants import CHARGED_CREEPER_CALL, DAYLIGHT_RAIN_CALL, DAYLIGHT_WATER_CALL
 from dogido_server.state_machine.response_catalog import is_ushiro_call_text
 from dogido_server.state_machine.types import AudioAction, DerivedSignals
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class ActionBuilderMixin:
@@ -155,6 +159,30 @@ class ActionBuilderMixin:
             cue_id=cue_id,
             protect_ms=protect_ms,
         )
+
+    def _log_emitted_actions(
+        self,
+        event: GameEvent,
+        previous_mode: str,
+        next_mode: str,
+        actions: list[AudioAction],
+    ) -> None:
+        if not actions:
+            return
+        event_name = getattr(event.event.name, "value", event.event.name)
+        for action in actions:
+            LOGGER.info(
+                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s interrupt=%s protect_ms=%s text=%s",
+                event_name,
+                event.sequence,
+                previous_mode,
+                next_mode,
+                action.layer,
+                action.cue_id,
+                action.interrupt,
+                action.protect_ms,
+                summarize_for_log(action.text),
+            )
 
     def _callout_protect_ms(self, text: str | None) -> int:
         if is_ushiro_call_text(text):

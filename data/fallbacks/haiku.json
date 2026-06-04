@@ -18,6 +18,16 @@
       "old_growth_pine_taiga",
       "old_growth_spruce_taiga",
       "snowy_taiga"
+    ],
+    "sheep_surface": [
+      "savanna",
+      "savanna_plateau",
+      "windswept_savanna",
+      "meadow",
+      "plains",
+      "sunflower_plains",
+      "windswept_hills",
+      "windswept_gravelly_hills"
     ]
   },
   "rules": [
@@ -60,6 +70,14 @@
     {
       "line": "森やねん　いけどもいけど　森やねん",
       "biome_groups": ["taiga_family"]
+    }
+  ],
+  "group_defaults": [
+    {
+      "line": "野にいでて　ひつじめえめえ　草がベリ！",
+      "biome_groups": ["sheep_surface"],
+      "weather": "clear",
+      "time_phase": "day"
     }
   ],
   "defaults": {

@@ -207,58 +207,58 @@
           "flowers": {
             "label": "花",
             "items": {
-              "allium": "アリウム",
-              "azure_bluet": "ヒナソウ",
-              "blue_orchid": "ヒスイラン",
-              "cornflower": "ヤグルマギク",
-              "dandelion": "タンポポ",
-              "golden_dandelion": "金のタンポポ",
-              "eyeblossom": "ヒトミソウ",
-              "lilac": "ライラック",
-              "lily_of_the_valley": "スズラン",
-              "oxeye_daisy": "フランスギク",
-              "peony": "ボタン",
-              "pitcher_plant": "ウツボカズラ",
-              "poppy": "ポピー",
-              "rose_bush": "バラの低木",
-              "sunflower": "ヒマワリ",
-              "torchflower": "トーチフラワー",
-              "red_tulip": "赤色のチューリップ",
-              "orange_tulip": "橙色のチューリップ",
-              "white_tulip": "白色のチューリップ",
-              "pink_tulip": "桃色のチューリップ",
-              "wildflowers": "野花",
-              "wither_rose": "ウィザーローズ",
-              "cactus_flower": "サボテンの花",
-              "pink_petals": "桜色の花びら"
+              "allium": {"japanese":"アリウム","note":"薄紫のボールのような花。ネギの仲間。"},
+              "azure_bluet": {"japanese":"ヒナソウ","note":"白い星のような花が咲く小さな植物。"},
+              "blue_orchid": {"japanese":"ヒスイラン","note":"湿地に咲く水色の花"},
+              "cornflower": {"japanese":"ヤグルマギク","note":"瑠璃色の背の高い花。"},
+              "dandelion": {"japanese":"タンポポ","note":"のべに咲く逞しい花"},
+              "golden_dandelion": {"japanese":"金のタンポポ","note":"金色に輝く人工の花"},
+              "eyeblossom": {"japanese":"ヒトミソウ","note":"夜になると猛獣の目のように輝く不思議な花"},
+              "lilac": {"japanese":"ライラック","note":"初夏の訪れを感じさせる薄紫の花"},
+              "lily_of_the_valley": {"japanese":"スズラン","note":"小さくて可愛らしい花。毒がある。"},
+              "oxeye_daisy": {"japanese":"フランスギク","note":"上品な佇まいの白い花。すっきりとした香り"},
+              "peony": {"japanese":"ボタン","note":"ピンク色の大きな花。ほんのりいい香りがする。"},
+              "pitcher_plant": {"japanese":"ウツボカズラ","note":"水色と紫の派手な花。古代の花。"},
+              "poppy": {"japanese":"ポピー","note":"赤い花。花保ちが悪く、すぐ散ってしまう。"},
+              "rose_bush": {"japanese":"バラの低木","note":"真っ赤なバラ。花言葉は美"},
+              "sunflower": {"japanese":"ヒマワリ","note":"花言葉は憧れ"},
+              "torchflower": {"japanese":"トーチフラワー","note":"松明のような、鮮やかなオレンジ色の花。花言葉は繁栄"},
+              "red_tulip": {"japanese":"赤色のチューリップ","note":"花言葉は愛情。艶やかな赤い色。"},
+              "orange_tulip": {"japanese":"橙色のチューリップ","note":"花言葉は照れ屋"},
+              "white_tulip": {"japanese":"白色のチューリップ","note":"清純さを感じさせる白い色。"},
+              "pink_tulip": {"japanese":"桃色のチューリップ","note":"可愛らしい色。"},
+              "wildflowers": {"japanese":"野花","note":"小さくとも逞しく咲く"},
+              "wither_rose": {"japanese":"ウィザーローズ","note":"死を呼ぶ黒薔薇"},
+              "cactus_flower": {"japanese":"サボテンの花","note":"緑色のサボテンのてっぺんにこじんまりと咲くピンク色の花。"},
+              "pink_petals": {"japanese":"桜色の花びら","note":"大地に舞い降りたピンク色の花びら。この世界では季節を問わない。花言葉は純潔"}
             }
           },
           "grasses_and_small_plants": {
             "label": "草・小型植物",
             "items": {
-              "short_grass": "背の低い草",
-              "tall_grass": "背の高い草",
-              "fern": "シダ",
-              "large_fern": "大きなシダ",
-              "dead_bush": "枯れ木",
-              "bush": "茂み",
-              "short_dry_grass": "背の低い枯れ草",
-              "tall_dry_grass": "背の高い枯れ草",
-              "leaf_litter": "落ち葉"
+              "short_grass": {"japanese":"背の低い草","note":"世界中に生えている草"},
+              "tall_grass": {"japanese":"背の高い草","note":"世界中に生えている草。風に揺れる。"},
+              "fern": {"japanese":"シダ","note":"タイガやジャングルで見られる草"},
+              "large_fern": {"japanese":"大きなシダ","note":"タイガやジャングルで見られる大きな草"},
+              "dead_bush":{"japanese": "枯れ木","note":"様々な場所でみられる。どこか寂しさを感じさせる茶色く枯れた小さな木。"},
+              "bush": {"japanese":"茂み","note":"世界中の様々なところに生えている。なんの変哲もない草。"},
+              "short_dry_grass": {"japanese":"背の低い枯れ草","note":"砂漠や荒野に生える砂色の草。"},
+              "tall_dry_grass": {"japanese":"背の高い枯れ草","note":"砂漠や荒野に生える砂色の草。風に揺れる"},
+              "leaf_litter": {"japanese":"落ち葉","note":"季節を問わず、木が茂るところに落ちている。焚き付けや肥料に"}
             }
           },
           "aquatic_plants": {
             "label": "水草・水辺植物",
             "items": {
-              "seagrass": "海草",
-              "tall_seagrass": "背の高い海草",
+              "seagrass":{"japanese": "海草","note":"ゆらゆらと海中に揺れる。亀の餌"},
+              "tall_seagrass": {"japanese":"背の高い海草","note":"ゆらゆらと海中に揺れる。亀の餌"},
               "bubble_column": {
                 "japanese": "気泡柱",
-                "note": "水中に発生。エンティティを沈めたり持ち上げる。空気を補充できる。"
+                "note": "水中に発生する泡。流れがあり、ものを沈めたり持ち上げる。空気を補充できる。"
               },
-              "lily_pad": "スイレンの葉",
-              "sugar_cane": "サトウキビ",              
-              "firefly_bush": "ホタルの茂み"
+              "lily_pad": {"japanese":"スイレンの葉","ntoe":"水面に浮かぶ葉。上を歩くことができる"},
+              "sugar_cane": {"japanese":"サトウキビ","note":"砂地の水辺に生える。紙と砂糖の原料"},             
+              "firefly_bush": {"japanese":"ホタルの茂み","note":"暗くなると周囲でホタルが飛び交う"}
             },
             "notes": [
               "蛍の茂みは水辺植物としてここに置く。"
@@ -267,43 +267,43 @@
           "cave_and_moss_plants": {
             "label": "洞窟・苔系植物",
             "items": {
-              "moss_block": "苔ブロック",
-              "pale_moss_block": "色あせた苔ブロック",
-              "moss_carpet": "苔のカーペット",
-              "pale_moss_carpet": "色あせた苔のカーペット",
+              "moss_block": {"japanese": "苔ブロック","note":"ふわふわの綺麗な緑色の苔。培地に適している。スニッファーの卵が倍の速度で孵化する。"},
+              "pale_moss_block": {"japanese": "色あせた苔ブロック","note":"ペールガーデンの苔ブロック。ほとんど灰色のような褪せた緑色。"},
+              "moss_carpet": {"japanese": "苔のカーペット","note":"ペラペラの綺麗な緑色の苔。"},
+              "pale_moss_carpet": {"japanese": "色あせた苔のカーペット","note":"ペラペラのほとんど灰色のような褪せた緑色の苔。"},
               "glow_lichen": {
                 "japanese": "ヒカリゴケ",
-                "note": "ハサミで入手可能。渓谷によくみられる。"
+                "note": "ハサミで入手可能。渓谷によくみられる。淡い光を放つ。"
               },
-              "spore_blossom": "胞子の花",
-              "small_dripleaf": "小さなドリップリーフ",
+              "spore_blossom": {"japanese": "胞子の花","note":"繁茂した洞窟に咲く。ピンク色の大きな花。緑色の胞子が舞い散る。"},
+              "small_dripleaf": {"japanese": "小さなドリップリーフ","note":"繁茂した洞窟。粘土池の畔に生える。骨粉を使うと大きなドロップリーフに成長。"},
               "big_dripleaf": {
                 "japanese": "大きなドリップリーフ",
-                "note": "上に乗ることができる大きな葉っぱ。"
+                "note": "繁茂した洞窟。少しの間だけ、上に乗ることができる大きな葉っぱ。"
               },
-              "big_dripleaf_stem": "大きなドリップリーフの茎"
+              "big_dripleaf_stem": {"japanese":"大きなドリップリーフの茎","note":"繁茂した洞窟。上に乗ることができる大きな葉っぱの茎。"}
             }
           },
           "vines_roots_and_hanging": {
             "label": "ツタ・根・垂れ下がる植物",
             "items": {
               "vines": "ツタ",
-              "cave_vines": "グローベリーのつる（実なし）",
-              "cave_vines_plant": "グローベリーのつる",
-              "lit_cave_vines": "グローベリーのつる（実付き）",
-              "lit_cave_vines_plant": "グローベリーのかずら",
-              "hanging_roots": "垂れ根",
-              "pale_hanging_moss": "色あせた垂れ苔",
-              "mangrove_roots": "マングローブの根",
-              "muddy_mangrove_roots": "泥だらけのマングローブの根"
+              "cave_vines": {"japanese": "グローベリーのつる（実なし）","note":"洞窟に生える枝垂れるおおきな植物"},
+              "cave_vines_plant":  {"japanese": "グローベリーのつる","note":"洞窟に生える枝垂れるおおきな植物"},
+              "lit_cave_vines":  {"japanese": "グローベリーのつる（実付き）","note":"洞窟に生える枝垂れるおおきな植物"},
+              "lit_cave_vines_plant": {"japanese": "グローベリーのかずら","note":"洞窟に生える枝垂れるおおきな植物"},
+              "hanging_roots": {"japanese": "垂れ根","note":"ツツジの根。土が少なく、岩が多い土地であることを感じさせる。"},
+              "pale_hanging_moss": {"japanese":"色あせた垂れ苔","note":"ペールオークにぶら下がる苔。ペールグリーンの針のような繊細な姿"},
+              "mangrove_roots": {"japanese":"マングローブの根","note":"水没する"},
+              "muddy_mangrove_roots": {"japanese":"泥だらけのマングローブの根","note":"培地にできる"}
             }
           },
           "nether_and_end_plants": {
             "label": "ネザー・エンド植物",
             "items": {
               "nether_sprouts": "ネザースプラウト",
-              "crimson_roots": {"japanese": "真紅の根", "note": "巨大キノコの一部。ネザー。おどろおどろしい"},
-              "warped_roots": {"japanese": "歪んだ根", "note": "巨大キノコの一部。ネザー。青緑色"},
+              "crimson_roots": {"japanese": "真紅の根", "note": "巨大キノコの一部。ネザー。おどろおどろしい見た目"},
+              "warped_roots": {"japanese": "歪んだ根", "note": "巨大キノコの一部。ネザー。青緑色少し神秘的"},
               "weeping_vines": {"japanese": "しだれツタ","note": "巨大キノコから垂れ下がるツタ。おどろおどろしい赤い色。"},
               "twisting_vines": {"japanese": "ねじれツタ","note": "巨大キノコから垂れ下がるツタ。青緑色。"},
               "chorus_plant":  {"japanese": "コーラスプラント","note":"エンド高地に生える植物。濃い紫色の奇妙な形の木"},
@@ -318,55 +318,54 @@
       "crops_and_growables": {
         "label": "作物・有用植物",
         "items": {
-          "wheat": "小麦",
-          "carrots": "ニンジン",
-          "potatoes": "ジャガイモ",
-          "beetroots": "ビートルート",
-          "pumpkin": "カボチャ",
+          "wheat":{"japanese":"小麦","note":"パンやクッキー、ケーキも作れる"},
+          "carrots": {"japanese":"ニンジン","note":"オレンジ色で村人も大好き"},
+          "potatoes": {"japanese":"ジャガイモ","note":"みんなが大好きな食べ物。油はないのでポテトチップスは作れない。"},
+          "beetroots": {"japanese":"ビートルート","note":"赤い根菜。スープの材料"},
+          "pumpkin": {"japanese":"カボチャ","note":"大きなオレンジ色のかぼちゃ。このままでは食べられない。"},
           "carved_pumpkin": {
             "japanese": "くり抜かれたカボチャ",
-            "note": "防御力はない。エンダーマン・クリーキングとの敵対を防ぐ。"
+            "note": "目のところに穴が空いている。防御力はない。エンダーマン・クリーキングとの敵対を防ぐ。"
           },
-          "pumpkin_stem": "カボチャの茎",
-          "melon": "スイカ",
+          "pumpkin_stem": {"japanese":"カボチャの茎","note":"まだ少し収穫には早かったようだ。"},
+          "melon": {"japanese":"スイカ","note":"みずみずしい大きくて緑色のスイカ。縞の色は薄い"},
           "melon_stem": "スイカの茎",
-          "sweet_berry_bush": "スイートベリーの低木",
-          "torchflower_crop": "未成熟なトーチフラワー",
-          "pitcher_crop": "未成熟なウツボカズラ",
-          "sugar_cane": "サトウキビ",
+          "sweet_berry_bush": {"japanese":"スイートベリーの低木","note":"スイートベリーがみのる小さな木。"},
+          "torchflower_crop": {"japanese":"未成熟なトーチフラワー","note":"見るたび大きく成長。花が咲くのが楽しみだ"},
+          "pitcher_crop": {"japanese":"未成熟なウツボカズラ","note":"見るたび大きく成長。花が咲くのが楽しみだ"},
           "cactus": {
             "japanese": "サボテン",
-            "note": "触れるとダメージを受ける。"
+            "note": "触れると痛い。プレイヤーと同じくらいの大きさ。太くて逞しい緑色の幹。"
           },
-          "hay_bale": "干草の俵",
+          "hay_bale": {"japanese":"干草の俵","note":"小麦を束にしたもの。家畜の餌にもなる。"},
           "bee_nest":{
             "japanese": "ミツバチの巣",
-            "note": "焚き火があれば、収穫時にミツバチが敵対しない。"
+            "note": "蜂たちの家。焚き火があれば、収穫時にミツバチが敵対しない。"
           },
-          "honeycomb":"ハニカム",
-          "honeycomb_block":"ハニカムブロック"
+          "honeycomb":{"japanese":"ハニカム","note":"蜂の巣そのもの。蜜蝋として使用できる"},
+          "honeycomb_block":{"japanese":"ハニカムブロック","note":"ハニカムから作る。オレンジ色の水玉のある装飾ブロック"}
         }},
       "egg_and_seeds": {
         "label": "種・卵",
         "items": {          
-          "turtle_egg": "カメの卵",
-          "frogspawn": "カエルの卵",
-          "sniffer_egg": "スニッファーの卵",
-          "dried_ghast": "乾燥したガスト",
+          "turtle_egg": {"japanese":"カメの卵","note":"踏み潰されると消滅。生成りに緑の斑点がある。少し柔らかい。"},
+          "frogspawn": {"japanese":"カエルの卵","note":"サバイバルモードではアイテムとして入手できない。寒天質"},
+          "sniffer_egg": {"japanese":"スニッファーの卵","note":"暖かい海域の海底遺跡の怪しげな砂から発見されることがある。赤と緑の水玉模様。ほんのり暖かい"},
+          "dried_ghast": {"japanese":"乾燥したガスト","note":"水を吸うとガスリンに変化する。なんともいえない辛そうな表情をしている"},
           "weat_seeds": "小麦の種",
-          "cacao_beans": "カカオ豆",
-          "pumpkin_seeds": "カボチャの種",
-          "melon_seeds": "スイカの種",
-          "beetroots_seeds": "ビートルートの種",
-          "torchflower_seeds": "トーチフラワーの種",
-          "pitcher_plant_pod": "ウツボカズラのさや",
-          "sweet_berry_seeds": "スイートベリー",          
+          "cacao_beans": {"japanese": "カカオ豆","note":"ジャングルに生える。クッキーの材料。なんともいえないいい匂い"},
+          "pumpkin_seeds": {"japanese": "カボチャの種","note":"オレンジ色のカボチャの種"},
+          "melon_seeds": {"japanese": "スイカの種","note":"畑に撒くだけで簡単にスイカが取れる"},
+          "beetroots_seeds": {"japanese": "ビートルートの種","note":"赤カブの種"},
+          "torchflower_seeds":{"japanese": "トーチフラワーの種","note":"スニッファーが発見する古代の植物。鳥たちとスニッファーの好物。松明のようなオレンジ色の花が咲く。"},
+          "pitcher_plant_pod": {"japanese":"ウツボカズラのさや","note":"スニッファーが発見する古代の植物。鳥たちの好物。鮮やかな水色の花が咲く。"},
+          "sweet_berry_seeds":{"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。キツネの好物"},          
           "glow_berries": {
             "japanese": "グロウベリー",
             "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。キツネの好物。"
           },
-          "nether_wart": "ネザーウォート",
-          "chorus_fruit": "コーラスフルーツ"                    
+          "nether_wart": {"japanese":"ネザーウォート","note":"ネザー要塞に自制する菌糸。真紅色。"},
+          "chorus_fruit": {"japanese":"コーラスフルーツ","note":"食べると周囲にテレポートする。ムベに似たフルーツ。" }                   
         }
       },
       "fungi": {
@@ -381,68 +380,191 @@
           "warped_fungus": {"japanese": "歪んだキノコ", "note": "巨大キノコの一部。ネザー。"},
           "brown_mushroom_block": "茶色のキノコブロック",
           "red_mushroom_block": "赤色のキノコブロック",
-          "mushroom_stem": "キノコの柄",
-          "nether_wart_block": "ネザーウォートブロック",
-          "warped_wart_block": {"japanese": "歪んだウォートブロック", "note": "巨大キノコの一部。ネザー。"},
-          "shroomlight": "シュルームライト"
+          "mushroom_stem": {"japanese": "キノコの柄","note":"巨大キノコの一部。ネザー。"},
+          "nether_wart_block": {"japanese": "ネザーウォートブロック","note":"ネザー要塞に自制する菌糸の塊。真紅色。"},
+          "warped_wart_block": {"japanese": "歪んだウォートブロック", "note": "巨大キノコの一部。ネザー。色は青緑色。"},
+          "shroomlight": {"japanese":"シュルームライト","note":"真紅と歪んだの両方の巨大キノコの上部に発生する、光を発する物質"}
         }
       },
       "coral_and_sea": {
         "label": "サンゴ・海中自然物",
         "items": {
-          "tube_coral": "クダサンゴ",
-          "brain_coral": "ノウサンゴ",
-          "bubble_coral": "ミズタマサンゴ",
-          "fire_coral": "ミレポラサンゴ",
-          "horn_coral": "シカツノサンゴ",
-          "dead_tube_coral": "死んだクダサンゴ",
-          "dead_brain_coral": "死んだノウサンゴ",
-          "dead_bubble_coral": "死んだミズタマサンゴ",
-          "dead_fire_coral": "死んだミレポラサンゴ",
-          "dead_horn_coral": "死んだシカツノサンゴ",
-          "tube_coral_block": "クダサンゴブロック",
-          "brain_coral_block": "ノウサンゴブロック",
-          "bubble_coral_block": "ミズタマサンゴブロック",
-          "fire_coral_block": "ミレポラサンゴブロック",
-          "horn_coral_block": "シカツノサンゴブロック",
-          "dead_tube_coral_block": "死んだクダサンゴブロック",
-          "dead_brain_coral_block": "死んだノウサンゴブロック",
-          "dead_bubble_coral_block": "死んだミズタマサンゴブロック",
-          "dead_fire_coral_block": "死んだミレポラサンゴブロック",
-          "dead_horn_coral_block": "死んだシカツノサンゴブロック",
-          "tube_coral_fan": "クダウチワサンゴ",
-          "brain_coral_fan": "ノウウチワサンゴ",
-          "bubble_coral_fan": "ミズタマウチワサンゴ",
-          "fire_coral_fan": "ミレポラウチワサンゴ",
-          "horn_coral_fan": "シカツノウチワサンゴ",
-          "dead_tube_coral_fan": "死んだクダウチワサンゴ",
-          "dead_brain_coral_fan": "死んだノウウチワサンゴ",
-          "dead_bubble_coral_fan": "死んだミズタマウチワサンゴ",
-          "dead_fire_coral_fan": "死んだミレポラウチワサンゴ",
-          "dead_horn_coral_fan": "死んだシカツノウチワサンゴ",
-          "tube_coral_wall_fan": "壁付きのクダウチワサンゴ",
-          "brain_coral_wall_fan": "壁付きのノウウチワサンゴ",
-          "bubble_coral_wall_fan": "壁付きのミズタマウチワサンゴ",
-          "fire_coral_wall_fan": "壁付きのミレポラウチワサンゴ",
-          "horn_coral_wall_fan": "壁付きのシカツノウチワサンゴ",
-          "dead_tube_coral_wall_fan": "壁付きの死んだクダウチワサンゴ",
-          "dead_brain_coral_wall_fan": "壁付きの死んだノウウチワサンゴ",
-          "dead_bubble_coral_wall_fan": "壁付きの死んだミズタマウチワサンゴ",
-          "dead_fire_coral_wall_fan": "壁付きの死んだミレポラウチワサンゴ",
-          "dead_horn_coral_wall_fan": "壁付きの死んだシカツノウチワサンゴ",
-          "sea_pickle": "シーピクルス",
-          "kelp": "コンブ",
-          "dried_kelp_block": "乾燥した昆布ブロック",
-          "sponge": "スポンジ",
-          "wet_sponge": "濡れたスポンジ"
+  "tube_coral": {
+    "japanese": "クダサンゴ",
+    "note": "青色のサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "brain_coral": {
+    "japanese": "ノウサンゴ",
+    "note": "ピンク色のサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "bubble_coral": {
+    "japanese": "ミズタマサンゴ",
+    "note": "紫色のサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "fire_coral": {
+    "japanese": "ミレポラサンゴ",
+    "note": "赤色のサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "horn_coral": {
+    "japanese": "シカツノサンゴ",
+    "note": "黄色のサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "dead_tube_coral": {
+    "japanese": "死んだクダサンゴ",
+    "note": "白化している"
+  },
+  "dead_brain_coral": {
+    "japanese": "死んだノウサンゴ",
+    "note": "白化している"
+  },
+  "dead_bubble_coral": {
+    "japanese": "死んだミズタマサンゴ",
+    "note": "白化している"
+  },
+  "dead_fire_coral": {
+    "japanese": "死んだミレポラサンゴ",
+    "note": "白化している"
+  },
+  "dead_horn_coral": {
+    "japanese": "死んだシカツノサンゴ",
+    "note": "白化している"
+  },
+
+  "tube_coral_block": {
+    "japanese": "クダサンゴブロック",
+    "note": "青色のサンゴブロック。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "brain_coral_block": {
+    "japanese": "ノウサンゴブロック",
+    "note": "ピンク色のサンゴブロック。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "bubble_coral_block": {
+    "japanese": "ミズタマサンゴブロック",
+    "note": "紫色のサンゴブロック。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "fire_coral_block": {
+    "japanese": "ミレポラサンゴブロック",
+    "note": "赤色のサンゴブロック。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "horn_coral_block": {
+    "japanese": "シカツノサンゴブロック",
+    "note": "黄色のサンゴブロック。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "dead_tube_coral_block": {
+    "japanese": "死んだクダサンゴブロック",
+    "note": "白化している"
+  },
+  "dead_brain_coral_block": {
+    "japanese": "死んだノウサンゴブロック",
+    "note": "白化している"
+  },
+  "dead_bubble_coral_block": {
+    "japanese": "死んだミズタマサンゴブロック",
+    "note": "白化している"
+  },
+  "dead_fire_coral_block": {
+    "japanese": "死んだミレポラサンゴブロック",
+    "note": "白化している"
+  },
+  "dead_horn_coral_block": {
+    "japanese": "死んだシカツノサンゴブロック",
+    "note": "白化している"
+  },
+
+  "tube_coral_fan": {
+    "japanese": "クダウチワサンゴ",
+    "note": "青色のウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "brain_coral_fan": {
+    "japanese": "ノウウチワサンゴ",
+    "note": "ピンク色のウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "bubble_coral_fan": {
+    "japanese": "ミズタマウチワサンゴ",
+    "note": "紫色のウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "fire_coral_fan": {
+    "japanese": "ミレポラウチワサンゴ",
+    "note": "赤色のウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "horn_coral_fan": {
+    "japanese": "シカツノウチワサンゴ",
+    "note": "黄色のウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "dead_tube_coral_fan": {
+    "japanese": "死んだクダウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_brain_coral_fan": {
+    "japanese": "死んだノウウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_bubble_coral_fan": {
+    "japanese": "死んだミズタマウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_fire_coral_fan": {
+    "japanese": "死んだミレポラウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_horn_coral_fan": {
+    "japanese": "死んだシカツノウチワサンゴ",
+    "note": "白化している"
+  },
+
+  "tube_coral_wall_fan": {
+    "japanese": "壁付きのクダウチワサンゴ",
+    "note": "青色の壁付きウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "brain_coral_wall_fan": {
+    "japanese": "壁付きのノウウチワサンゴ",
+    "note": "ピンク色の壁付きウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "bubble_coral_wall_fan": {
+    "japanese": "壁付きのミズタマウチワサンゴ",
+    "note": "紫色の壁付きウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "fire_coral_wall_fan": {
+    "japanese": "壁付きのミレポラウチワサンゴ",
+    "note": "赤色の壁付きウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "horn_coral_wall_fan": {
+    "japanese": "壁付きのシカツノウチワサンゴ",
+    "note": "黄色の壁付きウチワサンゴ。暖かい海に自生。水のない場所しばらく置くと死んだサンゴに変化。"
+  },
+  "dead_tube_coral_wall_fan": {
+    "japanese": "壁付きの死んだクダウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_brain_coral_wall_fan": {
+    "japanese": "壁付きの死んだノウウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_bubble_coral_wall_fan": {
+    "japanese": "壁付きの死んだミズタマウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_fire_coral_wall_fan": {
+    "japanese": "壁付きの死んだミレポラウチワサンゴ",
+    "note": "白化している"
+  },
+  "dead_horn_coral_wall_fan": {
+    "japanese": "壁付きの死んだシカツノウチワサンゴ",
+    "note": "白化している"
+  },
+          "sea_pickle": {"japanese" :"シーピクルス","note":"海底に生える植物。まるで海のろうそく" },
+          "kelp": {"japanese":"コンブ","note":"海の水源地に生える"},
+          "dried_kelp_block": {"japanese":"乾燥した昆布ブロック","note":"乾燥した昆布を束ねたもの。"},
+          "sponge": {"japanese":"スポンジ","note":"海底神殿で入手。かなりの水を吸う。製錬するかネザーに置くことで乾燥する"},
+          "wet_sponge": {"japanese":"濡れたスポンジ","note":"水をたっぷり吸ったスポンジ"}
         }
       },
       "sculk": {
         "label": "スカルク",
         "items": {
-          "sculk": "スカルク",
-          "sculk_vein": "スカルクヴェイン",
-          "sculk_catalyst": "スカルクカタリスト",
+          "sculk": {"japanese":"スカルク","note":"ディープダーク。星のような輝きを持つ地底のブロック。"},
+          "sculk_vein": {"japanese":"スカルクヴェイン","note":"ディープダーク。スカルクブロックの成長に必要な素材"},
+          "sculk_catalyst": {"japanese":"スカルクカタリスト","note":"星のような輝きを持つブロック。近くでMobが死ぬと魂の花を咲かせる"},
           "sculk_sensor": {
             "japanese": "スカルクセンサー",
             "note": "振動検知・伝達。羊毛で封じることができる。アメジストブロックと共鳴。レッドストーンコンバーターとの接続で振動をレッドストーン信号に変換可能。"
@@ -451,7 +573,7 @@
             "japanese": "調律されたスカルクセンサー",
             "note": "振動検知・伝達。羊毛で封じることができる。アメジストブロックと共鳴。レッドストーンコンバーターとの接続で振動をレッドストーン信号に変換可能。"
           },
-          "sculk_shrieker": "スカルクシュリーカー"
+          "sculk_shrieker": {"japanese":"スカルクシュリーカー", "note":"ディープダークバイオームに存在するスカルクブロック。複数回起動することでウォーデンを召喚。"}
         }
       },
       "natural_misc": {
@@ -459,20 +581,20 @@
         "items": {
           "pearlescent_froglight": {
             "japanese": "真珠色のフロッグライト",
-            "note": "カエルが小さいマグマキューブを捕食したときにドロップする天然の光源。熱帯種のカエルがドロップする。"
+            "note": "白いカエルが小さいマグマキューブを捕食したときにドロップする。優しい光を放つ天然の光源。熱帯種のカエルがドロップする。"
           },
           "verdant_froglight": {
             "japanese": "新緑色のフロッグライト",
-            "note": "カエルが小さいマグマキューブを捕食したときにドロップする天然の光源。冷帯種のカエルがドロップする。"
+            "note": "緑色のカエルが小さいマグマキューブを捕食したときにドロップする。優しい光を放つ天然の光源。冷帯種のカエルがドロップする。"
           },
           "ochre_froglight": {
             "japanese": "黄土色のフロッグライト",
-            "note": "カエルが小さいマグマキューブを捕食したときにドロップする天然の光源。温帯種のカエルがドロップする。"
+            "note": "オレンジ色のカエルが小さいマグマキューブを捕食したときにドロップする。優しい光を放つ天然の光源。温帯種のカエルがドロップする。"
           },
-          "resin_clump": "樹脂の塊",
-          "spider_nest": "クモの巣",
-          "bedrock": "岩盤"
+          "resin_clump": {"japanese":"樹脂の塊","note":"クリーキングの心臓とつながるクリーキングがダメージを受けると落とす。鮮やかなオレンジ色。"},
+          "spider_nest": {"japanese":"クモの巣","note":"移動を遅くする"},
+          "bedrock": {"japanese":"岩盤","note":"サバイバルでは破壊不可能"}
         }
       }
     }
-  }}
+  }}}}

@@ -30,6 +30,12 @@ class EnvironmentalReactionsMixin:
             return self._render_submerged_darkness_line(event)
         if signals.emergency_shelter:
             return None
+        if self._is_cramped_dark_burrow_event(event):
+            return None
+        if self._is_nearby_light_source_buffered_event(event):
+            return None
+        if self._is_lit_interior_safe_pocket_event(event):
+            return None
         if self._is_safe_zone_with_door_event(event):
             return None
         if self._is_foliage_shade_context(event):
@@ -81,7 +87,10 @@ class EnvironmentalReactionsMixin:
     def _should_emit_emergency_shelter_morning_call(self, event: GameEvent, signals: DerivedSignals) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:
             return False
-        if not self.state.emergency_shelter_advised_this_cycle:
+        if not (
+            self.state.emergency_shelter_advised_this_cycle
+            or self.state.emergency_shelter_seen_this_cycle
+        ):
             return False
         if self.state.emergency_shelter_morning_announced:
             return False
@@ -184,6 +193,10 @@ class EnvironmentalReactionsMixin:
         stop_dark_push: bool,
     ) -> list[AudioAction]:
         actions = self._emergency_shelter_morning_actions(event, signals, stop_dark_push)
+        if actions:
+            return actions
+
+        actions = self._emergency_shelter_entry_actions(event, signals, stop_dark_push)
         if actions:
             return actions
 
@@ -310,6 +323,23 @@ class EnvironmentalReactionsMixin:
         if stop_dark_push:
             actions.append(self._control_interrupt_action())
         actions.extend(self._speech_actions(self._render_light_crafted_line(event)))
+        return actions
+
+    def _emergency_shelter_entry_actions(
+        self,
+        event: GameEvent,
+        signals: DerivedSignals,
+        stop_dark_push: bool,
+    ) -> list[AudioAction]:
+        if not signals.entered_emergency_shelter:
+            return []
+        should_interrupt = stop_dark_push or self._should_stop_dark_push_stage_one(event, signals)
+        self._reset_dark_push_state()
+        self._log_darkness_decision("emergency_shelter_entry", event, signals)
+        actions: list[AudioAction] = []
+        if should_interrupt:
+            actions.append(self._control_interrupt_action())
+        actions.extend(self._speech_actions(self._render_emergency_shelter_relief_line(event)))
         return actions
 
     def _submerged_dark_entry_actions(

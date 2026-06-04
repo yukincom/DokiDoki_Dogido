@@ -36,12 +36,39 @@ def is_haiku_usable_output(text: str) -> bool:
         return False
     if not re.fullmatch(r"[\u3041-\u309f\u30a1-\u30ffー\s／/|]+", text):
         return False
+    if _contains_forbidden_gibberish_sequence(text):
+        return False
     phrases = split_haiku_phrases(text)
     if phrases is None:
         return False
     counts = [count_japanese_sounds(phrase) for phrase in phrases]
     targets = (5, 7, 5)
     return all(abs(count - target) <= 1 for count, target in zip(counts, targets))
+
+
+def _contains_forbidden_gibberish_sequence(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text)
+    forbidden = (
+        "あいうえお",
+        "かきくけこ",
+        "さしすせそ",
+        "たちつてと",
+        "なにぬねの",
+        "はひふへほ",
+        "まみむめも",
+        "やゆよ",
+        "らりるれろ",
+        "アイウエオ",
+        "カキクケコ",
+        "サシスセソ",
+        "タチツテト",
+        "ナニヌネノ",
+        "ハヒフヘホ",
+        "マミムメモ",
+        "ヤユヨ",
+        "ラリルレロ",
+    )
+    return any(pattern in compact for pattern in forbidden)
 
 
 def split_haiku_phrases(text: str) -> list[str] | None:

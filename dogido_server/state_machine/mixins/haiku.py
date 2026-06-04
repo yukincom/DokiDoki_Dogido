@@ -1,15 +1,19 @@
 # state_machine/mixins/haiku.py
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from math import inf
 
 from dogido_server.entry_catalog import mob_poetic_tags
 from dogido_server.llm import StructuredGenerationRequest
+from dogido_server.llm.sanitize import summarize_for_log
 from dogido_server.models import EventName, GameEvent, NearbyResource
 from dogido_server.state_machine.haiku_catalog import HaikuFallbackContext, resolve_fallback_haiku
 from dogido_server.state_machine.haiku_context import HaikuContext, HaikuFeature, IronyContext
 from dogido_server.state_machine.constants import *  # noqa: F403
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class HaikuMixin:
@@ -31,18 +35,42 @@ class HaikuMixin:
         if not self._should_emit_haiku(event, now):
             return None
         self.state.haiku_emitted_this_cycle = True
-        return self._render_haiku_line(event)
+        line = self._format_haiku_line(self._render_haiku_line(event))
+        LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))
+        return line
 
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)
         irony = self._detect_haiku_irony(context)
-        return self._generate_leaf_text(
+        fallback_text = self._fallback_haiku_line(event)
+        skip_reason = self._haiku_llm_skip_reason(context, irony)
+        if skip_reason is not None:
+            LOGGER.warning(
+                "haiku_decision result=fallback reason=%s text=%s",
+                skip_reason,
+                summarize_for_log(fallback_text),
+            )
+            return fallback_text
+        line = self._generate_leaf_text(
             kind="haiku",
-            fallback_text=self._fallback_haiku_line(event),
+            fallback_text=fallback_text,
             details=context.prompt_details(irony),
             temperature=0.82,
             route="haiku",
         )
+        if line == fallback_text:
+            LOGGER.warning(
+                "haiku_decision result=fallback reason=llm_rejected text=%s",
+                summarize_for_log(fallback_text),
+            )
+        return line
+
+    def _format_haiku_line(self, text: str) -> str:
+        stripped = text.strip()
+        if not stripped:
+            return "ここで一句。"
+        separator = "\n" if "\n" in stripped else " "
+        return f"ここで一句。{separator}{stripped}"
 
     def _fallback_haiku_line(self, event: GameEvent) -> str:
         context = HaikuFallbackContext(
@@ -177,10 +205,12 @@ class HaikuMixin:
         items = sorted(inventory.items(), key=lambda entry: (-entry[1], entry[0]))
         values: list[str] = []
         for item_id, count in items:
+            if count <= 0:
+                continue
             label = self._item_label(item_id)
             if not label:
                 continue
-            values.append(f"{label} {count}こ")
+            values.append(label)
             if len(values) >= 6:
                 break
         return values
@@ -278,4 +308,26 @@ class HaikuMixin:
         for mob in event.peaceful_mobs:
             if self._mob_label(mob.type) == label:
                 return mob.type
+        return None
+
+    def _should_use_llm_haiku(self, context: HaikuContext, irony: IronyContext) -> bool:
+        return self._haiku_llm_skip_reason(context, irony) is None
+
+    def _haiku_llm_skip_reason(self, context: HaikuContext, irony: IronyContext) -> str | None:
+        if self.llm is None:
+            return "llm_unavailable"
+        if irony.found:
+            return None
+        concrete_subjects = {
+            label
+            for label in (
+                *context.nearby_blocks,
+                *context.peaceful_mobs,
+            )
+            if label
+        }
+        if context.held_item and context.held_item != "なし":
+            concrete_subjects.add(context.held_item)
+        if len(concrete_subjects) < 2:
+            return "weak_scene"
         return None

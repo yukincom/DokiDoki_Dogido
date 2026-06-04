@@ -34,6 +34,8 @@ def make_snapshot(
     nearby_resources: list[NearbyResource] | None = None,
     player_y: float = 64,
     danger_darkness_score: float = 0.0,
+    held_item: str = "minecraft:torch",
+    inventory: dict[str, int] | None = None,
 ) -> GameEvent:
     return GameEvent(
         schema_version="2026-05-24",
@@ -49,7 +51,7 @@ def make_snapshot(
             name="player",
             position=Position(x=0, y=player_y, z=12),
             dimension="minecraft:overworld",
-            held_item="minecraft:torch",
+            held_item=held_item,
         ),
         world=WorldState(
             time_of_day=time_of_day,
@@ -61,7 +63,7 @@ def make_snapshot(
             danger_darkness_score=danger_darkness_score,
         ),
         peaceful_mobs=list(peaceful_mobs or []),
-        inventory={"torch": 2, "oak_log": 4},
+        inventory=inventory or {"torch": 2, "oak_log": 4},
         nearby_resources=list(nearby_resources or []),
         meta=MetaState(user_text=user_text),
     )
@@ -82,7 +84,7 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         emitted = self.machine.process(make_snapshot(self.base_time + timedelta(seconds=301))).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "砂集め　燃えろやハスク　ガラス吹き")
+        self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
         self.assertEqual(
             self.machine.process(make_snapshot(self.base_time + timedelta(seconds=602))).actions,
@@ -108,7 +110,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertEqual(len(morning_emitted), 1)
-        self.assertEqual(morning_emitted[0].text, "砂集め　燃えろやハスク　ガラス吹き")
+        self.assertEqual(morning_emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
     def test_user_text_resets_silence_timer(self) -> None:
         self.machine.process(make_snapshot(self.base_time))
@@ -130,15 +132,31 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         emitted = self.machine.process(make_snapshot(self.base_time + timedelta(seconds=605))).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "砂集め　燃えろやハスク　ガラス吹き")
+        self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
-    def test_missing_biome_falls_back_to_under_construction_line(self) -> None:
-        self.machine.process(make_snapshot(self.base_time, biome="savanna_plateau"))
+    def test_sheep_surface_biome_without_sheep_uses_group_fallback_line(self) -> None:
+        self.machine.process(make_snapshot(self.base_time, biome="meadow"))
         emitted = self.machine.process(
-            make_snapshot(self.base_time + timedelta(seconds=301), biome="savanna_plateau")
+            make_snapshot(self.base_time + timedelta(seconds=301), biome="meadow")
         ).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "今、考え中やねん…")
+        self.assertEqual(emitted[0].text, "ここで一句。 野にいでて　ひつじめえめえ　草がベリ！")
+
+    def test_exact_biome_default_beats_sheep_surface_group_fallback(self) -> None:
+        self.machine.process(make_snapshot(self.base_time, biome="windswept_hills"))
+        emitted = self.machine.process(
+            make_snapshot(self.base_time + timedelta(seconds=301), biome="windswept_hills")
+        ).actions
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].text, "ここで一句。 うすぎりの　たべかけケーキ　ぎんいろの")
+
+    def test_missing_biome_without_specific_or_group_falls_back_to_under_construction_line(self) -> None:
+        self.machine.process(make_snapshot(self.base_time, biome="dark_forest"))
+        emitted = self.machine.process(
+            make_snapshot(self.base_time + timedelta(seconds=301), biome="dark_forest")
+        ).actions
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].text, "ここで一句。 今、考え中やねん…")
 
     def test_tropical_fish_rule_depends_on_mob_not_ocean_biome(self) -> None:
         tropical_fish = PeacefulMob(type="tropical_fish")
@@ -157,7 +175,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "おさかなさん　色とりどりの　水の花")
+        self.assertEqual(emitted[0].text, "ここで一句。 おさかなさん　色とりどりの　水の花")
 
     def test_sheep_rule_is_mob_based_not_biome_limited(self) -> None:
         sheep = PeacefulMob(type="sheep")
@@ -176,7 +194,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "野にいでて　ひつじめえめえ　草がベリ！")
+        self.assertEqual(emitted[0].text, "ここで一句。 野にいでて　ひつじめえめえ　草がベリ！")
 
     def test_birch_rule_uses_nearby_resources_not_biome_name(self) -> None:
         birch_leaves = NearbyResource(type="block", name="minecraft:birch_leaves", distance=20.0)
@@ -195,7 +213,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "しらかばの　ふしめがちょっと　目にみえる")
+        self.assertEqual(emitted[0].text, "ここで一句。 しらかばの　ふしめがちょっと　目にみえる")
 
     def test_diamond_rule_uses_depth_not_deep_dark_exact_match(self) -> None:
         self.machine.process(
@@ -215,7 +233,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "しんそうや　ダイヤはどこや　怖いわぁ")
+        self.assertEqual(emitted[0].text, "ここで一句。 しんそうや　ダイヤはどこや　怖いわぁ")
 
     def test_haiku_feature_candidates_include_biome_group_traits(self) -> None:
         event = make_snapshot(
@@ -271,12 +289,101 @@ class HaikuStateMachineTest(unittest.TestCase):
         ).actions
 
         self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0].text, "すなあつめ\nくりーぱーくる\nこわいわあ")
+        self.assertEqual(emitted[0].text, "ここで一句。\nすなあつめ\nくりーぱーくる\nこわいわあ")
         self.assertEqual(len(fake_llm.structured_requests), 1)
         self.assertEqual(fake_llm.structured_requests[0].route, "chat")
         self.assertEqual(len(fake_llm.leaf_requests), 1)
         self.assertEqual(fake_llm.leaf_requests[0].route, "haiku")
         self.assertEqual(fake_llm.leaf_requests[0].kind, "haiku")
+
+    def test_weak_scene_without_relation_uses_fallback_instead_of_llm(self) -> None:
+        class FakeLLM:
+            def __init__(self) -> None:
+                self.leaf_requests: list[LeafGenerationRequest] = []
+                self.structured_requests: list[StructuredGenerationRequest] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
+                self.leaf_requests.append(request)
+                return "あおいじゃが\nしろいようせき\nかくれとる"
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                self.structured_requests.append(request)
+                return {"found": False}
+
+        fake_llm = FakeLLM()
+        machine = DogidoStateMachine(self.settings, llm=fake_llm)
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="forest",
+                time_phase="day",
+                player_y=64,
+                held_item="minecraft:air",
+                inventory={},
+            )
+        )
+        emitted = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                biome="forest",
+                time_phase="day",
+                player_y=64,
+                held_item="minecraft:air",
+                inventory={},
+            )
+        ).actions
+
+        self.assertEqual(len(fake_llm.structured_requests), 1)
+        self.assertEqual(fake_llm.leaf_requests, [])
+        self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
+
+    def test_weak_scene_logs_fallback_decision_and_emitted_haiku(self) -> None:
+        class FakeLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                return {"found": False}
+
+        machine = DogidoStateMachine(self.settings, llm=FakeLLM())
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="forest",
+                time_phase="day",
+                player_y=64,
+                held_item="minecraft:air",
+                inventory={},
+            )
+        )
+
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            emitted = machine.process(
+                make_snapshot(
+                    self.base_time + timedelta(seconds=301),
+                    biome="forest",
+                    time_phase="day",
+                    player_y=64,
+                    held_item="minecraft:air",
+                    inventory={},
+                )
+            ).actions
+
+        self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
+        self.assertTrue(
+            any("haiku_decision result=fallback reason=weak_scene" in line for line in captured.output)
+        )
+        self.assertTrue(
+            any(
+                "haiku_emit result=emitted text=ここで一句。" in line
+                and "ふみだして" in line
+                and "葉の香り" in line
+                for line in captured.output
+            )
+        )
 
 
 if __name__ == "__main__":

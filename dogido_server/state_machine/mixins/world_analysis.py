@@ -40,12 +40,61 @@ MATERIAL_TOKEN_LABELS = {
 
 
 class WorldAnalysisMixin:
-    def _is_foliage_shade_context(self, event: GameEvent) -> bool:
+    def _has_double_height_open_side_event(self, event: GameEvent) -> bool:
+        return (event.world.double_height_open_side_count or 0) > 0
+
+    def _has_nearby_light_source_event(self, event: GameEvent) -> bool:
+        count = event.world.nearby_light_source_count or 0
+        if count <= 0:
+            return False
+        distance = event.world.nearest_light_source_distance
+        if distance is None:
+            return True
+        return distance <= self.settings.lit_interior_safe_light_source_distance
+
+    def _is_nearby_light_source_buffered_event(self, event: GameEvent) -> bool:
+        local_light = event.world.local_light if event.world.local_light is not None else 15
+        return self._has_nearby_light_source_event(event) and local_light >= 6
+
+    def _is_lit_interior_safe_pocket_event(self, event: GameEvent) -> bool:
+        if event.world.is_submerged or bool(event.world.sky_visible):
+            return False
+        local_light = event.world.local_light if event.world.local_light is not None else 15
+        if (
+            local_light < self.settings.lit_interior_safe_light_threshold
+            and not self._has_nearby_light_source_event(event)
+        ):
+            return False
+        cover_type = (event.world.overhead_cover_type or "unknown").lower()
+        if cover_type in {"foliage", "fluid"}:
+            return False
+        ceiling_height = event.world.ceiling_height or 24.0
+        if ceiling_height > self.settings.lit_interior_safe_max_ceiling_height:
+            return False
+        connected_dark_volume = event.world.connected_dark_volume
+        if (
+            connected_dark_volume is None
+            or connected_dark_volume > self.settings.lit_interior_safe_max_connected_volume
+        ):
+            return False
+        nearest_dark_spawn_distance = event.world.nearest_dark_spawn_distance
+        if (
+            nearest_dark_spawn_distance is None
+            or nearest_dark_spawn_distance < self.settings.lit_interior_safe_min_spawn_distance
+        ):
+            return False
+        return True
+
+    def _is_tree_canopy_cover_event(self, event: GameEvent) -> bool:
         if event.world.is_submerged:
             return False
         if (event.world.overhead_cover_type or "").lower() != "foliage":
             return False
-        if not event.world.sky_visible:
+        ceiling_height = event.world.ceiling_height or 0.0
+        return ceiling_height >= 3.0
+
+    def _is_foliage_shade_context(self, event: GameEvent) -> bool:
+        if not self._is_tree_canopy_cover_event(event):
             return False
         if self._normalized_biome(event.world.biome) not in FOLIAGE_SHADE_BIOMES:
             return False
@@ -62,6 +111,8 @@ class WorldAnalysisMixin:
             return False
         if self._is_safe_zone_with_door_event(event):
             return False
+        if self._has_double_height_open_side_event(event):
+            return False
         wall_count = event.world.cardinal_wall_count or 0
         ceiling_height = event.world.ceiling_height or 24.0
         return wall_count >= 4 and ceiling_height <= self.settings.emergency_shelter_max_ceiling_height
@@ -76,7 +127,7 @@ class WorldAnalysisMixin:
     def _is_emergency_shelter_morning(self, event: GameEvent) -> bool:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
         time_of_day = event.world.time_of_day
-        return time_phase == "morning" or (
+        return time_phase in {"morning", "day"} or (
             time_of_day is not None and time_of_day < self.settings.emergency_shelter_morning_cutoff
         )
 
@@ -104,8 +155,13 @@ class WorldAnalysisMixin:
         enclosure_score = event.world.enclosure_score or 0.0
         cover_type = (event.world.overhead_cover_type or "unknown").lower()
         ceiling_height = event.world.ceiling_height or 0.0
+        local_light = event.world.local_light if event.world.local_light is not None else 15
         if event.world.sky_visible and ceiling_height >= 12.0:
             return True
+        if cover_type == "foliage":
+            if ceiling_height >= 3.0:
+                return True
+            return local_light >= 9 and enclosure_score < 0.9
         if not event.world.sky_visible:
             if ceiling_height >= 12.0 and enclosure_score < 0.12:
                 return True
@@ -117,29 +173,56 @@ class WorldAnalysisMixin:
     def _is_occluded_environment(self, event: GameEvent) -> bool:
         return not self._is_open_visibility_environment(event)
 
+    def _is_cramped_dark_burrow_event(self, event: GameEvent) -> bool:
+        if event.world.is_submerged or bool(event.world.sky_visible):
+            return False
+        if self._has_double_height_open_side_event(event):
+            return False
+        connected_dark_volume = event.world.connected_dark_volume
+        ceiling_height = event.world.ceiling_height or 24.0
+        wall_count = event.world.cardinal_wall_count or 0
+        enclosure_score = event.world.enclosure_score or 0.0
+        cover_type = (event.world.overhead_cover_type or "unknown").lower()
+        if ceiling_height > self.settings.cramped_dark_burrow_max_ceiling_height:
+            return False
+        if cover_type in {"foliage", "fluid"}:
+            return False
+        if enclosure_score >= self.settings.cramped_dark_burrow_min_enclosure_score:
+            return True
+        if (
+            connected_dark_volume is not None
+            and connected_dark_volume <= self.settings.cramped_dark_burrow_max_connected_volume
+        ):
+            return wall_count >= self.settings.cramped_dark_burrow_min_wall_count
+        return False
+
     def _is_occluded_dark_zone_event(self, event: GameEvent) -> bool:
         if event.world.is_submerged:
+            return False
+        if self._is_nearby_light_source_buffered_event(event):
+            return False
+        if self._is_lit_interior_safe_pocket_event(event):
             return False
         if self._is_emergency_shelter_event(event):
             return False
         if self._is_safe_zone_with_door_event(event):
             return False
-        local_light = event.world.local_light if event.world.local_light is not None else 15
-        return self._is_occluded_environment(event) and (
-            (event.world.danger_darkness_score or 0.0) >= self.settings.occluded_entry_darkness_threshold
-            or local_light <= self.settings.occluded_entry_light_threshold
-        )
+        if self._is_cramped_dark_burrow_event(event):
+            return False
+        return self._is_occluded_environment(event) and self._is_dark_enough_for_occluded_entry(event)
 
     def _is_submerged_dark_zone_event(self, event: GameEvent) -> bool:
         if not event.world.is_submerged:
             return False
         if (event.world.submerged_depth_blocks or 0) < self.settings.submerged_darkness_depth_threshold:
             return False
-        local_light = event.world.local_light if event.world.local_light is not None else 15
-        return (
-            (event.world.danger_darkness_score or 0.0) >= self.settings.occluded_entry_darkness_threshold
-            or local_light <= self.settings.occluded_entry_light_threshold
-        )
+        return self._is_dark_enough_for_occluded_entry(event)
+
+    def _is_dark_enough_for_occluded_entry(self, event: GameEvent) -> bool:
+        local_light = event.world.local_light
+        if local_light is not None:
+            return local_light <= self.settings.occluded_entry_light_threshold
+        return (event.world.danger_darkness_score or 0.0) >= self.settings.occluded_entry_darkness_threshold
 
     def _is_safe_zone_with_door_event(self, event: GameEvent) -> bool:
         if event.world.is_submerged:
