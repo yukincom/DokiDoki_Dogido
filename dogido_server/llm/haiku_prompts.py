@@ -29,6 +29,20 @@ def _scene_block(details: dict[str, object]) -> str:
     )
 
 
+def _constraint_block(details: dict[str, object]) -> str:
+    constraints = details.get("haiku_constraints")
+    if not isinstance(constraints, dict):
+        return "なし"
+    allowed_terms = "、".join(str(term) for term in constraints.get("allowed_terms", []) if term) or "なし"
+    forbidden_terms = "、".join(str(term) for term in constraints.get("forbidden_terms", []) if term) or "なし"
+    if allowed_terms == "なし" and forbidden_terms == "なし":
+        return "なし"
+    return (
+        f"使ってよい語: {allowed_terms}\n"
+        f"使ってはいけない語: {forbidden_terms}"
+    )
+
+
 def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
     feature_candidates = details.get("feature_candidates", [])
     candidate_lines = "\n".join(
@@ -44,6 +58,7 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
     biome_traits = "、".join(str(item) for item in details.get("biome_traits", []) if item) or "なし"
     item_hint = _item_hint(details)
     scene_block = _scene_block(details)
+    constraint_block = _constraint_block(details)
     irony = details.get("irony")
     irony_block = "なし"
     if isinstance(irony, dict) and irony.get("description"):
@@ -70,6 +85,9 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         "注目したい取り合わせや場面の要約:\n"
         f"{irony_block}\n"
         "\n"
+        "主役語の制約:\n"
+        f"{constraint_block}\n"
+        "\n"
         "川柳ルール:\n"
         "- 主題の優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする\n"
         "- アイテムだけを主題にしない\n"
@@ -84,6 +102,7 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         "- 場面の要約があれば、その内容を5-7-5に圧縮するつもりで作る\n"
         "- 取り合わせや場面の焦点があれば、それを優先してよい\n"
         "- 候補や現在の状況にないアイテム、ブロック、Mob を勝手に出さない\n"
+        "- もし道具名や主役語を句に入れるなら、『使ってよい語』だけを使い、『使ってはいけない語』へ言い換えない\n"
         "- 意味のない五十音並びやランダム文字列は禁止\n"
         "\n"
         "現在の状況:\n"

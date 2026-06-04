@@ -42,6 +42,8 @@ class VisualTargetsMixin:
         return None
 
     def _should_emit_spotted_hostile_gasp(self, event: GameEvent) -> bool:
+        if self._is_other_realm_swarm_scene(event):
+            return False
         threat = self._highest_priority_visual(event.visual_threats)
         if threat is None:
             return False

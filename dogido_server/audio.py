@@ -408,6 +408,8 @@ class AudioDispatcher:
         if not actions:
             return actions
         first = actions[0]
+        if first.layer == "flush":
+            return []
         if first.layer != "control":
             return actions
         remaining = list(actions[1:])
@@ -419,7 +421,8 @@ class AudioDispatcher:
     def _has_hard_interrupt(self, actions: list[AudioAction]) -> bool:
         """protect_ms を無視して強制割り込みすべき悲鳴系アクションかどうかを判定する。"""
         return any(
-            action.cue_id in {"panic_scream_start", "front_spawn_scream", "ushiro_scream"}
+            action.layer == "flush"
+            or action.cue_id in {"panic_scream_start", "front_spawn_scream", "ushiro_scream"}
             or (action.layer == "speech" and action.interrupt)
             for action in actions
         )

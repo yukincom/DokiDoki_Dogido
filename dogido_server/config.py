@@ -173,6 +173,8 @@ class Settings(BaseSettings):
     haiku_structured_max_tokens: int = 192
     hostile_comment_cooldown_ms: int = 60000
     occluded_hostile_presence_comment_cooldown_ms: int = 300000
+    other_realm_swarm_visual_threshold: int = 4
+    other_realm_audio_generic_threshold: int = 2
     daylight_water_comment_cooldown_ms: int = 120000
     burning_visual_comment_cooldown_ms: int = 10000
     multi_hostile_comment_cooldown_ms: int = 30000

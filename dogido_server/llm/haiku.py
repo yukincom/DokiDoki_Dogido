@@ -29,7 +29,7 @@ def clean_haiku_output(text: str | None) -> str:
     return "\n".join(candidates[-3:])
 
 
-def is_haiku_usable_output(text: str) -> bool:
+def is_haiku_usable_output(text: str, details: dict[str, object] | None = None) -> bool:
     if not text:
         return False
     if re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text):
@@ -43,7 +43,9 @@ def is_haiku_usable_output(text: str) -> bool:
         return False
     counts = [count_japanese_sounds(phrase) for phrase in phrases]
     targets = (5, 7, 5)
-    return all(abs(count - target) <= 1 for count, target in zip(counts, targets))
+    if not all(abs(count - target) <= 1 for count, target in zip(counts, targets)):
+        return False
+    return _respects_haiku_constraints(text, details)
 
 
 def _contains_forbidden_gibberish_sequence(text: str) -> bool:
@@ -120,3 +122,32 @@ def haiku_char_sound(ch: str, index: int) -> int:
     if ch in {"ゃ", "ゅ", "ょ", "ャ", "ュ", "ョ", "ぁ", "ぃ", "ぅ", "ぇ", "ぉ", "ァ", "ィ", "ゥ", "ェ", "ォ", "ゎ", "ヮ"}:
         return 0 if index > 0 else 1
     return 1
+
+
+def _respects_haiku_constraints(text: str, details: dict[str, object] | None) -> bool:
+    if not isinstance(details, dict):
+        return True
+    constraints = details.get("haiku_constraints")
+    if not isinstance(constraints, dict):
+        return True
+    forbidden_terms = [
+        _normalize_haiku_term(str(term))
+        for term in constraints.get("forbidden_terms", [])
+        if term
+    ]
+    if not forbidden_terms:
+        return True
+    normalized = _normalize_haiku_term(text)
+    return not any(term and term in normalized for term in forbidden_terms)
+
+
+def _normalize_haiku_term(text: str) -> str:
+    compact = re.sub(r"\s+", "", text)
+    chars: list[str] = []
+    for ch in compact:
+        code = ord(ch)
+        if 0x30A1 <= code <= 0x30F6:
+            chars.append(chr(code - 0x60))
+            continue
+        chars.append(ch)
+    return "".join(chars)

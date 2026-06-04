@@ -47,6 +47,9 @@ class ActionBuilderMixin:
     ) -> list[AudioAction]:
         actions: list[AudioAction] = []
 
+        if signals.dimension_changed:
+            return [self._flush_interrupt_action()]
+
         if event.event.name == EventName.PLAYER_DIED:
             actions.append(AudioAction(layer="speech", interrupt=True, text=self._render_death_message(event)))
             return actions
@@ -159,6 +162,9 @@ class ActionBuilderMixin:
             cue_id=cue_id,
             protect_ms=protect_ms,
         )
+
+    def _flush_interrupt_action(self) -> AudioAction:
+        return AudioAction(layer="flush", interrupt=True)
 
     def _log_emitted_actions(
         self,

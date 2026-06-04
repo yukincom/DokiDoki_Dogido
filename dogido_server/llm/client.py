@@ -151,7 +151,7 @@ class DogidoLLM:
         # 後処理は純粋関数なのでロック外で行うが、将来ここで _model / _tokenizer に触るなら要見直し。
         # kind によってクリーニング・判定ロジックを切り替える
         cleaned = self._clean_haiku_output(text) if request.kind == "haiku" else self._clean_output(text)
-        is_usable = self._is_haiku_usable_output(cleaned) if request.kind == "haiku" else self._is_usable_output(cleaned, request.details)
+        is_usable = self._is_haiku_usable_output(cleaned, request.details) if request.kind == "haiku" else self._is_usable_output(cleaned, request.details)
         if not is_usable:
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=unusable_output raw=%s cleaned=%s",
@@ -372,8 +372,8 @@ class DogidoLLM:
     def _clean_haiku_output(self, text: str | None) -> str:
         return clean_haiku_output(text)
 
-    def _is_haiku_usable_output(self, text: str) -> bool:
-        return is_haiku_usable_output(text)
+    def _is_haiku_usable_output(self, text: str, details: dict[str, Any] | None = None) -> bool:
+        return is_haiku_usable_output(text, details)
 
     def _split_haiku_phrases(self, text: str) -> list[str] | None:
         return split_haiku_phrases(text)

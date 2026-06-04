@@ -202,6 +202,11 @@ class CueReactionsMixin:
         direction_only: bool,
         silence_new_close_ambush: bool,
     ) -> str | None:
+        crowded_other_realm = self._is_other_realm_swarm_scene(
+            event,
+            visual_count=max(len(event.visual_threats), signals.visual_threat_count_within_10),
+            auditory_count=len(event.auditory_threats),
+        )
         if event.visual_threats:
             handled, line = self._priority_visual_callout(
                 event,
@@ -214,6 +219,8 @@ class CueReactionsMixin:
             )
             if handled:
                 return line
+            if crowded_other_realm:
+                return None
 
             urgent_new = self._new_priority_visual_target(event.visual_threats, now=now)
             if urgent_new is not None and (urgent_new.distance is None or urgent_new.distance > 3.0):
@@ -274,6 +281,12 @@ class CueReactionsMixin:
             return True, increase
 
         if self._visual_priority_cooldown_active(now):
+            if self._is_other_realm_swarm_scene(
+                event,
+                visual_count=max(len(event.visual_threats), signals.visual_threat_count_within_10),
+                auditory_count=len(event.auditory_threats),
+            ):
+                return True, None
             return True, self._auditory_comment(
                 event,
                 self._unseen_auditory_threats(event.visual_threats, event.auditory_threats),
@@ -281,7 +294,7 @@ class CueReactionsMixin:
                 style=auditory_style,
             )
 
-        overwhelmed = self._overwhelmed_callout(event.visual_threats, now=now, suppressed=softened_visuals)
+        overwhelmed = self._overwhelmed_callout(event.visual_threats, event, now=now, suppressed=softened_visuals)
         if overwhelmed is not None:
             return True, overwhelmed
 

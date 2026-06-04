@@ -62,6 +62,27 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int OCCLUDED_AUDIO_HORIZONTAL_BLOCKS = 8;
     private static final int OCCLUDED_AUDIO_VERTICAL_BLOCKS = 5;
     private static final double AMBIENT_MOB_DISTANCE = 12.0;
+    private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
+        {"zombified_piglin", "zombified_piglin"},
+        {"zombie_pigman", "zombified_piglin"},
+        {"zombie_villager", "zombie_villager"},
+        {"wither_skeleton", "wither_skeleton"},
+        {"piglin_brute", "piglin_brute"},
+        {"magma_cube", "magma_cube"},
+        {"creeper", "creeper"},
+        {"skeleton", "skeleton"},
+        {"spider", "spider"},
+        {"witch", "witch"},
+        {"enderman", "enderman"},
+        {"drowned", "drowned"},
+        {"zoglin", "zoglin"},
+        {"hoglin", "hoglin"},
+        {"ghast", "ghast"},
+        {"blaze", "blaze"},
+        {"slime", "slime"},
+        {"piglin", "piglin"},
+        {"zombie", "zombie"}
+    };
     private static final Set<String> AMBIENT_NEUTRAL_MONSTER_IDS = Set.of(
         "enderman",
         "piglin",
@@ -1270,10 +1291,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private String hostileLabelFromSoundEvent(String soundEventId) {
-        String[] hostileIds = {"creeper", "zombie", "skeleton", "spider", "witch", "enderman", "slime", "drowned"};
-        for (String hostileId : hostileIds) {
-            if (soundEventId.contains(hostileId)) {
-                return hostileId;
+        // Match specific identifiers and legacy aliases before generic ones like "zombie".
+        for (String[] pattern : HOSTILE_SOUND_LABEL_PATTERNS) {
+            if (soundEventId.contains(pattern[0])) {
+                return pattern[1];
             }
         }
         return null;

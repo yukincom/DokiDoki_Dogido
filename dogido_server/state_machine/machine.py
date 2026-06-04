@@ -61,6 +61,7 @@ class DogidoStateMachine(
 
         self._update_memory(event, now)
         signals = self._derive_signals(event, now)
+        signals.dimension_changed = dimension_changed
         signals.newly_burning_visual = newly_burning_visual
         signals.entered_occluded_dark_zone = entered_occluded_dark_zone
         signals.entered_safe_zone_with_door = entered_safe_zone_with_door

@@ -339,6 +339,8 @@ class AuditoryMixin:
             return None
 
         label = self._auditory_hostile_label(target)
+        if self._should_genericize_other_realm_auditory_presence(event, len(threats)):
+            label = None
         direction = self._direction_label(target)
         count = presence.count
         distance_rank = self._distance_band_rank(target.distance_band)

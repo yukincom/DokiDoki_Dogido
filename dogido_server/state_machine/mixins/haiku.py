@@ -31,6 +31,52 @@ class _InventoryPoemCandidate:
     order: int
 
 
+@dataclass(frozen=True, slots=True)
+class _HaikuNounFamily:
+    key: str
+    category: str
+    item_suffixes: tuple[str, ...]
+    label_markers: tuple[str, ...]
+    allowed_terms: tuple[str, ...]
+    forbidden_terms: tuple[str, ...]
+
+
+_HAIKU_NOUN_FAMILIES: tuple[_HaikuNounFamily, ...] = (
+    _HaikuNounFamily(
+        key="shovel",
+        category="tool",
+        item_suffixes=("shovel",),
+        label_markers=("シャベル", "しゃべる"),
+        allowed_terms=("しゃべる",),
+        forbidden_terms=("つるはし", "おの", "くわ"),
+    ),
+    _HaikuNounFamily(
+        key="pickaxe",
+        category="tool",
+        item_suffixes=("pickaxe",),
+        label_markers=("ツルハシ", "つるはし"),
+        allowed_terms=("つるはし",),
+        forbidden_terms=("しゃべる", "おの", "くわ"),
+    ),
+    _HaikuNounFamily(
+        key="axe",
+        category="tool",
+        item_suffixes=("axe",),
+        label_markers=("斧", "オノ", "おの"),
+        allowed_terms=("おの",),
+        forbidden_terms=("しゃべる", "つるはし", "くわ"),
+    ),
+    _HaikuNounFamily(
+        key="hoe",
+        category="tool",
+        item_suffixes=("hoe",),
+        label_markers=("クワ", "くわ"),
+        allowed_terms=("くわ",),
+        forbidden_terms=("しゃべる", "つるはし", "おの"),
+    ),
+)
+
+
 class HaikuMixin:
     def _should_emit_haiku(self, event: GameEvent, now: datetime) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:
@@ -77,10 +123,12 @@ class HaikuMixin:
                 summarize_for_log(fallback_text),
             )
             return fallback_text
+        prompt_details = context.prompt_details(irony, scene)
+        prompt_details["haiku_constraints"] = self._haiku_constraint_details(event, scene)
         line = self._generate_leaf_text(
             kind="haiku",
             fallback_text=llm_failed_text,
-            details=context.prompt_details(irony, scene),
+            details=prompt_details,
             temperature=0.82,
             route="haiku",
         )
@@ -503,3 +551,46 @@ class HaikuMixin:
         ):
             score += 1
         return score
+
+    def _haiku_constraint_details(self, event: GameEvent, scene: SceneContext) -> dict[str, object] | None:
+        families = self._haiku_selected_noun_families(event, scene)
+        if not families:
+            return None
+        allowed_terms: list[str] = []
+        forbidden_terms: list[str] = []
+        seen_allowed: set[str] = set()
+        seen_forbidden: set[str] = set()
+        for family in families:
+            for term in family.allowed_terms:
+                if term and term not in seen_allowed:
+                    seen_allowed.add(term)
+                    allowed_terms.append(term)
+            for term in family.forbidden_terms:
+                if term and term not in seen_forbidden:
+                    seen_forbidden.add(term)
+                    forbidden_terms.append(term)
+        if not allowed_terms and not forbidden_terms:
+            return None
+        return {
+            "allowed_terms": allowed_terms,
+            "forbidden_terms": forbidden_terms,
+        }
+
+    def _haiku_selected_noun_families(self, event: GameEvent, scene: SceneContext) -> tuple[_HaikuNounFamily, ...]:
+        selected: list[_HaikuNounFamily] = []
+        seen: set[str] = set()
+        held_item_id = str(event.player.held_item or "").split(":")[-1].strip().lower()
+        for family in _HAIKU_NOUN_FAMILIES:
+            if any(held_item_id.endswith(suffix) for suffix in family.item_suffixes):
+                if family.key not in seen:
+                    seen.add(family.key)
+                    selected.append(family)
+        for motif in scene.motifs:
+            motif_text = str(motif or "")
+            for family in _HAIKU_NOUN_FAMILIES:
+                if family.key in seen:
+                    continue
+                if any(marker and marker in motif_text for marker in family.label_markers):
+                    seen.add(family.key)
+                    selected.append(family)
+        return tuple(selected)

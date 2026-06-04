@@ -21,6 +21,7 @@ from dogido_server.models import (
     WorldState,
 )
 from dogido_server.state_machine import DogidoStateMachine
+from dogido_server.state_machine.haiku_context import SceneContext
 
 
 def make_snapshot(
@@ -582,6 +583,31 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertIn("手持ち 火打石と打ち金", candidates)
         self.assertFalse(any(candidate.startswith("持ち物 ") for candidate in candidates))
+
+    def test_haiku_prompt_details_include_tool_constraints_from_held_item_and_scene(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="snowy_slopes",
+            held_item="minecraft:diamond_shovel",
+        )
+        constraints = self.machine._haiku_constraint_details(
+            event,
+            SceneContext(
+                found=True,
+                summary="雪原でダイヤモンドシャベルを握る",
+                motifs=("ダイヤモンドシャベル", "雪原"),
+                focus=("道具の高級感",),
+                confidence=0.8,
+            ),
+        )
+
+        self.assertEqual(
+            constraints,
+            {
+                "allowed_terms": ["しゃべる"],
+                "forbidden_terms": ["つるはし", "おの", "くわ"],
+            },
+        )
 
 
 if __name__ == "__main__":

@@ -192,11 +192,20 @@ class VisualReportsMixin:
     def _overwhelmed_callout(
         self,
         threats: list[VisualThreat],
+        event: GameEvent,
         now: datetime,
         suppressed: bool,
     ) -> str | None:
         if len(threats) < 4:
             return None
+        if self._is_other_realm_swarm_scene(event, visual_count=len(threats)):
+            recent_ms = self._recent_ms(now, self.state.last_overwhelmed_report_at)
+            if recent_ms is not None and recent_ms < self.settings.multi_hostile_comment_cooldown_ms:
+                return None
+            self.state.last_overwhelmed_report_at = now
+            self._mark_visual_priority_callout(now, single_type=None)
+            key = "hostile_massive_suppressed" if suppressed else "hostile_massive"
+            return response_text("combat", "pressure", key)
         if len(threats) >= 9 and not self._contains_boss_hostile(threats):
             recent_ms = self._recent_ms(now, self.state.last_overwhelmed_report_at)
             if recent_ms is not None and recent_ms < self.settings.multi_hostile_comment_cooldown_ms:

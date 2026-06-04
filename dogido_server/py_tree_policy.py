@@ -81,6 +81,14 @@ class AmbientMobEvent(_Condition):
         return context.next_mode == "normal" and context.event.event.name == EventName.AMBIENT_MOB_DETECTED
 
 
+class DimensionChanged(_Condition):
+    def __init__(self) -> None:
+        super().__init__(name="DimensionChanged")
+
+    def check(self, context: PolicyContext) -> bool:
+        return bool(context.signals.dimension_changed)
+
+
 class NormalEnvironmentEvent(_Condition):
     def __init__(self) -> None:
         super().__init__(name="NormalEnvironmentEvent")
@@ -133,6 +141,14 @@ class EmitDeathActions(_Action):
                 text=context.machine._render_death_message(context.event),
             )
         )
+
+
+class EmitFlushInterrupt(_Action):
+    def __init__(self) -> None:
+        super().__init__(name="EmitFlushInterrupt")
+
+    def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        actions.append(context.machine._flush_interrupt_action())
 
 
 class EmitPanicActions(_Action):
@@ -310,6 +326,7 @@ class PyTreeActionPolicy:
         root = py_trees.composites.Selector(name="DogidoPolicy", memory=False)
         root.add_children(
             [
+                self._sequence("DimensionChanged", DimensionChanged(), EmitFlushInterrupt()),
                 self._sequence("Death", EventIs(EventName.PLAYER_DIED), EmitDeathActions()),
                 self._sequence("Panic", ModeIs("panic"), EmitPanicActions()),
                 self._sequence("SuppressedPanic", ModeIs("suppressed_panic"), EmitSuppressedPanicActions()),

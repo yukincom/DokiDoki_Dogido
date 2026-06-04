@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
+import logging
 from typing import Iterable
 from uuid import uuid4
 
@@ -26,6 +27,8 @@ from dogido_server.state_machine import (
 )
 from dogido_server.state_machine.fallback_catalog import fallback_prewarm_texts
 from dogido_server.state_machine.response_catalog import response_prewarm_texts
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 def _new_id(prefix: str) -> str:
@@ -52,6 +55,13 @@ class SessionInfo:
     seen_idempotency: deque[str] = field(default_factory=lambda: deque(maxlen=2048))
     seen_idempotency_set: set[str] = field(default_factory=set)
 
+    def is_stale_sequence(self, sequence: int) -> bool:
+        return (
+            self.last_sequence is not None
+            and sequence <= self.last_sequence
+            and sequence not in self.seen_sequence_set
+        )
+
     def remember_sequence(self, sequence: int) -> bool:
         if sequence in self.seen_sequence_set:
             return True
@@ -60,7 +70,8 @@ class SessionInfo:
             self.seen_sequence_set.discard(old)
         self.seen_sequences.append(sequence)
         self.seen_sequence_set.add(sequence)
-        self.last_sequence = sequence
+        if self.last_sequence is None or sequence > self.last_sequence:
+            self.last_sequence = sequence
         return False
 
     def remember_idempotency(self, key: str) -> bool:
@@ -138,7 +149,17 @@ class DogidoService:
             deduplicated = session.remember_idempotency(idempotency_key)
 
         if not deduplicated and event.sequence is not None:
-            deduplicated = session.remember_sequence(event.sequence)
+            if session.is_stale_sequence(event.sequence):
+                LOGGER.warning(
+                    "stale_sequence_skipped session_id=%s sequence=%s last_sequence=%s dimension=%s",
+                    session.session_id,
+                    event.sequence,
+                    session.last_sequence,
+                    event.player.dimension,
+                )
+                deduplicated = True
+            else:
+                deduplicated = session.remember_sequence(event.sequence)
 
         if deduplicated:
             response = AcceptedEventResponse(

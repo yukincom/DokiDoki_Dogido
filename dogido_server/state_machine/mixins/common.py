@@ -127,6 +127,35 @@ class CommonMixin:
             return True
         return dimension in {"overworld", "minecraft:overworld"}
 
+    def _is_other_realm_swarm_scene(
+        self,
+        event: GameEvent,
+        *,
+        visual_count: int | None = None,
+        auditory_count: int | None = None,
+    ) -> bool:
+        if self._is_overworld_dimension(event):
+            return False
+        resolved_visual_count = len(event.visual_threats) if visual_count is None else visual_count
+        resolved_auditory_count = len(event.auditory_threats) if auditory_count is None else auditory_count
+        if resolved_visual_count >= self.settings.other_realm_swarm_visual_threshold:
+            return True
+        return (
+            resolved_visual_count > 0
+            and resolved_auditory_count >= self.settings.other_realm_audio_generic_threshold
+        )
+
+    def _should_genericize_other_realm_auditory_presence(
+        self,
+        event: GameEvent,
+        auditory_count: int,
+    ) -> bool:
+        if self._is_overworld_dimension(event):
+            return False
+        if len(event.visual_threats) >= self.settings.other_realm_swarm_visual_threshold:
+            return True
+        return auditory_count >= self.settings.other_realm_audio_generic_threshold
+
     def _normalized_dimension(self, event: GameEvent) -> str:
         return (event.player.dimension or "").strip().lower()
 

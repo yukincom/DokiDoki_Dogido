@@ -110,6 +110,7 @@ class RuntimeState:
 
 @dataclass(slots=True)
 class DerivedSignals:
+    dimension_changed: bool = False
     nearest_visual_threat_distance: float = inf
     visual_threat_count_within_7: int = 0
     visual_threat_count_within_10: int = 0
