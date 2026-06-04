@@ -81,7 +81,7 @@ class CueReactionsMixin:
             return self._build_cue_action("panic_scream_start", "きゃー！", now)
         if has_callout and self._is_occluded_hostile_presence_context(event, event.auditory_threats):
             return None
-        if has_callout:
+        if has_callout and self._should_emit_spotted_hostile_gasp(event):
             self._log_panic_cue_decision(
                 "spot_hostile_gasp",
                 "hostile_spotted_gasp",

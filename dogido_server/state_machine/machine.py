@@ -48,13 +48,15 @@ class DogidoStateMachine(
         now = event.observed_at
         previous_mode = self.state.mode
         self.player_input = route_player_input(event.meta.user_text)
+        dimension_changed = self._did_change_dimension(event)
+        self._handle_dimension_change(event)
         newly_burning_visual = self._find_newly_burning_visual(event)
-        weather_transition = self._weather_transition(event)
-        entered_occluded_dark_zone = self._entered_occluded_dark_zone(event)
-        entered_safe_zone_with_door = self._entered_safe_zone_with_door(event)
-        entered_emergency_shelter = self._entered_emergency_shelter(event)
-        exited_safe_zone_with_door = self._exited_safe_zone_with_door(event)
-        entered_submerged_dark_zone = self._entered_submerged_dark_zone(event)
+        weather_transition = None if dimension_changed else self._weather_transition(event)
+        entered_occluded_dark_zone = False if dimension_changed else self._entered_occluded_dark_zone(event)
+        entered_safe_zone_with_door = False if dimension_changed else self._entered_safe_zone_with_door(event)
+        entered_emergency_shelter = False if dimension_changed else self._entered_emergency_shelter(event)
+        exited_safe_zone_with_door = False if dimension_changed else self._exited_safe_zone_with_door(event)
+        entered_submerged_dark_zone = False if dimension_changed else self._entered_submerged_dark_zone(event)
         light_source_crafted = self._light_source_crafted(event)
 
         self._update_memory(event, now)

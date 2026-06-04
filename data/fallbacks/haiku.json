@@ -1,6 +1,7 @@
 {
   "version": 1,
   "under_construction_line": "今、考え中やねん…",
+  "llm_failed_line": "まとまらんかった。。。",
   "biome_groups": {
     "ocean": [
       "ocean",

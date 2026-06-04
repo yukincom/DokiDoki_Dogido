@@ -134,6 +134,17 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
+    def test_haiku_does_not_emit_while_state_is_alert(self) -> None:
+        self.machine.state.mode = "alert"
+        self.machine.state.last_non_silent_at = self.base_time
+
+        should_emit = self.machine._should_emit_haiku(
+            make_snapshot(self.base_time + timedelta(seconds=301)),
+            self.base_time + timedelta(seconds=301),
+        )
+
+        self.assertFalse(should_emit)
+
     def test_sheep_surface_biome_without_sheep_uses_group_fallback_line(self) -> None:
         self.machine.process(make_snapshot(self.base_time, biome="meadow"))
         emitted = self.machine.process(
@@ -259,6 +270,14 @@ class HaikuStateMachineTest(unittest.TestCase):
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
                 self.structured_requests.append(request)
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "深い地下でヒツジがのんびりしとる",
+                        "motifs": ["地下", "ヒツジ"],
+                        "focus": ["地下", "ヒツジ"],
+                        "confidence": 0.8,
+                    }
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -290,8 +309,13 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nすなあつめ\nくりーぱーくる\nこわいわあ")
-        self.assertEqual(len(fake_llm.structured_requests), 1)
+        self.assertEqual(len(fake_llm.structured_requests), 2)
         self.assertEqual(fake_llm.structured_requests[0].route, "chat")
+        self.assertEqual(fake_llm.structured_requests[0].kind, "haiku_irony")
+        self.assertEqual(fake_llm.structured_requests[0].max_tokens, self.settings.haiku_structured_max_tokens)
+        self.assertEqual(fake_llm.structured_requests[1].route, "chat")
+        self.assertEqual(fake_llm.structured_requests[1].kind, "haiku_scene")
+        self.assertEqual(fake_llm.structured_requests[1].max_tokens, self.settings.haiku_structured_max_tokens)
         self.assertEqual(len(fake_llm.leaf_requests), 1)
         self.assertEqual(fake_llm.leaf_requests[0].route, "haiku")
         self.assertEqual(fake_llm.leaf_requests[0].kind, "haiku")
@@ -336,7 +360,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
 
-        self.assertEqual(len(fake_llm.structured_requests), 1)
+        self.assertEqual(len(fake_llm.structured_requests), 2)
         self.assertEqual(fake_llm.leaf_requests, [])
         self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
 
@@ -384,6 +408,180 @@ class HaikuStateMachineTest(unittest.TestCase):
                 for line in captured.output
             )
         )
+
+    def test_invalid_structured_haiku_uses_llm_failed_line_instead_of_catalog_fallback(self) -> None:
+        class FakeLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                return {"found": False, "__dogido_status": "invalid_json"}
+
+        machine = DogidoStateMachine(self.settings, llm=FakeLLM())
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="meadow",
+                time_phase="day",
+                held_item="minecraft:campfire",
+                inventory={"campfire": 1},
+            )
+        )
+        emitted = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                biome="meadow",
+                time_phase="day",
+                held_item="minecraft:campfire",
+                inventory={"campfire": 1},
+            )
+        ).actions
+
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].text, "ここで一句。 まとまらんかった。。。")
+
+    def test_scene_summary_can_unlock_llm_haiku_when_irony_is_weak(self) -> None:
+        class FakeLLM:
+            def __init__(self) -> None:
+                self.leaf_requests: list[LeafGenerationRequest] = []
+                self.structured_requests: list[StructuredGenerationRequest] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
+                self.leaf_requests.append(request)
+                return "のにいでて\nひうちいしもつ\nあまいみや"
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                self.structured_requests.append(request)
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "草地で火打石と打ち金を握り、甘い実をしまっとる",
+                        "motifs": ["草地", "火打石と打ち金", "きらめくスイカの薄切り"],
+                        "focus": ["火打石と打ち金", "きらめくスイカの薄切り"],
+                        "confidence": 0.76,
+                    }
+                return {"found": False}
+
+        fake_llm = FakeLLM()
+        machine = DogidoStateMachine(self.settings, llm=fake_llm)
+        inventory = {
+            "glistering_melon_slice": 1,
+            "poisonous_potato": 1,
+            "suspicious_stew": 1,
+        }
+        sheep = PeacefulMob(type="sheep")
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="meadow",
+                peaceful_mobs=[sheep],
+                held_item="minecraft:flint_and_steel",
+                inventory=inventory,
+            )
+        )
+        emitted = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                biome="meadow",
+                peaceful_mobs=[sheep],
+                held_item="minecraft:flint_and_steel",
+                inventory=inventory,
+            )
+        ).actions
+
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].text, "ここで一句。\nのにいでて\nひうちいしもつ\nあまいみや")
+        self.assertEqual(len(fake_llm.leaf_requests), 1)
+        self.assertEqual(fake_llm.leaf_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+
+    def test_plain_scene_summary_with_weather_and_held_item_can_use_llm(self) -> None:
+        class FakeLLM:
+            def __init__(self) -> None:
+                self.leaf_requests: list[LeafGenerationRequest] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
+                self.leaf_requests.append(request)
+                return "はれののに\nたきびかかえて\nかぜやわら"
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "晴れた草地でキャンプファイアを抱えて立っとる",
+                        "motifs": ["草地", "晴れ", "キャンプファイア"],
+                        "focus": ["草地", "キャンプファイア"],
+                        "confidence": 0.76,
+                    }
+                return {"found": False}
+
+        fake_llm = FakeLLM()
+        machine = DogidoStateMachine(self.settings, llm=fake_llm)
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="plains",
+                held_item="minecraft:campfire",
+                inventory={"campfire": 1},
+            )
+        )
+        emitted = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                biome="plains",
+                held_item="minecraft:campfire",
+                inventory={"campfire": 1},
+            )
+        ).actions
+
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].text, "ここで一句。\nはれののに\nたきびかかえて\nかぜやわら")
+        self.assertEqual(len(fake_llm.leaf_requests), 1)
+
+    def test_inventory_details_are_condensed_to_close_pair_and_outlier(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="meadow",
+            held_item="minecraft:flint_and_steel",
+            inventory={
+                "flint_and_steel": 1,
+                "glistering_melon_slice": 1,
+                "poisonous_potato": 1,
+                "suspicious_stew": 1,
+            },
+        )
+
+        context = self.machine._haiku_context(event)
+
+        self.assertEqual(context.inventory_close_pair, ("青くなったジャガイモ", "怪しげなシチュー"))
+        self.assertEqual(context.inventory_far_item, "きらめくスイカの薄切り")
+        self.assertEqual(
+            context.inventory_items,
+            ("青くなったジャガイモ", "怪しげなシチュー", "きらめくスイカの薄切り"),
+        )
+
+    def test_feature_candidates_do_not_fill_up_with_inventory_items(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="meadow",
+            held_item="minecraft:flint_and_steel",
+            inventory={
+                "flint_and_steel": 1,
+                "glistering_melon_slice": 1,
+                "poisonous_potato": 1,
+                "suspicious_stew": 1,
+            },
+        )
+
+        candidates = self.machine._haiku_context(event).feature_candidate_labels()
+
+        self.assertIn("手持ち 火打石と打ち金", candidates)
+        self.assertFalse(any(candidate.startswith("持ち物 ") for candidate in candidates))
 
 
 if __name__ == "__main__":

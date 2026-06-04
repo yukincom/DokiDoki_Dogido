@@ -10,6 +10,16 @@ from dogido_server.state_machine.response_catalog import response_text, selected
 
 
 class CommonMixin:
+    def _effective_time_phase(self, event: GameEvent) -> str | None:
+        if not self._is_overworld_dimension(event):
+            return None
+        return getattr(event.world.time_phase, "value", event.world.time_phase)
+
+    def _effective_time_of_day(self, event: GameEvent) -> int | None:
+        if not self._is_overworld_dimension(event):
+            return None
+        return event.world.time_of_day
+
     def _player_call_name(self, event: GameEvent) -> str:
         call_name = (event.meta.call_name or "").strip()
         if call_name:
@@ -72,9 +82,20 @@ class CommonMixin:
         if normalized_biome == self.state.current_biome:
             return
         self.state.current_biome = normalized_biome
+        if normalized_biome is not None:
+            recent_ms = self._recent_ms(
+                event.observed_at,
+                self.state.last_special_biome_comment_at.get(normalized_biome),
+            )
+            if (
+                recent_ms is not None
+                and recent_ms < self.settings.special_biome_comment_cooldown_ms
+            ):
+                self.state.pending_special_biome_line = None
+                return
         self.state.pending_special_biome_line = self._resolve_special_biome_entry_line(
             normalized_biome,
-            getattr(event.world.time_phase, "value", event.world.time_phase),
+            self._effective_time_phase(event),
         )
 
     def _resolve_special_biome_entry_line(self, biome: str | None, time_phase: object) -> str | None:
@@ -91,11 +112,13 @@ class CommonMixin:
             return lines[0]
         return lines[sum(ord(ch) for ch in seed) % len(lines)]
 
-    def _emit_pending_special_biome_line(self) -> str | None:
+    def _emit_pending_special_biome_line(self, now: datetime | None = None) -> str | None:
         line = self.state.pending_special_biome_line
         if line is None:
             return None
         self.state.pending_special_biome_line = None
+        if self.state.current_biome is not None and now is not None:
+            self.state.last_special_biome_comment_at[self.state.current_biome] = now
         return line
 
     def _is_overworld_dimension(self, event: GameEvent) -> bool:
@@ -107,6 +130,15 @@ class CommonMixin:
     def _normalized_dimension(self, event: GameEvent) -> str:
         return (event.player.dimension or "").strip().lower()
 
+    def _did_change_dimension(self, event: GameEvent) -> bool:
+        current_dimension = self._normalized_dimension(event) or None
+        previous_dimension = self.state.current_dimension
+        return (
+            previous_dimension is not None
+            and current_dimension is not None
+            and current_dimension != previous_dimension
+        )
+
     def _is_cave_biome(self, biome: str | None) -> bool:
         normalized = self._normalized_biome(biome)
         return normalized == "deep_dark" or normalized.endswith("_caves")
@@ -116,7 +148,7 @@ class CommonMixin:
         return normalized in NIGHT_WARNING_SUPPRESSED_BIOMES
 
     def _is_rest_time(self, event: GameEvent) -> bool:
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        time_phase = self._effective_time_phase(event)
         return time_phase in {"evening", "night"}
 
     def _is_near_respawn_bed(self, event: GameEvent) -> bool:
@@ -130,6 +162,8 @@ class CommonMixin:
 
     def _should_emit_sleep_prompt(self, event: GameEvent, now: datetime) -> bool:
         if event.world.is_submerged or not self._is_rest_time(event):
+            return False
+        if (event.world.nearby_sleeping_people_count or 0) > 0:
             return False
         if (
             self.state.last_sleep_prompt_at is not None
@@ -173,17 +207,15 @@ class CommonMixin:
             details={
                 "player_name": self._player_call_name(event),
                 "biome": self._biome_label(event.world.biome),
-                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "time_phase": self._effective_time_phase(event) or "unknown",
                 "sleeping_people_count": event.world.nearby_sleeping_people_count or 0,
             },
             temperature=0.35,
         )
 
     def _is_surface_evening_warning_context(self, event: GameEvent) -> bool:
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        time_phase = self._effective_time_phase(event)
         if time_phase != "evening":
-            return False
-        if not self._is_overworld_dimension(event):
             return False
         if self._is_night_warning_suppressed_biome(event.world.biome):
             return False
@@ -209,7 +241,7 @@ class CommonMixin:
         return self._is_cave_biome(event.world.biome)
 
     def _should_schedule_night_warning(self, event: GameEvent) -> bool:
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        time_phase = self._effective_time_phase(event)
         if time_phase == "evening":
             return (
                 self._is_surface_evening_warning_context(event)
@@ -231,7 +263,7 @@ class CommonMixin:
             return EVENING_SURFACE_WARNING_CALL
         if not self._is_cave_or_submerged_night_warning_context(event):
             return None
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        time_phase = self._effective_time_phase(event)
         if time_phase == "evening":
             phase_label = "夕方"
         elif time_phase == "night":

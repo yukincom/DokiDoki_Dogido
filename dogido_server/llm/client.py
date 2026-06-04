@@ -37,6 +37,7 @@ from .sanitize import (
 from .types import LeafGenerationRequest, StructuredGenerationRequest
 
 LOGGER = logging.getLogger("uvicorn.error")
+STRUCTURED_STATUS_KEY = "__dogido_status"
 
 
 class DogidoLLM:
@@ -178,7 +179,9 @@ class DogidoLLM:
         """JSON オブジェクトを 1 件生成して返す。失敗時は fallback_value を返す。"""
         if not self.enabled():
             LOGGER.warning("llm_structured kind=%s result=fallback reason=disabled", request.kind)
-            return dict(request.fallback_value)
+            payload = dict(request.fallback_value)
+            payload[STRUCTURED_STATUS_KEY] = "disabled"
+            return payload
 
         with self._lock:
             try:
@@ -190,7 +193,9 @@ class DogidoLLM:
                     request.kind,
                     self._disabled_reason,
                 )
-                return dict(request.fallback_value)
+                payload = dict(request.fallback_value)
+                payload[STRUCTURED_STATUS_KEY] = "generation_error"
+                return payload
 
         payload = self._extract_json_object(text)
         if payload is None:
@@ -199,7 +204,10 @@ class DogidoLLM:
                 request.kind,
                 self._summarize_for_log(text),
             )
-            return dict(request.fallback_value)
+            payload = dict(request.fallback_value)
+            payload[STRUCTURED_STATUS_KEY] = "invalid_json"
+            return payload
+        payload[STRUCTURED_STATUS_KEY] = "accepted"
         LOGGER.warning(
             "llm_structured kind=%s result=accepted payload=%s",
             request.kind,
@@ -212,8 +220,9 @@ class DogidoLLM:
         messages = self._build_messages(request)
         if not messages:
             raise ValueError("empty_prompt")
+        settings = self._settings_for_request(request)
 
-        if self.settings.llm_backend == "mlx":
+        if settings.llm_backend == "mlx":
             model, tokenizer = self._ensure_model()
             if model is None or tokenizer is None:
                 raise RuntimeError(self._disabled_reason or "mlx model unavailable")
@@ -232,31 +241,31 @@ class DogidoLLM:
                 model,
                 tokenizer,
                 prompt,
-                max_tokens=self.settings.llm_max_tokens,
+                max_tokens=settings.llm_max_tokens,
                 sampler=sampler,
                 verbose=False,
             )
 
-        if self.settings.llm_effective_backend == "chat_completions":
+        if settings.llm_effective_backend == "chat_completions":
             return generate_chat_completions_text(
-                self.settings,
+                settings,
                 messages,
                 temperature=request.temperature,
             )
-        if self.settings.llm_effective_backend == "anthropic_messages":
+        if settings.llm_effective_backend == "anthropic_messages":
             return generate_anthropic_text(
-                self.settings,
+                settings,
                 messages,
                 temperature=request.temperature,
             )
-        if self.settings.llm_effective_backend == "gemini_generate_content":
+        if settings.llm_effective_backend == "gemini_generate_content":
             return generate_gemini_text(
-                self.settings,
+                settings,
                 messages,
                 temperature=request.temperature,
             )
 
-        raise RuntimeError(f"unsupported llm_backend: {self.settings.llm_effective_backend}")
+        raise RuntimeError(f"unsupported llm_backend: {settings.llm_effective_backend}")
 
     def _ensure_model(self) -> tuple[Any | None, Any | None]:
         """mlx モデルをロードして返す。ロード済みならキャッシュを返す。
@@ -306,6 +315,11 @@ class DogidoLLM:
     def _build_messages(self, request: LeafGenerationRequest | StructuredGenerationRequest) -> list[dict[str, str]]:
         """リクエストからチャット形式のメッセージリストを組み立てる。実装は prompts.py に委譲。"""
         return build_messages(request)
+
+    def _settings_for_request(self, request: LeafGenerationRequest | StructuredGenerationRequest) -> Settings:
+        if request.max_tokens is None or request.max_tokens <= 0:
+            return self.settings
+        return self.settings.model_copy(update={"llm_max_tokens": request.max_tokens})
 
     def _extract_json_object(self, text: str | None) -> dict[str, Any] | None:
         if not text:

@@ -922,8 +922,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             for (int dy = -3; dy <= 4; dy += 1) {
                 for (int dz = -8; dz <= 8; dz += 1) {
                     BlockPos sample = origin.add(dx, dy, dz);
-                    String resourceName = nearbyResourceNameForBlock(world.getBlockState(sample));
+                    BlockState state = world.getBlockState(sample);
+                    String resourceName = nearbyResourceNameForBlock(state);
                     if (resourceName == null) {
+                        continue;
+                    }
+                    if (!isAirExposedNearbyResource(world, sample)) {
                         continue;
                     }
                     double distance = Math.sqrt(sample.getSquaredDistance(origin));
@@ -967,6 +971,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return "coal_ore";
         }
         return null;
+    }
+
+    private boolean isAirExposedNearbyResource(ClientWorld world, BlockPos pos) {
+        for (Direction direction : Direction.values()) {
+            if (world.getBlockState(pos.offset(direction)).isAir()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void mergeNearbyResource(

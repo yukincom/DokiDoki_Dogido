@@ -88,6 +88,7 @@ class NarrationMixin:
     def _render_aftermath_line(self, event: GameEvent) -> str:
         fallback = fallback_text("aftermath", "line")
         health = event.player.health
+        recent_combat_end_ms = self._recent_ms(event.observed_at, self.state.last_combat_end_at)
         if health is None:
             health_state = "不明"
         elif health <= 8:
@@ -96,12 +97,18 @@ class NarrationMixin:
             health_state = "少し減ってる"
         else:
             health_state = "まだ余力はある"
+        hostiles = (
+            list(self.state.last_confirmed_hostiles)
+            if recent_combat_end_ms is not None
+            and recent_combat_end_ms <= self.settings.pending_safe_aftermath_window_ms
+            else []
+        )
         return self._generate_leaf_text(
             kind="aftermath",
             fallback_text=fallback,
             details={
                 "player_name": self._player_call_name(event),
-                "hostiles": list(self.state.last_confirmed_hostiles),
+                "hostiles": hostiles,
                 "health_state": health_state,
             },
         )
@@ -231,7 +238,7 @@ class NarrationMixin:
         hostiles = [self._hostile_label(threat.type) for threat in event.visual_threats]
         if not hostiles and event.auditory_threats:
             hostiles = ["気配あり"]
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
+        time_phase = self._effective_time_phase(event) or "unknown"
         fallback = dark_push_after_breath_fallback(
             time_phase,
             prefix=self._player_call_prefix(event),
@@ -248,6 +255,8 @@ class NarrationMixin:
             },
             temperature=0.5,
         )
+        if time_phase not in {"evening", "night"} and any(token in line for token in {"夜", "夕方", "朝"}):
+            return fallback
         if time_phase not in {"evening", "night"} and "一難" in line:
             return fallback_text(
                 "general",

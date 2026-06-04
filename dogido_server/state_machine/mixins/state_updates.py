@@ -13,7 +13,7 @@ class StateUpdatesMixin:
         self._prune_comment_memory(now)
         self._handle_dimension_change(event)
         self._update_special_biome_context(event)
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        time_phase = self._effective_time_phase(event)
         if self.state.last_non_silent_at is None:
             self.state.last_non_silent_at = now
         if time_phase == "morning" and self.state.last_time_phase != "morning":
@@ -91,6 +91,17 @@ class StateUpdatesMixin:
             self.state.pending_safe_aftermath = True
         if event.event.name == EventName.PLAYER_DIED:
             self.state.pending_safe_aftermath = False
+        pending_aftermath_age_ms = self._recent_ms(now, self.state.last_combat_end_at)
+        if (
+            self.state.pending_safe_aftermath
+            and (
+                pending_aftermath_age_ms is None
+                or pending_aftermath_age_ms > self.settings.pending_safe_aftermath_window_ms
+            )
+        ):
+            self.state.pending_safe_aftermath = False
+            self.state.last_confirmed_hostiles = []
+            self.state.last_known_hostile_directions = []
 
         self.state.burning_visual_keys = {
             self._visual_identity_key(threat)
@@ -107,15 +118,21 @@ class StateUpdatesMixin:
 
     def _handle_dimension_change(self, event: GameEvent) -> None:
         current_dimension = self._normalized_dimension(event) or None
-        if current_dimension == self.state.current_dimension:
+        previous_dimension = self.state.current_dimension
+        if current_dimension == previous_dimension:
             return
         self.state.current_dimension = current_dimension
-        if current_dimension is None:
+        if previous_dimension is None or current_dimension is None:
             return
+        self.state.last_time_phase = None
         self.state.last_visual_threat_at = None
         self.state.last_audio_threat_at = None
+        self.state.last_damage_at = None
+        self.state.last_combat_end_at = None
         self.state.last_confirmed_hostiles = []
         self.state.last_known_hostile_directions = []
+        self.state.last_occluded_hostile_presence_comment_at = None
+        self.state.panic_scream_cooldown_until = None
         self.state.commented_visual_keys.clear()
         self.state.commented_auditory_keys.clear()
         self.state.auditory_presence_states.clear()
@@ -126,19 +143,37 @@ class StateUpdatesMixin:
         self.state.seen_visual_keys.clear()
         self.state.stalled_visual_signature = ""
         self.state.stalled_visual_started_at = None
+        self.state.last_stalled_visual_comment_at = None
+        self.state.last_multi_hostile_report_at = None
+        self.state.last_multi_hostile_count = 0
+        self.state.last_multi_species_report_at = None
+        self.state.last_multi_species_signature = ""
+        self.state.last_overwhelmed_report_at = None
+        self.state.last_overwhelmed_signature = ""
+        self.state.last_visual_priority_callout_at = None
+        self.state.last_single_visual_type = None
+        self.state.last_single_visual_at = None
+        self.state.last_ushiro_call_at = None
         self.state.pending_dark_push_after_breath_until = None
         self.state.dark_push_active = False
+        self.state.pending_safe_aftermath = False
         self.state.dark_push_stage = 0
+        self.state.dark_push_reference_light = None
+        self.state.dark_push_reference_darkness = None
         self.state.dark_push_breath_ready_at = None
         self.state.last_dark_push_breath_at = None
         self.state.dark_push_entry_x = None
         self.state.dark_push_entry_z = None
+        self.state.last_occluded_dark_zone = None
+        self.state.last_safe_zone_with_door = None
+        self.state.last_emergency_shelter = None
+        self.state.last_submerged_dark_zone = None
+        self.state.last_foliage_shade_context = None
+        self.state.pending_special_biome_line = None
+        self.state.last_weather = None
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
         self.state.night_warning_pending = False
-        if not self._is_overworld_dimension(event):
-            self.state.night_warning_emitted_this_cycle = False
-            self.state.firefly_reacted_this_night = False
 
     def _derive_signals(self, event: GameEvent, now: datetime) -> DerivedSignals:
         visual_distances = [threat.distance for threat in event.visual_threats if threat.distance is not None]
@@ -234,6 +269,9 @@ class StateUpdatesMixin:
 
         if (
             self.state.pending_safe_aftermath
+            and self._recent_ms(now, self.state.last_combat_end_at) is not None
+            and self._recent_ms(now, self.state.last_combat_end_at)
+            <= self.settings.pending_safe_aftermath_window_ms
             and signals.entered_safe_zone_with_door
             and not event.visual_threats
             and not event.auditory_threats
@@ -250,16 +288,25 @@ class StateUpdatesMixin:
             or signals.rear_high_risk
         )
 
+        local_light = event.world.local_light
+        darkness_mode_condition = (
+            signals.entered_occluded_dark_zone
+            or signals.occluded_dark_zone
+            or (
+                signals.danger_darkness_score >= self.settings.darkness_alert_threshold
+                and (
+                    local_light is None
+                    or local_light <= self.settings.darkness_advice_light_threshold
+                )
+            )
+        )
+
         alert_condition = (
             bool(event.visual_threats)
             or bool(event.auditory_threats)
             or (
                 not signals.submerged
-                and (
-                    signals.danger_darkness_score >= self.settings.darkness_alert_threshold
-                    or signals.entered_occluded_dark_zone
-                    or signals.occluded_dark_zone
-                )
+                and darkness_mode_condition
             )
         )
 

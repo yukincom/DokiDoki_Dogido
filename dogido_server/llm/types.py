@@ -12,6 +12,7 @@ class LeafGenerationRequest:
     details: dict[str, Any]
     temperature: float = 0.2
     route: str | None = None
+    max_tokens: int | None = None
 
 
 @dataclass(slots=True)
@@ -21,6 +22,7 @@ class StructuredGenerationRequest:
     details: dict[str, Any]
     temperature: float = 0.2
     route: str | None = None
+    max_tokens: int | None = None
 
 
 class LLMFrontend(Protocol):

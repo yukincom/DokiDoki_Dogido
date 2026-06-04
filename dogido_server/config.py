@@ -130,9 +130,12 @@ class Settings(BaseSettings):
     combat_clear_time_ms: int = 5000
     suppression_time_ms: int = 7000
     aftermath_time_ms: int = 8000
+    pending_safe_aftermath_window_ms: int = 20000
     panic_scream_cooldown_ms: int = 1200
     recent_damage_window_ms: int = 3000
+    darkness_advice_light_threshold: int = 3
     darkness_alert_threshold: float = 0.72
+    darkness_advice_cooldown_ms: int = 60000
     occluded_entry_darkness_threshold: float = 0.9
     occluded_entry_light_threshold: int = 3
     lit_interior_safe_light_threshold: int = 9
@@ -165,7 +168,9 @@ class Settings(BaseSettings):
     home_bed_prompt_distance: float = 10.0
     sleep_prompt_cooldown_ms: int = 60000
     sleeping_neighbor_comment_cooldown_ms: int = 60000
+    special_biome_comment_cooldown_ms: int = 600000
     haiku_silence_time_ms: int = 300000
+    haiku_structured_max_tokens: int = 192
     hostile_comment_cooldown_ms: int = 60000
     occluded_hostile_presence_comment_cooldown_ms: int = 300000
     daylight_water_comment_cooldown_ms: int = 120000

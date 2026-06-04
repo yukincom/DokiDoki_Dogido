@@ -45,6 +45,11 @@ def resolve_fallback_haiku(context: HaikuFallbackContext) -> str:
     return str(catalog.get("under_construction_line", "今、考え中やねん…"))
 
 
+def resolve_llm_failed_haiku() -> str:
+    catalog = load_haiku_catalog()
+    return str(catalog.get("llm_failed_line", "まとまらんかった。。。"))
+
+
 def _matches_rule(
     context: HaikuFallbackContext,
     rule: dict[str, Any],

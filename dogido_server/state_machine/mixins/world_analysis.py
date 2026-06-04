@@ -54,7 +54,7 @@ class WorldAnalysisMixin:
 
     def _is_nearby_light_source_buffered_event(self, event: GameEvent) -> bool:
         local_light = event.world.local_light if event.world.local_light is not None else 15
-        return self._has_nearby_light_source_event(event) and local_light >= 6
+        return self._has_nearby_light_source_event(event) and local_light >= 4
 
     def _is_lit_interior_safe_pocket_event(self, event: GameEvent) -> bool:
         if event.world.is_submerged or bool(event.world.sky_visible):
@@ -118,21 +118,21 @@ class WorldAnalysisMixin:
         return wall_count >= 4 and ceiling_height <= self.settings.emergency_shelter_max_ceiling_height
 
     def _is_emergency_shelter_night(self, event: GameEvent) -> bool:
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
-        time_of_day = event.world.time_of_day
+        time_phase = self._effective_time_phase(event)
+        time_of_day = self._effective_time_of_day(event)
         return time_phase == "night" or (
             time_of_day is not None and time_of_day >= self.settings.emergency_shelter_night_start
         )
 
     def _is_emergency_shelter_morning(self, event: GameEvent) -> bool:
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
-        time_of_day = event.world.time_of_day
+        time_phase = self._effective_time_phase(event)
+        time_of_day = self._effective_time_of_day(event)
         return time_phase in {"morning", "day"} or (
             time_of_day is not None and time_of_day < self.settings.emergency_shelter_morning_cutoff
         )
 
     def _has_surface_hostile_spawn_started(self, event: GameEvent) -> bool:
-        time_of_day = event.world.time_of_day
+        time_of_day = self._effective_time_of_day(event)
         if time_of_day is None:
             return False
         weather = self._weather_value(event.world.weather)

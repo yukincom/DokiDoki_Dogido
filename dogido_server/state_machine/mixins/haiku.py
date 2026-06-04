@@ -1,24 +1,41 @@
 # state_machine/mixins/haiku.py
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 from datetime import datetime
 from math import inf
 
-from dogido_server.entry_catalog import mob_poetic_tags
+from dogido_server.entry_catalog import block_entry, item_entry, mob_poetic_tags
+from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm import StructuredGenerationRequest
 from dogido_server.llm.sanitize import summarize_for_log
 from dogido_server.models import EventName, GameEvent, NearbyResource
-from dogido_server.state_machine.haiku_catalog import HaikuFallbackContext, resolve_fallback_haiku
-from dogido_server.state_machine.haiku_context import HaikuContext, HaikuFeature, IronyContext
+from dogido_server.state_machine.haiku_catalog import (
+    HaikuFallbackContext,
+    resolve_fallback_haiku,
+    resolve_llm_failed_haiku,
+)
+from dogido_server.state_machine.haiku_context import HaikuContext, HaikuFeature, IronyContext, SceneContext
 from dogido_server.state_machine.constants import *  # noqa: F403
 
 LOGGER = logging.getLogger("uvicorn.error")
 
 
+@dataclass(frozen=True, slots=True)
+class _InventoryPoemCandidate:
+    label: str
+    section: str
+    group_path: tuple[str, ...]
+    count: int
+    order: int
+
+
 class HaikuMixin:
     def _should_emit_haiku(self, event: GameEvent, now: datetime) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:
+            return False
+        if self.state.mode != "normal":
             return False
         if self.state.haiku_emitted_this_cycle:
             return False
@@ -41,10 +58,19 @@ class HaikuMixin:
 
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)
-        irony = self._detect_haiku_irony(context)
+        irony, irony_status = self._detect_haiku_irony(context)
+        scene, scene_status = self._detect_haiku_scene(context, irony)
         fallback_text = self._fallback_haiku_line(event)
-        skip_reason = self._haiku_llm_skip_reason(context, irony)
+        llm_failed_text = self._llm_failed_haiku_line()
+        skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
         if skip_reason is not None:
+            if self._should_use_llm_failed_haiku(skip_reason, irony_status, scene_status):
+                LOGGER.warning(
+                    "haiku_decision result=fallback reason=%s text=%s",
+                    self._haiku_llm_failure_reason(skip_reason, irony_status, scene_status),
+                    summarize_for_log(llm_failed_text),
+                )
+                return llm_failed_text
             LOGGER.warning(
                 "haiku_decision result=fallback reason=%s text=%s",
                 skip_reason,
@@ -53,15 +79,15 @@ class HaikuMixin:
             return fallback_text
         line = self._generate_leaf_text(
             kind="haiku",
-            fallback_text=fallback_text,
-            details=context.prompt_details(irony),
+            fallback_text=llm_failed_text,
+            details=context.prompt_details(irony, scene),
             temperature=0.82,
             route="haiku",
         )
-        if line == fallback_text:
+        if line == llm_failed_text:
             LOGGER.warning(
                 "haiku_decision result=fallback reason=llm_rejected text=%s",
-                summarize_for_log(fallback_text),
+                summarize_for_log(llm_failed_text),
             )
         return line
 
@@ -92,9 +118,18 @@ class HaikuMixin:
         )
         return resolve_fallback_haiku(context)
 
-    def _detect_haiku_irony(self, context: HaikuContext) -> IronyContext:
+    def _llm_failed_haiku_line(self) -> str:
+        return resolve_llm_failed_haiku()
+
+    def _structured_status(self, payload: dict[str, object] | None) -> str:
+        if not isinstance(payload, dict):
+            return "invalid_payload"
+        status = payload.get(STRUCTURED_STATUS_KEY)
+        return str(status or "accepted")
+
+    def _detect_haiku_irony(self, context: HaikuContext) -> tuple[IronyContext, str]:
         if self.llm is None:
-            return IronyContext()
+            return IronyContext(), "unavailable"
         payload = self.llm.generate_structured_json(
             StructuredGenerationRequest(
                 kind="haiku_irony",
@@ -102,9 +137,25 @@ class HaikuMixin:
                 details=context.irony_details(),
                 temperature=0.15,
                 route="chat",
+                max_tokens=self.settings.haiku_structured_max_tokens,
             )
         )
-        return IronyContext.from_mapping(payload)
+        return IronyContext.from_mapping(payload), self._structured_status(payload)
+
+    def _detect_haiku_scene(self, context: HaikuContext, irony: IronyContext) -> tuple[SceneContext, str]:
+        if self.llm is None:
+            return SceneContext(), "unavailable"
+        payload = self.llm.generate_structured_json(
+            StructuredGenerationRequest(
+                kind="haiku_scene",
+                fallback_value={"found": False},
+                details=context.scene_details(irony),
+                temperature=0.2,
+                route="chat",
+                max_tokens=self.settings.haiku_structured_max_tokens,
+            )
+        )
+        return SceneContext.from_mapping(payload), self._structured_status(payload)
 
     def _haiku_context(self, event: GameEvent) -> HaikuContext:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
@@ -112,7 +163,10 @@ class HaikuMixin:
         z_value = event.player.position.z
         biome = event.world.biome
         held_item = self._item_label(event.player.held_item)
-        inventory_items = tuple(self._haiku_inventory_values(event.inventory))
+        inventory_close_pair, inventory_far_item, inventory_items = self._haiku_inventory_values(
+            event.inventory,
+            held_item_id=event.player.held_item,
+        )
         nearby_blocks = tuple(self._haiku_nearby_block_values(event.nearby_resources))
         peaceful_mobs = tuple(self._haiku_peaceful_mob_values(event))
         feature_candidates = tuple(
@@ -137,6 +191,8 @@ class HaikuMixin:
             z_value=int(round(z_value)) if z_value is not None else 0,
             held_item=held_item,
             inventory_items=inventory_items,
+            inventory_close_pair=inventory_close_pair,
+            inventory_far_item=inventory_far_item,
             nearby_blocks=nearby_blocks,
             peaceful_mobs=peaceful_mobs,
             haiku_tags=tuple(self._haiku_tags(event, feature_candidates)),
@@ -170,10 +226,6 @@ class HaikuMixin:
         if held_item:
             candidates.append(HaikuFeature("手持ち", "held_item", held_item))
         candidates.extend(
-            HaikuFeature("持ち物", f"inventory_{index}", label)
-            for index, label in enumerate(inventory_items[:4], start=1)
-        )
-        candidates.extend(
             HaikuFeature("周辺", f"nearby_{index}", label)
             for index, label in enumerate(nearby_blocks[:4], start=1)
         )
@@ -201,32 +253,111 @@ class HaikuMixin:
             traits.append(f"雪は Y{snow_start_y}から")
         return traits
 
-    def _haiku_inventory_values(self, inventory: dict[str, int]) -> list[str]:
+    def _haiku_inventory_values(
+        self,
+        inventory: dict[str, int],
+        *,
+        held_item_id: str | None = None,
+    ) -> tuple[tuple[str, ...], str, tuple[str, ...]]:
         items = sorted(inventory.items(), key=lambda entry: (-entry[1], entry[0]))
-        values: list[str] = []
-        for item_id, count in items:
+        held_normalized = str(held_item_id or "").split(":")[-1].strip().lower()
+        seen: set[str] = set()
+        candidates: list[_InventoryPoemCandidate] = []
+        for order, (item_id, count) in enumerate(items):
             if count <= 0:
+                continue
+            normalized = str(item_id).split(":")[-1].strip().lower()
+            if normalized == held_normalized:
                 continue
             label = self._item_label(item_id)
             if not label:
                 continue
-            values.append(label)
-            if len(values) >= 6:
+            if label in seen:
+                continue
+            seen.add(label)
+            entry = item_entry(item_id) or {}
+            candidates.append(
+                _InventoryPoemCandidate(
+                    label=label,
+                    section=str(entry.get("section") or ""),
+                    group_path=tuple(str(value) for value in entry.get("group_path") or [] if value),
+                    count=count,
+                    order=order,
+                )
+            )
+
+        if not candidates:
+            return tuple(), "", tuple()
+        if len(candidates) == 1:
+            only = candidates[0].label
+            return tuple(), "", (only,)
+
+        best_pair: tuple[_InventoryPoemCandidate, _InventoryPoemCandidate] | None = None
+        best_score: tuple[int, int, int] | None = None
+        for left_index, left in enumerate(candidates[:-1]):
+            for right in candidates[left_index + 1:]:
+                score = (
+                    self._haiku_inventory_similarity(left, right),
+                    left.count + right.count,
+                    -min(left.order, right.order),
+                )
+                if best_score is None or score > best_score:
+                    best_score = score
+                    best_pair = (left, right)
+
+        if best_pair is None:
+            selected = tuple(candidate.label for candidate in candidates[:3])
+            return tuple(selected[:2]), "", selected
+
+        close_pair = (best_pair[0].label, best_pair[1].label)
+        remaining = [candidate for candidate in candidates if candidate not in best_pair]
+        far_item = ""
+        if remaining:
+            outlier = min(
+                remaining,
+                key=lambda candidate: (
+                    max(
+                        self._haiku_inventory_similarity(candidate, best_pair[0]),
+                        self._haiku_inventory_similarity(candidate, best_pair[1]),
+                    ),
+                    -candidate.count,
+                    candidate.order,
+                ),
+            )
+            far_item = outlier.label
+        selected_items = close_pair if not far_item else (*close_pair, far_item)
+        return close_pair, far_item, tuple(selected_items)
+
+    def _haiku_inventory_similarity(
+        self,
+        left: _InventoryPoemCandidate,
+        right: _InventoryPoemCandidate,
+    ) -> int:
+        shared_prefix = 0
+        for left_part, right_part in zip(left.group_path, right.group_path):
+            if left_part != right_part:
                 break
-        return values
+            shared_prefix += 1
+        score = shared_prefix * 3
+        if left.section and left.section == right.section:
+            score += 4
+        return score
 
     def _haiku_nearby_block_values(self, resources: list[NearbyResource]) -> list[str]:
-        values: list[str] = []
+        natural_values: list[str] = []
+        other_values: list[str] = []
         seen: set[str] = set()
         for resource in sorted(resources, key=lambda candidate: candidate.distance or inf):
             label = self._block_label(resource.name)
             if not label or label in seen:
                 continue
             seen.add(label)
-            values.append(label)
-            if len(values) >= 6:
+            entry = block_entry(resource.name) or {}
+            target = natural_values if entry.get("section") == "natural_blocks" else other_values
+            target.append(label)
+            if len(natural_values) + len(other_values) >= 6:
                 break
-        return values
+        return natural_values + other_values
 
     def _haiku_peaceful_mob_values(self, event: GameEvent) -> list[str]:
         values: list[str] = []
@@ -310,24 +441,65 @@ class HaikuMixin:
                 return mob.type
         return None
 
-    def _should_use_llm_haiku(self, context: HaikuContext, irony: IronyContext) -> bool:
-        return self._haiku_llm_skip_reason(context, irony) is None
+    def _should_use_llm_haiku(
+        self,
+        context: HaikuContext,
+        irony: IronyContext,
+        scene: SceneContext,
+    ) -> bool:
+        return self._haiku_llm_skip_reason(context, irony, scene) is None
 
-    def _haiku_llm_skip_reason(self, context: HaikuContext, irony: IronyContext) -> str | None:
+    def _haiku_llm_skip_reason(
+        self,
+        context: HaikuContext,
+        irony: IronyContext,
+        scene: SceneContext,
+    ) -> str | None:
         if self.llm is None:
             return "llm_unavailable"
-        if irony.found:
+        scene_strength = self._haiku_scene_strength(context)
+        if scene.found and scene_strength >= 3:
             return None
-        concrete_subjects = {
-            label
-            for label in (
-                *context.nearby_blocks,
-                *context.peaceful_mobs,
-            )
-            if label
-        }
-        if context.held_item and context.held_item != "なし":
-            concrete_subjects.add(context.held_item)
-        if len(concrete_subjects) < 2:
+        if irony.found and scene_strength >= 4:
+            return None
+        if scene_strength < 4:
             return "weak_scene"
         return None
+
+    def _should_use_llm_failed_haiku(
+        self,
+        skip_reason: str,
+        irony_status: str,
+        scene_status: str,
+    ) -> bool:
+        if skip_reason == "llm_unavailable":
+            return False
+        failure_statuses = {"invalid_json", "generation_error", "invalid_payload"}
+        return irony_status in failure_statuses or scene_status in failure_statuses
+
+    def _haiku_llm_failure_reason(
+        self,
+        skip_reason: str,
+        irony_status: str,
+        scene_status: str,
+    ) -> str:
+        if irony_status != "accepted":
+            return f"{skip_reason}:{irony_status}"
+        if scene_status != "accepted":
+            return f"{skip_reason}:{scene_status}"
+        return skip_reason
+
+    def _haiku_scene_strength(self, context: HaikuContext) -> int:
+        score = 0
+        if context.peaceful_mobs:
+            score += 3
+        if context.nearby_blocks:
+            score += 3
+        if context.biome_id != "unknown" or context.weather != "unknown":
+            score += 2
+        if (
+            (context.held_item and context.held_item != "なし")
+            or context.inventory_items
+        ):
+            score += 1
+        return score

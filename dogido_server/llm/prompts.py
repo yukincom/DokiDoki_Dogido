@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .haiku_prompts import build_haiku_irony_messages, build_haiku_messages
+from .haiku_prompts import build_haiku_irony_messages, build_haiku_messages, build_haiku_scene_messages
 from .types import LeafGenerationRequest
 
 SYSTEM_PROMPT = (
@@ -24,6 +24,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
     builders = {
         "haiku": _build_haiku_messages,
         "haiku_irony": _build_haiku_irony_messages,
+        "haiku_scene": _build_haiku_scene_messages,
         "aftermath": _build_aftermath_messages,
         "ambient": _build_ambient_messages,
         "death": _build_death_messages,
@@ -59,6 +60,10 @@ def _build_haiku_messages(request: Any) -> list[dict[str, str]]:
 
 def _build_haiku_irony_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_irony_messages(request.details)
+
+
+def _build_haiku_scene_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_scene_messages(request.details)
 
 
 def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:

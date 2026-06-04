@@ -105,6 +105,7 @@ class RuntimeState:
     current_dimension: str | None = None
     current_biome: str | None = None
     pending_special_biome_line: str | None = None
+    last_special_biome_comment_at: dict[str, datetime] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

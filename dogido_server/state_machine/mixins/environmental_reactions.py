@@ -25,9 +25,21 @@ class EnvironmentalReactionsMixin:
             return []
         return [self._speech_action(text, protect_ms=protect_ms)]
 
+    def _darkness_advice_on_cooldown(self, now: datetime) -> bool:
+        if self.state.last_darkness_advice_at is None:
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_darkness_advice_at)
+        return (
+            recent_ms is not None
+            and recent_ms < self.settings.darkness_advice_cooldown_ms
+        )
+
     def _darkness_advice(self, event: GameEvent, signals: DerivedSignals) -> str | None:
+        now = event.observed_at
         if signals.submerged:
             return self._render_submerged_darkness_line(event)
+        if self._darkness_advice_on_cooldown(now):
+            return None
         if signals.emergency_shelter:
             return None
         if self._is_cramped_dark_burrow_event(event):
@@ -43,25 +55,33 @@ class EnvironmentalReactionsMixin:
         if signals.danger_darkness_score < self.settings.darkness_alert_threshold:
             return None
         local_light = event.world.local_light
-        if local_light is not None and local_light > 7:
+        if local_light is not None and local_light > self.settings.darkness_advice_light_threshold:
             return None
 
         if signals.torch_available:
+            self.state.last_darkness_advice_at = now
             return "なあ、ここ急に暗なってきたやん。松明つけとこ。"
         if signals.torch_craftable:
+            self.state.last_darkness_advice_at = now
             return "石炭あるやん、今のうちに松明作っとこや。"
         if signals.torch_materials_nearby:
+            self.state.last_darkness_advice_at = now
             return "このへんで木とか石炭拾って、先に松明作っとこ。"
         if signals.bed_available:
+            self.state.last_darkness_advice_at = now
             return "ベッド持ってるやん、今日はもう無理せんと寝よ。"
         if signals.bed_craftable:
+            self.state.last_darkness_advice_at = now
             return "これベッド作れるで、先に寝る準備しとこや。"
         if signals.bed_materials_nearby:
+            self.state.last_darkness_advice_at = now
             return "羊毛か木を探して、先にベッド作っとこや。"
         if not self._has_weapon(event):
             return self._render_darkness_escape_line(event)
-        if event.world.time_phase in {"evening", "night"}:
-            return "これはもうあかん、こんなん家に帰ったほうがええって。"
+        if self._effective_time_phase(event) in {"evening", "night"}:
+            self.state.last_darkness_advice_at = now
+            return "これはもうあかん、こんなんいえに帰ったほうがええって。"
+        self.state.last_darkness_advice_at = now
         return "なんかこの先、普通に危ない空気してるで。"
 
     def _should_emit_emergency_shelter_advice(self, event: GameEvent, signals: DerivedSignals) -> bool:
@@ -70,6 +90,15 @@ class EnvironmentalReactionsMixin:
         if self.state.emergency_shelter_advised_this_cycle:
             return False
         if signals.submerged or signals.safe_zone_with_door or signals.emergency_shelter:
+            return False
+        if self._is_nearby_light_source_buffered_event(event):
+            return False
+        if self._is_lit_interior_safe_pocket_event(event):
+            return False
+        if self._is_tree_canopy_cover_event(event) or self._is_foliage_shade_context(event):
+            return False
+        local_light = event.world.local_light
+        if local_light is not None and local_light > self.settings.darkness_advice_light_threshold:
             return False
         if not self._has_surface_hostile_spawn_started(event):
             return False
@@ -110,7 +139,7 @@ class EnvironmentalReactionsMixin:
         signals: DerivedSignals,
         now: datetime,
     ) -> list[AudioAction]:
-        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        time_phase = self._effective_time_phase(event)
         if time_phase != "night":
             return []
         if self.state.firefly_reacted_this_night:
@@ -274,7 +303,7 @@ class EnvironmentalReactionsMixin:
             self._log_darkness_decision("foliage_shade", event, signals)
             return self._speech_actions(foliage_darkness)
 
-        special_biome_line = self._emit_pending_special_biome_line()
+        special_biome_line = self._emit_pending_special_biome_line(now)
         if special_biome_line:
             return self._speech_actions(special_biome_line)
 
