@@ -178,6 +178,15 @@ class Settings(BaseSettings):
     damaging_light_warning_cooldown_ms: int = 600000
     magma_block_comment_cooldown_ms: int = 1200000
     damaging_light_warning_max_distance: float = 2.0
+    ominous_sound_comment_cooldown_ms: int = 120000
+    sculk_ominous_sound_comment_cooldown_ms: int = 120000
+    ominous_sound_reset_ms: int = 30000
+    boss_omen_comment_cooldown_ms: int = 30000
+    mining_fatigue_comment_cooldown_ms: int = 120000
+    boss_recent_visual_window_ms: int = 10000
+    warden_chasing_comment_cooldown_ms: int = 60000
+    warden_ranged_trap_comment_cooldown_ms: int = 60000
+    warden_ranged_trap_max_comments: int = 2
     haiku_silence_time_ms: int = 300000
     haiku_structured_max_tokens: int = 192
     hostile_comment_cooldown_ms: int = 60000

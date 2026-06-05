@@ -170,6 +170,7 @@ class PlayerState(DogidoModel):
     hunger: int | None = None  # 最大 20
     dimension: str | None = None  # 例: "minecraft:overworld" / "minecraft:the_nether"
     held_item: str | None = None  # 手持ちアイテムの Minecraft item id
+    active_status_effects: list[str] = Field(default_factory=list)  # 例: ["mining_fatigue"]
 
 
 # ---- ワールド状態 ----
@@ -219,6 +220,9 @@ class WorldState(DogidoModel):
     nearest_damaging_light_source_distance: float | None = None  # 最近傍の危険光源までの距離
     standing_on_magma_block: bool | None = None  # 足元がマグマブロックか
     nearby_firefly_bush_count: int | None = None  # 周辺のホタルブッシュ数（雰囲気演出用）
+    ominous_sound_kind: str | None = None  # 例: "sculk_shrieker" / "warden_heartbeat"
+    ominous_sound_recent_ms: int | None = None  # 最近の不穏音からの経過ミリ秒
+    boss_omen_kind: str | None = None  # 例: "ender_dragon_arena" / "ender_dragon_summon" / "wither_assembly"
 
 
 # ---- 脅威情報 ----
@@ -301,6 +305,13 @@ class CombatState(DogidoModel):
     hostiles_within_10: int | None = Field(default=None, ge=0)  # 10マス以内（複数敵警戒の閾値）
     hostiles_within_30_ground: int | None = Field(default=None, ge=0)  # 30マス以内の地上系敵数
     combat_active_hint: bool | None = None
+    warden_recently_hurt: bool | None = None
+    warden_ranged_trap_active: bool | None = None
+    warden_nearby_iron_golem_count: int | None = Field(default=None, ge=0)
+    warden_end_crystal_bombardment_active: bool | None = None
+    warden_nearby_end_crystal_count: int | None = Field(default=None, ge=0)
+    warden_tnt_minecart_setup_active: bool | None = None
+    warden_nearby_tnt_minecart_count: int | None = Field(default=None, ge=0)
 
 
 class MetaState(DogidoModel):

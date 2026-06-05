@@ -17,6 +17,8 @@ class ThreatInterruptsMixin:
         event: GameEvent,
         signals: DerivedSignals,
     ) -> bool:
+        if self._boss_recently_seen(event.observed_at):
+            return True
         if signals.safe_zone_with_door or signals.emergency_shelter or self._is_cramped_dark_burrow_event(event):
             return True
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)

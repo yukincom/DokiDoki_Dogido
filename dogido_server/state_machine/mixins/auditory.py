@@ -375,6 +375,12 @@ class AuditoryMixin:
                 if label:
                     return response_text("combat", "auditory_presence", "shadowing_named", label=label)
                 return response_text("combat", "auditory_presence", "shadowing_unknown")
+            if (target.label or "").strip().lower() == "warden":
+                recent_ms = self._recent_ms(now, self.state.last_warden_chasing_comment_at)
+                if recent_ms is not None and recent_ms < self.settings.warden_chasing_comment_cooldown_ms:
+                    return None
+                self.state.last_warden_chasing_comment_at = now
+                return response_text("combat", "auditory_presence", "chasing_unknown")
             if label:
                 return response_text("combat", "auditory_presence", "chasing_named", label=label)
             return response_text("combat", "auditory_presence", "chasing_unknown")

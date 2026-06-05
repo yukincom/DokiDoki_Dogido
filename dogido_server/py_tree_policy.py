@@ -114,6 +114,9 @@ class NormalEnvironmentEvent(_Condition):
             or context.signals.weather_transition_to is not None
             or context.machine._has_pending_weather_transition()
             or context.machine._is_foliage_shade_context(context.event)
+            or context.signals.entered_mining_fatigue
+            or context.machine._boss_omen_kind(context.event) is not None
+            or context.machine._ominous_sound_kind(context.event) is not None
             or context.machine._should_consider_magma_block_comment(context.event, context.now)
             or context.machine._should_consider_damaging_light_warning(context.event, context.now)
             or (

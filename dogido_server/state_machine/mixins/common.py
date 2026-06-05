@@ -5,10 +5,150 @@ from datetime import datetime
 
 from dogido_server.models import EventName, GameEvent, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
-from dogido_server.state_machine.response_catalog import response_lines, response_text, selected_ushiro_call_text, special_biome_entry_lines
+from dogido_server.state_machine.response_catalog import (
+    response_lines,
+    response_text,
+    selected_ushiro_call_text,
+    special_biome_entry_lines,
+)
 
 
 class CommonMixin:
+    def _active_status_effects(self, event: GameEvent) -> set[str]:
+        return {
+            effect.split(":")[-1].strip().lower()
+            for effect in (event.player.active_status_effects or [])
+            if isinstance(effect, str) and effect.strip()
+        }
+
+    def _entered_status_effect(self, event: GameEvent, effect_id: str) -> bool:
+        if event.event.name != EventName.STATUS_SNAPSHOT:
+            return False
+        normalized = effect_id.strip().lower()
+        current = self._active_status_effects(event)
+        return normalized in current and normalized not in self.state.last_active_status_effects
+
+    def _is_boss_type(self, hostile_type: str | None) -> bool:
+        return (hostile_type or "").strip().lower() in BOSS_HOSTILES
+
+    def _boss_panic_policy(self, hostile_type: str | None) -> str | None:
+        normalized = (hostile_type or "").strip().lower()
+        if normalized in TACTICAL_BOSS_HOSTILES:
+            return "tactical"
+        if normalized in REVEAL_ONLY_BOSS_HOSTILES:
+            return "reveal_only"
+        return None
+
+    def _highest_priority_boss_visual(self, threats: list[VisualThreat]) -> VisualThreat | None:
+        bosses = [threat for threat in threats if self._is_boss_type(threat.type)]
+        if not bosses:
+            return None
+        return min(bosses, key=self._visual_threat_priority_key)
+
+    def _is_new_visual_reveal(self, threat: VisualThreat) -> bool:
+        visual_key = self._visual_identity_key(threat)
+        if self._is_boss_type(threat.type):
+            return visual_key not in self.state.seen_boss_visual_keys
+        return visual_key not in self.state.seen_visual_keys
+
+    def _boss_recently_seen(self, now: datetime) -> bool:
+        recent_ms = self._recent_ms(now, self.state.last_visual_threat_at)
+        if recent_ms is None or recent_ms >= self.settings.boss_recent_visual_window_ms:
+            return False
+        return any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles)
+
+    def _boss_presence_active(self, now: datetime) -> bool:
+        return self._boss_recently_seen(now)
+
+    def _is_warden_visual_present(self, event: GameEvent) -> bool:
+        return any((threat.type or "").strip().lower() == "warden" for threat in event.visual_threats)
+
+    def _has_new_warden_visual_reveal(self, event: GameEvent) -> bool:
+        return any(
+            (threat.type or "").strip().lower() == "warden" and self._is_new_visual_reveal(threat)
+            for threat in event.visual_threats
+        )
+
+    def _reset_warden_combat_comment_state(self) -> None:
+        self.state.last_warden_chasing_comment_at = None
+        self.state.warden_attack_start_announced = False
+        self.state.warden_ranged_trap_comment_count = 0
+        self.state.last_warden_ranged_trap_comment_at = None
+        self.state.warden_golem_army_announced = False
+        self.state.warden_end_crystal_bombardment_announced = False
+        self.state.warden_tnt_minecart_setup_announced = False
+
+    def _next_warden_special_callout(self, event: GameEvent, now: datetime) -> str | None:
+        if (
+            not self._is_warden_visual_present(event)
+            or self.player_input.asks_hostile_count
+            or self._has_new_warden_visual_reveal(event)
+        ):
+            return None
+
+        if bool(event.combat.warden_end_crystal_bombardment_active) and not self.state.warden_end_crystal_bombardment_announced:
+            self.state.warden_end_crystal_bombardment_announced = True
+            return response_text("boss", "warden", "end_crystal_bombardment")
+
+        if bool(event.combat.warden_tnt_minecart_setup_active) and not self.state.warden_tnt_minecart_setup_announced:
+            self.state.warden_tnt_minecart_setup_announced = True
+            return response_text("boss", "warden", "tnt_minecart_setup")
+
+        if (event.combat.warden_nearby_iron_golem_count or 0) >= 3 and not self.state.warden_golem_army_announced:
+            self.state.warden_golem_army_announced = True
+            return response_text("boss", "warden", "golem_army")
+
+        if bool(event.combat.warden_recently_hurt) and not self.state.warden_attack_start_announced:
+            self.state.warden_attack_start_announced = True
+            return response_text("boss", "warden", "attack_start")
+
+        if not bool(event.combat.warden_ranged_trap_active):
+            return None
+        if self.state.warden_ranged_trap_comment_count >= self.settings.warden_ranged_trap_max_comments:
+            return None
+        recent_ms = self._recent_ms(now, self.state.last_warden_ranged_trap_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.warden_ranged_trap_comment_cooldown_ms:
+            return None
+
+        lines = response_lines("boss", "warden", "ranged_trap_lines")
+        index = self.state.warden_ranged_trap_comment_count % len(lines)
+        self.state.warden_ranged_trap_comment_count += 1
+        self.state.last_warden_ranged_trap_comment_at = now
+        return lines[index]
+
+    def _ominous_sound_kind(self, event: GameEvent) -> str | None:
+        kind = (event.world.ominous_sound_kind or "").strip().lower()
+        if not kind:
+            return None
+        recent_ms = event.world.ominous_sound_recent_ms
+        if recent_ms is None or recent_ms > self.settings.ominous_sound_reset_ms:
+            return None
+        return kind
+
+    def _ominous_sound_severity(self, kind: str | None) -> int:
+        normalized = (kind or "").strip().lower()
+        if normalized == "sculk_sensor":
+            return 1
+        if normalized == "sculk_shrieker":
+            return 2
+        if normalized == "warden_heartbeat":
+            return 3
+        if normalized == "warden_presence":
+            return 4
+        return 0
+
+    def _ominous_sound_presence_active(self, now: datetime) -> bool:
+        if not self.state.last_ominous_sound_kind:
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_ominous_sound_seen_at)
+        return recent_ms is not None and recent_ms < self.settings.ominous_sound_reset_ms
+
+    def _boss_omen_kind(self, event: GameEvent) -> str | None:
+        kind = (event.world.boss_omen_kind or "").strip().lower()
+        if kind in {"ender_dragon_arena", "ender_dragon_summon", "wither_assembly"}:
+            return kind
+        return None
+
     def _effective_time_phase(self, event: GameEvent) -> str | None:
         if not self._is_overworld_dimension(event):
             return None
@@ -145,6 +285,12 @@ class CommonMixin:
         line = self.state.pending_special_biome_line
         if line is None:
             return None
+        if (
+            now is not None
+            and self.state.current_biome == "deep_dark"
+            and self._ominous_sound_presence_active(now)
+        ):
+            line = response_lines("biome", "reactions", "deep_dark", "ominous", "lines")[0]
         self.state.pending_special_biome_line = None
         if self.state.current_biome is not None and now is not None:
             self.state.last_special_biome_comment_at[self.state.current_biome] = now
@@ -372,6 +518,10 @@ class CommonMixin:
         return self._is_cave_biome(event.world.biome)
 
     def _should_schedule_night_warning(self, event: GameEvent) -> bool:
+        if self._boss_presence_active(event.observed_at):
+            return False
+        if self._ominous_sound_presence_active(event.observed_at):
+            return False
         time_phase = self._effective_time_phase(event)
         if time_phase == "evening":
             return (
@@ -384,6 +534,10 @@ class CommonMixin:
 
     def _should_consider_night_warning(self, event: GameEvent) -> bool:
         if self.state.night_warning_emitted_this_cycle:
+            return False
+        if self._boss_presence_active(event.observed_at):
+            return False
+        if self._ominous_sound_presence_active(event.observed_at):
             return False
         return self.state.night_warning_pending or self._should_schedule_night_warning(event)
 

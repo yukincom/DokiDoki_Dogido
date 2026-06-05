@@ -58,6 +58,7 @@ class DogidoStateMachine(
         entered_close_flying_visual = None if dimension_changed else self._entered_close_flying_visual(event)
         exited_safe_zone_with_door = False if dimension_changed else self._exited_safe_zone_with_door(event)
         entered_submerged_dark_zone = False if dimension_changed else self._entered_submerged_dark_zone(event)
+        entered_mining_fatigue = False if dimension_changed else self._entered_status_effect(event, "mining_fatigue")
         light_source_crafted = self._light_source_crafted(event)
 
         self._update_memory(event, now)
@@ -70,6 +71,7 @@ class DogidoStateMachine(
         signals.entered_close_flying_visual = entered_close_flying_visual
         signals.exited_safe_zone_with_door = exited_safe_zone_with_door
         signals.entered_submerged_dark_zone = entered_submerged_dark_zone
+        signals.entered_mining_fatigue = entered_mining_fatigue
         signals.light_source_crafted = light_source_crafted
         signals.weather_transition_from = weather_transition[0] if weather_transition is not None else None
         signals.weather_transition_to = weather_transition[1] if weather_transition is not None else None
@@ -85,7 +87,10 @@ class DogidoStateMachine(
         self._log_emitted_actions(event, previous_mode, next_mode, actions)
         self._update_silence_break_state(event, actions, now)
         for threat in event.visual_threats:
-            self.state.seen_visual_keys[self._visual_identity_key(threat)] = now
+            visual_key = self._visual_identity_key(threat)
+            self.state.seen_visual_keys[visual_key] = now
+            if self._is_boss_type(threat.type):
+                self.state.seen_boss_visual_keys.add(visual_key)
         self.state.last_foliage_shade_context = self._is_foliage_shade_context(event)
 
         combat_active = next_mode in {"panic", "suppressed_panic"} or signals.combat_active_hint

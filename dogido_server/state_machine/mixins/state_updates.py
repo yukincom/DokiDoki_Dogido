@@ -89,8 +89,38 @@ class StateUpdatesMixin:
             self.state.last_player_input_at = now
             self.state.last_non_silent_at = now
 
+        current_effects = self._active_status_effects(event)
+        self.state.last_active_status_effects = current_effects
+
+        ominous_kind = self._ominous_sound_kind(event)
+        if ominous_kind is None:
+            recent_ms = self._recent_ms(now, self.state.last_ominous_sound_seen_at)
+            if recent_ms is None or recent_ms >= self.settings.ominous_sound_reset_ms:
+                self.state.last_ominous_sound_kind = None
+                self.state.last_ominous_sound_severity = 0
+                self.state.ominous_sound_stage = 0
+        else:
+            if self.state.last_ominous_sound_seen_at is not None:
+                recent_ms = self._recent_ms(now, self.state.last_ominous_sound_seen_at)
+                if recent_ms is None or recent_ms >= self.settings.ominous_sound_reset_ms:
+                    self.state.ominous_sound_stage = 0
+                    self.state.last_ominous_sound_severity = 0
+            self.state.last_ominous_sound_seen_at = now
+            self.state.last_ominous_sound_kind = ominous_kind
+            self.state.last_ominous_sound_severity = self._ominous_sound_severity(ominous_kind)
+
+        if self._ominous_sound_presence_active(now):
+            self.state.night_warning_pending = False
+            if self.state.current_biome != "deep_dark":
+                self.state.pending_special_biome_line = None
+        if self._boss_presence_active(now):
+            self.state.night_warning_pending = False
+            self.state.pending_special_biome_line = None
+
         if event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}:
             self.state.last_combat_end_at = now
+            self.state.seen_boss_visual_keys.clear()
+            self._reset_warden_combat_comment_state()
         if event.event.name == EventName.COMBAT_ENDED:
             self.state.pending_safe_aftermath = True
         if event.event.name == EventName.PLAYER_DIED:
@@ -177,6 +207,7 @@ class StateUpdatesMixin:
         self.state.daylight_water_comment_keys.clear()
         self.state.screamed_visual_keys.clear()
         self.state.seen_visual_keys.clear()
+        self.state.seen_boss_visual_keys.clear()
         self.state.stalled_visual_signature = ""
         self.state.stalled_visual_started_at = None
         self.state.last_stalled_visual_comment_at = None
@@ -215,6 +246,16 @@ class StateUpdatesMixin:
         self.state.pending_weather_transition_to = None
         self.state.night_warning_pending = False
         self.state.pending_overworld_return_line = returning_to_overworld
+        self.state.last_active_status_effects.clear()
+        self.state.last_mining_fatigue_comment_at = None
+        self.state.last_boss_omen_comment_at = None
+        self.state.last_boss_omen_kind = None
+        self.state.last_ominous_sound_seen_at = None
+        self.state.last_ominous_sound_comment_at = None
+        self.state.last_ominous_sound_kind = None
+        self.state.last_ominous_sound_severity = 0
+        self.state.ominous_sound_stage = 0
+        self._reset_warden_combat_comment_state()
         if returning_to_overworld:
             self.state.pending_overworld_return_ready_at = event.observed_at + timedelta(
                 milliseconds=self.settings.overworld_return_line_delay_ms
@@ -316,6 +357,17 @@ class StateUpdatesMixin:
 
     def _resolve_mode(self, event: GameEvent, signals: DerivedSignals, now: datetime) -> str:
         if event.event.name == EventName.PLAYER_DIED:
+            return "aftermath"
+
+        if (
+            self.state.pending_safe_aftermath
+            and self._recent_ms(now, self.state.last_combat_end_at) is not None
+            and self._recent_ms(now, self.state.last_combat_end_at)
+            <= self.settings.pending_safe_aftermath_window_ms
+            and not event.visual_threats
+            and not event.auditory_threats
+            and any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles)
+        ):
             return "aftermath"
 
         if (

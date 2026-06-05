@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from dogido_server.models import EventName, GameEvent
 from dogido_server.state_machine.constants import *  # noqa: F403
+from dogido_server.state_machine.response_catalog import response_text
 from dogido_server.state_machine.types import AudioAction, DerivedSignals
 
 
@@ -224,6 +225,18 @@ class EnvironmentalReactionsMixin:
         if actions:
             return actions
 
+        actions = self._mining_fatigue_warning_actions(event, signals)
+        if actions:
+            return actions
+
+        actions = self._boss_omen_actions(event)
+        if actions:
+            return actions
+
+        actions = self._ominous_sound_priority_actions(event, now)
+        if actions:
+            return actions
+
         actions = self._submerged_dark_entry_actions(event, signals, stop_dark_push)
         if actions:
             return actions
@@ -300,6 +313,16 @@ class EnvironmentalReactionsMixin:
         if weather_transition:
             return self._speech_actions(weather_transition)
 
+        if self._boss_presence_active(now):
+            self.state.night_warning_pending = False
+            self.state.pending_special_biome_line = None
+            return []
+
+        if self._ominous_sound_presence_active(now):
+            self.state.night_warning_pending = False
+            if self.state.current_biome != "deep_dark":
+                self.state.pending_special_biome_line = None
+
         night_warning = self._emit_pending_night_warning(event)
         if night_warning:
             return self._speech_actions(night_warning)
@@ -307,6 +330,10 @@ class EnvironmentalReactionsMixin:
         firefly_actions = self._firefly_actions(event, signals, now)
         if firefly_actions:
             return firefly_actions
+
+        ominous_sound_line = self._emit_ominous_sound_line(event, now)
+        if ominous_sound_line:
+            return self._speech_actions(ominous_sound_line)
 
         magma_block_line = self._emit_magma_block_comment(event, now)
         if magma_block_line:
@@ -330,6 +357,12 @@ class EnvironmentalReactionsMixin:
             self.state.pending_special_biome_line = None
             self._log_darkness_decision("foliage_shade", event, signals)
             return self._speech_actions(foliage_darkness)
+
+        if self._ominous_sound_presence_active(now) and not (
+            self.state.current_biome == "deep_dark"
+            and self.state.pending_special_biome_line is not None
+        ):
+            return []
 
         special_biome_line = self._emit_pending_special_biome_line(now)
         if special_biome_line:
@@ -359,6 +392,35 @@ class EnvironmentalReactionsMixin:
         self.state.last_magma_block_comment_at = now
         return "………しゃがめば大丈夫なんが不思議やな……"
 
+    def _emit_ominous_sound_line(self, event: GameEvent, now: datetime) -> str | None:
+        if self._boss_presence_active(now):
+            return None
+        kind = self._ominous_sound_kind(event)
+        if kind is None:
+            return None
+        recent_ms = self._recent_ms(now, self.state.last_ominous_sound_comment_at)
+        cooldown_ms = self._ominous_sound_comment_cooldown_ms(kind)
+        if recent_ms is not None and recent_ms < cooldown_ms:
+            return None
+        severity = self._ominous_sound_severity(kind)
+        stage = 1
+        if self.state.ominous_sound_stage >= 1 and severity >= max(2, self.state.last_ominous_sound_severity):
+            stage = 2
+        self.state.last_ominous_sound_comment_at = now
+        self.state.ominous_sound_stage = max(self.state.ominous_sound_stage, stage)
+        return self._render_deep_dark_ominous_sound_line(event, kind, stage)
+
+    def _ominous_sound_comment_cooldown_ms(self, kind: str) -> int:
+        if kind in {"sculk_sensor", "sculk_shrieker"}:
+            return self.settings.sculk_ominous_sound_comment_cooldown_ms
+        return self.settings.ominous_sound_comment_cooldown_ms
+
+    def _ominous_sound_priority_actions(self, event: GameEvent, now: datetime) -> list[AudioAction]:
+        line = self._emit_ominous_sound_line(event, now)
+        if not line:
+            return []
+        return self._speech_actions(line)
+
     def _should_consider_damaging_light_warning(self, event: GameEvent, now: datetime) -> bool:
         count = event.world.nearby_damaging_light_source_count or 0
         nearest = event.world.nearest_damaging_light_source_distance
@@ -380,6 +442,40 @@ class EnvironmentalReactionsMixin:
         if recent_ms is not None and recent_ms < self.settings.magma_block_comment_cooldown_ms:
             return False
         return True
+
+    def _mining_fatigue_warning_actions(
+        self,
+        event: GameEvent,
+        signals: DerivedSignals,
+    ) -> list[AudioAction]:
+        if not signals.entered_mining_fatigue:
+            return []
+        recent_ms = self._recent_ms(event.observed_at, self.state.last_mining_fatigue_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.mining_fatigue_comment_cooldown_ms:
+            return []
+        self.state.last_mining_fatigue_comment_at = event.observed_at
+        return self._speech_actions(response_text("boss", "elder_guardian", "mining_fatigue"))
+
+    def _boss_omen_actions(self, event: GameEvent) -> list[AudioAction]:
+        kind = self._boss_omen_kind(event)
+        if kind is None:
+            return []
+        recent_ms = self._recent_ms(event.observed_at, self.state.last_boss_omen_comment_at)
+        if (
+            kind == self.state.last_boss_omen_kind
+            and recent_ms is not None
+            and recent_ms < self.settings.boss_omen_comment_cooldown_ms
+        ):
+            return []
+        self.state.last_boss_omen_kind = kind
+        self.state.last_boss_omen_comment_at = event.observed_at
+        if kind == "ender_dragon_arena":
+            return self._speech_actions(response_text("boss", "ender_dragon", "arena_hint"))
+        if kind == "ender_dragon_summon":
+            return self._speech_actions(response_text("boss", "ender_dragon", "summon_commit"))
+        if kind == "wither_assembly":
+            return self._speech_actions(response_text("boss", "wither", "assembly_hint"))
+        return []
 
     def _emergency_shelter_morning_actions(
         self,

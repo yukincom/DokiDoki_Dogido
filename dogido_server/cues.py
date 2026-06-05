@@ -4,6 +4,7 @@ from pathlib import Path
 
 DEFAULT_CUE_FILES = {
     "spot_hostile_gasp": "panic/freesound_community-male-gasp-1-7183.mp3",
+    "boss_reveal_scream": "panic/freesound_community-male-gasp-1-7183.mp3",
     "panic_scream_start": "panic/universfield-man-scream-08-352438.mp3",
     "front_spawn_scream": "panic/universfield-man-scream-08-352438.mp3",
     "ushiro_scream": "panic/universfield-man-scream-08-352438.mp3",

@@ -49,6 +49,22 @@ class RuntimeState:
     last_ambient_mob_comment_at: datetime | None = None
     last_damaging_light_warning_at: datetime | None = None
     last_magma_block_comment_at: datetime | None = None
+    last_mining_fatigue_comment_at: datetime | None = None
+    last_boss_omen_comment_at: datetime | None = None
+    last_boss_omen_kind: str | None = None
+    last_ominous_sound_seen_at: datetime | None = None
+    last_ominous_sound_comment_at: datetime | None = None
+    last_ominous_sound_kind: str | None = None
+    last_ominous_sound_severity: int = 0
+    ominous_sound_stage: int = 0
+    last_warden_chasing_comment_at: datetime | None = None
+    warden_attack_start_announced: bool = False
+    warden_ranged_trap_comment_count: int = 0
+    last_warden_ranged_trap_comment_at: datetime | None = None
+    warden_golem_army_announced: bool = False
+    warden_end_crystal_bombardment_announced: bool = False
+    warden_tnt_minecart_setup_announced: bool = False
+    last_active_status_effects: set[str] = field(default_factory=set)
     last_confirmed_hostiles: list[str] = field(default_factory=list)
     last_known_hostile_directions: list[str] = field(default_factory=list)
     prior_recent_visual_ms: int | None = None
@@ -89,6 +105,7 @@ class RuntimeState:
     daylight_water_comment_keys: dict[str, datetime] = field(default_factory=dict)
     screamed_visual_keys: dict[str, datetime] = field(default_factory=dict)
     seen_visual_keys: dict[str, datetime] = field(default_factory=dict)
+    seen_boss_visual_keys: set[str] = field(default_factory=set)
     stalled_visual_signature: str = ""
     stalled_visual_started_at: datetime | None = None
     last_stalled_visual_comment_at: datetime | None = None
@@ -163,6 +180,7 @@ class DerivedSignals:
     weather_transition_to: str | None = None
     cold_weather_biome: bool = False
     dry_weather_biome: bool = False
+    entered_mining_fatigue: bool = False
 
 
 @dataclass(slots=True)

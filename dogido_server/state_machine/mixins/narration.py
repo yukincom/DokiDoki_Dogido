@@ -8,7 +8,7 @@ from dogido_server.state_machine.ambient_mob_catalog import (
     ambient_mob_fallback_candidates,
 )
 from dogido_server.state_machine.fallback_catalog import dark_push_after_breath_fallback, death_fallback_text, fallback_text
-from dogido_server.state_machine.response_catalog import response_text
+from dogido_server.state_machine.response_catalog import response_lines, response_text
 from dogido_server.state_machine.types import DerivedSignals
 
 
@@ -90,6 +90,8 @@ class NarrationMixin:
         )
 
     def _render_aftermath_line(self, event: GameEvent) -> str:
+        if any(hostile == "warden" for hostile in self.state.last_confirmed_hostiles):
+            return response_text("boss", "warden", "defeated")
         fallback = fallback_text("aftermath", "line")
         health = event.player.health
         recent_combat_end_ms = self._recent_ms(event.observed_at, self.state.last_combat_end_at)
@@ -239,6 +241,8 @@ class NarrationMixin:
         )
 
     def _render_dark_push_after_breath_line(self, event: GameEvent) -> str | None:
+        if self._boss_recently_seen(event.observed_at):
+            return None
         hostiles = [self._hostile_label(threat.type) for threat in event.visual_threats]
         if not hostiles and event.auditory_threats:
             hostiles = ["気配あり"]
@@ -271,6 +275,34 @@ class NarrationMixin:
         if time_phase == "evening" and "まだ夜" in line:
             return line.replace("まだ夜", "もう夜")
         return line
+
+    def _render_deep_dark_ominous_sound_line(self, event: GameEvent, kind: str, stage: int) -> str:
+        return self._generate_leaf_text(
+            kind="deep_dark_ominous_sound",
+            fallback_text=self._deep_dark_ominous_fallback(event, kind, stage),
+            details={
+                "player_name": self._player_call_name(event),
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "ominous_kind": kind,
+                "ominous_stage": stage,
+            },
+            temperature=0.48,
+        )
+
+    def _deep_dark_ominous_fallback(self, event: GameEvent, kind: str, stage: int) -> str:
+        if kind == "warden_heartbeat":
+            if stage <= 1:
+                return response_text("boss", "warden", "heartbeat_first")
+            return response_text("boss", "warden", "heartbeat_close")
+        if kind == "warden_presence":
+            return response_text("boss", "warden", "heartbeat_close")
+        key = "sculk_shrieker_fallbacks" if kind == "sculk_shrieker" else "sculk_sensor_fallbacks"
+        lines = response_lines("boss", "deep_dark", key)
+        return self._select_deterministic_line(
+            f"{kind}:{event.sequence or 0}:{stage}",
+            lines,
+        )
 
     def _render_light_crafted_line(self, event: GameEvent) -> str:
         return self._generate_leaf_text(

@@ -46,6 +46,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "daylight_water_skeleton": _build_daylight_water_skeleton_messages,
         "newly_burning_visual": _build_newly_burning_visual_messages,
         "weather_transition": _build_weather_transition_messages,
+        "deep_dark_ominous_sound": _build_deep_dark_ominous_sound_messages,
     }
     builder = builders.get(request.kind)
     if builder is None:
@@ -456,5 +457,31 @@ def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[d
         "空の明るさや天気そのものへの反応を優先する。"
         "会話っぽい一言を24〜42文字くらいで返す。"
         "例文の語句を丸写しせず、怖がりなおじさんらしい自然な関西弁にする。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_deep_dark_ominous_sound_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    ominous_kind = str(details.get("ominous_kind", "unknown"))
+    stage = int(details.get("ominous_stage", 1) or 1)
+    user_prompt = (
+        "参考傾向:\n"
+        "- ディープダークで、正体が見えない不穏な音にじわっと怖くなる\n"
+        "- まだ見えていない段階では、ウォーデンだと断定しない\n"
+        "- 悲鳴というより、小さく気味悪がる・怖さが増す感じ\n"
+        "- 『俺の悲鳴とちゃうで』みたいな自虐はよい\n"
+        "- 会話として自然で、短く\n\n"
+        "/no_think\n"
+        "本番:\n"
+        "ディープダーク系の不穏な音がした。"
+        f"場所は{details.get('biome', 'unknown')}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"音の種類は{ominous_kind}。\n"
+        f"段階は{stage}。\n"
+        "stage 1 なら『なんやこの音』系の初期反応、"
+        "stage 2 以上なら『だんだん近い』『悲鳴みたいで気味悪い』系へ少し強めてよい。"
+        "見えていないのに『ウォーデンや』とは言わない。"
+        "会話っぽく16〜30文字くらいで一言だけ返す。"
     )
     return _dialog_messages(user_prompt)

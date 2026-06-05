@@ -61,6 +61,16 @@ BOSS_HOSTILES = {
     "ravager",
 }
 
+TACTICAL_BOSS_HOSTILES = {
+    "ender_dragon",
+}
+
+REVEAL_ONLY_BOSS_HOSTILES = {
+    "warden",
+    "wither",
+    "elder_guardian",
+}
+
 USHIRO_CALL = classic_ushiro_call_text()
 DAYLIGHT_WATER_CALL = response_text("combat", "daylight", "water_generic")
 DAYLIGHT_RAIN_CALL = response_text("combat", "daylight", "rain_started")

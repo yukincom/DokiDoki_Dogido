@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from math import inf
 
-from dogido_server.models import GameEvent, HorizontalDirection, VisualThreat
+from dogido_server.models import GameEvent, HorizontalDirection, VerticalRelation, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
 
 
@@ -12,6 +12,14 @@ class VisualTargetsMixin:
     def _render_hostile_visual_callout(self, threat: VisualThreat, mode: str) -> str:
         if threat.type == "charged_creeper":
             return CHARGED_CREEPER_CALL
+        if threat.type == "warden":
+            return "ウォーデンや！音立てんと離れよ！！"
+        if threat.type == "ender_dragon":
+            return "上や！ドラゴン来るで！" if threat.direction.vertical == VerticalRelation.ABOVE else "ドラゴンや！回り込んどるで！"
+        if threat.type == "wither":
+            return "ウィザーや！射線切れるとこ探そ！"
+        if threat.type == "elder_guardian":
+            return "エルダーガーディアンや！射線切らなあかん！"
         return self._realtime_hostile_visual_callout(threat, mode)
 
     def _realtime_hostile_visual_callout(self, threat: VisualThreat, mode: str) -> str:

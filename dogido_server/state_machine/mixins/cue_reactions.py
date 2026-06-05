@@ -6,6 +6,7 @@ import logging
 
 from dogido_server.models import EventName, GameEvent, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
+from dogido_server.state_machine.response_catalog import response_text
 from dogido_server.state_machine.types import AudioAction, DerivedSignals
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -51,7 +52,8 @@ class CueReactionsMixin:
         now: datetime,
         has_callout: bool,
     ) -> AudioAction | None:
-        if self._should_suppress_panic_cues(event) or not self._can_emit_panic_cue(now):
+        boss_reveal_target = self._boss_reveal_target(event)
+        if (self._should_suppress_panic_cues(event) and boss_reveal_target is None) or not self._can_emit_panic_cue(now):
             return None
         ushiro_target = self._consume_ushiro_ambush_target(event, now)
         if ushiro_target is not None:
@@ -75,6 +77,11 @@ class CueReactionsMixin:
                 threat=new_close_target,
             )
             return self._build_cue_action("panic_scream_start", "きゃー！", now)
+        boss_cue = self._boss_entry_cue(event, now, boss_reveal_target)
+        if boss_cue is not None:
+            return boss_cue
+        if self._highest_priority_boss_visual(event.visual_threats) is not None:
+            return None
         if has_callout and signals.entered_close_flying_visual is not None:
             self._log_panic_cue_decision(
                 "spot_hostile_gasp",
@@ -135,6 +142,32 @@ class CueReactionsMixin:
             )
             return self._build_cue_action("spot_hostile_gasp", "ハッ", now, interrupt=False)
         return None
+
+    def _boss_reveal_target(self, event: GameEvent) -> VisualThreat | None:
+        threat = self._highest_priority_boss_visual(event.visual_threats)
+        if threat is None or not self._is_new_visual_reveal(threat):
+            return None
+        return threat
+
+    def _boss_entry_cue(
+        self,
+        event: GameEvent,
+        now: datetime,
+        threat: VisualThreat | None,
+    ) -> AudioAction | None:
+        if threat is None:
+            return None
+        if self._boss_panic_policy(threat.type) != "reveal_only":
+            return None
+        self._log_panic_cue_decision(
+            "boss_reveal_scream",
+            f"{threat.type}_boss_reveal",
+            event,
+            threat=threat,
+            interrupt=False,
+        )
+        cue_text = "ひいっ！" if (threat.type or "").strip().lower() == "warden" else "ぎゃー！"
+        return self._build_cue_action("boss_reveal_scream", cue_text, now, interrupt=False)
 
     def _build_cue_action(
         self,
@@ -313,6 +346,14 @@ class CueReactionsMixin:
         if silence_new_close_ambush and self._peek_new_close_visual_ambush_target(event, now) is not None:
             return True, None
 
+        warden_special = self._next_warden_special_callout(event, now)
+        if warden_special is not None:
+            return True, warden_special
+
+        boss_line = self._boss_visual_callout(event, now)
+        if boss_line is not None:
+            return True, boss_line
+
         if signals.entered_close_flying_visual is not None:
             target = signals.entered_close_flying_visual
             self.state.commented_visual_keys[self._visual_identity_key(target)] = now
@@ -383,6 +424,30 @@ class CueReactionsMixin:
             return True, multi
 
         return False, None
+
+    def _boss_visual_callout(self, event: GameEvent, now: datetime) -> str | None:
+        threat = self._highest_priority_boss_visual(event.visual_threats)
+        if threat is None:
+            return None
+        visual_key = self._visual_identity_key(threat)
+        if not self._visual_comment_allowed(visual_key, now):
+            return None
+        self.state.commented_visual_keys[visual_key] = now
+        self.state.announced_hostile_counts[threat.type] = max(
+            1,
+            self.state.announced_hostile_counts.get(threat.type, 0),
+        )
+        self._mark_visual_priority_callout(now, single_type=threat.type)
+        if self._is_new_visual_reveal(threat):
+            if threat.type == "ender_dragon":
+                return response_text("boss", "ender_dragon", "reveal")
+            if threat.type == "wither":
+                return response_text("boss", "wither", "reveal")
+            if threat.type == "warden":
+                return response_text("boss", "warden", "reveal")
+            if threat.type == "elder_guardian":
+                return response_text("boss", "elder_guardian", "reveal")
+        return self._render_terminal_visual_callout(threat, mode="alert", direction_only=False)
 
     def _render_terminal_visual_callout(
         self,
