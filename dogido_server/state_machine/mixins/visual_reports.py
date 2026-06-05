@@ -159,10 +159,11 @@ class VisualReportsMixin:
         self.state.last_multi_hostile_count = count
         self._mark_visual_priority_callout(now, single_type=None)
         counts = self._hostile_counts(event.visual_threats)
-        return self._hostile_count_summary(counts, suppressed=suppressed, threats=event.visual_threats)
+        return self._hostile_count_summary(event, counts, suppressed=suppressed, threats=event.visual_threats)
 
     def _multi_species_callout(
         self,
+        event: GameEvent,
         threats: list[VisualThreat],
         now: datetime,
         suppressed: bool,
@@ -183,7 +184,7 @@ class VisualReportsMixin:
         self.state.last_multi_species_signature = signature
         self.state.last_multi_species_report_at = now
         self._mark_visual_priority_callout(now, single_type=None)
-        return self._hostile_count_summary(dict(ordered), suppressed=suppressed, threats=threats)
+        return self._hostile_count_summary(event, dict(ordered), suppressed=suppressed, threats=threats)
 
     def _multi_species_signature(self, counts: dict[str, int]) -> str:
         ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
@@ -212,7 +213,7 @@ class VisualReportsMixin:
                 return None
             self.state.last_overwhelmed_report_at = now
             self._mark_visual_priority_callout(now, single_type=None)
-            return "モンスターがぎょうさんおる……。" if suppressed else "モンスターがぎょうさんおるで！"
+            return self._hostile_massive_callout(event, suppressed=suppressed)
         support_targets = self._overwhelmed_support_targets(threats)
         signature_parts = sorted(self._visual_identity_key(threat) for threat in threats)
         signature = "|".join(signature_parts)

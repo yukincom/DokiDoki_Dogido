@@ -78,7 +78,7 @@ class AmbientMobEvent(_Condition):
         super().__init__(name="AmbientMobEvent")
 
     def check(self, context: PolicyContext) -> bool:
-        return context.next_mode == "normal" and context.event.event.name == EventName.AMBIENT_MOB_DETECTED
+        return context.next_mode == "normal" and context.machine._should_emit_ambient_mob_comment(context.event, context.now)
 
 
 class DimensionChanged(_Condition):
@@ -101,7 +101,9 @@ class NormalEnvironmentEvent(_Condition):
         if context.event.visual_threats or context.event.auditory_threats:
             return False
         return (
-            context.signals.light_source_crafted
+            context.machine.player_input.asks_hostile_count
+            or context.machine.state.pending_overworld_return_line
+            or context.signals.light_source_crafted
             or context.machine.state.pending_special_biome_line is not None
             or context.signals.entered_safe_zone_with_door
             or context.signals.exited_safe_zone_with_door
@@ -112,13 +114,13 @@ class NormalEnvironmentEvent(_Condition):
             or context.signals.weather_transition_to is not None
             or context.machine._has_pending_weather_transition()
             or context.machine._is_foliage_shade_context(context.event)
+            or context.machine._should_consider_magma_block_comment(context.event, context.now)
+            or context.machine._should_consider_damaging_light_warning(context.event, context.now)
             or (
                 getattr(context.event.world.time_phase, "value", context.event.world.time_phase) == "night"
                 and (context.event.world.nearby_firefly_bush_count or 0) > 0
             )
             or context.machine._should_consider_night_warning(context.event)
-            or context.machine._should_emit_sleep_prompt(context.event, context.now)
-            or context.machine._should_emit_sleeping_neighbor_comment(context.event, context.now)
             or context.machine._should_emit_haiku(context.event, context.now)
             or context.machine._should_emit_emergency_shelter_advice(context.event, context.signals)
             or context.machine._should_emit_emergency_shelter_morning_call(context.event, context.signals)
@@ -265,6 +267,8 @@ class EmitAftermathActions(_Action):
         super().__init__(name="EmitAftermathActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        if context.machine._player_input_priority_active(context.now):
+            return
         if context.previous_mode != "aftermath" or context.event.event.name == EventName.COMBAT_ENDED:
             actions.append(
                 context.machine._audio_action(
@@ -283,6 +287,7 @@ class EmitAmbientMobActions(_Action):
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
         line = context.machine._render_ambient_mob_line(context.event, context.event.peaceful_mobs)
         if line:
+            context.machine.state.last_ambient_mob_comment_at = context.now
             actions.append(
                 context.machine._audio_action(
                     layer="speech",

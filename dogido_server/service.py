@@ -54,6 +54,7 @@ class SessionInfo:
     seen_sequence_set: set[int] = field(default_factory=set)
     seen_idempotency: deque[str] = field(default_factory=lambda: deque(maxlen=2048))
     seen_idempotency_set: set[str] = field(default_factory=set)
+    first_event_logged: bool = False
 
     def is_stale_sequence(self, sequence: int) -> bool:
         return (
@@ -119,6 +120,14 @@ class DogidoService:
             machine=DogidoStateMachine(self.settings, llm=self.llm),
         )
         self.audio.prewarm_speech_texts(self._fallback_speech_catalog(request.call_name or self.settings.default_call_name))
+        LOGGER.info(
+            "adapter_session_created session_id=%s adapter=%s version=%s schema=%s capabilities=%s",
+            session_id,
+            request.adapter_name,
+            request.adapter_version,
+            request.schema_version,
+            ",".join(request.capabilities) or "none",
+        )
         return AdapterSessionCreateResponse(
             session_id=session_id,
             accepted_schema_version=self.settings.accepted_schema_version,
@@ -142,6 +151,16 @@ class DogidoService:
                     "meta": event.meta.model_copy(update={"call_name": session.call_name}),
                 }
             )
+        if not session.first_event_logged:
+            LOGGER.info(
+                "adapter_event_bound session_id=%s adapter=%s session_version=%s event_build=%s schema=%s",
+                session.session_id,
+                session.adapter_name,
+                session.adapter_version,
+                event.meta.adapter_build or "unset",
+                event.schema_version,
+            )
+            session.first_event_logged = True
         session.last_seen_at = event.observed_at
 
         deduplicated = False

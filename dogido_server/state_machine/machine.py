@@ -55,6 +55,7 @@ class DogidoStateMachine(
         entered_occluded_dark_zone = False if dimension_changed else self._entered_occluded_dark_zone(event)
         entered_safe_zone_with_door = False if dimension_changed else self._entered_safe_zone_with_door(event)
         entered_emergency_shelter = False if dimension_changed else self._entered_emergency_shelter(event)
+        entered_close_flying_visual = None if dimension_changed else self._entered_close_flying_visual(event)
         exited_safe_zone_with_door = False if dimension_changed else self._exited_safe_zone_with_door(event)
         entered_submerged_dark_zone = False if dimension_changed else self._entered_submerged_dark_zone(event)
         light_source_crafted = self._light_source_crafted(event)
@@ -66,6 +67,7 @@ class DogidoStateMachine(
         signals.entered_occluded_dark_zone = entered_occluded_dark_zone
         signals.entered_safe_zone_with_door = entered_safe_zone_with_door
         signals.entered_emergency_shelter = entered_emergency_shelter
+        signals.entered_close_flying_visual = entered_close_flying_visual
         signals.exited_safe_zone_with_door = exited_safe_zone_with_door
         signals.entered_submerged_dark_zone = entered_submerged_dark_zone
         signals.light_source_crafted = light_source_crafted

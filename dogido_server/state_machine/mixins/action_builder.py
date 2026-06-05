@@ -113,6 +113,8 @@ class ActionBuilderMixin:
             return actions
 
         if next_mode == "aftermath":
+            if self._player_input_priority_active(now):
+                return actions
             if previous_mode != "aftermath" or event.event.name == EventName.COMBAT_ENDED:
                 actions.append(
                     AudioAction(
@@ -124,9 +126,10 @@ class ActionBuilderMixin:
                 )
             return actions
 
-        if next_mode == "normal" and event.event.name == EventName.AMBIENT_MOB_DETECTED:
+        if next_mode == "normal" and self._should_emit_ambient_mob_comment(event, now):
             line = self._render_ambient_mob_line(event, event.peaceful_mobs)
             if line:
+                self.state.last_ambient_mob_comment_at = now
                 actions.append(AudioAction(layer="speech", interrupt=False, text=line))
             return actions
 

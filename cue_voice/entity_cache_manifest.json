@@ -367,10 +367,6 @@
       "orude": {
         "text": "おるで",
         "path": "common/phrases/orude.mp3"
-      },
-      "gyousan_orude": {
-        "text": "モンスターがぎょうさんおるで！",
-        "path": "common/phrases/gyousan_orude.mp3"
       }
     }
   }

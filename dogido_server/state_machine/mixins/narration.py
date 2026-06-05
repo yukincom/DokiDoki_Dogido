@@ -42,6 +42,8 @@ class NarrationMixin:
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
                 "mob_tags": list(mob_poetic_tags(mob.type))[:8],
                 "mob_role": str(role) if role else "",
+                "mob_temperament": getattr(mob, "temperament", None) or "friendly",
+                "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
                 "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
             },
         )
@@ -59,6 +61,8 @@ class NarrationMixin:
             mob_type=mob.type,
             mob_label=self._mob_label(mob.type),
             inventory_item_ids=inventory_item_ids,
+            temperament=getattr(mob, "temperament", None),
+            caution_reason=getattr(mob, "caution_reason", None),
         )
         return ambient_mob_fallback_candidates(context)
 

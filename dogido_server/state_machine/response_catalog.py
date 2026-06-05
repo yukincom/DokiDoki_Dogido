@@ -26,6 +26,15 @@ def response_text(topic: str, *keys: str, **replacements: str) -> str:
     return text
 
 
+def response_lines(topic: str, *keys: str) -> tuple[str, ...]:
+    node: Any = load_response_catalog(topic)
+    for key in keys:
+        node = node[key]
+    if isinstance(node, list):
+        return tuple(str(line) for line in node)
+    return (str(node),)
+
+
 def classic_ushiro_call_text() -> str:
     return response_text("combat", "calls", "classic_ushiro_call")
 
@@ -76,7 +85,7 @@ def response_prewarm_texts(player_name: str | None) -> list[str]:
         response_text("combat", "calls", "charged_creeper"),
         response_text("combat", "pressure", "stalled_visual_suppressed"),
         response_text("combat", "pressure", "stalled_visual"),
-        response_text("combat", "pressure", "hostile_massive"),
+        *response_lines("combat", "pressure", "hostile_massive_variants"),
         response_text("combat", "pressure", "hostile_massive_suppressed"),
         response_text("combat", "daylight", "water_generic"),
         response_text("combat", "daylight", "rain_started"),
@@ -84,8 +93,6 @@ def response_prewarm_texts(player_name: str | None) -> list[str]:
         response_text("combat", "daylight", "dry_thunder"),
         response_text("darkness", "emergency_shelter", "advice"),
         response_text("darkness", "emergency_shelter", "morning_release"),
-        response_text("darkness", "sleep", "near_respawn_bed"),
-        response_text("darkness", "sleep", "nearby_bed"),
         response_text("darkness", "night_warning", "surface_evening"),
         response_text("darkness", "night_warning", "cave_or_submerged", phase_label="夕方"),
         response_text("darkness", "night_warning", "cave_or_submerged", phase_label="夜"),

@@ -132,6 +132,47 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
     ]
 
 
+def build_haiku_repair_messages(details: dict[str, object]) -> list[dict[str, str]]:
+    scene_block = _scene_block(details)
+    constraint_block = _constraint_block(details)
+    draft = str(details.get("attempted_haiku") or "").strip() or "なし"
+    user_prompt = (
+        "以下の川柳下書きを、意味を保ったまま自然な日本語の川柳に直す。\n"
+        "返答は3行の川柳だけ。説明は禁止。\n"
+        "\n"
+        "下書き:\n"
+        f"{draft}\n"
+        "\n"
+        "場面の要約:\n"
+        f"{scene_block}\n"
+        "\n"
+        "主役語の制約:\n"
+        f"{constraint_block}\n"
+        "\n"
+        "修正ルール:\n"
+        "- 3行で出力する\n"
+        "- 1行目は5音、2行目は7音、3行目は5音。各行ともプラスマイナス1音まで許容\n"
+        "- ひらがなかカタカナだけを使う。漢字、英字、数字、記号、句読点は使わない\n"
+        "- 元の場面や主題は保つ\n"
+        "- 新しいアイテム、ブロック、Mob を足さない\n"
+        "- もし道具名や主役語を句に入れるなら、『使ってよい語』だけを使い、『使ってはいけない語』へ言い換えない\n"
+        "- 読みにくい造語や意味のない並びは使わない\n"
+        "\n"
+        "修正版の3行だけを返す。"
+    )
+    return [
+        {
+            "role": "system",
+            "content": (
+                "あなたはMinecraft実況AI『ドギド』です。"
+                "今は実況ではなく、日本語の川柳の下書きを自然な川柳に直します。"
+                "余計な説明は禁止です。"
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+
 def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str]]:
     feature_candidates = "\n".join(
         f"- {candidate}" for candidate in details.get("feature_candidates", []) if isinstance(candidate, str)

@@ -11,3 +11,4 @@ class PlayerInputContext:
     breaks_silence: bool = False
     wants_quiet: bool = False
     should_block_ambient: bool = False
+    asks_hostile_count: bool = False

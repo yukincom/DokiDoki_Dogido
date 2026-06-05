@@ -34,6 +34,9 @@ class VisualTargetsMixin:
         index = sum(ord(ch) for ch in identity) % len(variants)
         return variants[index]
 
+    def _render_flying_visual_callout(self, threat: VisualThreat) -> str:
+        return f"上から{self._hostile_label(threat.type)}きたで！"
+
     def _alert_cue_id(self, event: GameEvent, previous_mode: str) -> str | None:
         if previous_mode in {"alert", "panic", "suppressed_panic"}:
             return None
@@ -156,7 +159,7 @@ class VisualTargetsMixin:
                 continue
             if threat.direction.horizontal != HorizontalDirection.BACK:
                 continue
-            if threat.distance is None or threat.distance > 3.0:
+            if threat.distance is None or threat.distance > self.settings.rear_warning_distance:
                 continue
             visual_key = self._visual_identity_key(threat)
             screamed_at = self.state.screamed_visual_keys.get(visual_key)

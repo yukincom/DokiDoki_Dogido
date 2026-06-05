@@ -29,7 +29,9 @@ class RuntimeState:
     mode: str = "normal"
     shut_up_count: int = 0
     last_non_silent_at: datetime | None = None
+    last_player_input_at: datetime | None = None
     haiku_emitted_this_cycle: bool = False
+    pending_haiku_after_preface: bool = False
     last_time_phase: str | None = None
     suppression_started_at: datetime | None = None
     suppression_until: datetime | None = None
@@ -37,12 +39,16 @@ class RuntimeState:
     last_visual_threat_at: datetime | None = None
     last_audio_threat_at: datetime | None = None
     last_damage_at: datetime | None = None
+    low_health_warning_armed: bool = True
     last_combat_end_at: datetime | None = None
     last_darkness_advice_at: datetime | None = None
     last_foliage_darkness_advice_at: datetime | None = None
     last_submerged_darkness_advice_at: datetime | None = None
     panic_scream_cooldown_until: datetime | None = None
     last_occluded_hostile_presence_comment_at: datetime | None = None
+    last_ambient_mob_comment_at: datetime | None = None
+    last_damaging_light_warning_at: datetime | None = None
+    last_magma_block_comment_at: datetime | None = None
     last_confirmed_hostiles: list[str] = field(default_factory=list)
     last_known_hostile_directions: list[str] = field(default_factory=list)
     prior_recent_visual_ms: int | None = None
@@ -59,6 +65,9 @@ class RuntimeState:
     last_dark_push_breath_at: datetime | None = None
     last_multi_hostile_report_at: datetime | None = None
     last_multi_hostile_count: int = 0
+    last_mass_hostile_callout_at: datetime | None = None
+    last_ground_hostile_count_within_query_range: int = 0
+    mass_hostile_callout_latched: bool = False
     last_multi_species_report_at: datetime | None = None
     last_multi_species_signature: str = ""
     last_overwhelmed_report_at: datetime | None = None
@@ -104,6 +113,9 @@ class RuntimeState:
     emergency_shelter_morning_announced: bool = False
     current_dimension: str | None = None
     current_biome: str | None = None
+    pending_overworld_return_line: bool = False
+    pending_overworld_return_ready_at: datetime | None = None
+    active_close_flying_visual_keys: set[str] = field(default_factory=set)
     pending_special_biome_line: str | None = None
     last_special_biome_comment_at: dict[str, datetime] = field(default_factory=dict)
 
@@ -114,6 +126,8 @@ class DerivedSignals:
     nearest_visual_threat_distance: float = inf
     visual_threat_count_within_7: int = 0
     visual_threat_count_within_10: int = 0
+    ground_hostile_count_within_query_range: int = 0
+    flying_hostile_count_within_query_range: int = 0
     has_approaching_visual_threat: bool = False
     recent_hostile_audio_ms: int | None = None
     recent_hostile_visual_ms: int | None = None
@@ -133,6 +147,7 @@ class DerivedSignals:
     home_or_respawn_return_is_unrealistic: bool = False
     rear_high_risk: bool = False
     newly_burning_visual: VisualThreat | None = None
+    entered_close_flying_visual: VisualThreat | None = None
     occluded_dark_zone: bool = False
     entered_occluded_dark_zone: bool = False
     light_source_crafted: bool = False

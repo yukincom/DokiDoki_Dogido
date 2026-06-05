@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DogidoModel(BaseModel):
@@ -215,6 +215,9 @@ class WorldState(DogidoModel):
     danger_darkness_score: float | None = None  # 総合暗所危険度（0.0〜1.0, 最優先で参照）
     nearby_light_source_count: int | None = None  # 周辺の実光源ブロック数
     nearest_light_source_distance: float | None = None  # 最近傍の実光源までの距離
+    nearby_damaging_light_source_count: int | None = None  # 近距離の危険光源数（炎・焚き火・マグマ等）
+    nearest_damaging_light_source_distance: float | None = None  # 最近傍の危険光源までの距離
+    standing_on_magma_block: bool | None = None  # 足元がマグマブロックか
     nearby_firefly_bush_count: int | None = None  # 周辺のホタルブッシュ数（雰囲気演出用）
 
 
@@ -267,6 +270,8 @@ class PeacefulMob(DogidoModel):
     distance: float | None = None
     direction: Direction = Field(default_factory=Direction)
     certainty: Certainty = Certainty.HIGH
+    temperament: str | None = None  # "friendly" / "neutral"
+    caution_reason: str | None = None  # 例: "provoked_only", "darkness", "territorial"
 
 
 class NearbyResource(DogidoModel):
@@ -294,6 +299,7 @@ class CombatState(DogidoModel):
     recent_hostile_audio_ms: int | None = Field(default=None, ge=0)
     hostiles_within_7: int | None = Field(default=None, ge=0)  # 7マス以内（panic 移行の閾値）
     hostiles_within_10: int | None = Field(default=None, ge=0)  # 10マス以内（複数敵警戒の閾値）
+    hostiles_within_30_ground: int | None = Field(default=None, ge=0)  # 30マス以内の地上系敵数
     combat_active_hint: bool | None = None
 
 
@@ -320,6 +326,7 @@ class GameEvent(DogidoModel):
     必須: schema_version / game / adapter / observed_at / event
     推奨: sequence / visual_threats / auditory_threats / inventory / combat
     任意: peaceful_mobs / nearby_resources / meta
+    peaceful_mobs は旧スキーマ名。内部では passive_mobs 相当として扱う。
 
     inventory: キーは Minecraft item id、値は所持数。
                松明・石炭・木材・ベッド材料の有無を暗所対処フローで参照する。
@@ -339,6 +346,21 @@ class GameEvent(DogidoModel):
     nearby_resources: list[NearbyResource] = Field(default_factory=list)
     combat: CombatState = Field(default_factory=CombatState)
     meta: MetaState = Field(default_factory=MetaState)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_passive_mobs_alias(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        if "peaceful_mobs" not in value and "passive_mobs" in value:
+            cloned = dict(value)
+            cloned["peaceful_mobs"] = cloned.get("passive_mobs")
+            return cloned
+        return value
+
+    @property
+    def passive_mobs(self) -> list[PeacefulMob]:
+        return self.peaceful_mobs
 
 
 # ---- API リクエスト / レスポンス ----

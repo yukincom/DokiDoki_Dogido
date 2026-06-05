@@ -15,6 +15,8 @@ class AmbientMobReactionContext:
     mob_type: str
     mob_label: str
     inventory_item_ids: frozenset[str]
+    temperament: str | None = None
+    caution_reason: str | None = None
 
 
 @lru_cache(maxsize=1)
@@ -32,6 +34,16 @@ def ambient_mob_fallback_candidates(context: AmbientMobReactionContext) -> list[
         required_ids = frozenset(str(item_id) for item_id in conditional.get("requires_inventory_any", []))
         if required_ids and not required_ids.intersection(context.inventory_item_ids):
             continue
+        required_temperament = str(conditional.get("requires_temperament", "")).strip().lower()
+        if required_temperament and required_temperament != (context.temperament or "").strip().lower():
+            continue
+        required_caution = frozenset(
+            str(reason).strip().lower()
+            for reason in conditional.get("requires_caution_any", [])
+            if str(reason).strip()
+        )
+        if required_caution and (context.caution_reason or "").strip().lower() not in required_caution:
+            continue
         line = str(conditional.get("line", "")).strip()
         if line:
             candidates.append(line)
@@ -41,7 +53,8 @@ def ambient_mob_fallback_candidates(context: AmbientMobReactionContext) -> list[
         if text:
             candidates.append(text)
 
-    for template in catalog.get("generic_templates", []):
+    generic_key = "generic_neutral_templates" if (context.temperament or "").strip().lower() == "neutral" else "generic_templates"
+    for template in catalog.get(generic_key, []):
         text = str(template).replace("{mob}", context.mob_label).strip()
         if text:
             candidates.append(text)

@@ -9,8 +9,8 @@
     "nearby_bed": "ベッドあるし、寝よか。"
   },
   "night_warning": {
-    "surface_evening": "夕方や！あと1分もしないうちにモンスター出るで！",
-    "cave_or_submerged": "そろそろ{phase_label}やなー。今から地上に出るとモンスターとかち合うなー"
+    "surface_evening": "夕方や！あと1分もしないうちに敵出るで！",
+    "cave_or_submerged": "そろそろ{phase_label}やなー。今から地上に出ると敵とかち合うなー"
   },
   "darkness": {
     "submerged_entry": "……暗いのは、にがてなんやけど……。"

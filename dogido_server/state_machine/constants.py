@@ -44,6 +44,15 @@ HIGH_THREAT_SUPPORT_HOSTILES = {
     "ender_dragon",
 }
 
+FLYING_HOSTILES = {
+    "blaze",
+    "ender_dragon",
+    "ghast",
+    "phantom",
+    "vex",
+    "wither",
+}
+
 BOSS_HOSTILES = {
     "warden",
     "wither",

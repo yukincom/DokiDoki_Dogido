@@ -18,6 +18,7 @@ class StateUpdatesMixin:
             self.state.last_non_silent_at = now
         if time_phase == "morning" and self.state.last_time_phase != "morning":
             self.state.haiku_emitted_this_cycle = False
+            self.state.pending_haiku_after_preface = False
         self.state.last_time_phase = time_phase
         if time_phase != "night":
             self.state.firefly_reacted_this_night = False
@@ -79,10 +80,13 @@ class StateUpdatesMixin:
 
         if event.combat.recent_damage_ms is not None:
             self.state.last_damage_at = now - timedelta(milliseconds=event.combat.recent_damage_ms)
+        if event.player.health is None or event.player.health > self.settings.low_health_warning_threshold:
+            self.state.low_health_warning_armed = True
 
         if self.player_input.wants_quiet:
             self.state.shut_up_count += 1
         if self.player_input.breaks_silence:
+            self.state.last_player_input_at = now
             self.state.last_non_silent_at = now
 
         if event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}:
@@ -115,6 +119,33 @@ class StateUpdatesMixin:
         self.state.last_light_source_count = self._light_source_count(event.inventory)
         self.state.last_weather = self._weather_value(event.world.weather)
         self.state.inventory_initialized = True
+        ground_hostile_count = self._ground_hostile_count_within_query_range(event)
+        authoritative_ground_count_event = event.event.name in {
+            EventName.STATUS_SNAPSHOT,
+            EventName.THREAT_APPROACHING,
+            EventName.COMBAT_ENDED,
+            EventName.PLAYER_DIED,
+        }
+        if (
+            authoritative_ground_count_event
+            and ground_hostile_count <= 0
+            and self.state.last_ground_hostile_count_within_query_range > 0
+        ):
+            self.state.mass_hostile_callout_latched = False
+            self.state.last_multi_hostile_report_at = None
+            self.state.last_multi_hostile_count = 0
+            self.state.last_mass_hostile_callout_at = None
+            self.state.last_multi_species_report_at = None
+            self.state.last_multi_species_signature = ""
+            self.state.last_overwhelmed_report_at = None
+            self.state.last_overwhelmed_signature = ""
+            self.state.last_visual_priority_callout_at = None
+            self.state.last_single_visual_type = None
+            self.state.last_single_visual_at = None
+            self.state.announced_hostile_counts.clear()
+        if authoritative_ground_count_event:
+            self.state.last_ground_hostile_count_within_query_range = ground_hostile_count
+        self.state.active_close_flying_visual_keys = self._current_close_flying_visual_keys(event)
 
     def _handle_dimension_change(self, event: GameEvent) -> None:
         current_dimension = self._normalized_dimension(event) or None
@@ -124,10 +155,15 @@ class StateUpdatesMixin:
         self.state.current_dimension = current_dimension
         if previous_dimension is None or current_dimension is None:
             return
+        returning_to_overworld = (
+            previous_dimension in {"minecraft:the_nether", "the_nether", "minecraft:the_end", "the_end"}
+            and current_dimension in {"minecraft:overworld", "overworld"}
+        )
         self.state.last_time_phase = None
         self.state.last_visual_threat_at = None
         self.state.last_audio_threat_at = None
         self.state.last_damage_at = None
+        self.state.low_health_warning_armed = True
         self.state.last_combat_end_at = None
         self.state.last_confirmed_hostiles = []
         self.state.last_known_hostile_directions = []
@@ -146,6 +182,9 @@ class StateUpdatesMixin:
         self.state.last_stalled_visual_comment_at = None
         self.state.last_multi_hostile_report_at = None
         self.state.last_multi_hostile_count = 0
+        self.state.last_mass_hostile_callout_at = None
+        self.state.last_ground_hostile_count_within_query_range = 0
+        self.state.mass_hostile_callout_latched = False
         self.state.last_multi_species_report_at = None
         self.state.last_multi_species_signature = ""
         self.state.last_overwhelmed_report_at = None
@@ -154,6 +193,7 @@ class StateUpdatesMixin:
         self.state.last_single_visual_type = None
         self.state.last_single_visual_at = None
         self.state.last_ushiro_call_at = None
+        self.state.active_close_flying_visual_keys.clear()
         self.state.pending_dark_push_after_breath_until = None
         self.state.dark_push_active = False
         self.state.pending_safe_aftermath = False
@@ -174,6 +214,13 @@ class StateUpdatesMixin:
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
         self.state.night_warning_pending = False
+        self.state.pending_overworld_return_line = returning_to_overworld
+        if returning_to_overworld:
+            self.state.pending_overworld_return_ready_at = event.observed_at + timedelta(
+                milliseconds=self.settings.overworld_return_line_delay_ms
+            )
+        else:
+            self.state.pending_overworld_return_ready_at = None
 
     def _derive_signals(self, event: GameEvent, now: datetime) -> DerivedSignals:
         visual_distances = [threat.distance for threat in event.visual_threats if threat.distance is not None]
@@ -185,6 +232,8 @@ class StateUpdatesMixin:
         visual_within_10 = sum(
             1 for threat in event.visual_threats if threat.distance is not None and threat.distance <= 10.0
         )
+        ground_hostile_count = self._ground_hostile_count_within_query_range(event)
+        flying_hostile_count = self._flying_hostile_count_within_query_range(event)
         has_approaching = any(threat.approaching for threat in event.visual_threats)
 
         recent_audio_ms = self._recent_ms(now, self.state.last_audio_threat_at)
@@ -238,6 +287,8 @@ class StateUpdatesMixin:
             nearest_visual_threat_distance=nearest_visual,
             visual_threat_count_within_7=visual_within_7,
             visual_threat_count_within_10=visual_within_10,
+            ground_hostile_count_within_query_range=ground_hostile_count,
+            flying_hostile_count_within_query_range=flying_hostile_count,
             has_approaching_visual_threat=has_approaching,
             recent_hostile_audio_ms=recent_audio_ms,
             recent_hostile_visual_ms=recent_visual_ms,

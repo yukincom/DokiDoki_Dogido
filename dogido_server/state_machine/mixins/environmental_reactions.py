@@ -67,15 +67,6 @@ class EnvironmentalReactionsMixin:
         if signals.torch_materials_nearby:
             self.state.last_darkness_advice_at = now
             return "このへんで木とか石炭拾って、先に松明作っとこ。"
-        if signals.bed_available:
-            self.state.last_darkness_advice_at = now
-            return "ベッド持ってるやん、今日はもう無理せんと寝よ。"
-        if signals.bed_craftable:
-            self.state.last_darkness_advice_at = now
-            return "これベッド作れるで、先に寝る準備しとこや。"
-        if signals.bed_materials_nearby:
-            self.state.last_darkness_advice_at = now
-            return "羊毛か木を探して、先にベッド作っとこや。"
         if not self._has_weapon(event):
             return self._render_darkness_escape_line(event)
         if self._effective_time_phase(event) in {"evening", "night"}:
@@ -181,7 +172,7 @@ class EnvironmentalReactionsMixin:
         ):
             return None
         self.state.last_foliage_darkness_advice_at = now
-        return "木がしげっているとこは暗いわー。こういうとこはおひさんでとってもモンスターが残っとるんやで……。"
+        return "木がしげっているとこは暗いわー。こういうとこはおひさんでとっても敵が残っとるんやで……。"
 
     def _environmental_actions(
         self,
@@ -246,7 +237,9 @@ class EnvironmentalReactionsMixin:
             return actions
 
         if stop_dark_push or self._should_stop_dark_push_stage_one(event, signals):
-            return self._handle_dark_push_stop(event, signals, now, defer_speech=False)
+            actions = self._handle_dark_push_stop(event, signals, now, defer_speech=False)
+            actions.extend(self._explicit_ambient_mob_followup_actions(event, now))
+            return actions
 
         pending_after_breath = self._emit_pending_dark_push_after_breath(event, signals, now)
         if pending_after_breath:
@@ -264,6 +257,26 @@ class EnvironmentalReactionsMixin:
             ]
         return []
 
+    def _explicit_ambient_mob_followup_actions(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> list[AudioAction]:
+        if self._player_input_priority_active(now):
+            return []
+        if event.event.name != EventName.AMBIENT_MOB_DETECTED:
+            return []
+        if not event.peaceful_mobs or event.visual_threats or event.auditory_threats:
+            return []
+        recent_ms = self._recent_ms(now, self.state.last_ambient_mob_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.ambient_mob_comment_cooldown_ms:
+            return []
+        line = self._render_ambient_mob_line(event, event.peaceful_mobs)
+        if not line:
+            return []
+        self.state.last_ambient_mob_comment_at = now
+        return [self._speech_action(line)]
+
     def _ambient_environmental_actions(
         self,
         event: GameEvent,
@@ -272,6 +285,17 @@ class EnvironmentalReactionsMixin:
         now: datetime,
         stop_dark_push: bool,
     ) -> list[AudioAction]:
+        if self.player_input.asks_hostile_count:
+            return self._speech_actions(
+                self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
+            )
+        if self._player_input_priority_active(now):
+            return []
+
+        overworld_return_line = self._emit_pending_overworld_return_line(now)
+        if overworld_return_line:
+            return self._speech_actions(overworld_return_line)
+
         weather_transition = self._weather_transition_callout(event, signals)
         if weather_transition:
             return self._speech_actions(weather_transition)
@@ -280,13 +304,17 @@ class EnvironmentalReactionsMixin:
         if night_warning:
             return self._speech_actions(night_warning)
 
-        sleep_prompt = self._emit_sleep_prompt(event, now)
-        if sleep_prompt:
-            return self._speech_actions(sleep_prompt)
-
         firefly_actions = self._firefly_actions(event, signals, now)
         if firefly_actions:
             return firefly_actions
+
+        magma_block_line = self._emit_magma_block_comment(event, now)
+        if magma_block_line:
+            return self._speech_actions(magma_block_line)
+
+        damaging_light_line = self._emit_damaging_light_warning(event, now)
+        if damaging_light_line:
+            return self._speech_actions(damaging_light_line)
 
         shelter_actions = self._emergency_shelter_presence_actions(event, signals, stop_dark_push)
         if shelter_actions:
@@ -316,12 +344,42 @@ class EnvironmentalReactionsMixin:
                 self._log_darkness_decision("darkness_advice", event, signals)
                 return self._speech_actions(darkness_advice)
 
-        sleeping_neighbor = self._render_sleeping_neighbor_line(event, now)
-        if sleeping_neighbor:
-            return self._speech_actions(sleeping_neighbor)
-
         haiku_line = self._emit_haiku_line(event, now)
         return self._speech_actions(haiku_line)
+
+    def _emit_damaging_light_warning(self, event: GameEvent, now: datetime) -> str | None:
+        if not self._should_consider_damaging_light_warning(event, now):
+            return None
+        self.state.last_damaging_light_warning_at = now
+        return "触るとあちちやで！"
+
+    def _emit_magma_block_comment(self, event: GameEvent, now: datetime) -> str | None:
+        if not self._should_consider_magma_block_comment(event, now):
+            return None
+        self.state.last_magma_block_comment_at = now
+        return "………しゃがめば大丈夫なんが不思議やな……"
+
+    def _should_consider_damaging_light_warning(self, event: GameEvent, now: datetime) -> bool:
+        count = event.world.nearby_damaging_light_source_count or 0
+        nearest = event.world.nearest_damaging_light_source_distance
+        if count <= 0 or nearest is None:
+            return False
+        if nearest > self.settings.damaging_light_warning_max_distance:
+            return False
+        if event.world.standing_on_magma_block:
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_damaging_light_warning_at)
+        if recent_ms is not None and recent_ms < self.settings.damaging_light_warning_cooldown_ms:
+            return False
+        return True
+
+    def _should_consider_magma_block_comment(self, event: GameEvent, now: datetime) -> bool:
+        if not event.world.standing_on_magma_block:
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_magma_block_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.magma_block_comment_cooldown_ms:
+            return False
+        return True
 
     def _emergency_shelter_morning_actions(
         self,

@@ -317,9 +317,68 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(fake_llm.structured_requests[1].route, "chat")
         self.assertEqual(fake_llm.structured_requests[1].kind, "haiku_scene")
         self.assertEqual(fake_llm.structured_requests[1].max_tokens, self.settings.haiku_structured_max_tokens)
-        self.assertEqual(len(fake_llm.leaf_requests), 1)
-        self.assertEqual(fake_llm.leaf_requests[0].route, "haiku")
-        self.assertEqual(fake_llm.leaf_requests[0].kind, "haiku")
+        haiku_requests = [request for request in fake_llm.leaf_requests if request.kind == "haiku"]
+        self.assertEqual(len(haiku_requests), 1)
+        self.assertEqual(haiku_requests[0].route, "haiku")
+        self.assertEqual(haiku_requests[0].kind, "haiku")
+
+    def test_llm_haiku_emits_preface_before_generation(self) -> None:
+        class FakeLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
+                return "すなあつめ\nくりーぱーくる\nこわいわあ"
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "深い地下でヒツジがのんびりしとる",
+                        "motifs": ["地下", "ヒツジ"],
+                        "focus": ["地下", "ヒツジ"],
+                        "confidence": 0.8,
+                    }
+                return {
+                    "found": True,
+                    "kind": "contrast",
+                    "description": "深い地下なのにのどか",
+                    "elements": ["地下", "ヒツジ"],
+                    "focus": ["地下", "ヒツジ"],
+                    "confidence": 0.8,
+                }
+
+        settings = Settings(llm_enabled=True, decision_policy="py_trees")
+        machine = DogidoStateMachine(settings, llm=FakeLLM())
+        sheep = PeacefulMob(type="sheep")
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="savanna_plateau",
+                peaceful_mobs=[sheep],
+                player_y=12,
+            )
+        )
+
+        preface = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                biome="savanna_plateau",
+                peaceful_mobs=[sheep],
+                player_y=12,
+            )
+        ).actions
+        final_line = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=302),
+                biome="savanna_plateau",
+                peaceful_mobs=[sheep],
+                player_y=12,
+            )
+        ).actions
+
+        self.assertEqual([action.text for action in preface], ["ここで一句。"])
+        self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
 
     def test_weak_scene_without_relation_uses_fallback_instead_of_llm(self) -> None:
         class FakeLLM:
@@ -495,8 +554,9 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nのにいでて\nひうちいしもつ\nあまいみや")
-        self.assertEqual(len(fake_llm.leaf_requests), 1)
-        self.assertEqual(fake_llm.leaf_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+        haiku_requests = [request for request in fake_llm.leaf_requests if request.kind == "haiku"]
+        self.assertEqual(len(haiku_requests), 1)
+        self.assertEqual(haiku_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
 
     def test_plain_scene_summary_with_weather_and_held_item_can_use_llm(self) -> None:
         class FakeLLM:

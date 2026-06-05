@@ -52,7 +52,6 @@ def fallback_prewarm_texts(call_name: str | None) -> list[str]:
         fallback_text("death", "default"),
         fallback_text("death", "hostile"),
         fallback_text("death", "fall"),
-        fallback_text("general", "sleep", "sleeping_neighbor"),
         fallback_text("general", "darkness", "darkness_escape", prefix=prefix),
         fallback_text("general", "darkness", "occluded_entry_with_light", prefix=prefix),
         fallback_text("general", "darkness", "occluded_entry_no_light", prefix=prefix),

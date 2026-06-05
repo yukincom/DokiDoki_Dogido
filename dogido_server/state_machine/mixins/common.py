@@ -3,10 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from dogido_server.models import EventName, GameEvent
-from dogido_server.state_machine.fallback_catalog import fallback_text
+from dogido_server.models import EventName, GameEvent, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
-from dogido_server.state_machine.response_catalog import response_text, selected_ushiro_call_text, special_biome_entry_lines
+from dogido_server.state_machine.response_catalog import response_lines, response_text, selected_ushiro_call_text, special_biome_entry_lines
 
 
 class CommonMixin:
@@ -38,6 +37,30 @@ class CommonMixin:
             return ""
         return f"{name}、"
 
+    def _enemy_presence_for_low_health_warning(self, event: GameEvent, signals: object | None = None) -> bool:
+        if event.visual_threats or event.auditory_threats:
+            return True
+        if signals is None:
+            return False
+        ground_count = getattr(signals, "ground_hostile_count_within_query_range", 0) or 0
+        flying_count = getattr(signals, "flying_hostile_count_within_query_range", 0) or 0
+        return ground_count > 0 or flying_count > 0
+
+    def _should_emit_low_health_warning(self, event: GameEvent, signals: object | None = None) -> bool:
+        health = event.player.health
+        if health is None or health > self.settings.low_health_warning_threshold:
+            return False
+        if not self.state.low_health_warning_armed:
+            return False
+        return self._enemy_presence_for_low_health_warning(event, signals)
+
+    def _consume_low_health_warning(self, event: GameEvent, signals: object | None = None) -> str | None:
+        if not self._should_emit_low_health_warning(event, signals):
+            return None
+        self.state.low_health_warning_armed = False
+        name = (event.player.name or "").strip() or self._player_call_name(event)
+        return f"{name}！体力やばいで！"
+
     def _ushiro_call_text(self, event: GameEvent) -> str:
         seed = "|".join(
             [
@@ -54,6 +77,12 @@ class CommonMixin:
 
     def _weather_value(self, weather: object) -> str | None:
         return getattr(weather, "value", weather) if weather is not None else None
+
+    def _player_input_priority_active(self, now: datetime) -> bool:
+        if self.player_input.breaks_silence:
+            return True
+        recent_ms = self._recent_ms(now, self.state.last_player_input_at)
+        return recent_ms is not None and recent_ms < self.settings.player_input_priority_cooldown_ms
 
     def _weather_transition(self, event: GameEvent) -> tuple[str, str] | None:
         current = self._weather_value(event.world.weather)
@@ -159,6 +188,35 @@ class CommonMixin:
     def _normalized_dimension(self, event: GameEvent) -> str:
         return (event.player.dimension or "").strip().lower()
 
+    def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
+        if not event.peaceful_mobs:
+            return False
+        if self._player_input_priority_active(now):
+            return False
+        if event.visual_threats or event.auditory_threats:
+            return False
+        if event.event.name not in {EventName.AMBIENT_MOB_DETECTED, EventName.STATUS_SNAPSHOT}:
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_ambient_mob_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.ambient_mob_comment_cooldown_ms:
+            return False
+        if event.event.name == EventName.AMBIENT_MOB_DETECTED:
+            return True
+        if self.state.mode != "normal":
+            return False
+        if event.combat.combat_active_hint:
+            return False
+        recent_visual_ms = self._recent_ms(now, self.state.last_visual_threat_at)
+        if recent_visual_ms is not None and recent_visual_ms < self.settings.hostile_comment_cooldown_ms:
+            return False
+        recent_audio_ms = self._recent_ms(now, self.state.last_audio_threat_at)
+        if recent_audio_ms is not None and recent_audio_ms < self.settings.hostile_comment_cooldown_ms:
+            return False
+        recent_damage_ms = self._recent_ms(now, self.state.last_damage_at)
+        if recent_damage_ms is not None and recent_damage_ms < self.settings.hostile_comment_cooldown_ms:
+            return False
+        return True
+
     def _did_change_dimension(self, event: GameEvent) -> bool:
         current_dimension = self._normalized_dimension(event) or None
         previous_dimension = self.state.current_dimension
@@ -176,6 +234,91 @@ class CommonMixin:
         normalized = self._normalized_biome(biome)
         return normalized in NIGHT_WARNING_SUPPRESSED_BIOMES
 
+    def _is_flying_hostile_type(self, hostile_type: str) -> bool:
+        return hostile_type in FLYING_HOSTILES
+
+    def _visible_ground_hostiles_within_query_range(self, event: GameEvent) -> list[VisualThreat]:
+        max_distance = self.settings.hostile_query_distance
+        return [
+            threat
+            for threat in event.visual_threats
+            if not self._is_flying_hostile_type(threat.type)
+            and threat.distance is not None
+            and threat.distance <= max_distance
+        ]
+
+    def _visible_flying_hostiles_within_query_range(self, event: GameEvent) -> list[VisualThreat]:
+        max_distance = self.settings.hostile_query_distance
+        return [
+            threat
+            for threat in event.visual_threats
+            if self._is_flying_hostile_type(threat.type)
+            and threat.distance is not None
+            and threat.distance <= max_distance
+        ]
+
+    def _ground_hostile_count_within_query_range(self, event: GameEvent) -> int:
+        counted = event.combat.hostiles_within_30_ground
+        if counted is not None:
+            return counted
+        return len(self._visible_ground_hostiles_within_query_range(event))
+
+    def _flying_hostile_count_within_query_range(self, event: GameEvent) -> int:
+        return len(self._visible_flying_hostiles_within_query_range(event))
+
+    def _current_close_flying_visual_keys(self, event: GameEvent) -> set[str]:
+        return {
+            self._visual_identity_key(threat)
+            for threat in self._visible_flying_hostiles_within_query_range(event)
+        }
+
+    def _entered_close_flying_visual(self, event: GameEvent) -> VisualThreat | None:
+        candidates = [
+            threat
+            for threat in self._visible_flying_hostiles_within_query_range(event)
+            if self._visual_identity_key(threat) not in self.state.active_close_flying_visual_keys
+        ]
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda threat: (
+                0 if getattr(threat.direction.vertical, "value", threat.direction.vertical) == "above" else 1,
+                threat.distance if threat.distance is not None else float("inf"),
+            ),
+        )
+
+    def _render_hostile_query_line(self, event: GameEvent, count: int) -> str:
+        if count <= 0:
+            return "30マス以内には今はおらんかな。"
+        if count == 1:
+            return "30マス以内には今は1体おるで。"
+        return f"30マス以内には今は{count}体おるで。"
+
+    def _emit_pending_overworld_return_line(self, now: datetime) -> str | None:
+        if not self.state.pending_overworld_return_line:
+            return None
+        ready_at = self.state.pending_overworld_return_ready_at
+        if ready_at is not None and now < ready_at:
+            return None
+        self.state.pending_overworld_return_line = False
+        self.state.pending_overworld_return_ready_at = None
+        return "オーバーワールドは落ち着くな・・・"
+
+    def _hostile_massive_callout(self, event: GameEvent, *, suppressed: bool) -> str:
+        if suppressed:
+            return response_text("combat", "pressure", "hostile_massive_suppressed")
+        lines = response_lines("combat", "pressure", "hostile_massive_variants")
+        seed = "|".join(
+            [
+                str(event.sequence or ""),
+                getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
+                self._normalized_dimension(event),
+                self._normalized_biome(event.world.biome),
+            ]
+        )
+        return self._select_deterministic_line(seed, lines)
+
     def _is_rest_time(self, event: GameEvent) -> bool:
         time_phase = self._effective_time_phase(event)
         return time_phase in {"evening", "night"}
@@ -190,57 +333,16 @@ class CommonMixin:
         return (event.world.nearby_bed_count or 0) > 0
 
     def _should_emit_sleep_prompt(self, event: GameEvent, now: datetime) -> bool:
-        if event.world.is_submerged or not self._is_rest_time(event):
-            return False
-        if (event.world.nearby_sleeping_people_count or 0) > 0:
-            return False
-        if (
-            self.state.last_sleep_prompt_at is not None
-            and self._recent_ms(now, self.state.last_sleep_prompt_at) is not None
-            and self._recent_ms(now, self.state.last_sleep_prompt_at) < self.settings.sleep_prompt_cooldown_ms
-        ):
-            return False
-        return self._is_near_respawn_bed(event) or self._has_nearby_sleepable_bed(event)
+        return False
 
     def _emit_sleep_prompt(self, event: GameEvent, now: datetime) -> str | None:
-        if not self._should_emit_sleep_prompt(event, now):
-            return None
-        self.state.last_sleep_prompt_at = now
-        if self._is_near_respawn_bed(event):
-            return response_text("darkness", "sleep", "near_respawn_bed")
-        return response_text("darkness", "sleep", "nearby_bed")
+        return None
 
     def _should_emit_sleeping_neighbor_comment(self, event: GameEvent, now: datetime) -> bool:
-        if event.world.is_submerged or not self._is_rest_time(event):
-            return False
-        if self._should_emit_sleep_prompt(event, now):
-            return False
-        if (event.world.nearby_sleeping_people_count or 0) <= 0:
-            return False
-        if (
-            self.state.last_sleeping_neighbor_comment_at is not None
-            and self._recent_ms(now, self.state.last_sleeping_neighbor_comment_at) is not None
-            and self._recent_ms(now, self.state.last_sleeping_neighbor_comment_at)
-            < self.settings.sleeping_neighbor_comment_cooldown_ms
-        ):
-            return False
-        return True
+        return False
 
     def _render_sleeping_neighbor_line(self, event: GameEvent, now: datetime) -> str | None:
-        if not self._should_emit_sleeping_neighbor_comment(event, now):
-            return None
-        self.state.last_sleeping_neighbor_comment_at = now
-        return self._generate_leaf_text(
-            kind="sleeping_neighbor",
-            fallback_text=fallback_text("general", "sleep", "sleeping_neighbor"),
-            details={
-                "player_name": self._player_call_name(event),
-                "biome": self._biome_label(event.world.biome),
-                "time_phase": self._effective_time_phase(event) or "unknown",
-                "sleeping_people_count": event.world.nearby_sleeping_people_count or 0,
-            },
-            temperature=0.35,
-        )
+        return None
 
     def _is_surface_evening_warning_context(self, event: GameEvent) -> bool:
         time_phase = self._effective_time_phase(event)

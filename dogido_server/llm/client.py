@@ -59,6 +59,9 @@ class DogidoLLM:
         複数スレッドから同時呼び出しされてもモデルの二重ロードは起きない。
         その代わり、生成リクエストも直列化される。
     """
+    _shared_mlx_models: dict[str, tuple[Any, Any]] = {}
+    _shared_mlx_lock = threading.Lock()
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._lock = threading.Lock()
@@ -87,10 +90,14 @@ class DogidoLLM:
         with self._lock:
             try:
                 if self.settings.llm_backend == "mlx":
-                    model, tokenizer = self._ensure_model()
+                    model, tokenizer, reused = self._ensure_model()
                     ok = model is not None and tokenizer is not None
                     if ok:
-                        LOGGER.warning("llm_preload backend=mlx result=loaded model=%s", self.settings.mlx_model_id)
+                        LOGGER.warning(
+                            "llm_preload backend=mlx result=%s model=%s",
+                            "reused" if reused else "loaded",
+                            self.settings.mlx_model_id,
+                        )
                     else:
                         LOGGER.warning(
                             "llm_preload backend=mlx result=skipped reason=%s",
@@ -152,6 +159,15 @@ class DogidoLLM:
         # kind によってクリーニング・判定ロジックを切り替える
         cleaned = self._clean_haiku_output(text) if request.kind == "haiku" else self._clean_output(text)
         is_usable = self._is_haiku_usable_output(cleaned, request.details) if request.kind == "haiku" else self._is_usable_output(cleaned, request.details)
+        if request.kind == "haiku" and not is_usable and cleaned:
+            repaired = self._retry_haiku_repair(request, cleaned)
+            if repaired:
+                LOGGER.warning(
+                    "llm_leaf kind=%s result=accepted_repaired text=%s",
+                    request.kind,
+                    self._summarize_for_log(repaired),
+                )
+                return repaired
         if not is_usable:
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=unusable_output raw=%s cleaned=%s",
@@ -174,6 +190,35 @@ class DogidoLLM:
             self._summarize_for_log(cleaned),
         )
         return cleaned or request.fallback_text
+
+    def _retry_haiku_repair(self, request: LeafGenerationRequest, attempted: str) -> str | None:
+        repair_request = LeafGenerationRequest(
+            kind="haiku_repair",
+            fallback_text="",
+            details={**request.details, "attempted_haiku": attempted},
+            temperature=0.25,
+            route=request.route,
+            max_tokens=request.max_tokens,
+        )
+        with self._lock:
+            try:
+                repaired_text = self._generate_backend_text(repair_request)
+            except Exception as exc:
+                self._disabled_reason = str(exc)
+                LOGGER.warning(
+                    "llm_leaf kind=haiku_repair result=fallback reason=generation_error detail=%s",
+                    self._disabled_reason,
+                )
+                return None
+        cleaned = self._clean_haiku_output(repaired_text)
+        if not self._is_haiku_usable_output(cleaned, request.details):
+            LOGGER.warning(
+                "llm_leaf kind=haiku_repair result=fallback reason=unusable_output raw=%s cleaned=%s",
+                self._summarize_for_log(repaired_text),
+                self._summarize_for_log(cleaned),
+            )
+            return None
+        return cleaned
 
     def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, Any]:
         """JSON オブジェクトを 1 件生成して返す。失敗時は fallback_value を返す。"""
@@ -223,7 +268,7 @@ class DogidoLLM:
         settings = self._settings_for_request(request)
 
         if settings.llm_backend == "mlx":
-            model, tokenizer = self._ensure_model()
+            model, tokenizer, _ = self._ensure_model()
             if model is None or tokenizer is None:
                 raise RuntimeError(self._disabled_reason or "mlx model unavailable")
 
@@ -267,33 +312,40 @@ class DogidoLLM:
 
         raise RuntimeError(f"unsupported llm_backend: {settings.llm_effective_backend}")
 
-    def _ensure_model(self) -> tuple[Any | None, Any | None]:
+    def _ensure_model(self) -> tuple[Any | None, Any | None, bool]:
         """mlx モデルをロードして返す。ロード済みならキャッシュを返す。
 
         一度失敗したら _load_attempted=True にして再試行しない。
         ロード失敗はそのまま _disabled_reason に記録する。
         """
         if self._model is not None and self._tokenizer is not None:
-            return self._model, self._tokenizer
+            return self._model, self._tokenizer, True
 
         if self._load_attempted:
             # 失敗済みのため再試行しない
-            return None, None
+            return None, None, False
 
         self._load_attempted = True
         if not self.settings.mlx_model_id:
             self._disabled_reason = "mlx_model_id is not configured"
-            return None, None
+            return None, None, False
 
         try:
-            mlx_lm = importlib.import_module("mlx_lm")
-            self._model, self._tokenizer = mlx_lm.load(self.settings.mlx_model_id)
-            return self._model, self._tokenizer
+            with self._shared_mlx_lock:
+                cached = self._shared_mlx_models.get(self.settings.mlx_model_id)
+                if cached is not None:
+                    self._model, self._tokenizer = cached
+                    return self._model, self._tokenizer, True
+
+                mlx_lm = importlib.import_module("mlx_lm")
+                self._model, self._tokenizer = mlx_lm.load(self.settings.mlx_model_id)
+                self._shared_mlx_models[self.settings.mlx_model_id] = (self._model, self._tokenizer)
+                return self._model, self._tokenizer, False
         except Exception as exc:
             self._disabled_reason = str(exc)
             self._model = None
             self._tokenizer = None
-            return None, None
+            return None, None, False
 
     def _build_prompt(self, tokenizer: Any, messages: list[dict[str, str]]) -> str:
         """mlx 用プロンプト文字列を組み立てる。

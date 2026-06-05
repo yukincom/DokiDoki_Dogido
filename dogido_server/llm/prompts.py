@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .haiku_prompts import build_haiku_irony_messages, build_haiku_messages, build_haiku_scene_messages
+from .haiku_prompts import (
+    build_haiku_irony_messages,
+    build_haiku_messages,
+    build_haiku_repair_messages,
+    build_haiku_scene_messages,
+)
 from .types import LeafGenerationRequest
 
 SYSTEM_PROMPT = (
@@ -23,6 +28,7 @@ SYSTEM_PROMPT = (
 def build_messages(request: Any) -> list[dict[str, str]]:
     builders = {
         "haiku": _build_haiku_messages,
+        "haiku_repair": _build_haiku_repair_messages,
         "haiku_irony": _build_haiku_irony_messages,
         "haiku_scene": _build_haiku_scene_messages,
         "aftermath": _build_aftermath_messages,
@@ -56,6 +62,10 @@ def _dialog_messages(user_prompt: str) -> list[dict[str, str]]:
 
 def _build_haiku_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_messages(request.details)
+
+
+def _build_haiku_repair_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_repair_messages(request.details)
 
 
 def _build_haiku_irony_messages(request: Any) -> list[dict[str, str]]:
@@ -95,26 +105,34 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
     candidate_lines = " / ".join(str(candidate) for candidate in candidates[:4]) or "なし"
     mob_tags = "、".join(str(tag) for tag in details.get("mob_tags", [])[:6]) or "なし"
     mob_role = str(details.get("mob_role", "")).strip() or "なし"
+    temperament = str(details.get("mob_temperament", "friendly")).strip() or "friendly"
+    caution_reason = str(details.get("mob_caution_reason", "")).strip() or "なし"
     user_prompt = (
         "参考傾向:\n"
-        "- かわいい、親しみやすい、少し安心する\n"
+        "- 友好Mobなら、かわいい、親しみやすい、少し安心する\n"
+        "- 中立Mobなら、敵扱いはせず、軽い注意や距離感を混ぜてよい\n"
         "- Mobの見た目、動き、雰囲気に軽く触れてよい\n"
-        "- 怖がりでも、昼の平和な空気では表情がやわらぐ\n"
+        "- 怖がりでも、平和な場面なら必要以上に怯えない\n"
         "- 言い回しは軽く、自然に\n\n"
         "/no_think\n"
         "本番:\n"
-        "敵ではないMobを見つけた。"
+        "敵対していないMobを見つけた。"
         f"モブは{details.get('mob', 'mob')}。\n"
         f"方向は{details.get('direction', '近く')}。\n"
         f"見えている数は{details.get('mob_count', 1)}体。\n"
         f"距離は{details.get('distance', 'unknown')}マスくらい。\n"
         f"場所は{details.get('biome', 'そのへん')}。\n"
         f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"このMobの気質は{temperament}。\n"
+        f"注意理由ヒントは{caution_reason}。\n"
         f"/mobs のヒント語は{mob_tags}。\n"
         f"/mobs の役割ヒントは{mob_role}。\n"
         f"参考候補は{candidate_lines}。\n"
-        "かわいさや親しみを優先し、参考候補をそのままコピペせず、"
-        "見た目や動きの印象を少し混ぜてもよいので、会話っぽく20〜36文字くらいで一言だけ返す。"
+        "friendly ならかわいさや親しみを優先する。"
+        "neutral なら『触らんほうがええ』『近づきすぎんほうがええ』程度の軽い注意はよいが、"
+        "もう敵だと断定したり、戦闘警報みたいな調子にはしない。"
+        "参考候補をそのままコピペせず、見た目や動きの印象を少し混ぜてもよいので、"
+        "会話っぽく20〜36文字くらいで一言だけ返す。"
     )
     return _dialog_messages(user_prompt)
 def _build_death_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -388,7 +406,7 @@ def _build_daylight_water_skeleton_messages(request: LeafGenerationRequest) -> l
 
 def _build_newly_burning_visual_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
-    hostile = details.get("hostile", "モンスター")
+    hostile = details.get("hostile", "敵")
     user_prompt = (
         "参考傾向:\n"
         "- 怖がりなおじさんが、相手が燃え始めた瞬間だけ全力で喜ぶ\n"

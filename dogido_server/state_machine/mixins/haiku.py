@@ -78,6 +78,9 @@ _HAIKU_NOUN_FAMILIES: tuple[_HaikuNounFamily, ...] = (
 
 
 class HaikuMixin:
+    def _uses_prefaced_haiku_generation(self) -> bool:
+        return self.settings.llm_enabled and self.llm is not None
+
     def _should_emit_haiku(self, event: GameEvent, now: datetime) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:
             return False
@@ -94,9 +97,35 @@ class HaikuMixin:
             return False
         return quiet_ms >= self.settings.haiku_silence_time_ms
 
+    def _should_complete_prefaced_haiku(self, event: GameEvent) -> bool:
+        if not self.state.pending_haiku_after_preface:
+            return False
+        if event.event.name != EventName.STATUS_SNAPSHOT:
+            return False
+        if self.state.mode != "normal":
+            return False
+        if event.visual_threats or event.auditory_threats or self.player_input.should_block_ambient:
+            return False
+        if self.state.pending_special_biome_line is not None:
+            return False
+        return True
+
     def _emit_haiku_line(self, event: GameEvent, now: datetime) -> str | None:
+        if self._should_complete_prefaced_haiku(event):
+            self.state.pending_haiku_after_preface = False
+            self.state.haiku_emitted_this_cycle = True
+            line = self._render_haiku_line(event).strip()
+            LOGGER.warning(
+                "haiku_emit result=emitted text=%s",
+                summarize_for_log(self._format_haiku_line(line)),
+            )
+            return line or "まとまらんかった。。。"
         if not self._should_emit_haiku(event, now):
             return None
+        if self._uses_prefaced_haiku_generation():
+            self.state.pending_haiku_after_preface = True
+            LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log("ここで一句。"))
+            return "ここで一句。"
         self.state.haiku_emitted_this_cycle = True
         line = self._format_haiku_line(self._render_haiku_line(event))
         LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))

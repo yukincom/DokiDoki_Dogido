@@ -81,7 +81,7 @@ class AuditoryMixin:
             self.state.seen_visual_keys[visual_key] = now
 
         line = self._render_daylight_water_survivor_line(event, survivors, threats)
-        followup = self._daylight_water_followup_callout(threats, now)
+        followup = self._daylight_water_followup_callout(event, threats, now)
         if followup:
             return f"{line} {followup}"
         return line
@@ -161,6 +161,7 @@ class AuditoryMixin:
 
     def _daylight_water_followup_callout(
         self,
+        event: GameEvent,
         threats: list[VisualThreat],
         now: datetime,
     ) -> str | None:
@@ -169,14 +170,14 @@ class AuditoryMixin:
             self.state.last_multi_species_signature = self._multi_species_signature(counts)
             self.state.last_multi_species_report_at = now
             self._mark_visual_priority_callout(now, single_type=None)
-            return self._hostile_count_summary(counts, suppressed=False, threats=threats)
+            return self._hostile_count_summary(event, counts, suppressed=False, threats=threats)
 
         count = len(threats)
         if count >= 2:
             self.state.last_multi_hostile_report_at = now
             self.state.last_multi_hostile_count = count
             self._mark_visual_priority_callout(now, single_type=None)
-            return self._hostile_count_summary(counts, suppressed=False, threats=threats)
+            return self._hostile_count_summary(event, counts, suppressed=False, threats=threats)
 
         return None
 
@@ -296,14 +297,14 @@ class AuditoryMixin:
 
     def _hostile_count_summary(
         self,
+        event: GameEvent,
         counts: dict[str, int],
         suppressed: bool,
         threats: list[VisualThreat],
     ) -> str:
         total = sum(counts.values())
         if total >= 9 and not self._contains_boss_hostile(threats):
-            key = "hostile_massive_suppressed" if suppressed else "hostile_massive"
-            return response_text("combat", "pressure", key)
+            return self._hostile_massive_callout(event, suppressed=suppressed)
 
         ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         parts = [
@@ -352,6 +353,7 @@ class AuditoryMixin:
                 key=key,
                 distance_rank=distance_rank,
                 now=now,
+                hostile_label=label,
             )
 
         if count == 1:
@@ -394,10 +396,12 @@ class AuditoryMixin:
         key: str,
         distance_rank: int,
         now: datetime,
+        hostile_label: str | None,
     ) -> str | None:
         recent_ms = self._recent_ms(now, self.state.last_occluded_hostile_presence_comment_at)
         if recent_ms is not None and recent_ms < self.settings.occluded_hostile_presence_comment_cooldown_ms:
             return None
+        resolved_hostile = hostile_label or "敵対モブ"
         line = self._generate_leaf_text(
             kind="occluded_hostile_presence",
             fallback_text=fallback_text("general", "combat", "occluded_hostile_presence"),
@@ -406,7 +410,7 @@ class AuditoryMixin:
                 "biome": self._biome_label(event.world.biome),
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
                 "direction": self._direction_label(threat),
-                "hostile": self._auditory_hostile_label(threat) or "敵対モブ",
+                "hostile": resolved_hostile,
                 "distance_band": getattr(threat.distance_band, "value", threat.distance_band) or "unknown",
                 "certainty": getattr(threat.certainty, "value", threat.certainty) or "unknown",
             },
@@ -416,12 +420,13 @@ class AuditoryMixin:
         self.state.last_occluded_hostile_presence_comment_at = now
         self.state.commented_auditory_keys[key] = (now, distance_rank)
         LOGGER.info(
-            "auditory_presence_decision reason=occluded_hostile_presence event=%s sequence=%s direction=%s hostile=%s distance_band=%s text=%s",
+            "auditory_presence_decision reason=occluded_hostile_presence event=%s sequence=%s direction=%s hostile=%s distance_band=%s sound_event=%s text=%s",
             getattr(event.event.name, "value", event.event.name),
             event.sequence,
             self._direction_label(threat),
-            self._auditory_hostile_label(threat) or "敵対モブ",
+            resolved_hostile,
             getattr(threat.distance_band, "value", threat.distance_band),
+            threat.sound_event,
             summarize_for_log(line),
         )
         return line

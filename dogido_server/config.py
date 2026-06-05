@@ -123,9 +123,12 @@ class Settings(BaseSettings):
     llm_haiku_timeout_sec: float | None = None
     llm_haiku_max_tokens: int | None = None
 
-    rear_warning_distance: float = 8.0
+    rear_warning_distance: float = 3.0
     panic_distance: float = 7.0
     multi_hostile_distance: float = 10.0
+    hostile_query_distance: float = 30.0
+    hostile_mass_callout_threshold: int = 4
+    overworld_return_line_delay_ms: int = 3500
     combat_clear_distance: float = 10.0
     combat_clear_time_ms: int = 5000
     suppression_time_ms: int = 7000
@@ -133,6 +136,7 @@ class Settings(BaseSettings):
     pending_safe_aftermath_window_ms: int = 20000
     panic_scream_cooldown_ms: int = 1200
     recent_damage_window_ms: int = 3000
+    low_health_warning_threshold: float = 5.0
     darkness_advice_light_threshold: int = 3
     darkness_alert_threshold: float = 0.72
     darkness_advice_cooldown_ms: int = 60000
@@ -169,6 +173,11 @@ class Settings(BaseSettings):
     sleep_prompt_cooldown_ms: int = 60000
     sleeping_neighbor_comment_cooldown_ms: int = 60000
     special_biome_comment_cooldown_ms: int = 600000
+    ambient_mob_comment_cooldown_ms: int = 60000
+    player_input_priority_cooldown_ms: int = 120000
+    damaging_light_warning_cooldown_ms: int = 600000
+    magma_block_comment_cooldown_ms: int = 1200000
+    damaging_light_warning_max_distance: float = 2.0
     haiku_silence_time_ms: int = 300000
     haiku_structured_max_tokens: int = 192
     hostile_comment_cooldown_ms: int = 60000

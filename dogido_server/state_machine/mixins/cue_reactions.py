@@ -75,10 +75,54 @@ class CueReactionsMixin:
                 threat=new_close_target,
             )
             return self._build_cue_action("panic_scream_start", "きゃー！", now)
+        if has_callout and signals.entered_close_flying_visual is not None:
+            self._log_panic_cue_decision(
+                "spot_hostile_gasp",
+                "flying_visual_warning",
+                event,
+                threat=signals.entered_close_flying_visual,
+                interrupt=False,
+            )
+            return self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False)
         scream_only_reason = self._scream_only_reason(event, signals)
         if scream_only_reason is not None:
             self._log_panic_cue_decision("panic_scream_start", scream_only_reason, event)
             return self._build_cue_action("panic_scream_start", "きゃー！", now)
+        if (
+            has_callout
+            and not self.state.mass_hostile_callout_latched
+            and signals.ground_hostile_count_within_query_range >= self.settings.hostile_mass_callout_threshold
+        ):
+            self._log_panic_cue_decision(
+                "spot_hostile_gasp",
+                "mass_hostile_gasp",
+                event,
+                threat=self._highest_priority_visual(event.visual_threats),
+                interrupt=False,
+            )
+            return self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False)
+        if has_callout and self._is_other_realm_swarm_scene(
+            event,
+            visual_count=max(len(event.visual_threats), signals.visual_threat_count_within_10),
+            auditory_count=len(event.auditory_threats),
+        ):
+            self._log_panic_cue_decision(
+                "spot_hostile_gasp",
+                "other_realm_swarm_gasp",
+                event,
+                threat=self._highest_priority_visual(event.visual_threats),
+                interrupt=False,
+            )
+            return self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False)
+        if has_callout and signals.visual_threat_count_within_10 >= 2:
+            self._log_panic_cue_decision(
+                "spot_hostile_gasp",
+                "multi_hostile_gasp",
+                event,
+                threat=self._highest_priority_visual(event.visual_threats),
+                interrupt=False,
+            )
+            return self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False)
         if has_callout and self._is_occluded_hostile_presence_context(event, event.auditory_threats):
             return None
         if has_callout and self._should_emit_spotted_hostile_gasp(event):
@@ -219,6 +263,8 @@ class CueReactionsMixin:
             )
             if handled:
                 return line
+            if self.player_input.asks_hostile_count:
+                return self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
             if crowded_other_realm:
                 return None
 
@@ -239,6 +285,12 @@ class CueReactionsMixin:
             if auditory is not None:
                 return auditory
 
+        low_health_warning = self._consume_low_health_warning(event, signals)
+        if low_health_warning is not None:
+            return low_health_warning
+
+        if self.player_input.asks_hostile_count:
+            return self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
         return self._auditory_comment(event, event.auditory_threats, now=now, style=auditory_style)
 
     def _priority_visual_callout(
@@ -260,6 +312,26 @@ class CueReactionsMixin:
 
         if silence_new_close_ambush and self._peek_new_close_visual_ambush_target(event, now) is not None:
             return True, None
+
+        if signals.entered_close_flying_visual is not None:
+            target = signals.entered_close_flying_visual
+            self.state.commented_visual_keys[self._visual_identity_key(target)] = now
+            self._mark_visual_priority_callout(now, single_type=target.type)
+            return True, self._render_flying_visual_callout(target)
+
+        low_health_warning = self._consume_low_health_warning(event, signals)
+        if low_health_warning is not None:
+            return True, low_health_warning
+
+        if signals.ground_hostile_count_within_query_range >= self.settings.hostile_mass_callout_threshold:
+            if self.state.mass_hostile_callout_latched:
+                if self.player_input.asks_hostile_count:
+                    return False, None
+                return True, None
+            self.state.mass_hostile_callout_latched = True
+            self.state.last_mass_hostile_callout_at = now
+            self._mark_visual_priority_callout(now, single_type=None)
+            return True, self._hostile_massive_callout(event, suppressed=softened_visuals)
 
         daylight_rain = self._daylight_rain_callout(event, event.visual_threats, now=now)
         if daylight_rain is not None:
@@ -298,7 +370,7 @@ class CueReactionsMixin:
         if overwhelmed is not None:
             return True, overwhelmed
 
-        species = self._multi_species_callout(event.visual_threats, now=now, suppressed=softened_visuals)
+        species = self._multi_species_callout(event, event.visual_threats, now=now, suppressed=softened_visuals)
         if species is not None:
             return True, species
 

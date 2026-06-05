@@ -17,8 +17,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 final class DogidoEventClient {
-    private static final String SCHEMA_VERSION = "2026-05-24";
-
     private final Logger logger;
     private final DogidoConfig config;
     private final HttpClient httpClient;
@@ -47,12 +45,13 @@ final class DogidoEventClient {
         }
 
         JsonObject payload = new JsonObject();
-        payload.addProperty("adapter_name", "dogido-fabric-client");
-        payload.addProperty("adapter_version", "0.1.0");
-        payload.addProperty("game", "minecraft-java");
-        payload.addProperty("schema_version", SCHEMA_VERSION);
+        payload.addProperty("adapter_name", DogidoBuildInfo.ADAPTER_NAME);
+        payload.addProperty("adapter_version", DogidoBuildInfo.ADAPTER_VERSION);
+        payload.addProperty("game", DogidoBuildInfo.GAME);
+        payload.addProperty("schema_version", DogidoBuildInfo.SCHEMA_VERSION);
         payload.addProperty("player_name", playerName);
-        payload.addProperty("profile_name", "default");
+        payload.addProperty("profile_name", DogidoBuildInfo.PROFILE_NAME);
+        payload.addProperty("adapter_build", DogidoBuildInfo.ADAPTER_BUILD);
         JsonArray capabilities = new JsonArray();
         capabilities.add("player_state");
         capabilities.add("inventory");

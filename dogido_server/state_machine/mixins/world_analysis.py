@@ -136,7 +136,9 @@ class WorldAnalysisMixin:
         if time_of_day is None:
             return False
         weather = self._weather_value(event.world.weather)
-        threshold = SURFACE_HOSTILE_SPAWN_TICK_RAIN if weather in {"rain", "thunder"} else SURFACE_HOSTILE_SPAWN_TICK_CLEAR
+        threshold = self.settings.emergency_shelter_night_start
+        if weather in {"rain", "thunder"}:
+            threshold = min(threshold, SURFACE_HOSTILE_SPAWN_TICK_RAIN)
         return time_of_day >= threshold
 
     def _home_or_respawn_return_is_unrealistic(self, event: GameEvent) -> bool:

@@ -18,7 +18,6 @@ COUNT_FRAGMENT_TEXTS: dict[str, str] = {
 PHRASE_FRAGMENT_TEXTS: dict[str, str] = {
     "ga_orude": "がおるで",
     "orude": "おるで",
-    "gyousan_orude": "モンスターがぎょうさんおるで！",
 }
 
 RUNTIME_HOSTILE_LABELS: dict[str, str] = dict(HOSTILE_MOB_VOICE_LABELS)

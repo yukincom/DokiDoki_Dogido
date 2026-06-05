@@ -88,13 +88,13 @@ final class DogidoConfig {
             Integer.parseInt(properties.getProperty("snapshot_interval_ticks", "20")),
             Integer.parseInt(properties.getProperty("threat_scan_interval_ticks", "4")),
             Integer.parseInt(properties.getProperty("audio_scan_interval_ticks", "8")),
-            Integer.parseInt(properties.getProperty("ambient_mob_interval_ticks", "120")),
+            Integer.parseInt(properties.getProperty("ambient_mob_interval_ticks", "60")),
             Integer.parseInt(properties.getProperty("combat_ended_quiet_ticks", "100")),
-            Double.parseDouble(properties.getProperty("max_threat_distance", "16.0")),
-            Double.parseDouble(properties.getProperty("visible_threat_distance", "24.0")),
+            Double.parseDouble(properties.getProperty("max_threat_distance", "30.0")),
+            Double.parseDouble(properties.getProperty("visible_threat_distance", "30.0")),
             Double.parseDouble(properties.getProperty("audio_threat_distance", "12.0")),
             Double.parseDouble(properties.getProperty("panic_distance", "7.0")),
-            Double.parseDouble(properties.getProperty("rear_warning_distance", "8.0")),
+            Double.parseDouble(properties.getProperty("rear_warning_distance", "3.0")),
             Integer.parseInt(properties.getProperty("visual_confirm_ticks", "6")),
             Integer.parseInt(properties.getProperty("visual_hold_ticks", "16")),
             properties.getProperty("player_name_override", "").trim()
@@ -121,13 +121,13 @@ final class DogidoConfig {
         properties.setProperty("snapshot_interval_ticks", "20");
         properties.setProperty("threat_scan_interval_ticks", "4");
         properties.setProperty("audio_scan_interval_ticks", "8");
-        properties.setProperty("ambient_mob_interval_ticks", "120");
+        properties.setProperty("ambient_mob_interval_ticks", "60");
         properties.setProperty("combat_ended_quiet_ticks", "100");
-        properties.setProperty("max_threat_distance", "16.0");
-        properties.setProperty("visible_threat_distance", "24.0");
+        properties.setProperty("max_threat_distance", "30.0");
+        properties.setProperty("visible_threat_distance", "30.0");
         properties.setProperty("audio_threat_distance", "12.0");
         properties.setProperty("panic_distance", "7.0");
-        properties.setProperty("rear_warning_distance", "8.0");
+        properties.setProperty("rear_warning_distance", "3.0");
         properties.setProperty("visual_confirm_ticks", "6");
         properties.setProperty("visual_hold_ticks", "16");
         properties.setProperty("player_name_override", "");
