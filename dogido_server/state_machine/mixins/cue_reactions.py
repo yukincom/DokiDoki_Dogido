@@ -339,7 +339,11 @@ class CueReactionsMixin:
         softened_visuals: bool,
         silence_new_close_ambush: bool,
     ) -> tuple[bool, str | None]:
-        if self._peek_ushiro_ambush_target(event, now) is not None:
+        ushiro_target = self._peek_ushiro_ambush_target(event, now)
+        if ushiro_target is not None:
+            if self._should_suppress_panic_cues(event) or not self._can_emit_panic_cue(now):
+                self.state.last_ushiro_call_at = now
+                self._mark_visual_priority_callout(now, single_type=None)
             return True, self._ushiro_call_text(event)
 
         dark_push_forward = self._peek_dark_push_forward_ambush_target(event, now)

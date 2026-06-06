@@ -180,7 +180,32 @@ class ActionBuilderMixin:
         if not actions:
             return
         event_name = getattr(event.event.name, "value", event.event.name)
+        nearest = None
+        if event.visual_threats:
+            nearest = min(
+                event.visual_threats,
+                key=lambda threat: threat.distance if threat.distance is not None else float("inf"),
+            )
         for action in actions:
+            LOGGER.info(
+                "decision_debug seq=%s event=%s state=%s layer=%s visual_count=%s nearest=%s nearest_type=%s nearest_id=%s dir=%s approaching=%s hostiles7=%s hostiles10=%s recent_visual_ms=%s recent_audio_ms=%s last_ushiro_at=%s now=%s",
+                event.sequence,
+                event_name,
+                next_mode,
+                action.layer,
+                len(event.visual_threats),
+                nearest.distance if nearest is not None else None,
+                nearest.type if nearest is not None else None,
+                nearest.entity_id if nearest is not None else None,
+                getattr(nearest.direction.horizontal, "value", nearest.direction.horizontal) if nearest is not None else None,
+                nearest.approaching if nearest is not None else None,
+                getattr(event.combat, "hostiles_within_7", None),
+                getattr(event.combat, "hostiles_within_10", None),
+                getattr(event.combat, "recent_hostile_visual_ms", None),
+                getattr(event.combat, "recent_hostile_audio_ms", None),
+                self.state.last_ushiro_call_at.isoformat() if self.state.last_ushiro_call_at else None,
+                event.observed_at.isoformat(),
+            )
             LOGGER.info(
                 "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s interrupt=%s protect_ms=%s text=%s",
                 event_name,

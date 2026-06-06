@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from math import inf
 
-from dogido_server.models import GameEvent, HorizontalDirection, VerticalRelation, VisualThreat
+from dogido_server.models import EventName, GameEvent, HorizontalDirection, VerticalRelation, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class VisualTargetsMixin:
@@ -158,6 +161,8 @@ class VisualTargetsMixin:
         event: GameEvent,
         now: datetime,
     ) -> VisualThreat | None:
+        if event.event.name != EventName.THREAT_APPROACHING:
+            return None
         recent_ms = self._recent_ms(now, self.state.last_ushiro_call_at)
         if recent_ms is not None and recent_ms < self.settings.ushiro_comment_cooldown_ms:
             return None

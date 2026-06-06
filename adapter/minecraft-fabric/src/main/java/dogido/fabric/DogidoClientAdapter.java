@@ -1322,10 +1322,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
             json.addProperty("warden_nearby_tnt_minecart_count", nearbyTntMinecartCount);
         } else if (this.lastWardenSeenTick >= 0 && this.tickCounter - this.lastWardenSeenTick <= 200) {
-            int nearbyIronGolemCount = countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0);
-            int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0);
+            int nearbyIronGolemCount = countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0)
+                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "iron_golem", 20.0);
+            int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0)
+                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "end_crystal", 32.0);
             int nearbyTntMinecartCount = countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
-                + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0);
+                + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0)
+                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "tnt_minecart", 28.0)
+                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "tnt", 28.0);
             long recentExplosionMs = ticksSince(this.lastExplosionObservedTick);
             json.addProperty("warden_nearby_iron_golem_count", nearbyIronGolemCount);
             json.addProperty(
@@ -1368,6 +1372,31 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             nearbyEndCrystalCount += countNearbyEntityType(world, warden, "end_crystal", 32.0);
             nearbyTntMinecartCount += countNearbyEntityType(world, warden, "tnt_minecart", 28.0);
             nearbyTntMinecartCount += countNearbyEntityType(world, warden, "tnt", 28.0);
+        } else if (this.lastWardenSeenTick >= 0 && this.tickCounter - this.lastWardenSeenTick <= 200) {
+            nearbyEndCrystalCount += countNearbyEntityTypeAroundPoint(
+                world,
+                this.lastWardenSeenX,
+                this.lastWardenSeenY,
+                this.lastWardenSeenZ,
+                "end_crystal",
+                32.0
+            );
+            nearbyTntMinecartCount += countNearbyEntityTypeAroundPoint(
+                world,
+                this.lastWardenSeenX,
+                this.lastWardenSeenY,
+                this.lastWardenSeenZ,
+                "tnt_minecart",
+                28.0
+            );
+            nearbyTntMinecartCount += countNearbyEntityTypeAroundPoint(
+                world,
+                this.lastWardenSeenX,
+                this.lastWardenSeenY,
+                this.lastWardenSeenZ,
+                "tnt",
+                28.0
+            );
         }
 
         if (nearbyEndCrystalCount > 0) {
@@ -1477,6 +1506,35 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             player.getBoundingBox().expand(radius, radius, radius)
         )) {
             if (entityType.equals(entityTypeName(entity))) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private int countNearbyEntityTypeAroundPoint(
+        ClientWorld world,
+        double centerX,
+        double centerY,
+        double centerZ,
+        String entityType,
+        double radius
+    ) {
+        int count = 0;
+        for (Entity entity : world.getOtherEntities(
+            null,
+            new net.minecraft.util.math.Box(
+                centerX - radius, centerY - radius, centerZ - radius,
+                centerX + radius, centerY + radius, centerZ + radius
+            )
+        )) {
+            if (!entityType.equals(entityTypeName(entity))) {
+                continue;
+            }
+            double dx = entity.getX() - centerX;
+            double dy = entity.getY() - centerY;
+            double dz = entity.getZ() - centerZ;
+            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= radius) {
                 count += 1;
             }
         }
