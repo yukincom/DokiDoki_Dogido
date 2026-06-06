@@ -32,6 +32,9 @@
     "blizzard_after_snow": "ふぶいてきたわ〜〜！視界わるぅ！雷も落ちよるし……おっさんにはキツいわぁ。",
     "blizzard_started": "ぐわー！なんじゃこの天気は！！",
     "thunder_after_rain": "はぁはぁ……雷鳴ってる！めっちゃ暗いし雷の音が怖すぎるわ！あかん、隠れなあかん！",
-    "thunder_started": "うわああっ！雷や！雷落ちてくるで！くわばらくわばら！！"
+    "thunder_started": "うわああっ！雷や！雷落ちてくるで！くわばらくわばら！！",
+    "rain_suspected": "なんか雨の音する気が・・・",
+    "thunder_suspected": "なんかゴロゴロ聞こえるな……雷きとるんか？",
+    "nearby_lightning_strike": "今、落ちたで！"
   }
 }

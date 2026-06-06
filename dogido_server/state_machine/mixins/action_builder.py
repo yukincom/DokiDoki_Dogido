@@ -116,12 +116,13 @@ class ActionBuilderMixin:
             if self._player_input_priority_active(now):
                 return actions
             if previous_mode != "aftermath" or event.event.name == EventName.COMBAT_ENDED:
+                boss_aftermath = any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles)
                 actions.append(
                     AudioAction(
                         layer="speech",
-                        interrupt=False,
+                        interrupt=boss_aftermath,
                         text=self._render_aftermath_line(event),
-                        cue_id="aftermath_relief",
+                        protect_ms=2500 if boss_aftermath else 0,
                     )
                 )
             return actions

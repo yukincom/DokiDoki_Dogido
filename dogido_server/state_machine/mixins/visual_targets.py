@@ -159,7 +159,7 @@ class VisualTargetsMixin:
         now: datetime,
     ) -> VisualThreat | None:
         recent_ms = self._recent_ms(now, self.state.last_ushiro_call_at)
-        if recent_ms is not None and recent_ms < self.settings.multi_hostile_comment_cooldown_ms:
+        if recent_ms is not None and recent_ms < self.settings.ushiro_comment_cooldown_ms:
             return None
         candidates: list[VisualThreat] = []
         for threat in event.visual_threats:

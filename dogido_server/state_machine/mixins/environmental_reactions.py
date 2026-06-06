@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from dogido_server.models import EventName, GameEvent
 from dogido_server.state_machine.constants import *  # noqa: F403
+from dogido_server.state_machine.fallback_catalog import fallback_text
 from dogido_server.state_machine.response_catalog import response_text
 from dogido_server.state_machine.types import AudioAction, DerivedSignals
 
@@ -78,6 +79,10 @@ class EnvironmentalReactionsMixin:
 
     def _should_emit_emergency_shelter_advice(self, event: GameEvent, signals: DerivedSignals) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:
+            return False
+        if not self._is_overworld_dimension(event):
+            return False
+        if self._is_cave_biome(event.world.biome):
             return False
         if self.state.emergency_shelter_advised_this_cycle:
             return False
@@ -309,6 +314,10 @@ class EnvironmentalReactionsMixin:
         if overworld_return_line:
             return self._speech_actions(overworld_return_line)
 
+        lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
+        if lightning_actions:
+            return lightning_actions
+
         weather_transition = self._weather_transition_callout(event, signals)
         if weather_transition:
             return self._speech_actions(weather_transition)
@@ -379,6 +388,22 @@ class EnvironmentalReactionsMixin:
 
         haiku_line = self._emit_haiku_line(event, now)
         return self._speech_actions(haiku_line)
+
+    def _emit_nearby_lightning_strike_actions(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> list[AudioAction]:
+        if not self._has_recent_nearby_lightning(event):
+            return []
+        recent_ms = self._recent_ms(now, self.state.last_nearby_lightning_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.nearby_lightning_comment_cooldown_ms:
+            return []
+        self.state.last_nearby_lightning_comment_at = now
+        return [
+            self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False),
+            self._speech_action(fallback_text("general", "weather_transition", "nearby_lightning_strike")),
+        ]
 
     def _emit_damaging_light_warning(self, event: GameEvent, now: datetime) -> str | None:
         if not self._should_consider_damaging_light_warning(event, now):

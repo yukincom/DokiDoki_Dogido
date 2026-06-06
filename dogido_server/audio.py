@@ -472,12 +472,14 @@ class AudioDispatcher:
                 self._stop_current_locked()
 
             try:
-                if action.cue_id:
+                if action.layer == "speech" and action.text:
+                    handle = self.speech_backend.start(action.text)
+                elif action.cue_id:
                     handle = self.cue_backend.start(action.cue_id)
                     if handle is not None:
                         self._current = handle
                         return handle, False
-                if action.text:
+                elif action.text:
                     handle = self.speech_backend.start(action.text)
                 else:
                     # cue も text もない場合は何もしない

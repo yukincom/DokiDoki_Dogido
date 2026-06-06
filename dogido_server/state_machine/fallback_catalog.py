@@ -76,6 +76,9 @@ def fallback_prewarm_texts(call_name: str | None) -> list[str]:
         fallback_text("general", "weather_transition", "blizzard_started"),
         fallback_text("general", "weather_transition", "thunder_after_rain"),
         fallback_text("general", "weather_transition", "thunder_started"),
+        fallback_text("general", "weather_transition", "rain_suspected"),
+        fallback_text("general", "weather_transition", "thunder_suspected"),
+        fallback_text("general", "weather_transition", "nearby_lightning_strike"),
     ]
     texts.extend(_ambient_mob_prewarm_texts())
     return _dedupe(texts)

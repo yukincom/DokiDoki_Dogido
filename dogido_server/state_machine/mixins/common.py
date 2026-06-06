@@ -63,11 +63,27 @@ class CommonMixin:
     def _is_warden_visual_present(self, event: GameEvent) -> bool:
         return any((threat.type or "").strip().lower() == "warden" for threat in event.visual_threats)
 
+    def _is_warden_combat_context_active(self, event: GameEvent, now: datetime) -> bool:
+        if self._is_warden_visual_present(event):
+            return True
+        recent_ms = self._recent_ms(now, self.state.last_visual_threat_at)
+        if recent_ms is None or recent_ms >= self.settings.boss_recent_visual_window_ms:
+            return False
+        return "warden" in self.state.last_confirmed_hostiles
+
     def _has_new_warden_visual_reveal(self, event: GameEvent) -> bool:
         return any(
             (threat.type or "").strip().lower() == "warden" and self._is_new_visual_reveal(threat)
             for threat in event.visual_threats
         )
+
+    def _boss_defeat_confirmed(self, event: GameEvent) -> bool:
+        bosses = [hostile for hostile in self.state.last_confirmed_hostiles if self._is_boss_type(hostile)]
+        if not bosses:
+            return True
+        if "warden" in bosses:
+            return bool(event.combat.warden_defeat_confirmed)
+        return True
 
     def _reset_warden_combat_comment_state(self) -> None:
         self.state.last_warden_chasing_comment_at = None
@@ -80,29 +96,34 @@ class CommonMixin:
 
     def _next_warden_special_callout(self, event: GameEvent, now: datetime) -> str | None:
         if (
-            not self._is_warden_visual_present(event)
+            not self._is_warden_combat_context_active(event, now)
             or self.player_input.asks_hostile_count
             or self._has_new_warden_visual_reveal(event)
         ):
             return None
+        crystal_active = bool(event.combat.warden_end_crystal_bombardment_active)
+        tnt_active = bool(event.combat.warden_tnt_minecart_setup_active)
+        golem_active = (event.combat.warden_nearby_iron_golem_count or 0) >= 2
+        ranged_trap_active = bool(event.combat.warden_ranged_trap_active)
+        tactic_active = crystal_active or tnt_active or golem_active or ranged_trap_active
 
-        if bool(event.combat.warden_end_crystal_bombardment_active) and not self.state.warden_end_crystal_bombardment_announced:
+        if crystal_active and not self.state.warden_end_crystal_bombardment_announced:
             self.state.warden_end_crystal_bombardment_announced = True
             return response_text("boss", "warden", "end_crystal_bombardment")
 
-        if bool(event.combat.warden_tnt_minecart_setup_active) and not self.state.warden_tnt_minecart_setup_announced:
+        if tnt_active and not self.state.warden_tnt_minecart_setup_announced:
             self.state.warden_tnt_minecart_setup_announced = True
             return response_text("boss", "warden", "tnt_minecart_setup")
 
-        if (event.combat.warden_nearby_iron_golem_count or 0) >= 3 and not self.state.warden_golem_army_announced:
+        if golem_active and not self.state.warden_golem_army_announced:
             self.state.warden_golem_army_announced = True
             return response_text("boss", "warden", "golem_army")
 
-        if bool(event.combat.warden_recently_hurt) and not self.state.warden_attack_start_announced:
+        if bool(event.combat.warden_recently_hurt) and not tactic_active and not self.state.warden_attack_start_announced:
             self.state.warden_attack_start_announced = True
             return response_text("boss", "warden", "attack_start")
 
-        if not bool(event.combat.warden_ranged_trap_active):
+        if not ranged_trap_active:
             return None
         if self.state.warden_ranged_trap_comment_count >= self.settings.warden_ranged_trap_max_comments:
             return None
@@ -217,6 +238,24 @@ class CommonMixin:
 
     def _weather_value(self, weather: object) -> str | None:
         return getattr(weather, "value", weather) if weather is not None else None
+
+    def _has_recent_rain_sound(self, event: GameEvent) -> bool:
+        recent_ms = event.world.rain_sound_recent_ms
+        return recent_ms is not None and recent_ms <= self.settings.weather_sound_recent_ms
+
+    def _has_recent_thunder_sound(self, event: GameEvent) -> bool:
+        recent_ms = event.world.thunder_sound_recent_ms
+        return recent_ms is not None and recent_ms <= self.settings.weather_sound_recent_ms
+
+    def _has_recent_nearby_lightning(self, event: GameEvent) -> bool:
+        recent_ms = event.world.nearby_lightning_strike_recent_ms
+        distance = event.world.nearby_lightning_strike_distance
+        return (
+            recent_ms is not None
+            and recent_ms <= self.settings.nearby_lightning_recent_ms
+            and distance is not None
+            and distance <= self.settings.hostile_query_distance
+        )
 
     def _player_input_priority_active(self, now: datetime) -> bool:
         if self.player_input.breaks_silence:

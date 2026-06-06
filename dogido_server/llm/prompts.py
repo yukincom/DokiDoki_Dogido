@@ -175,12 +175,14 @@ def _build_hostile_callout_messages(request: LeafGenerationRequest) -> list[dict
 
 def _build_occluded_hostile_presence_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
+    variation_hint = details.get("variation_hint", "気配")
     user_prompt = (
         "参考傾向:\n"
         "- 壁や床の向こうに敵対モブの気配を感じて、少し気になる\n"
         "- 悲鳴ではなく、小さく気にする程度の反応\n"
         "- 音だけなので、見えた・確定したとは言わない\n"
         "- 避難指示や命令はしない\n"
+        "- 毎回『気味悪い音がする』みたいな同じ型に寄せすぎない\n"
         "- 関西弁は自然に、会話っぽく\n\n"
         "/no_think\n"
         "本番:\n"
@@ -192,6 +194,8 @@ def _build_occluded_hostile_presence_messages(request: LeafGenerationRequest) ->
         f"方向は{details.get('direction', '近く')}。\n"
         f"敵の呼び方は{details.get('hostile', '敵対モブ')}。\n"
         f"近さの目安は{details.get('distance_band', 'unknown')}。\n"
+        f"音イベントのヒントは{details.get('sound_event', 'unknown')}。\n"
+        f"今回は『{variation_hint}』寄りの言い回しを使う。\n"
         "見えている敵の実況ではない。"
         "『見えた』『来てる』『目の前』『逃げろ』のような言い方は禁止。"
         "悲鳴や大げさな狼狽えは避けて、"
@@ -465,12 +469,14 @@ def _build_deep_dark_ominous_sound_messages(request: LeafGenerationRequest) -> l
     details = request.details
     ominous_kind = str(details.get("ominous_kind", "unknown"))
     stage = int(details.get("ominous_stage", 1) or 1)
+    variation_hint = details.get("variation_hint", "嫌な予感")
     user_prompt = (
         "参考傾向:\n"
         "- ディープダークで、正体が見えない不穏な音にじわっと怖くなる\n"
         "- まだ見えていない段階では、ウォーデンだと断定しない\n"
         "- 悲鳴というより、小さく気味悪がる・怖さが増す感じ\n"
         "- 『俺の悲鳴とちゃうで』みたいな自虐はよい\n"
+        "- 同じ出だしや同じ言い回しを続けない\n"
         "- 会話として自然で、短く\n\n"
         "/no_think\n"
         "本番:\n"
@@ -479,6 +485,7 @@ def _build_deep_dark_ominous_sound_messages(request: LeafGenerationRequest) -> l
         f"時間帯は{details.get('time_phase', 'unknown')}。\n"
         f"音の種類は{ominous_kind}。\n"
         f"段階は{stage}。\n"
+        f"今回は『{variation_hint}』寄りの観点で言う。\n"
         "stage 1 なら『なんやこの音』系の初期反応、"
         "stage 2 以上なら『だんだん近い』『悲鳴みたいで気味悪い』系へ少し強めてよい。"
         "見えていないのに『ウォーデンや』とは言わない。"

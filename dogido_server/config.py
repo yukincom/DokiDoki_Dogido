@@ -187,10 +187,14 @@ class Settings(BaseSettings):
     warden_chasing_comment_cooldown_ms: int = 60000
     warden_ranged_trap_comment_cooldown_ms: int = 60000
     warden_ranged_trap_max_comments: int = 2
+    ushiro_comment_cooldown_ms: int = 60000
+    weather_sound_recent_ms: int = 4000
+    nearby_lightning_recent_ms: int = 2000
+    nearby_lightning_comment_cooldown_ms: int = 10000
     haiku_silence_time_ms: int = 300000
     haiku_structured_max_tokens: int = 192
     hostile_comment_cooldown_ms: int = 60000
-    occluded_hostile_presence_comment_cooldown_ms: int = 300000
+    occluded_hostile_presence_comment_cooldown_ms: int = 180000
     other_realm_swarm_visual_threshold: int = 4
     other_realm_audio_generic_threshold: int = 2
     daylight_water_comment_cooldown_ms: int = 120000

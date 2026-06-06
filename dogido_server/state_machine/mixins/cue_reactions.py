@@ -284,6 +284,9 @@ class CueReactionsMixin:
             visual_count=max(len(event.visual_threats), signals.visual_threat_count_within_10),
             auditory_count=len(event.auditory_threats),
         )
+        warden_special = self._next_warden_special_callout(event, now)
+        if warden_special is not None:
+            return warden_special
         if event.visual_threats:
             handled, line = self._priority_visual_callout(
                 event,

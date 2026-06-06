@@ -49,6 +49,7 @@ class RuntimeState:
     last_ambient_mob_comment_at: datetime | None = None
     last_damaging_light_warning_at: datetime | None = None
     last_magma_block_comment_at: datetime | None = None
+    last_nearby_lightning_comment_at: datetime | None = None
     last_mining_fatigue_comment_at: datetime | None = None
     last_boss_omen_comment_at: datetime | None = None
     last_boss_omen_kind: str | None = None

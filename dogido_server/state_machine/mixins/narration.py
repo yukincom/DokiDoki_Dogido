@@ -286,8 +286,17 @@ class NarrationMixin:
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
                 "ominous_kind": kind,
                 "ominous_stage": stage,
+                "variation_hint": self._select_deterministic_line(
+                    f"{kind}:{stage}:{event.sequence or 0}",
+                    (
+                        "反響",
+                        "悲鳴っぽさ",
+                        "静けさ",
+                        "嫌な予感",
+                    ),
+                ),
             },
-            temperature=0.48,
+            temperature=0.6,
         )
 
     def _deep_dark_ominous_fallback(self, event: GameEvent, kind: str, stage: int) -> str:

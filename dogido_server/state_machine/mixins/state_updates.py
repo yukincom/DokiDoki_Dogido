@@ -122,7 +122,7 @@ class StateUpdatesMixin:
             self.state.seen_boss_visual_keys.clear()
             self._reset_warden_combat_comment_state()
         if event.event.name == EventName.COMBAT_ENDED:
-            self.state.pending_safe_aftermath = True
+            self.state.pending_safe_aftermath = self._boss_defeat_confirmed(event)
         if event.event.name == EventName.PLAYER_DIED:
             self.state.pending_safe_aftermath = False
         pending_aftermath_age_ms = self._recent_ms(now, self.state.last_combat_end_at)
@@ -367,6 +367,7 @@ class StateUpdatesMixin:
             and not event.visual_threats
             and not event.auditory_threats
             and any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles)
+            and self._boss_defeat_confirmed(event)
         ):
             return "aftermath"
 

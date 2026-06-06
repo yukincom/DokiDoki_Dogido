@@ -186,17 +186,30 @@ class AuditoryMixin:
         event: GameEvent,
         signals: DerivedSignals,
     ) -> str | None:
+        if self._boss_presence_active(event.observed_at) or self._ominous_sound_presence_active(event.observed_at):
+            self.state.pending_weather_transition_from = None
+            self.state.pending_weather_transition_to = None
+            return None
         weather_from = self.state.pending_weather_transition_from
         weather_to = self.state.pending_weather_transition_to
         if weather_from is None or weather_to is None or weather_from == weather_to:
             return None
 
-        scene, fallback = self._weather_transition_scene(
-            weather_from,
-            weather_to,
-            signals.cold_weather_biome,
-            signals.dry_weather_biome,
-        )
+        scene: str | None = None
+        fallback: str | None = None
+        if event.world.sky_visible:
+            scene, fallback = self._weather_transition_scene(
+                weather_from,
+                weather_to,
+                signals.cold_weather_biome,
+                signals.dry_weather_biome,
+            )
+        elif weather_to == "rain" and self._has_recent_rain_sound(event):
+            scene = "rain_suspected"
+            fallback = fallback_text("general", "weather_transition", "rain_suspected")
+        elif weather_to == "thunder" and self._has_recent_thunder_sound(event):
+            scene = "thunder_suspected"
+            fallback = fallback_text("general", "weather_transition", "thunder_suspected")
         if scene is None or fallback is None:
             self.state.pending_weather_transition_from = None
             self.state.pending_weather_transition_to = None
@@ -419,8 +432,18 @@ class AuditoryMixin:
                 "hostile": resolved_hostile,
                 "distance_band": getattr(threat.distance_band, "value", threat.distance_band) or "unknown",
                 "certainty": getattr(threat.certainty, "value", threat.certainty) or "unknown",
+                "sound_event": threat.sound_event or "unknown",
+                "variation_hint": self._select_deterministic_line(
+                    f"{threat.sound_event or 'unknown'}:{event.sequence or 0}:{self._direction_label(threat)}:{distance_rank}",
+                    (
+                        "反響",
+                        "足音",
+                        "気配",
+                        "自分ツッコミ",
+                    ),
+                ),
             },
-            temperature=0.42,
+            temperature=0.58,
             route="chat",
         )
         self.state.last_occluded_hostile_presence_comment_at = now

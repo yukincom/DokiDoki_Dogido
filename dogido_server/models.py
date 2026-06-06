@@ -223,6 +223,10 @@ class WorldState(DogidoModel):
     ominous_sound_kind: str | None = None  # 例: "sculk_shrieker" / "warden_heartbeat"
     ominous_sound_recent_ms: int | None = None  # 最近の不穏音からの経過ミリ秒
     boss_omen_kind: str | None = None  # 例: "ender_dragon_arena" / "ender_dragon_summon" / "wither_assembly"
+    rain_sound_recent_ms: int | None = None  # 最近の雨音観測からの経過ミリ秒
+    thunder_sound_recent_ms: int | None = None  # 最近の雷鳴観測からの経過ミリ秒
+    nearby_lightning_strike_recent_ms: int | None = None  # 近距離落雷の観測からの経過ミリ秒
+    nearby_lightning_strike_distance: float | None = None  # 最近の近距離落雷までの距離
 
 
 # ---- 脅威情報 ----
@@ -306,8 +310,10 @@ class CombatState(DogidoModel):
     hostiles_within_30_ground: int | None = Field(default=None, ge=0)  # 30マス以内の地上系敵数
     combat_active_hint: bool | None = None
     warden_recently_hurt: bool | None = None
+    warden_defeat_confirmed: bool | None = None
     warden_ranged_trap_active: bool | None = None
     warden_nearby_iron_golem_count: int | None = Field(default=None, ge=0)
+    nearby_experience_orb_count: int | None = Field(default=None, ge=0)
     warden_end_crystal_bombardment_active: bool | None = None
     warden_nearby_end_crystal_count: int | None = Field(default=None, ge=0)
     warden_tnt_minecart_setup_active: bool | None = None

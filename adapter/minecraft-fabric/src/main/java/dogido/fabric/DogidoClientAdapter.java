@@ -66,6 +66,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
     private static final int SOUND_OBSERVATION_TTL_TICKS = 12;
     private static final int OMINOUS_SOUND_TTL_TICKS = 80;
+    private static final int WEATHER_SOUND_TTL_TICKS = 80;
+    private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;
+    private static final int WARDEN_SPECIAL_LATCH_TICKS = 100;
     private static final int BOSS_OMEN_SCAN_RADIUS = 20;
     private static final int WITHER_OMEN_SCAN_RADIUS = 8;
     private static final int LIT_INTERIOR_SAFE_LIGHT_THRESHOLD = 9;
@@ -128,7 +131,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private long lastAudioThreatObservedTick = -1000;
     private long lastOminousSoundObservedTick = -1000;
     private long lastExplosionObservedTick = -1000;
+    private long lastRainSoundObservedTick = -1000;
+    private long lastThunderSoundObservedTick = -1000;
+    private long lastNearbyLightningObservedTick = -1000;
+    private double lastNearbyLightningDistance = 99.0;
     private long lastCombatSignalTick = -1000;
+    private long lastWardenSeenTick = -1000;
+    private long lastWardenEndCrystalObservedTick = -1000;
+    private long lastWardenTntSetupObservedTick = -1000;
+    private double lastWardenSeenX = 0.0;
+    private double lastWardenSeenY = 0.0;
+    private double lastWardenSeenZ = 0.0;
     private float lastHealth = 20.0f;
     private String lastThreatSignature = "";
     private String lastAudioSignature = "";
@@ -195,6 +208,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.tickCounter += 1;
         this.eventClient.ensureSession(resolvePlayerName(player));
         expireSoundObservations();
+        observeNearbyLightning(player, world);
 
         boolean sleepingNow = player.isSleeping();
         if (sleepingNow && !this.wasSleeping && countNearbyBeds(world, player.getBlockPos()) > 0) {
@@ -210,6 +224,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastHealth = player.getHealth();
 
         List<ThreatObservation> threats = scanThreats(player, world);
+        observeWardenSpecialSetups(player, world, threats);
         List<ThreatObservation> visibleThreats = filterVisibleThreats(threats);
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
@@ -271,7 +286,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastAudioThreatObservedTick = -1000;
         this.lastOminousSoundObservedTick = -1000;
         this.lastExplosionObservedTick = -1000;
+        this.lastRainSoundObservedTick = -1000;
+        this.lastThunderSoundObservedTick = -1000;
+        this.lastNearbyLightningObservedTick = -1000;
+        this.lastNearbyLightningDistance = 99.0;
         this.lastCombatSignalTick = -1000;
+        this.lastWardenSeenTick = -1000;
+        this.lastWardenEndCrystalObservedTick = -1000;
+        this.lastWardenTntSetupObservedTick = -1000;
         this.lastHealth = 20.0f;
         this.lastThreatSignature = "";
         this.lastAudioSignature = "";
@@ -303,7 +325,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastAudioThreatObservedTick = -1000;
         this.lastOminousSoundObservedTick = -1000;
         this.lastExplosionObservedTick = -1000;
+        this.lastRainSoundObservedTick = -1000;
+        this.lastThunderSoundObservedTick = -1000;
+        this.lastNearbyLightningObservedTick = -1000;
+        this.lastNearbyLightningDistance = 99.0;
         this.lastCombatSignalTick = -1000;
+        this.lastWardenSeenTick = -1000;
+        this.lastWardenEndCrystalObservedTick = -1000;
+        this.lastWardenTntSetupObservedTick = -1000;
         this.lastThreatSignature = "";
         this.lastAudioSignature = "";
         this.lastAmbientMobSignature = "";
@@ -486,6 +515,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.lastThreatDistances.put(entity.getUuid(), distance);
             this.lastThreatSeenTicks.put(entity.getUuid(), this.tickCounter);
             this.lastThreatHealths.put(entity.getUuid(), currentHealth);
+            if ("warden".equals(disposition.type())) {
+                this.lastWardenSeenTick = this.tickCounter;
+                this.lastWardenSeenX = entity.getX();
+                this.lastWardenSeenY = entity.getY();
+                this.lastWardenSeenZ = entity.getZ();
+            }
         }
 
         threats.sort(Comparator.comparingDouble(ThreatObservation::distance));
@@ -993,6 +1028,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         boolean standingOnMagmaBlock = isStandingOnMagmaBlock(world, player);
         String bossOmenKind = detectBossOmenKind(player, world, pos);
         long ominousSoundRecentMs = ticksSince(this.lastOminousSoundObservedTick);
+        long rainSoundRecentMs = ticksSince(this.lastRainSoundObservedTick);
+        long thunderSoundRecentMs = ticksSince(this.lastThunderSoundObservedTick);
+        long nearbyLightningRecentMs = ticksSince(this.lastNearbyLightningObservedTick);
         Double respawnDistance = estimateRespawnDistance(world, pos);
         json.addProperty("ceiling_height", round(ceilingHeight));
         json.addProperty("overhead_cover_type", overheadCoverType);
@@ -1015,6 +1053,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (!this.lastOminousSoundKind.isBlank() && ominousSoundRecentMs <= OMINOUS_SOUND_TTL_TICKS * 50L) {
             json.addProperty("ominous_sound_kind", this.lastOminousSoundKind);
             json.addProperty("ominous_sound_recent_ms", ominousSoundRecentMs);
+        }
+        if (rainSoundRecentMs <= WEATHER_SOUND_TTL_TICKS * 50L) {
+            json.addProperty("rain_sound_recent_ms", rainSoundRecentMs);
+        }
+        if (thunderSoundRecentMs <= WEATHER_SOUND_TTL_TICKS * 50L) {
+            json.addProperty("thunder_sound_recent_ms", thunderSoundRecentMs);
+        }
+        if (nearbyLightningRecentMs <= LIGHTNING_STRIKE_TTL_TICKS * 50L && this.lastNearbyLightningDistance <= 30.0) {
+            json.addProperty("nearby_lightning_strike_recent_ms", nearbyLightningRecentMs);
+            json.addProperty("nearby_lightning_strike_distance", round(this.lastNearbyLightningDistance));
         }
         if (respawnDistance != null) {
             json.addProperty("respawn_distance", round(respawnDistance));
@@ -1242,24 +1290,92 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("hostiles_within_10", countThreatsWithin(threats, 10.0));
         json.addProperty("hostiles_within_30_ground", countGroundThreatsWithin(threats, 30.0));
         json.addProperty("combat_active_hint", this.combatActive || !threats.isEmpty() || !audioThreats.isEmpty());
+        int nearbyExperienceOrbCount = countNearbyExperienceOrbs(world, player);
+        json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);
         ThreatObservation warden = nearestThreatOfType(threats, "warden");
         if (warden != null) {
-            int nearbyIronGolemCount = countNearbyEntityType(world, warden, "iron_golem", 20.0);
-            int nearbyEndCrystalCount = countNearbyEntityType(world, warden, "end_crystal", 20.0);
-            int nearbyTntMinecartCount = countNearbyEntityType(world, warden, "tnt_minecart", 20.0);
+            int nearbyIronGolemCount = countNearbyEntityType(world, warden, "iron_golem", 20.0)
+                + countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0);
+            int nearbyEndCrystalCount = countNearbyEntityType(world, warden, "end_crystal", 32.0)
+                + countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0);
+            int nearbyTntMinecartCount = countNearbyEntityType(world, warden, "tnt_minecart", 28.0)
+                + countNearbyEntityType(world, warden, "tnt", 28.0)
+                + countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
+                + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0);
             long recentExplosionMs = ticksSince(this.lastExplosionObservedTick);
             json.addProperty("warden_recently_hurt", warden.recentlyHurt());
             json.addProperty("warden_ranged_trap_active", isWardenRangedTrapActive(player, warden));
             json.addProperty("warden_nearby_iron_golem_count", nearbyIronGolemCount);
             json.addProperty(
                 "warden_end_crystal_bombardment_active",
-                nearbyEndCrystalCount > 0 && recentExplosionMs <= 1500L
+                recentExplosionMs <= 1500L
+                    && (
+                        nearbyEndCrystalCount > 0
+                        || ticksSince(this.lastWardenEndCrystalObservedTick) <= WARDEN_SPECIAL_LATCH_TICKS * 50L
+                    )
             );
             json.addProperty("warden_nearby_end_crystal_count", nearbyEndCrystalCount);
-            json.addProperty("warden_tnt_minecart_setup_active", nearbyTntMinecartCount > 0);
+            json.addProperty(
+                "warden_tnt_minecart_setup_active",
+                nearbyTntMinecartCount > 0
+                    || ticksSince(this.lastWardenTntSetupObservedTick) <= WARDEN_SPECIAL_LATCH_TICKS * 50L
+            );
             json.addProperty("warden_nearby_tnt_minecart_count", nearbyTntMinecartCount);
+        } else if (this.lastWardenSeenTick >= 0 && this.tickCounter - this.lastWardenSeenTick <= 200) {
+            int nearbyIronGolemCount = countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0);
+            int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0);
+            int nearbyTntMinecartCount = countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
+                + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0);
+            long recentExplosionMs = ticksSince(this.lastExplosionObservedTick);
+            json.addProperty("warden_nearby_iron_golem_count", nearbyIronGolemCount);
+            json.addProperty(
+                "warden_end_crystal_bombardment_active",
+                recentExplosionMs <= 1500L
+                    && (
+                        nearbyEndCrystalCount > 0
+                        || ticksSince(this.lastWardenEndCrystalObservedTick) <= WARDEN_SPECIAL_LATCH_TICKS * 50L
+                    )
+            );
+            json.addProperty("warden_nearby_end_crystal_count", nearbyEndCrystalCount);
+            json.addProperty(
+                "warden_tnt_minecart_setup_active",
+                nearbyTntMinecartCount > 0
+                    || ticksSince(this.lastWardenTntSetupObservedTick) <= WARDEN_SPECIAL_LATCH_TICKS * 50L
+            );
+            json.addProperty("warden_nearby_tnt_minecart_count", nearbyTntMinecartCount);
+        } else {
+            json.addProperty("warden_defeat_confirmed", isRecentWardenDefeatConfirmed(world));
         }
         return json;
+    }
+
+    private void observeWardenSpecialSetups(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<ThreatObservation> threats
+    ) {
+        ThreatObservation warden = nearestThreatOfType(threats, "warden");
+        boolean recentWardenContext = warden != null
+            || (this.lastWardenSeenTick >= 0 && this.tickCounter - this.lastWardenSeenTick <= 200);
+        if (!recentWardenContext) {
+            return;
+        }
+
+        int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0);
+        int nearbyTntMinecartCount = countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
+            + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0);
+        if (warden != null) {
+            nearbyEndCrystalCount += countNearbyEntityType(world, warden, "end_crystal", 32.0);
+            nearbyTntMinecartCount += countNearbyEntityType(world, warden, "tnt_minecart", 28.0);
+            nearbyTntMinecartCount += countNearbyEntityType(world, warden, "tnt", 28.0);
+        }
+
+        if (nearbyEndCrystalCount > 0) {
+            this.lastWardenEndCrystalObservedTick = this.tickCounter;
+        }
+        if (nearbyTntMinecartCount > 0) {
+            this.lastWardenTntSetupObservedTick = this.tickCounter;
+        }
     }
 
     private JsonObject buildMeta(String deathCause) {
@@ -1347,6 +1463,55 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
         }
         return count;
+    }
+
+    private int countNearbyEntityTypeAroundPlayer(
+        ClientWorld world,
+        ClientPlayerEntity player,
+        String entityType,
+        double radius
+    ) {
+        int count = 0;
+        for (Entity entity : world.getOtherEntities(
+            null,
+            player.getBoundingBox().expand(radius, radius, radius)
+        )) {
+            if (entityType.equals(entityTypeName(entity))) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private int countNearbyExperienceOrbs(ClientWorld world, ClientPlayerEntity player) {
+        int count = 0;
+        for (Entity entity : world.getOtherEntities(
+            null,
+            player.getBoundingBox().expand(24.0, 12.0, 24.0)
+        )) {
+            if ("experience_orb".equals(entityTypeName(entity))) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private boolean isRecentWardenDefeatConfirmed(ClientWorld world) {
+        if (this.lastWardenSeenTick < 0 || this.tickCounter - this.lastWardenSeenTick > 400) {
+            return false;
+        }
+        for (Entity entity : world.getOtherEntities(
+            null,
+            new net.minecraft.util.math.Box(
+                this.lastWardenSeenX - 20.0, this.lastWardenSeenY - 12.0, this.lastWardenSeenZ - 20.0,
+                this.lastWardenSeenX + 20.0, this.lastWardenSeenY + 12.0, this.lastWardenSeenZ + 20.0
+            )
+        )) {
+            if ("experience_orb".equals(entityTypeName(entity))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isWardenRangedTrapActive(ClientPlayerEntity player, ThreatObservation warden) {
@@ -1452,6 +1617,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
+        }
+        String weatherSoundKind = classifyWeatherSoundKind(soundEventId);
+        if (weatherSoundKind != null) {
+            recordWeatherSoundObservation(weatherSoundKind);
         }
         if (isExplosionSound(soundEventId)) {
             this.lastExplosionObservedTick = this.tickCounter;
@@ -1699,6 +1868,19 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return null;
     }
 
+    private String classifyWeatherSoundKind(String soundEventId) {
+        if (soundEventId == null || soundEventId.isBlank()) {
+            return null;
+        }
+        if (soundEventId.contains("weather.rain") || soundEventId.contains("rain.above")) {
+            return "rain";
+        }
+        if (soundEventId.contains("lightning_bolt.thunder") || soundEventId.contains("weather.thunder") || soundEventId.contains("thunder")) {
+            return "thunder";
+        }
+        return null;
+    }
+
     private boolean isExplosionSound(String soundEventId) {
         if (soundEventId == null || soundEventId.isBlank()) {
             return false;
@@ -1709,6 +1891,37 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private void recordOminousSoundObservation(String kind) {
         this.lastOminousSoundObservedTick = this.tickCounter;
         this.lastOminousSoundKind = kind;
+    }
+
+    private void recordWeatherSoundObservation(String kind) {
+        if ("rain".equals(kind)) {
+            this.lastRainSoundObservedTick = this.tickCounter;
+            return;
+        }
+        if ("thunder".equals(kind)) {
+            this.lastThunderSoundObservedTick = this.tickCounter;
+        }
+    }
+
+    private void observeNearbyLightning(ClientPlayerEntity player, ClientWorld world) {
+        double nearestDistance = Double.POSITIVE_INFINITY;
+        for (Entity entity : world.getOtherEntities(
+            null,
+            player.getBoundingBox().expand(30.0, 16.0, 30.0)
+        )) {
+            if (!"lightning_bolt".equals(entityTypeName(entity))) {
+                continue;
+            }
+            double distance = player.distanceTo(entity);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+            }
+        }
+        if (nearestDistance == Double.POSITIVE_INFINITY) {
+            return;
+        }
+        this.lastNearbyLightningObservedTick = this.tickCounter;
+        this.lastNearbyLightningDistance = nearestDistance;
     }
 
     private String classifyTimePhase(long timeOfDay) {

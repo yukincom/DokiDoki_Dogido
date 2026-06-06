@@ -119,6 +119,7 @@ class NormalEnvironmentEvent(_Condition):
             or context.machine._ominous_sound_kind(context.event) is not None
             or context.machine._should_consider_magma_block_comment(context.event, context.now)
             or context.machine._should_consider_damaging_light_warning(context.event, context.now)
+            or context.machine._has_recent_nearby_lightning(context.event)
             or (
                 getattr(context.event.world.time_phase, "value", context.event.world.time_phase) == "night"
                 and (context.event.world.nearby_firefly_bush_count or 0) > 0
@@ -273,12 +274,16 @@ class EmitAftermathActions(_Action):
         if context.machine._player_input_priority_active(context.now):
             return
         if context.previous_mode != "aftermath" or context.event.event.name == EventName.COMBAT_ENDED:
+            boss_aftermath = any(
+                context.machine._is_boss_type(hostile)
+                for hostile in context.machine.state.last_confirmed_hostiles
+            )
             actions.append(
                 context.machine._audio_action(
                     layer="speech",
-                    interrupt=False,
+                    interrupt=boss_aftermath,
                     text=context.machine._render_aftermath_line(context.event),
-                    cue_id="aftermath_relief",
+                    protect_ms=2500 if boss_aftermath else 0,
                 )
             )
 
