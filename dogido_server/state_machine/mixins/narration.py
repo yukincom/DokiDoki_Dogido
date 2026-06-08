@@ -30,6 +30,7 @@ class NarrationMixin:
         entry = mob_entry(mob.type) or {}
         poetic = entry.get("poetic") if isinstance(entry, dict) else {}
         role = poetic.get("role") if isinstance(poetic, dict) else ""
+        variation_slot = event.sequence % 4 if event.sequence is not None else 0
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,
@@ -45,7 +46,9 @@ class NarrationMixin:
                 "mob_temperament": getattr(mob, "temperament", None) or "friendly",
                 "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
                 "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
+                "variation_slot": variation_slot,
             },
+            temperature=0.48,
         )
 
     def _ambient_mob_fallback_candidates(self, event: GameEvent, mobs: list[PeacefulMob]) -> list[str]:

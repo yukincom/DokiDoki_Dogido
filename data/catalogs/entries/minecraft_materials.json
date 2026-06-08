@@ -19,26 +19,26 @@
           "lapis_lazuli": "ラピスラズリ",
           "ancient_debris": {
             "japanese": "古代の残骸",
-            "note": "ネザーに生成される珍しい鉱石。非常に高い爆発耐久値を持っている。"
+            "note": "ネザーに生成される珍しい鉱石。茶色で、ひび割れている。しかし、非常に高い爆発耐久値を持っており熱に強い。"
           },
-          "nether_quartz": "ネザークォーツ",
+          "nether_quartz": {"japanese":"ネザークォーツ","note":"ネザーで産出する乳白色の水晶"},
           "amethyst_shard": "アメジストの欠片",
           "copper_nugget": "銅塊",
           "iron_nugget": "鉄塊",
           "gold_nugget": {
             "japanese": "金塊",
-            "note": "ピグリンが好きなもの。"
+            "note": "キラキラ輝く金の塊。ピグリンが好きなもの。"
           },
           "iron_ingot": "鉄インゴット",
           "copper_ingot": "銅インゴット",
           "gold_ingot": {
             "japanese": "金インゴット",
-            "note": "ピグリンが好きなもの。"
+            "note": "キラキラ輝く金の塊。ピグリンが好きなもの。"
           },
-          "netherite_scrap": "ネザライトの欠片",
+          "netherite_scrap": {"japanese":"ネザライトの欠片","note":"古代の残骸を製錬することで生まれる茶色い鉱物"},
           "netherite_ingot": {
             "japanese": "ネザライトインゴット",
-            "note": "ネザーで産出する珍しい鉱石。ダイヤモンドより硬い。"
+            "note": "ネザーで産出する珍しい鉱石。真っ黒。ダイヤモンドより硬い。"
           }
         }
       },
@@ -84,17 +84,17 @@
       "special_materials": {
         "label": "特殊素材",
         "items": {
-          "fire_charge": "ファイヤーチャージ",
-          "blaze_rod": "ブレイズロッド",
-          "breeze_rod": "ブリーズロッド",
-          "heavy_core": "ヘビーコア",
-          "nether_star": "ネザースター",
-          "ender_pearl": "エンダーパール",
-          "eye_of_ender": "エンダーアイ",
-          "shulker_shell": "シュルカーの殻",
-          "popped_chorus_fruit": "焼いたコーラスフルーツ",
-          "echo_shard": "残響の欠片",
-          "disc_fragment": "レコードの破片"
+          "fire_charge": {"japanese":"ファイヤーチャージ","note":"炎の力を持つ石。火球を生み出す。"},
+          "blaze_rod": {"japanese":"ブレイズロッド","note":"炎の力を秘めた杖。力を引き出すには工夫が必要だ"},
+          "breeze_rod": {"japanese":"ブリーズロッド","note":"風の力を秘めた杖。力を引き出すには工夫が必要だ"},
+          "heavy_core": {"japanese":"ヘビーコア","note":"重い塊。穴が開いており、何かを差し込めそうだ"},
+          "nether_star": {"japanese":"ネザースター","note":"十字形で星のように輝く石。どこか神聖さを感じる"},
+          "ender_pearl": {"japanese":"エンダーパール","note":"深い緑色の宝玉。エンダーマンが所有している。投げると投げた方向にテレポートできる。"},
+          "eye_of_ender": {"japanese":"エンダーアイ","note":"深い緑色のドラゴンの眼のような宝玉。キラキラと紫色の魔力の光を放って飛ぶ。"},
+          "shulker_shell": {"japanese":"シュルカーの殻","note":"シュルカーという生き物の外郭。紫色。"},
+          "popped_chorus_fruit": {"japanese":"焼いたコーラスフルーツ","note":"コーラスという木の実を焼いた物。紫色。硬く、食べることはできない。"},
+          "echo_shard": {"japanese":"残響の欠片","note":"古代都市で発見される石。深い緑色。"},
+          "disc_fragment": {"japanese":"レコードの破片","note":"古代都市で発見されるレコード。このままでは再生できない"}
         }
       },
       "dyes": {
@@ -142,7 +142,7 @@
           "nether_wart": "ネザーウォート",
           "redstone_dust": {
             "japanese": "レッドストーンダスト",
-            "note": "レッドストーン信号を伝達。設置されたものはレッドストーンワイヤーと呼ぶ。"
+            "_source":"block/minecraft_redstone_components.json"
           },
           "glowstone_dust": "グロウストーンダスト",
           "gunpowder": "火薬",
@@ -237,13 +237,14 @@
       "special_consumables_and_keys": {
         "label": "特殊アイテム・鍵",
         "items": {
-          "bottle_o_enchanting": "エンチャントの瓶",
-          "trial_key": "試練の鍵",
-          "ominous_trial_key": "不吉な試練の鍵"
+          "bottle_o_enchanting": {"japanese":"エンチャントの瓶","note":"エンチャント効果が込められたビン。ぼんやりと光っている。"},
+          "trial_key": {"japanese":"試練の鍵","note":"黒い髑髏のモチーフがついている。ここぞという時に使おう！"},
+          "ominous_trial_key": {"japanese":"不吉な試練の鍵","note":"みつ首の髑髏のモチーフがついている。怪しげな雰囲気が漂う鍵。ここぞという時に使おう！"}
         }
       },
       "enchanted_books": {
         "label": "エンチャントの本",
+        "note":"さまざまな魔法について書かれている本。詳しくはウィキをみよう！",
         "items": {
           "protection": {
             "label": "ダメージ軽減",

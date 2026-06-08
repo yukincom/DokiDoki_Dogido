@@ -420,6 +420,8 @@ class EnvironmentalReactionsMixin:
     def _emit_ominous_sound_line(self, event: GameEvent, now: datetime) -> str | None:
         if self._boss_presence_active(now):
             return None
+        if event.event.name == EventName.HOSTILE_AUDIO_DETECTED:
+            return None
         kind = self._ominous_sound_kind(event)
         if kind is None:
             return None

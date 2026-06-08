@@ -16,13 +16,13 @@ class VisualTargetsMixin:
         if threat.type == "charged_creeper":
             return CHARGED_CREEPER_CALL
         if threat.type == "warden":
-            return "ウォーデンや！音立てんと離れよ！！"
+            return "ウォーデンや！音を立てんと、そーっと離れよぉ！！"
         if threat.type == "ender_dragon":
-            return "上や！ドラゴン来るで！" if threat.direction.vertical == VerticalRelation.ABOVE else "ドラゴンや！回り込んどるで！"
+            return "上から来るでぇ！エンダードラゴンやぁ！" if threat.direction.vertical == VerticalRelation.ABOVE else "エンダードラゴンや！あいつ、回り込んどるでぇ！"
         if threat.type == "wither":
-            return "ウィザーや！射線切れるとこ探そ！"
+            return "ウィザーやんけぇ！物陰に隠れられる場所、はよ探そっ！"
         if threat.type == "elder_guardian":
-            return "エルダーガーディアンや！射線切らなあかん！"
+            return "エルダーガーディアンおるやん！あのレーザーは、まともに喰うたらアカン！"
         return self._realtime_hostile_visual_callout(threat, mode)
 
     def _realtime_hostile_visual_callout(self, threat: VisualThreat, mode: str) -> str:

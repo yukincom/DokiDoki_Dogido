@@ -108,6 +108,16 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
     mob_role = str(details.get("mob_role", "")).strip() or "なし"
     temperament = str(details.get("mob_temperament", "friendly")).strip() or "friendly"
     caution_reason = str(details.get("mob_caution_reason", "")).strip() or "なし"
+    variation_slot = int(details.get("variation_slot", 0) or 0) % 4
+    variation_hint = (
+        "観察寄りで入る"
+        if variation_slot == 0
+        else "感想寄りで入る"
+        if variation_slot == 1
+        else "軽い注意から入る"
+        if variation_slot == 2
+        else "共感や愛嬌寄りで入る"
+    )
     user_prompt = (
         "参考傾向:\n"
         "- 友好Mobなら、かわいい、親しみやすい、少し安心する\n"
@@ -129,10 +139,13 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
         f"/mobs のヒント語は{mob_tags}。\n"
         f"/mobs の役割ヒントは{mob_role}。\n"
         f"参考候補は{candidate_lines}。\n"
+        f"今回は{variation_hint}。\n"
         "friendly ならかわいさや親しみを優先する。"
         "neutral なら『触らんほうがええ』『近づきすぎんほうがええ』程度の軽い注意はよいが、"
         "もう敵だと断定したり、戦闘警報みたいな調子にはしない。"
-        "参考候補をそのままコピペせず、見た目や動きの印象を少し混ぜてもよいので、"
+        "参考候補は雰囲気だけ借りて、出だし・語尾・言い回しは少し変える。"
+        "毎回同じ『〜やな』『〜しとこか』に寄せすぎず、"
+        "見た目や動きの印象を少し混ぜてもよいので、"
         "会話っぽく20〜36文字くらいで一言だけ返す。"
     )
     return _dialog_messages(user_prompt)

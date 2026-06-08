@@ -144,7 +144,24 @@ class CommonMixin:
         recent_ms = event.world.ominous_sound_recent_ms
         if recent_ms is None or recent_ms > self.settings.ominous_sound_reset_ms:
             return None
+        if not self._ominous_sound_context_allows(event, kind):
+            return None
         return kind
+
+    def _ominous_sound_context_allows(self, event: GameEvent, kind: str | None) -> bool:
+        normalized = (kind or "").strip().lower()
+        if not normalized:
+            return False
+        biome = (event.world.biome or "").strip().lower()
+        if normalized in {"sculk_sensor", "sculk_shrieker"}:
+            return biome == "deep_dark"
+        if normalized in {"warden_heartbeat", "warden_presence"}:
+            if biome == "deep_dark":
+                return True
+            if self._is_warden_visual_present(event):
+                return True
+            return any((threat.label or "").strip().lower() == "warden" for threat in event.auditory_threats)
+        return True
 
     def _ominous_sound_severity(self, kind: str | None) -> int:
         normalized = (kind or "").strip().lower()

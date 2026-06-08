@@ -364,6 +364,21 @@ def _collect_grouped_entry_payloads(
             if entry is None:
                 continue
             entries[str(item_id)] = entry
+
+            # ここから追加 ↓
+            if isinstance(payload, dict):
+                for variant_id, variant_name in payload.get("variants", {}).items():
+                    variant_entry = {
+                        "label": variant_name,
+                        "japanese": variant_name,
+                        "note": payload.get("note", ""),
+                        "parent": str(item_id),
+                        "section": root_section,
+                        "group_path": list(group_path),
+                    }
+                    entries[str(variant_id)] = variant_entry
+            # ここまで追加 ↑
+
     groups = node.get("groups", {})
     if isinstance(groups, dict):
         for group_id, payload in groups.items():

@@ -94,6 +94,12 @@ class StateUpdatesMixin:
 
         ominous_kind = self._ominous_sound_kind(event)
         if ominous_kind is None:
+            raw_ominous_kind = (event.world.ominous_sound_kind or "").strip().lower()
+            if raw_ominous_kind and not self._ominous_sound_context_allows(event, raw_ominous_kind):
+                self.state.last_ominous_sound_seen_at = None
+                self.state.last_ominous_sound_kind = None
+                self.state.last_ominous_sound_severity = 0
+                self.state.ominous_sound_stage = 0
             recent_ms = self._recent_ms(now, self.state.last_ominous_sound_seen_at)
             if recent_ms is None or recent_ms >= self.settings.ominous_sound_reset_ms:
                 self.state.last_ominous_sound_kind = None

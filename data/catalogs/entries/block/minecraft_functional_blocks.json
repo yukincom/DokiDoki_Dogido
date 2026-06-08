@@ -7,36 +7,36 @@
         "label": "光源",
         "items": {
           "torch": "松明",
-          "copper_torch": "銅の松明",
-          "soul_torch": "魂の松明",
-          "redstone_torch": {
-            "japanese": "レッドストーントーチ",
-            "note": "制御可能なレッドストーン信号の動力源。"
-          },
-          "lantern": "ランタン",
+          "copper_torch": {"japanese": "銅の松明","note":"緑の炎の松明"},
+          "soul_torch": {"japanese": "魂の松明","note":"青い炎の不思議な松明"},
+          "redstone_torch": {"japanese": "レッドストーントーチ","note": "真っ赤な松明。制御可能なレッドストーン信号の動力源。"},
+          "lantern":{"japanese":"ランタン","note":"オレンジ色の光を放つ、鉄製のランタン"},    
+          "soul_lantern": {"japanese":"魂のランタン","note":"青い光を放つ不思議なランタン"},
+          "copper_lantern": {
+          "label":{"japanese":"銅のランタン","note":"緑色の光を放つランタン"},
+          "items":{
           "copper_lantern": "銅のランタン",
-          "soul_lantern": "魂のランタン",
           "exposed_copper_lantern": "風化した銅のランタン",
           "weathered_copper_lantern": "錆びた銅のランタン",
           "oxidized_copper_lantern": "酸化した銅のランタン",
           "waxed_copper_lantern": "錆止めされた銅のランタン",
           "waxed_exposed_copper_lantern": "錆止めされた風化した銅のランタン",
           "waxed_weathered_copper_lantern": "錆止めされた錆びた銅のランタン",
-          "waxed_oxidized_copper_lantern": "錆止めされた酸化した銅のランタン",
-          "end_rod": "エンドロッド",
-          "glowstone": "グロウストーン",
-          "shroomlight": "シュルームライト",
-          "pearlescent_froglight": "真珠色のフロッグライト",
-          "verdant_froglight": "新緑色のフロッグライト",
-          "ochre_froglight": "黄土色のフロッグライト",
-          "crying_obsidian": "泣く黒曜石",
-          "glow_lichen": "ヒカリゴケ",
-          "magma_block": "マグマブロック"
+          "waxed_oxidized_copper_lantern": "錆止めされた酸化した銅のランタン"}},
+          "end_rod": {"japanese": "エンドロッド","note":"白くキラキラと輝くロッド。熱を持っている"},
+          "glowstone": {"japanese":"グロウストーン","_source":" block/minecraft_natural_blocks.json"},
+          "shroomlight": {"japanese":"シュルームライト","_source":" block/minecraft_natural_blocks.json"},
+          "pearlescent_froglight": {"japanese":"真珠色のフロッグライト","_source":" block/minecraft_natural_blocks.json"},
+          "verdant_froglight": {"japanese":"新緑色のフロッグライト","_source":" block/minecraft_natural_blocks.json"},
+          "ochre_froglight": {"japanese":"黄土色のフロッグライト","_source":" block/minecraft_natural_blocks.json"},
+          "crying_obsidian": {"japanese":"泣く黒曜石","_source":"block/minecraft_stone_blocks.json"},
+          "glow_lichen": {"japanese":"ヒカリゴケ","note":"洞窟に生える微かな光源", "_source":" block/minecraft_natural_blocks.json"},
+          "magma_block": {"japanese":"マグマブロック","note":"熱を持つマグマの塊","_source":" block/minecraft_natural_blocks.json"}
         }
         
       },
       "chains": {
-        "label": "鎖",
+        "label": {"japanese":"鎖","note":"ランタンなどをぶら下げることができる"},
         "items": {
           "iron_chain": "鉄の鎖",
           "copper_chain": "銅の鎖",
@@ -67,60 +67,61 @@
           },
           "campfire": {
             "japanese": "焚き火",
-            "note": "食料の調理や、狼煙を上げるために使用されるブロックである。"
+            "note": "もくもくと煙を上げる焚き火。"
           },
           "soul_campfire": {
             "japanese": "魂の焚き火",
-            "note": "焚き火の亜種である。炎が青い。"
+            "note": "もくもくと煙を上げる青い炎の焚き火。"
           },
           "anvil": {
             "japanese": "金床",
-            "note": "アイテムの修理と名称変更ができる。落下する。"
+            "note": "アイテムの修理と名称変更ができる。上から落ちてきたらかなり痛い。"
           },
           "chipped_anvil": {
             "japanese": "欠けた金床",
-            "note": "アイテムの修理と名称変更ができる。落下する。"
+            "note": "アイテムの修理と名称変更ができる。上から落ちてきたらかなり痛い。"
           },
           "damaged_anvil": {
             "japanese": "壊れかけの金床",
-            "note": "アイテムの修理と名称変更ができる。落下する。"
+            "note": "アイテムの修理と名称変更ができる。上から落ちてきたらかなり痛い。"
           },
           "composter": "コンポスター",
           "note_block": {
             "japanese": "音符ブロック",
-            "note": "レッドストーン信号を受信するとサウンドを発する。6回叩くと、ドの音になる。台によって楽器が変わる。いろいろ試してみよう！"
+            "note": "寄木細工のおしゃれな箱。台によって楽器が変わる。いろいろ試してみよう！"
           },
-          "jukebox": "ジュークボックス",
-          "enchanting_table": "エンチャントテーブル",
+          "jukebox": {
+            "japanese": "ジュークボックス","note": "上にディスクを入れる穴の空いた寄木細工のおしゃれな箱。"},
+          "enchanting_table":{"japanese": "エンチャントテーブル","note":"アイテムに特別な効果を与えるテーブル。本が浮かんでおり、黒曜石の台座の四隅にダイヤモンドが輝く豪華な作り。"},
           "brewing_stand": {
             "japanese": "醸造台",
-            "note": "ポーション類を醸造する道具。"
+            "note": "ポーション類を醸造する道具。教会によくある"
           },
           "cauldron": "大釜",
-          "lava_cauldron": "溶岩入りの大釜",
-          "powder_snow_cauldron": "粉雪入りの大釜",
+          "lava_cauldron": {"japanese":"溶岩入りの大釜","note":"ドロドロと赤く燃える溶岩が入った大釜"},
+          "powder_snow_cauldron": {"jpanese":"粉雪入りの大釜","note":"粉雪が入った大釜"},
           "water_cauldron": "水入りの大釜"
         }
       },
       "utility_blocks": {
         "label": "実用ブロック",
         "items": {
-          "end_crystal": "エンドクリスタル",
+          "end_crystal": {"japanese":"エンドクリスタル","source":"minecraft_combat_items.json"},
           "bell": {
             "japanese": "鐘",
-            "note": "ピグリンが好きなもの。村の集会所。鳴らすと近くの襲撃者を発光させる。"
+            "note": "金色。ピグリンが好きなもの。村の集会所。鳴らすと近くの襲撃者を発光させる。"
           },
           "beacon": {
             "japanese": "ビーコン",
             "note": "光線を空に投射し近隣のプレイヤーにバフを与える。かなり光る。ピラミットパワー。詳しくはwiki。"
           },
-          "conduit": "コンジット",
-          "lodestone": "ロードストーン",
+          "conduit": {"japanese":"コンジット","note":"水をきれいにする浄化作用を持つアイテム。中央の青いオーブがきれい。"},
+          "lodestone": {"japanese":"ロードストーン","note":"磁力を発生させる石。十字模様が書かれている。コンパスが狂う場所で目印として使おう"},
           "scaffolding": "足場",
           "ladder": "はしご",
           "bee_nest": {
             "japanese": "ミツバチの巣",
-            "note": "焚き火があれば、収穫時にミツバチが敵対しない。"
+            "_source":"block/minecraft_natural_blocks.json "
           },
           "beehive": {
             "japanese": "養蜂箱",
@@ -128,38 +129,20 @@
           },
           "suspicious_sand": "怪しげな砂",
           "suspicious_gravel": "怪しげな砂利",
+
           "lightning_rod": {
             "japanese": "避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "exposed_lightning_rod": {
-            "japanese": "風化した避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "weathered_lightning_rod": {
-            "japanese": "錆びた避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "oxidized_lightning_rod": {
-            "japanese": "酸化した避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "waxed_lightning_rod": {
-            "japanese": "錆止めされた避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "waxed_exposed_lightning_rod": {
-            "japanese": "錆止めされた風化した避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "waxed_weathered_lightning_rod": {
-            "japanese": "錆止めされた錆びた避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
-          "waxed_oxidized_lightning_rod": {
-            "japanese": "錆止めされた酸化した避雷針",
-            "note": "銅の酸化を還元する。落雷で炎発生。"
-          },
+            "note": "銅の酸化を還元する。落雷で炎発生。",
+            "variants": {
+          "lightning_rod":"避雷針",
+          "exposed_lightning_rod": "風化した避雷針",
+          "weathered_lightning_rod":  "錆びた避雷針",
+          "oxidized_lightning_rod": "酸化した避雷針",
+          "waxed_lightning_rod": "錆止めされた避雷針",
+          "waxed_exposed_lightning_rod": "錆止めされた風化した避雷針",
+          "waxed_weathered_lightning_rod": "錆止めされた錆びた避雷針",
+          "waxed_oxidized_lightning_rod":  "錆止めされた酸化した避雷針"
+          }},
           "flower_pot": "植木鉢",
           "decorated_pot": "飾り壺"
         }
@@ -170,7 +153,7 @@
           "armor_stand": "防具立て",
           "item_frame": "額縁",
           "glow_item_frame": "輝く額縁",
-          "painting": "絵画"
+          "painting": "絵画","data_ref": "minecraft_paintings.json"
         }
       },
       "bookshelves_and_shelves": {
@@ -351,10 +334,11 @@
           }
         }
       },
-      "respawn_and_beds": {
-        "label": "リスポーン・ベッド",
+      "respawn_anchor":{"japanese": "リスポーンアンカー","note":"ネザーでリスポーン地点に設定できるブロック。上部に光る紫色の渦。横に金色のメーターが付いている。",
+      "beds": {
+        "label": "ベッド",
+        "_source":"block/minecraft_colored_blocks.json",
         "items": {
-          "respawn_anchor": "リスポーンアンカー",
           "white_bed": "白色のベッド",
           "orange_bed": "橙色のベッド",
           "magenta_bed": "赤紫色のベッド",
@@ -375,6 +359,7 @@
       },
       "candles": {
         "label": "ろうそく",
+        "_source":"block/minecraft_colored_blocks.json",
         "items": {
           "candle": "ろうそく",
           "white_candle": "白色のろうそく",
@@ -398,6 +383,7 @@
       "banners": {
         "label": "旗",
         "items": {
+          "_source":"block/minecraft_colored_blocks.json",
           "white_banner": "白色の旗",
           "orange_banner": "橙色の旗",
           "magenta_banner": "赤紫色の旗",
@@ -435,7 +421,7 @@
           "dragon_egg": "ドラゴンの卵",
           "end_portal_frame": "エンドポータルフレーム",
           "vault": "宝物庫",
-          "eye_of_ender": "エンダーアイ"
+          "eye_of_ender": "エンダーアイ","_source":"minecraft_tools_and_utilities.json"}
         },
         "notes": [
           "エンダーアイは公式の機能的ブロックタブに合わせてここに収録。"

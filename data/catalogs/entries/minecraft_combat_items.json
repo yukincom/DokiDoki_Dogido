@@ -74,6 +74,7 @@
         "variants": {
           "tipped_arrows": {
             "label": "効能付きの矢",
+            "note":"さまざまな特殊効果を持つ矢。詳しくはウィキをみよう！",
             "items": {
               "arrow_of_mundane": "ありふれた矢",
               "arrow_of_thick": "濃厚な矢",
@@ -225,16 +226,15 @@
         "label": "戦闘用消耗品・設置物",
         "items": {
           "totem_of_undying": "不死のトーテム",
-          "tnt": "TNT",
+          "tnt": {"japanese":"TNT", "_source":"redstone_components.json"},
           "end_crystal": "エンドクリスタル",
           "snowball": "雪玉",
-          "egg": "卵",
-          "blue_egg": "青色の卵",
-          "brown_egg": "茶色の卵",
+          "egg": {"japanese":"卵","_source": "materials.json"},
+          "blue_egg": {"japanese": "青色の卵","_source": "materials.json"},
+          "brown_egg": {"japanese": "茶色の卵","_source": "materials.json"},
           "wind_charge": "ウィンドチャージ",
           "firework_rocket": "ロケット花火"
         },
-        "variants": {},
         "notes": [
           "ロケット花火は、飛行時間・形状・色・フェード色などの組み合わせが多いため、個別JSON展開せず firework_rocket 本体のみを保持する。"
         ],

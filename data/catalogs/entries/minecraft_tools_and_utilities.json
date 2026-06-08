@@ -91,12 +91,8 @@
           "bucket_of_pufferfish": "フグ入りバケツ",
           "bucket_of_salmon": "サケ入りバケツ",
           "bucket_of_tadpole": "オタマジャクシ入りバケツ",
-          "bucket_of_tropical_fish": "熱帯魚入りバケツ"
-        },
-        "pending": {
-          "bucket_of_sulfur_cube": {
-            "label": "サルファーキューブ入りバケツ",
-            "status": "not_yet_available"
+          "bucket_of_tropical_fish": "熱帯魚入りバケツ",
+          "bucket_of_sulfur_cube":"サルファーキューブ入りバケツ"
           }
         }
       },
@@ -230,7 +226,6 @@
         "items": {
           "rail": "レール",
           "powered_rail": "パワードレール",
-          "detector_rail": "ディテクターレール",
           "activator_rail": "アクティベーターレール",
           "minecart": "トロッコ",
           "minecart_with_chest": "チェスト付きのトロッコ",
@@ -293,4 +288,4 @@
       }
     }
   }
-}
+

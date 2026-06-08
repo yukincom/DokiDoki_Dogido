@@ -33,7 +33,8 @@
         }
       },
       "stone_and_ores": {
-        "label": "石・鉱石",
+        "label": "石",
+        "_source": "block/minecraft_stone_blocks.json",
         "items": {
           "stone": "石",
           "deepslate": "深層岩",
@@ -53,20 +54,23 @@
           "blackstone": "ブラックストーン",
           "basalt": "玄武岩",
           "smooth_basalt": "滑らかな玄武岩",
-          "end_stone": "エンドストーン",
+          "end_stone": "エンドストーン"}},
+        "ores": {
+        "label": "鉱石",
+        "items": {    
           "coal_ore": "石炭鉱石",
-          "deepslate_coal_ore": "深層石炭鉱石",
+          "deepslate_coal_ore": {"japanese":"深層石炭鉱石","note": "黒い岩に石炭が含まれている。"},
           "iron_ore": "鉄鉱石",
-          "deepslate_iron_ore": "深層鉄鉱石",
+          "deepslate_iron_ore": {"japanese":"深層鉄鉱石","note": "黒い岩に鉄鉱石が含まれている。"},
           "copper_ore": "銅鉱石",
-          "deepslate_copper_ore": "深層銅鉱石",
+          "deepslate_copper_ore": {"japanese":"深層銅鉱石","note": "黒い岩に銅が含まれている。"},
           "gold_ore": {
             "japanese": "金鉱石",
             "note": "ピグリンが好きなもの。"
           },
           "deepslate_gold_ore": {
             "japanese": "深層金鉱石",
-            "note": "ピグリンが好きなもの。"
+            "note": "黒い岩に金が含まれている。ピグリンが好きなもの。"
           },
           "redstone_ore": {
             "japanese": "レッドストーン鉱石",
@@ -74,22 +78,22 @@
           },
           "deepslate_redstone_ore": {
             "japanese": "深層レッドストーン鉱石",
-            "note": "レッドストーンダストが得られる鉱石ブロック。"
+            "note": "黒い岩にレッドストーンが含まれている。"
           },
           "emerald_ore": "エメラルド鉱石",
-          "deepslate_emerald_ore": "深層エメラルド鉱石",
+          "deepslate_emerald_ore": {"japanese":"深層エメラルド鉱石","note": "黒い岩にエメラルドが含まれている。"},
           "lapis_lazuli_ore": "ラピスラズリ鉱石",
-          "deepslate_lapis_lazuli_ore": "深層ラピスラズリ鉱石",
+          "deepslate_lapis_lazuli_ore": {"japanese":"深層ラピスラズリ鉱石","note": "黒い岩にラピスラズリが含まれている。"},
           "diamond_ore": "ダイヤモンド鉱石",
-          "deepslate_diamond_ore": "深層ダイヤモンド鉱石",
+          "deepslate_diamond_ore": {"japanese":"深層ダイヤモンド鉱石","note": "黒い岩にダイヤモンドが含まれている。"},
           "nether_gold_ore": {
             "japanese": "ネザー金鉱石",
-            "note": "ピグリンが好きなもの。"
+            "note": "ネザーで産出する金鉱石。赤い岩に金が混じる。ピグリンが好きなもの。"
           },
-          "nether_quartz_ore": "ネザークォーツ鉱石",
+          "nether_quartz_ore": {"japanese": "ネザークォーツ鉱石","note":"ネザーで産出する白い水晶を含んだ鉱石"},
           "ancient_debris": {
             "japanese": "古代の残骸",
-            "note": "ネザーに生成される珍しい鉱石。非常に高い爆発耐久値を持っている。"
+            "_source": "minecraft_materials.json"
           },
           "raw_iron_block": "鉄の原石ブロック",
           "raw_copper_block": "銅の原石ブロック",
@@ -99,7 +103,7 @@
           },
           "glowstone": {
             "japanese": "グロウストーン",
-            "note": "レッドストーン信号を斜め下から受け取ることができる。常に眩しく光っている。ネザーに発生。"
+            "note": "眩しい光を放つ、ミステリアスな石。ネザーで産出"
           },
           "amethyst_block": {
             "japanese": "アメジストブロック",
@@ -126,6 +130,7 @@
       },
       "plants": {
         "label": "植物",
+        "_source": "block/minecraft_wood_and_bamboo.json",
         "groups": {
           "tree_logs_and_bamboo": {
             "label": "原木・幹・竹",
@@ -139,14 +144,10 @@
               "mangrove_log": "マングローブの原木",
               "cherry_log": "サクラの原木",
               "pale_oak_log": "ペールオークの原木",
-              "crimson_stem": {"japanese": "真紅の幹", "note": "巨大キノコの一部。ネザー。"},
-              "warped_stem": {"japanese": "歪んだ幹", "note": "巨大キノコの一部。ネザー。"},
+              "crimson_stem":"真紅の幹",
+              "warped_stem": "歪んだ幹", 
               "bamboo": "竹"
-            },
-            "notes": [
-              "植物側には自然物としての原木・幹・竹のみを入れる。",
-              "oak_wood 系、block_of_bamboo、板材・階段・柵などの加工材は建材側に置く。"
-            ]
+            }
           },
           "leaves": {
             "label": "葉",
@@ -162,7 +163,8 @@
                 "japanese": "サクラの葉",
                 "note": "ピンク色の花が咲いている。花びらが舞う。"
               },
-              "pale_oak_leaves": "ペールオークの葉"
+              "pale_oak_leaves": {
+                "japanese": "ペールオークの葉","note":"灰色に褪せた色合いの葉"}
             }
           },
           "saplings": {
@@ -567,13 +569,13 @@
           "sculk_catalyst": {"japanese":"スカルクカタリスト","note":"星のような輝きを持つブロック。近くでMobが死ぬと魂の花を咲かせる"},
           "sculk_sensor": {
             "japanese": "スカルクセンサー",
-            "note": "振動検知・伝達。羊毛で封じることができる。アメジストブロックと共鳴。レッドストーンコンバーターとの接続で振動をレッドストーン信号に変換可能。"
+            "note": "何やらうねうねとした緑色の職種のようなものがついている。近くで動きがあるとコロロ〜と音を出す。"
           },
           "calibrated_sculk_sensor": {
             "japanese": "調律されたスカルクセンサー",
-            "note": "振動検知・伝達。羊毛で封じることができる。アメジストブロックと共鳴。レッドストーンコンバーターとの接続で振動をレッドストーン信号に変換可能。"
+            "note": "中央にアメジストが設置されたスカルクセンサー"
           },
-          "sculk_shrieker": {"japanese":"スカルクシュリーカー", "note":"ディープダークバイオームに存在するスカルクブロック。複数回起動することでウォーデンを召喚。"}
+          "sculk_shrieker": {"japanese":"スカルクシュリーカー", "note":"角のような飾りがついている。スカルクセンサーが反応を受信し、叫び声をあげ、ウォーデンを喚ぶ。"}
         }
       },
       "natural_misc": {

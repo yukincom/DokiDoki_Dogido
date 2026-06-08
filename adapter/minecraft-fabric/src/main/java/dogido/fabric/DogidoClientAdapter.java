@@ -69,6 +69,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int WEATHER_SOUND_TTL_TICKS = 80;
     private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;
     private static final int WARDEN_SPECIAL_LATCH_TICKS = 100;
+    private static final double LARGE_POSITION_JUMP_BLOCKS = 48.0;
     private static final int BOSS_OMEN_SCAN_RADIUS = 20;
     private static final int WITHER_OMEN_SCAN_RADIUS = 8;
     private static final int LIT_INTERIOR_SAFE_LIGHT_THRESHOLD = 9;
@@ -155,6 +156,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private String observedRespawnDimension = null;
     private String lastDimensionId = null;
     private String pendingUserText = null;
+    private double lastPlayerX = Double.NaN;
+    private double lastPlayerY = Double.NaN;
+    private double lastPlayerZ = Double.NaN;
 
     @Override
     public void onInitializeClient() {
@@ -204,6 +208,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             resetThreatStateForDimensionChange();
         }
         this.lastDimensionId = currentDimensionId;
+        if (
+            Double.isFinite(this.lastPlayerX)
+                && hasLargePositionJump(player.getX(), player.getY(), player.getZ())
+        ) {
+            resetThreatStateForPositionJump();
+        }
+        this.lastPlayerX = player.getX();
+        this.lastPlayerY = player.getY();
+        this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
         this.eventClient.ensureSession(resolvePlayerName(player));
@@ -307,6 +320,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.observedRespawnDimension = null;
         this.lastDimensionId = null;
         this.pendingUserText = null;
+        this.lastPlayerX = Double.NaN;
+        this.lastPlayerY = Double.NaN;
+        this.lastPlayerZ = Double.NaN;
         this.lastThreatDistances.clear();
         this.lastThreatSeenTicks.clear();
         this.lineOfSightStartedTicks.clear();
@@ -338,12 +354,27 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastAmbientMobSignature = "";
         this.lastOminousSoundKind = "";
         this.combatActive = false;
+        this.lastPlayerX = Double.NaN;
+        this.lastPlayerY = Double.NaN;
+        this.lastPlayerZ = Double.NaN;
         this.lastThreatDistances.clear();
         this.lastThreatSeenTicks.clear();
         this.lineOfSightStartedTicks.clear();
         this.confirmedVisibleTicks.clear();
         this.lastThreatHealths.clear();
         this.recentSoundObservations.clear();
+    }
+
+    private void resetThreatStateForPositionJump() {
+        resetThreatStateForDimensionChange();
+    }
+
+    private boolean hasLargePositionJump(double x, double y, double z) {
+        double dx = x - this.lastPlayerX;
+        double dy = y - this.lastPlayerY;
+        double dz = z - this.lastPlayerZ;
+        double thresholdSquared = LARGE_POSITION_JUMP_BLOCKS * LARGE_POSITION_JUMP_BLOCKS;
+        return (dx * dx) + (dy * dy) + (dz * dz) >= thresholdSquared;
     }
 
     private boolean shouldSendSnapshot() {
