@@ -32,29 +32,35 @@
           "snow": "雪"
         }
       },
-      "stone_and_ores": {
+      "stone": {
         "label": "石",
         "_source": "block/minecraft_stone_blocks.json",
-        "items": {
-          "stone": "石",
-          "deepslate": "深層岩",
-          "granite":"花崗岩",
-          "diorite": "閃緑岩",
-          "andesite": "安山岩",
-          "tuff": "凝灰岩",
-          "calcite": "方解石",
-          "dripstone_block": "鍾乳石ブロック",
-          "dripstone": "鍾乳石",
-          "prismarine": "プリズマリン",
-          "magma_block": "マグマブロック",
-          "obsidian": "黒曜石",
-          "crying_obsidian": "泣く黒曜石",
-          "netherrack": "ネザーラック",
-          "bone_block": "骨ブロック",
-          "blackstone": "ブラックストーン",
-          "basalt": "玄武岩",
-          "smooth_basalt": "滑らかな玄武岩",
-          "end_stone": "エンドストーン"}},
+        "refs": [
+          "stone",
+          "deepslate",
+          "granite",
+          "diorite",
+          "andesite",
+          "tuff",
+          "calcite",
+          "dripstone_block",
+          "dripstone",
+          "prismarine",
+
+          "obsidian",
+          "crying_obsidian",
+          "netherrack",
+          "bone_block",
+          "blackstone",
+          "basalt",
+          "smooth_basalt",
+          "end_stone"]
+        },
+        "function_stone":{
+          "label":"機能性のある石",
+          "items":{
+        "magma_block":{"japanese":"マグマブロック","note":"熱を持つマグマの塊"}}
+      },
         "ores": {
         "label": "鉱石",
         "items": {    
@@ -130,24 +136,25 @@
       },
       "plants": {
         "label": "植物",
-        "_source": "block/minecraft_wood_and_bamboo.json",
+        
         "groups": {
           "tree_logs_and_bamboo": {
+            "_source": "block/minecraft_wood_and_bamboo.json",
             "label": "原木・幹・竹",
-            "items": {
-              "oak_log": "オークの原木",
-              "spruce_log": "トウヒの原木",
-              "birch_log": "シラカバの原木",
-              "jungle_log": "ジャングルの原木",
-              "acacia_log": "アカシアの原木",
-              "dark_oak_log": "ダークオークの原木",
-              "mangrove_log": "マングローブの原木",
-              "cherry_log": "サクラの原木",
-              "pale_oak_log": "ペールオークの原木",
-              "crimson_stem":"真紅の幹",
-              "warped_stem": "歪んだ幹", 
-              "bamboo": "竹"
-            }
+            "refs": [
+              "oak_log",
+              "spruce_log",
+              "birch_log",
+              "jungle_log",
+              "acacia_log",
+              "dark_oak_log",
+              "mangrove_log",
+              "cherry_log",
+              "pale_oak_log",
+              "crimson_stem",
+              "warped_stem", 
+              "bamboo"
+            ]
           },
           "leaves": {
             "label": "葉",
@@ -177,7 +184,7 @@
               "acacia_sapling": "アカシアの苗木",
               "dark_oak_sapling": "ダークオークの苗木",
               "cherry_sapling": "サクラの苗木",
-              "pale_oak_sapling": "ペールオークの苗木",
+              "pale_oak_sapling": {"japanese":"ペールオークの苗木","note":"灰色に褪せた色の苗木"},
               "mangrove_propagule": "マングローブの芽",
               "bamboo_shoot": {
                 "japanese": "タケノコ",
@@ -273,10 +280,7 @@
               "pale_moss_block": {"japanese": "色あせた苔ブロック","note":"ペールガーデンの苔ブロック。ほとんど灰色のような褪せた緑色。"},
               "moss_carpet": {"japanese": "苔のカーペット","note":"ペラペラの綺麗な緑色の苔。"},
               "pale_moss_carpet": {"japanese": "色あせた苔のカーペット","note":"ペラペラのほとんど灰色のような褪せた緑色の苔。"},
-              "glow_lichen": {
-                "japanese": "ヒカリゴケ",
-                "note": "ハサミで入手可能。渓谷によくみられる。淡い光を放つ。"
-              },
+              "glow_lichen": {"japanese":"ヒカリゴケ","note":"洞窟や渓谷に生える微かな光を放つ苔"},
               "spore_blossom": {"japanese": "胞子の花","note":"繁茂した洞窟に咲く。ピンク色の大きな花。緑色の胞子が舞い散る。"},
               "small_dripleaf": {"japanese": "小さなドリップリーフ","note":"繁茂した洞窟。粘土池の畔に生える。骨粉を使うと大きなドロップリーフに成長。"},
               "big_dripleaf": {
@@ -320,16 +324,17 @@
       "crops_and_growables": {
         "label": "作物・有用植物",
         "items": {
-          "wheat":{"japanese":"小麦","note":"パンやクッキー、ケーキも作れる"},
-          "carrots": {"japanese":"ニンジン","note":"オレンジ色で村人も大好き"},
-          "potatoes": {"japanese":"ジャガイモ","note":"みんなが大好きな食べ物。油はないのでポテトチップスは作れない。"},
-          "beetroots": {"japanese":"ビートルート","note":"赤い根菜。スープの材料"},
-          "pumpkin": {"japanese":"カボチャ","note":"大きなオレンジ色のかぼちゃ。このままでは食べられない。"},
+          "wheat":{"japanese":"小麦","note":"パンやクッキー、ケーキも作れる。収穫が楽しみ！"},
+          "carrots": {"japanese":"ニンジン","note":"畑に植えられている状態のニンジン"},
+          "potatoes": {"japanese":"ジャガイモ","note":"みんなが大好きな食べ物。油はないのでポテトチップスは作れない。収穫が楽しみ！"},
+          "beetroots": {"japanese":"ビートルート","note":"赤い根菜。スープの材料。収穫が楽しみ！"},
+          "pumpkin": {"japanese":"カボチャ","note":"大きなオレンジ色のかぼちゃ。収穫が楽しみ！"},
+          "pumpkin_stem": {"japanese":"カボチャの茎","note":"まだ少し収穫には早かったようだ。"},
+          "attached_pumpkin_stem":"実がなったカボチャの茎",
           "carved_pumpkin": {
             "japanese": "くり抜かれたカボチャ",
             "note": "目のところに穴が空いている。防御力はない。エンダーマン・クリーキングとの敵対を防ぐ。"
           },
-          "pumpkin_stem": {"japanese":"カボチャの茎","note":"まだ少し収穫には早かったようだ。"},
           "melon": {"japanese":"スイカ","note":"みずみずしい大きくて緑色のスイカ。縞の色は薄い"},
           "melon_stem": "スイカの茎",
           "sweet_berry_bush": {"japanese":"スイートベリーの低木","note":"スイートベリーがみのる小さな木。"},
@@ -348,7 +353,7 @@
           "honeycomb_block":{"japanese":"ハニカムブロック","note":"ハニカムから作る。オレンジ色の水玉のある装飾ブロック"}
         }},
       "egg_and_seeds": {
-        "label": "種・卵",
+        "label": "卵・種子",
         "items": {          
           "turtle_egg": {"japanese":"カメの卵","note":"踏み潰されると消滅。生成りに緑の斑点がある。少し柔らかい。"},
           "frogspawn": {"japanese":"カエルの卵","note":"サバイバルモードではアイテムとして入手できない。寒天質"},
@@ -361,7 +366,7 @@
           "beetroots_seeds": {"japanese": "ビートルートの種","note":"赤カブの種"},
           "torchflower_seeds":{"japanese": "トーチフラワーの種","note":"スニッファーが発見する古代の植物。鳥たちとスニッファーの好物。松明のようなオレンジ色の花が咲く。"},
           "pitcher_plant_pod": {"japanese":"ウツボカズラのさや","note":"スニッファーが発見する古代の植物。鳥たちの好物。鮮やかな水色の花が咲く。"},
-          "sweet_berry_seeds":{"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。キツネの好物"},          
+          "sweet_berry":{"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。キツネの好物"},          
           "glow_berries": {
             "japanese": "グロウベリー",
             "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。キツネの好物。"

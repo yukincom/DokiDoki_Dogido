@@ -18,57 +18,55 @@
           },
           "target": {
             "japanese": "的",
-            "note": "投擲物が命中するとレッドストーン信号を発する。"
+            "note": "赤と白の縞々模様。投擲物が命中するとレッドストーン信号を発する。"
           }
         }
       },
-      "buttons_and_pressure_plates": {
-        "label": "ボタン・感圧板",
+      "wood_buttons": {
+        "label": "木材ボタン",
         "_source":"block/minecraft_wood_and_bamboo.json",
-        "groups": {
-          "wooden_buttons": {
-            "label": "木・竹・ネザー木材のボタン",
-            "items": {
-              "oak_button": "オークのボタン", 
-              "spruce_button":  "トウヒのボタン",
-              "birch_button": "シラカバのボタン",
-              "jungle_button":  "ジャングルのボタン", 
-              "acacia_button":  "アカシアのボタン", 
-              "dark_oak_button": "ダークオークのボタン", 
-              "mangrove_button":  "マングローブのボタン",
-              "cherry_button": "サクラのボタン", 
-              "pale_oak_button": "ペールオークのボタン", 
-              "bamboo_button":  "竹のボタン", 
-              "crimson_button":  "真紅のボタン",
-              "warped_button":  "歪んだボタン"
-            }
-          },
-          "wooden_pressure_plates": {
-            "label": "木・竹・ネザー木材の感圧板",
-            "items": {
-              "oak_pressure_plate":"オークの感圧板", 
-              "spruce_pressure_plate": "トウヒの感圧板", 
-              "birch_pressure_plate": "シラカバの感圧板", 
-              "jungle_pressure_plate":  "ジャングルの感圧板", 
-              "acacia_pressure_plate": "アカシアの感圧板", 
-              "dark_oak_pressure_plate": "ダークオークの感圧板",
-              "mangrove_pressure_plate":  "マングローブの感圧板", 
-              "cherry_pressure_plate": "サクラの感圧板", 
-              "pale_oak_pressure_plate":  "ペールオークの感圧板", 
-              "bamboo_pressure_plate":  "竹の感圧板", 
-              "crimson_pressure_plate":  "真紅の感圧板",
-              "warped_pressure_plate": "歪んだ感圧板"
-            }
+        "refs": [
+              "oak_button", 
+              "spruce_button",
+              "birch_button",
+              "jungle_button", 
+              "acacia_button", 
+              "dark_oak_button", 
+              "mangrove_button",
+              "cherry_button", 
+              "pale_oak_button", 
+              "bamboo_button", 
+              "crimson_button",
+              "warped_button"
+            ]
+            },
+      "wood_pressure_plates": {
+        "label": "木材感圧板",
+        "_source":"block/minecraft_wood_and_bamboo.json",
+        "refs": [
+              "oak_pressure_plate",
+              "spruce_pressure_plate", 
+              "birch_pressure_plate", 
+              "jungle_pressure_plate", 
+              "acacia_pressure_plate", 
+              "dark_oak_pressure_plate",
+              "mangrove_pressure_plate", 
+              "cherry_pressure_plate", 
+              "pale_oak_pressure_plate", 
+              "bamboo_pressure_plate", 
+              "crimson_pressure_plate",
+              "warped_pressure_plate"
+            ]
           },
           "stone_buttons": {
-            "label": "石系ボタン",
+            "label": "石材ボタン",
             "items": {
               "stone_button": "石のボタン",
               "polished_blackstone_button": "磨かれたブラックストーンのボタン"
             }
           },
           "stone_pressure_plates": {
-            "label": "石系感圧板",
+            "label": "石材感圧板",
             "items": {
               "stone_pressure_plate": "石の感圧板",
               "polished_blackstone_pressure_plate": "磨かれたブラックストーンの感圧板"
@@ -80,10 +78,6 @@
               "light_weighted_pressure_plate": "軽量用感圧板",
               "heavy_weighted_pressure_plate": "重量用感圧板"
             },
-            "source_rule": "金属素材由来のレッドストーン部品"
-          }
-        }
-      },
       "logic_and_power": {
         "label": "信号・論理部品",
         "items": {
@@ -133,10 +127,8 @@
             "japanese": "粘着ピストン",
             "note": "ピストンに似ているが、押すのは勿論、引くこともできる。"
           },
-          "piston_head": "ピストンヘッド",
-          "moving_piston": "作動中のピストン",
-          "slime_block": "スライムブロック",
-          "honey_block": "ハチミツブロック"
+          "slime_block": {"japanese":"スライムブロック","note":"緑色でベタつくブロック。スライムが原料"},
+          "honey_block": {"japanese":"ハチミツブロック","note":"黄色くてベタつくブロック"}
         }
       },
         "rails": {
@@ -148,11 +140,11 @@
           },
           "powered_rail": {
             "japanese": "パワードレール",
-            "note": "トロッコの速度を増減させるレール。"
+            "note": "トロッコの速度を増減させるレール。金ピカ。起動中は赤く光る"
           },
           "detector_rail": {
             "japanese": "ディテクターレール",
-            "note": "トロッコにのみ反応する感圧装置。"
+            "note": "トロッコにのみ反応する感圧装置。金ピカ"
           },
           "activator_rail": {
             "japanese": "アクティベーターレール",
@@ -183,95 +175,99 @@
       },
       "redstone_doors_traps": {
         "label": "ドア・トラップ系",
-        "_source":"block/minecraft_wood_and_bamboo.json",
+        
         "groups": {
           "wooden_fence_gates": {
+            "_source":"block/minecraft_wood_and_bamboo.json",
             "label": "木・竹・キノコ材のフェンスゲート",
-            "items": {
-              "oak_fence_gate": "オークのフェンスゲート",
-              "spruce_fence_gate": "トウヒのフェンスゲート",
-              "birch_fence_gate": "シラカバのフェンスゲート",
-              "jungle_fence_gate": "ジャングルのフェンスゲート",
-              "acacia_fence_gate": "アカシアのフェンスゲート",
-              "dark_oak_fence_gate": "ダークオークのフェンスゲート",
-              "mangrove_fence_gate": "マングローブのフェンスゲート",
-              "cherry_fence_gate": "サクラのフェンスゲート",
-              "pale_oak_fence_gate": "ペールオークのフェンスゲート",
-              "bamboo_fence_gate": "竹のフェンスゲート",
-              "crimson_fence_gate": {"japanese": "真紅のフェンスゲート", "note": "巨大キノコの一部。ネザー。"},
-              "warped_fence_gate": {"japanese": "歪んだフェンスゲート", "note": "巨大キノコの一部。ネザー。"}
-            }
+            "refs": [
+              "oak_fence_gate",
+              "spruce_fence_gate",
+              "birch_fence_gate",
+              "jungle_fence_gate",
+              "acacia_fence_gate",
+              "dark_oak_fence_gate",
+              "mangrove_fence_gate",
+              "cherry_fence_gate",
+              "pale_oak_fence_gate",
+              "bamboo_fence_gate",
+              "crimson_fence_gate",
+              "warped_fence_gate"
+            ]
           },
           "wooden_doors": {         
             "label": "木・竹・キノコ材のドア",
-            "items": {
-              "oak_door": "オークのドア",
-              "spruce_door": "トウヒのドア",
-              "birch_door": "シラカバのドア",
-              "jungle_door": "ジャングルのドア",
-              "acacia_door": "アカシアのドア",
-              "dark_oak_door": "ダークオークのドア",
-              "mangrove_door": "マングローブのドア",
-              "cherry_door": "サクラのドア",
-              "pale_oak_door": "ペールオークのドア",
-              "bamboo_door": "竹のドア",
-              "crimson_door": {"japanese": "真紅のドア", "note": "巨大キノコの一部。ネザー。"},
-              "warped_door": {"japanese": "歪んだドア", "note": "巨大キノコの一部。ネザー。"}
-            }
+            "_source":"block/minecraft_wood_and_bamboo.json",
+            "refs": [
+              "oak_door",
+              "spruce_door",
+              "birch_door",
+              "jungle_door",
+              "acacia_door",
+              "dark_oak_door",
+              "mangrove_door",
+              "cherry_door",
+              "pale_oak_door",
+              "bamboo_door",
+              "crimson_door",
+              "warped_door"
+            ]
           },
           "wooden_trapdoors": {
             "label": "木・竹・キノコ材のトラップドア",
-            "items": {
-              "oak_trapdoor": "オークのトラップドア",
-              "spruce_trapdoor": "トウヒのトラップドア",
-              "birch_trapdoor": "シラカバのトラップドア",
-              "jungle_trapdoor": "ジャングルのトラップドア",
-              "acacia_trapdoor": "アカシアのトラップドア",
-              "dark_oak_trapdoor": "ダークオークのトラップドア",
-              "mangrove_trapdoor": "マングローブのトラップドア",
-              "cherry_trapdoor": "サクラのトラップドア",
-              "pale_oak_trapdoor": "ペールオークのトラップドア",
-              "bamboo_trapdoor": "竹のトラップドア",
-              "crimson_trapdoor": {"japanese": "真紅のトラップドア", "note": "巨大キノコの一部。ネザー。"},
-              "warped_trapdoor": {"japanese": "歪んだトラップドア", "note": "巨大キノコの一部。ネザー。"}
-            }
+            "_source":"block/minecraft_wood_and_bamboo.json",
+            "refs": [
+              "oak_trapdoor",
+              "spruce_trapdoor",
+              "birch_trapdoor",
+              "jungle_trapdoor",
+              "acacia_trapdoor",
+              "dark_oak_trapdoor",
+              "mangrove_trapdoor",
+              "cherry_trapdoor",
+              "pale_oak_trapdoor",
+              "bamboo_trapdoor",
+              "crimson_trapdoor",
+              "warped_trapdoor"
+            ]
           },
+
           "iron_doors_trapdoors": {
             "label": "鉄のドア・トラップドア",
             "_source":"block/minecraft_metal_blocks.json",
-            "items": {
-              "iron_door": "鉄のドア",
-              "iron_trapdoor": "鉄のトラップドア"
-            }
+            "refs": [
+              "iron_door",
+              "iron_trapdoor"
+            ]
           },
           "copper_doors": {
             "label": "銅のドア",
             "_source":"block/minecraft_metal_blocks.json",
-            "items": {
-              "copper_door": "銅のドア",
-              "exposed_copper_door": "風化した銅のドア",
-              "weathered_copper_door": "錆びた銅のドア",
-              "oxidized_copper_door": "酸化した銅のドア",
-              "waxed_copper_door": "錆止めされた銅のドア",
-              "waxed_exposed_copper_door": "錆止めされた風化した銅のドア",
-              "waxed_weathered_copper_door": "錆止めされた錆びた銅のドア",
-              "waxed_oxidized_copper_door": "錆止めされた酸化した銅のドア"
-            }
+            "refs": [
+              "copper_door",
+              "exposed_copper_door",
+              "weathered_copper_door",
+              "oxidized_copper_door",
+              "waxed_copper_door",
+              "waxed_exposed_copper_door",
+              "waxed_weathered_copper_door",
+              "waxed_oxidized_copper_door"
+            ]
           },
           "copper_trapdoors": {
             "label": "銅のトラップドア",
             "_source":"block/minecraft_metal_blocks.json",
-            "items": {
-              "copper_trapdoor": "銅のトラップドア",
-              "exposed_copper_trapdoor": "風化した銅のトラップドア",
-              "weathered_copper_trapdoor": "錆びた銅のトラップドア",
-              "oxidized_copper_trapdoor": "酸化した銅のトラップドア",
-              "waxed_copper_trapdoor": "錆止めされた銅のトラップドア",
-              "waxed_exposed_copper_trapdoor": "錆止めされた風化した銅のトラップドア",
-              "waxed_weathered_copper_trapdoor": "錆止めされた錆びた銅のトラップドア",
-              "waxed_oxidized_copper_trapdoor": "錆止めされた酸化した銅のトラップドア"
-            }
-          },
+            "refs": [
+              "copper_trapdoor",
+              "exposed_copper_trapdoor",
+              "weathered_copper_trapdoor",
+              "oxidized_copper_trapdoor",
+              "waxed_copper_trapdoor",
+              "waxed_exposed_copper_trapdoor",
+              "waxed_weathered_copper_trapdoor",
+              "waxed_oxidized_copper_trapdoor"
+            ]
+          }},
           "special_traps": {
             "label": "特殊トラップ・自動作業",
             "items": {

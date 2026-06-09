@@ -59,19 +59,19 @@
           "diamond_hoe": "ダイヤモンドのクワ",
           "netherite_pickaxe": {
             "japanese": "ネザライトのツルハシ",
-            "note": "溶岩では消滅しないが、サボテンで消滅。"
+            "note": "ヘッドは黒い。ネザライト製のツルハシ。溶岩では消滅しないが、サボテンで消滅。"
           },
           "netherite_axe": {
             "japanese": "ネザライトの斧",
-            "note": "銅の酸化を還元する。溶岩では消滅しないが、サボテンで消滅。"
+            "note": "ヘッドは黒い。ネザライト製の斧。銅の酸化を還元する。溶岩では消滅しないが、サボテンで消滅。"
           },
           "netherite_shovel": {
             "japanese": "ネザライトのシャベル",
-            "note": "溶岩では消滅しないが、サボテンで消滅。"
+            "note": "ヘッドは黒い。ネザライト製のシャベル。溶岩では消滅しないが、サボテンで消滅。"
           },
           "netherite_hoe": {
             "japanese": "ネザライトのクワ",
-            "note": "溶岩では消滅しないが、サボテンで消滅。"
+            "note": "ヘッドは黒い。ネザライト製のクワ。溶岩では消滅しないが、サボテンで消滅。"
           }
         },
         "notes": [
@@ -85,7 +85,7 @@
           "water_bucket": "水入りバケツ",
           "lava_bucket": "溶岩入りバケツ",
           "powder_snow_bucket": "粉雪入りバケツ",
-          "milk_bucket": "ミルク入りバケツ",
+          "milk_bucket": {"_source":"minecraft_food_and_drinks.json"},
           "bucket_of_axolotl": "ウーパールーパー入りバケツ",
           "bucket_of_cod": "タラ入りバケツ",
           "bucket_of_pufferfish": "フグ入りバケツ",
@@ -100,11 +100,11 @@
         "label": "実用品",
         "items": {
           "fishing_rod": "釣竿",
-          "fire_charge": "ファイヤーチャージ",
+          "fire_charge":  {"_source":"minecraft_materials.json"},
           "flint_and_steel": "火打石と打ち金",
           "brush": "ブラシ",
           "shears": "ハサミ",
-          "bone_meal": "骨粉",
+          "bone_meal": {"_source":"minecraft_materials.json"},
           "name_tag": "名札",
           "lead": "リード"
         }
@@ -148,25 +148,25 @@
           "filled_map_village_taiga": "タイガの村の地図",
           "filled_map_explorer_jungle": "密林探検家の地図",
           "filled_map_explorer_swamp": "沼地探検家の地図",
-          "compass": "コンパス",
-          "recovery_compass": "リカバリーコンパス",
+          "compass": {"japanese":"コンパス","note":"プレイヤーのスポーン地点、もしくは設定したロードストーンの場所を指している。"},
+          "recovery_compass": {"japanese":"リカバリーコンパス","note":"青い針がついたコンパス。プレイヤーが死んだ場所を指す。アイテムを回収しに行こう！"},
           "clock": {
             "japanese": "時計",
-            "note": "ピグリンが好きなもの。"
+            "note": "太陽と月の絵が描かれた金時計。ピグリンが好きなもの。"
           },
           "spyglass": "望遠鏡",
-          "paper": "紙",
-          "book": "本",
+          "paper":  {"_source":"minecraft_materials.json"},
+          "book": {"_source":"minecraft_materials.json"},
           "book_and_quill": "本と羽根ペン"
             }
       },
       "mobility_and_riding": {
         "label": "移動・騎乗補助",
         "items": {
-          "ender_pearl": "エンダーパール",
-          "eye_of_ender": "エンダーアイ",
-          "elytra": "エリトラ",
-          "firework_rocket": "ロケット花火",
+          "ender_pearl": {"_source":"minecraft_materials.json"},
+          "eye_of_ender":  {"_source":"minecraft_materials.json"},
+          "elytra": {"japanese":"エリトラ","note":"空を飛べるようになる不思議なマント"},
+          "firework_rocket":{ "_source":"minecraft_combat_items.json"},
           "saddle": "鞍",
           "carrot_on_a_stick": "ニンジン付きの棒",
           "warped_fungus_on_a_stick": {
@@ -221,33 +221,28 @@
           "bamboo_raft_with_chest": "チェスト付きの竹のイカダ"
         }
       },
-      "minecarts_and_rails": {
-        "label": "トロッコ・レール",
-        "items": {
-          "rail": "レール",
-          "powered_rail": "パワードレール",
-          "activator_rail": "アクティベーターレール",
+      "rails": {
+        "label": "レール",
+        "_source":"block/minecraft_redstone_components.json",
+        "ref": [
+          "rail",
+          "powered_rail",
+          "activator_rail",
+          "detector_rail"
+        ]
+      },
+        "minecarts":{
+        "label": "トロッコ",
           "minecart": "トロッコ",
           "minecart_with_chest": "チェスト付きのトロッコ",
           "minecart_with_command_block": "コマンドブロック付きのトロッコ",
           "minecart_with_furnace": "かまど付きのトロッコ",
           "minecart_with_hopper": "ホッパー付きのトロッコ",
-          "minecart_with_tnt": "TNT付きのトロッコ",
-          "detector_rail": {
-            "japanese": "ディテクターレール",
-            "note": "トロッコにのみ反応する感圧装置。"
-          }
-        }
-      },
+          "minecart_with_tnt": "TNT付きのトロッコ"
+          },
       "goat_horns": {
         "label": "ヤギの角笛",
         "items": {
-          "goat_horn": "ヤギの角笛"
-        },
-        "variants": {
-          "goat_horn_variants": {
-            "label": "ヤギの角笛の音色",
-            "items": {
               "ponder_goat_horn": "沈思のヤギの角笛",
               "sing_goat_horn": "歌声のヤギの角笛",
               "seek_goat_horn": "探求のヤギの角笛",
@@ -257,8 +252,6 @@
               "yearn_goat_horn": "憧憬のヤギの角笛",
               "dream_goat_horn": "夢想のヤギの角笛"
             }
-          }
-        }
       },
       "music_discs": {
         "label": "レコード",

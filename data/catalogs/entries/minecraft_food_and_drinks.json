@@ -13,10 +13,10 @@
           "raw_porkchop": {"japanese":"生の豚肉","note":"新鮮な豚肉。生のままでも食べることができるが、焼いたほうがおいしい"},
           "raw_rabbit": {"japanese":"生の兎肉","note":"新鮮そのもの。焼いて食べよう"},
           "raw_salmon": {"japanese:":"生鮭","note":"大きくてオレンジ色のみが美しい魚。焼いて食べたい。"},
-          "pufferfish": {"japanese":"フグ","note":"食べられないことはない。しかし、かなり勇気が必要"},
+          "pufferfish": {"japanese":"フグ","_source":"minecraft_materials.json"},  
           "tropical_fish": {"japanese":"熱帯魚","note":"大しておいしくないが食べられないことはない。"},
           "rotten_flesh": {"japanese":"腐った肉","note":"主にゾンビから入手できる食材。食べるのには勇気が必要。狼の好物"},
-          "spider_eye": {"japanese":"クモの目","note":"食べると毒。アルマジロの好物"}
+          "spider_eye": {"japanese":"クモの目","_source":"minecraft_materials.json"} 
 
         }
       },
@@ -34,8 +34,8 @@
       "carbohydrates": {
         "label": "食料：炭水化物",
         "items": {
-          "wheat": "小麦",      
-          "potato": "ジャガイモ",
+          "wheat": {"japanse":"小麦","note":"パンやクッキー、ケーキも作れる。"},  
+          "potato": {"japanese":"ジャガイモ","note":"みんなが大好きな食べ物。油はないのでポテトチップスは作れない。"},
           "poisonous_potato": {"japanese":"青くなったジャガイモ","note":"食べたプレイヤーに毒を与えることがあるジャガイモ"},          
           "baked_potato": "ベイクドポテト",
           "bread": "パン",
@@ -50,11 +50,11 @@
           "apple": "リンゴ",
           "golden_apple": {
             "japanese": "金のリンゴ",
-            "note": "ピグリンが好きなもの。"
+            "note": "死者を生き返らせる生命力に満ち溢れたリンゴ。ピグリンが好きなもの。"
           },
           "enchanted_golden_apple": {
             "japanese": "エンチャントされた金のリンゴ",
-            "note": "ピグリンが好きなもの。"
+            "note": "不思議な効果があるリンゴ。ピグリンが好きなもの。"
           },
           "melon_slice": "スイカの薄切り",
           "glistering_melon_slice": {
@@ -63,266 +63,26 @@
           },
           "chorus_fruit": "コーラスフルーツ",
           "beetroot": "ビートルート",
-          "carrot": "ニンジン",
+          "carrot": {"japanese":"ニンジン","note":"栄養満点で生でも美味しい。"},
           "golden_carrot": {
             "japanese": "金のニンジン",
-            "note": "ピグリンが好きなもの。"
+            "note": "金色に輝くにんじん。栄養満点で生でも美味しい。ピグリンが好きなもの。"
           },
-          "sweet_berries": "スイートベリー",
+          "sweet_berries": {"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。"},   
           "glow_berries": {
             "japanese": "グロウベリー",
-            "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。キツネの好物。"
+            "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。"
           },
-          "dried_kelp": "乾燥した昆布"       
+          "dried_kelp": {"japanese":"乾燥した昆布","note":"ミネラル豊富。高速で食べられる"}       
         }
       },
       "soups_and_stews": {
         "label": "食料：スープ・シチュー",
         "items": {
-          "beetroot_soup": "ビートルートスープ",
+          "beetroot_soup": {"japanese":"ビートルートスープ","note":"赤い根菜を煮込んだスープ"},
           "mushroom_stew": "キノコシチュー",
           "rabbit_stew": "ウサギシチュー",
           "suspicious_stew": {"japanese:":"怪しげなシチュー","note":"ざまざまな特殊効果があるスリリングなシチュー。美味しいといいな！"}
-        },
-        "variants": {
-          "suspicious_stew_by_flower": {
-            "label": "怪しげなシチュー：材料の花別",
-            "items": {
-              "allium": {
-                "flower": "アリウム",
-                "effect": "fire_resistance",
-                "effect_label": "火炎耐性",
-                "duration_je_seconds": 3,
-                "duration_be_seconds": 3
-              },
-              "azure_bluet": {
-                "flower": "ヒナソウ",
-                "effect": "blindness",
-                "effect_label": "盲目",
-                "duration_je_seconds": 11,
-                "duration_be_seconds": 7
-              },
-              "open_eyeblossom": {
-                "flower": "開いたヒトミソウ",
-                "effect": "blindness",
-                "effect_label": "盲目",
-                "duration_je_seconds": 11,
-                "duration_be_seconds": 7
-              },
-              "blue_orchid": {
-                "flower": "ヒスイラン",
-                "effect": "saturation",
-                "effect_label": "満腹度回復",
-                "duration_je_seconds": 0.35,
-                "duration_be_seconds": 0.3
-              },
-              "dandelion": {
-                "flower": "タンポポ",
-                "effect": "saturation",
-                "effect_label": "満腹度回復",
-                "duration_je_seconds": 0.35,
-                "duration_be_seconds": 0.3
-              },
-              "golden_dandelion": {
-                "flower": "金のタンポポ",
-                "effect": "saturation",
-                "effect_label": "満腹度回復",
-                "duration_je_seconds": 0.35,
-                "duration_be_seconds": 0.3
-              },
-              "closed_eyeblossom": {
-                "flower": "閉じたヒトミソウ",
-                "effect": "nausea",
-                "effect_label": "吐き気",
-                "duration_je_seconds": 7,
-                "duration_be_seconds": 7
-              },
-              "cornflower": {
-                "flower": "ヤグルマギク",
-                "effect": "jump_boost",
-                "effect_label": "跳躍力上昇",
-                "duration_je_seconds": 5,
-                "duration_be_seconds": 5
-              },
-              "lily_of_the_valley": {
-                "flower": "スズラン",
-                "effect": "poison",
-                "effect_label": "毒",
-                "duration_je_seconds": 11,
-                "duration_be_seconds": 11
-              },
-              "oxeye_daisy": {
-                "flower": "フランスギク",
-                "effect": "regeneration",
-                "effect_label": "再生能力",
-                "duration_je_seconds": 7,
-                "duration_be_seconds": 7
-              },
-              "poppy": {
-                "flower": "ポピー",
-                "effect": "night_vision",
-                "effect_label": "暗視",
-                "duration_je_seconds": 5,
-                "duration_be_seconds": 5
-              },
-              "torchflower": {
-                "flower": "トーチフラワー",
-                "effect": "night_vision",
-                "effect_label": "暗視",
-                "duration_je_seconds": 5,
-                "duration_be_seconds": 5
-              },
-              "tulips": {
-                "flower": "チューリップ",
-                "effect": "weakness",
-                "effect_label": "弱体化",
-                "duration_je_seconds": 7,
-                "duration_be_seconds": 8,
-                "includes": [
-                  "red_tulip",
-                  "orange_tulip",
-                  "white_tulip",
-                  "pink_tulip"
-                ]
-              },
-              "wither_rose": {
-                "flower": "ウィザーローズ",
-                "effect": "wither",
-                "effect_label": "衰弱",
-                "duration_je_seconds": 7,
-                "duration_be_seconds": 7
-              }
-            }
-          },
-          "suspicious_stew_by_effect": {
-            "label": "怪しげなシチュー：効果別索引",
-            "items": {
-              "fire_resistance": {
-                "effect_label": "火炎耐性",
-                "flowers": [
-                  "allium"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 3,
-                    "duration_be_seconds": 3
-                  }
-                ]
-              },
-              "blindness": {
-                "effect_label": "盲目",
-                "flowers": [
-                  "azure_bluet",
-                  "open_eyeblossom"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 11,
-                    "duration_be_seconds": 7
-                  }
-                ]
-              },
-              "saturation": {
-                "effect_label": "満腹度回復",
-                "flowers": [
-                  "blue_orchid",
-                  "dandelion",
-                  "golden_dandelion"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 0.35,
-                    "duration_be_seconds": 0.3
-                  }
-                ]
-              },
-              "nausea": {
-                "effect_label": "吐き気",
-                "flowers": [
-                  "closed_eyeblossom"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 7,
-                    "duration_be_seconds": 7
-                  }
-                ]
-              },
-              "jump_boost": {
-                "effect_label": "跳躍力上昇",
-                "flowers": [
-                  "cornflower"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 5,
-                    "duration_be_seconds": 5
-                  }
-                ]
-              },
-              "poison": {
-                "effect_label": "毒",
-                "flowers": [
-                  "lily_of_the_valley"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 11,
-                    "duration_be_seconds": 11
-                  }
-                ]
-              },
-              "regeneration": {
-                "effect_label": "再生能力",
-                "flowers": [
-                  "oxeye_daisy"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 7,
-                    "duration_be_seconds": 7
-                  }
-                ]
-              },
-              "night_vision": {
-                "effect_label": "暗視",
-                "flowers": [
-                  "poppy",
-                  "torchflower"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 5,
-                    "duration_be_seconds": 5
-                  }
-                ]
-              },
-              "weakness": {
-                "effect_label": "弱体化",
-                "flowers": [
-                  "tulips"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 7,
-                    "duration_be_seconds": 8
-                  }
-                ]
-              },
-              "wither": {
-                "effect_label": "衰弱",
-                "flowers": [
-                  "wither_rose"
-                ],
-                "duration_patterns": [
-                  {
-                    "duration_je_seconds": 7,
-                    "duration_be_seconds": 7
-                  }
-                ]
-              }
-            }
-          }
         }
       },
       "basic_drinks": {
@@ -340,7 +100,7 @@
           "splash_potion": "スプラッシュポーション",
           "lingering_potion": "残留ポーション"
         },
-        "effect_variants": {
+        "variants": {
 
           "water": {
             "label": "水入り瓶",

@@ -47,11 +47,11 @@
         "items": {
           "stick": "棒",
           "flint": "火打石",
-          "wheat": "小麦",
+          "wheat": {"japanse":"小麦","_source":"minecraft_food_and_drinks.json"},  
           "feather": "羽根",
           "string": "糸",
           "bone": "骨",
-          "bone_meal": "骨粉",
+          "bone_meal": {"japanese":"骨粉","note":"骨を粉砕したもの。肥料。"},
           "snowball": "雪玉",
           "egg": {
             "japanese": "卵",
@@ -68,18 +68,18 @@
           "leather": "革",
           "rabbit_hide": "ウサギの皮",
           "honeycomb": "ハニカム",
-          "resin_clump": "樹脂の塊",
-          "ink_sac": "イカスミ",
-          "glow_ink_sac": "輝くイカスミ",
+          "resin_clump": {"japanese":"樹脂の塊","_source":"block/minecraft_natural_blocks.json"},
+          "ink_sac": {"japanese":"イカスミ","note":"黒の染料になる。食べることはできない。"},
+          "glow_ink_sac": {"japanese":"輝くイカスミ","note":"輝くイカからとれるイカ墨。蛍光塗料になる。"},
           "turtle_scute": "カメのウロコ",
           "armadillo_scute": "アルマジロのウロコ",
-          "slimeball": "スライムボール",
-          "clay_ball": "粘土だま",
-          "prismarine_shard": "プリズマリンの欠片",
-          "prismarine_crystals": "プリズマリンクリスタル",
+          "slimeball": {"japanese":"スライムボール","note":"スライムから取れる黄緑色の玉。少しベタつく"},
+          "clay_ball": {"japanese":"粘土だま","note":"粘度の塊"},
+          "prismarine_shard": {"japanese":"プリズマリンの欠片","note":"海底神殿を構成する石のかけら。海のようなターコイズグリーン"},
+          "prismarine_crystals": {"japanese":"プリズマリンクリスタル","note":"ガーディアンから取れる緑がかった水晶。シーランタンの原料"},
           "nautilus_shell": "オウムガイの殻",
-          "heart_of_the_sea": "海洋の心"
-        }
+          "heart_of_the_sea": {"japanese":"海洋の心","note":"海底の宝箱から見つかる碧色の宝玉"
+        }}
       },
       "special_materials": {
         "label": "特殊素材",
@@ -88,7 +88,7 @@
           "blaze_rod": {"japanese":"ブレイズロッド","note":"炎の力を秘めた杖。力を引き出すには工夫が必要だ"},
           "breeze_rod": {"japanese":"ブリーズロッド","note":"風の力を秘めた杖。力を引き出すには工夫が必要だ"},
           "heavy_core": {"japanese":"ヘビーコア","note":"重い塊。穴が開いており、何かを差し込めそうだ"},
-          "nether_star": {"japanese":"ネザースター","note":"十字形で星のように輝く石。どこか神聖さを感じる"},
+          "nether_star": {"japanese":"ネザースター","note":"十字形で星のように輝く石。どこか神聖さを感じる。"},
           "ender_pearl": {"japanese":"エンダーパール","note":"深い緑色の宝玉。エンダーマンが所有している。投げると投げた方向にテレポートできる。"},
           "eye_of_ender": {"japanese":"エンダーアイ","note":"深い緑色のドラゴンの眼のような宝玉。キラキラと紫色の魔力の光を放って飛ぶ。"},
           "shulker_shell": {"japanese":"シュルカーの殻","note":"シュルカーという生き物の外郭。紫色。"},
@@ -122,9 +122,9 @@
         "label": "加工素材",
         "items": {
           "bowl": "ボウル",
-          "brick": "レンガ",
-          "nether_brick": "ネザーレンガ",
-          "resin_brick": "樹脂レンガ"
+          "brick": {"japanese":"レンガ","_source":"block/minecraft_stone_blocks.json"},
+          "nether_brick": {"japanese":"ネザーレンガ","_source":"block/minecraft_stone_blocks.json"},
+          "resin_brick": {"japanese":"樹脂レンガ","_source":"block/minecraft_wood_and_bamboo.json"}
         }
       },
       "paper_bottle_and_firework_materials": {
@@ -139,32 +139,32 @@
       "brewing_materials": {
         "label": "醸造素材",
         "items": {
-          "nether_wart": "ネザーウォート",
+          "nether_wart": {"japanese":"ネザーウォート","_source":"minecraft_materials.json"},
           "redstone_dust": {
             "japanese": "レッドストーンダスト",
             "_source":"block/minecraft_redstone_components.json"
           },
-          "glowstone_dust": "グロウストーンダスト",
+          "glowstone_dust": {"japanese":"グロウストーンダスト","note":"キラキラと黄金色に輝く粉"},
           "gunpowder": "火薬",
-          "dragons_breath": "ドラゴンブレス",
-          "fermented_spider_eye": "発酵したクモの目",
-          "blaze_powder": "ブレイズパウダー",
+          "dragons_breath": {"japanese":"ドラゴンブレス","note":"ドラゴンが吐く息を閉じ込めたビン。ピンク色の気体が入っている"},
+          "fermented_spider_eye": {"japanese":"発酵したクモの目","note":"クモの目を原料とした、ドロドロに溶けた赤い物質。薬の材料だ"},
+          "blaze_powder": {"japanese":"ブレイズパウダー","note":"ブレイズロッドを粉砕したもの。炎の力を秘めたオレンジ色の粉"},
           "sugar": "砂糖",
           "rabbits_foot": "ウサギの足",
           "glistering_melon_slice": {
             "japanese": "きらめくスイカの薄切り",
-            "note": "ピグリンが好きなもの。"
+            "_source": "minecraft_food_and_drinks.json"
           },
-          "spider_eye": "クモの目",
-          "pufferfish": "フグ",
-          "magma_cream": "マグマクリーム",
+          "spider_eye": {"japanese":"クモの目","note":"食べると毒。アルマジロの好物"},
+          "pufferfish": {"japanese":"フグ","note":"食べられないことはない。しかし、かなり勇気が必要"},
+          "magma_cream": {"japanese":"マグマクリーム","note":"マグマキューブから取れる。緑と赤のバイカラーのクリーム。ひんやりしている。"},
           "golden_carrot": {
             "japanese": "金のニンジン",
-            "note": "ピグリンが好きなもの。"
+            "_source": "minecraft_food_and_drinks.json"
           },
-          "ghast_tear": "ガストの涙",
-          "turtle_shell": "カメの甲羅",
-          "phantom_membrane": "ファントムの皮膜"
+          "ghast_tear": {"japanese":"ガストの涙","note":"ガストというネザーの宙に浮く白い幽霊のような生物が流した涙。魂の谷を舞う彼らがなぜ泣くのか、誰も知らない"},
+          "turtle_shell": {"japanese":"カメの甲羅","_source":"minecraft_combat_items.json"},
+          "phantom_membrane": {"japanese":"ファントムの皮膜","note":"ファントムという夜空を飛ぶアンデットの皮膜。白っぽい色"}
         }
       },
       "banner_patterns": {

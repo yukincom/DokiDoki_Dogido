@@ -12,26 +12,23 @@
           "redstone_torch": {"japanese": "レッドストーントーチ","note": "真っ赤な松明。制御可能なレッドストーン信号の動力源。"},
           "lantern":{"japanese":"ランタン","note":"オレンジ色の光を放つ、鉄製のランタン"},    
           "soul_lantern": {"japanese":"魂のランタン","note":"青い光を放つ不思議なランタン"},
-          "copper_lantern": {
-          "label":{"japanese":"銅のランタン","note":"緑色の光を放つランタン"},
-          "items":{
-          "copper_lantern": "銅のランタン",
-          "exposed_copper_lantern": "風化した銅のランタン",
-          "weathered_copper_lantern": "錆びた銅のランタン",
-          "oxidized_copper_lantern": "酸化した銅のランタン",
-          "waxed_copper_lantern": "錆止めされた銅のランタン",
-          "waxed_exposed_copper_lantern": "錆止めされた風化した銅のランタン",
-          "waxed_weathered_copper_lantern": "錆止めされた錆びた銅のランタン",
-          "waxed_oxidized_copper_lantern": "錆止めされた酸化した銅のランタン"}},
+          "copper_lantern":{"japanese":"銅のランタン","note":"緑色の光を放つランタン"},
+          "exposed_copper_lantern": {"japanese":"風化した銅のランタン","note":"緑色の光を放つランタン"},
+          "weathered_copper_lantern": {"japanese":"錆びた銅のランタン","note":"緑色の光を放つランタン"},
+          "oxidized_copper_lantern": {"japanese":"酸化した銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_copper_lantern":{"japanese": "錆止めされた銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_exposed_copper_lantern": {"japanese":"錆止めされた風化した銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_weathered_copper_lantern": {"japanese":"錆止めされた錆びた銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_oxidized_copper_lantern": {"japanese":"錆止めされた酸化した銅のランタン","note":"緑色の光を放つランタン"},
           "end_rod": {"japanese": "エンドロッド","note":"白くキラキラと輝くロッド。熱を持っている"},
-          "glowstone": {"japanese":"グロウストーン","_source":" block/minecraft_natural_blocks.json"},
-          "shroomlight": {"japanese":"シュルームライト","_source":" block/minecraft_natural_blocks.json"},
-          "pearlescent_froglight": {"japanese":"真珠色のフロッグライト","_source":" block/minecraft_natural_blocks.json"},
-          "verdant_froglight": {"japanese":"新緑色のフロッグライト","_source":" block/minecraft_natural_blocks.json"},
-          "ochre_froglight": {"japanese":"黄土色のフロッグライト","_source":" block/minecraft_natural_blocks.json"},
-          "crying_obsidian": {"japanese":"泣く黒曜石","_source":"block/minecraft_stone_blocks.json"},
-          "glow_lichen": {"japanese":"ヒカリゴケ","note":"洞窟に生える微かな光源", "_source":" block/minecraft_natural_blocks.json"},
-          "magma_block": {"japanese":"マグマブロック","note":"熱を持つマグマの塊","_source":" block/minecraft_natural_blocks.json"}
+          "glowstone": {"_source":" block/minecraft_natural_blocks.json"},
+          "shroomlight": {"_source":" block/minecraft_natural_blocks.json"},
+          "pearlescent_froglight": {"_source":" block/minecraft_natural_blocks.json"},
+          "verdant_froglight": {"_source":" block/minecraft_natural_blocks.json"},
+          "ochre_froglight": {"_source":" block/minecraft_natural_blocks.json"},
+          "crying_obsidian": {"_source":"block/minecraft_stone_blocks.json"},
+          "glow_lichen":  {"_source":" block/minecraft_natural_blocks.json"},
+          "magma_block": {"_source":" block/minecraft_natural_blocks.json"}
         }
         
       },
@@ -95,7 +92,7 @@
           "enchanting_table":{"japanese": "エンチャントテーブル","note":"アイテムに特別な効果を与えるテーブル。本が浮かんでおり、黒曜石の台座の四隅にダイヤモンドが輝く豪華な作り。"},
           "brewing_stand": {
             "japanese": "醸造台",
-            "note": "ポーション類を醸造する道具。教会によくある"
+            "note": "ポーション類を醸造する道具。教会にもある"
           },
           "cauldron": "大釜",
           "lava_cauldron": {"japanese":"溶岩入りの大釜","note":"ドロドロと赤く燃える溶岩が入った大釜"},
@@ -106,7 +103,7 @@
       "utility_blocks": {
         "label": "実用ブロック",
         "items": {
-          "end_crystal": {"japanese":"エンドクリスタル","source":"minecraft_combat_items.json"},
+          "end_crystal": {"_source":"minecraft_combat_items.json"},
           "bell": {
             "japanese": "鐘",
             "note": "金色。ピグリンが好きなもの。村の集会所。鳴らすと近くの襲撃者を発光させる。"
@@ -119,21 +116,20 @@
           "lodestone": {"japanese":"ロードストーン","note":"磁力を発生させる石。十字模様が書かれている。コンパスが狂う場所で目印として使おう"},
           "scaffolding": "足場",
           "ladder": "はしご",
-          "bee_nest": {
-            "japanese": "ミツバチの巣",
-            "_source":"block/minecraft_natural_blocks.json "
+          "bee_nest": {"_source":"block/minecraft_natural_blocks.json "
           },
           "beehive": {
             "japanese": "養蜂箱",
             "note": "焚き火があれば、収穫時にミツバチが敵対しない。"
           },
           "suspicious_sand": "怪しげな砂",
-          "suspicious_gravel": "怪しげな砂利",
-
-          "lightning_rod": {
+          "suspicious_gravel": "怪しげな砂利"
+        }
+      },
+    "lightning_rod": {
             "japanese": "避雷針",
             "note": "銅の酸化を還元する。落雷で炎発生。",
-            "variants": {
+            "label": {
           "lightning_rod":"避雷針",
           "exposed_lightning_rod": "風化した避雷針",
           "weathered_lightning_rod":  "錆びた避雷針",
@@ -142,18 +138,23 @@
           "waxed_exposed_lightning_rod": "錆止めされた風化した避雷針",
           "waxed_weathered_lightning_rod": "錆止めされた錆びた避雷針",
           "waxed_oxidized_lightning_rod":  "錆止めされた酸化した避雷針"
-          }},
+          }
+        },
+    "pot":{
+      "japanese":"鉢",
+      "label":{
           "flower_pot": "植木鉢",
           "decorated_pot": "飾り壺"
         }
       },
+
       "display_blocks": {
         "label": "展示・額縁・絵画",
         "items": {
           "armor_stand": "防具立て",
           "item_frame": "額縁",
           "glow_item_frame": "輝く額縁",
-          "painting": "絵画","data_ref": "minecraft_paintings.json"
+          "painting": {"_source": "minecraft_paintings.json"}
         }
       },
       "bookshelves_and_shelves": {
@@ -190,7 +191,8 @@
             }
           }
         }
-      },
+      }
+    },
       "signs": {
         "label": "看板・吊り看板",
         "items": {
@@ -338,70 +340,70 @@
       "beds": {
         "label": "ベッド",
         "_source":"block/minecraft_colored_blocks.json",
-        "items": {
-          "white_bed": "白色のベッド",
-          "orange_bed": "橙色のベッド",
-          "magenta_bed": "赤紫色のベッド",
-          "light_blue_bed": "空色のベッド",
-          "yellow_bed": "黄色のベッド",
-          "lime_bed": "黄緑色のベッド",
-          "pink_bed": "桃色のベッド",
-          "gray_bed": "灰色のベッド",
-          "light_gray_bed": "薄灰色のベッド",
-          "cyan_bed": "青緑色のベッド",
-          "purple_bed": "紫色のベッド",
-          "blue_bed": "青色のベッド",
-          "brown_bed": "茶色のベッド",
-          "green_bed": "緑色のベッド",
-          "red_bed": "赤色のベッド",
-          "black_bed": "黒色のベッド"
-        }
+        "refs": [
+          "white_bed",
+          "orange_bed",
+          "magenta_bed",
+          "light_blue_bed",
+          "yellow_bed",
+          "lime_bed",
+          "pink_bed",
+          "gray_bed",
+          "light_gray_bed",
+          "cyan_bed",
+          "purple_bed",
+          "blue_bed",
+          "brown_bed",
+          "green_bed",
+          "red_bed",
+          "black_bed"
+        ]
       },
       "candles": {
         "label": "ろうそく",
         "_source":"block/minecraft_colored_blocks.json",
-        "items": {
-          "candle": "ろうそく",
-          "white_candle": "白色のろうそく",
-          "orange_candle": "橙色のろうそく",
-          "magenta_candle": "赤紫色のろうそく",
-          "light_blue_candle": "空色のろうそく",
-          "yellow_candle": "黄色のろうそく",
-          "lime_candle": "黄緑色のろうそく",
-          "pink_candle": "桃色のろうそく",
-          "gray_candle": "灰色のろうそく",
-          "light_gray_candle": "薄灰色のろうそく",
-          "cyan_candle": "青緑色のろうそく",
-          "purple_candle": "紫色のろうそく",
-          "blue_candle": "青色のろうそく",
-          "brown_candle": "茶色のろうそく",
-          "green_candle": "緑色のろうそく",
-          "red_candle": "赤色のろうそく",
-          "black_candle": "黒色のろうそく"
-        }
+        "refs": [
+          "candle",
+          "white_candle",
+          "orange_candle",
+          "magenta_candle",
+          "light_blue_candle",
+          "yellow_candle",
+          "lime_candle",
+          "pink_candle",
+          "gray_candle",
+          "light_gray_candle",
+          "cyan_candle",
+          "purple_candle",
+          "blue_candle",
+          "brown_candle",
+          "green_candle",
+          "red_candle",
+          "black_candle"
+        ]
       },
       "banners": {
         "label": "旗",
-        "items": {
-          "_source":"block/minecraft_colored_blocks.json",
-          "white_banner": "白色の旗",
-          "orange_banner": "橙色の旗",
-          "magenta_banner": "赤紫色の旗",
-          "light_blue_banner": "空色の旗",
-          "yellow_banner": "黄色の旗",
-          "lime_banner": "黄緑色の旗",
-          "pink_banner": "桃色の旗",
-          "gray_banner": "灰色の旗",
-          "light_gray_banner": "薄灰色の旗",
-          "cyan_banner": "青緑色の旗",
-          "purple_banner": "紫色の旗",
-          "blue_banner": "青色の旗",
-          "brown_banner": "茶色の旗",
-          "green_banner": "緑色の旗",
-          "red_banner": "赤色の旗",
-          "black_banner": "黒色の旗",
-          "ominous_banner": "不吉な旗"
-        }
+        "_source":"block/minecraft_colored_blocks.json",
+        "refs": [
+          "white_banner",
+          "orange_banner",
+          "magenta_banner",
+          "light_blue_banner",
+          "yellow_banner",
+          "lime_banner",
+          "pink_banner",
+          "gray_banner",
+          "light_gray_banner",
+          "cyan_banner",
+          "purple_banner",
+          "blue_banner",
+          "brown_banner",
+          "green_banner",
+          "red_banner",
+          "black_banner",
+          "ominous_banner"
+        ]
       },
       "mob_heads": {
         "label": "Mobの頭",
@@ -418,17 +420,15 @@
       "rare_and_special": {
         "label": "特殊・希少ブロック",
         "items": {
-          "dragon_egg": "ドラゴンの卵",
+          "dragon_egg": {"japanese":"ドラゴンの卵","note":"ほんのり光る黒いドラゴンの卵"},
           "end_portal_frame": "エンドポータルフレーム",
-          "vault": "宝物庫",
-          "eye_of_ender": "エンダーアイ","_source":"minecraft_tools_and_utilities.json"}
-        },
-        "notes": [
-          "エンダーアイは公式の機能的ブロックタブに合わせてここに収録。"
-        ]
+          "vault": {"japanese":"宝物庫","note":"とってもいいものが入っている黒い箱"},
+          "eye_of_ender": {"_source":"minecraft_tools_and_utilities.json"}
+        }
       },
       "copper_golem_statues": {
         "label": "カッパーゴーレムの像",
+        "note":"銅製のゴーレム。とても働き者で仕分け上手",
         "items": {
           "copper_golem_statue": "カッパーゴーレムの像",
           "exposed_copper_golem_statue": "風化したカッパーゴーレムの像",
@@ -442,6 +442,7 @@
       },
       "infested_blocks": {
         "label": "虫食いブロック",
+        "note":"シルバーフィッシュが巣食う石材",
         "items": {
           "infested_stone": "虫食い石",
           "infested_cobblestone": "虫食い丸石",

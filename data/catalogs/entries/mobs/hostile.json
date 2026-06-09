@@ -110,38 +110,6 @@
         "role": "風で崩す攪乱役"
       }
     },
-    "cave_spider": {
-      "label": "洞窟スパイダー",
-      "threat_class": "melee",
-      "priority": "medium",
-      "poetic": {
-        "visual_tags": [
-          "小さい",
-          "青緑",
-          "毒"
-        ],
-        "sound_tags": [
-          "かさかさ"
-        ],
-        "motion_tags": [
-          "すばやい",
-          "群がる"
-        ],
-        "scene_tags": [
-          "廃坑",
-          "糸",
-          "暗がり"
-        ],
-        "reaction_tags": [
-          "噛まれたくない",
-          "狭い所が怖い"
-        ],
-        "comic_tags": [
-          "小さいのにいやらしい"
-        ],
-        "role": "狭所で刺す嫌な相手"
-      }
-    },
     "charged_creeper": {
       "label": "帯電クリーパー",
       "threat_class": "explosive",
@@ -577,7 +545,8 @@
         "visual_tags": [
           "夜空",
           "翼",
-          "不眠"
+          "紺色",
+          "アンデッド"
         ],
         "sound_tags": [
           "ひゅるる"
@@ -598,7 +567,7 @@
         "comic_tags": [
           "ねないこだれだぁ"
         ],
-        "role": "空から舞い降りる睡魔"
+        "role": "空から舞い降りる悪魔"
       }
     },
     "piglin_brute": {
