@@ -25,6 +25,7 @@ class StateUpdatesMixin:
         if time_phase in {"morning", "day"}:
             self.state.night_warning_pending = False
             self.state.night_warning_emitted_this_cycle = False
+            self.state.pending_night_warning_detail = False
         elif (
             not self.state.night_warning_emitted_this_cycle
             and self._should_schedule_night_warning(event)
@@ -117,10 +118,12 @@ class StateUpdatesMixin:
 
         if self._ominous_sound_presence_active(now):
             self.state.night_warning_pending = False
+            self.state.pending_night_warning_detail = False
             if self.state.current_biome != "deep_dark":
                 self.state.pending_special_biome_line = None
         if self._boss_presence_active(now):
             self.state.night_warning_pending = False
+            self.state.pending_night_warning_detail = False
             self.state.pending_special_biome_line = None
 
         if event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}:
@@ -257,6 +260,7 @@ class StateUpdatesMixin:
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
         self.state.night_warning_pending = False
+        self.state.pending_night_warning_detail = False
         self.state.pending_overworld_return_line = returning_to_overworld
         self.state.last_active_status_effects.clear()
         self.state.last_mining_fatigue_comment_at = None

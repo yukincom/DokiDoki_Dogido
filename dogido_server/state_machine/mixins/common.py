@@ -620,12 +620,3 @@ class CommonMixin:
             return None
         return response_text("darkness", "night_warning", "cave_or_submerged", phase_label=phase_label)
 
-    def _emit_pending_night_warning(self, event: GameEvent) -> str | None:
-        if not self._should_consider_night_warning(event):
-            return None
-        line = self._render_night_warning_line(event)
-        if line is None:
-            return None
-        self.state.night_warning_pending = False
-        self.state.night_warning_emitted_this_cycle = True
-        return line
