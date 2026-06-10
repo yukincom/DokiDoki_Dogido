@@ -138,6 +138,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private double lastNearbyLightningDistance = 99.0;
     private long lastCombatSignalTick = -1000;
     private long lastWardenSeenTick = -1000;
+    private long lastWardenDeathSoundTick = -1000;
     private long lastWardenEndCrystalObservedTick = -1000;
     private long lastWardenTntSetupObservedTick = -1000;
     private double lastWardenSeenX = 0.0;
@@ -305,6 +306,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastNearbyLightningDistance = 99.0;
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
+        this.lastWardenDeathSoundTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
         this.lastHealth = 20.0f;
@@ -347,6 +349,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastNearbyLightningDistance = 99.0;
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
+        this.lastWardenDeathSoundTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
         this.lastThreatSignature = "";
@@ -1386,6 +1389,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     || ticksSince(this.lastWardenTntSetupObservedTick) <= WARDEN_SPECIAL_LATCH_TICKS * 50L
             );
             json.addProperty("warden_nearby_tnt_minecart_count", nearbyTntMinecartCount);
+            // 討伐直後（姿が消えてから10秒以内）の combat_ended でも
+            // 討伐確認が届くようにここでも送る
+            json.addProperty("warden_defeat_confirmed", isRecentWardenDefeatConfirmed(world));
         } else {
             json.addProperty("warden_defeat_confirmed", isRecentWardenDefeatConfirmed(world));
         }
@@ -1593,9 +1599,21 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return count;
     }
 
+    private void recordWardenDeathSound(String soundEventId) {
+        if (soundEventId != null && soundEventId.contains("warden") && soundEventId.contains("death")) {
+            this.lastWardenDeathSoundTick = this.tickCounter;
+        }
+    }
+
     private boolean isRecentWardenDefeatConfirmed(ClientWorld world) {
         if (this.lastWardenSeenTick < 0 || this.tickCounter - this.lastWardenSeenTick > 400) {
             return false;
+        }
+        // 死亡音はキル手段（ゴーレム・TNT・クリスタル・遠距離）に関係なく鳴る、
+        // 最も確実な討伐サイン。XPオーブはプレイヤーキル時しか落ちない。
+        if (this.lastWardenDeathSoundTick >= 0
+            && this.tickCounter - this.lastWardenDeathSoundTick <= 400) {
+            return true;
         }
         for (Entity entity : world.getOtherEntities(
             null,
@@ -1711,6 +1729,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         String soundEventId = soundEventId(packet.getSound());
+        recordWardenDeathSound(soundEventId);
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
@@ -1818,6 +1837,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         String soundEventId = soundEventId(packet.getSound());
+        recordWardenDeathSound(soundEventId);
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
@@ -1962,6 +1982,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return "warden_sonic_boom";
         }
         if (soundEventId.contains("warden")) {
+            if (soundEventId.contains("death")) {
+                // 死亡音は討伐確認に使う。presence として latch すると
+                // 討伐後しばらく不穏空気が残ってしまうので除外
+                return null;
+            }
             if (soundEventId.contains("heartbeat")) {
                 return "warden_heartbeat";
             }
