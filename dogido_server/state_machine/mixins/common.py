@@ -96,11 +96,8 @@ class CommonMixin:
         self.state.last_warden_chasing_comment_at = None
         self.state.last_warden_sonic_boom_scream_at = None
         self.state.warden_attack_start_announced = False
-        self.state.warden_ranged_trap_comment_count = 0
-        self.state.last_warden_ranged_trap_comment_at = None
         self.state.warden_golem_army_announced = False
-        self.state.warden_end_crystal_bombardment_announced = False
-        self.state.warden_tnt_minecart_setup_announced = False
+        self.state.warden_extreme_tactic_announced = False
 
     def _next_warden_special_callout(self, event: GameEvent, now: datetime) -> str | None:
         if (
@@ -113,37 +110,24 @@ class CommonMixin:
         tnt_active = bool(event.combat.warden_tnt_minecart_setup_active)
         golem_active = (event.combat.warden_nearby_iron_golem_count or 0) >= 2
         ranged_trap_active = bool(event.combat.warden_ranged_trap_active)
-        tactic_active = crystal_active or tnt_active or golem_active or ranged_trap_active
-
-        if crystal_active and not self.state.warden_end_crystal_bombardment_announced:
-            self.state.warden_end_crystal_bombardment_announced = True
-            return response_text("boss", "warden", "end_crystal_bombardment")
-
-        if tnt_active and not self.state.warden_tnt_minecart_setup_announced:
-            self.state.warden_tnt_minecart_setup_announced = True
-            return response_text("boss", "warden", "tnt_minecart_setup")
+        # ゴーレムリンチだけ専用ライン。クリスタル爆破・TNT装置・上空ちくちくは
+        # 共通の「そこまでしてウォーデンを！」で受ける
+        extreme_active = crystal_active or tnt_active or ranged_trap_active
+        tactic_active = extreme_active or golem_active
 
         if golem_active and not self.state.warden_golem_army_announced:
             self.state.warden_golem_army_announced = True
             return response_text("boss", "warden", "golem_army")
 
+        if extreme_active and not self.state.warden_extreme_tactic_announced:
+            self.state.warden_extreme_tactic_announced = True
+            return response_text("boss", "warden", "extreme_tactics")
+
         if bool(event.combat.warden_recently_hurt) and not tactic_active and not self.state.warden_attack_start_announced:
             self.state.warden_attack_start_announced = True
             return response_text("boss", "warden", "attack_start")
 
-        if not ranged_trap_active:
-            return None
-        if self.state.warden_ranged_trap_comment_count >= self.settings.warden_ranged_trap_max_comments:
-            return None
-        recent_ms = self._recent_ms(now, self.state.last_warden_ranged_trap_comment_at)
-        if recent_ms is not None and recent_ms < self.settings.warden_ranged_trap_comment_cooldown_ms:
-            return None
-
-        lines = response_lines("boss", "warden", "ranged_trap_lines")
-        index = self.state.warden_ranged_trap_comment_count % len(lines)
-        self.state.warden_ranged_trap_comment_count += 1
-        self.state.last_warden_ranged_trap_comment_at = now
-        return lines[index]
+        return None
 
     def _neutral_turned_hostile_callout(self, event: GameEvent, now: datetime) -> str | None:
         """さっきまで平和な姿で見えていた中立モブが脅威化したら警告する。

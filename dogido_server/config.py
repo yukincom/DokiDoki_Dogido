@@ -187,8 +187,6 @@ class Settings(BaseSettings):
     mining_fatigue_comment_cooldown_ms: int = 120000
     boss_recent_visual_window_ms: int = 10000
     warden_chasing_comment_cooldown_ms: int = 60000
-    warden_ranged_trap_comment_cooldown_ms: int = 60000
-    warden_ranged_trap_max_comments: int = 2
     # ウォーデンのビーム（sonic boom）は鮮度内なら必ず悲鳴を上げる
     warden_sonic_boom_fresh_ms: int = 2500
     warden_sonic_boom_scream_cooldown_ms: int = 4000

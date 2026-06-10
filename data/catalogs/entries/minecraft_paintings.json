@@ -114,6 +114,10 @@
       }
     },
     "items": {
+      "painting": {
+        "japanese": "絵画",
+        "note": "壁に飾れる絵。羊毛と棒でクラフトできて、どの絵になるかは飾ってからのお楽しみ。"
+      },
       "painting_kebab": {
         "id_status": "provisional",
         "title": "Kebab med tre pepperoni",

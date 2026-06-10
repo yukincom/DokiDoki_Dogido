@@ -1325,14 +1325,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);
         ThreatObservation warden = nearestThreatOfType(threats, "warden");
         if (warden != null) {
-            int nearbyIronGolemCount = countNearbyEntityType(world, warden, "iron_golem", 20.0)
-                + countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0);
-            int nearbyEndCrystalCount = countNearbyEntityType(world, warden, "end_crystal", 32.0)
-                + countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0);
-            int nearbyTntMinecartCount = countNearbyEntityType(world, warden, "tnt_minecart", 28.0)
-                + countNearbyEntityType(world, warden, "tnt", 28.0)
-                + countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
-                + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0);
+            // ウォーデン周辺とプレイヤー周辺で同じ個体を二重に数えないよう max を取る
+            int nearbyIronGolemCount = Math.max(
+                countNearbyEntityType(world, warden, "iron_golem", 20.0),
+                countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0));
+            int nearbyEndCrystalCount = Math.max(
+                countNearbyEntityType(world, warden, "end_crystal", 32.0),
+                countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0));
+            int nearbyTntMinecartCount = Math.max(
+                countNearbyEntityType(world, warden, "tnt_minecart", 28.0)
+                    + countNearbyEntityType(world, warden, "tnt", 28.0),
+                countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
+                    + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0));
             long recentExplosionMs = ticksSince(this.lastExplosionObservedTick);
             json.addProperty("warden_recently_hurt", warden.recentlyHurt());
             json.addProperty("warden_ranged_trap_active", isWardenRangedTrapActive(player, warden));
@@ -1353,14 +1357,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
             json.addProperty("warden_nearby_tnt_minecart_count", nearbyTntMinecartCount);
         } else if (this.lastWardenSeenTick >= 0 && this.tickCounter - this.lastWardenSeenTick <= 200) {
-            int nearbyIronGolemCount = countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0)
-                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "iron_golem", 20.0);
-            int nearbyEndCrystalCount = countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0)
-                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "end_crystal", 32.0);
-            int nearbyTntMinecartCount = countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
-                + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0)
-                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "tnt_minecart", 28.0)
-                + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "tnt", 28.0);
+            // 同上: プレイヤー周辺と最終目撃地点周辺の二重計上を避ける
+            int nearbyIronGolemCount = Math.max(
+                countNearbyEntityTypeAroundPlayer(world, player, "iron_golem", 20.0),
+                countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "iron_golem", 20.0));
+            int nearbyEndCrystalCount = Math.max(
+                countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", 32.0),
+                countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "end_crystal", 32.0));
+            int nearbyTntMinecartCount = Math.max(
+                countNearbyEntityTypeAroundPlayer(world, player, "tnt_minecart", 28.0)
+                    + countNearbyEntityTypeAroundPlayer(world, player, "tnt", 28.0),
+                countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "tnt_minecart", 28.0)
+                    + countNearbyEntityTypeAroundPoint(world, this.lastWardenSeenX, this.lastWardenSeenY, this.lastWardenSeenZ, "tnt", 28.0));
             long recentExplosionMs = ticksSince(this.lastExplosionObservedTick);
             json.addProperty("warden_nearby_iron_golem_count", nearbyIronGolemCount);
             json.addProperty(

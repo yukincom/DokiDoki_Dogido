@@ -66,11 +66,9 @@ class RuntimeState:
     ominous_sound_stage: int = 0
     last_warden_chasing_comment_at: datetime | None = None
     warden_attack_start_announced: bool = False
-    warden_ranged_trap_comment_count: int = 0
-    last_warden_ranged_trap_comment_at: datetime | None = None
     warden_golem_army_announced: bool = False
-    warden_end_crystal_bombardment_announced: bool = False
-    warden_tnt_minecart_setup_announced: bool = False
+    # クリスタル爆破・TNT装置・上空ちくちくの共通「そこまでして」ライン
+    warden_extreme_tactic_announced: bool = False
     last_active_status_effects: set[str] = field(default_factory=set)
     last_confirmed_hostiles: list[str] = field(default_factory=list)
     last_known_hostile_directions: list[str] = field(default_factory=list)

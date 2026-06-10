@@ -66,7 +66,11 @@
               "brown_banner": "茶色の旗",
               "green_banner": "緑色の旗",
               "red_banner": "赤色の旗",
-              "black_banner": "黒色の旗"
+              "black_banner": "黒色の旗",
+              "ominous_banner": {
+                "japanese": "不吉な旗",
+                "note": "襲撃隊の大将が掲げる不気味な旗。なんや嫌な予感するわ……。"
+              }
             }
           },
           "wall_banners": {

@@ -122,9 +122,9 @@
         "label": "加工素材",
         "items": {
           "bowl": "ボウル",
-          "brick": {"japanese":"レンガ","source":"block/minecraft_stone_blocks.json"},
-          "nether_brick": {"japanese":"ネザーレンガ","source":"block/minecraft_stone_blocks.json"},
-          "resin_brick": {"japanese":"樹脂レンガ","source":"block/minecraft_wood_and_bamboo.json"}
+          "brick": {"japanese":"レンガ","note":"粘土を焼いて作る赤茶色の素材。4つ集めるとレンガブロックになる。"},
+          "nether_brick": {"japanese":"ネザーレンガ","note":"ネザーラックを焼いた黒赤色の素材。ネザーレンガブロックの材料。"},
+          "resin_brick": {"japanese":"樹脂レンガ","note":"樹脂の塊を焼いて固めた素材。樹脂レンガブロックの材料。"}
         }
       },
       "paper_bottle_and_firework_materials": {
