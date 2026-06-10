@@ -2,13 +2,19 @@
 
 Minecraft のゲーム状況を読み取り、怖がりな AI キャラクター「ドギド」が実況・警告・雑談を行うための設計メモです。
 
-このプロジェクトでは、主に以下の既存資産をベースとして使います。
+##　プロジェクトコンセプト
+**AIと発見しよう！マイクラ世界の新しい見方！**
 
-- [yukincom/yuno-chan-api](https://github.com/yukincom/yuno-chan-api)
-- [mindcraft-bots/mindcraft](https://github.com/mindcraft-bots/mindcraft)
-- [yukincom/m5stack-push-avatar](https://github.com/yukincom/m5stack-push-avatar)
+ちょっと怖がりなAI相棒「ドギド」は、
+Minecraftの冒険中にふいに川柳を詠みます。
 
-`yuno-chan-api` を主な改造対象とし、`mindcraft` からは Minecraft データ取得部分を切り出して利用、`m5stack-push-avatar` は音声再生先として再利用する想定です。
+でも、ドギドの句はちょっぴり下手くそ。
+プレイヤーは「どこが変？」「どう直す？」とツッコミながら、
+言葉を観察し、表現を工夫していきます。
+
+自分で詠んだ句も保存できます。
+洞窟、朝日、クリーパー、ウーパールーパー。
+Minecraftの世界が、そのまま表現の材料になります。
 
 ## ドキュメント構成
 
@@ -45,10 +51,11 @@ Minecraft のゲーム状況を読み取り、怖がりな AI キャラクター
 
 ## 現時点の方針
 
-- Minecraft 側は AI アバター制御を捨て、イベント取得に専念する
-- `mindcraft` は主に参考実装として扱い、Minecraft 本体の観測は別アダプタ化を前提とする
+- Minecraft 側はイベント取得に専念する
 - AI のキャラクター性は LLM に任せきらず、状態管理をコード側で持つ
 - 音声基盤より先に、イベント入力と優先制御の仕様を固める
+- 川柳の「保存はコードで」「学習・整理・再利用はヘルメスエージェント」
+- エージェントは「川柳の先生」ではなく「編集者・司書」
 
 ## 実装状況
 
