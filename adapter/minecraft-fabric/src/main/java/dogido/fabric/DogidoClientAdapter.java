@@ -1172,7 +1172,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return array;
     }
 
-    private JsonArray buildPeacefulMobs(List<AmbientMobObservation> ambientMobs) {
+    private JsonArray buildPassiveMobs(List<AmbientMobObservation> ambientMobs) {
         JsonArray array = new JsonArray();
         int limit = Math.min(ambientMobs.size(), 4);
         for (int index = 0; index < limit; index += 1) {
@@ -1199,7 +1199,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void attachPassiveMobs(JsonObject root, List<AmbientMobObservation> ambientMobs) {
-        JsonArray passiveMobs = buildPeacefulMobs(ambientMobs);
+        JsonArray passiveMobs = buildPassiveMobs(ambientMobs);
         root.add("passive_mobs", passiveMobs);
         root.add("peaceful_mobs", passiveMobs.deepCopy());
     }

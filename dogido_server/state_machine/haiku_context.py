@@ -98,7 +98,7 @@ class HaikuContext:
     inventory_close_pair: tuple[str, ...]
     inventory_far_item: str
     nearby_blocks: tuple[str, ...]
-    peaceful_mobs: tuple[str, ...]
+    passive_mobs: tuple[str, ...]
     haiku_tags: tuple[str, ...]
     feature_candidates: tuple[HaikuFeature, ...]
     candidate_tensions: tuple[str, ...]
@@ -123,7 +123,7 @@ class HaikuContext:
             "inventory_close_pair": list(self.inventory_close_pair),
             "inventory_far_item": self.inventory_far_item,
             "nearby_blocks": list(self.nearby_blocks),
-            "peaceful_mobs": list(self.peaceful_mobs),
+            "passive_mobs": list(self.passive_mobs),
             "haiku_tags": list(self.haiku_tags),
             "feature_candidates": self.feature_candidate_labels(),
             "candidate_tensions": list(self.candidate_tensions),

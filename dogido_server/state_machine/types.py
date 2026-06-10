@@ -35,6 +35,9 @@ class RuntimeState:
     # 友好・中立モブへの反応クールダウンは種ごとに管理する
     last_ambient_mob_comment_at_by_type: dict[str, datetime] = field(default_factory=dict)
     last_warden_sonic_boom_scream_at: datetime | None = None
+    # 中立モブの敵対化検知: 平和な姿を最後に見た時刻と、警告の種別クールダウン
+    recent_passive_mob_seen_at_by_type: dict[str, datetime] = field(default_factory=dict)
+    last_neutral_turned_hostile_comment_at_by_type: dict[str, datetime] = field(default_factory=dict)
     last_time_phase: str | None = None
     suppression_started_at: datetime | None = None
     suppression_until: datetime | None = None

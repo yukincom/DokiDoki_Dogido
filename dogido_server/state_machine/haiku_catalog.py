@@ -18,7 +18,7 @@ class HaikuFallbackContext:
     player_y: float | None
     danger_darkness_score: float | None
     visual_threat_types: frozenset[str]
-    peaceful_mob_types: frozenset[str]
+    passive_mob_types: frozenset[str]
     nearby_resources: tuple[tuple[str, float | None], ...]
 
 
@@ -67,7 +67,7 @@ def _matches_rule(
         return False
     if not _matches_any(context.visual_threat_types, rule.get("visual_threat_types_any")):
         return False
-    if not _matches_any(context.peaceful_mob_types, rule.get("peaceful_mob_types_any")):
+    if not _matches_any(context.passive_mob_types, rule.get("passive_mob_types_any")):
         return False
     if not _matches_nearby_resources(context.nearby_resources, rule):
         return False

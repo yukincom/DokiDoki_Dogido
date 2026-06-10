@@ -288,7 +288,7 @@ class EnvironmentalReactionsMixin:
             return []
         if event.event.name != EventName.AMBIENT_MOB_DETECTED:
             return []
-        if not event.peaceful_mobs or event.visual_threats or event.auditory_threats:
+        if not event.passive_mobs or event.visual_threats or event.auditory_threats:
             return []
         line = self._emit_ambient_mob_comment_line(event, now)
         if not line:

@@ -6,9 +6,9 @@
 検出するもの:
 - グループ直下に紛れ込んだ「グループらしき dict」(ネスト崩れの兆候)
 - items 配下のエントリ値に items/groups/refs が入っている (ネスト崩れ)
-- _source が指すファイルが存在しない
-- ref / refs の id が参照先ファイルに見つからない
-- "japanse" などのキータイポ
+- source ポインタ（.json で終わる値）が指すファイルが存在しない
+- refs の id が参照先ファイルに見つからない
+- "japanse" / "_source" / "ref" などのキータイポ・旧表記
 """
 from __future__ import annotations
 
@@ -24,7 +24,15 @@ RESERVED_KEYS = {
     "schema", "notes", "direct_labels", "description", "biomes", "priority",
     "poetic", "source", "parent",
 }
-KEY_TYPOS = {"japanse": "japanese"}
+KEY_TYPOS = {
+    "japanse": "japanese",
+    "_source": "source",  # 仮表記。参照解決コードが入ったので source に統一
+    "ref": "refs",
+}
+
+
+def is_source_pointer(value: object) -> bool:
+    return isinstance(value, str) and value.strip().lower().endswith(".json")
 
 issues: list[str] = []
 
@@ -46,7 +54,7 @@ def resolve_source(spec: str) -> Path | None:
 
 def looks_like_group(value: object) -> bool:
     return isinstance(value, dict) and bool(
-        {"items", "groups", "refs", "ref"} & value.keys()
+        {"items", "groups", "refs"} & value.keys()
     )
 
 
@@ -86,13 +94,13 @@ def check_node(node: object, *, file: Path, path: str, under_items: bool) -> Non
     for key in node:
         if isinstance(key, str) and key.rstrip() != key.rstrip(": "):
             issues.append(f"[typo] {file.name} {path}: キー '{key}' に余分なコロン/空白")
-    source = node.get("_source")
-    if source is not None:
+    source = node.get("source")
+    if is_source_pointer(source):
         target = resolve_source(str(source))
         if target is None:
-            issues.append(f"[bad-source] {file.name} {path}: _source '{source}' が見つからない")
+            issues.append(f"[bad-source] {file.name} {path}: source '{source}' が見つからない")
         else:
-            ref_ids = node.get("refs") or node.get("ref")
+            ref_ids = node.get("refs")
             if isinstance(ref_ids, list):
                 known = entry_ids_in_file(target)
                 for ref_id in ref_ids:

@@ -12,7 +12,7 @@ from dogido_server.models import (
     GameEvent,
     MetaState,
     NearbyResource,
-    PeacefulMob,
+    PassiveMob,
     PlayerState,
     Position,
     PriorityHint,
@@ -31,7 +31,7 @@ def make_snapshot(
     time_phase: str = "day",
     time_of_day: int = 6000,
     user_text: str | None = None,
-    peaceful_mobs: list[PeacefulMob] | None = None,
+    passive_mobs: list[PassiveMob] | None = None,
     nearby_resources: list[NearbyResource] | None = None,
     player_y: float = 64,
     danger_darkness_score: float = 0.0,
@@ -63,7 +63,7 @@ def make_snapshot(
             sky_visible=True,
             danger_darkness_score=danger_darkness_score,
         ),
-        peaceful_mobs=list(peaceful_mobs or []),
+        passive_mobs=list(passive_mobs or []),
         inventory=inventory or {"torch": 2, "oak_log": 4},
         nearby_resources=list(nearby_resources or []),
         meta=MetaState(user_text=user_text),
@@ -186,38 +186,38 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(emitted[0].text, "ここで一句。 今、考え中やねん…")
 
     def test_tropical_fish_rule_depends_on_mob_not_ocean_biome(self) -> None:
-        tropical_fish = PeacefulMob(type="tropical_fish")
+        tropical_fish = PassiveMob(type="tropical_fish")
         self.machine.process(
             make_snapshot(
                 self.base_time,
                 biome="river",
-                peaceful_mobs=[tropical_fish],
+                passive_mobs=[tropical_fish],
             )
         )
         emitted = self.machine.process(
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="river",
-                peaceful_mobs=[tropical_fish],
+                passive_mobs=[tropical_fish],
             )
         ).actions
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。 おさかなさん　色とりどりの　水の花")
 
     def test_sheep_rule_is_mob_based_not_biome_limited(self) -> None:
-        sheep = PeacefulMob(type="sheep")
+        sheep = PassiveMob(type="sheep")
         self.machine.process(
             make_snapshot(
                 self.base_time,
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
             )
         )
         emitted = self.machine.process(
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
             )
         ).actions
         self.assertEqual(len(emitted), 1)
@@ -305,12 +305,12 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         fake_llm = FakeLLM()
         machine = DogidoStateMachine(self.settings, llm=fake_llm)
-        sheep = PeacefulMob(type="sheep")
+        sheep = PassiveMob(type="sheep")
         machine.process(
             make_snapshot(
                 self.base_time,
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 player_y=12,
             )
         )
@@ -318,7 +318,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 player_y=12,
             )
         ).actions
@@ -370,12 +370,12 @@ class HaikuStateMachineTest(unittest.TestCase):
             haiku_quiet_time_ms=300000,
         )
         machine = DogidoStateMachine(settings, llm=FakeLLM())
-        sheep = PeacefulMob(type="sheep")
+        sheep = PassiveMob(type="sheep")
         machine.process(
             make_snapshot(
                 self.base_time,
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 player_y=12,
             )
         )
@@ -384,7 +384,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 player_y=12,
             )
         ).actions
@@ -392,7 +392,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             make_snapshot(
                 self.base_time + timedelta(seconds=302),
                 biome="savanna_plateau",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 player_y=12,
             )
         ).actions
@@ -552,12 +552,12 @@ class HaikuStateMachineTest(unittest.TestCase):
             "poisonous_potato": 1,
             "suspicious_stew": 1,
         }
-        sheep = PeacefulMob(type="sheep")
+        sheep = PassiveMob(type="sheep")
         machine.process(
             make_snapshot(
                 self.base_time,
                 biome="meadow",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 held_item="minecraft:flint_and_steel",
                 inventory=inventory,
             )
@@ -566,7 +566,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="meadow",
-                peaceful_mobs=[sheep],
+                passive_mobs=[sheep],
                 held_item="minecraft:flint_and_steel",
                 inventory=inventory,
             )

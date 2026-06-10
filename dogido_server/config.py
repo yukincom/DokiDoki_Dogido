@@ -192,6 +192,9 @@ class Settings(BaseSettings):
     # ウォーデンのビーム（sonic boom）は鮮度内なら必ず悲鳴を上げる
     warden_sonic_boom_fresh_ms: int = 2500
     warden_sonic_boom_scream_cooldown_ms: int = 4000
+    # 「さっきまで平和だった中立モブ」が敵対化したとみなす記憶ウィンドウ
+    neutral_hostility_memory_ms: int = 120000
+    neutral_turned_hostile_comment_cooldown_ms: int = 60000
     ushiro_comment_cooldown_ms: int = 60000
     weather_sound_recent_ms: int = 4000
     nearby_lightning_recent_ms: int = 2000

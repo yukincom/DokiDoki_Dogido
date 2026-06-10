@@ -19,6 +19,11 @@ class StateUpdatesMixin:
         if self.state.last_haiku_emitted_at is None:
             # 初回イベントから川柳の10分周期を始める
             self.state.last_haiku_emitted_at = now
+        # 平和な姿のモブを種ごとに記録する（中立モブの敵対化検知に使う）
+        for mob in event.passive_mobs:
+            mob_type = (mob.type or "").strip().lower()
+            if mob_type:
+                self.state.recent_passive_mob_seen_at_by_type[mob_type] = now
         # 優先イベント（脅威・プレイヤー入力）が来たら発句中の川柳はキャンセルする。
         # 周期 (last_haiku_emitted_at) はそのままなので、静けさが戻って
         # haiku_quiet_time_ms 経過後に再発句される。

@@ -24,7 +24,7 @@
       },
       "wood_buttons": {
         "label": "木材ボタン",
-        "_source":"block/minecraft_wood_and_bamboo.json",
+        "source":"block/minecraft_wood_and_bamboo.json",
         "refs": [
               "oak_button", 
               "spruce_button",
@@ -42,7 +42,7 @@
             },
       "wood_pressure_plates": {
         "label": "木材感圧板",
-        "_source":"block/minecraft_wood_and_bamboo.json",
+        "source":"block/minecraft_wood_and_bamboo.json",
         "refs": [
               "oak_pressure_plate",
               "spruce_pressure_plate", 
@@ -104,7 +104,7 @@
           }}},
       "bulbs": {
         "label": "電球",
-        "_source":"block/minecraft_metal_blocks.json",
+        "source":"block/minecraft_metal_blocks.json",
           "refs": [        
           "copper_bulb",
           "exposed_copper_bulb",
@@ -178,7 +178,7 @@
         
         "groups": {
           "wooden_fence_gates": {
-            "_source":"block/minecraft_wood_and_bamboo.json",
+            "source":"block/minecraft_wood_and_bamboo.json",
             "label": "木・竹・キノコ材のフェンスゲート",
             "refs": [
               "oak_fence_gate",
@@ -197,7 +197,7 @@
           },
           "wooden_doors": {         
             "label": "木・竹・キノコ材のドア",
-            "_source":"block/minecraft_wood_and_bamboo.json",
+            "source":"block/minecraft_wood_and_bamboo.json",
             "refs": [
               "oak_door",
               "spruce_door",
@@ -215,7 +215,7 @@
           },
           "wooden_trapdoors": {
             "label": "木・竹・キノコ材のトラップドア",
-            "_source":"block/minecraft_wood_and_bamboo.json",
+            "source":"block/minecraft_wood_and_bamboo.json",
             "refs": [
               "oak_trapdoor",
               "spruce_trapdoor",
@@ -234,7 +234,7 @@
 
           "iron_doors_trapdoors": {
             "label": "鉄のドア・トラップドア",
-            "_source":"block/minecraft_metal_blocks.json",
+            "source":"block/minecraft_metal_blocks.json",
             "refs": [
               "iron_door",
               "iron_trapdoor"
@@ -242,7 +242,7 @@
           },
           "copper_doors": {
             "label": "銅のドア",
-            "_source":"block/minecraft_metal_blocks.json",
+            "source":"block/minecraft_metal_blocks.json",
             "refs": [
               "copper_door",
               "exposed_copper_door",
@@ -256,7 +256,7 @@
           },
           "copper_trapdoors": {
             "label": "銅のトラップドア",
-            "_source":"block/minecraft_metal_blocks.json",
+            "source":"block/minecraft_metal_blocks.json",
             "refs": [
               "copper_trapdoor",
               "exposed_copper_trapdoor",

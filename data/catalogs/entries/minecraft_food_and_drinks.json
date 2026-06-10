@@ -13,10 +13,10 @@
           "raw_porkchop": {"japanese":"生の豚肉","note":"新鮮な豚肉。生のままでも食べることができるが、焼いたほうがおいしい"},
           "raw_rabbit": {"japanese":"生の兎肉","note":"新鮮そのもの。焼いて食べよう"},
           "raw_salmon": {"japanese":"生鮭","note":"大きくてオレンジ色のみが美しい魚。焼いて食べたい。"},
-          "pufferfish": {"japanese":"フグ","_source":"minecraft_materials.json"},  
+          "pufferfish": {"japanese":"フグ","source":"minecraft_materials.json"},  
           "tropical_fish": {"japanese":"熱帯魚","note":"大しておいしくないが食べられないことはない。"},
           "rotten_flesh": {"japanese":"腐った肉","note":"主にゾンビから入手できる食材。食べるのには勇気が必要。狼の好物"},
-          "spider_eye": {"japanese":"クモの目","_source":"minecraft_materials.json"} 
+          "spider_eye": {"japanese":"クモの目","source":"minecraft_materials.json"} 
 
         }
       },
@@ -71,7 +71,7 @@
           "sweet_berries": {"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。"},   
           "glow_berries": {
             "japanese": "グロウベリー",
-            "_source": "block/minecraft_natural_blocks.json"
+            "source": "block/minecraft_natural_blocks.json"
           },
           "dried_kelp": {"japanese":"乾燥した昆布","note":"ミネラル豊富。高速で食べられる"}       
         }

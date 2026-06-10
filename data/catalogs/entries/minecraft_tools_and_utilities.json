@@ -85,7 +85,7 @@
           "water_bucket": "水入りバケツ",
           "lava_bucket": "溶岩入りバケツ",
           "powder_snow_bucket": "粉雪入りバケツ",
-          "milk_bucket": {"_source":"minecraft_food_and_drinks.json"},
+          "milk_bucket": {"source":"minecraft_food_and_drinks.json"},
           "bucket_of_axolotl": "ウーパールーパー入りバケツ",
           "bucket_of_cod": "タラ入りバケツ",
           "bucket_of_pufferfish": "フグ入りバケツ",
@@ -100,11 +100,11 @@
         "label": "実用品",
         "items": {
           "fishing_rod": "釣竿",
-          "fire_charge":  {"_source":"minecraft_materials.json"},
+          "fire_charge":  {"source":"minecraft_materials.json"},
           "flint_and_steel": "火打石と打ち金",
           "brush": "ブラシ",
           "shears": "ハサミ",
-          "bone_meal": {"_source":"minecraft_materials.json"},
+          "bone_meal": {"source":"minecraft_materials.json"},
           "name_tag": "名札",
           "lead": "リード"
         }
@@ -155,18 +155,18 @@
             "note": "太陽と月の絵が描かれた金時計。ピグリンが好きなもの。"
           },
           "spyglass": "望遠鏡",
-          "paper":  {"_source":"minecraft_materials.json"},
-          "book": {"_source":"minecraft_materials.json"},
+          "paper":  {"source":"minecraft_materials.json"},
+          "book": {"source":"minecraft_materials.json"},
           "book_and_quill": "本と羽根ペン"
             }
       },
       "mobility_and_riding": {
         "label": "移動・騎乗補助",
         "items": {
-          "ender_pearl": {"_source":"minecraft_materials.json"},
-          "eye_of_ender":  {"_source":"minecraft_materials.json"},
+          "ender_pearl": {"source":"minecraft_materials.json"},
+          "eye_of_ender":  {"source":"minecraft_materials.json"},
           "elytra": {"japanese":"エリトラ","note":"空を飛べるようになる不思議なマント"},
-          "firework_rocket":{ "_source":"minecraft_combat_items.json"},
+          "firework_rocket":{ "source":"minecraft_combat_items.json"},
           "saddle": "鞍",
           "carrot_on_a_stick": "ニンジン付きの棒",
           "warped_fungus_on_a_stick": {
@@ -223,8 +223,8 @@
       },
       "rails": {
         "label": "レール",
-        "_source":"block/minecraft_redstone_components.json",
-        "ref": [
+        "source":"block/minecraft_redstone_components.json",
+        "refs": [
           "rail",
           "powered_rail",
           "activator_rail",

@@ -43,15 +43,15 @@
     {
       "line": "ふるいけや　ウーパー飛び込み　ほねうかぶ",
       "biomes": ["lush_caves"],
-      "peaceful_mob_types_any": ["axolotl"]
+      "passive_mob_types_any": ["axolotl"]
     },
     {
       "line": "おさかなさん　色とりどりの　水の花",
-      "peaceful_mob_types_any": ["tropical_fish"]
+      "passive_mob_types_any": ["tropical_fish"]
     },
     {
       "line": "野にいでて　ひつじめえめえ　草がベリ！",
-      "peaceful_mob_types_any": ["sheep"],
+      "passive_mob_types_any": ["sheep"],
       "weather": "clear",
       "time_phase": "day"
     },

@@ -34,7 +34,7 @@
       },
       "stone": {
         "label": "石",
-        "_source": "block/minecraft_stone_blocks.json",
+        "source": "block/minecraft_stone_blocks.json",
         "refs": [
           "stone",
           "deepslate",
@@ -101,7 +101,7 @@
           "nether_quartz_ore": {"japanese": "ネザークォーツ鉱石","note":"ネザーで産出する白い水晶を含んだ鉱石"},
           "ancient_debris": {
             "japanese": "古代の残骸",
-            "_source": "minecraft_materials.json"
+            "source": "minecraft_materials.json"
           },
           "raw_iron_block": "鉄の原石ブロック",
           "raw_copper_block": "銅の原石ブロック",
@@ -141,7 +141,7 @@
         
         "groups": {
           "tree_logs_and_bamboo": {
-            "_source": "block/minecraft_wood_and_bamboo.json",
+            "source": "block/minecraft_wood_and_bamboo.json",
             "label": "原木・幹・竹",
             "refs": [
               "oak_log",

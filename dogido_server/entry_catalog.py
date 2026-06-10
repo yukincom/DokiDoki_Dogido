@@ -20,15 +20,21 @@ ITEM_CATALOG_FILES = (
 )
 
 # グループ構造を示すキー。これを持つ dict はエントリではなくグループとして辿る。
-GROUP_STRUCTURE_KEYS = {"items", "groups", "ref", "refs"}
+GROUP_STRUCTURE_KEYS = {"items", "groups", "refs"}
 
 # グループ直下にあってもエントリ id として扱わないキー。
 NON_ENTRY_KEYS = {
-    "label", "english", "japanese", "japanse", "note", "items", "groups",
-    "_source", "ref", "refs", "meta", "variants", "role",
+    "label", "english", "japanese", "note", "items", "groups",
+    "source", "refs", "meta", "variants", "role",
     "recommended_fields", "schema", "notes", "direct_labels", "description",
-    "priority", "poetic", "source", "parent",
+    "priority", "poetic", "parent",
 }
+
+
+def _is_source_pointer(value: Any) -> bool:
+    # source は「参照ポインタ（.json で終わる）」と「ただのメタ情報」の両方に
+    # 使われ得るので、ファイル参照の形をしているものだけ解決対象にする。
+    return isinstance(value, str) and value.strip().lower().endswith(".json")
 
 
 @lru_cache(maxsize=None)
@@ -392,33 +398,33 @@ def _find_canonical_payload(
     for found_id, payload, _group_path in _iter_document_entries(document):
         if found_id != entry_id:
             continue
-        if isinstance(payload, dict) and "_source" in payload:
+        if isinstance(payload, dict) and _is_source_pointer(payload.get("source")):
             if pointer is None:
                 pointer = payload
             continue
         return payload
     if pointer is not None:
-        next_path = _resolve_source_path(pointer.get("_source"))
+        next_path = _resolve_source_path(pointer.get("source"))
         if next_path is not None:
             return _find_canonical_payload(next_path, entry_id, _seen | {key})
     return None
 
 
 def _resolve_entry_payload(payload: Any, entry_id: str) -> Any:
-    if not isinstance(payload, dict) or "_source" not in payload:
+    if not isinstance(payload, dict) or not _is_source_pointer(payload.get("source")):
         return payload
     local = {
         key: value
         for key, value in payload.items()
-        if key not in {"_source", "ref", "refs"}
+        if key not in {"source", "refs"}
     }
-    source_path = _resolve_source_path(payload.get("_source"))
+    source_path = _resolve_source_path(payload.get("source"))
     canonical = _find_canonical_payload(source_path, entry_id) if source_path else None
     if canonical is None:
         LOGGER.warning(
             "entry_catalog_unresolved_entry_source id=%s spec=%r",
             entry_id,
-            payload.get("_source"),
+            payload.get("source"),
         )
         return local or None
     if isinstance(canonical, str):
@@ -431,7 +437,7 @@ def _resolve_entry_payload(payload: Any, entry_id: str) -> Any:
             {
                 key: value
                 for key, value in canonical.items()
-                if key not in {"_source", "ref", "refs"}
+                if key not in {"source", "refs"}
             }
         )
         return merged
@@ -468,7 +474,7 @@ def _iter_node_entries(
     #   {id: 名前, ...}    -> 子エントリのマップ
     # グループとして辿られたノード自身が japanese/note を持つ場合、
     # そのノード id を代表エントリとして放出する (例: lightning_rod, pot)。
-    if node_id and ({"japanese", "note", "_source"} & node.keys()):
+    if node_id and ({"japanese", "note", "source"} & node.keys()):
         self_payload = {
             key: value
             for key, value in node.items()
@@ -487,10 +493,8 @@ def _iter_node_entries(
                     yield str(sub_id), sub_label, group_path
     if resolve:
         ref_ids = node.get("refs")
-        if not isinstance(ref_ids, list):
-            ref_ids = node.get("ref")
-        source = node.get("_source")
-        if source is not None and isinstance(ref_ids, list):
+        source = node.get("source")
+        if _is_source_pointer(source) and isinstance(ref_ids, list):
             source_path = _resolve_source_path(source)
             if source_path is None:
                 LOGGER.warning(
@@ -541,7 +545,7 @@ def _iter_node_entries(
         elif isinstance(value, str):
             yield str(key), value, group_path
         elif isinstance(value, dict) and (
-            {"japanese", "label", "note", "_source"} & value.keys()
+            {"japanese", "label", "note", "source"} & value.keys()
         ):
             yield from _iter_entry_payload(str(key), value, group_path, resolve)
 
@@ -564,7 +568,7 @@ def _iter_entry_payload(
 
 
 def _maybe_resolve(payload: Any, entry_id: str, resolve: bool) -> Any:
-    if resolve and isinstance(payload, dict) and "_source" in payload:
+    if resolve and isinstance(payload, dict) and _is_source_pointer(payload.get("source")):
         return _resolve_entry_payload(payload, entry_id)
     return payload
 

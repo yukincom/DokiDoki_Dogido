@@ -384,6 +384,10 @@ class CueReactionsMixin:
         if boss_line is not None:
             return True, boss_line
 
+        neutral_turned = self._neutral_turned_hostile_callout(event, now)
+        if neutral_turned is not None:
+            return True, neutral_turned
+
         if signals.entered_close_flying_visual is not None:
             target = signals.entered_close_flying_visual
             self.state.commented_visual_keys[self._visual_identity_key(target)] = now

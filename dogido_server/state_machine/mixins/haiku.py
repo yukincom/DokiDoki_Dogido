@@ -184,7 +184,7 @@ class HaikuMixin:
             player_y=event.player.position.y,
             danger_darkness_score=event.world.danger_darkness_score,
             visual_threat_types=frozenset(threat.type for threat in event.visual_threats if threat.type),
-            peaceful_mob_types=frozenset(mob.type for mob in event.peaceful_mobs if mob.type),
+            passive_mob_types=frozenset(mob.type for mob in event.passive_mobs if mob.type),
             nearby_resources=tuple(
                 (
                     resource.name.split(":")[-1].strip().lower(),
@@ -246,14 +246,14 @@ class HaikuMixin:
             held_item_id=event.player.held_item,
         )
         nearby_blocks = tuple(self._haiku_nearby_block_values(event.nearby_resources))
-        peaceful_mobs = tuple(self._haiku_peaceful_mob_values(event))
+        passive_mobs = tuple(self._haiku_passive_mob_values(event))
         feature_candidates = tuple(
             self._haiku_feature_candidates(
                 event,
                 held_item=held_item,
                 inventory_items=inventory_items,
                 nearby_blocks=nearby_blocks,
-                peaceful_mobs=peaceful_mobs,
+                passive_mobs=passive_mobs,
             )
         )
         return HaikuContext(
@@ -272,10 +272,10 @@ class HaikuMixin:
             inventory_close_pair=inventory_close_pair,
             inventory_far_item=inventory_far_item,
             nearby_blocks=nearby_blocks,
-            peaceful_mobs=peaceful_mobs,
+            passive_mobs=passive_mobs,
             haiku_tags=tuple(self._haiku_tags(event, feature_candidates)),
             feature_candidates=feature_candidates,
-            candidate_tensions=tuple(self._haiku_candidate_tensions(event, held_item, peaceful_mobs, nearby_blocks)),
+            candidate_tensions=tuple(self._haiku_candidate_tensions(event, held_item, passive_mobs, nearby_blocks)),
         )
 
     def _haiku_feature_candidates(
@@ -285,7 +285,7 @@ class HaikuMixin:
         held_item: str,
         inventory_items: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
-        peaceful_mobs: tuple[str, ...],
+        passive_mobs: tuple[str, ...],
     ) -> list[HaikuFeature]:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
@@ -307,13 +307,13 @@ class HaikuMixin:
             HaikuFeature("周辺", f"nearby_{index}", label)
             for index, label in enumerate(nearby_blocks[:4], start=1)
         )
-        for index, mob_label in enumerate(peaceful_mobs[:3], start=1):
+        for index, mob_label in enumerate(passive_mobs[:3], start=1):
             candidates.append(
                 HaikuFeature(
                     "Mob",
                     f"mob_{index}",
                     mob_label,
-                    tags=mob_poetic_tags(self._peaceful_mob_type_for_label(event, mob_label)),
+                    tags=mob_poetic_tags(self._passive_mob_type_for_label(event, mob_label)),
                 )
             )
         return candidates[:14]
@@ -437,10 +437,10 @@ class HaikuMixin:
                 break
         return natural_values + other_values
 
-    def _haiku_peaceful_mob_values(self, event: GameEvent) -> list[str]:
+    def _haiku_passive_mob_values(self, event: GameEvent) -> list[str]:
         values: list[str] = []
         seen: set[str] = set()
-        for mob in event.peaceful_mobs:
+        for mob in event.passive_mobs:
             label = self._mob_label(mob.type)
             if not label or label in seen:
                 continue
@@ -454,7 +454,7 @@ class HaikuMixin:
         tags: list[str] = []
         for feature in features:
             tags.extend(feature.tags)
-        for mob in event.peaceful_mobs[:4]:
+        for mob in event.passive_mobs[:4]:
             tags.extend(mob_poetic_tags(mob.type))
         seen: set[str] = set()
         result: list[str] = []
@@ -471,7 +471,7 @@ class HaikuMixin:
         self,
         event: GameEvent,
         held_item: str,
-        peaceful_mobs: tuple[str, ...],
+        passive_mobs: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
     ) -> list[str]:
         tensions: list[str] = []
@@ -484,11 +484,11 @@ class HaikuMixin:
 
         if biome_group_id == "dry" and weather in {"rain", "thunder"}:
             tensions.append("乾いた土地やのに空だけ荒れとる")
-        if biome_group_id == "dry" and any(label in {"熱帯魚", "イカ", "フグ", "サケ", "タラ"} for label in peaceful_mobs):
+        if biome_group_id == "dry" and any(label in {"熱帯魚", "イカ", "フグ", "サケ", "タラ"} for label in passive_mobs):
             tensions.append(f"{biome_label}なのに水のいきものがおる")
-        if any(label == "熱帯魚" for label in peaceful_mobs) and "ocean" not in biome:
+        if any(label == "熱帯魚" for label in passive_mobs) and "ocean" not in biome:
             tensions.append("海やないのに熱帯魚がおる")
-        if any(label == "ヒツジ" for label in peaceful_mobs) and biome not in {"plains", "savanna", "meadow"}:
+        if any(label == "ヒツジ" for label in passive_mobs) and biome not in {"plains", "savanna", "meadow"}:
             tensions.append(f"{biome_label}やのにヒツジがのんびりしとる")
         if "シラカバの葉" in nearby_blocks and not biome.startswith("birch_") and biome != "old_growth_birch_forest":
             tensions.append(f"{biome_label}やのにシラカバの気配がある")
@@ -498,7 +498,7 @@ class HaikuMixin:
                 tensions.append(f"深い地下なのに手には{held_item}がある")
         if biome == "mushroom_fields":
             tensions.append("安全すぎて逆に妙や")
-        if time_phase == "night" and peaceful_mobs:
+        if time_phase == "night" and passive_mobs:
             tensions.append("夜やのにのどかな気配が残っとる")
         if time_phase == "day" and event.player.position.y is not None and event.player.position.y <= 16:
             tensions.append("昼やのに地の底みたいや")
@@ -513,8 +513,8 @@ class HaikuMixin:
                 break
         return result
 
-    def _peaceful_mob_type_for_label(self, event: GameEvent, label: str) -> str | None:
-        for mob in event.peaceful_mobs:
+    def _passive_mob_type_for_label(self, event: GameEvent, label: str) -> str | None:
+        for mob in event.passive_mobs:
             if self._mob_label(mob.type) == label:
                 return mob.type
         return None
@@ -569,7 +569,7 @@ class HaikuMixin:
 
     def _haiku_scene_strength(self, context: HaikuContext) -> int:
         score = 0
-        if context.peaceful_mobs:
+        if context.passive_mobs:
             score += 3
         if context.nearby_blocks:
             score += 3

@@ -21,7 +21,7 @@
 - 高精度の line-of-sight 判定
 - エンダーマンやウィッチの個別ロジック
 - ベッド/資源候補のワールドスキャン
-- `peaceful_mobs` と `nearby_resources` の本格収集
+- `passive_mobs` と `nearby_resources` の本格収集
 
 ## 設定ファイル
 

@@ -21,14 +21,14 @@
           "waxed_weathered_copper_lantern": {"japanese":"錆止めされた錆びた銅のランタン","note":"緑色の光を放つランタン"},
           "waxed_oxidized_copper_lantern": {"japanese":"錆止めされた酸化した銅のランタン","note":"緑色の光を放つランタン"},
           "end_rod": {"japanese": "エンドロッド","note":"白くキラキラと輝くロッド。熱を持っている"},
-          "glowstone": {"_source":" block/minecraft_natural_blocks.json"},
-          "shroomlight": {"_source":" block/minecraft_natural_blocks.json"},
-          "pearlescent_froglight": {"_source":" block/minecraft_natural_blocks.json"},
-          "verdant_froglight": {"_source":" block/minecraft_natural_blocks.json"},
-          "ochre_froglight": {"_source":" block/minecraft_natural_blocks.json"},
-          "crying_obsidian": {"_source":"block/minecraft_stone_blocks.json"},
-          "glow_lichen":  {"_source":" block/minecraft_natural_blocks.json"},
-          "magma_block": {"_source":" block/minecraft_natural_blocks.json"}
+          "glowstone": {"source":" block/minecraft_natural_blocks.json"},
+          "shroomlight": {"source":" block/minecraft_natural_blocks.json"},
+          "pearlescent_froglight": {"source":" block/minecraft_natural_blocks.json"},
+          "verdant_froglight": {"source":" block/minecraft_natural_blocks.json"},
+          "ochre_froglight": {"source":" block/minecraft_natural_blocks.json"},
+          "crying_obsidian": {"source":"block/minecraft_stone_blocks.json"},
+          "glow_lichen":  {"source":" block/minecraft_natural_blocks.json"},
+          "magma_block": {"source":" block/minecraft_natural_blocks.json"}
         }
         
       },
@@ -103,7 +103,7 @@
       "utility_blocks": {
         "label": "実用ブロック",
         "items": {
-          "end_crystal": {"_source":"minecraft_combat_items.json"},
+          "end_crystal": {"source":"minecraft_combat_items.json"},
           "bell": {
             "japanese": "鐘",
             "note": "金色。ピグリンが好きなもの。村の集会所。鳴らすと近くの襲撃者を発光させる。"
@@ -116,7 +116,7 @@
           "lodestone": {"japanese":"ロードストーン","note":"磁力を発生させる石。十字模様が書かれている。コンパスが狂う場所で目印として使おう"},
           "scaffolding": "足場",
           "ladder": "はしご",
-          "bee_nest": {"_source":"block/minecraft_natural_blocks.json "
+          "bee_nest": {"source":"block/minecraft_natural_blocks.json "
           },
           "beehive": {
             "japanese": "養蜂箱",
@@ -154,7 +154,7 @@
           "armor_stand": "防具立て",
           "item_frame": "額縁",
           "glow_item_frame": "輝く額縁",
-          "painting": {"_source": "minecraft_paintings.json"}
+          "painting": {"source": "minecraft_paintings.json"}
         }
       },
       "bookshelves_and_shelves": {
@@ -339,7 +339,7 @@
       "respawn_anchor":{"japanese": "リスポーンアンカー","note":"ネザーでリスポーン地点に設定できるブロック。上部に光る紫色の渦。横に金色のメーターが付いている。"},
       "beds": {
         "label": "ベッド",
-        "_source":"block/minecraft_colored_blocks.json",
+        "source":"block/minecraft_colored_blocks.json",
         "refs": [
           "white_bed",
           "orange_bed",
@@ -361,7 +361,7 @@
       },
       "candles": {
         "label": "ろうそく",
-        "_source":"block/minecraft_colored_blocks.json",
+        "source":"block/minecraft_colored_blocks.json",
         "refs": [
           "candle",
           "white_candle",
@@ -384,7 +384,7 @@
       },
       "banners": {
         "label": "旗",
-        "_source":"block/minecraft_colored_blocks.json",
+        "source":"block/minecraft_colored_blocks.json",
         "refs": [
           "white_banner",
           "orange_banner",
@@ -423,7 +423,7 @@
           "dragon_egg": {"japanese":"ドラゴンの卵","note":"ほんのり光る黒いドラゴンの卵"},
           "end_portal_frame": "エンドポータルフレーム",
           "vault": {"japanese":"宝物庫","note":"とってもいいものが入っている黒い箱"},
-          "eye_of_ender": {"_source":"minecraft_tools_and_utilities.json"}
+          "eye_of_ender": {"source":"minecraft_tools_and_utilities.json"}
         }
       },
       "copper_golem_statues": {

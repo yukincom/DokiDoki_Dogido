@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags
-from dogido_server.models import GameEvent, PeacefulMob
+from dogido_server.models import GameEvent, PassiveMob
 from dogido_server.state_machine.ambient_mob_catalog import (
     AmbientMobReactionContext,
     ambient_mob_fallback_candidates,
@@ -15,7 +15,7 @@ from dogido_server.state_machine.types import DerivedSignals
 
 
 class NarrationMixin:
-    def _ambient_mob_line(self, event: GameEvent, mobs: list[PeacefulMob]) -> str | None:
+    def _ambient_mob_line(self, event: GameEvent, mobs: list[PassiveMob]) -> str | None:
         if not mobs:
             return None
         candidates = self._ambient_mob_fallback_candidates(event, mobs)
@@ -23,7 +23,7 @@ class NarrationMixin:
             return None
         return candidates[0]
 
-    def _render_ambient_mob_line(self, event: GameEvent, mobs: list[PeacefulMob]) -> str | None:
+    def _render_ambient_mob_line(self, event: GameEvent, mobs: list[PassiveMob]) -> str | None:
         fallback = self._ambient_mob_line(event, mobs)
         if fallback is None or not mobs:
             return fallback
@@ -53,10 +53,10 @@ class NarrationMixin:
             temperature=0.48,
         )
 
-    def _ambient_mob_type_key(self, mob: PeacefulMob) -> str:
+    def _ambient_mob_type_key(self, mob: PassiveMob) -> str:
         return (mob.type or "").strip().lower()
 
-    def _next_ambient_mob_target(self, mobs: list[PeacefulMob], now: datetime) -> PeacefulMob | None:
+    def _next_ambient_mob_target(self, mobs: list[PassiveMob], now: datetime) -> PassiveMob | None:
         for mob in mobs:
             key = self._ambient_mob_type_key(mob)
             if not key:
@@ -71,10 +71,10 @@ class NarrationMixin:
     def _emit_ambient_mob_comment_line(self, event: GameEvent, now: datetime) -> str | None:
         # クールダウンは種ごと。別の種ならすぐ反応してよい
         # （⭕️「うしさんや」→「にわとりさんや」 ❌「うしさんや」→「うしさんや」）
-        target = self._next_ambient_mob_target(event.peaceful_mobs, now)
+        target = self._next_ambient_mob_target(event.passive_mobs, now)
         if target is None:
             return None
-        ordered_mobs = [target] + [mob for mob in event.peaceful_mobs if mob is not target]
+        ordered_mobs = [target] + [mob for mob in event.passive_mobs if mob is not target]
         line = self._render_ambient_mob_line(event, ordered_mobs)
         if not line:
             return None
@@ -84,7 +84,7 @@ class NarrationMixin:
         self.state.pending_haiku_after_preface = False
         return line
 
-    def _ambient_mob_fallback_candidates(self, event: GameEvent, mobs: list[PeacefulMob]) -> list[str]:
+    def _ambient_mob_fallback_candidates(self, event: GameEvent, mobs: list[PassiveMob]) -> list[str]:
         if not mobs:
             return []
         mob = mobs[0]

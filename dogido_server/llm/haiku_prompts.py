@@ -53,7 +53,7 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         f"- {candidate}" for candidate in candidate_tensions if isinstance(candidate, str)
     ) or "- なし"
     nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
-    peaceful_mobs = "、".join(str(item) for item in details.get("peaceful_mobs", []) if item) or "なし"
+    passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
     haiku_tags = "、".join(str(item) for item in details.get("haiku_tags", []) if item) or "なし"
     biome_traits = "、".join(str(item) for item in details.get("biome_traits", []) if item) or "なし"
     item_hint = _item_hint(details)
@@ -110,7 +110,7 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         f"- バイオーム分類: {details.get('biome_group', 'unknown')}\n"
         f"- バイオーム特徴: {biome_traits}\n"
         f"- 周辺ブロック: {nearby_blocks}\n"
-        f"- 平和なMob: {peaceful_mobs}\n"
+        f"- 平和なMob: {passive_mobs}\n"
         f"- アイテムヒント（弱）: {item_hint}\n"
         f"- 詩語ヒント: {haiku_tags}\n"
         f"- Z座標: {details.get('z_value', 0)}\n"
@@ -182,7 +182,7 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
     ) or "- なし"
     haiku_tags = "、".join(str(item) for item in details.get("haiku_tags", []) if item) or "なし"
     nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
-    peaceful_mobs = "、".join(str(item) for item in details.get("peaceful_mobs", []) if item) or "なし"
+    passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
     item_hint = _item_hint(details)
     user_prompt = (
         "以下の Minecraft 状況から、川柳の焦点になる『関係のある取り合わせ・印象的な場面』を1つだけ選ぶ。\n"
@@ -206,7 +206,7 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
         f"- 時間: {details.get('time_label', details.get('time_phase', 'unknown'))}\n"
         f"- アイテムヒント（弱）: {item_hint}\n"
         f"- 周辺ブロック: {nearby_blocks}\n"
-        f"- 平和なMob: {peaceful_mobs}\n"
+        f"- 平和なMob: {passive_mobs}\n"
         f"- 詩語ヒント: {haiku_tags}\n"
         "\n"
         "優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする。\n"
@@ -233,7 +233,7 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         f"- {candidate}" for candidate in details.get("candidate_tensions", []) if isinstance(candidate, str)
     ) or "- なし"
     nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
-    peaceful_mobs = "、".join(str(item) for item in details.get("peaceful_mobs", []) if item) or "なし"
+    passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
     item_hint = _item_hint(details)
     irony = details.get("irony")
     irony_block = "なし"
@@ -267,7 +267,7 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         f"- 時間: {details.get('time_label', details.get('time_phase', 'unknown'))}\n"
         f"- アイテムヒント（弱）: {item_hint}\n"
         f"- 周辺ブロック: {nearby_blocks}\n"
-        f"- 平和なMob: {peaceful_mobs}\n"
+        f"- 平和なMob: {passive_mobs}\n"
         "\n"
         "優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする。\n"
         "summary は後段で5-7-5に圧縮しやすい、具体的で短い場面説明にする。\n"

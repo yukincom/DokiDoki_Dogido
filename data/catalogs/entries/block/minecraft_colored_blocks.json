@@ -291,7 +291,7 @@
       "cakes": {
         "label": "ケーキ",
         "items": {
-          "cake": {"_source":"minecraft_food_and_drinks.json"},
+          "cake": {"source":"minecraft_food_and_drinks.json"},
           "candle_cake": "ろうそくが立てられたケーキ",
           "white_candle_cake": "白色のろうそくが立てられたケーキ",
           "orange_candle_cake": "橙色のろうそくが立てられたケーキ",

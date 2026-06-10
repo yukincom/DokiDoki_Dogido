@@ -3,7 +3,12 @@
   "calls": {
     "classic_ushiro_call": "志村！うしろ！うしろ〜！",
     "named_ushiro_call": "{player_name}うしろ！うしろ〜！",
-    "charged_creeper": "うわああっ！帯電クリーパーや！！逃げろぉ！！"
+    "charged_creeper": "うわああっ！帯電クリーパーや！！逃げろぉ！！",
+    "neutral_turned_hostile_variants": [
+      "{player_name}！{label}の動きが怪しいで！",
+      "{player_name}、{label}が睨んどる！なんか怒らせたんちゃう！？",
+      "あかん、{label}がこっち来る気や！気ぃつけて！"
+    ]
   },
   "pressure": {
     "stalled_visual_suppressed": "まだ減ってへん……。",

@@ -47,7 +47,7 @@
         "items": {
           "stick": "棒",
           "flint": "火打石",
-          "wheat": {"japanese":"小麦","_source":"minecraft_food_and_drinks.json"},  
+          "wheat": {"japanese":"小麦","source":"minecraft_food_and_drinks.json"},  
           "feather": "羽根",
           "string": "糸",
           "bone": "骨",
@@ -68,7 +68,7 @@
           "leather": "革",
           "rabbit_hide": "ウサギの皮",
           "honeycomb": "ハニカム",
-          "resin_clump": {"japanese":"樹脂の塊","_source":"block/minecraft_natural_blocks.json"},
+          "resin_clump": {"japanese":"樹脂の塊","source":"block/minecraft_natural_blocks.json"},
           "ink_sac": {"japanese":"イカスミ","note":"黒の染料になる。食べることはできない。"},
           "glow_ink_sac": {"japanese":"輝くイカスミ","note":"輝くイカからとれるイカ墨。蛍光塗料になる。"},
           "turtle_scute": "カメのウロコ",
@@ -122,9 +122,9 @@
         "label": "加工素材",
         "items": {
           "bowl": "ボウル",
-          "brick": {"japanese":"レンガ","_source":"block/minecraft_stone_blocks.json"},
-          "nether_brick": {"japanese":"ネザーレンガ","_source":"block/minecraft_stone_blocks.json"},
-          "resin_brick": {"japanese":"樹脂レンガ","_source":"block/minecraft_wood_and_bamboo.json"}
+          "brick": {"japanese":"レンガ","source":"block/minecraft_stone_blocks.json"},
+          "nether_brick": {"japanese":"ネザーレンガ","source":"block/minecraft_stone_blocks.json"},
+          "resin_brick": {"japanese":"樹脂レンガ","source":"block/minecraft_wood_and_bamboo.json"}
         }
       },
       "paper_bottle_and_firework_materials": {
@@ -139,10 +139,10 @@
       "brewing_materials": {
         "label": "醸造素材",
         "items": {
-          "nether_wart": {"japanese":"ネザーウォート","_source":"minecraft_materials.json"},
+          "nether_wart": {"japanese":"ネザーウォート","source":"minecraft_materials.json"},
           "redstone_dust": {
             "japanese": "レッドストーンダスト",
-            "_source":"block/minecraft_redstone_components.json"
+            "source":"block/minecraft_redstone_components.json"
           },
           "glowstone_dust": {"japanese":"グロウストーンダスト","note":"キラキラと黄金色に輝く粉"},
           "gunpowder": "火薬",
@@ -153,17 +153,17 @@
           "rabbits_foot": "ウサギの足",
           "glistering_melon_slice": {
             "japanese": "きらめくスイカの薄切り",
-            "_source": "minecraft_food_and_drinks.json"
+            "source": "minecraft_food_and_drinks.json"
           },
           "spider_eye": {"japanese":"クモの目","note":"食べると毒。アルマジロの好物"},
           "pufferfish": {"japanese":"フグ","note":"食べられないことはない。しかし、かなり勇気が必要"},
           "magma_cream": {"japanese":"マグマクリーム","note":"マグマキューブから取れる。緑と赤のバイカラーのクリーム。ひんやりしている。"},
           "golden_carrot": {
             "japanese": "金のニンジン",
-            "_source": "minecraft_food_and_drinks.json"
+            "source": "minecraft_food_and_drinks.json"
           },
           "ghast_tear": {"japanese":"ガストの涙","note":"ガストというネザーの宙に浮く白い幽霊のような生物が流した涙。魂の谷を舞う彼らがなぜ泣くのか、誰も知らない"},
-          "turtle_shell": {"japanese":"カメの甲羅","_source":"minecraft_combat_items.json"},
+          "turtle_shell": {"japanese":"カメの甲羅","source":"minecraft_combat_items.json"},
           "phantom_membrane": {"japanese":"ファントムの皮膜","note":"ファントムという夜空を飛ぶアンデットの皮膜。白っぽい色"}
         }
       },

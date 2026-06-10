@@ -269,10 +269,12 @@ class AuditoryThreat(DogidoModel):
     spoken_name_allowed: bool = False  # 発話で具体名を出してよいか（原則 False）
 
 
-class PeacefulMob(DogidoModel):
-    """昼の雑談に使う平和 mob（仕様 §13）。
+class PassiveMob(DogidoModel):
+    """周囲にいる非敵対モブ（仕様 §13）。
 
-    脅威判定には使わず、ドギドの「かわい〜！」系リアクションのトリガーに使う。
+    脅威判定には使わず、ドギドの「かわい〜！」系リアクションや川柳の題材に使う。
+    友好（passive）種に加え、まだ敵対していない中立（neutral）種も
+    temperament="neutral" として載ってよい。
     """
     type: str
     distance: float | None = None
@@ -342,8 +344,9 @@ class GameEvent(DogidoModel):
 
     必須: schema_version / game / adapter / observed_at / event
     推奨: sequence / visual_threats / auditory_threats / inventory / combat
-    任意: peaceful_mobs / nearby_resources / meta
-    peaceful_mobs は旧スキーマ名。内部では passive_mobs 相当として扱う。
+    任意: passive_mobs / nearby_resources / meta
+    passive_mobs には非敵対状態の中立モブも temperament="neutral" で含まれる。
+    旧スキーマ名 peaceful_mobs も受信時に受け付ける。
 
     inventory: キーは Minecraft item id、値は所持数。
                松明・石炭・木材・ベッド材料の有無を暗所対処フローで参照する。
@@ -358,7 +361,7 @@ class GameEvent(DogidoModel):
     world: WorldState = Field(default_factory=WorldState)
     visual_threats: list[VisualThreat] = Field(default_factory=list)
     auditory_threats: list[AuditoryThreat] = Field(default_factory=list)
-    peaceful_mobs: list[PeacefulMob] = Field(default_factory=list)
+    passive_mobs: list[PassiveMob] = Field(default_factory=list)
     inventory: dict[str, int] = Field(default_factory=dict)
     nearby_resources: list[NearbyResource] = Field(default_factory=list)
     combat: CombatState = Field(default_factory=CombatState)
@@ -366,18 +369,15 @@ class GameEvent(DogidoModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _accept_passive_mobs_alias(cls, value: object) -> object:
+    def _accept_legacy_peaceful_mobs(cls, value: object) -> object:
+        # 旧スキーマ名 peaceful_mobs からの移行用
         if not isinstance(value, dict):
             return value
-        if "peaceful_mobs" not in value and "passive_mobs" in value:
+        if "passive_mobs" not in value and "peaceful_mobs" in value:
             cloned = dict(value)
-            cloned["peaceful_mobs"] = cloned.get("passive_mobs")
+            cloned["passive_mobs"] = cloned.get("peaceful_mobs")
             return cloned
         return value
-
-    @property
-    def passive_mobs(self) -> list[PeacefulMob]:
-        return self.peaceful_mobs
 
 
 # ---- API リクエスト / レスポンス ----

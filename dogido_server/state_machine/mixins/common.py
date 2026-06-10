@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import lru_cache
 
+from dogido_server.entry_catalog import neutral_mob_entries
 from dogido_server.models import EventName, GameEvent, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.response_catalog import (
@@ -11,6 +13,11 @@ from dogido_server.state_machine.response_catalog import (
     selected_ushiro_call_text,
     special_biome_entry_lines,
 )
+
+
+@lru_cache(maxsize=1)
+def _neutral_mob_type_set() -> frozenset[str]:
+    return frozenset(neutral_mob_entries().keys())
 
 
 class CommonMixin:
@@ -137,6 +144,41 @@ class CommonMixin:
         self.state.warden_ranged_trap_comment_count += 1
         self.state.last_warden_ranged_trap_comment_at = now
         return lines[index]
+
+    def _neutral_turned_hostile_callout(self, event: GameEvent, now: datetime) -> str | None:
+        """さっきまで平和な姿で見えていた中立モブが脅威化したら警告する。
+
+        キュー音声（固定文・LLMなし）。バリエーションは combat.json の
+        neutral_turned_hostile_variants から決定的に選ぶ。
+        """
+        for threat in event.visual_threats:
+            mob_type = (threat.type or "").strip().lower()
+            if not mob_type or mob_type not in _neutral_mob_type_set():
+                continue
+            seen_ms = self._recent_ms(
+                now, self.state.recent_passive_mob_seen_at_by_type.get(mob_type)
+            )
+            if seen_ms is None or seen_ms > self.settings.neutral_hostility_memory_ms:
+                continue
+            commented_ms = self._recent_ms(
+                now,
+                self.state.last_neutral_turned_hostile_comment_at_by_type.get(mob_type),
+            )
+            if (
+                commented_ms is not None
+                and commented_ms < self.settings.neutral_turned_hostile_comment_cooldown_ms
+            ):
+                continue
+            self.state.last_neutral_turned_hostile_comment_at_by_type[mob_type] = now
+            self.state.commented_visual_keys[self._visual_identity_key(threat)] = now
+            self._mark_visual_priority_callout(now, single_type=None)
+            lines = response_lines("combat", "calls", "neutral_turned_hostile_variants")
+            line = self._select_deterministic_line(f"{event.sequence or ''}|{mob_type}", lines)
+            return (
+                line.replace("{player_name}", self._player_call_name(event))
+                .replace("{label}", self._hostile_label(mob_type))
+            )
+        return None
 
     def _ominous_sound_kind(self, event: GameEvent) -> str | None:
         kind = (event.world.ominous_sound_kind or "").strip().lower()
@@ -406,7 +448,7 @@ class CommonMixin:
         return (event.player.dimension or "").strip().lower()
 
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
-        if not event.peaceful_mobs:
+        if not event.passive_mobs:
             return False
         if self._player_input_priority_active(now):
             return False
@@ -415,7 +457,7 @@ class CommonMixin:
         if event.event.name not in {EventName.AMBIENT_MOB_DETECTED, EventName.STATUS_SNAPSHOT}:
             return False
         # クールダウンは種ごとに管理する。別の種が見えたならすぐ反応してよい
-        if self._next_ambient_mob_target(event.peaceful_mobs, now) is None:
+        if self._next_ambient_mob_target(event.passive_mobs, now) is None:
             return False
         if event.event.name == EventName.AMBIENT_MOB_DETECTED:
             return True
