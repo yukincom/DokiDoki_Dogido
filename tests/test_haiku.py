@@ -72,46 +72,61 @@ def make_snapshot(
 
 class HaikuStateMachineTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.settings = Settings(llm_enabled=False, decision_policy="py_trees")
+        # ルール検証用テストは旧来のタイミング設計（300秒で発句）を維持する。
+        # 実運用デフォルト（10分周期 + 30秒静寂）は
+        # test_haiku_emits_on_interval_after_quiet_window で検証する。
+        self.settings = Settings(
+            llm_enabled=False,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
         self.machine = DogidoStateMachine(self.settings)
         self.base_time = datetime(2026, 5, 31, 12, 0, 0, tzinfo=timezone.utc)
 
-    def test_haiku_emits_after_silence_and_resets_on_morning(self) -> None:
-        self.assertEqual(self.machine.process(make_snapshot(self.base_time)).actions, [])
+    def test_haiku_emits_on_interval_after_quiet_window(self) -> None:
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+
+        # 初回イベントから10分周期が始まる
+        self.assertEqual(machine.process(make_snapshot(self.base_time)).actions, [])
         self.assertEqual(
-            self.machine.process(make_snapshot(self.base_time + timedelta(seconds=299))).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=599))).actions,
             [],
         )
 
-        emitted = self.machine.process(make_snapshot(self.base_time + timedelta(seconds=301))).actions
+        # 10分経過 + 30秒以上の静けさ → 発句
+        emitted = machine.process(make_snapshot(self.base_time + timedelta(seconds=601))).actions
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
+        # 詠んだ直後は次の周期まで出ない
         self.assertEqual(
-            self.machine.process(make_snapshot(self.base_time + timedelta(seconds=602))).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=700))).actions,
             [],
         )
 
+        # 次の周期で再び詠む
+        second = machine.process(make_snapshot(self.base_time + timedelta(seconds=1202))).actions
+        self.assertEqual(len(second), 1)
+        self.assertEqual(second[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
+
+    def test_haiku_waits_for_quiet_window_after_priority_activity(self) -> None:
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+
+        machine.process(make_snapshot(self.base_time))
+        # 周期は満ちているが、直前にプレイヤー入力があった場合は静けさを待つ
+        machine.process(
+            make_snapshot(self.base_time + timedelta(seconds=610), user_text="ねえドギド")
+        )
         self.assertEqual(
-            self.machine.process(
-                make_snapshot(
-                    self.base_time + timedelta(seconds=302),
-                    time_phase="morning",
-                    time_of_day=1000,
-                )
-            ).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=620))).actions,
             [],
         )
 
-        morning_emitted = self.machine.process(
-            make_snapshot(
-                self.base_time + timedelta(seconds=603),
-                time_phase="morning",
-                time_of_day=1000,
-            )
-        ).actions
-        self.assertEqual(len(morning_emitted), 1)
-        self.assertEqual(morning_emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
+        # 入力が止んで30秒すぎ + 入力優先クールダウンが明けたら詠む
+        emitted = machine.process(make_snapshot(self.base_time + timedelta(seconds=731))).actions
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
     def test_user_text_resets_silence_timer(self) -> None:
         self.machine.process(make_snapshot(self.base_time))
@@ -348,7 +363,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                     "confidence": 0.8,
                 }
 
-        settings = Settings(llm_enabled=True, decision_policy="py_trees")
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
         machine = DogidoStateMachine(settings, llm=FakeLLM())
         sheep = PeacefulMob(type="sheep")
         machine.process(

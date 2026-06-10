@@ -30,8 +30,11 @@ class RuntimeState:
     shut_up_count: int = 0
     last_non_silent_at: datetime | None = None
     last_player_input_at: datetime | None = None
-    haiku_emitted_this_cycle: bool = False
+    last_haiku_emitted_at: datetime | None = None
     pending_haiku_after_preface: bool = False
+    # 友好・中立モブへの反応クールダウンは種ごとに管理する
+    last_ambient_mob_comment_at_by_type: dict[str, datetime] = field(default_factory=dict)
+    last_warden_sonic_boom_scream_at: datetime | None = None
     last_time_phase: str | None = None
     suppression_started_at: datetime | None = None
     suppression_until: datetime | None = None

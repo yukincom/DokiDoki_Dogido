@@ -19,6 +19,7 @@ DEFAULT_CUE_FILES = {
     "panic_spider": "panic/universfield-man-scream-08-352438.mp3",
     "panic_witch": "panic/universfield-man-scream-08-352438.mp3",
     "panic_enderman": "panic/universfield-man-scream-08-352438.mp3",
+    "warden_sonic_boom_scream": "panic/universfield-man-scream-08-352438.mp3",
 }
 
 

@@ -129,9 +129,8 @@ class ActionBuilderMixin:
             return actions
 
         if next_mode == "normal" and self._should_emit_ambient_mob_comment(event, now):
-            line = self._render_ambient_mob_line(event, event.peaceful_mobs)
+            line = self._emit_ambient_mob_comment_line(event, now)
             if line:
-                self.state.last_ambient_mob_comment_at = now
                 actions.append(AudioAction(layer="speech", interrupt=False, text=line))
             return actions
 

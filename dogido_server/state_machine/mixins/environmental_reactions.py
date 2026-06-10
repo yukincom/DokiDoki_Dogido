@@ -187,6 +187,10 @@ class EnvironmentalReactionsMixin:
         previous_mode: str,
         now: datetime,
     ) -> list[AudioAction]:
+        # ノーマルモード中でもウォーデンのビームには即座に悲鳴を上げる
+        sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
+        if sonic_boom_cue is not None:
+            return [sonic_boom_cue]
         stop_dark_push = self._should_stop_dark_push_audio(event, signals)
         blocked = self._blocked_environmental_actions(event, signals, now, stop_dark_push)
         if blocked is not None:
@@ -286,13 +290,9 @@ class EnvironmentalReactionsMixin:
             return []
         if not event.peaceful_mobs or event.visual_threats or event.auditory_threats:
             return []
-        recent_ms = self._recent_ms(now, self.state.last_ambient_mob_comment_at)
-        if recent_ms is not None and recent_ms < self.settings.ambient_mob_comment_cooldown_ms:
-            return []
-        line = self._render_ambient_mob_line(event, event.peaceful_mobs)
+        line = self._emit_ambient_mob_comment_line(event, now)
         if not line:
             return []
-        self.state.last_ambient_mob_comment_at = now
         return [self._speech_action(line)]
 
     def _night_warning_actions(self, event: GameEvent, now: datetime) -> list[AudioAction]:
@@ -351,6 +351,12 @@ class EnvironmentalReactionsMixin:
             return night_warning_actions
         if self._player_input_priority_active(now):
             return []
+
+        # 発句済みの川柳は最優先で本句を完了させる（次のスナップショットで出す）
+        if self.state.pending_haiku_after_preface:
+            haiku_completion = self._emit_haiku_line(event, now)
+            if haiku_completion:
+                return self._speech_actions(haiku_completion)
 
         overworld_return_line = self._emit_pending_overworld_return_line(now)
         if overworld_return_line:

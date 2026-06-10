@@ -125,6 +125,8 @@ class NormalEnvironmentEvent(_Condition):
                 and (context.event.world.nearby_firefly_bush_count or 0) > 0
             )
             or context.machine._should_consider_night_warning(context.event)
+            # 発句済みの川柳の完了を取りこぼさない
+            or context.machine.state.pending_haiku_after_preface
             or context.machine._should_emit_haiku(context.event, context.now)
             or context.machine._should_emit_emergency_shelter_advice(context.event, context.signals)
             or context.machine._should_emit_emergency_shelter_morning_call(context.event, context.signals)
@@ -294,9 +296,8 @@ class EmitAmbientMobActions(_Action):
         super().__init__(name="EmitAmbientMobActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
-        line = context.machine._render_ambient_mob_line(context.event, context.event.peaceful_mobs)
+        line = context.machine._emit_ambient_mob_comment_line(context.event, context.now)
         if line:
-            context.machine.state.last_ambient_mob_comment_at = context.now
             actions.append(
                 context.machine._audio_action(
                     layer="speech",

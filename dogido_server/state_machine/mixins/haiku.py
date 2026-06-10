@@ -86,16 +86,17 @@ class HaikuMixin:
             return False
         if self.state.mode != "normal":
             return False
-        if self.state.haiku_emitted_this_cycle:
-            return False
         if event.visual_threats or event.auditory_threats or self.player_input.should_block_ambient:
             return False
         if self.state.pending_special_biome_line is not None:
             return False
+        interval_ms = self._recent_ms(now, self.state.last_haiku_emitted_at)
+        if interval_ms is None or interval_ms < self.settings.haiku_interval_ms:
+            return False
         quiet_ms = self._recent_ms(now, self.state.last_non_silent_at)
         if quiet_ms is None:
             return False
-        return quiet_ms >= self.settings.haiku_silence_time_ms
+        return quiet_ms >= self.settings.haiku_quiet_time_ms
 
     def _should_complete_prefaced_haiku(self, event: GameEvent) -> bool:
         if not self.state.pending_haiku_after_preface:
@@ -113,7 +114,7 @@ class HaikuMixin:
     def _emit_haiku_line(self, event: GameEvent, now: datetime) -> str | None:
         if self._should_complete_prefaced_haiku(event):
             self.state.pending_haiku_after_preface = False
-            self.state.haiku_emitted_this_cycle = True
+            self.state.last_haiku_emitted_at = now
             line = self._render_haiku_line(event).strip()
             LOGGER.warning(
                 "haiku_emit result=emitted text=%s",
@@ -126,7 +127,7 @@ class HaikuMixin:
             self.state.pending_haiku_after_preface = True
             LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log("ここで一句。"))
             return "ここで一句。"
-        self.state.haiku_emitted_this_cycle = True
+        self.state.last_haiku_emitted_at = now
         line = self._format_haiku_line(self._render_haiku_line(event))
         LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))
         return line

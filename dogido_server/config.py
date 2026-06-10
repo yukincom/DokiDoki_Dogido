@@ -189,11 +189,17 @@ class Settings(BaseSettings):
     warden_chasing_comment_cooldown_ms: int = 60000
     warden_ranged_trap_comment_cooldown_ms: int = 60000
     warden_ranged_trap_max_comments: int = 2
+    # ウォーデンのビーム（sonic boom）は鮮度内なら必ず悲鳴を上げる
+    warden_sonic_boom_fresh_ms: int = 2500
+    warden_sonic_boom_scream_cooldown_ms: int = 4000
     ushiro_comment_cooldown_ms: int = 60000
     weather_sound_recent_ms: int = 4000
     nearby_lightning_recent_ms: int = 2000
     nearby_lightning_comment_cooldown_ms: int = 10000
-    haiku_silence_time_ms: int = 300000
+    # 川柳は約10分に1回。優先イベント（脅威・モブ反応・入力・発話）の後は
+    # 30秒の静けさを待ってから詠む
+    haiku_interval_ms: int = 600000
+    haiku_quiet_time_ms: int = 30000
     haiku_structured_max_tokens: int = 192
     hostile_comment_cooldown_ms: int = 60000
     occluded_hostile_presence_comment_cooldown_ms: int = 180000

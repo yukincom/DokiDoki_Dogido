@@ -16,8 +16,19 @@ class StateUpdatesMixin:
         time_phase = self._effective_time_phase(event)
         if self.state.last_non_silent_at is None:
             self.state.last_non_silent_at = now
+        if self.state.last_haiku_emitted_at is None:
+            # 初回イベントから川柳の10分周期を始める
+            self.state.last_haiku_emitted_at = now
+        # 優先イベント（脅威・プレイヤー入力）が来たら発句中の川柳はキャンセルする。
+        # 周期 (last_haiku_emitted_at) はそのままなので、静けさが戻って
+        # haiku_quiet_time_ms 経過後に再発句される。
+        if self.state.pending_haiku_after_preface and (
+            event.visual_threats
+            or event.auditory_threats
+            or self.player_input.breaks_silence
+        ):
+            self.state.pending_haiku_after_preface = False
         if time_phase == "morning" and self.state.last_time_phase != "morning":
-            self.state.haiku_emitted_this_cycle = False
             self.state.pending_haiku_after_preface = False
         self.state.last_time_phase = time_phase
         if time_phase != "night":

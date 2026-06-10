@@ -22,7 +22,27 @@ class CueReactionsMixin:
     ) -> AudioAction | None:
         return self._threat_entry_cue(event, signals, now, has_callout)
 
+    def _warden_sonic_boom_scream_cue(self, event: GameEvent, now: datetime) -> AudioAction | None:
+        # ビームは命に関わるので、ディープダークの静音抑制や
+        # 直前の悲鳴クールダウンよりも優先して悲鳴を上げる
+        if not self._detect_warden_sonic_boom(event):
+            return None
+        recent_ms = self._recent_ms(now, self.state.last_warden_sonic_boom_scream_at)
+        if recent_ms is not None and recent_ms < self.settings.warden_sonic_boom_scream_cooldown_ms:
+            return None
+        self.state.last_warden_sonic_boom_scream_at = now
+        self._log_panic_cue_decision(
+            "warden_sonic_boom_scream",
+            "warden_sonic_boom",
+            event,
+            interrupt=True,
+        )
+        return self._build_cue_action("warden_sonic_boom_scream", "ぎゃあああ！！", now, protect_ms=1500)
+
     def _suppressed_entry_cue(self, event: GameEvent, previous_mode: str, now: datetime) -> AudioAction | None:
+        sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
+        if sonic_boom_cue is not None:
+            return sonic_boom_cue
         if self._should_suppress_panic_cues(event):
             return None
         if not self._can_emit_panic_cue(now):
@@ -52,6 +72,9 @@ class CueReactionsMixin:
         now: datetime,
         has_callout: bool,
     ) -> AudioAction | None:
+        sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
+        if sonic_boom_cue is not None:
+            return sonic_boom_cue
         boss_reveal_target = self._boss_reveal_target(event)
         if (self._should_suppress_panic_cues(event) and boss_reveal_target is None) or not self._can_emit_panic_cue(now):
             return None

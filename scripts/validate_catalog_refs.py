@@ -83,6 +83,9 @@ def check_node(node: object, *, file: Path, path: str, under_items: bool) -> Non
     for typo, correct in KEY_TYPOS.items():
         if typo in node:
             issues.append(f"[typo] {file.name} {path}: キー '{typo}' (正: '{correct}')")
+    for key in node:
+        if isinstance(key, str) and key.rstrip() != key.rstrip(": "):
+            issues.append(f"[typo] {file.name} {path}: キー '{key}' に余分なコロン/空白")
     source = node.get("_source")
     if source is not None:
         target = resolve_source(str(source))

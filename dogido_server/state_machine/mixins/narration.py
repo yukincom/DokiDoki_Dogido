@@ -1,6 +1,8 @@
 # state_machine/mixins/narration.py
 from __future__ import annotations
 
+from datetime import datetime
+
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags
 from dogido_server.models import GameEvent, PeacefulMob
 from dogido_server.state_machine.ambient_mob_catalog import (
@@ -50,6 +52,37 @@ class NarrationMixin:
             },
             temperature=0.48,
         )
+
+    def _ambient_mob_type_key(self, mob: PeacefulMob) -> str:
+        return (mob.type or "").strip().lower()
+
+    def _next_ambient_mob_target(self, mobs: list[PeacefulMob], now: datetime) -> PeacefulMob | None:
+        for mob in mobs:
+            key = self._ambient_mob_type_key(mob)
+            if not key:
+                continue
+            recent_ms = self._recent_ms(
+                now, self.state.last_ambient_mob_comment_at_by_type.get(key)
+            )
+            if recent_ms is None or recent_ms >= self.settings.ambient_mob_comment_cooldown_ms:
+                return mob
+        return None
+
+    def _emit_ambient_mob_comment_line(self, event: GameEvent, now: datetime) -> str | None:
+        # クールダウンは種ごと。別の種ならすぐ反応してよい
+        # （⭕️「うしさんや」→「にわとりさんや」 ❌「うしさんや」→「うしさんや」）
+        target = self._next_ambient_mob_target(event.peaceful_mobs, now)
+        if target is None:
+            return None
+        ordered_mobs = [target] + [mob for mob in event.peaceful_mobs if mob is not target]
+        line = self._render_ambient_mob_line(event, ordered_mobs)
+        if not line:
+            return None
+        self.state.last_ambient_mob_comment_at = now
+        self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
+        # モブ反応が優先。発句中の川柳はキャンセルし、静けさが戻ってから再発句する
+        self.state.pending_haiku_after_preface = False
+        return line
 
     def _ambient_mob_fallback_candidates(self, event: GameEvent, mobs: list[PeacefulMob]) -> list[str]:
         if not mobs:

@@ -87,6 +87,7 @@ class CommonMixin:
 
     def _reset_warden_combat_comment_state(self) -> None:
         self.state.last_warden_chasing_comment_at = None
+        self.state.last_warden_sonic_boom_scream_at = None
         self.state.warden_attack_start_announced = False
         self.state.warden_ranged_trap_comment_count = 0
         self.state.last_warden_ranged_trap_comment_at = None
@@ -154,13 +155,14 @@ class CommonMixin:
             return False
         biome = (event.world.biome or "").strip().lower()
         if normalized in {"sculk_sensor", "sculk_shrieker"}:
-            return biome == "deep_dark"
-        if normalized in {"warden_heartbeat", "warden_presence"}:
+            # スカルク音はディープダーク、またはウォーデンの気配がある場面で反応する
             if biome == "deep_dark":
                 return True
             if self._is_warden_visual_present(event):
                 return True
             return any((threat.label or "").strip().lower() == "warden" for threat in event.auditory_threats)
+        # ウォーデン固有音（心音・presence・ビーム）はバイオームを問わず反応する。
+        # 地上にスポーンしたウォーデンでもディープダークと同じ挙動にする。
         return True
 
     def _ominous_sound_severity(self, kind: str | None) -> int:
@@ -173,7 +175,20 @@ class CommonMixin:
             return 3
         if normalized == "warden_presence":
             return 4
+        if normalized == "warden_sonic_boom":
+            return 5
         return 0
+
+    def _detect_warden_sonic_boom(self, event: GameEvent) -> bool:
+        kind = (event.world.ominous_sound_kind or "").strip().lower()
+        if kind == "warden_sonic_boom":
+            recent_ms = event.world.ominous_sound_recent_ms
+            if recent_ms is not None and recent_ms <= self.settings.warden_sonic_boom_fresh_ms:
+                return True
+        return any(
+            "sonic_boom" in (threat.sound_event or "").strip().lower()
+            for threat in event.auditory_threats
+        )
 
     def _ominous_sound_presence_active(self, now: datetime) -> bool:
         if not self.state.last_ominous_sound_kind:
@@ -399,8 +414,8 @@ class CommonMixin:
             return False
         if event.event.name not in {EventName.AMBIENT_MOB_DETECTED, EventName.STATUS_SNAPSHOT}:
             return False
-        recent_ms = self._recent_ms(now, self.state.last_ambient_mob_comment_at)
-        if recent_ms is not None and recent_ms < self.settings.ambient_mob_comment_cooldown_ms:
+        # クールダウンは種ごとに管理する。別の種が見えたならすぐ反応してよい
+        if self._next_ambient_mob_target(event.peaceful_mobs, now) is None:
             return False
         if event.event.name == EventName.AMBIENT_MOB_DETECTED:
             return True
