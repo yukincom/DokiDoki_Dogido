@@ -62,34 +62,56 @@ def looks_like_group(value: object) -> bool:
     )
 
 
-def entry_ids_in_file(path: Path) -> set[str]:
-    ids: set[str] = set()
+def entry_ids_in_file(path: Path) -> dict[str, int]:
+    ids: dict[str, int] = {}
+
+    def add(key: object) -> None:
+        ids[str(key)] = ids.get(str(key), 0) + 1
 
     def walk(node: object) -> None:
         if not isinstance(node, dict):
             return
         items = node.get("items")
         if isinstance(items, dict):
-            ids.update(str(key) for key in items)
-            for value in items.values():
+            for key, value in items.items():
+                add(key)
                 walk(value)
         groups = node.get("groups")
         if isinstance(groups, dict):
-            for value in groups.values():
+            for group_id, value in groups.items():
+                # label がオブジェクトのグループは「代表エントリ」を兼ねる
+                # （例: bamboo, deepslate）。ローダーと同じ扱いで id に数える。
+                if isinstance(value, dict):
+                    label_value = value.get("label")
+                    if isinstance(label_value, dict) and (
+                        {"japanese", "label", "note"} & label_value.keys()
+                    ):
+                        add(group_id)
+                    elif "refs" not in value and (
+                        {"japanese", "note", "source"} & value.keys()
+                    ):
+                        add(group_id)
                 walk(value)
         for key, value in node.items():
             if key in {"items", "groups"}:
                 continue
             if isinstance(value, dict):
                 if key not in RESERVED_KEYS:
-                    ids.add(str(key))
+                    add(key)
                 walk(value)
     data = json.loads(path.read_text(encoding="utf-8"))
     walk(data)
     return ids
 
 
-def check_node(node: object, *, file: Path, path: str, under_items: bool) -> None:
+def check_node(
+    node: object,
+    *,
+    file: Path,
+    path: str,
+    under_items: bool,
+    node_key: str | None = None,
+) -> None:
     if not isinstance(node, dict):
         return
     for typo, correct in KEY_TYPOS.items():
@@ -105,19 +127,36 @@ def check_node(node: object, *, file: Path, path: str, under_items: bool) -> Non
             issues.append(f"[bad-source] {file.name} {path}: source '{source}' が見つからない")
         else:
             ref_ids = node.get("refs")
+            known = entry_ids_in_file(target)
             if isinstance(ref_ids, list):
-                known = entry_ids_in_file(target)
                 for ref_id in ref_ids:
                     if str(ref_id) not in known:
                         issues.append(
                             f"[bad-ref] {file.name} {path}: '{ref_id}' が {target.name} に無い"
                         )
+            elif node_key:
+                # エントリ単位のポインタ: 参照先に同じ id の正準データがあるか
+                count = known.get(node_key, 0)
+                if count == 0:
+                    issues.append(
+                        f"[bad-pointer] {file.name} {path}: '{node_key}' が {target.name} に無い"
+                    )
+                elif target.name == file.name and count < 2:
+                    issues.append(
+                        f"[self-pointer] {file.name} {path}: '{node_key}' が自分自身しか指していない（正準データが無い）"
+                    )
     items = node.get("items")
     if isinstance(items, dict):
         for item_id, value in items.items():
             if looks_like_group(value):
                 issues.append(f"[nesting] {file.name} {path}.items.{item_id}: エントリ値にグループ構造")
-            check_node(value, file=file, path=f"{path}.items.{item_id}", under_items=True)
+            check_node(
+                value,
+                file=file,
+                path=f"{path}.items.{item_id}",
+                under_items=True,
+                node_key=str(item_id),
+            )
     groups = node.get("groups")
     if isinstance(groups, dict):
         for group_id, value in groups.items():
@@ -127,7 +166,13 @@ def check_node(node: object, *, file: Path, path: str, under_items: bool) -> Non
             continue
         if looks_like_group(value):
             issues.append(f"[nesting] {file.name} {path}: '{key}' がグループらしき形で直下に存在")
-        check_node(value, file=file, path=f"{path}.{key}", under_items=under_items)
+        check_node(
+            value,
+            file=file,
+            path=f"{path}.{key}",
+            under_items=under_items,
+            node_key=str(key),
+        )
 
 
 def main() -> int:

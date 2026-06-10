@@ -139,7 +139,7 @@
       "brewing_materials": {
         "label": "醸造素材",
         "items": {
-          "nether_wart": {"japanese":"ネザーウォート","source":"minecraft_materials.json"},
+          "nether_wart": {"japanese":"ネザーウォート","source":"block/minecraft_natural_blocks.json"},
           "redstone_dust": {
             "japanese": "レッドストーンダスト",
             "source":"block/minecraft_redstone_components.json"

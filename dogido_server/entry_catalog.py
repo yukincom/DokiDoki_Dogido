@@ -474,7 +474,8 @@ def _iter_node_entries(
     #   {id: 名前, ...}    -> 子エントリのマップ
     # グループとして辿られたノード自身が japanese/note を持つ場合、
     # そのノード id を代表エントリとして放出する (例: lightning_rod, pot)。
-    if node_id and ({"japanese", "note", "source"} & node.keys()):
+    # refs を持つグループは参照展開で完結するので対象外（id がエントリ名ではないため）。
+    if node_id and "refs" not in node and ({"japanese", "note", "source"} & node.keys()):
         self_payload = {
             key: value
             for key, value in node.items()
