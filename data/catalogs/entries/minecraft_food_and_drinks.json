@@ -12,7 +12,7 @@
           "raw_mutton":  {"japanese":"生の羊肉","note":"生のままでも食べることができるが、焼いたほうがおいしい"},
           "raw_porkchop": {"japanese":"生の豚肉","note":"新鮮な豚肉。生のままでも食べることができるが、焼いたほうがおいしい"},
           "raw_rabbit": {"japanese":"生の兎肉","note":"新鮮そのもの。焼いて食べよう"},
-          "raw_salmon": {"japanese":"生鮭","note":"大きくてオレンジ色のみが美しい魚。焼いて食べたい。"},
+          "raw_salmon": {"japanese":"生鮭","note":"大きくてオレンジ色の身が美しい魚。焼いて食べたい。"},
           "pufferfish": {"japanese":"フグ","source":"minecraft_materials.json"},  
           "tropical_fish": {"japanese":"熱帯魚","note":"大しておいしくないが食べられないことはない。"},
           "rotten_flesh": {"japanese":"腐った肉","note":"主にゾンビから入手できる食材。食べるのには勇気が必要。狼の好物"},
@@ -82,7 +82,7 @@
           "beetroot_soup": {"japanese":"ビートルートスープ","note":"赤い根菜を煮込んだスープ"},
           "mushroom_stew": "キノコシチュー",
           "rabbit_stew": "ウサギシチュー",
-          "suspicious_stew": {"japanese":"怪しげなシチュー","note":"ざまざまな特殊効果があるスリリングなシチュー。美味しいといいな！"}
+          "suspicious_stew": {"japanese":"怪しげなシチュー","note":"さまざまな特殊効果があるスリリングなシチュー。美味しいといいな！"}
         }
       },
       "basic_drinks": {
@@ -94,7 +94,7 @@
       },
       "potions": {
         "label": "ポーション類",
-        "note":"薬入りの便。詳しくはウィキをみよう！",
+        "note":"薬入りの瓶。詳しくはウィキをみよう！",
         "items": {
           "potion": "ポーション",
           "splash_potion": "スプラッシュポーション",
