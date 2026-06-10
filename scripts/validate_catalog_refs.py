@@ -26,6 +26,10 @@ RESERVED_KEYS = {
 }
 KEY_TYPOS = {
     "japanse": "japanese",
+    "jpanese": "japanese",
+    "japanees": "japanese",
+    "ntoe": "note",
+    "noet": "note",
     "_source": "source",  # 仮表記。参照解決コードが入ったので source に統一
     "ref": "refs",
 }

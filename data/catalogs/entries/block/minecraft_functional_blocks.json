@@ -96,7 +96,7 @@
           },
           "cauldron": "大釜",
           "lava_cauldron": {"japanese":"溶岩入りの大釜","note":"ドロドロと赤く燃える溶岩が入った大釜"},
-          "powder_snow_cauldron": {"jpanese":"粉雪入りの大釜","note":"粉雪が入った大釜"},
+          "powder_snow_cauldron": {"japanese":"粉雪入りの大釜","note":"粉雪が入った大釜"},
           "water_cauldron": "水入りの大釜"
         }
       },
