@@ -1948,6 +1948,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (soundEventId.contains("sculk_sensor")) {
             return "sculk_sensor";
         }
+        if (soundEventId.contains("sonic_boom") || soundEventId.contains("sonic_charge")) {
+            // ビームは専用 kind で送る（チャージ音=予兆の段階で送れば悲鳴が間に合う）。
+            // サーバ側はこの kind を受けると即座に悲鳴を上げる。
+            return "warden_sonic_boom";
+        }
         if (soundEventId.contains("warden")) {
             if (soundEventId.contains("heartbeat")) {
                 return "warden_heartbeat";

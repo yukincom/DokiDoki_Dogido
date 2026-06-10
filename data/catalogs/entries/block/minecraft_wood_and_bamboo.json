@@ -237,7 +237,7 @@
             "label": {"japanese": "樹脂","note":"クリーキングが落とした樹脂の塊から作られた材。鮮やかなオレンジ色。"},
             "items": {          
               "block_of_resin": {"japanese":"樹脂ブロック","note":"樹脂の塊を練り固めたもの。表面がぼこぼこしている。"},
-              "resin_bricks": {"japanese":"樹脂レンガ","note":"樹脂の塊を温めて整形したもの。艶やかで艶やかなオレンジ色のレンガを積み重ねたもの"},
+              "resin_bricks": {"japanese":"樹脂レンガ","note":"樹脂の塊を温めて整形したもの。艶やかなオレンジ色のレンガを積み重ねたもの"},
               "resin_brick_stairs": "樹脂レンガの階段",
               "resin_brick_slab": "樹脂レンガのハーフブロック",
               "resin_brick_wall": "樹脂レンガの塀",

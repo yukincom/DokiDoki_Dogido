@@ -220,7 +220,7 @@ class WorldState(DogidoModel):
     nearest_damaging_light_source_distance: float | None = None  # 最近傍の危険光源までの距離
     standing_on_magma_block: bool | None = None  # 足元がマグマブロックか
     nearby_firefly_bush_count: int | None = None  # 周辺のホタルブッシュ数（雰囲気演出用）
-    ominous_sound_kind: str | None = None  # 例: "sculk_shrieker" / "warden_heartbeat"
+    ominous_sound_kind: str | None = None  # 例: "sculk_shrieker" / "warden_heartbeat" / "warden_sonic_boom"
     ominous_sound_recent_ms: int | None = None  # 最近の不穏音からの経過ミリ秒
     boss_omen_kind: str | None = None  # 例: "ender_dragon_arena" / "ender_dragon_summon" / "wither_assembly"
     rain_sound_recent_ms: int | None = None  # 最近の雨音観測からの経過ミリ秒
