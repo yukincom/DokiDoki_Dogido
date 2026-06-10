@@ -336,7 +336,7 @@
           }
         }
       },
-      "respawn_anchor":{"japanese": "リスポーンアンカー","note":"ネザーでリスポーン地点に設定できるブロック。上部に光る紫色の渦。横に金色のメーターが付いている。",
+      "respawn_anchor":{"japanese": "リスポーンアンカー","note":"ネザーでリスポーン地点に設定できるブロック。上部に光る紫色の渦。横に金色のメーターが付いている。"},
       "beds": {
         "label": "ベッド",
         "_source":"block/minecraft_colored_blocks.json",
@@ -453,6 +453,5 @@
           "infested_deepslate": "虫食い深層岩"
         }
       }
-    }
   }
 }

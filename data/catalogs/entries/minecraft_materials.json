@@ -47,7 +47,7 @@
         "items": {
           "stick": "棒",
           "flint": "火打石",
-          "wheat": {"japanse":"小麦","_source":"minecraft_food_and_drinks.json"},  
+          "wheat": {"japanese":"小麦","_source":"minecraft_food_and_drinks.json"},  
           "feather": "羽根",
           "string": "糸",
           "bone": "骨",

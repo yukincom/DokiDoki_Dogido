@@ -128,6 +128,8 @@ class Settings(BaseSettings):
     multi_hostile_distance: float = 10.0
     hostile_query_distance: float = 30.0
     hostile_mass_callout_threshold: int = 4
+    # 「ぎょうさん」一括コールアウトはディメンション移動直後の群れ限定
+    mass_callout_warp_window_ms: int = 90000
     overworld_return_line_delay_ms: int = 3500
     combat_clear_distance: float = 10.0
     combat_clear_time_ms: int = 5000

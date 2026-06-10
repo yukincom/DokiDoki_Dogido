@@ -376,10 +376,13 @@ class CueReactionsMixin:
                 if self.player_input.asks_hostile_count:
                     return False, None
                 return True, None
-            self.state.mass_hostile_callout_latched = True
-            self.state.last_mass_hostile_callout_at = now
-            self._mark_visual_priority_callout(now, single_type=None)
-            return True, self._hostile_massive_callout(event, suppressed=softened_visuals)
+            # 「ぎょうさん」一括はワープ到着直後の群れ限定。
+            # 通常の大群は後段の四方八方・増えたで系に任せる。
+            if self._recent_dimension_warp(now):
+                self.state.mass_hostile_callout_latched = True
+                self.state.last_mass_hostile_callout_at = now
+                self._mark_visual_priority_callout(now, single_type=None)
+                return True, self._hostile_massive_callout(event, suppressed=softened_visuals)
 
         daylight_rain = self._daylight_rain_callout(event, event.visual_threats, now=now)
         if daylight_rain is not None:

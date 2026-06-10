@@ -205,8 +205,7 @@ class VisualReportsMixin:
                 return None
             self.state.last_overwhelmed_report_at = now
             self._mark_visual_priority_callout(now, single_type=None)
-            key = "hostile_massive_suppressed" if suppressed else "hostile_massive"
-            return response_text("combat", "pressure", key)
+            return self._hostile_massive_callout(event, suppressed=suppressed)
         if len(threats) >= 9 and not self._contains_boss_hostile(threats):
             recent_ms = self._recent_ms(now, self.state.last_overwhelmed_report_at)
             if recent_ms is not None and recent_ms < self.settings.multi_hostile_comment_cooldown_ms:

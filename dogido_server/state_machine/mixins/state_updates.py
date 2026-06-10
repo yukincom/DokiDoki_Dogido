@@ -189,6 +189,12 @@ class StateUpdatesMixin:
         if current_dimension == previous_dimension:
             return
         self.state.current_dimension = current_dimension
+        # 初観測が非オーバーワールドの場合もワープ到着直後とみなす
+        if current_dimension is not None and (
+            previous_dimension is not None
+            or not self._is_overworld_dimension(event)
+        ):
+            self.state.last_dimension_change_at = event.observed_at
         if previous_dimension is None or current_dimension is None:
             return
         returning_to_overworld = (

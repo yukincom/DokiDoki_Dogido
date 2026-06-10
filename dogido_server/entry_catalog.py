@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,17 @@ ITEM_CATALOG_FILES = (
     "minecraft_spawn_egg",
     "minecraft_command_only_items",
 )
+
+# グループ構造を示すキー。これを持つ dict はエントリではなくグループとして辿る。
+GROUP_STRUCTURE_KEYS = {"items", "groups", "ref", "refs"}
+
+# グループ直下にあってもエントリ id として扱わないキー。
+NON_ENTRY_KEYS = {
+    "label", "english", "japanese", "japanse", "note", "items", "groups",
+    "_source", "ref", "refs", "meta", "variants", "role",
+    "recommended_fields", "schema", "notes", "direct_labels", "description",
+    "priority", "poetic", "source", "parent",
+}
 
 
 @lru_cache(maxsize=None)
@@ -332,18 +344,236 @@ def _merge_mob_entry_maps(*maps: dict[str, dict[str, Any]]) -> dict[str, dict[st
     return merged
 
 
-def _collect_grouped_block_labels(node: dict[str, Any], labels: dict[str, str]) -> None:
-    items = node.get("items", {})
+def _looks_like_group(value: Any) -> bool:
+    return isinstance(value, dict) and bool(GROUP_STRUCTURE_KEYS & value.keys())
+
+
+@lru_cache(maxsize=None)
+def _load_catalog_document(path: Path) -> dict[str, Any] | None:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        LOGGER.warning("entry_catalog_source_load_failed path=%s detail=%s", path, exc)
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def _resolve_source_path(spec: Any) -> Path | None:
+    name = str(spec or "").strip()
+    if not name:
+        return None
+    base = Path(name)
+    candidates = (
+        ENTRIES_DIR / name,
+        ENTRIES_DIR / base.parent / f"minecraft_{base.name}",
+        ENTRIES_DIR / "block" / base.name,
+        ENTRIES_DIR / "block" / f"minecraft_{base.name}",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    return None
+
+
+def _find_canonical_payload(
+    path: Path,
+    entry_id: str,
+    _seen: frozenset[tuple[str, str]] = frozenset(),
+) -> Any:
+    key = (str(path), entry_id)
+    if key in _seen:
+        LOGGER.warning("entry_catalog_source_cycle id=%s path=%s", entry_id, path.name)
+        return None
+    document = _load_catalog_document(path)
+    if document is None:
+        return None
+    pointer: dict[str, Any] | None = None
+    for found_id, payload, _group_path in _iter_document_entries(document):
+        if found_id != entry_id:
+            continue
+        if isinstance(payload, dict) and "_source" in payload:
+            if pointer is None:
+                pointer = payload
+            continue
+        return payload
+    if pointer is not None:
+        next_path = _resolve_source_path(pointer.get("_source"))
+        if next_path is not None:
+            return _find_canonical_payload(next_path, entry_id, _seen | {key})
+    return None
+
+
+def _resolve_entry_payload(payload: Any, entry_id: str) -> Any:
+    if not isinstance(payload, dict) or "_source" not in payload:
+        return payload
+    local = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"_source", "ref", "refs"}
+    }
+    source_path = _resolve_source_path(payload.get("_source"))
+    canonical = _find_canonical_payload(source_path, entry_id) if source_path else None
+    if canonical is None:
+        LOGGER.warning(
+            "entry_catalog_unresolved_entry_source id=%s spec=%r",
+            entry_id,
+            payload.get("_source"),
+        )
+        return local or None
+    if isinstance(canonical, str):
+        merged = dict(local)
+        merged.setdefault("japanese", canonical)
+        return merged
+    if isinstance(canonical, dict):
+        merged = dict(local)
+        merged.update(
+            {
+                key: value
+                for key, value in canonical.items()
+                if key not in {"_source", "ref", "refs"}
+            }
+        )
+        return merged
+    return local or None
+
+
+def _iter_document_entries(
+    document: dict[str, Any],
+) -> Iterator[tuple[str, Any, tuple[str, ...]]]:
+    for section_id, payload in document.items():
+        if not isinstance(payload, dict):
+            continue
+        if section_id == "direct_labels":
+            for item_id, label in payload.items():
+                if isinstance(label, str):
+                    yield str(item_id), label, ("direct_labels",)
+            continue
+        if section_id == "meta":
+            continue
+        yield from _iter_node_entries(
+            payload, (str(section_id),), resolve=False, node_id=str(section_id)
+        )
+
+
+def _iter_node_entries(
+    node: dict[str, Any],
+    group_path: tuple[str, ...],
+    *,
+    resolve: bool,
+    node_id: str | None = None,
+) -> Iterator[tuple[str, Any, tuple[str, ...]]]:
+    # label がオブジェクトの場合は2通りの手書き慣習に対応する:
+    #   {japanese/note...} -> グループ代表エントリの定義
+    #   {id: 名前, ...}    -> 子エントリのマップ
+    # グループとして辿られたノード自身が japanese/note を持つ場合、
+    # そのノード id を代表エントリとして放出する (例: lightning_rod, pot)。
+    if node_id and ({"japanese", "note", "_source"} & node.keys()):
+        self_payload = {
+            key: value
+            for key, value in node.items()
+            if key not in GROUP_STRUCTURE_KEYS and key != "label"
+        }
+        if self_payload:
+            yield node_id, _maybe_resolve(self_payload, node_id, resolve), group_path
+    label_value = node.get("label")
+    if isinstance(label_value, dict):
+        if {"japanese", "label", "note"} & label_value.keys():
+            if node_id:
+                yield node_id, label_value, group_path
+        else:
+            for sub_id, sub_label in label_value.items():
+                if isinstance(sub_label, str):
+                    yield str(sub_id), sub_label, group_path
+    if resolve:
+        ref_ids = node.get("refs")
+        if not isinstance(ref_ids, list):
+            ref_ids = node.get("ref")
+        source = node.get("_source")
+        if source is not None and isinstance(ref_ids, list):
+            source_path = _resolve_source_path(source)
+            if source_path is None:
+                LOGGER.warning(
+                    "entry_catalog_unresolved_group_source group=%s spec=%r",
+                    "/".join(group_path) or "(root)",
+                    source,
+                )
+            else:
+                for ref_id in ref_ids:
+                    canonical = _find_canonical_payload(source_path, str(ref_id))
+                    if canonical is None:
+                        LOGGER.warning(
+                            "entry_catalog_missing_ref id=%s source=%s",
+                            ref_id,
+                            source_path.name,
+                        )
+                        continue
+                    yield str(ref_id), canonical, group_path
+    items = node.get("items")
     if isinstance(items, dict):
         for item_id, payload in items.items():
-            label = _entry_label_from_payload(payload)
-            if label:
-                _merge_block_label(labels, str(item_id), label)
-    groups = node.get("groups", {})
+            if _looks_like_group(payload):
+                yield from _iter_node_entries(
+                    payload,
+                    (*group_path, str(item_id)),
+                    resolve=resolve,
+                    node_id=str(item_id),
+                )
+                continue
+            yield from _iter_entry_payload(str(item_id), payload, group_path, resolve)
+    groups = node.get("groups")
     if isinstance(groups, dict):
-        for payload in groups.values():
+        for group_id, payload in groups.items():
             if isinstance(payload, dict):
-                _collect_grouped_block_labels(payload, labels)
+                yield from _iter_node_entries(
+                    payload,
+                    (*group_path, str(group_id)),
+                    resolve=resolve,
+                    node_id=str(group_id),
+                )
+    for key, value in node.items():
+        if key in NON_ENTRY_KEYS:
+            continue
+        if _looks_like_group(value):
+            yield from _iter_node_entries(
+                value, (*group_path, str(key)), resolve=resolve, node_id=str(key)
+            )
+        elif isinstance(value, str):
+            yield str(key), value, group_path
+        elif isinstance(value, dict) and (
+            {"japanese", "label", "note", "_source"} & value.keys()
+        ):
+            yield from _iter_entry_payload(str(key), value, group_path, resolve)
+
+
+def _iter_entry_payload(
+    entry_id: str,
+    payload: Any,
+    group_path: tuple[str, ...],
+    resolve: bool,
+) -> Iterator[tuple[str, Any, tuple[str, ...]]]:
+    yield entry_id, _maybe_resolve(payload, entry_id, resolve), group_path
+    if isinstance(payload, dict):
+        label_value = payload.get("label")
+        if isinstance(label_value, dict) and not (
+            {"japanese", "label", "note"} & label_value.keys()
+        ):
+            for sub_id, sub_label in label_value.items():
+                if isinstance(sub_label, str):
+                    yield str(sub_id), sub_label, group_path
+
+
+def _maybe_resolve(payload: Any, entry_id: str, resolve: bool) -> Any:
+    if resolve and isinstance(payload, dict) and "_source" in payload:
+        return _resolve_entry_payload(payload, entry_id)
+    return payload
+
+
+def _collect_grouped_block_labels(node: dict[str, Any], labels: dict[str, str]) -> None:
+    for item_id, payload, _group_path in _iter_node_entries(node, (), resolve=True):
+        label = _entry_label_from_payload(payload)
+        if label:
+            _merge_block_label(labels, item_id, label)
 
 
 def _collect_grouped_entry_payloads(
@@ -353,42 +583,32 @@ def _collect_grouped_entry_payloads(
     root_section: str,
     group_path: tuple[str, ...] = (),
 ) -> None:
-    items = node.get("items", {})
-    if isinstance(items, dict):
-        for item_id, payload in items.items():
-            entry = _entry_payload_from_value(
-                payload,
-                root_section=root_section,
-                group_path=group_path,
-            )
-            if entry is None:
-                continue
-            entries[str(item_id)] = entry
+    for item_id, payload, found_path in _iter_node_entries(node, group_path, resolve=True):
+        entry = _entry_payload_from_value(
+            payload,
+            root_section=root_section,
+            group_path=found_path,
+        )
+        if entry is None:
+            continue
+        # note 持ちのエントリを note 無しの重複定義で潰さない
+        existing = entries.get(item_id)
+        if existing is not None and not entry.get("note") and existing.get("note"):
+            continue
+        entries[item_id] = entry
 
-            # ここから追加 ↓
-            if isinstance(payload, dict):
-                for variant_id, variant_name in payload.get("variants", {}).items():
-                    variant_entry = {
+        if isinstance(payload, dict):
+            variants = payload.get("variants")
+            if isinstance(variants, dict):
+                for variant_id, variant_name in variants.items():
+                    entries[str(variant_id)] = {
                         "label": variant_name,
                         "japanese": variant_name,
                         "note": payload.get("note", ""),
-                        "parent": str(item_id),
+                        "parent": item_id,
                         "section": root_section,
-                        "group_path": list(group_path),
+                        "group_path": list(found_path),
                     }
-                    entries[str(variant_id)] = variant_entry
-            # ここまで追加 ↑
-
-    groups = node.get("groups", {})
-    if isinstance(groups, dict):
-        for group_id, payload in groups.items():
-            if isinstance(payload, dict):
-                _collect_grouped_entry_payloads(
-                    payload,
-                    entries,
-                    root_section=root_section,
-                    group_path=(*group_path, str(group_id)),
-                )
 
 
 def _entry_payload_from_value(

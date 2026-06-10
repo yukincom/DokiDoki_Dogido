@@ -121,6 +121,7 @@ class ActionBuilderMixin:
                     AudioAction(
                         layer="speech",
                         interrupt=boss_aftermath,
+                        cue_id="aftermath_relief",
                         text=self._render_aftermath_line(event),
                         protect_ms=2500 if boss_aftermath else 0,
                     )

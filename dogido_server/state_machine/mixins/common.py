@@ -419,6 +419,13 @@ class CommonMixin:
             return False
         return True
 
+    def _recent_dimension_warp(self, now: datetime) -> bool:
+        recent_ms = self._recent_ms(now, self.state.last_dimension_change_at)
+        return (
+            recent_ms is not None
+            and recent_ms < self.settings.mass_callout_warp_window_ms
+        )
+
     def _did_change_dimension(self, event: GameEvent) -> bool:
         current_dimension = self._normalized_dimension(event) or None
         previous_dimension = self.state.current_dimension

@@ -120,6 +120,8 @@ class RuntimeState:
     firefly_reacted_this_night: bool = False
     night_warning_pending: bool = False
     night_warning_emitted_this_cycle: bool = False
+    # 注意喚起行を出した後、本文行の発話待ちであることを示す
+    pending_night_warning_detail: bool = False
     pending_weather_transition_from: str | None = None
     pending_weather_transition_to: str | None = None
     last_sleep_prompt_at: datetime | None = None
@@ -130,6 +132,7 @@ class RuntimeState:
     emergency_shelter_reset_ready: bool = False
     emergency_shelter_morning_announced: bool = False
     current_dimension: str | None = None
+    last_dimension_change_at: datetime | None = None
     current_biome: str | None = None
     pending_overworld_return_line: bool = False
     pending_overworld_return_ready_at: datetime | None = None

@@ -34,7 +34,7 @@
       "carbohydrates": {
         "label": "食料：炭水化物",
         "items": {
-          "wheat": {"japanse":"小麦","note":"パンやクッキー、ケーキも作れる。"},  
+          "wheat": {"japanese":"小麦","note":"パンやクッキー、ケーキも作れる。"},  
           "potato": {"japanese":"ジャガイモ","note":"みんなが大好きな食べ物。油はないのでポテトチップスは作れない。"},
           "poisonous_potato": {"japanese":"青くなったジャガイモ","note":"食べたプレイヤーに毒を与えることがあるジャガイモ"},          
           "baked_potato": "ベイクドポテト",
@@ -71,7 +71,7 @@
           "sweet_berries": {"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。"},   
           "glow_berries": {
             "japanese": "グロウベリー",
-            "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。"
+            "_source": "block/minecraft_natural_blocks.json"
           },
           "dried_kelp": {"japanese":"乾燥した昆布","note":"ミネラル豊富。高速で食べられる"}       
         }

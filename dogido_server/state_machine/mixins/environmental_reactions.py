@@ -295,6 +295,44 @@ class EnvironmentalReactionsMixin:
         self.state.last_ambient_mob_comment_at = now
         return [self._speech_action(line)]
 
+    def _night_warning_actions(self, event: GameEvent, now: datetime) -> list[AudioAction]:
+        if self.state.pending_night_warning_detail:
+            if (
+                self._boss_presence_active(now)
+                or self._ominous_sound_presence_active(now)
+                or not self._is_surface_evening_warning_context(event)
+            ):
+                self.state.pending_night_warning_detail = False
+                return []
+            self.state.pending_night_warning_detail = False
+            self.state.night_warning_pending = False
+            self.state.night_warning_emitted_this_cycle = True
+            return self._speech_actions(
+                response_text("darkness", "night_warning", "surface_evening")
+            )
+        if not self._should_consider_night_warning(event):
+            return []
+        if (
+            self._player_input_priority_active(now)
+            and self._is_surface_evening_warning_context(event)
+        ):
+            # 夕方警告は時限性が高いので、プレイヤーの話を遮って
+            # 注意喚起 -> 次イベントで本文 の2段階で出す
+            self.state.pending_night_warning_detail = True
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=True,
+                    text=response_text("darkness", "night_warning", "surface_evening_attention"),
+                )
+            ]
+        line = self._render_night_warning_line(event)
+        if line is None:
+            return []
+        self.state.night_warning_pending = False
+        self.state.night_warning_emitted_this_cycle = True
+        return self._speech_actions(line)
+
     def _ambient_environmental_actions(
         self,
         event: GameEvent,
@@ -307,6 +345,10 @@ class EnvironmentalReactionsMixin:
             return self._speech_actions(
                 self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
             )
+        # 夜警告は入力優先クールダウンをバイパスする（時限性のため）
+        night_warning_actions = self._night_warning_actions(event, now)
+        if night_warning_actions:
+            return night_warning_actions
         if self._player_input_priority_active(now):
             return []
 
@@ -324,17 +366,15 @@ class EnvironmentalReactionsMixin:
 
         if self._boss_presence_active(now):
             self.state.night_warning_pending = False
+            self.state.pending_night_warning_detail = False
             self.state.pending_special_biome_line = None
             return []
 
         if self._ominous_sound_presence_active(now):
             self.state.night_warning_pending = False
+            self.state.pending_night_warning_detail = False
             if self.state.current_biome != "deep_dark":
                 self.state.pending_special_biome_line = None
-
-        night_warning = self._emit_pending_night_warning(event)
-        if night_warning:
-            return self._speech_actions(night_warning)
 
         firefly_actions = self._firefly_actions(event, signals, now)
         if firefly_actions:

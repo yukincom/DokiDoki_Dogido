@@ -10,6 +10,7 @@
   },
   "night_warning": {
     "surface_evening": "夕方や！あと1分もしないうちに敵出るで！",
+    "surface_evening_attention": "！そろそろ夜やで！",
     "cave_or_submerged": "そろそろ{phase_label}やなー。今から地上に出ると敵とかち合うなー"
   },
   "darkness": {

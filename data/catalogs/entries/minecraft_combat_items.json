@@ -9,23 +9,23 @@
           "wooden_sword": "木の剣",
           "wooden_spear": "木の槍",
           "wooden_axe": {
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "stone_sword": "石の剣",
           "stone_spear": "石の槍",
           "stone_axe": {
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "copper_sword": "銅の剣",
           "copper_spear": "銅の槍",
           "copper_axe": {
             "japanese": "銅の斧",
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "iron_sword": "鉄の剣",
           "iron_spear": "鉄の槍",
           "iron_axe": {
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "golden_sword": {
             "japanese": "金の剣",
@@ -34,12 +34,12 @@
           "golden_spear": {"japanese": "金の槍",
             "note": "刀身が金でできている槍。ピグリンが好きなもの。耐久力は低い"},
           "golden_axe": {
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "diamond_sword": {"japanese":"ダイヤモンドの剣","note":"刀身がダイヤモンドでできた剣。空の光を反射し、水色に見える"},
           "diamond_spear": {"japanese":"ダイヤモンドの槍","note":"刀身がダイヤモンドでできた槍。空の光を反射し、水色見える"},
           "diamond_axe": {
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "netherite_sword": {
             "japanese": "ネザライトの剣",
@@ -50,7 +50,7 @@
             "note": "ネザーで産出するネザライトで作られている。刀身が黒い。溶岩では消滅しないが、サボテンで消滅。"
           },
           "netherite_axe": {
-            "_source":"inecraft_tools_and_utilities.json"
+            "_source":"minecraft_tools_and_utilities.json"
           },
           "trident": "トライデント",
           "mace": "メイス",

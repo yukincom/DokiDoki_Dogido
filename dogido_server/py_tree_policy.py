@@ -282,6 +282,7 @@ class EmitAftermathActions(_Action):
                 context.machine._audio_action(
                     layer="speech",
                     interrupt=boss_aftermath,
+                    cue_id="aftermath_relief",
                     text=context.machine._render_aftermath_line(context.event),
                     protect_ms=2500 if boss_aftermath else 0,
                 )

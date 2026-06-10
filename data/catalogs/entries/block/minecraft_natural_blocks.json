@@ -44,13 +44,13 @@
           "tuff",
           "calcite",
           "dripstone_block",
-          "dripstone",
+          
           "prismarine",
 
           "obsidian",
           "crying_obsidian",
           "netherrack",
-          "bone_block",
+          
           "blackstone",
           "basalt",
           "smooth_basalt",
@@ -59,6 +59,8 @@
         "function_stone":{
           "label":"機能性のある石",
           "items":{
+        "dripstone":{"japanese":"鍾乳石","note":"タケノコのような形の石。水が滴る"},   
+        "bone_block":{"japanese":"骨ブロック","note":"骨粉を固めたもの。肥料"}, 
         "magma_block":{"japanese":"マグマブロック","note":"熱を持つマグマの塊"}}
       },
         "ores": {
