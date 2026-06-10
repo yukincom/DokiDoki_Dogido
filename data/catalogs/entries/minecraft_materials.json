@@ -74,7 +74,7 @@
           "turtle_scute": "カメのウロコ",
           "armadillo_scute": "アルマジロのウロコ",
           "slimeball": {"japanese":"スライムボール","note":"スライムから取れる黄緑色の玉。少しベタつく"},
-          "clay_ball": {"japanese":"粘土だま","note":"粘度の塊"},
+          "clay_ball": {"japanese":"粘土だま","note":"粘土の塊"},
           "prismarine_shard": {"japanese":"プリズマリンの欠片","note":"海底神殿を構成する石のかけら。海のようなターコイズグリーン"},
           "prismarine_crystals": {"japanese":"プリズマリンクリスタル","note":"ガーディアンから取れる緑がかった水晶。シーランタンの原料"},
           "nautilus_shell": "オウムガイの殻",
@@ -164,7 +164,7 @@
           },
           "ghast_tear": {"japanese":"ガストの涙","note":"ガストというネザーの宙に浮く白い幽霊のような生物が流した涙。魂の谷を舞う彼らがなぜ泣くのか、誰も知らない"},
           "turtle_shell": {"japanese":"カメの甲羅","source":"minecraft_combat_items.json"},
-          "phantom_membrane": {"japanese":"ファントムの皮膜","note":"ファントムという夜空を飛ぶアンデットの皮膜。白っぽい色"}
+          "phantom_membrane": {"japanese":"ファントムの皮膜","note":"ファントムという夜空を飛ぶアンデッドの皮膜。白っぽい色"}
         }
       },
       "banner_patterns": {

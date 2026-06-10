@@ -80,7 +80,7 @@
         }
       },
       "acacia": {
-        "label": {"japanese":"アカシア","note":"やや斜めに映える性質を持つ木。黒い樹皮がおしゃれ。"},
+        "label": {"japanese":"アカシア","note":"やや斜めに生える性質を持つ木。黒い樹皮がおしゃれ。"},
         "items": {
           "acacia_wood": "アカシアの木",
           "acacia_log": "アカシアの原木",

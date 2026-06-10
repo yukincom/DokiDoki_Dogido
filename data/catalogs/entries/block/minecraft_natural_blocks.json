@@ -373,7 +373,7 @@
             "japanese": "グロウベリー",
             "note": "洞窟のツタになる食用の実。光を放ち、洞窟を照らす。キツネの好物。"
           },
-          "nether_wart": {"japanese":"ネザーウォート","note":"ネザー要塞に自制する菌糸。真紅色。"},
+          "nether_wart": {"japanese":"ネザーウォート","note":"ネザー要塞に自生する菌糸。真紅色。"},
           "chorus_fruit": {"japanese":"コーラスフルーツ","note":"食べると周囲にテレポートする。ムベに似たフルーツ。" }                   
         }
       },
@@ -390,7 +390,7 @@
           "brown_mushroom_block": "茶色のキノコブロック",
           "red_mushroom_block": "赤色のキノコブロック",
           "mushroom_stem": {"japanese": "キノコの柄","note":"巨大キノコの一部。ネザー。"},
-          "nether_wart_block": {"japanese": "ネザーウォートブロック","note":"ネザー要塞に自制する菌糸の塊。真紅色。"},
+          "nether_wart_block": {"japanese": "ネザーウォートブロック","note":"ネザー要塞に自生する菌糸の塊。真紅色。"},
           "warped_wart_block": {"japanese": "歪んだウォートブロック", "note": "巨大キノコの一部。ネザー。色は青緑色。"},
           "shroomlight": {"japanese":"シュルームライト","note":"真紅と歪んだの両方の巨大キノコの上部に発生する、光を発する物質"}
         }
