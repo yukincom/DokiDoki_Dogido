@@ -139,6 +139,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private long lastCombatSignalTick = -1000;
     private long lastWardenSeenTick = -1000;
     private long lastWardenDeathSoundTick = -1000;
+    private int trackedWardenEntityId = -1;
+    private long lastWardenDefeatObservedTick = -1000;
     private long lastWardenEndCrystalObservedTick = -1000;
     private long lastWardenTntSetupObservedTick = -1000;
     private double lastWardenSeenX = 0.0;
@@ -239,6 +241,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         List<ThreatObservation> threats = scanThreats(player, world);
         observeWardenSpecialSetups(player, world, threats);
+        observeTrackedWardenDefeat(world);
         List<ThreatObservation> visibleThreats = filterVisibleThreats(threats);
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
@@ -307,6 +310,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
         this.lastWardenDeathSoundTick = -1000;
+        this.trackedWardenEntityId = -1;
+        this.lastWardenDefeatObservedTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
         this.lastHealth = 20.0f;
@@ -350,6 +355,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
         this.lastWardenDeathSoundTick = -1000;
+        this.trackedWardenEntityId = -1;
+        this.lastWardenDefeatObservedTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
         this.lastThreatSignature = "";
@@ -554,6 +561,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 this.lastWardenSeenX = entity.getX();
                 this.lastWardenSeenY = entity.getY();
                 this.lastWardenSeenZ = entity.getZ();
+                // 討伐確認のため、目の前のウォーデンを entity ID で直接追跡する
+                this.trackedWardenEntityId = entity.getId();
             }
         }
 
@@ -1605,12 +1614,32 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
     }
 
+    private void observeTrackedWardenDefeat(ClientWorld world) {
+        if (this.trackedWardenEntityId < 0) {
+            return;
+        }
+        Entity entity = world.getEntityById(this.trackedWardenEntityId);
+        if (!(entity instanceof LivingEntity living)) {
+            return;
+        }
+        // HP0 / isDead / 死亡アニメーション進行中を「討伐」とみなす。
+        // 地面に潜って消える despawn は HP が残ったまま entity が消えるので、ここには引っかからない。
+        if (living.isDead() || living.getHealth() <= 0.0f || living.deathTime > 0) {
+            this.lastWardenDefeatObservedTick = this.tickCounter;
+            this.trackedWardenEntityId = -1;
+        }
+    }
+
     private boolean isRecentWardenDefeatConfirmed(ClientWorld world) {
         if (this.lastWardenSeenTick < 0 || this.tickCounter - this.lastWardenSeenTick > 400) {
             return false;
         }
-        // 死亡音はキル手段（ゴーレム・TNT・クリスタル・遠距離）に関係なく鳴る、
-        // 最も確実な討伐サイン。XPオーブはプレイヤーキル時しか落ちない。
+        // 追跡中の entity の死亡を直接観測したのが最優先（キル手段を問わず確実）
+        if (this.lastWardenDefeatObservedTick >= 0
+            && this.tickCounter - this.lastWardenDefeatObservedTick <= 400) {
+            return true;
+        }
+        // 死亡音はフォールバック。XPオーブはプレイヤーキル時しか落ちない。
         if (this.lastWardenDeathSoundTick >= 0
             && this.tickCounter - this.lastWardenDeathSoundTick <= 400) {
             return true;

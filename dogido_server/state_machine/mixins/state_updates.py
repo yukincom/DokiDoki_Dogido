@@ -1,11 +1,14 @@
 # state_machine/mixins/state_updates.py
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from math import inf
 
 from dogido_server.models import EventName, GameEvent, HorizontalDirection
 from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class StateUpdatesMixin:
@@ -148,6 +151,13 @@ class StateUpdatesMixin:
             self._reset_warden_combat_comment_state()
         if event.event.name == EventName.COMBAT_ENDED:
             self.state.pending_safe_aftermath = self._boss_defeat_confirmed(event)
+            if any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles):
+                LOGGER.warning(
+                    "boss_aftermath_decision pending=%s defeat_confirmed_flag=%s hostiles=%s",
+                    self.state.pending_safe_aftermath,
+                    event.combat.warden_defeat_confirmed,
+                    list(self.state.last_confirmed_hostiles),
+                )
         if event.event.name == EventName.PLAYER_DIED:
             self.state.pending_safe_aftermath = False
         pending_aftermath_age_ms = self._recent_ms(now, self.state.last_combat_end_at)
@@ -397,7 +407,8 @@ class StateUpdatesMixin:
             and self._recent_ms(now, self.state.last_combat_end_at)
             <= self.settings.pending_safe_aftermath_window_ms
             and not event.visual_threats
-            and not event.auditory_threats
+            # 討伐確認済みのボス戦後は、激しい戦闘音の残響（auditory_threats）が
+            # 残っていても討伐ラインを待たせない
             and any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles)
             and self._boss_defeat_confirmed(event)
         ):
