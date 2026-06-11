@@ -1,0 +1,217 @@
+{
+  "groups": {
+    "village": {
+      "label": "村",
+      "description": "Village structures",
+      "dimension": "overworld",
+      "overview": "村人が暮らす平和的な集落。バイオームごとに建築素材と外観が異なる。農場・鍛冶屋・図書館などの施設があり、村人との取引やレイドへの備えなど、序盤から終盤まで活用できる重要な拠点。",
+      "structures": {
+        "village_plains": {
+          "japanese": "平原の村",
+          "biomes": ["plains", "sunflower_plains"],
+          "note": "平原に建つオーク材と滑らかな石の村。農民・鍛冶屋・司書など多彩な村人が暮らし、井戸と鐘がある広場を中心にレイアウトされている。序盤の拠点として最も利用しやすい村。"
+        },
+        "village_desert": {
+          "japanese": "砂漠の村",
+          "biomes": ["desert"],
+          "note": "砂漠に建つ砂岩造りの村。木材をほとんど使わず、砂岩・テラコッタ・砂で構成された建物が砂地に溶け込む。近くに砂漠のピラミッドが生成されることも多い。"
+        },
+        "village_savanna": {
+          "japanese": "サバンナの村",
+          "biomes": ["savanna", "savanna_plateau", "windswept_savanna"],
+          "note": "サバンナに建つアカシア材の村。明るいオレンジ色の木材が特徴的で、広大な草地に農場が点在する。建物の形状は他の村と同系統だが素材が独特。"
+        },
+        "village_taiga": {
+          "japanese": "タイガの村",
+          "biomes": ["taiga"],
+          "note": "タイガの針葉樹林に建つ丸石とトウヒ材の村。寒い気候に合わせた頑丈な造りが特徴。スウィートベリーの農場を持つ村人がいることもある。"
+        },
+        "village_snowy": {
+          "japanese": "雪の村",
+          "biomes": ["snowy_plains"],
+          "note": "雪原に建つ雪と氷に包まれた村。建物はすべて雪化粧した外観になる。かまくら風の住居や灯台を思わせる塔が並ぶ、独特の雰囲気がある。"
+        }
+      }
+    },
+    "overworld_surface": {
+      "label": "地上構造物",
+      "description": "Overworld surface and near-surface structures",
+      "dimension": "overworld",
+      "overview": "オーバーワールドの地表または地表付近に生成される構造物。各バイオームの特徴に応じた建築素材が使われており、探索のランドマークになる。",
+      "structures": {
+        "desert_pyramid": {
+          "japanese": "砂漠のピラミッド",
+          "biomes": ["desert"],
+          "note": "砂漠に聳える砂岩造りのピラミッド。内部中央の床下に4つの宝箱とTNTトラップが仕掛けられた隠し部屋がある。カラフルなテラコッタが装飾に使われている。床の青色テラコッタを踏み抜くと爆発するので要注意。"
+        },
+        "jungle_pyramid": {
+          "japanese": "ジャングルの寺院",
+          "biomes": ["jungle", "bamboo_jungle", "sparse_jungle"],
+          "note": "ジャングルの奥地に潜む苔むした石レンガの寺院。内部にはトリップワイヤーとディスペンサーの罠、レバーで開く隠し部屋がある。仕掛けを解除せずに宝箱に近づくと矢が飛んでくる。"
+        },
+        "igloo": {
+          "japanese": "イグルー",
+          "biomes": ["snowy_plains", "snowy_taiga"],
+          "note": "雪原や雪のタイガに現れるかまくら型の建物。一部には床下に地下室があり、弱体化ポーションと金のリンゴで村人ゾンビを治療する仕掛けが残っている。地下室ありとなしで内部の構成が異なる。"
+        },
+        "swamp_hut": {
+          "japanese": "湿地の小屋",
+          "biomes": ["swamp"],
+          "note": "沼地の水面からせり出した小さな小屋。魔女が唯一専用でスポーンする拠点で、黒猫が一緒に住んでいることも。内部には大釜と鉢植えが置かれている。ハロウィンの日には魔女が帽子をかぶる。"
+        },
+        "mansion": {
+          "japanese": "森の洋館",
+          "biomes": ["dark_forest"],
+          "note": "暗い森の奥に建つ巨大な3階建て洋館。50を超える部屋を持ち、ヴィンジケーターとエヴォーカーが大量に棲んでいる。エヴォーカー討伐でトーテムが手に入る唯一の場所。地図商人から地図を買って場所を調べてから向かうのが定石。"
+        },
+        "pillager_outpost": {
+          "japanese": "ピリジャー前哨基地",
+          "biomes": ["plains", "desert", "savanna", "taiga", "snowy_plains", "meadow", "grove", "snowy_slopes", "jagged_peaks", "frozen_peaks", "stony_peaks"],
+          "note": "開けた場所に建つ石造りの塔状前哨基地。ピリジャーが弩を構えて巡回・待機している。周囲には木の檻や荷車が散乱し、最上部の宝箱にレアなアイテムが眠る。村の近くに生成されることが多く、レイドの起点になりやすい。"
+        },
+        "trail_ruins": {
+          "japanese": "トレイル遺跡",
+          "biomes": ["taiga", "snowy_taiga", "old_growth_pine_taiga", "old_growth_spruce_taiga", "jungle"],
+          "note": "大部分が地下に埋まった古代の遺跡。地表にわずかにレンガが顔を出しているのが目印。疑わしい砂や疑わしいグラベルを砂ぬきブラシで慎重に発掘すると、陶器の欠片や珍しい染料・装飾アイテムが得られる。"
+          },
+        "ruined_portal_desert": {
+          "japanese": "荒廃した砂漠のポータル",
+          "biomes": ["desert"],
+          "note": "砂漠バイオームに特有の廃ポータル。砂岩ブロックが周囲に積まれるなど、砂漠の環境に合わせた外観になっている。"
+        },
+        "ruined_portal_jungle": {
+          "japanese": "荒廃したジャングルのポータル",
+          "biomes": ["jungle", "bamboo_jungle", "sparse_jungle"],
+          "note": "ジャングルバイオームに特有の廃ポータル。コケむした石がジャングルの植生に溶け込む。"
+        },
+        "ruined_portal_mountain": {
+          "japanese": "荒廃した山岳のポータル",
+          "biomes": ["windswept_hills", "windswept_gravelly_hills", "windswept_forest", "jagged_peaks", "frozen_peaks", "stony_peaks"],
+          "note": "山岳バイオームに特有の廃ポータル。岩場の地形の中に崩れた黒曜石が転がる。"
+        },
+        "ruined_portal_ocean": {
+          "japanese": "荒廃した海洋のポータル",
+          "biomes": ["ocean", "cold_ocean", "frozen_ocean", "lukewarm_ocean", "warm_ocean", "deep_ocean"],
+          "note": "海中に沈んだ廃ポータル。水底に崩れた黒曜石とマグマブロックが転がっている。"
+        },
+        "ruined_portal_swamp": {
+          "japanese": "荒廃した沼地のポータル",
+          "biomes": ["swamp", "mangrove_swamp"],
+          "note": "沼地バイオームに特有の廃ポータル。湿地の水の中に黒曜石が沈みかけている。"
+        }
+      }
+    },
+    "overworld_ocean": {
+      "label": "海洋構造物",
+      "description": "Ocean and coastal structures",
+      "dimension": "overworld",
+      "overview": "海中や海岸に生成される構造物。水中呼吸のポーションやエンチャントを準備してから挑むと探索しやすい。",
+      "structures": {
+        "monument": {
+          "japanese": "海底神殿",
+          "biomes": ["deep_ocean", "deep_lukewarm_ocean", "deep_cold_ocean"],
+          "note": "深海に生成されるプリズマリン製の巨大神殿。大量のガーディアンと3体のエルダーガーディアンが守護する。エルダーガーディアンが付与する採掘疲れが最大の障害。海綿スポンジが大量入手でき、中心部には8つの金ブロックがある。"
+        },
+        "shipwreck": {
+          "japanese": "沈没船",
+          "biomes": ["ocean", "cold_ocean", "frozen_ocean", "lukewarm_ocean", "warm_ocean", "deep_ocean", "beach", "snowy_beach"],
+          "note": "海底や砂浜に沈んだ木造の船。破損の度合いにより外観が異なり、傾いて埋もれているものも多い。船内に3種類の宝箱があり、食料・宝の地図・金銀ダイヤが眠っている。地図を使えば次に埋もれた宝の場所が分かる。"
+        },
+        "shipwreck_beached": {
+          "japanese": "座礁した難破船",
+          "biomes": ["beach", "snowy_beach"],
+          "note": "砂浜に座礁した難破船。海底に沈んでいるのではなく、砂浜に傾いて乗り上げた状態になっている。通常の沈没船より地上から発見しやすい。内部の構成と宝箱の内容は通常の沈没船と同じ。"
+        },
+        "buried_treasure": {
+          "japanese": "埋もれた宝",
+          "biomes": ["beach", "snowy_beach"],
+          "note": "砂浜・雪の砂浜の地中に埋まった宝箱。沈没船で入手した宝の地図の✕印を掘ると見つかる。ハートの器・ダイヤモンド・貴重な宝石類が入っており、特にハートの器はここでしか入手できない。"
+        },
+        "ocean_ruin_cold": {
+          "japanese": "海底遺跡（寒冷）",
+          "biomes": ["ocean", "cold_ocean", "frozen_ocean", "deep_ocean", "deep_cold_ocean", "deep_frozen_ocean"],
+          "note": "冷たい海や凍った海の海底に生成される石造りの遺跡。小規模なものと大規模なものがある。ドラウンドがスポーンし、宝箱には金・エンチャント本・釣り竿などが入っている。"
+        },
+        "ocean_ruin_warm": {
+          "japanese": "海底遺跡（暖海）",
+          "biomes": ["warm_ocean", "lukewarm_ocean", "deep_lukewarm_ocean"],
+          "note": "暖かい海やぬるい海の海底に生成される砂岩造りの遺跡。珊瑚礁の近くに沈んでいることが多い。ドラウンドがスポーンし、宝箱には金・エンチャント本などが入っている。"
+        }
+      }
+    },
+    "overworld_underground": {
+      "label": "地下構造物",
+      "description": "Underground structures",
+      "dimension": "overworld",
+      "overview": "オーバーワールドの地下深くに生成される構造物。採掘や洞窟探索の途中で偶然発見されることもある。危険な敵が潜むが、貴重なアイテムやゲーム進行に欠かせない施設がある。",
+      "structures": {
+        "stronghold": {
+          "japanese": "要塞",
+          "biomes": ["any"],
+          "note": "地下深くに潜む巨大な石レンガの要塞。内部にエンドポータルがあり、エンダードラゴンへの唯一の入り口となる。迷路状の廊下にゾンビ・スケルトンが徘徊し、図書館には貴重なエンチャント本が並ぶ。アイオブエンダーで場所を特定しよう。"
+        },
+        "ancient_city": {
+          "japanese": "古代都市",
+          "biomes": ["deep_dark"],
+          "note": "ディープダーク層（Y=-51付近）に生成される謎めいた古代都市。精巧な彫刻が刻まれた巨大建物が連なる。ウォーデンが徘徊しており、スカルクセンサーやスカルクシュリーカーが至る所に張り巡らされている。音を立てずに探索することが最大の課題。強力なエンチャント本や珍しいアイテムが手に入る。"
+        },
+        "trial_chambers": {
+          "japanese": "試練の間",
+          "biomes": ["any"],
+          "note": "1.21で追加された地下試練施設。銅と石材の複雑な構造が続く迷路状の空間に、トライアルスポナーが波状に敵を召喚する。クリアするとトライアルキーを入手でき、金庫を開けると強力な装備が報酬として得られる。ブリーズが唯一出現する建造物。"
+        },
+        "mineshaft": {
+          "japanese": "鉱山（廃坑）",
+          "biomes": ["any"],
+          "note": "地下を縦横無尽に走る廃棄された鉱山。木製の柱と床板・トロッコのレールが迷宮のように広がっている。洞窟グモのスポナーが複数あり、トロッコ付きチェストに稀少鉱石が眠っていることも。広大すぎて迷子になりやすい。"
+        },
+        "mineshaft_mesa": {
+          "japanese": "バッドランズの廃坑",
+          "biomes": ["badlands", "eroded_badlands", "wooded_badlands"],
+          "note": "バッドランズ（荒野）バイオームに特有の廃坑。通常の廃坑と構造は同じだが、別のレジストリIDが割り当てられている。鮮やかなテラコッタの地層が断面に露わになる荒野の地下を走る迷路。"
+        }
+      }
+    },
+    "nether": {
+      "label": "ネザー構造物",
+      "description": "Nether structures",
+      "dimension": "the_nether",
+      "overview": "ネザーに生成される構造物。いずれもゲーム進行に欠かせない素材・要素を持つ重要拠点で、攻略には準備と戦略が必要になる。",
+      "structures": {
+        "fortress": {
+          "japanese": "ネザー要塞",
+          "biomes": ["nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest", "basalt_deltas"],
+          "note": "ネザーを縦横に貫く石レンガ造りの巨大要塞。ブレイズスポナーからブレイズロッド（ポーション素材）が手に入り、ウィザースケルトンからウィザースケルトンの頭骨が稀にドロップする。ウィザー召喚のため、どちらも必須の素材。"
+        },
+        "bastion_remnant": {
+          "japanese": "砦の遺跡",
+          "biomes": ["nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest"],
+          "note": "玄武岩の三角州以外のネザーバイオームに生成される砦跡。ピグリンとホグリンが大量に生息している。金の装備を着用すると通常のピグリンに攻撃されにくい。ピグリンブルートが守るブリッジの奥にネザライトの欠片や強力なアイテムが眠っている。"
+        },
+        "nether_fossil": {
+          "japanese": "ネザーの化石",
+          "biomes": ["soul_sand_valley"],
+          "note": "ソウルサンドの谷に生成される巨大な骨の化石。地面から大きな骨柱が突き出した構造で、古代の生物の名残とも言われる。骨ブロックが採取できる。"
+        },
+        "ruined_portal_nether": {
+          "japanese": "荒廃したポータル（ネザー）",
+          "biomes": ["nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest", "basalt_deltas"],
+          "note": "ネザーに生成される廃ポータルのネザー版。マグマブロックや溶岩が周囲に多く、溶岩の中から黒曜石が露出している。ruined_portal とは別のレジストリIDを持ちネザー専用。"
+        }
+      }
+    },
+    "end": {
+      "label": "エンド構造物",
+      "description": "The End structures",
+      "dimension": "the_end",
+      "overview": "ジ・エンドに生成される構造物。エンダードラゴンを倒してエンドゲートウェイポータルで外縁部へ渡ると発見できる。",
+      "structures": {
+        "end_city": {
+          "japanese": "エンドシティ",
+          "biomes": ["end_highlands"],
+          "note": "エンドの高地に生成される紫色の塔状都市。シュルカーが至る所でスポーンしシュルカーシェルを集めやすい。都市の傍には空中に浮かんだエンド船があり、船内の防具立てにエリトラが飾られている。エリトラは実質ここでしか入手できない。"
+        }
+      }
+    }
+  }
+}
