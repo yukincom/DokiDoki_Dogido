@@ -350,6 +350,28 @@ class WorldAnalysisMixin:
             return None
         return dict(entry)
 
+    def _structure_label(self, structure: str | None) -> str:
+        if not structure:
+            return "なにかの建物"
+        normalized = structure.strip().lower()
+        mapped = STRUCTURE_LABELS.get(normalized)
+        if mapped is not None:
+            return mapped
+        if normalized.isascii():
+            return "なにかの建物"
+        return structure
+
+    def _structure_entry(self, structure: str | None) -> dict[str, object] | None:
+        if not structure:
+            return None
+        normalized = structure.strip().lower()
+        if not normalized:
+            return None
+        entry = STRUCTURE_ENTRIES.get(normalized)
+        if entry is None:
+            return None
+        return dict(entry)
+
     def _biome_group_label(self, biome: str | None) -> str | None:
         entry = self._biome_entry(biome)
         if entry is None:

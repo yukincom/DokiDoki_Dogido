@@ -7,6 +7,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from dogido_server.entry_catalog import structure_entries
+
 RESPONSES_DIR = Path(__file__).resolve().parents[2] / "data" / "responses" / "ques"
 
 
@@ -78,6 +80,37 @@ def special_biome_entry_lines(biome: str, phase_key: str) -> tuple[str, ...] | N
     return tuple(str(line) for line in group_lines)
 
 
+def structure_entry_fallback_text(structure_id: str) -> str | None:
+    """構造物入場ラインの固定フォールバック（LLM 無効・失敗時用）。
+
+    カタログの group_id ごとのテンプレートに日本語名を差し込む。
+    カタログに無い構造物は None（発話しない）。
+    """
+    entry = structure_entries().get(structure_id)
+    if entry is None:
+        return None
+    catalog = load_response_catalog("exploration")
+    structure_section = catalog.get("structure")
+    fallbacks = structure_section.get("entry_fallbacks") if isinstance(structure_section, dict) else None
+    if not isinstance(fallbacks, dict):
+        return None
+    group_id = str(entry.get("group_id") or "")
+    template = fallbacks.get(group_id) or fallbacks.get("default")
+    if not isinstance(template, str):
+        return None
+    label = str(entry.get("label") or structure_id)
+    return template.replace("{label}", label)
+
+
+def structure_entry_prewarm_texts() -> list[str]:
+    texts: list[str] = []
+    for structure_id in structure_entries():
+        text = structure_entry_fallback_text(structure_id)
+        if text:
+            texts.append(text)
+    return texts
+
+
 def response_prewarm_texts(player_name: str | None) -> list[str]:
     return [
         classic_ushiro_call_text(),
@@ -128,6 +161,11 @@ def response_prewarm_texts(player_name: str | None) -> list[str]:
         response_text("boss", "elder_guardian", "reveal"),
         *response_lines("boss", "deep_dark", "sculk_sensor_fallbacks"),
         *response_lines("boss", "deep_dark", "sculk_shrieker_fallbacks"),
+        *response_lines("exploration", "ender_eye", "throw", "lines"),
+        response_text("exploration", "portal", "appearance_fallbacks", "nether_portal"),
+        response_text("exploration", "portal", "appearance_fallbacks", "end_portal"),
+        response_text("exploration", "portal", "appearance_fallbacks", "end_gateway"),
+        *structure_entry_prewarm_texts(),
     ]
 
 

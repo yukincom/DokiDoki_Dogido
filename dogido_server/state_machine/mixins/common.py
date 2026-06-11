@@ -344,10 +344,15 @@ class CommonMixin:
     def _update_special_biome_context(self, event: GameEvent) -> None:
         if event.event.name != EventName.STATUS_SNAPSHOT:
             return
+        self._update_structure_context(event)
         normalized_biome = self._normalized_biome(event.world.biome) or None
         if normalized_biome == self.state.current_biome:
             return
         self.state.current_biome = normalized_biome
+        if self.state.current_structure is not None:
+            # 構造物の中ではバイオーム側の入場コメントは出さない（構造物コメントと横並び分岐）
+            self.state.pending_special_biome_line = None
+            return
         if normalized_biome is not None:
             recent_ms = self._recent_ms(
                 event.observed_at,
@@ -363,6 +368,55 @@ class CommonMixin:
             normalized_biome,
             self._effective_time_phase(event),
         )
+
+    def _normalized_structure(self, structure: str | None) -> str:
+        return (structure or "").split(":")[-1].strip().lower()
+
+    def _update_structure_context(self, event: GameEvent) -> None:
+        normalized = self._normalized_structure(event.world.structure) or None
+        if normalized == self.state.current_structure:
+            return
+        self.state.current_structure = normalized
+        if normalized is None:
+            self.state.pending_structure_entry_key = None
+            return
+        # 構造物入場が確定したらバイオーム入場コメントは破棄する
+        self.state.pending_special_biome_line = None
+        if self._structure_entry(normalized) is None:
+            # カタログ未登録の構造物は黙って通す
+            self.state.pending_structure_entry_key = None
+            return
+        recent_ms = self._recent_ms(
+            event.observed_at,
+            self.state.last_structure_comment_at.get(normalized),
+        )
+        if recent_ms is not None and recent_ms < self.settings.structure_comment_cooldown_ms:
+            self.state.pending_structure_entry_key = None
+            return
+        self.state.pending_structure_entry_key = normalized
+
+    def _emit_pending_structure_line(self, event: GameEvent, now: datetime) -> str | None:
+        structure_key = self.state.pending_structure_entry_key
+        if structure_key is None:
+            return None
+        self.state.pending_structure_entry_key = None
+        line = self._render_structure_entry_line(event, structure_key)
+        if line:
+            self.state.last_structure_comment_at[structure_key] = now
+        return line
+
+    def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
+        recent_ms = event.world.ender_eye_launch_recent_ms
+        return recent_ms is not None and recent_ms <= self.settings.ender_eye_recent_ms
+
+    def _emit_ender_eye_throw_line(self, event: GameEvent, now: datetime) -> str | None:
+        if not self._has_recent_ender_eye_launch(event):
+            return None
+        recent_ms = self._recent_ms(now, self.state.last_ender_eye_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.ender_eye_comment_cooldown_ms:
+            return None
+        self.state.last_ender_eye_comment_at = now
+        return self._render_ender_eye_throw_line(event)
 
     def _resolve_special_biome_entry_line(self, biome: str | None, time_phase: object) -> str | None:
         if biome is None:

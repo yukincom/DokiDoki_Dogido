@@ -1,7 +1,14 @@
 # state_machine/constants.py
 from __future__ import annotations
 
-from dogido_server.entry_catalog import biome_entries, biome_labels, block_labels, item_labels
+from dogido_server.entry_catalog import (
+    biome_entries,
+    biome_labels,
+    block_labels,
+    item_labels,
+    structure_entries,
+    structure_labels,
+)
 from dogido_server.entity_voice_catalog import MOB_VOICE_LABELS, RUNTIME_HOSTILE_LABELS
 from dogido_server.models import HorizontalDirection
 from dogido_server.state_machine.response_catalog import classic_ushiro_call_text, response_text
@@ -126,6 +133,8 @@ MOB_LABELS = dict(MOB_VOICE_LABELS)
 
 BIOME_ENTRIES = biome_entries()
 BIOME_LABELS = biome_labels()
+STRUCTURE_ENTRIES = structure_entries()
+STRUCTURE_LABELS = structure_labels()
 ITEM_LABELS = item_labels()
 BLOCK_LABELS = block_labels()
 

@@ -10,7 +10,11 @@ from dogido_server.state_machine.ambient_mob_catalog import (
     ambient_mob_fallback_candidates,
 )
 from dogido_server.state_machine.fallback_catalog import dark_push_after_breath_fallback, death_fallback_text, fallback_text
-from dogido_server.state_machine.response_catalog import response_lines, response_text
+from dogido_server.state_machine.response_catalog import (
+    response_lines,
+    response_text,
+    structure_entry_fallback_text,
+)
 from dogido_server.state_machine.types import DerivedSignals
 
 
@@ -347,6 +351,71 @@ class NarrationMixin:
         return self._select_deterministic_line(
             f"{kind}:{event.sequence or 0}:{stage}",
             lines,
+        )
+
+    PORTAL_LABELS: dict[str, str] = {
+        "nether_portal": "ネザーポータル",
+        "end_portal": "エンドポータル",
+        "end_gateway": "エンドゲートウェイ",
+    }
+
+    def _portal_label(self, portal_type: str) -> str:
+        return self.PORTAL_LABELS.get(portal_type, portal_type)
+
+    def _render_portal_appearance_line(self, event: GameEvent, portal_type: str) -> str:
+        fallback = response_text("exploration", "portal", "appearance_fallbacks", portal_type)
+        return self._generate_leaf_text(
+            kind="portal_appearance",
+            fallback_text=fallback,
+            details={
+                "player_name": self._player_call_name(event),
+                "portal_type": portal_type,
+                "portal_label": self._portal_label(portal_type),
+                "portal_distance": event.world.nearby_portal_distance,
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "dimension": self._normalized_dimension(event),
+            },
+            temperature=0.55,
+        )
+
+    def _render_structure_entry_line(self, event: GameEvent, structure_key: str) -> str | None:
+        fallback = structure_entry_fallback_text(structure_key)
+        if fallback is None:
+            return None
+        entry = self._structure_entry(structure_key) or {}
+        return self._generate_leaf_text(
+            kind="structure_entry",
+            fallback_text=fallback,
+            details={
+                "player_name": self._player_call_name(event),
+                "structure": structure_key,
+                "structure_label": str(entry.get("label") or structure_key),
+                "structure_note": str(entry.get("note") or ""),
+                "group_label": str(entry.get("group_label") or ""),
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            },
+            temperature=0.55,
+        )
+
+    def _render_ender_eye_throw_line(self, event: GameEvent) -> str:
+        # 何度も投げる行動なので、印象は控えめ・短め（TTS 向け）の固定候補を軸にする
+        lines = response_lines("exploration", "ender_eye", "throw", "lines")
+        fallback = self._select_deterministic_line(
+            f"ender_eye:{event.sequence or 0}",
+            lines,
+        )
+        return self._generate_leaf_text(
+            kind="ender_eye_throw",
+            fallback_text=fallback,
+            details={
+                "player_name": self._player_call_name(event),
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "reference_lines": list(lines),
+            },
+            temperature=0.4,
         )
 
     def _render_light_crafted_line(self, event: GameEvent) -> str:

@@ -47,6 +47,9 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "newly_burning_visual": _build_newly_burning_visual_messages,
         "weather_transition": _build_weather_transition_messages,
         "deep_dark_ominous_sound": _build_deep_dark_ominous_sound_messages,
+        "structure_entry": _build_structure_entry_messages,
+        "ender_eye_throw": _build_ender_eye_throw_messages,
+        "portal_appearance": _build_portal_appearance_messages,
     }
     builder = builders.get(request.kind)
     if builder is None:
@@ -474,6 +477,96 @@ def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[d
         "空の明るさや天気そのものへの反応を優先する。"
         "会話っぽい一言を24〜42文字くらいで返す。"
         "例文の語句を丸写しせず、怖がりなおじさんらしい自然な関西弁にする。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_structure_entry_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    note = str(details.get("structure_note", "")).strip() or "なし"
+    user_prompt = (
+        "参考傾向:\n"
+        "- 探索中に構造物を見つけて足を踏み入れた第一声\n"
+        "- 危険が書かれた場所ではちょっと及び腰、村など平和な場所では少しほっとする\n"
+        "- 攻略解説はせず、感想の一言にとどめる\n"
+        "- 関西弁は語尾中心で、単語は標準的な日本語を使う\n\n"
+        "/no_think\n"
+        "本番:\n"
+        f"プレイヤーが{details.get('structure_label', '構造物')}に入った。"
+        f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
+        "自然なら呼び名は入れなくてよい。\n"
+        f"構造物の分類は{details.get('group_label', 'unknown')}。\n"
+        f"場所は{details.get('biome', 'そのへん')}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"この構造物の知識メモ: {note}\n"
+        "構造物の名前は自然に口に出してよい。"
+        "知識メモから印象的な点を最大1つだけ軽く混ぜてよいが、説明口調にしない。"
+        "未確認の敵やアイテムを見えたとは言わない。"
+        "会話っぽい一言を18〜32文字くらいで返す。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_ender_eye_throw_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    references = details.get("reference_lines") or []
+    reference_text = " / ".join(str(line) for line in references[:5]) or "なし"
+    user_prompt = (
+        "参考傾向:\n"
+        "- エンダーアイを投げて、要塞の方向を探っている場面\n"
+        "- 何度も繰り返す行動なので、テンションは控えめで軽い\n"
+        "- 悲鳴や大げさな反応、長い解説はしない\n\n"
+        "/no_think\n"
+        "本番:\n"
+        "プレイヤーがエンダーアイを投げた。"
+        f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
+        "呼び名は基本入れない。\n"
+        f"場所は{details.get('biome', 'そのへん')}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"参考の一言の例は {reference_text}。\n"
+        "参考例のどれか1つの雰囲気だけ借りて、語尾や言い回しを少しだけ変える。"
+        "飛んでいった方向を見送る・割れないか心配する・まだ遠そうとつぶやく、のどれかの軽い一言にする。"
+        "控えめなトーンで、8〜18文字くらいの短い一言だけ返す。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_portal_appearance_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    portal_type = str(details.get("portal_type", ""))
+    portal_label = str(details.get("portal_label", "ポータル"))
+    dimension = str(details.get("dimension", ""))
+    portal_color_hints = {
+        "nether_portal": "紫色の光が渦巻いている",
+        "end_portal": "中に緑色の星空のような模様が見える",
+        "end_gateway": "小さな紫色のビーム状のゲートが空中に浮いている",
+    }
+    color_hint = portal_color_hints.get(portal_type, "不思議な光を放っている")
+    portal_mood_hints = {
+        "nether_portal": "異世界への入口が開いた。暑そうで少し怖い",
+        "end_portal": "最終目的地への門が開いた。飛び込む覚悟が必要",
+        "end_gateway": "新しいワープポイントが出現した。狭いけどどこかへ飛ばされそう",
+    }
+    mood_hint = portal_mood_hints.get(portal_type, "異世界への入口が見える")
+    user_prompt = (
+        "参考傾向:\n"
+        "- ポータルが突然現れたことへの驚き\n"
+        "- 好奇心と不安が入り混じる\n"
+        "- 怖がりだが少しワクワクも感じている\n"
+        "- 関西弁は語尾中心で、単語は標準的な日本語を使う\n\n"
+        "/no_think\n"
+        "本番:\n"
+        f"目の前で{portal_label}が出現した。{color_hint}。\n"
+        f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
+        "自然なら呼び名は入れなくてよい。\n"
+        f"場所は{details.get('biome', 'そのへん')}。\n"
+        f"距離は{details.get('portal_distance', 'unknown')}マスくらい。\n"
+        f"雰囲気: {mood_hint}。\n"
+        "攻略解説や行動指示はしない。"
+        "突然の出来事に驚いてるが、正体はわかっている前提で話す。"
+        "怖がりだけど少し興奮もしている感じで、"
+        "会話っぽい一言を20〜36文字くらいで返す。"
+        "例文の語句をそのまま丸写しせず、自分の言葉で驚く。"
     )
     return _dialog_messages(user_prompt)
 

@@ -218,6 +218,46 @@ def biome_labels() -> dict[str, str]:
     }
 
 
+def structure_entries() -> dict[str, dict[str, Any]]:
+    catalog = load_entry_catalog("structure")
+    groups = catalog.get("groups")
+    flattened: dict[str, dict[str, Any]] = {}
+    if not isinstance(groups, dict):
+        return flattened
+    for group_id, group_payload in groups.items():
+        if not isinstance(group_payload, dict):
+            continue
+        group_label = group_payload.get("label")
+        group_description = group_payload.get("description")
+        group_structures = group_payload.get("structures", {})
+        group_meta = {
+            key: value
+            for key, value in group_payload.items()
+            if key not in {"label", "description", "structures"}
+        }
+        if not isinstance(group_structures, dict):
+            continue
+        for structure_id, structure_payload in group_structures.items():
+            if not isinstance(structure_payload, dict):
+                continue
+            entry = dict(structure_payload)
+            entry["label"] = entry.pop("japanese", structure_id)
+            entry["group_id"] = str(group_id)
+            entry["group_label"] = group_label
+            entry["group_description"] = group_description
+            for key, value in group_meta.items():
+                entry[f"group_{key}"] = value
+            flattened[str(structure_id)] = entry
+    return flattened
+
+
+def structure_labels() -> dict[str, str]:
+    return {
+        structure_id: str(entry.get("label", structure_id))
+        for structure_id, entry in structure_entries().items()
+    }
+
+
 def hostile_mob_entries() -> dict[str, dict[str, Any]]:
     sections = _mob_catalog_sections()
     return _normalize_mob_entries(_mob_section_items(sections.get("hostile", {})))

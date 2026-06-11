@@ -53,14 +53,20 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
+import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
+import net.minecraft.world.World;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
@@ -80,6 +86,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int OCCLUDED_AUDIO_VERTICAL_BLOCKS = 5;
     private static final double AMBIENT_MOB_DISTANCE = 16.0;
     private static final double GLOBAL_SOUND_SOURCE_MATCH_RADIUS = 4.0;
+    // エンダーアイ投擲音: 鮮度 TTL（サーバ側 ender_eye_recent_ms=2000ms と同期）と投擲者判定の距離
+    private static final int ENDER_EYE_LAUNCH_TTL_TICKS = 40;
+    private static final double ENDER_EYE_LAUNCH_MATCH_RADIUS = 8.0;
+    // ポータルブロック検知: ネザー/エンドポータルは5ブロック、エンドゲートウェイは15ブロック
+    private static final int PORTAL_SCAN_RADIUS = 5;
+    private static final int GATEWAY_SCAN_RADIUS = 15;
     private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
         {"zombified_piglin", "zombified_piglin"},
         {"zombie_pigman", "zombified_piglin"},
@@ -136,6 +148,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private long lastThunderSoundObservedTick = -1000;
     private long lastNearbyLightningObservedTick = -1000;
     private double lastNearbyLightningDistance = 99.0;
+    private long lastEnderEyeLaunchObservedTick = -1000;
+    // プレイヤー座標を含む構造物 id（統合サーバーのスレッドで照会した結果のキャッシュ）
+    private volatile String structureAtPlayer = null;
+    private long lastStructureProbeTick = -1000;
     private long lastCombatSignalTick = -1000;
     private long lastWardenSeenTick = -1000;
     private long lastWardenDeathSoundTick = -1000;
@@ -225,6 +241,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.eventClient.ensureSession(resolvePlayerName(player));
         expireSoundObservations();
         observeNearbyLightning(player, world);
+        probeStructureAtPlayer(client, player, world);
 
         boolean sleepingNow = player.isSleeping();
         if (sleepingNow && !this.wasSleeping && countNearbyBeds(world, player.getBlockPos()) > 0) {
@@ -307,6 +324,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastThunderSoundObservedTick = -1000;
         this.lastNearbyLightningObservedTick = -1000;
         this.lastNearbyLightningDistance = 99.0;
+        this.lastEnderEyeLaunchObservedTick = -1000;
+        this.structureAtPlayer = null;
+        this.lastStructureProbeTick = -1000;
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
         this.lastWardenDeathSoundTick = -1000;
@@ -352,6 +372,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastThunderSoundObservedTick = -1000;
         this.lastNearbyLightningObservedTick = -1000;
         this.lastNearbyLightningDistance = 99.0;
+        this.lastEnderEyeLaunchObservedTick = -1000;
+        this.structureAtPlayer = null;
+        this.lastStructureProbeTick = -1000;
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
         this.lastWardenDeathSoundTick = -1000;
@@ -1050,6 +1073,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         json.addProperty("weather", classifyWeather(world));
         json.addProperty("biome", resolveBiomeName(world, pos));
+        String structureName = this.structureAtPlayer;
+        if (structureName != null && !structureName.isBlank()) {
+            json.addProperty("structure", structureName);
+        }
         json.addProperty("local_light", world.getLightLevel(pos));
         json.addProperty("sky_visible", world.isSkyVisible(pos));
         double ceilingHeight = estimateCeilingHeight(world, pos);
@@ -1107,6 +1134,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             json.addProperty("nearby_lightning_strike_recent_ms", nearbyLightningRecentMs);
             json.addProperty("nearby_lightning_strike_distance", round(this.lastNearbyLightningDistance));
         }
+        long enderEyeLaunchRecentMs = ticksSince(this.lastEnderEyeLaunchObservedTick);
+        if (enderEyeLaunchRecentMs <= ENDER_EYE_LAUNCH_TTL_TICKS * 50L) {
+            json.addProperty("ender_eye_launch_recent_ms", enderEyeLaunchRecentMs);
+        }
         if (respawnDistance != null) {
             json.addProperty("respawn_distance", round(respawnDistance));
         }
@@ -1138,6 +1169,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("nearby_damaging_light_source_count", nearbyDamagingLightSourceCount);
         json.addProperty("nearest_damaging_light_source_distance", round(nearestDamagingLightSourceDistance));
         json.addProperty("danger_darkness_score", round(darknessScore));
+
+        String[] portalInfo = scanNearbyPortals(world, pos);
+        if (portalInfo != null) {
+            json.addProperty("nearby_portal_type", portalInfo[0]);
+            json.addProperty("nearby_portal_distance", round(Double.parseDouble(portalInfo[1])));
+        }
+
         return json;
     }
 
@@ -1750,6 +1788,39 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return biomeId.map(Identifier::getPath).orElse("unknown");
     }
 
+    private void probeStructureAtPlayer(MinecraftClient client, ClientPlayerEntity player, ClientWorld world) {
+        if (this.tickCounter - this.lastStructureProbeTick < this.config.snapshotIntervalTicks) {
+            return;
+        }
+        this.lastStructureProbeTick = this.tickCounter;
+        MinecraftServer server = client.getServer();
+        if (server == null) {
+            // リモートサーバー接続時はクライアントから構造物情報を取得できない
+            this.structureAtPlayer = null;
+            return;
+        }
+        BlockPos pos = player.getBlockPos();
+        RegistryKey<World> worldKey = world.getRegistryKey();
+        // 構造物参照はサーバー側データなので、統合サーバーのスレッドで照会して結果だけ受け取る
+        server.execute(() -> {
+            ServerWorld serverWorld = server.getWorld(worldKey);
+            if (serverWorld == null) {
+                this.structureAtPlayer = null;
+                return;
+            }
+            // ピース単位の内包判定（バニラの実績判定と同じ基準）
+            StructureStart start = serverWorld.getStructureAccessor().getStructureContaining(pos, entry -> true);
+            if (start == null || !start.hasChildren()) {
+                this.structureAtPlayer = null;
+                return;
+            }
+            Identifier structureId = serverWorld.getRegistryManager()
+                .getOrThrow(RegistryKeys.STRUCTURE)
+                .getId(start.getStructure());
+            this.structureAtPlayer = structureId == null ? null : structureId.getPath();
+        });
+    }
+
     private void onGlobalSoundPacket(PlaySoundS2CPacket packet) {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientPlayerEntity player = client.player;
@@ -1769,6 +1840,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         if (isExplosionSound(soundEventId)) {
             this.lastExplosionObservedTick = this.tickCounter;
+        }
+        if (soundEventId.contains("ender_eye.launch")) {
+            // プレイヤー近傍の投擲音のみ拾う（マルチで他人の投擲を実況しない）
+            double launchDx = packet.getX() - player.getX();
+            double launchDy = packet.getY() - player.getY();
+            double launchDz = packet.getZ() - player.getZ();
+            double launchDistanceSquared = (launchDx * launchDx) + (launchDy * launchDy) + (launchDz * launchDz);
+            if (launchDistanceSquared <= ENDER_EYE_LAUNCH_MATCH_RADIUS * ENDER_EYE_LAUNCH_MATCH_RADIUS) {
+                this.lastEnderEyeLaunchObservedTick = this.tickCounter;
+            }
         }
         if (packet.getCategory() != SoundCategory.HOSTILE) {
             return;
@@ -2518,6 +2599,46 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             cursor.move(0, 1, 0);
         }
         return depth;
+    }
+
+    private String[] scanNearbyPortals(ClientWorld world, BlockPos origin) {
+        String bestType = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (int dx = -GATEWAY_SCAN_RADIUS; dx <= GATEWAY_SCAN_RADIUS; dx += 1) {
+            for (int dy = -8; dy <= 8; dy += 1) {
+                for (int dz = -GATEWAY_SCAN_RADIUS; dz <= GATEWAY_SCAN_RADIUS; dz += 1) {
+                    BlockPos sample = origin.add(dx, dy, dz);
+                    String blockId = Registries.BLOCK.getId(world.getBlockState(sample).getBlock()).getPath();
+                    String portalType = null;
+                    double maxRange = 0;
+                    if ("nether_portal".equals(blockId)) {
+                        portalType = "nether_portal";
+                        maxRange = PORTAL_SCAN_RADIUS;
+                    } else if ("end_portal".equals(blockId)) {
+                        portalType = "end_portal";
+                        maxRange = PORTAL_SCAN_RADIUS;
+                    } else if ("end_gateway".equals(blockId)) {
+                        portalType = "end_gateway";
+                        maxRange = GATEWAY_SCAN_RADIUS;
+                    }
+                    if (portalType == null) {
+                        continue;
+                    }
+                    double distance = Math.sqrt(sample.getSquaredDistance(origin));
+                    if (distance > maxRange) {
+                        continue;
+                    }
+                    if (distance < bestDistance) {
+                        bestType = portalType;
+                        bestDistance = distance;
+                    }
+                }
+            }
+        }
+        if (bestType == null) {
+            return null;
+        }
+        return new String[]{bestType, String.valueOf(bestDistance)};
     }
 
     private int countNearbyFireflyBushes(ClientWorld world, BlockPos origin) {

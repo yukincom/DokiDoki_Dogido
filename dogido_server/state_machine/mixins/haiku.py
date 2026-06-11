@@ -290,13 +290,25 @@ class HaikuMixin:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
         z_value = event.player.position.z
-        candidates = [
+        portal_type = (event.world.nearby_portal_type or "").strip().lower()
+        candidates = []
+        if portal_type:
+            portal_labels = {
+                "nether_portal": "ネザーポータル",
+                "end_portal": "エンドポータル",
+                "end_gateway": "エンドゲートウェイ",
+            }
+            candidates.append(HaikuFeature(
+                "ポータル", "portal", portal_labels.get(portal_type, portal_type),
+                tags=frozenset({"異世界", "ワープ", "光", "不思議"}),
+            ))
+        candidates.extend([
             HaikuFeature("バイオーム", "biome", self._biome_label(event.world.biome)),
             HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
             HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
             HaikuFeature("天気", "weather", WEATHER_LABELS.get(weather, "不明")),
             HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
-        ]
+        ])
         candidates.extend(
             HaikuFeature("地形", f"trait_{index}", trait)
             for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "portal": {
+    "appearance_fallbacks": {
+      "nether_portal": "うわっ、なんか紫のモヤモヤが出てきたでぇ……！",
+      "end_portal": "うぉぉっ、開いてしもうた……！中、宇宙みたいやん！",
+      "end_gateway": "んっ？なんか空中にちっこいワープゾーンみたいなの出たでぇ？"
+    }
+  },
+  "ender_eye": {
+    "throw": {
+      "lines": [
+        "おっ、あっちの方向やな。",
+        "割れんといてよぉ……。",
+        "んー、まだまだ遠そうやなぁ。",
+        "ほいっ、飛んでったでぇ。",
+        "こっちかぁ。道中、気ぃつけて行こか。"
+      ]
+    }
+  },
+  "structure": {
+    "entry_fallbacks": {
+      "village": "お、{label}や。人の気配があるとほっとするわぁ。",
+      "overworld_surface": "お、{label}や。なんかありそうやなぁ。",
+      "overworld_ocean": "{label}や。ええもん残っとるとええなぁ。",
+      "overworld_underground": "ここ、{label}やんか……静かに行こな。",
+      "nether": "{label}や……気ぃ引き締めていこか。",
+      "end": "おお、{label}や！とうとう来てしもたなぁ。",
+      "default": "お、{label}やんか。"
+    }
+  }
+}

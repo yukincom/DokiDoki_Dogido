@@ -143,6 +143,14 @@ class RuntimeState:
     active_close_flying_visual_keys: set[str] = field(default_factory=set)
     pending_special_biome_line: str | None = None
     last_special_biome_comment_at: dict[str, datetime] = field(default_factory=dict)
+    # プレイヤー座標を含む構造物（村・要塞など）。構造物内ではバイオーム入場コメントを抑制する
+    current_structure: str | None = None
+    pending_structure_entry_key: str | None = None
+    last_structure_comment_at: dict[str, datetime] = field(default_factory=dict)
+    last_ender_eye_comment_at: datetime | None = None
+    reacted_portal_types: set[str] = field(default_factory=set)
+    pending_portal_type: str | None = None
+    portal_state_initialized: bool = False
 
 
 @dataclass(slots=True)

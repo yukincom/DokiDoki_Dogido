@@ -370,10 +370,20 @@ class EnvironmentalReactionsMixin:
         if weather_transition:
             return self._speech_actions(weather_transition)
 
+        # エンダーアイ投擲はプレイヤー自身の行動への相槌なので早めに返す
+        ender_eye_line = self._emit_ender_eye_throw_line(event, now)
+        if ender_eye_line:
+            return self._speech_actions(ender_eye_line)
+
+        portal_line = self._emit_portal_appearance_line(event, now)
+        if portal_line:
+            return self._speech_actions(portal_line)
+
         if self._boss_presence_active(now):
             self.state.night_warning_pending = False
             self.state.pending_night_warning_detail = False
             self.state.pending_special_biome_line = None
+            self.state.pending_structure_entry_key = None
             return []
 
         if self._ominous_sound_presence_active(now):
@@ -381,6 +391,7 @@ class EnvironmentalReactionsMixin:
             self.state.pending_night_warning_detail = False
             if self.state.current_biome != "deep_dark":
                 self.state.pending_special_biome_line = None
+                self.state.pending_structure_entry_key = None
 
         firefly_actions = self._firefly_actions(event, signals, now)
         if firefly_actions:
@@ -415,9 +426,17 @@ class EnvironmentalReactionsMixin:
 
         if self._ominous_sound_presence_active(now) and not (
             self.state.current_biome == "deep_dark"
-            and self.state.pending_special_biome_line is not None
+            and (
+                self.state.pending_special_biome_line is not None
+                or self.state.pending_structure_entry_key is not None
+            )
         ):
             return []
+
+        # 構造物入場コメントはバイオーム入場コメントより優先
+        structure_line = self._emit_pending_structure_line(event, now)
+        if structure_line:
+            return self._speech_actions(structure_line)
 
         special_biome_line = self._emit_pending_special_biome_line(now)
         if special_biome_line:
@@ -432,7 +451,7 @@ class EnvironmentalReactionsMixin:
                 self._log_darkness_decision("darkness_advice", event, signals)
                 return self._speech_actions(darkness_advice)
 
-        haiku_line = self._emit_haiku_line(event, now)
+        haiku_line = self._emit_portal_haiku_or_haiku_line(event, now)
         return self._speech_actions(haiku_line)
 
     def _emit_nearby_lightning_strike_actions(
@@ -665,6 +684,43 @@ class EnvironmentalReactionsMixin:
         self.state.dark_push_stage = 2
         self._log_darkness_decision("dark_push", event, signals)
         return self._speech_actions(line)
+
+    def _emit_portal_appearance_line(self, event: GameEvent, now: datetime) -> str | None:
+        portal_type = self.state.pending_portal_type
+        if portal_type is None:
+            return None
+        self.state.pending_portal_type = None
+        self.state.reacted_portal_types.add(portal_type)
+        return self._render_portal_appearance_line(event, portal_type)
+
+    def _emit_portal_haiku_or_haiku_line(self, event: GameEvent, now: datetime) -> str | None:
+        if self._should_emit_haiku(event, now):
+            portal_type = (event.world.nearby_portal_type or "").strip().lower() or None
+            if portal_type is not None:
+                return self._emit_portal_themed_haiku(event, now, portal_type)
+        return self._emit_haiku_line(event, now)
+
+    def _emit_portal_themed_haiku(self, event: GameEvent, now: datetime, portal_type: str) -> str | None:
+        self.state.last_haiku_emitted_at = now
+        portal_label = self._portal_label(portal_type)
+        fallback = f"ここで一句。\n{portal_label}　光るその先　どこへ行く"
+        line = self._generate_leaf_text(
+            kind="haiku",
+            fallback_text=fallback,
+            details={
+                "player_name": self._player_call_name(event),
+                "biome_label": self._biome_label(event.world.biome),
+                "time_label": TIME_PHASE_LABELS.get(
+                    getattr(event.world.time_phase, "value", event.world.time_phase) or "", "不明"
+                ),
+                "portal_type": portal_type,
+                "portal_label": portal_label,
+                "portal_themed": True,
+            },
+            temperature=0.82,
+            route="haiku",
+        )
+        return f"ここで一句。\n{line}" if "\n" not in line and "ここで一句" not in line else line
 
     def _emergency_shelter_presence_actions(
         self,

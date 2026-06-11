@@ -175,6 +175,10 @@ class Settings(BaseSettings):
     sleep_prompt_cooldown_ms: int = 60000
     sleeping_neighbor_comment_cooldown_ms: int = 60000
     special_biome_comment_cooldown_ms: int = 600000
+    structure_comment_cooldown_ms: int = 600000
+    # エンダーアイ投擲: 鮮度ウィンドウ（スナップショット間隔より長く）と連投時の発話間隔
+    ender_eye_recent_ms: int = 2000
+    ender_eye_comment_cooldown_ms: int = 8000
     ambient_mob_comment_cooldown_ms: int = 60000
     player_input_priority_cooldown_ms: int = 120000
     damaging_light_warning_cooldown_ms: int = 600000

@@ -192,6 +192,7 @@ class WorldState(DogidoModel):
     time_phase: TimePhase | None = None
     weather: Weather | None = None
     biome: str | None = None  # 例: "plains" / "dripstone_caves"
+    structure: str | None = None  # プレイヤー座標を含む構造物 id（例: "village_plains" / "ancient_city"）。構造物外は省略
     local_light: int | None = None  # プレイヤー足元のブロック光レベル（0〜15）
     sky_visible: bool | None = None  # 空が見えているか（屋外判定の補助）
     ceiling_height: float | None = None  # 天井までの高さ（ブロック数）
@@ -227,6 +228,9 @@ class WorldState(DogidoModel):
     thunder_sound_recent_ms: int | None = None  # 最近の雷鳴観測からの経過ミリ秒
     nearby_lightning_strike_recent_ms: int | None = None  # 近距離落雷の観測からの経過ミリ秒
     nearby_lightning_strike_distance: float | None = None  # 最近の近距離落雷までの距離
+    ender_eye_launch_recent_ms: int | None = None  # プレイヤー近傍でのエンダーアイ投擲音からの経過ミリ秒
+    nearby_portal_type: str | None = None  # 近距離に存在するポータルブロックの種類（"nether_portal" / "end_portal" / "end_gateway"）
+    nearby_portal_distance: float | None = None  # 最近傍のポータルブロックまでの距離
 
 
 # ---- 脅威情報 ----

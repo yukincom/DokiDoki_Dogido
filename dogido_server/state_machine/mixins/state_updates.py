@@ -16,6 +16,7 @@ class StateUpdatesMixin:
         self._prune_comment_memory(now)
         self._handle_dimension_change(event)
         self._update_special_biome_context(event)
+        self._update_portal_context(event)
         time_phase = self._effective_time_phase(event)
         if self.state.last_non_silent_at is None:
             self.state.last_non_silent_at = now
@@ -140,10 +141,12 @@ class StateUpdatesMixin:
             self.state.pending_night_warning_detail = False
             if self.state.current_biome != "deep_dark":
                 self.state.pending_special_biome_line = None
+                self.state.pending_structure_entry_key = None
         if self._boss_presence_active(now):
             self.state.night_warning_pending = False
             self.state.pending_night_warning_detail = False
             self.state.pending_special_biome_line = None
+            self.state.pending_structure_entry_key = None
 
         if event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}:
             self.state.last_combat_end_at = now
@@ -282,6 +285,8 @@ class StateUpdatesMixin:
         self.state.last_submerged_dark_zone = None
         self.state.last_foliage_shade_context = None
         self.state.pending_special_biome_line = None
+        self.state.current_structure = None
+        self.state.pending_structure_entry_key = None
         self.state.last_weather = None
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
@@ -486,3 +491,18 @@ class StateUpdatesMixin:
             self.state.shut_up_count = 0
             self.state.suppression_started_at = None
             self.state.suppression_until = None
+
+    def _update_portal_context(self, event: GameEvent) -> None:
+        if event.event.name != EventName.STATUS_SNAPSHOT:
+            return
+        portal_type = (event.world.nearby_portal_type or "").strip().lower() or None
+        if not self.state.portal_state_initialized:
+            self.state.portal_state_initialized = True
+            if portal_type is not None:
+                self.state.reacted_portal_types.add(portal_type)
+            return
+        if portal_type is None:
+            return
+        if portal_type in self.state.reacted_portal_types:
+            return
+        self.state.pending_portal_type = portal_type
