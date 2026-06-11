@@ -310,6 +310,11 @@ class CueReactionsMixin:
         warden_special = self._next_warden_special_callout(event, now)
         if warden_special is not None:
             return warden_special
+        if self.player_input.asks_dragon_direction and self._is_dragon_combat_context_active(event, now):
+            return self._render_dragon_direction_answer(event)
+        dragon_special = self._next_dragon_special_callout(event, now)
+        if dragon_special is not None:
+            return dragon_special
         if event.visual_threats:
             handled, line = self._priority_visual_callout(
                 event,

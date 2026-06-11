@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import lru_cache
 
 from dogido_server.entry_catalog import neutral_mob_entries
-from dogido_server.models import EventName, GameEvent, VisualThreat
+from dogido_server.models import EventName, GameEvent, HorizontalDirection, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.response_catalog import (
     response_lines,
@@ -88,8 +88,10 @@ class CommonMixin:
         bosses = [hostile for hostile in self.state.last_confirmed_hostiles if self._is_boss_type(hostile)]
         if not bosses:
             return True
-        if "warden" in bosses:
-            return bool(event.combat.warden_defeat_confirmed)
+        if "warden" in bosses and not bool(event.combat.warden_defeat_confirmed):
+            return False
+        if "ender_dragon" in bosses and not bool(event.combat.dragon_defeat_confirmed):
+            return False
         return True
 
     def _reset_warden_combat_comment_state(self) -> None:
@@ -128,6 +130,126 @@ class CommonMixin:
             return response_text("boss", "warden", "attack_start")
 
         return None
+
+    def _reset_dragon_combat_comment_state(self) -> None:
+        self.state.dragon_perch_announced = False
+        self.state.last_dragon_approach_callout_at = None
+        self.state.pending_crystal_count_announce = None
+        self.state.dragon_crystal_hint_announced = False
+
+    def _normalized_dragon_phase(self, event: GameEvent) -> str | None:
+        return (event.combat.dragon_phase or "").strip().lower() or None
+
+    def _is_dragon_combat_context_active(self, event: GameEvent, now: datetime) -> bool:
+        if self._normalized_dragon_phase(event) is not None:
+            return True
+        if any((threat.type or "").strip().lower() == "ender_dragon" for threat in event.visual_threats):
+            return True
+        recent_ms = self._recent_ms(now, self.state.last_dragon_seen_at)
+        return recent_ms is not None and recent_ms <= 20000
+
+    def _dragon_special_pending(self, event: GameEvent, now: datetime) -> bool:
+        """副作用なしの『ドラゴン特殊コールアウトが出せるか』チェック（py_tree ゲート用）。"""
+        if not self._is_dragon_combat_context_active(event, now):
+            return False
+        phase = self._normalized_dragon_phase(event)
+        if phase in DRAGON_PERCH_PHASES and not self.state.dragon_perch_announced:
+            return True
+        if phase == "charging_player":
+            recent_ms = self._recent_ms(now, self.state.last_dragon_approach_callout_at)
+            if recent_ms is None or recent_ms >= self.settings.dragon_approach_callout_cooldown_ms:
+                return True
+        if (
+            not self.state.dragon_crystal_hint_announced
+            and (event.combat.end_crystal_count or 0) > 0
+        ):
+            return True
+        if self.state.pending_crystal_count_announce is not None:
+            recent_ms = self._recent_ms(now, self.state.last_crystal_callout_at)
+            if recent_ms is None or recent_ms >= self.settings.dragon_crystal_callout_cooldown_ms:
+                return True
+        return False
+
+    def _has_new_dragon_visual_reveal(self, event: GameEvent) -> bool:
+        return any(
+            (threat.type or "").strip().lower() == "ender_dragon" and self._is_new_visual_reveal(threat)
+            for threat in event.visual_threats
+        )
+
+    def _next_dragon_special_callout(self, event: GameEvent, now: datetime) -> str | None:
+        if not self._is_dragon_combat_context_active(event, now):
+            return None
+        if self.player_input.asks_hostile_count or self.player_input.asks_dragon_direction:
+            return None
+        if self._has_new_dragon_visual_reveal(event):
+            # 初視認の「くるで！」を先に言わせる
+            return None
+        phase = self._normalized_dragon_phase(event)
+
+        # チャンスタイム: 着地系フェーズに入った瞬間だけ一回言う
+        if phase in DRAGON_PERCH_PHASES and not self.state.dragon_perch_announced:
+            self.state.dragon_perch_announced = True
+            return response_text("boss", "ender_dragon", "chance_time")
+
+        # 突進: ドラゴンがプレイヤーに向かってくるフェーズ
+        if phase == "charging_player":
+            recent_ms = self._recent_ms(now, self.state.last_dragon_approach_callout_at)
+            if recent_ms is None or recent_ms >= self.settings.dragon_approach_callout_cooldown_ms:
+                self.state.last_dragon_approach_callout_at = now
+                return response_text("boss", "ender_dragon", "approach")
+
+        # クリスタル助言: 初回は本数つきの促し、以降は割れるたびに残数だけ言う
+        crystal_count = event.combat.end_crystal_count
+        if (
+            not self.state.dragon_crystal_hint_announced
+            and crystal_count is not None
+            and crystal_count > 0
+        ):
+            self.state.dragon_crystal_hint_announced = True
+            self.state.pending_crystal_count_announce = None
+            return response_text(
+                "boss", "ender_dragon", "crystal_first_hint", count=str(crystal_count)
+            )
+        if self.state.pending_crystal_count_announce is not None:
+            recent_ms = self._recent_ms(now, self.state.last_crystal_callout_at)
+            if recent_ms is None or recent_ms >= self.settings.dragon_crystal_callout_cooldown_ms:
+                remaining = self.state.pending_crystal_count_announce
+                self.state.pending_crystal_count_announce = None
+                self.state.last_crystal_callout_at = now
+                self.state.dragon_crystal_hint_announced = True
+                if remaining <= 0:
+                    return response_text("boss", "ender_dragon", "crystal_clear")
+                return response_text(
+                    "boss", "ender_dragon", "crystal_remaining", count=str(remaining)
+                )
+        return None
+
+    def _render_dragon_direction_answer(self, event: GameEvent) -> str:
+        horizontal = (event.combat.dragon_horizontal or "").strip().lower() or None
+        vertical = (event.combat.dragon_vertical or "").strip().lower() or None
+        if horizontal is None:
+            threat = next(
+                (
+                    candidate
+                    for candidate in event.visual_threats
+                    if (candidate.type or "").strip().lower() == "ender_dragon"
+                ),
+                None,
+            )
+            if threat is not None:
+                if threat.direction.horizontal is not None:
+                    horizontal = threat.direction.horizontal.value
+                if threat.direction.vertical is not None:
+                    vertical = threat.direction.vertical.value
+        if horizontal is None:
+            return response_text("boss", "ender_dragon", "direction_unknown")
+        try:
+            direction_label = DIRECTION_LABELS[HorizontalDirection(horizontal)]
+        except (KeyError, ValueError):
+            direction_label = "近く"
+        if vertical == "above":
+            return response_text("boss", "ender_dragon", "direction_above", direction=direction_label)
+        return response_text("boss", "ender_dragon", "direction_answer", direction=direction_label)
 
     def _neutral_turned_hostile_callout(self, event: GameEvent, now: datetime) -> str | None:
         """さっきまで平和な姿で見えていた中立モブが脅威化したら警告する。

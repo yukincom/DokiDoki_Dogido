@@ -325,6 +325,13 @@ class CombatState(DogidoModel):
     warden_nearby_end_crystal_count: int | None = Field(default=None, ge=0)
     warden_tnt_minecart_setup_active: bool | None = None
     warden_nearby_tnt_minecart_count: int | None = Field(default=None, ge=0)
+    # ---- エンダードラゴン戦（ジ・エンド）----
+    dragon_phase: str | None = None  # 例: "holding_pattern" / "charging_player" / "sitting_scanning" / "dying"
+    dragon_distance: float | None = None  # プレイヤーからドラゴンまでの距離（視覚脅威の30マス制限より広く追跡）
+    dragon_horizontal: str | None = None  # プレイヤー視点の水平方向（HorizontalDirection 値）
+    dragon_vertical: str | None = None  # 垂直関係（VerticalRelation 値）
+    dragon_defeat_confirmed: bool | None = None  # entity ID 追跡＋死亡音による討伐確認
+    end_crystal_count: int | None = Field(default=None, ge=0)  # アリーナ内の残エンドクリスタル数
 
 
 class MetaState(DogidoModel):
@@ -340,6 +347,7 @@ class MetaState(DogidoModel):
     debug: bool = False
     death_cause: str | None = None
     user_text: str | None = None
+    advancements: list[str] = Field(default_factory=list)
 
 
 # ---- トップレベルイベント ----

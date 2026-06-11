@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from math import inf
 
 from dogido_server.models import EventName, GameEvent, HorizontalDirection
+from dogido_server.state_machine.constants import DRAGON_PERCH_PHASES
 from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -113,6 +114,22 @@ class StateUpdatesMixin:
         current_effects = self._active_status_effects(event)
         self.state.last_active_status_effects = current_effects
 
+        # ドラゴン戦の追跡: 目撃時刻、着地フラグの解除、クリスタル残数の減少検知
+        dragon_phase = self._normalized_dragon_phase(event)
+        if dragon_phase is not None or any(
+            (threat.type or "").strip().lower() == "ender_dragon" for threat in event.visual_threats
+        ):
+            self.state.last_dragon_seen_at = now
+        if dragon_phase is not None and dragon_phase not in DRAGON_PERCH_PHASES:
+            self.state.dragon_perch_announced = False
+        crystal_count = event.combat.end_crystal_count
+        if crystal_count is not None:
+            previous_count = self.state.last_end_crystal_count
+            if previous_count is not None and crystal_count < previous_count:
+                # 連続で割れた場合は最新の残数だけ伝える
+                self.state.pending_crystal_count_announce = crystal_count
+            self.state.last_end_crystal_count = crystal_count
+
         ominous_kind = self._ominous_sound_kind(event)
         if ominous_kind is None:
             raw_ominous_kind = (event.world.ominous_sound_kind or "").strip().lower()
@@ -152,6 +169,7 @@ class StateUpdatesMixin:
             self.state.last_combat_end_at = now
             self.state.seen_boss_visual_keys.clear()
             self._reset_warden_combat_comment_state()
+            self._reset_dragon_combat_comment_state()
         if event.event.name == EventName.COMBAT_ENDED:
             self.state.pending_safe_aftermath = self._boss_defeat_confirmed(event)
             if any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles):
@@ -304,6 +322,14 @@ class StateUpdatesMixin:
         self.state.last_ominous_sound_severity = 0
         self.state.ominous_sound_stage = 0
         self._reset_warden_combat_comment_state()
+        self._reset_dragon_combat_comment_state()
+        self.state.last_dragon_seen_at = None
+        self.state.last_end_crystal_count = None
+        # ポータル反応はディメンションごとに仕切り直す
+        # （要塞でエンドポータル起動を見た後でも、エンドの帰還ポータル出現に反応できるように）
+        self.state.reacted_portal_types.clear()
+        self.state.pending_portal_type = None
+        self.state.portal_state_initialized = False
         if returning_to_overworld:
             self.state.pending_overworld_return_ready_at = event.observed_at + timedelta(
                 milliseconds=self.settings.overworld_return_line_delay_ms

@@ -347,10 +347,19 @@ class EnvironmentalReactionsMixin:
             return self._speech_actions(
                 self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
             )
+        if self.player_input.asks_dragon_direction:
+            return self._speech_actions(self._render_dragon_direction_answer(event))
         # 夜警告は入力優先クールダウンをバイパスする（時限性のため）
         night_warning_actions = self._night_warning_actions(event, now)
         if night_warning_actions:
             return night_warning_actions
+
+        # ドラゴン戦の特殊コールアウト（突進・着地・クリスタル残数）も時限性が高いので
+        # 入力優先ミュートをバイパスする。視覚脅威の30マス圏外でも出せるよう normal フローに置く
+        dragon_special = self._next_dragon_special_callout(event, now)
+        if dragon_special:
+            return self._speech_actions(dragon_special)
+
         if self._player_input_priority_active(now):
             return []
 
@@ -736,7 +745,9 @@ class EnvironmentalReactionsMixin:
             temperature=0.82,
             route="haiku",
         )
-        return f"ここで一句。\n{line}" if "\n" not in line and "ここで一句" not in line else line
+        emitted = f"ここで一句。\n{line}" if "\n" not in line and "ここで一句" not in line else line
+        self._remember_haiku_emission(event, now, emitted, route="haiku")
+        return emitted
 
     def _emergency_shelter_presence_actions(
         self,

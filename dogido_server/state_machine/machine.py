@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dogido_server.config import Settings
 from dogido_server.llm import LLMFrontend
+from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import GameEvent
 from dogido_server.player_input import PlayerInputContext, route_player_input
 from dogido_server.py_tree_policy import PyTreeActionPolicy
@@ -43,10 +44,14 @@ class DogidoStateMachine(
         self.llm = llm
         self.player_input = PlayerInputContext()
         self.policy_tree = PyTreeActionPolicy() if settings.decision_policy == "py_trees" else None
+        self.emitted_haiku: HaikuEmission | None = None
+        self._pending_haiku_interpretation: str | None = None
 
     def process(self, event: GameEvent) -> StateMachineResult:
         now = event.observed_at
         previous_mode = self.state.mode
+        self.emitted_haiku = None
+        self._pending_haiku_interpretation = None
         self.player_input = route_player_input(event.meta.user_text)
         dimension_changed = self._did_change_dimension(event)
         self._handle_dimension_change(event)
@@ -94,4 +99,9 @@ class DogidoStateMachine(
         self.state.last_foliage_shade_context = self._is_foliage_shade_context(event)
 
         combat_active = next_mode in {"panic", "suppressed_panic"} or signals.combat_active_hint
-        return StateMachineResult(state=self.state, combat_active=combat_active, actions=actions)
+        return StateMachineResult(
+            state=self.state,
+            combat_active=combat_active,
+            actions=actions,
+            haiku_emission=self.emitted_haiku,
+        )

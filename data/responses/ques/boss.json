@@ -3,7 +3,16 @@
   "ender_dragon": {
     "arena_hint": "これ、やばいやつちゃう？",
     "summon_commit": "マジいくんか・・・俺も腹括るわ",
-    "reveal": "くるで！"
+    "reveal": "くるで！",
+    "approach": "こっち来とる！頭下げや！！",
+    "chance_time": "降りてきた！叩くなら今やで！！",
+    "crystal_first_hint": "先にクリスタルや！まだ{count}本残っとるで！",
+    "crystal_remaining": "クリスタルあと{count}本や！",
+    "crystal_clear": "クリスタル全部割れたで！あとはドラゴンだけや！",
+    "defeated": "うわああ……やった……やったで……！ドラゴン討伐や……お前、ほんまもんの英雄やで……",
+    "direction_answer": "ドラゴンは{direction}や！",
+    "direction_above": "ドラゴンは{direction}の上空や！",
+    "direction_unknown": "あかん、今ドラゴン見失っとる……周り気ぃつけてや！"
   },
   "wither": {
     "assembly_hint": "えっ・・・何しとるん？",

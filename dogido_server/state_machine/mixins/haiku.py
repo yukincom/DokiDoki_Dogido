@@ -10,7 +10,9 @@ from dogido_server.entry_catalog import block_entry, item_entry, mob_poetic_tags
 from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm import StructuredGenerationRequest
 from dogido_server.llm.sanitize import summarize_for_log
+from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import EventName, GameEvent, NearbyResource
+from dogido_server.minecraft_ids import normalize_minecraft_id
 from dogido_server.state_machine.haiku_catalog import (
     HaikuFallbackContext,
     resolve_fallback_haiku,
@@ -162,6 +164,7 @@ class HaikuMixin:
             self.state.pending_haiku_after_preface = False
             self.state.last_haiku_emitted_at = now
             line = self._render_haiku_line(event).strip()
+            self._remember_haiku_emission(event, now, line, route="haiku")
             LOGGER.warning(
                 "haiku_emit result=emitted text=%s",
                 summarize_for_log(self._format_haiku_line(line)),
@@ -174,7 +177,9 @@ class HaikuMixin:
             LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log("ここで一句。"))
             return "ここで一句。"
         self.state.last_haiku_emitted_at = now
-        line = self._format_haiku_line(self._render_haiku_line(event))
+        raw_line = self._render_haiku_line(event)
+        self._remember_haiku_emission(event, now, raw_line, route="haiku")
+        line = self._format_haiku_line(raw_line)
         LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))
         return line
 
@@ -182,6 +187,7 @@ class HaikuMixin:
         context = self._haiku_context(event)
         irony, irony_status = self._detect_haiku_irony(context)
         scene, scene_status = self._detect_haiku_scene(context, irony)
+        self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
         skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
@@ -214,6 +220,45 @@ class HaikuMixin:
                 summarize_for_log(llm_failed_text),
             )
         return line
+
+    def _haiku_interpretation_text(self, irony: IronyContext, scene: SceneContext) -> str | None:
+        if irony.found and irony.description.strip():
+            return irony.description.strip()
+        if scene.found and scene.summary.strip():
+            return scene.summary.strip()
+        return None
+
+    def _remember_haiku_emission(
+        self,
+        event: GameEvent,
+        now: datetime,
+        text: str,
+        *,
+        route: str | None,
+    ) -> None:
+        stripped = self._strip_haiku_preface(text).strip()
+        if not stripped:
+            return
+        time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
+        self.emitted_haiku = HaikuEmission(
+            created_at=now,
+            text=stripped,
+            preface="ここで一句。",
+            interpretation=self._pending_haiku_interpretation,
+            biome=normalize_minecraft_id(event.world.biome),
+            structure=normalize_minecraft_id(event.world.structure),
+            time_phase=str(time_phase) if time_phase else None,
+            dimension=event.player.dimension,
+            event_sequence=event.sequence,
+            route=route,
+        )
+
+    def _strip_haiku_preface(self, text: str) -> str:
+        stripped = text.strip()
+        for prefix in ("ここで一句。", "ここで一句"):
+            if stripped.startswith(prefix):
+                return stripped[len(prefix):].strip()
+        return stripped
 
     def _format_haiku_line(self, text: str) -> str:
         stripped = text.strip()

@@ -143,6 +143,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _ensure_authorized(resolved_settings, authorization)
         return service.close_session(session_id)
 
+    @app.get("/api/v1/memory/haiku")
+    async def get_haiku_memory(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> list[dict[str, object]]:
+        _ensure_authorized(resolved_settings, authorization)
+        return service.list_haiku_memory()
+
+    @app.get("/api/v1/memory/profile")
+    async def get_memory_profile(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        _ensure_authorized(resolved_settings, authorization)
+        return service.memory_profile()
+
+    @app.get("/api/v1/memory/summary")
+    async def get_memory_summary(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        _ensure_authorized(resolved_settings, authorization)
+        return service.memory_startup_summary()
+
     return app
 
 

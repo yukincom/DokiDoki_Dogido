@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     voicevox_volume_scale: float = 1.0
     voicevox_output_sampling_rate: int | None = None
     voicevox_temp_dir: Path = Field(default_factory=lambda: Path(".dogido_tmp") / "voicevox")
+    memory_enabled: bool = True
+    memory_dir: Path = Path(".dogido_memory")
 
     mlx_model_id: str | None = None
     llm_base_url: str | None = None
@@ -191,6 +193,9 @@ class Settings(BaseSettings):
     sculk_ominous_sound_comment_cooldown_ms: int = 120000
     ominous_sound_reset_ms: int = 30000
     boss_omen_comment_cooldown_ms: int = 30000
+    # ドラゴン戦: 突進警告の再発話間隔と、クリスタル残数コールの最小間隔
+    dragon_approach_callout_cooldown_ms: int = 8000
+    dragon_crystal_callout_cooldown_ms: int = 4000
     mining_fatigue_comment_cooldown_ms: int = 120000
     boss_recent_visual_window_ms: int = 10000
     warden_chasing_comment_cooldown_ms: int = 60000

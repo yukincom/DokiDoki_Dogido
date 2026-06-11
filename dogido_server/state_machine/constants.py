@@ -72,6 +72,15 @@ TACTICAL_BOSS_HOSTILES = {
     "ender_dragon",
 }
 
+# ドラゴンが着地している（攻撃チャンス）とみなすフェーズ
+DRAGON_PERCH_PHASES = {
+    "landing_approach",
+    "landing",
+    "sitting_flaming",
+    "sitting_scanning",
+    "sitting_attacking",
+}
+
 REVEAL_ONLY_BOSS_HOSTILES = {
     "warden",
     "wither",

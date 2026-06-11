@@ -4,13 +4,16 @@ __pycache__/
 *.pyc
 .env
 .dogido_tmp/
+.dogido_memory/
 adapter/minecraft-fabric/.gradle/
 adapter/minecraft-fabric/build/
 adapter/minecraft-fabric/run/
 /資料
 .Ds_store
-/docs
+/docs/*
+!/docs/memory-architecture.md
 /dogido-llm
 /tests/*
 !/tests/test_haiku.py
+!/tests/test_memory.py
 /dogido_server.egg-info

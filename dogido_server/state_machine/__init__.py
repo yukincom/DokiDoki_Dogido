@@ -8,7 +8,7 @@ from dogido_server.state_machine.constants import (
     USHIRO_CALL,
 )
 from dogido_server.state_machine.machine import DogidoStateMachine
-from dogido_server.state_machine.types import AudioAction, StateMachineResult
+from dogido_server.state_machine.types import AudioAction, HaikuEmission, StateMachineResult
 
 __all__ = [
     "AudioAction",
@@ -18,6 +18,7 @@ __all__ = [
     "DogidoStateMachine",
     "EMERGENCY_SHELTER_CALL",
     "EMERGENCY_SHELTER_MORNING_CALL",
+    "HaikuEmission",
     "USHIRO_CALL",
     "StateMachineResult",
 ]

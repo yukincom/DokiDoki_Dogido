@@ -12,3 +12,6 @@ class PlayerInputContext:
     wants_quiet: bool = False
     should_block_ambient: bool = False
     asks_hostile_count: bool = False
+    asks_dragon_direction: bool = False
+    asks_save_last_haiku: bool = False
+    player_haiku_text: str | None = None

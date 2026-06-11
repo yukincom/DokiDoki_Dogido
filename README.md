@@ -47,7 +47,8 @@ Minecraftの世界が、そのまま表現の材料になります。
 10. [連携構成](docs/integration-architecture.md)
 11. [挙動仕様](docs/behavior-spec.md)
 12. [川柳アーキテクチャ](docs/haiku-architecture.md)
-13. [技術課題](docs/technical-risks.md)
+13. [記憶アーキテクチャ](docs/memory-architecture.md)
+14. [技術課題](docs/technical-risks.md)
 
 ## 現時点の方針
 

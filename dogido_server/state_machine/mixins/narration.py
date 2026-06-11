@@ -132,6 +132,8 @@ class NarrationMixin:
     def _render_aftermath_line(self, event: GameEvent) -> str:
         if any(hostile == "warden" for hostile in self.state.last_confirmed_hostiles):
             return response_text("boss", "warden", "defeated")
+        if any(hostile == "ender_dragon" for hostile in self.state.last_confirmed_hostiles):
+            return response_text("boss", "ender_dragon", "defeated")
         fallback = fallback_text("aftermath", "line")
         health = event.player.health
         recent_combat_end_ms = self._recent_ms(event.observed_at, self.state.last_combat_end_at)

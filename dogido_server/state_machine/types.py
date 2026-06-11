@@ -5,7 +5,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from math import inf
 
+from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import VisualThreat
+
 
 @dataclass(slots=True)
 class AudioAction:
@@ -69,6 +71,14 @@ class RuntimeState:
     warden_golem_army_announced: bool = False
     # クリスタル爆破・TNT装置・上空ちくちくの共通「そこまでして」ライン
     warden_extreme_tactic_announced: bool = False
+    # エンダードラゴン戦
+    last_dragon_seen_at: datetime | None = None
+    dragon_perch_announced: bool = False
+    last_dragon_approach_callout_at: datetime | None = None
+    last_end_crystal_count: int | None = None
+    pending_crystal_count_announce: int | None = None
+    last_crystal_callout_at: datetime | None = None
+    dragon_crystal_hint_announced: bool = False
     last_active_status_effects: set[str] = field(default_factory=set)
     last_confirmed_hostiles: list[str] = field(default_factory=list)
     last_known_hostile_directions: list[str] = field(default_factory=list)
@@ -206,6 +216,7 @@ class StateMachineResult:
     state: RuntimeState
     combat_active: bool
     actions: list[AudioAction]
+    haiku_emission: HaikuEmission | None = None
 
     def as_actions(self) -> list[dict[str, str | bool | None]]:
         return [asdict(action) for action in self.actions]
