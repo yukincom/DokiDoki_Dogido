@@ -164,6 +164,8 @@ class EnvironmentalReactionsMixin:
         signals: DerivedSignals,
         now: datetime,
     ) -> str | None:
+        if self.state.current_structure is not None:
+            return None
         if not self._is_foliage_shade_context(event):
             return None
         if not self._entered_foliage_shade_context(event):
@@ -438,6 +440,10 @@ class EnvironmentalReactionsMixin:
         if structure_line:
             return self._speech_actions(structure_line)
 
+        portal_frame_line = self._emit_end_portal_frame_line(event, now)
+        if portal_frame_line:
+            return self._speech_actions(portal_frame_line)
+
         special_biome_line = self._emit_pending_special_biome_line(now)
         if special_biome_line:
             return self._speech_actions(special_biome_line)
@@ -684,6 +690,16 @@ class EnvironmentalReactionsMixin:
         self.state.dark_push_stage = 2
         self._log_darkness_decision("dark_push", event, signals)
         return self._speech_actions(line)
+
+    def _emit_end_portal_frame_line(self, event: GameEvent, now: datetime) -> str | None:
+        # 設置済みのエンドポータルフレームなら要塞外（手置き）でも反応する
+        if not self._has_nearby_end_portal_frame(event):
+            return None
+        recent_ms = self._recent_ms(now, self.state.last_portal_frame_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.portal_frame_comment_cooldown_ms:
+            return None
+        self.state.last_portal_frame_comment_at = now
+        return response_text("exploration", "portal", "frame_nearby")
 
     def _emit_portal_appearance_line(self, event: GameEvent, now: datetime) -> str | None:
         portal_type = self.state.pending_portal_type

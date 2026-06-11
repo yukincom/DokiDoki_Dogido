@@ -96,6 +96,9 @@ class WorldAnalysisMixin:
     def _is_foliage_shade_context(self, event: GameEvent) -> bool:
         if not self._is_tree_canopy_cover_event(event):
             return False
+        player_y = event.player.position.y
+        if player_y is not None and player_y <= 50:
+            return False
         if self._normalized_biome(event.world.biome) not in FOLIAGE_SHADE_BIOMES:
             return False
         local_light = event.world.local_light if event.world.local_light is not None else 15

@@ -92,6 +92,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     // ポータルブロック検知: ネザー/エンドポータルは5ブロック、エンドゲートウェイは15ブロック
     private static final int PORTAL_SCAN_RADIUS = 5;
     private static final int GATEWAY_SCAN_RADIUS = 15;
+    private static final int END_PORTAL_FRAME_SCAN_RADIUS = 5;
     private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
         {"zombified_piglin", "zombified_piglin"},
         {"zombie_pigman", "zombified_piglin"},
@@ -1174,6 +1175,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (portalInfo != null) {
             json.addProperty("nearby_portal_type", portalInfo[0]);
             json.addProperty("nearby_portal_distance", round(Double.parseDouble(portalInfo[1])));
+        }
+
+        double frameDistance = scanNearbyEndPortalFrame(world, pos);
+        if (frameDistance >= 0) {
+            json.addProperty("nearby_end_portal_frame_distance", round(frameDistance));
         }
 
         return json;
@@ -2599,6 +2605,25 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             cursor.move(0, 1, 0);
         }
         return depth;
+    }
+
+    private double scanNearbyEndPortalFrame(ClientWorld world, BlockPos origin) {
+        double best = Double.MAX_VALUE;
+        for (int dx = -END_PORTAL_FRAME_SCAN_RADIUS; dx <= END_PORTAL_FRAME_SCAN_RADIUS; dx += 1) {
+            for (int dy = -END_PORTAL_FRAME_SCAN_RADIUS; dy <= END_PORTAL_FRAME_SCAN_RADIUS; dy += 1) {
+                for (int dz = -END_PORTAL_FRAME_SCAN_RADIUS; dz <= END_PORTAL_FRAME_SCAN_RADIUS; dz += 1) {
+                    BlockPos sample = origin.add(dx, dy, dz);
+                    String blockId = Registries.BLOCK.getId(world.getBlockState(sample).getBlock()).getPath();
+                    if ("end_portal_frame".equals(blockId)) {
+                        double d = Math.sqrt(sample.getSquaredDistance(origin));
+                        if (d <= END_PORTAL_FRAME_SCAN_RADIUS && d < best) {
+                            best = d;
+                        }
+                    }
+                }
+            }
+        }
+        return best == Double.MAX_VALUE ? -1 : best;
     }
 
     private String[] scanNearbyPortals(ClientWorld world, BlockPos origin) {

@@ -98,6 +98,52 @@ class HaikuMixin:
             return False
         return quiet_ms >= self.settings.haiku_quiet_time_ms
 
+    def _haiku_block_reason(self, event: GameEvent, now: datetime) -> str | None:
+        if self.state.mode != "normal":
+            return f"mode_{self.state.mode}"
+        if event.visual_threats:
+            return "visual_threats"
+        if event.auditory_threats:
+            return "auditory_threats"
+        if self.player_input.should_block_ambient:
+            return "player_input"
+        if self._player_input_priority_active(now):
+            return "player_input_priority"
+        if self.state.pending_special_biome_line is not None:
+            return "pending_biome_line"
+        quiet_ms = self._recent_ms(now, self.state.last_non_silent_at)
+        if quiet_ms is not None and quiet_ms < self.settings.haiku_quiet_time_ms:
+            return "quiet_not_reached"
+        return None
+
+    def _log_haiku_block_state(self, event: GameEvent, now: datetime) -> None:
+        """川柳の周期が満ちているのに出ない理由を60秒に1回ログへ残す（デバッグ用）。"""
+        if event.event.name != EventName.STATUS_SNAPSHOT:
+            return
+        if self.state.pending_haiku_after_preface:
+            return
+        interval_ms = self._recent_ms(now, self.state.last_haiku_emitted_at)
+        if interval_ms is None or interval_ms < self.settings.haiku_interval_ms:
+            return
+        reason = self._haiku_block_reason(event, now)
+        if reason is None:
+            return
+        recent_log_ms = self._recent_ms(now, self.state.last_haiku_block_log_at)
+        if recent_log_ms is not None and recent_log_ms < 60000:
+            return
+        self.state.last_haiku_block_log_at = now
+        quiet_ms = self._recent_ms(now, self.state.last_non_silent_at)
+        LOGGER.warning(
+            "haiku_block reason=%s mode=%s light=%s visual=%d audio=%d quiet_ms=%s overdue_ms=%d",
+            reason,
+            self.state.mode,
+            event.world.local_light,
+            len(event.visual_threats),
+            len(event.auditory_threats),
+            quiet_ms,
+            interval_ms - self.settings.haiku_interval_ms,
+        )
+
     def _should_complete_prefaced_haiku(self, event: GameEvent) -> bool:
         if not self.state.pending_haiku_after_preface:
             return False

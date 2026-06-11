@@ -151,6 +151,8 @@ class RuntimeState:
     reacted_portal_types: set[str] = field(default_factory=set)
     pending_portal_type: str | None = None
     portal_state_initialized: bool = False
+    last_portal_frame_comment_at: datetime | None = None
+    last_haiku_block_log_at: datetime | None = None
 
 
 @dataclass(slots=True)

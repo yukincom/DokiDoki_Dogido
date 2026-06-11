@@ -8,6 +8,13 @@ from dogido_server.player_input.types import PlayerInputContext
 
 def route_player_input(raw_text: str | None) -> PlayerInputContext:
     normalized_text = normalize_player_text(raw_text)
+    if normalized_text.startswith("/"):
+        # スラッシュコマンドはドギドへの話しかけではないので、
+        # 会話優先ミュート（player_input_priority_cooldown_ms）を発動しない
+        return PlayerInputContext(
+            raw_text=raw_text or "",
+            normalized_text=normalized_text,
+        )
     blocks_ambient = should_block_ambient(normalized_text)
     return PlayerInputContext(
         raw_text=raw_text or "",

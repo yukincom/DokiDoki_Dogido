@@ -107,6 +107,8 @@ class NormalEnvironmentEvent(_Condition):
             or context.machine.state.pending_special_biome_line is not None
             or context.machine.state.pending_structure_entry_key is not None
             or context.machine._has_recent_ender_eye_launch(context.event)
+            or context.machine._has_nearby_end_portal_frame(context.event)
+            or context.machine.state.pending_portal_type is not None
             or context.signals.entered_safe_zone_with_door
             or context.signals.exited_safe_zone_with_door
             or context.signals.safe_zone_with_door

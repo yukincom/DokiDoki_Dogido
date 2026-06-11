@@ -165,6 +165,7 @@ def response_prewarm_texts(player_name: str | None) -> list[str]:
         response_text("exploration", "portal", "appearance_fallbacks", "nether_portal"),
         response_text("exploration", "portal", "appearance_fallbacks", "end_portal"),
         response_text("exploration", "portal", "appearance_fallbacks", "end_gateway"),
+        response_text("exploration", "portal", "frame_nearby"),
         *structure_entry_prewarm_texts(),
     ]
 

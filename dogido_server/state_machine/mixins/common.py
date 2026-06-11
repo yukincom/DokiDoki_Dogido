@@ -409,6 +409,13 @@ class CommonMixin:
         recent_ms = event.world.ender_eye_launch_recent_ms
         return recent_ms is not None and recent_ms <= self.settings.ender_eye_recent_ms
 
+    def _has_nearby_end_portal_frame(self, event: GameEvent) -> bool:
+        distance = event.world.nearby_end_portal_frame_distance
+        return (
+            distance is not None
+            and distance <= self.settings.end_portal_frame_comment_distance
+        )
+
     def _emit_ender_eye_throw_line(self, event: GameEvent, now: datetime) -> str | None:
         if not self._has_recent_ender_eye_launch(event):
             return None

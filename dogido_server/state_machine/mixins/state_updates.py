@@ -214,6 +214,7 @@ class StateUpdatesMixin:
         if authoritative_ground_count_event:
             self.state.last_ground_hostile_count_within_query_range = ground_hostile_count
         self.state.active_close_flying_visual_keys = self._current_close_flying_visual_keys(event)
+        self._log_haiku_block_state(event, now)
 
     def _handle_dimension_change(self, event: GameEvent) -> None:
         current_dimension = self._normalized_dimension(event) or None

@@ -384,6 +384,8 @@ class NarrationMixin:
         if fallback is None:
             return None
         entry = self._structure_entry(structure_key) or {}
+        group_id = str(entry.get("group_id") or "")
+        biome = "地下" if group_id == "overworld_underground" else self._biome_label(event.world.biome)
         return self._generate_leaf_text(
             kind="structure_entry",
             fallback_text=fallback,
@@ -393,7 +395,7 @@ class NarrationMixin:
                 "structure_label": str(entry.get("label") or structure_key),
                 "structure_note": str(entry.get("note") or ""),
                 "group_label": str(entry.get("group_label") or ""),
-                "biome": self._biome_label(event.world.biome),
+                "biome": biome,
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
             },
             temperature=0.55,

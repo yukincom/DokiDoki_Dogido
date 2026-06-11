@@ -231,6 +231,7 @@ class WorldState(DogidoModel):
     ender_eye_launch_recent_ms: int | None = None  # プレイヤー近傍でのエンダーアイ投擲音からの経過ミリ秒
     nearby_portal_type: str | None = None  # 近距離に存在するポータルブロックの種類（"nether_portal" / "end_portal" / "end_gateway"）
     nearby_portal_distance: float | None = None  # 最近傍のポータルブロックまでの距離
+    nearby_end_portal_frame_distance: float | None = None  # 4ブロック以内のエンドポータルフレームまでの距離
 
 
 # ---- 脅威情報 ----
