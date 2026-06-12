@@ -471,7 +471,10 @@ class EnvironmentalReactionsMixin:
                 self._log_darkness_decision("darkness_advice", event, signals)
                 return self._speech_actions(darkness_advice)
 
-        haiku_line = self._emit_portal_haiku_or_haiku_line(event, now)
+        # ポータルが近い場合も専用の近道は使わない。通常の川柳フロー
+        # （「ここで一句。」発句 → 情景・持ち物込みの本句）に一本化し、
+        # ポータルは題材候補（_haiku_feature_candidates）として混ざる
+        haiku_line = self._emit_haiku_line(event, now)
         return self._speech_actions(haiku_line)
 
     def _emit_nearby_lightning_strike_actions(
@@ -722,37 +725,6 @@ class EnvironmentalReactionsMixin:
         self.state.pending_portal_type = None
         self.state.reacted_portal_types.add(portal_type)
         return self._render_portal_appearance_line(event, portal_type)
-
-    def _emit_portal_haiku_or_haiku_line(self, event: GameEvent, now: datetime) -> str | None:
-        if self._should_emit_haiku(event, now):
-            portal_type = (event.world.nearby_portal_type or "").strip().lower() or None
-            if portal_type is not None:
-                return self._emit_portal_themed_haiku(event, now, portal_type)
-        return self._emit_haiku_line(event, now)
-
-    def _emit_portal_themed_haiku(self, event: GameEvent, now: datetime, portal_type: str) -> str | None:
-        self.state.last_haiku_emitted_at = now
-        portal_label = self._portal_label(portal_type)
-        fallback = f"ここで一句。\n{portal_label}　光るその先　どこへ行く"
-        line = self._generate_leaf_text(
-            kind="haiku",
-            fallback_text=fallback,
-            details={
-                "player_name": self._player_call_name(event),
-                "biome_label": self._biome_label(event.world.biome),
-                "time_label": TIME_PHASE_LABELS.get(
-                    getattr(event.world.time_phase, "value", event.world.time_phase) or "", "不明"
-                ),
-                "portal_type": portal_type,
-                "portal_label": portal_label,
-                "portal_themed": True,
-            },
-            temperature=0.82,
-            route="haiku",
-        )
-        emitted = f"ここで一句。\n{line}" if "\n" not in line and "ここで一句" not in line else line
-        self._remember_haiku_emission(event, now, emitted, route="haiku")
-        return emitted
 
     def _emergency_shelter_presence_actions(
         self,

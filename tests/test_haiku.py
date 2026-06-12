@@ -37,6 +37,7 @@ def make_snapshot(
     danger_darkness_score: float = 0.0,
     held_item: str = "minecraft:torch",
     inventory: dict[str, int] | None = None,
+    nearby_portal_type: str | None = None,
 ) -> GameEvent:
     return GameEvent(
         schema_version="2026-05-24",
@@ -62,6 +63,8 @@ def make_snapshot(
             local_light=15,
             sky_visible=True,
             danger_darkness_score=danger_darkness_score,
+            nearby_portal_type=nearby_portal_type,
+            nearby_portal_distance=3.0 if nearby_portal_type else None,
         ),
         passive_mobs=list(passive_mobs or []),
         inventory=inventory or {"torch": 2, "oak_log": 4},
@@ -399,6 +402,66 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual([action.text for action in preface], ["ここで一句。"])
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
+
+    def test_haiku_near_portal_still_uses_preface_flow_and_full_context(self) -> None:
+        # 回帰テスト: 起動済みポータルの近くに居続けても、ポータル専用の近道で
+        # 「ここで一句。」抜き・情景抜きの川柳が出てはいけない
+        class FakeLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
+                return "ぽーたるの\nひかりのさきへ\nいざゆかん"
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                self.structured_kinds.append(request.kind)
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "要塞のポータル前で支度を整えている",
+                        "motifs": ["ポータル", "要塞"],
+                        "focus": ["ポータル"],
+                        "confidence": 0.8,
+                    }
+                return {"found": False}
+
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        fake_llm = FakeLLM()
+        machine = DogidoStateMachine(settings, llm=fake_llm)
+        sheep = PassiveMob(type="sheep")
+
+        machine.process(
+            make_snapshot(self.base_time, passive_mobs=[sheep], nearby_portal_type="end_portal")
+        )
+        preface = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                passive_mobs=[sheep],
+                nearby_portal_type="end_portal",
+            )
+        ).actions
+        final_line = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=302),
+                passive_mobs=[sheep],
+                nearby_portal_type="end_portal",
+            )
+        ).actions
+
+        # 必ず発句 → 本句の二段階で出る
+        self.assertEqual([action.text for action in preface], ["ここで一句。"])
+        self.assertEqual([action.text for action in final_line], ["ぽーたるの\nひかりのさきへ\nいざゆかん"])
+        # 情景・取り合わせの思考（irony/scene）もポータル近くで省略されない
+        self.assertIn("haiku_irony", fake_llm.structured_kinds)
+        self.assertIn("haiku_scene", fake_llm.structured_kinds)
 
     def test_weak_scene_without_relation_uses_fallback_instead_of_llm(self) -> None:
         class FakeLLM:
