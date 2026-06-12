@@ -91,6 +91,18 @@ class Settings(BaseSettings):
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 
+    # 音声入力（dogido_server.voice_input プロセス）。
+    # whisper のパスは未設定なら ~/AI_assistant/whisper.cpp/ などから自動検出する
+    voice_whisper_cli: Path | None = None
+    voice_whisper_model: Path | None = None
+    voice_input_device: str = ":0"  # ffmpeg avfoundation のオーディオ入力（":0"=最初のマイク）
+    voice_rms_threshold: int = 700  # 発話開始とみなす音量（環境ノイズが多ければ上げる）
+    voice_silence_ms: int = 800  # この長さ無音が続いたら発話終了
+    voice_min_speech_ms: int = 350  # これより短い音は無視（物音対策）
+    voice_max_speech_sec: float = 12.0
+    voice_wake_word: str = ""  # 設定すると、この語を含む発話だけ届ける（例: "ドギド"）
+    voice_no_speech_thold: float = 0.6
+
     mlx_model_id: str | None = None
     llm_base_url: str | None = None
     llm_model: str | None = None

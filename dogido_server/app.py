@@ -21,6 +21,7 @@ from dogido_server.models import (
     HealthResponse,
     HeartbeatRequest,
     HeartbeatResponse,
+    PlayerInputRequest,
 )
 from dogido_server.service import DogidoService
 
@@ -142,6 +143,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # 異常終了時はハートビートのタイムアウトで検知する想定
         _ensure_authorized(resolved_settings, authorization)
         return service.close_session(session_id)
+
+    @app.post("/api/v1/player-input")
+    async def post_player_input(
+        payload: PlayerInputRequest,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        # 音声入力（dogido_server.voice_input）やテスト用 curl からの話しかけ。
+        # 次のゲームイベントの user_text としてチャットと同じ経路に合流する
+        _ensure_authorized(resolved_settings, authorization)
+        return service.push_player_input(payload.text)
 
     @app.get("/api/v1/memory/haiku")
     async def get_haiku_memory(

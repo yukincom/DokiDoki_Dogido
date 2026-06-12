@@ -36,5 +36,8 @@
     "rain_suspected": "なんか雨の音する気が・・・",
     "thunder_suspected": "なんかゴロゴロ聞こえるな……雷きとるんか？",
     "nearby_lightning_strike": "今、落ちたで！"
+  },
+  "chat": {
+    "reply": "おう、聞こえとるで〜。"
   }
 }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from typing import Iterable
 from uuid import uuid4
@@ -58,6 +58,8 @@ class SessionInfo:
     seen_idempotency_set: set[str] = field(default_factory=set)
     first_event_logged: bool = False
     last_haiku_emission: HaikuEmission | None = None
+    # 音声入力など外部から届いたプレイヤー発話。次のイベントの user_text に相乗りさせる
+    pending_player_text: str | None = None
 
     def is_stale_sequence(self, sequence: int) -> bool:
         return (
@@ -195,6 +197,12 @@ class DogidoService:
             )
             return ProcessedEvent(response=response, actions=[])
 
+        # 音声入力（/api/v1/player-input）はチャットと同じ user_text 経路に合流させる。
+        # アダプタからのチャットが同じイベントに載っていた場合はそちらを優先し、保留分は次イベントへ
+        if session.pending_player_text and not (event.meta.user_text or "").strip():
+            event.meta.user_text = session.pending_player_text
+            session.pending_player_text = None
+
         machine_result = session.machine.process(event)
         if machine_result.haiku_emission is not None:
             session.last_haiku_emission = machine_result.haiku_emission
@@ -257,6 +265,25 @@ class DogidoService:
         if not self.settings.audio_enabled or not actions:
             return
         self.audio.play_actions(actions)
+
+    def push_player_input(self, text: str) -> dict[str, object]:
+        """音声入力などゲーム外からのプレイヤー発話を、直近のアクティブセッションへ届ける。"""
+        normalized = (text or "").strip()
+        if not normalized:
+            return {"accepted": False, "reason": "empty_text"}
+        if not self.sessions:
+            return {"accepted": False, "reason": "no_active_session"}
+        session = max(
+            self.sessions.values(),
+            key=lambda candidate: candidate.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
+        )
+        session.pending_player_text = normalized
+        LOGGER.warning(
+            "player_input_pushed session_id=%s text=%s",
+            session.session_id,
+            normalized[:80],
+        )
+        return {"accepted": True, "session_id": session.session_id}
 
     def list_haiku_memory(self) -> list[dict[str, object]]:
         if self.memory is None:

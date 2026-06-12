@@ -50,6 +50,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "structure_entry": _build_structure_entry_messages,
         "ender_eye_throw": _build_ender_eye_throw_messages,
         "portal_appearance": _build_portal_appearance_messages,
+        "player_chat": _build_player_chat_messages,
     }
     builder = builders.get(request.kind)
     if builder is None:
@@ -477,6 +478,31 @@ def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[d
         "空の明るさや天気そのものへの反応を優先する。"
         "会話っぽい一言を24〜42文字くらいで返す。"
         "例文の語句を丸写しせず、怖がりなおじさんらしい自然な関西弁にする。"
+    )
+    return _dialog_messages(user_prompt)
+
+
+def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+    details = request.details
+    user_text = str(details.get("user_text", "")).strip() or "（聞き取れなかった）"
+    structure_label = str(details.get("structure_label", "")).strip()
+    place = structure_label or str(details.get("biome", "そのへん"))
+    user_prompt = (
+        "参考傾向:\n"
+        "- プレイヤーからの話しかけへの、相棒としての返事\n"
+        "- 普通の雑談として自然に返す。実況口調や定型あいさつにしない\n"
+        "- 質問なら知っている範囲で正直に。わからんことは正直に『わからん』と言う\n"
+        "- 音声認識やローマ字の打ち間違いっぽい文は、無理に解釈せず軽く聞き返してよい\n"
+        "- 関西弁は語尾中心で、単語は標準的な日本語を使う\n\n"
+        "/no_think\n"
+        "本番:\n"
+        f"プレイヤーが話しかけてきた:「{user_text}」\n"
+        f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
+        "自然なら一度だけ呼び名を入れてよい。\n"
+        f"いまの場所は{place}。\n"
+        f"時間帯は{details.get('time_phase', 'unknown')}。\n"
+        f"いまの状態は{details.get('mode', 'normal')}（alertなら少し警戒しながら話す）。\n"
+        "発言の内容にちゃんと噛み合った返事を、会話っぽく12〜42文字くらいで一言だけ返す。"
     )
     return _dialog_messages(user_prompt)
 

@@ -103,6 +103,7 @@ class NormalEnvironmentEvent(_Condition):
         return (
             context.machine.player_input.asks_hostile_count
             or context.machine.player_input.asks_dragon_direction
+            or context.machine._has_pending_player_chat(context.event)
             or context.machine._dragon_special_pending(context.event, context.now)
             or context.machine.state.pending_overworld_return_line
             or context.signals.light_source_crafted

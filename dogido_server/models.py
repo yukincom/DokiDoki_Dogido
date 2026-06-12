@@ -452,6 +452,15 @@ class HealthResponse(DogidoModel):
     version: str
 
 
+class PlayerInputRequest(DogidoModel):
+    """POST /api/v1/player-input のリクエスト。
+
+    音声入力プロセス（dogido_server.voice_input）やテスト用 curl からの
+    プレイヤー発話。次のゲームイベントの meta.user_text に相乗りする。
+    """
+    text: str
+
+
 class StateResponse(DogidoModel):
     """イベント受付レスポンスに含まれる現在のドギドの状態サマリ。"""
     mode: str

@@ -360,6 +360,11 @@ class EnvironmentalReactionsMixin:
         if dragon_special:
             return self._speech_actions(dragon_special)
 
+        # キーワードに一致しない話しかけには会話として返事する
+        # （入力優先ミュートはこの後の自発発話を黙らせるためのものなので、返事自体は通す）
+        if self._has_pending_player_chat(event):
+            return self._speech_actions(self._render_player_chat_reply(event))
+
         if self._player_input_priority_active(now):
             return []
 

@@ -17,7 +17,17 @@ SAVE_LAST_HAIKU_KEYWORDS = (
 )
 
 
+def _fold_kana(text: str) -> str:
+    """カタカナをひらがなに畳む。音声認識（whisper）がカタカナで返すことがあるため、
+    キーワード判定はかなを正規化してから行う。"""
+    return "".join(
+        chr(ord(ch) - 0x60) if "ァ" <= ch <= "ヶ" else ch
+        for ch in text
+    )
+
+
 def wants_quiet(normalized_text: str) -> bool:
+    normalized_text = _fold_kana(normalized_text)
     return bool(normalized_text) and any(keyword in normalized_text for keyword in HUSH_KEYWORDS)
 
 
@@ -26,6 +36,7 @@ def should_block_ambient(normalized_text: str) -> bool:
 
 
 def asks_hostile_count(normalized_text: str) -> bool:
+    normalized_text = _fold_kana(normalized_text)
     if not normalized_text:
         return False
     if not any(keyword in normalized_text for keyword in HOSTILE_COUNT_QUERY_KEYWORDS):
@@ -36,14 +47,16 @@ def asks_hostile_count(normalized_text: str) -> bool:
 
 
 def asks_dragon_direction(normalized_text: str) -> bool:
+    normalized_text = _fold_kana(normalized_text)
     if not normalized_text:
         return False
-    if not any(keyword in normalized_text for keyword in DRAGON_KEYWORDS):
+    if not any(_fold_kana(keyword) in normalized_text for keyword in DRAGON_KEYWORDS):
         return False
     return any(keyword in normalized_text for keyword in DIRECTION_QUERY_KEYWORDS)
 
 
 def asks_save_last_haiku(normalized_text: str) -> bool:
+    normalized_text = _fold_kana(normalized_text)
     if not normalized_text:
         return False
     if any(keyword in normalized_text for keyword in SAVE_LAST_HAIKU_KEYWORDS):

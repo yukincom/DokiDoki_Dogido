@@ -94,6 +94,22 @@ cp .env.example .env
 python -m dogido_server
 ```
 
+音声入力（マイク → whisper.cpp → ドギドへ話しかけ）:
+
+```bash
+python -m dogido_server.voice_input
+```
+
+ヘッドホン推奨（スピーカー再生だとドギドの声を拾ってループする）。
+マイク権限はターミナルに付与する。whisper のパスは自動検出（`DOGIDO_VOICE_*` で上書き可）。
+
+テキストでの話しかけテスト（ゲーム接続中に）:
+
+```bash
+curl -X POST http://127.0.0.1:5055/api/v1/player-input \
+  -H 'Content-Type: application/json' -d '{"text": "おはようさん"}'
+```
+
 fixture replay:
 
 ```bash

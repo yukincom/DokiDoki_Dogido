@@ -527,6 +527,19 @@ class CommonMixin:
             self.state.last_structure_comment_at[structure_key] = now
         return line
 
+    def _has_pending_player_chat(self, event: GameEvent) -> bool:
+        """キーワード応答に拾われなかった「話しかけ」が今のイベントに載っているか。"""
+        if not self.player_input.breaks_silence:
+            return False
+        if self.player_input.wants_quiet:
+            return False
+        if self.player_input.asks_hostile_count or self.player_input.asks_dragon_direction:
+            return False
+        # 川柳保存系はサービス側が確認の返事を出す
+        if self.player_input.asks_save_last_haiku or self.player_input.player_haiku_text:
+            return False
+        return bool(self.player_input.normalized_text)
+
     def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
         recent_ms = event.world.ender_eye_launch_recent_ms
         return recent_ms is not None and recent_ms <= self.settings.ender_eye_recent_ms

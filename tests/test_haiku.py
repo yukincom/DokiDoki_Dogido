@@ -131,15 +131,15 @@ class HaikuStateMachineTest(unittest.TestCase):
     def test_user_text_resets_silence_timer(self) -> None:
         self.machine.process(make_snapshot(self.base_time))
 
-        self.assertEqual(
-            self.machine.process(
-                make_snapshot(
-                    self.base_time + timedelta(seconds=301),
-                    user_text="こんにちは",
-                )
-            ).actions,
-            [],
-        )
+        # 話しかけには会話として返事する（返事と同時に静寂タイマーもリセットされる）
+        chat_actions = self.machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                user_text="こんにちは",
+            )
+        ).actions
+        self.assertEqual(len(chat_actions), 1)
+        self.assertEqual(chat_actions[0].text, "おう、聞こえとるで〜。")
 
         self.assertEqual(
             self.machine.process(make_snapshot(self.base_time + timedelta(seconds=550))).actions,

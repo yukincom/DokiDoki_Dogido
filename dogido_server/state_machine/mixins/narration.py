@@ -381,6 +381,26 @@ class NarrationMixin:
             temperature=0.55,
         )
 
+    def _render_player_chat_reply(self, event: GameEvent) -> str:
+        fallback = fallback_text("general", "chat", "reply")
+        return self._generate_leaf_text(
+            kind="player_chat",
+            fallback_text=fallback,
+            details={
+                "player_name": self._player_call_name(event),
+                "user_text": (self.player_input.raw_text or "").strip()[:160],
+                "biome": self._biome_label(event.world.biome),
+                "structure_label": (
+                    self._structure_label(self.state.current_structure)
+                    if self.state.current_structure
+                    else ""
+                ),
+                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+                "mode": self.state.mode,
+            },
+            temperature=0.65,
+        )
+
     def _render_structure_entry_line(self, event: GameEvent, structure_key: str) -> str | None:
         fallback = structure_entry_fallback_text(structure_key)
         if fallback is None:
