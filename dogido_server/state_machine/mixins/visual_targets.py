@@ -89,6 +89,10 @@ class VisualTargetsMixin:
         return min(threats, key=self._visual_threat_priority_key)
 
     def _next_visual_comment_target(self, threats: list[VisualThreat], now: datetime) -> VisualThreat | None:
+        # ドラゴンの定期方角通知はしない（reveal と突進・着地コールアウトのみ）
+        threats = [
+            threat for threat in threats if (threat.type or "").strip().lower() != "ender_dragon"
+        ]
         counts = self._hostile_counts(threats)
         ordered = sorted(threats, key=self._visual_threat_priority_key)
         for threat in ordered:
@@ -108,6 +112,9 @@ class VisualTargetsMixin:
         return None
 
     def _new_priority_visual_target(self, threats: list[VisualThreat], now: datetime) -> VisualThreat | None:
+        threats = [
+            threat for threat in threats if (threat.type or "").strip().lower() != "ender_dragon"
+        ]
         uncommented: list[VisualThreat] = []
         scene_acknowledged = self._visual_scene_acknowledged(threats, now)
         for threat in sorted(threats, key=self._visual_threat_priority_key):

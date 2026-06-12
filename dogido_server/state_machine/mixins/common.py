@@ -710,6 +710,8 @@ class CommonMixin:
             threat
             for threat in self._visible_flying_hostiles_within_query_range(event)
             if self._visual_identity_key(threat) not in self.state.active_close_flying_visual_keys
+            # ドラゴンは専用コールアウト（reveal・突進・着地）に任せる
+            and (threat.type or "").strip().lower() != "ender_dragon"
         ]
         if not candidates:
             return None

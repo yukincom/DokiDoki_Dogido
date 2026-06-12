@@ -116,7 +116,12 @@ class VisualReportsMixin:
         return counts
 
     def _visual_group_signature(self, threats: list[VisualThreat]) -> str:
-        keys = sorted(self._visual_identity_key(threat) for threat in threats)
+        # ドラゴンは長期戦が前提なので「まだ敵おるやん」系の停滞プレッシャー対象から外す
+        keys = sorted(
+            self._visual_identity_key(threat)
+            for threat in threats
+            if (threat.type or "").strip().lower() != "ender_dragon"
+        )
         return "|".join(keys)
 
     def _swarm_callout(self, event: GameEvent, now: datetime) -> str | None:

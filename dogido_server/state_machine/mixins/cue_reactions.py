@@ -471,6 +471,13 @@ class CueReactionsMixin:
         threat = self._highest_priority_boss_visual(event.visual_threats)
         if threat is None:
             return None
+        if (
+            (threat.type or "").strip().lower() == "ender_dragon"
+            and not self._is_new_visual_reveal(threat)
+        ):
+            # ドラゴンの自発位置コールアウトは突進・着地時のみ（_next_dragon_special_callout）。
+            # 定期的な方角通知はせず、聞かれたら答える
+            return None
         visual_key = self._visual_identity_key(threat)
         if not self._visual_comment_allowed(visual_key, now):
             return None

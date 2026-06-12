@@ -32,9 +32,13 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.boss.dragon.EnderDragonEntity;
+import net.minecraft.entity.boss.dragon.phase.PhaseType;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.mob.PiglinEntity;
+import net.minecraft.entity.mob.ShulkerEntity;
 import net.minecraft.entity.mob.SpiderEntity;
 import net.minecraft.entity.mob.ZombifiedPiglinEntity;
 import net.minecraft.entity.passive.BeeEntity;
@@ -89,6 +93,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     // エンダーアイ投擲音: 鮮度 TTL（サーバ側 ender_eye_recent_ms=2000ms と同期）と投擲者判定の距離
     private static final int ENDER_EYE_LAUNCH_TTL_TICKS = 40;
     private static final double ENDER_EYE_LAUNCH_MATCH_RADIUS = 8.0;
+    // ドラゴン戦: 視覚脅威の30マス制限とは別に、アリーナ全域を追跡する
+    private static final double DRAGON_SCAN_RADIUS = 160.0;
+    private static final int DRAGON_DEFEAT_WINDOW_TICKS = 400;
     // ポータルブロック検知: ネザー/エンドポータルは5ブロック、エンドゲートウェイは15ブロック
     private static final int PORTAL_SCAN_RADIUS = 5;
     private static final int GATEWAY_SCAN_RADIUS = 15;
@@ -158,6 +165,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private long lastWardenDeathSoundTick = -1000;
     private int trackedWardenEntityId = -1;
     private long lastWardenDefeatObservedTick = -1000;
+    private long lastDragonSeenTick = -1000;
+    private long lastDragonDeathSoundTick = -1000;
+    private int trackedDragonEntityId = -1;
+    private long lastDragonDefeatObservedTick = -1000;
+    // 一度でも殻を開いた（動き出した）シュルカー。閉じたままの個体は「ブロックのフリ」を尊重して黙る
+    private final Set<UUID> awakenedShulkerIds = new java.util.HashSet<>();
     private long lastWardenEndCrystalObservedTick = -1000;
     private long lastWardenTntSetupObservedTick = -1000;
     private double lastWardenSeenX = 0.0;
@@ -260,6 +273,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<ThreatObservation> threats = scanThreats(player, world);
         observeWardenSpecialSetups(player, world, threats);
         observeTrackedWardenDefeat(world);
+        observeTrackedDragonDefeat(world);
         List<ThreatObservation> visibleThreats = filterVisibleThreats(threats);
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
@@ -335,6 +349,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastWardenDefeatObservedTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
+        this.lastDragonSeenTick = -1000;
+        this.lastDragonDeathSoundTick = -1000;
+        this.trackedDragonEntityId = -1;
+        this.lastDragonDefeatObservedTick = -1000;
+        this.awakenedShulkerIds.clear();
         this.lastHealth = 20.0f;
         this.lastThreatSignature = "";
         this.lastAudioSignature = "";
@@ -383,6 +402,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastWardenDefeatObservedTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
+        this.lastDragonSeenTick = -1000;
+        this.lastDragonDeathSoundTick = -1000;
+        this.trackedDragonEntityId = -1;
+        this.lastDragonDefeatObservedTick = -1000;
+        this.awakenedShulkerIds.clear();
         this.lastThreatSignature = "";
         this.lastAudioSignature = "";
         this.lastAmbientMobSignature = "";
@@ -588,6 +612,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 // 討伐確認のため、目の前のウォーデンを entity ID で直接追跡する
                 this.trackedWardenEntityId = entity.getId();
             }
+            if ("ender_dragon".equals(disposition.type())) {
+                this.lastDragonSeenTick = this.tickCounter;
+                this.trackedDragonEntityId = entity.getId();
+            }
         }
 
         threats.sort(Comparator.comparingDouble(ThreatObservation::distance));
@@ -678,7 +706,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (entity instanceof PlayerEntity) {
             return false;
         }
-        if (entity instanceof HostileEntity) {
+        // HostileEntity 継承でないモンスター（ドラゴン・ガスト・ファントム・スライム・
+        // シュルカー等）を友好モブ扱いしないよう Monster インターフェースで判定する
+        if (entity instanceof Monster) {
             return AMBIENT_NEUTRAL_MONSTER_IDS.contains(entityTypeName(entity));
         }
         return true;
@@ -691,7 +721,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (entity instanceof PlayerEntity) {
             return false;
         }
-        return entity instanceof HostileEntity
+        return entity instanceof Monster
             || entity instanceof BeeEntity
             || entity instanceof DolphinEntity
             || entity instanceof IronGolemEntity
@@ -703,7 +733,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private MobDisposition classifyMobDisposition(ClientPlayerEntity player, LivingEntity entity) {
         String type = entityTypeName(entity);
-        if (entity instanceof HostileEntity) {
+        if (entity instanceof ShulkerEntity shulker) {
+            // 閉じたままのシュルカーは「ブロックのフリ」を尊重して気づかないフリをする。
+            // 一度でも殻を開いたら（動き出したら）以後は脅威として扱う
+            return new MobDisposition(type, false, isShulkerAwakened(shulker), null, "hostile");
+        }
+        if (entity instanceof Monster) {
             if (!AMBIENT_NEUTRAL_MONSTER_IDS.contains(type)) {
                 return new MobDisposition(type, false, true, null, "hostile");
             }
@@ -735,6 +770,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
 
         return new MobDisposition(type, true, false, "friendly", null);
+    }
+
+    private boolean isShulkerAwakened(ShulkerEntity shulker) {
+        // openProgress は殻の開き具合（0.0=完全に閉じてブロックのフリ中）
+        if (shulker.getOpenProgress(0.0f) > 0.0f) {
+            this.awakenedShulkerIds.add(shulker.getUuid());
+        }
+        return this.awakenedShulkerIds.contains(shulker.getUuid());
     }
 
     private boolean isNeutralMobHostileToPlayer(ClientPlayerEntity player, LivingEntity entity) {
@@ -1448,6 +1491,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         } else {
             json.addProperty("warden_defeat_confirmed", isRecentWardenDefeatConfirmed(world));
         }
+        appendDragonCombatInfo(json, player, world);
         return json;
     }
 
@@ -1658,6 +1702,119 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
     }
 
+    private void recordDragonDeathSound(String soundEventId) {
+        if (soundEventId != null && soundEventId.contains("ender_dragon") && soundEventId.contains("death")) {
+            this.lastDragonDeathSoundTick = this.tickCounter;
+        }
+    }
+
+    private void observeTrackedDragonDefeat(ClientWorld world) {
+        if (this.trackedDragonEntityId < 0) {
+            return;
+        }
+        Entity entity = world.getEntityById(this.trackedDragonEntityId);
+        if (!(entity instanceof LivingEntity living)) {
+            return;
+        }
+        // 死亡アニメーション（DYINGフェーズ）開始時点で討伐とみなす
+        boolean dyingPhase = entity instanceof EnderDragonEntity dragon
+            && dragon.getPhaseManager().getCurrent().getType() == PhaseType.DYING;
+        if (living.isDead() || living.getHealth() <= 0.0f || living.deathTime > 0 || dyingPhase) {
+            this.lastDragonDefeatObservedTick = this.tickCounter;
+            this.trackedDragonEntityId = -1;
+        }
+    }
+
+    private boolean isRecentDragonDefeatConfirmed() {
+        if (this.lastDragonSeenTick < 0 || this.tickCounter - this.lastDragonSeenTick > DRAGON_DEFEAT_WINDOW_TICKS) {
+            return false;
+        }
+        if (this.lastDragonDefeatObservedTick >= 0
+            && this.tickCounter - this.lastDragonDefeatObservedTick <= DRAGON_DEFEAT_WINDOW_TICKS) {
+            return true;
+        }
+        return this.lastDragonDeathSoundTick >= 0
+            && this.tickCounter - this.lastDragonDeathSoundTick <= DRAGON_DEFEAT_WINDOW_TICKS;
+    }
+
+    private EnderDragonEntity findNearestDragon(ClientPlayerEntity player, ClientWorld world) {
+        EnderDragonEntity nearest = null;
+        double nearestDistance = DRAGON_SCAN_RADIUS;
+        for (Entity entity : world.getOtherEntities(
+            player,
+            player.getBoundingBox().expand(DRAGON_SCAN_RADIUS),
+            candidate -> candidate instanceof EnderDragonEntity
+        )) {
+            double distance = Math.sqrt(player.squaredDistanceTo(entity));
+            if (distance <= nearestDistance) {
+                nearest = (EnderDragonEntity) entity;
+                nearestDistance = distance;
+            }
+        }
+        return nearest;
+    }
+
+    private String dragonPhaseName(EnderDragonEntity dragon) {
+        PhaseType<?> type = dragon.getPhaseManager().getCurrent().getType();
+        if (type == PhaseType.STRAFE_PLAYER) {
+            return "strafe_player";
+        }
+        if (type == PhaseType.LANDING_APPROACH) {
+            return "landing_approach";
+        }
+        if (type == PhaseType.LANDING) {
+            return "landing";
+        }
+        if (type == PhaseType.TAKEOFF) {
+            return "takeoff";
+        }
+        if (type == PhaseType.SITTING_FLAMING) {
+            return "sitting_flaming";
+        }
+        if (type == PhaseType.SITTING_SCANNING) {
+            return "sitting_scanning";
+        }
+        if (type == PhaseType.SITTING_ATTACKING) {
+            return "sitting_attacking";
+        }
+        if (type == PhaseType.CHARGING_PLAYER) {
+            return "charging_player";
+        }
+        if (type == PhaseType.DYING) {
+            return "dying";
+        }
+        if (type == PhaseType.HOVER) {
+            return "hover";
+        }
+        return "holding_pattern";
+    }
+
+    private void appendDragonCombatInfo(JsonObject json, ClientPlayerEntity player, ClientWorld world) {
+        String dimensionId = world.getRegistryKey().getValue().toString();
+        boolean dragonPossible = "minecraft:the_end".equals(dimensionId)
+            || (this.lastDragonSeenTick >= 0 && this.tickCounter - this.lastDragonSeenTick <= DRAGON_DEFEAT_WINDOW_TICKS);
+        if (!dragonPossible) {
+            return;
+        }
+        EnderDragonEntity dragon = findNearestDragon(player, world);
+        if (dragon != null) {
+            this.lastDragonSeenTick = this.tickCounter;
+            this.trackedDragonEntityId = dragon.getId();
+            Vec3d dragonPosition = new Vec3d(dragon.getX(), dragon.getY(), dragon.getZ());
+            json.addProperty("dragon_phase", dragonPhaseName(dragon));
+            json.addProperty("dragon_distance", round(Math.sqrt(player.squaredDistanceTo(dragonPosition))));
+            json.addProperty("dragon_horizontal", classifyHorizontal(player, dragonPosition));
+            json.addProperty("dragon_vertical", classifyVertical(player, dragonPosition));
+            json.addProperty(
+                "end_crystal_count",
+                countNearbyEntityTypeAroundPlayer(world, player, "end_crystal", DRAGON_SCAN_RADIUS)
+            );
+        }
+        if (this.lastDragonSeenTick >= 0 && this.tickCounter - this.lastDragonSeenTick <= DRAGON_DEFEAT_WINDOW_TICKS) {
+            json.addProperty("dragon_defeat_confirmed", isRecentDragonDefeatConfirmed());
+        }
+    }
+
     private void observeTrackedWardenDefeat(ClientWorld world) {
         if (this.trackedWardenEntityId < 0) {
             return;
@@ -1836,6 +1993,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         String soundEventId = soundEventId(packet.getSound());
         recordWardenDeathSound(soundEventId);
+        recordDragonDeathSound(soundEventId);
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
@@ -1954,6 +2112,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         String soundEventId = soundEventId(packet.getSound());
         recordWardenDeathSound(soundEventId);
+        recordDragonDeathSound(soundEventId);
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
@@ -1966,7 +2125,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
 
         Entity entity = world.getEntityById(packet.getEntityId());
-        if (!(entity instanceof HostileEntity hostileEntity) || !hostileEntity.isAlive()) {
+        if (!(entity instanceof LivingEntity hostileEntity) || !(entity instanceof Monster) || !hostileEntity.isAlive()) {
             String fallbackLabel = hostileLabelFromSoundEvent(soundEventId);
             if (fallbackLabel == null) {
                 return;
@@ -2041,7 +2200,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             source.x - 4.5, source.y - 4.5, source.z - 4.5,
             source.x + 4.5, source.y + 4.5, source.z + 4.5
         ))) {
-            if (!(entity instanceof HostileEntity hostile) || !hostile.isAlive()) {
+            if (!(entity instanceof LivingEntity hostile) || !(entity instanceof Monster) || !hostile.isAlive()) {
                 continue;
             }
             if (player != null && !classifyMobDisposition(player, hostile).threatNow()) {
