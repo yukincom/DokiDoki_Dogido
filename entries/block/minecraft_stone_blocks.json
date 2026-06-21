@@ -1,0 +1,321 @@
+{
+  "building_blocks": {
+    "label": "一般建築ブロック",
+    "english": "General Building Blocks",
+    "groups": {
+      "stone_materials": {
+        "label": "石材",
+        "groups": {
+          "stone": {
+            "label":  {"japanese":"石", "note":"どこにでもあるかと思いきやそうでもない"},
+            "items": {
+              "stone": "石", 
+              "stone_stairs": "石の階段",
+              "stone_slab": "石のハーフブロック",
+              "smooth_stone": "滑らかな石",
+              "smooth_stone_stairs": "滑らかな石の階段",
+              "smooth_stone_slab": "滑らかな石のハーフブロック"
+            }
+          },
+          "cobblestone": {
+            "label": {"japanese":"丸石", "note":"砕けた石を固めたもの"},
+            "items": {
+              "cobblestone": "丸石",
+              "cobblestone_stairs": "丸石の階段",
+              "cobblestone_slab": "丸石のハーフブロック",
+              "cobblestone_wall": "丸石の塀",
+              "mossy_cobblestone": "苔むした丸石",
+              "mossy_cobblestone_wall": "苔むした丸石の塀"
+            }
+          },
+          "stone_bricks": {
+            "label": {"japanese":"石レンガ", "note":"石を切って作る。少しおしゃれな建材"},
+            "items": {
+              "stone_bricks": "石レンガ",
+              "stone_brick_stairs": "石レンガの階段",
+              "stone_brick_slab": "石レンガのハーフブロック",
+              "stone_brick_wall": "石レンガの塀",
+              "chiseled_stone_bricks": {
+                "japanese": "模様入りの石レンガ",
+                "note": "マトのような模様が描かれている。"
+              },
+              "cracked_stone_bricks": "ひび割れた石レンガ",
+              "mossy_stone_bricks": "苔むした石レンガ",
+              "mossy_stone_brick_stairs": "苔むした石レンガの階段",
+              "mossy_stone_brick_slab": "苔むした石レンガのハーフブロック",
+              "mossy_stone_brick_wall": "苔むした石レンガの塀"
+            }
+          },
+          "granite": {
+            "label": {"japanese":"花崗岩", "note":"水晶が混ざった赤い石。御影石とも。"},
+            "items": {
+              "granite": "花崗岩",
+              "granite_stairs": "花崗岩の階段",
+              "granite_slab": "花崗岩のハーフブロック",
+              "granite_wall": "花崗岩の塀",
+              "polished_granite": "磨かれた花崗岩",
+              "polished_granite_stairs": "磨かれた花崗岩の階段",
+              "polished_granite_slab": "磨かれた花崗岩のハーフブロック"
+            }
+          },
+          "diorite": {
+            "label": {"japanese":"閃緑岩","note":"水晶が混ざった白い石。安山岩と同じ素材でできている。"},
+            "items": {
+              "diorite": "閃緑岩",
+              "diorite_stairs": "閃緑岩の階段",
+              "diorite_slab": "閃緑岩のハーフブロック",
+              "diorite_wall": "閃緑岩の塀",
+              "polished_diorite": "磨かれた閃緑岩",
+              "polished_diorite_stairs": "磨かれた閃緑岩の階段",
+              "polished_diorite_slab": "磨かれた閃緑岩のハーフブロック"
+            }
+          },
+          "andesite": {
+            "label": {"japanese":"安山岩","note":"閃緑岩と同じ素材でできている灰色の石"},
+            "items": {
+              "andesite": "安山岩",
+              "andesite_stairs": "安山岩の階段",
+              "andesite_slab": "安山岩のハーフブロック",
+              "andesite_wall": "安山岩の塀",
+              "polished_andesite": "磨かれた安山岩",
+              "polished_andesite_stairs": "磨かれた安山岩の階段",
+              "polished_andesite_slab": "磨かれた安山岩のハーフブロック"
+            }
+          },
+          "sandstone": {
+            "label": {"japanese":"砂岩・赤い砂岩","note":"砂を固めてできた岩。砂漠の大地に眠っている。"},
+            "items": {
+              "sandstone": "砂岩",
+              "cut_sandstone": "研がれた砂岩",
+              "chiseled_sandstone": {
+                "japanese": "模様入りの砂岩",
+                "note": "クリーパーのような模様が描かれている。"
+              },
+              "smooth_sandstone": "滑らかな砂岩",
+              "red_sandstone": "赤い砂岩",
+              "cut_red_sandstone": "研がれた赤い砂岩",
+              "chiseled_red_sandstone": {
+                "japanese": "模様入りの赤い砂岩",
+                "note": "ウィザーのような模様が描かれている。"
+              },
+              "smooth_red_sandstone": "滑らかな赤い砂岩",
+              "sandstone_slab": "砂岩のハーフブロック",
+              "sandstone_wall": "砂岩の塀",
+              "cut_sandstone_slab": "研がれた砂岩のハーフブロック",
+              "smooth_sandstone_slab": "滑らかな砂岩のハーフブロック",
+              "red_sandstone_slab": "赤い砂岩のハーフブロック",
+              "red_sandstone_wall": "赤い砂岩の塀",
+              "cut_red_sandstone_slab": "研がれた赤い砂岩のハーフブロック",
+              "smooth_red_sandstone_slab": "滑らかな赤い砂岩のハーフブロック",
+              "sandstone_stairs": "砂岩の階段",
+              "cut_sandstone_stairs": "研がれた砂岩の階段",
+              "smooth_sandstone_stairs": "滑らかな砂岩の階段",
+              "red_sandstone_stairs": "赤い砂岩の階段",
+              "cut_red_sandstone_stairs": "研がれた赤い砂岩の階段",
+              "smooth_red_sandstone_stairs": "滑らかな赤い砂岩の階段"
+            }
+          },
+          "deepslate": {
+            "label": {"japanese": "深層岩", "note": "通常の石の2倍、硬い。黒い岩。"},
+            "items": {
+              "deepslate": "深層岩",
+              "cobbled_deepslate":  "深層岩の丸石", 
+              "cobbled_deepslate_stairs":  "深層岩の丸石の階段",
+              "cobbled_deepslate_slab": "深層岩の丸石のハーフブロック", 
+              "cobbled_deepslate_wall": "深層岩の丸石の塀", 
+              "polished_deepslate": "磨かれた深層岩", 
+              "polished_deepslate_stairs":  "磨かれた深層岩の階段", 
+              "polished_deepslate_slab": "磨かれた深層岩のハーフブロック",
+              "polished_deepslate_wall":"磨かれた深層岩の塀", 
+              "chiseled_deepslate":  "模様入りの深層岩", 
+              "deepslate_bricks": "深層岩レンガ", 
+              "deepslate_brick_stairs": "深層岩レンガの階段",
+              "deepslate_brick_slab":  "深層岩レンガのハーフブロック",
+              "deepslate_brick_wall": "深層岩レンガの塀", 
+              "cracked_deepslate_bricks": "ひび割れた深層岩レンガ", 
+              "deepslate_tiles": "深層岩タイル", 
+              "deepslate_tile_stairs": "深層岩タイルの階段", 
+              "deepslate_tile_slab": "深層岩タイルのハーフブロック", 
+              "deepslate_tile_wall": "深層岩タイルの塀", 
+              "cracked_deepslate_tiles":"ひび割れた深層岩タイル", 
+              "reinforced_deepslate": "強化された深層岩"
+            }
+          },
+          "tuff": {
+            "label":  {"japanese": "凝灰岩","note":"火山灰が固まってできた岩"},
+            "items": {
+              "tuff": "凝灰岩",
+              "tuff_stairs": "凝灰岩の階段",
+              "tuff_slab": "凝灰岩のハーフブロック",
+              "tuff_wall": "凝灰岩の塀",
+              "polished_tuff": "磨かれた凝灰岩",
+              "polished_tuff_stairs": "磨かれた凝灰岩の階段",
+              "polished_tuff_slab": "磨かれた凝灰岩のハーフブロック",
+              "polished_tuff_wall": "磨かれた凝灰岩の塀",
+              "chiseled_tuff": {
+                "japanese": "模様入りの凝灰岩",
+                "note": "ラーメンどんぶりのような模様が描かれている。"
+              },
+              "tuff_bricks": "凝灰岩レンガ",
+              "tuff_brick_stairs": "凝灰岩レンガの階段",
+              "tuff_brick_slab": "凝灰岩レンガのハーフブロック",
+              "tuff_brick_wall": "凝灰岩レンガの塀",
+              "chiseled_tuff_bricks": {
+                "japanese": "模様入りの凝灰岩レンガ",
+                "note": "開いたジッパーのような模様が描かれている。"
+              }
+            }
+          },
+          "bricks_mud_resin": {
+            "label": {"japanese":"レンガ・泥", "note":"泥から作られた建材"},
+            "items": {
+              "bricks": "レンガ",
+              "brick_stairs": "レンガの階段",
+              "brick_slab": "レンガのハーフブロック",
+              "brick_wall": "レンガの塀",
+              "packed_mud": "固めた泥",
+              "mud_bricks": "泥レンガ",
+              "mud_brick_stairs": "泥レンガの階段",
+              "mud_brick_slab": "泥レンガのハーフブロック",
+              "mud_brick_wall": "泥レンガの塀"
+
+            }
+          },
+          "prismarine": {
+            "label": {"japanese":"プリズマリン","note":"海底神殿を構成する石材。海を切り取ったかのような、エメラルドグリーン色をしている"},
+            "items": {
+              "prismarine": "プリズマリン",
+              "prismarine_stairs": "プリズマリンの階段",
+              "prismarine_slab": "プリズマリンのハーフブロック",
+              "prismarine_wall": "プリズマリンの塀",
+              "prismarine_bricks": "プリズマリンレンガ",
+              "prismarine_brick_stairs": "プリズマリンレンガの階段",
+              "prismarine_brick_slab": "プリズマリンレンガのハーフブロック",
+              "dark_prismarine": "ダークプリズマリン",
+              "dark_prismarine_stairs": "ダークプリズマリンの階段",
+              "dark_prismarine_slab": "ダークプリズマリンのハーフブロック"
+            }
+
+          },
+          "netherrack": {
+            "label": {"japanese":"ネザーラック","note":"ネザーで算出する赤黒い石。火をつけると燃え続ける性質を持つ。"},
+            "items": {
+              "netherrack": "ネザーラック",
+              "nether_bricks": "ネザーレンガ",
+              "nether_brick_stairs": "ネザーレンガの階段",
+              "nether_brick_slab": "ネザーレンガのハーフブロック",
+              "nether_brick_wall": "ネザーレンガの塀",
+              "chiseled_nether_bricks": {
+                "japanese": "模様入りのネザーレンガ",
+                "note": "不燃性でガストの火の玉でも破壊されない。ウィザースケルトンの模様が刻まれている。"
+              },
+              "cracked_nether_bricks": "ひび割れたネザーレンガ",
+              "red_nether_bricks": "赤いネザーレンガ",
+              "red_nether_brick_stairs": "ネザーレンガの階段",
+              "red_nether_brick_slab": "ネザーレンガのハーフブロック",              
+              "red_nether_brick_wall": "赤いネザーレンガの塀"}
+            },
+            "basalt":{
+            "label":{"japanese":"玄武岩","note":"ネザーで産出する灰色の石。爆発耐性を持つ"},
+            "items":{
+              "basalt":"玄武岩",
+              "polished_basalt": "磨かれた玄武岩",
+              "smooth_basalt": "滑らかな玄武岩"}
+            },
+            "block_of_quartz":{
+            "label": {"japanese": "クォーツブロック",
+                "note": "ネザークォーツから作られる白いブロック。爆発に弱い。"},
+            "items":{
+            "block_of_quartz":"クォーツブロック",
+              "quartz_stairs": "クォーツの階段",
+              "quartz_slab": "クォーツのハーフブロック",
+              "smooth_quartz_block": "滑らかなクォーツブロック",
+              "smooth_quartz_stairs": "滑らかなクォーツの階段",
+              "smooth_quartz_slab": "滑らかなクォーツのハーフブロック",
+              "quartz_bricks": "クォーツレンガ",
+              "chiseled_quartz_block": {
+                "japanese": "模様入りのクォーツブロック",
+                "note": "コンジットとオウムガイの模様が描かれている。"},
+              "quartz_pillar": "クォーツの柱"}
+            },
+          
+          "blackstone": {
+            "label":{"japanese": "ブラックストーン", "note":"ネザーで産出する真っ黒い石。"},
+            "items": {
+              "blackstone": "ブラックストーン",
+              "blackstone_stairs": "ブラックストーンの階段",
+              "blackstone_slab": "ブラックストーンのハーフブロック",
+              "blackstone_wall": "ブラックストーンの塀",
+              "polished_blackstone": "磨かれたブラックストーン",
+              "polished_blackstone_stairs": "磨かれたブラックストーンの階段",
+              "polished_blackstone_slab": "磨かれたブラックストーンのハーフブロック",
+              "polished_blackstone_wall": "磨かれたブラックストーンの塀",
+              "chiseled_polished_blackstone": {
+                "japanese": "模様入りの磨かれたブラックストーン",
+                "note": "ピグリンの鼻のような模様が彫られている。"
+              },
+              "polished_blackstone_bricks": "磨かれたブラックストーンレンガ",
+              "polished_blackstone_brick_stairs": "磨かれたブラックストーンレンガの階段",
+              "polished_blackstone_brick_slab": "磨かれたブラックストーンレンガのハーフブロック",
+              "polished_blackstone_brick_wall": "磨かれたブラックストーンレンガの塀",
+              "cracked_polished_blackstone_bricks": "ひび割れた磨かれたブラックストーンレンガ"
+            }
+          },
+          "end_stone": {
+            "label": {"japanese":"エンドストーン","note":"ジ・エンドの浮島を構成する岩石。爆発耐性が高い。クリーム色。ケーキスポンジのような見た目。エンダードラゴンに破壊されない。"},
+            "items": {
+              "end_stone": "エンドストーン",
+              "end_stone_bricks": "エンドストーンレンガ",
+              "end_stone_brick_stairs": "エンドストーンレンガの階段",
+              "end_stone_brick_slab": "エンドストーンレンガのハーフブロック",
+              "end_stone_brick_wall": "エンドストーンレンガの塀"
+            }
+          },
+          "special_stone": {
+            "label": "特殊石材",
+            "items": {
+              "bedrock": {"japanese":"岩盤","note":"世界の基盤になっている石。破壊できない"},
+              "obsidian": {"japanese":"黒曜石","note":"暗紫色。極めて硬くダイヤモンド以上のツルハシでのみ回収できる。爆発耐性がある。"},
+              "crying_obsidian": {"japanese":"泣く黒曜石","note":"暗紫色の光る石。極めて硬くダイヤモンド以上のツルハシでのみ回収できる。爆発耐性がある。"},
+              "calcite": {"japanese":"方解石","note":"アメジストの側で見られる白い石"},
+              "dripstone_block": {"japanese":"鍾乳石ブロック","note":"鍾乳石を成長させる石。マダラ模様"},
+              "pointed_dripstone_down_tip_merge": {"japanese":"鍾乳石","note":"鍾乳石、石筍、石柱を形作る石。大きな筍のようだ"}
+            }
+          },
+          "future_stone": {
+            "label": "追加予定・要確認石材",
+            "items": {
+              "cinnabar_wall": "辰砂の塀",
+              "polished_cinnabar_wall": "磨かれた辰砂の塀",
+              "cinnabar_brick_wall": "辰砂レンガの塀",
+              "sulfur_wall": "硫黄の塀",
+              "polished_sulfur_wall": "磨かれた硫黄の塀",
+              "sulfur_brick_wall": "硫黄レンガの塀"
+            }
+          }
+        },
+        "notes": [
+          "素材ごとに、ブロック→階段→ハーフブロック→塀を基本順序として整理。",
+          "並びは石→石レンガ→砂岩→深層岩→凝灰岩→レンガ/泥/樹脂→海洋石材→ネザー系→ブラックストーン系を意識。",
+          "追加予定の素材はどちらも毒性のある素材なので、noteを書くか、考える必要あり。"
+        ]
+      }
+    }
+  },
+  "meta": {
+    "source_file": "minecraft_category_general_building_blocks_v3_inventory_order.json",
+    "note": "wood_and_bamboo は minecraft_category_wood_and_bamboo.json に独立分離。",
+    "image_reference": "スクリーンショット 2026-06-01 16.34.14.png",
+    "unplaced_counts": {
+      "wood": 0,
+      "stone": 0,
+      "metal": 0
+    },
+    "cut_copper_slabs_and_stairs_patch": {
+      "added_to": "building_blocks.groups.metal_building.groups.copper.groups.cut_copper_slabs_and_stairs",
+      "count": 16
+    },
+    "removed_category": "wood_and_bamboo"
+  }
+}
+  

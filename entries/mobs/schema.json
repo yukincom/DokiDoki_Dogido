@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "schema": {
+    "entry_fields": {
+      "label": "日本語表示名",
+      "threat_class": "melee|ranged|explosive|tank|swarm|ambush|trickster|teleport|utility",
+      "priority": "critical|high|medium|low",
+      "burns_in_daylight": "bool",
+      "aquatic": "bool",
+      "dies_on_land": "bool",
+      "undead": "bool",
+      "provoked_only": "bool",
+      "poetic": {
+        "visual_tags": [
+          "見た目の短い語"
+        ],
+        "sound_tags": [
+          "音の短い語"
+        ],
+        "motion_tags": [
+          "動きの短い語"
+        ],
+        "scene_tags": [
+          "似合う場面の語"
+        ],
+        "reaction_tags": [
+          "AI反応の語"
+        ],
+        "comic_tags": [
+          "ちょっと可笑しい面"
+        ],
+        "role": "川柳での役割ひとこと"
+      }
+    },
+    "notes": [
+      "neutral は普段は敵対しないが、条件次第で脅威になる Mob を置く。",
+      "passive_mob_labels は neutral と passive をまとめて ambient 用に読む。",
+      "threat_mob_labels は hostile と neutral をまとめて戦闘用に読む。"
+    ]
+  }
+}

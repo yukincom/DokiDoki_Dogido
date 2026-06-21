@@ -1,0 +1,285 @@
+{
+  "redstone_components": {
+    "label": "レッドストーン回路部品",
+    "english": "Redstone Components",
+    "groups": {
+      "wiring_and_inputs": {
+        "label": "配線・入力",
+        "items": {
+          "redstone_dust": {
+            "japanese": "レッドストーンダスト",
+            "note": "レッドストーンを原料とする赤い粉。"
+          },
+          "lever": "レバー",
+          "tripwire": "トリップワイヤー",
+          "tripwire_hook": {
+            "japanese": "トリップワイヤーフック",
+            "note": "糸を踏む・破壊で作動。ハサミで装置解除。2個セットで使用。水に流れる。溶岩流で消滅。"
+          },
+          "target": {
+            "japanese": "的",
+            "note": "赤と白の縞々模様。投擲物が命中するとレッドストーン信号を発する。"
+          }
+        }
+      },
+      "wood_buttons": {
+        "label": "木材ボタン",
+        "source":"block/minecraft_wood_and_bamboo.json",
+        "refs": [
+              "oak_button", 
+              "spruce_button",
+              "birch_button",
+              "jungle_button", 
+              "acacia_button", 
+              "dark_oak_button", 
+              "mangrove_button",
+              "cherry_button", 
+              "pale_oak_button", 
+              "bamboo_button", 
+              "crimson_button",
+              "warped_button"
+            ]
+            },
+      "wood_pressure_plates": {
+        "label": "木材感圧板",
+        "source":"block/minecraft_wood_and_bamboo.json",
+        "refs": [
+              "oak_pressure_plate",
+              "spruce_pressure_plate", 
+              "birch_pressure_plate", 
+              "jungle_pressure_plate", 
+              "acacia_pressure_plate", 
+              "dark_oak_pressure_plate",
+              "mangrove_pressure_plate", 
+              "cherry_pressure_plate", 
+              "pale_oak_pressure_plate", 
+              "bamboo_pressure_plate", 
+              "crimson_pressure_plate",
+              "warped_pressure_plate"
+            ]
+          },
+          "stone_buttons": {
+            "label": "石材ボタン",
+            "items": {
+              "stone_button": "石のボタン",
+              "polished_blackstone_button": "磨かれたブラックストーンのボタン"
+            }
+          },
+          "stone_pressure_plates": {
+            "label": "石材感圧板",
+            "items": {
+              "stone_pressure_plate": "石の感圧板",
+              "polished_blackstone_pressure_plate": "磨かれたブラックストーンの感圧板"
+            }
+          },
+          "weighted_pressure_plates": {
+            "label": "重量感圧板",
+            "items": {
+              "light_weighted_pressure_plate": "軽量用感圧板",
+              "heavy_weighted_pressure_plate": "重量用感圧板"
+            },
+      "logic_and_power": {
+        "label": "信号・論理部品",
+        "items": {
+          "redstone_repeater": {
+            "japanese": "レッドストーンリピーター",
+            "note": "後ろから前にのみ信号を伝達。横からの信号で変更可能。詳細はwikiで確認。"
+          },
+          "redstone_comparator": {
+            "japanese": "レッドストーンコンパレーター",
+            "note": "レッドストーン信号を比較、減算する。矢印が向いている方が前。前のトーチが消灯：比較モード。前のトーチが点灯：減算モード。容器の中身の量を信号化する。"
+          },
+          "daylight_detector": {
+            "japanese": "日照センサー",
+            "note": "日光の照度に応じてレッドストーン信号を発する。"
+          },
+          "observer": "オブザーバー",
+          "redstone_lamp": {
+            "japanese": "レッドストーンランプ",
+            "note": "レッドストーン信号が通っているかを目で確認できるブロック。光ると綺麗。"
+          },
+          "block_of_redstone": {
+            "japanese": "レッドストーンブロック",
+            "note": "ブロック形態のレッドストーン。レッドストーン信号の動力源。"
+          }}},
+      "bulbs": {
+        "label": "電球",
+        "source":"block/minecraft_metal_blocks.json",
+          "refs": [        
+          "copper_bulb",
+          "exposed_copper_bulb",
+          "weathered_copper_bulb",
+          "oxidized_copper_bulb",
+          "waxed_copper_bulb",
+          "waxed_exposed_copper_bulb",
+          "waxed_weathered_copper_bulb",
+          "waxed_oxidized_copper_bulb"
+          ]
+      },
+      "pistons_and_mechanics": {
+        "label": "ピストン・機械部品",
+        "items": {
+          "piston": {
+            "japanese": "ピストン",
+            "note": "レッドストーン信号を受信するとブロックやエンティティを押し出す。"
+          },
+          "sticky_piston": {
+            "japanese": "粘着ピストン",
+            "note": "ピストンに似ているが、押すのは勿論、引くこともできる。"
+          },
+          "slime_block": {"japanese":"スライムブロック","note":"緑色でベタつくブロック。スライムが原料"},
+          "honey_block": {"japanese":"ハチミツブロック","note":"黄色くてベタつくブロック"}
+        }
+      },
+        "rails": {
+        "label": "レール",
+        "items": {
+          "rail": {
+            "japanese": "レール",
+            "note": "トロッコの通り道。"
+          },
+          "powered_rail": {
+            "japanese": "パワードレール",
+            "note": "トロッコの速度を増減させるレール。金ピカ。起動中は赤く光る"
+          },
+          "detector_rail": {
+            "japanese": "ディテクターレール",
+            "note": "トロッコにのみ反応する感圧装置。金ピカ"
+          },
+          "activator_rail": {
+            "japanese": "アクティベーターレール",
+            "note": "一部のトロッコに対して特定のアクションを起こすレール。くわしくはwiki。"
+          }
+          }
+        },
+        "containers_and_inventory_io": {
+        "label": "収納・アイテム入出力",
+        "items": {
+          "trapped_chest": {
+            "japanese": "トラップチェスト",
+            "note": "音符ブロックを置くとベース音が鳴る。プレイヤーがチェストを開けたことを検出し、レッドストーン信号を発信。"
+          },
+          "hopper": {
+            "japanese": "ホッパー",
+            "note": "アイテムを吸い込み、送り込む。くわしくはwiki。"
+          },
+          "dispenser": {
+            "japanese": "ディスペンサー",
+            "note": "アイテムを射出する。アイテムによって作用が異なる。くわしくはwiki。"
+          },
+          "dropper": {
+            "japanese": "ドロッパー",
+            "note": "アイテムをドロップする。くわしくはwiki。"
+          }
+        }
+      },
+      "redstone_doors_traps": {
+        "label": "ドア・トラップ系",
+        
+        "groups": {
+          "wooden_fence_gates": {
+            "source":"block/minecraft_wood_and_bamboo.json",
+            "label": "木・竹・キノコ材のフェンスゲート",
+            "refs": [
+              "oak_fence_gate",
+              "spruce_fence_gate",
+              "birch_fence_gate",
+              "jungle_fence_gate",
+              "acacia_fence_gate",
+              "dark_oak_fence_gate",
+              "mangrove_fence_gate",
+              "cherry_fence_gate",
+              "pale_oak_fence_gate",
+              "bamboo_fence_gate",
+              "crimson_fence_gate",
+              "warped_fence_gate"
+            ]
+          },
+          "wooden_doors": {         
+            "label": "木・竹・キノコ材のドア",
+            "source":"block/minecraft_wood_and_bamboo.json",
+            "refs": [
+              "oak_door",
+              "spruce_door",
+              "birch_door",
+              "jungle_door",
+              "acacia_door",
+              "dark_oak_door",
+              "mangrove_door",
+              "cherry_door",
+              "pale_oak_door",
+              "bamboo_door",
+              "crimson_door",
+              "warped_door"
+            ]
+          },
+          "wooden_trapdoors": {
+            "label": "木・竹・キノコ材のトラップドア",
+            "source":"block/minecraft_wood_and_bamboo.json",
+            "refs": [
+              "oak_trapdoor",
+              "spruce_trapdoor",
+              "birch_trapdoor",
+              "jungle_trapdoor",
+              "acacia_trapdoor",
+              "dark_oak_trapdoor",
+              "mangrove_trapdoor",
+              "cherry_trapdoor",
+              "pale_oak_trapdoor",
+              "bamboo_trapdoor",
+              "crimson_trapdoor",
+              "warped_trapdoor"
+            ]
+          },
+
+          "iron_doors_trapdoors": {
+            "label": "鉄のドア・トラップドア",
+            "source":"block/minecraft_metal_blocks.json",
+            "refs": [
+              "iron_door",
+              "iron_trapdoor"
+            ]
+          },
+          "copper_doors": {
+            "label": "銅のドア",
+            "source":"block/minecraft_metal_blocks.json",
+            "refs": [
+              "copper_door",
+              "exposed_copper_door",
+              "weathered_copper_door",
+              "oxidized_copper_door",
+              "waxed_copper_door",
+              "waxed_exposed_copper_door",
+              "waxed_weathered_copper_door",
+              "waxed_oxidized_copper_door"
+            ]
+          },
+          "copper_trapdoors": {
+            "label": "銅のトラップドア",
+            "source":"block/minecraft_metal_blocks.json",
+            "refs": [
+              "copper_trapdoor",
+              "exposed_copper_trapdoor",
+              "weathered_copper_trapdoor",
+              "oxidized_copper_trapdoor",
+              "waxed_copper_trapdoor",
+              "waxed_exposed_copper_trapdoor",
+              "waxed_weathered_copper_trapdoor",
+              "waxed_oxidized_copper_trapdoor"
+            ]
+          }},
+          "special_traps": {
+            "label": "特殊トラップ・自動作業",
+            "items": {
+              "tnt": "TNT",
+              "crafter": {
+                "japanese": "自動作業台",
+                "note": "作業台を鉄で加工した物。レッドストーン信号で自動クラフトする。くわしくはwiki。"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

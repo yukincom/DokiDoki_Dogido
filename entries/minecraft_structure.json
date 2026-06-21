@@ -1,0 +1,217 @@
+{
+  "groups": {
+    "village": {
+      "label": "村",
+      "description": "Village structures",
+      "dimension": "overworld",
+      "overview": "村人が暮らす平和的な集落。バイオームごとに建築素材と外観が異なる。農場・鍛冶屋・図書館などの施設がある。",
+      "structures": {
+        "village_plains": {
+          "japanese": "平原の村",
+          "biomes": ["plains", "sunflower_plains"],
+          "note": "平原に建つ木材と石でできた村。井戸と鐘がある広場が中心。"
+        },
+        "village_desert": {
+          "japanese": "砂漠の村",
+          "biomes": ["desert"],
+          "note": "砂漠に建つ砂岩造りの村。砂岩・テラコッタ・砂で構成された建物が砂地に溶け込む。"
+        },
+        "village_savanna": {
+          "japanese": "サバンナの村",
+          "biomes": ["savanna", "savanna_plateau", "windswept_savanna"],
+          "note": "サバンナに建つアカシア材の村。明るいオレンジ色の木材が特徴的で、広大な草地に農場が点在する。"
+        },
+        "village_taiga": {
+          "japanese": "タイガの村",
+          "biomes": ["taiga"],
+          "note": "タイガの針葉樹林に建つ丸石とトウヒ材の村。寒い気候に合わせた頑丈な造りが特徴。スウィートベリーの農場があることもある。"
+        },
+        "village_snowy": {
+          "japanese": "雪の村",
+          "biomes": ["snowy_plains"],
+          "note": "雪原に建つ雪と氷に包まれた村。建物はすべて雪化粧した外観になる。かまくら風の住居や灯台を思わせる塔が並ぶ、独特の雰囲気がある。"
+        }
+      }
+    },
+    "overworld_surface": {
+      "label": "地上構造物",
+      "description": "Overworld surface and near-surface structures",
+      "dimension": "overworld",
+      "overview": "オーバーワールドの地表または地表付近に生成される構造物。各バイオームの特徴に応じた建築素材が使われており、探索のランドマークになる。",
+      "structures": {
+        "desert_pyramid": {
+          "japanese": "砂漠のピラミッド",
+          "biomes": ["desert"],
+          "note": "砂漠に聳える砂岩造りのピラミッド。内部はカラフルなテラコッタが装飾に使われている。足元は安全かな？"
+        },
+        "jungle_pyramid": {
+          "japanese": "ジャングルの寺院",
+          "biomes": ["jungle", "bamboo_jungle", "sparse_jungle"],
+          "note": "ジャングルの奥地に潜む、苔むした石レンガの寺院。内部には罠がたくさん、隠し部屋もあるかも。"
+        },
+        "igloo": {
+          "japanese": "イグルー",
+          "biomes": ["snowy_plains", "snowy_taiga"],
+          "note": "雪原や雪のタイガに現れるかまくら型の建物。"
+        },
+        "swamp_hut": {
+          "japanese": "湿地の小屋",
+          "biomes": ["swamp"],
+          "note": "沼地の水面からせり出した小さな小屋。人の気配がある。"
+        },
+        "mansion": {
+          "japanese": "森の洋館",
+          "biomes": ["dark_forest"],
+          "note": "暗い森の奥に建つ巨大な3階建ての洋館。50を超える部屋がある。人の気配がある。誰かが潜んでいるようだ。"
+        },
+        "pillager_outpost": {
+          "japanese": "ピリジャー前哨基地",
+          "biomes": ["plains", "desert", "savanna", "taiga", "snowy_plains", "meadow", "grove", "snowy_slopes", "jagged_peaks", "frozen_peaks", "stony_peaks"],
+          "note": "開けた場所に建つ石造りの塔。周囲には木の檻や荷車が散乱し、最上部の宝箱にレアなアイテムが眠る。何やら敵意に満ちた視線を感じる。"
+        },
+        "trail_ruins": {
+          "japanese": "トレイル遺跡",
+          "biomes": ["taiga", "snowy_taiga", "old_growth_pine_taiga", "old_growth_spruce_taiga", "jungle"],
+          "note": "大部分が地下に埋まった古代の遺跡。地表にわずかにレンガが顔を出しているのが目印。発掘にチャレンジしてみよう！"
+          },
+        "ruined_portal_desert": {
+          "japanese": "荒廃した砂漠のポータル",
+          "biomes": ["desert"],
+          "note": "砂漠バイオームに特有の廃ポータル。砂岩ブロックが周囲に積まれるなど、砂漠の環境に合わせた外観になっている。"
+        },
+        "ruined_portal_jungle": {
+          "japanese": "荒廃したジャングルのポータル",
+          "biomes": ["jungle", "bamboo_jungle", "sparse_jungle"],
+          "note": "ジャングルバイオームに特有の廃ポータル。コケむした石がジャングルの植生に溶け込む。"
+        },
+        "ruined_portal_mountain": {
+          "japanese": "荒廃した山岳のポータル",
+          "biomes": ["windswept_hills", "windswept_gravelly_hills", "windswept_forest", "jagged_peaks", "frozen_peaks", "stony_peaks"],
+          "note": "山岳バイオームに特有の廃ポータル。岩場の地形の中に崩れた黒曜石が転がる。"
+        },
+        "ruined_portal_ocean": {
+          "japanese": "荒廃した海洋のポータル",
+          "biomes": ["ocean", "cold_ocean", "frozen_ocean", "lukewarm_ocean", "warm_ocean", "deep_ocean"],
+          "note": "海中に沈んだ廃ポータル。水底に崩れた黒曜石とマグマブロックが転がっている。"
+        },
+        "ruined_portal_swamp": {
+          "japanese": "荒廃した沼地のポータル",
+          "biomes": ["swamp", "mangrove_swamp"],
+          "note": "沼地バイオームに特有の廃ポータル。湿地の水の中に黒曜石が沈みかけている。"
+        }
+      }
+    },
+    "overworld_ocean": {
+      "label": "海洋構造物",
+      "description": "Ocean and coastal structures",
+      "dimension": "overworld",
+      "overview": "海中や海岸に生成される構造物。",
+      "structures": {
+        "monument": {
+          "japanese": "海底神殿",
+          "biomes": ["deep_ocean", "deep_lukewarm_ocean", "deep_cold_ocean"],
+          "note": "深海に生成されるプリズマリン製の巨大神殿。ガーディアンとエルダーガーディアンが守護する。"
+        },
+        "shipwreck": {
+          "japanese": "沈没船",
+          "biomes": ["ocean", "cold_ocean", "frozen_ocean", "lukewarm_ocean", "warm_ocean", "deep_ocean", "beach", "snowy_beach"],
+          "note": "海底や砂浜に沈んだ木造の船。宝物があるかもしれない。"
+        },
+        "shipwreck_beached": {
+          "japanese": "座礁した難破船",
+          "biomes": ["beach", "snowy_beach"],
+          "note": "砂浜に座礁した難破船。海底に沈んでいるのではなく、砂浜に傾いて乗り上げた状態になっている。"
+        },
+        "buried_treasure": {
+          "japanese": "埋もれた宝",
+          "biomes": ["beach", "snowy_beach"],
+          "note": "どうもお宝の匂いがするような気がする。"
+        },
+        "ocean_ruin_cold": {
+          "japanese": "冷たい海の海底遺跡",
+          "biomes": ["ocean", "cold_ocean", "frozen_ocean", "deep_ocean", "deep_cold_ocean", "deep_frozen_ocean"],
+          "note": "冷たい海や凍った海の海底に生成される石造りの遺跡。"
+        },
+        "ocean_ruin_warm": {
+          "japanese": "あたたかい海の海底遺跡",
+          "biomes": ["warm_ocean", "lukewarm_ocean", "deep_lukewarm_ocean"],
+          "note": "暖かい海やぬるい海の海底に生成される砂岩造りの遺跡。珊瑚礁の近くに沈んでいることが多い。"
+        }
+      }
+    },
+    "overworld_underground": {
+      "label": "地下構造物",
+      "description": "Underground structures",
+      "dimension": "overworld",
+      "overview": "オーバーワールドの地下深くに生成される構造物。採掘や洞窟探索の途中で偶然発見されることもある。危険な敵が潜む",
+      "structures": {
+        "stronghold": {
+          "japanese": "要塞",
+          "biomes": ["any"],
+          "note": "地下深くに潜む巨大な石レンガの要塞。"
+        },
+        "ancient_city": {
+          "japanese": "古代都市",
+          "biomes": ["deep_dark"],
+          "note": "地下深くにある謎めいた古代都市。精巧な彫刻が刻まれた巨大建物が連なる。モンスターの影はなく、不気味に静まり返っている。"
+        },
+        "trial_chambers": {
+          "japanese": "試練の間",
+          "biomes": ["any"],
+          "note": "地下試練施設。銅と石材の複雑な構造が続く迷路状の空間。"
+        },
+        "mineshaft": {
+          "japanese": "廃坑",
+          "biomes": ["any"],
+          "note": "地下を縦横無尽に走る廃棄された鉱山。木製の柱と床板・トロッコのレールが迷宮のように広がっている。似たような風景が続くため迷子になりやすい。"
+        },
+        "mineshaft_mesa": {
+          "japanese": "荒野の廃坑",
+          "biomes": ["badlands", "eroded_badlands", "wooded_badlands"],
+          "note": "荒野に特有の廃坑。鮮やかなテラコッタの地層が断面に露わになる荒野の地下を走る迷路。"
+        }
+      }
+    },
+    "nether": {
+      "label": "ネザー構造物",
+      "description": "Nether structures",
+      "dimension": "the_nether",
+      "overview": "ネザーに生成される構造物。",
+      "structures": {
+        "fortress": {
+          "japanese": "ネザー要塞",
+          "biomes": ["nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest", "basalt_deltas"],
+          "note": "ネザーを縦横に貫く石レンガ造りの巨大要塞。"
+        },
+        "bastion_remnant": {
+          "japanese": "砦の遺跡",
+          "biomes": ["nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest"],
+          "note": "砦跡。ブヒブヒと鳴き声が聞こえてくる。"
+        },
+        "nether_fossil": {
+          "japanese": "ネザーの化石",
+          "biomes": ["soul_sand_valley"],
+          "note": "巨大な骨の化石。地面から大きな骨柱が突き出しており、古代の生物の名残とも言われる。"
+        },
+        "ruined_portal_nether": {
+          "japanese": "荒廃したネザーのポータル",
+          "biomes": ["nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest", "basalt_deltas"],
+          "note": "ネザーに生成される廃ポータル。マグマブロックや溶岩が周囲に多く、溶岩の中から黒曜石が露出している。"
+        }
+      }
+    },
+    "end": {
+      "label": "エンド構造物",
+      "description": "The End structures",
+      "dimension": "the_end",
+      "overview": "ジ・エンドに生成される構造物。",
+      "structures": {
+        "end_city": {
+          "japanese": "エンドシティ",
+          "biomes": ["end_highlands"],
+          "note": "エンドの高地に生成される紫色の塔状都市。都市の傍には空中に浮かんだエンド船があり。"
+        }
+      }
+    }
+  }
+}

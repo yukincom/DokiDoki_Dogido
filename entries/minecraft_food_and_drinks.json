@@ -1,0 +1,313 @@
+{
+  "food_and_drinks": {
+    "label": "食べ物と飲み物",
+    "english": "The Food and Drinks",
+    "groups": {
+      "raw_protein": {
+        "label": "食料：生もの",
+        "items": {
+          "raw_beef": {"japanese":"生の牛肉","note":"新鮮な牛肉。生でも食べられるが焼いてステーキにしよう。ご馳走だ"},
+          "raw_chicken": {"japanese":"生の鶏肉","note":"新鮮な鶏肉。生でも食べられるが、焼いた方が美味しい"},
+          "raw_cod": {"japanese":"生鱈","note":"大きな白身の魚。焼いて食べよう。ご馳走だ。"},
+          "raw_mutton":  {"japanese":"生の羊肉","note":"生のままでも食べることができるが、焼いたほうがおいしい"},
+          "raw_porkchop": {"japanese":"生の豚肉","note":"新鮮な豚肉。生のままでも食べることができるが、焼いたほうがおいしい"},
+          "raw_rabbit": {"japanese":"生の兎肉","note":"新鮮そのもの。焼いて食べよう"},
+          "raw_salmon": {"japanese":"生鮭","note":"大きくてオレンジ色の身が美しい魚。焼いて食べたい。"},
+          "pufferfish": {"japanese":"フグ","source":"minecraft_materials.json"},  
+          "tropical_fish": {"japanese":"熱帯魚","note":"大しておいしくないが食べられないことはない。"},
+          "rotten_flesh": {"japanese":"腐った肉","note":"主にゾンビから入手できる食材。食べるのには勇気が必要。狼の好物"},
+          "spider_eye": {"japanese":"クモの目","source":"minecraft_materials.json"} 
+
+        }
+      },
+      "protein": {
+        "label": "食料：タンパク質",
+        "items": {
+          "steak": "ステーキ",
+          "cooked_chicken": "焼き鳥",
+          "cooked_cod": "焼き鱈",
+          "cooked_mutton": "焼き羊肉",
+          "cooked_porkchop": "焼き豚",
+          "cooked_rabbit": "焼き兎肉",
+          "cooked_salmon": "焼き鮭"
+      }},
+      "carbohydrates": {
+        "label": "食料：炭水化物",
+        "items": {
+          "wheat": {"japanese":"小麦","note":"パンやクッキー、ケーキも作れる。"},  
+          "potato": {"japanese":"ジャガイモ","note":"みんなが大好きな食べ物。油はないのでポテトチップスは作れない。"},
+          "poisonous_potato": {"japanese":"青くなったジャガイモ","note":"食べたプレイヤーに毒を与えることがあるジャガイモ"},          
+          "baked_potato": "ベイクドポテト",
+          "bread": "パン",
+          "cookie": {"japanese":"クッキー","note":"チョコチップクッキー"},
+          "pumpkin_pie": {"japanese":"パンプキンパイ","note":"卵と砂糖が入ったシンプルなカボチャのパイ"},
+          "cake": {"japanese":"ケーキ","note":"赤いトッピング。茶色いスポンジ。白いクリームがかけられている。"}
+        }
+      },
+      "vitamins": {
+        "label": "食料：野菜・果物",
+        "items": {
+          "apple": "リンゴ",
+          "golden_apple": {
+            "japanese": "金のリンゴ",
+            "note": "死者を生き返らせる生命力に満ち溢れたリンゴ。ピグリンが好きなもの。"
+          },
+          "enchanted_golden_apple": {
+            "japanese": "エンチャントされた金のリンゴ",
+            "note": "不思議な効果があるリンゴ。ピグリンが好きなもの。"
+          },
+          "melon_slice": "スイカの薄切り",
+          "glistering_melon_slice": {
+            "japanese": "きらめくスイカの薄切り",
+            "note": "ピグリンが好きなもの。"
+          },
+          "chorus_fruit": "コーラスフルーツ",
+          "beetroot": "ビートルート",
+          "carrot": {"japanese":"ニンジン","note":"栄養満点で生でも美味しい。"},
+          "golden_carrot": {
+            "japanese": "金のニンジン",
+            "note": "金色に輝くにんじん。栄養満点で生でも美味しい。ピグリンが好きなもの。"
+          },
+          "sweet_berries": {"japanese": "スイートベリー","note":"赤くて可愛らしいきのみ。"},   
+          "glow_berries": {
+            "japanese": "グロウベリー",
+            "source": "block/minecraft_natural_blocks.json"
+          },
+          "dried_kelp": {"japanese":"乾燥した昆布","note":"ミネラル豊富。高速で食べられる"}       
+        }
+      },
+      "soups_and_stews": {
+        "label": "食料：スープ・シチュー",
+        "items": {
+          "beetroot_soup": {"japanese":"ビートルートスープ","note":"赤い根菜を煮込んだスープ"},
+          "mushroom_stew": "キノコシチュー",
+          "rabbit_stew": "ウサギシチュー",
+          "suspicious_stew": {"japanese":"怪しげなシチュー","note":"さまざまな特殊効果があるスリリングなシチュー。美味しいといいな！"}
+        }
+      },
+      "basic_drinks": {
+        "label": "状態異常回復",
+        "items": {
+          "honey_bottle": {"japanese":"ハチミツ入りの瓶","note":"ゆっくり飲みたい天然の甘味。心と体が癒される"},
+          "milk_bucket": {"japanese":"ミルク入りバケツ","note":"胃の不調に効く美味しいミルク"}
+        }
+      },
+      "potions": {
+        "label": "ポーション類",
+        "note":"薬入りの瓶。詳しくはウィキをみよう！",
+        "items": {
+          "potion": "ポーション",
+          "splash_potion": "スプラッシュポーション",
+          "lingering_potion": "残留ポーション"
+        },
+        "variants": {
+
+          "water": {
+            "label": "水入り瓶",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "mundane": {
+            "label": "ありふれたポーション",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "thick": {
+            "label": "濃厚なポーション",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "awkward": {
+            "label": "奇妙なポーション",
+            "effect_label": null,
+            "levels": [
+              "normal"
+            ]
+          },
+          "night_vision": {
+            "label": "暗視のポーション",
+            "effect_label": "暗視",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "invisibility": {
+            "label": "透明化のポーション",
+            "effect_label": "透明化",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "leaping": {
+            "label": "跳躍のポーション",
+            "effect_label": "跳躍力上昇",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "fire_resistance": {
+            "label": "耐火のポーション",
+            "effect_label": "火炎耐性",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "swiftness": {
+            "label": "俊敏のポーション",
+            "effect_label": "移動速度上昇",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "slowness": {
+            "label": "鈍化のポーション",
+            "effect_label": "移動速度低下",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "water_breathing": {
+            "label": "水中呼吸のポーション",
+            "effect_label": "水中呼吸",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "healing": {
+            "label": "治癒のポーション",
+            "effect_label": "即時回復",
+            "levels": [
+              "normal",
+              "strong"
+            ]
+          },
+          "harming": {
+            "label": "負傷のポーション",
+            "effect_label": "即時ダメージ",
+            "levels": [
+              "normal",
+              "strong"
+            ]
+          },
+          "poison": {
+            "label": "毒のポーション",
+            "effect_label": "毒",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "regeneration": {
+            "label": "再生のポーション",
+            "effect_label": "再生能力",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "strength": {
+            "label": "力のポーション",
+            "effect_label": "攻撃力上昇",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "weakness": {
+            "label": "弱化のポーション",
+            "effect_label": "弱体化",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "luck": {
+            "label": "幸運のポーション",
+            "effect_label": "幸運",
+            "levels": [
+              "normal"
+            ]
+          },
+          "turtle_master": {
+            "label": "タートルマスターのポーション",
+            "effect_label": "移動速度低下・耐性",
+            "levels": [
+              "normal",
+              "strong",
+              "long"
+            ]
+          },
+          "slow_falling": {
+            "label": "低速落下のポーション",
+            "effect_label": "落下速度低下",
+            "levels": [
+              "normal",
+              "long"
+            ]
+          },
+          "wind_charged": {
+            "label": "蓄風のポーション",
+            "effect_label": "蓄風",
+            "levels": [
+              "normal"
+            ]
+          },
+          "weaving": {
+            "label": "巣張りのポーション",
+            "effect_label": "巣張り",
+            "levels": [
+              "normal"
+            ]
+          },
+          "oozing": {
+            "label": "滲出のポーション",
+            "effect_label": "滲出",
+            "levels": [
+              "normal"
+            ]
+          },
+          "infested": {
+            "label": "虫食いのポーション",
+            "effect_label": "虫食い",
+            "levels": [
+              "normal"
+            ]
+          }
+        }
+      },
+      "ominous_bottles": {
+        "label": "不吉な瓶",
+        "note":"得体の知れない黒い液体の入った瓶。くわしくはウィキをみよう！",
+        "items": {
+          "ominous_bottle": "不吉な瓶"
+        },
+        "levels": {
+          "ominous_bottle_1": "不吉な瓶 I",
+          "ominous_bottle_2": "不吉な瓶 II",
+          "ominous_bottle_3": "不吉な瓶 III",
+          "ominous_bottle_4": "不吉な瓶 IV",
+          "ominous_bottle_5": "不吉な瓶 V"
+        }
+      }
+    }
+  }
+}

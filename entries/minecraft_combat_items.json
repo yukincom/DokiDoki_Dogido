@@ -1,0 +1,287 @@
+{
+  "combat": {
+    "label": "戦闘",
+    "english": "Combat",
+    "groups": {
+     "melee_weapons_and_shield": {
+        "label": "近距離武器・盾",
+        "items": {
+          "wooden_sword": "木の剣",
+          "wooden_spear": "木の槍",
+          "wooden_axe": {
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "stone_sword": "石の剣",
+          "stone_spear": "石の槍",
+          "stone_axe": {
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "copper_sword": "銅の剣",
+          "copper_spear": "銅の槍",
+          "copper_axe": {
+            "japanese": "銅の斧",
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "iron_sword": "鉄の剣",
+          "iron_spear": "鉄の槍",
+          "iron_axe": {
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "golden_sword": {
+            "japanese": "金の剣",
+            "note": "刀身が金でできている剣。ピグリンが好きなもの。耐久力は低い"
+          },
+          "golden_spear": {"japanese": "金の槍",
+            "note": "刀身が金でできている槍。ピグリンが好きなもの。耐久力は低い"},
+          "golden_axe": {
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "diamond_sword": {"japanese":"ダイヤモンドの剣","note":"刀身がダイヤモンドでできた剣。空の光を反射し、水色に見える"},
+          "diamond_spear": {"japanese":"ダイヤモンドの槍","note":"刀身がダイヤモンドでできた槍。空の光を反射し、水色見える"},
+          "diamond_axe": {
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "netherite_sword": {
+            "japanese": "ネザライトの剣",
+            "note": "ネザーで産出するネザライトで作られている。刀身が黒い。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_spear": {
+            "japanese": "ネザライトの槍",
+            "note": "ネザーで産出するネザライトで作られている。刀身が黒い。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_axe": {
+            "source":"minecraft_tools_and_utilities.json"
+          },
+          "trident": "トライデント",
+          "mace": "メイス",
+          "shield": "盾"          
+        }
+      },
+      "ranged_weapons": {
+        "label": "遠隔武器",
+        "items": {
+          "bow": "弓",
+          "crossbow": "クロスボウ",
+          "arrow": "矢",
+          "spectral_arrow": "光の矢",
+          "tipped_arrow": "効能付きの矢"
+        },
+        "variants": {
+          "tipped_arrows": {
+            "label": "効能付きの矢",
+            "note":"さまざまな特殊効果を持つ矢。詳しくはウィキをみよう！",
+            "items": {
+              "arrow_of_mundane": "ありふれた矢",
+              "arrow_of_thick": "濃厚な矢",
+              "arrow_of_awkward": "奇妙な矢",
+              "arrow_of_regeneration": "再生の矢",
+              "arrow_of_swiftness": "俊敏の矢",
+              "arrow_of_fire_resistance": "耐火の矢",
+              "arrow_of_healing": "治癒の矢",
+              "arrow_of_night_vision": "暗視の矢",
+              "arrow_of_strength": "力の矢",
+              "arrow_of_leaping": "跳躍の矢",
+              "arrow_of_invisibility": "透明化の矢",
+              "arrow_of_poison": "毒の矢",
+              "arrow_of_weakness": "弱化の矢",
+              "arrow_of_slowness": "鈍化の矢",
+              "arrow_of_harming": "負傷の矢",
+              "arrow_of_water_breathing": "水中呼吸の矢",
+              "arrow_of_luck": "幸運の矢",
+              "arrow_of_decay": "衰弱の矢",
+              "arrow_of_the_turtle_master": "タートルマスターの矢",
+              "arrow_of_slow_falling": "低速落下の矢",
+              "arrow_of_wind_charging": "蓄風の矢",
+              "arrow_of_weaving": "巣張りの矢",
+              "arrow_of_oozing": "滲出の矢",
+              "arrow_of_infested": "虫食いの矢"
+            },
+            "edition_notes": {
+              "arrow_of_luck": "JE限定",
+              "arrow_of_decay": "BE限定"
+            }
+          }
+        }
+      },
+      "armor": {
+        "label": "防具",
+        "items": {
+          "chainmail_helmet": "チェーンのヘルメット",
+          "chainmail_chestplate": "チェーンのチェストプレート",
+          "chainmail_leggings": "チェーンのレギンス",
+          "chainmail_boots": "チェーンのブーツ",
+          "copper_helmet": "銅のヘルメット",
+          "copper_chestplate": "銅のチェストプレート",
+          "copper_leggings": "銅のレギンス",
+          "copper_boots": "銅のブーツ",
+          "iron_helmet": "鉄のヘルメット",
+          "iron_chestplate": "鉄のチェストプレート",
+          "iron_leggings": "鉄のレギンス",
+          "iron_boots": "鉄のブーツ",
+          "golden_helmet": {
+            "japanese": "金のヘルメット",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "golden_chestplate": {
+            "japanese": "金のチェストプレート",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "golden_leggings": {
+            "japanese": "金のレギンス",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "golden_boots": {
+            "japanese": "金のブーツ",
+            "note": "ピグリンの敵対を防ぐ効果。ピグリンが好きなもの。"
+          },
+          "diamond_helmet": "ダイヤモンドのヘルメット",
+          "diamond_chestplate": "ダイヤモンドのチェストプレート",
+          "diamond_leggings": "ダイヤモンドのレギンス",
+          "diamond_boots": "ダイヤモンドのブーツ",
+          "netherite_helmet": {
+            "japanese": "ネザライトのヘルメット",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_chestplate": {
+            "japanese": "ネザライトのチェストプレート",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_leggings": {
+            "japanese": "ネザライトのレギンス",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "netherite_boots": {
+            "japanese": "ネザライトのブーツ",
+            "note": "ノックバックを軽減する効果。溶岩では消滅しないが、サボテンで消滅。"
+          },
+          "leather_cap": {
+            "japanese": "革の帽子",
+            "note": "粉雪の凍結ダメージを防ぐ効果。"
+          },
+          "leather_tunic": {
+            "japanese": "革の上着",
+            "note": "粉雪の凍結ダメージを防ぐ効果。"
+          },
+          "leather_pants": {
+            "japanese": "革のズボン",
+            "note": "粉雪の凍結ダメージを防ぐ効果。"
+          },
+          "leather_boots": {
+            "japanese": "革のブーツ",
+            "note": "粉雪の凍結ダメージを防ぐ効果。粉雪に沈みにくくなる効果。"
+          },
+          "turtle_shell": {
+            "japanese": "カメの甲羅",
+            "note": "入水から10秒間、水中呼吸の効果。"
+          }
+                }
+      },
+      "horse_armor": {
+        "label": "馬鎧",
+        "items": {
+          "leather_horse_armor": {
+            "japanese": "革の馬鎧",
+            "note": "凍傷防止"
+          },
+          "copper_horse_armor": "銅の馬鎧",
+          "iron_horse_armor": "鉄の馬鎧",
+          "golden_horse_armor": {
+            "japanese": "金の馬鎧",
+            "note": "ピグリンが好きなもの。"
+          },
+          "diamond_horse_armor": "ダイヤモンドの馬鎧"
+        }
+      },
+      "companion_armor": {
+        "label": "コンパニオン装備",
+        "items": {
+          "wolf_armor": {
+            "japanese": "オオカミの鎧",
+            "note": "オオカミ用の鎧。アルマジロのウロコから作成。"
+          },
+          "copper_nautilus_armor": {
+            "japanese": "銅のオウムガイの鎧",
+            "note": "オウムガイ用の鎧"
+          },
+          "iron_nautilus_armor": {
+            "japanese": "鉄のオウムガイの鎧",
+            "note": "オウムガイ用の鎧"
+          },
+          "gold_nautilus_armor": {
+            "japanese": "金のオウムガイの鎧",
+            "note": "オウムガイ用の鎧。ピグリンが好きなもの。"
+          },
+          "netherite_nautilus_armor": {
+            "japanese": "ネザライトのオウムガイの鎧",
+            "note": "オウムガイ用の鎧。溶岩では消滅しないが、サボテンで消滅。"
+          }
+        }
+      },
+      "combat_consumables_and_traps": {
+        "label": "戦闘用消耗品・設置物",
+        "items": {
+          "totem_of_undying": "不死のトーテム",
+          "tnt": {"japanese":"TNT", "source":"redstone_components.json"},
+          "end_crystal": "エンドクリスタル",
+          "snowball": "雪玉",
+          "egg": {"japanese":"卵","source": "materials.json"},
+          "blue_egg": {"japanese": "青色の卵","source": "materials.json"},
+          "brown_egg": {"japanese": "茶色の卵","source": "materials.json"},
+          "wind_charge": "ウィンドチャージ",
+          "firework_rocket": "ロケット花火"
+        },
+        "notes": [
+          "ロケット花火は、飛行時間・形状・色・フェード色などの組み合わせが多いため、個別JSON展開せず firework_rocket 本体のみを保持する。"
+        ],
+        "firework_rocket_properties": {
+          "label": "ロケット花火の可変要素",
+          "enumerate_variants": false,
+          "variant_reason": "組み合わせ数が多すぎるため、川柳・コメント用データでは個別展開しない。",
+          "properties": {
+            "flight_duration": {
+              "label": "飛行時間",
+              "source": "火薬の数",
+              "values": [
+                1,
+                2,
+                3
+              ]
+            },
+            "shape": {
+              "label": "形状",
+              "source": "Firework Star Type",
+              "values": {
+                "0": "小玉",
+                "1": "大玉",
+                "2": "星型",
+                "3": "mobの頭部型７種（スケルトン,ウィザースケルトン,ゾンビ,プレイヤー,クリーパー,ドラゴン,ピグリン）",
+                "4": "破裂"
+              },
+              "extra_sources": [
+                "mob_head_variants"
+              ]
+            },
+            "color": {
+              "label": "色",
+              "source": "染料",
+              "values": "16色以上から1〜2種以上の組み合わせ"
+            },
+            "fade_color": {
+              "label": "フェード色",
+              "source": "染料",
+              "values": "任意の追加色"
+            }
+          },
+          "poetic_use": [
+            "花火",
+            "色とりどり",
+            "夜空",
+            "打ち上げ",
+            "爆ぜる",
+            "ドーン"
+          ]
+        }
+      }
+    }
+  }
+}

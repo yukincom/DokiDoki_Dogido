@@ -1,0 +1,457 @@
+{
+  "functional_blocks": {
+    "label": "機能的ブロック",
+    "english": "Functional Blocks",
+    "groups": {
+      "light_sources": {
+        "label": "光源",
+        "items": {
+          "torch": "松明",
+          "copper_torch": {"japanese": "銅の松明","note":"緑の炎の松明"},
+          "soul_torch": {"japanese": "魂の松明","note":"青い炎の不思議な松明"},
+          "redstone_torch": {"japanese": "レッドストーントーチ","note": "真っ赤な松明。制御可能なレッドストーン信号の動力源。"},
+          "lantern":{"japanese":"ランタン","note":"オレンジ色の光を放つ、鉄製のランタン"},    
+          "soul_lantern": {"japanese":"魂のランタン","note":"青い光を放つ不思議なランタン"},
+          "copper_lantern":{"japanese":"銅のランタン","note":"緑色の光を放つランタン"},
+          "exposed_copper_lantern": {"japanese":"風化した銅のランタン","note":"緑色の光を放つランタン"},
+          "weathered_copper_lantern": {"japanese":"錆びた銅のランタン","note":"緑色の光を放つランタン"},
+          "oxidized_copper_lantern": {"japanese":"酸化した銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_copper_lantern":{"japanese": "錆止めされた銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_exposed_copper_lantern": {"japanese":"錆止めされた風化した銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_weathered_copper_lantern": {"japanese":"錆止めされた錆びた銅のランタン","note":"緑色の光を放つランタン"},
+          "waxed_oxidized_copper_lantern": {"japanese":"錆止めされた酸化した銅のランタン","note":"緑色の光を放つランタン"},
+          "end_rod": {"japanese": "エンドロッド","note":"白くキラキラと輝くロッド。熱を持っている"},
+          "glowstone": {"source":" block/minecraft_natural_blocks.json"},
+          "shroomlight": {"source":" block/minecraft_natural_blocks.json"},
+          "pearlescent_froglight": {"source":" block/minecraft_natural_blocks.json"},
+          "verdant_froglight": {"source":" block/minecraft_natural_blocks.json"},
+          "ochre_froglight": {"source":" block/minecraft_natural_blocks.json"},
+          "crying_obsidian": {"source":"block/minecraft_stone_blocks.json"},
+          "glow_lichen":  {"source":" block/minecraft_natural_blocks.json"},
+          "magma_block": {"source":" block/minecraft_natural_blocks.json"}
+        }
+        
+      },
+      "chains": {
+        "label": {"japanese":"鎖","note":"ランタンなどをぶら下げることができる"},
+        "items": {
+          "iron_chain": "鉄の鎖",
+          "copper_chain": "銅の鎖",
+          "exposed_copper_chain": "風化した銅の鎖",
+          "weathered_copper_chain": "錆びた銅の鎖",
+          "oxidized_copper_chain": "酸化した銅の鎖",
+          "waxed_copper_chain": "錆止めされた銅の鎖",
+          "waxed_exposed_copper_chain": "錆止めされた風化した銅の鎖",
+          "waxed_weathered_copper_chain": "錆止めされた錆びた銅の鎖",
+          "waxed_oxidized_copper_chain": "錆止めされた酸化した銅の鎖"
+        }
+      },
+      "workstations_and_processing": {
+        "label": "作業・加工・音・醸造",
+        "items": {
+          "crafting_table": "作業台",
+          "stonecutter": "石切台",
+          "cartography_table": "製図台",
+          "fletching_table": "矢細工台",
+          "smithing_table": "鍛冶台",
+          "grindstone": "砥石",
+          "loom": "機織り機",
+          "furnace": "かまど",
+          "smoker": "燻製器",
+          "blast_furnace": {
+            "japanese": "溶鉱炉",
+            "note": "鉱石と製錬可能な防具や道具の製錬に使用。"
+          },
+          "campfire": {
+            "japanese": "焚き火",
+            "note": "もくもくと煙を上げる焚き火。"
+          },
+          "soul_campfire": {
+            "japanese": "魂の焚き火",
+            "note": "もくもくと煙を上げる青い炎の焚き火。"
+          },
+          "anvil": {
+            "japanese": "金床",
+            "note": "アイテムの修理と名称変更ができる。上から落ちてきたらかなり痛い。"
+          },
+          "chipped_anvil": {
+            "japanese": "欠けた金床",
+            "note": "アイテムの修理と名称変更ができる。上から落ちてきたらかなり痛い。"
+          },
+          "damaged_anvil": {
+            "japanese": "壊れかけの金床",
+            "note": "アイテムの修理と名称変更ができる。上から落ちてきたらかなり痛い。"
+          },
+          "composter": "コンポスター",
+          "note_block": {
+            "japanese": "音符ブロック",
+            "note": "寄木細工のおしゃれな箱。台によって楽器が変わる。いろいろ試してみよう！"
+          },
+          "jukebox": {
+            "japanese": "ジュークボックス","note": "上にディスクを入れる穴の空いた寄木細工のおしゃれな箱。"},
+          "enchanting_table":{"japanese": "エンチャントテーブル","note":"アイテムに特別な効果を与えるテーブル。本が浮かんでおり、黒曜石の台座の四隅にダイヤモンドが輝く豪華な作り。"},
+          "brewing_stand": {
+            "japanese": "醸造台",
+            "note": "ポーション類を醸造する道具。教会にもある"
+          },
+          "cauldron": "大釜",
+          "lava_cauldron": {"japanese":"溶岩入りの大釜","note":"ドロドロと赤く燃える溶岩が入った大釜"},
+          "powder_snow_cauldron": {"japanese":"粉雪入りの大釜","note":"粉雪が入った大釜"},
+          "water_cauldron": "水入りの大釜"
+        }
+      },
+      "utility_blocks": {
+        "label": "実用ブロック",
+        "items": {
+          "end_crystal": {"source":"minecraft_combat_items.json"},
+          "bell": {
+            "japanese": "鐘",
+            "note": "金色。ピグリンが好きなもの。村の集会所。鳴らすと近くの襲撃者を発光させる。"
+          },
+          "beacon": {
+            "japanese": "ビーコン",
+            "note": "光線を空に投射し近隣のプレイヤーにバフを与える。かなり光る。ピラミットパワー。詳しくはwiki。"
+          },
+          "conduit": {"japanese":"コンジット","note":"水をきれいにする浄化作用を持つアイテム。中央の青いオーブがきれい。"},
+          "lodestone": {"japanese":"ロードストーン","note":"磁力を発生させる石。十字模様が書かれている。コンパスが狂う場所で目印として使おう"},
+          "scaffolding": "足場",
+          "ladder": "はしご",
+          "bee_nest": {"source":"block/minecraft_natural_blocks.json "
+          },
+          "beehive": {
+            "japanese": "養蜂箱",
+            "note": "焚き火があれば、収穫時にミツバチが敵対しない。"
+          },
+          "suspicious_sand": "怪しげな砂",
+          "suspicious_gravel": "怪しげな砂利"
+        }
+      },
+    "lightning_rod": {
+            "japanese": "避雷針",
+            "note": "銅の酸化を還元する。落雷で炎発生。",
+            "label": {
+          "lightning_rod":"避雷針",
+          "exposed_lightning_rod": "風化した避雷針",
+          "weathered_lightning_rod":  "錆びた避雷針",
+          "oxidized_lightning_rod": "酸化した避雷針",
+          "waxed_lightning_rod": "錆止めされた避雷針",
+          "waxed_exposed_lightning_rod": "錆止めされた風化した避雷針",
+          "waxed_weathered_lightning_rod": "錆止めされた錆びた避雷針",
+          "waxed_oxidized_lightning_rod":  "錆止めされた酸化した避雷針"
+          }
+        },
+    "pot":{
+      "japanese":"鉢",
+      "label":{
+          "flower_pot": "植木鉢",
+          "decorated_pot": "飾り壺"
+        }
+      },
+
+      "display_blocks": {
+        "label": "展示・額縁・絵画",
+        "items": {
+          "armor_stand": "防具立て",
+          "item_frame": "額縁",
+          "glow_item_frame": "輝く額縁",
+          "painting": {"source": "minecraft_paintings.json"}
+        }
+      },
+      "bookshelves_and_shelves": {
+        "label": "本棚・棚",
+        "groups": {
+          "bookshelves": {
+            "label": "本棚",
+            "items": {
+              "bookshelf": {
+                "japanese": "本棚",
+                "note": "エンチャントテーブルを強化。"
+              },
+              "chiseled_bookshelf": {
+                "japanese": "模様入りの本棚",
+                "note": "本、本と羽根ペン、記入済みの本、エンチャントの本、知恵の本を収納することができる。"
+              }
+            }
+          },
+          "wooden_shelves": {
+            "label": "木製の棚",
+            "items": {
+              "oak_shelf": "オークの棚",
+              "spruce_shelf": "トウヒの棚",
+              "birch_shelf": "シラカバの棚",
+              "jungle_shelf": "ジャングルの棚",
+              "acacia_shelf": "アカシアの棚",
+              "dark_oak_shelf": "ダークオークの棚",
+              "mangrove_shelf": "マングローブの棚",
+              "cherry_shelf": "サクラの棚",
+              "pale_oak_shelf": "ペールオークの棚",
+              "bamboo_shelf": "竹の棚",
+              "crimson_shelf": {"japanese": "真紅の棚", "note": "巨大キノコの一部。ネザー。"},
+              "warped_shelf": {"japanese": "歪んだの棚", "note": "巨大キノコの一部。ネザー。"}
+            }
+          }
+        }
+      }
+    },
+      "signs": {
+        "label": "看板・吊り看板",
+        "items": {
+          "oak_sign": "オークの看板",
+          "spruce_sign": "トウヒの看板",
+          "birch_sign": "シラカバの看板",
+          "jungle_sign": "ジャングルの看板",
+          "acacia_sign": "アカシアの看板",
+          "dark_oak_sign": "ダークオークの看板",
+          "mangrove_sign": "マングローブの看板",
+          "cherry_sign": "サクラの看板",
+          "pale_oak_sign": "ペールオークの看板",
+          "bamboo_sign": "竹の看板",
+          "crimson_sign": {"japanese": "真紅の看板", "note": "巨大キノコの一部。ネザー。"},
+          "warped_sign": {"japanese": "歪んだの看板", "note": "巨大キノコの一部。ネザー。"},
+          "oak_wall_sign": "壁に付けられたオークの看板",
+          "spruce_wall_sign": "壁に付けられたトウヒの看板",
+          "birch_wall_sign": "壁に付けられたシラカバの看板",
+          "jungle_wall_sign": "壁に付けられたジャングルの看板",
+          "acacia_wall_sign": "壁に付けられたアカシアの看板",
+          "dark_oak_wall_sign": "壁に付けられたダークオークの看板",
+          "mangrove_wall_sign": "壁に付けられたマングローブの看板",
+          "cherry_wall_sign": "壁に付けられたサクラの看板",
+          "pale_oak_wall_sign": "壁に付けられたペールオークの看板",
+          "bamboo_wall_sign": "壁に付けられた竹の看板",
+          "crimson_wall_sign": {"japanese": "壁に付けられた真紅の看板", "note": "巨大キノコの一部。ネザー。"},
+          "warped_wall_sign": {"japanese": "壁に付けられた歪んだの看板", "note": "巨大キノコの一部。ネザー。"},
+          "oak_hanging_sign": "オークの吊り看板",
+          "spruce_hanging_sign": "トウヒの吊り看板",
+          "birch_hanging_sign": "シラカバの吊り看板",
+          "jungle_hanging_sign": "ジャングルの吊り看板",
+          "acacia_hanging_sign": "アカシアの吊り看板",
+          "dark_oak_hanging_sign": "ダークオークの吊り看板",
+          "mangrove_hanging_sign": "マングローブの吊り看板",
+          "cherry_hanging_sign": "サクラの吊り看板",
+          "pale_oak_hanging_sign": "ペールオークの吊り看板",
+          "bamboo_hanging_sign": "竹の吊り看板",
+          "crimson_hanging_sign": {"japanese": "真紅の吊り看板", "note": "巨大キノコの一部。ネザー。"},
+          "warped_hanging_sign": {"japanese": "歪んだの吊り看板", "note": "巨大キノコの一部。ネザー。"},
+          "oak_wall_hanging_sign": "壁に付けられたオークの吊り看板",
+          "spruce_wall_hanging_sign": "壁に付けられたトウヒの吊り看板",
+          "birch_wall_hanging_sign": "壁に付けられたシラカバの吊り看板",
+          "jungle_wall_hanging_sign": "壁に付けられたジャングルの吊り看板",
+          "acacia_wall_hanging_sign": "壁に付けられたアカシアの吊り看板",
+          "dark_oak_wall_hanging_sign": "壁に付けられたダークオークの吊り看板",
+          "mangrove_wall_hanging_sign": "壁に付けられたマングローブの吊り看板",
+          "cherry_wall_hanging_sign": "壁に付けられたサクラの吊り看板",
+          "pale_oak_wall_hanging_sign": "壁に付けられたペールオークの吊り看板",
+          "bamboo_wall_hanging_sign": "壁に付けられた竹の吊り看板",
+          "crimson_wall_hanging_sign": {"japanese": "壁に付けられた真紅の吊り看板", "note": "巨大キノコの一部。ネザー。"},
+          "warped_wall_hanging_sign": {"japanese": "壁に付けられた歪んだの吊り看板", "note": "巨大キノコの一部。ネザー。"}
+        }
+      },
+      "storage": {
+        "label": "収納",
+        "items": {
+          "chest": {
+            "japanese": "チェスト",
+            "note": "アイテムやその他のブロックを保管できる。ふたつ並べるとラージチェストになる。"
+          },
+          "copper_chest": "銅のチェスト",
+          "exposed_copper_chest": "風化した銅のチェスト",
+          "weathered_copper_chest": "錆びた銅のチェスト",
+          "oxidized_copper_chest": "酸化した銅のチェスト",
+          "waxed_copper_chest": "錆止めされた銅のチェスト",
+          "waxed_exposed_copper_chest": "錆止めされた風化した銅のチェスト",
+          "waxed_weathered_copper_chest": "錆止めされた錆びた銅のチェスト",
+          "waxed_oxidized_copper_chest": "錆止めされた酸化した銅のチェスト",
+          "barrel": {
+            "japanese": "樽",
+            "note": "アイテムを保管できる。重ねることができる。"
+          },
+          "ender_chest": "エンダーチェスト",
+          "shulker_box": {
+            "japanese": "シュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "white_shulker_box": {
+            "japanese": "白色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "orange_shulker_box": {
+            "japanese": "橙色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "magenta_shulker_box": {
+            "japanese": "赤紫色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "light_blue_shulker_box": {
+            "japanese": "空色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "yellow_shulker_box": {
+            "japanese": "黄色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "lime_shulker_box": {
+            "japanese": "黄緑色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "pink_shulker_box": {
+            "japanese": "桃色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "gray_shulker_box": {
+            "japanese": "灰色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "light_gray_shulker_box": {
+            "japanese": "薄灰色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "cyan_shulker_box": {
+            "japanese": "青緑色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "purple_shulker_box": {
+            "japanese": "紫色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "blue_shulker_box": {
+            "japanese": "青色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "brown_shulker_box": {
+            "japanese": "茶色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "green_shulker_box": {
+            "japanese": "緑色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "red_shulker_box": {
+            "japanese": "赤色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          },
+          "black_shulker_box": {
+            "japanese": "黒色のシュルカーボックス",
+            "note": "保管ブロックの一種。他の保管ブロックと違い、壊しても中身をそのまま保持可能。"
+          }
+        }
+      },
+      "respawn_anchor":{"japanese": "リスポーンアンカー","note":"ネザーでリスポーン地点に設定できるブロック。上部に光る紫色の渦。横に金色のメーターが付いている。"},
+      "beds": {
+        "label": "ベッド",
+        "source":"block/minecraft_colored_blocks.json",
+        "refs": [
+          "white_bed",
+          "orange_bed",
+          "magenta_bed",
+          "light_blue_bed",
+          "yellow_bed",
+          "lime_bed",
+          "pink_bed",
+          "gray_bed",
+          "light_gray_bed",
+          "cyan_bed",
+          "purple_bed",
+          "blue_bed",
+          "brown_bed",
+          "green_bed",
+          "red_bed",
+          "black_bed"
+        ]
+      },
+      "candles": {
+        "label": "ろうそく",
+        "source":"block/minecraft_colored_blocks.json",
+        "refs": [
+          "candle",
+          "white_candle",
+          "orange_candle",
+          "magenta_candle",
+          "light_blue_candle",
+          "yellow_candle",
+          "lime_candle",
+          "pink_candle",
+          "gray_candle",
+          "light_gray_candle",
+          "cyan_candle",
+          "purple_candle",
+          "blue_candle",
+          "brown_candle",
+          "green_candle",
+          "red_candle",
+          "black_candle"
+        ]
+      },
+      "banners": {
+        "label": "旗",
+        "source":"block/minecraft_colored_blocks.json",
+        "refs": [
+          "white_banner",
+          "orange_banner",
+          "magenta_banner",
+          "light_blue_banner",
+          "yellow_banner",
+          "lime_banner",
+          "pink_banner",
+          "gray_banner",
+          "light_gray_banner",
+          "cyan_banner",
+          "purple_banner",
+          "blue_banner",
+          "brown_banner",
+          "green_banner",
+          "red_banner",
+          "black_banner",
+          "ominous_banner"
+        ]
+      },
+      "mob_heads": {
+        "label": "Mobの頭",
+        "items": {
+          "skeleton_skull": "スケルトンの頭蓋骨",
+          "wither_skeleton_skull": "ウィザースケルトンの頭蓋骨",
+          "zombie_head": "ゾンビの頭",
+          "player_head": "プレイヤーの頭",
+          "creeper_head": "クリーパーの頭",
+          "dragon_head": "ドラゴンの頭",
+          "piglin_head": "ピグリンの頭"
+        }
+      },
+      "rare_and_special": {
+        "label": "特殊・希少ブロック",
+        "items": {
+          "dragon_egg": {"japanese":"ドラゴンの卵","note":"ほんのり光る黒いドラゴンの卵"},
+          "end_portal_frame": "エンドポータルフレーム",
+          "vault": {"japanese":"宝物庫","note":"とってもいいものが入っている黒い箱"},
+          "eye_of_ender": {"source":"minecraft_tools_and_utilities.json"}
+        }
+      },
+      "copper_golem_statues": {
+        "label": "カッパーゴーレムの像",
+        "note":"銅製のゴーレム。とても働き者で仕分け上手",
+        "items": {
+          "copper_golem_statue": "カッパーゴーレムの像",
+          "exposed_copper_golem_statue": "風化したカッパーゴーレムの像",
+          "weathered_copper_golem_statue": "錆びたカッパーゴーレムの像",
+          "oxidized_copper_golem_statue": "酸化したカッパーゴーレムの像",
+          "waxed_copper_golem_statue": "錆止めされたカッパーゴーレムの像",
+          "waxed_exposed_copper_golem_statue": "錆止めされた風化したカッパーゴーレムの像",
+          "waxed_weathered_copper_golem_statue": "錆止めされた錆びたカッパーゴーレムの像",
+          "waxed_oxidized_copper_golem_statue": "錆止めされた酸化したカッパーゴーレムの像"
+        }
+      },
+      "infested_blocks": {
+        "label": "虫食いブロック",
+        "note":"シルバーフィッシュが巣食う石材",
+        "items": {
+          "infested_stone": "虫食い石",
+          "infested_cobblestone": "虫食い丸石",
+          "infested_stone_bricks": "虫食い石レンガ",
+          "infested_cracked_stone_bricks": "ひび割れた虫食い石レンガ",
+          "infested_mossy_stone_bricks": "苔むした虫食い石レンガ",
+          "infested_chiseled_stone_bricks": "模様入りの虫食い石レンガ",
+          "infested_deepslate": "虫食い深層岩"
+        }
+      }
+  }
+}

@@ -1,0 +1,616 @@
+{
+  "label": "中立Mob",
+  "recommended_fields": [
+    "label",
+    "threat_class",
+    "priority",
+    "provoked_only",
+    "burns_in_daylight",
+    "aquatic",
+    "dies_on_land",
+    "undead",
+    "poetic"
+  ],
+  "items": {
+    "bee": {
+      "label": "ミツバチ",
+      "threat_class": "swarm",
+      "priority": "low",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "黄色",
+          "羽音",
+          "花"
+        ],
+        "sound_tags": [
+          "ぶんぶん"
+        ],
+        "motion_tags": [
+          "ふわふわ",
+          "群れる"
+        ],
+        "scene_tags": [
+          "花畑",
+          "巣箱",
+          "昼"
+        ],
+        "reaction_tags": [
+          "刺されたくない",
+          "普段はかわいい"
+        ],
+        "comic_tags": [
+          "怒らすと急に怖い"
+        ],
+        "role": "手順を間違えると怖い"
+      }
+    },
+    "cave_spider": {
+      "label": "洞窟スパイダー",
+      "threat_class": "melee",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "赤く光る目",
+          "青緑",
+          "毒"
+        ],
+        "sound_tags": [
+          "かさかさ"
+        ],
+        "motion_tags": [
+          "すばやい",
+          "群がる"
+        ],
+        "scene_tags": [
+          "廃坑",
+          "糸",
+          "暗がり"
+        ],
+        "reaction_tags": [
+          "噛まれたくない",
+          "狭い所が怖い"
+        ],
+        "comic_tags": [
+          "小さいのにいやらしい"
+        ],
+        "role": "狭所で刺す嫌な相手"
+      }
+    },
+    "dolphin": {
+      "label": "イルカ",
+      "threat_class": "utility",
+      "priority": "low",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "青",
+          "つるり",
+          "跳ねる"
+        ],
+        "sound_tags": [
+          "きゅい"
+        ],
+        "motion_tags": [
+          "すいすい"
+        ],
+        "scene_tags": [
+          "海",
+          "波",
+          "日差し"
+        ],
+        "reaction_tags": [
+          "明るい",
+          "餌をやりたい"
+        ],
+        "comic_tags": [
+          "元気すぎる海の案内役"
+        ],
+        "role": "水辺を陽気にする相棒"
+      }
+    },
+    "drowned": {
+      "label": "ドラウンド",
+      "threat_class": "melee",
+      "priority": "high",
+      "burns_in_daylight": false,
+      "aquatic": true,
+      "dies_on_land": false,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "水死体",
+          "青緑",
+          "濡れた体"
+        ],
+        "sound_tags": [
+          "ごぼり",
+          "うめき"
+        ],
+        "motion_tags": [
+          "水から上がる",
+          "のろのろ"
+        ],
+        "scene_tags": [
+          "川",
+          "海岸",
+          "水面下"
+        ],
+        "reaction_tags": [
+          "水中だと見えにくい",
+          "燃えへんのがいや"
+        ],
+        "comic_tags": [
+          "水が味方すぎる"
+        ],
+        "role": "日中は穏やかな水辺の亡者"
+      }
+    },
+    "enderman": {
+      "label": "エンダーマン",
+      "threat_class": "teleport",
+      "priority": "high",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "黒い",
+          "長身",
+          "紫の目"
+        ],
+        "sound_tags": [
+          "ぴきぃ",
+          "ぞわっ"
+        ],
+        "motion_tags": [
+          "瞬間移動",
+          "凝視"
+        ],
+        "scene_tags": [
+          "夜",
+          "エンド",
+          "雨前"
+        ],
+        "reaction_tags": [
+          "目を合わせたくない",
+          "みないようにすると視界が取れない"
+        ],
+        "comic_tags": [
+          "見るなと言われるほど見てしまう"
+        ],
+        "role": "視線で始まる緊張"
+      }
+    },
+    "fox": {
+      "label": "キツネ",
+      "threat_class": "utility",
+      "priority": "low",
+      "poetic": {
+        "visual_tags": [
+          "赤茶",
+          "しっぽ",
+          "すばしこい"
+        ],
+        "sound_tags": [
+          "きゅん"
+        ],
+        "motion_tags": [
+          "ちょこちょこ"
+        ],
+        "scene_tags": [
+          "タイガ",
+          "夜明け",
+          "雪"
+        ],
+        "reaction_tags": [
+          "かわいい",
+          "すばやい"
+        ],
+        "comic_tags": [
+          "寝姿が平和"
+        ],
+        "role": "森の軽やかな気配"
+      }
+    },
+    "goat": {
+      "label": "ヤギ",
+      "threat_class": "melee",
+      "priority": "low",
+      "provoked_only": false,
+      "poetic": {
+        "visual_tags": [
+          "角",
+          "白",
+          "山"
+        ],
+        "sound_tags": [
+          "めえ"
+        ],
+        "motion_tags": [
+          "ぴょん",
+          "頭突き"
+        ],
+        "scene_tags": [
+          "山頂",
+          "雪",
+          "崖"
+        ],
+        "reaction_tags": [
+          "突き飛ばされとうない",
+          "元気やな"
+        ],
+        "comic_tags": [
+          "急にぶつかる"
+        ],
+        "role": "高地の陽気な危なさ"
+      }
+    },
+    "iron_golem": {
+      "label": "アイアンゴーレム",
+      "threat_class": "tank",
+      "priority": "high",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "鉄",
+          "巨体",
+          "つる草"
+        ],
+        "sound_tags": [
+          "どすん"
+        ],
+        "motion_tags": [
+          "のっそり",
+          "守る"
+        ],
+        "scene_tags": [
+          "村",
+          "門",
+          "昼"
+        ],
+        "reaction_tags": [
+          "頼もしい",
+          "怒らせたくない"
+        ],
+        "comic_tags": [
+          "頼もしさが服着て歩いとる"
+        ],
+        "role": "力強い村の守護者"
+      }
+    },
+    "llama": {
+      "label": "ラマ",
+      "threat_class": "ranged",
+      "priority": "low",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "長い首",
+          "もふもふ",
+          "荷物"
+        ],
+        "sound_tags": [
+          "ふごっ"
+        ],
+        "motion_tags": [
+          "のしのし",
+          "つばを吐く"
+        ],
+        "scene_tags": [
+          "山道",
+          "商隊",
+          "草地"
+        ],
+        "reaction_tags": [
+          "妙に強気",
+          "かわいいけど油断できん"
+        ],
+        "comic_tags": [
+          "つばが本気"
+        ],
+        "role": "愛嬌と反撃を両立する相棒"
+      }
+    },
+    "nautilus": {
+      "label": "オウムガイ",
+      "aquatic": true,
+      "dies_on_land": true,
+      "poetic": {
+        "visual_tags": [
+          "うずまき",
+          "殻",
+          "海"
+        ],
+        "sound_tags": [
+          "しん",
+          "ちゃぷ"
+        ],
+        "motion_tags": [
+          "ただよう",
+          "くるり"
+        ],
+        "scene_tags": [
+          "海底",
+          "潮",
+          "青い水"
+        ],
+        "reaction_tags": [
+          "不思議",
+          "かわいい"
+        ],
+        "comic_tags": [
+          "殻だけでも主役感"
+        ],
+        "role": "海の友達"
+      }
+    },
+    "panda": {
+      "label": "パンダ",
+      "threat_class": "melee",
+      "priority": "low",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "白黒",
+          "笹",
+          "ころん"
+        ],
+        "sound_tags": [
+          "もふっ"
+        ],
+        "motion_tags": [
+          "のんびり",
+          "ごろごろ"
+        ],
+        "scene_tags": [
+          "竹林",
+          "昼",
+          "ゆるい空気"
+        ],
+        "reaction_tags": [
+          "和む",
+          "見とれてしまう"
+        ],
+        "comic_tags": [
+          "動きがだいたい愛嬌"
+        ],
+        "role": "竹の中の脱力担当"
+      }
+    },
+    "piglin": {
+      "label": "ピグリン",
+      "threat_class": "ranged",
+      "priority": "medium",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "金",
+          "豚人",
+          "ネザー"
+        ],
+        "sound_tags": [
+          "ぶもっ"
+        ],
+        "motion_tags": [
+          "うろつく",
+          "構える"
+        ],
+        "scene_tags": [
+          "砦",
+          "金鉱石",
+          "深紅"
+        ],
+        "reaction_tags": [
+          "金を見せたくなる",
+          "怒らせたくない"
+        ],
+        "comic_tags": [
+          "金で態度が変わる"
+        ],
+        "role": "取引と緊張のあいだ"
+      }
+    },
+    "polar_bear": {
+      "label": "シロクマ",
+      "threat_class": "melee",
+      "priority": "medium",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "白",
+          "大きい",
+          "雪"
+        ],
+        "sound_tags": [
+          "うおっ"
+        ],
+        "motion_tags": [
+          "のっそり",
+          "急に走る"
+        ],
+        "scene_tags": [
+          "氷原",
+          "海氷",
+          "吹雪"
+        ],
+        "reaction_tags": [
+          "遠くから眺めたい",
+          "子連れは特に怖い"
+        ],
+        "comic_tags": [
+          "白くて丸いのに重い"
+        ],
+        "role": "雪景色に潜む力強い気配"
+      }
+    },
+    "spider": {
+      "label": "スパイダー",
+      "threat_class": "ambush",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "八本脚",
+          "赤く光る目",
+          "壁"
+        ],
+        "sound_tags": [
+          "かさかさ"
+        ],
+        "motion_tags": [
+          "這う",
+          "飛びかかる"
+        ],
+        "scene_tags": [
+          "夜",
+          "木陰",
+          "壁面"
+        ],
+        "reaction_tags": [
+          "近寄られたくない",
+          "上も怖い"
+        ],
+        "comic_tags": [
+          "昼はちょっと落ち着く"
+        ],
+        "role": "視界の外から来る足音"
+      }
+    },
+    "trader_llama": {
+      "label": "商人のラマ",
+      "threat_class": "ranged",
+      "priority": "low",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "飾り布",
+          "長い首",
+          "荷物持ち"
+        ],
+        "sound_tags": [
+          "ふごっ"
+        ],
+        "motion_tags": [
+          "ついて歩く",
+          "つばを吐く"
+        ],
+        "scene_tags": [
+          "旅路",
+          "行商",
+          "道ばた"
+        ],
+        "reaction_tags": [
+          "商人より気になる",
+          "意外と気が強い"
+        ],
+        "comic_tags": [
+          "見た目のわりに反撃派"
+        ],
+        "role": "旅の空気を濃くする連れ"
+      }
+    },
+    "wolf": {
+      "label": "オオカミ",
+      "threat_class": "melee",
+      "priority": "medium",
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "灰色",
+          "耳",
+          "群れ"
+        ],
+        "sound_tags": [
+          "わふ",
+          "うなり"
+        ],
+        "motion_tags": [
+          "駆ける",
+          "見つめる"
+        ],
+        "scene_tags": [
+          "森",
+          "雪",
+          "夜"
+        ],
+        "reaction_tags": [
+          "かわいい",
+          "仲良くしたい"
+        ],
+        "comic_tags": [
+          "犬っぽいのに野生"
+        ],
+        "role": "親近感と野性の境目"
+      }
+    },
+    "zombie_nautilus": {
+      "label": "ゾンビオウムガイ",
+      "burns_in_daylight": true,
+      "aquatic": true,
+      "dies_on_land": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "腐った殻",
+          "海",
+          "異形"
+        ],
+        "sound_tags": [
+          "ごぼり"
+        ],
+        "motion_tags": [
+          "ただよう",
+          "よろめく"
+        ],
+        "scene_tags": [
+          "海底",
+          "濁り水",
+          "沈船"
+        ],
+        "reaction_tags": [
+          "妙やな",
+          "ちょっと見たくない"
+        ],
+        "comic_tags": [
+          "素材の取り合わせがおかしい"
+        ],
+        "role": "海の不調和そのもの"
+      }
+    },
+    "zombified_piglin": {
+      "label": "ゾンビピグリン",
+      "threat_class": "swarm",
+      "priority": "medium",
+      "burns_in_daylight": false,
+      "undead": true,
+      "provoked_only": true,
+      "poetic": {
+        "visual_tags": [
+          "腐敗",
+          "金剣",
+          "ネザー"
+        ],
+        "sound_tags": [
+          "ぶもっ",
+          "うめき"
+        ],
+        "motion_tags": [
+          "群れる",
+          "寄る"
+        ],
+        "scene_tags": [
+          "ネザー",
+          "金",
+          "群集"
+        ],
+        "reaction_tags": [
+          "一体で済ませたい",
+          "怒らせたくない"
+        ],
+        "comic_tags": [
+          "連鎖で空気が変わる"
+        ],
+        "role": "群れで牙をむく静かな圧"
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "command_only_items": {
+    "label": "コマンド入手アイテム",
+    "english": "Command-only Items",
+    "groups": {
+      "special_items": {
+        "label": "特殊アイテム",
+        "items": {
+          "knowledge_book": {"japanese":"知恵の本","note":"レシピが書かれている特別な本。"},
+          "debug_stick": {"japanese":"デバッグ棒","note":"見た目は普通の棒だが世界を変える機能のある棒"}
+        }
+      },
+      "invisible_or_technical_blocks": {
+        "label": "不可視・技術系ブロック",
+        "note":"どうも何かがあるようだが見えない"},
+        "items": {
+          "barrier": "バリアブロック",
+          "structure_void": "ストラクチャーヴォイド"}
+        }
+      },
+      "command_blocks": {
+        "label": "コマンドブロック",
+        "note":"LEDの表示のようなものがついているブロック",
+        "items": {
+          "command_block": "コマンドブロック",
+          "chain_command_block": "チェーンコマンドブロック",
+          "repeating_command_block": "リピートコマンドブロック"
+        }
+      },
+      "structure_and_test_blocks": {
+        "label": "構造物・テスト系ブロック",
+        "items": {
+          "jigsaw_block":{"japanese": "ジグソーブロック","note":"黒字にピンクのジグソーパズルや矢印のような模様が書かれたブロック"},
+          "structure_block": {"japanese":"ストラクチャーブロック","note":"黒字にピンクの模様が書かれたブロック"},
+          "test_block_start": {"japanese":"テストブロック","note":"中華風の窓のようなデザインのブロック"},
+          "test_instance_block":  {"japanese":"テストインスタンスブロック","note":"ココア色に白くYの文字が書かれている"
+          }
+        }
+      },
+      "portal_blocks": {
+        "label": "ポータル系ブロック",
+        "items": {
+          "nether_portal": {"japanese":"ネザーポータルブロック","note":"ネザーへ誘う不思議なポータル。紫色の光が渦巻く"},
+          "end_portal": {"japanese":"エンドポータルブロック","note":"ワープゲート本体。中に緑色の星が煌めく"},
+          "end_gateway": {"japanese":"エンドゲートウェイ","note":"エンドの島々にワープする門"
+        }
+      },
+      "spawner_and_vault_blocks": {
+        "label": "スポナー・宝物庫系",
+        "items": {
+          "monster_spawner": {"japanese":"モンスタースポナー","note":"炎がチラチラと光る不気味なカゴ。モンスターが湧く"},
+          "trial_spawner": {"japanese":"試練のスポナー","note":"敵の赤い目が光る湧く不気味なカゴ。四隅にオレンジのランプがついている"},
+          "ominous_trial_spawner": {"japanese":"不吉な試練のスポナー","note":"敵の赤い目が光る湧く不気味なカゴ。四隅に青いランプがついている"},
+          "ominous_vault": {"japanese":"不吉な宝物庫","note":"髑髏の目が光る不気味なブロック。いいアイテムが入っている"}
+        }
+      }
+    
+  }
+}

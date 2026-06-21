@@ -1,0 +1,1263 @@
+{
+  "label": "敵対Mob",
+  "recommended_fields": [
+    "label",
+    "threat_class",
+    "priority",
+    "burns_in_daylight",
+    "aquatic",
+    "dies_on_land",
+    "undead",
+    "poetic"
+  ],
+  "items": {
+    "blaze": {
+      "label": "ブレイズ",
+      "threat_class": "ranged",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "炎",
+          "浮遊",
+          "火花"
+        ],
+        "sound_tags": [
+          "ぱちぱち",
+          "うなり"
+        ],
+        "motion_tags": [
+          "ふわふわ",
+          "包囲"
+        ],
+        "scene_tags": [
+          "ネザー",
+          "要塞",
+          "火の海"
+        ],
+        "reaction_tags": [
+          "熱い",
+          "近づきたくない"
+        ],
+        "comic_tags": [
+          "火の玉まみれ"
+        ],
+        "role": "火で追い立てる恐怖"
+      }
+    },
+    "bogged": {
+      "label": "ボグド",
+      "threat_class": "ranged",
+      "priority": "high",
+      "undead": true,
+      "burns_in_daylight": true,
+      "poetic": {
+        "visual_tags": [
+          "骨",
+          "苔",
+          "湿り気"
+        ],
+        "sound_tags": [
+          "かたかた"
+        ],
+        "motion_tags": [
+          "じりじり"
+        ],
+        "scene_tags": [
+          "沼",
+          "湿地",
+          "茂み"
+        ],
+        "reaction_tags": [
+          "毒がいや",
+          "遠くから怖い"
+        ],
+        "comic_tags": [
+          "しめった骨"
+        ],
+        "role": "湿った遠距離の嫌さ"
+      }
+    },
+    "breeze": {
+      "label": "ブリーズ",
+      "threat_class": "ranged",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "風",
+          "渦",
+          "青白い"
+        ],
+        "sound_tags": [
+          "ひゅう",
+          "ごう"
+        ],
+        "motion_tags": [
+          "跳ねる",
+          "すり抜ける"
+        ],
+        "scene_tags": [
+          "試練",
+          "回廊",
+          "高低差"
+        ],
+        "reaction_tags": [
+          "足場が怖い",
+          "飛ばされたくない"
+        ],
+        "comic_tags": [
+          "風だけに軽い"
+        ],
+        "role": "風で崩す攪乱役"
+      }
+    },
+    "charged_creeper": {
+      "label": "帯電クリーパー",
+      "threat_class": "explosive",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "稲妻",
+          "青白く光る",
+          "無言"
+        ],
+        "sound_tags": [
+          "しゅう",
+          "ぴかっ"
+        ],
+        "motion_tags": [
+          "ぬっと来る"
+        ],
+        "scene_tags": [
+          "雷雨",
+          "背後",
+          "足元"
+        ],
+        "reaction_tags": [
+          "即逃げたい",
+          "見たくない"
+        ],
+        "comic_tags": [
+          "通常版よりだいぶあかん"
+        ],
+        "role": "一撃で空気を変える最悪役"
+      }
+    },
+    "creaking": {
+      "label": "クリーキング",
+      "threat_class": "ambush",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "老木",
+          "いびつ",
+          "影"
+        ],
+        "sound_tags": [
+          "ぎしぎし"
+        ],
+        "motion_tags": [
+          "ぬるり",
+          "背後寄り"
+        ],
+        "scene_tags": [
+          "ペールガーデン",
+          "夜",
+          "森",
+          "ヒトミ草"
+        ],
+        "reaction_tags": [
+          "振り向きたくない",
+          "不気味"
+        ],
+        "comic_tags": [
+          "木なのに生きとる"
+        ],
+        "role": "静けさを壊す木の気配"
+      }
+    },
+    "creeper": {
+      "label": "クリーパー",
+      "threat_class": "explosive",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "緑",
+          "無言",
+          "４本足",
+          "虚のような顔"
+        ],
+        "sound_tags": [
+          "しゅう"
+        ],
+        "motion_tags": [
+          "ぬっと来る",
+          "接近"
+        ],
+        "scene_tags": [
+          "草むら",
+          "背後",
+          "曲がり角"
+        ],
+        "reaction_tags": [
+          "逃げたい",
+          "見失いたくない"
+        ],
+        "comic_tags": [
+          "緑にまぎれる"
+        ],
+        "role": "一瞬で全部を壊す役"
+      }
+    },
+    "elder_guardian": {
+      "label": "エルダーガーディアン",
+      "threat_class": "tank",
+      "priority": "critical",
+      "aquatic": true,
+      "dies_on_land": false,
+      "poetic": {
+        "visual_tags": [
+          "棘",
+          "巨大",
+          "海底",
+          "フグ",
+          "ひとつ目"
+        ],
+        "sound_tags": [
+          "ごごご",
+          "びりり"
+        ],
+        "motion_tags": [
+          "にらむ",
+          "泳ぐ"
+        ],
+        "scene_tags": [
+          "海底神殿",
+          "水圧",
+          "暗い青"
+        ],
+        "reaction_tags": [
+          "帰りたい",
+          "息がもたない",
+          "ビームえぐい"
+        ],
+        "comic_tags": [
+          "海のボス"
+        ],
+        "role": "水中で睨みを利かせる大将"
+      }
+    },
+    "ender_dragon": {
+      "label": "エンダードラゴン",
+      "threat_class": "tank",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "黒",
+          "翼",
+          "虚空"
+        ],
+        "sound_tags": [
+          "咆哮"
+        ],
+        "motion_tags": [
+          "旋回",
+          "突っ込む"
+        ],
+        "scene_tags": [
+          "ジ・エンド",
+          "黒曜石",
+          "空島"
+        ],
+        "reaction_tags": [
+          "圧倒される",
+          "帰りたい"
+        ],
+        "comic_tags": [
+          "あまりにもドラゴン"
+        ],
+        "role": "終盤そのものの象徴"
+      }
+    },
+    "endermite": {
+      "label": "エンダーマイト",
+      "threat_class": "swarm",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "紫",
+          "小さい",
+          "虫"
+        ],
+        "sound_tags": [
+          "かさかさ"
+        ],
+        "motion_tags": [
+          "ちょろちょろ"
+        ],
+        "scene_tags": [
+          "エンド",
+          "足元",
+          "石の上"
+        ],
+        "reaction_tags": [
+          "踏みたくない",
+          "地味にいや"
+        ],
+        "comic_tags": [
+          "小さいのに目立つ"
+        ],
+        "role": "ちまちま削る小さな不快感"
+      }
+    },
+    "evoker": {
+      "label": "エヴォーカー",
+      "threat_class": "trickster",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "魔術",
+          "きんの襟元に黒いローブ",
+          "灰色"
+        ],
+        "sound_tags": [
+          "ぶつぶつ"
+        ],
+        "motion_tags": [
+          "詠唱",
+          "ヴェックス召喚"
+        ],
+        "scene_tags": [
+          "森の洋館",
+          "襲撃",
+          "室内"
+        ],
+        "reaction_tags": [
+          "近寄りたくない",
+          "ずるい"
+        ],
+        "comic_tags": [
+          "本人より牙が働く"
+        ],
+        "role": "危険な魔術師"
+      }
+    },
+    "ghast": {
+      "label": "ガスト",
+      "threat_class": "ranged",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "白い顔",
+          "浮遊",
+          "涙目"
+        ],
+        "sound_tags": [
+          "ぎゃあ",
+          "ひゅう"
+        ],
+        "motion_tags": [
+          "漂う",
+          "砲撃"
+        ],
+        "scene_tags": [
+          "ネザー",
+          "溶岩湖",
+          "足場の外"
+        ],
+        "reaction_tags": [
+          "足元が怖い",
+          "撃ち返したい"
+        ],
+        "comic_tags": [
+          "見た目は風船のよう"
+        ],
+        "role": "遠くから足場を奪う役"
+      }
+    },
+    "guardian": {
+      "label": "ガーディアン",
+      "threat_class": "ranged",
+      "priority": "high",
+      "aquatic": true,
+      "dies_on_land": false,
+      "poetic": {
+        "visual_tags": [
+          "棘",
+          "一つ目",
+          "水中",
+          "ビーム"
+        ],
+        "sound_tags": [
+          "びりびり"
+        ],
+        "motion_tags": [
+          "すいっ",
+          "にらむ"
+        ],
+        "scene_tags": [
+          "海底",
+          "神殿",
+          "深い青"
+        ],
+        "reaction_tags": [
+          "息がつらい",
+          "見られたくない"
+        ],
+        "comic_tags": [
+          "目で殺すタイプ"
+        ],
+        "role": "目で殺す神殿の番人"
+      }
+    },
+    "hoglin": {
+      "label": "ホグリン",
+      "threat_class": "melee",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "牙",
+          "巨体",
+          "突進"
+        ],
+        "sound_tags": [
+          "ぶもっ"
+        ],
+        "motion_tags": [
+          "どすどす",
+          "はね飛ばす"
+        ],
+        "scene_tags": [
+          "深紅の森",
+          "ネザー",
+          "きのこ林"
+        ],
+        "reaction_tags": [
+          "押し返されたくない",
+          "近いと怖い"
+        ],
+        "comic_tags": [
+          "ぶつかる圧が強すぎる"
+        ],
+        "role": "前から押し切る猪"
+      }
+    },
+    "husk": {
+      "label": "ハスク",
+      "threat_class": "melee",
+      "priority": "high",
+      "burns_in_daylight": false,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "乾いた",
+          "砂色",
+          "ミイラ"
+        ],
+        "sound_tags": [
+          "うめき"
+        ],
+        "motion_tags": [
+          "よたよた"
+        ],
+        "scene_tags": [
+          "砂漠",
+          "日差し",
+          "遺跡"
+        ],
+        "reaction_tags": [
+          "燃えへんのがいや",
+          "砂漠で会いたくない"
+        ],
+        "comic_tags": [
+          "昼でも平気",
+          "水に入るとゾンビに変身"
+        ],
+        "role": "昼の安心を壊す砂漠ゾンビ"
+      }
+    },
+    "illusioner": {
+      "label": "イリュージョナー",
+      "threat_class": "trickster",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "幻",
+          "分身",
+          "弓"
+        ],
+        "sound_tags": [
+          "ひそひそ"
+        ],
+        "motion_tags": [
+          "消える",
+          "ずらす"
+        ],
+        "scene_tags": [
+          "襲撃",
+          "視界の端",
+          "平地"
+        ],
+        "reaction_tags": [
+          "見失うのが怖い",
+          "ずるい"
+        ],
+        "comic_tags": [
+          "どれが本物やねん"
+        ],
+        "role": "視界をかき回す幻惑役",
+        "note":"プレイヤー召喚でのみ登場"
+      }
+    },
+    "magma_cube": {
+      "label": "マグマキューブ",
+      "threat_class": "melee",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "溶岩",
+          "四角",
+          "跳ねる"
+        ],
+        "sound_tags": [
+          "ぺちょ",
+          "ぼすっ"
+        ],
+        "motion_tags": [
+          "ぴょんぴょん"
+        ],
+        "scene_tags": [
+          "玄武岩",
+          "ネザー",
+          "足場"
+        ],
+        "reaction_tags": [
+          "足元が熱い",
+          "近づかれたくない"
+        ],
+        "comic_tags": [
+          "跳ね方だけちょっとかわいい"
+        ],
+        "role": "熱さと圧を刻む跳ね役"
+      }
+    },
+    "phantom": {
+      "label": "ファントム",
+      "threat_class": "ambush",
+      "priority": "high",
+      "burns_in_daylight": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "夜空",
+          "翼",
+          "紺色",
+          "アンデッド"
+        ],
+        "sound_tags": [
+          "ひゅるる"
+        ],
+        "motion_tags": [
+          "急降下",
+          "旋回"
+        ],
+        "scene_tags": [
+          "夜空",
+          "屋外",
+          "高所"
+        ],
+        "reaction_tags": [
+          "上が怖い",
+          "寝たい"
+        ],
+        "comic_tags": [
+          "ねないこだれだぁ"
+        ],
+        "role": "空から舞い降りる悪魔"
+      }
+    },
+    "piglin_brute": {
+      "label": "ピグリンブルート",
+      "threat_class": "melee",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "金",
+          "斧",
+          "ごつい"
+        ],
+        "sound_tags": [
+          "ぶもっ"
+        ],
+        "motion_tags": [
+          "一直線"
+        ],
+        "scene_tags": [
+          "砦",
+          "金塊",
+          "ネザー"
+        ],
+        "reaction_tags": [
+          "殴られたくない",
+          "近づきたくない"
+        ],
+        "comic_tags": [
+          "話し合い不可"
+        ],
+        "role": "正面突破のごり押し役"
+      }
+    },
+    "pillager": {
+      "label": "ピリジャー",
+      "threat_class": "ranged",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "クロスボウ",
+          "灰色",
+          "隊列"
+        ],
+        "sound_tags": [
+          "かちゃ",
+          "びゅっ"
+        ],
+        "motion_tags": [
+          "囲む",
+          "射る"
+        ],
+        "scene_tags": [
+          "襲撃",
+          "前哨基地",
+          "平地"
+        ],
+        "reaction_tags": [
+          "遠くからいや",
+          "数が増えると怖い"
+        ],
+        "comic_tags": [
+          "見た目より堅実に痛い"
+        ],
+        "role": "群れる略奪者"
+      }
+    },
+    "ravager": {
+      "label": "ラヴェジャー",
+      "threat_class": "tank",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "巨体",
+          "角",
+          "暴れる",
+          "牛"
+        ],
+        "sound_tags": [
+          "どおん"
+        ],
+        "motion_tags": [
+          "突進",
+          "踏み荒らす"
+        ],
+        "scene_tags": [
+          "襲撃",
+          "村",
+          "地鳴り"
+        ],
+        "reaction_tags": [
+          "真正面に立ちたくない",
+          "押しつぶされそう"
+        ],
+        "comic_tags": [
+          "全部なぎ倒してくる"
+        ],
+        "role": "怒り狂う牛"
+      }
+    },
+    "shulker": {
+      "label": "シュルカー",
+      "threat_class": "ranged",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "箱",
+          "紫",
+          "口"
+        ],
+        "sound_tags": [
+          "ぱかっ"
+        ],
+        "motion_tags": [
+          "閉じる",
+          "浮かせる"
+        ],
+        "scene_tags": [
+          "エンドシティ",
+          "高所",
+          "足場"
+        ],
+        "reaction_tags": [
+          "落ちたくない",
+          "浮かされるのが怖い"
+        ],
+        "comic_tags": [
+          "箱なのに痛い"
+        ],
+        "role": "災を呼ぶ箱"
+      }
+    },
+    "silverfish": {
+      "label": "シルバーフィッシュ",
+      "threat_class": "swarm",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "虫",
+          "石のすき間",
+          "小さい"
+        ],
+        "sound_tags": [
+          "かさかさ"
+        ],
+        "motion_tags": [
+          "わらわら"
+        ],
+        "scene_tags": [
+          "石の山",
+          "要塞",
+          "壁の中"
+        ],
+        "reaction_tags": [
+          "増えるのがいや",
+          "踏みたくない"
+        ],
+        "comic_tags": [
+          "壁から出てくるの反則"
+        ],
+        "role": "少し気持ち悪い虫たち"
+      }
+    },
+    "skeleton": {
+      "label": "スケルトン",
+      "threat_class": "ranged",
+      "priority": "high",
+      "burns_in_daylight": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "骨",
+          "弓",
+          "白い"
+        ],
+        "sound_tags": [
+          "かたかた"
+        ],
+        "motion_tags": [
+          "引き絞る",
+          "離れる"
+        ],
+        "scene_tags": [
+          "夜道",
+          "森",
+          "崖上"
+        ],
+        "reaction_tags": [
+          "遠くから怖い",
+          "水に入るな"
+        ],
+        "comic_tags": [
+          "燃えてくれたら助かる"
+        ],
+        "role": "精密射撃ガイコツの射手"
+      }
+    },
+    "slime": {
+      "label": "スライム",
+      "threat_class": "melee",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "半透明",
+          "緑",
+          "四角"
+        ],
+        "sound_tags": [
+          "ぺたぺた"
+        ],
+        "motion_tags": [
+          "ぽよんぽよん"
+        ],
+        "scene_tags": [
+          "沼",
+          "地下",
+          "平たい地面"
+        ],
+        "reaction_tags": [
+          "まとわりつかれたくない",
+          "数が増えるといや"
+        ],
+        "comic_tags": [
+          "割れるたび増える"
+        ],
+        "role": "弾みながら増える"
+      }
+    },
+    "stray": {
+      "label": "ストレイ",
+      "threat_class": "ranged",
+      "priority": "high",
+      "burns_in_daylight": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "骨",
+          "氷",
+          "ぼろ布"
+        ],
+        "sound_tags": [
+          "かたかた"
+        ],
+        "motion_tags": [
+          "じりじり",
+          "射る"
+        ],
+        "scene_tags": [
+          "雪原",
+          "吹雪",
+          "夜明け"
+        ],
+        "reaction_tags": [
+          "凍えそう",
+          "鈍足がいや"
+        ],
+        "comic_tags": [
+          "寒そうな骨"
+        ],
+        "role": "隙間風を運ぶガイコツ弓兵"
+      }
+    },
+    "sulfur_cube": {
+      "label": "サルファーキューブ",
+      "threat_class": "melee",
+      "priority": "medium",
+      "poetic": {
+        "visual_tags": [
+          "黄色",
+          "硫黄",
+          "四角"
+        ],
+        "sound_tags": [
+          "ぼすっ"
+        ],
+        "motion_tags": [
+          "跳ねる"
+        ],
+        "scene_tags": [
+          "地熱",
+          "洞窟",
+          "黄い"
+        ],
+        "reaction_tags": [
+          "アイテムを食べさせる"
+        ],
+        "comic_tags": [
+          "見た目は可愛い"
+        ],
+        "role": "貪食の塊"
+      }
+    },
+    "vex": {
+      "label": "ヴェックス",
+      "threat_class": "ambush",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "白い",
+          "小さい",
+          "妖魔"
+        ],
+        "sound_tags": [
+          "きぃん"
+        ],
+        "motion_tags": [
+          "壁をすり抜ける",
+          "飛ぶ"
+        ],
+        "scene_tags": [
+          "洋館",
+          "室内",
+          "視界の端"
+        ],
+        "reaction_tags": [
+          "落ち着かない",
+          "うっとうしい"
+        ],
+        "comic_tags": [
+          "見た目は小さい",
+          "エヴォーカーの僕"
+        ],
+        "role": "館を守る小さな妖魔"
+      }
+    },
+    "vindicator": {
+      "label": "ヴィンディケーター",
+      "threat_class": "melee",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "斧",
+          "しかめ面",
+          "灰色"
+        ],
+        "sound_tags": [
+          "どたどた"
+        ],
+        "motion_tags": [
+          "一直線"
+        ],
+        "scene_tags": [
+          "洋館",
+          "村",
+          "廊下"
+        ],
+        "reaction_tags": [
+          "殴られたくない",
+          "近いと怖い"
+        ],
+        "comic_tags": [
+          "考えずに振ってくる強さ"
+        ],
+        "role": "自惚れたおっさん"
+      }
+    },
+    "warden": {
+      "label": "ウォーデン",
+      "threat_class": "tank",
+      "priority": "critical",
+      "poetic": {
+        "visual_tags": [
+          "闇",
+          "胸の鼓動",
+          "巨体"
+        ],
+        "sound_tags": [
+          "どくん",
+          "うなり"
+        ],
+        "motion_tags": [
+          "重い足音",
+          "探る"
+        ],
+        "scene_tags": [
+          "ディープダーク",
+          "静寂",
+          "振動"
+        ],
+        "reaction_tags": [
+          "息をひそめたい",
+          "動きたくない"
+        ],
+        "comic_tags": [
+          "静かにしてるほど怖い"
+        ],
+        "role": "魂を食らう冥府の王"
+      }
+    },
+    "witch": {
+      "label": "ウィッチ",
+      "threat_class": "trickster",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "紫",
+          "とんがり帽子",
+          "薬",
+          "鼻にできもの"
+        ],
+        "sound_tags": [
+          "笑い声",
+          "ごくごく"
+        ],
+        "motion_tags": [
+          "投げる",
+          "回復する"
+        ],
+        "scene_tags": [
+          "沼",
+          "小屋",
+          "夜"
+        ],
+        "reaction_tags": [
+          "近寄りたくない",
+          "長引くのがいや"
+        ],
+        "comic_tags": [
+          "飲んでから投げる"
+        ],
+        "role": "じわじわ嫌がらせする魔女"
+      }
+    },
+    "wither": {
+      "label": "ウィザー",
+      "threat_class": "tank",
+      "priority": "critical",
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "黒",
+          "三つ首",
+          "死"
+        ],
+        "sound_tags": [
+          "爆ぜる",
+          "唸る"
+        ],
+        "motion_tags": [
+          "浮遊",
+          "破壊"
+        ],
+        "scene_tags": [
+          "空洞",
+          "荒野",
+          "爆発跡"
+        ],
+        "reaction_tags": [
+          "近寄れない",
+          "全部壊れる"
+        ],
+        "comic_tags": [
+          "規模が大きすぎる"
+        ],
+        "role": "死人の王"
+      }
+    },
+    "wither_skeleton": {
+      "label": "ウィザースケルトン",
+      "threat_class": "melee",
+      "priority": "high",
+      "burns_in_daylight": false,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "黒い骨",
+          "長身",
+          "石炭色"
+        ],
+        "sound_tags": [
+          "かたかた"
+        ],
+        "motion_tags": [
+          "ずしずし"
+        ],
+        "scene_tags": [
+          "要塞",
+          "暗い廊下",
+          "ネザー"
+        ],
+        "reaction_tags": [
+          "近づきたくない",
+          "いやな一撃"
+        ],
+        "comic_tags": [
+          "骨でもだいぶ黒い"
+        ],
+        "role": "黒く、硬い、ネザーの番人"
+      }
+    },
+    "zoglin": {
+      "label": "ゾグリン",
+      "threat_class": "melee",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "牙",
+          "腐敗",
+          "暴走"
+        ],
+        "sound_tags": [
+          "ぶもっ"
+        ],
+        "motion_tags": [
+          "突進"
+        ],
+        "scene_tags": [
+          "ネザー",
+          "歪み",
+          "荒れ地"
+        ],
+        "reaction_tags": [
+          "会いたくない",
+          "暴れ方が怖い"
+        ],
+        "comic_tags": [
+          "パワフルな亡霊イノシシ"
+        ],
+        "role": "理屈抜きで突っ込む怪物"
+      }
+    },
+    "zombie": {
+      "label": "ゾンビ",
+      "threat_class": "melee",
+      "priority": "high",
+      "burns_in_daylight": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "腐敗",
+          "緑",
+          "腕をのばす"
+        ],
+        "sound_tags": [
+          "うめき"
+        ],
+        "motion_tags": [
+          "よたよた"
+        ],
+        "scene_tags": [
+          "夜道",
+          "背後",
+          "洞窟"
+        ],
+        "reaction_tags": [
+          "逃げたい",
+          "燃えてほしい"
+        ],
+        "comic_tags": [
+          "日光で逆転"
+        ],
+        "role": "じわじわ来る恐怖"
+      }
+    },
+    "zombie_villager": {
+      "label": "村人ゾンビ",
+      "threat_class": "melee",
+      "priority": "high",
+      "burns_in_daylight": true,
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "村人",
+          "腐敗",
+          "うなだれ"
+        ],
+        "sound_tags": [
+          "うめき"
+        ],
+        "motion_tags": [
+          "よたよた"
+        ],
+        "scene_tags": [
+          "村",
+          "夜",
+          "戸口"
+        ],
+        "reaction_tags": [
+          "助けたいけど怖い",
+          "金リンゴがあれば"
+        ],
+        "comic_tags": [
+          "生きていた頃の面影がちらつく"
+        ],
+        "role": "戦いにくい夜の脅威"
+      }
+    },
+    "chicken_jockey": {
+      "label": "チキンジョッキー",
+      "threat_class": "ambush",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "小さい",
+          "にわとり",
+          "不釣り合い"
+        ],
+        "sound_tags": [
+          "ぱたぱた",
+          "うめき"
+        ],
+        "motion_tags": [
+          "ちょこまか",
+          "乗り回す"
+        ],
+        "scene_tags": [
+          "夜",
+          "足元",
+          "村はずれ"
+        ],
+        "reaction_tags": [
+          "笑うけど怖い",
+          "不意打ちいや"
+        ],
+        "comic_tags": [
+          "見た目のインパクトが強い"
+        ],
+        "role": "笑ってる暇のない珍妙な奇襲"
+      }
+    },
+    "spider_jockey": {
+      "label": "スパイダージョッキー",
+      "threat_class": "ambush",
+      "priority": "high",
+      "poetic": {
+        "visual_tags": [
+          "骨",
+          "蜘蛛",
+          "高い位置"
+        ],
+        "sound_tags": [
+          "かたかた",
+          "かさかさ"
+        ],
+        "motion_tags": [
+          "壁を這う",
+          "撃ちながら来る"
+        ],
+        "scene_tags": [
+          "夜",
+          "森",
+          "壁際"
+        ],
+        "reaction_tags": [
+          "上も前も怖い",
+          "視線が足りない"
+        ],
+        "comic_tags": [
+          "機動力ありすぎや"
+        ],
+        "role": "上下から迫るいやな合わせ技"
+      }
+    },
+    "skeleton_horseman": {
+      "label": "スケルトンホースマン",
+      "threat_class": "ranged",
+      "priority": "high",
+      "undead": true,
+      "poetic": {
+        "visual_tags": [
+          "骨馬",
+          "雷",
+          "騎兵"
+        ],
+        "sound_tags": [
+          "いななき",
+          "かたかた"
+        ],
+        "motion_tags": [
+          "駆ける",
+          "包囲する"
+        ],
+        "scene_tags": [
+          "雷雨",
+          "平原",
+          "夜"
+        ],
+        "reaction_tags": [
+          "縁起でもない",
+          "囲まれたくない"
+        ],
+        "comic_tags": [
+          "馬まで骨"
+        ],
+        "role": "雷鳴から始まる騎兵の不吉さ"
+      }
+    }
+  }
+}
