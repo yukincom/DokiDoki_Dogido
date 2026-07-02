@@ -1,0 +1,140 @@
+schema_version: 1
+id: creeper
+
+identity:
+  name_ja: クリーパー
+  name_en: Creeper
+  category: overworld_hostile
+  family: explosive
+  default_disposition: hostile
+  dimensions:
+    - overworld
+
+source:
+  primary_urls:
+    - "https://minecraft.wiki/w/Tutorial:Combat"
+  extraction_notes:
+    - "爆発型脅威として最優先級"
+    - "猫やヤマネコを避ける"
+  last_reviewed: "2026-05-25"
+  overall_confidence: medium
+
+canonical:
+  stats:
+    health: 20
+    armor: null
+    size:
+      width: 0.6
+      height: 1.7
+    attack_damage:
+      easy: null
+      normal: null
+      hard: null
+
+  spawn:
+    light_rule:
+      type: threshold
+      max_block_light: 7
+    player_distance:
+      min: 24
+      max: 128
+    group_size: null
+    special_cases: []
+
+  aggro:
+    detection_range: null
+    triggers:
+      - type: sight
+        target: player
+        max_distance: null
+        trigger_delay:
+          game_ticks: 0
+          confidence: medium
+        break_on_lost_contact: false
+    loses_aggro_conditions:
+      - "cat_or_ocelot_nearby"
+
+  movement:
+    primary_style: walk
+    speed:
+      qualitative: medium
+      numeric_blocks_per_sec: null
+    special_movement:
+      - type: self_detonation
+        purpose: explosive_attack
+        trigger: close_range_fuse
+        confidence: high
+    pathing_notes:
+      - "爆発準備に入ると近接圧が急上昇する"
+
+  attacks:
+    primary:
+      type: explosion
+      range: close
+    secondary: []
+
+  difficulty_overrides:
+    easy: []
+    normal: []
+    hard:
+      - id: point_blank_explosion_more_lethal
+        effect: explosion_is_extremely_dangerous
+        confidence: medium
+
+  special_behaviors:
+    - id: fuse_starts_within_close_range
+      effect: begins_exploding_at_close_distance
+      confidence: medium
+    - id: charged_by_lightning
+      effect: can_become_charged
+      confidence: high
+    - id: avoids_cat
+      effect: avoids_cats_and_ocelots
+      confidence: medium
+
+  weaknesses:
+    - shield_block
+    - ranged_attack
+
+  resistances: []
+
+adapter_hints:
+  visual_signals:
+    - "close_approach"
+    - "charged_variant"
+    - "fuse_animation_if_available"
+  audio_signals:
+    - "minecraft:entity.creeper.primed"
+  derived_metrics:
+    - "fuse_active"
+    - "charged"
+  must_detect:
+    - visual_distance
+    - visual_direction
+    - approaching
+  nice_to_have:
+    - "fuse_started"
+
+dogido:
+  threat_class: explosive
+  priority: critical
+  rear_warning_range: 8
+  panic_range: 7
+  audio_name_safe: false
+  callouts:
+    seen:
+      - "クリーパーや！くるなくるな！！"
+      - "うわっ、爆発するやつや！"
+    heard:
+      - "後ろでなんか気配するやが……"
+      - "なんか危ないの寄ってきとる"
+    aftermath:
+      - "クリーパーはほんま心臓に悪いわ……"
+  notes:
+    - "後方警告の代表例"
+
+quality:
+  status: draft
+  missing_fields:
+    - "通常個体の正確な検知距離"
+    - "爆発ダメージの距離減衰を別表にするか未決"

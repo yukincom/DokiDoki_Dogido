@@ -9,12 +9,21 @@ adapter/minecraft-fabric/.gradle/
 adapter/minecraft-fabric/build/
 adapter/minecraft-fabric/run/
 /資料
-.Ds_store
-/docs/*
-!/docs/memory-architecture.md
+.DS_Store
 /dogido-llm
-/tests/*
-!/tests/test_haiku.py
-!/tests/test_memory.py
 /dogido_server.egg-info
-/models
+models/
+*.safetensors
+*.gguf
+*.bin
+*.mlx
+
+# --- AIエージェント/ツールのローカルキャッシュ・メモリ・セッション情報 ---
+.claude/
+.codex/
+.codex-cache/
+.cursor/
+.aider*
+# pytestキャッシュ
+.pytest_cache/
+

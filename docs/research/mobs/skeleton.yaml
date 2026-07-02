@@ -1,0 +1,160 @@
+schema_version: 1
+id: skeleton
+
+identity:
+  name_ja: スケルトン
+  name_en: Skeleton
+  category: overworld_hostile
+  family: undead
+  default_disposition: hostile
+  dimensions:
+    - overworld
+
+source:
+  primary_urls:
+    - "https://minecraft-japan.fandom.com/ja/wiki/%E7%94%9F%E7%89%A9/%E3%83%A2%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%BC"
+    - "https://minecraft.wiki/w/Tutorial:Combat"
+    - "https://es.minecraft.wiki/w/Dificultad"
+  extraction_notes:
+    - "難易度で射撃間隔と命中精度が変わる情報を後で精査したい"
+    - "近づくと距離を取りながら撃つ印象が強い"
+    - "ambient と step は存在するが、step は小さく事前察知には弱い"
+    - "shoot 音はあるが、突然被弾の面白さを守るため警告頻度は絞る"
+  last_reviewed: "2026-05-31"
+  overall_confidence: medium
+
+canonical:
+  stats:
+    health: 20
+    armor: null
+    size:
+      width: 0.6
+      height: 1.99
+    attack_damage:
+      easy: null
+      normal: null
+      hard: null
+
+  spawn:
+    light_rule:
+      type: threshold
+      max_block_light: 7
+    player_distance:
+      min: 24
+      max: 128
+    group_size: null
+    special_cases:
+      - "一部の個体は防具装備"
+
+  aggro:
+    detection_range: null
+    triggers:
+      - type: sight
+        target: player
+        max_distance: null
+        trigger_delay:
+          game_ticks: 0
+          confidence: high
+        break_on_lost_contact: false
+    loses_aggro_conditions: []
+
+  movement:
+    primary_style: run
+    speed:
+      qualitative: medium
+      numeric_blocks_per_sec: null
+    special_movement:
+      - type: strafe
+        purpose: keep_ranged_distance
+        trigger: during_combat
+        confidence: medium
+    pathing_notes:
+      - "距離を保ちながら射撃"
+
+  attacks:
+    primary:
+      type: ranged_projectile
+      range: far
+    secondary:
+      - type: melee_if_cornered
+        range: close
+
+  difficulty_overrides:
+    easy:
+      - id: slower_bow_cooldown
+        effect: ranged_attack_interval_longer
+        confidence: medium
+    normal:
+      - id: baseline_bow_cooldown
+        effect: ranged_attack_interval_medium
+        confidence: medium
+    hard:
+      - id: faster_bow_cooldown
+        effect: ranged_attack_interval_shorter
+        confidence: medium
+      - id: better_accuracy
+        effect: ranged_accuracy_higher
+        confidence: medium
+
+  special_behaviors:
+    - id: sunlight_burn
+      effect: burns_in_daylight
+      confidence: high
+
+  weaknesses:
+    - shield
+    - cover
+    - sunlight
+
+  resistances: []
+
+adapter_hints:
+  visual_signals:
+    - "bow_draw"
+    - "strafe_motion"
+  audio_signals:
+    - "minecraft:entity.skeleton.ambient"
+    - "minecraft:entity.skeleton.step"
+    - "minecraft:entity.skeleton.shoot"
+  derived_metrics:
+    - "is_aiming"
+    - "ranged_pressure"
+    - "recent_unseen_arrow_hit"
+    - "waterline_exposure"
+    - "submerged_state"
+  must_detect:
+    - visual_distance
+    - visual_direction
+    - line_of_sight
+  nice_to_have:
+    - "projectile_near_miss"
+    - "ranged_line_of_sight_in_water"
+
+dogido:
+  threat_class: ranged
+  priority: high
+  rear_warning_range: 8
+  panic_range: 7
+  audio_name_safe: false
+  callouts:
+    seen:
+      - "スケルトンがおるで！打ってくるで！"
+      - "遠くから撃ってきよる！"
+    heard:
+      - "ん？いまなんか音がしよったな？"
+      - "風切り音が、せえへん？"
+    aftermath:
+      - "遠隔攻撃はほんまいややな・・・"
+  notes:
+    - "遮蔽物へ誘導しやすい敵"
+    - "足音と骨音は low certainty 扱いにし、小音量時は無視してよい"
+    - "弓構えや射撃の警告は 30% から 40% 程度に抑え、毎回は反応しない"
+    - "矢の飛来は基本的に検知せず、被弾した瞬間の panic を優先する"
+    - "浅瀬で燃えずに射線を通してくる時は高優先で扱う"
+    - "完全水没した時は圧を落として扱い、状態不変なら長めに黙る"
+
+quality:
+  status: draft
+  missing_fields:
+    - "攻撃力の難易度別数値"
+    - "射撃間隔の正確な秒数"
