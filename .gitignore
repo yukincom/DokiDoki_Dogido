@@ -17,3 +17,4 @@ adapter/minecraft-fabric/run/
 !/tests/test_haiku.py
 !/tests/test_memory.py
 /dogido_server.egg-info
+/models
