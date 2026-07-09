@@ -184,12 +184,14 @@
 
 ### 期待する主イベント
 
-- `danger_darkness_changed`
+- `status_snapshot`（暗所の本流）
+- （互換）`danger_darkness_changed` でも server は受理してよいが、本番 adapter の主経路ではない
 
 ### 期待する反応
 
 - `暗い` ではなく `危ない` 寄りの助言
 - 松明や撤退の提案
+- 必要なら `dark_push` 多段（息・あと押し）や shelter 判定へ接続
 
 ### 最低限ほしい項目
 
@@ -211,7 +213,7 @@
 
 ### 期待する主イベント
 
-- `danger_darkness_changed`
+- `status_snapshot`（暗所スコア + inventory 同梱）
 
 ### 期待する反応
 
@@ -236,7 +238,7 @@
 
 ### 期待する主イベント
 
-- `danger_darkness_changed`
+- `status_snapshot`（暗所スコア + inventory 同梱）
 
 ### 期待する反応
 
@@ -261,7 +263,7 @@
 
 ### 期待する主イベント
 
-- `danger_darkness_changed`
+- `status_snapshot`（暗所スコア + inventory 同梱）
 
 ### 期待する反応
 
@@ -286,7 +288,8 @@
 
 ### 期待する主イベント
 
-- `resource_option_found`
+- `status_snapshot`（`nearby_resources` 同梱）
+- （互換）`resource_option_found` は主経路にしない
 
 ### 期待する反応
 
@@ -311,7 +314,8 @@
 
 ### 期待する主イベント
 
-- `time_phase_changed`
+- `status_snapshot`（`world.time_phase` 継続更新）
+- （互換）`time_phase_changed` は主経路にしない
 
 ### 期待する反応
 
