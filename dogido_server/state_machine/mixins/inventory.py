@@ -221,21 +221,35 @@ class InventoryMixin:
         return False
 
     def _dark_push_recovered(self, event: GameEvent) -> bool:
+        """暗所押し込みから回復したか。
+
+        旧実装は `local_light >= 入場時` / `darkness <= 入場時+margin` だったが、
+        入場時すでに light=0 や danger=1.0 だと「変化なし」でも即回復扱いになり、
+        はぁはぁ SE（suppressed_breath）が始まる前に dark_push が止まっていた。
+        回復は「入場時より明確にマシになった」場合に限る。
+        """
         current_light = event.world.local_light
         current_darkness = event.world.danger_darkness_score
         reference_light = self.state.dark_push_reference_light
         reference_darkness = self.state.dark_push_reference_darkness
 
-        light_recovered = (
-            current_light is not None
-            and reference_light is not None
-            and current_light >= reference_light
-        )
-        darkness_recovered = (
-            current_darkness is not None
-            and reference_darkness is not None
-            and current_darkness <= reference_darkness + self.settings.dark_push_recover_darkness_margin
-        )
+        light_recovered = False
+        if current_light is not None and reference_light is not None:
+            if current_light > reference_light:
+                # 入場時より明るくなった
+                light_recovered = True
+            elif reference_light > 0 and current_light >= reference_light:
+                # いったん暗くなったあと、入場時の明るさまで戻った
+                # （入場時 light=0 のままではここに入らない → 誤停止しない）
+                light_recovered = True
+
+        darkness_recovered = False
+        if current_darkness is not None and reference_darkness is not None:
+            # 入場時より明確に危険度が下がったときだけ（同値や悪化は回復にしない）
+            darkness_recovered = (
+                current_darkness + self.settings.dark_push_recover_darkness_margin
+                < reference_darkness
+            )
 
         if reference_light is not None and reference_darkness is not None:
             return light_recovered or darkness_recovered

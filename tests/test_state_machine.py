@@ -2940,6 +2940,120 @@ class StateMachineTests(unittest.TestCase):
         self.assertTrue(any(action.cue_id == "suppressed_breath" for action in continued.actions))
         self.assertFalse(any(action.layer == "speech" for action in continued.actions))
 
+    def test_pitch_black_dark_push_does_not_stop_before_breath(self) -> None:
+        """入場時すでに light=0 / danger=1.0 でも、変化なしだけで回復扱いにしない。
+
+        これが壊れていると dark_push 開始の次 tick で stop し、はぁはぁ SE が一生出ない。
+        """
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
+        entry = GameEvent.model_validate_json(
+            """
+            {
+              "schema_version": "2026-05-24",
+              "game": "minecraft-java",
+              "adapter": "dogido-fabric-client",
+              "observed_at": "2026-05-25T21:11:00+09:00",
+              "sequence": 801,
+              "event": {
+                "name": "status_snapshot",
+                "source_kind": "system",
+                "priority_hint": "background",
+                "certainty": "high"
+              },
+              "player": {"name": "main_player", "position": {"x": 0.0, "y": 20.0, "z": 0.0}},
+              "world": {
+                "time_phase": "night",
+                "danger_darkness_score": 1.0,
+                "local_light": 0,
+                "sky_visible": false,
+                "enclosure_score": 0.64,
+                "ceiling_height": 5.0,
+                "overhead_cover_type": "solid",
+                "connected_dark_volume": 222,
+                "biome": "plains"
+              },
+              "inventory": {}
+            }
+            """
+        )
+        still = GameEvent.model_validate_json(
+            """
+            {
+              "schema_version": "2026-05-24",
+              "game": "minecraft-java",
+              "adapter": "dogido-fabric-client",
+              "observed_at": "2026-05-25T21:11:01+09:00",
+              "sequence": 802,
+              "event": {
+                "name": "status_snapshot",
+                "source_kind": "system",
+                "priority_hint": "background",
+                "certainty": "high"
+              },
+              "player": {"name": "main_player", "position": {"x": 1.5, "y": 20.0, "z": 0.0}},
+              "world": {
+                "time_phase": "night",
+                "danger_darkness_score": 1.0,
+                "local_light": 0,
+                "sky_visible": false,
+                "enclosure_score": 0.64,
+                "ceiling_height": 5.0,
+                "overhead_cover_type": "solid",
+                "connected_dark_volume": 222,
+                "biome": "plains"
+              },
+              "inventory": {}
+            }
+            """
+        )
+        later = GameEvent.model_validate_json(
+            """
+            {
+              "schema_version": "2026-05-24",
+              "game": "minecraft-java",
+              "adapter": "dogido-fabric-client",
+              "observed_at": "2026-05-25T21:11:08+09:00",
+              "sequence": 803,
+              "event": {
+                "name": "status_snapshot",
+                "source_kind": "system",
+                "priority_hint": "background",
+                "certainty": "high"
+              },
+              "player": {"name": "main_player", "position": {"x": 2.0, "y": 20.0, "z": 0.0}},
+              "world": {
+                "time_phase": "night",
+                "danger_darkness_score": 1.0,
+                "local_light": 0,
+                "sky_visible": false,
+                "enclosure_score": 0.64,
+                "ceiling_height": 5.0,
+                "overhead_cover_type": "solid",
+                "connected_dark_volume": 222,
+                "biome": "plains"
+              },
+              "inventory": {}
+            }
+            """
+        )
+
+        first = machine.process(entry)
+        second = machine.process(still)
+        third = machine.process(later)
+
+        self.assertFalse(any(action.text == "LLM:dark_push_after_breath" for action in second.actions))
+        self.assertTrue(
+            first.state.dark_push_active or second.state.dark_push_active,
+            "pitch black should keep or start dark_push",
+        )
+        self.assertTrue(
+            any(action.cue_id == "suppressed_breath" for action in third.actions)
+            or third.state.dark_push_active,
+            "breath SE should start after delay while still pitch black",
+        )
+        if third.state.dark_push_active:
+            self.assertTrue(any(action.cue_id == "suppressed_breath" for action in third.actions))
+
     def test_dark_push_stops_when_light_recovers_to_entry_level(self) -> None:
         machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
         entry = GameEvent.model_validate_json(

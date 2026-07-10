@@ -193,6 +193,17 @@ class EnvironmentalReactionsMixin:
         sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
         if sonic_boom_cue is not None:
             return [sonic_boom_cue]
+
+        # 話しかけは暗所ループや環境反応より先に返す（取りこぼし防止）
+        if self.player_input.asks_hostile_count:
+            return self._speech_actions(
+                self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
+            )
+        if self.player_input.asks_dragon_direction:
+            return self._speech_actions(self._render_dragon_direction_answer(event))
+        if self._has_pending_player_chat(event):
+            return self._speech_actions(self._render_player_chat_reply(event))
+
         stop_dark_push = self._should_stop_dark_push_audio(event, signals)
         blocked = self._blocked_environmental_actions(event, signals, now, stop_dark_push)
         if blocked is not None:
@@ -286,7 +297,7 @@ class EnvironmentalReactionsMixin:
         event: GameEvent,
         now: datetime,
     ) -> list[AudioAction]:
-        if self._player_input_priority_active(now):
+        if self._player_input_priority_active(now, purpose="ambient"):
             return []
         if event.event.name != EventName.AMBIENT_MOB_DETECTED:
             return []

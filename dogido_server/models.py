@@ -274,6 +274,20 @@ class AuditoryThreat(DogidoModel):
     spoken_name_allowed: bool = False  # 発話で具体名を出してよいか（原則 False）
 
 
+class AmbientSound(DogidoModel):
+    """非敵対の周囲音（村人・家畜など）。戦闘判定には使わない。
+
+    HOSTILE カテゴリ以外の entity 音を adapter が拾って載せる。
+    player_chat の「音がした？」系の根拠になる。
+    """
+    type: str  # 例: villager / cow / unknown
+    source_id: str | None = None
+    sound_event: str | None = None
+    direction: Direction = Field(default_factory=Direction)
+    distance_band: DistanceBand | None = None
+    certainty: Certainty = Certainty.MEDIUM
+
+
 class PassiveMob(DogidoModel):
     """周囲にいる非敵対モブ（仕様 §13）。
 
@@ -374,6 +388,7 @@ class GameEvent(DogidoModel):
     world: WorldState = Field(default_factory=WorldState)
     visual_threats: list[VisualThreat] = Field(default_factory=list)
     auditory_threats: list[AuditoryThreat] = Field(default_factory=list)
+    ambient_sounds: list[AmbientSound] = Field(default_factory=list)
     passive_mobs: list[PassiveMob] = Field(default_factory=list)
     inventory: dict[str, int] = Field(default_factory=dict)
     nearby_resources: list[NearbyResource] = Field(default_factory=list)

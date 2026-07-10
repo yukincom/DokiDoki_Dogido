@@ -199,8 +199,10 @@ class DogidoService:
 
         # 音声入力（/api/v1/player-input）はチャットと同じ user_text 経路に合流させる。
         # アダプタからのチャットが同じイベントに載っていた場合はそちらを優先し、保留分は次イベントへ
+        attached_player_text: str | None = None
         if session.pending_player_text and not (event.meta.user_text or "").strip():
-            event.meta.user_text = session.pending_player_text
+            attached_player_text = session.pending_player_text
+            event.meta.user_text = attached_player_text
             session.pending_player_text = None
 
         machine_result = session.machine.process(event)
@@ -208,6 +210,19 @@ class DogidoService:
             session.last_haiku_emission = machine_result.haiku_emission
         actions = list(machine_result.actions)
         actions.extend(self._memory_actions(session, event, actions, machine_result.haiku_emission))
+
+        # 話しかけをイベントに載せたが speech が出なかった場合は捨てずに再キュー
+        # （ambient_mob 枝や panic 枝に食われたケースの取りこぼし防止）
+        if attached_player_text and self._should_requeue_player_input(session, actions):
+            if not session.pending_player_text:
+                session.pending_player_text = attached_player_text
+                LOGGER.warning(
+                    "player_input_requeued session_id=%s mode=%s text=%s",
+                    session.session_id,
+                    machine_result.state.mode,
+                    attached_player_text[:80],
+                )
+
         response = AcceptedEventResponse(
             accepted=True,
             event_id=_new_id("evt"),
@@ -284,6 +299,19 @@ class DogidoService:
             normalized[:80],
         )
         return {"accepted": True, "session_id": session.session_id}
+
+    def _should_requeue_player_input(self, session: SessionInfo, actions: list[AudioAction]) -> bool:
+        """相乗りした話しかけに対する speech が無ければ再キューする。"""
+        player_input = session.machine.player_input
+        if not player_input.breaks_silence:
+            return False
+        if player_input.wants_quiet:
+            return False
+        # 川柳保存などは memory 側で返事する場合がある
+        if player_input.asks_save_last_haiku or player_input.player_haiku_text:
+            return False
+        has_speech = any(bool(action.text) and action.layer == "speech" for action in actions)
+        return not has_speech
 
     def list_haiku_memory(self) -> list[dict[str, object]]:
         if self.memory is None:

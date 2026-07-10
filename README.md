@@ -30,6 +30,7 @@ Minecraftの世界が、そのまま表現の材料になります。
 - [状態機械](docs/state-machine.md)
 - [連携構成](docs/integration-architecture.md)
 - [挙動仕様](docs/behavior-spec.md)
+- [対話設計](docs/dialogue-design.md)
 - [川柳アーキテクチャ](docs/haiku-architecture.md)
 - [技術課題](docs/technical-risks.md)
 
@@ -46,9 +47,10 @@ Minecraftの世界が、そのまま表現の材料になります。
 9. [状態機械](docs/state-machine.md)
 10. [連携構成](docs/integration-architecture.md)
 11. [挙動仕様](docs/behavior-spec.md)
-12. [川柳アーキテクチャ](docs/haiku-architecture.md)
-13. [記憶アーキテクチャ](docs/memory-architecture.md)
-14. [技術課題](docs/technical-risks.md)
+12. [対話設計](docs/dialogue-design.md)
+13. [川柳アーキテクチャ](docs/haiku-architecture.md)
+14. [記憶アーキテクチャ](docs/memory-architecture.md)
+15. [技術課題](docs/technical-risks.md)
 
 ## 現時点の方針
 

@@ -78,7 +78,23 @@ class AmbientMobEvent(_Condition):
         super().__init__(name="AmbientMobEvent")
 
     def check(self, context: PolicyContext) -> bool:
+        # 話しかけ待ちがあるときは ambient より PlayerChat 枝を優先する
+        if context.machine._has_pending_player_chat(context.event):
+            return False
         return context.next_mode == "normal" and context.machine._should_emit_ambient_mob_comment(context.event, context.now)
+
+
+class HasPlayerChat(_Condition):
+    def __init__(self) -> None:
+        super().__init__(name="HasPlayerChat")
+
+    def check(self, context: PolicyContext) -> bool:
+        # 絶叫系モード中は戦闘優先。それ以外は話しかけを落とさない
+        if context.next_mode in {"panic", "suppressed_panic"}:
+            return False
+        if context.event.event.name == EventName.PLAYER_DIED:
+            return False
+        return bool(context.machine._has_pending_player_chat(context.event))
 
 
 class DimensionChanged(_Condition):
@@ -156,6 +172,31 @@ class EmitDeathActions(_Action):
                 text=context.machine._render_death_message(context.event),
             )
         )
+
+
+class EmitPlayerChatActions(_Action):
+    def __init__(self) -> None:
+        super().__init__(name="EmitPlayerChatActions")
+
+    def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        machine = context.machine
+        if machine.player_input.asks_hostile_count:
+            text = machine._render_hostile_query_line(
+                context.event,
+                context.signals.ground_hostile_count_within_query_range,
+            )
+        elif machine.player_input.asks_dragon_direction:
+            text = machine._render_dragon_direction_answer(context.event)
+        else:
+            text = machine._render_player_chat_reply(context.event)
+        if text:
+            actions.append(
+                machine._audio_action(
+                    layer="speech",
+                    interrupt=False,
+                    text=text,
+                )
+            )
 
 
 class EmitFlushInterrupt(_Action):
@@ -352,6 +393,8 @@ class PyTreeActionPolicy:
                 self._sequence("Death", EventIs(EventName.PLAYER_DIED), EmitDeathActions()),
                 self._sequence("Panic", ModeIs("panic"), EmitPanicActions()),
                 self._sequence("SuppressedPanic", ModeIs("suppressed_panic"), EmitSuppressedPanicActions()),
+                # 話しかけは alert/aftermath/ambient より先（次イベントに相乗りした瞬間に落とさない）
+                self._sequence("PlayerChat", HasPlayerChat(), EmitPlayerChatActions()),
                 self._sequence("Alert", ModeIs("alert"), EmitAlertActions()),
                 self._sequence("Aftermath", ModeIs("aftermath"), EmitAftermathActions()),
                 self._sequence("NormalEnvironment", NormalEnvironmentEvent(), EmitNormalEnvironmentActions()),

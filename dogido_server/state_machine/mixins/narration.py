@@ -382,7 +382,30 @@ class NarrationMixin:
         )
 
     def _render_player_chat_reply(self, event: GameEvent) -> str:
+        from dogido_server.llm.prompts import resolve_character_mode_from_state
+
         fallback = fallback_text("general", "chat", "reply")
+        combat_active = bool(getattr(event.combat, "combat_active_hint", False)) or self.state.mode in {
+            "panic",
+            "suppressed_panic",
+        }
+        has_visual_threats = bool(event.visual_threats)
+        danger_score = event.world.danger_darkness_score
+        danger_darkness_high = danger_score is not None and float(danger_score) >= float(
+            getattr(self.settings, "darkness_alert_threshold", 0.72)
+        )
+        character_mode = resolve_character_mode_from_state(
+            self.state.mode,
+            combat_active=combat_active,
+            has_visual_threats=has_visual_threats,
+            danger_darkness_high=danger_darkness_high,
+        )
+        # inventory は重いので、所持品を聞かれたときだけ要約を渡す
+        inventory_summary = ""
+        held_item_label = ""
+        if self.player_input.asks_inventory:
+            inventory_summary = self._player_chat_inventory_summary(event)
+            held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
         return self._generate_leaf_text(
             kind="player_chat",
             fallback_text=fallback,
@@ -397,9 +420,94 @@ class NarrationMixin:
                 ),
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
                 "mode": self.state.mode,
+                "character_mode": character_mode,
+                "combat_active": combat_active,
+                "has_visual_threats": has_visual_threats,
+                "danger_darkness_high": danger_darkness_high,
+                "threat_summary": self._player_chat_threat_summary(event),
+                "hearing_summary": self._player_chat_hearing_summary(event),
+                "asks_inventory": self.player_input.asks_inventory,
+                "inventory_summary": inventory_summary,
+                "held_item_label": held_item_label,
             },
             temperature=0.65,
         )
+
+    def _player_chat_threat_summary(self, event: GameEvent) -> str:
+        parts: list[str] = []
+        if event.visual_threats:
+            nearest = min(
+                event.visual_threats,
+                key=lambda threat: threat.distance if threat.distance is not None else 999.0,
+            )
+            direction = self._direction_label(nearest)
+            distance = f"{nearest.distance:.0f}マス" if nearest.distance is not None else "近く"
+            label = self._hostile_label(nearest.type)
+            parts.append(f"視認 {label} が{direction} {distance}")
+            if len(event.visual_threats) > 1:
+                parts.append(f"ほか{len(event.visual_threats) - 1}体")
+        elif event.auditory_threats:
+            audio = event.auditory_threats[0]
+            direction = self._direction_label(audio)
+            band = getattr(audio.distance_band, "value", audio.distance_band) or ""
+            label = audio.label if not audio.spoken_name_allowed else self._hostile_label(audio.label)
+            parts.append(f"敵っぽい音 {label} {direction} {band}".strip())
+        if event.combat.combat_active_hint:
+            parts.append("交戦中っぽい")
+        return "、".join(parts)
+
+    def _player_chat_hearing_summary(self, event: GameEvent) -> str:
+        """今フレームで adapter が拾っている「聞こえた音」の要約。捏造防止用。"""
+        from dogido_server.state_machine.constants import MOB_LABELS
+
+        parts: list[str] = []
+        for audio in event.auditory_threats[:3]:
+            direction = self._direction_label(audio)
+            band = getattr(audio.distance_band, "value", audio.distance_band) or ""
+            if audio.spoken_name_allowed and audio.label:
+                name = self._hostile_label(audio.label)
+            else:
+                name = "敵意っぽい気配"
+            parts.append(f"{name}の音 {direction} {band}".strip())
+        for sound in event.ambient_sounds[:4]:
+            # AmbientSound も direction.horizontal を持つので流用できる
+            direction = self._direction_label(sound)  # type: ignore[arg-type]
+            band = getattr(sound.distance_band, "value", sound.distance_band) or ""
+            key = str(sound.type or "").removeprefix("minecraft:")
+            name = str(MOB_LABELS.get(key) or self._hostile_label(key) or key or "なにか")
+            parts.append(f"{name}っぽい声 {direction} {band}".strip())
+        return "、".join(parts)
+
+    def _player_chat_inventory_summary(self, event: GameEvent, *, max_items: int = 18) -> str:
+        """所持品の短い要約。player_chat 専用。常時注入しない。"""
+        counted: list[tuple[int, str, str]] = []
+        for item_id, count in event.inventory.items():
+            try:
+                amount = int(count)
+            except (TypeError, ValueError):
+                continue
+            if amount <= 0:
+                continue
+            key = str(item_id).removeprefix("minecraft:")
+            label = self._item_label(key)
+            counted.append((amount, key, label))
+        if not counted:
+            return "（所持品データなし、または空）"
+        # 多い順、同数なら id 順。上位だけ渡してプロンプトを軽く保つ
+        counted.sort(key=lambda row: (-row[0], row[1]))
+        parts = [f"{label}×{amount}" for amount, _key, label in counted[:max_items]]
+        if len(counted) > max_items:
+            parts.append(f"ほか{len(counted) - max_items}種")
+        return "、".join(parts)
+
+    def _item_label(self, item_id: str | None) -> str:
+        if not item_id:
+            return ""
+        from dogido_server.state_machine.constants import BLOCK_LABELS, ITEM_LABELS
+
+        key = str(item_id).removeprefix("minecraft:")
+        # 松明などは block カタログ側に日本語がある
+        return str(ITEM_LABELS.get(key) or BLOCK_LABELS.get(key) or key)
 
     def _render_structure_entry_line(self, event: GameEvent, structure_key: str) -> str | None:
         fallback = structure_entry_fallback_text(structure_key)

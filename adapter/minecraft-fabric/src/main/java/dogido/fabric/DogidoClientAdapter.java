@@ -140,6 +140,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private final Map<UUID, Long> lineOfSightStartedTicks = new HashMap<>();
     private final Map<UUID, Long> confirmedVisibleTicks = new HashMap<>();
     private final Deque<SoundObservation> recentSoundObservations = new ArrayDeque<>();
+    /** 村人・家畜など非敵対の周囲音。戦闘判定には使わない。 */
+    private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
 
     private long tickCounter = 0;
     private long lastSnapshotTick = -1;
@@ -276,13 +278,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         observeTrackedDragonDefeat(world);
         List<ThreatObservation> visibleThreats = filterVisibleThreats(threats);
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
+        List<AudioThreatObservation> ambientSounds = scanAmbientSounds(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
         List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
 
         if (shouldSendSnapshot()) {
-            JsonObject snapshot = buildStatusSnapshot(player, world, visibleThreats, audioThreats, ambientMobs);
+            JsonObject snapshot = buildStatusSnapshot(player, world, visibleThreats, audioThreats, ambientSounds, ambientMobs);
             this.eventClient.postEvent(snapshot);
             this.lastSnapshotTick = this.tickCounter;
         }
@@ -376,6 +379,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.confirmedVisibleTicks.clear();
         this.lastThreatHealths.clear();
         this.recentSoundObservations.clear();
+        this.recentAmbientSoundObservations.clear();
     }
 
     private void resetThreatStateForDimensionChange() {
@@ -421,6 +425,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.confirmedVisibleTicks.clear();
         this.lastThreatHealths.clear();
         this.recentSoundObservations.clear();
+        this.recentAmbientSoundObservations.clear();
     }
 
     private void resetThreatStateForPositionJump() {
@@ -918,6 +923,49 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
             this.recentSoundObservations.removeFirst();
         }
+        expireAmbientSoundObservations();
+    }
+
+    private void expireAmbientSoundObservations() {
+        while (!this.recentAmbientSoundObservations.isEmpty()) {
+            SoundObservation oldest = this.recentAmbientSoundObservations.peekFirst();
+            if (oldest == null || this.tickCounter - oldest.observedTick() <= SOUND_OBSERVATION_TTL_TICKS) {
+                break;
+            }
+            this.recentAmbientSoundObservations.removeFirst();
+        }
+    }
+
+    private List<AudioThreatObservation> scanAmbientSounds(ClientPlayerEntity player) {
+        Map<String, AudioThreatObservation> deduped = new LinkedHashMap<>();
+        for (SoundObservation observation : this.recentAmbientSoundObservations) {
+            Vec3d source = new Vec3d(observation.sourceX(), observation.sourceY(), observation.sourceZ());
+            double distance = Math.sqrt(player.squaredDistanceTo(source));
+            if (distance > this.config.audioThreatDistance) {
+                continue;
+            }
+            String horizontal = classifyHorizontal(player, source);
+            String vertical = classifyVertical(player, source);
+            String distanceBand = bucketDistance(distance);
+            String certainty = distance <= 6.0 ? "medium" : "low";
+            deduped.put(
+                observation.sourceId(),
+                new AudioThreatObservation(
+                    observation.label(),
+                    observation.sourceId(),
+                    observation.soundEvent(),
+                    horizontal,
+                    vertical,
+                    distanceBand,
+                    certainty,
+                    true,
+                    observation.observedTick()
+                )
+            );
+        }
+        List<AudioThreatObservation> ambient = new ArrayList<>(deduped.values());
+        ambient.sort(Comparator.comparingInt(observation -> distanceBandRank(observation.distanceBand())));
+        return ambient;
     }
 
     private long latestAudioObservationTick(List<AudioThreatObservation> audioThreats) {
@@ -933,6 +981,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         ClientWorld world,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
+        List<AudioThreatObservation> ambientSounds,
         List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
@@ -942,6 +991,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("world", buildWorld(player, world));
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
+        root.add("ambient_sounds", buildAmbientSounds(ambientSounds));
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
@@ -1266,6 +1316,28 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             entry.addProperty("distance_band", threat.distanceBand());
             entry.addProperty("certainty", threat.certainty());
             entry.addProperty("spoken_name_allowed", threat.spokenNameAllowed());
+            array.add(entry);
+        }
+        return array;
+    }
+
+    private JsonArray buildAmbientSounds(List<AudioThreatObservation> ambientSounds) {
+        JsonArray array = new JsonArray();
+        int limit = Math.min(ambientSounds.size(), 6);
+        for (int index = 0; index < limit; index += 1) {
+            AudioThreatObservation sound = ambientSounds.get(index);
+            JsonObject entry = new JsonObject();
+            entry.addProperty("type", sound.label());
+            entry.addProperty("source_id", sound.sourceId());
+            entry.addProperty("sound_event", sound.soundEvent());
+
+            JsonObject direction = new JsonObject();
+            direction.addProperty("horizontal", sound.horizontalDirection());
+            direction.addProperty("vertical", sound.verticalRelation());
+            entry.add("direction", direction);
+
+            entry.addProperty("distance_band", sound.distanceBand());
+            entry.addProperty("certainty", sound.certainty());
             array.add(entry);
         }
         return array;
@@ -2015,7 +2087,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 this.lastEnderEyeLaunchObservedTick = this.tickCounter;
             }
         }
+        Vec3d source = new Vec3d(packet.getX(), packet.getY(), packet.getZ());
         if (packet.getCategory() != SoundCategory.HOSTILE) {
+            // 村人などの NEUTRAL 音。戦闘トラックには載せない。
+            if (packet.getCategory() == SoundCategory.NEUTRAL
+                || ambientLabelFromSoundEvent(soundEventId) != null) {
+                tryRecordAmbientFromGlobalSound(player, world, soundEventId, source);
+            }
             return;
         }
         String defaultHostileLabel = hostileLabelFromSoundEvent(soundEventId);
@@ -2023,7 +2101,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
 
-        Vec3d source = new Vec3d(packet.getX(), packet.getY(), packet.getZ());
         SoundSourceResolution resolution = resolveGlobalHostileSoundSource(player, world, source, defaultHostileLabel, soundEventId);
         if (resolution == null) {
             return;
@@ -2120,11 +2197,32 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (isExplosionSound(soundEventId)) {
             this.lastExplosionObservedTick = this.tickCounter;
         }
+        Entity entity = world.getEntityById(packet.getEntityId());
         if (packet.getCategory() != SoundCategory.HOSTILE) {
+            if (entity instanceof LivingEntity living
+                && living.isAlive()
+                && !(entity instanceof PlayerEntity)
+                && !classifyMobDisposition(player, living).threatNow()
+                && (packet.getCategory() == SoundCategory.NEUTRAL
+                    || ambientLabelFromSoundEvent(soundEventId) != null
+                    || isAmbientMobCandidate(entity))) {
+                String type = entityTypeName(living);
+                if (type == null || type.isBlank()) {
+                    type = ambientLabelFromSoundEvent(soundEventId);
+                }
+                if (type != null && !type.isBlank()) {
+                    recordAmbientSoundObservation(
+                        player,
+                        soundEventId,
+                        type,
+                        new Vec3d(living.getX(), living.getY(), living.getZ()),
+                        living.getUuid().toString()
+                    );
+                }
+            }
             return;
         }
 
-        Entity entity = world.getEntityById(packet.getEntityId());
         if (!(entity instanceof LivingEntity hostileEntity) || !(entity instanceof Monster) || !hostileEntity.isAlive()) {
             String fallbackLabel = hostileLabelFromSoundEvent(soundEventId);
             if (fallbackLabel == null) {
@@ -2144,6 +2242,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         if (!classifyMobDisposition(player, hostileEntity).threatNow()) {
+            // 敵対モブ音カテゴリでも、いまは中立の個体は ambient 側へ
+            String type = entityTypeName(hostileEntity);
+            if (type != null && !type.isBlank()) {
+                recordAmbientSoundObservation(
+                    player,
+                    soundEventId,
+                    type,
+                    new Vec3d(hostileEntity.getX(), hostileEntity.getY(), hostileEntity.getZ()),
+                    hostileEntity.getUuid().toString()
+                );
+            }
             return;
         }
 
@@ -2190,6 +2299,138 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         );
         expireSoundObservations();
         this.lastAudioThreatObservedTick = this.tickCounter;
+    }
+
+    private void recordAmbientSoundObservation(
+        ClientPlayerEntity player,
+        String soundEventId,
+        String entityType,
+        Vec3d source,
+        String sourceId
+    ) {
+        double distance = Math.sqrt(player.squaredDistanceTo(source));
+        if (distance > this.config.audioThreatDistance) {
+            return;
+        }
+        String id = sourceId == null || sourceId.isBlank()
+            ? "ambient:" + entityType + ":" + Math.round(source.x) + ":" + Math.round(source.z)
+            : sourceId;
+        this.recentAmbientSoundObservations.removeIf(existing -> existing.sourceId().equals(id));
+        this.recentAmbientSoundObservations.addLast(
+            new SoundObservation(
+                this.tickCounter,
+                id,
+                entityType,
+                soundEventId,
+                source.x,
+                source.y,
+                source.z,
+                true
+            )
+        );
+        expireAmbientSoundObservations();
+    }
+
+    private boolean tryRecordAmbientFromGlobalSound(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        String soundEventId,
+        Vec3d source
+    ) {
+        String typeHint = ambientLabelFromSoundEvent(soundEventId);
+        LivingEntity nearest = null;
+        double nearestDistance = 6.0;
+        for (Entity entity : world.getOtherEntities(null, new net.minecraft.util.math.Box(
+            source.x - 6.0, source.y - 6.0, source.z - 6.0,
+            source.x + 6.0, source.y + 6.0, source.z + 6.0
+        ))) {
+            if (!(entity instanceof LivingEntity living) || !living.isAlive() || entity instanceof PlayerEntity) {
+                continue;
+            }
+            MobDisposition disposition = classifyMobDisposition(player, living);
+            if (disposition.threatNow()) {
+                continue;
+            }
+            if (!disposition.ambientEligible() && typeHint == null) {
+                continue;
+            }
+            double dx = entity.getX() - source.x;
+            double dy = entity.getY() - source.y;
+            double dz = entity.getZ() - source.z;
+            double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (distance < nearestDistance) {
+                nearest = living;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest != null) {
+            String type = entityTypeName(nearest);
+            if (type == null || type.isBlank()) {
+                type = typeHint != null ? typeHint : "unknown";
+            }
+            recordAmbientSoundObservation(
+                player,
+                soundEventId,
+                type,
+                new Vec3d(nearest.getX(), nearest.getY(), nearest.getZ()),
+                nearest.getUuid().toString()
+            );
+            return true;
+        }
+        if (typeHint != null) {
+            recordAmbientSoundObservation(player, soundEventId, typeHint, source, null);
+            return true;
+        }
+        return false;
+    }
+
+    private String ambientLabelFromSoundEvent(String soundEventId) {
+        if (soundEventId == null || soundEventId.isBlank()) {
+            return null;
+        }
+        String id = soundEventId.toLowerCase(java.util.Locale.ROOT);
+        // 具体的なものを先に
+        String[][] patterns = {
+            {"villager", "villager"},
+            {"wandering_trader", "wandering_trader"},
+            {"iron_golem", "iron_golem"},
+            {"snow_golem", "snow_golem"},
+            {"allay", "allay"},
+            {"axolotl", "axolotl"},
+            {"cat", "cat"},
+            {"ocelot", "ocelot"},
+            {"wolf", "wolf"},
+            {"parrot", "parrot"},
+            {"chicken", "chicken"},
+            {"cow", "cow"},
+            {"pig", "pig"},
+            {"sheep", "sheep"},
+            {"horse", "horse"},
+            {"donkey", "donkey"},
+            {"mule", "mule"},
+            {"llama", "llama"},
+            {"camel", "camel"},
+            {"frog", "frog"},
+            {"goat", "goat"},
+            {"bee", "bee"},
+            {"fox", "fox"},
+            {"rabbit", "rabbit"},
+            {"panda", "panda"},
+            {"sniffer", "sniffer"},
+            {"armadillo", "armadillo"},
+            {"turtle", "turtle"},
+            {"dolphin", "dolphin"},
+            {"squid", "squid"},
+            {"glow_squid", "glow_squid"},
+            {"bat", "bat"},
+            {"strider", "strider"},
+        };
+        for (String[] pattern : patterns) {
+            if (id.contains(pattern[0])) {
+                return pattern[1];
+            }
+        }
+        return null;
     }
 
     private String resolveSoundSourceId(ClientWorld world, Vec3d source, String hostileLabel, String soundEventId) {
