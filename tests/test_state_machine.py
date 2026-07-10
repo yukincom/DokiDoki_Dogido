@@ -289,8 +289,16 @@ class StateMachineTests(unittest.TestCase):
         # 同じ種への警告はクールダウン中は繰り返さない
         self.assertFalse(any((action.text or "") in expected_variants for action in repeat.actions))
 
-    def test_player_input_blocks_ambient_until_two_minutes_pass(self) -> None:
-        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
+    def test_player_input_blocks_ambient_until_short_mute_passes(self) -> None:
+        """話しかけ後の友好モブ mute は短時間（既定 12s）。旧 120s ではない。"""
+        machine = DogidoStateMachine(
+            Settings(
+                audio_enabled=False,
+                player_input_ambient_mute_ms=12000,
+                ambient_mob_comment_cooldown_ms=1000,
+            ),
+            llm=FakeLLM(),
+        )
         first = GameEvent.model_validate_json(
             """
             {
@@ -335,7 +343,7 @@ class StateMachineTests(unittest.TestCase):
               "schema_version": "2026-05-24",
               "game": "minecraft-java",
               "adapter": "dogido-fabric-client",
-              "observed_at": "2026-06-05T12:01:59+09:00",
+              "observed_at": "2026-06-05T12:00:10+09:00",
               "sequence": 11,
               "event": {
                 "name": "ambient_mob_detected",
@@ -370,7 +378,7 @@ class StateMachineTests(unittest.TestCase):
               "schema_version": "2026-05-24",
               "game": "minecraft-java",
               "adapter": "dogido-fabric-client",
-              "observed_at": "2026-06-05T12:02:01+09:00",
+              "observed_at": "2026-06-05T12:00:13+09:00",
               "sequence": 12,
               "event": {
                 "name": "ambient_mob_detected",

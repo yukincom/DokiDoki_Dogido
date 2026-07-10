@@ -342,6 +342,63 @@ def mob_poetic_tags(mob_id: str | None) -> tuple[str, ...]:
     return tuple(deduped)
 
 
+def mob_dogido_tactics(mob_id: str | None) -> dict[str, Any] | None:
+    """Mob ごとのドギド戦術メモ（禁止助言・安全ヒント）。"""
+    entry = mob_entry(mob_id)
+    if entry is None:
+        return None
+    tactics = entry.get("dogido_tactics")
+    if not isinstance(tactics, dict):
+        return None
+    return dict(tactics)
+
+
+def collect_dogido_tactics_for_mobs(mob_ids: list[str] | tuple[str, ...] | set[str]) -> dict[str, Any]:
+    """複数 Mob の tactics を合成して player_chat 等に渡す。
+
+    戻り値:
+      labels: 日本語名リスト
+      notes: 性質メモ
+      forbidden_advice: 禁止フレーズ断片（重複除去）
+      safe_hints: 言ってよいヒント
+    """
+    labels: list[str] = []
+    notes: list[str] = []
+    forbidden: list[str] = []
+    safe_hints: list[str] = []
+    seen_ids: set[str] = set()
+    for raw_id in mob_ids:
+        mob_id = str(raw_id or "").removeprefix("minecraft:").strip().lower()
+        if not mob_id or mob_id in seen_ids:
+            continue
+        seen_ids.add(mob_id)
+        entry = mob_entry(mob_id)
+        if entry is None:
+            continue
+        label = str(entry.get("label") or mob_id)
+        labels.append(label)
+        tactics = entry.get("dogido_tactics")
+        if not isinstance(tactics, dict):
+            continue
+        note = tactics.get("notes")
+        if note:
+            notes.append(f"{label}: {note}")
+        for item in tactics.get("forbidden_advice") or []:
+            text = str(item).strip()
+            if text and text not in forbidden:
+                forbidden.append(text)
+        for item in tactics.get("safe_hints") or []:
+            text = str(item).strip()
+            if text and text not in safe_hints:
+                safe_hints.append(text)
+    return {
+        "labels": labels,
+        "notes": notes,
+        "forbidden_advice": forbidden,
+        "safe_hints": safe_hints,
+    }
+
+
 def _normalize_mob_entries(raw_entries: Any) -> dict[str, dict[str, Any]]:
     normalized: dict[str, dict[str, Any]] = {}
     if not isinstance(raw_entries, dict):

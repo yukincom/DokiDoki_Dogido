@@ -90,7 +90,11 @@ def looks_japanese_forward(text: str) -> bool:
     return any("\u3040" <= ch <= "\u309f" or "\u4e00" <= ch <= "\u9fff" for ch in compact)
 
 
-def is_style_acceptable(kind: str, text: str) -> bool:
+def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = None) -> bool:
+    details = details or {}
+    # 敵対中の「じっと」系・Mob カタログの禁止助言
+    if contains_forbidden_mob_advice(text, details):
+        return False
     if kind not in {
         "aftermath",
         "darkness_escape",
@@ -100,6 +104,8 @@ def is_style_acceptable(kind: str, text: str) -> bool:
         "dark_push_after_breath",
         "newly_burning_visual",
         "daylight_water_skeleton",
+        "player_chat",
+        "hostile_callout",
     }:
         return True
     banned_patterns = [
@@ -176,6 +182,13 @@ def is_style_acceptable(kind: str, text: str) -> bool:
             "火つけ",
             "火をつけ",
         ])
+    if kind in {"player_chat", "hostile_callout"}:
+        banned_patterns.extend([
+            "溶岩に飛び",
+            "溶岩に入",
+            "奈落に飛び",
+            "Voidに",
+        ])
     if any(pattern in text for pattern in banned_patterns):
         return False
     if kind == "darkness_escape" and not has_kansai_marker(text):
@@ -185,6 +198,82 @@ def is_style_acceptable(kind: str, text: str) -> bool:
     if has_suffix_chain_noise(text):
         return False
     return True
+
+
+# 敵対中は原則 NG（寄ってくる／狙われるので静止は危険）。
+HOSTILE_FREEZE_ADVICE_PATTERNS = (
+    "じっと",
+    "じっとして",
+    "動かない",
+    "動かんと",
+    "動くな",
+    "止まって",
+    "止まれ",
+    "固まれ",
+    "その場で",
+    "動かへん",
+)
+
+
+def contains_deadly_creeper_advice(text: str, details: dict[str, Any] | None = None) -> bool:
+    """後方互換名。敵対全般の禁止助言チェックへ委譲。"""
+    return contains_forbidden_mob_advice(text, details)
+
+
+def contains_forbidden_mob_advice(text: str, details: dict[str, Any] | None = None) -> bool:
+    """敵対中の静止助言、および Mob カタログ固有の禁止助言を検出する。"""
+    details = details or {}
+    if not text:
+        return False
+
+    hostile_context = _is_hostile_combat_context(text, details)
+    if hostile_context and any(pattern in text for pattern in HOSTILE_FREEZE_ADVICE_PATTERNS):
+        return True
+
+    # Mob 固有の追加禁止（カタログ dogido_tactics.forbidden_advice）
+    patterns: list[str] = []
+    forbidden = details.get("forbidden_advice")
+    if isinstance(forbidden, (list, tuple)):
+        patterns.extend(str(item) for item in forbidden if item)
+    if not patterns:
+        from dogido_server.entry_catalog import collect_dogido_tactics_for_mobs
+
+        mob_ids = details.get("nearby_hostile_types") or details.get("nearby_mob_ids") or []
+        if isinstance(mob_ids, str):
+            mob_ids = [mob_ids]
+        tactics = collect_dogido_tactics_for_mobs(list(mob_ids))
+        patterns.extend(str(item) for item in tactics.get("forbidden_advice") or [])
+
+    if not patterns:
+        return False
+    return any(pattern in text for pattern in patterns)
+
+
+def _is_hostile_combat_context(text: str, details: dict[str, Any]) -> bool:
+    """視認敵・交戦中・脅威メモなど、敵対コンテキストかどうか。"""
+    if details.get("has_visual_threats") or details.get("combat_active"):
+        return True
+    mode = str(details.get("mode") or details.get("character_mode") or "").lower()
+    if mode in {"panic", "suppressed_panic", "alert", "battle"}:
+        # 脅威メモが空の alert もあるが、battle 口調＋じっとは危険なので止める
+        if details.get("nearby_hostile_types") or details.get("threat_summary"):
+            return True
+        if mode in {"panic", "suppressed_panic", "battle"}:
+            return True
+    mob_ids = details.get("nearby_hostile_types") or details.get("nearby_mob_ids") or []
+    if mob_ids:
+        return True
+    blob = " ".join(
+        str(details.get(key) or "")
+        for key in ("threat_summary", "hearing_summary", "event_digest")
+    )
+    if "視認" in blob or "敵" in blob:
+        return True
+    # 出力自体が敵警告＋じっと、の組み合わせ
+    hostile_names = ("クリーパー", "ゾンビ", "スケルトン", "クモ", "ウィッチ", "エンダーマン", "モンスター")
+    if any(name in text for name in hostile_names):
+        return True
+    return False
 
 
 def has_excessive_repetition(text: str) -> bool:

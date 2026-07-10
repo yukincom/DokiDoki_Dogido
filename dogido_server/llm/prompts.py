@@ -44,6 +44,8 @@ BATTLE_TONE_PROMPT = (
     "方向や敵の種類など役に立つ一言を優先する。"
     "長い愚痴・プレイヤーへの非難・無関係な雑談は禁止。"
     "『いける』『気いつけや』など短い鼓舞を混ぜてよい。"
+    "誤った攻略で死なせる指示は禁止。"
+    "周囲の敵ごとの禁止助言・安全ヒントは本番メモに従う（カタログ由来）。"
 )
 
 TENSION_TONE_PROMPT = (
@@ -623,6 +625,39 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
     inventory_summary = str(details.get("inventory_summary", "")).strip()
     held_item_label = str(details.get("held_item_label", "")).strip()
     asks_inventory = bool(details.get("asks_inventory")) and bool(inventory_summary)
+    tactics_notes = details.get("mob_tactics_notes") or []
+    forbidden_advice = details.get("forbidden_advice") or []
+    safe_hints = details.get("safe_hints") or []
+    if isinstance(tactics_notes, str):
+        tactics_notes = [tactics_notes]
+    if isinstance(forbidden_advice, str):
+        forbidden_advice = [forbidden_advice]
+    if isinstance(safe_hints, str):
+        safe_hints = [safe_hints]
+    combat_safety_rules = (
+        "- プレイヤーを死なせる誤アドバイスは禁止。"
+        "位置・種類の警告と短い応援はよいが、根拠の薄い作戦指示は控える\n"
+    )
+    # 敵対中は全 hostile 共通: 静止助言は NG（寄ってくる／狙われる）
+    if (
+        character_mode == "battle"
+        or details.get("has_visual_threats")
+        or details.get("combat_active")
+        or details.get("nearby_hostile_types")
+    ):
+        combat_safety_rules += (
+            "- 敵対モブがいる／交戦中は『じっとして』『動かないで』『止まって』『固まれ』は禁止。"
+            "ほとんどの敵対は寄ってくるか距離を取って撃ってくる。静止は危険\n"
+        )
+    if tactics_notes:
+        joined = " / ".join(str(note) for note in tactics_notes[:4])
+        combat_safety_rules += f"- 周囲の敵の性質メモ: {joined}\n"
+    if forbidden_advice:
+        joined = "」「".join(str(item) for item in forbidden_advice[:12])
+        combat_safety_rules += f"- 今の敵について追加の禁止助言: 「{joined}」\n"
+    if safe_hints:
+        joined = " / ".join(str(item) for item in safe_hints[:8])
+        combat_safety_rules += f"- 言ってよい短いヒント例: {joined}\n"
     mode_hint = {
         "peace": (
             "平和時: 気さくで落ち着いて返す。"
@@ -632,6 +667,7 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
             "バトル時: 短く狼狽えつつも応援する。"
             "いま危ないなら状況を一言混ぜてよいが、発言への返事は必ずする。"
             "諦めや非難は禁止。"
+            "行動指示は安全な範囲だけ。静止指示は禁止。"
         ),
         "tension": (
             "緊張時: 用心は見せるが、わーきゃー応援にはしない。"
@@ -665,6 +701,25 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
             "- 音のメモが空のとき、『音がした』『誰かいる』『離れた所で何か』などの断定は禁止。"
             "プレイヤーに音を聞かれても『こっちでははっきり拾えてへん』と正直に言う\n"
         )
+    conversation_history = str(details.get("conversation_history", "")).strip()
+    event_digest = str(details.get("event_digest", "")).strip()
+    if conversation_history:
+        history_block = f"【直近の会話】\n{conversation_history}\n"
+        history_rules = (
+            "- 直近の会話があるときは続きとして自然に返す。前の話題を無理に蒸し返さない\n"
+        )
+    else:
+        history_block = ""
+        history_rules = ""
+    if event_digest:
+        digest_block = f"【直近の出来事メモ】\n{event_digest}\n"
+        digest_rules = (
+            "- 出来事メモは粗い要約。細かい数値や見えていないことは足さない。"
+            "会話の補助として軽く触れてよい\n"
+        )
+    else:
+        digest_block = ""
+        digest_rules = ""
     user_prompt = (
         "参考傾向:\n"
         "- プレイヤーからの話しかけへの、相棒としての返事\n"
@@ -673,9 +728,14 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
         "- 音声認識やローマ字の打ち間違いっぽい文は、無理に解釈せず軽く聞き返してよい\n"
         f"{inventory_rules}"
         f"{hearing_rules}"
+        f"{history_rules}"
+        f"{digest_rules}"
+        f"{combat_safety_rules}"
         f"- {mode_hint}\n\n"
         "/no_think\n"
         "本番:\n"
+        f"{history_block}"
+        f"{digest_block}"
         f"プレイヤーが話しかけてきた:「{user_text}」\n"
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけ呼び名を入れてよい。\n"

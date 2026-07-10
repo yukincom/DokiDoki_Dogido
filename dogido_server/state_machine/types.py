@@ -88,6 +88,12 @@ class RuntimeState:
     last_occluded_dark_zone: bool | None = None
     last_light_source_count: int = 0
     inventory_initialized: bool = False
+    last_inventory_counts: dict[str, int] = field(default_factory=dict)
+    # player_chat 用の粗い出来事メモ（自然文）。service が DialogueContext に吸い上げる
+    pending_dialogue_notes: list[str] = field(default_factory=list)
+    # 撃破推定: 直近に見えていた敵対 entity_id -> type
+    tracked_hostile_entities: dict[str, str] = field(default_factory=dict)
+    recent_kill_counts: dict[str, int] = field(default_factory=dict)
     commented_visual_keys: dict[str, datetime] = field(default_factory=dict)
     commented_auditory_keys: dict[str, tuple[datetime, int]] = field(default_factory=dict)
     auditory_presence_states: dict[str, AuditoryPresenceState] = field(default_factory=dict)

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
+from dogido_server.dialogue_context import DialogueContext
 from dogido_server.llm import DogidoLLMRouter
 from dogido_server.memory import MemoryStore
 from dogido_server.models import (
@@ -60,6 +61,8 @@ class SessionInfo:
     last_haiku_emission: HaikuEmission | None = None
     # 音声入力など外部から届いたプレイヤー発話。次のイベントの user_text に相乗りさせる
     pending_player_text: str | None = None
+    # player_chat 用: 直近5往復 + 粗い出来事メモ
+    dialogue: DialogueContext = field(default_factory=DialogueContext)
 
     def is_stale_sequence(self, sequence: int) -> bool:
         return (
@@ -112,7 +115,8 @@ class DogidoService:
     def create_session(self, request: AdapterSessionCreateRequest) -> AdapterSessionCreateResponse:
         now = datetime.now().astimezone()
         session_id = _new_id("ses")
-        self.sessions[session_id] = SessionInfo(
+        machine = DogidoStateMachine(self.settings, llm=self.llm)
+        session = SessionInfo(
             session_id=session_id,
             schema_version=request.schema_version,
             adapter_name=request.adapter_name,
@@ -123,8 +127,10 @@ class DogidoService:
             call_name=request.call_name or self.settings.default_call_name,
             capabilities=request.capabilities,
             created_at=now,
-            machine=DogidoStateMachine(self.settings, llm=self.llm),
+            machine=machine,
         )
+        self._bind_dialogue_provider(session)
+        self.sessions[session_id] = session
         self.audio.prewarm_speech_texts(self._fallback_speech_catalog(request.call_name or self.settings.default_call_name))
         LOGGER.info(
             "adapter_session_created session_id=%s adapter=%s version=%s schema=%s capabilities=%s",
@@ -210,6 +216,7 @@ class DogidoService:
             session.last_haiku_emission = machine_result.haiku_emission
         actions = list(machine_result.actions)
         actions.extend(self._memory_actions(session, event, actions, machine_result.haiku_emission))
+        self._update_dialogue_context(session, event, actions)
 
         # 話しかけをイベントに載せたが speech が出なかった場合は捨てずに再キュー
         # （ambient_mob 枝や panic 枝に食われたケースの取りこぼし防止）
@@ -313,6 +320,34 @@ class DogidoService:
         has_speech = any(bool(action.text) and action.layer == "speech" for action in actions)
         return not has_speech
 
+    def _update_dialogue_context(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        actions: list[AudioAction],
+    ) -> None:
+        """会話5往復と出来事メモを session.dialogue に積む。"""
+        now = event.observed_at
+        # 状態機械が積んだ粗い出来事
+        notes = list(session.machine.state.pending_dialogue_notes)
+        if notes:
+            session.dialogue.extend_digest(notes, kind="event", at=now)
+            session.machine.state.pending_dialogue_notes.clear()
+
+        player_input = session.machine.player_input
+        if (
+            player_input.breaks_silence
+            and player_input.raw_text
+            and not player_input.wants_quiet
+            and not (player_input.normalized_text or "").startswith("/")
+        ):
+            session.dialogue.add_player(player_input.raw_text, at=now)
+
+        for action in actions:
+            if action.layer != "speech" or not action.text:
+                continue
+            session.dialogue.add_dogido(action.text, at=now)
+
     def list_haiku_memory(self) -> list[dict[str, object]]:
         if self.memory is None:
             return []
@@ -411,7 +446,8 @@ class DogidoService:
 
         implicit_id = session_id or self._implicit_session_id(event)
         if implicit_id not in self.sessions:
-            self.sessions[implicit_id] = SessionInfo(
+            machine = DogidoStateMachine(self.settings, llm=self.llm)
+            session = SessionInfo(
                 session_id=implicit_id,
                 schema_version=event.schema_version,
                 adapter_name=event.adapter,
@@ -422,12 +458,17 @@ class DogidoService:
                 call_name=event.meta.call_name or self.settings.default_call_name,
                 capabilities=[],
                 created_at=datetime.now().astimezone(),
-                machine=DogidoStateMachine(self.settings, llm=self.llm),
+                machine=machine,
             )
+            self._bind_dialogue_provider(session)
+            self.sessions[implicit_id] = session
             self.audio.prewarm_speech_texts(
                 self._fallback_speech_catalog(event.meta.call_name or self.settings.default_call_name)
             )
         return self.sessions[implicit_id]
+
+    def _bind_dialogue_provider(self, session: SessionInfo) -> None:
+        session.machine.dialogue_context_provider = lambda: session.dialogue
 
     def _implicit_session_id(self, event: GameEvent) -> str:
         player = (event.player.name or "player").replace(" ", "_")

@@ -81,6 +81,9 @@ class StateUpdatesMixin:
             self.state.stalled_visual_signature = ""
             self.state.stalled_visual_started_at = None
 
+        self._update_dialogue_kill_tracking(event, now)
+        self._update_dialogue_inventory_gains(event, now)
+
         unseen_auditory_threats = self._unseen_auditory_threats(event.visual_threats, event.auditory_threats)
         if unseen_auditory_threats:
             self.state.last_non_silent_at = now
@@ -172,6 +175,7 @@ class StateUpdatesMixin:
             self._reset_dragon_combat_comment_state()
         if event.event.name == EventName.COMBAT_ENDED:
             self.state.pending_safe_aftermath = self._boss_defeat_confirmed(event)
+            self._flush_combat_dialogue_notes(event, now)
             if any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles):
                 LOGGER.warning(
                     "boss_aftermath_decision pending=%s defeat_confirmed_flag=%s hostiles=%s",
@@ -513,11 +517,94 @@ class StateUpdatesMixin:
             self.state.aftermath_until = now + timedelta(milliseconds=self.settings.aftermath_time_ms)
             self.state.last_combat_end_at = now
             self.state.pending_safe_aftermath = False
+            # combat_ended イベント無しでも余韻入りで撃破メモをまとめる
+            self._flush_combat_dialogue_notes_from_mode(now)
 
         if previous_mode == "aftermath" and next_mode == "normal":
             self.state.shut_up_count = 0
             self.state.suppression_started_at = None
             self.state.suppression_until = None
+
+    def _update_dialogue_kill_tracking(self, event: GameEvent, now: datetime) -> None:
+        """視界から消えた敵対を粗い撃破候補として数える（完全正確ではない）。"""
+        current: dict[str, str] = {}
+        for threat in event.visual_threats:
+            if not threat.entity_id:
+                continue
+            current[str(threat.entity_id)] = threat.type
+        combatish = (
+            self.state.mode in {"panic", "suppressed_panic", "alert", "aftermath"}
+            or bool(event.combat.combat_active_hint)
+            or (
+                event.combat.recent_damage_ms is not None
+                and event.combat.recent_damage_ms <= self.settings.recent_damage_window_ms
+            )
+        )
+        if combatish:
+            for entity_id, entity_type in self.state.tracked_hostile_entities.items():
+                if entity_id not in current:
+                    key = entity_type or "敵"
+                    self.state.recent_kill_counts[key] = self.state.recent_kill_counts.get(key, 0) + 1
+        self.state.tracked_hostile_entities = current
+
+    def _update_dialogue_inventory_gains(self, event: GameEvent, now: datetime) -> None:
+        del now
+        if not self._is_status_snapshot(event):
+            return
+        current = {
+            str(item_id).removeprefix("minecraft:"): int(count)
+            for item_id, count in event.inventory.items()
+            if int(count) > 0
+        }
+        if not self.state.inventory_initialized or not self.state.last_inventory_counts:
+            self.state.last_inventory_counts = current
+            return
+        gains: list[str] = []
+        for item_id, count in current.items():
+            previous = self.state.last_inventory_counts.get(item_id, 0)
+            delta = count - previous
+            if delta <= 0:
+                continue
+            label = self._item_label(item_id) if hasattr(self, "_item_label") else item_id
+            # 大量スタックの細かい増減は省略し、増えた事実だけ
+            gains.append(str(label))
+        self.state.last_inventory_counts = current
+        if not gains:
+            return
+        # 多すぎるとノイズなので最大3種
+        shown = gains[:3]
+        extra = len(gains) - len(shown)
+        text = "、".join(shown) + "を入手"
+        if extra > 0:
+            text += f"（ほか{extra}種）"
+        self.state.pending_dialogue_notes.append(text)
+
+    def _flush_combat_dialogue_notes(self, event: GameEvent, now: datetime) -> None:
+        del event, now
+        self._flush_combat_dialogue_notes_from_mode(now=None)
+
+    def _flush_combat_dialogue_notes_from_mode(self, now: datetime | None) -> None:
+        del now
+        if self.state.recent_kill_counts:
+            parts: list[str] = []
+            for entity_type, count in sorted(self.state.recent_kill_counts.items(), key=lambda row: (-row[1], row[0])):
+                label = self._hostile_label(entity_type) if hasattr(self, "_hostile_label") else entity_type
+                if count <= 1:
+                    parts.append(f"{label}を倒した")
+                else:
+                    parts.append(f"{label}を{count}体倒した")
+            self.state.pending_dialogue_notes.append("、".join(parts[:4]))
+            self.state.recent_kill_counts.clear()
+        elif self.state.last_confirmed_hostiles:
+            # 撃破が取れなくても交戦相手のメモは残す
+            labels: list[str] = []
+            for hostile in self.state.last_confirmed_hostiles[:3]:
+                labels.append(self._hostile_label(hostile) if hasattr(self, "_hostile_label") else hostile)
+            if labels:
+                self.state.pending_dialogue_notes.append("、".join(labels) + "と交戦した")
+        else:
+            self.state.pending_dialogue_notes.append("戦闘から抜けた")
+        self.state.tracked_hostile_entities.clear()
 
     def _update_portal_context(self, event: GameEvent) -> None:
         if event.event.name != EventName.STATUS_SNAPSHOT:
