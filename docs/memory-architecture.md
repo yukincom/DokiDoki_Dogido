@@ -11,6 +11,8 @@
 - コンバット判定、mob 反応、暗さ判定、川柳生成の内部判定は既存の状態機械が担当する
 - 記憶は状態機械の判定正本にはしない
 - ただし、実際に発話された警告・反応・川柳と、その発話意図は会話参照のため短期記憶に残す
+- 保存・読取はコードが行う。汎用エージェント基盤（Hermes 等）は使わない
+- 将来の LLM 側ワークフロー整理は LangChain / LangGraph を想定するが、JSONL 正本は変えない
 
 ## 2. 保存形式
 
@@ -23,7 +25,7 @@
     rolling_summary.json
   long_term/
     haiku_entries.jsonl
-    haiku_revisions.jsonl
+    haiku_revisions.jsonl   # 予約。添削履歴を載せる想定だが、現行実装は未使用
     player_profile.json
 ```
 
@@ -31,7 +33,7 @@
 
 - 時系列で追記するログ
 - 川柳エントリ
-- 添削履歴
+- 添削履歴（`haiku_revisions.jsonl` はパス予約。Hermes 前提の自動整理はしない）
 
 ### JSON を使うもの
 

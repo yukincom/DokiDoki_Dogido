@@ -177,7 +177,7 @@ class DogidoLLM:
             )
             return request.fallback_text
         # haiku はスタイルチェック不要（音節数チェックを is_haiku_usable_output 側で完結させている）
-        if request.kind != "haiku" and not self._is_style_acceptable(request.kind, cleaned):
+        if request.kind != "haiku" and not self._is_style_acceptable(request.kind, cleaned, request.details):
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=style_mismatch cleaned=%s",
                 request.kind,
@@ -445,8 +445,8 @@ class DogidoLLM:
     def _looks_japanese_forward(self, text: str) -> bool:
         return looks_japanese_forward(text)
 
-    def _is_style_acceptable(self, kind: str, text: str) -> bool:
-        return is_style_acceptable(kind, text)
+    def _is_style_acceptable(self, kind: str, text: str, details: dict[str, Any] | None = None) -> bool:
+        return is_style_acceptable(kind, text, details)
 
     def _has_excessive_repetition(self, text: str) -> bool:
         return has_excessive_repetition(text)

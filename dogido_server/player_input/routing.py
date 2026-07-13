@@ -4,6 +4,7 @@ from __future__ import annotations
 from dogido_server.player_input.guardrails import (
     asks_dragon_direction,
     asks_hostile_count,
+    asks_inventory,
     asks_save_last_haiku,
     extract_player_haiku,
     should_block_ambient,
@@ -33,5 +34,6 @@ def route_player_input(raw_text: str | None) -> PlayerInputContext:
         asks_hostile_count=asks_hostile_count(normalized_text),
         asks_dragon_direction=asks_dragon_direction(normalized_text),
         asks_save_last_haiku=asks_save_last_haiku(normalized_text),
+        asks_inventory=asks_inventory(normalized_text),
         player_haiku_text=player_haiku_text,
     )

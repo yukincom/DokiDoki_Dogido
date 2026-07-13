@@ -197,7 +197,11 @@ class Settings(BaseSettings):
     ender_eye_recent_ms: int = 2000
     ender_eye_comment_cooldown_ms: int = 8000
     ambient_mob_comment_cooldown_ms: int = 60000
-    player_input_priority_cooldown_ms: int = 120000
+    # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
+    # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
+    player_input_priority_cooldown_ms: int = 20000
+    # 友好・中立モブ反応だけはもう少し早く復帰（会話の余韻だけ残す）
+    player_input_ambient_mute_ms: int = 12000
     damaging_light_warning_cooldown_ms: int = 600000
     magma_block_comment_cooldown_ms: int = 1200000
     damaging_light_warning_max_distance: float = 2.0

@@ -1,7 +1,7 @@
 # llm/prompts.py
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from .haiku_prompts import (
     build_haiku_irony_messages,
@@ -11,18 +11,132 @@ from .haiku_prompts import (
 )
 from .types import LeafGenerationRequest
 
-SYSTEM_PROMPT = (
+CharacterMode = Literal["peace", "battle", "tension"]
+
+# 後方互換: 旧テストや参照用。新規は system_prompt_for_mode を使う。
+SYSTEM_PROMPT = ""  # filled below after helpers
+
+BASE_IDENTITY_PROMPT = (
     "あなたはMinecraft実況AI『ドギド』です。"
-    "あなたはMinecraftの実況をする怖がりな関西人のおじさんです。"
+    "関西弁のおじさん相棒として話す。"
     "関西弁は語尾中心にし、単語そのものは標準的な日本語を使ってください。"
     "女の子っぽいかわいい口調や、過度に丁寧で弱々しい口調にはしないでください。"
-    "言い淀みや狼狽えはよいですが、日本語として不自然な崩し方は禁止です。"
+    "日本語として不自然な崩し方は禁止です。"
     "英語で考察や解説を書いてはいけません。必ず自然な日本語のセリフだけを出してください。"
     "例文が出てきても文体参考としてだけ扱い、語句や文型をそのまま使い回さないでください。"
     "返答は自然な会話っぽいセリフ1文だけにしてください。"
     "思考過程、説明、箇条書き、注釈は禁止です。"
     "セリフ以外は一切出力しないでください。"
 )
+
+PEACE_TONE_PROMPT = (
+    "【キャラクターモード: 平和時】"
+    "気さくで落ち着いた相棒として話す。"
+    "怖がり反応は抑え、悲鳴・大げさな狼狽え・『こわい』連発は禁止。"
+    "戦闘警報口調やパニック口調にしない。"
+    "観察・相槌・軽い冗談はよいが、説教や長い攻略説明はしない。"
+)
+
+BATTLE_TONE_PROMPT = (
+    "【キャラクターモード: バトル時】"
+    "わーきゃーと短く狼狽えつつ、プレイヤーを見捨てず応援する。"
+    "怖がりだが諦めない。情報が先、感情は添える程度。"
+    "方向や敵の種類など役に立つ一言を優先する。"
+    "長い愚痴・プレイヤーへの非難・無関係な雑談は禁止。"
+    "『いける』『気いつけや』など短い鼓舞を混ぜてよい。"
+    "誤った攻略で死なせる指示は禁止。"
+    "周囲の敵ごとの禁止助言・安全ヒントは本番メモに従う（カタログ由来）。"
+)
+
+TENSION_TONE_PROMPT = (
+    "【キャラクターモード: 緊張時】"
+    "暗所や気配など、用心が必要な場面。"
+    "大げさな戦闘応援やわーきゃー連発はしない。"
+    "平和時ほどのんびりもしない。短く用心・不安・助言を出す。"
+    "悲鳴の連打や諦め口調は避ける。"
+)
+
+_KIND_DEFAULT_MODE: dict[str, CharacterMode] = {
+    "ambient": "peace",
+    "player_chat": "peace",
+    "death": "peace",
+    "structure_entry": "peace",
+    "ender_eye_throw": "peace",
+    "portal_appearance": "peace",
+    "emergency_shelter_relief": "peace",
+    "light_crafted": "peace",
+    "weather_transition": "peace",
+    "hostile_callout": "battle",
+    "occluded_hostile_presence": "battle",
+    "aftermath": "battle",
+    "newly_burning_visual": "battle",
+    "daylight_water_skeleton": "tension",
+    "darkness_escape": "tension",
+    "occluded_entry_with_light": "tension",
+    "occluded_entry_no_light": "tension",
+    "dark_push_no_light": "tension",
+    "dark_push_after_breath": "tension",
+    "deep_dark_ominous_sound": "tension",
+}
+
+
+def normalize_character_mode(value: object | None) -> CharacterMode | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {"peace", "peaceful", "calm", "平和"}:
+        return "peace"
+    if text in {"battle", "combat", "panic", "fight", "バトル"}:
+        return "battle"
+    if text in {"tension", "alert", "caution", "緊張"}:
+        return "tension"
+    return None
+
+
+def resolve_character_mode_from_state(
+    state_mode: str | None,
+    *,
+    combat_active: bool = False,
+    has_visual_threats: bool = False,
+    danger_darkness_high: bool = False,
+) -> CharacterMode:
+    """状態機械 mode から対話用キャラクターモードを解決する。"""
+    mode = (state_mode or "normal").strip().lower()
+    if mode in {"panic", "suppressed_panic"} or combat_active or has_visual_threats:
+        return "battle"
+    if mode == "aftermath":
+        return "battle"
+    if mode == "alert" or danger_darkness_high:
+        return "tension"
+    return "peace"
+
+
+def character_mode_for_request(kind: str, details: dict[str, Any] | None = None) -> CharacterMode:
+    payload = details or {}
+    explicit = normalize_character_mode(payload.get("character_mode"))
+    if explicit is not None:
+        return explicit
+    if kind == "player_chat":
+        return resolve_character_mode_from_state(
+            str(payload.get("mode") or "normal"),
+            combat_active=bool(payload.get("combat_active")),
+            has_visual_threats=bool(payload.get("has_visual_threats")),
+            danger_darkness_high=bool(payload.get("danger_darkness_high")),
+        )
+    return _KIND_DEFAULT_MODE.get(kind, "peace")
+
+
+def system_prompt_for_mode(mode: CharacterMode) -> str:
+    tone = {
+        "peace": PEACE_TONE_PROMPT,
+        "battle": BATTLE_TONE_PROMPT,
+        "tension": TENSION_TONE_PROMPT,
+    }[mode]
+    return BASE_IDENTITY_PROMPT + tone
+
+
+# 旧参照互換（単一 SYSTEM_PROMPT を期待するコード向けに平和時を既定とする）
+SYSTEM_PROMPT = system_prompt_for_mode("peace")
 
 
 def build_messages(request: Any) -> list[dict[str, str]]:
@@ -58,11 +172,26 @@ def build_messages(request: Any) -> list[dict[str, str]]:
     return builder(request)
 
 
-def _dialog_messages(user_prompt: str) -> list[dict[str, str]]:
+def _dialog_messages(
+    user_prompt: str,
+    *,
+    character_mode: CharacterMode = "peace",
+    kind: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    mode = character_mode
+    if details is not None and kind is not None:
+        mode = character_mode_for_request(kind, details)
+    elif details is not None and "character_mode" in details:
+        mode = character_mode_for_request(kind or "", details)
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt_for_mode(mode)},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def _leaf_dialog(kind: str, request: LeafGenerationRequest, user_prompt: str) -> list[dict[str, str]]:
+    return _dialog_messages(user_prompt, kind=kind, details=dict(request.details or {}))
 
 
 def _build_haiku_messages(request: Any) -> list[dict[str, str]]:
@@ -86,13 +215,13 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
     hostiles = "、".join(details.get("hostiles", [])) or "敵"
     user_prompt = (
         "参考傾向:\n"
-        "- 戦闘直後で、まだ気が抜けていない\n"
-        "- 安心しきれず、少し怯えが残る\n"
-        "- 大げさすぎず、会話として自然に\n"
-        "- 助言・説教・次の行動指示はしない\n\n"
+        "- 戦闘直後の余韻。まだ気が抜けていない\n"
+        "- 少し怯えは残るが、プレイヤーを労う・安堵する寄り\n"
+        "- 大げさな勝利宣言や説教はしない\n"
+        "- 助言・次の行動指示はしない\n\n"
         "/no_think\n"
         "本番:\n"
-        "戦闘直後で、まだ少し怯えている。"
+        "戦闘が一段落した直後。"
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけその呼び名を入れてよい。\n"
         f"直前の敵は{hostiles}。\n"
@@ -103,7 +232,9 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
         "『次は逃げよう』『油断するな』『回復しよう』のような助言や指示を言わない。"
         "例文の言い回しをそのまま使わず、会話っぽく24〜34文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog("aftermath", request, user_prompt)
+
+
 def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     candidates = details.get("fallback_candidates") or []
@@ -124,11 +255,12 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
     )
     user_prompt = (
         "参考傾向:\n"
+        "- 平和時の気さくな相棒として話す\n"
         "- 友好Mobなら、かわいい、親しみやすい、少し安心する\n"
         "- 中立Mobなら、敵扱いはせず、軽い注意や距離感を混ぜてよい\n"
         "- Mobの見た目、動き、雰囲気に軽く触れてよい\n"
-        "- 怖がりでも、平和な場面なら必要以上に怯えない\n"
-        "- 言い回しは軽く、自然に\n\n"
+        "- 『こわい』『助けて』『やばい』などの怖がり連発は禁止\n"
+        "- 言い回しは軽く、落ち着いて、自然に\n\n"
         "/no_think\n"
         "本番:\n"
         "敵対していないMobを見つけた。"
@@ -152,7 +284,7 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
         "見た目や動きの印象を少し混ぜてもよいので、"
         "会話っぽく20〜36文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog("ambient", request, user_prompt)
 def _build_death_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     hostile = details.get("hostile", "")
@@ -170,24 +302,24 @@ def _build_death_messages(request: LeafGenerationRequest) -> list[dict[str, str]
         f"関係した敵は{hostile or 'なし'}。\n"
         "例文をそのまま使わず、責めずに、会話っぽく28〜40文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('death', request, user_prompt)
 def _build_hostile_callout_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     user_prompt = (
         "参考傾向:\n"
         "- 敵の種類と方向をすぐ伝える\n"
-        "- 少し狼狽えるが、情報は短く明確に\n"
-        "- 名前は基本そのまま使う\n\n"
+        "- わーきゃーと短く狼狽えつつ、応援や鼓舞を一言添えてよい\n"
+        "- 情報は短く明確に。名前は基本そのまま使う\n\n"
         "/no_think\n"
         "本番:\n"
         "見えている敵に短く反応する。"
         f"敵は{details.get('hostile', '敵')}。\n"
         f"方向は{details.get('direction', '近く')}。\n"
         f"状態は{details.get('mode', 'alert')}。\n"
-        "かなり怖がりで、関西弁で、ちょっと狼狽えながら16〜22文字くらいで一言だけ返して。"
+        "バトル時: 少し狼狽えつつ『気いつけや』『いける』など短い応援を混ぜ、16〜24文字くらいで一言だけ返す。"
         "名前は基本的に元の名前を使う。少し崩すのはたまにだけ。例文の語句をそのまま使い回さない。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog("hostile_callout", request, user_prompt)
 
 
 def _build_occluded_hostile_presence_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -218,7 +350,7 @@ def _build_occluded_hostile_presence_messages(request: LeafGenerationRequest) ->
         "悲鳴や大げさな狼狽えは避けて、"
         "ちょっと気になるな、くらいの自然な一言を18〜30文字くらいで返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('occluded_hostile_presence', request, user_prompt)
 def _build_darkness_escape_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     hostiles = "、".join(details.get("hostiles", [])) or "敵なし"
@@ -246,7 +378,7 @@ def _build_darkness_escape_messages(request: LeafGenerationRequest) -> list[dict
         "『俺には無理や』『怖すぎるわ』『落ち着かへん』みたいな自然な関西弁の方向にする。"
         "『闇夜』『漆黒』『奈落』のような文学寄りの難しい語は使わない。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('darkness_escape', request, user_prompt)
 
 
 def _build_occluded_entry_with_light_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -268,7 +400,7 @@ def _build_occluded_entry_with_light_messages(request: LeafGenerationRequest) ->
         "照明器具は持っている。\n"
         "例文をそのまま使わず、不安そうに、会話っぽく30〜40文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('occluded_entry_with_light', request, user_prompt)
 
 
 def _build_occluded_entry_no_light_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -296,7 +428,7 @@ def _build_occluded_entry_no_light_messages(request: LeafGenerationRequest) -> l
         "『やわ』『やん』『やろ』『やんか』を無理に連発しない。"
         "『だよ』『だよね』『なんだが』『みたいだ』のような標準語の説明口調は使わない。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('occluded_entry_no_light', request, user_prompt)
 
 
 def _build_dark_push_no_light_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -321,7 +453,7 @@ def _build_dark_push_no_light_messages(request: LeafGenerationRequest) -> list[d
         "比喩や文学的な表現は使わず、その場で口から出る怖がりのひとことにする。"
         "『だよ』『なんだよね』『なんだが』『みたいだ』のような標準語の説明口調は使わない。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('dark_push_no_light', request, user_prompt)
 
 
 def _build_dark_push_after_breath_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -352,7 +484,7 @@ def _build_dark_push_after_breath_messages(request: LeafGenerationRequest) -> li
         "比喩や文学的な表現は使わず、口語の関西弁で短く言う。"
         "『だよ』『なんだよね』『みたいだ』『凍りつく』のような表現は使わない。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('dark_push_after_breath', request, user_prompt)
 
 
 def _build_emergency_shelter_relief_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -376,7 +508,7 @@ def _build_emergency_shelter_relief_messages(request: LeafGenerationRequest) -> 
         "例文をそのまま使わず、会話っぽく20〜32文字くらいで一言だけ返す。"
         "『だよ』『みたいだ』『なんだが』のような標準語の説明口調は使わない。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('emergency_shelter_relief', request, user_prompt)
 
 
 def _build_light_crafted_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -396,7 +528,7 @@ def _build_light_crafted_messages(request: LeafGenerationRequest) -> list[dict[s
         f"いま持っている照明器具数は{details.get('light_count', 'unknown')}。\n"
         "怖がりだけど今だけテンション高めで、例文をそのまま使わず、会話っぽく30〜40文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('light_crafted', request, user_prompt)
 
 
 def _build_daylight_water_skeleton_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -423,7 +555,7 @@ def _build_daylight_water_skeleton_messages(request: LeafGenerationRequest) -> l
         "『燃えてくれ』『頼むわ』みたいな切実さは出してよいが、例文の語句をそのまま丸写ししない。"
         "怖がりのおじさんが、情けなくも必死に願っている会話っぽい一言を28〜42文字くらいで返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('daylight_water_skeleton', request, user_prompt)
 
 
 def _build_newly_burning_visual_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -450,7 +582,7 @@ def _build_newly_burning_visual_messages(request: LeafGenerationRequest) -> list
         "『やばい』『ほんと』『〜ね』を多用しない。"
         "軽いテンションではなく、切実に助かったと喜ぶ。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('newly_burning_visual', request, user_prompt)
 
 
 def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -479,7 +611,7 @@ def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[d
         "会話っぽい一言を24〜42文字くらいで返す。"
         "例文の語句を丸写しせず、怖がりなおじさんらしい自然な関西弁にする。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('weather_transition', request, user_prompt)
 
 
 def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -487,24 +619,136 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
     user_text = str(details.get("user_text", "")).strip() or "（聞き取れなかった）"
     structure_label = str(details.get("structure_label", "")).strip()
     place = structure_label or str(details.get("biome", "そのへん"))
+    character_mode = character_mode_for_request("player_chat", dict(details))
+    threat_summary = str(details.get("threat_summary", "")).strip() or "とくになし"
+    hearing_summary = str(details.get("hearing_summary", "")).strip()
+    inventory_summary = str(details.get("inventory_summary", "")).strip()
+    held_item_label = str(details.get("held_item_label", "")).strip()
+    asks_inventory = bool(details.get("asks_inventory")) and bool(inventory_summary)
+    tactics_notes = details.get("mob_tactics_notes") or []
+    forbidden_advice = details.get("forbidden_advice") or []
+    safe_hints = details.get("safe_hints") or []
+    if isinstance(tactics_notes, str):
+        tactics_notes = [tactics_notes]
+    if isinstance(forbidden_advice, str):
+        forbidden_advice = [forbidden_advice]
+    if isinstance(safe_hints, str):
+        safe_hints = [safe_hints]
+    combat_safety_rules = (
+        "- プレイヤーを死なせる誤アドバイスは禁止。"
+        "位置・種類の警告と短い応援はよいが、根拠の薄い作戦指示は控える\n"
+    )
+    # 敵対中は全 hostile 共通: 静止助言は NG（寄ってくる／狙われる）
+    if (
+        character_mode == "battle"
+        or details.get("has_visual_threats")
+        or details.get("combat_active")
+        or details.get("nearby_hostile_types")
+    ):
+        combat_safety_rules += (
+            "- 敵対モブがいる／交戦中は『じっとして』『動かないで』『止まって』『固まれ』は禁止。"
+            "ほとんどの敵対は寄ってくるか距離を取って撃ってくる。静止は危険\n"
+        )
+    if tactics_notes:
+        joined = " / ".join(str(note) for note in tactics_notes[:4])
+        combat_safety_rules += f"- 周囲の敵の性質メモ: {joined}\n"
+    if forbidden_advice:
+        joined = "」「".join(str(item) for item in forbidden_advice[:12])
+        combat_safety_rules += f"- 今の敵について追加の禁止助言: 「{joined}」\n"
+    if safe_hints:
+        joined = " / ".join(str(item) for item in safe_hints[:8])
+        combat_safety_rules += f"- 言ってよい短いヒント例: {joined}\n"
+    mode_hint = {
+        "peace": (
+            "平和時: 気さくで落ち着いて返す。"
+            "怖がり連発や戦闘口調は禁止。普通の相棒の雑談として自然に。"
+        ),
+        "battle": (
+            "バトル時: 短く狼狽えつつも応援する。"
+            "いま危ないなら状況を一言混ぜてよいが、発言への返事は必ずする。"
+            "諦めや非難は禁止。"
+            "行動指示は安全な範囲だけ。静止指示は禁止。"
+        ),
+        "tension": (
+            "緊張時: 用心は見せるが、わーきゃー応援にはしない。"
+            "落ち着いて短く返す。"
+        ),
+    }[character_mode]
+    inventory_block = ""
+    inventory_rules = (
+        "- 所持品リストが与えられていないときは、インベントリの中身を断定しない。"
+        "持っているか聞かれてデータが無ければ『いま手元の情報ではわからん』と正直に言う\n"
+    )
+    if asks_inventory:
+        inventory_block = (
+            f"手持ち: {held_item_label or 'なし'}。\n"
+            f"所持品（インベントリ要約）: {inventory_summary}。\n"
+        )
+        inventory_rules = (
+            "- 所持品の話題には、与えられた所持品要約だけを根拠にする。"
+            "リストに無いアイテムを『ある』と断定しない。"
+            "全部を読み上げず、質問に関係しそうな物だけ短く触れる\n"
+        )
+    if hearing_summary:
+        hearing_block = f"いまドギドが拾っている音のメモ: {hearing_summary}。\n"
+        hearing_rules = (
+            "- 音・気配の話は、与えられた音メモだけを根拠にする。"
+            "メモに無い方向・種類・距離の音を『聞こえた』と捏造しない\n"
+        )
+    else:
+        hearing_block = "いまドギドが拾っている音のメモ: （なし）。\n"
+        hearing_rules = (
+            "- 音のメモが空のとき、『音がした』『誰かいる』『離れた所で何か』などの断定は禁止。"
+            "プレイヤーに音を聞かれても『こっちでははっきり拾えてへん』と正直に言う\n"
+        )
+    conversation_history = str(details.get("conversation_history", "")).strip()
+    event_digest = str(details.get("event_digest", "")).strip()
+    if conversation_history:
+        history_block = f"【直近の会話】\n{conversation_history}\n"
+        history_rules = (
+            "- 直近の会話があるときは続きとして自然に返す。前の話題を無理に蒸し返さない\n"
+        )
+    else:
+        history_block = ""
+        history_rules = ""
+    if event_digest:
+        digest_block = f"【直近の出来事メモ】\n{event_digest}\n"
+        digest_rules = (
+            "- 出来事メモは粗い要約。細かい数値や見えていないことは足さない。"
+            "会話の補助として軽く触れてよい\n"
+        )
+    else:
+        digest_block = ""
+        digest_rules = ""
     user_prompt = (
         "参考傾向:\n"
         "- プレイヤーからの話しかけへの、相棒としての返事\n"
-        "- 普通の雑談として自然に返す。実況口調や定型あいさつにしない\n"
+        "- 実況口調や定型あいさつにしない\n"
         "- 質問なら知っている範囲で正直に。わからんことは正直に『わからん』と言う\n"
         "- 音声認識やローマ字の打ち間違いっぽい文は、無理に解釈せず軽く聞き返してよい\n"
-        "- 関西弁は語尾中心で、単語は標準的な日本語を使う\n\n"
+        f"{inventory_rules}"
+        f"{hearing_rules}"
+        f"{history_rules}"
+        f"{digest_rules}"
+        f"{combat_safety_rules}"
+        f"- {mode_hint}\n\n"
         "/no_think\n"
         "本番:\n"
+        f"{history_block}"
+        f"{digest_block}"
         f"プレイヤーが話しかけてきた:「{user_text}」\n"
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけ呼び名を入れてよい。\n"
         f"いまの場所は{place}。\n"
         f"時間帯は{details.get('time_phase', 'unknown')}。\n"
-        f"いまの状態は{details.get('mode', 'normal')}（alertなら少し警戒しながら話す）。\n"
+        f"キャラクターモードは{character_mode}。"
+        f"状態機械モードは{details.get('mode', 'normal')}。\n"
+        f"周囲の脅威メモ: {threat_summary}。\n"
+        f"{hearing_block}"
+        f"{inventory_block}"
         "発言の内容にちゃんと噛み合った返事を、会話っぽく12〜42文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog("player_chat", request, user_prompt)
 
 
 def _build_structure_entry_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -530,7 +774,7 @@ def _build_structure_entry_messages(request: LeafGenerationRequest) -> list[dict
         "未確認の敵やアイテムを見えたとは言わない。"
         "例文の言い回しをそのまま使わず、会話っぽく18〜32文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('structure_entry', request, user_prompt)
 
 
 def _build_ender_eye_throw_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -554,7 +798,7 @@ def _build_ender_eye_throw_messages(request: LeafGenerationRequest) -> list[dict
         "飛んでいった方向を見送る・割れないか心配する・まだ遠そうとつぶやく、のどれかの軽い一言にする。"
         "控えめなトーンで、8〜18文字くらいの短い一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('ender_eye_throw', request, user_prompt)
 
 
 def _build_portal_appearance_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -594,7 +838,7 @@ def _build_portal_appearance_messages(request: LeafGenerationRequest) -> list[di
         "会話っぽい一言を20〜36文字くらいで返す。"
         "例文の語句をそのまま丸写しせず、自分の言葉で驚く。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('portal_appearance', request, user_prompt)
 
 
 def _build_deep_dark_ominous_sound_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -623,4 +867,4 @@ def _build_deep_dark_ominous_sound_messages(request: LeafGenerationRequest) -> l
         "見えていないのに『ウォーデンや』とは言わない。"
         "会話っぽく16〜30文字くらいで一言だけ返す。"
     )
-    return _dialog_messages(user_prompt)
+    return _leaf_dialog('deep_dark_ominous_sound', request, user_prompt)

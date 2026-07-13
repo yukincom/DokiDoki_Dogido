@@ -10,6 +10,15 @@
       "dies_on_land": "bool",
       "undead": "bool",
       "provoked_only": "bool",
+      "dogido_tactics": {
+        "notes": "ドギドが戦況で守るべき性質（短い日本語）",
+        "forbidden_advice": [
+          "このMobの近くで言ってはいけない助言フレーズ断片"
+        ],
+        "safe_hints": [
+          "言ってよい短いヒント"
+        ]
+      },
       "poetic": {
         "visual_tags": [
           "見た目の短い語"
@@ -35,7 +44,8 @@
     "notes": [
       "neutral は普段は敵対しないが、条件次第で脅威になる Mob を置く。",
       "passive_mob_labels は neutral と passive をまとめて ambient 用に読む。",
-      "threat_mob_labels は hostile と neutral をまとめて戦闘用に読む。"
+      "threat_mob_labels は hostile と neutral をまとめて戦闘用に読む。",
+      "dogido_tactics は Mob 固有の notes / safe_hints / 追加 forbidden。静止助言 NG は敵対全般の共通規則（コード側）。"
     ]
   }
 }

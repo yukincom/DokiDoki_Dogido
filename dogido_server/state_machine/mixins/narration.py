@@ -86,6 +86,8 @@ class NarrationMixin:
         self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
         # モブ反応が優先。発句中の川柳はキャンセルし、静けさが戻ってから再発句する
         self.state.pending_haiku_after_preface = False
+        label = self._mob_label(target.type)
+        self.state.pending_dialogue_notes.append(f"{label}を見た")
         return line
 
     def _ambient_mob_fallback_candidates(self, event: GameEvent, mobs: list[PassiveMob]) -> list[str]:
@@ -382,24 +384,191 @@ class NarrationMixin:
         )
 
     def _render_player_chat_reply(self, event: GameEvent) -> str:
+        from dogido_server.llm.prompts import resolve_character_mode_from_state
+
         fallback = fallback_text("general", "chat", "reply")
-        return self._generate_leaf_text(
+        combat_active = bool(getattr(event.combat, "combat_active_hint", False)) or self.state.mode in {
+            "panic",
+            "suppressed_panic",
+        }
+        has_visual_threats = bool(event.visual_threats)
+        danger_score = event.world.danger_darkness_score
+        danger_darkness_high = danger_score is not None and float(danger_score) >= float(
+            getattr(self.settings, "darkness_alert_threshold", 0.72)
+        )
+        character_mode = resolve_character_mode_from_state(
+            self.state.mode,
+            combat_active=combat_active,
+            has_visual_threats=has_visual_threats,
+            danger_darkness_high=danger_darkness_high,
+        )
+        # inventory は重いので、所持品を聞かれたときだけ要約を渡す
+        inventory_summary = ""
+        held_item_label = ""
+        if self.player_input.asks_inventory:
+            inventory_summary = self._player_chat_inventory_summary(event)
+            held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
+        threat_summary = self._player_chat_threat_summary(event)
+        tactics = self._player_chat_mob_tactics(event)
+        nearby_types = list(tactics.get("nearby_hostile_types") or [])
+        if tactics.get("safe_fallback"):
+            fallback = str(tactics["safe_fallback"])
+        details = {
+            "player_name": self._player_call_name(event),
+            "user_text": (self.player_input.raw_text or "").strip()[:160],
+            "biome": self._biome_label(event.world.biome),
+            "structure_label": (
+                self._structure_label(self.state.current_structure)
+                if self.state.current_structure
+                else ""
+            ),
+            "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            "mode": self.state.mode,
+            "character_mode": character_mode,
+            "combat_active": combat_active,
+            "has_visual_threats": has_visual_threats,
+            "danger_darkness_high": danger_darkness_high,
+            "threat_summary": threat_summary,
+            "hearing_summary": self._player_chat_hearing_summary(event),
+            "asks_inventory": self.player_input.asks_inventory,
+            "inventory_summary": inventory_summary,
+            "held_item_label": held_item_label,
+            "nearby_hostile_types": nearby_types,
+            "mob_tactics_notes": list(tactics.get("notes") or []),
+            "forbidden_advice": list(tactics.get("forbidden_advice") or []),
+            "safe_hints": list(tactics.get("safe_hints") or []),
+            **self._player_chat_history_details(),
+        }
+        text = self._generate_leaf_text(
             kind="player_chat",
             fallback_text=fallback,
-            details={
-                "player_name": self._player_call_name(event),
-                "user_text": (self.player_input.raw_text or "").strip()[:160],
-                "biome": self._biome_label(event.world.biome),
-                "structure_label": (
-                    self._structure_label(self.state.current_structure)
-                    if self.state.current_structure
-                    else ""
-                ),
-                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
-                "mode": self.state.mode,
-            },
+            details=details,
             temperature=0.65,
         )
+        from dogido_server.llm.sanitize import contains_forbidden_mob_advice
+
+        if contains_forbidden_mob_advice(text, details):
+            return fallback
+        return text
+
+    def _player_chat_mob_tactics(self, event: GameEvent) -> dict[str, object]:
+        """周囲の敵対 Mob カタログから dogido_tactics を集約する。"""
+        from dogido_server.entry_catalog import collect_dogido_tactics_for_mobs
+
+        nearby_types = [threat.type for threat in event.visual_threats if threat.type]
+        tactics = collect_dogido_tactics_for_mobs(nearby_types)
+        safe_fallback = None
+        if event.visual_threats and (tactics.get("forbidden_advice") or tactics.get("safe_hints")):
+            nearest = min(
+                event.visual_threats,
+                key=lambda threat: threat.distance if threat.distance is not None else 999.0,
+            )
+            direction = self._direction_label(nearest)
+            label = self._hostile_label(nearest.type)
+            hints = tactics.get("safe_hints") or []
+            hint = str(hints[0]) if hints else "気いつけ"
+            # 禁止助言を含まない安全な短文
+            safe_fallback = f"{direction}に{label}や！{hint}や！"
+        return {
+            "nearby_hostile_types": nearby_types,
+            "notes": tactics.get("notes") or [],
+            "forbidden_advice": tactics.get("forbidden_advice") or [],
+            "safe_hints": tactics.get("safe_hints") or [],
+            "safe_fallback": safe_fallback,
+        }
+
+    def _player_chat_history_details(self) -> dict[str, str]:
+        """Session 側の DialogueContext があれば会話履歴・出来事を返す。"""
+        provider = getattr(self, "dialogue_context_provider", None)
+        if provider is None:
+            return {"conversation_history": "", "event_digest": ""}
+        try:
+            context = provider()
+        except Exception:
+            return {"conversation_history": "", "event_digest": ""}
+        if context is None:
+            return {"conversation_history": "", "event_digest": ""}
+        blocks = context.prompt_blocks()
+        return {
+            "conversation_history": str(blocks.get("conversation_history") or ""),
+            "event_digest": str(blocks.get("event_digest") or ""),
+        }
+
+    def _player_chat_threat_summary(self, event: GameEvent) -> str:
+        parts: list[str] = []
+        if event.visual_threats:
+            nearest = min(
+                event.visual_threats,
+                key=lambda threat: threat.distance if threat.distance is not None else 999.0,
+            )
+            direction = self._direction_label(nearest)
+            distance = f"{nearest.distance:.0f}マス" if nearest.distance is not None else "近く"
+            label = self._hostile_label(nearest.type)
+            parts.append(f"視認 {label} が{direction} {distance}")
+            if len(event.visual_threats) > 1:
+                parts.append(f"ほか{len(event.visual_threats) - 1}体")
+        elif event.auditory_threats:
+            audio = event.auditory_threats[0]
+            direction = self._direction_label(audio)
+            band = getattr(audio.distance_band, "value", audio.distance_band) or ""
+            label = audio.label if not audio.spoken_name_allowed else self._hostile_label(audio.label)
+            parts.append(f"敵っぽい音 {label} {direction} {band}".strip())
+        if event.combat.combat_active_hint:
+            parts.append("交戦中っぽい")
+        return "、".join(parts)
+
+    def _player_chat_hearing_summary(self, event: GameEvent) -> str:
+        """今フレームで adapter が拾っている「聞こえた音」の要約。捏造防止用。"""
+        from dogido_server.state_machine.constants import MOB_LABELS
+
+        parts: list[str] = []
+        for audio in event.auditory_threats[:3]:
+            direction = self._direction_label(audio)
+            band = getattr(audio.distance_band, "value", audio.distance_band) or ""
+            if audio.spoken_name_allowed and audio.label:
+                name = self._hostile_label(audio.label)
+            else:
+                name = "敵意っぽい気配"
+            parts.append(f"{name}の音 {direction} {band}".strip())
+        for sound in event.ambient_sounds[:4]:
+            # AmbientSound も direction.horizontal を持つので流用できる
+            direction = self._direction_label(sound)  # type: ignore[arg-type]
+            band = getattr(sound.distance_band, "value", sound.distance_band) or ""
+            key = str(sound.type or "").removeprefix("minecraft:")
+            name = str(MOB_LABELS.get(key) or self._hostile_label(key) or key or "なにか")
+            parts.append(f"{name}っぽい声 {direction} {band}".strip())
+        return "、".join(parts)
+
+    def _player_chat_inventory_summary(self, event: GameEvent, *, max_items: int = 18) -> str:
+        """所持品の短い要約。player_chat 専用。常時注入しない。"""
+        counted: list[tuple[int, str, str]] = []
+        for item_id, count in event.inventory.items():
+            try:
+                amount = int(count)
+            except (TypeError, ValueError):
+                continue
+            if amount <= 0:
+                continue
+            key = str(item_id).removeprefix("minecraft:")
+            label = self._item_label(key)
+            counted.append((amount, key, label))
+        if not counted:
+            return "（所持品データなし、または空）"
+        # 多い順、同数なら id 順。上位だけ渡してプロンプトを軽く保つ
+        counted.sort(key=lambda row: (-row[0], row[1]))
+        parts = [f"{label}×{amount}" for amount, _key, label in counted[:max_items]]
+        if len(counted) > max_items:
+            parts.append(f"ほか{len(counted) - max_items}種")
+        return "、".join(parts)
+
+    def _item_label(self, item_id: str | None) -> str:
+        if not item_id:
+            return ""
+        from dogido_server.state_machine.constants import BLOCK_LABELS, ITEM_LABELS
+
+        key = str(item_id).removeprefix("minecraft:")
+        # 松明などは block カタログ側に日本語がある
+        return str(ITEM_LABELS.get(key) or BLOCK_LABELS.get(key) or key)
 
     def _render_structure_entry_line(self, event: GameEvent, structure_key: str) -> str | None:
         fallback = structure_entry_fallback_text(structure_key)

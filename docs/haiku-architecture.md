@@ -88,3 +88,10 @@ VLM はまだ常時使わない。
 - Claude
 - Grok
 - Gemini
+
+## エージェント / オーケストレーション方針
+
+- 川柳・雑談の**保存はコード**（`.dogido_memory/` の JSONL）が正本
+- 汎用エージェント基盤（例: Hermes）は**使わない**。編集者エージェント一式は機能過剰
+- 将来、irony 抽出 → 一句生成 → fallback のような LLM ワークフローを整理するときは **LangChain / LangGraph** で必要なグラフだけ載せる想定
+- panic / cue / 状態遷移は引き続きコード側（状態機械 + py_trees）が担当し、LangGraph に移さない

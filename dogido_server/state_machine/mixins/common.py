@@ -437,11 +437,24 @@ class CommonMixin:
             and distance <= self.settings.hostile_query_distance
         )
 
-    def _player_input_priority_active(self, now: datetime) -> bool:
+    def _player_input_priority_active(self, now: datetime, *, purpose: str = "default") -> bool:
+        """話しかけ後の自発発話ミュート。
+
+        purpose:
+          - default: 川柳・環境雑談など
+          - ambient: 友好/中立モブ反応（より短い mute）
+        """
         if self.player_input.breaks_silence:
+            # 今このイベントが話しかけそのものなら、同 tick の自発発話は抑える
             return True
         recent_ms = self._recent_ms(now, self.state.last_player_input_at)
-        return recent_ms is not None and recent_ms < self.settings.player_input_priority_cooldown_ms
+        if recent_ms is None:
+            return False
+        if purpose == "ambient":
+            cooldown = self.settings.player_input_ambient_mute_ms
+        else:
+            cooldown = self.settings.player_input_priority_cooldown_ms
+        return recent_ms < cooldown
 
     def _weather_transition(self, event: GameEvent) -> tuple[str, str] | None:
         current = self._weather_value(event.world.weather)
@@ -630,7 +643,7 @@ class CommonMixin:
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
         if not event.passive_mobs:
             return False
-        if self._player_input_priority_active(now):
+        if self._player_input_priority_active(now, purpose="ambient"):
             return False
         if event.visual_threats or event.auditory_threats:
             return False

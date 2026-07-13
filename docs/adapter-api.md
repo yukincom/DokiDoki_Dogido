@@ -346,15 +346,14 @@ adapter 側は以下を実装する。
 
 単送信または短時間 debounce。
 
-- `danger_darkness_changed`
-- `resource_option_found`
-- `time_phase_changed`
+- （レガシー）`danger_darkness_changed` / `resource_option_found` / `time_phase_changed`
+  - 現行 adapter はこれらを主経路にせず、`status_snapshot` 同梱フィールドで代替する
 
 ### 低優先度
 
 batch 可。
 
-- `status_snapshot`
+- `status_snapshot`（暗所スコア・inventory の本流もここ）
 - `ambient_mob_detected`
 
 ## 18. `status_snapshot`
@@ -364,8 +363,13 @@ batch 可。
 ### 用途
 
 - セッション生存中の平常状態更新
-- inventory や暗所判定の背景同期
+- inventory や**暗所判定の本流入力**（`danger_darkness_score` 等）
 - UI やデバッグ用途
+
+### 暗所について
+
+初期は `danger_darkness_changed` 専用イベント案もあったが、挙動が粗く、server 側で多段リアクション（`dark_push` / shelter 等）に寄せた。  
+暗所は snapshot の連続スコアを正とする。詳細は [現行仕様 §6](current-spec.md)。
 
 ### 推奨頻度
 
@@ -398,8 +402,8 @@ batch 可。
 - state machine 更新
 - 発話優先度判定
 - LLM 呼び出し
-- TTS
-- M5Stack Push
+- TTS / cue 再生（現行は PC 音声）
+- （将来）M5Stack Push への再生命令
 
 ## 20. 実装優先度
 

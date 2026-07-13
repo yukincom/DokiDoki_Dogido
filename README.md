@@ -31,6 +31,7 @@ Minecraftの世界が、そのまま表現の材料になります。
 - [状態機械](docs/state-machine.md)
 - [連携構成](docs/integration-architecture.md)
 - [挙動仕様](docs/behavior-spec.md)
+- [対話設計](docs/dialogue-design.md)
 - [川柳アーキテクチャ](docs/haiku-architecture.md)
 - [技術課題](docs/technical-risks.md)
 
@@ -47,17 +48,19 @@ Minecraftの世界が、そのまま表現の材料になります。
 9. [状態機械](docs/state-machine.md)
 10. [連携構成](docs/integration-architecture.md)
 11. [挙動仕様](docs/behavior-spec.md)
-12. [川柳アーキテクチャ](docs/haiku-architecture.md)
-13. [記憶アーキテクチャ](docs/memory-architecture.md)
-14. [技術課題](docs/technical-risks.md)
+12. [対話設計](docs/dialogue-design.md)
+13. [川柳アーキテクチャ](docs/haiku-architecture.md)
+14. [記憶アーキテクチャ](docs/memory-architecture.md)
+15. [技術課題](docs/technical-risks.md)
 
 ## 現時点の方針
 
 - Minecraft 側はイベント取得に専念する
 - AI のキャラクター性は LLM に任せきらず、状態管理をコード側で持つ
 - 音声基盤より先に、イベント入力と優先制御の仕様を固める
-- 川柳の「保存はコードで」「学習・整理・再利用はヘルメスエージェント」
-- エージェントは「川柳の先生」ではなく「編集者・司書」
+- 川柳の**保存はコード**（JSONL）で行い、LLM ワークフローの将来整理は **LangChain / LangGraph** を想定する
+- 汎用エージェント基盤（例: Hermes）は使わない。機能過剰になりやすいため、必要なグラフだけ載せる
+- **M5Stack 出力**と **LINE / Discord などの外部メッセージ連携**は、対話設計が固まるまで後回し（現状は PC 音声）
 
 ## 実装状況
 

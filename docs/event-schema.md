@@ -160,7 +160,7 @@
 
 ### `name`
 
-初期実装では以下を採用する。
+スキーマ上は以下を受け付ける。
 
 - `threat_detected`
 - `threat_approaching`
@@ -172,6 +172,24 @@
 - `time_phase_changed`
 - `combat_ended`
 - `status_snapshot`
+
+#### 本番 adapter の主経路（2026-07 時点）
+
+Fabric adapter が実際に送る中心は次のとおり。
+
+- `status_snapshot`
+- `threat_approaching`
+- `hostile_audio_detected`
+- `ambient_mob_detected`
+- `player_died`
+- `combat_ended`
+
+#### レガシー / テスト用（専用イベントを主経路にしない）
+
+- `danger_darkness_changed` … 暗所は `status_snapshot` 上の `danger_darkness_score` 等と server 内の多段状態（`dark_push` / shelter 等）で扱う。経緯は [現行仕様 §6](current-spec.md)
+- `threat_detected` … 接近は `threat_approaching`、平常同期は snapshot で足りることが多い
+- `resource_option_found` … `nearby_resources` 同梱で代替
+- `time_phase_changed` … `world.time_phase` を snapshot 等で継続更新
 
 ## 9. `player` オブジェクト
 
@@ -437,18 +455,23 @@
 - `world`
 - `auditory_threats`
 
-### `danger_darkness_changed`
+### `danger_darkness_changed`（レガシー / テスト用）
 
 - `player`
 - `world`
 - `inventory`
 - 任意で `nearby_resources`
 
-### `resource_option_found`
+> 現行の本番経路では、暗所判定の入力は主に `status_snapshot`（および他イベント同梱の `world`）のスコア群。  
+> 専用イベント発火に依存した反応設計はしない。
+
+### `resource_option_found`（レガシー寄り）
 
 - `player`
 - `inventory`
 - `nearby_resources`
+
+> 現行は `status_snapshot` 等への `nearby_resources` 同梱で代替する。
 
 ### `ambient_mob_detected`
 
@@ -462,10 +485,12 @@
 - `world`
 - `meta.death_cause`
 
-### `time_phase_changed`
+### `time_phase_changed`（レガシー寄り）
 
 - `player`
 - `world.time_phase`
+
+> 現行は snapshot 等での `world.time_phase` 継続更新が本流。
 
 ### `combat_ended`
 
@@ -591,6 +616,9 @@
 
 ## 22. サンプル 3: 暗所危険
 
+本番 adapter では `status_snapshot` に暗所スコアを載せる形が本流。  
+以下は互換例（`danger_darkness_changed` も受理するが主経路ではない）。
+
 ```json
 {
   "schema_version": "2026-05-24",
@@ -599,10 +627,10 @@
   "observed_at": "2026-05-24T14:35:40.000+09:00",
   "sequence": 1901,
   "event": {
-    "name": "danger_darkness_changed",
-    "source_kind": "inferred",
-    "priority_hint": "normal",
-    "certainty": "medium"
+    "name": "status_snapshot",
+    "source_kind": "system",
+    "priority_hint": "background",
+    "certainty": "high"
   },
   "player": {
     "name": "main_player",
