@@ -32,6 +32,8 @@ Minecraftの世界が、そのまま表現の材料になります。
 - [挙動仕様](docs/behavior-spec.md)
 - [対話設計](docs/dialogue-design.md)
 - [川柳アーキテクチャ](docs/haiku-architecture.md)
+- [Senryu-RAG 実装プラン](docs/senryu-rag-plan.md)
+- [RAG 初期メモ](docs/rag.md)
 - [技術課題](docs/technical-risks.md)
 
 ## 読む順番
@@ -49,8 +51,9 @@ Minecraftの世界が、そのまま表現の材料になります。
 11. [挙動仕様](docs/behavior-spec.md)
 12. [対話設計](docs/dialogue-design.md)
 13. [川柳アーキテクチャ](docs/haiku-architecture.md)
-14. [記憶アーキテクチャ](docs/memory-architecture.md)
-15. [技術課題](docs/technical-risks.md)
+14. [Senryu-RAG 実装プラン](docs/senryu-rag-plan.md)
+15. [記憶アーキテクチャ](docs/memory-architecture.md)
+16. [技術課題](docs/technical-risks.md)
 
 ## 現時点の方針
 
