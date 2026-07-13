@@ -301,7 +301,7 @@ def all_mob_entries() -> dict[str, dict[str, Any]]:
 def mob_entry(mob_id: str | None) -> dict[str, Any] | None:
     if not mob_id:
         return None
-    normalized = str(mob_id).strip().lower()
+    normalized = str(mob_id).strip().lower().removeprefix("minecraft:")
     if not normalized:
         return None
     entry = all_mob_entries().get(normalized)
@@ -340,6 +340,50 @@ def mob_poetic_tags(mob_id: str | None) -> tuple[str, ...]:
         seen.add(tag)
         deduped.append(tag)
     return tuple(deduped)
+
+
+def mob_poetic_line(mob_id: str | None, *, max_tags: int = 4) -> str | None:
+    """主役用の1行詩語。role を軸に代表タグだけ添える（フラットタグ列より誰の語か分かる）。"""
+    entry = mob_entry(mob_id)
+    if entry is None:
+        return None
+    poetic = entry.get("poetic")
+    if not isinstance(poetic, dict):
+        return None
+    label = str(entry.get("label") or mob_id or "").strip()
+    if not label:
+        return None
+    role = str(poetic.get("role") or "").strip()
+    tags: list[str] = []
+    seen: set[str] = set()
+    for key in (
+        "visual_tags",
+        "sound_tags",
+        "motion_tags",
+        "comic_tags",
+        "scene_tags",
+        "reaction_tags",
+    ):
+        values = poetic.get(key)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            text = str(value or "").strip()
+            if not text or text in seen or text == role:
+                continue
+            seen.add(text)
+            tags.append(text)
+            if len(tags) >= max_tags:
+                break
+        if len(tags) >= max_tags:
+            break
+    if role and tags:
+        return f"{label}: {role}（{'、'.join(tags)}）"
+    if role:
+        return f"{label}: {role}"
+    if tags:
+        return f"{label}: {'、'.join(tags)}"
+    return None
 
 
 def mob_dogido_tactics(mob_id: str | None) -> dict[str, Any] | None:

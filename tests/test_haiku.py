@@ -20,6 +20,7 @@ from dogido_server.models import (
     Weather,
     WorldState,
 )
+from dogido_server.entry_catalog import mob_poetic_line, mob_poetic_tags
 from dogido_server.llm.haiku_prompts import build_haiku_irony_messages, build_haiku_messages
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.state_machine.haiku_context import SceneContext
@@ -813,6 +814,38 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertIn("雪のタイガ", haiku_user)
         self.assertIn("カタログ観察", irony_user)
         self.assertIn("雪のタイガ", irony_user)
+
+    def test_poetic_lines_for_passive_mobs_and_dedupe_tags(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="plains",
+            passive_mobs=[
+                PassiveMob(type="cow", distance=3.0),
+                PassiveMob(type="sheep", distance=5.0),
+                PassiveMob(type="minecraft:chicken", distance=6.0),  # prefix 付きでも解決できること
+            ],
+        )
+        context = self.machine._haiku_context(event)
+
+        self.assertEqual(len(context.poetic_lines), 2)
+        self.assertTrue(any(line.startswith("ウシ:") for line in context.poetic_lines))
+        self.assertTrue(any(line.startswith("ヒツジ:") for line in context.poetic_lines))
+        cow_tags = set(mob_poetic_tags("cow"))
+        # poetic_lines 済み mob のタグは haiku_tags に再展開しない
+        self.assertFalse(cow_tags & set(context.haiku_tags))
+
+        details = context.prompt_details()
+        prompt = build_haiku_messages(details)[1]["content"]
+        self.assertIn("詩語（主役Mob）", prompt)
+        self.assertIn("ウシ:", prompt)
+        self.assertIn("詩語ヒント（補助）", prompt)
+
+    def test_mob_poetic_line_format(self) -> None:
+        line = mob_poetic_line("cow")
+        self.assertIsNotNone(line)
+        assert line is not None
+        self.assertTrue(line.startswith("ウシ:"))
+        self.assertIn("（", line)
 
 
 if __name__ == "__main__":

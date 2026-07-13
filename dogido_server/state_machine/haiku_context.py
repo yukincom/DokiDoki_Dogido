@@ -103,6 +103,7 @@ class HaikuContext:
     feature_candidates: tuple[HaikuFeature, ...]
     candidate_tensions: tuple[str, ...]
     catalog_notes: tuple[str, ...] = ()
+    poetic_lines: tuple[str, ...] = ()
 
     def feature_candidate_labels(self) -> list[str]:
         return [feature.prompt_label() for feature in self.feature_candidates]
@@ -126,6 +127,7 @@ class HaikuContext:
             "nearby_blocks": list(self.nearby_blocks),
             "passive_mobs": list(self.passive_mobs),
             "haiku_tags": list(self.haiku_tags),
+            "poetic_lines": list(self.poetic_lines),
             "feature_candidates": self.feature_candidate_labels(),
             "candidate_tensions": list(self.candidate_tensions),
             "catalog_notes": list(self.catalog_notes),
