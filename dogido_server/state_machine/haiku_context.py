@@ -102,6 +102,7 @@ class HaikuContext:
     haiku_tags: tuple[str, ...]
     feature_candidates: tuple[HaikuFeature, ...]
     candidate_tensions: tuple[str, ...]
+    catalog_notes: tuple[str, ...] = ()
 
     def feature_candidate_labels(self) -> list[str]:
         return [feature.prompt_label() for feature in self.feature_candidates]
@@ -127,6 +128,7 @@ class HaikuContext:
             "haiku_tags": list(self.haiku_tags),
             "feature_candidates": self.feature_candidate_labels(),
             "candidate_tensions": list(self.candidate_tensions),
+            "catalog_notes": list(self.catalog_notes),
         }
 
     def irony_details(self) -> dict[str, object]:

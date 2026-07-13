@@ -367,6 +367,7 @@ class HaikuMixin:
             haiku_tags=tuple(self._haiku_tags(event, feature_candidates)),
             feature_candidates=feature_candidates,
             candidate_tensions=tuple(self._haiku_candidate_tensions(event, held_item, passive_mobs, nearby_blocks)),
+            catalog_notes=tuple(self._haiku_catalog_notes(event)),
         )
 
     def _haiku_feature_candidates(
@@ -539,6 +540,60 @@ class HaikuMixin:
             if len(natural_values) + len(other_values) >= 6:
                 break
         return natural_values + other_values
+
+    def _haiku_catalog_notes(self, event: GameEvent) -> list[str]:
+        """いまの ID から取れるカタログ note（biome / structure / nearby block）。
+
+        entry_catalog 直引き。詩語ヒント（poetic）とは別枠。ベクトル RAG ではない。
+        """
+        notes: list[str] = []
+        seen: set[str] = set()
+
+        def append_note(label: str, note: object, *, max_len: int = 100) -> None:
+            text = str(note or "").strip()
+            if not text:
+                return
+            name = str(label or "").strip()
+            if not name:
+                return
+            if len(text) > max_len:
+                text = text[: max_len - 1].rstrip() + "…"
+            line = f"{name}: {text}"
+            if line in seen:
+                return
+            seen.add(line)
+            notes.append(line)
+
+        biome_entry = self._biome_entry(event.world.biome) or {}
+        append_note(self._biome_label(event.world.biome), biome_entry.get("note"))
+
+        structure_id = event.world.structure or getattr(self.state, "current_structure", None)
+        if structure_id:
+            structure_entry = self._structure_entry(structure_id) or {}
+            structure_label = (
+                str(structure_entry.get("label") or "").strip()
+                or self._structure_label(structure_id)
+            )
+            append_note(structure_label, structure_entry.get("note"))
+
+        block_note_count = 0
+        for resource in sorted(event.nearby_resources, key=lambda candidate: candidate.distance or inf):
+            if block_note_count >= 3:
+                break
+            entry = block_entry(resource.name) or {}
+            note = entry.get("note")
+            if not str(note or "").strip():
+                continue
+            label = (
+                str(entry.get("japanese") or entry.get("label") or "").strip()
+                or self._block_label(resource.name)
+            )
+            before = len(notes)
+            append_note(label, note)
+            if len(notes) > before:
+                block_note_count += 1
+
+        return notes
 
     def _haiku_passive_mob_values(self, event: GameEvent) -> list[str]:
         values: list[str] = []
