@@ -499,8 +499,12 @@ class DogidoService:
         assert self.memory is not None
         query = getattr(player_input, "haiku_recall_query", None)
         biome_hint = getattr(player_input, "haiku_recall_biome_hint", None)
+        place_label = None
+        biome_ids: tuple[str, ...] = ()
         if query is not None:
             biome = getattr(query, "biome_id", None) or biome_hint
+            biome_ids = tuple(getattr(query, "biome_ids", ()) or ())
+            place_label = getattr(query, "place_label", None)
             since = getattr(query, "since", None)
             until = getattr(query, "until", None)
             time_label = getattr(query, "time_label", None)
@@ -510,26 +514,28 @@ class DogidoService:
 
         # 場所も期間も無い「いつ頃の句」などは全件から新しい順（現在地に縛らない）
         hits = self.memory.search_haiku_memory(
-            biome=biome,
+            biome=biome if not biome_ids else None,
+            biome_ids=biome_ids or None,
             since=since,
             until=until,
             limit=3,
         )
-        if not hits and (biome or since or until):
+        place_speech = place_label or biome
+        if not hits and (biome or biome_ids or since or until):
             # 条件を緩めて再検索
             hits = self.memory.search_haiku_memory(limit=3)
-            if hits and (biome or time_label):
+            if hits and (place_speech or time_label):
                 soft = "ぴったりは無いけど、覚えとる句やと…"
             else:
                 soft = "覚えとる句やと…"
         else:
             soft = "覚えとる句やと…"
-            if time_label and biome:
-                soft = f"{time_label}の{biome}あたりで覚えとる句やと…"
+            if time_label and place_speech:
+                soft = f"{time_label}の{place_speech}あたりで覚えとる句やと…"
             elif time_label:
                 soft = f"{time_label}の句やと…"
-            elif biome:
-                soft = f"{biome}で覚えとる句やと…"
+            elif place_speech:
+                soft = f"{place_speech}で覚えとる句やと…"
 
         if not hits:
             return [AudioAction(layer="speech", interrupt=False, text="それに合う句、まだ覚えとらへんで。")]

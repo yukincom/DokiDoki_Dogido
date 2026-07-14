@@ -17,6 +17,9 @@ class HaikuRecallQuery:
     """明示的な句の想起条件（壁時計・場所）。プロンプト常駐用ではない。"""
 
     biome_id: str | None = None
+    biome_ids: tuple[str, ...] = ()  # グループ展開後の id 群
+    group_ids: tuple[str, ...] = ()
+    place_label: str | None = None
     since: datetime | None = None
     until: datetime | None = None
     time_label: str | None = None

@@ -41,12 +41,22 @@ def route_player_input(raw_text: str | None) -> PlayerInputContext:
             wrong_reading=wrong,
         )
     recall = asks_haiku_recall(normalized_text)
-    biome_hint = haiku_recall_biome_hint(normalized_text) if recall else None
+    biome_hint = None
     recall_query = None
     if recall:
+        from dogido_server.entry_catalog import resolve_biome_place_from_text
+
+        place = resolve_biome_place_from_text(normalized_text)
+        biome_hint = str(place["biome_id"]) if place.get("biome_id") else None
+        biome_ids = tuple(sorted(str(x) for x in (place.get("biome_ids") or ())))
+        group_ids = tuple(sorted(str(x) for x in (place.get("group_ids") or ())))
+        place_label = str(place["place_label"]) if place.get("place_label") else None
         since, until, time_label = parse_haiku_time_range(normalized_text)
         recall_query = HaikuRecallQuery(
             biome_id=biome_hint,
+            biome_ids=biome_ids,
+            group_ids=group_ids,
+            place_label=place_label,
             since=since,
             until=until,
             time_label=time_label,

@@ -190,6 +190,7 @@ class MemoryStore:
         self,
         *,
         biome: str | None = None,
+        biome_ids: set[str] | frozenset[str] | list[str] | tuple[str, ...] | None = None,
         query_text: str | None = None,
         since: datetime | None = None,
         until: datetime | None = None,
@@ -198,8 +199,20 @@ class MemoryStore:
         """明示的な「あの句」想起用。場所・壁時計の期間で長期句を探す。
 
         ゲーム内時刻は見ない。`created_at`（保存時の実時刻）だけを使う。
+        biome_ids はカタロググループ展開後の集合（寒いところ＝cold+snowy など）。
         """
         biome_key = normalize_minecraft_id(biome) if biome else None
+        allowed_biomes: set[str] | None = None
+        if biome_ids:
+            allowed_biomes = {
+                normalized
+                for raw in biome_ids
+                if (normalized := normalize_minecraft_id(str(raw) if raw is not None else None))
+            }
+            if not allowed_biomes:
+                allowed_biomes = None
+        if biome_key:
+            allowed_biomes = {biome_key} if allowed_biomes is None else (allowed_biomes | {biome_key})
         query = (query_text or "").strip()
         hits: list[dict[str, Any]] = []
         seen_texts: set[str] = set()
@@ -237,8 +250,9 @@ class MemoryStore:
             if not _in_time_range(_parse_created(created_at)):
                 return False
             row_biome = normalize_minecraft_id(str(world.get("biome") or "") or None)
-            if biome_key and row_biome != biome_key:
-                return False
+            if allowed_biomes is not None:
+                if not row_biome or row_biome not in allowed_biomes:
+                    return False
             if not query:
                 return True
             blob = " ".join(str(part) for part in texts if part)

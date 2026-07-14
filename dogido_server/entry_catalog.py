@@ -247,6 +247,121 @@ def biome_labels() -> dict[str, str]:
     }
 
 
+def biome_group_id(biome_id: str | None) -> str | None:
+    if not biome_id:
+        return None
+    normalized = str(biome_id).strip().lower().removeprefix("minecraft:")
+    entry = biome_entries().get(normalized)
+    if entry is None:
+        return None
+    group = entry.get("group_id")
+    return str(group) if group else None
+
+
+def biomes_in_groups(group_ids: set[str] | frozenset[str] | list[str] | tuple[str, ...]) -> frozenset[str]:
+    wanted = {str(gid).strip().lower() for gid in group_ids if str(gid).strip()}
+    if not wanted:
+        return frozenset()
+    return frozenset(
+        biome_id
+        for biome_id, entry in biome_entries().items()
+        if str(entry.get("group_id") or "").lower() in wanted
+    )
+
+
+def biome_label_to_id_map() -> dict[str, str]:
+    """表示名・読み → biome_id。長いキー優先でマッチするため呼び出し側で sort する。"""
+    from dogido_server.catalog_readings import resolve_reading
+
+    mapping: dict[str, str] = {}
+    for biome_id, entry in biome_entries().items():
+        label = str(entry.get("label") or entry.get("japanese") or "").strip()
+        if label:
+            mapping[label] = biome_id
+        reading = resolve_reading(label, str(entry.get("reading") or "").strip() or None)
+        if reading:
+            mapping[reading] = biome_id
+        # id 自体もヒントに（snowy_taiga など）
+        mapping[biome_id] = biome_id
+        mapping[biome_id.replace("_", "")] = biome_id
+    return mapping
+
+
+# ぼんやり場所イメージ → カタログ group_id（複数可）
+# catalog groups: snowy, cold, temperate, dry, aquatic, cave, neutral_other, nether, end
+BIOME_PLACE_GROUP_HINTS: tuple[tuple[tuple[str, ...], tuple[str, ...], str], ...] = (
+    # (trigger phrases, group_ids, speech label)
+    (("氷雪", "雪のとこ", "雪のところ", "雪国"), ("snowy",), "氷雪バイオーム"),
+    (("冷帯", "寒いとこ", "寒いところ", "寒い場所", "寒い", "冷たいとこ", "冷たい"), ("cold", "snowy"), "寒いところ"),
+    (("温帯", "暖地", "暖かいとこ", "あたたかいとこ", "温暖"), ("temperate",), "温帯"),
+    (("乾燥", "乾燥帯", "乾いたとこ", "砂漠っぽ"), ("dry",), "乾燥帯"),
+    (("水性", "海の", "海辺", "水辺", "海で", "海に"), ("aquatic",), "水辺"),
+    (("洞窟", "地下のバイオーム", "洞窟バイオーム"), ("cave",), "洞窟"),
+    (("ネザー", "ねざー", "地獄"), ("nether",), "ネザー"),
+    (("エンド", "えんど", "ジ・エンド", "ジエンド"), ("end",), "エンド"),
+)
+
+
+def _fold_kana_for_match(text: str) -> str:
+    return "".join(
+        chr(ord(ch) - 0x60) if "ァ" <= ch <= "ヶ" else ch
+        for ch in text
+    )
+
+
+def resolve_biome_place_from_text(text: str) -> dict[str, object]:
+    """発話から具体バイオーム or グループを解決する。
+
+    戻り値:
+      biome_id: 具体 id or None
+      group_ids: frozenset[str]
+      biome_ids: 展開後の id 集合（グループ指定時）
+      place_label: 返事用ラベル
+    """
+    raw = (text or "").strip()
+    folded = _fold_kana_for_match(raw)
+    if not folded and not raw:
+        return {
+            "biome_id": None,
+            "group_ids": frozenset(),
+            "biome_ids": frozenset(),
+            "place_label": None,
+        }
+
+    # 1) 具体名（カタログ全ラベル・読み）。長い順
+    label_map = biome_label_to_id_map()
+    for hint, biome_id in sorted(label_map.items(), key=lambda item: -len(item[0])):
+        if len(hint) < 2:
+            continue
+        if hint in raw or _fold_kana_for_match(hint) in folded:
+            label = biome_labels().get(biome_id, biome_id)
+            return {
+                "biome_id": biome_id,
+                "group_ids": frozenset(),
+                "biome_ids": frozenset({biome_id}),
+                "place_label": label,
+            }
+
+    # 2) ぼんやりグループ
+    for phrases, group_ids, place_label in BIOME_PLACE_GROUP_HINTS:
+        for phrase in phrases:
+            if phrase in raw or _fold_kana_for_match(phrase) in folded:
+                expanded = biomes_in_groups(group_ids)
+                return {
+                    "biome_id": None,
+                    "group_ids": frozenset(group_ids),
+                    "biome_ids": expanded,
+                    "place_label": place_label,
+                }
+
+    return {
+        "biome_id": None,
+        "group_ids": frozenset(),
+        "biome_ids": frozenset(),
+        "place_label": None,
+    }
+
+
 def structure_entries() -> dict[str, dict[str, Any]]:
     catalog = load_entry_catalog("structure")
     groups = catalog.get("groups")

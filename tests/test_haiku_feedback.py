@@ -307,3 +307,71 @@ class HaikuTimeRangeTest(unittest.TestCase):
         assert ctx.haiku_recall_query is not None
         self.assertEqual(ctx.haiku_recall_query.time_label, "今月")
         self.assertEqual(ctx.haiku_recall_query.biome_id, "meadow")
+
+
+class BiomeGroupRecallTest(unittest.TestCase):
+    def test_catalog_groups_resolve_vague_places(self) -> None:
+        from dogido_server.entry_catalog import biomes_in_groups, resolve_biome_place_from_text
+
+        cold = resolve_biome_place_from_text("寒いところの句")
+        self.assertIsNone(cold["biome_id"])
+        self.assertEqual(set(cold["group_ids"]), {"cold", "snowy"})
+        self.assertIn("snowy_taiga", cold["biome_ids"])
+        self.assertIn("taiga", cold["biome_ids"])
+        self.assertEqual(cold["place_label"], "寒いところ")
+
+        dry = resolve_biome_place_from_text("乾燥帯")
+        self.assertEqual(set(dry["group_ids"]), {"dry"})
+        self.assertIn("desert", dry["biome_ids"])
+
+        concrete = resolve_biome_place_from_text("雪のタイガで詠んだ句")
+        self.assertEqual(concrete["biome_id"], "snowy_taiga")
+        self.assertEqual(concrete["biome_ids"], frozenset({"snowy_taiga"}))
+
+        self.assertEqual(len(biomes_in_groups(["nether"])), 5)
+
+    def test_search_by_group_expanded_biome_ids(self) -> None:
+        with TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp))
+            store.save_agent_haiku(
+                HaikuEmission(
+                    created_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+                    text="さばくかぜ\nかわききった\nすなのうみ",
+                    preface="ここで一句。",
+                    interpretation=None,
+                    biome="desert",
+                    structure=None,
+                    time_phase="day",
+                    dimension="minecraft:overworld",
+                    event_sequence=1,
+                )
+            )
+            store.save_agent_haiku(
+                HaikuEmission(
+                    created_at=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+                    text="ゆきのやま\nしずかすぎて\nこごえそう",
+                    preface="ここで一句。",
+                    interpretation=None,
+                    biome="snowy_taiga",
+                    structure=None,
+                    time_phase="day",
+                    dimension="minecraft:overworld",
+                    event_sequence=2,
+                )
+            )
+            from dogido_server.entry_catalog import biomes_in_groups
+
+            cold_ids = biomes_in_groups(["cold", "snowy"])
+            hits = store.search_haiku_memory(biome_ids=cold_ids, limit=5)
+            texts = [h["original_text"] for h in hits]
+            self.assertIn("ゆきのやま\nしずかすぎて\nこごえそう", texts)
+            self.assertNotIn("さばくかぜ\nかわききった\nすなのうみ", texts)
+
+    def test_route_vague_place_and_time(self) -> None:
+        ctx = route_player_input("ここひと月の寒いところの句思い出して")
+        self.assertTrue(ctx.asks_haiku_recall)
+        assert ctx.haiku_recall_query is not None
+        self.assertEqual(ctx.haiku_recall_query.place_label, "寒いところ")
+        self.assertIn("snowy", ctx.haiku_recall_query.group_ids)
+        self.assertEqual(ctx.haiku_recall_query.time_label, "ここひと月")
+        self.assertGreater(len(ctx.haiku_recall_query.biome_ids), 5)

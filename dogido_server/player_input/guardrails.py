@@ -326,24 +326,40 @@ def asks_haiku_recall(normalized_text: str) -> bool:
             "一ヶ月",
             "1ヶ月",
             "ヶ月",
+            "寒い",
+            "暖かい",
+            "あたたかい",
+            "乾燥",
+            "洞窟",
+            "ネザー",
+            "エンド",
+            "海",
+            "水辺",
+            "氷雪",
+            "冷帯",
+            "温帯",
+            "暖地",
         )
     )
     # 「7月の句」「草地の句」など、句＋場所/時の言及
-    if has_haiku and (
-        any(hint in normalized_text or _fold_kana(hint) in normalized_text for hint in BIOME_HINT_TO_ID)
-        or bool(__import__("re").search(r"\d{1,2}\s*月", normalized_text))
-    ):
-        return True
+    if has_haiku:
+        from dogido_server.entry_catalog import resolve_biome_place_from_text
+
+        place = resolve_biome_place_from_text(normalized_text)
+        if place.get("biome_ids") or place.get("biome_id"):
+            return True
+        if bool(__import__("re").search(r"\d{1,2}\s*月", normalized_text)):
+            return True
     return has_haiku and has_recall
 
 
 def haiku_recall_biome_hint(normalized_text: str) -> str | None:
-    normalized_text = _fold_kana(normalized_text)
-    # 長いキーから当てる（雪のタイガ > タイガ など）
-    for hint, biome_id in sorted(BIOME_HINT_TO_ID.items(), key=lambda item: -len(item[0])):
-        if _fold_kana(hint) in normalized_text or hint in normalized_text:
-            return biome_id
-    return None
+    """後方互換: 具体バイオーム id だけ返す。グループは resolve_biome_place_from_text を使う。"""
+    from dogido_server.entry_catalog import resolve_biome_place_from_text
+
+    place = resolve_biome_place_from_text(normalized_text)
+    biome_id = place.get("biome_id")
+    return str(biome_id) if biome_id else None
 
 
 def parse_haiku_time_range(
