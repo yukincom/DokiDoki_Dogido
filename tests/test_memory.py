@@ -125,7 +125,13 @@ class MemoryServiceTest(unittest.TestCase):
             )
 
             self.assertTrue(any(action.text and "ここで一句" in action.text for action in emitted.actions))
-            self.assertTrue(any(action.text == "今の句、保存したで。" for action in saved.actions))
+            # 発句時に自動で長期保存済みなので、明示保存は「もうある」になる
+            self.assertTrue(
+                any(
+                    action.text in {"今の句、保存したで。", "今の句はもう保存してあるで。"}
+                    for action in saved.actions
+                )
+            )
 
             entries = service.list_haiku_memory()
             self.assertEqual(len(entries), 1)

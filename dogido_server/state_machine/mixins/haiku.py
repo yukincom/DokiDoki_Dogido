@@ -351,7 +351,7 @@ class HaikuMixin:
         return HaikuContext(
             player_name=self._player_call_name(event),
             biome_id=self._normalized_biome(biome) or "unknown",
-            biome_label=self._biome_label(biome),
+            biome_label=self._biome_label_with_reading(biome),
             biome_group=self._biome_group_label(biome) or "不明",
             biome_traits=tuple(self._haiku_biome_traits(biome)),
             time_phase=time_phase,
@@ -403,7 +403,7 @@ class HaikuMixin:
                 tags=frozenset({"異世界", "ワープ", "光", "不思議"}),
             ))
         candidates.extend([
-            HaikuFeature("バイオーム", "biome", self._biome_label(event.world.biome)),
+            HaikuFeature("バイオーム", "biome", self._biome_label_with_reading(event.world.biome)),
             HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
             HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
             HaikuFeature("天気", "weather", WEATHER_LABELS.get(weather, "不明")),
@@ -573,7 +573,7 @@ class HaikuMixin:
             notes.append(line)
 
         biome_entry = self._biome_entry(event.world.biome) or {}
-        append_note(self._biome_label(event.world.biome), biome_entry.get("note"))
+        append_note(self._biome_label_with_reading(event.world.biome), biome_entry.get("note"))
 
         structure_id = event.world.structure or getattr(self.state, "current_structure", None)
         if structure_id:
@@ -788,9 +788,10 @@ class HaikuMixin:
         return score
 
     def _haiku_constraint_details(self, event: GameEvent, scene: SceneContext) -> dict[str, object] | None:
+        from dogido_server.catalog_readings import haiku_reading_terms
+        from dogido_server.entry_catalog import biome_reading
+
         families = self._haiku_selected_noun_families(event, scene)
-        if not families:
-            return None
         allowed_terms: list[str] = []
         forbidden_terms: list[str] = []
         seen_allowed: set[str] = set()
@@ -804,6 +805,22 @@ class HaikuMixin:
                 if term and term not in seen_forbidden:
                     seen_forbidden.add(term)
                     forbidden_terms.append(term)
+
+        biome_label = self._biome_label(event.world.biome)
+        catalog_reading = biome_reading(event.world.biome)
+        reading_allowed, reading_forbidden = haiku_reading_terms(
+            [biome_label],
+            catalog_readings={biome_label: catalog_reading} if catalog_reading else None,
+        )
+        for term in reading_allowed:
+            if term and term not in seen_allowed:
+                seen_allowed.add(term)
+                allowed_terms.append(term)
+        for term in reading_forbidden:
+            if term and term not in seen_forbidden:
+                seen_forbidden.add(term)
+                forbidden_terms.append(term)
+
         if not allowed_terms and not forbidden_terms:
             return None
         return {

@@ -548,8 +548,14 @@ class CommonMixin:
             return False
         if self.player_input.asks_hostile_count or self.player_input.asks_dragon_direction:
             return False
-        # 川柳保存系はサービス側が確認の返事を出す
-        if self.player_input.asks_save_last_haiku or self.player_input.player_haiku_text:
+        # 川柳保存・直し・読み訂正・句想起はサービス側が返事する
+        if (
+            self.player_input.asks_save_last_haiku
+            or self.player_input.player_haiku_text
+            or self.player_input.revised_haiku_text
+            or self.player_input.reading_correction is not None
+            or self.player_input.asks_haiku_recall
+        ):
             return False
         return bool(self.player_input.normalized_text)
 

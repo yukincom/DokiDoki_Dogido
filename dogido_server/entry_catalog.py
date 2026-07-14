@@ -211,6 +211,35 @@ def biome_entries() -> dict[str, dict[str, Any]]:
     }
 
 
+def biome_reading(biome_id: str | None) -> str | None:
+    """バイオーム表示名の正しい読み（カタログ reading。オーバーレイは catalog_readings 側）。"""
+    from dogido_server.catalog_readings import resolve_reading
+
+    if not biome_id:
+        return None
+    normalized = str(biome_id).strip().lower().removeprefix("minecraft:")
+    entry = biome_entries().get(normalized)
+    if entry is None:
+        return None
+    label = str(entry.get("label") or entry.get("japanese") or "").strip()
+    catalog_reading = str(entry.get("reading") or "").strip() or None
+    return resolve_reading(label, catalog_reading)
+
+
+def biome_label_with_reading(biome_id: str | None) -> str | None:
+    from dogido_server.catalog_readings import format_label_with_reading
+
+    if not biome_id:
+        return None
+    normalized = str(biome_id).strip().lower().removeprefix("minecraft:")
+    entry = biome_entries().get(normalized)
+    if entry is None:
+        return None
+    label = str(entry.get("label") or entry.get("japanese") or normalized).strip()
+    catalog_reading = str(entry.get("reading") or "").strip() or None
+    return format_label_with_reading(label, catalog_reading)
+
+
 def biome_labels() -> dict[str, str]:
     return {
         biome_id: str(entry.get("label", biome_id))
