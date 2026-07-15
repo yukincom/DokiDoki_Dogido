@@ -350,8 +350,8 @@ structures_for_mob / structure_biomes / plausibility_hint(...)
 |---|---|---|---|
 | **A** | 中立 fallback + visual ログ | ①-A / ③ fallback | ✅ |
 | **B** | ② 照合エンジン + details（プロンプト厚みは打ち切り） | ② | ⏸ エンジンのみ |
-| **S1** | `reply_stance` + プロンプト規則カット | 2.5b 執行を SM へ | 次 |
-| **S2** | 出力白リスト sanitize | 2.5b 音・候補のコード担保 | |
+| **S1** | `reply_stance` + プロンプト規則カット | 2.5b 執行を SM へ | ✅ |
+| **S2** | 出力白リスト sanitize | 2.5b 音・候補のコード担保 | 次 |
 | **C** | ①-D visual バッファ | ①-D | |
 | **S3** | identify 高信頼 → SM 骨子 | 2.5b 成功イメージ | |
 | **F′** | ④ related_mobs + **SM** plausibility 1 行 | ④ | 旧 F |
@@ -405,7 +405,7 @@ A ✅ → B ⏸ → S1 → S2 → C → S3 → F′ → E′
 
 ## 次の作業
 
-1. **S1**（`reply_stance` + プロンプト規則カット）← 次  
-2. 続けて **S2**（白リスト sanitize）  
+1. **S1** ✅  
+2. **S2**（白リスト sanitize）← 次  
 3. **C** visual バッファ  
 4. LOS が実測で酷いときだけ **D** 前倒し  

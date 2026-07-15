@@ -210,7 +210,8 @@ class InventoryOnDemandTests(unittest.TestCase):
             )
         )
         self.assertNotIn("所持品（インベントリ要約）", without[1]["content"])
-        self.assertIn("所持品リストが与えられていない", without[1]["content"])
+        # S1: 未提示時は inventory 節・長文規則ごと省略
+        self.assertNotIn("所持品リストが与えられていない", without[1]["content"])
 
     def test_inventory_summary_from_event(self) -> None:
         machine = DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
@@ -297,12 +298,16 @@ class HearingContextTests(unittest.TestCase):
                     "time_phase": "day",
                     "hearing_summary": "",
                     "threat_summary": "",
+                    "reply_stance": "none",
+                    "reply_policy": "雑談として自然に返す。根拠のない種名・敵・音の捏造はしない。",
                 },
             )
         )
-        self.assertIn("音のメモ: （なし）", messages[1]["content"])
-        self.assertIn("種名を当てない", messages[1]["content"])
-        self.assertIn("はっきり拾えてへん", messages[1]["content"])
+        content = messages[1]["content"]
+        self.assertIn("音のメモ: （なし）", content)
+        self.assertIn("音から使ってよい具体モブ名: （なし）", content)
+        # S1: 長文 hearing 規則ではなく policy / 空メモで担保
+        self.assertIn("捏造はしない", content)
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(
@@ -316,11 +321,15 @@ class HearingContextTests(unittest.TestCase):
                     "time_phase": "day",
                     "hearing_summary": "村人っぽい声 左 close",
                     "threat_summary": "とくになし",
+                    "hearing_named_mobs": ["村人"],
+                    "reply_stance": "none",
+                    "reply_policy": "雑談として自然に返す。根拠のない種名・敵・音の捏造はしない。",
                 },
             )
         )
-        self.assertIn("村人っぽい声 左 close", messages[1]["content"])
-        self.assertIn("捏造しない", messages[1]["content"])
+        content = messages[1]["content"]
+        self.assertIn("村人っぽい声 左 close", content)
+        self.assertIn("音から使ってよい具体モブ名: 村人", content)
 
 
 class PlayerInputEndpointTests(unittest.TestCase):

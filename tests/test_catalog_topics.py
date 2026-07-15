@@ -55,8 +55,14 @@ class FindCatalogTopicsTests(unittest.TestCase):
 
 
 class PlayerChatTopicPromptTests(unittest.TestCase):
-    def test_prompt_includes_topic_hints_and_gap_rules(self) -> None:
-        hints = format_catalog_topic_hints(find_catalog_topics("なんだあのババア"))
+    def test_prompt_includes_topic_hints_and_stance_policy(self) -> None:
+        from dogido_server.player_chat_policy import reply_policy_line, resolve_reply_stance
+
+        hits = find_catalog_topics("なんだあのババア")
+        hints = format_catalog_topic_hints(hits)
+        stance = resolve_reply_stance(
+            has_visual_threats=False, topic_hits=hits, user_text="なんだあのババア"
+        )
         messages = build_messages(
             LeafGenerationRequest(
                 kind="player_chat",
@@ -69,17 +75,21 @@ class PlayerChatTopicPromptTests(unittest.TestCase):
                     "threat_summary": "とくになし",
                     "hearing_summary": "",
                     "catalog_topic_hints": hints,
+                    "reply_stance": stance,
+                    "reply_policy": reply_policy_line(stance),
                 },
             )
         )
         content = messages[1]["content"]
         self.assertIn("カタログからの話題ヒント", content)
         self.assertIn("ウィッチ", content)
-        self.assertIn("否定して落とさない", content)
-        self.assertIn("見えんけど", content)
-        self.assertIn("捏造しない", content)
+        self.assertIn("hypothesis", content)
+        self.assertIn("おらへん", content)
+        self.assertIn("見えてへん", content)
 
-    def test_prompt_without_hints_still_forbids_denying_player(self) -> None:
+    def test_prompt_without_hints_uses_clarify_policy(self) -> None:
+        from dogido_server.player_chat_policy import reply_policy_line
+
         messages = build_messages(
             LeafGenerationRequest(
                 kind="player_chat",
@@ -91,13 +101,16 @@ class PlayerChatTopicPromptTests(unittest.TestCase):
                     "time_phase": "day",
                     "threat_summary": "とくになし",
                     "catalog_topic_hints": "",
+                    "reply_stance": "clarify",
+                    "reply_policy": reply_policy_line("clarify"),
                 },
             )
         )
         content = messages[1]["content"]
         self.assertNotIn("カタログからの話題ヒント", content)
-        self.assertIn("おらへん", content)
+        self.assertIn("答え方スタンス: clarify", content)
         self.assertIn("種名を当てず", content)
+        self.assertIn("否定しない", content)
 
 
 if __name__ == "__main__":

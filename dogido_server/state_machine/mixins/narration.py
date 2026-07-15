@@ -423,6 +423,15 @@ class NarrationMixin:
         user_text = (self.player_input.raw_text or "").strip()
         topic_hits = self._player_chat_topic_hits(user_text, visual_types)
         catalog_topic_hints = self._format_player_chat_topic_hints(topic_hits)
+        from dogido_server.player_chat_policy import reply_policy_line, resolve_reply_stance
+
+        reply_stance = resolve_reply_stance(
+            has_visual_threats=has_visual_threats,
+            topic_hits=topic_hits,
+            threat_summary=threat_summary,
+            user_text=user_text,
+        )
+        reply_policy = reply_policy_line(reply_stance)
         LOGGER.warning(
             "player_chat_visual count=%s types=%s threat_summary=%s",
             len(event.visual_threats),
@@ -430,13 +439,14 @@ class NarrationMixin:
             (threat_summary or "")[:120] or "-",
         )
         LOGGER.warning(
-            "player_chat_topics empty=%s hits=%s",
+            "player_chat_topics empty=%s hits=%s stance=%s",
             not bool(topic_hits),
             ",".join(
                 f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
                 for hit in topic_hits
             )
             or "-",
+            reply_stance,
         )
         LOGGER.warning(
             "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
@@ -470,6 +480,8 @@ class NarrationMixin:
             "hearing_named_mobs": hearing_named_mobs,
             "catalog_topic_hints": catalog_topic_hints,
             "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_hits],
+            "reply_stance": reply_stance,
+            "reply_policy": reply_policy,
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,

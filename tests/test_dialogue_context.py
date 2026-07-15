@@ -378,7 +378,8 @@ class PlayerChatPlaceContextTests(unittest.TestCase):
         user = messages[1]["content"]
         self.assertIn("場所メモ:", user)
         self.assertIn("地下", user)
-        self.assertIn("バイオーム名だけ見て地上", user)
+        # S1: 場所は place_line を正とし、長文ルールは載せない
+        self.assertNotIn("バイオーム名だけ見て地上", user)
 
     def test_open_surface_day(self) -> None:
         from dogido_server.config import Settings
