@@ -1,7 +1,7 @@
 # Senryu-RAG 実装プラン
 
 **ブランチ:** `Senryu-RAG`  
-**関連:** [rag.md](rag.md), [haiku-architecture.md](haiku-architecture.md), [dialogue-design.md](dialogue-design.md)
+**関連:** [rag.md](rag.md), [haiku-architecture.md](haiku-architecture.md), [dialogue-design.md](dialogue-design.md), **[進捗・将来ロードマップ](senryu-roadmap.md)**
 
 川柳（senryu/haiku）向けに、カタログ知識をどう足すかの実装方針。  
 「全部ベクトル化」ではなく、**既存の直引きを使い切ってから**、必要なら Simple Vector を載せる。

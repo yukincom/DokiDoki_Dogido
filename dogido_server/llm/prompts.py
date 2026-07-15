@@ -618,10 +618,20 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
     details = request.details
     user_text = str(details.get("user_text", "")).strip() or "（聞き取れなかった）"
     structure_label = str(details.get("structure_label", "")).strip()
-    place = structure_label or str(details.get("biome", "そのへん"))
+    place_context = str(details.get("place_context", "")).strip()
+    space_kind = str(details.get("space_kind", "") or "").strip()
+    if place_context:
+        place = place_context
+    else:
+        place = structure_label or str(details.get("biome", "そのへん"))
     character_mode = character_mode_for_request("player_chat", dict(details))
     threat_summary = str(details.get("threat_summary", "")).strip() or "とくになし"
     hearing_summary = str(details.get("hearing_summary", "")).strip()
+    hearing_named_raw = details.get("hearing_named_mobs") or []
+    if isinstance(hearing_named_raw, str):
+        hearing_named_mobs = [hearing_named_raw] if hearing_named_raw.strip() else []
+    else:
+        hearing_named_mobs = [str(item).strip() for item in hearing_named_raw if str(item).strip()]
     inventory_summary = str(details.get("inventory_summary", "")).strip()
     held_item_label = str(details.get("held_item_label", "")).strip()
     asks_inventory = bool(details.get("asks_inventory")) and bool(inventory_summary)
@@ -689,17 +699,32 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
             "リストに無いアイテムを『ある』と断定しない。"
             "全部を読み上げず、質問に関係しそうな物だけ短く触れる\n"
         )
+    if hearing_named_mobs:
+        named_line = "、".join(hearing_named_mobs)
+    else:
+        named_line = "（なし）"
     if hearing_summary:
-        hearing_block = f"いまドギドが拾っている音のメモ: {hearing_summary}。\n"
+        hearing_block = (
+            f"いまドギドが拾っている音のメモ: {hearing_summary}。\n"
+            f"音から使ってよい具体モブ名: {named_line}。\n"
+        )
         hearing_rules = (
             "- 音・気配の話は、与えられた音メモだけを根拠にする。"
             "メモに無い方向・種類・距離の音を『聞こえた』と捏造しない\n"
+            "- 音の正体の具体モブ名は『音から使ってよい具体モブ名』にあるものだけ。"
+            "リストに無い種名（バイオームからの連想・野犬など）は禁止\n"
+            "- メモが『種別未確定』だけのときは種名を当てず、"
+            "『なんか声がする』『低い声っぽい』程度に留める\n"
         )
     else:
-        hearing_block = "いまドギドが拾っている音のメモ: （なし）。\n"
+        hearing_block = (
+            "いまドギドが拾っている音のメモ: （なし）。\n"
+            "音から使ってよい具体モブ名: （なし）。\n"
+        )
         hearing_rules = (
-            "- 音のメモが空のとき、『音がした』『誰かいる』『離れた所で何か』などの断定は禁止。"
-            "プレイヤーに音を聞かれても『こっちでははっきり拾えてへん』と正直に言う\n"
+            "- 音のメモが空のとき、プレイヤーが音の話をしていても種名を当てない。"
+            "『こっちでははっきり拾えてへん』『さっきは聞こえた気がするが今はわからん』など正直に。"
+            "バイオーム名から動物を連想して補完しない\n"
         )
     conversation_history = str(details.get("conversation_history", "")).strip()
     event_digest = str(details.get("event_digest", "")).strip()
@@ -720,6 +745,19 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
     else:
         digest_block = ""
         digest_rules = ""
+    place_rules = (
+        "- 場所メモは『地表バイオーム』と『空間（空が見えるか・地下っぽさ）』が別。"
+        "バイオーム名だけ見て地上の散歩と決めつけない\n"
+    )
+    if space_kind in {"underground_or_roofed", "cave_biome", "underwater"}:
+        place_rules += (
+            "- いまは地下っぽい／洞窟／水中寄り。『野原を歩いてる』『空の下』のような地上オープンスペース扱いをしない。"
+            "バイオームは気候・植生のタグとして軽く触れてよい\n"
+        )
+    elif space_kind == "canopy":
+        place_rules += "- 木陰っぽい。真上は空でも葉で塞がれている前提でよい\n"
+    elif space_kind == "open_surface":
+        place_rules += "- 開けた地上（空が見える）。屋内・洞窟扱いにしない\n"
     user_prompt = (
         "参考傾向:\n"
         "- プレイヤーからの話しかけへの、相棒としての返事\n"
@@ -728,6 +766,7 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
         "- 音声認識やローマ字の打ち間違いっぽい文は、無理に解釈せず軽く聞き返してよい\n"
         f"{inventory_rules}"
         f"{hearing_rules}"
+        f"{place_rules}"
         f"{history_rules}"
         f"{digest_rules}"
         f"{combat_safety_rules}"
@@ -739,7 +778,7 @@ def _build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str
         f"プレイヤーが話しかけてきた:「{user_text}」\n"
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけ呼び名を入れてよい。\n"
-        f"いまの場所は{place}。\n"
+        f"場所メモ: {place}。\n"
         f"時間帯は{details.get('time_phase', 'unknown')}。\n"
         f"キャラクターモードは{character_mode}。"
         f"状態機械モードは{details.get('mode', 'normal')}。\n"

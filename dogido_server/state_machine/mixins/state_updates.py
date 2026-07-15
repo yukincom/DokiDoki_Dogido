@@ -7,7 +7,7 @@ from math import inf
 
 from dogido_server.models import EventName, GameEvent, HorizontalDirection
 from dogido_server.state_machine.constants import DRAGON_PERCH_PHASES
-from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals
+from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals, RecentHearingMemo
 
 LOGGER = logging.getLogger("uvicorn.error")
 
@@ -102,6 +102,9 @@ class StateUpdatesMixin:
                     self.state.auditory_presence_states[key] = state
                 state.count += 1
                 state.last_seen_at = now
+
+        # player_chat 用: 全 auditory / ambient を短期バッファへ（未視認フィルタ前の分も残す）
+        self._remember_hearing_for_chat(event, now)
 
         if event.combat.recent_damage_ms is not None:
             self.state.last_damage_at = now - timedelta(milliseconds=event.combat.recent_damage_ms)

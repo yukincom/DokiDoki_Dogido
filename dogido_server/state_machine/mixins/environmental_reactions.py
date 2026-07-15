@@ -103,12 +103,21 @@ class EnvironmentalReactionsMixin:
             return False
         return signals.home_or_respawn_return_is_unrealistic
 
+    def _emergency_shelter_advice_text(self, event: GameEvent) -> str:
+        """所持ベッド優先。直下掘りはベッドが無いときだけの最終手段。"""
+        if self._event_has_usable_bed(event):
+            return response_text("darkness", "emergency_shelter", "advice_with_bed")
+        nearby_beds = event.world.nearby_bed_count or 0
+        if nearby_beds > 0:
+            return response_text("darkness", "emergency_shelter", "advice_nearby_bed")
+        return response_text("darkness", "emergency_shelter", "advice")
+
     def _emit_emergency_shelter_advice(self, event: GameEvent, signals: DerivedSignals) -> str | None:
         if not self._should_emit_emergency_shelter_advice(event, signals):
             return None
         self.state.emergency_shelter_advised_this_cycle = True
         self.state.emergency_shelter_morning_announced = False
-        return EMERGENCY_SHELTER_CALL
+        return self._emergency_shelter_advice_text(event)
 
     def _should_emit_emergency_shelter_morning_call(self, event: GameEvent, signals: DerivedSignals) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:

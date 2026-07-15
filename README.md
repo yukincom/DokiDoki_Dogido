@@ -33,6 +33,8 @@ Minecraftの世界が、そのまま表現の材料になります。
 - [対話設計](docs/dialogue-design.md)
 - [川柳アーキテクチャ](docs/haiku-architecture.md)
 - [Senryu-RAG 実装プラン](docs/senryu-rag-plan.md)
+- [川柳ロードマップ（進捗・将来）](docs/senryu-roadmap.md)
+- [川柳フィードバック実装メモ](docs/haiku-feedback-plan.md)
 - [RAG 初期メモ](docs/rag.md)
 - [技術課題](docs/technical-risks.md)
 
@@ -52,8 +54,9 @@ Minecraftの世界が、そのまま表現の材料になります。
 12. [対話設計](docs/dialogue-design.md)
 13. [川柳アーキテクチャ](docs/haiku-architecture.md)
 14. [Senryu-RAG 実装プラン](docs/senryu-rag-plan.md)
-15. [記憶アーキテクチャ](docs/memory-architecture.md)
-16. [技術課題](docs/technical-risks.md)
+15. [川柳ロードマップ（進捗・将来）](docs/senryu-roadmap.md)
+16. [記憶アーキテクチャ](docs/memory-architecture.md)
+17. [技術課題](docs/technical-risks.md)
 
 ## 現時点の方針
 

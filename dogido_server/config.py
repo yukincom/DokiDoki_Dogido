@@ -197,6 +197,8 @@ class Settings(BaseSettings):
     ender_eye_recent_ms: int = 2000
     ender_eye_comment_cooldown_ms: int = 8000
     ambient_mob_comment_cooldown_ms: int = 60000
+    # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
+    player_chat_hearing_retention_ms: int = 12000
     # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
     player_input_priority_cooldown_ms: int = 20000

@@ -442,6 +442,7 @@ def all_mob_entries() -> dict[str, dict[str, Any]]:
     return _merge_mob_entry_maps(threat_mob_entries(), passive_mob_entries())
 
 
+
 def mob_entry(mob_id: str | None) -> dict[str, Any] | None:
     if not mob_id:
         return None
