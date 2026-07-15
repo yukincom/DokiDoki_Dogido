@@ -95,6 +95,12 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
     # 敵対中の「じっと」系・Mob カタログの禁止助言
     if contains_forbidden_mob_advice(text, details):
         return False
+    # S2: player_chat はカタログ種名の白リスト外を拒否（details にキーがあるとき）
+    if kind == "player_chat" and "allowed_speech_labels" in details:
+        from dogido_server.player_chat_policy import contains_unlisted_speech_names
+
+        if contains_unlisted_speech_names(text, details.get("allowed_speech_labels") or []):
+            return False
     if kind not in {
         "aftermath",
         "darkness_escape",

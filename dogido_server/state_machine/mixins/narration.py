@@ -423,7 +423,11 @@ class NarrationMixin:
         user_text = (self.player_input.raw_text or "").strip()
         topic_hits = self._player_chat_topic_hits(user_text, visual_types)
         catalog_topic_hints = self._format_player_chat_topic_hints(topic_hits)
-        from dogido_server.player_chat_policy import reply_policy_line, resolve_reply_stance
+        from dogido_server.player_chat_policy import (
+            build_allowed_speech_labels,
+            reply_policy_line,
+            resolve_reply_stance,
+        )
 
         reply_stance = resolve_reply_stance(
             has_visual_threats=has_visual_threats,
@@ -432,6 +436,11 @@ class NarrationMixin:
             user_text=user_text,
         )
         reply_policy = reply_policy_line(reply_stance)
+        allowed_speech_labels = build_allowed_speech_labels(
+            topic_hits=topic_hits,
+            visual_types=visual_types,
+            hearing_named_mobs=hearing_named_mobs,
+        )
         LOGGER.warning(
             "player_chat_visual count=%s types=%s threat_summary=%s",
             len(event.visual_threats),
@@ -482,6 +491,7 @@ class NarrationMixin:
             "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_hits],
             "reply_stance": reply_stance,
             "reply_policy": reply_policy,
+            "allowed_speech_labels": allowed_speech_labels,
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
@@ -497,9 +507,18 @@ class NarrationMixin:
             details=details,
             temperature=0.65,
         )
-        from dogido_server.llm.sanitize import contains_forbidden_mob_advice
+        from dogido_server.llm.sanitize import contains_forbidden_mob_advice, is_style_acceptable
 
         if contains_forbidden_mob_advice(text, details):
+            return fallback
+        # S2: 白リスト外種名なども style 不合格 → 中立 fallback
+        if not is_style_acceptable("player_chat", text, details):
+            LOGGER.warning(
+                "player_chat_style_reject stance=%s allowed=%s text=%s",
+                reply_stance,
+                ",".join(allowed_speech_labels) or "-",
+                (text or "")[:80],
+            )
             return fallback
         return text
 

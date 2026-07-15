@@ -7,7 +7,14 @@ import unittest
 from dogido_server.entry_catalog import find_catalog_topics, format_catalog_topic_hints
 from dogido_server.llm.prompts import build_messages
 from dogido_server.llm.types import LeafGenerationRequest
-from dogido_server.player_chat_policy import reply_policy_line, resolve_reply_stance
+from dogido_server.llm.sanitize import is_style_acceptable
+from dogido_server.player_chat_policy import (
+    build_allowed_speech_labels,
+    catalog_labels_mentioned_in_text,
+    contains_unlisted_speech_names,
+    reply_policy_line,
+    resolve_reply_stance,
+)
 
 
 class ReplyStanceTests(unittest.TestCase):
@@ -58,6 +65,52 @@ class ReplyStanceTests(unittest.TestCase):
             self.assertTrue(line)
         self.assertIn("おらへん", reply_policy_line("hypothesis"))
         self.assertIn("見えてへん", reply_policy_line("hypothesis"))
+
+
+class AllowedSpeechLabelsTests(unittest.TestCase):
+    def test_topic_builds_witch_whitelist(self) -> None:
+        hits = find_catalog_topics("なんだあのババア")
+        labels = build_allowed_speech_labels(topic_hits=hits, visual_types=[], hearing_named_mobs=[])
+        self.assertIn("ウィッチ", labels)
+
+    def test_visual_type_adds_label(self) -> None:
+        labels = build_allowed_speech_labels(
+            topic_hits=[],
+            visual_types=["pillager"],
+            hearing_named_mobs=[],
+        )
+        self.assertIn("ピリジャー", labels)
+
+    def test_longest_label_masks_shorter(self) -> None:
+        # ウィザースケルトンを言ったとき、部分の「ウィザー」だけで未登録扱いにしない
+        mentioned = catalog_labels_mentioned_in_text("ウィザースケルトンがおるで")
+        self.assertIn("ウィザースケルトン", mentioned)
+        self.assertNotIn("ウィザー", mentioned)
+
+    def test_unlisted_name_detected(self) -> None:
+        self.assertTrue(
+            contains_unlisted_speech_names("ゾンビやないか", allowed_labels=["ウィッチ"])
+        )
+        self.assertFalse(
+            contains_unlisted_speech_names("ウィッチかもしれん", allowed_labels=["ウィッチ"])
+        )
+        self.assertTrue(
+            contains_unlisted_speech_names("ピリジャーやな", allowed_labels=[])
+        )
+        self.assertFalse(
+            contains_unlisted_speech_names("ようわからん、もうちょい教えて。", allowed_labels=[])
+        )
+
+    def test_style_reject_unlisted_for_player_chat(self) -> None:
+        details = {"allowed_speech_labels": ["ウィッチ"]}
+        self.assertFalse(
+            is_style_acceptable("player_chat", "ゾンビがおるで！", details)
+        )
+        self.assertTrue(
+            is_style_acceptable("player_chat", "ウィッチかもしれんな", details)
+        )
+        # キーが無い旧経路は白リスト未適用
+        self.assertTrue(is_style_acceptable("player_chat", "ゾンビがおるで！", {}))
 
 
 class PlayerChatPromptStanceTests(unittest.TestCase):

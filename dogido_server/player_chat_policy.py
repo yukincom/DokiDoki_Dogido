@@ -1,10 +1,12 @@
 """player_chat の答え方スタンス（状態機械が決める骨格）。
 
 プロンプト長文に方針を積まず、ここで saw / hypothesis / clarify / none を決める。
+S2: 発話に使ってよい種名白リストもここで組み立てる。
 """
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Literal
 
 ReplyStance = Literal["saw", "hypothesis", "clarify", "none"]
@@ -75,3 +77,104 @@ def reply_policy_line(stance: ReplyStance | str) -> str:
     if key not in _POLICY_LINES:
         key = "none"
     return _POLICY_LINES[key]  # type: ignore[index]
+
+
+def build_allowed_speech_labels(
+    *,
+    topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+    visual_types: list[str] | tuple[str, ...] | None = None,
+    hearing_named_mobs: list[str] | tuple[str, ...] | None = None,
+) -> list[str]:
+    """出力に使ってよい表示名（topic ∪ visual ∪ hearing の union）。"""
+    from dogido_server.entry_catalog import mob_entry, structure_entries
+
+    labels: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: object | None) -> None:
+        text = str(raw or "").strip()
+        if len(text) < 2 or text in seen:
+            return
+        seen.add(text)
+        labels.append(text)
+
+    for hit in topic_hits or ():
+        add(hit.get("label_ja"))
+        # structure は label_ja のみ。mob id からも再解決
+        entry_id = str(hit.get("entry_id") or "").strip()
+        kind = str(hit.get("kind") or "mob")
+        if kind == "mob" and entry_id:
+            entry = mob_entry(entry_id)
+            if entry:
+                add(entry.get("label"))
+        elif kind == "structure" and entry_id:
+            entry = structure_entries().get(entry_id) or {}
+            add(entry.get("label"))
+
+    for raw_type in visual_types or ():
+        mob_id = str(raw_type or "").removeprefix("minecraft:").strip().lower()
+        if not mob_id:
+            continue
+        entry = mob_entry(mob_id)
+        if entry:
+            add(entry.get("label"))
+        else:
+            add(mob_id)
+
+    for name in hearing_named_mobs or ():
+        add(name)
+
+    return labels
+
+
+@lru_cache(maxsize=1)
+def catalog_speech_labels() -> tuple[str, ...]:
+    """照合用: カタログ上の表示名（長い順）。"""
+    from dogido_server.entry_catalog import all_mob_entries, structure_entries
+
+    labels: set[str] = set()
+    for entry in all_mob_entries().values():
+        label = str(entry.get("label") or "").strip()
+        if len(label) >= 2:
+            labels.add(label)
+    for entry in structure_entries().values():
+        label = str(entry.get("label") or "").strip()
+        if len(label) >= 2:
+            labels.add(label)
+    return tuple(sorted(labels, key=lambda item: (-len(item), item)))
+
+
+def catalog_labels_mentioned_in_text(text: str) -> list[str]:
+    """文中に含まれるカタログ表示名（長い一致を優先し、短い部分一致はマスク）。"""
+    raw = text or ""
+    if not raw:
+        return []
+    covered = [False] * len(raw)
+    found: list[str] = []
+    for label in catalog_speech_labels():
+        start = 0
+        while True:
+            index = raw.find(label, start)
+            if index < 0:
+                break
+            end = index + len(label)
+            if not any(covered[index:end]):
+                found.append(label)
+                for pos in range(index, end):
+                    covered[pos] = True
+            start = index + 1
+    return found
+
+
+def contains_unlisted_speech_names(
+    text: str,
+    allowed_labels: list[str] | tuple[str, ...] | set[str] | None,
+) -> bool:
+    """白リスト外のカタログ種名／構造物名が出力に含まれるか。"""
+    if not text:
+        return False
+    allowed = {str(item).strip() for item in (allowed_labels or ()) if str(item).strip()}
+    for label in catalog_labels_mentioned_in_text(text):
+        if label not in allowed:
+            return True
+    return False
