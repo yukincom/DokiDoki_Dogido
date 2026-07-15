@@ -331,7 +331,7 @@ structures_for_mob / structure_biomes / plausibility_hint(...)
 
 | PR | 内容 | 依存 |
 |---|---|---|
-| **PR-A** | 中立 fallback 最低限 + visual ログ（①-A） | なし |
+| **PR-A** | 中立 fallback 最低限 + visual ログ（①-A）✅ | なし |
 | **PR-B** | ② `find_catalog_topics` + details + §2.5b 規則の骨子 + テスト | 通称タグ済 |
 | **PR-C** | ①-D visual バッファ + threat_summary | A |
 | **PR-F** | ④ related_mobs + biome 突合 | B |

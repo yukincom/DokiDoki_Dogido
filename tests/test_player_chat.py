@@ -23,6 +23,7 @@ from dogido_server.models import (
     PriorityHint,
     SourceKind,
     TimePhase,
+    VisualThreat,
     Weather,
     WorldState,
 )
@@ -93,6 +94,38 @@ class PlayerChatReplyTests(unittest.TestCase):
     def texts(self, event: GameEvent) -> list[str]:
         result = self.machine.process(event)
         return [action.text for action in result.actions if action.text]
+
+    def test_chat_fallback_is_neutral_not_hearing_ack(self) -> None:
+        """PR-A: unusable 時などに載る固定文は話題を横取りしない中立文。"""
+        self.assertNotIn("聞こえとる", CHAT_REPLY)
+        self.assertIn("教えて", CHAT_REPLY)
+        texts = self.texts(make_event(sequence=1, user_text="今日もよろしくな"))
+        self.assertEqual([CHAT_REPLY], texts)
+
+    def test_player_chat_logs_visual_count_and_types(self) -> None:
+        """PR-A: player_chat 時に visual 件数・types をログへ。"""
+        event = make_event(sequence=1, user_text="あいつら何？")
+        event.visual_threats = [
+            VisualThreat(
+                type="pillager",
+                entity_id="pillager-1",
+                distance=12.0,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+                certainty=Certainty.HIGH,
+            ),
+            VisualThreat(
+                type="pillager",
+                entity_id="pillager-2",
+                distance=14.0,
+                direction=Direction(horizontal=HorizontalDirection.LEFT),
+                certainty=Certainty.HIGH,
+            ),
+        ]
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            self.machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+        joined = "\n".join(captured.output)
+        self.assertIn("player_chat_visual count=2", joined)
+        self.assertIn("types=pillager,pillager", joined)
 
     def test_free_chat_gets_reply(self) -> None:
         texts = self.texts(make_event(sequence=1, user_text="今日もよろしくな"))
@@ -268,7 +301,8 @@ class HearingContextTests(unittest.TestCase):
             )
         )
         self.assertIn("音のメモ: （なし）", messages[1]["content"])
-        self.assertIn("断定は禁止", messages[1]["content"])
+        self.assertIn("種名を当てない", messages[1]["content"])
+        self.assertIn("はっきり拾えてへん", messages[1]["content"])
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(

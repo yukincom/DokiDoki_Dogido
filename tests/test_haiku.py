@@ -146,7 +146,9 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertEqual(len(chat_actions), 1)
-        self.assertEqual(chat_actions[0].text, "おう、聞こえとるで〜。")
+        from dogido_server.state_machine.fallback_catalog import fallback_text
+
+        self.assertEqual(chat_actions[0].text, fallback_text("general", "chat", "reply"))
 
         self.assertEqual(
             self.machine.process(make_snapshot(self.base_time + timedelta(seconds=550))).actions,

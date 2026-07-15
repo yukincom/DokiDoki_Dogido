@@ -419,6 +419,13 @@ class NarrationMixin:
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
         if tactics.get("safe_fallback"):
             fallback = str(tactics["safe_fallback"])
+        visual_types = [str(threat.type) for threat in event.visual_threats if threat.type]
+        LOGGER.warning(
+            "player_chat_visual count=%s types=%s threat_summary=%s",
+            len(event.visual_threats),
+            ",".join(visual_types) or "-",
+            (threat_summary or "")[:120] or "-",
+        )
         LOGGER.warning(
             "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
             not bool(hearing_summary),
