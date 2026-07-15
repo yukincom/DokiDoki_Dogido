@@ -420,11 +420,23 @@ class NarrationMixin:
         if tactics.get("safe_fallback"):
             fallback = str(tactics["safe_fallback"])
         visual_types = [str(threat.type) for threat in event.visual_threats if threat.type]
+        user_text = (self.player_input.raw_text or "").strip()
+        topic_hits = self._player_chat_topic_hits(user_text, visual_types)
+        catalog_topic_hints = self._format_player_chat_topic_hints(topic_hits)
         LOGGER.warning(
             "player_chat_visual count=%s types=%s threat_summary=%s",
             len(event.visual_threats),
             ",".join(visual_types) or "-",
             (threat_summary or "")[:120] or "-",
+        )
+        LOGGER.warning(
+            "player_chat_topics empty=%s hits=%s",
+            not bool(topic_hits),
+            ",".join(
+                f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
+                for hit in topic_hits
+            )
+            or "-",
         )
         LOGGER.warning(
             "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
@@ -437,7 +449,7 @@ class NarrationMixin:
         )
         details = {
             "player_name": self._player_call_name(event),
-            "user_text": (self.player_input.raw_text or "").strip()[:160],
+            "user_text": user_text[:160],
             "biome": self._biome_label(event.world.biome),
             "structure_label": (
                 self._structure_label(self.state.current_structure)
@@ -456,6 +468,8 @@ class NarrationMixin:
             "threat_summary": threat_summary,
             "hearing_summary": hearing_summary,
             "hearing_named_mobs": hearing_named_mobs,
+            "catalog_topic_hints": catalog_topic_hints,
+            "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_hits],
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
@@ -551,6 +565,21 @@ class NarrationMixin:
             "place_line": place_line,
             "biome_label": biome_label,
         }
+
+    def _player_chat_topic_hits(
+        self,
+        user_text: str,
+        observed_types: list[str] | tuple[str, ...],
+    ) -> list[dict[str, object]]:
+        """プレイヤー文 → カタログ話題候補（種族ハードコードなし）。"""
+        from dogido_server.entry_catalog import find_catalog_topics
+
+        return find_catalog_topics(user_text, observed_ids=observed_types)
+
+    def _format_player_chat_topic_hints(self, hits: list[dict[str, object]]) -> str:
+        from dogido_server.entry_catalog import format_catalog_topic_hints
+
+        return format_catalog_topic_hints(hits)
 
     def _player_chat_mob_tactics(self, event: GameEvent) -> dict[str, object]:
         """周囲の敵対 Mob カタログから dogido_tactics を集約する。"""

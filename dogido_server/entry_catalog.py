@@ -588,6 +588,181 @@ def collect_dogido_tactics_for_mobs(mob_ids: list[str] | tuple[str, ...] | set[s
     }
 
 
+# --- player_chat 汎用トピック照合（プレイヤー文 → カタログ） ---
+
+# field_kind → 重み。種族専用キーワード表は置かない。
+_TOPIC_FIELD_WEIGHTS: dict[str, float] = {
+    "label": 10.0,
+    "spoken_aliases": 10.0,
+    "visual_tags": 6.0,
+    "role": 5.0,
+    "scene_tags": 4.0,
+    "motion_tags": 4.0,
+    "sound_tags": 4.0,
+    "reaction_tags": 2.0,
+    "comic_tags": 2.0,
+    "structure_label": 8.0,
+    "note": 3.0,
+}
+
+_TOPIC_MIN_TERM_LEN = 1  # 旗・紫・薬など1文字タグを許可（カタログが正本）
+_TOPIC_MIN_SCORE = 5.0
+_TOPIC_TOP_K = 3
+
+
+def _topic_term_score(field_kind: str, term_len: int) -> float:
+    weight = _TOPIC_FIELD_WEIGHTS.get(field_kind, 2.0)
+    # 長い語ほど強い（「とんがり帽子」>「帽子」が両方あっても長い方が効く）
+    return weight * float(max(term_len, 1))
+
+
+@lru_cache(maxsize=1)
+def _topic_term_index() -> tuple[tuple[str, str, str, str], ...]:
+    """(term, entry_id, kind, field_kind) を長い term 優先で返す。"""
+    rows: list[tuple[str, str, str, str]] = []
+
+    def add(term: str, entry_id: str, kind: str, field_kind: str) -> None:
+        text = str(term or "").strip()
+        if len(text) < _TOPIC_MIN_TERM_LEN:
+            return
+        # 長文 note は部分一致ノイズが大きいので短めだけ
+        if field_kind == "note" and len(text) > 24:
+            return
+        # 音タグは擬音が多く「こんにちは」⊃「こん」などの誤爆が出やすい
+        if field_kind == "sound_tags" and len(text) < 3:
+            return
+        rows.append((text, entry_id, kind, field_kind))
+
+    for mob_id, entry in all_mob_entries().items():
+        label = str(entry.get("label") or entry.get("japanese") or "").strip()
+        if label:
+            add(label, mob_id, "mob", "label")
+        aliases = entry.get("spoken_aliases")
+        if isinstance(aliases, list):
+            for alias in aliases:
+                add(str(alias), mob_id, "mob", "spoken_aliases")
+        poetic = entry.get("poetic")
+        if isinstance(poetic, dict):
+            role = poetic.get("role")
+            if role:
+                add(str(role), mob_id, "mob", "role")
+            for key in (
+                "visual_tags",
+                "sound_tags",
+                "motion_tags",
+                "scene_tags",
+                "reaction_tags",
+                "comic_tags",
+            ):
+                values = poetic.get(key)
+                if not isinstance(values, list):
+                    continue
+                for value in values:
+                    add(str(value), mob_id, "mob", key)
+
+    for structure_id, entry in structure_entries().items():
+        label = str(entry.get("label") or entry.get("japanese") or "").strip()
+        if label:
+            add(label, structure_id, "structure", "structure_label")
+        note = entry.get("note")
+        if note:
+            add(str(note), structure_id, "structure", "note")
+
+    # 長い term を先に照合（部分の短い語より優先してスコア加算）
+    rows.sort(key=lambda row: (-len(row[0]), row[0], row[1], row[2], row[3]))
+    return tuple(rows)
+
+
+def find_catalog_topics(
+    text: str,
+    *,
+    observed_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+    top_k: int = _TOPIC_TOP_K,
+    min_score: float = _TOPIC_MIN_SCORE,
+) -> list[dict[str, Any]]:
+    """プレイヤー文に含まれるカタログ語から話題候補を返す。
+
+    戻り値は score 降順の dict リスト:
+      entry_id, kind, label_ja, score, matched_terms, observed
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    folded = _fold_kana_for_match(raw)
+    observed: set[str] = set()
+    for raw_id in observed_ids or ():
+        normalized = str(raw_id or "").removeprefix("minecraft:").strip().lower()
+        if normalized:
+            observed.add(normalized)
+
+    scores: dict[tuple[str, str], float] = {}
+    matched: dict[tuple[str, str], list[str]] = {}
+    labels: dict[tuple[str, str], str] = {}
+
+    for term, entry_id, kind, field_kind in _topic_term_index():
+        term_folded = _fold_kana_for_match(term)
+        if not term_folded:
+            continue
+        if term not in raw and term_folded not in folded:
+            continue
+        key = (kind, entry_id)
+        scores[key] = scores.get(key, 0.0) + _topic_term_score(field_kind, len(term))
+        bucket = matched.setdefault(key, [])
+        if term not in bucket:
+            bucket.append(term)
+        if key not in labels:
+            if kind == "mob":
+                entry = mob_entry(entry_id) or {}
+                labels[key] = str(entry.get("label") or entry_id)
+            else:
+                entry = structure_entries().get(entry_id) or {}
+                labels[key] = str(entry.get("label") or entry_id)
+
+    hits: list[dict[str, Any]] = []
+    for key, score in scores.items():
+        kind, entry_id = key
+        is_observed = entry_id in observed
+        if is_observed:
+            score *= 3.0
+        if score < min_score:
+            continue
+        hits.append(
+            {
+                "entry_id": entry_id,
+                "kind": kind,
+                "label_ja": labels.get(key, entry_id),
+                "score": score,
+                "matched_terms": tuple(matched.get(key, ())),
+                "observed": is_observed,
+            }
+        )
+
+    hits.sort(
+        key=lambda hit: (
+            -float(hit["score"]),
+            not bool(hit["observed"]),
+            str(hit["entry_id"]),
+        )
+    )
+    return hits[: max(0, int(top_k))]
+
+
+def format_catalog_topic_hints(hits: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> str:
+    """player_chat details / プロンプト用の短いヒント文。"""
+    lines: list[str] = []
+    for hit in hits:
+        terms = "・".join(str(term) for term in (hit.get("matched_terms") or ())[:4])
+        obs = "あり" if hit.get("observed") else "なし"
+        label = str(hit.get("label_ja") or hit.get("entry_id") or "")
+        kind = str(hit.get("kind") or "mob")
+        prefix = "構造物" if kind == "structure" else "モブ"
+        if terms:
+            lines.append(f"- [{prefix}] {label}: マッチ「{terms}」。観測: {obs}")
+        else:
+            lines.append(f"- [{prefix}] {label}: 観測: {obs}")
+    return "\n".join(lines)
+
+
 def _normalize_mob_entries(raw_entries: Any) -> dict[str, dict[str, Any]]:
     normalized: dict[str, dict[str, Any]] = {}
     if not isinstance(raw_entries, dict):
