@@ -105,6 +105,8 @@ class StateUpdatesMixin:
 
         # player_chat 用: 全 auditory / ambient を短期バッファへ（未視認フィルタ前の分も残す）
         self._remember_hearing_for_chat(event, now)
+        # player_chat 用: 視認脅威も短期バッファへ（話しかけフレームの抜け穴埋め）
+        self._remember_visual_for_chat(event, now)
 
         if event.combat.recent_damage_ms is not None:
             self.state.last_damage_at = now - timedelta(milliseconds=event.combat.recent_damage_ms)

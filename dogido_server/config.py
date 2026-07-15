@@ -199,6 +199,8 @@ class Settings(BaseSettings):
     ambient_mob_comment_cooldown_ms: int = 60000
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
     player_chat_hearing_retention_ms: int = 12000
+    # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
+    player_chat_visual_retention_ms: int = 12000
     # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
     player_input_priority_cooldown_ms: int = 20000

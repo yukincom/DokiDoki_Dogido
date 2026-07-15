@@ -61,6 +61,7 @@ def resolve_reply_stance(
 ) -> ReplyStance:
     """観測とトピック候補から reply_stance を決める。"""
     threat = (threat_summary or "").strip()
+    # 「ついさっき 視認 …」も saw（visual バッファ経由）
     if has_visual_threats or "視認" in threat:
         return "saw"
     hits = list(topic_hits or ())
@@ -178,3 +179,41 @@ def contains_unlisted_speech_names(
         if label not in allowed:
             return True
     return False
+
+
+# topic score の目安（visual_tags 1 語 ≈ 6, 長い語はそれ以上）
+_IDENTIFY_MIN_SCORE = 6.0
+
+
+def build_identify_skeleton(
+    *,
+    stance: ReplyStance | str,
+    topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+    min_score: float = _IDENTIFY_MIN_SCORE,
+) -> str | None:
+    """高信頼トピックの固定骨子（S3）。LLM オフや style reject 時の最低限の返事。"""
+    if str(stance or "") != "hypothesis":
+        return None
+    hits = list(topic_hits or ())
+    if not hits:
+        return None
+    top = hits[0]
+    score = float(top.get("score") or 0.0)
+    if score < min_score:
+        return None
+    # 1文字タグ単独（例: お風呂⊃風）では骨子を出さない。旗など1文字は LLM/ヒントのみ。
+    matched = tuple(str(t) for t in (top.get("matched_terms") or ()) if str(t).strip())
+    if matched and max(len(t) for t in matched) < 2:
+        return None
+    # 同点トップが複数なら決めつけない
+    if len(hits) >= 2 and abs(float(hits[1].get("score") or 0.0) - score) < 0.01:
+        labels = [str(h.get("label_ja") or "") for h in hits[:2] if h.get("label_ja")]
+        if len(labels) >= 2:
+            return f"俺には見えんけど、{labels[0]}か{labels[1]}あたりかもしれんな"
+    label = str(top.get("label_ja") or "").strip()
+    if not label:
+        return None
+    kind = str(top.get("kind") or "mob")
+    if kind == "structure":
+        return f"俺にははっきり見えんけど、{label}かもしれんな"
+    return f"俺にははっきり見えんけど、{label}かもしれんな"

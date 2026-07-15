@@ -16,7 +16,7 @@ from dogido_server.state_machine.response_catalog import (
     response_text,
     structure_entry_fallback_text,
 )
-from dogido_server.state_machine.types import DerivedSignals, RecentHearingMemo
+from dogido_server.state_machine.types import DerivedSignals, RecentHearingMemo, RecentVisualMemo
 
 LOGGER = logging.getLogger("uvicorn.error")
 
@@ -395,6 +395,13 @@ class NarrationMixin:
             "suppressed_panic",
         }
         has_visual_threats = bool(event.visual_threats)
+        recent_visual_types = self._player_chat_recent_visual_types(event)
+        effective_visual_types = self._merge_unique_types(
+            [str(threat.type) for threat in event.visual_threats if threat.type],
+            recent_visual_types,
+        )
+        # バッファに種が残っていれば「見た」材料あり（character_mode は今フレーム優先）
+        has_visual_for_chat = has_visual_threats or bool(recent_visual_types)
         danger_score = event.world.danger_darkness_score
         danger_darkness_high = danger_score is not None and float(danger_score) >= float(
             getattr(self.settings, "darkness_alert_threshold", 0.72)
@@ -415,22 +422,22 @@ class NarrationMixin:
         hearing_summary = self._player_chat_hearing_summary(event)
         hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
         place_ctx = self._player_chat_place_context(event)
-        tactics = self._player_chat_mob_tactics(event)
+        tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
         if tactics.get("safe_fallback"):
             fallback = str(tactics["safe_fallback"])
-        visual_types = [str(threat.type) for threat in event.visual_threats if threat.type]
         user_text = (self.player_input.raw_text or "").strip()
-        topic_hits = self._player_chat_topic_hits(user_text, visual_types)
+        topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
         catalog_topic_hints = self._format_player_chat_topic_hints(topic_hits)
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
+            build_identify_skeleton,
             reply_policy_line,
             resolve_reply_stance,
         )
 
         reply_stance = resolve_reply_stance(
-            has_visual_threats=has_visual_threats,
+            has_visual_threats=has_visual_for_chat,
             topic_hits=topic_hits,
             threat_summary=threat_summary,
             user_text=user_text,
@@ -438,13 +445,18 @@ class NarrationMixin:
         reply_policy = reply_policy_line(reply_stance)
         allowed_speech_labels = build_allowed_speech_labels(
             topic_hits=topic_hits,
-            visual_types=visual_types,
+            visual_types=effective_visual_types,
             hearing_named_mobs=hearing_named_mobs,
         )
+        identify_skeleton = build_identify_skeleton(
+            stance=reply_stance,
+            topic_hits=topic_hits,
+        )
         LOGGER.warning(
-            "player_chat_visual count=%s types=%s threat_summary=%s",
+            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s",
             len(event.visual_threats),
-            ",".join(visual_types) or "-",
+            ",".join(str(t.type) for t in event.visual_threats if t.type) or "-",
+            ",".join(recent_visual_types) or "-",
             (threat_summary or "")[:120] or "-",
         )
         LOGGER.warning(
@@ -492,6 +504,7 @@ class NarrationMixin:
             "reply_stance": reply_stance,
             "reply_policy": reply_policy,
             "allowed_speech_labels": allowed_speech_labels,
+            "identify_skeleton": identify_skeleton or "",
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
@@ -501,17 +514,19 @@ class NarrationMixin:
             "safe_hints": list(tactics.get("safe_hints") or []),
             **self._player_chat_history_details(),
         }
+        # S3: 高信頼 identify は LLM より骨子を優先できる（オフ時・失敗時の最低限）
+        preferred_fallback = identify_skeleton or fallback
         text = self._generate_leaf_text(
             kind="player_chat",
-            fallback_text=fallback,
+            fallback_text=preferred_fallback,
             details=details,
             temperature=0.65,
         )
         from dogido_server.llm.sanitize import contains_forbidden_mob_advice, is_style_acceptable
 
         if contains_forbidden_mob_advice(text, details):
-            return fallback
-        # S2: 白リスト外種名なども style 不合格 → 中立 fallback
+            return preferred_fallback
+        # S2: 白リスト外種名なども style 不合格 → 骨子 or 中立 fallback
         if not is_style_acceptable("player_chat", text, details):
             LOGGER.warning(
                 "player_chat_style_reject stance=%s allowed=%s text=%s",
@@ -519,7 +534,7 @@ class NarrationMixin:
                 ",".join(allowed_speech_labels) or "-",
                 (text or "")[:80],
             )
-            return fallback
+            return preferred_fallback
         return text
 
     def _player_chat_place_context(self, event: GameEvent) -> dict[str, object]:
@@ -612,11 +627,31 @@ class NarrationMixin:
 
         return format_catalog_topic_hints(hits)
 
-    def _player_chat_mob_tactics(self, event: GameEvent) -> dict[str, object]:
+    def _merge_unique_types(self, *groups: list[str] | tuple[str, ...]) -> list[str]:
+        merged: list[str] = []
+        seen: set[str] = set()
+        for group in groups:
+            for raw in group:
+                text = str(raw or "").removeprefix("minecraft:").strip().lower()
+                if not text or text in seen:
+                    continue
+                seen.add(text)
+                merged.append(text)
+        return merged
+
+    def _player_chat_mob_tactics(
+        self,
+        event: GameEvent,
+        *,
+        extra_types: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, object]:
         """周囲の敵対 Mob カタログから dogido_tactics を集約する。"""
         from dogido_server.entry_catalog import collect_dogido_tactics_for_mobs
 
-        nearby_types = [threat.type for threat in event.visual_threats if threat.type]
+        nearby_types = self._merge_unique_types(
+            [threat.type for threat in event.visual_threats if threat.type],
+            list(extra_types or ()),
+        )
         tactics = collect_dogido_tactics_for_mobs(nearby_types)
         safe_fallback = None
         if event.visual_threats and (tactics.get("forbidden_advice") or tactics.get("safe_hints")):
@@ -668,18 +703,80 @@ class NarrationMixin:
             parts.append(f"視認 {label} が{direction} {distance}")
             if len(event.visual_threats) > 1:
                 parts.append(f"ほか{len(event.visual_threats) - 1}体")
-        elif event.auditory_threats:
-            audio = event.auditory_threats[0]
-            direction = self._direction_label(audio)
-            band = getattr(audio.distance_band, "value", audio.distance_band) or ""
-            name = self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None))
-            if name:
-                parts.append(f"音 {name} {direction} {band}".strip())
-            else:
-                parts.append(f"音（種別未確定） {direction} {band}".strip())
+        else:
+            # 今フレーム 0 でも直近バッファがあれば「ついさっき」
+            recent_line = self._player_chat_recent_visual_summary_line(event)
+            if recent_line:
+                parts.append(recent_line)
+            elif event.auditory_threats:
+                audio = event.auditory_threats[0]
+                direction = self._direction_label(audio)
+                band = getattr(audio.distance_band, "value", audio.distance_band) or ""
+                name = self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None))
+                if name:
+                    parts.append(f"音 {name} {direction} {band}".strip())
+                else:
+                    parts.append(f"音（種別未確定） {direction} {band}".strip())
         if event.combat.combat_active_hint:
             parts.append("交戦中っぽい")
         return "、".join(parts)
+
+    def _remember_visual_for_chat(self, event: GameEvent, now: datetime) -> None:
+        """今フレームの visual_threats を短期バッファへ。"""
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        kept: list[RecentVisualMemo] = []
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is not None and age <= retention_ms:
+                kept.append(memo)
+
+        by_key = {memo.dedupe_key: memo for memo in kept}
+        for threat in event.visual_threats:
+            mob_type = str(threat.type or "").removeprefix("minecraft:").strip().lower()
+            if not mob_type:
+                continue
+            direction = self._direction_label(threat)
+            label_ja = self._hostile_label(mob_type)
+            key = f"visual:{mob_type}:{direction}"
+            by_key[key] = RecentVisualMemo(
+                mob_type=mob_type,
+                label_ja=label_ja,
+                direction=direction,
+                distance=threat.distance,
+                seen_at=now,
+                dedupe_key=key,
+            )
+
+        memos = sorted(by_key.values(), key=lambda memo: memo.seen_at, reverse=True)[:12]
+        self.state.recent_visual_memos = memos
+
+    def _player_chat_recent_visual_types(self, event: GameEvent) -> list[str]:
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        types: list[str] = []
+        seen: set[str] = set()
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is None or age > retention_ms:
+                continue
+            if memo.mob_type in seen:
+                continue
+            seen.add(memo.mob_type)
+            types.append(memo.mob_type)
+        return types
+
+    def _player_chat_recent_visual_summary_line(self, event: GameEvent) -> str | None:
+        """バッファ先頭の視認を1行に（ついさっき ピリジャー 前）。"""
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is None or age > retention_ms:
+                continue
+            label = memo.label_ja or memo.mob_type
+            direction = memo.direction or "近く"
+            return f"ついさっき 視認 {label} が{direction}"
+        return None
 
     def _resolve_hearing_mob_type(self, raw_type: str | None, sound_event: str | None = None) -> str | None:
         """sound / label から mob カタログ id を解決。解決できなければ None。"""

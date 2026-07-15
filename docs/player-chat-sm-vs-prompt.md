@@ -28,7 +28,9 @@
 | **PR-B** | ⏸ **途中停止**（照合エンジンのみ採用。プロンプト厚みは打ち切り） |
 | **S1** | ✅ 完了（`reply_stance` + プロンプト規則カット） |
 | **S2** | ✅ 完了（`allowed_speech_labels` + sanitize 白リスト） |
-| **C 以降** | 未着手 ← **次はここ** |
+| **C** | ✅ 完了（`recent_visual_memos` + threat_summary「ついさっき」） |
+| **S3** | ✅ 完了（高信頼 identify 骨子、LLM オフでも最低限） |
+| **F′ 以降** | 未着手 ← **次はここ** |
 | 旧 PR-C / F / E / D | 下表の **C / F′ / E′ / D** に再定義 |
 
 ### PR-B を止めている理由
@@ -123,8 +125,8 @@ A ✅ ── B ⏸（エンジンのみ）
 |---|---|---|---|
 | **S1** ✅ | `reply_stance`（`saw` / `hypothesis` / `clarify` / `none`）を narration で決定し details へ。user プロンプトから **mode_hint 重複・冗長な place/hearing/topic 長文規則**を削り、**stance 依存の短い policy_line** に置換 | A, B エンジン | 旧 B 残り・旧 E の一部を前倒し |
 | **S2** ✅ | 出力に許す種名の **白リスト**（topic ∪ visual ∪ hearing named の union）。sanitize でリスト外種名を reject → 中立 fallback | S1 | 新規。プロンプトの「捏造するな」をコード担保 |
-| **C** | ①-D `recent_visual_memos` + threat_summary「ついさっき」。stance=`saw` の材料 | A（S1 の直後推奨） | 旧 PR-C そのまま |
-| **S3** | topic 高信頼（例: ババア→witch）かつ必要なら **SM 固定骨子**（「見えんけどウィッチかもしれん」系）。LLM は言い回しだけ or スキップ | S1, S2、（C あれば尚良） | 旧 B 体感・identify intent |
+| **C** ✅ | ①-D `recent_visual_memos` + threat_summary「ついさっき」。stance=`saw` の材料 | A（S1 の直後推奨） | 旧 PR-C そのまま |
+| **S3** ✅ | topic 高信頼（例: ババア→witch）かつ必要なら **SM 固定骨子**（「見えんけどウィッチかもしれん」系）。LLM は言い回しだけ or スキップ | S1, S2、（C あれば尚良） | 旧 B 体感・identify intent |
 | **F′** | structure `related_mobs` + **SM が** `plausibility_hint` 1 行を details に載せる。LLM に生成可否を推論させない | S1、topic id（B エンジン） | 旧 PR-F。手段を SM 直計算に固定 |
 | **E′** | tactics 合成の整理、fallback 磨き、**プロンプトは口調＋骨格言い換えのみ**になっていることの確認 | S1〜S3, C,（F′ あれば尚良） | 旧 PR-E。「規則を足す」から「規則を削ったあと」へ |
 | **D** | adapter LOS/confirm・`equipment_hints`（実測後） | ログ | 旧 PR-D。独立。LOS 酷いとき前倒し |

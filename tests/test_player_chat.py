@@ -131,6 +131,13 @@ class PlayerChatReplyTests(unittest.TestCase):
         texts = self.texts(make_event(sequence=1, user_text="今日もよろしくな"))
         self.assertEqual([CHAT_REPLY], texts)
 
+    def test_identify_skeleton_when_llm_off(self) -> None:
+        """S3: LLM オフでもババア→ウィッチ骨子が返る。"""
+        texts = self.texts(make_event(sequence=1, user_text="なんだあのババア"))
+        self.assertEqual(1, len(texts))
+        self.assertIn("ウィッチ", texts[0])
+        self.assertIn("見えん", texts[0])
+
     def test_romaji_chat_gets_reply(self) -> None:
         texts = self.texts(make_event(sequence=1, user_text="outouseyo"))
         self.assertEqual([CHAT_REPLY], texts)

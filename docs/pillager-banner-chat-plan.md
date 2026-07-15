@@ -352,9 +352,9 @@ structures_for_mob / structure_biomes / plausibility_hint(...)
 | **B** | ② 照合エンジン + details（プロンプト厚みは打ち切り） | ② | ⏸ エンジンのみ |
 | **S1** | `reply_stance` + プロンプト規則カット | 2.5b 執行を SM へ | ✅ |
 | **S2** | 出力白リスト sanitize | 2.5b 音・候補のコード担保 | ✅ |
-| **C** | ①-D visual バッファ | ①-D | 次 |
-| **S3** | identify 高信頼 → SM 骨子 | 2.5b 成功イメージ | |
-| **F′** | ④ related_mobs + **SM** plausibility 1 行 | ④ | 旧 F |
+| **C** | ①-D visual バッファ | ①-D | ✅ |
+| **S3** | identify 高信頼 → SM 骨子 | 2.5b 成功イメージ | ✅ |
+| **F′** | ④ related_mobs + **SM** plausibility 1 行 | ④ | 次・旧 F |
 | **E′** | tactics 整理・プロンプト縮退確認 | ③ | 旧 E（意味変更） |
 | **D** | adapter LOS/装備（実測後・必要時前倒し） | ①-B/C | 旧 D |
 
@@ -405,7 +405,7 @@ A ✅ → B ⏸ → S1 → S2 → C → S3 → F′ → E′
 
 ## 次の作業
 
-1. **S1** ✅ / **S2** ✅  
-2. **C** visual バッファ ← 次  
-3. **S3** identify 骨子  
+1. **S1〜S3 / C** ✅  
+2. **F′** structure×biome を SM 1 行 ← 次  
+3. **E′** プロンプト縮退確認  
 4. LOS が実測で酷いときだけ **D** 前倒し  

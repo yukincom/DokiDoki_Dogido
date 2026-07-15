@@ -10,6 +10,7 @@ from dogido_server.llm.types import LeafGenerationRequest
 from dogido_server.llm.sanitize import is_style_acceptable
 from dogido_server.player_chat_policy import (
     build_allowed_speech_labels,
+    build_identify_skeleton,
     catalog_labels_mentioned_in_text,
     contains_unlisted_speech_names,
     reply_policy_line,
@@ -111,6 +112,23 @@ class AllowedSpeechLabelsTests(unittest.TestCase):
         )
         # キーが無い旧経路は白リスト未適用
         self.assertTrue(is_style_acceptable("player_chat", "ゾンビがおるで！", {}))
+
+
+class IdentifySkeletonTests(unittest.TestCase):
+    def test_babaa_hypothesis_has_witch_skeleton(self) -> None:
+        hits = find_catalog_topics("なんだあのババア")
+        stance = resolve_reply_stance(
+            has_visual_threats=False, topic_hits=hits, user_text="なんだあのババア"
+        )
+        skeleton = build_identify_skeleton(stance=stance, topic_hits=hits)
+        self.assertIsNotNone(skeleton)
+        self.assertIn("ウィッチ", skeleton or "")
+        self.assertIn("見えん", skeleton or "")
+
+    def test_none_stance_has_no_skeleton(self) -> None:
+        self.assertIsNone(
+            build_identify_skeleton(stance="none", topic_hits=find_catalog_topics("なんだあのババア"))
+        )
 
 
 class PlayerChatPromptStanceTests(unittest.TestCase):
