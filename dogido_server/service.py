@@ -107,6 +107,10 @@ class DogidoService:
         self.audio = AudioDispatcher(settings)
         self.llm = DogidoLLMRouter(settings)
         self.memory = MemoryStore(settings.memory_dir) if settings.memory_enabled else None
+        if self.memory is not None:
+            from dogido_server.catalog_readings import configure_corrections_path
+
+            configure_corrections_path(self.memory.catalog_corrections_path)
 
     def warmup(self) -> None:
         self.llm.preload()
@@ -314,8 +318,14 @@ class DogidoService:
             return False
         if player_input.wants_quiet:
             return False
-        # 川柳保存などは memory 側で返事する場合がある
-        if player_input.asks_save_last_haiku or player_input.player_haiku_text:
+        # 川柳保存・直し・読み訂正・想起などは memory 側で返事する場合がある
+        if (
+            player_input.asks_save_last_haiku
+            or player_input.player_haiku_text
+            or player_input.revised_haiku_text
+            or player_input.reading_correction is not None
+            or player_input.asks_haiku_recall
+        ):
             return False
         has_speech = any(bool(action.text) and action.layer == "speech" for action in actions)
         return not has_speech
@@ -373,7 +383,13 @@ class DogidoService:
         player_input = session.machine.player_input
         extra_actions: list[AudioAction] = []
         if self.memory is None:
-            if player_input.asks_save_last_haiku or player_input.player_haiku_text:
+            if (
+                player_input.asks_save_last_haiku
+                or player_input.player_haiku_text
+                or player_input.revised_haiku_text
+                or player_input.reading_correction is not None
+                or player_input.asks_haiku_recall
+            ):
                 extra_actions.append(AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。"))
             return extra_actions
 
@@ -385,6 +401,8 @@ class DogidoService:
                 self.memory.append_player_input(event, session.session_id, player_input.raw_text)
             if haiku_emission is not None:
                 self.memory.append_haiku_emission(session.session_id, haiku_emission)
+                # 発句は珍しいので、基本すべて長期記憶へ（明示保存を待たない）
+                self.memory.save_agent_haiku(haiku_emission)
             for action in actions:
                 if not action.text:
                     continue
@@ -402,17 +420,140 @@ class DogidoService:
     def _memory_input_actions(self, session: SessionInfo, event: GameEvent) -> list[AudioAction]:
         assert self.memory is not None
         player_input = session.machine.player_input
+
+        if player_input.reading_correction is not None:
+            return self._handle_reading_correction(session, event, player_input.reading_correction)
+
+        if player_input.revised_haiku_text:
+            if session.last_haiku_emission is None:
+                return [AudioAction(layer="speech", interrupt=False, text="直す元の句がまだないで。")]
+            self.memory.save_haiku_feedback(
+                session.last_haiku_emission,
+                revised_text=player_input.revised_haiku_text,
+                observed_at=event.observed_at,
+            )
+            return [AudioAction(layer="speech", interrupt=False, text="元の句と直し、覚えといたで。")]
+
         if player_input.player_haiku_text:
             _, created = self.memory.save_player_haiku(event, player_input.player_haiku_text)
             text = "プレイヤーの川柳、保存したで。" if created else "その川柳はもう保存してあるで。"
             return [AudioAction(layer="speech", interrupt=False, text=text)]
+
         if player_input.asks_save_last_haiku:
             if session.last_haiku_emission is None:
                 return [AudioAction(layer="speech", interrupt=False, text="まだ保存できる句がないで。")]
             _, created = self.memory.save_agent_haiku(session.last_haiku_emission)
             text = "今の句、保存したで。" if created else "今の句はもう保存してあるで。"
             return [AudioAction(layer="speech", interrupt=False, text=text)]
+
+        if player_input.asks_haiku_recall:
+            return self._handle_haiku_recall(session, event, player_input)
+
         return []
+
+    def _handle_reading_correction(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        correction: object,
+    ) -> list[AudioAction]:
+        assert self.memory is not None
+        surface = str(getattr(correction, "surface", "") or "").strip()
+        reading = str(getattr(correction, "reading", "") or "").strip()
+        wrong = getattr(correction, "wrong_reading", None)
+        wrong_reading = str(wrong).strip() if wrong else None
+        if not surface or not reading:
+            return [AudioAction(layer="speech", interrupt=False, text="読み、もう一回教えてくれへん？")]
+
+        # 「そうち→くさち」のように surface が誤読だけのとき、直近バイオーム名を正本にする
+        import re
+
+        if re.fullmatch(r"[ぁ-んー]+", surface):
+            biome_label = session.machine._biome_label(event.world.biome)
+            if biome_label and biome_label != "そのへん":
+                wrong_reading = wrong_reading or surface
+                surface = biome_label
+
+        source = None
+        biome_id = session.machine._normalized_biome(event.world.biome)
+        if biome_id:
+            source = f"biome:{biome_id}"
+
+        self.memory.save_reading_correction(
+            surface=surface,
+            reading=reading,
+            wrong_reading=wrong_reading,
+            source=source,
+            observed_at=event.observed_at,
+            session_id=session.session_id,
+        )
+        text = f"{surface}は「{reading}」やね。覚え直したで。"
+        return [AudioAction(layer="speech", interrupt=False, text=text)]
+
+    def _handle_haiku_recall(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        player_input: object,
+    ) -> list[AudioAction]:
+        assert self.memory is not None
+        query = getattr(player_input, "haiku_recall_query", None)
+        biome_hint = getattr(player_input, "haiku_recall_biome_hint", None)
+        place_label = None
+        biome_ids: tuple[str, ...] = ()
+        if query is not None:
+            biome = getattr(query, "biome_id", None) or biome_hint
+            biome_ids = tuple(getattr(query, "biome_ids", ()) or ())
+            place_label = getattr(query, "place_label", None)
+            since = getattr(query, "since", None)
+            until = getattr(query, "until", None)
+            time_label = getattr(query, "time_label", None)
+        else:
+            biome = biome_hint
+            since = until = time_label = None
+
+        # 場所も期間も無い「いつ頃の句」などは全件から新しい順（現在地に縛らない）
+        hits = self.memory.search_haiku_memory(
+            biome=biome if not biome_ids else None,
+            biome_ids=biome_ids or None,
+            since=since,
+            until=until,
+            limit=3,
+        )
+        place_speech = place_label or biome
+        if not hits and (biome or biome_ids or since or until):
+            # 条件を緩めて再検索
+            hits = self.memory.search_haiku_memory(limit=3)
+            if hits and (place_speech or time_label):
+                soft = "ぴったりは無いけど、覚えとる句やと…"
+            else:
+                soft = "覚えとる句やと…"
+        else:
+            soft = "覚えとる句やと…"
+            if time_label and place_speech:
+                soft = f"{time_label}の{place_speech}あたりで覚えとる句やと…"
+            elif time_label:
+                soft = f"{time_label}の句やと…"
+            elif place_speech:
+                soft = f"{place_speech}で覚えとる句やと…"
+
+        if not hits:
+            return [AudioAction(layer="speech", interrupt=False, text="それに合う句、まだ覚えとらへんで。")]
+
+        lines: list[str] = [soft]
+        for hit in hits[:2]:
+            world = hit.get("world") if isinstance(hit.get("world"), dict) else {}
+            place = world.get("biome") or "どこか"
+            when = str(hit.get("created_at") or "")[:10]  # YYYY-MM-DD
+            original = str(hit.get("original_text") or "").replace("\n", " / ")
+            revised = hit.get("revised_text")
+            prefix = f"{when} {place}" if when else str(place)
+            if revised:
+                revised_line = str(revised).replace("\n", " / ")
+                lines.append(f"{prefix}: 元「{original}」直し「{revised_line}」")
+            else:
+                lines.append(f"{prefix}: 「{original}」")
+        return [AudioAction(layer="speech", interrupt=False, text=" ".join(lines))]
 
     def _action_contains_haiku(self, action: AudioAction, haiku: HaikuEmission) -> bool:
         text = self._compact_text(action.text or "")

@@ -27,6 +27,31 @@ class AuditoryPresenceState:
 
 
 @dataclass(slots=True)
+class RecentHearingMemo:
+    """player_chat 用: 直近フレームの音を数秒残す（今フレーム配列が空でも会話に載せる）。"""
+
+    kind: str  # "hostile" | "ambient"
+    mob_type: str | None  # カタログ id（解決できたとき）
+    label_ja: str | None  # カタログ日本語名
+    direction: str  # 表示用
+    distance_band: str
+    heard_at: datetime
+    dedupe_key: str
+
+
+@dataclass(slots=True)
+class RecentVisualMemo:
+    """player_chat 用: 直近フレームの視認脅威を数秒残す（snapshot 抜け対策）。"""
+
+    mob_type: str  # カタログ / adapter type id
+    label_ja: str
+    direction: str
+    distance: float | None
+    seen_at: datetime
+    dedupe_key: str
+
+
+@dataclass(slots=True)
 class RuntimeState:
     mode: str = "normal"
     shut_up_count: int = 0
@@ -169,6 +194,10 @@ class RuntimeState:
     portal_state_initialized: bool = False
     last_portal_frame_comment_at: datetime | None = None
     last_haiku_block_log_at: datetime | None = None
+    # player_chat 用の直近音バッファ（今フレームの auditory/ambient が空でも使う）
+    recent_hearing_memos: list[RecentHearingMemo] = field(default_factory=list)
+    # player_chat 用の直近視認バッファ（話しかけフレームだけ visual 0 の穴埋め）
+    recent_visual_memos: list[RecentVisualMemo] = field(default_factory=list)
 
 
 @dataclass(slots=True)

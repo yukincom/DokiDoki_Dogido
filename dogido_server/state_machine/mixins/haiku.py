@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from math import inf
 
-from dogido_server.entry_catalog import block_entry, item_entry, mob_poetic_tags
+from dogido_server.entry_catalog import block_entry, item_entry, mob_poetic_line, mob_poetic_tags
 from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm import StructuredGenerationRequest
 from dogido_server.llm.sanitize import summarize_for_log
@@ -347,10 +347,11 @@ class HaikuMixin:
                 passive_mobs=passive_mobs,
             )
         )
+        poetic_lines, poetic_mob_keys = self._haiku_poetic_lines(event)
         return HaikuContext(
             player_name=self._player_call_name(event),
             biome_id=self._normalized_biome(biome) or "unknown",
-            biome_label=self._biome_label(biome),
+            biome_label=self._biome_label_with_reading(biome),
             biome_group=self._biome_group_label(biome) or "不明",
             biome_traits=tuple(self._haiku_biome_traits(biome)),
             time_phase=time_phase,
@@ -364,9 +365,17 @@ class HaikuMixin:
             inventory_far_item=inventory_far_item,
             nearby_blocks=nearby_blocks,
             passive_mobs=passive_mobs,
-            haiku_tags=tuple(self._haiku_tags(event, feature_candidates)),
+            haiku_tags=tuple(
+                self._haiku_tags(
+                    event,
+                    feature_candidates,
+                    covered_mob_keys=poetic_mob_keys,
+                )
+            ),
             feature_candidates=feature_candidates,
             candidate_tensions=tuple(self._haiku_candidate_tensions(event, held_item, passive_mobs, nearby_blocks)),
+            catalog_notes=tuple(self._haiku_catalog_notes(event)),
+            poetic_lines=tuple(poetic_lines),
         )
 
     def _haiku_feature_candidates(
@@ -394,7 +403,7 @@ class HaikuMixin:
                 tags=frozenset({"異世界", "ワープ", "光", "不思議"}),
             ))
         candidates.extend([
-            HaikuFeature("バイオーム", "biome", self._biome_label(event.world.biome)),
+            HaikuFeature("バイオーム", "biome", self._biome_label_with_reading(event.world.biome)),
             HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
             HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
             HaikuFeature("天気", "weather", WEATHER_LABELS.get(weather, "不明")),
@@ -540,6 +549,60 @@ class HaikuMixin:
                 break
         return natural_values + other_values
 
+    def _haiku_catalog_notes(self, event: GameEvent) -> list[str]:
+        """いまの ID から取れるカタログ note（biome / structure / nearby block）。
+
+        entry_catalog 直引き。詩語ヒント（poetic）とは別枠。ベクトル RAG ではない。
+        """
+        notes: list[str] = []
+        seen: set[str] = set()
+
+        def append_note(label: str, note: object, *, max_len: int = 100) -> None:
+            text = str(note or "").strip()
+            if not text:
+                return
+            name = str(label or "").strip()
+            if not name:
+                return
+            if len(text) > max_len:
+                text = text[: max_len - 1].rstrip() + "…"
+            line = f"{name}: {text}"
+            if line in seen:
+                return
+            seen.add(line)
+            notes.append(line)
+
+        biome_entry = self._biome_entry(event.world.biome) or {}
+        append_note(self._biome_label_with_reading(event.world.biome), biome_entry.get("note"))
+
+        structure_id = event.world.structure or getattr(self.state, "current_structure", None)
+        if structure_id:
+            structure_entry = self._structure_entry(structure_id) or {}
+            structure_label = (
+                str(structure_entry.get("label") or "").strip()
+                or self._structure_label(structure_id)
+            )
+            append_note(structure_label, structure_entry.get("note"))
+
+        block_note_count = 0
+        for resource in sorted(event.nearby_resources, key=lambda candidate: candidate.distance or inf):
+            if block_note_count >= 3:
+                break
+            entry = block_entry(resource.name) or {}
+            note = entry.get("note")
+            if not str(note or "").strip():
+                continue
+            label = (
+                str(entry.get("japanese") or entry.get("label") or "").strip()
+                or self._block_label(resource.name)
+            )
+            before = len(notes)
+            append_note(label, note)
+            if len(notes) > before:
+                block_note_count += 1
+
+        return notes
+
     def _haiku_passive_mob_values(self, event: GameEvent) -> list[str]:
         values: list[str] = []
         seen: set[str] = set()
@@ -553,20 +616,59 @@ class HaikuMixin:
                 break
         return values
 
-    def _haiku_tags(self, event: GameEvent, features: tuple[HaikuFeature, ...]) -> list[str]:
+    def _haiku_poetic_lines(self, event: GameEvent) -> tuple[list[str], frozenset[str]]:
+        """主役平和 mob 最大2体の1行詩語。covered な mob id は haiku_tags で再展開しない。"""
+        lines: list[str] = []
+        covered: set[str] = set()
+        seen_labels: set[str] = set()
+        for mob in event.passive_mobs:
+            mob_key = normalize_minecraft_id(mob.type) or str(mob.type or "").strip().lower()
+            if not mob_key or mob_key in covered:
+                continue
+            label = self._mob_label(mob.type)
+            if label and label in seen_labels:
+                continue
+            line = mob_poetic_line(mob.type)
+            if not line:
+                continue
+            lines.append(line)
+            covered.add(mob_key)
+            if label:
+                seen_labels.add(label)
+            if len(lines) >= 2:
+                break
+        return lines, frozenset(covered)
+
+    def _haiku_tags(
+        self,
+        event: GameEvent,
+        features: tuple[HaikuFeature, ...],
+        *,
+        covered_mob_keys: frozenset[str] = frozenset(),
+    ) -> list[str]:
+        """補助のフラット詩語。poetic_lines 済み mob は二重に載せない。"""
         tags: list[str] = []
         for feature in features:
+            # feature 側の tags は主に mob 由来。covered のラベルに紐づくものは後で文字列重複除去
             tags.extend(feature.tags)
         for mob in event.passive_mobs[:4]:
+            mob_key = normalize_minecraft_id(mob.type) or str(mob.type or "").strip().lower()
+            if mob_key in covered_mob_keys:
+                continue
             tags.extend(mob_poetic_tags(mob.type))
+        covered_fragments: set[str] = set()
+        for mob_key in covered_mob_keys:
+            for fragment in mob_poetic_tags(mob_key):
+                covered_fragments.add(fragment)
         seen: set[str] = set()
         result: list[str] = []
+        limit = 8 if covered_mob_keys else 16
         for tag in tags:
-            if not tag or tag in seen:
+            if not tag or tag in seen or tag in covered_fragments:
                 continue
             seen.add(tag)
             result.append(tag)
-            if len(result) >= 16:
+            if len(result) >= limit:
                 break
         return result
 
@@ -686,9 +788,10 @@ class HaikuMixin:
         return score
 
     def _haiku_constraint_details(self, event: GameEvent, scene: SceneContext) -> dict[str, object] | None:
+        from dogido_server.catalog_readings import haiku_reading_terms
+        from dogido_server.entry_catalog import biome_reading
+
         families = self._haiku_selected_noun_families(event, scene)
-        if not families:
-            return None
         allowed_terms: list[str] = []
         forbidden_terms: list[str] = []
         seen_allowed: set[str] = set()
@@ -702,6 +805,22 @@ class HaikuMixin:
                 if term and term not in seen_forbidden:
                     seen_forbidden.add(term)
                     forbidden_terms.append(term)
+
+        biome_label = self._biome_label(event.world.biome)
+        catalog_reading = biome_reading(event.world.biome)
+        reading_allowed, reading_forbidden = haiku_reading_terms(
+            [biome_label],
+            catalog_readings={biome_label: catalog_reading} if catalog_reading else None,
+        )
+        for term in reading_allowed:
+            if term and term not in seen_allowed:
+                seen_allowed.add(term)
+                allowed_terms.append(term)
+        for term in reading_forbidden:
+            if term and term not in seen_forbidden:
+                seen_forbidden.add(term)
+                forbidden_terms.append(term)
+
         if not allowed_terms and not forbidden_terms:
             return None
         return {

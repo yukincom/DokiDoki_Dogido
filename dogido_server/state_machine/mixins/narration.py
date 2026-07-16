@@ -1,6 +1,7 @@
 # state_machine/mixins/narration.py
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags
@@ -15,7 +16,9 @@ from dogido_server.state_machine.response_catalog import (
     response_text,
     structure_entry_fallback_text,
 )
-from dogido_server.state_machine.types import DerivedSignals
+from dogido_server.state_machine.types import DerivedSignals, RecentHearingMemo, RecentVisualMemo
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 class NarrationMixin:
@@ -392,6 +395,13 @@ class NarrationMixin:
             "suppressed_panic",
         }
         has_visual_threats = bool(event.visual_threats)
+        recent_visual_types = self._player_chat_recent_visual_types(event)
+        effective_visual_types = self._merge_unique_types(
+            [str(threat.type) for threat in event.visual_threats if threat.type],
+            recent_visual_types,
+        )
+        # バッファに種が残っていれば「見た」材料あり（character_mode は今フレーム優先）
+        has_visual_for_chat = has_visual_threats or bool(recent_visual_types)
         danger_score = event.world.danger_darkness_score
         danger_darkness_high = danger_score is not None and float(danger_score) >= float(
             getattr(self.settings, "darkness_alert_threshold", 0.72)
@@ -409,19 +419,129 @@ class NarrationMixin:
             inventory_summary = self._player_chat_inventory_summary(event)
             held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
         threat_summary = self._player_chat_threat_summary(event)
-        tactics = self._player_chat_mob_tactics(event)
+        hearing_summary = self._player_chat_hearing_summary(event)
+        hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+        place_ctx = self._player_chat_place_context(event)
+        tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
         if tactics.get("safe_fallback"):
             fallback = str(tactics["safe_fallback"])
+        user_text = (self.player_input.raw_text or "").strip()
+        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
+        from dogido_server.player_chat_policy import (
+            build_allowed_speech_labels,
+            build_identify_skeleton,
+            filter_usable_topic_hits,
+            reply_policy_line,
+            resolve_reply_stance,
+            should_enforce_speech_whitelist,
+        )
+
+        passive_types = self._player_chat_observed_passive_types(event)
+        observed_ids = self._merge_unique_types(
+            effective_visual_types,
+            passive_types,
+        )
+        usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
+        reply_stance = resolve_reply_stance(
+            has_visual_threats=has_visual_for_chat,
+            topic_hits=raw_topic_hits,
+            threat_summary=threat_summary,
+            user_text=user_text,
+            observed_ids=observed_ids,
+        )
+        reply_policy = reply_policy_line(reply_stance)
+        # hypothesis のときだけ強い topic を hints / allowed / plausibility に使う
+        topic_for_identify = usable_topic_hits if reply_stance == "hypothesis" else []
+        catalog_topic_hints = (
+            self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
+        )
+        allowed_speech_labels = build_allowed_speech_labels(
+            topic_hits=topic_for_identify,
+            visual_types=effective_visual_types,
+            passive_types=passive_types,
+            hearing_named_mobs=hearing_named_mobs,
+        )
+        speech_whitelist_enforce = should_enforce_speech_whitelist(
+            reply_stance, allowed_speech_labels
+        )
+        identify_skeleton = build_identify_skeleton(
+            stance=reply_stance,
+            topic_hits=topic_for_identify,
+        )
+        from dogido_server.entry_catalog import (
+            build_plausibility_hint_lines,
+            normalize_biome_id,
+            structure_ids_for_plausibility,
+        )
+
+        if reply_stance == "hypothesis" and topic_for_identify:
+            structure_ids = structure_ids_for_plausibility(topic_for_identify)
+            plausibility_lines = build_plausibility_hint_lines(
+                topic_hits=topic_for_identify,
+                current_biome_id=normalize_biome_id(event.world.biome),
+                current_biome_label=self._biome_label(event.world.biome),
+            )
+        else:
+            structure_ids = []
+            plausibility_lines = []
+        plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
+        observation_summary = self._player_chat_observation_summary(
+            event,
+            threat_summary=threat_summary,
+            hearing_summary=hearing_summary,
+            passive_types=passive_types,
+        )
+        LOGGER.warning(
+            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s",
+            len(event.visual_threats),
+            ",".join(str(t.type) for t in event.visual_threats if t.type) or "-",
+            ",".join(recent_visual_types) or "-",
+            (threat_summary or "")[:120] or "-",
+        )
+        if structure_ids or plausibility_lines:
+            LOGGER.warning(
+                "player_chat_plausibility structures=%s lines=%s",
+                ",".join(structure_ids) or "-",
+                len(plausibility_lines),
+            )
+        LOGGER.warning(
+            "player_chat_topics raw=%s usable=%s stance=%s allowed=%s enforce_wl=%s",
+            ",".join(
+                f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
+                for hit in raw_topic_hits
+            )
+            or "-",
+            ",".join(
+                f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
+                for hit in usable_topic_hits
+            )
+            or "-",
+            reply_stance,
+            ",".join(allowed_speech_labels) or "-",
+            speech_whitelist_enforce,
+        )
+        LOGGER.warning(
+            "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
+            not bool(hearing_summary),
+            ",".join(hearing_named_mobs) or "-",
+            (hearing_summary or "")[:120],
+            len(event.auditory_threats),
+            len(event.ambient_sounds),
+            len(self.state.recent_hearing_memos),
+        )
         details = {
             "player_name": self._player_call_name(event),
-            "user_text": (self.player_input.raw_text or "").strip()[:160],
+            "user_text": user_text[:160],
             "biome": self._biome_label(event.world.biome),
             "structure_label": (
                 self._structure_label(self.state.current_structure)
                 if self.state.current_structure
                 else ""
             ),
+            "place_context": place_ctx["place_line"],
+            "space_kind": place_ctx["space_kind"],
+            "sky_visible": place_ctx["sky_visible"],
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
             "mode": self.state.mode,
             "character_mode": character_mode,
@@ -429,7 +549,17 @@ class NarrationMixin:
             "has_visual_threats": has_visual_threats,
             "danger_darkness_high": danger_darkness_high,
             "threat_summary": threat_summary,
-            "hearing_summary": self._player_chat_hearing_summary(event),
+            "hearing_summary": hearing_summary,
+            "hearing_named_mobs": hearing_named_mobs,
+            "observation_summary": observation_summary,
+            "catalog_topic_hints": catalog_topic_hints,
+            "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_for_identify],
+            "reply_stance": reply_stance,
+            "reply_policy": reply_policy,
+            "allowed_speech_labels": allowed_speech_labels,
+            "speech_whitelist_enforce": speech_whitelist_enforce,
+            "identify_skeleton": identify_skeleton or "",
+            "plausibility_hints": plausibility_hints,
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
@@ -439,25 +569,204 @@ class NarrationMixin:
             "safe_hints": list(tactics.get("safe_hints") or []),
             **self._player_chat_history_details(),
         }
+        # S3: 高信頼 identify は LLM より骨子を優先できる（オフ時・失敗時の最低限）
+        preferred_fallback = identify_skeleton or fallback
         text = self._generate_leaf_text(
             kind="player_chat",
-            fallback_text=fallback,
+            fallback_text=preferred_fallback,
             details=details,
             temperature=0.65,
         )
-        from dogido_server.llm.sanitize import contains_forbidden_mob_advice
+        from dogido_server.llm.sanitize import contains_forbidden_mob_advice, is_style_acceptable
 
         if contains_forbidden_mob_advice(text, details):
-            return fallback
+            return preferred_fallback
+        # S2: 白リスト外種名なども style 不合格 → 骨子 or 中立 fallback
+        if not is_style_acceptable("player_chat", text, details):
+            LOGGER.warning(
+                "player_chat_style_reject stance=%s allowed=%s text=%s",
+                reply_stance,
+                ",".join(allowed_speech_labels) or "-",
+                (text or "")[:80],
+            )
+            return preferred_fallback
         return text
 
-    def _player_chat_mob_tactics(self, event: GameEvent) -> dict[str, object]:
-        """周囲の敵対 Mob カタログから dogido_tactics を集約する。"""
+    def _player_chat_place_context(self, event: GameEvent) -> dict[str, object]:
+        """地表バイオームと「空間」（地下っぽさ）を分けて chat に渡す。
+
+        biome id が白樺の森のままでも、sky_visible / 天井 / 囲まれ度で洞窟っぽさを伝える。
+        """
+        biome_label = self._biome_label(event.world.biome)
+        sky_raw = event.world.sky_visible
+        sky_visible = bool(sky_raw) if sky_raw is not None else None
+        y = event.player.position.y
+        ceiling = event.world.ceiling_height
+        enclosure = float(event.world.enclosure_score or 0.0)
+        cover = (event.world.overhead_cover_type or "unknown").lower()
+        light = event.world.local_light
+        structure = (
+            self._structure_label(self.state.current_structure)
+            if self.state.current_structure
+            else ""
+        )
+
+        cave_biome = self._is_cave_biome(event.world.biome)
+        submerged = bool(event.world.is_submerged)
+        occluded = self._is_occluded_environment(event)
+        foliage = self._is_foliage_shade_context(event)
+        low_ceiling = ceiling is not None and ceiling <= 8.0
+        deep_y = y is not None and y <= 48.0
+        enclosed = enclosure >= 0.35
+
+        if submerged:
+            space_kind = "underwater"
+            space_ja = "水中"
+        elif cave_biome:
+            space_kind = "cave_biome"
+            space_ja = "洞窟バイオームの中"
+        elif sky_visible is False and (low_ceiling or enclosed or deep_y or occluded):
+            space_kind = "underground_or_roofed"
+            space_ja = "地下っぽい／屋根のある空間（空は見えない）"
+        elif foliage or (cover == "foliage" and sky_visible is not True):
+            space_kind = "canopy"
+            space_ja = "木陰っぽい空間"
+        elif sky_visible is True:
+            space_kind = "open_surface"
+            space_ja = "開けた地上（空が見える）"
+        elif sky_visible is False:
+            space_kind = "roofed_unclear"
+            space_ja = "空は見えないが、深さははっきりしない空間"
+        else:
+            space_kind = "unknown"
+            space_ja = "空間の詳細は不明"
+
+        sky_ja = {
+            True: "空が見える",
+            False: "空は見えない",
+            None: "空の見え方は不明",
+        }[sky_visible]
+        bits = [
+            f"地表バイオーム: {biome_label}",
+            f"空間: {space_ja}",
+            sky_ja,
+        ]
+        if y is not None:
+            bits.append(f"高さY{int(round(y))}")
+        if ceiling is not None:
+            bits.append(f"天井おおよそ{ceiling:.0f}m")
+        if light is not None:
+            bits.append(f"明るさ{light}")
+        if structure:
+            bits.append(f"構造物: {structure}")
+        place_line = " / ".join(bits)
+        return {
+            "space_kind": space_kind,
+            "sky_visible": sky_visible,
+            "place_line": place_line,
+            "biome_label": biome_label,
+        }
+
+    def _player_chat_topic_hits(
+        self,
+        user_text: str,
+        observed_types: list[str] | tuple[str, ...],
+    ) -> list[dict[str, object]]:
+        """プレイヤー文 → カタログ話題候補（種族ハードコードなし）。"""
+        from dogido_server.entry_catalog import find_catalog_topics
+
+        return find_catalog_topics(user_text, observed_ids=observed_types)
+
+    def _format_player_chat_topic_hints(self, hits: list[dict[str, object]]) -> str:
+        from dogido_server.entry_catalog import format_catalog_topic_hints
+
+        return format_catalog_topic_hints(hits)
+
+    def _merge_unique_types(self, *groups: list[str] | tuple[str, ...]) -> list[str]:
+        merged: list[str] = []
+        seen: set[str] = set()
+        for group in groups:
+            for raw in group:
+                text = str(raw or "").removeprefix("minecraft:").strip().lower()
+                if not text or text in seen:
+                    continue
+                seen.add(text)
+                merged.append(text)
+        return merged
+
+    def _player_chat_observed_passive_types(self, event: GameEvent) -> list[str]:
+        """今フレームの passive_mobs + 直近見た平和/中立（ambient 根拠）。"""
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        # ambient はもう少し長く「話題に残ってよい」
+        ambient_retention_ms = max(retention_ms, 60000)
+        current = [str(mob.type) for mob in (event.passive_mobs or []) if getattr(mob, "type", None)]
+        recent: list[str] = []
+        for mob_type, seen_at in (self.state.recent_passive_mob_seen_at_by_type or {}).items():
+            age = self._recent_ms(now, seen_at)
+            if age is not None and age <= ambient_retention_ms:
+                recent.append(str(mob_type))
+        return self._merge_unique_types(current, recent)
+
+    def _player_chat_observation_summary(
+        self,
+        event: GameEvent,
+        *,
+        threat_summary: str,
+        hearing_summary: str,
+        passive_types: list[str] | tuple[str, ...],
+    ) -> str:
+        """観測だけの短い事実メモ（topic 仮説は混ぜない）。最大数行。"""
+        lines: list[str] = []
+        threat = (threat_summary or "").strip()
+        if threat and threat != "とくになし":
+            lines.append(f"脅威: {threat}")
+        labels: list[str] = []
+        seen: set[str] = set()
+        from dogido_server.entry_catalog import mob_entry
+
+        for mob_type in passive_types:
+            entry = mob_entry(mob_type)
+            label = str((entry or {}).get("label") or mob_type)
+            if label and label not in seen:
+                seen.add(label)
+                labels.append(label)
+            if len(labels) >= 4:
+                break
+        if labels:
+            lines.append(f"近くの生き物: {'、'.join(labels)}")
+        hearing = (hearing_summary or "").strip()
+        if hearing:
+            lines.append(f"音: {hearing}")
+        return "\n".join(f"- {line}" for line in lines[:4])
+
+    def _player_chat_mob_tactics(
+        self,
+        event: GameEvent,
+        *,
+        extra_types: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, object]:
+        """観測（今フレーム + visual バッファ）の敵対だけ tactics を集約。
+
+        トピック仮説だけの種は混ぜない（空観測で断定的 tactics を出さない）。
+        """
         from dogido_server.entry_catalog import collect_dogido_tactics_for_mobs
 
-        nearby_types = [threat.type for threat in event.visual_threats if threat.type]
+        nearby_types = self._merge_unique_types(
+            [threat.type for threat in event.visual_threats if threat.type],
+            list(extra_types or ()),
+        )
+        if not nearby_types:
+            return {
+                "nearby_hostile_types": [],
+                "notes": [],
+                "forbidden_advice": [],
+                "safe_hints": [],
+                "safe_fallback": None,
+            }
         tactics = collect_dogido_tactics_for_mobs(nearby_types)
         safe_fallback = None
+        # 今フレームに視認があるときだけ短い安全 fallback（バッファのみは threat 文に任せる）
         if event.visual_threats and (tactics.get("forbidden_advice") or tactics.get("safe_hints")):
             nearest = min(
                 event.visual_threats,
@@ -467,7 +776,6 @@ class NarrationMixin:
             label = self._hostile_label(nearest.type)
             hints = tactics.get("safe_hints") or []
             hint = str(hints[0]) if hints else "気いつけ"
-            # 禁止助言を含まない安全な短文
             safe_fallback = f"{direction}に{label}や！{hint}や！"
         return {
             "nearby_hostile_types": nearby_types,
@@ -507,37 +815,247 @@ class NarrationMixin:
             parts.append(f"視認 {label} が{direction} {distance}")
             if len(event.visual_threats) > 1:
                 parts.append(f"ほか{len(event.visual_threats) - 1}体")
-        elif event.auditory_threats:
-            audio = event.auditory_threats[0]
-            direction = self._direction_label(audio)
-            band = getattr(audio.distance_band, "value", audio.distance_band) or ""
-            label = audio.label if not audio.spoken_name_allowed else self._hostile_label(audio.label)
-            parts.append(f"敵っぽい音 {label} {direction} {band}".strip())
+        else:
+            # 今フレーム 0 でも直近バッファがあれば「ついさっき」
+            recent_line = self._player_chat_recent_visual_summary_line(event)
+            if recent_line:
+                parts.append(recent_line)
+            elif event.auditory_threats:
+                audio = event.auditory_threats[0]
+                direction = self._direction_label(audio)
+                band = getattr(audio.distance_band, "value", audio.distance_band) or ""
+                name = self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None))
+                if name:
+                    parts.append(f"音 {name} {direction} {band}".strip())
+                else:
+                    parts.append(f"音（種別未確定） {direction} {band}".strip())
         if event.combat.combat_active_hint:
             parts.append("交戦中っぽい")
         return "、".join(parts)
 
-    def _player_chat_hearing_summary(self, event: GameEvent) -> str:
-        """今フレームで adapter が拾っている「聞こえた音」の要約。捏造防止用。"""
+    def _remember_visual_for_chat(self, event: GameEvent, now: datetime) -> None:
+        """今フレームの visual_threats を短期バッファへ。"""
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        kept: list[RecentVisualMemo] = []
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is not None and age <= retention_ms:
+                kept.append(memo)
+
+        by_key = {memo.dedupe_key: memo for memo in kept}
+        for threat in event.visual_threats:
+            mob_type = str(threat.type or "").removeprefix("minecraft:").strip().lower()
+            if not mob_type:
+                continue
+            direction = self._direction_label(threat)
+            label_ja = self._hostile_label(mob_type)
+            key = f"visual:{mob_type}:{direction}"
+            by_key[key] = RecentVisualMemo(
+                mob_type=mob_type,
+                label_ja=label_ja,
+                direction=direction,
+                distance=threat.distance,
+                seen_at=now,
+                dedupe_key=key,
+            )
+
+        memos = sorted(by_key.values(), key=lambda memo: memo.seen_at, reverse=True)[:12]
+        self.state.recent_visual_memos = memos
+
+    def _player_chat_recent_visual_types(self, event: GameEvent) -> list[str]:
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        types: list[str] = []
+        seen: set[str] = set()
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is None or age > retention_ms:
+                continue
+            if memo.mob_type in seen:
+                continue
+            seen.add(memo.mob_type)
+            types.append(memo.mob_type)
+        return types
+
+    def _player_chat_recent_visual_summary_line(self, event: GameEvent) -> str | None:
+        """バッファ先頭の視認を1行に（ついさっき ピリジャー 前）。"""
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is None or age > retention_ms:
+                continue
+            label = memo.label_ja or memo.mob_type
+            direction = memo.direction or "近く"
+            return f"ついさっき 視認 {label} が{direction}"
+        return None
+
+    def _resolve_hearing_mob_type(self, raw_type: str | None, sound_event: str | None = None) -> str | None:
+        """sound / label から mob カタログ id を解決。解決できなければ None。"""
+        from dogido_server.entry_catalog import mob_entry
+
+        candidates: list[str] = []
+        if raw_type:
+            candidates.append(str(raw_type).removeprefix("minecraft:").strip().lower())
+        if sound_event:
+            # entity.zombie.ambient / entity.minecraft.zombie.hurt など
+            se = str(sound_event).removeprefix("minecraft:").strip().lower().replace("/", ".")
+            parts = [p for p in se.split(".") if p and p not in {"entity", "minecraft", "hostile", "neutral", "passive"}]
+            candidates.extend(parts)
+        seen: set[str] = set()
+        for cand in candidates:
+            if not cand or cand in seen:
+                continue
+            seen.add(cand)
+            if mob_entry(cand) is not None:
+                return cand
+        return None
+
+    def _resolve_hearing_mob_label(self, raw_type: str | None, sound_event: str | None = None) -> str | None:
+        from dogido_server.entry_catalog import mob_entry
         from dogido_server.state_machine.constants import MOB_LABELS
 
+        mob_type = self._resolve_hearing_mob_type(raw_type, sound_event)
+        if not mob_type:
+            return None
+        entry = mob_entry(mob_type)
+        if entry is not None:
+            label = str(entry.get("label") or "").strip()
+            if label:
+                return label
+        mapped = MOB_LABELS.get(mob_type)
+        return str(mapped) if mapped else None
+
+    def _remember_hearing_for_chat(self, event: GameEvent, now: datetime) -> None:
+        """今フレームの音を短期バッファへ。player_chat が数秒遅れても種名を使えるようにする。"""
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
+        # prune
+        kept: list[RecentHearingMemo] = []
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if age is not None and age <= retention_ms:
+                kept.append(memo)
+
+        by_key = {memo.dedupe_key: memo for memo in kept}
+
+        def _dir_band(obj: object) -> tuple[str, str]:
+            direction = self._direction_label(obj)  # type: ignore[arg-type]
+            band = str(getattr(getattr(obj, "distance_band", None), "value", getattr(obj, "distance_band", None)) or "")
+            return direction, band
+
+        for audio in event.auditory_threats:
+            direction, band = _dir_band(audio)
+            mob_type = self._resolve_hearing_mob_type(audio.label, getattr(audio, "sound_event", None))
+            label_ja = self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None))
+            key = f"hostile:{mob_type or audio.label}:{direction}:{band}"
+            by_key[key] = RecentHearingMemo(
+                kind="hostile",
+                mob_type=mob_type,
+                label_ja=label_ja,
+                direction=direction,
+                distance_band=band,
+                heard_at=now,
+                dedupe_key=key,
+            )
+
+        for sound in event.ambient_sounds:
+            direction, band = _dir_band(sound)
+            raw = str(sound.type or "")
+            mob_type = self._resolve_hearing_mob_type(raw, getattr(sound, "sound_event", None))
+            label_ja = self._resolve_hearing_mob_label(raw, getattr(sound, "sound_event", None))
+            key = f"ambient:{mob_type or raw}:{direction}:{band}"
+            by_key[key] = RecentHearingMemo(
+                kind="ambient",
+                mob_type=mob_type,
+                label_ja=label_ja,
+                direction=direction,
+                distance_band=band,
+                heard_at=now,
+                dedupe_key=key,
+            )
+
+        # 新しい順に上限
+        memos = sorted(by_key.values(), key=lambda m: m.heard_at, reverse=True)[:12]
+        self.state.recent_hearing_memos = memos
+
+    def _player_chat_hearing_summary(self, event: GameEvent) -> str:
+        """今フレーム + 直近バッファの音要約。種名はカタログ解決できたものだけ。"""
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
         parts: list[str] = []
-        for audio in event.auditory_threats[:3]:
+        seen_keys: set[str] = set()
+
+        def _add_line(key: str, line: str) -> None:
+            if key in seen_keys or not line:
+                return
+            seen_keys.add(key)
+            parts.append(line)
+
+        # 1) 今フレーム優先
+        for audio in event.auditory_threats[:4]:
             direction = self._direction_label(audio)
             band = getattr(audio.distance_band, "value", audio.distance_band) or ""
-            if audio.spoken_name_allowed and audio.label:
-                name = self._hostile_label(audio.label)
+            label_ja = self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None))
+            key = f"hostile:{label_ja or audio.label}:{direction}:{band}"
+            if label_ja:
+                _add_line(key, f"{label_ja}の音 {direction} {band}".strip())
             else:
-                name = "敵意っぽい気配"
-            parts.append(f"{name}の音 {direction} {band}".strip())
+                _add_line(key, f"音（種別未確定） {direction} {band}".strip())
+
         for sound in event.ambient_sounds[:4]:
-            # AmbientSound も direction.horizontal を持つので流用できる
             direction = self._direction_label(sound)  # type: ignore[arg-type]
             band = getattr(sound.distance_band, "value", sound.distance_band) or ""
-            key = str(sound.type or "").removeprefix("minecraft:")
-            name = str(MOB_LABELS.get(key) or self._hostile_label(key) or key or "なにか")
-            parts.append(f"{name}っぽい声 {direction} {band}".strip())
+            raw = str(sound.type or "")
+            label_ja = self._resolve_hearing_mob_label(raw, getattr(sound, "sound_event", None))
+            key = f"ambient:{label_ja or raw}:{direction}:{band}"
+            if label_ja:
+                _add_line(key, f"{label_ja}っぽい声 {direction} {band}".strip())
+            else:
+                _add_line(key, f"なにかの声 {direction} {band}".strip())
+
+        # 2) 直近バッファ（今フレームで埋まらなかった分）
+        for memo in self.state.recent_hearing_memos:
+            if len(parts) >= 6:
+                break
+            age = self._recent_ms(now, memo.heard_at)
+            if age is None or age > retention_ms:
+                continue
+            if memo.dedupe_key in seen_keys:
+                continue
+            if memo.label_ja:
+                if memo.kind == "hostile":
+                    line = f"{memo.label_ja}の音 {memo.direction} {memo.distance_band}（ついさっき）".strip()
+                else:
+                    line = f"{memo.label_ja}っぽい声 {memo.direction} {memo.distance_band}（ついさっき）".strip()
+            else:
+                line = f"音（種別未確定） {memo.direction} {memo.distance_band}（ついさっき）".strip()
+            _add_line(memo.dedupe_key, line)
+
         return "、".join(parts)
+
+    def _player_chat_hearing_named_mobs(self, event: GameEvent) -> list[str]:
+        """hearing 要約から、種名として使ってよいカタログ名だけ。"""
+        names: list[str] = []
+        seen: set[str] = set()
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
+
+        def _add(name: str | None) -> None:
+            text = str(name or "").strip()
+            if not text or text in seen:
+                return
+            seen.add(text)
+            names.append(text)
+
+        for audio in event.auditory_threats:
+            _add(self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None)))
+        for sound in event.ambient_sounds:
+            _add(self._resolve_hearing_mob_label(sound.type, getattr(sound, "sound_event", None)))
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if age is not None and age <= retention_ms:
+                _add(memo.label_ja)
+        return names
 
     def _player_chat_inventory_summary(self, event: GameEvent, *, max_items: int = 18) -> str:
         """所持品の短い要約。player_chat 専用。常時注入しない。"""

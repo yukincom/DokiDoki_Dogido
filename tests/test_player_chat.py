@@ -23,6 +23,7 @@ from dogido_server.models import (
     PriorityHint,
     SourceKind,
     TimePhase,
+    VisualThreat,
     Weather,
     WorldState,
 )
@@ -94,9 +95,48 @@ class PlayerChatReplyTests(unittest.TestCase):
         result = self.machine.process(event)
         return [action.text for action in result.actions if action.text]
 
+    def test_chat_fallback_is_neutral_not_hearing_ack(self) -> None:
+        """PR-A: unusable 時などに載る固定文は話題を横取りしない中立文。"""
+        self.assertNotIn("聞こえとる", CHAT_REPLY)
+        self.assertIn("教えて", CHAT_REPLY)
+        texts = self.texts(make_event(sequence=1, user_text="今日もよろしくな"))
+        self.assertEqual([CHAT_REPLY], texts)
+
+    def test_player_chat_logs_visual_count_and_types(self) -> None:
+        """PR-A: player_chat 時に visual 件数・types をログへ。"""
+        event = make_event(sequence=1, user_text="あいつら何？")
+        event.visual_threats = [
+            VisualThreat(
+                type="pillager",
+                entity_id="pillager-1",
+                distance=12.0,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+                certainty=Certainty.HIGH,
+            ),
+            VisualThreat(
+                type="pillager",
+                entity_id="pillager-2",
+                distance=14.0,
+                direction=Direction(horizontal=HorizontalDirection.LEFT),
+                certainty=Certainty.HIGH,
+            ),
+        ]
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            self.machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+        joined = "\n".join(captured.output)
+        self.assertIn("player_chat_visual count=2", joined)
+        self.assertIn("types=pillager,pillager", joined)
+
     def test_free_chat_gets_reply(self) -> None:
         texts = self.texts(make_event(sequence=1, user_text="今日もよろしくな"))
         self.assertEqual([CHAT_REPLY], texts)
+
+    def test_identify_skeleton_when_llm_off(self) -> None:
+        """S3: LLM オフでもババア→ウィッチ骨子が返る。"""
+        texts = self.texts(make_event(sequence=1, user_text="なんだあのババア"))
+        self.assertEqual(1, len(texts))
+        self.assertIn("ウィッチ", texts[0])
+        self.assertIn("見えん", texts[0])
 
     def test_romaji_chat_gets_reply(self) -> None:
         texts = self.texts(make_event(sequence=1, user_text="outouseyo"))
@@ -177,7 +217,8 @@ class InventoryOnDemandTests(unittest.TestCase):
             )
         )
         self.assertNotIn("所持品（インベントリ要約）", without[1]["content"])
-        self.assertIn("所持品リストが与えられていない", without[1]["content"])
+        # S1: 未提示時は inventory 節・長文規則ごと省略
+        self.assertNotIn("所持品リストが与えられていない", without[1]["content"])
 
     def test_inventory_summary_from_event(self) -> None:
         machine = DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
@@ -264,11 +305,15 @@ class HearingContextTests(unittest.TestCase):
                     "time_phase": "day",
                     "hearing_summary": "",
                     "threat_summary": "",
+                    "reply_stance": "none",
+                    "reply_policy": "雑談として自然に返す。根拠のない種名・敵・音の捏造はしない。",
                 },
             )
         )
-        self.assertIn("音のメモ: （なし）", messages[1]["content"])
-        self.assertIn("断定は禁止", messages[1]["content"])
+        content = messages[1]["content"]
+        # E′: 空 hearing は節ごと省略。捏造防止は policy + S2 白リスト
+        self.assertNotIn("音のメモ:", content)
+        self.assertIn("捏造はしない", content)
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(
@@ -282,11 +327,15 @@ class HearingContextTests(unittest.TestCase):
                     "time_phase": "day",
                     "hearing_summary": "村人っぽい声 左 close",
                     "threat_summary": "とくになし",
+                    "hearing_named_mobs": ["村人"],
+                    "reply_stance": "none",
+                    "reply_policy": "雑談として自然に返す。根拠のない種名・敵・音の捏造はしない。",
                 },
             )
         )
-        self.assertIn("村人っぽい声 左 close", messages[1]["content"])
-        self.assertIn("捏造しない", messages[1]["content"])
+        content = messages[1]["content"]
+        self.assertIn("村人っぽい声 左 close", content)
+        self.assertIn("音から使ってよい具体モブ名: 村人", content)
 
 
 class PlayerInputEndpointTests(unittest.TestCase):

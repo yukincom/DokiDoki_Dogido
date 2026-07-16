@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 from pathlib import Path
@@ -44,6 +44,7 @@ class MemoryStore:
         self.rolling_summary_path = self.short_term_dir / "rolling_summary.json"
         self.haiku_entries_path = self.long_term_dir / "haiku_entries.jsonl"
         self.haiku_revisions_path = self.long_term_dir / "haiku_revisions.jsonl"
+        self.catalog_corrections_path = self.long_term_dir / "catalog_corrections.jsonl"
         self.player_profile_path = self.long_term_dir / "player_profile.json"
 
     def append_short_term_event(self, payload: dict[str, Any]) -> None:
@@ -115,6 +116,206 @@ class MemoryStore:
 
     def list_haiku_entries(self) -> list[dict[str, Any]]:
         return self._read_jsonl(self.haiku_entries_path)
+
+    def list_haiku_revisions(self) -> list[dict[str, Any]]:
+        return self._read_jsonl(self.haiku_revisions_path)
+
+    def save_haiku_feedback(
+        self,
+        emission: HaikuEmission,
+        *,
+        revised_text: str | None = None,
+        comment: str | None = None,
+        observed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        """元句を長期に残し、直し句があれば revision にペア保存する。
+
+        プロンプト常駐用ではない。明示検索・保存用の長期アーカイブ。
+        """
+        entry, _ = self.save_agent_haiku(emission)
+        created_at = observed_at or emission.created_at
+        revision = {
+            "id": self._revision_id(created_at, emission.event_sequence),
+            "created_at": datetime_json(created_at),
+            "haiku_id": entry.get("id"),
+            "source": "player_feedback",
+            "comment": (comment or "").strip() or None,
+            "original_text": emission.text.strip(),
+            "revised_text": (revised_text or "").strip() or None,
+            "world": {
+                "biome": emission.biome,
+                "structure": emission.structure,
+                "time_phase": emission.time_phase,
+                "dimension": emission.dimension,
+            },
+        }
+        self._append_jsonl(self.haiku_revisions_path, revision)
+        return revision
+
+    def save_reading_correction(
+        self,
+        *,
+        surface: str,
+        reading: str,
+        wrong_reading: str | None = None,
+        source: str | None = None,
+        observed_at: datetime | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """読みの訂正をオーバーレイ JSONL に追記し、ランタイム辞書を更新する。"""
+        from dogido_server.catalog_readings import apply_overlay_correction, configure_corrections_path
+
+        created_at = observed_at or datetime.now().astimezone()
+        row = {
+            "id": f"corr_{created_at.strftime('%Y%m%d_%H%M%S')}_{surface}",
+            "created_at": datetime_json(created_at),
+            "surface": surface.strip(),
+            "reading": reading.strip(),
+            "wrong_reading": (wrong_reading or "").strip() or None,
+            "forbidden_readings": [wrong_reading.strip()] if wrong_reading and wrong_reading.strip() else [],
+            "source": source,
+            "session_id": session_id,
+        }
+        self._append_jsonl(self.catalog_corrections_path, row)
+        configure_corrections_path(self.catalog_corrections_path)
+        apply_overlay_correction(
+            surface=surface,
+            reading=reading,
+            wrong_reading=wrong_reading,
+            source=source,
+        )
+        return row
+
+    def search_haiku_memory(
+        self,
+        *,
+        biome: str | None = None,
+        biome_ids: set[str] | frozenset[str] | list[str] | tuple[str, ...] | None = None,
+        query_text: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """明示的な「あの句」想起用。場所・壁時計の期間で長期句を探す。
+
+        ゲーム内時刻は見ない。`created_at`（保存時の実時刻）だけを使う。
+        biome_ids はカタロググループ展開後の集合（寒いところ＝cold+snowy など）。
+        """
+        biome_key = normalize_minecraft_id(biome) if biome else None
+        allowed_biomes: set[str] | None = None
+        if biome_ids:
+            allowed_biomes = {
+                normalized
+                for raw in biome_ids
+                if (normalized := normalize_minecraft_id(str(raw) if raw is not None else None))
+            }
+            if not allowed_biomes:
+                allowed_biomes = None
+        if biome_key:
+            allowed_biomes = {biome_key} if allowed_biomes is None else (allowed_biomes | {biome_key})
+        query = (query_text or "").strip()
+        hits: list[dict[str, Any]] = []
+        seen_texts: set[str] = set()
+
+        def _parse_created(value: object) -> datetime | None:
+            if value is None:
+                return None
+            text = str(value).strip()
+            if not text:
+                return None
+            try:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            return parsed
+
+        def _in_time_range(created: datetime | None) -> bool:
+            if since is None and until is None:
+                return True
+            if created is None:
+                return False
+            # 比較用に aware へ
+            created_cmp = created if created.tzinfo is not None else created.replace(tzinfo=timezone.utc)
+            if since is not None:
+                since_cmp = since if since.tzinfo is not None else since.replace(tzinfo=timezone.utc)
+                if created_cmp < since_cmp:
+                    return False
+            if until is not None:
+                until_cmp = until if until.tzinfo is not None else until.replace(tzinfo=timezone.utc)
+                if created_cmp >= until_cmp:
+                    return False
+            return True
+
+        def _match(world: dict[str, Any], created_at: object, *texts: object) -> bool:
+            if not _in_time_range(_parse_created(created_at)):
+                return False
+            row_biome = normalize_minecraft_id(str(world.get("biome") or "") or None)
+            if allowed_biomes is not None:
+                if not row_biome or row_biome not in allowed_biomes:
+                    return False
+            if not query:
+                return True
+            blob = " ".join(str(part) for part in texts if part)
+            return query in blob
+
+        def _add(hit: dict[str, Any]) -> bool:
+            key = str(hit.get("original_text") or "").strip()
+            if key and key in seen_texts:
+                return False
+            if key:
+                seen_texts.add(key)
+            hits.append(hit)
+            return len(hits) >= limit
+
+        # 新しい順: created_at でソート（revision と entry を混ぜる）
+        candidates: list[tuple[datetime, dict[str, Any]]] = []
+
+        for rev in self.list_haiku_revisions():
+            world = rev.get("world") if isinstance(rev.get("world"), dict) else {}
+            if not _match(world, rev.get("created_at"), rev.get("original_text"), rev.get("revised_text"), rev.get("comment")):
+                continue
+            created = _parse_created(rev.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)
+            candidates.append(
+                (
+                    created,
+                    {
+                        "kind": "revision",
+                        "id": rev.get("id"),
+                        "created_at": rev.get("created_at"),
+                        "original_text": rev.get("original_text"),
+                        "revised_text": rev.get("revised_text"),
+                        "comment": rev.get("comment"),
+                        "world": world,
+                    },
+                )
+            )
+
+        for entry in self.list_haiku_entries():
+            world = entry.get("world") if isinstance(entry.get("world"), dict) else {}
+            text = str(entry.get("text") or "")
+            if not _match(world, entry.get("created_at"), text, entry.get("interpretation")):
+                continue
+            created = _parse_created(entry.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)
+            candidates.append(
+                (
+                    created,
+                    {
+                        "kind": "entry",
+                        "id": entry.get("id"),
+                        "created_at": entry.get("created_at"),
+                        "original_text": text,
+                        "revised_text": None,
+                        "comment": entry.get("interpretation"),
+                        "world": world,
+                    },
+                )
+            )
+
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        for _, hit in candidates:
+            if _add(hit):
+                break
+        return hits
 
     def load_profile(self, player_name: str | None = None) -> dict[str, Any]:
         if self.player_profile_path.exists():
@@ -220,6 +421,11 @@ class MemoryStore:
         if suffix:
             parts.append(suffix)
         return "_".join(parts)
+
+    def _revision_id(self, created_at: datetime, sequence: int | None) -> str:
+        timestamp = created_at.strftime("%Y%m%d_%H%M%S")
+        sequence_part = str(sequence) if sequence is not None else created_at.strftime("%f")
+        return f"rev_{timestamp}_{sequence_part}"
 
     def _default_profile(self, player_name: str) -> dict[str, Any]:
         return {

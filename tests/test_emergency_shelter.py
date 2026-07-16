@@ -11,6 +11,10 @@ from dogido_server.state_machine import (
     EMERGENCY_SHELTER_CALL,
     EMERGENCY_SHELTER_MORNING_CALL,
 )
+from dogido_server.state_machine.response_catalog import response_text
+
+EMERGENCY_SHELTER_CALL_WITH_BED = response_text("darkness", "emergency_shelter", "advice_with_bed")
+EMERGENCY_SHELTER_CALL_NEARBY_BED = response_text("darkness", "emergency_shelter", "advice_nearby_bed")
 
 
 def build_event(
@@ -30,6 +34,8 @@ def build_event(
     respawn_point_set: bool = True,
     respawn_distance: float | None = 80.0,
     inventory: dict[str, int] | None = None,
+    held_item: str = "minecraft:air",
+    nearby_bed_count: int = 0,
 ) -> GameEvent:
     return GameEvent.model_validate(
         {
@@ -46,7 +52,7 @@ def build_event(
             "player": {
                 "name": "tester",
                 "position": {"x": 0.0, "y": 64.0, "z": 0.0},
-                "held_item": "minecraft:air",
+                "held_item": held_item,
                 "dimension": dimension,
             },
             "world": {
@@ -63,7 +69,7 @@ def build_event(
                 "air_supply": 300,
                 "nearby_door_count": 0,
                 "open_door_count": 0,
-                "nearby_bed_count": 0,
+                "nearby_bed_count": nearby_bed_count,
                 "drafty_opening_count": 0,
                 "respawn_point_set": respawn_point_set,
                 "respawn_distance": respawn_distance,
@@ -141,6 +147,44 @@ class EmergencyShelterTests(unittest.TestCase):
             build_event(self.started_at, sequence=1, inventory={"red_wool": 1})
         )
         self.assertIn(EMERGENCY_SHELTER_CALL, [action.text for action in wool_event.actions])
+
+    def test_emergency_shelter_prefers_held_bed_over_dig_down(self) -> None:
+        result = self.machine.process(
+            build_event(
+                self.started_at,
+                sequence=1,
+                held_item="minecraft:red_bed",
+                inventory={},
+            )
+        )
+        texts = [action.text for action in result.actions]
+        self.assertIn(EMERGENCY_SHELTER_CALL_WITH_BED, texts)
+        self.assertNotIn(EMERGENCY_SHELTER_CALL, texts)
+        self.assertNotIn("掘って", EMERGENCY_SHELTER_CALL_WITH_BED)
+
+    def test_emergency_shelter_prefers_inventory_bed_over_dig_down(self) -> None:
+        result = self.machine.process(
+            build_event(
+                self.started_at,
+                sequence=1,
+                inventory={"white_bed": 1},
+            )
+        )
+        texts = [action.text for action in result.actions]
+        self.assertIn(EMERGENCY_SHELTER_CALL_WITH_BED, texts)
+        self.assertNotIn(EMERGENCY_SHELTER_CALL, texts)
+
+    def test_emergency_shelter_prefers_nearby_bed_over_dig_down(self) -> None:
+        result = self.machine.process(
+            build_event(
+                self.started_at,
+                sequence=1,
+                nearby_bed_count=1,
+            )
+        )
+        texts = [action.text for action in result.actions]
+        self.assertIn(EMERGENCY_SHELTER_CALL_NEARBY_BED, texts)
+        self.assertNotIn(EMERGENCY_SHELTER_CALL, texts)
 
     def test_emergency_shelter_waits_until_surface_hostile_spawn_time(self) -> None:
         before_spawn = self.machine.process(

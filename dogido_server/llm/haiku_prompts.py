@@ -43,6 +43,32 @@ def _constraint_block(details: dict[str, object]) -> str:
     )
 
 
+def _catalog_notes_block(details: dict[str, object]) -> str:
+    notes = [str(note) for note in details.get("catalog_notes", []) if note]
+    if not notes:
+        return "なし"
+    lines = "\n".join(f"- {note}" for note in notes)
+    return (
+        "描写の参考。ここにだけある固有名を句の主役にしない。\n"
+        f"{lines}"
+    )
+
+
+def _poetic_lines_block(details: dict[str, object]) -> str:
+    lines = [str(line) for line in details.get("poetic_lines", []) if line]
+    if not lines:
+        return "なし"
+    return "\n".join(f"- {line}" for line in lines)
+
+
+def _haiku_tags_hint(details: dict[str, object]) -> str:
+    """poetic_lines があるときは補助ラベル。無いときだけ従来どおり詩語ヒントとして列挙。"""
+    tags = [str(item) for item in details.get("haiku_tags", []) if item]
+    if not tags:
+        return "なし"
+    return "、".join(tags)
+
+
 def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
     feature_candidates = details.get("feature_candidates", [])
     candidate_lines = "\n".join(
@@ -54,11 +80,13 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
     ) or "- なし"
     nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
     passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
-    haiku_tags = "、".join(str(item) for item in details.get("haiku_tags", []) if item) or "なし"
+    haiku_tags = _haiku_tags_hint(details)
+    poetic_lines_block = _poetic_lines_block(details)
     biome_traits = "、".join(str(item) for item in details.get("biome_traits", []) if item) or "なし"
     item_hint = _item_hint(details)
     scene_block = _scene_block(details)
     constraint_block = _constraint_block(details)
+    catalog_notes_block = _catalog_notes_block(details)
     irony = details.get("irony")
     irony_block = "なし"
     if isinstance(irony, dict) and irony.get("description"):
@@ -84,6 +112,12 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         "\n"
         "注目したい取り合わせや場面の要約:\n"
         f"{irony_block}\n"
+        "\n"
+        "カタログ観察:\n"
+        f"{catalog_notes_block}\n"
+        "\n"
+        "詩語（主役Mob）:\n"
+        f"{poetic_lines_block}\n"
         "\n"
         "主役語の制約:\n"
         f"{constraint_block}\n"
@@ -112,7 +146,7 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         f"- 周辺ブロック: {nearby_blocks}\n"
         f"- 平和なMob: {passive_mobs}\n"
         f"- アイテムヒント（弱）: {item_hint}\n"
-        f"- 詩語ヒント: {haiku_tags}\n"
+        f"- 詩語ヒント（補助）: {haiku_tags}\n"
         f"- Z座標: {details.get('z_value', 0)}\n"
         f"- 天気: {details.get('weather_label', details.get('weather', 'unknown'))}\n"
         f"- 時間: {details.get('time_label', details.get('time_phase', 'unknown'))}\n"
@@ -135,6 +169,7 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
 def build_haiku_repair_messages(details: dict[str, object]) -> list[dict[str, str]]:
     scene_block = _scene_block(details)
     constraint_block = _constraint_block(details)
+    catalog_notes_block = _catalog_notes_block(details)
     draft = str(details.get("attempted_haiku") or "").strip() or "なし"
     user_prompt = (
         "以下の川柳下書きを、意味を保ったまま自然な日本語の川柳に直す。\n"
@@ -145,6 +180,9 @@ def build_haiku_repair_messages(details: dict[str, object]) -> list[dict[str, st
         "\n"
         "場面の要約:\n"
         f"{scene_block}\n"
+        "\n"
+        "カタログ観察:\n"
+        f"{catalog_notes_block}\n"
         "\n"
         "主役語の制約:\n"
         f"{constraint_block}\n"
@@ -180,10 +218,12 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
     candidate_tensions = "\n".join(
         f"- {candidate}" for candidate in details.get("candidate_tensions", []) if isinstance(candidate, str)
     ) or "- なし"
-    haiku_tags = "、".join(str(item) for item in details.get("haiku_tags", []) if item) or "なし"
+    haiku_tags = _haiku_tags_hint(details)
+    poetic_lines_block = _poetic_lines_block(details)
     nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
     passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
     item_hint = _item_hint(details)
+    catalog_notes_block = _catalog_notes_block(details)
     user_prompt = (
         "以下の Minecraft 状況から、川柳の焦点になる『関係のある取り合わせ・印象的な場面』を1つだけ選ぶ。\n"
         "強い違和感がなくても、その場の空気や手触りがあれば found=true でよい。\n"
@@ -200,6 +240,12 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
         "コード側の取り合わせ候補:\n"
         f"{candidate_tensions}\n"
         "\n"
+        "カタログ観察:\n"
+        f"{catalog_notes_block}\n"
+        "\n"
+        "詩語（主役Mob）:\n"
+        f"{poetic_lines_block}\n"
+        "\n"
         "状況:\n"
         f"- バイオーム: {details.get('biome', 'unknown')} ({details.get('biome_group', 'unknown')})\n"
         f"- 天気: {details.get('weather_label', details.get('weather', 'unknown'))}\n"
@@ -207,7 +253,7 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
         f"- アイテムヒント（弱）: {item_hint}\n"
         f"- 周辺ブロック: {nearby_blocks}\n"
         f"- 平和なMob: {passive_mobs}\n"
-        f"- 詩語ヒント: {haiku_tags}\n"
+        f"- 詩語ヒント（補助）: {haiku_tags}\n"
         "\n"
         "優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする。\n"
         "与えられた状況にないアイテム、ブロック、Mob を書かない。\n"
@@ -235,6 +281,8 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
     nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
     passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
     item_hint = _item_hint(details)
+    catalog_notes_block = _catalog_notes_block(details)
+    poetic_lines_block = _poetic_lines_block(details)
     irony = details.get("irony")
     irony_block = "なし"
     if isinstance(irony, dict) and irony.get("description"):
@@ -260,6 +308,12 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         "\n"
         "前段の要約候補:\n"
         f"{irony_block}\n"
+        "\n"
+        "カタログ観察:\n"
+        f"{catalog_notes_block}\n"
+        "\n"
+        "詩語（主役Mob）:\n"
+        f"{poetic_lines_block}\n"
         "\n"
         "状況:\n"
         f"- バイオーム: {details.get('biome', 'unknown')} ({details.get('biome_group', 'unknown')})\n"

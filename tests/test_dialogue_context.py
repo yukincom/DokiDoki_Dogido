@@ -112,7 +112,6 @@ class HostileFreezeAdviceGuardTests(unittest.TestCase):
         self.assertFalse(is_style_acceptable("player_chat", bad_zombie, zombie_details))
         self.assertTrue(is_style_acceptable("player_chat", good, creeper_details))
 
-
 class DialogueContextUnitTests(unittest.TestCase):
     def test_keeps_five_exchanges(self) -> None:
         ctx = DialogueContext()
@@ -209,3 +208,315 @@ class DialogueContextServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlayerChatHearingBufferTests(unittest.TestCase):
+    def test_hearing_uses_recent_buffer_when_current_frame_empty(self) -> None:
+        """今フレームに音が無くても、直近バッファのカタログ解決名が渡る。"""
+        from dogido_server.config import Settings
+        from dogido_server.state_machine import DogidoStateMachine
+
+        settings = Settings(
+            llm_enabled=False,
+            decision_policy="py_trees",
+            player_chat_hearing_retention_ms=12000,
+        )
+        machine = DogidoStateMachine(settings)
+        t0 = datetime(2026, 7, 15, 9, 17, 40, tzinfo=timezone.utc)
+
+        def make_event(
+            sequence: int,
+            observed: datetime,
+            *,
+            auditory: list | None = None,
+            user_text: str | None = None,
+        ) -> GameEvent:
+            return GameEvent.model_validate(
+                {
+                    "schema_version": "2026-05-24",
+                    "adapter": "unit-test",
+                    "observed_at": observed.isoformat(),
+                    "sequence": sequence,
+                    "event": {
+                        "name": "status_snapshot",
+                        "source_kind": "system",
+                        "priority_hint": "background",
+                        "certainty": "high",
+                    },
+                    "player": {
+                        "name": "tester",
+                        "position": {"x": 0, "y": 64, "z": 0},
+                        "dimension": "minecraft:overworld",
+                    },
+                    "world": {
+                        "time_phase": "day",
+                        "weather": "clear",
+                        "biome": "taiga",
+                        "local_light": 15,
+                        "sky_visible": True,
+                    },
+                    "auditory_threats": auditory or [],
+                    "ambient_sounds": [],
+                    "meta": {"user_text": user_text},
+                }
+            )
+
+        # 8 秒前: sound_event から zombie を解決（spoken_name_allowed は false でも type は取れる）
+        machine.process(
+            make_event(
+                1,
+                t0,
+                auditory=[
+                    {
+                        "label": "hostile_presence",
+                        "spoken_name_allowed": False,
+                        "sound_event": "entity.zombie.ambient",
+                        "distance_band": "far",
+                        "direction": {"horizontal": "front"},
+                    }
+                ],
+            )
+        )
+        self.assertTrue(machine.state.recent_hearing_memos)
+        self.assertEqual(machine.state.recent_hearing_memos[0].label_ja, "ゾンビ")
+
+        later = t0 + timedelta(seconds=8)
+        empty = make_event(2, later)
+        summary = machine._player_chat_hearing_summary(empty)
+        named = machine._player_chat_hearing_named_mobs(empty)
+        self.assertIn("ゾンビ", summary)
+        self.assertIn("ついさっき", summary)
+        self.assertEqual(named, ["ゾンビ"])
+
+        # プロンプトに allowlist が載る
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="おう",
+                details={
+                    "user_text": "まだなんか低い声が聞こえるような",
+                    "player_name": "tester",
+                    "biome": "タイガ",
+                    "time_phase": "day",
+                    "mode": "normal",
+                    "character_mode": "peace",
+                    "threat_summary": "とくになし",
+                    "hearing_summary": summary,
+                    "hearing_named_mobs": named,
+                },
+            )
+        )
+        user = messages[1]["content"]
+        self.assertIn("ゾンビ", user)
+        self.assertIn("音から使ってよい具体モブ名", user)
+
+
+class PlayerChatVisualBufferTests(unittest.TestCase):
+    def test_visual_buffer_survives_empty_chat_frame(self) -> None:
+        """今フレーム visual 0 でも、直近の種名が threat_summary / stance / 白リストに残る。"""
+        from dogido_server.config import Settings
+        from dogido_server.player_chat_policy import resolve_reply_stance
+        from dogido_server.state_machine import DogidoStateMachine
+
+        settings = Settings(
+            llm_enabled=False,
+            decision_policy="py_trees",
+            player_chat_visual_retention_ms=12000,
+        )
+        machine = DogidoStateMachine(settings)
+        t0 = datetime(2026, 7, 15, 10, 0, 0, tzinfo=timezone.utc)
+
+        def make_event(
+            sequence: int,
+            observed: datetime,
+            *,
+            visual: list | None = None,
+            user_text: str | None = None,
+        ) -> GameEvent:
+            return GameEvent.model_validate(
+                {
+                    "schema_version": "2026-05-24",
+                    "adapter": "unit-test",
+                    "observed_at": observed.isoformat(),
+                    "sequence": sequence,
+                    "event": {
+                        "name": "status_snapshot",
+                        "source_kind": "system",
+                        "priority_hint": "background",
+                        "certainty": "high",
+                    },
+                    "player": {
+                        "name": "tester",
+                        "position": {"x": 0, "y": 64, "z": 0},
+                        "dimension": "minecraft:overworld",
+                    },
+                    "world": {
+                        "time_phase": "day",
+                        "weather": "clear",
+                        "biome": "taiga",
+                        "local_light": 15,
+                        "sky_visible": True,
+                    },
+                    "visual_threats": visual or [],
+                    "meta": {"user_text": user_text},
+                }
+            )
+
+        machine.process(
+            make_event(
+                1,
+                t0,
+                visual=[
+                    {
+                        "type": "pillager",
+                        "entity_id": "p1",
+                        "distance": 12.0,
+                        "direction": {"horizontal": "front"},
+                        "certainty": "high",
+                    }
+                ],
+            )
+        )
+        self.assertTrue(machine.state.recent_visual_memos)
+        self.assertEqual(machine.state.recent_visual_memos[0].mob_type, "pillager")
+
+        later = t0 + timedelta(seconds=8)
+        empty = make_event(2, later, user_text="あいつらどこやった？")
+        summary = machine._player_chat_threat_summary(empty)
+        recent_types = machine._player_chat_recent_visual_types(empty)
+        self.assertIn("ついさっき", summary)
+        self.assertIn("視認", summary)
+        self.assertIn("ピリジャー", summary)
+        self.assertEqual(recent_types, ["pillager"])
+        self.assertEqual(
+            resolve_reply_stance(
+                has_visual_threats=bool(recent_types),
+                topic_hits=[],
+                threat_summary=summary,
+                user_text="あいつらどこやった？",
+            ),
+            "saw",
+        )
+
+        # 期限切れ
+        expired = make_event(3, t0 + timedelta(seconds=20))
+        self.assertEqual(machine._player_chat_recent_visual_types(expired), [])
+        self.assertNotIn("ついさっき", machine._player_chat_threat_summary(expired) or "")
+
+        # 白リストにバッファ種が載る
+        from dogido_server.player_chat_policy import build_allowed_speech_labels
+
+        labels = build_allowed_speech_labels(
+            topic_hits=[],
+            visual_types=recent_types,
+            hearing_named_mobs=[],
+        )
+        self.assertIn("ピリジャー", labels)
+
+
+class PlayerChatPlaceContextTests(unittest.TestCase):
+    def test_underground_context_despite_surface_biome(self) -> None:
+        """地表バイオームでも sky_visible=false なら地下っぽい空間として渡す。"""
+        from dogido_server.config import Settings
+        from dogido_server.llm.prompts import build_messages
+        from dogido_server.llm.types import LeafGenerationRequest
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = GameEvent.model_validate(
+            {
+                "schema_version": "2026-05-24",
+                "adapter": "unit-test",
+                "observed_at": "2026-07-15T12:00:00+09:00",
+                "event": {
+                    "name": "status_snapshot",
+                    "source_kind": "system",
+                    "priority_hint": "background",
+                    "certainty": "high",
+                },
+                "player": {
+                    "name": "tester",
+                    "position": {"x": 0, "y": 32, "z": 0},
+                    "dimension": "minecraft:overworld",
+                },
+                "world": {
+                    "time_phase": "day",
+                    "weather": "clear",
+                    "biome": "birch_forest",
+                    "local_light": 4,
+                    "sky_visible": False,
+                    "ceiling_height": 4.0,
+                    "enclosure_score": 0.6,
+                    "overhead_cover_type": "solid",
+                    "danger_darkness_score": 0.5,
+                },
+            }
+        )
+        place = machine._player_chat_place_context(event)
+        self.assertEqual(place["space_kind"], "underground_or_roofed")
+        self.assertFalse(place["sky_visible"])
+        self.assertIn("シラカバ", place["place_line"])  # 地表バイオームは残る
+        self.assertIn("空は見えない", place["place_line"])
+        self.assertIn("地下", place["place_line"])
+
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="おう",
+                details={
+                    "user_text": "ここどこや？",
+                    "player_name": "tester",
+                    "biome": place["biome_label"],
+                    "place_context": place["place_line"],
+                    "space_kind": place["space_kind"],
+                    "time_phase": "day",
+                    "mode": "normal",
+                    "character_mode": "peace",
+                    "threat_summary": "とくになし",
+                    "hearing_summary": "",
+                    "hearing_named_mobs": [],
+                },
+            )
+        )
+        user = messages[1]["content"]
+        self.assertIn("場所メモ:", user)
+        self.assertIn("地下", user)
+        # S1: 場所は place_line を正とし、長文ルールは載せない
+        self.assertNotIn("バイオーム名だけ見て地上", user)
+
+    def test_open_surface_day(self) -> None:
+        from dogido_server.config import Settings
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = GameEvent.model_validate(
+            {
+                "schema_version": "2026-05-24",
+                "adapter": "unit-test",
+                "observed_at": "2026-07-15T12:00:00+09:00",
+                "event": {
+                    "name": "status_snapshot",
+                    "source_kind": "system",
+                    "priority_hint": "background",
+                    "certainty": "high",
+                },
+                "player": {
+                    "name": "tester",
+                    "position": {"x": 0, "y": 72, "z": 0},
+                    "dimension": "minecraft:overworld",
+                },
+                "world": {
+                    "time_phase": "day",
+                    "weather": "clear",
+                    "biome": "birch_forest",
+                    "local_light": 15,
+                    "sky_visible": True,
+                    "ceiling_height": 64.0,
+                    "enclosure_score": 0.05,
+                    "overhead_cover_type": "none",
+                },
+            }
+        )
+        place = machine._player_chat_place_context(event)
+        self.assertEqual(place["space_kind"], "open_surface")
+        self.assertIn("空が見える", place["place_line"])

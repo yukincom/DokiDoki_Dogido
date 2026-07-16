@@ -1,4 +1,9 @@
-**✅ Dogido最新状況を反映したRAG導入計画（2026-07時点）**
+> **正本プランは [senryu-rag-plan.md](senryu-rag-plan.md)（2026-07 改訂）。**  
+> 以下は初期メモ。全 `data/` の LlamaIndex 前提や poetic の再ベクトル化は **採用しない**（直引きと二重になるため）。
+
+---
+
+**✅ Dogido最新状況を反映したRAG導入計画（2026-07時点・初期メモ）**
 
 ユキ、ありがとう！ GitHub（https://github.com/yukincom/DokiDoki_Dogido）を確認したよ。  
 **勘違い修正**：すでに `dogido_server` がかなり進んでいて、**状態機械（py_trees統合）・イベント受信API・LLM routes（chat / haiku分離）・Fabric adapter・voice_input** が実装済み。LLMは低遅延部分を避け、雑談/川柳で使ってる形。

@@ -194,6 +194,7 @@
         },
         "meadow": {
           "japanese": "草地",
+          "reading": "くさち",
           "temperature": {
             "java": 0.5,
             "bedrock": 0.3

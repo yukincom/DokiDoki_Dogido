@@ -211,10 +211,154 @@ def biome_entries() -> dict[str, dict[str, Any]]:
     }
 
 
+def biome_reading(biome_id: str | None) -> str | None:
+    """バイオーム表示名の正しい読み（カタログ reading。オーバーレイは catalog_readings 側）。"""
+    from dogido_server.catalog_readings import resolve_reading
+
+    if not biome_id:
+        return None
+    normalized = str(biome_id).strip().lower().removeprefix("minecraft:")
+    entry = biome_entries().get(normalized)
+    if entry is None:
+        return None
+    label = str(entry.get("label") or entry.get("japanese") or "").strip()
+    catalog_reading = str(entry.get("reading") or "").strip() or None
+    return resolve_reading(label, catalog_reading)
+
+
+def biome_label_with_reading(biome_id: str | None) -> str | None:
+    from dogido_server.catalog_readings import format_label_with_reading
+
+    if not biome_id:
+        return None
+    normalized = str(biome_id).strip().lower().removeprefix("minecraft:")
+    entry = biome_entries().get(normalized)
+    if entry is None:
+        return None
+    label = str(entry.get("label") or entry.get("japanese") or normalized).strip()
+    catalog_reading = str(entry.get("reading") or "").strip() or None
+    return format_label_with_reading(label, catalog_reading)
+
+
 def biome_labels() -> dict[str, str]:
     return {
         biome_id: str(entry.get("label", biome_id))
         for biome_id, entry in biome_entries().items()
+    }
+
+
+def biome_group_id(biome_id: str | None) -> str | None:
+    if not biome_id:
+        return None
+    normalized = str(biome_id).strip().lower().removeprefix("minecraft:")
+    entry = biome_entries().get(normalized)
+    if entry is None:
+        return None
+    group = entry.get("group_id")
+    return str(group) if group else None
+
+
+def biomes_in_groups(group_ids: set[str] | frozenset[str] | list[str] | tuple[str, ...]) -> frozenset[str]:
+    wanted = {str(gid).strip().lower() for gid in group_ids if str(gid).strip()}
+    if not wanted:
+        return frozenset()
+    return frozenset(
+        biome_id
+        for biome_id, entry in biome_entries().items()
+        if str(entry.get("group_id") or "").lower() in wanted
+    )
+
+
+def biome_label_to_id_map() -> dict[str, str]:
+    """表示名・読み → biome_id。長いキー優先でマッチするため呼び出し側で sort する。"""
+    from dogido_server.catalog_readings import resolve_reading
+
+    mapping: dict[str, str] = {}
+    for biome_id, entry in biome_entries().items():
+        label = str(entry.get("label") or entry.get("japanese") or "").strip()
+        if label:
+            mapping[label] = biome_id
+        reading = resolve_reading(label, str(entry.get("reading") or "").strip() or None)
+        if reading:
+            mapping[reading] = biome_id
+        # id 自体もヒントに（snowy_taiga など）
+        mapping[biome_id] = biome_id
+        mapping[biome_id.replace("_", "")] = biome_id
+    return mapping
+
+
+# ぼんやり場所イメージ → カタログ group_id（複数可）
+# catalog groups: snowy, cold, temperate, dry, aquatic, cave, neutral_other, nether, end
+BIOME_PLACE_GROUP_HINTS: tuple[tuple[tuple[str, ...], tuple[str, ...], str], ...] = (
+    # (trigger phrases, group_ids, speech label)
+    (("氷雪", "雪のとこ", "雪のところ", "雪国"), ("snowy",), "氷雪バイオーム"),
+    (("冷帯", "寒いとこ", "寒いところ", "寒い場所", "寒い", "冷たいとこ", "冷たい"), ("cold", "snowy"), "寒いところ"),
+    (("温帯", "暖地", "暖かいとこ", "あたたかいとこ", "温暖"), ("temperate",), "温帯"),
+    (("乾燥", "乾燥帯", "乾いたとこ", "砂漠っぽ"), ("dry",), "乾燥帯"),
+    (("水性", "海の", "海辺", "水辺", "海で", "海に"), ("aquatic",), "水辺"),
+    (("洞窟", "地下のバイオーム", "洞窟バイオーム"), ("cave",), "洞窟"),
+    (("ネザー", "ねざー", "地獄"), ("nether",), "ネザー"),
+    (("エンド", "えんど", "ジ・エンド", "ジエンド"), ("end",), "エンド"),
+)
+
+
+def _fold_kana_for_match(text: str) -> str:
+    return "".join(
+        chr(ord(ch) - 0x60) if "ァ" <= ch <= "ヶ" else ch
+        for ch in text
+    )
+
+
+def resolve_biome_place_from_text(text: str) -> dict[str, object]:
+    """発話から具体バイオーム or グループを解決する。
+
+    戻り値:
+      biome_id: 具体 id or None
+      group_ids: frozenset[str]
+      biome_ids: 展開後の id 集合（グループ指定時）
+      place_label: 返事用ラベル
+    """
+    raw = (text or "").strip()
+    folded = _fold_kana_for_match(raw)
+    if not folded and not raw:
+        return {
+            "biome_id": None,
+            "group_ids": frozenset(),
+            "biome_ids": frozenset(),
+            "place_label": None,
+        }
+
+    # 1) 具体名（カタログ全ラベル・読み）。長い順
+    label_map = biome_label_to_id_map()
+    for hint, biome_id in sorted(label_map.items(), key=lambda item: -len(item[0])):
+        if len(hint) < 2:
+            continue
+        if hint in raw or _fold_kana_for_match(hint) in folded:
+            label = biome_labels().get(biome_id, biome_id)
+            return {
+                "biome_id": biome_id,
+                "group_ids": frozenset(),
+                "biome_ids": frozenset({biome_id}),
+                "place_label": label,
+            }
+
+    # 2) ぼんやりグループ
+    for phrases, group_ids, place_label in BIOME_PLACE_GROUP_HINTS:
+        for phrase in phrases:
+            if phrase in raw or _fold_kana_for_match(phrase) in folded:
+                expanded = biomes_in_groups(group_ids)
+                return {
+                    "biome_id": None,
+                    "group_ids": frozenset(group_ids),
+                    "biome_ids": expanded,
+                    "place_label": place_label,
+                }
+
+    return {
+        "biome_id": None,
+        "group_ids": frozenset(),
+        "biome_ids": frozenset(),
+        "place_label": None,
     }
 
 
@@ -258,6 +402,152 @@ def structure_labels() -> dict[str, str]:
     }
 
 
+def normalize_biome_id(biome_id: str | None) -> str | None:
+    text = str(biome_id or "").removeprefix("minecraft:").strip().lower().replace("-", "_")
+    return text or None
+
+
+def structure_biomes(structure_id: str | None) -> frozenset[str]:
+    if not structure_id:
+        return frozenset()
+    entry = structure_entries().get(str(structure_id))
+    if not entry:
+        return frozenset()
+    biomes = entry.get("biomes") or []
+    if not isinstance(biomes, list):
+        return frozenset()
+    normalized = {
+        bid
+        for raw in biomes
+        if (bid := normalize_biome_id(str(raw))) is not None
+    }
+    return frozenset(normalized)
+
+
+def structure_related_mobs(structure_id: str | None) -> tuple[str, ...]:
+    if not structure_id:
+        return ()
+    entry = structure_entries().get(str(structure_id))
+    if not entry:
+        return ()
+    raw = entry.get("related_mobs") or []
+    if not isinstance(raw, list):
+        return ()
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        mob_id = str(item or "").removeprefix("minecraft:").strip().lower()
+        if not mob_id or mob_id in seen:
+            continue
+        seen.add(mob_id)
+        out.append(mob_id)
+    return tuple(out)
+
+
+@lru_cache(maxsize=1)
+def structures_for_mob_index() -> dict[str, tuple[str, ...]]:
+    """mob_id → structure_id 群（related_mobs の逆引き）。"""
+    index: dict[str, list[str]] = {}
+    for structure_id in structure_entries():
+        for mob_id in structure_related_mobs(structure_id):
+            index.setdefault(mob_id, []).append(structure_id)
+    return {mob_id: tuple(ids) for mob_id, ids in index.items()}
+
+
+def structures_for_mob(mob_id: str | None) -> tuple[str, ...]:
+    if not mob_id:
+        return ()
+    key = str(mob_id).removeprefix("minecraft:").strip().lower()
+    return structures_for_mob_index().get(key, ())
+
+
+def structure_ids_for_plausibility(
+    topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+) -> list[str]:
+    """トピックから plausibility 対象の structure id を集める。
+
+    - kind=structure はそのまま
+    - kind=mob は related_mobs 逆引きし、マッチ語が structure 表示名に含まれるときだけ
+      （「前哨基地」→ ピリジャー scene → 前哨基地、のように。ピリ視認だけでは出さない）
+    """
+    ids: list[str] = []
+    seen: set[str] = set()
+
+    def add(structure_id: str) -> None:
+        if structure_id and structure_id not in seen and structure_id in structure_entries():
+            seen.add(structure_id)
+            ids.append(structure_id)
+
+    for hit in topic_hits or ():
+        kind = str(hit.get("kind") or "")
+        entry_id = str(hit.get("entry_id") or "").strip()
+        if not entry_id:
+            continue
+        if kind == "structure":
+            add(entry_id)
+            continue
+        if kind != "mob":
+            continue
+        matched = [str(t).strip() for t in (hit.get("matched_terms") or ()) if str(t).strip()]
+        if not matched:
+            continue
+        mob_label = str(hit.get("label_ja") or "").strip()
+        for structure_id in structures_for_mob(entry_id):
+            label = str((structure_entries().get(structure_id) or {}).get("label") or "")
+            # 種名ラベルそのもの（「ピリジャー」）だけでは前哨を出さない。
+            # 「前哨基地」など structure 名に含まれる別語のときだけ。
+            if any(
+                len(term) >= 2 and term in label and term != mob_label
+                for term in matched
+            ):
+                add(structure_id)
+    return ids
+
+
+def build_plausibility_hint_lines(
+    *,
+    structure_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+    topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+    current_biome_id: str | None = None,
+    current_biome_label: str | None = None,
+) -> list[str]:
+    """structure の生成可否を現在 biome と突合した短い行（LLM 推論用ではない事実行）。"""
+    resolved_ids = list(structure_ids or ())
+    if topic_hits is not None:
+        for structure_id in structure_ids_for_plausibility(topic_hits):
+            if structure_id not in resolved_ids:
+                resolved_ids.append(structure_id)
+
+    biome = normalize_biome_id(current_biome_id)
+    place = (current_biome_label or "").strip() or (biome or "いまの場所")
+    lines: list[str] = []
+    seen: set[str] = set()
+
+    for raw_id in resolved_ids:
+        structure_id = str(raw_id or "").strip()
+        if not structure_id or structure_id in seen:
+            continue
+        entry = structure_entries().get(structure_id)
+        if entry is None:
+            continue
+        seen.add(structure_id)
+        label = str(entry.get("label") or structure_id)
+        biomes = structure_biomes(structure_id)
+        if not biomes:
+            continue
+        if biome is None:
+            lines.append(f"{label}: 生成バイオームの知識はあるが、いまの場所は不明")
+            continue
+        if biome in biomes:
+            lines.append(f"{label}: いまの場所（{place}）は生成されうるバイオームに含む → ありうる")
+        else:
+            lines.append(f"{label}: いまの場所（{place}）には生成されにくいかも")
+        # 前哨は襲撃と混同しやすいので注記
+        if structure_id == "pillager_outpost":
+            lines.append("（ピリジャーがいること自体は襲撃でも起きる。前哨の有無は別）")
+    return lines
+
+
 def hostile_mob_entries() -> dict[str, dict[str, Any]]:
     sections = _mob_catalog_sections()
     return _normalize_mob_entries(_mob_section_items(sections.get("hostile", {})))
@@ -298,10 +588,11 @@ def all_mob_entries() -> dict[str, dict[str, Any]]:
     return _merge_mob_entry_maps(threat_mob_entries(), passive_mob_entries())
 
 
+
 def mob_entry(mob_id: str | None) -> dict[str, Any] | None:
     if not mob_id:
         return None
-    normalized = str(mob_id).strip().lower()
+    normalized = str(mob_id).strip().lower().removeprefix("minecraft:")
     if not normalized:
         return None
     entry = all_mob_entries().get(normalized)
@@ -340,6 +631,50 @@ def mob_poetic_tags(mob_id: str | None) -> tuple[str, ...]:
         seen.add(tag)
         deduped.append(tag)
     return tuple(deduped)
+
+
+def mob_poetic_line(mob_id: str | None, *, max_tags: int = 4) -> str | None:
+    """主役用の1行詩語。role を軸に代表タグだけ添える（フラットタグ列より誰の語か分かる）。"""
+    entry = mob_entry(mob_id)
+    if entry is None:
+        return None
+    poetic = entry.get("poetic")
+    if not isinstance(poetic, dict):
+        return None
+    label = str(entry.get("label") or mob_id or "").strip()
+    if not label:
+        return None
+    role = str(poetic.get("role") or "").strip()
+    tags: list[str] = []
+    seen: set[str] = set()
+    for key in (
+        "visual_tags",
+        "sound_tags",
+        "motion_tags",
+        "comic_tags",
+        "scene_tags",
+        "reaction_tags",
+    ):
+        values = poetic.get(key)
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            text = str(value or "").strip()
+            if not text or text in seen or text == role:
+                continue
+            seen.add(text)
+            tags.append(text)
+            if len(tags) >= max_tags:
+                break
+        if len(tags) >= max_tags:
+            break
+    if role and tags:
+        return f"{label}: {role}（{'、'.join(tags)}）"
+    if role:
+        return f"{label}: {role}"
+    if tags:
+        return f"{label}: {'、'.join(tags)}"
+    return None
 
 
 def mob_dogido_tactics(mob_id: str | None) -> dict[str, Any] | None:
@@ -397,6 +732,181 @@ def collect_dogido_tactics_for_mobs(mob_ids: list[str] | tuple[str, ...] | set[s
         "forbidden_advice": forbidden,
         "safe_hints": safe_hints,
     }
+
+
+# --- player_chat 汎用トピック照合（プレイヤー文 → カタログ） ---
+
+# field_kind → 重み。種族専用キーワード表は置かない。
+_TOPIC_FIELD_WEIGHTS: dict[str, float] = {
+    "label": 10.0,
+    "spoken_aliases": 10.0,
+    "visual_tags": 6.0,
+    "role": 5.0,
+    "scene_tags": 4.0,
+    "motion_tags": 4.0,
+    "sound_tags": 4.0,
+    "reaction_tags": 2.0,
+    "comic_tags": 2.0,
+    "structure_label": 8.0,
+    "note": 3.0,
+}
+
+_TOPIC_MIN_TERM_LEN = 1  # 旗・紫・薬など1文字タグを許可（カタログが正本）
+_TOPIC_MIN_SCORE = 5.0
+_TOPIC_TOP_K = 3
+
+
+def _topic_term_score(field_kind: str, term_len: int) -> float:
+    weight = _TOPIC_FIELD_WEIGHTS.get(field_kind, 2.0)
+    # 長い語ほど強い（「とんがり帽子」>「帽子」が両方あっても長い方が効く）
+    return weight * float(max(term_len, 1))
+
+
+@lru_cache(maxsize=1)
+def _topic_term_index() -> tuple[tuple[str, str, str, str], ...]:
+    """(term, entry_id, kind, field_kind) を長い term 優先で返す。"""
+    rows: list[tuple[str, str, str, str]] = []
+
+    def add(term: str, entry_id: str, kind: str, field_kind: str) -> None:
+        text = str(term or "").strip()
+        if len(text) < _TOPIC_MIN_TERM_LEN:
+            return
+        # 長文 note は部分一致ノイズが大きいので短めだけ
+        if field_kind == "note" and len(text) > 24:
+            return
+        # 音タグは擬音が多く「こんにちは」⊃「こん」などの誤爆が出やすい
+        if field_kind == "sound_tags" and len(text) < 3:
+            return
+        rows.append((text, entry_id, kind, field_kind))
+
+    for mob_id, entry in all_mob_entries().items():
+        label = str(entry.get("label") or entry.get("japanese") or "").strip()
+        if label:
+            add(label, mob_id, "mob", "label")
+        aliases = entry.get("spoken_aliases")
+        if isinstance(aliases, list):
+            for alias in aliases:
+                add(str(alias), mob_id, "mob", "spoken_aliases")
+        poetic = entry.get("poetic")
+        if isinstance(poetic, dict):
+            role = poetic.get("role")
+            if role:
+                add(str(role), mob_id, "mob", "role")
+            for key in (
+                "visual_tags",
+                "sound_tags",
+                "motion_tags",
+                "scene_tags",
+                "reaction_tags",
+                "comic_tags",
+            ):
+                values = poetic.get(key)
+                if not isinstance(values, list):
+                    continue
+                for value in values:
+                    add(str(value), mob_id, "mob", key)
+
+    for structure_id, entry in structure_entries().items():
+        label = str(entry.get("label") or entry.get("japanese") or "").strip()
+        if label:
+            add(label, structure_id, "structure", "structure_label")
+        note = entry.get("note")
+        if note:
+            add(str(note), structure_id, "structure", "note")
+
+    # 長い term を先に照合（部分の短い語より優先してスコア加算）
+    rows.sort(key=lambda row: (-len(row[0]), row[0], row[1], row[2], row[3]))
+    return tuple(rows)
+
+
+def find_catalog_topics(
+    text: str,
+    *,
+    observed_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+    top_k: int = _TOPIC_TOP_K,
+    min_score: float = _TOPIC_MIN_SCORE,
+) -> list[dict[str, Any]]:
+    """プレイヤー文に含まれるカタログ語から話題候補を返す。
+
+    戻り値は score 降順の dict リスト:
+      entry_id, kind, label_ja, score, matched_terms, observed
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    folded = _fold_kana_for_match(raw)
+    observed: set[str] = set()
+    for raw_id in observed_ids or ():
+        normalized = str(raw_id or "").removeprefix("minecraft:").strip().lower()
+        if normalized:
+            observed.add(normalized)
+
+    scores: dict[tuple[str, str], float] = {}
+    matched: dict[tuple[str, str], list[str]] = {}
+    labels: dict[tuple[str, str], str] = {}
+
+    for term, entry_id, kind, field_kind in _topic_term_index():
+        term_folded = _fold_kana_for_match(term)
+        if not term_folded:
+            continue
+        if term not in raw and term_folded not in folded:
+            continue
+        key = (kind, entry_id)
+        scores[key] = scores.get(key, 0.0) + _topic_term_score(field_kind, len(term))
+        bucket = matched.setdefault(key, [])
+        if term not in bucket:
+            bucket.append(term)
+        if key not in labels:
+            if kind == "mob":
+                entry = mob_entry(entry_id) or {}
+                labels[key] = str(entry.get("label") or entry_id)
+            else:
+                entry = structure_entries().get(entry_id) or {}
+                labels[key] = str(entry.get("label") or entry_id)
+
+    hits: list[dict[str, Any]] = []
+    for key, score in scores.items():
+        kind, entry_id = key
+        is_observed = entry_id in observed
+        if is_observed:
+            score *= 3.0
+        if score < min_score:
+            continue
+        hits.append(
+            {
+                "entry_id": entry_id,
+                "kind": kind,
+                "label_ja": labels.get(key, entry_id),
+                "score": score,
+                "matched_terms": tuple(matched.get(key, ())),
+                "observed": is_observed,
+            }
+        )
+
+    hits.sort(
+        key=lambda hit: (
+            -float(hit["score"]),
+            not bool(hit["observed"]),
+            str(hit["entry_id"]),
+        )
+    )
+    return hits[: max(0, int(top_k))]
+
+
+def format_catalog_topic_hints(hits: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> str:
+    """player_chat details / プロンプト用の短いヒント文。"""
+    lines: list[str] = []
+    for hit in hits:
+        terms = "・".join(str(term) for term in (hit.get("matched_terms") or ())[:4])
+        obs = "あり" if hit.get("observed") else "なし"
+        label = str(hit.get("label_ja") or hit.get("entry_id") or "")
+        kind = str(hit.get("kind") or "mob")
+        prefix = "構造物" if kind == "structure" else "モブ"
+        if terms:
+            lines.append(f"- [{prefix}] {label}: マッチ「{terms}」。観測: {obs}")
+        else:
+            lines.append(f"- [{prefix}] {label}: 観測: {obs}")
+    return "\n".join(lines)
 
 
 def _normalize_mob_entries(raw_entries: Any) -> dict[str, dict[str, Any]]:

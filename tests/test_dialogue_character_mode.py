@@ -73,7 +73,7 @@ class CharacterModePromptTests(unittest.TestCase):
         self.assertEqual(messages[0]["role"], "system")
         self.assertIn("平和時", messages[0]["content"])
         self.assertIn("おはようさん", messages[1]["content"])
-        self.assertIn("キャラクターモードはpeace", messages[1]["content"])
+        # S1: mode トーンは system のみ。user に「キャラクターモードはpeace」を重ねない
 
     def test_player_chat_battle_prompt(self) -> None:
         messages = build_messages(
@@ -84,16 +84,21 @@ class CharacterModePromptTests(unittest.TestCase):
                     "user_text": "大丈夫？",
                     "mode": "panic",
                     "character_mode": "battle",
+                    "has_visual_threats": True,
                     "threat_summary": "視認 クリーパー が後ろ 4マス",
                     "biome": "洞窟",
                     "time_phase": "night",
+                    "reply_stance": "saw",
+                    "reply_policy": "脅威メモの視認を優先してよい。",
                 },
             )
         )
         self.assertIn("バトル時", messages[0]["content"])
         self.assertIn("応援", messages[0]["content"])
         self.assertIn("視認 クリーパー", messages[1]["content"])
-        self.assertIn("バトル時:", messages[1]["content"])
+        # S1: user の「バトル時:」mode_hint は廃止。敵対時の静止禁止は残す
+        self.assertIn("静止指示は禁止", messages[1]["content"])
+        self.assertIn("答え方スタンス: saw", messages[1]["content"])
 
     def test_ambient_uses_peace_system(self) -> None:
         messages = build_messages(

@@ -260,7 +260,24 @@ class InventoryMixin:
         return False
 
     def _has_bed(self, inventory: dict[str, int]) -> bool:
-        return inventory.get("bed", 0) > 0 or self._inventory_has_suffix(inventory, "_bed")
+        for raw_key, count in inventory.items():
+            try:
+                amount = int(count)
+            except (TypeError, ValueError):
+                continue
+            if amount <= 0:
+                continue
+            key = str(raw_key).removeprefix("minecraft:").lower()
+            if key == "bed" or key.endswith("_bed"):
+                return True
+        return False
+
+    def _event_has_usable_bed(self, event: GameEvent) -> bool:
+        """所持 or 手持ちにベッドがあるか（緊急シェルター助言用）。"""
+        if self._has_bed(event.inventory):
+            return True
+        held = str(event.player.held_item or "").removeprefix("minecraft:").lower()
+        return held == "bed" or held.endswith("_bed")
 
     def _bed_craftable(self, inventory: dict[str, int]) -> bool:
         wool_count = self._wool_count(inventory)

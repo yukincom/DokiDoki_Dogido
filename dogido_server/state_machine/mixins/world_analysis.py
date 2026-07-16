@@ -332,7 +332,7 @@ class WorldAnalysisMixin:
     def _biome_label(self, biome: str | None) -> str:
         if not biome:
             return "そのへん"
-        normalized = biome.strip().lower()
+        normalized = biome.strip().lower().removeprefix("minecraft:")
         if not normalized:
             return "そのへん"
         mapped = BIOME_LABELS.get(normalized)
@@ -342,10 +342,19 @@ class WorldAnalysisMixin:
             return "そのへん"
         return biome
 
+    def _biome_label_with_reading(self, biome: str | None) -> str:
+        """川柳・観察用。草地（くさち）のように正しい読みを添える。"""
+        from dogido_server.entry_catalog import biome_label_with_reading
+
+        enriched = biome_label_with_reading(biome)
+        if enriched:
+            return enriched
+        return self._biome_label(biome)
+
     def _biome_entry(self, biome: str | None) -> dict[str, object] | None:
         if not biome:
             return None
-        normalized = biome.strip().lower()
+        normalized = biome.strip().lower().removeprefix("minecraft:")
         if not normalized:
             return None
         entry = BIOME_ENTRIES.get(normalized)
