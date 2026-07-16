@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 from pathlib import Path
@@ -27,6 +27,26 @@ PROGRESS_ITEMS: dict[str, str] = {
 
 def datetime_json(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def parse_iso_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+# soft lesson の自然減衰（H5.2）。strength 段階は使わず TTL のみ。
+LESSON_MAX_AGE_DAYS = 14
+LESSON_MAX_EMISSIONS_AFTER = 6
 
 
 def normalize_advancement_id(value: str) -> str:
@@ -228,14 +248,28 @@ class MemoryStore:
         self._append_jsonl(self.haiku_lessons_path, row)
         return row
 
-    def list_recent_haiku_lessons(self, *, limit: int = 3) -> list[dict[str, Any]]:
-        """発句用 soft lessons。新しい順・軸(type)1件・loosen で抑止。
+    def list_recent_haiku_lessons(
+        self,
+        *,
+        limit: int = 3,
+        now: datetime | None = None,
+        max_age_days: float = LESSON_MAX_AGE_DAYS,
+        max_emissions_after: int = LESSON_MAX_EMISSIONS_AFTER,
+    ) -> list[dict[str, Any]]:
+        """発句用 soft lessons。新しい順・軸1件・loosen / TTL で抑止。
 
-        H5.1: 最大 3（既定）。同 lesson_type は最新1件。loosen より古い tighten は出さない。
+        H5.1: 最大 3・type 最新1件・loosen 抑止。
+        H5.2: 日数 TTL + その後の発句件数 TTL（自然に薄まる。strength は未使用）。
         """
         limit = max(1, min(int(limit), 5))
+        now_dt = now or datetime.now(timezone.utc)
+        if now_dt.tzinfo is None:
+            now_dt = now_dt.replace(tzinfo=timezone.utc)
+        age_cutoff = now_dt - timedelta(days=max(0.0, float(max_age_days)))
+        max_em = max(0, int(max_emissions_after))
+
+        entry_times = self._haiku_entry_created_times()
         rows = self._read_jsonl(self.haiku_lessons_path)
-        # 新しい行が末尾 → 新しい順
         selected = list(reversed(rows[- max(12, limit * 8) :]))
         out: list[dict[str, Any]] = []
         seen_types: set[str] = set()
@@ -259,11 +293,28 @@ class MemoryStore:
             note = str(row.get("note") or "").strip()
             if not note:
                 continue
+            created = parse_iso_datetime(row.get("created_at"))
+            if created is not None and created < age_cutoff:
+                continue
+            if created is not None and max_em > 0:
+                emissions_after = sum(1 for t in entry_times if t > created)
+                if emissions_after >= max_em:
+                    continue
             seen_types.add(lesson_type)
             out.append(row)
             if len(out) >= limit:
                 break
         return out
+
+    def _haiku_entry_created_times(self) -> list[datetime]:
+        times: list[datetime] = []
+        for entry in self.list_haiku_entries():
+            if not isinstance(entry, dict):
+                continue
+            created = parse_iso_datetime(entry.get("created_at"))
+            if created is not None:
+                times.append(created)
+        return times
 
     def save_reading_correction(
         self,

@@ -17,8 +17,10 @@ from dogido_server.haiku.workshop import (
     extract_conversational_revise,
     is_open,
     lessons_from_critique_kind,
+    loosen_all_lessons,
     loosen_lesson_for_praise,
     maybe_close_for_time,
+    wants_clear_haiku_lessons,
     open_from_emission,
     record_drift,
     record_workshop_activity,
@@ -500,12 +502,40 @@ class DogidoService:
         if player_input.asks_haiku_recall:
             return self._handle_haiku_recall(session, event, player_input)
 
+        # H5.2: 明示で soft lesson を緩める（workshop open 外でも可）
+        raw = (player_input.raw_text or "").strip()
+        if wants_clear_haiku_lessons(raw):
+            return self._clear_haiku_lessons_reply(session, event)
+
         # 川柳 workshop（pin が open のとき、自然な突っ込みを優先）
         workshop_actions = self._haiku_workshop_actions(session, event)
         if workshop_actions:
             return workshop_actions
 
         return []
+
+    def _clear_haiku_lessons_reply(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+    ) -> list[AudioAction]:
+        if self.memory is None:
+            return [AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。")]
+        loosen = loosen_all_lessons()
+        try:
+            self.memory.save_haiku_lesson(
+                lesson_type=str(loosen.get("lesson_type") or "*"),
+                note=str(loosen.get("note") or ""),
+                prefer_materials=bool(loosen.get("prefer_materials")),
+                observed_at=event.observed_at,
+                polarity=str(loosen.get("polarity") or "loosen"),
+                strength=float(loosen.get("strength") or 0.0),
+            )
+        except OSError as exc:
+            LOGGER.warning("haiku_lesson_clear_failed detail=%s", exc)
+            return [AudioAction(layer="speech", interrupt=False, text="ちょっと保存に失敗したわ。")]
+        LOGGER.warning("haiku_lessons_cleared session_id=%s", session.session_id)
+        return [AudioAction(layer="speech", interrupt=False, text="おけ、前の注意は気にせんでええわ。")]
 
     def _open_haiku_workshop(
         self,
@@ -627,7 +657,7 @@ class DogidoService:
                 critique_id = str(row.get("id") or "") or None
                 # H5.1: soft lesson / praise は loosen（新規常駐しない）
                 if critique_kind == "praise":
-                    loosen = loosen_lesson_for_praise()
+                    loosen = loosen_all_lessons()
                     self.memory.save_haiku_lesson(
                         lesson_type=str(loosen.get("lesson_type") or "*"),
                         note=str(loosen.get("note") or ""),

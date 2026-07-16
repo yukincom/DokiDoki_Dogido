@@ -1,7 +1,7 @@
 # パッケージ整理 ＋ 川柳ワークショップ — 編集順
 
 **日付:** 2026-07-16  
-**状態:** Phase A〜D（H1〜H5.1）実装済み。H6 固定語 materials 突合は**撤回**。H7 / catalog 分割（Phase E）は未  
+**状態:** Phase A〜D（H1〜H5.2）実装済み。H6 固定語 materials 突合は**撤回**。H7 / catalog 分割（Phase E）は未  
 **方針:** [server-package-layout-proposal.md](server-package-layout-proposal.md)  
 **workshop:** [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)  
 **pin の閉じ方:** 同計画 §1b  
@@ -156,9 +156,11 @@ dogido_server/haiku/
 | D4 | 次回発句へ soft 最大 **3** 行（provider → `_haiku_constraint_details` → prompt「参考・強制ではない」） | **済** H5.1 |
 | D5 | テスト | **済** `test_haiku_workshop` / constraint lessons |
 | D6 | 口答え soft 化・計画書と実装のトーン揃え | **済**（`render_workshop_reply`） |
+| D7 | 明示「気にせんで」+ lesson TTL（日数・発句回数） | **済** H5.2 |
 
 **編集注意:** lessons を `haiku.py` にベタ書きしない。provider 経由で memory から注入。  
-**hard 禁止は道具・読みのみ。** player `forbidden_fragments` は hard に合流しない。
+**hard 禁止は道具・読みのみ。** player `forbidden_fragments` は hard に合流しない。  
+**strength 段階は当面やらない。** 減衰は TTL + praise / 明示 loosen。
 
 ---
 

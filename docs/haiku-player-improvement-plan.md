@@ -264,7 +264,9 @@ lesson の効き方（H5.1）:
 - **soft 既定**（発句プロンプトは「参考。強制ではない」）  
 - 最大 **2〜3 行**、`lesson_type` 軸は最新1件  
 - `forbidden_fragments` は hard 禁止語に**合流しない**（道具・読みの forbidden は別途 hard）  
-- `strength` は **記録のみ**（将来 TTL / 段階言い回し用。list は未参照）  
+- `strength` は **記録のみ・当面未使用**（段階言い回しは予定しない。減衰は TTL）  
+- **TTL（H5.2）:** 既定 14 日、または lesson 後の発句 6 回で list から消える  
+- **明示緩め:** 「気にせんで」「注意いらん」等 → `loosen *`（workshop 外でも可）  
 - プロンプト注入: `haiku_lessons_provider` → `_haiku_constraint_details.player_lessons`
 
 ---
@@ -337,15 +339,17 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H4** | 自然文の直し → revision（`直し:` なし / `こう直して:` 等） | H3 | **済** |
 | **H5** | lessons 生成・発句制約へ最大 3 行 soft 注入 | H3 | **済** |
 | **H5.1** | ゆるめ・可逆（soft 文言 / hard 非合流 / praise loosen / 口答え soft） | H5 | **済** |
+| **H5.2** | 明示「気にせんで」+ lesson 自然減衰（日数・発句回数 TTL） | H5.1 | **済** |
 | **H6** | 発句後 materials 突合バリデータ（固定語リスト） | 独立可 | **撤回** |
 | **H7** | （任意）workshop 分類の LLM structured | H2 の後 | 未 |
 
-**H1〜H5.1 実装済み。H6 は撤回。**  
+**H1〜H5.2 実装済み。H6 は撤回。**  
 道具/読みの forbidden は hard のまま。player lesson は soft。  
-**H6 をやめた理由:** 発句は渡した materials / scene から作る前提なので、  
-「うみ」等の固定 drift リストは本質ではなく、網羅もできずメンテだけ増える。  
-場外れは **プロンプト制約 + 既存 usable/repair（音数・造語・道具 hard）+ workshop 講評** で見る。  
-**未:** 発句回数 TTL、`strength` の段階反映、「もう気にせんで」、直し案 1 本、H7。
+**H6 をやめた理由:** 発句は渡した materials / scene から作る前提。固定 drift リストは本質でなくメンテだけ増える。  
+「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
+場の違和感は **プレイヤーが言ったとき** workshop で。  
+**strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
+**未（気が向いたら）:** 直し案 1 本、H7、Phase E 整理。
 
 ---
 
@@ -382,11 +386,10 @@ HaikuContext / 制約ブロックに追加（短く）:
 
 ---
 
-## 11. 次の合意ポイント（残作業）
+## 11. 次の合意ポイント（残作業・ゆるく）
 
-1. 直し案をシステムが1つ出すか（現状は保存と soft 返事のみ。音数失敗時の haiku_repair は既存）  
-2. lesson の TTL / strength 段階 / 「もう気にせんで」を入れるか  
-3. H7 workshop LLM 分類 / Phase E パッケージ整理  
-4. 場外れ句は固定語リストではなく、生成品質 or workshop で見る（H6 撤回済み）
+1. 直し案をシステムが1つ出すか（任意。現状は保存 + soft 返事。音数失敗時 repair は既存）  
+2. H7 workshop LLM 分類（ルールで足りている間は不要）  
+3. Phase E パッケージ整理（機能ではない）
 
 合意後に実装。

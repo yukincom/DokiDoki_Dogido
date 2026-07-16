@@ -157,6 +157,64 @@ class WorkshopIntentTests(unittest.TestCase):
             store.save_haiku_lesson(lesson_type="*", note="", polarity="loosen", strength=0.0)
             self.assertEqual(store.list_recent_haiku_lessons(limit=3), [])
 
+    def test_wants_clear_lessons_not_close(self) -> None:
+        from dogido_server.haiku.workshop import wants_clear_haiku_lessons
+
+        self.assertTrue(wants_clear_haiku_lessons("もう気にせんでええわ"))
+        self.assertTrue(wants_clear_haiku_lessons("前の注意いらない"))
+        self.assertFalse(wants_clear_haiku_lessons("もうええ"))
+        self.assertEqual(classify_workshop_intent("もう気にせんで"), "clear_lessons")
+        self.assertEqual(classify_workshop_intent("もうええ"), "close")
+
+    def test_lessons_ttl_by_age_and_emissions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "mem")
+            old = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+            now = datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc)
+            store.save_haiku_lesson(
+                lesson_type="compress",
+                note="古い注意",
+                polarity="tighten",
+                observed_at=old,
+            )
+            # 14日超 → 出ない
+            self.assertEqual(
+                store.list_recent_haiku_lessons(limit=3, now=now, max_age_days=14),
+                [],
+            )
+            recent = now - timedelta(days=1)
+            store.save_haiku_lesson(
+                lesson_type="compress",
+                note="最近の注意",
+                polarity="tighten",
+                observed_at=recent,
+            )
+            listed = store.list_recent_haiku_lessons(limit=3, now=now, max_age_days=14)
+            self.assertEqual(len(listed), 1)
+            self.assertIn("最近", listed[0]["note"])
+            # 発句を max 回積むと薄まる
+            emission = _emission()
+            for i in range(6):
+                emission = HaikuEmission(
+                    created_at=recent + timedelta(minutes=i + 1),
+                    text=f"てすとく{i} あ い",
+                    preface="ここで一句。",
+                    interpretation="test",
+                    biome="plains",
+                    structure=None,
+                    time_phase="day",
+                    dimension="minecraft:overworld",
+                    event_sequence=10 + i,
+                    route="haiku",
+                )
+                store.save_agent_haiku(emission)
+            self.assertEqual(
+                store.list_recent_haiku_lessons(
+                    limit=3, now=now, max_age_days=14, max_emissions_after=6
+                ),
+                [],
+            )
+
 
 class WorkshopServiceIntegrationTests(unittest.TestCase):
     def test_emit_opens_workshop_and_critique_path(self) -> None:
@@ -225,6 +283,68 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(any("読みやす" in str(x.get("note")) for x in lessons))
             # hard 合流用の fragments があっても soft のまま
             self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))
+
+    def test_clear_lessons_without_workshop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                llm_enabled=False,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sid = session.session_id
+            sess = service.sessions[sid]
+            store = MemoryStore(Path(tmp) / "mem")
+            store.save_haiku_lesson(
+                lesson_type="compress",
+                note="要素を少し絞って余白を残すとよい",
+                polarity="tighten",
+            )
+            self.assertTrue(store.list_recent_haiku_lessons(limit=3))
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc),
+                sequence=4,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text="もう気にせんで"),
+            )
+            sess.machine.player_input = __import__(
+                "dogido_server.player_input", fromlist=["route_player_input"]
+            ).route_player_input("もう気にせんで")
+            actions = service._memory_input_actions(sess, event)
+            self.assertEqual(1, len(actions))
+            self.assertIn("気にせんでええ", actions[0].text)
+            self.assertEqual(MemoryStore(Path(tmp) / "mem").list_recent_haiku_lessons(limit=3), [])
 
     def test_conversational_revise_closes_workshop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

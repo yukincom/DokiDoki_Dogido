@@ -7,6 +7,7 @@ from dogido_server.haiku.workshop import (
     extract_conversational_revise,
     is_open,
     lessons_from_critique_kind,
+    loosen_all_lessons,
     loosen_lesson_for_praise,
     materials_speech_line,
     maybe_close_for_time,
@@ -14,6 +15,7 @@ from dogido_server.haiku.workshop import (
     record_drift,
     record_workshop_activity,
     render_workshop_reply,
+    wants_clear_haiku_lessons,
     workshop_prompt_details,
 )
 
@@ -24,6 +26,7 @@ __all__ = [
     "extract_conversational_revise",
     "is_open",
     "lessons_from_critique_kind",
+    "loosen_all_lessons",
     "loosen_lesson_for_praise",
     "materials_speech_line",
     "maybe_close_for_time",
@@ -31,5 +34,6 @@ __all__ = [
     "record_drift",
     "record_workshop_activity",
     "render_workshop_reply",
+    "wants_clear_haiku_lessons",
     "workshop_prompt_details",
 ]
