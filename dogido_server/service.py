@@ -14,7 +14,10 @@ from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
     classify_workshop_intent,
     close_workshop,
+    extract_conversational_revise,
     is_open,
+    lessons_from_critique_kind,
+    loosen_lesson_for_praise,
     maybe_close_for_time,
     open_from_emission,
     record_drift,
@@ -475,14 +478,12 @@ class DogidoService:
             return self._handle_reading_correction(session, event, player_input.reading_correction)
 
         if player_input.revised_haiku_text:
-            if session.last_haiku_emission is None:
-                return [AudioAction(layer="speech", interrupt=False, text="直す元の句がまだないで。")]
-            self.memory.save_haiku_feedback(
-                session.last_haiku_emission,
-                revised_text=player_input.revised_haiku_text,
-                observed_at=event.observed_at,
+            return self._save_haiku_revision_reply(
+                session,
+                event,
+                player_input.revised_haiku_text,
+                source="formal",
             )
-            return [AudioAction(layer="speech", interrupt=False, text="元の句と直し、覚えといたで。")]
 
         if player_input.player_haiku_text:
             _, created = self.memory.save_player_haiku(event, player_input.player_haiku_text)
@@ -538,6 +539,33 @@ class DogidoService:
             entry_id or "-",
         )
 
+    def _save_haiku_revision_reply(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        revised_text: str,
+        *,
+        source: str,
+    ) -> list[AudioAction]:
+        if session.last_haiku_emission is None:
+            return [AudioAction(layer="speech", interrupt=False, text="直す元の句がまだないで。")]
+        assert self.memory is not None
+        self.memory.save_haiku_feedback(
+            session.last_haiku_emission,
+            revised_text=revised_text,
+            observed_at=event.observed_at,
+        )
+        if is_open(session.haiku_workshop):
+            close_workshop(session.haiku_workshop, reason="revise")
+            session.haiku_workshop = None
+        LOGGER.warning(
+            "haiku_revision_saved session_id=%s source=%s text=%s",
+            session.session_id,
+            source,
+            revised_text[:60],
+        )
+        return [AudioAction(layer="speech", interrupt=False, text="元の句と直し、覚えといたで。")]
+
     def _haiku_workshop_actions(
         self,
         session: SessionInfo,
@@ -552,7 +580,17 @@ class DogidoService:
             return []
         if (player_input.normalized_text or "").startswith("/"):
             return []
-        # formal 川柳操作は上で処理済み。ここでは自然文のみ。
+
+        # H4: 自然文の直し（workshop open 中）
+        conversational = extract_conversational_revise(text)
+        if conversational and self.memory is not None:
+            return self._save_haiku_revision_reply(
+                session, event, conversational, source="conversational"
+            )
+        if conversational and self.memory is None:
+            return [AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。")]
+
+        # formal 川柳操作は上で処理済み。ここでは自然文の講評のみ。
         kind = classify_workshop_intent(text)
         if kind is None:
             return []
@@ -574,9 +612,10 @@ class DogidoService:
             "other_haiku": "other",
         }.get(kind, "other")
 
+        critique_id: str | None = None
         if kind != "close" and self.memory is not None:
             try:
-                self.memory.save_haiku_critique(
+                row = self.memory.save_haiku_critique(
                     entry_id=workshop.entry_id,
                     kind=critique_kind,
                     player_text=text,
@@ -585,6 +624,33 @@ class DogidoService:
                     observed_at=now,
                     session_id=session.session_id,
                 )
+                critique_id = str(row.get("id") or "") or None
+                # H5.1: soft lesson / praise は loosen（新規常駐しない）
+                if critique_kind == "praise":
+                    loosen = loosen_lesson_for_praise()
+                    self.memory.save_haiku_lesson(
+                        lesson_type=str(loosen.get("lesson_type") or "*"),
+                        note=str(loosen.get("note") or ""),
+                        prefer_materials=bool(loosen.get("prefer_materials")),
+                        from_entry_id=workshop.entry_id,
+                        from_critique_id=critique_id,
+                        observed_at=now,
+                        polarity=str(loosen.get("polarity") or "loosen"),
+                        strength=float(loosen.get("strength") or 0.0),
+                    )
+                else:
+                    for lesson in lessons_from_critique_kind(critique_kind, player_text=text):
+                        self.memory.save_haiku_lesson(
+                            lesson_type=str(lesson.get("lesson_type") or "other"),
+                            note=str(lesson.get("note") or ""),
+                            prefer_materials=bool(lesson.get("prefer_materials")),
+                            forbidden_fragments=list(lesson.get("forbidden_fragments") or []),
+                            from_entry_id=workshop.entry_id,
+                            from_critique_id=critique_id,
+                            observed_at=now,
+                            polarity=str(lesson.get("polarity") or "tighten"),
+                            strength=float(lesson.get("strength") or 0.3),
+                        )
             except OSError as exc:
                 LOGGER.warning("haiku_critique_save_failed detail=%s", exc)
 
@@ -788,6 +854,10 @@ class DogidoService:
         session.machine.dialogue_context_provider = lambda: session.dialogue
         # open 中の句 pin を player_chat details へ（履歴に依存しない）
         session.machine.haiku_workshop_provider = lambda: session.haiku_workshop
+        # 次回発句用の薄い lessons
+        session.machine.haiku_lessons_provider = lambda: (
+            self.memory.list_recent_haiku_lessons(limit=3) if self.memory is not None else []
+        )
 
     def _implicit_session_id(self, event: GameEvent) -> str:
         player = (event.player.name or "player").replace(" ", "_")

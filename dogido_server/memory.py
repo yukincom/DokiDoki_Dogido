@@ -46,6 +46,7 @@ class MemoryStore:
         self.haiku_entries_path = self.long_term_dir / "haiku_entries.jsonl"
         self.haiku_revisions_path = self.long_term_dir / "haiku_revisions.jsonl"
         self.haiku_critiques_path = self.long_term_dir / "haiku_critiques.jsonl"
+        self.haiku_lessons_path = self.long_term_dir / "haiku_lessons.jsonl"
         self.catalog_corrections_path = self.long_term_dir / "catalog_corrections.jsonl"
         self.player_profile_path = self.long_term_dir / "player_profile.json"
 
@@ -179,6 +180,90 @@ class MemoryStore:
         }
         self._append_jsonl(self.haiku_critiques_path, row)
         return row
+
+    def save_haiku_lesson(
+        self,
+        *,
+        lesson_type: str,
+        note: str,
+        prefer_materials: bool = False,
+        forbidden_fragments: list[str] | None = None,
+        from_entry_id: str | None = None,
+        from_critique_id: str | None = None,
+        observed_at: datetime | None = None,
+        polarity: str = "tighten",
+        strength: float = 0.3,
+    ) -> dict[str, Any]:
+        """次回発句へ薄く効かせる教訓（soft。hard 禁止語にはしない）。
+
+        polarity:
+          - tighten: 癖として意識する
+          - loosen: それ以前の tighten を弱める（lesson_type='*' なら全軸）
+        strength:
+          - 将来 TTL / 言い回し段階用。list_recent は現状 strength を見ない（記録のみ）
+        """
+        created_at = observed_at or datetime.now().astimezone()
+        pol = (polarity or "tighten").strip().lower()
+        if pol not in {"tighten", "loosen"}:
+            pol = "tighten"
+        try:
+            strength_val = float(strength)
+        except (TypeError, ValueError):
+            strength_val = 0.3
+        strength_val = max(0.0, min(1.0, strength_val))
+        row = {
+            "id": f"hlesson_{created_at.strftime('%Y%m%dT%H%M%S')}_{uuid4().hex[:8]}",
+            "created_at": datetime_json(created_at),
+            "lesson_type": (lesson_type or "other").strip() or "other",
+            "note": (note or "").strip()[:200],
+            "prefer_materials": bool(prefer_materials),
+            # soft ヒント用。発句の hard forbidden には合流しない
+            "forbidden_fragments": [str(x).strip() for x in (forbidden_fragments or []) if str(x).strip()][:12],
+            "polarity": pol,
+            # 未使用（将来）。いまは polarity + lesson_type 軸だけが list に効く
+            "strength": strength_val,
+            "from_entry_id": from_entry_id,
+            "from_critique_id": from_critique_id,
+        }
+        self._append_jsonl(self.haiku_lessons_path, row)
+        return row
+
+    def list_recent_haiku_lessons(self, *, limit: int = 3) -> list[dict[str, Any]]:
+        """発句用 soft lessons。新しい順・軸(type)1件・loosen で抑止。
+
+        H5.1: 最大 3（既定）。同 lesson_type は最新1件。loosen より古い tighten は出さない。
+        """
+        limit = max(1, min(int(limit), 5))
+        rows = self._read_jsonl(self.haiku_lessons_path)
+        # 新しい行が末尾 → 新しい順
+        selected = list(reversed(rows[- max(12, limit * 8) :]))
+        out: list[dict[str, Any]] = []
+        seen_types: set[str] = set()
+        suppressed_types: set[str] = set()
+        suppress_all = False
+        for row in selected:
+            if not isinstance(row, dict):
+                continue
+            polarity = str(row.get("polarity") or "tighten").strip().lower()
+            lesson_type = str(row.get("lesson_type") or "other").strip() or "other"
+            if polarity == "loosen":
+                if lesson_type == "*":
+                    suppress_all = True
+                else:
+                    suppressed_types.add(lesson_type)
+                continue
+            if suppress_all or lesson_type in suppressed_types:
+                continue
+            if lesson_type in seen_types:
+                continue
+            note = str(row.get("note") or "").strip()
+            if not note:
+                continue
+            seen_types.add(lesson_type)
+            out.append(row)
+            if len(out) >= limit:
+                break
+        return out
 
     def save_reading_correction(
         self,

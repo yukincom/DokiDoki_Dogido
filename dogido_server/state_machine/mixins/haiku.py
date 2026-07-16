@@ -821,12 +821,35 @@ class HaikuMixin:
                 seen_forbidden.add(term)
                 forbidden_terms.append(term)
 
-        if not allowed_terms and not forbidden_terms:
+        # H5.1: player lessons は soft のみ。forbidden_fragments を hard 禁止に合流しない
+        # （道具・読みの forbidden_terms だけが hard）
+        player_lessons: list[str] = []
+        provider = getattr(self, "haiku_lessons_provider", None)
+        if provider is not None:
+            try:
+                rows = provider() or []
+            except Exception:
+                rows = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                polarity = str(row.get("polarity") or "tighten").strip().lower()
+                if polarity == "loosen":
+                    continue
+                note = str(row.get("note") or "").strip()
+                if note and note not in player_lessons:
+                    player_lessons.append(note)
+
+        if not allowed_terms and not forbidden_terms and not player_lessons:
             return None
-        return {
+        details: dict[str, object] = {
             "allowed_terms": allowed_terms,
             "forbidden_terms": forbidden_terms,
         }
+        # 空配列は載せない。soft は最大 3（provider 側でも絞る）
+        if player_lessons:
+            details["player_lessons"] = player_lessons[:3]
+        return details
 
     def _haiku_selected_noun_families(self, event: GameEvent, scene: SceneContext) -> tuple[_HaikuNounFamily, ...]:
         selected: list[_HaikuNounFamily] = []

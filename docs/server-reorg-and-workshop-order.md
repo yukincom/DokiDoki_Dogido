@@ -1,7 +1,7 @@
 # パッケージ整理 ＋ 川柳ワークショップ — 編集順
 
 **日付:** 2026-07-16  
-**状態:** Phase A〜C 一部 **実装済み**（H1〜H3 核）。H4〜H5 / catalog 分割は未  
+**状態:** Phase A〜D（H1〜H5.1）実装済み。H6 固定語 materials 突合は**撤回**。H7 / catalog 分割（Phase E）は未  
 **方針:** [server-package-layout-proposal.md](server-package-layout-proposal.md)  
 **workshop:** [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)  
 **pin の閉じ方:** 同計画 §1b  
@@ -146,17 +146,19 @@ dogido_server/haiku/
 
 ---
 
-## Phase D — workshop 仕上げ（H4〜H5）
+## Phase D — workshop 仕上げ（H4〜H5）✅
 
-| 順 | 作業 | ファイル |
+| 順 | 作業 | 状態 |
 |---|---|---|
-| D1 | 自然文直し → revision | `workshop` 意図 + 既存 `memory.save_haiku_feedback` |
-| D2 | 直し後 close（C4） | lifecycle |
-| D3 | lessons 生成（critique から薄い dict） | `memory` or `haiku/feedback.py` |
-| D4 | 次回発句制約へ最大 N 行 | **haiku 発句プロンプト組み立て**（`llm/haiku_prompts.py` or context）に **短い注入のみ** |
-| D5 | テスト | lesson が次の制約に出る、常駐巨大化しない |
+| D1 | 自然文直し → revision（`extract_conversational_revise`） | **済** `haiku/workshop.py` + service |
+| D2 | 直し後 close（formal / conversational とも `reason=revise`） | **済** |
+| D3 | lessons 生成（`lessons_from_critique_kind` → `haiku_lessons.jsonl`） | **済** soft。praise は loosen |
+| D4 | 次回発句へ soft 最大 **3** 行（provider → `_haiku_constraint_details` → prompt「参考・強制ではない」） | **済** H5.1 |
+| D5 | テスト | **済** `test_haiku_workshop` / constraint lessons |
+| D6 | 口答え soft 化・計画書と実装のトーン揃え | **済**（`render_workshop_reply`） |
 
-**編集注意:** lessons を `haiku.py` にベタ書きしない。`build_haiku_lesson_lines(profile) -> list[str]` を haiku/ か memory に。
+**編集注意:** lessons を `haiku.py` にベタ書きしない。provider 経由で memory から注入。  
+**hard 禁止は道具・読みのみ。** player `forbidden_fragments` は hard に合流しない。
 
 ---
 

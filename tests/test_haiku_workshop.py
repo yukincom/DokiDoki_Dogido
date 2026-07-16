@@ -97,6 +97,65 @@ class WorkshopIntentTests(unittest.TestCase):
         reply = render_workshop_reply("ask_meaning", ws)
         self.assertIn("平原", reply)
         self.assertIn("あさひさす", reply)
+        # H5.1: ガチ約束せず soft
+        self.assertIn("ちょっと意識", reply)
+        self.assertNotIn("外れんようにする", reply)
+
+    def test_reply_soft_tones(self) -> None:
+        ws = open_from_emission(_emission())
+        self.assertIn("ちょっと意識", render_workshop_reply("critique_forced", ws))
+        self.assertIn("外れすぎん", render_workshop_reply("critique_offscene", ws))
+        praise = render_workshop_reply("praise", ws)
+        self.assertIn("緩める", praise)
+
+    def test_conversational_revise_extract(self) -> None:
+        from dogido_server.haiku.workshop import extract_conversational_revise
+
+        self.assertEqual(
+            extract_conversational_revise("こう直して: あさひさす / むらのどう / あかがね"),
+            "あさひさす\nむらのどう\nあかがね",
+        )
+        self.assertIsNone(extract_conversational_revise("こう直してや"))
+
+    def test_lessons_from_critique(self) -> None:
+        from dogido_server.haiku.workshop import lessons_from_critique_kind
+
+        lessons = lessons_from_critique_kind("forced_compress")
+        self.assertTrue(lessons)
+        self.assertIn("余白", lessons[0]["note"])
+        self.assertEqual(lessons[0]["polarity"], "tighten")
+        # praise / other は常駐 lesson を増やさない
+        self.assertEqual(lessons_from_critique_kind("praise"), [])
+        self.assertEqual(lessons_from_critique_kind("other", player_text="なんか微妙"), [])
+
+
+    def test_lessons_list_soft_and_loosen(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp) / "mem")
+            store.save_haiku_lesson(
+                lesson_type="compress",
+                note="要素を少し絞って余白を残すとよい",
+                polarity="tighten",
+            )
+            store.save_haiku_lesson(
+                lesson_type="readability",
+                note="読みやすさを少し意識する",
+                polarity="tighten",
+            )
+            # 同軸は最新1件
+            store.save_haiku_lesson(
+                lesson_type="compress",
+                note="詰め込み注意（新しい方）",
+                polarity="tighten",
+            )
+            listed = store.list_recent_haiku_lessons(limit=3)
+            notes = [str(x.get("note")) for x in listed]
+            self.assertIn("詰め込み注意（新しい方）", notes)
+            self.assertNotIn("要素を少し絞って余白を残すとよい", notes)
+            self.assertEqual(len(listed), 2)
+            # praise → 全軸 loosen
+            store.save_haiku_lesson(lesson_type="*", note="", polarity="loosen", strength=0.0)
+            self.assertEqual(store.list_recent_haiku_lessons(limit=3), [])
 
 
 class WorkshopServiceIntegrationTests(unittest.TestCase):
@@ -159,9 +218,71 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertEqual(1, len(actions))
             self.assertIn("読みにく", actions[0].text)
             self.assertIn("平原", actions[0].text)
-            store = MemoryStore(Path(tmp) / "mem")
             # critique was written via service.memory
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_critiques.jsonl").exists())
+            self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_lessons.jsonl").exists())
+            lessons = MemoryStore(Path(tmp) / "mem").list_recent_haiku_lessons(limit=3)
+            self.assertTrue(any("読みやす" in str(x.get("note")) for x in lessons))
+            # hard 合流用の fragments があっても soft のまま
+            self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))
+
+    def test_conversational_revise_closes_workshop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                llm_enabled=False,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sid = session.session_id
+            sess = service.sessions[sid]
+            emission = _emission()
+            sess.last_haiku_emission = emission
+            service._open_haiku_workshop(sess, emission, entry_id="h_test", now=emission.created_at)
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=3,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text="こう直して: あさひさす / むらのどう / あかがね"),
+            )
+            sess.machine.player_input = __import__(
+                "dogido_server.player_input", fromlist=["route_player_input"]
+            ).route_player_input("こう直して: あさひさす / むらのどう / あかがね")
+            actions = service._haiku_workshop_actions(sess, event)
+            self.assertEqual(1, len(actions))
+            self.assertIn("覚えといた", actions[0].text)
+            self.assertIsNone(sess.haiku_workshop)
 
 
 if __name__ == "__main__":

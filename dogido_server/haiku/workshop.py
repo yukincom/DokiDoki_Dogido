@@ -227,13 +227,117 @@ def classify_workshop_intent(user_text: str) -> str | None:
     return None
 
 
+def extract_conversational_revise(raw_text: str | None) -> str | None:
+    """自然文の直し句。formal の「直し:」に加え、workshop 中の言い回しを拾う。"""
+    from dogido_server.player_input.guardrails import _parse_haiku_payload, extract_revised_haiku
+
+    formal = extract_revised_haiku(raw_text)
+    if formal:
+        return formal
+    text = (raw_text or "").strip()
+    if not text:
+        return None
+    soft_prefixes = (
+        "こう直して:",
+        "こう直して：",
+        "こう直して",
+        "こう直す:",
+        "こう直す：",
+        "こう直す",
+        "直して:",
+        "直して：",
+        "直しは:",
+        "直しは：",
+        "直しは",
+        "この方がええ:",
+        "この方がええ：",
+        "このほうがいい:",
+        "このほうがいい：",
+        "こうしたら:",
+        "こうしたら：",
+    )
+    for prefix in soft_prefixes:
+        if text.startswith(prefix):
+            payload = text[len(prefix) :].strip()
+            # 「こう直してや」だけのときは None
+            if len(payload) < 4:
+                return None
+            return _parse_haiku_payload(payload)
+    # 「直し … 五/七/五」が文中にある場合
+    for marker in ("直し:", "直し：", "直して "):
+        if marker in text:
+            idx = text.find(marker)
+            payload = text[idx + len(marker) :].strip()
+            if len(payload) >= 4:
+                parsed = _parse_haiku_payload(payload)
+                if parsed:
+                    return parsed
+    return None
+
+
+def lessons_from_critique_kind(kind: str, *, player_text: str = "") -> list[dict[str, object]]:
+    """critique 種別から薄い soft lesson を0〜1件生成。
+
+    H5.1: 強制禁止ではなく「できれば意識」。praise / other は常駐 lesson を増やさない
+    （praise の可逆は memory 側の loosen 行で扱う）。
+    """
+    del player_text  # 将来の自然文抽出用。いまは種別のみ
+    k = (kind or "other").strip()
+    # 軸は lesson_type で1本。同種は list 時に新しい1件だけ効く
+    if k in {"unreadable", "ask_meaning"}:
+        return [
+            {
+                "lesson_type": "readability",
+                "note": "読みやすさを少し意識する（かな連続・謎語は控えめに）",
+                "prefer_materials": True,
+                "polarity": "tighten",
+                # strength は将来用。現状 list は polarity / type のみ参照
+                "strength": 0.3,
+            }
+        ]
+    if k == "forced_compress":
+        return [
+            {
+                "lesson_type": "compress",
+                "note": "要素を少し絞って余白を残すとよい",
+                "prefer_materials": True,
+                "polarity": "tighten",
+                "strength": 0.3,
+            }
+        ]
+    if k == "off_context":
+        return [
+            {
+                "lesson_type": "scene",
+                "note": "材料・場面から大きく外れない方がよい",
+                "prefer_materials": True,
+                "polarity": "tighten",
+                "strength": 0.3,
+            }
+        ]
+    # praise / other / 不明 → 新規 tighten は作らない
+    return []
+
+
+def loosen_lesson_for_praise() -> dict[str, object]:
+    """ほめられたとき、既存 tighten を弱める（append-only の loosen 行）。"""
+    return {
+        "lesson_type": "*",
+        "note": "",
+        "prefer_materials": False,
+        "polarity": "loosen",
+        "strength": 0.0,
+    }
+
+
 def render_workshop_reply(
     kind: str,
     workshop: RecentHaikuWorkshop,
     *,
     player_text: str = "",
 ) -> str:
-    """ルールベースの短い返事（LLM なし初版）。"""
+    """ルールベースの短い返事（LLM なし）。H5.1: ガチ約束せず soft に寄せる。"""
+    del player_text  # 将来の言い回し反映用
     verse = workshop.display_line() or "（句なし）"
     materials = materials_speech_line(workshop)
     materials_bit = f"狙いは「{materials}」やったんやけどな。" if materials else ""
@@ -241,30 +345,31 @@ def render_workshop_reply(
     if kind == "close":
         return "おけ、この句の話はここまでや。"
     if kind == "praise":
-        return "ありがとうや。その句、残しとくで。"
+        # loosen とセット。可逆がプレイヤーにも見える一文
+        return "ありがとうや。その句、残しとくで。前の注意は少し緩めるわ。"
     if kind == "ask_meaning":
         return (
             f"正直「{verse}」は読みにくいかもな。"
             f"{materials_bit}"
-            "直すなら言ってな。"
+            "直すなら言ってな。次は読みやすさ、ちょっと意識するわ。"
         )
     if kind == "critique_forced":
         return (
             "せやな、詰め込みすぎたかもな。"
             f"{materials_bit}"
-            "次は余白残すようにするわ。"
+            "次は余白、ちょっと意識するわ。"
         )
     if kind == "critique_gibberish":
         return (
             f"うん、あれは読みにくいわ。「{verse}」やった。"
             f"{materials_bit}"
-            "直しか、次の注意、どっちでもええで。"
+            "直すでも、次で気をつけるでもええで。"
         )
     if kind == "critique_offscene":
         return (
             "場とずれたな、悪かった。"
             f"{materials_bit}"
-            "次は材料から外れんようにするわ。"
+            "次は材料から外れすぎんように気をつけるわ。"
         )
     # other_haiku
     return (
