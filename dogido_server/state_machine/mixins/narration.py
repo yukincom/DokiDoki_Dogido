@@ -434,6 +434,7 @@ class NarrationMixin:
             build_identify_skeleton,
             reply_policy_line,
             resolve_reply_stance,
+            should_enforce_speech_whitelist,
         )
 
         reply_stance = resolve_reply_stance(
@@ -443,15 +444,34 @@ class NarrationMixin:
             user_text=user_text,
         )
         reply_policy = reply_policy_line(reply_stance)
+        # ambient / 平和・中立 mob も「現実にいる」根拠として許可名に入れる
+        passive_types = self._player_chat_observed_passive_types(event)
         allowed_speech_labels = build_allowed_speech_labels(
             topic_hits=topic_hits,
             visual_types=effective_visual_types,
+            passive_types=passive_types,
             hearing_named_mobs=hearing_named_mobs,
+        )
+        speech_whitelist_enforce = should_enforce_speech_whitelist(
+            reply_stance, allowed_speech_labels
         )
         identify_skeleton = build_identify_skeleton(
             stance=reply_stance,
             topic_hits=topic_hits,
         )
+        from dogido_server.entry_catalog import (
+            build_plausibility_hint_lines,
+            normalize_biome_id,
+            structure_ids_for_plausibility,
+        )
+
+        structure_ids = structure_ids_for_plausibility(topic_hits)
+        plausibility_lines = build_plausibility_hint_lines(
+            topic_hits=topic_hits,
+            current_biome_id=normalize_biome_id(event.world.biome),
+            current_biome_label=self._biome_label(event.world.biome),
+        )
+        plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
         LOGGER.warning(
             "player_chat_visual count=%s types=%s recent=%s threat_summary=%s",
             len(event.visual_threats),
@@ -459,8 +479,14 @@ class NarrationMixin:
             ",".join(recent_visual_types) or "-",
             (threat_summary or "")[:120] or "-",
         )
+        if structure_ids or plausibility_lines:
+            LOGGER.warning(
+                "player_chat_plausibility structures=%s lines=%s",
+                ",".join(structure_ids) or "-",
+                len(plausibility_lines),
+            )
         LOGGER.warning(
-            "player_chat_topics empty=%s hits=%s stance=%s",
+            "player_chat_topics empty=%s hits=%s stance=%s allowed=%s enforce_wl=%s",
             not bool(topic_hits),
             ",".join(
                 f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
@@ -468,6 +494,8 @@ class NarrationMixin:
             )
             or "-",
             reply_stance,
+            ",".join(allowed_speech_labels) or "-",
+            speech_whitelist_enforce,
         )
         LOGGER.warning(
             "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
@@ -504,7 +532,9 @@ class NarrationMixin:
             "reply_stance": reply_stance,
             "reply_policy": reply_policy,
             "allowed_speech_labels": allowed_speech_labels,
+            "speech_whitelist_enforce": speech_whitelist_enforce,
             "identify_skeleton": identify_skeleton or "",
+            "plausibility_hints": plausibility_hints,
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
@@ -639,21 +669,47 @@ class NarrationMixin:
                 merged.append(text)
         return merged
 
+    def _player_chat_observed_passive_types(self, event: GameEvent) -> list[str]:
+        """今フレームの passive_mobs + 直近見た平和/中立（ambient 根拠）。"""
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_visual_retention_ms", 12000))
+        # ambient はもう少し長く「話題に残ってよい」
+        ambient_retention_ms = max(retention_ms, 60000)
+        current = [str(mob.type) for mob in (event.passive_mobs or []) if getattr(mob, "type", None)]
+        recent: list[str] = []
+        for mob_type, seen_at in (self.state.recent_passive_mob_seen_at_by_type or {}).items():
+            age = self._recent_ms(now, seen_at)
+            if age is not None and age <= ambient_retention_ms:
+                recent.append(str(mob_type))
+        return self._merge_unique_types(current, recent)
+
     def _player_chat_mob_tactics(
         self,
         event: GameEvent,
         *,
         extra_types: list[str] | tuple[str, ...] | None = None,
     ) -> dict[str, object]:
-        """周囲の敵対 Mob カタログから dogido_tactics を集約する。"""
+        """観測（今フレーム + visual バッファ）の敵対だけ tactics を集約。
+
+        トピック仮説だけの種は混ぜない（空観測で断定的 tactics を出さない）。
+        """
         from dogido_server.entry_catalog import collect_dogido_tactics_for_mobs
 
         nearby_types = self._merge_unique_types(
             [threat.type for threat in event.visual_threats if threat.type],
             list(extra_types or ()),
         )
+        if not nearby_types:
+            return {
+                "nearby_hostile_types": [],
+                "notes": [],
+                "forbidden_advice": [],
+                "safe_hints": [],
+                "safe_fallback": None,
+            }
         tactics = collect_dogido_tactics_for_mobs(nearby_types)
         safe_fallback = None
+        # 今フレームに視認があるときだけ短い安全 fallback（バッファのみは threat 文に任せる）
         if event.visual_threats and (tactics.get("forbidden_advice") or tactics.get("safe_hints")):
             nearest = min(
                 event.visual_threats,
@@ -663,7 +719,6 @@ class NarrationMixin:
             label = self._hostile_label(nearest.type)
             hints = tactics.get("safe_hints") or []
             hint = str(hints[0]) if hints else "気いつけ"
-            # 禁止助言を含まない安全な短文
             safe_fallback = f"{direction}に{label}や！{hint}や！"
         return {
             "nearby_hostile_types": nearby_types,

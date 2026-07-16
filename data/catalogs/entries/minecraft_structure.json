@@ -57,21 +57,25 @@
         "swamp_hut": {
           "japanese": "湿地の小屋",
           "biomes": ["swamp"],
+          "related_mobs": ["witch"],
           "note": "沼地の水面からせり出した小さな小屋。人の気配がある。"
         },
         "Witch_hut": {
           "japanese": "ウィッチの小屋",
           "biomes": ["swamp"],
+          "related_mobs": ["witch"],
           "note": "沼地の水面からせり出した小さな小屋。人の気配がある。"
         },        
         "mansion": {
           "japanese": "森の洋館",
           "biomes": ["dark_forest"],
+          "related_mobs": ["vindicator", "evoker"],
           "note": "暗い森の奥に建つ巨大な3階建ての洋館。50を超える部屋がある。人の気配がある。誰かが潜んでいるようだ。"
         },
         "pillager_outpost": {
           "japanese": "ピリジャー前哨基地",
-          "biomes": ["plains", "desert", "savanna", "taiga", "snowy_plains", "meadow", "grove", "snowy_slopes", "jagged_peaks", "frozen_peaks", "stony_peaks", "cherry-grove"],
+          "biomes": ["plains", "desert", "savanna", "taiga", "snowy_plains", "meadow", "grove", "snowy_slopes", "jagged_peaks", "frozen_peaks", "stony_peaks", "cherry_grove"],
+          "related_mobs": ["pillager", "ravager"],
           "note": "開けた場所に建つ石造りの塔。周囲には木の檻や荷車が散乱し、最上部の宝箱にレアなアイテムが眠る。何やら敵意に満ちた視線を感じる。"
         },
         "trail_ruins": {
@@ -115,6 +119,7 @@
         "monument": {
           "japanese": "海底神殿",
           "biomes": ["deep_ocean", "deep_lukewarm_ocean", "deep_cold_ocean"],
+          "related_mobs": ["guardian", "elder_guardian"],
           "note": "深海に生成されるプリズマリン製の巨大神殿。ガーディアンとエルダーガーディアンが守護する。"
         },
         "shipwreck": {

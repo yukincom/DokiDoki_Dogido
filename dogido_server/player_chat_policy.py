@@ -84,9 +84,14 @@ def build_allowed_speech_labels(
     *,
     topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
     visual_types: list[str] | tuple[str, ...] | None = None,
+    passive_types: list[str] | tuple[str, ...] | None = None,
     hearing_named_mobs: list[str] | tuple[str, ...] | None = None,
 ) -> list[str]:
-    """出力に使ってよい表示名（topic ∪ visual ∪ hearing の union）。"""
+    """出力に使ってよい表示名。
+
+    topic ∪ 視認脅威 ∪ 平和/ambient 観測 ∪ hearing の union。
+    種 id は呼び出し側が渡す（特定 mob 専用ではない）。
+    """
     from dogido_server.entry_catalog import mob_entry, structure_entries
 
     labels: list[str] = []
@@ -99,9 +104,18 @@ def build_allowed_speech_labels(
         seen.add(text)
         labels.append(text)
 
+    def add_mob_type(raw_type: object | None) -> None:
+        mob_id = str(raw_type or "").removeprefix("minecraft:").strip().lower()
+        if not mob_id:
+            return
+        entry = mob_entry(mob_id)
+        if entry:
+            add(entry.get("label"))
+        else:
+            add(mob_id)
+
     for hit in topic_hits or ():
         add(hit.get("label_ja"))
-        # structure は label_ja のみ。mob id からも再解決
         entry_id = str(hit.get("entry_id") or "").strip()
         kind = str(hit.get("kind") or "mob")
         if kind == "mob" and entry_id:
@@ -113,19 +127,24 @@ def build_allowed_speech_labels(
             add(entry.get("label"))
 
     for raw_type in visual_types or ():
-        mob_id = str(raw_type or "").removeprefix("minecraft:").strip().lower()
-        if not mob_id:
-            continue
-        entry = mob_entry(mob_id)
-        if entry:
-            add(entry.get("label"))
-        else:
-            add(mob_id)
-
+        add_mob_type(raw_type)
+    for raw_type in passive_types or ():
+        add_mob_type(raw_type)
     for name in hearing_named_mobs or ():
         add(name)
 
     return labels
+
+
+def should_enforce_speech_whitelist(stance: str | None, allowed_labels: list[str] | tuple[str, ...] | None) -> bool:
+    """白リスト検査を行うか。
+
+    - saw / hypothesis: 候補外の種名捏造を止めるため常に検査
+    - none / clarify: 雑談を殺さない。検査しない
+      （観測名は allowed に載せても、雑談全体を空白リスト全禁止にはしない）
+    """
+    key = str(stance or "none").strip().lower()
+    return key in {"saw", "hypothesis"}
 
 
 @lru_cache(maxsize=1)

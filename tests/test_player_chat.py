@@ -311,9 +311,8 @@ class HearingContextTests(unittest.TestCase):
             )
         )
         content = messages[1]["content"]
-        self.assertIn("音のメモ: （なし）", content)
-        self.assertIn("音から使ってよい具体モブ名: （なし）", content)
-        # S1: 長文 hearing 規則ではなく policy / 空メモで担保
+        # E′: 空 hearing は節ごと省略。捏造防止は policy + S2 白リスト
+        self.assertNotIn("音のメモ:", content)
         self.assertIn("捏造はしない", content)
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:

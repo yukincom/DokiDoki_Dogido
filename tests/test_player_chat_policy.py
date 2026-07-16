@@ -103,15 +103,47 @@ class AllowedSpeechLabelsTests(unittest.TestCase):
         )
 
     def test_style_reject_unlisted_for_player_chat(self) -> None:
-        details = {"allowed_speech_labels": ["ウィッチ"]}
+        details = {
+            "allowed_speech_labels": ["ウィッチ"],
+            "speech_whitelist_enforce": True,
+        }
         self.assertFalse(
             is_style_acceptable("player_chat", "ゾンビがおるで！", details)
         )
         self.assertTrue(
             is_style_acceptable("player_chat", "ウィッチかもしれんな", details)
         )
-        # キーが無い旧経路は白リスト未適用
+        # enforce オフ（雑談 none）では種名があっても落とさない
+        self.assertTrue(
+            is_style_acceptable(
+                "player_chat",
+                "あー、サケのことやな",
+                {"allowed_speech_labels": [], "speech_whitelist_enforce": False},
+            )
+        )
+        # enforce キーが無い旧経路は白リスト未適用
         self.assertTrue(is_style_acceptable("player_chat", "ゾンビがおるで！", {}))
+
+    def test_passive_observation_allows_any_observed_types(self) -> None:
+        """特定種専用ではなく、渡した type id をすべて label 化する。"""
+        labels = build_allowed_speech_labels(
+            topic_hits=[],
+            visual_types=["pillager"],
+            passive_types=["salmon", "cow", "sheep"],
+            hearing_named_mobs=["村人"],
+        )
+        for name in ("ピリジャー", "サケ", "ウシ", "ヒツジ", "村人"):
+            self.assertIn(name, labels)
+            self.assertFalse(contains_unlisted_speech_names(f"{name}やな", labels))
+
+    def test_whitelist_enforce_only_for_identify_stances(self) -> None:
+        from dogido_server.player_chat_policy import should_enforce_speech_whitelist
+
+        self.assertTrue(should_enforce_speech_whitelist("hypothesis", ["ウィッチ"]))
+        self.assertTrue(should_enforce_speech_whitelist("saw", ["ピリジャー"]))
+        self.assertFalse(should_enforce_speech_whitelist("none", []))
+        self.assertFalse(should_enforce_speech_whitelist("none", ["サケ"]))
+        self.assertFalse(should_enforce_speech_whitelist("clarify", []))
 
 
 class IdentifySkeletonTests(unittest.TestCase):

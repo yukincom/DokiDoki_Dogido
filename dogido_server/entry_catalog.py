@@ -402,6 +402,152 @@ def structure_labels() -> dict[str, str]:
     }
 
 
+def normalize_biome_id(biome_id: str | None) -> str | None:
+    text = str(biome_id or "").removeprefix("minecraft:").strip().lower().replace("-", "_")
+    return text or None
+
+
+def structure_biomes(structure_id: str | None) -> frozenset[str]:
+    if not structure_id:
+        return frozenset()
+    entry = structure_entries().get(str(structure_id))
+    if not entry:
+        return frozenset()
+    biomes = entry.get("biomes") or []
+    if not isinstance(biomes, list):
+        return frozenset()
+    normalized = {
+        bid
+        for raw in biomes
+        if (bid := normalize_biome_id(str(raw))) is not None
+    }
+    return frozenset(normalized)
+
+
+def structure_related_mobs(structure_id: str | None) -> tuple[str, ...]:
+    if not structure_id:
+        return ()
+    entry = structure_entries().get(str(structure_id))
+    if not entry:
+        return ()
+    raw = entry.get("related_mobs") or []
+    if not isinstance(raw, list):
+        return ()
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        mob_id = str(item or "").removeprefix("minecraft:").strip().lower()
+        if not mob_id or mob_id in seen:
+            continue
+        seen.add(mob_id)
+        out.append(mob_id)
+    return tuple(out)
+
+
+@lru_cache(maxsize=1)
+def structures_for_mob_index() -> dict[str, tuple[str, ...]]:
+    """mob_id → structure_id 群（related_mobs の逆引き）。"""
+    index: dict[str, list[str]] = {}
+    for structure_id in structure_entries():
+        for mob_id in structure_related_mobs(structure_id):
+            index.setdefault(mob_id, []).append(structure_id)
+    return {mob_id: tuple(ids) for mob_id, ids in index.items()}
+
+
+def structures_for_mob(mob_id: str | None) -> tuple[str, ...]:
+    if not mob_id:
+        return ()
+    key = str(mob_id).removeprefix("minecraft:").strip().lower()
+    return structures_for_mob_index().get(key, ())
+
+
+def structure_ids_for_plausibility(
+    topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+) -> list[str]:
+    """トピックから plausibility 対象の structure id を集める。
+
+    - kind=structure はそのまま
+    - kind=mob は related_mobs 逆引きし、マッチ語が structure 表示名に含まれるときだけ
+      （「前哨基地」→ ピリジャー scene → 前哨基地、のように。ピリ視認だけでは出さない）
+    """
+    ids: list[str] = []
+    seen: set[str] = set()
+
+    def add(structure_id: str) -> None:
+        if structure_id and structure_id not in seen and structure_id in structure_entries():
+            seen.add(structure_id)
+            ids.append(structure_id)
+
+    for hit in topic_hits or ():
+        kind = str(hit.get("kind") or "")
+        entry_id = str(hit.get("entry_id") or "").strip()
+        if not entry_id:
+            continue
+        if kind == "structure":
+            add(entry_id)
+            continue
+        if kind != "mob":
+            continue
+        matched = [str(t).strip() for t in (hit.get("matched_terms") or ()) if str(t).strip()]
+        if not matched:
+            continue
+        mob_label = str(hit.get("label_ja") or "").strip()
+        for structure_id in structures_for_mob(entry_id):
+            label = str((structure_entries().get(structure_id) or {}).get("label") or "")
+            # 種名ラベルそのもの（「ピリジャー」）だけでは前哨を出さない。
+            # 「前哨基地」など structure 名に含まれる別語のときだけ。
+            if any(
+                len(term) >= 2 and term in label and term != mob_label
+                for term in matched
+            ):
+                add(structure_id)
+    return ids
+
+
+def build_plausibility_hint_lines(
+    *,
+    structure_ids: list[str] | tuple[str, ...] | set[str] | None = None,
+    topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+    current_biome_id: str | None = None,
+    current_biome_label: str | None = None,
+) -> list[str]:
+    """structure の生成可否を現在 biome と突合した短い行（LLM 推論用ではない事実行）。"""
+    resolved_ids = list(structure_ids or ())
+    if topic_hits is not None:
+        for structure_id in structure_ids_for_plausibility(topic_hits):
+            if structure_id not in resolved_ids:
+                resolved_ids.append(structure_id)
+
+    biome = normalize_biome_id(current_biome_id)
+    place = (current_biome_label or "").strip() or (biome or "いまの場所")
+    lines: list[str] = []
+    seen: set[str] = set()
+
+    for raw_id in resolved_ids:
+        structure_id = str(raw_id or "").strip()
+        if not structure_id or structure_id in seen:
+            continue
+        entry = structure_entries().get(structure_id)
+        if entry is None:
+            continue
+        seen.add(structure_id)
+        label = str(entry.get("label") or structure_id)
+        biomes = structure_biomes(structure_id)
+        if not biomes:
+            continue
+        if biome is None:
+            lines.append(f"{label}: 生成バイオームの知識はあるが、いまの場所は不明")
+            continue
+        if biome in biomes:
+            lines.append(f"{label}: いまの場所（{place}）は生成されうるバイオームに含む → ありうる")
+        else:
+            lines.append(f"{label}: いまの場所（{place}）には生成されにくいかも")
+        # 前哨は襲撃と混同しやすいので注記
+        if structure_id == "pillager_outpost":
+            lines.append("（ピリジャーがいること自体は襲撃でも起きる。前哨の有無は別）")
+    return lines
+
+
 def hostile_mob_entries() -> dict[str, dict[str, Any]]:
     sections = _mob_catalog_sections()
     return _normalize_mob_entries(_mob_section_items(sections.get("hostile", {})))

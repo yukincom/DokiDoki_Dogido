@@ -29,6 +29,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     inventory_rules, inventory_block = _inventory_section(details)
     hearing_block = _hearing_block(details)
     topic_block = _topic_block(details)
+    plausibility_block = _plausibility_block(details)
     history_rules, history_block = _history_section(details)
     digest_rules, digest_block = _digest_section(details)
     combat_safety_rules = _combat_safety_rules(details, character_mode)
@@ -56,6 +57,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"答え方スタンス: {stance}。\n"
         f"周囲の脅威メモ: {threat_summary}。\n"
         f"{topic_block}"
+        f"{plausibility_block}"
         f"{hearing_block}"
         f"{inventory_block}"
         "発言に噛み合った返事を、会話っぽく12〜42文字くらいで一言だけ返す。"
@@ -92,17 +94,16 @@ def _inventory_section(details: dict[str, Any]) -> tuple[str, str]:
 
 
 def _hearing_block(details: dict[str, Any]) -> str:
+    """音メモがあるときだけ載せる（空行の常時2行は E′ で廃止。捏造防止は白リスト）。"""
     hearing_summary = detail_str(details, "hearing_summary")
     hearing_named_mobs = as_str_list(details.get("hearing_named_mobs"))
+    if not hearing_summary and not hearing_named_mobs:
+        return ""
     named_line = "、".join(hearing_named_mobs) if hearing_named_mobs else "（なし）"
-    if hearing_summary:
-        return (
-            f"いまドギドが拾っている音のメモ: {hearing_summary}。\n"
-            f"音から使ってよい具体モブ名: {named_line}。\n"
-        )
+    summary_line = hearing_summary or "（なし）"
     return (
-        "いまドギドが拾っている音のメモ: （なし）。\n"
-        "音から使ってよい具体モブ名: （なし）。\n"
+        f"いまドギドが拾っている音のメモ: {summary_line}。\n"
+        f"音から使ってよい具体モブ名: {named_line}。\n"
     )
 
 
@@ -113,6 +114,17 @@ def _topic_block(details: dict[str, Any]) -> str:
     return (
         "カタログからの話題ヒント（断定材料ではない）:\n"
         f"{catalog_topic_hints}\n"
+    )
+
+
+def _plausibility_block(details: dict[str, Any]) -> str:
+    """F′: SM が計算した structure×biome 行。推論ではなく事実メモ。"""
+    hints = detail_str(details, "plausibility_hints")
+    if not hints:
+        return ""
+    return (
+        "知識リンク（断定ではない。生成しうる≠いま視界にある）:\n"
+        f"{hints}\n"
     )
 
 
@@ -135,29 +147,33 @@ def _digest_section(details: dict[str, Any]) -> tuple[str, str]:
 
 
 def _combat_safety_rules(details: dict[str, Any], character_mode: CharacterMode) -> str:
+    """戦闘安全は短く。tactics は観測（nearby_hostile_types）があるときだけ。"""
     rules = (
         "- プレイヤーを死なせる誤アドバイスは禁止。"
         "位置・種類の警告と短い応援はよいが、根拠の薄い作戦指示は控える\n"
     )
-    if (
+    nearby = as_str_list(details.get("nearby_hostile_types"))
+    in_hostile = (
         character_mode == "battle"
         or details.get("has_visual_threats")
         or details.get("combat_active")
-        or details.get("nearby_hostile_types")
-    ):
-        rules += (
-            "- 敵対中は『じっとして』『止まって』等の静止指示は禁止\n"
-        )
+        or bool(nearby)
+    )
+    if in_hostile:
+        rules += "- 敵対中は『じっとして』『止まって』等の静止指示は禁止\n"
+    # tactics は SM が観測種だけ入れたときのみ（トピック仮説だけでは載せない）
+    if not nearby:
+        return rules
     tactics_notes = as_str_list(details.get("mob_tactics_notes"))
     forbidden_advice = as_str_list(details.get("forbidden_advice"))
     safe_hints = as_str_list(details.get("safe_hints"))
     if tactics_notes:
-        joined = " / ".join(tactics_notes[:4])
+        joined = " / ".join(tactics_notes[:3])
         rules += f"- 周囲の敵の性質メモ: {joined}\n"
     if forbidden_advice:
-        joined = "」「".join(forbidden_advice[:12])
+        joined = "」「".join(forbidden_advice[:8])
         rules += f"- 追加の禁止助言: 「{joined}」\n"
     if safe_hints:
-        joined = " / ".join(safe_hints[:8])
+        joined = " / ".join(safe_hints[:5])
         rules += f"- 言ってよい短いヒント例: {joined}\n"
     return rules
