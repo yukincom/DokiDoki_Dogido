@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from dogido_server.minecraft_ids import normalize_minecraft_id
 from dogido_server.memory_types import HaikuEmission
@@ -28,6 +29,26 @@ def datetime_json(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def parse_iso_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+# soft lesson の自然減衰（H5.2）。strength 段階は使わず TTL のみ。
+LESSON_MAX_AGE_DAYS = 14
+LESSON_MAX_EMISSIONS_AFTER = 6
+
+
 def normalize_advancement_id(value: str) -> str:
     normalized = value.strip().lower()
     if normalized.startswith("minecraft:"):
@@ -44,6 +65,8 @@ class MemoryStore:
         self.rolling_summary_path = self.short_term_dir / "rolling_summary.json"
         self.haiku_entries_path = self.long_term_dir / "haiku_entries.jsonl"
         self.haiku_revisions_path = self.long_term_dir / "haiku_revisions.jsonl"
+        self.haiku_critiques_path = self.long_term_dir / "haiku_critiques.jsonl"
+        self.haiku_lessons_path = self.long_term_dir / "haiku_lessons.jsonl"
         self.catalog_corrections_path = self.long_term_dir / "catalog_corrections.jsonl"
         self.player_profile_path = self.long_term_dir / "player_profile.json"
 
@@ -151,6 +174,147 @@ class MemoryStore:
         }
         self._append_jsonl(self.haiku_revisions_path, revision)
         return revision
+
+    def save_haiku_critique(
+        self,
+        *,
+        entry_id: str | None,
+        kind: str,
+        player_text: str,
+        surface_at_time: str | None = None,
+        materials_snapshot: dict[str, Any] | None = None,
+        observed_at: datetime | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """プレイヤーの自然言語講評を長期保存（プロンプト常駐用ではない）。"""
+        created_at = observed_at or datetime.now().astimezone()
+        row = {
+            "id": f"hcrit_{created_at.strftime('%Y%m%dT%H%M%S')}_{uuid4().hex[:8]}",
+            "created_at": datetime_json(created_at),
+            "entry_id": entry_id,
+            "kind": (kind or "other").strip() or "other",
+            "player_text": (player_text or "").strip()[:240],
+            "surface_at_time": (surface_at_time or "").strip()[:200] or None,
+            "materials_snapshot": materials_snapshot or {},
+            "session_id": session_id,
+        }
+        self._append_jsonl(self.haiku_critiques_path, row)
+        return row
+
+    def save_haiku_lesson(
+        self,
+        *,
+        lesson_type: str,
+        note: str,
+        prefer_materials: bool = False,
+        forbidden_fragments: list[str] | None = None,
+        from_entry_id: str | None = None,
+        from_critique_id: str | None = None,
+        observed_at: datetime | None = None,
+        polarity: str = "tighten",
+        strength: float = 0.3,
+    ) -> dict[str, Any]:
+        """次回発句へ薄く効かせる教訓（soft。hard 禁止語にはしない）。
+
+        polarity:
+          - tighten: 癖として意識する
+          - loosen: それ以前の tighten を弱める（lesson_type='*' なら全軸）
+        strength:
+          - 将来 TTL / 言い回し段階用。list_recent は現状 strength を見ない（記録のみ）
+        """
+        created_at = observed_at or datetime.now().astimezone()
+        pol = (polarity or "tighten").strip().lower()
+        if pol not in {"tighten", "loosen"}:
+            pol = "tighten"
+        try:
+            strength_val = float(strength)
+        except (TypeError, ValueError):
+            strength_val = 0.3
+        strength_val = max(0.0, min(1.0, strength_val))
+        row = {
+            "id": f"hlesson_{created_at.strftime('%Y%m%dT%H%M%S')}_{uuid4().hex[:8]}",
+            "created_at": datetime_json(created_at),
+            "lesson_type": (lesson_type or "other").strip() or "other",
+            "note": (note or "").strip()[:200],
+            "prefer_materials": bool(prefer_materials),
+            # soft ヒント用。発句の hard forbidden には合流しない
+            "forbidden_fragments": [str(x).strip() for x in (forbidden_fragments or []) if str(x).strip()][:12],
+            "polarity": pol,
+            # 未使用（将来）。いまは polarity + lesson_type 軸だけが list に効く
+            "strength": strength_val,
+            "from_entry_id": from_entry_id,
+            "from_critique_id": from_critique_id,
+        }
+        self._append_jsonl(self.haiku_lessons_path, row)
+        return row
+
+    def list_recent_haiku_lessons(
+        self,
+        *,
+        limit: int = 3,
+        now: datetime | None = None,
+        max_age_days: float = LESSON_MAX_AGE_DAYS,
+        max_emissions_after: int = LESSON_MAX_EMISSIONS_AFTER,
+    ) -> list[dict[str, Any]]:
+        """発句用 soft lessons。新しい順・軸1件・loosen / TTL で抑止。
+
+        H5.1: 最大 3・type 最新1件・loosen 抑止。
+        H5.2: 日数 TTL + その後の発句件数 TTL（自然に薄まる。strength は未使用）。
+        """
+        limit = max(1, min(int(limit), 5))
+        now_dt = now or datetime.now(timezone.utc)
+        if now_dt.tzinfo is None:
+            now_dt = now_dt.replace(tzinfo=timezone.utc)
+        age_cutoff = now_dt - timedelta(days=max(0.0, float(max_age_days)))
+        max_em = max(0, int(max_emissions_after))
+
+        entry_times = self._haiku_entry_created_times()
+        rows = self._read_jsonl(self.haiku_lessons_path)
+        selected = list(reversed(rows[- max(12, limit * 8) :]))
+        out: list[dict[str, Any]] = []
+        seen_types: set[str] = set()
+        suppressed_types: set[str] = set()
+        suppress_all = False
+        for row in selected:
+            if not isinstance(row, dict):
+                continue
+            polarity = str(row.get("polarity") or "tighten").strip().lower()
+            lesson_type = str(row.get("lesson_type") or "other").strip() or "other"
+            if polarity == "loosen":
+                if lesson_type == "*":
+                    suppress_all = True
+                else:
+                    suppressed_types.add(lesson_type)
+                continue
+            if suppress_all or lesson_type in suppressed_types:
+                continue
+            if lesson_type in seen_types:
+                continue
+            note = str(row.get("note") or "").strip()
+            if not note:
+                continue
+            created = parse_iso_datetime(row.get("created_at"))
+            if created is not None and created < age_cutoff:
+                continue
+            if created is not None and max_em > 0:
+                emissions_after = sum(1 for t in entry_times if t > created)
+                if emissions_after >= max_em:
+                    continue
+            seen_types.add(lesson_type)
+            out.append(row)
+            if len(out) >= limit:
+                break
+        return out
+
+    def _haiku_entry_created_times(self) -> list[datetime]:
+        times: list[datetime] = []
+        for entry in self.list_haiku_entries():
+            if not isinstance(entry, dict):
+                continue
+            created = parse_iso_datetime(entry.get("created_at"))
+            if created is not None:
+                times.append(created)
+        return times
 
     def save_reading_correction(
         self,

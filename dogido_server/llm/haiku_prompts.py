@@ -34,13 +34,22 @@ def _constraint_block(details: dict[str, object]) -> str:
     if not isinstance(constraints, dict):
         return "なし"
     allowed_terms = "、".join(str(term) for term in constraints.get("allowed_terms", []) if term) or "なし"
+    # 道具・読みなどゲーム知識の hard 禁止のみ（プレイヤー lesson は soft 別枠）
     forbidden_terms = "、".join(str(term) for term in constraints.get("forbidden_terms", []) if term) or "なし"
-    if allowed_terms == "なし" and forbidden_terms == "なし":
+    player_lessons = [str(x) for x in constraints.get("player_lessons", []) if x][:3]
+    if allowed_terms == "なし" and forbidden_terms == "なし" and not player_lessons:
         return "なし"
-    return (
-        f"使ってよい語: {allowed_terms}\n"
-        f"使ってはいけない語: {forbidden_terms}"
-    )
+    parts = [
+        f"使ってよい語: {allowed_terms}",
+        f"使ってはいけない語: {forbidden_terms}",
+    ]
+    if player_lessons:
+        lesson_lines = "\n".join(f"- {note}" for note in player_lessons)
+        parts.append(
+            "プレイヤーからの最近の癖・好み（参考。強制ではない。全文を写さない）:\n"
+            f"{lesson_lines}"
+        )
+    return "\n".join(parts)
 
 
 def _catalog_notes_block(details: dict[str, object]) -> str:

@@ -758,6 +758,35 @@ class HaikuStateMachineTest(unittest.TestCase):
             },
         )
 
+    def test_haiku_constraint_details_include_player_lessons(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="snowy_slopes",
+            held_item="minecraft:diamond_shovel",
+        )
+        self.machine.haiku_lessons_provider = lambda: [
+            {
+                "note": "要素を少し絞って余白を残すとよい",
+                "forbidden_fragments": ["謎語"],  # soft のみ。hard に合流しない
+                "polarity": "tighten",
+            }
+        ]
+        constraints = self.machine._haiku_constraint_details(
+            event,
+            SceneContext(
+                found=True,
+                summary="雪原でダイヤモンドシャベルを握る",
+                motifs=("ダイヤモンドシャベル", "雪原"),
+                focus=("道具の高級感",),
+                confidence=0.8,
+            ),
+        )
+        assert constraints is not None
+        self.assertIn("余白", constraints["player_lessons"][0])
+        # hard は道具語のみ。lesson の fragments は入らない
+        self.assertNotIn("謎語", constraints["forbidden_terms"])
+        self.assertIn("つるはし", constraints["forbidden_terms"])
+
     def test_catalog_notes_include_biome_note(self) -> None:
         event = make_snapshot(self.base_time, biome="snowy_taiga")
         context = self.machine._haiku_context(event)
