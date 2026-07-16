@@ -43,3 +43,5 @@ Minecraft のプレイ状況をもとに、怖がりな AI キャラクター「
 - ドギドの内部状態
 - 発話を抑制する条件
 - プレイヤー入力への反応品質（対話設計の本丸）
+
+相棒としての完成度の上げ方・何を後回しにするかは [companion-maturity.md](companion-maturity.md)。

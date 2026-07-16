@@ -1,223 +1,150 @@
-# Minecraft実況AI "ドキドキドギド"
+# ドキドキドギド
 
-Minecraft のゲーム状況を読み取り、怖がりな AI キャラクター「ドギド」が実況・警告・雑談を行うための設計メモです。
+Minecraft の冒険に、ちょっと怖がりな AI 相棒 **ドギド** がついてくるプロジェクトです。
 
-## プロジェクトコンセプト
+---
 
-**AIと発見しよう！マイクラ世界の新しい見方！**
+## コンセプト
 
-ちょっと怖がりなAI相棒「ドギド」は、
-Minecraftの冒険中にふいに川柳を詠みます。
+**AI と発見しよう！マイクラ世界の新しい見方！**
 
-でも、ドギドの句はちょっぴり下手くそ。
-プレイヤーは「どこが変？」「どう直す？」とツッコミながら、
-言葉を観察し、表現を工夫していきます。
+冒険の主役はいつもプレイヤー。  
+ドギドは状況を盛り上げ、危ないときに慌て、平和なときに雑談し、ふいに **川柳** を詠みます。
 
-自分で詠んだ句も保存できます。
-洞窟、朝日、クリーパー、ウーパールーパー。
-Minecraftの世界が、そのまま表現の材料になります。
+でも、ドギドの句はちょっぴり下手くそです。
 
-## ドキュメント構成
+- 「どこが変？」
+- 「どう直す？」
+- 「いい句やな」
 
-- [プロジェクト概要](docs/project-overview.md)
-- [現行仕様](docs/current-spec.md)
-- [イベントスキーマ](docs/event-schema.md)
-- [受信 API 仕様](docs/adapter-api.md)
-- [サンプルイベントログ収集ケース](docs/sample-event-log-cases.md)
-- [デバッグチェックリスト](docs/debug-checklist.md)
-- [モンスター定義スキーマ](docs/monster-schema.md)
-- [`py_trees` 統合メモ](docs/py-trees-integration.md)
-- [実行時依存ライブラリ](docs/runtime-dependencies.md)
-- [状態機械](docs/state-machine.md)
-- [連携構成](docs/integration-architecture.md)
-- [挙動仕様](docs/behavior-spec.md)
-- [対話設計](docs/dialogue-design.md)
-- [川柳アーキテクチャ](docs/haiku-architecture.md)
-- [Senryu-RAG 実装プラン](docs/senryu-rag-plan.md)
-- [川柳ロードマップ（進捗・将来）](docs/senryu-roadmap.md)
-- [川柳フィードバック実装メモ](docs/haiku-feedback-plan.md)
-- [RAG 初期メモ](docs/rag.md)
-- [技術課題](docs/technical-risks.md)
+とツッコミながら、言葉を観察して表現を工夫していく——  
+Minecraft の洞窟・朝日・クリーパー・ウーパールーパーが、そのまま言葉の材料になります。
 
-## 読む順番
+自分で詠んだ句も残せます。
 
-1. [プロジェクト概要](docs/project-overview.md)
-2. [現行仕様](docs/current-spec.md)
-3. [イベントスキーマ](docs/event-schema.md)
-4. [受信 API 仕様](docs/adapter-api.md)
-5. [サンプルイベントログ収集ケース](docs/sample-event-log-cases.md)
-6. [モンスター定義スキーマ](docs/monster-schema.md)
-7. [`py_trees` 統合メモ](docs/py-trees-integration.md)
-8. [実行時依存ライブラリ](docs/runtime-dependencies.md)
-9. [状態機械](docs/state-machine.md)
-10. [連携構成](docs/integration-architecture.md)
-11. [挙動仕様](docs/behavior-spec.md)
-12. [対話設計](docs/dialogue-design.md)
-13. [川柳アーキテクチャ](docs/haiku-architecture.md)
-14. [Senryu-RAG 実装プラン](docs/senryu-rag-plan.md)
-15. [川柳ロードマップ（進捗・将来）](docs/senryu-roadmap.md)
-16. [記憶アーキテクチャ](docs/memory-architecture.md)
-17. [技術課題](docs/technical-risks.md)
+---
 
-## 現時点の方針
+## ドギドは何をしてくれるの？
 
-- Minecraft 側はイベント取得に専念する
-- AI のキャラクター性は LLM に任せきらず、状態管理をコード側で持つ
-- 音声基盤より先に、イベント入力と優先制御の仕様を固める
-- 川柳の**保存はコード**（JSONL）で行い、LLM ワークフローの将来整理は **LangChain / LangGraph** を想定する
-- 汎用エージェント基盤（例: Hermes）は使わない。機能過剰になりやすいため、必要なグラフだけ載せる
-- **M5Stack 出力**と **LINE / Discord などの外部メッセージ連携**は、対話設計が固まるまで後回し（現状は PC 音声）
+| とき | だいたいこんな感じ |
+|---|---|
+| 敵が近い | 警告・パニック気味のリアクション |
+| 落ち着いている | 雑談・観察・実況 |
+| ふとした瞬間 | いまの景色から川柳 |
+| プレイヤーが句にツッコミ | 狙いや材料を正直に話して、一緒に直す |
+| プレイヤーが直した句 | 覚えておいて、次の句に薄く反映（締めすぎない） |
 
-## 実装状況
+「なんでも知ってる万能 AI」ではなく、  
+**ゲームの中にいる、ちょっと下手な相棒** を目指しています。
 
-- `dogido_server/`
-  - `FastAPI` の受信 API
-  - `event schema` の `Pydantic` モデル
-  - `normal / alert / panic / suppressed_panic / aftermath` の状態機械
-  - `py_trees` ベースの action policy
-  - `aftermath / ambient / death` の LLM leaf
-  - `VOICEVOX / say / afplay` の PC 音声バックエンド
-  - `fixtures/` を流す replay CLI
-- `tests/`
-  - state machine と API の最小テスト
-- `adapter/minecraft-fabric/`
-  - Minecraft Java 1.21.11 / Fabric 用の最小 client adapter
-  - `status_snapshot / threat_approaching / hostile_audio_detected / player_died / combat_ended` を `dogido-server` に送る
+---
 
-## 起動メモ
+## ざっくり仕組み
 
-依存を入れる:
+```text
+Minecraft (Fabric アダプタ)
+    ↓  いまの位置・敵・天気・持ちもの…
+dogido-server
+    ↓  状態機械で「今なにを言うか」を決める
+    ↓  必要なときだけ LLM（雑談 / 川柳）
+音声・テキストでプレイヤーへ
+```
+
+- **Minecraft 側** … 状況を取ることに専念  
+- **サーバー側** … キャラクターの判断と記憶（コードが主、LLM は生成の一部）  
+- **声** … PC 上の TTS（VOICEVOX など）
+
+詳しい設計は `docs/` にあります。人間向けの入口はこの README、  
+AI エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
+
+---
+
+## はじめて動かす
 
 ```bash
+# 依存
 pip install -e .
-```
 
-設定ファイルを作る:
-
-```bash
+# 設定
 cp .env.example .env
-```
 
-サーバー起動:
-
-```bash
+# サーバー
 python -m dogido_server
 ```
 
-音声入力（マイク → whisper.cpp → ドギドへ話しかけ）:
+Minecraft 用アダプタは `adapter/minecraft-fabric/`（Java 1.21.11 / Fabric）。  
+ビルドと入れ方は [adapter/minecraft-fabric/README.md](adapter/minecraft-fabric/README.md) を見てください。
+
+テキストで話しかけるテスト（サーバー起動中）:
+
+```bash
+curl -X POST http://127.0.0.1:5055/api/v1/player-input \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "おはようさん"}'
+```
+
+マイクから話しかける:
 
 ```bash
 python -m dogido_server.voice_input
 ```
 
-ヘッドホン推奨（スピーカー再生だとドギドの声を拾ってループする）。
-マイク権限はターミナルに付与する。whisper のパスは自動検出（`DOGIDO_VOICE_*` で上書き可）。
+ヘッドホン推奨（スピーカーだとドギドの声を拾ってループしやすいです）。
 
-テキストでの話しかけテスト（ゲーム接続中に）:
-
-```bash
-curl -X POST http://127.0.0.1:5055/api/v1/player-input \
-  -H 'Content-Type: application/json' -d '{"text": "おはようさん"}'
-```
-
-fixture replay:
+fixture 再生 / スモーク:
 
 ```bash
 python -m dogido_server.replay fixtures --no-audio
-```
-
-初回スモークテスト:
-
-```bash
 python -m dogido_server.smoke_test --mode all
 ```
 
-実際に PC で鳴らす:
+---
 
-```bash
-python -m dogido_server.smoke_test --mode all --audio
-```
+## いまできること（雰囲気）
 
-## LLM Routes
+- 脅威に応じた警告・余韻・雑談
+- 状況に根ざした川柳（カタログ・読み・材料）
+- 句への自然なツッコミ（ワークショップ）と、薄〜い教訓の反映
+- 句の保存・直し・「思い出して」
+- 読みの訂正（例: 草地の読み）
 
-低レイテンシの戦況報告は state machine とキャッシュ音声で処理し、LLM は使いません。
+完璧な名句ジェネレータではありません。  
+**一緒に直しながら遊ぶ** 方がコンセプトに近いです。
 
-- 雑談・助言
-  - `chat` route
-  - ローカル MLX でもクラウド API でもよい
-- 川柳
-  - `haiku` route
-  - まず軽い route で矛盾候補を抽出し、最後の句だけ `haiku` route のモデルで生成する
+---
 
-`mlx_lm.server` のようなローカル互換サーバーでも、OpenAI / OpenRouter / Claude / Grok / Gemini の API でも、route ごとに切り替えられます。
+## ドキュメント
 
-```bash
-mlx_lm.server \
-  --model mlx-community/Qwen3.6-35B-A3B-4bit-DWQ \
-  --host 127.0.0.1 \
-  --port 8080
-```
+全部読まなくて大丈夫。気になったところから。
 
-`.env` 側は例えばこうです。
+| 読みたいこと | ドキュメント |
+|---|---|
+| **目次・読む順番（正）** | **[docs/README.md](docs/README.md)** |
+| 製品の心 | [docs/concept.md](docs/concept.md) |
+| 何が動いているか | [docs/project-overview.md](docs/project-overview.md) |
+| 完成度をどう上げるか | [docs/companion-maturity.md](docs/companion-maturity.md) |
+| 川柳を一緒に直す設計 | [docs/haiku-player-improvement-plan.md](docs/haiku-player-improvement-plan.md) |
+| 雑談の方針 | [docs/player-chat-casual-plan.md](docs/player-chat-casual-plan.md) / [docs/dialogue-design.md](docs/dialogue-design.md) |
+| AI がコードを触るとき | [AGENTS.md](AGENTS.md) |
 
-```env
-DOGIDO_LLM_BACKEND=chat_completions
-DOGIDO_LLM_PROVIDER=local
-DOGIDO_LLM_BASE_URL=http://127.0.0.1:8080/v1
-DOGIDO_LLM_MODEL=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
-```
+仕様の一覧・推奨読む順は **[docs/README.md](docs/README.md)** を正とします。
 
-OpenAI を使うなら、`base_url` は省略できます。
+---
 
-```env
-DOGIDO_LLM_BACKEND=chat_completions
-DOGIDO_LLM_PROVIDER=openai
-DOGIDO_LLM_MODEL=gpt-4.1-mini
-DOGIDO_LLM_API_KEY=...
-```
+## 方針（短く）
 
-OpenRouter を使うなら、`HTTP-Referer` と `X-Title` も設定できます。
+- プレイヤーが冒険の主体。ドギドは相棒
+- キャラクター判断はコード（状態機械）が持つ。LLM に任せきりにしない
+- 川柳の記憶は JSONL。プロンプトに過去句を山盛りしない
+- プレイヤーからの注意は **ゆるく** 効かせ、ほめたり「気にせんで」で緩められる
+- 外部連携（M5Stack / LINE など）は対話が安定してから
+- 完成は急がない。観測を厚くして、外したときは一緒に直す
 
-```env
-DOGIDO_LLM_BACKEND=chat_completions
-DOGIDO_LLM_PROVIDER=openrouter
-DOGIDO_LLM_MODEL=openai/gpt-4.1-mini
-DOGIDO_LLM_API_KEY=...
-DOGIDO_LLM_HTTP_REFERER=https://example.com
-DOGIDO_LLM_APPLICATION_NAME=Dogido
-```
+---
 
-雑談と川柳を分けるなら、route override を使います。
+## ライセンス・開発
 
-```env
-DOGIDO_LLM_BACKEND=mlx
-DOGIDO_LLM_PROVIDER=local
-DOGIDO_MLX_MODEL_ID=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
+個人・研究寄りの実験プロジェクトです。  
+コードを触る AI アシスタント向けの注意は **[AGENTS.md](AGENTS.md)** にまとめています。
 
-DOGIDO_LLM_CHAT_PROVIDER=local
-DOGIDO_LLM_CHAT_BASE_URL=http://127.0.0.1:8080/v1
-DOGIDO_LLM_CHAT_MODEL=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
-
-DOGIDO_LLM_HAIKU_PROVIDER=openai
-DOGIDO_LLM_HAIKU_MODEL=gpt-4.1
-DOGIDO_LLM_HAIKU_API_KEY=...
-```
-
-`backend` を route ごとに明示しなくても、`provider=claude|grok|gemini|openai|openrouter` のときは API family を自動解決します。
-
-## Minecraft Adapter
-
-Fabric adapter の詳細は [adapter/minecraft-fabric/README.md](adapter/minecraft-fabric/README.md) を参照。
-
-ビルド:
-
-```bash
-cd /Users/yukin_co/Documents/DokiDoki-Dogido/adapter/minecraft-fabric
-./gradlew build
-```
-
-出力 jar:
-
-```text
-/Users/yukin_co/Documents/DokiDoki-Dogido/adapter/minecraft-fabric/build/libs/dogido-fabric-client-0.1.0.jar
-```
+楽しんで、マイクラとことばを。

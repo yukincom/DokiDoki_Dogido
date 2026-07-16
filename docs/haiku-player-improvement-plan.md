@@ -1,8 +1,8 @@
 # 川柳: プレイヤー主導の改善設計
 
 **日付:** 2026-07-16  
-**状態:** 方針・詳細計画（実装前）  
-**関連:** [haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
+**状態:** H1〜H5.2 **実装済み** / H6 **撤回**（詳細は §7）  
+**関連:** [companion-maturity.md](companion-maturity.md)、[haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
 
 ---
 
@@ -349,7 +349,9 @@ HaikuContext / 制約ブロックに追加（短く）:
 「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
 場の違和感は **プレイヤーが言ったとき** workshop で。  
 **strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
-**未（気が向いたら）:** 直し案 1 本、H7、Phase E 整理。
+**未（気が向いたら）:** 直し案 1 本、H7、Phase E 整理。  
+
+全体の完成度・優先の考え方は [companion-maturity.md](companion-maturity.md)。
 
 ---
 
