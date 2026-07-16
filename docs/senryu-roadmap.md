@@ -1,10 +1,12 @@
 # 川柳・Senryu ロードマップ
 
-**更新:** 2026-07-14  
+**更新:** 2026-07-16  
 **ブランチ文脈:** `Senryu-RAG` 以降の対話・カタログ・記憶まわり
 
 関連:
 
+- [相棒としての完成度ガイド](companion-maturity.md)（何を足すと完成に近づくか）
+- [川柳プレイヤー改善](haiku-player-improvement-plan.md)（workshop / soft lesson）
 - [川柳フィードバック（実装メモ）](haiku-feedback-plan.md)
 - [Senryu-RAG 実装プラン](senryu-rag-plan.md)（カタログ直引き優先・ベクトルは任意）
 - [川柳アーキテクチャ](haiku-architecture.md)
