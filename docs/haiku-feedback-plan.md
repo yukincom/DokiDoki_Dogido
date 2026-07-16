@@ -2,7 +2,8 @@
 
 2026-07-14 時点の実装方針と動かし方。
 
-**全体の進捗・将来（保存 UI 含む）:** [senryu-roadmap.md](senryu-roadmap.md)
+**全体の進捗・将来（保存 UI 含む）:** [senryu-roadmap.md](senryu-roadmap.md)  
+**プレイヤー主導の改善（講評・workshop）:** [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)
 
 ## 二つの仕組み
 
