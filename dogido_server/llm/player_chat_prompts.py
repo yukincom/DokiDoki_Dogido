@@ -30,6 +30,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     hearing_block = _hearing_block(details)
     topic_block = _topic_block(details)
     plausibility_block = _plausibility_block(details)
+    observation_block = _observation_block(details, threat_summary)
     history_rules, history_block = _history_section(details)
     digest_rules, digest_block = _digest_section(details)
     combat_safety_rules = _combat_safety_rules(details, character_mode)
@@ -55,7 +56,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"場所メモ: {place}。\n"
         f"時間帯は{detail_str(details, 'time_phase', 'unknown') or 'unknown'}。\n"
         f"答え方スタンス: {stance}。\n"
-        f"周囲の脅威メモ: {threat_summary}。\n"
+        f"{observation_block}"
         f"{topic_block}"
         f"{plausibility_block}"
         f"{hearing_block}"
@@ -105,6 +106,17 @@ def _hearing_block(details: dict[str, Any]) -> str:
         f"いまドギドが拾っている音のメモ: {summary_line}。\n"
         f"音から使ってよい具体モブ名: {named_line}。\n"
     )
+
+
+def _observation_block(details: dict[str, Any], threat_summary: str) -> str:
+    """観測事実のみ。hypothesis 用 topic は別節。"""
+    observation = detail_str(details, "observation_summary")
+    if observation:
+        return f"観測メモ（短い事実）:\n{observation}\n"
+    # 後方互換: observation 未設定時は threat だけ
+    if threat_summary and threat_summary != "とくになし":
+        return f"周囲の脅威メモ: {threat_summary}。\n"
+    return ""
 
 
 def _topic_block(details: dict[str, Any]) -> str:

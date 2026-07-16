@@ -1,7 +1,9 @@
 """player_chat の答え方スタンス（状態機械が決める骨格）。
 
-プロンプト長文に方針を積まず、ここで saw / hypothesis / clarify / none を決める。
-S2: 発話に使ってよい種名白リストもここで組み立てる。
+雑談3本柱:
+  1. none を守る（弱い topic で identify に引きずらない）
+  2. 本当の観測だけ短く
+  3. 5往復＋LLM で相槌（履歴長は触らない）
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ ReplyStance = Literal["saw", "hypothesis", "clarify", "none"]
 
 _POLICY_LINES: dict[ReplyStance, str] = {
     "saw": (
-        "脅威メモの視認を優先してよい。"
+        "脅威メモ・観測の視認を優先してよい。"
         "プレイヤーの話と一致するなら種名を言ってよい。"
         "メモ・話題ヒントに無い種族やNPCは作らない。"
     ),
@@ -31,25 +33,116 @@ _POLICY_LINES: dict[ReplyStance, str] = {
     "none": (
         "雑談として自然に返す。"
         "根拠のない種名・敵・音の捏造はしない。"
+        "観測メモにある生き物には触れてよい。"
     ),
 }
 
-# 「あれ何？」系で topic も視認も無いときの clarify ヒント（粗い）
-_CLARIFY_HINTS = (
-    "何",
-    "なに",
+# 単独では identify に使わない語（描写タグとしてはカタログに残してよい）
+GENERIC_TOPIC_TERMS: frozenset[str] = frozenset(
+    {
+        "大きい",
+        "小さい",
+        "きれい",
+        "白い",
+        "黒い",
+        "赤い",
+        "青い",
+        "緑",
+        "黄色い",
+        "長い",
+        "短い",
+        "丸い",
+        "速い",
+        "遅い",
+        "怖い",
+        "変な",
+        "強い",
+        "弱い",
+        "暗い",
+        "明るい",
+        "古い",
+        "新しい",
+        "沼",
+        "海",
+        "夜",
+        "森",
+        "山",
+        "空",
+        "村",
+        "平地",
+        "地下",
+        "洞窟",
+    }
+)
+
+# 1 文字でも identify 信号として認める語
+_SPECIFIC_SHORT_TERMS: frozenset[str] = frozenset({"旗"})
+
+# identify 意図（hypothesis ではなく clarify 判定用が主）
+_IDENTIFY_INTENT_MARKERS: tuple[str, ...] = (
+    "なんだ",
+    "なにもの",
+    "何物",
     "なんや",
+    "なに",
+    "何",
     "だれ",
     "誰",
     "あいつ",
-    "あれ",
-    "それ",
     "どれ",
-    "いる",
-    "おる",
-    "見",
-    "みて",
+    "何て",
+    "なんて",
+    "どういう",
 )
+
+
+def is_generic_topic_term(term: str) -> bool:
+    text = str(term or "").strip()
+    if not text:
+        return True
+    if text in GENERIC_TOPIC_TERMS:
+        return True
+    # 1 文字は原則弱い（旗だけ例外）
+    if len(text) < 2 and text not in _SPECIFIC_SHORT_TERMS:
+        return True
+    return False
+
+
+def term_is_identify_signal(term: str) -> bool:
+    """旗・ババア・前哨基地など、identify に使える語か。"""
+    return not is_generic_topic_term(term)
+
+
+def hit_has_identify_signal(hit: dict[str, Any]) -> bool:
+    matched = [str(t).strip() for t in (hit.get("matched_terms") or ()) if str(t).strip()]
+    if not matched:
+        return False
+    return any(term_is_identify_signal(term) for term in matched)
+
+
+def filter_usable_topic_hits(
+    hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
+) -> list[dict[str, Any]]:
+    """GENERIC のみの hit を除いた identify 用候補。"""
+    usable: list[dict[str, Any]] = []
+    for hit in hits or ():
+        if not isinstance(hit, dict):
+            continue
+        if hit_has_identify_signal(hit):
+            usable.append(hit)
+    return usable
+
+
+def has_identify_intent(user_text: str) -> bool:
+    text = (user_text or "").strip()
+    if not text:
+        return False
+    if any(marker in text for marker in _IDENTIFY_INTENT_MARKERS):
+        return True
+    # 「いる？」「おる？」系の質問
+    if ("？" in text or "?" in text) and any(token in text for token in ("いる", "おる", "誰", "何", "なに")):
+        return True
+    return False
 
 
 def resolve_reply_stance(
@@ -58,17 +151,34 @@ def resolve_reply_stance(
     topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
     threat_summary: str = "",
     user_text: str = "",
+    observed_ids: list[str] | tuple[str, ...] | set[str] | None = None,
 ) -> ReplyStance:
-    """観測とトピック候補から reply_stance を決める。"""
+    """観測と（フィルタ後の）トピックから reply_stance を決める。
+
+    - topic あり ≠ 即 hypothesis
+    - usable（非 GENERIC 語）があるときだけ hypothesis
+    """
     threat = (threat_summary or "").strip()
-    # 「ついさっき 視認 …」も saw（visual バッファ経由）
     if has_visual_threats or "視認" in threat:
         return "saw"
-    hits = list(topic_hits or ())
-    if hits:
+
+    raw_hits = list(topic_hits or ())
+    usable = filter_usable_topic_hits(raw_hits)
+    observed = {
+        str(item).removeprefix("minecraft:").strip().lower()
+        for item in (observed_ids or ())
+        if str(item or "").strip()
+    }
+
+    if usable:
+        # 観測と一致する usable hit があれば hypothesis（念のため）
+        # usable 自体が識別語を持つので、基本はすべて hypothesis でよい
         return "hypothesis"
-    text = (user_text or "").strip()
-    if text and any(hint in text for hint in _CLARIFY_HINTS):
+
+    # 観測 id だけが raw hit と一致し GENERIC のみ…は usable 空のまま。saw は上で処理済み。
+    _ = observed  # 将来: GENERIC+観測一致の救済に使える
+
+    if has_identify_intent(user_text):
         return "clarify"
     return "none"
 
@@ -136,13 +246,11 @@ def build_allowed_speech_labels(
     return labels
 
 
-def should_enforce_speech_whitelist(stance: str | None, allowed_labels: list[str] | tuple[str, ...] | None) -> bool:
-    """白リスト検査を行うか。
-
-    - saw / hypothesis: 候補外の種名捏造を止めるため常に検査
-    - none / clarify: 雑談を殺さない。検査しない
-      （観測名は allowed に載せても、雑談全体を空白リスト全禁止にはしない）
-    """
+def should_enforce_speech_whitelist(
+    stance: str | None,
+    allowed_labels: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    """白リスト検査を行うか。saw / hypothesis のみ。"""
     key = str(stance or "none").strip().lower()
     return key in {"saw", "hypothesis"}
 
@@ -200,7 +308,6 @@ def contains_unlisted_speech_names(
     return False
 
 
-# topic score の目安（visual_tags 1 語 ≈ 6, 長い語はそれ以上）
 _IDENTIFY_MIN_SCORE = 6.0
 
 
@@ -210,19 +317,18 @@ def build_identify_skeleton(
     topic_hits: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
     min_score: float = _IDENTIFY_MIN_SCORE,
 ) -> str | None:
-    """高信頼トピックの固定骨子（S3）。LLM オフや style reject 時の最低限の返事。"""
+    """高信頼トピックの固定骨子。usable（非 GENERIC）hit のみ。"""
     if str(stance or "") != "hypothesis":
         return None
-    hits = list(topic_hits or ())
+    hits = filter_usable_topic_hits(topic_hits)
     if not hits:
         return None
     top = hits[0]
     score = float(top.get("score") or 0.0)
     if score < min_score:
         return None
-    # 1文字タグ単独（例: お風呂⊃風）では骨子を出さない。旗など1文字は LLM/ヒントのみ。
     matched = tuple(str(t) for t in (top.get("matched_terms") or ()) if str(t).strip())
-    if matched and max(len(t) for t in matched) < 2:
+    if matched and not any(term_is_identify_signal(t) for t in matched):
         return None
     # 同点トップが複数なら決めつけない
     if len(hits) >= 2 and abs(float(hits[1].get("score") or 0.0) - score) < 0.01:
@@ -232,7 +338,4 @@ def build_identify_skeleton(
     label = str(top.get("label_ja") or "").strip()
     if not label:
         return None
-    kind = str(top.get("kind") or "mob")
-    if kind == "structure":
-        return f"俺にははっきり見えんけど、{label}かもしれんな"
     return f"俺にははっきり見えんけど、{label}かもしれんな"

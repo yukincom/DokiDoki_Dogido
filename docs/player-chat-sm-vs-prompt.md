@@ -2,7 +2,7 @@
 
 **日付:** 2026-07-15  
 **状態:** **実装計画の正本**（優先順・PR 定義）  
-**関連:** [pillager-banner-chat-plan.md](pillager-banner-chat-plan.md)（観測・トピック・structure の詳細）、[sound-identity-plan.md](sound-identity-plan.md)、[research/code-review-player-reactivity-2026-07-02.md](research/code-review-player-reactivity-2026-07-02.md)
+**関連:** [pillager-banner-chat-plan.md](pillager-banner-chat-plan.md)（観測・トピック・structure の詳細）、[sound-identity-plan.md](sound-identity-plan.md)、[player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)（トピック過適合・将来 VLM）、[player-chat-casual-plan.md](player-chat-casual-plan.md)（**雑談3本柱の実装計画**）、[research/code-review-player-reactivity-2026-07-02.md](research/code-review-player-reactivity-2026-07-02.md)
 
 ---
 
@@ -175,6 +175,24 @@ A ✅ ── B ⏸（エンジンのみ）
 - 関西弁・相棒感・文字数感  
 - 曖昧雑談  
 - 骨格があるときの言い回し差  
+
+---
+
+## 将来: VLM（プレイヤー巨大建造物）
+
+**入れる前提。** カタログに id が無いもの（例: 巨大なヒカキンの像）の感想は構造化では無理。
+
+| 層 | 役割 |
+|---|---|
+| 構造化（今） | mob / 音 / 公式 structure — 正確なゲーム知識 |
+| **VLM（将来）** | 「あれ見て」等で画を見て **スケール・形・像っぽさ**の感想 |
+
+- 常時ではなく **トリガー限定**（意図 or 巨大ヒューリスティック → 構造化のあと）  
+- 観測がある mob は VLM より構造化優先  
+- habitat／スポーン表で動物園の展示を否定しない  
+- 詳細: [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md) の「将来: VLM」節  
+
+当面の次手は VLM ではなく **トピック過適合修正（T-A〜）**。
 
 ---
 

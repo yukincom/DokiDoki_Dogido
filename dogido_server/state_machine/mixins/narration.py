@@ -427,27 +427,37 @@ class NarrationMixin:
         if tactics.get("safe_fallback"):
             fallback = str(tactics["safe_fallback"])
         user_text = (self.player_input.raw_text or "").strip()
-        topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
-        catalog_topic_hints = self._format_player_chat_topic_hints(topic_hits)
+        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
             build_identify_skeleton,
+            filter_usable_topic_hits,
             reply_policy_line,
             resolve_reply_stance,
             should_enforce_speech_whitelist,
         )
 
+        passive_types = self._player_chat_observed_passive_types(event)
+        observed_ids = self._merge_unique_types(
+            effective_visual_types,
+            passive_types,
+        )
+        usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
         reply_stance = resolve_reply_stance(
             has_visual_threats=has_visual_for_chat,
-            topic_hits=topic_hits,
+            topic_hits=raw_topic_hits,
             threat_summary=threat_summary,
             user_text=user_text,
+            observed_ids=observed_ids,
         )
         reply_policy = reply_policy_line(reply_stance)
-        # ambient / 平和・中立 mob も「現実にいる」根拠として許可名に入れる
-        passive_types = self._player_chat_observed_passive_types(event)
+        # hypothesis のときだけ強い topic を hints / allowed / plausibility に使う
+        topic_for_identify = usable_topic_hits if reply_stance == "hypothesis" else []
+        catalog_topic_hints = (
+            self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
+        )
         allowed_speech_labels = build_allowed_speech_labels(
-            topic_hits=topic_hits,
+            topic_hits=topic_for_identify,
             visual_types=effective_visual_types,
             passive_types=passive_types,
             hearing_named_mobs=hearing_named_mobs,
@@ -457,7 +467,7 @@ class NarrationMixin:
         )
         identify_skeleton = build_identify_skeleton(
             stance=reply_stance,
-            topic_hits=topic_hits,
+            topic_hits=topic_for_identify,
         )
         from dogido_server.entry_catalog import (
             build_plausibility_hint_lines,
@@ -465,13 +475,23 @@ class NarrationMixin:
             structure_ids_for_plausibility,
         )
 
-        structure_ids = structure_ids_for_plausibility(topic_hits)
-        plausibility_lines = build_plausibility_hint_lines(
-            topic_hits=topic_hits,
-            current_biome_id=normalize_biome_id(event.world.biome),
-            current_biome_label=self._biome_label(event.world.biome),
-        )
+        if reply_stance == "hypothesis" and topic_for_identify:
+            structure_ids = structure_ids_for_plausibility(topic_for_identify)
+            plausibility_lines = build_plausibility_hint_lines(
+                topic_hits=topic_for_identify,
+                current_biome_id=normalize_biome_id(event.world.biome),
+                current_biome_label=self._biome_label(event.world.biome),
+            )
+        else:
+            structure_ids = []
+            plausibility_lines = []
         plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
+        observation_summary = self._player_chat_observation_summary(
+            event,
+            threat_summary=threat_summary,
+            hearing_summary=hearing_summary,
+            passive_types=passive_types,
+        )
         LOGGER.warning(
             "player_chat_visual count=%s types=%s recent=%s threat_summary=%s",
             len(event.visual_threats),
@@ -486,11 +506,15 @@ class NarrationMixin:
                 len(plausibility_lines),
             )
         LOGGER.warning(
-            "player_chat_topics empty=%s hits=%s stance=%s allowed=%s enforce_wl=%s",
-            not bool(topic_hits),
+            "player_chat_topics raw=%s usable=%s stance=%s allowed=%s enforce_wl=%s",
             ",".join(
                 f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
-                for hit in topic_hits
+                for hit in raw_topic_hits
+            )
+            or "-",
+            ",".join(
+                f"{hit.get('entry_id')}:{','.join(hit.get('matched_terms') or ())}"
+                for hit in usable_topic_hits
             )
             or "-",
             reply_stance,
@@ -527,8 +551,9 @@ class NarrationMixin:
             "threat_summary": threat_summary,
             "hearing_summary": hearing_summary,
             "hearing_named_mobs": hearing_named_mobs,
+            "observation_summary": observation_summary,
             "catalog_topic_hints": catalog_topic_hints,
-            "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_hits],
+            "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_for_identify],
             "reply_stance": reply_stance,
             "reply_policy": reply_policy,
             "allowed_speech_labels": allowed_speech_labels,
@@ -682,6 +707,38 @@ class NarrationMixin:
             if age is not None and age <= ambient_retention_ms:
                 recent.append(str(mob_type))
         return self._merge_unique_types(current, recent)
+
+    def _player_chat_observation_summary(
+        self,
+        event: GameEvent,
+        *,
+        threat_summary: str,
+        hearing_summary: str,
+        passive_types: list[str] | tuple[str, ...],
+    ) -> str:
+        """観測だけの短い事実メモ（topic 仮説は混ぜない）。最大数行。"""
+        lines: list[str] = []
+        threat = (threat_summary or "").strip()
+        if threat and threat != "とくになし":
+            lines.append(f"脅威: {threat}")
+        labels: list[str] = []
+        seen: set[str] = set()
+        from dogido_server.entry_catalog import mob_entry
+
+        for mob_type in passive_types:
+            entry = mob_entry(mob_type)
+            label = str((entry or {}).get("label") or mob_type)
+            if label and label not in seen:
+                seen.add(label)
+                labels.append(label)
+            if len(labels) >= 4:
+                break
+        if labels:
+            lines.append(f"近くの生き物: {'、'.join(labels)}")
+        hearing = (hearing_summary or "").strip()
+        if hearing:
+            lines.append(f"音: {hearing}")
+        return "\n".join(f"- {line}" for line in lines[:4])
 
     def _player_chat_mob_tactics(
         self,
