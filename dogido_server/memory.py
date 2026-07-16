@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from dogido_server.minecraft_ids import normalize_minecraft_id
 from dogido_server.memory_types import HaikuEmission
@@ -44,6 +45,7 @@ class MemoryStore:
         self.rolling_summary_path = self.short_term_dir / "rolling_summary.json"
         self.haiku_entries_path = self.long_term_dir / "haiku_entries.jsonl"
         self.haiku_revisions_path = self.long_term_dir / "haiku_revisions.jsonl"
+        self.haiku_critiques_path = self.long_term_dir / "haiku_critiques.jsonl"
         self.catalog_corrections_path = self.long_term_dir / "catalog_corrections.jsonl"
         self.player_profile_path = self.long_term_dir / "player_profile.json"
 
@@ -151,6 +153,32 @@ class MemoryStore:
         }
         self._append_jsonl(self.haiku_revisions_path, revision)
         return revision
+
+    def save_haiku_critique(
+        self,
+        *,
+        entry_id: str | None,
+        kind: str,
+        player_text: str,
+        surface_at_time: str | None = None,
+        materials_snapshot: dict[str, Any] | None = None,
+        observed_at: datetime | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """プレイヤーの自然言語講評を長期保存（プロンプト常駐用ではない）。"""
+        created_at = observed_at or datetime.now().astimezone()
+        row = {
+            "id": f"hcrit_{created_at.strftime('%Y%m%dT%H%M%S')}_{uuid4().hex[:8]}",
+            "created_at": datetime_json(created_at),
+            "entry_id": entry_id,
+            "kind": (kind or "other").strip() or "other",
+            "player_text": (player_text or "").strip()[:240],
+            "surface_at_time": (surface_at_time or "").strip()[:200] or None,
+            "materials_snapshot": materials_snapshot or {},
+            "session_id": session_id,
+        }
+        self._append_jsonl(self.haiku_critiques_path, row)
+        return row
 
     def save_reading_correction(
         self,

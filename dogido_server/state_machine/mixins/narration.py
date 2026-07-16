@@ -568,6 +568,7 @@ class NarrationMixin:
             "forbidden_advice": list(tactics.get("forbidden_advice") or []),
             "safe_hints": list(tactics.get("safe_hints") or []),
             **self._player_chat_history_details(),
+            **self._player_chat_haiku_workshop_details(),
         }
         # S3: 高信頼 identify は LLM より骨子を優先できる（オフ時・失敗時の最低限）
         preferred_fallback = identify_skeleton or fallback
@@ -801,6 +802,19 @@ class NarrationMixin:
             "conversation_history": str(blocks.get("conversation_history") or ""),
             "event_digest": str(blocks.get("event_digest") or ""),
         }
+
+    def _player_chat_haiku_workshop_details(self) -> dict[str, str]:
+        """open 中の句 pin（履歴と別）。"""
+        provider = getattr(self, "haiku_workshop_provider", None)
+        if provider is None:
+            return {}
+        try:
+            workshop = provider()
+        except Exception:
+            return {}
+        from dogido_server.haiku.workshop import workshop_prompt_details
+
+        return workshop_prompt_details(workshop)
 
     def _player_chat_threat_summary(self, event: GameEvent) -> str:
         parts: list[str] = []

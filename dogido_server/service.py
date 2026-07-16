@@ -10,6 +10,17 @@ from uuid import uuid4
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
 from dogido_server.dialogue_context import DialogueContext
+from dogido_server.haiku.workshop import (
+    RecentHaikuWorkshop,
+    classify_workshop_intent,
+    close_workshop,
+    is_open,
+    maybe_close_for_time,
+    open_from_emission,
+    record_drift,
+    record_workshop_activity,
+    render_workshop_reply,
+)
 from dogido_server.llm import DogidoLLMRouter
 from dogido_server.memory import MemoryStore
 from dogido_server.models import (
@@ -59,6 +70,8 @@ class SessionInfo:
     seen_idempotency_set: set[str] = field(default_factory=set)
     first_event_logged: bool = False
     last_haiku_emission: HaikuEmission | None = None
+    # 発句の pin（会話履歴とは別。open 中は句本文を忘れない）
+    haiku_workshop: RecentHaikuWorkshop | None = None
     # 音声入力など外部から届いたプレイヤー発話。次のイベントの user_text に相乗りさせる
     pending_player_text: str | None = None
     # player_chat 用: 直近5往復 + 粗い出来事メモ
@@ -215,12 +228,37 @@ class DogidoService:
             event.meta.user_text = attached_player_text
             session.pending_player_text = None
 
+        # pin の時間切れ（発話の有無に関係なく）
+        session.haiku_workshop = maybe_close_for_time(
+            session.haiku_workshop,
+            now=event.observed_at,
+        )
+        if session.haiku_workshop is not None and not session.haiku_workshop.open:
+            LOGGER.warning(
+                "haiku_workshop_closed session_id=%s reason=%s",
+                session.session_id,
+                session.haiku_workshop.close_reason,
+            )
+            session.haiku_workshop = None
+
         machine_result = session.machine.process(event)
         if machine_result.haiku_emission is not None:
             session.last_haiku_emission = machine_result.haiku_emission
+            # memory の有無に関わらず pin を立てる（entry_id は memory 側で埋める）
+            if session.haiku_workshop is None or (
+                session.haiku_workshop.surface_text != (machine_result.haiku_emission.text or "").strip()
+            ):
+                self._open_haiku_workshop(
+                    session,
+                    machine_result.haiku_emission,
+                    entry_id=None,
+                    now=event.observed_at,
+                )
         actions = list(machine_result.actions)
         actions.extend(self._memory_actions(session, event, actions, machine_result.haiku_emission))
         self._update_dialogue_context(session, event, actions)
+        # 句と無関係な speech が出た（通常 chat）→ drift
+        self._note_workshop_after_actions(session, event, actions)
 
         # 話しかけをイベントに載せたが speech が出なかった場合は捨てずに再キュー
         # （ambient_mob 枝や panic 枝に食われたケースの取りこぼし防止）
@@ -391,6 +429,8 @@ class DogidoService:
                 or player_input.asks_haiku_recall
             ):
                 extra_actions.append(AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。"))
+            # pin の講評返事は memory 無しでも動く
+            extra_actions.extend(self._haiku_workshop_actions(session, event))
             return extra_actions
 
         try:
@@ -402,7 +442,17 @@ class DogidoService:
             if haiku_emission is not None:
                 self.memory.append_haiku_emission(session.session_id, haiku_emission)
                 # 発句は珍しいので、基本すべて長期記憶へ（明示保存を待たない）
-                self.memory.save_agent_haiku(haiku_emission)
+                entry, _ = self.memory.save_agent_haiku(haiku_emission)
+                entry_id = str(entry.get("id") or "") or None
+                if session.haiku_workshop is not None and session.haiku_workshop.open:
+                    session.haiku_workshop.entry_id = entry_id or session.haiku_workshop.entry_id
+                else:
+                    self._open_haiku_workshop(
+                        session,
+                        haiku_emission,
+                        entry_id=entry_id,
+                        now=event.observed_at,
+                    )
             for action in actions:
                 if not action.text:
                     continue
@@ -449,7 +499,133 @@ class DogidoService:
         if player_input.asks_haiku_recall:
             return self._handle_haiku_recall(session, event, player_input)
 
+        # 川柳 workshop（pin が open のとき、自然な突っ込みを優先）
+        workshop_actions = self._haiku_workshop_actions(session, event)
+        if workshop_actions:
+            return workshop_actions
+
         return []
+
+    def _open_haiku_workshop(
+        self,
+        session: SessionInfo,
+        emission: HaikuEmission,
+        *,
+        entry_id: str | None,
+        now: datetime,
+    ) -> None:
+        if is_open(session.haiku_workshop):
+            close_workshop(session.haiku_workshop, reason="next_haiku")
+        materials: dict[str, object] = {}
+        if emission.interpretation:
+            materials["interpretation"] = emission.interpretation
+        if emission.biome:
+            materials["biome"] = emission.biome
+        if emission.structure:
+            materials["structure"] = emission.structure
+        if emission.time_phase:
+            materials["time_phase"] = emission.time_phase
+        session.haiku_workshop = open_from_emission(
+            emission,
+            materials=materials,
+            entry_id=entry_id,
+            now=now,
+        )
+        LOGGER.warning(
+            "haiku_workshop_opened session_id=%s text=%s entry_id=%s",
+            session.session_id,
+            (emission.text or "")[:60],
+            entry_id or "-",
+        )
+
+    def _haiku_workshop_actions(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+    ) -> list[AudioAction]:
+        workshop = session.haiku_workshop
+        if not is_open(workshop) or workshop is None:
+            return []
+        player_input = session.machine.player_input
+        text = (player_input.raw_text or "").strip()
+        if not text or player_input.wants_quiet:
+            return []
+        if (player_input.normalized_text or "").startswith("/"):
+            return []
+        # formal 川柳操作は上で処理済み。ここでは自然文のみ。
+        kind = classify_workshop_intent(text)
+        if kind is None:
+            return []
+
+        now = event.observed_at
+        if kind == "close":
+            close_workshop(workshop, reason="explicit")
+            session.haiku_workshop = None
+            reply = render_workshop_reply("close", workshop, player_text=text)
+            return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+        record_workshop_activity(workshop, now=now)
+        critique_kind = {
+            "praise": "praise",
+            "critique_forced": "forced_compress",
+            "critique_gibberish": "unreadable",
+            "critique_offscene": "off_context",
+            "ask_meaning": "ask_meaning",
+            "other_haiku": "other",
+        }.get(kind, "other")
+
+        if kind != "close" and self.memory is not None:
+            try:
+                self.memory.save_haiku_critique(
+                    entry_id=workshop.entry_id,
+                    kind=critique_kind,
+                    player_text=text,
+                    surface_at_time=workshop.surface_text,
+                    materials_snapshot=dict(workshop.materials or {}),
+                    observed_at=now,
+                    session_id=session.session_id,
+                )
+            except OSError as exc:
+                LOGGER.warning("haiku_critique_save_failed detail=%s", exc)
+
+        if kind == "praise":
+            close_workshop(workshop, reason="praise")
+            session.haiku_workshop = None
+
+        reply = render_workshop_reply(kind, workshop, player_text=text)
+        return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+    def _note_workshop_after_actions(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        actions: list[AudioAction],
+    ) -> None:
+        """通常 chat 等で句以外の speech が出たら drift。"""
+        workshop = session.haiku_workshop
+        if not is_open(workshop) or workshop is None:
+            return
+        player_input = session.machine.player_input
+        text = (player_input.raw_text or "").strip()
+        if not text or not player_input.breaks_silence:
+            return
+        # workshop 経路で既に処理済みなら drift しない（reply が actions に含まれる）
+        if classify_workshop_intent(text) is not None:
+            return
+        if player_input.revised_haiku_text or player_input.asks_haiku_recall:
+            return
+        if player_input.reading_correction is not None:
+            return
+        has_speech = any(bool(a.text) and a.layer == "speech" for a in actions)
+        if not has_speech:
+            return
+        updated = record_drift(workshop, now=event.observed_at)
+        if updated is not None and not updated.open:
+            LOGGER.warning(
+                "haiku_workshop_closed session_id=%s reason=drift",
+                session.session_id,
+            )
+            session.haiku_workshop = None
 
     def _handle_reading_correction(
         self,
@@ -610,6 +786,8 @@ class DogidoService:
 
     def _bind_dialogue_provider(self, session: SessionInfo) -> None:
         session.machine.dialogue_context_provider = lambda: session.dialogue
+        # open 中の句 pin を player_chat details へ（履歴に依存しない）
+        session.machine.haiku_workshop_provider = lambda: session.haiku_workshop
 
     def _implicit_session_id(self, event: GameEvent) -> str:
         player = (event.player.name or "player").replace(" ", "_")

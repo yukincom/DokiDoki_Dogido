@@ -56,6 +56,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"場所メモ: {place}。\n"
         f"時間帯は{detail_str(details, 'time_phase', 'unknown') or 'unknown'}。\n"
         f"答え方スタンス: {stance}。\n"
+        f"{_haiku_workshop_block(details)}"
         f"{observation_block}"
         f"{topic_block}"
         f"{plausibility_block}"
@@ -64,6 +65,19 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "発言に噛み合った返事を、会話っぽく12〜42文字くらいで一言だけ返す。"
     )
     return leaf_dialog("player_chat", request, user_prompt)
+
+
+def _haiku_workshop_block(details: dict[str, Any]) -> str:
+    if not detail_str(details, "haiku_workshop_open"):
+        return ""
+    verse = detail_str(details, "haiku_workshop_text")
+    materials = detail_str(details, "haiku_workshop_materials")
+    lines = ["【いまの句（ワークショップ中・忘れない用）】"]
+    if verse:
+        lines.append(f"句: {verse}")
+    if materials:
+        lines.append(f"材料: {materials}")
+    return "\n".join(lines) + "\n"
 
 
 def _resolve_place_line(details: dict[str, Any]) -> str:

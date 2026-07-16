@@ -1,8 +1,5 @@
-"""後方互換: 実装は dogido_server.dialogue.chat_policy へ移動。"""
+"""対話ドメイン: 雑談方針・履歴・（将来）player_input。"""
 
-from __future__ import annotations
-
-from dogido_server.dialogue.chat_policy import *  # noqa: F403
 from dogido_server.dialogue.chat_policy import (
     GENERIC_TOPIC_TERMS,
     ReplyStance,

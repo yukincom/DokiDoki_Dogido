@@ -46,8 +46,9 @@ class DogidoStateMachine(
         self.policy_tree = PyTreeActionPolicy() if settings.decision_policy == "py_trees" else None
         self.emitted_haiku: HaikuEmission | None = None
         self._pending_haiku_interpretation: str | None = None
-        # service が session.dialogue を返す callable を差し込む
+        # service が session.dialogue / haiku_workshop を返す callable を差し込む
         self.dialogue_context_provider = None
+        self.haiku_workshop_provider = None
 
     def process(self, event: GameEvent) -> StateMachineResult:
         now = event.observed_at
