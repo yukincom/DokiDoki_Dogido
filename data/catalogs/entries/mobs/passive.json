@@ -1047,7 +1047,6 @@
       "poetic": {
         "visual_tags": [
           "日常",
-          "ローブ",
           "村"
         ],
         "sound_tags": [
@@ -1058,17 +1057,283 @@
         ],
         "scene_tags": [
           "村",
-          "畑",
-          "夕暮れ"
+          "家",
+          "人の気配"
         ],
         "reaction_tags": [
           "住人",
           "ほっとする"
         ],
-        "comic_tags": [
-          "商売優先"
-        ],
+        "comic_tags": [],
         "role": "生活感を運ぶ人影"
+      },
+      "baby": {
+        "label": "子供",
+        "poetic": {
+          "visual_tags": [
+            "小さい",
+            "はしゃぎ"
+          ],
+          "motion_tags": [
+            "はねる",
+            "走り回る"
+          ],
+          "scene_tags": [
+            "村",
+            "遊び場"
+          ],
+          "reaction_tags": [
+            "かわいい",
+            "元気"
+          ],
+          "comic_tags": [
+            "ちびっ子"
+          ],
+          "role": "村のちびっ子"
+        }
+      },
+      "professions": {
+        "none": {
+          "label": "求職者",
+          "poetic": {
+            "visual_tags": [
+              "ふつうの服"
+            ],
+            "motion_tags": [
+              "ぶらぶら",
+              "職探し"
+            ],
+            "reaction_tags": [
+              "仕事探してそう"
+            ],
+            "comic_tags": [
+              "まだ何者でもない"
+            ],
+            "role": "仕事を探してる村人"
+          }
+        },
+        "nitwit": {
+          "label": "ニート",
+          "poetic": {
+            "visual_tags": [
+              "緑の服"
+            ],
+            "motion_tags": [
+              "のそのそ"
+            ],
+            "reaction_tags": [
+              "働かなそう"
+            ],
+            "comic_tags": [
+              "ずっと暇"
+            ],
+            "role": "緑の服のニート"
+          }
+        },
+        "armorer": {
+          "label": "防具鍛冶",
+          "job_site": "blast_furnace",
+          "poetic": {
+            "visual_tags": [
+              "溶接マスク",
+              "黒い前掛け"
+            ],
+            "scene_tags": [
+              "溶鉱炉",
+              "防具屋"
+            ],
+            "motion_tags": [
+              "鍛える"
+            ],
+            "role": "防具を扱う村人"
+          }
+        },
+        "butcher": {
+          "label": "肉屋",
+          "job_site": "smoker",
+          "poetic": {
+            "visual_tags": [
+              "白い前掛け",
+              "赤い服"
+            ],
+            "scene_tags": [
+              "燻製器",
+              "肉"
+            ],
+            "role": "肉を扱う村人"
+          }
+        },
+        "cartographer": {
+          "label": "製図家",
+          "job_site": "cartography_table",
+          "poetic": {
+            "visual_tags": [
+              "金色の眼鏡",
+              "地図"
+            ],
+            "scene_tags": [
+              "製図台",
+              "地図"
+            ],
+            "role": "地図を描く村人"
+          }
+        },
+        "cleric": {
+          "label": "聖職者",
+          "job_site": "brewing_stand",
+          "poetic": {
+            "visual_tags": [
+              "紫の服",
+              "香水瓶"
+            ],
+            "scene_tags": [
+              "醸造台",
+              "教会"
+            ],
+            "role": "薬を作る村人"
+          }
+        },
+        "farmer": {
+          "label": "農民",
+          "job_site": "composter",
+          "poetic": {
+            "visual_tags": [
+              "麦わら帽子",
+              "茶色い服"
+            ],
+            "scene_tags": [
+              "畑",
+              "麦",
+              "コンポスター"
+            ],
+            "motion_tags": [
+              "収穫",
+              "種まき"
+            ],
+            "role": "畑の番人"
+          }
+        },
+        "fisherman": {
+          "label": "漁師",
+          "job_site": "barrel",
+          "poetic": {
+            "visual_tags": [
+              "釣り人の服",
+              "浮き"
+            ],
+            "scene_tags": [
+              "樽",
+              "水辺",
+              "釣り"
+            ],
+            "role": "釣りをする村人"
+          }
+        },
+        "fletcher": {
+          "label": "矢師",
+          "job_site": "fletching_table",
+          "poetic": {
+            "visual_tags": [
+              "羽根飾り",
+              "矢"
+            ],
+            "scene_tags": [
+              "矢細工台"
+            ],
+            "role": "矢を作る村人"
+          }
+        },
+        "leatherworker": {
+          "label": "革細工師",
+          "job_site": "cauldron",
+          "poetic": {
+            "visual_tags": [
+              "茶色い前掛け",
+              "革"
+            ],
+            "scene_tags": [
+              "大釜",
+              "革"
+            ],
+            "role": "革を扱う村人"
+          }
+        },
+        "librarian": {
+          "label": "司書",
+          "job_site": "lectern",
+          "poetic": {
+            "visual_tags": [
+              "めがね",
+              "白い服",
+              "本"
+            ],
+            "scene_tags": [
+              "図書館",
+              "書見台"
+            ],
+            "role": "本の番人"
+          }
+        },
+        "mason": {
+          "label": "石工",
+          "job_site": "stonecutter",
+          "poetic": {
+            "visual_tags": [
+              "前掛け",
+              "石粉"
+            ],
+            "scene_tags": [
+              "石切台",
+              "石材"
+            ],
+            "role": "石を削る村人"
+          }
+        },
+        "shepherd": {
+          "label": "羊飼い",
+          "job_site": "loom",
+          "poetic": {
+            "visual_tags": [
+              "茶色い帽子",
+              "羊毛"
+            ],
+            "scene_tags": [
+              "機織り機",
+              "羊",
+              "羊毛"
+            ],
+            "role": "羊毛を扱う村人"
+          }
+        },
+        "toolsmith": {
+          "label": "道具鍛冶",
+          "job_site": "smithing_table",
+          "poetic": {
+            "visual_tags": [
+              "黒い前掛け",
+              "道具"
+            ],
+            "scene_tags": [
+              "鍛冶台"
+            ],
+            "role": "道具を扱う村人"
+          }
+        },
+        "weaponsmith": {
+          "label": "武器鍛冶",
+          "job_site": "grindstone",
+          "poetic": {
+            "visual_tags": [
+              "眼帯",
+              "黒い前掛け"
+            ],
+            "scene_tags": [
+              "砥石",
+              "武器"
+            ],
+            "role": "武器を扱う村人"
+          }
+        }
       }
     },
     "wandering_trader": {

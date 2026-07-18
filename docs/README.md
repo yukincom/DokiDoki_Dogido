@@ -54,9 +54,11 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 | 1 | [player-chat-casual-plan.md](player-chat-casual-plan.md) | 雑談の設計原則 |
 | 2 | [player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md) | 状態機械とプロンプトの分担 |
 | 3 | [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md) | トピック過適合の抑制 |
-| 4 | [bug-player-chat-observation-gaps.md](bug-player-chat-observation-gaps.md) | 観測ギャップの既知課題 |
-| 5 | [pillager-banner-chat-plan.md](pillager-banner-chat-plan.md) | 構造物・旗まわりの会話 |
-| 6 | [sound-identity-plan.md](sound-identity-plan.md) | 音源の同定 |
+| 4 | [mob-interaction-tone.md](mob-interaction-tone.md) | モブ反応トーン（公式 Tips 準拠） |
+| 5 | [villager-context-plan.md](villager-context-plan.md) | 村人の職業・子供・日課 |
+| 6 | [bug-player-chat-observation-gaps.md](bug-player-chat-observation-gaps.md) | 観測ギャップの既知課題 |
+| 7 | [pillager-banner-chat-plan.md](pillager-banner-chat-plan.md) | 構造物・旗まわりの会話 |
+| 8 | [sound-identity-plan.md](sound-identity-plan.md) | 音源の同定 |
 
 ### 5. Senryu (haiku) and memory
 
@@ -115,6 +117,8 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 - [player-chat-casual-plan.md](player-chat-casual-plan.md)
 - [player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md)
 - [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)
+- [mob-interaction-tone.md](mob-interaction-tone.md)
+- [villager-context-plan.md](villager-context-plan.md)
 - [bug-player-chat-observation-gaps.md](bug-player-chat-observation-gaps.md)
 - [pillager-banner-chat-plan.md](pillager-banner-chat-plan.md)
 - [sound-identity-plan.md](sound-identity-plan.md)

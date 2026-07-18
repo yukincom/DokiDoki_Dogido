@@ -656,7 +656,7 @@ class CommonMixin:
         if event.event.name not in {EventName.AMBIENT_MOB_DETECTED, EventName.STATUS_SNAPSHOT}:
             return False
         # クールダウンは種ごとに管理する。別の種が見えたならすぐ反応してよい
-        if self._next_ambient_mob_target(event.passive_mobs, now) is None:
+        if self._next_ambient_mob_target(event.passive_mobs, now, event) is None:
             return False
         if event.event.name == EventName.AMBIENT_MOB_DETECTED:
             return True

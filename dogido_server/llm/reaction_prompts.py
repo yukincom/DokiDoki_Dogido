@@ -49,14 +49,30 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
         if variation_slot == 2
         else "共感や愛嬌寄りで入る"
     )
+    # SM が載せるキーだけ事実として並べる（判定・フィルタはプロンプトでやらない）
+    schedule_ja = str(details.get("villager_schedule_ja") or "").strip()
+    profession = str(details.get("mob_profession") or "").strip()
+    villager_bits = ""
+    if schedule_ja or profession or details.get("mob_is_baby"):
+        parts = []
+        if schedule_ja:
+            parts.append(f"活動={schedule_ja}")
+        if profession:
+            parts.append(f"職={details.get('mob', profession)}")
+        elif details.get("mob_is_baby"):
+            parts.append("子供")
+        villager_bits = (
+            "村人メモ: " + " / ".join(parts) + "。観察に使ってよい。\n"
+            if parts
+            else ""
+        )
     user_prompt = (
         "参考傾向:\n"
-        "- 平和時の気さくな相棒として話す\n"
-        "- 友好Mobなら、かわいい、親しみやすい、少し安心する\n"
-        "- 中立Mobなら、敵扱いはせず、軽い注意や距離感を混ぜてよい\n"
+        "- 平和時のやさしい相棒として話す\n"
+        "- 友好Mobなら親しみや観察を優先する\n"
+        "- 中立Mobなら怒らせない・やさしい距離感（触るな一択にしない）\n"
         "- Mobの見た目、動き、雰囲気に軽く触れてよい\n"
-        "- 『こわい』『助けて』『やばい』などの怖がり連発は禁止\n"
-        "- 言い回しは軽く、落ち着いて、自然に\n\n"
+        "- 言い回しは温かく、短く、自然に\n\n"
         "/no_think\n"
         "本番:\n"
         "敵対していないMobを見つけた。"
@@ -68,17 +84,16 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
         f"時間帯は{details.get('time_phase', 'unknown')}。\n"
         f"このMobの気質は{temperament}。\n"
         f"注意理由ヒントは{caution_reason}。\n"
+        f"{villager_bits}"
         f"/mobs のヒント語は{mob_tags}。\n"
         f"/mobs の役割ヒントは{mob_role}。\n"
         f"参考候補は{candidate_lines}。\n"
         f"今回は{variation_hint}。\n"
         "friendly ならかわいさや親しみを優先する。"
-        "neutral なら『触らんほうがええ』『近づきすぎんほうがええ』程度の軽い注意はよいが、"
+        "neutral なら『怒らせんほうがええ』『優しくしとこか』程度はよいが、"
         "もう敵だと断定したり、戦闘警報みたいな調子にはしない。"
         "参考候補は雰囲気だけ借りて、出だし・語尾・言い回しは少し変える。"
-        "毎回同じ『〜やな』『〜しとこか』に寄せすぎず、"
-        "見た目や動きの印象を少し混ぜてもよいので、"
-        "会話っぽく20〜36文字くらいで一言だけ返す。"
+        "会話っぽく一言だけ返す（50字以内）。"
     )
     return leaf_dialog("ambient", request, user_prompt)
 def _build_death_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
