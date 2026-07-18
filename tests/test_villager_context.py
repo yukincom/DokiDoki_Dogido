@@ -19,6 +19,8 @@ from dogido_server.models import (
 )
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.state_machine.villager_schedule import (
+    is_profession_known,
+    project_villager_speech_facts,
     resolve_villager_role,
     resolve_villager_schedule,
     should_suppress_ambient_for_sleep,
@@ -82,7 +84,7 @@ class VillagerCatalogTests(unittest.TestCase):
         self.assertEqual(entry["label"], "ニート")
         self.assertNotIn("ニット", entry["label"])
 
-    def test_none_is_job_seeker(self) -> None:
+    def test_none_catalog_is_job_seeker_when_known(self) -> None:
         entry = resolve_mob_catalog_entry("villager", profession="none")
         assert entry is not None
         self.assertEqual(entry["label"], "求職者")
@@ -91,6 +93,34 @@ class VillagerCatalogTests(unittest.TestCase):
         entry = resolve_mob_catalog_entry("villager", profession="farmer", is_baby=True)
         assert entry is not None
         self.assertEqual(entry["label"], "子供")
+
+
+class VillagerSpeechProjectionTests(unittest.TestCase):
+    def test_unknown_profession_passes_only_villager(self) -> None:
+        facts = project_villager_speech_facts(
+            day_time=4000, is_baby=False, profession=None
+        )
+        self.assertFalse(facts.profession_known)
+        self.assertIsNone(facts.profession)
+        self.assertEqual(facts.label, "村人")
+        self.assertFalse(is_profession_known(None))
+
+    def test_known_farmer_passes_profession(self) -> None:
+        facts = project_villager_speech_facts(
+            day_time=4000, is_baby=False, profession="farmer"
+        )
+        self.assertTrue(facts.profession_known)
+        self.assertEqual(facts.profession, "farmer")
+        self.assertEqual(facts.label, "農民")
+        self.assertEqual(facts.schedule, "work")
+
+    def test_known_none_is_job_seeker(self) -> None:
+        facts = project_villager_speech_facts(
+            day_time=4000, is_baby=False, profession="none"
+        )
+        self.assertTrue(facts.profession_known)
+        self.assertEqual(facts.profession, "none")
+        self.assertEqual(facts.label, "求職者")
 
 
 class VillagerAmbientIntegrationTests(unittest.TestCase):

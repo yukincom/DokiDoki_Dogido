@@ -11,9 +11,9 @@ from dogido_server.state_machine.ambient_mob_catalog import (
     ambient_mob_fallback_candidates,
 )
 from dogido_server.state_machine.villager_schedule import (
+    project_villager_speech_facts,
     resolve_villager_schedule,
     should_suppress_ambient_for_sleep,
-    villager_schedule_ja,
 )
 from dogido_server.state_machine.fallback_catalog import dark_push_after_breath_fallback, death_fallback_text, fallback_text
 from dogido_server.state_machine.response_catalog import (
@@ -42,11 +42,46 @@ class NarrationMixin:
         mob = mobs[0]
         direction = self._direction_label(mob)
         is_baby = bool(getattr(mob, "is_baby", None))
-        profession = getattr(mob, "profession", None)
-        entry = resolve_mob_catalog_entry(mob.type, profession=profession, is_baby=is_baby) or {}
+        raw_profession = getattr(mob, "profession", None)
+        is_villager = (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager"
+
+        # 村人: SM が「明確/不明」を判定してから details を組み立てる（プロンプト判定にしない）
+        speech_prof: str | None = None
+        speech_baby = is_baby
+        if is_villager:
+            facts = project_villager_speech_facts(
+                day_time=self._effective_time_of_day(event),
+                is_baby=is_baby,
+                profession=raw_profession,
+            )
+            label = facts.label
+            speech_prof = facts.profession  # 明確なときだけ
+            speech_baby = facts.is_baby
+            entry = (
+                resolve_mob_catalog_entry(
+                    "villager",
+                    profession=speech_prof,
+                    is_baby=speech_baby,
+                )
+                or {}
+            )
+            LOGGER.warning(
+                "ambient_villager raw_profession=%s known=%s profession=%s is_baby=%s "
+                "schedule=%s label=%s day_time=%s",
+                raw_profession,
+                facts.profession_known,
+                speech_prof,
+                speech_baby,
+                facts.schedule,
+                label,
+                self._effective_time_of_day(event),
+            )
+        else:
+            entry = resolve_mob_catalog_entry(mob.type) or {}
+            label = str(entry.get("label") or self._mob_label(mob.type))
+
         poetic = entry.get("poetic") if isinstance(entry, dict) else {}
         role = poetic.get("role") if isinstance(poetic, dict) else ""
-        label = str(entry.get("label") or self._mob_label(mob.type))
         variation_slot = event.sequence % 4 if event.sequence is not None else 0
         details: dict[str, object] = {
             "mob": label,
@@ -55,34 +90,24 @@ class NarrationMixin:
             "distance": mob.distance,
             "biome": self._biome_label(event.world.biome),
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
-            "mob_tags": list(mob_poetic_tags(mob.type, profession=profession, is_baby=is_baby))[:8],
+            "mob_tags": list(
+                mob_poetic_tags(mob.type, profession=speech_prof, is_baby=speech_baby)
+            )[:8],
             "mob_role": str(role) if role else "",
             "mob_temperament": getattr(mob, "temperament", None) or "friendly",
             "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
             "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
             "variation_slot": variation_slot,
         }
-        if (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager":
-            day_time = self._effective_time_of_day(event)
-            activity = resolve_villager_schedule(
-                day_time, is_baby=is_baby, profession=profession
-            )
-            prof_norm = (profession or "none").strip().lower().removeprefix("minecraft:") or "none"
-            details["mob_profession"] = prof_norm
-            details["mob_is_baby"] = is_baby
-            details["villager_schedule"] = activity
-            details["villager_schedule_ja"] = villager_schedule_ja(activity)
-            job_site = entry.get("job_site")
-            if job_site:
-                details["mob_job_site"] = str(job_site)
-            LOGGER.warning(
-                "ambient_villager profession=%s is_baby=%s schedule=%s label=%s day_time=%s",
-                prof_norm,
-                is_baby,
-                activity,
-                label,
-                day_time,
-            )
+        if is_villager:
+            # 日課は常にコード解決。職は明確なときだけキーを載せる
+            details["mob_is_baby"] = speech_baby
+            details["villager_schedule"] = facts.schedule
+            details["villager_schedule_ja"] = facts.schedule_ja
+            if facts.profession_known and facts.profession is not None:
+                details["mob_profession"] = facts.profession
+            if facts.job_site:
+                details["mob_job_site"] = facts.job_site
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,

@@ -626,11 +626,15 @@ def resolve_mob_catalog_entry(
             out["label"] = label
         poetic = _merge_poetic_dicts(poetic, overlay.get("poetic"))
     else:
-        prof = (profession or "none").strip().lower().removeprefix("minecraft:") or "none"
+        # profession は SM が「明確」と判定したときだけ渡す想定。
+        # none→求職者、nitwit→ニート、farmer→農民。未指定はベース「村人」。
+        prof = (profession or "").strip().lower().removeprefix("minecraft:")
         professions = base.get("professions") if isinstance(base.get("professions"), dict) else {}
-        overlay = professions.get(prof) if isinstance(professions.get(prof), dict) else None
-        if overlay is None and prof != "none":
-            overlay = professions.get("none") if isinstance(professions.get("none"), dict) else None
+        overlay = None
+        if prof:
+            candidate = professions.get(prof)
+            if isinstance(candidate, dict):
+                overlay = candidate
         if isinstance(overlay, dict):
             label = overlay.get("label")
             if label:

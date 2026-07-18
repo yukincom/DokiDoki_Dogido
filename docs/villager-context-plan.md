@@ -301,18 +301,31 @@ data.profession().getKey().map(...).orElse("none");
 ### 修正
 
 ```java
-// OK: value() をレジストリで ID 解決
-Registries.VILLAGER_PROFESSION.getId(data.profession().value()).getPath();
+// 1) matchesKey(VillagerProfession.FARMER) 等
+// 2) getKey()
+// 3) Registries.getId(value)
+// 取れなければ null（サーバは「村人」汎用。誤って求職者にしない）
 ```
 
 `villager_type` も同様。
 
+### 表示ポリシー（SM が判定・プロンプトに頼らない）
+
+| 判定（コード） | details に渡す | 渡さない |
+|---|---|---|
+| profession **明確**（known set） | `mob`=農民/求職者/ニート…、`mob_profession`、日課 | — |
+| profession **不明**（null 等） | `mob`=**村人**、日課のみ | `mob_profession` |
+| 子供 | `mob`=子供、日課 | 職 |
+
+実装: `project_villager_speech_facts()`（`villager_schedule.py`）。  
+ambient プロンプトは **載っているキーを読むだけ**。判定文を書かない。
+
 ### 検証手順
 
 1. `./gradlew build` で jar を入れ直す（**sources.jar ではない**）  
-2. ambient 時サーバログ:  
-   `ambient_villager profession=farmer is_baby=False schedule=work label=農民 …`  
-3. 求職者 `none` / ニート `nitwit` / 農民 `farmer` が実際の服・職場と一致すること  
+2. ambient ログ: `profession=farmer label=農民` が出ること  
+3. 未就職は `profession=none label=村人` でよい（求職者断定しない）  
+4. コンポスター横の農民が `farmer` になること  
 
 ### サーバ側で「まだ足りない」もの（職業バグ以外）
 
@@ -320,6 +333,7 @@ Registries.VILLAGER_PROFESSION.getId(data.profession().value()).getPath();
 |---|---|
 | 日課・catalog merge | 実装済み |
 | ambient への profession 載せ | 実装済み（アダプタが正しければ効く） |
+| 曖昧時は「村人」 | 実装済み |
 | job site 近傍スキャン | 未（任意） |
 | 職業変更時のクールダウンキー | signature に profession を含めるよう修正済み |
 

@@ -49,14 +49,22 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
         if variation_slot == 2
         else "共感や愛嬌寄りで入る"
     )
+    # SM が載せるキーだけ事実として並べる（判定・フィルタはプロンプトでやらない）
     schedule_ja = str(details.get("villager_schedule_ja") or "").strip()
     profession = str(details.get("mob_profession") or "").strip()
     villager_bits = ""
-    if schedule_ja or profession:
+    if schedule_ja or profession or details.get("mob_is_baby"):
+        parts = []
+        if schedule_ja:
+            parts.append(f"活動={schedule_ja}")
+        if profession:
+            parts.append(f"職={details.get('mob', profession)}")
+        elif details.get("mob_is_baby"):
+            parts.append("子供")
         villager_bits = (
-            f"村人メモ（事実。誇張しない）: "
-            f"活動={schedule_ja or 'なし'} / 職ID={profession or 'なし'}。"
-            f"活動に合った観察でよい。操作禁止や長説教はしない。\n"
+            "村人メモ: " + " / ".join(parts) + "。観察に使ってよい。\n"
+            if parts
+            else ""
         )
     user_prompt = (
         "参考傾向:\n"
