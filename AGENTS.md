@@ -68,6 +68,12 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - 弱い topic で偽 identify しない（**none を守る**）
 - 詳細: [docs/player-chat-casual-plan.md](docs/player-chat-casual-plan.md)
 
+### 3.4b ambient / モブ反応トーンは公式に合わせる
+
+- 友好・資源モブに「触るな」系の操作禁止を言わない
+- 中立は「触るな」より **優しく・怒らせない**（Be nice to animals）
+- 正: [docs/mob-interaction-tone.md](docs/mob-interaction-tone.md)
+
 ### 3.5 記憶の載せ方
 
 - 発句は基本 auto-save（entries）
