@@ -601,8 +601,76 @@ def mob_entry(mob_id: str | None) -> dict[str, Any] | None:
     return dict(entry)
 
 
-def mob_poetic_tags(mob_id: str | None) -> tuple[str, ...]:
-    entry = mob_entry(mob_id)
+def resolve_mob_catalog_entry(
+    mob_id: str | None,
+    *,
+    profession: str | None = None,
+    is_baby: bool = False,
+) -> dict[str, Any] | None:
+    """村人は base + baby/professions をマージしたエントリを返す。"""
+    base = mob_entry(mob_id)
+    if base is None:
+        return None
+    normalized = str(mob_id or "").strip().lower().removeprefix("minecraft:")
+    if normalized != "villager":
+        return base
+
+    out = dict(base)
+    poetic_base = base.get("poetic") if isinstance(base.get("poetic"), dict) else {}
+    poetic = dict(poetic_base)
+
+    if is_baby and isinstance(base.get("baby"), dict):
+        overlay = base["baby"]
+        label = overlay.get("label")
+        if label:
+            out["label"] = label
+        poetic = _merge_poetic_dicts(poetic, overlay.get("poetic"))
+    else:
+        prof = (profession or "none").strip().lower().removeprefix("minecraft:") or "none"
+        professions = base.get("professions") if isinstance(base.get("professions"), dict) else {}
+        overlay = professions.get(prof) if isinstance(professions.get(prof), dict) else None
+        if overlay is None and prof != "none":
+            overlay = professions.get("none") if isinstance(professions.get("none"), dict) else None
+        if isinstance(overlay, dict):
+            label = overlay.get("label")
+            if label:
+                out["label"] = label
+            if overlay.get("job_site"):
+                out["job_site"] = overlay.get("job_site")
+            poetic = _merge_poetic_dicts(poetic, overlay.get("poetic"))
+
+    out["poetic"] = poetic
+    return out
+
+
+def _merge_poetic_dicts(base: dict[str, Any], overlay: object) -> dict[str, Any]:
+    """list タグは overlay が非空なら置換、role は overlay 優先。"""
+    result = dict(base or {})
+    if not isinstance(overlay, dict):
+        return result
+    for key, value in overlay.items():
+        if key == "role":
+            text = str(value or "").strip()
+            if text:
+                result["role"] = text
+            continue
+        if isinstance(value, list):
+            items = [str(v).strip() for v in value if str(v).strip()]
+            if items:
+                result[key] = items
+            continue
+        if value is not None and value != "":
+            result[key] = value
+    return result
+
+
+def mob_poetic_tags(
+    mob_id: str | None,
+    *,
+    profession: str | None = None,
+    is_baby: bool = False,
+) -> tuple[str, ...]:
+    entry = resolve_mob_catalog_entry(mob_id, profession=profession, is_baby=is_baby)
     if entry is None:
         return ()
     poetic = entry.get("poetic")
@@ -633,9 +701,15 @@ def mob_poetic_tags(mob_id: str | None) -> tuple[str, ...]:
     return tuple(deduped)
 
 
-def mob_poetic_line(mob_id: str | None, *, max_tags: int = 4) -> str | None:
+def mob_poetic_line(
+    mob_id: str | None,
+    *,
+    max_tags: int = 4,
+    profession: str | None = None,
+    is_baby: bool = False,
+) -> str | None:
     """主役用の1行詩語。role を軸に代表タグだけ添える（フラットタグ列より誰の語か分かる）。"""
-    entry = mob_entry(mob_id)
+    entry = resolve_mob_catalog_entry(mob_id, profession=profession, is_baby=is_baby)
     if entry is None:
         return None
     poetic = entry.get("poetic")

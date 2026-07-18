@@ -4,11 +4,16 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from dogido_server.entry_catalog import mob_entry, mob_poetic_tags
+from dogido_server.entry_catalog import mob_entry, mob_poetic_tags, resolve_mob_catalog_entry
 from dogido_server.models import GameEvent, PassiveMob
 from dogido_server.state_machine.ambient_mob_catalog import (
     AmbientMobReactionContext,
     ambient_mob_fallback_candidates,
+)
+from dogido_server.state_machine.villager_schedule import (
+    resolve_villager_schedule,
+    should_suppress_ambient_for_sleep,
+    villager_schedule_ja,
 )
 from dogido_server.state_machine.fallback_catalog import dark_push_after_breath_fallback, death_fallback_text, fallback_text
 from dogido_server.state_machine.response_catalog import (
@@ -36,38 +41,76 @@ class NarrationMixin:
             return fallback
         mob = mobs[0]
         direction = self._direction_label(mob)
-        entry = mob_entry(mob.type) or {}
+        is_baby = bool(getattr(mob, "is_baby", None))
+        profession = getattr(mob, "profession", None)
+        entry = resolve_mob_catalog_entry(mob.type, profession=profession, is_baby=is_baby) or {}
         poetic = entry.get("poetic") if isinstance(entry, dict) else {}
         role = poetic.get("role") if isinstance(poetic, dict) else ""
+        label = str(entry.get("label") or self._mob_label(mob.type))
         variation_slot = event.sequence % 4 if event.sequence is not None else 0
+        details: dict[str, object] = {
+            "mob": label,
+            "direction": direction,
+            "mob_count": len(mobs),
+            "distance": mob.distance,
+            "biome": self._biome_label(event.world.biome),
+            "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            "mob_tags": list(mob_poetic_tags(mob.type, profession=profession, is_baby=is_baby))[:8],
+            "mob_role": str(role) if role else "",
+            "mob_temperament": getattr(mob, "temperament", None) or "friendly",
+            "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
+            "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
+            "variation_slot": variation_slot,
+        }
+        if (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager":
+            day_time = self._effective_time_of_day(event)
+            activity = resolve_villager_schedule(
+                day_time, is_baby=is_baby, profession=profession
+            )
+            details["mob_profession"] = (profession or "none").strip().lower() or "none"
+            details["mob_is_baby"] = is_baby
+            details["villager_schedule"] = activity
+            details["villager_schedule_ja"] = villager_schedule_ja(activity)
+            job_site = entry.get("job_site")
+            if job_site:
+                details["mob_job_site"] = str(job_site)
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,
-            details={
-                "mob": self._mob_label(mob.type),
-                "direction": direction,
-                "mob_count": len(mobs),
-                "distance": mob.distance,
-                "biome": self._biome_label(event.world.biome),
-                "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
-                "mob_tags": list(mob_poetic_tags(mob.type))[:8],
-                "mob_role": str(role) if role else "",
-                "mob_temperament": getattr(mob, "temperament", None) or "friendly",
-                "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
-                "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
-                "variation_slot": variation_slot,
-            },
+            details=details,
             temperature=0.48,
         )
 
     def _ambient_mob_type_key(self, mob: PassiveMob) -> str:
-        return (mob.type or "").strip().lower()
+        base = (mob.type or "").strip().lower().removeprefix("minecraft:")
+        if base != "villager":
+            return base
+        if getattr(mob, "is_baby", None):
+            return "villager:baby"
+        prof = (getattr(mob, "profession", None) or "none").strip().lower() or "none"
+        return f"villager:{prof}"
 
-    def _next_ambient_mob_target(self, mobs: list[PassiveMob], now: datetime) -> PassiveMob | None:
+    def _villager_activity_for_mob(self, event: GameEvent, mob: PassiveMob) -> str | None:
+        if (mob.type or "").strip().lower().removeprefix("minecraft:") != "villager":
+            return None
+        return resolve_villager_schedule(
+            self._effective_time_of_day(event),
+            is_baby=bool(getattr(mob, "is_baby", None)),
+            profession=getattr(mob, "profession", None),
+        )
+
+    def _next_ambient_mob_target(
+        self, mobs: list[PassiveMob], now: datetime, event: GameEvent | None = None
+    ) -> PassiveMob | None:
         for mob in mobs:
             key = self._ambient_mob_type_key(mob)
             if not key:
                 continue
+            # 睡眠中の村人は ambient を出さない（起こさない）
+            if event is not None:
+                activity = self._villager_activity_for_mob(event, mob)
+                if activity is not None and should_suppress_ambient_for_sleep(activity):
+                    continue
             recent_ms = self._recent_ms(
                 now, self.state.last_ambient_mob_comment_at_by_type.get(key)
             )
@@ -78,7 +121,7 @@ class NarrationMixin:
     def _emit_ambient_mob_comment_line(self, event: GameEvent, now: datetime) -> str | None:
         # クールダウンは種ごと。別の種ならすぐ反応してよい
         # （⭕️「うしさんや」→「にわとりさんや」 ❌「うしさんや」→「うしさんや」）
-        target = self._next_ambient_mob_target(event.passive_mobs, now)
+        target = self._next_ambient_mob_target(event.passive_mobs, now, event)
         if target is None:
             return None
         ordered_mobs = [target] + [mob for mob in event.passive_mobs if mob is not target]
@@ -89,7 +132,12 @@ class NarrationMixin:
         self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
         # モブ反応が優先。発句中の川柳はキャンセルし、静けさが戻ってから再発句する
         self.state.pending_haiku_after_preface = False
-        label = self._mob_label(target.type)
+        entry = resolve_mob_catalog_entry(
+            target.type,
+            profession=getattr(target, "profession", None),
+            is_baby=bool(getattr(target, "is_baby", None)),
+        ) or {}
+        label = str(entry.get("label") or self._mob_label(target.type))
         self.state.pending_dialogue_notes.append(f"{label}を見た")
         return line
 

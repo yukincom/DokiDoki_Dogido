@@ -338,9 +338,28 @@ Fabric adapter が実際に送る中心は次のとおり。
     "distance": 6.2,
     "direction": { "horizontal": "front_left", "vertical": "same" },
     "certainty": "high"
+  },
+  {
+    "type": "villager",
+    "distance": 8.0,
+    "direction": { "horizontal": "front", "vertical": "same" },
+    "certainty": "high",
+    "is_baby": false,
+    "profession": "farmer",
+    "villager_type": "plains"
   }
 ]
 ```
+
+村人のみ任意:
+
+| フィールド | 説明 |
+|---|---|
+| `is_baby` | 子供か |
+| `profession` | `none`（求職者）/ `nitwit`（ニート）/ `farmer` 等 |
+| `villager_type` | 見た目種（plains 等） |
+
+日課はサーバが `world.time_of_day` と上記から解決する（[villager-context-plan.md](villager-context-plan.md)）。
 
 ## 14. `inventory`
 

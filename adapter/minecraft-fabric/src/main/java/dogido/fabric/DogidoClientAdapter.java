@@ -54,6 +54,7 @@ import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.village.VillagerData;
 import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
 import net.minecraft.registry.Registries;
@@ -687,6 +688,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
 
             Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
+            Boolean isBaby = null;
+            String profession = null;
+            String villagerType = null;
+            if (living instanceof VillagerEntity villager) {
+                isBaby = villager.isBaby();
+                profession = villagerProfessionId(villager);
+                villagerType = villagerTypeId(villager);
+            }
             mobs.add(
                 new AmbientMobObservation(
                     entity.getUuid(),
@@ -695,7 +704,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     classifyHorizontal(player, entityPosition),
                     classifyVertical(player, entityPosition),
                     disposition.temperament(),
-                    disposition.cautionReason()
+                    disposition.cautionReason(),
+                    isBaby,
+                    profession,
+                    villagerType
                 )
             );
         }
@@ -1363,6 +1375,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
             if (mob.cautionReason() != null && !mob.cautionReason().isBlank()) {
                 entry.addProperty("caution_reason", mob.cautionReason());
+            }
+            if (mob.isBaby() != null) {
+                entry.addProperty("is_baby", mob.isBaby());
+            }
+            if (mob.profession() != null && !mob.profession().isBlank()) {
+                entry.addProperty("profession", mob.profession());
+            }
+            if (mob.villagerType() != null && !mob.villagerType().isBlank()) {
+                entry.addProperty("villager_type", mob.villagerType());
             }
             array.add(entry);
         }
@@ -3609,8 +3630,28 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String horizontalDirection,
         String verticalRelation,
         String temperament,
-        String cautionReason
+        String cautionReason,
+        Boolean isBaby,
+        String profession,
+        String villagerType
     ) {
+    }
+
+    /** 村人 profession の短名（farmer / none / nitwit 等）。 */
+    private String villagerProfessionId(VillagerEntity villager) {
+        VillagerData data = villager.getVillagerData();
+        return data.profession()
+            .getKey()
+            .map(key -> key.getValue().getPath())
+            .orElse("none");
+    }
+
+    private String villagerTypeId(VillagerEntity villager) {
+        VillagerData data = villager.getVillagerData();
+        return data.type()
+            .getKey()
+            .map(key -> key.getValue().getPath())
+            .orElse(null);
     }
 
     private record MobDisposition(
