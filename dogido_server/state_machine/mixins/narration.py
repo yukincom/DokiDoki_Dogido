@@ -67,13 +67,22 @@ class NarrationMixin:
             activity = resolve_villager_schedule(
                 day_time, is_baby=is_baby, profession=profession
             )
-            details["mob_profession"] = (profession or "none").strip().lower() or "none"
+            prof_norm = (profession or "none").strip().lower().removeprefix("minecraft:") or "none"
+            details["mob_profession"] = prof_norm
             details["mob_is_baby"] = is_baby
             details["villager_schedule"] = activity
             details["villager_schedule_ja"] = villager_schedule_ja(activity)
             job_site = entry.get("job_site")
             if job_site:
                 details["mob_job_site"] = str(job_site)
+            LOGGER.warning(
+                "ambient_villager profession=%s is_baby=%s schedule=%s label=%s day_time=%s",
+                prof_norm,
+                is_baby,
+                activity,
+                label,
+                day_time,
+            )
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,

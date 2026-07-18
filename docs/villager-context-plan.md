@@ -277,9 +277,58 @@ Java でよく使う短名（実装時に `getId()` で確認）:
 
 ---
 
+## 11. 既知バグ: 職業が求職者/ニートに固定される（2026-07-18）
+
+### 症状
+
+- 自然生成の村人 → ニートっぽい言い回し、または誤ラベル  
+- スポーンエッグ → 求職者のまま  
+- 職業ブロックで就職しても **求職者のまま**
+
+### 原因（アダプタ）
+
+```java
+// NG: Direct な RegistryEntry では getKey() が empty → 常に orElse("none")
+data.profession().getKey().map(...).orElse("none");
+```
+
+クライアント同期の `VillagerData.profession()` は多くの場合 **Reference ではなく Direct**。  
+`getKey()` だけ見ると **常に `none`（求職者）** になる。就職後も更新されないように見える。
+
+「初期村人がニート」は、本当に `nitwit` の緑服が混ざる／LLM が求職者メモと雰囲気で寄せた、の両方があり得る。  
+**根は profession ID の取り方が壊れていたこと。**
+
+### 修正
+
+```java
+// OK: value() をレジストリで ID 解決
+Registries.VILLAGER_PROFESSION.getId(data.profession().value()).getPath();
+```
+
+`villager_type` も同様。
+
+### 検証手順
+
+1. `./gradlew build` で jar を入れ直す（**sources.jar ではない**）  
+2. ambient 時サーバログ:  
+   `ambient_villager profession=farmer is_baby=False schedule=work label=農民 …`  
+3. 求職者 `none` / ニート `nitwit` / 農民 `farmer` が実際の服・職場と一致すること  
+
+### サーバ側で「まだ足りない」もの（職業バグ以外）
+
+| 項目 | 状態 |
+|---|---|
+| 日課・catalog merge | 実装済み |
+| ambient への profession 載せ | 実装済み（アダプタが正しければ効く） |
+| job site 近傍スキャン | 未（任意） |
+| 職業変更時のクールダウンキー | signature に profession を含めるよう修正済み |
+
+---
+
 ## 変更履歴
 
 | 日付 | 内容 |
 |---|---|
 | 2026-07-18 | 初版。職業・子供・日課表。SM は mode 増やすより派生シグナル + ambient 材料 |
 | 2026-07-18 | `none`=求職者（普通の服）、`nitwit`=ニート（緑の服）。「ニットウィット」は使わない |
+| 2026-07-18 | 職業誤認: RegistryEntry.getKey() empty → Registries.getId(value) に修正 |

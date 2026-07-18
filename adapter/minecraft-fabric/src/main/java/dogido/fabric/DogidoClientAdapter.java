@@ -3586,7 +3586,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 .append("@")
                 .append(mob.horizontalDirection())
                 .append("@")
-                .append(mob.temperament() == null ? "" : mob.temperament());
+                .append(mob.temperament() == null ? "" : mob.temperament())
+                .append("@")
+                .append(mob.profession() == null ? "" : mob.profession())
+                .append("@")
+                .append(Boolean.TRUE.equals(mob.isBaby()) ? "baby" : "");
         }
         return builder.toString();
     }
@@ -3637,9 +3641,19 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     ) {
     }
 
-    /** 村人 profession の短名（farmer / none / nitwit 等）。 */
+    /**
+     * 村人 profession の短名（farmer / none / nitwit 等）。
+     *
+     * 注意: RegistryEntry.getKey() は Direct 登録だと empty になることがある。
+     * クライアント同期の VillagerData はほぼ Direct なので、value() + Registries.getId を正とする。
+     * getKey() だけに頼ると常に none 落ちし、就職後も求職者のままになる。
+     */
     private String villagerProfessionId(VillagerEntity villager) {
         VillagerData data = villager.getVillagerData();
+        Identifier id = Registries.VILLAGER_PROFESSION.getId(data.profession().value());
+        if (id != null) {
+            return id.getPath();
+        }
         return data.profession()
             .getKey()
             .map(key -> key.getValue().getPath())
@@ -3648,6 +3662,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private String villagerTypeId(VillagerEntity villager) {
         VillagerData data = villager.getVillagerData();
+        Identifier id = Registries.VILLAGER_TYPE.getId(data.type().value());
+        if (id != null) {
+            return id.getPath();
+        }
         return data.type()
             .getKey()
             .map(key -> key.getValue().getPath())
