@@ -54,6 +54,10 @@ import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.village.VillagerData;
+import net.minecraft.village.VillagerProfession;
+import net.minecraft.village.VillagerType;
 import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
 import net.minecraft.registry.Registries;
@@ -687,6 +691,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
 
             Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
+            Boolean isBaby = null;
+            String profession = null;
+            String villagerType = null;
+            if (living instanceof VillagerEntity villager) {
+                isBaby = villager.isBaby();
+                profession = villagerProfessionId(villager);
+                villagerType = villagerTypeId(villager);
+            }
             mobs.add(
                 new AmbientMobObservation(
                     entity.getUuid(),
@@ -695,7 +707,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     classifyHorizontal(player, entityPosition),
                     classifyVertical(player, entityPosition),
                     disposition.temperament(),
-                    disposition.cautionReason()
+                    disposition.cautionReason(),
+                    isBaby,
+                    profession,
+                    villagerType
                 )
             );
         }
@@ -1363,6 +1378,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
             if (mob.cautionReason() != null && !mob.cautionReason().isBlank()) {
                 entry.addProperty("caution_reason", mob.cautionReason());
+            }
+            if (mob.isBaby() != null) {
+                entry.addProperty("is_baby", mob.isBaby());
+            }
+            if (mob.profession() != null && !mob.profession().isBlank()) {
+                entry.addProperty("profession", mob.profession());
+            }
+            if (mob.villagerType() != null && !mob.villagerType().isBlank()) {
+                entry.addProperty("villager_type", mob.villagerType());
             }
             array.add(entry);
         }
@@ -3565,7 +3589,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 .append("@")
                 .append(mob.horizontalDirection())
                 .append("@")
-                .append(mob.temperament() == null ? "" : mob.temperament());
+                .append(mob.temperament() == null ? "" : mob.temperament())
+                .append("@")
+                .append(mob.profession() == null ? "" : mob.profession())
+                .append("@")
+                .append(Boolean.TRUE.equals(mob.isBaby()) ? "baby" : "");
         }
         return builder.toString();
     }
@@ -3609,8 +3637,91 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String horizontalDirection,
         String verticalRelation,
         String temperament,
-        String cautionReason
+        String cautionReason,
+        Boolean isBaby,
+        String profession,
+        String villagerType
     ) {
+    }
+
+    /**
+     * 村人 profession の短名（farmer / none / nitwit 等）。
+     *
+     * RegistryEntry はクライアント同期だと getKey() が empty のことがある。
+     * 1) matchesKey(VillagerProfession.*)  2) getKey  3) Registries.getId(value)
+     * の順で取る。
+     */
+    private String villagerProfessionId(VillagerEntity villager) {
+        RegistryEntry<VillagerProfession> entry = villager.getVillagerData().profession();
+        if (entry.matchesKey(VillagerProfession.NONE)) {
+            return "none";
+        }
+        if (entry.matchesKey(VillagerProfession.NITWIT)) {
+            return "nitwit";
+        }
+        if (entry.matchesKey(VillagerProfession.ARMORER)) {
+            return "armorer";
+        }
+        if (entry.matchesKey(VillagerProfession.BUTCHER)) {
+            return "butcher";
+        }
+        if (entry.matchesKey(VillagerProfession.CARTOGRAPHER)) {
+            return "cartographer";
+        }
+        if (entry.matchesKey(VillagerProfession.CLERIC)) {
+            return "cleric";
+        }
+        if (entry.matchesKey(VillagerProfession.FARMER)) {
+            return "farmer";
+        }
+        if (entry.matchesKey(VillagerProfession.FISHERMAN)) {
+            return "fisherman";
+        }
+        if (entry.matchesKey(VillagerProfession.FLETCHER)) {
+            return "fletcher";
+        }
+        if (entry.matchesKey(VillagerProfession.LEATHERWORKER)) {
+            return "leatherworker";
+        }
+        if (entry.matchesKey(VillagerProfession.LIBRARIAN)) {
+            return "librarian";
+        }
+        if (entry.matchesKey(VillagerProfession.MASON)) {
+            return "mason";
+        }
+        if (entry.matchesKey(VillagerProfession.SHEPHERD)) {
+            return "shepherd";
+        }
+        if (entry.matchesKey(VillagerProfession.TOOLSMITH)) {
+            return "toolsmith";
+        }
+        if (entry.matchesKey(VillagerProfession.WEAPONSMITH)) {
+            return "weaponsmith";
+        }
+        Optional<String> fromKey = entry.getKey().map(key -> key.getValue().getPath());
+        if (fromKey.isPresent() && !fromKey.get().isBlank()) {
+            return fromKey.get();
+        }
+        Identifier id = Registries.VILLAGER_PROFESSION.getId(entry.value());
+        if (id != null && id.getPath() != null && !id.getPath().isBlank()) {
+            return id.getPath();
+        }
+        // 取れないときは null（サーバは「村人」汎用に落とす。誤って求職者にしない）
+        LOGGER.debug("villager profession unresolved idAsString={}", entry.getIdAsString());
+        return null;
+    }
+
+    private String villagerTypeId(VillagerEntity villager) {
+        RegistryEntry<VillagerType> entry = villager.getVillagerData().type();
+        Optional<String> fromKey = entry.getKey().map(key -> key.getValue().getPath());
+        if (fromKey.isPresent() && !fromKey.get().isBlank()) {
+            return fromKey.get();
+        }
+        Identifier id = Registries.VILLAGER_TYPE.getId(entry.value());
+        if (id != null && id.getPath() != null && !id.getPath().isBlank()) {
+            return id.getPath();
+        }
+        return null;
     }
 
     private record MobDisposition(

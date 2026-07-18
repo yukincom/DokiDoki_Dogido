@@ -9,7 +9,7 @@
         "village_plains": {
           "japanese": "平原の村",
           "biomes": ["plains", "sunflower_plains"],
-          "note": "平原に建つ木材と石でできた村。井戸と鐘がある広場が中心。"
+          "note": "平原に建つ木材と石でできた村。鐘がある広場が中心。"
         },
         "village_desert": {
           "japanese": "砂漠の村",
@@ -73,7 +73,7 @@
           "note": "暗い森の奥に建つ巨大な3階建ての洋館。50を超える部屋がある。人の気配がある。誰かが潜んでいるようだ。"
         },
         "pillager_outpost": {
-          "japanese": "ピリジャー前哨基地",
+          "japanese": "ピリジャーぜんしょう基地",
           "biomes": ["plains", "desert", "savanna", "taiga", "snowy_plains", "meadow", "grove", "snowy_slopes", "jagged_peaks", "frozen_peaks", "stony_peaks", "cherry_grove"],
           "related_mobs": ["pillager", "ravager"],
           "note": "開けた場所に建つ石造りの塔。周囲には木の檻や荷車が散乱し、最上部の宝箱にレアなアイテムが眠る。何やら敵意に満ちた視線を感じる。"

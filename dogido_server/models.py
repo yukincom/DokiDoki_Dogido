@@ -294,6 +294,10 @@ class PassiveMob(DogidoModel):
     脅威判定には使わず、ドギドの「かわい〜！」系リアクションや川柳の題材に使う。
     友好（passive）種に加え、まだ敵対していない中立（neutral）種も
     temperament="neutral" として載ってよい。
+
+    村人のみ:
+      is_baby / profession / villager_type（職業・子供・見た目種）
+      profession: none=求職者, nitwit=ニート（緑）, farmer 等=就職者
     """
     type: str
     distance: float | None = None
@@ -301,6 +305,9 @@ class PassiveMob(DogidoModel):
     certainty: Certainty = Certainty.HIGH
     temperament: str | None = None  # "friendly" / "neutral"
     caution_reason: str | None = None  # 例: "provoked_only", "darkness", "territorial"
+    is_baby: bool | None = None
+    profession: str | None = None  # villager: farmer / none / nitwit …
+    villager_type: str | None = None  # plains / desert …
 
 
 class NearbyResource(DogidoModel):

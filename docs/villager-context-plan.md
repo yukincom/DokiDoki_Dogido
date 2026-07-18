@@ -1,7 +1,7 @@
 # 村人コンテキスト（職業・子供・日課）設計
 
 **日付:** 2026-07-18  
-**状態:** 方針（実装前）  
+**状態:** PR-A/B/C 一部 **実装済み**（アダプタ属性・日課純関数・カタログ merge・ambient details・睡眠抑制）  
 **目的:** 村人を「villager 一括」から、職業・子供・日課が分かる観測にし、ambient / 雑談の違和感を減らす。  
 **原則:** 判断は状態機械・純関数。LLM は言い回しのみ。アダプタは事実だけ送る。
 
@@ -71,6 +71,20 @@ LLM              … 短いセリフ（ラベルをそのままドラマ化し�
 | `profession` | 推奨 | レジストリ短名。例: `farmer`, `librarian`, `none`, `nitwit` |
 | `villager_type` | 任意 | 見た目バイオーム種。例: `plains`, `desert`（第一波で省略可） |
 
+#### 無職まわりの用語（カタログ label 用）
+
+ゲーム ID と見た目・日本語ラベルを混同しない。
+
+| profession ID | 見た目の目安 | 日本語 label（カタログ） | 意味 |
+|---|---|---|---|
+| `none` | **ふつうの服**（茶色系など） | **求職者**（または「仕事を探してる村人」） | 職場を取れば就職できる |
+| `nitwit` | **緑の服** | **ニート** | 永久に職業が付かない。英語 nitwit はカタログに出さない |
+| それ以外 | 職業ごとの服装 | 農民・司書 等 | 就職者 |
+
+- 日課表の「求職者/無職」列は、**`none` も `nitwit` も同じ帯**（仕事枠なし・散歩中心）でよい  
+- 表示・セリフ材料だけ「求職者」と「ニート」を分ける  
+- 「ニットウィット」は使わない（日本語として通じにくい）
+
 - 非村人はこれらのキーを送らない（null 省略）  
 - `PassiveMob` モデルも同キーを optional で追加  
 
@@ -98,8 +112,8 @@ LLM              … 短いセリフ（ラベルをそのままドラマ化し�
 | ロール | 条件 |
 |---|---|
 | `child` | `is_baby == true` |
-| `employed` | 大人かつ profession ∉ {`none`, `nitwit`, 空} |
-| `unemployed` | 大人かつ無職 / nitwit / 求職扱い |
+| `employed` | 大人かつ profession ∉ {`none`, `nitwit`, 空}（就職者・仕事枠あり） |
+| `unemployed` | 大人かつ `none`（求職者）または `nitwit`（ニート）。日課表は同じ列 |
 
 ### 4.2 活動（表のセル）
 
@@ -189,8 +203,8 @@ villager_schedule_ja: 仕事中    # 人間/LLM 用の短いラベル
 
 | key | label 例 |
 |---|---|
-| `none` / 無職 | 無職の村人 |
-| `nitwit` | ニットウィット |
+| `none` | **求職者**（ふつうの服・就職可能） |
+| `nitwit` | **ニート**（緑の服・永久無職。nitwit は出さない） |
 | `farmer` | 農民 |
 | `librarian` | 司書 |
 | …主要職 | … |
@@ -263,8 +277,72 @@ Java でよく使う短名（実装時に `getId()` で確認）:
 
 ---
 
+## 11. 既知バグ: 職業が求職者/ニートに固定される（2026-07-18）
+
+### 症状
+
+- 自然生成の村人 → ニートっぽい言い回し、または誤ラベル  
+- スポーンエッグ → 求職者のまま  
+- 職業ブロックで就職しても **求職者のまま**
+
+### 原因（アダプタ）
+
+```java
+// NG: Direct な RegistryEntry では getKey() が empty → 常に orElse("none")
+data.profession().getKey().map(...).orElse("none");
+```
+
+クライアント同期の `VillagerData.profession()` は多くの場合 **Reference ではなく Direct**。  
+`getKey()` だけ見ると **常に `none`（求職者）** になる。就職後も更新されないように見える。
+
+「初期村人がニート」は、本当に `nitwit` の緑服が混ざる／LLM が求職者メモと雰囲気で寄せた、の両方があり得る。  
+**根は profession ID の取り方が壊れていたこと。**
+
+### 修正
+
+```java
+// 1) matchesKey(VillagerProfession.FARMER) 等
+// 2) getKey()
+// 3) Registries.getId(value)
+// 取れなければ null（サーバは「村人」汎用。誤って求職者にしない）
+```
+
+`villager_type` も同様。
+
+### 表示ポリシー（SM が判定・プロンプトに頼らない）
+
+| 判定（コード） | details に渡す | 渡さない |
+|---|---|---|
+| profession **明確**（known set） | `mob`=農民/求職者/ニート…、`mob_profession`、日課 | — |
+| profession **不明**（null 等） | `mob`=**村人**、日課のみ | `mob_profession` |
+| 子供 | `mob`=子供、日課 | 職 |
+
+実装: `project_villager_speech_facts()`（`villager_schedule.py`）。  
+ambient プロンプトは **載っているキーを読むだけ**。判定文を書かない。
+
+### 検証手順
+
+1. `./gradlew build` で jar を入れ直す（**sources.jar ではない**）  
+2. ambient ログ: `profession=farmer label=農民` が出ること  
+3. 未就職は `profession=none label=村人` でよい（求職者断定しない）  
+4. コンポスター横の農民が `farmer` になること  
+
+### サーバ側で「まだ足りない」もの（職業バグ以外）
+
+| 項目 | 状態 |
+|---|---|
+| 日課・catalog merge | 実装済み |
+| ambient への profession 載せ | 実装済み（アダプタが正しければ効く） |
+| 曖昧時は「村人」 | 実装済み |
+| job site 近傍スキャン | 未（任意） |
+| 職業変更時のクールダウンキー | signature に profession を含めるよう修正済み |
+
+---
+
 ## 変更履歴
 
 | 日付 | 内容 |
 |---|---|
 | 2026-07-18 | 初版。職業・子供・日課表。SM は mode 増やすより派生シグナル + ambient 材料 |
+| 2026-07-18 | `none`=求職者（普通の服）、`nitwit`=ニート（緑の服）。「ニットウィット」は使わない |
+| 2026-07-18 | 職業誤認: RegistryEntry.getKey() empty → Registries.getId(value) に修正 |
