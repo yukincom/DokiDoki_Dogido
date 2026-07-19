@@ -66,7 +66,8 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 |---|---|---|
 | 1 | [haiku-architecture.md](haiku-architecture.md) | 発句パイプライン |
 | 2 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop） |
-| 3 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
+| 3 | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) | workshop 取り込みパターン調査 |
+| 4 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
 | 4 | [memory-architecture.md](memory-architecture.md) | 記憶モデル |
 | 5 | [senryu-roadmap.md](senryu-roadmap.md) | ロードマップ |
 | 6 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
@@ -127,6 +128,7 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 
 - [haiku-architecture.md](haiku-architecture.md)
 - [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)
+- [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md)
 - [haiku-feedback-plan.md](haiku-feedback-plan.md)
 - [memory-architecture.md](memory-architecture.md)
 - [senryu-roadmap.md](senryu-roadmap.md)
