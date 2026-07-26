@@ -58,16 +58,31 @@ AI エージェント向けの注意は [AGENTS.md](AGENTS.md) です。
 
 ## 導入方法
 
+このリポジトリの仮想環境名は **`dogido-llm`** です（`venv` ではない）。
+
 ```bash
-# 依存
+cd /Users/yukin_co/Documents/DokiDoki-Dogido
+source dogido-llm/bin/activate
+
+# 依存（初回）
 pip install -e .
 
-# 設定
+# 設定（初回）
 cp .env.example .env
 
 # サーバー
 python -m dogido_server
 ```
+
+マイクから話しかける（別ターミナル）:
+
+```bash
+cd /Users/yukin_co/Documents/DokiDoki-Dogido
+source dogido-llm/bin/activate
+python -m dogido_server.voice_input
+```
+
+ヘッドホン推奨。
 
 Minecraft 用アダプタは `adapter/minecraft-fabric/`（Java 1.21.11 / Fabric）。  
 ビルドと入れ方は [adapter/minecraft-fabric/README.md](adapter/minecraft-fabric/README.md) をご確認ください。
@@ -79,14 +94,6 @@ curl -X POST http://127.0.0.1:5055/api/v1/player-input \
   -H 'Content-Type: application/json' \
   -d '{"text": "おはようさん"}'
 ```
-
-マイクから話しかける:
-
-```bash
-python -m dogido_server.voice_input
-```
-
-ヘッドホン推奨。
 
 fixture 再生 / スモーク:
 
