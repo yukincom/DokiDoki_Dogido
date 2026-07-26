@@ -113,3 +113,11 @@ python -m dogido_server.smoke_test --mode all
 
 MIT ライセンス
 コードを触る AI アシスタント向けの注意は **[AGENTS.md](AGENTS.md)** にまとめています。
+
+---
+
+## Acknowledgments / 謝辞
+
+本プロジェクトは OpenAI の Series T - Post AGI from Kyoto プログラムより API クレジット支援を受けています。ありがとうございます。
+
+**[note_LINK](https://note.com/yukin_co/n/n74eefa93ed24)**
