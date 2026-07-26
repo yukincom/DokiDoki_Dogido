@@ -12,6 +12,7 @@ adapter/minecraft-fabric/run/
 .DS_Store
 /dogido-llm
 /dogido_server.egg-info
+/data
 models/
 *.safetensors
 *.gguf
