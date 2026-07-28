@@ -11,6 +11,8 @@ adapter/minecraft-fabric/run/
 /資料
 .DS_Store
 /dogido-llm
+.venv/
+venv/
 /dogido_server.egg-info
 /data
 models/

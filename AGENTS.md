@@ -150,19 +150,15 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 ## 7. 起動・確認（最短）
 
 ```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -e .
 cp .env.example .env   # 必要なら LLM / TTS を設定
 python -m dogido_server
 python -m pytest tests/test_haiku*.py -q
 ```
 
-player 入力:
-
-```bash
-curl -X POST http://127.0.0.1:5055/api/v1/player-input \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "おはようさん"}'
-```
+player テキスト注入（開発用・**アクティブセッション必須**）は
+[docs/adapter-api.md §21](docs/adapter-api.md#21-post-apiv1player-input) を参照。
 
 記憶ディレクトリは設定の `memory_dir`（多くの場合 `.dogido_memory` 系）。JSONL を手で壊すと lesson/entry がおかしくなる。
 
