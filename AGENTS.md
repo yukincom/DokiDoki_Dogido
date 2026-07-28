@@ -151,7 +151,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"   # ランタイム + pytest。サーバーだけなら pip install -e .
 cp .env.example .env   # 必要なら LLM / TTS を設定
 python -m dogido_server
 python -m pytest tests/test_haiku*.py -q
