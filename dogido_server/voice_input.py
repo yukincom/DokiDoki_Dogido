@@ -7,7 +7,7 @@ POST /api/v1/player-input で dogido_server に届ける。
 whisper.cpp の呼び出しとノイズ除去は yuno-chan-api の speech_service.py を参考にしている。
 
 使い方:
-    dogido-llm/bin/python -m dogido_server.voice_input
+    .venv/bin/python -m dogido_server.voice_input
 
 設定（.env / 環境変数 DOGIDO_*）:
     DOGIDO_VOICE_WHISPER_CLI / DOGIDO_VOICE_WHISPER_MODEL  … 未設定なら自動検出
