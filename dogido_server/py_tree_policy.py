@@ -78,6 +78,9 @@ class AmbientMobEvent(_Condition):
         super().__init__(name="AmbientMobEvent")
 
     def check(self, context: PolicyContext) -> bool:
+        # 川柳の自分の世界中は ambient で中断しない
+        if context.machine.state.pending_haiku_after_preface:
+            return False
         # 話しかけ待ちがあるときは ambient より PlayerChat 枝を優先する
         if context.machine._has_pending_player_chat(context.event):
             return False
@@ -93,6 +96,9 @@ class HasPlayerChat(_Condition):
         if context.next_mode in {"panic", "suppressed_panic"}:
             return False
         if context.event.event.name == EventName.PLAYER_DIED:
+            return False
+        # 見どころ〜本句のあいだは自分の世界（雑談に乗らない）
+        if context.machine.state.pending_haiku_after_preface:
             return False
         return bool(context.machine._has_pending_player_chat(context.event))
 

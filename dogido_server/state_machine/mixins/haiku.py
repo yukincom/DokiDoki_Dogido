@@ -153,7 +153,8 @@ class HaikuMixin:
             return False
         if self.state.mode != "normal":
             return False
-        if event.visual_threats or event.auditory_threats or self.player_input.should_block_ambient:
+        # 脅威は state_updates で prep を消す。雑談では自分の世界を中断しない。
+        if event.visual_threats or event.auditory_threats:
             return False
         if self.state.pending_special_biome_line is not None:
             return False
@@ -161,27 +162,144 @@ class HaikuMixin:
 
     def _emit_haiku_line(self, event: GameEvent, now: datetime) -> str | None:
         if self._should_complete_prefaced_haiku(event):
-            self.state.pending_haiku_after_preface = False
-            self.state.last_haiku_emitted_at = now
-            line = self._render_haiku_line(event).strip()
-            self._remember_haiku_emission(event, now, line, route="haiku")
-            LOGGER.warning(
-                "haiku_emit result=emitted text=%s",
-                summarize_for_log(self._format_haiku_line(line)),
-            )
-            return line or "まとまらんかった。。。"
+            return self._complete_prefaced_haiku(event, now)
         if not self._should_emit_haiku(event, now):
             return None
         if self._uses_prefaced_haiku_generation():
-            self.state.pending_haiku_after_preface = True
-            LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log("ここで一句。"))
-            return "ここで一句。"
+            return self._begin_prefaced_haiku(event, now)
         self.state.last_haiku_emitted_at = now
         raw_line = self._render_haiku_line(event)
         self._remember_haiku_emission(event, now, raw_line, route="haiku")
         line = self._format_haiku_line(raw_line)
         LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))
         return line
+
+    def _begin_prefaced_haiku(self, event: GameEvent, now: datetime) -> str:
+        """見どころ + ここで一句。irony/scene はここで回し、本句は次フレーム。"""
+        context = self._haiku_context(event)
+        irony, irony_status = self._detect_haiku_irony(context)
+        scene, scene_status = self._detect_haiku_scene(context, irony)
+        self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
+        fallback_text = self._fallback_haiku_line(event)
+        llm_failed_text = self._llm_failed_haiku_line()
+        skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
+
+        self._pending_haiku_prompt_details = None
+        self._pending_haiku_fixed_line = None
+        if skip_reason is None:
+            prompt_details = context.prompt_details(irony, scene)
+            prompt_details["haiku_constraints"] = self._haiku_constraint_details(event, scene)
+            self._pending_haiku_prompt_details = prompt_details
+        elif self._should_use_llm_failed_haiku(skip_reason, irony_status, scene_status):
+            LOGGER.warning(
+                "haiku_decision result=fallback reason=%s text=%s",
+                self._haiku_llm_failure_reason(skip_reason, irony_status, scene_status),
+                summarize_for_log(llm_failed_text),
+            )
+            self._pending_haiku_fixed_line = llm_failed_text
+        else:
+            LOGGER.warning(
+                "haiku_decision result=fallback reason=%s text=%s",
+                skip_reason,
+                summarize_for_log(fallback_text),
+            )
+            self._pending_haiku_fixed_line = fallback_text
+
+        self.state.pending_haiku_after_preface = True
+        spoken = self._compose_haiku_preface_speech(irony, scene)
+        LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log(spoken))
+        return spoken
+
+    def _complete_prefaced_haiku(self, event: GameEvent, now: datetime) -> str:
+        self.state.pending_haiku_after_preface = False
+        self.state.last_haiku_emitted_at = now
+        details = self._pending_haiku_prompt_details
+        fixed = self._pending_haiku_fixed_line
+        self._pending_haiku_prompt_details = None
+        self._pending_haiku_fixed_line = None
+        llm_failed_text = self._llm_failed_haiku_line()
+        if details is not None:
+            line = self._generate_leaf_text(
+                kind="haiku",
+                fallback_text=llm_failed_text,
+                details=details,
+                temperature=0.82,
+                route="haiku",
+            )
+            if line == llm_failed_text:
+                LOGGER.warning(
+                    "haiku_decision result=fallback reason=llm_rejected text=%s",
+                    summarize_for_log(llm_failed_text),
+                )
+        elif fixed is not None:
+            line = fixed
+        else:
+            line = self._render_haiku_line(event).strip()
+        line = (line or "").strip() or "まとまらんかった。。。"
+        self._remember_haiku_emission(event, now, line, route="haiku")
+        LOGGER.warning(
+            "haiku_emit result=emitted text=%s",
+            summarize_for_log(self._format_haiku_line(line)),
+        )
+        return line
+
+    def _clear_pending_haiku_prep(self) -> None:
+        self.state.pending_haiku_after_preface = False
+        self._pending_haiku_prompt_details = None
+        self._pending_haiku_fixed_line = None
+        # interpretation は emission 後に残す必要はないが、キャンセル時は捨てる
+        self._pending_haiku_interpretation = None
+
+    def _compose_haiku_preface_speech(self, irony: IronyContext, scene: SceneContext) -> str:
+        """語順: 見どころ → ここで一句。"""
+        inspiration = self._haiku_inspiration_spoken_line(irony, scene)
+        if inspiration:
+            body = inspiration if inspiration.endswith("。") else f"{inspiration}。"
+            return f"{body}ここで一句。"
+        return "ここで一句。"
+
+    def _haiku_inspiration_spoken_line(
+        self,
+        irony: IronyContext,
+        scene: SceneContext,
+    ) -> str | None:
+        """irony/scene を短い口語の見どころにする。無い・空なら None。"""
+        raw: str | None = None
+        if irony.found and irony.description.strip():
+            raw = irony.description.strip()
+        elif scene.found and scene.summary.strip():
+            raw = scene.summary.strip()
+        if not raw:
+            return None
+        body = self._shorten_haiku_inspiration(raw)
+        if not body:
+            return None
+        # すでに「浮かんだ」系なら重ねない
+        if any(marker in body for marker in ("浮か", "おもいつ", "思いつ")):
+            return body if body.endswith(("。", "わ", "や", "で", "ね")) else f"{body}。"
+        return f"{body}が頭に浮かんできたわ"
+
+    def _shorten_haiku_inspiration(self, text: str, *, max_chars: int = 42) -> str:
+        cleaned = text.strip().rstrip("。．.！!？?")
+        if not cleaned:
+            return ""
+        # 分析っぽい語を少しだけ崩す
+        cleaned = cleaned.replace("プレイヤー", "あんた")
+        if len(cleaned) <= max_chars:
+            return cleaned
+        # 読点で切れるなら短い塊を優先
+        for sep in ("、", "，", "。"):
+            if sep in cleaned:
+                parts = [p.strip() for p in cleaned.split(sep) if p.strip()]
+                if len(parts) >= 2:
+                    # 先頭 + 末尾（対比の芯）をくっつけられるとき
+                    head, tail = parts[0], parts[-1]
+                    joined = f"{head}、{tail}"
+                    if len(joined) <= max_chars + 8:
+                        return joined
+                    if len(head) <= max_chars:
+                        return head
+        return cleaned[: max_chars - 1].rstrip("、， ") + "…"
 
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)

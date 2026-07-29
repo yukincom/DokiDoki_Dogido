@@ -213,11 +213,12 @@ class Settings(BaseSettings):
     player_chat_hearing_retention_ms: int = 12000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
     player_chat_visual_retention_ms: int = 12000
-    # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
+    # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
+    # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。
     player_input_priority_cooldown_ms: int = 20000
-    # 友好・中立モブ反応だけはもう少し早く復帰（会話の余韻だけ残す）
-    player_input_ambient_mute_ms: int = 12000
+    # 互換のため残す。参照箇所は priority に統一済み（設定しても mute 長には使わない）
+    player_input_ambient_mute_ms: int = 20000
     damaging_light_warning_cooldown_ms: int = 600000
     magma_block_comment_cooldown_ms: int = 1200000
     damaging_light_warning_max_distance: float = 2.0

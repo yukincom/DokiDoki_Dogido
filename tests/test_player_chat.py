@@ -249,13 +249,12 @@ class AmbientMobPriorityTests(unittest.TestCase):
         ]
         return event
 
-    def test_ambient_mob_recovers_after_short_player_mute(self) -> None:
-        """話しかけ後も、長い 120s ミュートではなく短時間で友好モブ反応が戻る。"""
+    def test_ambient_mob_uses_same_mute_as_player_priority(self) -> None:
+        """ambient も priority と同じ mute（既定 20s）。短い 12s 専用 mute は使わない。"""
         settings = Settings(
             decision_policy="py_trees",
             llm_enabled=False,
             player_input_priority_cooldown_ms=20000,
-            player_input_ambient_mute_ms=12000,
             ambient_mob_comment_cooldown_ms=1000,
         )
         machine = DogidoStateMachine(settings)
@@ -263,17 +262,34 @@ class AmbientMobPriorityTests(unittest.TestCase):
         machine.process(make_event(sequence=1, at_sec=0.0, user_text="やあ"))
         self.assertIsNotNone(machine.state.last_player_input_at)
 
-        # 5秒後: ambient mute 中（user_text 無しで process して player_input をクリア）
-        early = self._ambient_event(sequence=2, at_sec=5.0)
-        early_result = machine.process(early)
-        early_texts = [action.text for action in early_result.actions if action.text]
-        self.assertEqual([], early_texts)
+        # 15秒後: まだ priority mute 中（旧 ambient 12s では復帰していた）
+        mid = self._ambient_event(sequence=2, at_sec=15.0)
+        mid_result = machine.process(mid)
+        mid_texts = [action.text for action in mid_result.actions if action.text]
+        self.assertEqual([], mid_texts)
 
-        # 15秒後: ambient mute は明けている
-        later = self._ambient_event(sequence=3, at_sec=15.0)
+        # 21秒後: mute 明け
+        later = self._ambient_event(sequence=3, at_sec=21.0)
         later_result = machine.process(later)
         later_texts = [action.text for action in later_result.actions if action.text]
-        self.assertTrue(later_texts, "friendly mob reaction should return after short mute")
+        self.assertTrue(later_texts, "friendly mob reaction should return after priority mute")
+
+    def test_queued_player_input_blocks_ambient(self) -> None:
+        """pending 相乗り待ち（player_input_queued）中は ambient を出さない。"""
+        settings = Settings(
+            decision_policy="py_trees",
+            llm_enabled=False,
+            player_input_priority_cooldown_ms=0,
+            ambient_mob_comment_cooldown_ms=1000,
+        )
+        machine = DogidoStateMachine(settings)
+        machine.player_input_queued = True
+        blocked = machine.process(self._ambient_event(sequence=1, at_sec=0.0))
+        self.assertEqual([a.text for a in blocked.actions if a.text], [])
+
+        machine.player_input_queued = False
+        ok = machine.process(self._ambient_event(sequence=2, at_sec=2.0))
+        self.assertTrue([a.text for a in ok.actions if a.text])
 
 
 class HearingContextTests(unittest.TestCase):

@@ -193,9 +193,63 @@ _PRAISE_MARKERS = (
     "良い句",
 )
 _FORCED_MARKERS = ("無理やり", "詰め込み", "つめこみ", "圧縮", "息苦", "ごちゃごちゃ")
-_GIBBERISH_MARKERS = ("読めん", "読めない", "わからん", "意味わから", "日本語", "何言", "なにい", "ぐう", "グー")
-_OFFSCENE_MARKERS = ("海ちゃう", "海じゃない", "ここ海", "村なのに", "関係ない", "場違い")
-_MEANING_MARKERS = ("って何", "ってなに", "とは何", "とはなに", "何それ", "なにそれ", "意味")
+_GIBBERISH_MARKERS = ("読めん", "読めない", "わからん", "意味わから", "日本語", "何言", "なにい")
+# 場面ずれ: 固有モチーフ名（海・村など）は入れない。メタな言い回しだけ。
+_OFFSCENE_MARKERS = (
+    "関係ない",
+    "場違い",
+    "場と違う",
+    "場とちが",
+    "場面と違う",
+    "場面ちゃう",
+    "場面じゃない",
+    "ここちゃう",
+    "ここじゃない",
+    "ここやない",
+    "空気ちゃう",
+    "空気じゃない",
+    "ずれてる",
+    "ずれた",
+    "外れとる",
+    "はずれとる",
+    "見当違い",
+    "見当ちがい",
+)
+_MEANING_MARKERS = (
+    "って何",
+    "ってなに",
+    "とは何",
+    "とはなに",
+    "何それ",
+    "なにそれ",
+    "意味",
+    "って何だ",
+    "ってなんだ",
+    "って何だろ",
+    "ってなんだろ",
+)
+# 読みの好み（メタ語のみ。素材名・地名は禁止）
+_READING_META_MARKERS = (
+    "読み",
+    "よみ",
+    "読み方",
+    "よみかた",
+)
+# 言い換え・好み（「AじゃなくB」「〜の方が」）。ドメイン語は見ない。
+_PREFERENCE_MARKERS = (
+    "じゃなく",
+    "ではなく",
+    "の方が",
+    "のほうが",
+    "方がいい",
+    "方がええ",
+    "方がよかった",
+    "ほうがよかった",
+    "方が良い",
+    "追加して",
+    "追加しと",
+    "足して",
+)
 # プレイヤー明示で lesson を緩める（workshop open 外でも可）
 _CLEAR_LESSON_MARKERS = (
     "気にせんで",
@@ -246,15 +300,34 @@ def classify_workshop_intent(user_text: str) -> str | None:
         return "critique_forced"
     if any(m in text for m in _OFFSCENE_MARKERS):
         return "critique_offscene"
-    # 「〜って何」を先に（「グー」単独より意味質問を優先）
+    # 「〜って何」を先に（固有語リストは使わない）
     if any(m in text for m in _MEANING_MARKERS):
         return "ask_meaning"
     if any(m in text for m in _GIBBERISH_MARKERS):
         return "critique_gibberish"
-    # 句・川柳・俳句への明示参照
+    # 読みメタ + 好み／言い換えパターン（素材名・地名は見ない）
+    if any(m in text for m in _READING_META_MARKERS) and any(
+        h in text for h in _PREFERENCE_MARKERS
+    ):
+        return "other_haiku"
+    if any(m in text for m in _READING_META_MARKERS) and any(
+        h in text for h in ("方が", "ほうが", "よかった", "良かった", "違う", "ちがう")
+    ):
+        return "other_haiku"
+    # 「AじゃなくB」「〜の方が〜」など好み・訂正（workshop 中のみ呼ばれる想定）
+    if any(m in text for m in _PREFERENCE_MARKERS):
+        return "other_haiku"
+    # 句・川柳・俳句への明示参照（ジャンル語のみ）
     if any(m in text for m in ("句", "川柳", "俳句", "せんりゅう", "詠ん", "よんだ")):
         return "other_haiku"
     return None
+
+
+def should_handle_as_workshop(user_text: str | None) -> bool:
+    """workshop open 中に service/SM が player_chat より先に扱うべきか。"""
+    if extract_conversational_revise(user_text):
+        return True
+    return classify_workshop_intent(user_text) is not None
 
 
 def extract_conversational_revise(raw_text: str | None) -> str | None:
@@ -372,10 +445,10 @@ def render_workshop_reply(
     player_text: str = "",
 ) -> str:
     """ルールベースの短い返事（LLM なし）。H5.1: ガチ約束せず soft に寄せる。"""
-    del player_text  # 将来の言い回し反映用
     verse = workshop.display_line() or "（句なし）"
     materials = materials_speech_line(workshop)
     materials_bit = f"狙いは「{materials}」やったんやけどな。" if materials else ""
+    said = player_text or ""
 
     if kind == "close":
         return "おけ、この句の話はここまでや。"
@@ -385,6 +458,14 @@ def render_workshop_reply(
         # loosen とセット。可逆がプレイヤーにも見える一文
         return "ありがとうや。その句、残しとくで。前の注意は少し緩めるわ。"
     if kind == "ask_meaning":
+        # プレイヤーが指した断片があれば、それに寄せて返す
+        fragment = _quoted_or_fragment_about_verse(said, verse)
+        if fragment:
+            return (
+                f"「{fragment}」のところやろ？句全体は「{verse}」で、"
+                f"{materials_bit or '狙いはその場の空気やったんやけどな。'}"
+                "読みにくかったら直すでも、別の言い方でもええで。"
+            )
         return (
             f"正直「{verse}」は読みにくいかもな。"
             f"{materials_bit}"
@@ -408,9 +489,44 @@ def render_workshop_reply(
             f"{materials_bit}"
             "次は材料から外れすぎんように気をつけるわ。"
         )
-    # other_haiku
+    # other_haiku（読み・好み・句への言及など）
+    if any(m in said for m in _READING_META_MARKERS):
+        return (
+            f"せやな、読みの話やな。いまの句は「{verse}」や。"
+            f"{materials_bit}"
+            "次の発句で読みやすさ、ちょっと意識するわ。直し文あったら言ってな。"
+        )
+    if any(m in said for m in _PREFERENCE_MARKERS):
+        return (
+            f"なるほど、そっちの方がしっくりくるかもな。いまの句は「{verse}」や。"
+            f"{materials_bit}"
+            "次に活かすわ。直し文あったら言ってな。"
+        )
     return (
         f"いまの句は「{verse}」や。"
         f"{materials_bit}"
         "気になるところあったら言ってな。"
     )
+
+
+def _quoted_or_fragment_about_verse(player_text: str, verse: str) -> str | None:
+    """プレイヤー文から句に関係しそうな断片を拾う（雑なヒューリスティック）。"""
+    text = (player_text or "").strip()
+    if not text or not verse:
+        return None
+    compact_verse = verse.replace("\n", "").replace(" ", "").replace("　", "")
+    # 「Xって何」の X
+    for sep in ("って何", "ってなに", "って何だ", "ってなんだ", "とは何", "とはなに"):
+        if sep in text:
+            head = text.split(sep, 1)[0].strip(" 「」『』\"'")
+            # 末尾の短い語を優先
+            token = head.split()[-1] if head.split() else head
+            token = token[-12:] if len(token) > 12 else token
+            if token and (token in verse or token in compact_verse or len(token) <= 6):
+                return token
+    # 句の部分文字列が文中にある
+    for part in verse.replace("　", " ").split():
+        p = part.strip()
+        if len(p) >= 2 and p in text:
+            return p
+    return None

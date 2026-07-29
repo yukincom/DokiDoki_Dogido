@@ -116,14 +116,19 @@ class ActionBuilderMixin:
                 )
             return actions
 
-        if next_mode == "normal" and self._should_emit_ambient_mob_comment(event, now):
-            line = self._emit_ambient_mob_comment_line(event, now)
-            if line:
-                actions.append(AudioAction(layer="speech", interrupt=False, text=line))
-            return actions
-
+        # ambient は environmental（player_chat 含む）より後。legacy でも chat を先に見る
         if next_mode == "normal":
             actions.extend(self._environmental_actions(event, signals, previous_mode, now))
+            if actions:
+                return actions
+            if (
+                not self.state.pending_haiku_after_preface
+                and self._should_emit_ambient_mob_comment(event, now)
+            ):
+                line = self._emit_ambient_mob_comment_line(event, now)
+                if line:
+                    actions.append(AudioAction(layer="speech", interrupt=False, text=line))
+            return actions
 
         return actions
 

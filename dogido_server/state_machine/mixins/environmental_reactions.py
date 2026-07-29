@@ -226,6 +226,16 @@ class EnvironmentalReactionsMixin:
         if sonic_boom_cue is not None:
             return [sonic_boom_cue]
 
+        # 自分の世界（見どころ〜本句）: 雑談より先に本句を完了させる
+        if self.state.pending_haiku_after_preface:
+            haiku_completion = self._emit_haiku_line(event, now)
+            if haiku_completion:
+                return self._speech_actions(
+                    haiku_completion,
+                    protect_ms=4000,
+                    speech_profile="haiku",
+                )
+
         # 話しかけは暗所ループや環境反応より先に返す（取りこぼし防止）
         if self.player_input.asks_hostile_count:
             return self._speech_actions(
@@ -329,7 +339,11 @@ class EnvironmentalReactionsMixin:
         event: GameEvent,
         now: datetime,
     ) -> list[AudioAction]:
-        if self._player_input_priority_active(now, purpose="ambient"):
+        if getattr(self, "player_input_queued", False):
+            return []
+        if self._has_pending_player_chat(event):
+            return []
+        if self._player_input_priority_active(now):
             return []
         if event.event.name != EventName.AMBIENT_MOB_DETECTED:
             return []
@@ -404,6 +418,16 @@ class EnvironmentalReactionsMixin:
         if dragon_special:
             return self._speech_actions(dragon_special)
 
+        # 自分の世界: 見どころ〜本句が終わるまで雑談より本句完了を優先
+        if self.state.pending_haiku_after_preface:
+            haiku_completion = self._emit_haiku_line(event, now)
+            if haiku_completion:
+                return self._speech_actions(
+                    haiku_completion,
+                    protect_ms=4000,
+                    speech_profile="haiku",
+                )
+
         # キーワードに一致しない話しかけには会話として返事する
         # （入力優先ミュートはこの後の自発発話を黙らせるためのものなので、返事自体は通す）
         if self._has_pending_player_chat(event):
@@ -411,12 +435,6 @@ class EnvironmentalReactionsMixin:
 
         if self._player_input_priority_active(now):
             return []
-
-        # 発句済みの川柳は最優先で本句を完了させる（次のスナップショットで出す）
-        if self.state.pending_haiku_after_preface:
-            haiku_completion = self._emit_haiku_line(event, now)
-            if haiku_completion:
-                return self._speech_actions(haiku_completion, speech_profile="haiku")
 
         overworld_return_line = self._emit_pending_overworld_return_line(now)
         if overworld_return_line:
@@ -516,10 +534,18 @@ class EnvironmentalReactionsMixin:
                 return self._speech_actions(darkness_advice)
 
         # ポータルが近い場合も専用の近道は使わない。通常の川柳フロー
-        # （「ここで一句。」発句 → 情景・持ち物込みの本句）に一本化し、
+        # （見どころ → ここで一句 → 情景・持ち物込みの本句）に一本化し、
         # ポータルは題材候補（_haiku_feature_candidates）として混ざる
         haiku_line = self._emit_haiku_line(event, now)
-        return self._speech_actions(haiku_line, speech_profile="haiku")
+        protect_ms = 0
+        if haiku_line and ("ここで一句" in haiku_line or "浮かんできた" in haiku_line):
+            # 見どころ+preface は自分の世界。短く割り込ませない
+            protect_ms = 6000
+        return self._speech_actions(
+            haiku_line,
+            protect_ms=protect_ms,
+            speech_profile="haiku",
+        )
 
     def _emit_nearby_lightning_strike_actions(
         self,

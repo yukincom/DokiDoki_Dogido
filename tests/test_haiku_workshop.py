@@ -86,11 +86,28 @@ class WorkshopLifecycleTests(unittest.TestCase):
 class WorkshopIntentTests(unittest.TestCase):
     def test_classify(self) -> None:
         self.assertEqual(classify_workshop_intent("グーの木の水って何?"), "ask_meaning")
+        self.assertEqual(classify_workshop_intent("木木って何ですか?"), "ask_meaning")
+        self.assertEqual(classify_workshop_intent("平べったって何だろうか"), "ask_meaning")
         self.assertEqual(classify_workshop_intent("無理やり圧縮しすぎ"), "critique_forced")
         self.assertEqual(classify_workshop_intent("いい句やな"), "praise")
         self.assertEqual(classify_workshop_intent("もうええ"), "close")
+        # 読みメタ + 好み（素材名に依存しない）
+        self.assertEqual(
+            classify_workshop_intent("こっちの読み方の方がよかったんじゃないかなと思う"),
+            "other_haiku",
+        )
+        # 言い換えパターン（ドメイン語リストは使わない）
+        self.assertEqual(
+            classify_workshop_intent("AじゃなくてBの方がしっくりくる"),
+            "other_haiku",
+        )
+        # 場面ずれも固有モチーフ名ではなくメタ表現
+        self.assertEqual(classify_workshop_intent("場と違うやろ"), "critique_offscene")
         self.assertIsNone(classify_workshop_intent("おはよう"))
         self.assertIsNone(classify_workshop_intent("松明ある？"))
+        # 固有モチーフ名だけでは hit しない（リストに載せていない）
+        self.assertIsNone(classify_workshop_intent("海やな"))
+        self.assertIsNone(classify_workshop_intent("村がある"))
 
     def test_reply_includes_materials(self) -> None:
         ws = open_from_emission(_emission())
@@ -283,6 +300,84 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(any("読みやす" in str(x.get("note")) for x in lessons))
             # hard 合流用の fragments があっても soft のまま
             self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))
+
+    def test_workshop_meaning_question_beats_player_chat(self) -> None:
+        """workshop open 中の『〜って何』は player_chat ではなく workshop 返事だけ。"""
+
+        class CaptureChatLLM:
+            def __init__(self) -> None:
+                self.kinds: list[str] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                self.kinds.append(request.kind)
+                return "LLMが雑談で答えた文"
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                return {"found": False}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = CaptureChatLLM()
+            settings = Settings(
+                llm_enabled=True,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sid = session.session_id
+            sess = service.sessions[sid]
+            sess.machine.llm = llm
+            emission = _emission(text="ひらべった てのきのき ひるのひ")
+            service._open_haiku_workshop(sess, emission, entry_id="h_test", now=emission.created_at)
+
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text="平べったって何だろうか"),
+            )
+            result = service.process_event(event, session_id=sid)
+            speeches = [a.text for a in result.actions if a.layer == "speech" and a.text]
+            self.assertEqual(len(speeches), 1)
+            self.assertNotIn("LLMが雑談で答えた文", speeches[0])
+            self.assertTrue(
+                "ひらべった" in (speeches[0] or "") or "読みにく" in (speeches[0] or ""),
+                msg=speeches[0],
+            )
+            self.assertNotIn("player_chat", llm.kinds)
 
     def test_clear_lessons_without_workshop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

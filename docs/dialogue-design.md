@@ -204,16 +204,20 @@
 - environmental 内でも話しかけを dark_push ループより先に処理
 - それでも speech が出なければ `pending_player_text` に**再キュー**（ログ: `player_input_requeued`）
 
-### 友好・中立モブ反応が消える件
+### 友好・中立モブ反応とプレイヤー入力
+
+**優先:** プレイヤー話しかけ（今フレーム / `pending_player_text` キュー）> 川柳自分の世界 > 環境一言 > **友好・中立 ambient（最下位）**
 
 話しかけ後は自発発話をしばらくミュートする（会話に割り込ませないため）。
 
-| 設定 | 旧 | 新 | 対象 |
-|---|---|---|---|
-| `player_input_priority_cooldown_ms` | **120s** | **20s** | 川柳・環境雑談など |
-| `player_input_ambient_mute_ms` | （同上に相乗り） | **12s** | 友好・中立モブ反応だけ |
+| 設定 | 内容 | 対象 |
+|---|---|---|
+| `player_input_priority_cooldown_ms` | 既定 **20s** | 川柳・環境雑談・**友好/中立 ambient** |
+| `player_input_ambient_mute_ms` | 互換のみ（未使用） | 以前は 12s の短い mute だったが **廃止** |
 
-旧 120 秒だと「たまに話しただけ」でもモブ反応がほぼ出なくなっていた。
+加えて `pending_player_text`（音声入力の相乗り待ち）がある間は ambient を出さない。
+
+旧 120 秒 mute だと「たまに話しただけ」でもモブ反応がほぼ出なくなっていた。逆に ambient だけ 12s だと話しかけ直後に羊コメントが割り込みやすかったため、**会話と同じ 20s** に揃えた。
 
 ## 7. 実装メモ
 

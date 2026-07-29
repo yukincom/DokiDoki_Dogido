@@ -166,7 +166,7 @@ class NarrationMixin:
         self.state.last_ambient_mob_comment_at = now
         self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
         # モブ反応が優先。発句中の川柳はキャンセルし、静けさが戻ってから再発句する
-        self.state.pending_haiku_after_preface = False
+        self._clear_pending_haiku_prep()
         entry = resolve_mob_catalog_entry(
             target.type,
             profession=getattr(target, "profession", None),

@@ -514,9 +514,8 @@ class CommonMixin:
     def _player_input_priority_active(self, now: datetime, *, purpose: str = "default") -> bool:
         """話しかけ後の自発発話ミュート。
 
-        purpose:
-          - default: 川柳・環境雑談など
-          - ambient: 友好/中立モブ反応（より短い mute）
+        purpose は互換のため残す。ambient も default と同じ
+        ``player_input_priority_cooldown_ms`` を使う（短い別 mute は廃止）。
         """
         if self.player_input.breaks_silence:
             # 今このイベントが話しかけそのものなら、同 tick の自発発話は抑える
@@ -524,10 +523,7 @@ class CommonMixin:
         recent_ms = self._recent_ms(now, self.state.last_player_input_at)
         if recent_ms is None:
             return False
-        if purpose == "ambient":
-            cooldown = self.settings.player_input_ambient_mute_ms
-        else:
-            cooldown = self.settings.player_input_priority_cooldown_ms
+        cooldown = self.settings.player_input_priority_cooldown_ms
         return recent_ms < cooldown
 
     def _weather_transition(self, event: GameEvent) -> tuple[str, str] | None:
@@ -631,7 +627,25 @@ class CommonMixin:
             or self.player_input.asks_haiku_recall
         ):
             return False
+        # workshop open 中の講評・「〜って何」は service 側が返す（player_chat と二重にしない）
+        if self._haiku_workshop_should_handle_player_input():
+            return False
         return bool(self.player_input.normalized_text)
+
+    def _haiku_workshop_should_handle_player_input(self) -> bool:
+        """pin が open で、今の発話が workshop 向けなら True。"""
+        provider = getattr(self, "haiku_workshop_provider", None)
+        if provider is None:
+            return False
+        try:
+            workshop = provider()
+        except Exception:  # noqa: BLE001 — provider 失敗時は chat に落とす
+            return False
+        from dogido_server.haiku.workshop import is_open, should_handle_as_workshop
+
+        if not is_open(workshop):
+            return False
+        return should_handle_as_workshop(self.player_input.raw_text)
 
     def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
         recent_ms = event.world.ender_eye_launch_recent_ms
@@ -723,7 +737,13 @@ class CommonMixin:
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
         if not event.passive_mobs:
             return False
-        if self._player_input_priority_active(now, purpose="ambient"):
+        # 相乗り待ちの話しかけがある間は ambient を出さない（プレイヤー入力優先）
+        if getattr(self, "player_input_queued", False):
+            return False
+        if self._has_pending_player_chat(event):
+            return False
+        # 話しかけ後の mute は川柳・環境と同じ長さ（短い ambient 専用 mute は使わない）
+        if self._player_input_priority_active(now):
             return False
         if event.visual_threats or event.auditory_threats:
             return False
