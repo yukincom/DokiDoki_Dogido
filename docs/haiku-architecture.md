@@ -1,5 +1,7 @@
 # 川柳アーキテクチャ
 
+読み上げの速度・5-7-5 の間・SE 方針は [voice-delivery-plan.md](voice-delivery-plan.md)（Issue #13）。
+
 ## レイテンシ方針
 
 - 緊急度高 / 低レイテンシ

@@ -175,6 +175,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 | 川柳 workshop | `docs/haiku-player-improvement-plan.md` |
 | パッケージ編集順 | `docs/server-reorg-and-workshop-order.md` |
 | 雑談 | `docs/player-chat-casual-plan.md` |
+| ボイス速度・間 | `docs/voice-delivery-plan.md`（#13） |
 | イベント形 | `docs/event-schema.md` · `docs/adapter-api.md` |
 | 状態機械 | `docs/state-machine.md` |
 

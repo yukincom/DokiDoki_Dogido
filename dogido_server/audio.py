@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import deque
 import hashlib
+import logging
 import subprocess
 import threading
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ import httpx
 from dogido_server.config import Settings
 from dogido_server.cues import resolve_cue_path
 from dogido_server.state_machine import AudioAction
+
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 # ---- データクラス ----
@@ -91,12 +94,15 @@ class VoicevoxSpeechBackend(SpeechBackend):
     2 回目以降は合成 API を呼ばずに再生する。
     キャッシュキーに話者 ID・速度・ピッチ・音量・サンプリングレートを含めるため、
     設定変更後に古いキャッシュが使われることはない。
+
+    キャッシュはサイズ上限・経過日数で自動削除する（無制限に肥大化させない）。
     """
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.settings.voicevox_temp_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir = self.settings.voicevox_temp_dir / "cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._prune_cache()
 
     def start(self, text: str) -> RunningAudio:
         cached = self._ensure_cached(text)
@@ -121,6 +127,11 @@ class VoicevoxSpeechBackend(SpeechBackend):
         """キャッシュがあれば返す。なければ VoiceVox API で合成してキャッシュに保存する。"""
         cached = self._cached_path_for(text)
         if cached.exists():
+            # 参照されたら mtime を更新（LRU 相当の掃除に使う）
+            try:
+                cached.touch()
+            except OSError:
+                pass
             return cached
 
         query_url = f"{self.settings.voicevox_url}/audio_query"
@@ -147,6 +158,7 @@ class VoicevoxSpeechBackend(SpeechBackend):
             synth.raise_for_status()
 
         cached.write_bytes(synth.content)
+        self._prune_cache()
         return cached
 
     def _cached_path_for(self, text: str) -> Path:
@@ -166,6 +178,68 @@ class VoicevoxSpeechBackend(SpeechBackend):
         )
         digest = hashlib.sha1(cache_key.encode("utf-8")).hexdigest()[:20]
         return self.cache_dir / f"{digest}.wav"
+
+    def _prune_cache(self) -> None:
+        """古い／大きいキャッシュを削除する。
+
+        1. max_age_days を超えたファイルを削除
+        2. 合計が max_mb を超えていれば、mtime が古い順に削除して上限以下にする
+        """
+        max_mb = float(self.settings.voicevox_cache_max_mb)
+        max_age_days = float(self.settings.voicevox_cache_max_age_days)
+        if max_mb <= 0 and max_age_days <= 0:
+            return
+        if not self.cache_dir.is_dir():
+            return
+
+        now = time.time()
+        max_age_sec = max_age_days * 86400.0 if max_age_days > 0 else None
+        max_bytes = int(max_mb * 1024 * 1024) if max_mb > 0 else None
+
+        entries: list[tuple[float, int, Path]] = []
+        removed = 0
+        for path in self.cache_dir.glob("*.wav"):
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            mtime = stat.st_mtime
+            size = stat.st_size
+            if max_age_sec is not None and (now - mtime) > max_age_sec:
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+                continue
+            entries.append((mtime, size, path))
+
+        if max_bytes is None:
+            if removed:
+                LOGGER.warning("voicevox_cache_pruned reason=age removed=%s", removed)
+            return
+
+        entries.sort(key=lambda item: item[0])  # oldest first
+        total = sum(size for _, size, _ in entries)
+        idx = 0
+        while total > max_bytes and idx < len(entries):
+            _, size, path = entries[idx]
+            idx += 1
+            try:
+                path.unlink()
+                total -= size
+                removed += 1
+            except OSError:
+                continue
+
+        if removed:
+            LOGGER.warning(
+                "voicevox_cache_pruned removed=%s remaining_mb=%.1f max_mb=%.1f max_age_days=%.1f",
+                removed,
+                total / (1024 * 1024),
+                max_mb,
+                max_age_days,
+            )
 
 
 # ---- CueBackend 実装 ----

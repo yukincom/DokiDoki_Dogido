@@ -1,0 +1,264 @@
+# ボイス配信（速度・間・演技）方針
+
+**日付:** 2026-07-28  
+**状態:** 方針メモ（Phase 0 は設定で試せる。Phase 1 以降は実装前）  
+**きっかけ:** [Issue #13](https://github.com/yukincom/DokiDoki_Dogido/issues/13)  
+うみれおんさんアドバイス（ボイスが早い／子ども向けにゆっくりはっきり／繰り返し／演技がかり）と、オーナー追記（文脈別速度・川柳の呼吸・SE idea）。
+
+関連:
+
+- [dialogue-design.md](dialogue-design.md) … 対話モード
+- [haiku-architecture.md](haiku-architecture.md) … 発句パイプライン
+- [companion-maturity.md](companion-maturity.md) … 完成度の優先軸
+- [research/tts-landscape-2026.md](research/tts-landscape-2026.md) … TTS 世代・コミュニティ・適性・権利（調査メモ）
+- 実装: `dogido_server/audio.py` · `config.py` · `state_machine/types.py`（`AudioAction`）
+
+---
+
+## 1. ゴール（体感）
+
+| 優先 | 体感 |
+|---|---|
+| 高 | **川柳に間がある**（「ここで一句」→ 5 → 7 → 5 で呼吸） |
+| 高 | **平時はゆっくり、バトルは今くらい**（全部一律に遅くしない） |
+| 中 | 子どもにも聞き取れるはっきりさ（速度・区切り） |
+| 低〜後 | 繰り返し読み、演技がかり（ブレス・助詞・大げさ抑揚）、雅 SE |
+
+**速度・間・いつ読むかはコード側。** LLM に「ゆっくり読んで」と委ねない。
+
+---
+
+## 2. 現状（実装事実）
+
+| 項目 | 現状 |
+|---|---|
+| TTS | 既定 VOICEVOX。`DOGIDO_VOICEVOX_SPEED_SCALE` 等（**全体1系統**） |
+| 既定 speed | `1.0` |
+| `AudioAction` | `layer` / `interrupt` / `text` / `cue_id` / `protect_ms` のみ。**発話単位の speed なし** |
+| 川柳読み上げ | 句テキストを **1 本の speech** で一気に再生しやすい |
+| 悲鳴・息 | **cue mp3**（`afplay`）。TTS 速度とは独立 |
+| キャッシュ | VOICEVOX は speaker・speed・pitch・volume をキーに含む（設定変更で別ファイル） |
+
+だから「`.env` の speed を下げる」だけでも全体の早さは改善できるが、**文脈差・川柳の間**には届かない。
+
+---
+
+## 3. アドバイスの分解
+
+### 3.1 うみれおんさん（#13 本文）
+
+- 全体が少し早い
+- 小さめの子ども向けに、**ゆっくりはっきり**語りかけるモードが欲しい
+- **繰り返し読み上げ**もあるとよい（何度も言われると納得しやすい）
+- 抑揚は激しすぎるくらい・**演技がかり**の方が「物語に来た」感じ
+  - 手段の例: ブレス、激しい抑揚、変な区切り、不自然な助詞
+
+### 3.2 オーナー追記（同 issue コメント）
+
+- バトルは今の速さでもよい
+- 友好・中立 mob、平時バイオーム反応はもっとゆっくり
+- **川柳が特に早い** → 5-7-5 の間に呼吸
+- idea: 拍子木 SE →「ここで一句」／ベースからの見どころ一言／句後に琴など
+
+---
+
+## 4. フェーズ計画
+
+### Phase 0 — 耳合わせ（設定のみ・実装不要）
+
+```bash
+# .env 例（コミットしない）
+DOGIDO_VOICEVOX_SPEED_SCALE=0.85
+# 必要なら pitch / volume も
+```
+
+- **目的:** 「全体が早い」の確認と、子ども向け下限の感覚を耳で決める
+- **限界:** バトル TTS も一緒に遅くなる（cue 悲鳴は別）
+
+### Phase 1 — 本線（小さく効く）
+
+#### 1-A. 発話プロファイル（文脈別スピード）
+
+| プロファイル | 用途 | 目安（要チューニング） |
+|---|---|---|
+| `battle` | 警告・戦況コール | 現状付近（〜1.0） |
+| `peace` | 雑談・友好/中立・バイオーム等 | ゆっくり（0.8〜0.9） |
+| `haiku` | 川柳まわり | さらにゆっくり（0.75〜0.85） |
+
+実装の方向:
+
+- `AudioAction` に `speech_profile` または `speed_scale` を足す
+- `VoicevoxSpeechBackend` が合成時に上書き（キャッシュキーは既存どおり speed を含む）
+- 状態機械が kind / layer からプロファイルを付ける
+
+#### 1-B. 川柳の間（体感インパクト最大）
+
+ねらいの並び:
+
+```text
+（任意）拍子木 SE
+「ここで一句」
+  間
+上の句（5）
+  間
+中の句（7）
+  間
+下の句（5）
+（任意）余韻 SE
+```
+
+- 5-7-5 分割は haiku 側に既存ロジックがある前提で **複数 `AudioAction` を順に積む**
+- SE は既存 cue 機構 + 音声ファイル
+- **バトル割り込みは壊さない**（長い読みの途中でも interrupt 可能のまま）
+
+#### Phase 1 でやらない
+
+| 項目 | 理由 |
+|---|---|
+| 繰り返し読みモード | いつ／何回／止め方の UX が要る |
+| LLM に演技助詞を強要 | ブレとプロンプト肥大。先に間と速度 |
+| 画面エフェクト | 別系統（#11 / #15 寄り） |
+
+### Phase 2 — 味付け（余裕が出てから）
+
+- 拍子木・琴など **雅 SE**
+- 発句前の短い「見どころ」一言（materials 由来）。順序とレイテンシに注意
+- 子ども向け **一括スロープロファイル**（env / 設定）
+- 重要助言の **1 回リピート**（同一 text を2回、または「もういっぺん」）
+- 演技がかりは **定型カタログ＋限定プロンプト** で小さく
+
+---
+
+## 5. 実装優先の推奨順
+
+```text
+1. Phase 0: .env で全体 speed を耳合わせ
+2. Phase 1-B: 川柳 5-7-5 分割読み + 間
+3. Phase 1-A: peace / battle / haiku 速度差
+4. Phase 2: SE・preface・リピート・演技（素材と必要性に応じて）
+```
+
+---
+
+## 6. 設計の不変条件
+
+1. **速度・間・発話分割はコード**（audio / 状態機械）。LLM は言い回しのみ  
+2. **緊急 cue・ハード割り込みを遅延させない**  
+3. VOICEVOX キャッシュは **speed 変更で自動分離**（既存キー設計を維持）  
+4. 川柳を複数発話に分けても **protect / interrupt 方針と矛盾させない**  
+5. レイテンシ: 分割合成は回数が増える。必要なら後で prewarm / 並列合成
+
+---
+
+## 7. 設定キー（現行）
+
+| 環境変数 | 役割 |
+|---|---|
+| `DOGIDO_TTS_BACKEND` | `voicevox` / `say` / `noop` |
+| `DOGIDO_VOICEVOX_SPEED_SCALE` | 全体話速（既定 1.0） |
+| `DOGIDO_VOICEVOX_PITCH_SCALE` | ピッチ |
+| `DOGIDO_VOICEVOX_VOLUME_SCALE` | 音量 |
+| `DOGIDO_VOICEVOX_SPEAKER` | 話者 ID |
+| `DOGIDO_VOICEVOX_CACHE_MAX_MB` | TTS キャッシュ上限（既定 256）。超過分は古い順に削除 |
+| `DOGIDO_VOICEVOX_CACHE_MAX_AGE_DAYS` | キャッシュ保持日数（既定 7）。0 以下で年齢削除オフ |
+| `DOGIDO_CUE_BACKEND` | 悲鳴等 cue |
+
+TTS キャッシュは `.dogido_tmp/voicevox/cache/`（gitignore）。起動時・新規合成後に prune。  
+手動掃除: `rm -rf .dogido_tmp/voicevox/cache/*`
+
+`cue_voice/` の内訳・コールアウト断片方針は §10 と [../cue_voice/README.md](../cue_voice/README.md)。
+
+Phase 1 以降で profile 別キーを足す場合は、この表と `.env.example` を同時更新する。
+
+---
+
+## 8. 受け入れの目安（Phase 1 完了時）
+
+- [ ] 平時の雑談・友好モブ反応が、バトル警告より明らかにゆっくり聞こえる  
+- [ ] 川柳が「ここで一句」のあと、句が 5 / 7 / 5 で区切って読まれる  
+- [ ] 川柳読みの途中で脅威割り込みが従来どおり効く  
+- [ ] speed / profile 変更後に古い VOICEVOX キャッシュを誤用しない  
+
+Phase 0 のみでも「全体が少し遅い」が確認できれば issue の一部は前進。
+
+---
+
+## 9. TTS エンジンについて（本線方針）
+
+- **本線は当面 VOICEVOX。** #13（速度・間）はエンジン差し替えより先。
+- 世間の TTS 盛り上がりと「ドギドに最適か」は別。詳細は [research/tts-landscape-2026.md](research/tts-landscape-2026.md)。
+- 声優・クローン・各話者の利用規約は技術選定と同等に扱う。同意のないクローンはしない。
+
+## 10. コールアウト音声: パズル連結（方針）
+
+### 10.1 結論
+
+戦況コールアウトは **全文 TTS の都度生成より、事前断片のパズル連結を本線**にする。
+
+```text
+[任意] panic cue（悲鳴 mp3）
+  → 名称断片（敵対・中立のみ）
+  → 体数断片（1〜8体）
+  → 定型句（おるで / がおるで 等）
+  （方向などは短定型部品 or 短い補助 TTS）
+```
+
+| 経路 | 方式 |
+|---|---|
+| 悲鳴・息 | cue mp3（現状どおり） |
+| **戦況コール（名前・体数）** | **断片パズル**（本線方針。再生配線は段階実装） |
+| 雑談・川柳・workshop | 全文 TTS + 速度プロファイル（#13） |
+
+Minecraft のモブ集合はほぼ閉じているため、名称断片の事前生成は現実的。  
+全文パターンを全録音する必要はない。
+
+### 10.2 どのモブ名を持つか
+
+| 含む | カタログ | 例 |
+|---|---|---|
+| **敵対** | `hostile` | creeper, skeleton, zombie… |
+| **中立** | `neutral` | enderman, wolf, piglin… |
+| **含めない** | pure **passive（友好）** | cow, sheep, villager, axolotl… |
+
+コード上の集合: `CALLOUT_MOB_VOICE_LABELS` = `threat_mob_labels()`（hostile ∪ neutral）。
+
+以前 `cue_voice/mob/` が約 80 あったのは **友好名まで一括生成していた**ため。  
+コールアウト用ではないので友好名 mp3 は削除し、敵対・中立のみ復活した。
+
+### 10.3 アセット配置
+
+| パス | 内容 |
+|---|---|
+| `cue_voice/mob/{id}.mp3` | 敵対・中立の読み上げ名 |
+| `cue_voice/common/counts/{1-8}.mp3` | 「N体」 |
+| `cue_voice/common/phrases/*.mp3` | 「おるで」等 |
+| `cue_voice/entity_cache_manifest.json` | 一覧・欠けリスト |
+| `cue_voice/panic/` | 悲鳴（別系統・使用中） |
+
+生成: `python scripts/generate_entity_voice_cache.py`（友好は生成しない）。  
+詳細: [../cue_voice/README.md](../cue_voice/README.md)
+
+### 10.4 実装状態
+
+| 項目 | 状態 |
+|---|---|
+| 方針 | **確定**（パズル本線） |
+| 敵対・中立名称 mp3 | リポに配置（一部 threat ラベルは未生成 → manifest の missing） |
+| 体数・定型句 mp3 | リポに配置 |
+| **連結再生コード** | **未配線**（現状 callout は全文 TTS） |
+| 友好名称 mp3 | 置かない |
+
+配線時の注意:
+
+- `AudioAction` に複数 cue 連鎖、または callout 専用シーケンス
+- 欠けモブは TTS フォールバック可
+- 速度: callout 断片は battle テンポ、平時 speech は slow（#13）
+
+## 11. 状態ログ
+
+| 日付 | 内容 |
+|---|---|
+| 2026-07-28 | Issue #13 を踏まえ方針を文書化。実装は未着手。 |
+| 2026-07-28 | TTS 地図・権利の注意を research メモに追加。本線は VOICEVOX 維持。 |
+| 2026-07-29 | VOICEVOX キャッシュに max MB / max age の自動 prune。 |
+| 2026-07-29 | コールアウトはパズル連結を本線と明記。友好名 mp3 を外し敵対・中立のみ復活。 |

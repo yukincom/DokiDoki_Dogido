@@ -11,6 +11,7 @@
 - 挙動の具体例 → [挙動仕様](behavior-spec.md)
 - 川柳 → [川柳アーキテクチャ](haiku-architecture.md)
 - 周辺モブ一言のトーン（公式 Tips 準拠）→ [mob-interaction-tone.md](mob-interaction-tone.md)
+- ボイス速度・間・川柳の呼吸 → [voice-delivery-plan.md](voice-delivery-plan.md)
 
 ## 1. 目的
 
