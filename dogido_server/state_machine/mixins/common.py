@@ -632,19 +632,32 @@ class CommonMixin:
             return False
         return bool(self.player_input.normalized_text)
 
-    def _haiku_workshop_should_handle_player_input(self) -> bool:
-        """pin が open で、今の発話が workshop 向けなら True。"""
+    def _haiku_workshop_is_open(self) -> bool:
+        """service が bind した pin が open か。未 bind なら False。"""
         provider = getattr(self, "haiku_workshop_provider", None)
         if provider is None:
             return False
         try:
             workshop = provider()
-        except Exception:  # noqa: BLE001 — provider 失敗時は chat に落とす
+        except Exception:  # noqa: BLE001
             return False
-        from dogido_server.haiku.workshop import is_open, should_handle_as_workshop
+        from dogido_server.haiku.workshop import is_open
 
-        if not is_open(workshop):
+        return is_open(workshop)
+
+    def _haiku_focus_active(self) -> bool:
+        """川柳に集中している（発句 preface 待ち or workshop pin）。
+
+        この間は低優先の自発発話を抑止する。脅威（panic/alert）は別枝。
+        """
+        return bool(self.state.pending_haiku_after_preface) or self._haiku_workshop_is_open()
+
+    def _haiku_workshop_should_handle_player_input(self) -> bool:
+        """pin が open で、今の発話が workshop 向けなら True。"""
+        if not self._haiku_workshop_is_open():
             return False
+        from dogido_server.haiku.workshop import should_handle_as_workshop
+
         return should_handle_as_workshop(self.player_input.raw_text)
 
     def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
@@ -736,6 +749,9 @@ class CommonMixin:
 
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
         if not event.passive_mobs:
+            return False
+        # 川柳集中中（workshop / 発句 preface）は ambient を出さない
+        if self._haiku_focus_active():
             return False
         # 相乗り待ちの話しかけがある間は ambient を出さない（プレイヤー入力優先）
         if getattr(self, "player_input_queued", False):

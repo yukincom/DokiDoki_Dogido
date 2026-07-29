@@ -502,8 +502,12 @@ class NarrationMixin:
             inventory_summary = self._player_chat_inventory_summary(event)
             held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
         threat_summary = self._player_chat_threat_summary(event)
-        hearing_summary = self._player_chat_hearing_summary(event)
-        hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+        # 音メモは『今の音なに？』等の明示時だけ LLM に渡す（視覚話題を音で上書きしない）
+        hearing_summary = ""
+        hearing_named_mobs: list[str] = []
+        if self.player_input.asks_about_sound:
+            hearing_summary = self._player_chat_hearing_summary(event)
+            hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
         place_ctx = self._player_chat_place_context(event)
         tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
@@ -634,6 +638,7 @@ class NarrationMixin:
             "threat_summary": threat_summary,
             "hearing_summary": hearing_summary,
             "hearing_named_mobs": hearing_named_mobs,
+            "asks_about_sound": self.player_input.asks_about_sound,
             "observation_summary": observation_summary,
             "catalog_topic_hints": catalog_topic_hints,
             "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_for_identify],

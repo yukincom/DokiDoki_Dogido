@@ -301,6 +301,82 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             # hard 合流用の fragments があっても soft のまま
             self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))
 
+    def test_workshop_defers_night_warning_until_closed(self) -> None:
+        """workshop open 中は夕方割り込みを出さず、閉じたあとに出せる。"""
+        from dogido_server.haiku.workshop import close_workshop
+        from dogido_server.player_input.routing import route_player_input
+        from dogido_server.state_machine import DogidoStateMachine
+
+        settings = Settings(
+            llm_enabled=False,
+            audio_enabled=False,
+            decision_policy="py_trees",
+            player_input_priority_cooldown_ms=20000,
+        )
+        machine = DogidoStateMachine(settings)
+        emission = _emission()
+        workshop = open_from_emission(emission, materials={"interpretation": "平原"}, now=emission.created_at)
+        machine.haiku_workshop_provider = lambda: workshop
+
+        evening = GameEvent(
+            schema_version="2026-05-24",
+            adapter="test",
+            observed_at=emission.created_at + timedelta(seconds=10),
+            sequence=2,
+            event=EventDescriptor(
+                name=EventName.STATUS_SNAPSHOT,
+                source_kind=SourceKind.SYSTEM,
+                priority_hint=PriorityHint.BACKGROUND,
+                certainty=Certainty.HIGH,
+            ),
+            player=PlayerState(
+                name="p",
+                position=Position(x=0, y=64, z=0),
+                dimension="minecraft:overworld",
+            ),
+            world=WorldState(
+                time_phase=TimePhase.EVENING,
+                weather=Weather.CLEAR,
+                biome="plains",
+                local_light=12,
+                sky_visible=True,
+                enclosure_score=0.05,
+                ceiling_height=24.0,
+                danger_darkness_score=0.2,
+            ),
+            meta=MetaState(user_text="平原と平場は結びつけない方がいい"),
+        )
+        # 入力優先を立てる（夜警告の注意喚起条件）
+        machine.player_input = route_player_input(evening.meta.user_text or "")
+        machine.state.last_player_input_at = evening.observed_at
+        machine.state.night_warning_pending = True
+        machine.state.night_warning_emitted_this_cycle = False
+
+        during = machine.process(evening)
+        speeches = [a.text for a in during.actions if a.layer == "speech" and a.text]
+        self.assertFalse(
+            any(t and ("夜" in t or "夕方" in t) for t in speeches),
+            msg=speeches,
+        )
+        # pending は消費しない
+        self.assertFalse(machine.state.night_warning_emitted_this_cycle)
+
+        close_workshop(workshop, reason="explicit")
+        later = evening.model_copy(
+            update={
+                "sequence": 3,
+                "observed_at": evening.observed_at + timedelta(seconds=2),
+                "meta": MetaState(user_text=None),
+            }
+        )
+        machine.player_input = route_player_input(None)
+        after = machine.process(later)
+        after_speech = [a.text for a in after.actions if a.layer == "speech" and a.text]
+        self.assertTrue(
+            any(t and ("夜" in t or "夕方" in t) for t in after_speech),
+            msg=after_speech,
+        )
+
     def test_workshop_meaning_question_beats_player_chat(self) -> None:
         """workshop open 中の『〜って何』は player_chat ではなく workshop 返事だけ。"""
 

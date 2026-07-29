@@ -36,6 +36,8 @@ class PlayerInputContext:
     asks_dragon_direction: bool = False
     asks_save_last_haiku: bool = False
     asks_inventory: bool = False
+    # 『今の音なに？』等。true のときだけ player_chat に hearing を載せる
+    asks_about_sound: bool = False
     player_haiku_text: str | None = None
     # 川柳フィードバック（長期保存・読み修正）。player_chat には回さない。
     revised_haiku_text: str | None = None

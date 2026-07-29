@@ -44,6 +44,16 @@ Frame N+1: haiku leaf → 本句（モード解除・workshop 可）
 - 見どころは irony description / scene summary を短くし、「…が頭に浮かんできたわ。」にする  
 - 材料全文の棒読みはしない  
 - **自分の世界モード**（`pending_haiku_after_preface`）: player_chat に乗らない。入力はキュー保持。脅威はキャンセル可  
+- **川柳フォーカス**（`_haiku_focus_active` = preface 待ち **or** workshop pin open）:
+
+| 種別 | フォーカス中 |
+|---|---|
+| panic / alert / 悲鳴 / 脅威 callout | **許可**（敵ターゲティング等） |
+| 暗所押し・閉塞暗所の入口 | **許可**（足元の安全） |
+| 水没暗所コメント | **抑止**（敵が出にくいゾーン） |
+| 夜警告 | **抑止**（pending 保持 → pin close 後） |
+| ambient モブ・バイオーム入場・構造物・蛍・マグマ足元・天候など | **抑止** |
+| workshop 講評 / player_chat | service / chat 経路で処理 |
 
 カタログ fallback（LLM 無し）は従来どおり「ここで一句。 句」の一発。
 
