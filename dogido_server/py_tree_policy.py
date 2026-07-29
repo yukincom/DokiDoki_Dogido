@@ -78,10 +78,14 @@ class AmbientMobEvent(_Condition):
         super().__init__(name="AmbientMobEvent")
 
     def check(self, context: PolicyContext) -> bool:
-        # 話しかけ待ちがあるときは ambient より PlayerChat 枝を優先する
+        # 川柳集中中・話しかけ待ちは ambient にしない（判定は _should_emit にもある）
+        if context.machine._haiku_focus_active():
+            return False
         if context.machine._has_pending_player_chat(context.event):
             return False
-        return context.next_mode == "normal" and context.machine._should_emit_ambient_mob_comment(context.event, context.now)
+        return context.next_mode == "normal" and context.machine._should_emit_ambient_mob_comment(
+            context.event, context.now
+        )
 
 
 class HasPlayerChat(_Condition):
@@ -93,6 +97,14 @@ class HasPlayerChat(_Condition):
         if context.next_mode in {"panic", "suppressed_panic"}:
             return False
         if context.event.event.name == EventName.PLAYER_DIED:
+            return False
+        # 見どころ〜本句のあいだは自分の世界（雑談に乗らない）
+        if context.machine.state.pending_haiku_after_preface:
+            return False
+        # 夕方・夜警告は時限性が高いので player_chat より先（workshop 中は抑止）
+        if context.machine._night_warning_should_preempt_player_chat(
+            context.event, context.now
+        ):
             return False
         return bool(context.machine._has_pending_player_chat(context.event))
 

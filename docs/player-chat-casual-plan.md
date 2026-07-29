@@ -123,7 +123,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 | visual_threats | threat_summary | 維持 |
 | recent_visual_memos | ついさっき 視認 | 維持 |
 | passive + recent_passive | **allowed のみ** | **短い observation 行にも載せる** |
-| hearing + buffer | hearing_summary（空なら非表示） | 維持 |
+| hearing + buffer | **プレイヤーが音を明示したときだけ** hearing 注入（`asks_about_sound`） | **済** |
 | topic（弱い） | hints に載りうる | **none では載せない**（柱1） |
 | topic（強い） | hints | hypothesis のみ |
 

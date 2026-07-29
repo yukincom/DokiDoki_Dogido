@@ -221,12 +221,36 @@ class EnvironmentalReactionsMixin:
         previous_mode: str,
         now: datetime,
     ) -> list[AudioAction]:
-        # ノーマルモード中でもウォーデンのビームには即座に悲鳴を上げる
+        """normal 時の環境発話。優先は上から。
+
+        1. ハード安全（sonic boom）
+        2. 川柳本句完了（preface 後）
+        3. 夜警告（workshop 中は抑止・pending 保持）
+        4. プレイヤー問い／雑談
+        5. 脅威ブロック／高優先／低優先 ambient
+           ※ workshop / 発句集中中は 5 の低優先を抑止。暗所押し等の安全系のみ残す
+        """
+        # 1) ハード安全
         sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
         if sonic_boom_cue is not None:
             return [sonic_boom_cue]
 
-        # 話しかけは暗所ループや環境反応より先に返す（取りこぼし防止）
+        # 2) 川柳本句完了
+        if self.state.pending_haiku_after_preface:
+            haiku_completion = self._emit_haiku_line(event, now)
+            if haiku_completion:
+                return self._speech_actions(
+                    haiku_completion,
+                    protect_ms=4000,
+                    speech_profile="haiku",
+                )
+
+        # 3) 夜警告（workshop 中は _night_warning_actions 内で []）
+        night_warning_actions = self._night_warning_actions(event, now)
+        if night_warning_actions:
+            return night_warning_actions
+
+        # 4) プレイヤー向け（workshop 講評は service 側。ここでは一般 chat / 個数問い）
         if self.player_input.asks_hostile_count:
             return self._speech_actions(
                 self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
@@ -241,9 +265,15 @@ class EnvironmentalReactionsMixin:
         if blocked is not None:
             return blocked
 
-        high_priority = self._high_priority_environmental_actions(event, signals, now, stop_dark_push)
+        # 5) 高優先・低優先（workshop / 発句集中中は安全系以外を抑止）
+        high_priority = self._high_priority_environmental_actions(
+            event, signals, now, stop_dark_push
+        )
         if high_priority:
             return high_priority
+
+        if self._haiku_focus_active():
+            return []
 
         return self._ambient_environmental_actions(event, signals, previous_mode, now, stop_dark_push)
 
@@ -267,34 +297,41 @@ class EnvironmentalReactionsMixin:
         now: datetime,
         stop_dark_push: bool,
     ) -> list[AudioAction]:
-        actions = self._emergency_shelter_morning_actions(event, signals, stop_dark_push)
-        if actions:
-            return actions
+        """暗所・ボス予兆など。workshop 中は安全系のみ残す。"""
+        haiku_focus = self._haiku_focus_active()
 
-        actions = self._emergency_shelter_entry_actions(event, signals, stop_dark_push)
-        if actions:
-            return actions
+        if not haiku_focus:
+            actions = self._emergency_shelter_morning_actions(event, signals, stop_dark_push)
+            if actions:
+                return actions
 
-        actions = self._light_source_crafted_actions(event, signals, stop_dark_push)
-        if actions:
-            return actions
+            actions = self._emergency_shelter_entry_actions(event, signals, stop_dark_push)
+            if actions:
+                return actions
 
-        actions = self._mining_fatigue_warning_actions(event, signals)
-        if actions:
-            return actions
+            actions = self._light_source_crafted_actions(event, signals, stop_dark_push)
+            if actions:
+                return actions
 
-        actions = self._boss_omen_actions(event)
-        if actions:
-            return actions
+            actions = self._mining_fatigue_warning_actions(event, signals)
+            if actions:
+                return actions
 
-        actions = self._ominous_sound_priority_actions(event, now)
-        if actions:
-            return actions
+            actions = self._boss_omen_actions(event)
+            if actions:
+                return actions
 
-        actions = self._submerged_dark_entry_actions(event, signals, stop_dark_push)
-        if actions:
-            return actions
+            actions = self._ominous_sound_priority_actions(event, now)
+            if actions:
+                return actions
 
+        # 水没暗所: 敵が出にくいゾーン。workshop / 発句集中中は抑止
+        if not haiku_focus:
+            actions = self._submerged_dark_entry_actions(event, signals, stop_dark_push)
+            if actions:
+                return actions
+
+        # --- 以下は暗所押し・閉塞（足元の危険。フォーカス中も許可） ---
         actions = self._occluded_dark_entry_actions(event, signals, now)
         if actions:
             return actions
@@ -305,7 +342,8 @@ class EnvironmentalReactionsMixin:
 
         if stop_dark_push or self._should_stop_dark_push_stage_one(event, signals):
             actions = self._handle_dark_push_stop(event, signals, now, defer_speech=False)
-            actions.extend(self._explicit_ambient_mob_followup_actions(event, now))
+            if not haiku_focus:
+                actions.extend(self._explicit_ambient_mob_followup_actions(event, now))
             return actions
 
         pending_after_breath = self._emit_pending_dark_push_after_breath(event, signals, now)
@@ -329,7 +367,13 @@ class EnvironmentalReactionsMixin:
         event: GameEvent,
         now: datetime,
     ) -> list[AudioAction]:
-        if self._player_input_priority_active(now, purpose="ambient"):
+        if self._haiku_focus_active():
+            return []
+        if getattr(self, "player_input_queued", False):
+            return []
+        if self._has_pending_player_chat(event):
+            return []
+        if self._player_input_priority_active(now):
             return []
         if event.event.name != EventName.AMBIENT_MOB_DETECTED:
             return []
@@ -340,7 +384,29 @@ class EnvironmentalReactionsMixin:
             return []
         return [self._speech_action(line)]
 
+    def _night_warning_should_preempt_player_chat(self, event: GameEvent, now: datetime) -> bool:
+        """player_chat より夜警告を先に出すべきか（副作用なし）。workshop 中は False。"""
+        if self._haiku_workshop_is_open():
+            return False
+        if self.state.pending_night_warning_detail:
+            if (
+                self._boss_presence_active(now)
+                or self._ominous_sound_presence_active(now)
+                or not self._is_surface_evening_warning_context(event)
+            ):
+                return False
+            return True
+        if not self._should_consider_night_warning(event):
+            return False
+        if self._player_input_priority_active(now) and self._is_surface_evening_warning_context(event):
+            return True
+        return self._render_night_warning_line(event) is not None
+
     def _night_warning_actions(self, event: GameEvent, now: datetime) -> list[AudioAction]:
+        # 川柳 workshop 中は出さない（pending は残し、pin が閉じたあとで出す）
+        # 脅威・ターゲティングは panic/alert 枝が別途担当
+        if self._haiku_workshop_is_open():
+            return []
         if self.state.pending_night_warning_detail:
             if (
                 self._boss_presence_active(now)
@@ -363,6 +429,7 @@ class EnvironmentalReactionsMixin:
         ):
             # 夕方警告は時限性が高いので、プレイヤーの話を遮って
             # 注意喚起 -> 次イベントで本文 の2段階で出す
+            # （workshop 中は上で抑止済み）
             self.state.pending_night_warning_detail = True
             return [
                 AudioAction(
@@ -387,36 +454,17 @@ class EnvironmentalReactionsMixin:
         now: datetime,
         stop_dark_push: bool,
     ) -> list[AudioAction]:
-        if self.player_input.asks_hostile_count:
-            return self._speech_actions(
-                self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
-            )
-        if self.player_input.asks_dragon_direction:
-            return self._speech_actions(self._render_dragon_direction_answer(event))
-        # 夜警告は入力優先クールダウンをバイパスする（時限性のため）
-        night_warning_actions = self._night_warning_actions(event, now)
-        if night_warning_actions:
-            return night_warning_actions
-
-        # ドラゴン戦の特殊コールアウト（突進・着地・クリスタル残数）も時限性が高いので
-        # 入力優先ミュートをバイパスする。視覚脅威の30マス圏外でも出せるよう normal フローに置く
-        dragon_special = self._next_dragon_special_callout(event, now)
-        if dragon_special:
-            return self._speech_actions(dragon_special)
-
-        # キーワードに一致しない話しかけには会話として返事する
-        # （入力優先ミュートはこの後の自発発話を黙らせるためのものなので、返事自体は通す）
-        if self._has_pending_player_chat(event):
-            return self._speech_actions(self._render_player_chat_reply(event))
-
+        """低優先の自発発話。chat / 夜警告 / 本句完了は上位 _environmental_actions で処理済み。"""
+        # 呼び出し元で _haiku_focus_active を弾いているが二重に
+        if self._haiku_focus_active():
+            return []
         if self._player_input_priority_active(now):
             return []
 
-        # 発句済みの川柳は最優先で本句を完了させる（次のスナップショットで出す）
-        if self.state.pending_haiku_after_preface:
-            haiku_completion = self._emit_haiku_line(event, now)
-            if haiku_completion:
-                return self._speech_actions(haiku_completion, speech_profile="haiku")
+        # ドラゴン戦の特殊コールアウト（normal でも時限性が高い）
+        dragon_special = self._next_dragon_special_callout(event, now)
+        if dragon_special:
+            return self._speech_actions(dragon_special)
 
         overworld_return_line = self._emit_pending_overworld_return_line(now)
         if overworld_return_line:
@@ -516,10 +564,18 @@ class EnvironmentalReactionsMixin:
                 return self._speech_actions(darkness_advice)
 
         # ポータルが近い場合も専用の近道は使わない。通常の川柳フロー
-        # （「ここで一句。」発句 → 情景・持ち物込みの本句）に一本化し、
+        # （見どころ → ここで一句 → 情景・持ち物込みの本句）に一本化し、
         # ポータルは題材候補（_haiku_feature_candidates）として混ざる
         haiku_line = self._emit_haiku_line(event, now)
-        return self._speech_actions(haiku_line, speech_profile="haiku")
+        protect_ms = 0
+        if haiku_line and ("ここで一句" in haiku_line or "浮かんできた" in haiku_line):
+            # 見どころ+preface は自分の世界。短く割り込ませない
+            protect_ms = 6000
+        return self._speech_actions(
+            haiku_line,
+            protect_ms=protect_ms,
+            speech_profile="haiku",
+        )
 
     def _emit_nearby_lightning_strike_actions(
         self,

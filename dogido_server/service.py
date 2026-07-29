@@ -227,11 +227,26 @@ class DogidoService:
 
         # 音声入力（/api/v1/player-input）はチャットと同じ user_text 経路に合流させる。
         # アダプタからのチャットが同じイベントに載っていた場合はそちらを優先し、保留分は次イベントへ
+        # 川柳の自分の世界中（preface〜本句）は入力を保持し、機械には載せない
         attached_player_text: str | None = None
-        if session.pending_player_text and not (event.meta.user_text or "").strip():
+        if session.machine.state.pending_haiku_after_preface:
+            incoming = (event.meta.user_text or "").strip()
+            if incoming:
+                session.pending_player_text = incoming
+                event.meta.user_text = None
+                LOGGER.warning(
+                    "player_input_held_for_haiku session_id=%s text=%s",
+                    session.session_id,
+                    incoming[:80],
+                )
+            # pending_player_text のみの場合もこのフレームでは載せない（句完了後に）
+        elif session.pending_player_text and not (event.meta.user_text or "").strip():
             attached_player_text = session.pending_player_text
             event.meta.user_text = attached_player_text
             session.pending_player_text = None
+
+        # ambient 抑止: まだ相乗りしていない話しかけがキューにある
+        session.machine.player_input_queued = bool((session.pending_player_text or "").strip())
 
         # pin の時間切れ（発話の有無に関係なく）
         session.haiku_workshop = maybe_close_for_time(
@@ -260,7 +275,18 @@ class DogidoService:
                     now=event.observed_at,
                 )
         actions = list(machine_result.actions)
-        actions.extend(self._memory_actions(session, event, actions, machine_result.haiku_emission))
+        memory_actions = self._memory_actions(
+            session, event, actions, machine_result.haiku_emission
+        )
+        # workshop 返事があるときは player_chat と二重にしない（講評を優先）
+        if memory_actions and any(a.layer == "speech" and a.text for a in memory_actions):
+            if session.machine._haiku_workshop_should_handle_player_input():
+                actions = [
+                    a
+                    for a in actions
+                    if not (a.layer == "speech" and a.text)
+                ]
+        actions.extend(memory_actions)
         self._update_dialogue_context(session, event, actions)
         # 句と無関係な speech が出た（通常 chat）→ drift
         self._note_workshop_after_actions(session, event, actions)

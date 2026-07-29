@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dogido_server.player_input.guardrails import (
+    asks_about_sound,
     asks_dragon_direction,
     asks_haiku_recall,
     asks_hostile_count,
@@ -71,6 +72,7 @@ def route_player_input(raw_text: str | None) -> PlayerInputContext:
         asks_dragon_direction=asks_dragon_direction(normalized_text),
         asks_save_last_haiku=asks_save_last_haiku(normalized_text),
         asks_inventory=asks_inventory(normalized_text),
+        asks_about_sound=asks_about_sound(normalized_text),
         player_haiku_text=player_haiku_text,
         revised_haiku_text=revised_haiku_text,
         reading_correction=reading_correction,

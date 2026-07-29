@@ -82,9 +82,13 @@ source .venv/bin/activate
 
 # 依存（初回）。テストも回すなら: pip install -e ".[dev]"
 pip install -e .
+# 任意: VOICEVOX の音読み誤読を減らす（fugashi + UniDic lite、~250MB）
+# pip install -e ".[tts-reading]"
+# まとめて: pip install -e ".[dev,tts-reading]"
 
 # 設定（初回）
 cp .env.example .env
+# TTS 読み: DOGIDO_TTS_READING_ENGINE=auto|unidic|off（既定 auto）
 
 # サーバー
 python -m dogido_server
@@ -128,5 +132,7 @@ MIT ライセンス
 ## Acknowledgments / 謝辞
 
 本プロジェクトは OpenAI の Series T - Post AGI from Kyoto プログラムより API クレジット支援を受けています。ありがとうございます。
+
+TTS 読み補正（optional `pip install -e ".[tts-reading]"`）では [fugashi](https://github.com/polm/fugashi) と [unidic-lite](https://github.com/polm/unidic-lite) を利用します。UniDic は国立国語研究所の成果物で、GPL / LGPL / BSD のトリプルライセンスです。詳細は各パッケージのライセンス表記を参照してください。
 
 **[note](https://note.com/yukin_co/n/n74eefa93ed24)**

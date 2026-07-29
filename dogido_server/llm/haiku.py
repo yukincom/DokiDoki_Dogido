@@ -30,11 +30,10 @@ def clean_haiku_output(text: str | None) -> str:
 
 
 def is_haiku_usable_output(text: str, details: dict[str, object] | None = None) -> bool:
+    """厳格な 5-7-5（±1）合格。repair や品質ゲート用。"""
     if not text:
         return False
-    if re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text):
-        return False
-    if not re.fullmatch(r"[\u3041-\u309f\u30a1-\u30ffー\s／/|]+", text):
+    if not _is_haiku_script_ok(text):
         return False
     if _contains_forbidden_gibberish_sequence(text):
         return False
@@ -46,6 +45,36 @@ def is_haiku_usable_output(text: str, details: dict[str, object] | None = None) 
     if not all(abs(count - target) <= 1 for count, target in zip(counts, targets)):
         return False
     return _respects_haiku_constraints(text, details)
+
+
+def is_haiku_soft_emit_ok(text: str, details: dict[str, object] | None = None) -> bool:
+    """音数外れでもプレイヤー直し用に発話してよい最低ライン。
+
+    「まとまらんかった」より、変でも一句出した方が workshop が楽しい前提。
+    英語・漢字・禁止道具・五十音羅列・極端な短長は弾く。
+    """
+    if not text or not text.strip():
+        return False
+    if not _is_haiku_script_ok(text):
+        return False
+    if _contains_forbidden_gibberish_sequence(text):
+        return False
+    if not _respects_haiku_constraints(text, details):
+        return False
+    compact = re.sub(r"\s+", "", text)
+    # 句らしさのざっくり帯（5+7+5=17 前後）。短すぎ・暴走を除外
+    if len(compact) < 8 or len(compact) > 36:
+        return False
+    total = count_japanese_sounds(compact)
+    if total < 10 or total > 26:
+        return False
+    return True
+
+
+def _is_haiku_script_ok(text: str) -> bool:
+    if re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text):
+        return False
+    return bool(re.fullmatch(r"[\u3041-\u309f\u30a1-\u30ffー\s／/|]+", text))
 
 
 def _contains_forbidden_gibberish_sequence(text: str) -> bool:

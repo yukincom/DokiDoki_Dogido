@@ -15,6 +15,7 @@ from dogido_server.haiku.workshop import (
     record_drift,
     record_workshop_activity,
     render_workshop_reply,
+    should_handle_as_workshop,
     wants_clear_haiku_lessons,
     workshop_prompt_details,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "record_drift",
     "record_workshop_activity",
     "render_workshop_reply",
+    "should_handle_as_workshop",
     "wants_clear_haiku_lessons",
     "workshop_prompt_details",
 ]

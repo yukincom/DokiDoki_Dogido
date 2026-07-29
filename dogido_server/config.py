@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     # TTS キャッシュ肥大化防止（.dogido_tmp は gitignore。上限超過 or 古い順で削除）
     voicevox_cache_max_mb: float = 256.0
     voicevox_cache_max_age_days: float = 7.0
+    # TTS 読み補正: auto=UniDic あれば使う / unidic=試す / off=例外表のみ
+    # optional: pip install -e ".[tts-reading]"（fugashi + unidic-lite）
+    tts_reading_engine: Literal["auto", "unidic", "off"] = "auto"
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 
@@ -206,15 +209,18 @@ class Settings(BaseSettings):
     ender_eye_comment_cooldown_ms: int = 8000
     # 種ごと（村人は villager:職 で別 key → 別職は即出し可、同職は下の秒数）
     ambient_mob_comment_cooldown_ms: int = 120000
+    # この人数以上の非睡眠村人がいると汎用村人1発 + villager:crowd 共有 CD（職連発渋滞防止）
+    ambient_villager_crowd_threshold: int = 3
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
     player_chat_hearing_retention_ms: int = 12000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
     player_chat_visual_retention_ms: int = 12000
-    # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
+    # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
+    # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。
     player_input_priority_cooldown_ms: int = 20000
-    # 友好・中立モブ反応だけはもう少し早く復帰（会話の余韻だけ残す）
-    player_input_ambient_mute_ms: int = 12000
+    # 互換のため残す。参照箇所は priority に統一済み（設定しても mute 長には使わない）
+    player_input_ambient_mute_ms: int = 20000
     damaging_light_warning_cooldown_ms: int = 600000
     magma_block_comment_cooldown_ms: int = 1200000
     damaging_light_warning_max_distance: float = 2.0

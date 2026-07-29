@@ -249,13 +249,12 @@ class AmbientMobPriorityTests(unittest.TestCase):
         ]
         return event
 
-    def test_ambient_mob_recovers_after_short_player_mute(self) -> None:
-        """話しかけ後も、長い 120s ミュートではなく短時間で友好モブ反応が戻る。"""
+    def test_ambient_mob_uses_same_mute_as_player_priority(self) -> None:
+        """ambient も priority と同じ mute（既定 20s）。短い 12s 専用 mute は使わない。"""
         settings = Settings(
             decision_policy="py_trees",
             llm_enabled=False,
             player_input_priority_cooldown_ms=20000,
-            player_input_ambient_mute_ms=12000,
             ambient_mob_comment_cooldown_ms=1000,
         )
         machine = DogidoStateMachine(settings)
@@ -263,20 +262,52 @@ class AmbientMobPriorityTests(unittest.TestCase):
         machine.process(make_event(sequence=1, at_sec=0.0, user_text="やあ"))
         self.assertIsNotNone(machine.state.last_player_input_at)
 
-        # 5秒後: ambient mute 中（user_text 無しで process して player_input をクリア）
-        early = self._ambient_event(sequence=2, at_sec=5.0)
-        early_result = machine.process(early)
-        early_texts = [action.text for action in early_result.actions if action.text]
-        self.assertEqual([], early_texts)
+        # 15秒後: まだ priority mute 中（旧 ambient 12s では復帰していた）
+        mid = self._ambient_event(sequence=2, at_sec=15.0)
+        mid_result = machine.process(mid)
+        mid_texts = [action.text for action in mid_result.actions if action.text]
+        self.assertEqual([], mid_texts)
 
-        # 15秒後: ambient mute は明けている
-        later = self._ambient_event(sequence=3, at_sec=15.0)
+        # 21秒後: mute 明け
+        later = self._ambient_event(sequence=3, at_sec=21.0)
         later_result = machine.process(later)
         later_texts = [action.text for action in later_result.actions if action.text]
-        self.assertTrue(later_texts, "friendly mob reaction should return after short mute")
+        self.assertTrue(later_texts, "friendly mob reaction should return after priority mute")
+
+    def test_queued_player_input_blocks_ambient(self) -> None:
+        """pending 相乗り待ち（player_input_queued）中は ambient を出さない。"""
+        settings = Settings(
+            decision_policy="py_trees",
+            llm_enabled=False,
+            player_input_priority_cooldown_ms=0,
+            ambient_mob_comment_cooldown_ms=1000,
+        )
+        machine = DogidoStateMachine(settings)
+        machine.player_input_queued = True
+        blocked = machine.process(self._ambient_event(sequence=1, at_sec=0.0))
+        self.assertEqual([a.text for a in blocked.actions if a.text], [])
+
+        machine.player_input_queued = False
+        ok = machine.process(self._ambient_event(sequence=2, at_sec=2.0))
+        self.assertTrue([a.text for a in ok.actions if a.text])
 
 
 class HearingContextTests(unittest.TestCase):
+    def test_asks_about_sound_detects_explicit_sound_queries(self) -> None:
+        from dogido_server.player_input.guardrails import asks_about_sound
+        from dogido_server.player_input.routing import route_player_input
+
+        self.assertTrue(asks_about_sound("なんか音がしなかった?"))
+        self.assertTrue(asks_about_sound("今の音なに？"))
+        self.assertTrue(asks_about_sound("聞こえる？"))
+        self.assertTrue(asks_about_sound("音楽好き"))
+        self.assertTrue(asks_about_sound("この曲なに？"))
+        self.assertTrue(asks_about_sound("レコード流そう"))
+        self.assertFalse(asks_about_sound("あっ溶岩だ"))
+        self.assertFalse(asks_about_sound("おはよう"))
+        self.assertTrue(route_player_input("今の音なに？").asks_about_sound)
+        self.assertFalse(route_player_input("あっ溶岩だ").asks_about_sound)
+
     def test_hearing_summary_includes_ambient_villager(self) -> None:
         machine = DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
         event = make_event(sequence=1, user_text="なんか音がしなかった?")
@@ -292,6 +323,65 @@ class HearingContextTests(unittest.TestCase):
         summary = machine._player_chat_hearing_summary(event)  # type: ignore[attr-defined]
         self.assertIn("村人", summary)
         self.assertIn("左", summary)
+
+    def test_hearing_not_injected_unless_player_asks_about_sound(self) -> None:
+        """『あっ溶岩だ』など音以外の話題では hearing を details に載せない。"""
+        from dogido_server.player_input.routing import route_player_input
+
+        class CaptureLLM:
+            def __init__(self) -> None:
+                self.details: dict | None = None
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                self.details = dict(request.details or {})
+                return "溶岩か、気をつけや。"
+
+            def generate_structured_json(self, request) -> dict:  # type: ignore[no-untyped-def]
+                return {"found": False}
+
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=llm,
+        )
+        event = make_event(sequence=1, user_text="あっ溶岩だ")
+        event.ambient_sounds = [
+            AmbientSound(
+                type="pig",
+                sound_event="entity.pig.ambient",
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+                distance_band=DistanceBand.CLOSE,
+                certainty=Certainty.HIGH,
+            )
+        ]
+        event.passive_mobs = [
+            PassiveMob(type="pig", distance=3.0, direction=Direction(horizontal=HorizontalDirection.FRONT))
+        ]
+        machine.player_input = route_player_input("あっ溶岩だ")
+        # render 経路を直接叩く
+        text = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+        self.assertTrue(text)
+        assert llm.details is not None
+        self.assertFalse(llm.details.get("asks_about_sound"))
+        self.assertEqual(llm.details.get("hearing_summary") or "", "")
+        self.assertEqual(list(llm.details.get("hearing_named_mobs") or []), [])
+
+        # 明示の音クエリなら載る
+        llm2 = CaptureLLM()
+        machine2 = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=llm2,
+        )
+        event2 = make_event(sequence=2, user_text="なんか音した？")
+        event2.ambient_sounds = event.ambient_sounds
+        machine2.player_input = route_player_input("なんか音した？")
+        machine2._render_player_chat_reply(event2)  # type: ignore[attr-defined]
+        assert llm2.details is not None
+        self.assertTrue(llm2.details.get("asks_about_sound"))
+        self.assertTrue(llm2.details.get("hearing_summary") or llm2.details.get("hearing_named_mobs"))
 
     def test_player_chat_prompt_forbids_invented_sounds_when_empty(self) -> None:
         messages = build_messages(

@@ -393,6 +393,53 @@ class LLMTests(unittest.TestCase):
         self.assertEqual(text, "はれわたる\nくさはらのよる\nえをもてり")
         self.assertEqual(llm.kinds, ["haiku", "haiku_repair"])
 
+    def test_haiku_emits_imperfect_verse_instead_of_llm_failed_line(self) -> None:
+        """575 外れでもかなの句なら出し、workshop で直せるようにする。"""
+
+        imperfect = "ゆうやけの むらじんふんふん ひらば"
+
+        class ImperfectLLM(DogidoLLM):
+            def __init__(self) -> None:
+                super().__init__(Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop"))
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                if request.kind == "haiku":
+                    return imperfect
+                if request.kind == "haiku_repair":
+                    return imperfect  # repair も直らない
+                raise AssertionError(request.kind)
+
+        llm = ImperfectLLM()
+        self.assertFalse(llm._is_haiku_usable_output(imperfect))
+        self.assertTrue(llm._is_haiku_soft_emit_ok(imperfect))
+
+        text = llm.generate_leaf_text(
+            LeafGenerationRequest(
+                kind="haiku",
+                fallback_text="まとまらんかった。。。",
+                details={"haiku_constraints": {"allowed_terms": [], "forbidden_terms": []}},
+                route="haiku",
+            )
+        )
+        self.assertEqual(text, imperfect)
+        self.assertNotEqual(text, "まとまらんかった。。。")
+
+    def test_haiku_soft_emit_still_rejects_forbidden_tool_and_gibberish(self) -> None:
+        details = {
+            "haiku_constraints": {
+                "allowed_terms": [],
+                "forbidden_terms": ["つるはし"],
+            }
+        }
+        self.assertFalse(
+            self.llm._is_haiku_soft_emit_ok("ゆきのやま ゆうぐれにひかる つるはし", details)
+        )
+        self.assertFalse(self.llm._is_haiku_soft_emit_ok("あいうえお かきくけこ さしすせそ"))
+        self.assertFalse(self.llm._is_haiku_soft_emit_ok("hi there friend"))
+
     def test_preload_loads_mlx_model_once(self) -> None:
         llm = DogidoLLM(
             Settings(

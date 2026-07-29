@@ -35,7 +35,16 @@ class NarrationMixin:
             return None
         return candidates[0]
 
-    def _render_ambient_mob_line(self, event: GameEvent, mobs: list[PassiveMob]) -> str | None:
+    # 村人団子: 職別連発を止める共有 CD key
+    _VILLAGER_CROWD_COOLDOWN_KEY = "villager:crowd"
+
+    def _render_ambient_mob_line(
+        self,
+        event: GameEvent,
+        mobs: list[PassiveMob],
+        *,
+        villager_crowd: bool = False,
+    ) -> str | None:
         fallback = self._ambient_mob_line(event, mobs)
         if fallback is None or not mobs:
             return fallback
@@ -43,39 +52,53 @@ class NarrationMixin:
         direction = self._direction_label(mob)
         is_baby = bool(getattr(mob, "is_baby", None))
         raw_profession = getattr(mob, "profession", None)
-        is_villager = (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager"
+        is_villager = self._is_passive_villager(mob)
 
         # 村人: SM が「明確/不明」を判定してから details を組み立てる（プロンプト判定にしない）
+        # 団子（crowd）時は職を渡さず汎用「村人」
         speech_prof: str | None = None
         speech_baby = is_baby
         if is_villager:
             facts = project_villager_speech_facts(
                 day_time=self._effective_time_of_day(event),
                 is_baby=is_baby,
-                profession=raw_profession,
+                profession=None if villager_crowd else raw_profession,
             )
-            label = facts.label
-            speech_prof = facts.profession  # 明確なときだけ
-            speech_baby = facts.is_baby
-            entry = (
-                resolve_mob_catalog_entry(
-                    "villager",
-                    profession=speech_prof,
-                    is_baby=speech_baby,
+            if villager_crowd:
+                # 汎用村人（人数は言わない。職・人数を LLM に渡さない）
+                label = "村人"
+                speech_prof = None
+                speech_baby = False
+                entry = resolve_mob_catalog_entry("villager", profession=None, is_baby=False) or {}
+                LOGGER.warning(
+                    "ambient_villager mode=crowd raw_profession=%s label=%s day_time=%s",
+                    raw_profession,
+                    label,
+                    self._effective_time_of_day(event),
                 )
-                or {}
-            )
-            LOGGER.warning(
-                "ambient_villager raw_profession=%s known=%s profession=%s is_baby=%s "
-                "schedule=%s label=%s day_time=%s",
-                raw_profession,
-                facts.profession_known,
-                speech_prof,
-                speech_baby,
-                facts.schedule,
-                label,
-                self._effective_time_of_day(event),
-            )
+            else:
+                label = facts.label
+                speech_prof = facts.profession  # 明確なときだけ
+                speech_baby = facts.is_baby
+                entry = (
+                    resolve_mob_catalog_entry(
+                        "villager",
+                        profession=speech_prof,
+                        is_baby=speech_baby,
+                    )
+                    or {}
+                )
+                LOGGER.warning(
+                    "ambient_villager raw_profession=%s known=%s profession=%s is_baby=%s "
+                    "schedule=%s label=%s day_time=%s",
+                    raw_profession,
+                    facts.profession_known,
+                    speech_prof,
+                    speech_baby,
+                    facts.schedule,
+                    label,
+                    self._effective_time_of_day(event),
+                )
         else:
             entry = resolve_mob_catalog_entry(mob.type) or {}
             label = str(entry.get("label") or self._mob_label(mob.type))
@@ -83,10 +106,12 @@ class NarrationMixin:
         poetic = entry.get("poetic") if isinstance(entry, dict) else {}
         role = poetic.get("role") if isinstance(poetic, dict) else ""
         variation_slot = event.sequence % 4 if event.sequence is not None else 0
+        # crowd 時は mob_count=1（人数を言わせない）
+        detail_mobs = [mob] if villager_crowd else mobs
         details: dict[str, object] = {
             "mob": label,
             "direction": direction,
-            "mob_count": len(mobs),
+            "mob_count": 1 if villager_crowd else len(mobs),
             "distance": mob.distance,
             "biome": self._biome_label(event.world.biome),
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
@@ -96,10 +121,10 @@ class NarrationMixin:
             "mob_role": str(role) if role else "",
             "mob_temperament": getattr(mob, "temperament", None) or "friendly",
             "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
-            "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
+            "fallback_candidates": self._ambient_mob_fallback_candidates(event, detail_mobs),
             "variation_slot": variation_slot,
         }
-        if is_villager:
+        if is_villager and not villager_crowd:
             # 日課は常にコード解決。職は明確なときだけキーを載せる
             details["mob_is_baby"] = speech_baby
             details["villager_schedule"] = facts.schedule
@@ -108,12 +133,19 @@ class NarrationMixin:
                 details["mob_profession"] = facts.profession
             if facts.job_site:
                 details["mob_job_site"] = facts.job_site
+        elif is_villager and villager_crowd:
+            details["mob_is_baby"] = False
+            details["villager_schedule"] = facts.schedule
+            details["villager_schedule_ja"] = facts.schedule_ja
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,
             details=details,
             temperature=0.48,
         )
+
+    def _is_passive_villager(self, mob: PassiveMob) -> bool:
+        return (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager"
 
     def _ambient_mob_type_key(self, mob: PassiveMob) -> str:
         base = (mob.type or "").strip().lower().removeprefix("minecraft:")
@@ -125,7 +157,7 @@ class NarrationMixin:
         return f"villager:{prof}"
 
     def _villager_activity_for_mob(self, event: GameEvent, mob: PassiveMob) -> str | None:
-        if (mob.type or "").strip().lower().removeprefix("minecraft:") != "villager":
+        if not self._is_passive_villager(mob):
             return None
         return resolve_villager_schedule(
             self._effective_time_of_day(event),
@@ -133,46 +165,111 @@ class NarrationMixin:
             profession=getattr(mob, "profession", None),
         )
 
+    def _awake_villagers(
+        self, mobs: list[PassiveMob], event: GameEvent | None
+    ) -> list[PassiveMob]:
+        """睡眠中を除く村人。crowd 判定用。"""
+        out: list[PassiveMob] = []
+        for mob in mobs:
+            if not self._is_passive_villager(mob):
+                continue
+            if event is not None:
+                activity = self._villager_activity_for_mob(event, mob)
+                if activity is not None and should_suppress_ambient_for_sleep(activity):
+                    continue
+            out.append(mob)
+        return out
+
+    def _villager_crowd_mode(self, mobs: list[PassiveMob], event: GameEvent | None) -> bool:
+        threshold = max(1, int(getattr(self.settings, "ambient_villager_crowd_threshold", 3)))
+        return len(self._awake_villagers(mobs, event)) >= threshold
+
+    def _ambient_type_cooldown_ready(self, key: str, now: datetime) -> bool:
+        recent_ms = self._recent_ms(
+            now, self.state.last_ambient_mob_comment_at_by_type.get(key)
+        )
+        return recent_ms is None or recent_ms >= self.settings.ambient_mob_comment_cooldown_ms
+
     def _next_ambient_mob_target(
         self, mobs: list[PassiveMob], now: datetime, event: GameEvent | None = None
     ) -> PassiveMob | None:
+        awake_villagers = self._awake_villagers(mobs, event)
+        crowd = len(awake_villagers) >= max(
+            1, int(getattr(self.settings, "ambient_villager_crowd_threshold", 3))
+        )
+        crowd_cd_ready = self._ambient_type_cooldown_ready(self._VILLAGER_CROWD_COOLDOWN_KEY, now)
+
+        # 団子 or crowd CD 中: 村人は crowd key だけで制御（職別連発しない）
+        if crowd or not crowd_cd_ready:
+            if crowd and crowd_cd_ready and awake_villagers:
+                # いちばん近い村人を代表に（距離不明は後ろ）
+                return min(
+                    awake_villagers,
+                    key=lambda m: (
+                        m.distance is None,
+                        m.distance if m.distance is not None else 1e9,
+                    ),
+                )
+            # crowd CD 中、または crowd だが代表なし → 村人はスキップし他モブへ
+            for mob in mobs:
+                if self._is_passive_villager(mob):
+                    continue
+                key = self._ambient_mob_type_key(mob)
+                if not key:
+                    continue
+                if self._ambient_type_cooldown_ready(key, now):
+                    return mob
+            return None
+
         for mob in mobs:
             key = self._ambient_mob_type_key(mob)
             if not key:
                 continue
             # 睡眠中の村人は ambient を出さない（起こさない）
-            if event is not None:
+            if event is not None and self._is_passive_villager(mob):
                 activity = self._villager_activity_for_mob(event, mob)
                 if activity is not None and should_suppress_ambient_for_sleep(activity):
                     continue
-            recent_ms = self._recent_ms(
-                now, self.state.last_ambient_mob_comment_at_by_type.get(key)
-            )
-            if recent_ms is None or recent_ms >= self.settings.ambient_mob_comment_cooldown_ms:
+            if self._ambient_type_cooldown_ready(key, now):
                 return mob
         return None
 
     def _emit_ambient_mob_comment_line(self, event: GameEvent, now: datetime) -> str | None:
         # クールダウンは種ごと（村人は villager:職 で別 key → 別職は即出し可）。
+        # 村人 N>=threshold は汎用1発 + villager:crowd 共有 CD（職連発渋滞防止）。
         # 既定 120s。同種／同職の連発だけ抑える。全体ギャップは設けない。
-        # （⭕️ 牛→鶏 / 農民→聖職者  ❌ 牛→牛 / 農民→農民）
+        # （⭕️ 牛→鶏 / 農民→聖職者  ❌ 牛→牛 / 農民→農民 / 団子村の職リレー）
         target = self._next_ambient_mob_target(event.passive_mobs, now, event)
         if target is None:
             return None
-        ordered_mobs = [target] + [mob for mob in event.passive_mobs if mob is not target]
-        line = self._render_ambient_mob_line(event, ordered_mobs)
+        villager_crowd = self._is_passive_villager(target) and self._villager_crowd_mode(
+            event.passive_mobs, event
+        )
+        if villager_crowd:
+            ordered_mobs = [target]
+        else:
+            ordered_mobs = [target] + [mob for mob in event.passive_mobs if mob is not target]
+        line = self._render_ambient_mob_line(
+            event, ordered_mobs, villager_crowd=villager_crowd
+        )
         if not line:
             return None
         self.state.last_ambient_mob_comment_at = now
-        self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
+        if villager_crowd:
+            self.state.last_ambient_mob_comment_at_by_type[self._VILLAGER_CROWD_COOLDOWN_KEY] = now
+        else:
+            self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
         # モブ反応が優先。発句中の川柳はキャンセルし、静けさが戻ってから再発句する
-        self.state.pending_haiku_after_preface = False
-        entry = resolve_mob_catalog_entry(
-            target.type,
-            profession=getattr(target, "profession", None),
-            is_baby=bool(getattr(target, "is_baby", None)),
-        ) or {}
-        label = str(entry.get("label") or self._mob_label(target.type))
+        self._clear_pending_haiku_prep()
+        if villager_crowd:
+            label = "村人"
+        else:
+            entry = resolve_mob_catalog_entry(
+                target.type,
+                profession=getattr(target, "profession", None),
+                is_baby=bool(getattr(target, "is_baby", None)),
+            ) or {}
+            label = str(entry.get("label") or self._mob_label(target.type))
         self.state.pending_dialogue_notes.append(f"{label}を見た")
         return line
 
@@ -502,8 +599,12 @@ class NarrationMixin:
             inventory_summary = self._player_chat_inventory_summary(event)
             held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
         threat_summary = self._player_chat_threat_summary(event)
-        hearing_summary = self._player_chat_hearing_summary(event)
-        hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+        # 音メモは『今の音なに？』等の明示時だけ LLM に渡す（視覚話題を音で上書きしない）
+        hearing_summary = ""
+        hearing_named_mobs: list[str] = []
+        if self.player_input.asks_about_sound:
+            hearing_summary = self._player_chat_hearing_summary(event)
+            hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
         place_ctx = self._player_chat_place_context(event)
         tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
@@ -634,6 +735,7 @@ class NarrationMixin:
             "threat_summary": threat_summary,
             "hearing_summary": hearing_summary,
             "hearing_named_mobs": hearing_named_mobs,
+            "asks_about_sound": self.player_input.asks_about_sound,
             "observation_summary": observation_summary,
             "catalog_topic_hints": catalog_topic_hints,
             "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_for_identify],

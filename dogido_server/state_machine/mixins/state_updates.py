@@ -29,17 +29,16 @@ class StateUpdatesMixin:
             mob_type = (mob.type or "").strip().lower()
             if mob_type:
                 self.state.recent_passive_mob_seen_at_by_type[mob_type] = now
-        # 優先イベント（脅威・プレイヤー入力）が来たら発句中の川柳はキャンセルする。
+        # 脅威が来たら発句中の川柳（自分の世界）はキャンセルする。
+        # プレイヤー雑談ではキャンセルしない（入力は service 側でキュー保持）。
         # 周期 (last_haiku_emitted_at) はそのままなので、静けさが戻って
         # haiku_quiet_time_ms 経過後に再発句される。
         if self.state.pending_haiku_after_preface and (
-            event.visual_threats
-            or event.auditory_threats
-            or self.player_input.breaks_silence
+            event.visual_threats or event.auditory_threats
         ):
-            self.state.pending_haiku_after_preface = False
+            self._clear_pending_haiku_prep()
         if time_phase == "morning" and self.state.last_time_phase != "morning":
-            self.state.pending_haiku_after_preface = False
+            self._clear_pending_haiku_prep()
         self.state.last_time_phase = time_phase
         if time_phase != "night":
             self.state.firefly_reacted_this_night = False

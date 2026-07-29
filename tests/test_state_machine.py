@@ -16,8 +16,35 @@ class FakeLLM(DogidoLLM):
     def __init__(self) -> None:
         super().__init__(Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop"))
 
+    def enabled(self) -> bool:
+        return True
+
     def generate_leaf_text(self, request):  # type: ignore[override]
+        if request.kind == "haiku":
+            return "はるのかわ\nみずのひかりに\nうごくそら"
         return f"LLM:{request.kind}"
+
+    def generate_structured_json(self, request):  # type: ignore[override]
+        if request.kind == "haiku_scene":
+            return {
+                "found": True,
+                "summary": "川の光と空の対比",
+                "motifs": ["川", "光"],
+                "focus": ["川"],
+                "confidence": 0.8,
+                "__dogido_status": "accepted",
+            }
+        if request.kind == "haiku_irony":
+            return {
+                "found": True,
+                "kind": "contrast",
+                "description": "川面の光と空のうつろいの対比",
+                "elements": ["川", "光", "空"],
+                "focus": ["川"],
+                "confidence": 0.8,
+                "__dogido_status": "accepted",
+            }
+        return {"found": False, "__dogido_status": "accepted"}
 
 
 class CaptureLLM(DogidoLLM):
@@ -289,12 +316,12 @@ class StateMachineTests(unittest.TestCase):
         # 同じ種への警告はクールダウン中は繰り返さない
         self.assertFalse(any((action.text or "") in expected_variants for action in repeat.actions))
 
-    def test_player_input_blocks_ambient_until_short_mute_passes(self) -> None:
-        """話しかけ後の友好モブ mute は短時間（既定 12s）。旧 120s ではない。"""
+    def test_player_input_blocks_ambient_until_priority_mute_passes(self) -> None:
+        """話しかけ後の友好モブ mute は priority と同じ（既定 20s）。短い 12s 専用は使わない。"""
         machine = DogidoStateMachine(
             Settings(
                 audio_enabled=False,
-                player_input_ambient_mute_ms=12000,
+                player_input_priority_cooldown_ms=20000,
                 ambient_mob_comment_cooldown_ms=1000,
             ),
             llm=FakeLLM(),
@@ -372,14 +399,49 @@ class StateMachineTests(unittest.TestCase):
             }
             """
         )
-        third = GameEvent.model_validate_json(
+        still_muted = GameEvent.model_validate_json(
             """
             {
               "schema_version": "2026-05-24",
               "game": "minecraft-java",
               "adapter": "dogido-fabric-client",
-              "observed_at": "2026-06-05T12:00:13+09:00",
+              "observed_at": "2026-06-05T12:00:15+09:00",
               "sequence": 12,
+              "event": {
+                "name": "ambient_mob_detected",
+                "source_kind": "visual",
+                "priority_hint": "background",
+                "certainty": "high"
+              },
+              "player": {"name": "main_player"},
+              "world": {
+                "time_phase": "day",
+                "biome": "plains",
+                "sky_visible": true
+              },
+              "passive_mobs": [
+                {
+                  "type": "fox",
+                  "distance": 5.0,
+                  "direction": {"horizontal": "front", "vertical": "same"},
+                  "certainty": "high",
+                  "temperament": "friendly"
+                }
+              ],
+              "combat": {
+                "combat_active_hint": false
+              }
+            }
+            """
+        )
+        after_mute = GameEvent.model_validate_json(
+            """
+            {
+              "schema_version": "2026-05-24",
+              "game": "minecraft-java",
+              "adapter": "dogido-fabric-client",
+              "observed_at": "2026-06-05T12:00:21+09:00",
+              "sequence": 13,
               "event": {
                 "name": "ambient_mob_detected",
                 "source_kind": "visual",
@@ -410,11 +472,13 @@ class StateMachineTests(unittest.TestCase):
 
         first_result = machine.process(first)
         second_result = machine.process(second)
-        third_result = machine.process(third)
+        mid_result = machine.process(still_muted)
+        late_result = machine.process(after_mute)
 
         self.assertFalse(any(action.text == "LLM:ambient" for action in first_result.actions))
         self.assertFalse(any(action.text == "LLM:ambient" for action in second_result.actions))
-        self.assertTrue(any(action.text == "LLM:ambient" for action in third_result.actions))
+        self.assertFalse(any(action.text == "LLM:ambient" for action in mid_result.actions))
+        self.assertTrue(any(action.text == "LLM:ambient" for action in late_result.actions))
 
     def test_damaging_light_source_emits_hot_warning(self) -> None:
         event = GameEvent.model_validate_json(
@@ -8027,14 +8091,22 @@ class StateMachineTests(unittest.TestCase):
         self.assertEqual(speech.text, "……暗いのは、にがてなんやけど……。")
         # 川柳の周期（10分）が満ちるまでは詠まない
         self.assertEqual([action.text for action in second.actions if action.layer == "speech"], [])
-        # 周期が満ちたら発句し、次のスナップショットで本句を出す
-        self.assertEqual(
-            [action.text for action in third.actions if action.layer == "speech"],
-            ["ここで一句。"],
-        )
-        self.assertEqual(
-            [action.text for action in fourth.actions if action.layer == "speech"],
-            ["五月雨を　集めてはやし　シミュレート"],
+        # 周期が満ちたら（見どころがあれば）ここで一句 → 次スナップショットで本句
+        third_speech = [action.text for action in third.actions if action.layer == "speech"]
+        self.assertEqual(len(third_speech), 1)
+        self.assertIn("ここで一句。", third_speech[0])
+        self.assertTrue(third_speech[0].endswith("ここで一句。"), msg=third_speech[0])
+        fourth_speech = [action.text for action in fourth.actions if action.layer == "speech"]
+        self.assertEqual(len(fourth_speech), 1)
+        # 情景が弱ければカタログ、強ければ LLM 句
+        self.assertTrue(
+            fourth_speech[0] in {
+                "はるのかわ\nみずのひかりに\nうごくそら",
+                "五月雨を　集めてはやし　シミュレート",
+            }
+            or "五月雨" in fourth_speech[0]
+            or "はるのかわ" in fourth_speech[0],
+            msg=fourth_speech[0],
         )
 
     def test_firefly_reaction_happens_once_per_night(self) -> None:

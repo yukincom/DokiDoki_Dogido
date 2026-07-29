@@ -406,8 +406,83 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
 
-        self.assertEqual([action.text for action in preface], ["ここで一句。"])
+        preface_text = preface[0].text if preface else ""
+        self.assertIn("ここで一句。", preface_text)
+        # 見どころ（irony/scene）が先に来る
+        self.assertTrue(
+            preface_text.endswith("ここで一句。"),
+            msg=preface_text,
+        )
+        self.assertIn("浮かんできた", preface_text)
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
+
+    def test_haiku_zone_ignores_player_chat_until_verse(self) -> None:
+        """自分の世界: preface 中は話しかけより本句完了を優先する。"""
+
+        class FakeLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
+                return "あさのひに\nむらびとあるく\nきをかかえ"
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "朝の村で木を持つあんた",
+                        "motifs": ["朝", "村", "木"],
+                        "focus": ["村"],
+                        "confidence": 0.85,
+                    }
+                return {
+                    "found": True,
+                    "kind": "contrast",
+                    "description": "朝の村と手持ちの木の対比",
+                    "elements": ["朝", "村", "木"],
+                    "focus": ["村"],
+                    "confidence": 0.85,
+                }
+
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        machine = DogidoStateMachine(settings, llm=FakeLLM())
+        sheep = PassiveMob(type="sheep")
+        machine.process(
+            make_snapshot(
+                self.base_time,
+                biome="plains",
+                passive_mobs=[sheep],
+                held_item="minecraft:oak_log",
+            )
+        )
+        preface = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=301),
+                biome="plains",
+                passive_mobs=[sheep],
+                held_item="minecraft:oak_log",
+            )
+        ).actions
+        self.assertTrue(machine.state.pending_haiku_after_preface)
+        self.assertTrue(preface and "ここで一句。" in (preface[0].text or ""))
+
+        # 詠みの途中に話しかけても本句が先
+        verse = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=302),
+                biome="plains",
+                passive_mobs=[sheep],
+                held_item="minecraft:oak_log",
+                user_text="ねえ聞こえる？",
+            )
+        ).actions
+        self.assertEqual([a.text for a in verse], ["あさのひに\nむらびとあるく\nきをかかえ"])
+        self.assertFalse(machine.state.pending_haiku_after_preface)
 
     def test_haiku_near_portal_still_uses_preface_flow_and_full_context(self) -> None:
         # 回帰テスト: 起動済みポータルの近くに居続けても、ポータル専用の近道で
@@ -463,7 +538,9 @@ class HaikuStateMachineTest(unittest.TestCase):
         ).actions
 
         # 必ず発句 → 本句の二段階で出る
-        self.assertEqual([action.text for action in preface], ["ここで一句。"])
+        preface_text = preface[0].text if preface else ""
+        self.assertIn("ここで一句。", preface_text)
+        self.assertTrue(preface_text.endswith("ここで一句。"), msg=preface_text)
         self.assertEqual([action.text for action in final_line], ["ぽーたるの\nひかりのさきへ\nいざゆかん"])
         # 情景・取り合わせの思考（irony/scene）もポータル近くで省略されない
         self.assertIn("haiku_irony", fake_llm.structured_kinds)
