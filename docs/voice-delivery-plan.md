@@ -155,7 +155,10 @@ DOGIDO_VOICEVOX_SPEED_SCALE=0.85
 | 環境変数 | 役割 |
 |---|---|
 | `DOGIDO_TTS_BACKEND` | `voicevox` / `say` / `noop` |
-| `DOGIDO_VOICEVOX_SPEED_SCALE` | 全体話速（既定 1.0） |
+| `DOGIDO_VOICEVOX_SPEED_SCALE` | 既定・battle 話速（既定 1.0）。cue mp3 には効かない |
+| `DOGIDO_VOICEVOX_SPEED_SCALE_BATTLE` | 戦況 callout 用（未設定なら上と同じ） |
+| `DOGIDO_VOICEVOX_SPEED_SCALE_PEACE` | 平時 speech（既定 0.88） |
+| `DOGIDO_VOICEVOX_SPEED_SCALE_HAIKU` | 川柳 speech（既定 0.80） |
 | `DOGIDO_VOICEVOX_PITCH_SCALE` | ピッチ |
 | `DOGIDO_VOICEVOX_VOLUME_SCALE` | 音量 |
 | `DOGIDO_VOICEVOX_SPEAKER` | 話者 ID |
@@ -251,7 +254,10 @@ Minecraft のモブ集合はほぼ閉じているため、名称断片の事前�
 
 #### 配線済み（2026-07-29）
 
-- `AudioAction.cue_sequence` + `AudioDispatcher` が断片を順再生
+- `AudioAction.cue_sequence` + `AudioDispatcher` が断片を再生
+  - **複数断片は ffmpeg で1本に結合してから afplay 1回**（順次 afplay のギャップ回避）
+  - 結合結果は `.dogido_tmp/cue_sequence_cache/` にキャッシュ
+  - 1断片だけならそのまま afplay
 - `CalloutPayload`（text + cue_sequence）
 - **複数体／複数種の「〇〇N体…おるで」**（`_hostile_count_summary`）が断片を優先
   - 欠けがあれば全文 TTS にフォールバック
@@ -269,10 +275,25 @@ Minecraft のモブ集合はほぼ閉じているため、名称断片の事前�
 | うしろ | `mixins/common.py` `_ushiro_callout` |
 | 発火 | `mixins/action_builder.py` / `py_tree_policy.py`（`_callout_audio_action`） |
 
+### 10.6 話速プロファイル（#13・配線済み）
+
+| プロファイル | 既定 speedScale | 主な対象 |
+|---|---|---|
+| **battle** | 1.0（`SPEED_SCALE` / `SPEED_SCALE_BATTLE`） | `layer=callout`（全文 TTS 戦況）、死亡・緊急 speech |
+| **peace** | 0.88 | `layer=speech` 既定（雑談・環境・友好・workshop 返事等） |
+| **haiku** | 0.80 | 川柳 preface / 本句 |
+
+- **cue mp3（悲鳴・息・断片パズル）は速度変更しない**（録音再生）
+- callout の全文 TTS フォールバックは battle 速度
+- `AudioAction.speech_profile` / `speed_scale` で上書き可
+- キャッシュキーに speed を含む（プロファイル違いで別ファイル）
+
+5-7-5 の間（句の分割読み）は **未実装**（次の #13 残り）。
+
 #### 次
 
 - 欠けモブ時のログ監視
-- 速度: callout 断片は battle テンポ、平時 speech は slow（#13）
+- 川柳 5-7-5 分割読み + 間（#13 続き）
 - 記憶の人物プロファイル境界（#20 / [multi-user-tenancy.md](multi-user-tenancy.md)）と call_name 切替 UX
 - **単体視認の方向フル部品化はしない**（§10.5）
 
@@ -349,7 +370,18 @@ call_name
 - 川柳・lesson の人物分離は **まだ単一空間** → [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) / [multi-user-tenancy.md](multi-user-tenancy.md)  
 - 同時に複数人と会話する想定はない（交代プレイのみ）
 
-## 12. 状態ログ
+## 12. ambient 間隔・長さ・読み（VOICEVOX）
+
+| 項目 | 内容 |
+|---|---|
+| 種ごと CD | **120s**（`ambient_mob_comment_cooldown_ms`） |
+| 村人 | key は `villager:{職}` のまま。**別職は即出し可**、同職は 120s |
+| 村人一括 CD | **しない**（職ネタの連続を楽しむ） |
+| ambient 文字数目安 | プロンプト **35字以内** |
+| 読み（現状） | プロンプト誘導 + `tts_reading.py` 内の薄い置換表（合成直前）。辞書は同ファイル定数 |
+| 読み（次） | **MeCab + UniDic を第一候補**で解析・語種活用。例外表は `tts_reading` に残す。詳細: [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) |
+
+## 13. 状態ログ
 
 | 日付 | 内容 |
 |---|---|
@@ -360,3 +392,7 @@ call_name
 | 2026-07-29 | 体数サマリー系コールアウトの断片再生を配線。欠け時は TTS フォールバック。 |
 | 2026-07-29 | うしろ named を call_name→断片解決で配線。player_1 固定禁止を docs に明記。 |
 | 2026-07-29 | §10.5: 都度 TTS の戦況コールは都度のまま残す。方向フル部品化はしない（音質優先）。 |
+| 2026-07-29 | §10.6: battle / peace / haiku 話速プロファイルを配線。cue は対象外。 |
+| 2026-07-29 | cue_sequence を ffmpeg 結合→afplay 1回に変更（ギャップ対策・結合キャッシュ）。 |
+| 2026-07-29 | ambient 種 CD 120s・35字・TTS 読み補正（朝等）+ プロンプトひらがな誘導。 |
+| 2026-07-29 | TTS 読みの本命を UniDic 方針として [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) に分離。 |

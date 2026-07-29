@@ -11,21 +11,43 @@ from dogido_server.state_machine.types import AudioAction, DerivedSignals
 
 
 class EnvironmentalReactionsMixin:
-    def _speech_action(self, text: str, *, protect_ms: int = 0) -> AudioAction:
+    def _speech_action(
+        self,
+        text: str,
+        *,
+        protect_ms: int = 0,
+        speech_profile: str = "peace",
+        interrupt: bool = False,
+    ) -> AudioAction:
         return AudioAction(
             layer="speech",
-            interrupt=False,
+            interrupt=interrupt,
             text=text,
             protect_ms=protect_ms,
+            speech_profile=speech_profile,
         )
 
     def _control_interrupt_action(self) -> AudioAction:
         return AudioAction(layer="control", interrupt=True)
 
-    def _speech_actions(self, text: str | None, *, protect_ms: int = 0) -> list[AudioAction]:
+    def _speech_actions(
+        self,
+        text: str | None,
+        *,
+        protect_ms: int = 0,
+        speech_profile: str = "peace",
+        interrupt: bool = False,
+    ) -> list[AudioAction]:
         if not text:
             return []
-        return [self._speech_action(text, protect_ms=protect_ms)]
+        return [
+            self._speech_action(
+                text,
+                protect_ms=protect_ms,
+                speech_profile=speech_profile,
+                interrupt=interrupt,
+            )
+        ]
 
     def _darkness_advice_on_cooldown(self, now: datetime) -> bool:
         if self.state.last_darkness_advice_at is None:
@@ -164,6 +186,7 @@ class EnvironmentalReactionsMixin:
                 layer="speech",
                 interrupt=False,
                 text="なんや。ほたるかいな……驚いて損したわ……。",
+                speech_profile="peace",
             ),
         ]
 
@@ -346,6 +369,7 @@ class EnvironmentalReactionsMixin:
                     layer="speech",
                     interrupt=True,
                     text=response_text("darkness", "night_warning", "surface_evening_attention"),
+                    speech_profile="battle",
                 )
             ]
         line = self._render_night_warning_line(event)
@@ -392,7 +416,7 @@ class EnvironmentalReactionsMixin:
         if self.state.pending_haiku_after_preface:
             haiku_completion = self._emit_haiku_line(event, now)
             if haiku_completion:
-                return self._speech_actions(haiku_completion)
+                return self._speech_actions(haiku_completion, speech_profile="haiku")
 
         overworld_return_line = self._emit_pending_overworld_return_line(now)
         if overworld_return_line:
@@ -495,7 +519,7 @@ class EnvironmentalReactionsMixin:
         # （「ここで一句。」発句 → 情景・持ち物込みの本句）に一本化し、
         # ポータルは題材候補（_haiku_feature_candidates）として混ざる
         haiku_line = self._emit_haiku_line(event, now)
-        return self._speech_actions(haiku_line)
+        return self._speech_actions(haiku_line, speech_profile="haiku")
 
     def _emit_nearby_lightning_strike_actions(
         self,

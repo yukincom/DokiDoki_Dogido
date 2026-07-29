@@ -4,7 +4,9 @@ from __future__ import annotations
 from collections import deque
 import hashlib
 import logging
+import shutil
 import subprocess
+import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,8 +17,10 @@ import httpx
 from dogido_server.config import Settings
 from dogido_server.cues import resolve_cue_path
 from dogido_server.state_machine import AudioAction
+from dogido_server.tts_reading import prepare_text_for_tts
 
 LOGGER = logging.getLogger("uvicorn.error")
+FFMPEG_BIN = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 
 
 # ---- データクラス ----
@@ -41,7 +45,7 @@ class SpeechBackend:
     通常発話・助言・雑談など、通常 TTS が担う発話に使う。
     緊急悲鳴は CueBackend 側で処理する。
     """
-    def start(self, text: str) -> RunningAudio:
+    def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
         raise NotImplementedError
 
     def prewarm_texts(self, texts: list[str]) -> None:
@@ -66,7 +70,7 @@ class NoopSpeechBackend(SpeechBackend):
 
     CI・テスト時など音声出力が不要な環境で使う。
     """
-    def start(self, text: str) -> RunningAudio:
+    def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
         process = subprocess.Popen(["/usr/bin/true"])
         return RunningAudio(process=process)
 
@@ -79,10 +83,11 @@ class SaySpeechBackend(SpeechBackend):
     def __init__(self, voice: str | None = None) -> None:
         self.voice = voice
 
-    def start(self, text: str) -> RunningAudio:
+    def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
         command = ["say"]
         if self.voice:
             command.extend(["-v", self.voice])
+        # say は -r で語速（語/分）だが、プロファイル数値とは単位が違うので無視
         command.append(text)
         return RunningAudio(process=subprocess.Popen(command))
 
@@ -104,8 +109,9 @@ class VoicevoxSpeechBackend(SpeechBackend):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._prune_cache()
 
-    def start(self, text: str) -> RunningAudio:
-        cached = self._ensure_cached(text)
+    def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
+        spoken = prepare_text_for_tts(text)
+        cached = self._ensure_cached(spoken, speed_scale=speed_scale)
         # cleanup_path=None: キャッシュファイルは再生後も残す
         return RunningAudio(process=subprocess.Popen(["afplay", str(cached)]), cleanup_path=None)
 
@@ -115,7 +121,7 @@ class VoicevoxSpeechBackend(SpeechBackend):
         合成失敗した文は無視して続行する（1 件のエラーで全部止めない）。
         """
         for text in texts:
-            cleaned = text.strip()
+            cleaned = prepare_text_for_tts(text.strip())
             if not cleaned:
                 continue
             try:
@@ -123,9 +129,15 @@ class VoicevoxSpeechBackend(SpeechBackend):
             except Exception:
                 continue
 
-    def _ensure_cached(self, text: str) -> Path:
+    def _ensure_cached(self, text: str, *, speed_scale: float | None = None) -> Path:
         """キャッシュがあれば返す。なければ VoiceVox API で合成してキャッシュに保存する。"""
-        cached = self._cached_path_for(text)
+        spoken = prepare_text_for_tts(text)
+        effective_speed = (
+            float(speed_scale)
+            if speed_scale is not None
+            else float(self.settings.voicevox_speed_scale)
+        )
+        cached = self._cached_path_for(spoken, speed_scale=effective_speed)
         if cached.exists():
             # 参照されたら mtime を更新（LRU 相当の掃除に使う）
             try:
@@ -136,14 +148,14 @@ class VoicevoxSpeechBackend(SpeechBackend):
 
         query_url = f"{self.settings.voicevox_url}/audio_query"
         synth_url = f"{self.settings.voicevox_url}/synthesis"
-        params = {"speaker": self.settings.voicevox_speaker, "text": text}
+        params = {"speaker": self.settings.voicevox_speaker, "text": spoken}
 
         with httpx.Client(timeout=15.0) as client:
             # Step1: audio_query でクエリオブジェクトを取得し、話速・ピッチなどを上書き
             query = client.post(query_url, params=params)
             query.raise_for_status()
             payload = query.json()
-            payload["speedScale"] = self.settings.voicevox_speed_scale
+            payload["speedScale"] = effective_speed
             payload["pitchScale"] = self.settings.voicevox_pitch_scale
             payload["volumeScale"] = self.settings.voicevox_volume_scale
             if self.settings.voicevox_output_sampling_rate is not None:
@@ -161,15 +173,20 @@ class VoicevoxSpeechBackend(SpeechBackend):
         self._prune_cache()
         return cached
 
-    def _cached_path_for(self, text: str) -> Path:
+    def _cached_path_for(self, text: str, *, speed_scale: float | None = None) -> Path:
         """テキストと全音声パラメータを結合して SHA-1 ハッシュを作りキャッシュパスを返す。
 
         パラメータが 1 つでも変われば別ファイルになるため、設定変更後の古いキャッシュ再利用を防ぐ。
         """
+        effective_speed = (
+            float(speed_scale)
+            if speed_scale is not None
+            else float(self.settings.voicevox_speed_scale)
+        )
         cache_key = "|".join(
             [
                 str(self.settings.voicevox_speaker),
-                str(self.settings.voicevox_speed_scale),
+                str(effective_speed),
                 str(self.settings.voicevox_pitch_scale),
                 str(self.settings.voicevox_volume_scale),
                 str(self.settings.voicevox_output_sampling_rate),
@@ -429,6 +446,9 @@ class AudioDispatcher:
             self.speech_backend = NoopSpeechBackend()
             self.fallback_speech_backend = self.speech_backend
 
+        self._cue_sequence_cache_dir = settings.voicevox_temp_dir.parent / "cue_sequence_cache"
+        self._cue_sequence_cache_dir.mkdir(parents=True, exist_ok=True)
+
         # ---- キュー再生バックエンドの選択 ----
         if settings.cue_backend == "afplay":
             self.cue_backend: CueBackend = AfplayCueBackend(
@@ -546,6 +566,7 @@ class AudioDispatcher:
                 self._stop_current_locked()
 
             try:
+                tts_speed = self._resolve_tts_speed(action)
                 if action.cue_sequence:
                     handle = self._start_cue_sequence_locked(
                         action.cue_sequence,
@@ -554,11 +575,11 @@ class AudioDispatcher:
                     if handle is None:
                         # 断片が欠けた・失敗 → 文言 TTS へ
                         if action.text:
-                            handle = self.speech_backend.start(action.text)
+                            handle = self.speech_backend.start(action.text, speed_scale=tts_speed)
                         else:
                             return None, False
                 elif action.layer == "speech" and action.text:
-                    handle = self.speech_backend.start(action.text)
+                    handle = self.speech_backend.start(action.text, speed_scale=tts_speed)
                 elif action.cue_id:
                     handle = self.cue_backend.start(action.cue_id)
                     if handle is not None:
@@ -566,7 +587,7 @@ class AudioDispatcher:
                         self._set_protect_locked(action.protect_ms)
                         return handle, False
                 elif action.text:
-                    handle = self.speech_backend.start(action.text)
+                    handle = self.speech_backend.start(action.text, speed_scale=tts_speed)
                 else:
                     # cue も text もない場合は何もしない
                     return None, False
@@ -574,11 +595,28 @@ class AudioDispatcher:
                 if not action.text:
                     raise
                 # TTS 失敗時は say にフォールバック
-                handle = self.fallback_speech_backend.start(action.text)
+                handle = self.fallback_speech_backend.start(
+                    action.text,
+                    speed_scale=self._resolve_tts_speed(action),
+                )
 
             self._current = handle
             self._set_protect_locked(action.protect_ms)
             return handle, False
+
+    def _resolve_tts_speed(self, action: AudioAction) -> float:
+        """AudioAction の profile / 明示 speed / layer 既定から VOICEVOX speedScale を決める。"""
+        if action.speed_scale is not None:
+            return float(action.speed_scale)
+        profile = action.speech_profile
+        if not profile:
+            if action.layer == "callout":
+                profile = "battle"
+            elif action.layer == "speech":
+                profile = "peace"
+            else:
+                profile = "battle"
+        return self.settings.tts_speed_for_profile(profile)
 
     def _set_protect_locked(self, protect_ms: int) -> None:
         if protect_ms > 0:
@@ -592,13 +630,16 @@ class AudioDispatcher:
         *,
         expected_epoch: int | None,
     ) -> RunningAudio | None:
-        """断片 id を順に afplay。途中で epoch が変わったら中断。
+        """断片 id を ffmpeg で1本に結合してから afplay 1回。
 
-        ロック保持のまま wait するため、長いシーケンス中は他スレッドの stop が
-        terminate で割り込める（process は _current に載せる）。
+        順次 afplay だとクリップ間ギャップで体感が遅くなるため結合する。
+        結合結果はキャッシュし、同じ sequence の再発話では concat を省略する。
         """
         ids = [str(item).strip() for item in cue_sequence if str(item).strip()]
         if not ids:
+            return None
+
+        if expected_epoch is not None and expected_epoch != self._epoch:
             return None
 
         # 先に全パス解決。欠けがあれば None（TTS フォールバック）
@@ -610,30 +651,131 @@ class AudioDispatcher:
                 return None
             paths.append(path)
 
-        last_handle: RunningAudio | None = None
-        for index, path in enumerate(paths):
-            if expected_epoch is not None and expected_epoch != self._epoch:
-                if last_handle is not None:
-                    self._cleanup_handle_locked(last_handle)
-                return None
+        if len(paths) == 1:
             try:
-                process = subprocess.Popen(["afplay", str(path)])
+                process = subprocess.Popen(["afplay", str(paths[0])])
             except Exception:
-                LOGGER.warning("callout_fragment_play_failed path=%s", path)
-                if last_handle is not None:
-                    self._cleanup_handle_locked(last_handle)
+                LOGGER.warning("callout_fragment_play_failed path=%s", paths[0])
                 return None
-            handle = RunningAudio(process=process, cleanup_path=None, cue_id=ids[index])
+            handle = RunningAudio(process=process, cleanup_path=None, cue_id=ids[0])
             self._current = handle
-            last_handle = handle
-            # 最後以外はここで完了待ち
-            if index < len(paths) - 1:
-                try:
-                    process.wait()
-                finally:
-                    if self._current is handle:
-                        self._current = None
-        return last_handle
+            return handle
+
+        combined = self._concat_cue_files(ids, paths)
+        if combined is None:
+            return None
+        if expected_epoch is not None and expected_epoch != self._epoch:
+            return None
+        try:
+            process = subprocess.Popen(["afplay", str(combined)])
+        except Exception:
+            LOGGER.warning("callout_concat_play_failed path=%s", combined)
+            return None
+        handle = RunningAudio(
+            process=process,
+            cleanup_path=None,  # キャッシュを残す
+            cue_id="+".join(ids),
+        )
+        self._current = handle
+        try:
+            combined.touch()
+        except OSError:
+            pass
+        return handle
+
+    def _concat_cue_files(self, ids: list[str], paths: list[Path]) -> Path | None:
+        """断片を1ファイルに結合して返す。失敗時 None。"""
+        if not paths:
+            return None
+        cache_key_parts: list[str] = []
+        for path in paths:
+            try:
+                stat = path.stat()
+                cache_key_parts.append(f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")
+            except OSError:
+                cache_key_parts.append(str(path.resolve()))
+        digest = hashlib.sha1("|".join(cache_key_parts).encode("utf-8")).hexdigest()[:20]
+        out_path = self._cue_sequence_cache_dir / f"{digest}.mp3"
+        if out_path.exists():
+            return out_path
+
+        ffmpeg = FFMPEG_BIN
+        if not ffmpeg or not Path(ffmpeg).exists():
+            LOGGER.warning("callout_concat_ffmpeg_missing bin=%s", ffmpeg)
+            return None
+
+        list_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                suffix=".txt",
+                delete=False,
+            ) as handle:
+                list_path = Path(handle.name)
+                for path in paths:
+                    # concat demuxer: 単一引用符をエスケープ
+                    escaped = str(path.resolve()).replace("'", r"'\''")
+                    handle.write(f"file '{escaped}'\n")
+
+            # まず再エンコードなし（速い）。失敗したら再エンコード
+            copy_cmd = [
+                ffmpeg,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(list_path),
+                "-c",
+                "copy",
+                str(out_path),
+            ]
+            result = subprocess.run(
+                copy_cmd,
+                capture_output=True,
+                timeout=30.0,
+            )
+            if result.returncode != 0 or not out_path.exists():
+                out_path.unlink(missing_ok=True)
+                reenc_cmd = [
+                    ffmpeg,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(list_path),
+                    "-c:a",
+                    "libmp3lame",
+                    "-q:a",
+                    "4",
+                    str(out_path),
+                ]
+                result = subprocess.run(
+                    reenc_cmd,
+                    capture_output=True,
+                    timeout=60.0,
+                )
+                if result.returncode != 0 or not out_path.exists():
+                    LOGGER.warning(
+                        "callout_concat_failed ids=%s detail=%s",
+                        ids,
+                        (result.stderr or b"")[-400:].decode("utf-8", errors="replace"),
+                    )
+                    out_path.unlink(missing_ok=True)
+                    return None
+            LOGGER.warning("callout_concat_ok parts=%s cache=%s", len(paths), out_path.name)
+            return out_path
+        except Exception as exc:
+            LOGGER.warning("callout_concat_error ids=%s detail=%s", ids, exc)
+            out_path.unlink(missing_ok=True)
+            return None
+        finally:
+            if list_path is not None:
+                list_path.unlink(missing_ok=True)
 
     def _wait_for(self, handle: RunningAudio) -> None:
         """プロセス終了まで待機し、終了後にクリーンアップする。
