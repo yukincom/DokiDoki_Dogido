@@ -20,6 +20,12 @@ dependencies = [
   "py_trees>=2.4.0",
 ]
 
+[project.optional-dependencies]
+# テスト・開発用（本番サーバー起動だけなら不要）
+dev = [
+  "pytest>=8.0",
+]
+
 [project.scripts]
 dogido-server = "dogido_server.app:main"
 dogido-replay = "dogido_server.replay:main"

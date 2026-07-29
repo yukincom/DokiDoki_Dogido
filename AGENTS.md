@@ -151,7 +151,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"   # ランタイム + pytest。サーバーだけなら pip install -e .
 cp .env.example .env   # 必要なら LLM / TTS を設定
 python -m dogido_server
 python -m pytest tests/test_haiku*.py -q
@@ -175,6 +175,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 | 川柳 workshop | `docs/haiku-player-improvement-plan.md` |
 | パッケージ編集順 | `docs/server-reorg-and-workshop-order.md` |
 | 雑談 | `docs/player-chat-casual-plan.md` |
+| ボイス速度・間 | `docs/voice-delivery-plan.md`（#13） |
 | イベント形 | `docs/event-schema.md` · `docs/adapter-api.md` |
 | 状態機械 | `docs/state-machine.md` |
 

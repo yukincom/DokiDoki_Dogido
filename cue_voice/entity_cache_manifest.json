@@ -2,167 +2,9 @@
   "speaker": 21,
   "voicevox_url": "http://127.0.0.1:50021",
   "generated_root": "cue_voice",
+  "scope": "callout_threat_only",
+  "note": "hostile+neutral name clips only; pure passive excluded. Playback wiring TBD.",
   "mob": {
-    "allay": {
-      "label": "アレイ",
-      "path": "mob/allay.mp3"
-    },
-    "armadillo": {
-      "label": "アルマジロ",
-      "path": "mob/armadillo.mp3"
-    },
-    "axolotl": {
-      "label": "ウーパールーパー",
-      "path": "mob/axolotl.mp3"
-    },
-    "bat": {
-      "label": "コウモリ",
-      "path": "mob/bat.mp3"
-    },
-    "camel": {
-      "label": "ラクダ",
-      "path": "mob/camel.mp3"
-    },
-    "cat": {
-      "label": "ネコ",
-      "path": "mob/cat.mp3"
-    },
-    "chicken": {
-      "label": "ニワトリ",
-      "path": "mob/chicken.mp3"
-    },
-    "cod": {
-      "label": "タラ",
-      "path": "mob/cod.mp3"
-    },
-    "cow": {
-      "label": "ウシ",
-      "path": "mob/cow.mp3"
-    },
-    "donkey": {
-      "label": "ロバ",
-      "path": "mob/donkey.mp3"
-    },
-    "fox": {
-      "label": "キツネ",
-      "path": "mob/fox.mp3"
-    },
-    "frog": {
-      "label": "カエル",
-      "path": "mob/frog.mp3"
-    },
-    "glow_squid": {
-      "label": "ヒカリイカ",
-      "path": "mob/glow_squid.mp3"
-    },
-    "goat": {
-      "label": "ヤギ",
-      "path": "mob/goat.mp3"
-    },
-    "horse": {
-      "label": "ウマ",
-      "path": "mob/horse.mp3"
-    },
-    "iron_golem": {
-      "label": "アイアンゴーレム",
-      "path": "mob/iron_golem.mp3"
-    },
-    "llama": {
-      "label": "ラマ",
-      "path": "mob/llama.mp3"
-    },
-    "mooshroom": {
-      "label": "ムーシュルーム",
-      "path": "mob/mooshroom.mp3"
-    },
-    "mule": {
-      "label": "ラバ",
-      "path": "mob/mule.mp3"
-    },
-    "ocelot": {
-      "label": "ヤマネコ",
-      "path": "mob/ocelot.mp3"
-    },
-    "panda": {
-      "label": "パンダ",
-      "path": "mob/panda.mp3"
-    },
-    "parrot": {
-      "label": "オウム",
-      "path": "mob/parrot.mp3"
-    },
-    "pig": {
-      "label": "ブタ",
-      "path": "mob/pig.mp3"
-    },
-    "polar_bear": {
-      "label": "シロクマ",
-      "path": "mob/polar_bear.mp3"
-    },
-    "pufferfish": {
-      "label": "フグ",
-      "path": "mob/pufferfish.mp3"
-    },
-    "rabbit": {
-      "label": "ウサギ",
-      "path": "mob/rabbit.mp3"
-    },
-    "salmon": {
-      "label": "サケ",
-      "path": "mob/salmon.mp3"
-    },
-    "sheep": {
-      "label": "ヒツジ",
-      "path": "mob/sheep.mp3"
-    },
-    "skeleton_horse": {
-      "label": "スケルトンホース",
-      "path": "mob/skeleton_horse.mp3"
-    },
-    "sniffer": {
-      "label": "スニファー",
-      "path": "mob/sniffer.mp3"
-    },
-    "snow_golem": {
-      "label": "スノウゴーレム",
-      "path": "mob/snow_golem.mp3"
-    },
-    "squid": {
-      "label": "イカ",
-      "path": "mob/squid.mp3"
-    },
-    "strider": {
-      "label": "ストライダー",
-      "path": "mob/strider.mp3"
-    },
-    "trader_llama": {
-      "label": "商人のラマ",
-      "path": "mob/trader_llama.mp3"
-    },
-    "tropical_fish": {
-      "label": "熱帯魚",
-      "path": "mob/tropical_fish.mp3"
-    },
-    "turtle": {
-      "label": "カメ",
-      "path": "mob/turtle.mp3"
-    },
-    "villager": {
-      "label": "村人",
-      "path": "mob/villager.mp3"
-    },
-    "wandering_trader": {
-      "label": "行商人",
-      "path": "mob/wandering_trader.mp3"
-    },
-    "wolf": {
-      "label": "オオカミ",
-      "path": "mob/wolf.mp3"
-    },
-    "zombified_piglin": {
-      "label": "ゾンビピグリン",
-      "path": "mob/zombified_piglin.mp3"
-    },
     "blaze": {
       "label": "ブレイズ",
       "path": "mob/blaze.mp3"
@@ -176,12 +18,16 @@
       "path": "mob/breeze.mp3"
     },
     "cave_spider": {
-      "label": "ケイブスパイダー",
+      "label": "洞窟スパイダー",
       "path": "mob/cave_spider.mp3"
     },
     "charged_creeper": {
       "label": "帯電クリーパー",
       "path": "mob/charged_creeper.mp3"
+    },
+    "chicken_jockey": {
+      "label": "チキンジョッキー",
+      "path": "mob/chicken_jockey.mp3"
     },
     "creeper": {
       "label": "クリーパー",
@@ -195,6 +41,10 @@
       "label": "エルダーガーディアン",
       "path": "mob/elder_guardian.mp3"
     },
+    "ender_dragon": {
+      "label": "エンダードラゴン",
+      "path": "mob/ender_dragon.mp3"
+    },
     "enderman": {
       "label": "エンダーマン",
       "path": "mob/enderman.mp3"
@@ -207,9 +57,17 @@
       "label": "エヴォーカー",
       "path": "mob/evoker.mp3"
     },
+    "fox": {
+      "label": "キツネ",
+      "path": "mob/fox.mp3"
+    },
     "ghast": {
       "label": "ガスト",
       "path": "mob/ghast.mp3"
+    },
+    "goat": {
+      "label": "ヤギ",
+      "path": "mob/goat.mp3"
     },
     "guardian": {
       "label": "ガーディアン",
@@ -227,9 +85,21 @@
       "label": "イリュージョナー",
       "path": "mob/illusioner.mp3"
     },
+    "iron_golem": {
+      "label": "アイアンゴーレム",
+      "path": "mob/iron_golem.mp3"
+    },
+    "llama": {
+      "label": "ラマ",
+      "path": "mob/llama.mp3"
+    },
     "magma_cube": {
       "label": "マグマキューブ",
       "path": "mob/magma_cube.mp3"
+    },
+    "panda": {
+      "label": "パンダ",
+      "path": "mob/panda.mp3"
     },
     "phantom": {
       "label": "ファントム",
@@ -242,6 +112,10 @@
     "pillager": {
       "label": "ピリジャー",
       "path": "mob/pillager.mp3"
+    },
+    "polar_bear": {
+      "label": "シロクマ",
+      "path": "mob/polar_bear.mp3"
     },
     "ravager": {
       "label": "ラヴェジャー",
@@ -259,6 +133,10 @@
       "label": "スケルトン",
       "path": "mob/skeleton.mp3"
     },
+    "skeleton_horseman": {
+      "label": "スケルトンホースマン",
+      "path": "mob/skeleton_horseman.mp3"
+    },
     "slime": {
       "label": "スライム",
       "path": "mob/slime.mp3"
@@ -267,9 +145,17 @@
       "label": "スパイダー",
       "path": "mob/spider.mp3"
     },
+    "spider_jockey": {
+      "label": "スパイダージョッキー",
+      "path": "mob/spider_jockey.mp3"
+    },
     "stray": {
       "label": "ストレイ",
       "path": "mob/stray.mp3"
+    },
+    "trader_llama": {
+      "label": "商人のラマ",
+      "path": "mob/trader_llama.mp3"
     },
     "vex": {
       "label": "ヴェックス",
@@ -279,13 +165,25 @@
       "label": "ヴィンディケーター",
       "path": "mob/vindicator.mp3"
     },
+    "warden": {
+      "label": "ウォーデン",
+      "path": "mob/warden.mp3"
+    },
     "witch": {
       "label": "ウィッチ",
       "path": "mob/witch.mp3"
     },
+    "wither": {
+      "label": "ウィザー",
+      "path": "mob/wither.mp3"
+    },
     "wither_skeleton": {
       "label": "ウィザースケルトン",
       "path": "mob/wither_skeleton.mp3"
+    },
+    "wolf": {
+      "label": "オオカミ",
+      "path": "mob/wolf.mp3"
     },
     "zoglin": {
       "label": "ゾグリン",
@@ -299,29 +197,9 @@
       "label": "村人ゾンビ",
       "path": "mob/zombie_villager.mp3"
     },
-    "chicken_jockey": {
-      "label": "チキンジョッキー",
-      "path": "mob/chicken_jockey.mp3"
-    },
-    "spider_jockey": {
-      "label": "スパイダージョッキー",
-      "path": "mob/spider_jockey.mp3"
-    },
-    "skeleton_horseman": {
-      "label": "スケルトンホースマン",
-      "path": "mob/skeleton_horseman.mp3"
-    },
-    "ender_dragon": {
-      "label": "エンダードラゴン",
-      "path": "mob/ender_dragon.mp3"
-    },
-    "wither": {
-      "label": "ウィザー",
-      "path": "mob/wither.mp3"
-    },
-    "warden": {
-      "label": "ウォーデン",
-      "path": "mob/warden.mp3"
+    "zombified_piglin": {
+      "label": "ゾンビピグリン",
+      "path": "mob/zombified_piglin.mp3"
     }
   },
   "common": {
@@ -369,5 +247,14 @@
         "path": "common/phrases/orude.mp3"
       }
     }
-  }
+  },
+  "missing_mob_clips": [
+    "bee",
+    "creaking",
+    "dolphin",
+    "nautilus",
+    "piglin",
+    "sulfur_cube",
+    "zombie_nautilus"
+  ]
 }

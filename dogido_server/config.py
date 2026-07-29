@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     voicevox_volume_scale: float = 1.0
     voicevox_output_sampling_rate: int | None = None
     voicevox_temp_dir: Path = Field(default_factory=lambda: Path(".dogido_tmp") / "voicevox")
+    # TTS キャッシュ肥大化防止（.dogido_tmp は gitignore。上限超過 or 古い順で削除）
+    voicevox_cache_max_mb: float = 256.0
+    voicevox_cache_max_age_days: float = 7.0
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 

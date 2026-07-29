@@ -1,3 +1,17 @@
+"""コールアウト用の断片音声を VOICEVOX で生成する。
+
+既定: 敵対・中立モブ名 + 体数 + 定型句のみ（友好 pure passive は出さない）。
+
+方針:
+  - 戦況コールアウトは全文 TTS より、名称・体数・句のパズル連結を本線にする
+  - 生成した mp3 のうち「使うセット」は cue_voice/ に置きコミット可
+  - 友好モブ名はコールアウトに不要なので生成しない
+
+使い方:
+  python scripts/generate_entity_voice_cache.py
+  python scripts/generate_entity_voice_cache.py --overwrite
+  python scripts/generate_entity_voice_cache.py --only creeper --only zombie
+"""
 from __future__ import annotations
 
 import argparse
@@ -15,8 +29,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from dogido_server.config import Settings
 from dogido_server.entity_voice_catalog import (
+    CALLOUT_MOB_VOICE_LABELS,
     COUNT_FRAGMENT_TEXTS,
-    MOB_VOICE_LABELS,
     PHRASE_FRAGMENT_TEXTS,
 )
 
@@ -91,6 +105,7 @@ def generate_catalog(
         "speaker": settings.voicevox_speaker,
         "voicevox_url": settings.voicevox_url,
         "generated_root": str(root),
+        "scope": "callout_threat_only",  # hostile + neutral, no pure passive
         "mob": {},
         "common": {
             "counts": {},
@@ -100,7 +115,7 @@ def generate_catalog(
 
     with httpx.Client(timeout=20.0) as client:
         mob_manifest: dict[str, object] = {}
-        for entity_id, label in MOB_VOICE_LABELS.items():
+        for entity_id, label in sorted(CALLOUT_MOB_VOICE_LABELS.items()):
             relative = Path("mob") / f"{entity_id}.mp3"
             mob_manifest[entity_id] = {
                 "label": label,
@@ -147,8 +162,9 @@ def main() -> None:
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"generated entity voice cache under {root}")
+    print(f"generated callout voice fragments under {root} (threat/neutral only)")
     print(f"manifest: {manifest_path}")
+    print(f"mob clips in manifest: {len(manifest.get('mob') or {})}")
 
 
 if __name__ == "__main__":

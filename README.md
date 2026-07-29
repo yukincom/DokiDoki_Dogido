@@ -80,7 +80,7 @@ cd /path/to/DokiDoki-Dogido
 python -m venv .venv
 source .venv/bin/activate
 
-# 依存（初回）
+# 依存（初回）。テストも回すなら: pip install -e ".[dev]"
 pip install -e .
 
 # 設定（初回）

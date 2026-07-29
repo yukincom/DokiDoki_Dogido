@@ -44,8 +44,9 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 | 2 | [behavior-spec.md](behavior-spec.md) | 挙動仕様 |
 | 3 | [py-trees-integration.md](py-trees-integration.md) | アクション方針（py_trees） |
 | 4 | [dialogue-design.md](dialogue-design.md) | 対話モード（peace / battle 等） |
-| 5 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
-| 6 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
+| 5 | [voice-delivery-plan.md](voice-delivery-plan.md) | ボイス速度・間・川柳の呼吸（#13） |
+| 6 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
+| 7 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
 
 ### 4. Player conversation
 
@@ -107,6 +108,7 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 - [behavior-spec.md](behavior-spec.md)
 - [py-trees-integration.md](py-trees-integration.md)
 - [dialogue-design.md](dialogue-design.md)
+- [voice-delivery-plan.md](voice-delivery-plan.md)
 - [monster-schema.md](monster-schema.md)
 - [skeleton-spec.md](skeleton-spec.md)
 - [boss-spec.md](boss-spec.md)
@@ -152,6 +154,7 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 - [research/guardrail.md](research/guardrail.md)
 - [research/mob_list.md](research/mob_list.md)
 - [research/code-review-player-reactivity-2026-07-02.md](research/code-review-player-reactivity-2026-07-02.md)
+- [research/tts-landscape-2026.md](research/tts-landscape-2026.md) … TTS 地図・コミュニティ・適性・権利
 
 ---
 
