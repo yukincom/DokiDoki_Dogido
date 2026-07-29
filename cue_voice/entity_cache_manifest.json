@@ -3,8 +3,12 @@
   "voicevox_url": "http://127.0.0.1:50021",
   "generated_root": "cue_voice",
   "scope": "callout_threat_only",
-  "note": "hostile+neutral name clips only; pure passive excluded. Playback wiring TBD.",
+  "note": "hostile+neutral name clips only; pure passive excluded.",
   "mob": {
+    "bee": {
+      "label": "ミツバチ",
+      "path": "mob/bee.mp3"
+    },
     "blaze": {
       "label": "ブレイズ",
       "path": "mob/blaze.mp3"
@@ -29,9 +33,17 @@
       "label": "チキンジョッキー",
       "path": "mob/chicken_jockey.mp3"
     },
+    "creaking": {
+      "label": "クリーキング",
+      "path": "mob/creaking.mp3"
+    },
     "creeper": {
       "label": "クリーパー",
       "path": "mob/creeper.mp3"
+    },
+    "dolphin": {
+      "label": "イルカ",
+      "path": "mob/dolphin.mp3"
     },
     "drowned": {
       "label": "ドラウンド",
@@ -97,6 +109,10 @@
       "label": "マグマキューブ",
       "path": "mob/magma_cube.mp3"
     },
+    "nautilus": {
+      "label": "オウムガイ",
+      "path": "mob/nautilus.mp3"
+    },
     "panda": {
       "label": "パンダ",
       "path": "mob/panda.mp3"
@@ -104,6 +120,10 @@
     "phantom": {
       "label": "ファントム",
       "path": "mob/phantom.mp3"
+    },
+    "piglin": {
+      "label": "ピグリン",
+      "path": "mob/piglin.mp3"
     },
     "piglin_brute": {
       "label": "ピグリンブルート",
@@ -153,6 +173,10 @@
       "label": "ストレイ",
       "path": "mob/stray.mp3"
     },
+    "sulfur_cube": {
+      "label": "サルファーキューブ",
+      "path": "mob/sulfur_cube.mp3"
+    },
     "trader_llama": {
       "label": "商人のラマ",
       "path": "mob/trader_llama.mp3"
@@ -192,6 +216,10 @@
     "zombie": {
       "label": "ゾンビ",
       "path": "mob/zombie.mp3"
+    },
+    "zombie_nautilus": {
+      "label": "ゾンビオウムガイ",
+      "path": "mob/zombie_nautilus.mp3"
     },
     "zombie_villager": {
       "label": "村人ゾンビ",
@@ -248,13 +276,5 @@
       }
     }
   },
-  "missing_mob_clips": [
-    "bee",
-    "creaking",
-    "dolphin",
-    "nautilus",
-    "piglin",
-    "sulfur_cube",
-    "zombie_nautilus"
-  ]
+  "missing_mob_clips": []
 }
