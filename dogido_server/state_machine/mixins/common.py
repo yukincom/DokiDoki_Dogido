@@ -440,10 +440,12 @@ class CommonMixin:
         if not self._should_emit_low_health_warning(event, signals):
             return None
         self.state.low_health_warning_armed = False
-        name = (event.player.name or "").strip() or self._player_call_name(event)
+        # 呼びかけは call_name（設定／meta）。Minecraft ログイン名を直差ししない
+        name = self._player_call_name(event)
         return f"{name}！体力やばいで！"
 
     def _ushiro_call_text(self, event: GameEvent) -> str:
+        """後方互換: 文言のみ。断片付きは _ushiro_callout。"""
         seed = "|".join(
             [
                 getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
@@ -456,6 +458,36 @@ class CommonMixin:
             ]
         )
         return selected_ushiro_call_text(self._player_call_name(event), seed)
+
+    def _ushiro_callout(self, event: GameEvent) -> CalloutPayload:
+        """うしろコール。named かつ名前断片が解決できればパズル、否则 TTS 用 text のみ。
+
+        player_1 等にハードコードしない。call_name → manifest / ファイル解決。
+        classic（志村）はカタログ定型のまま全文 TTS（名前スロット非依存）。
+        """
+        from dogido_server.player_name_voice import build_named_ushiro_sequence
+        from dogido_server.state_machine.response_catalog import use_classic_ushiro_call
+
+        call_name = self._player_call_name(event)
+        seed = "|".join(
+            [
+                getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
+                str(event.sequence or ""),
+                call_name,
+                ",".join(threat.entity_id or threat.type for threat in event.visual_threats),
+            ]
+        )
+        text = selected_ushiro_call_text(call_name, seed)
+        if use_classic_ushiro_call(seed):
+            return CalloutPayload(text=text)
+
+        sequence = build_named_ushiro_sequence(
+            call_name,
+            cue_audio_dir=self.settings.cue_audio_dir,
+        )
+        if sequence:
+            return CalloutPayload(text=text, cue_sequence=tuple(sequence))
+        return CalloutPayload(text=text)
 
     def _weather_value(self, weather: object) -> str | None:
         return getattr(weather, "value", weather) if weather is not None else None

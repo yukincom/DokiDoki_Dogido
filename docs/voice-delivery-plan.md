@@ -206,7 +206,8 @@ Phase 0 のみでも「全体が少し遅い」が確認できれば issue の�
 | 経路 | 方式 |
 |---|---|
 | 悲鳴・息 | cue mp3（現状どおり） |
-| **戦況コール（名前・体数）** | **断片パズル**（本線方針。再生配線は段階実装） |
+| **戦況サマリー（名前・体数・おるで）** | **断片パズル**（配線済み） |
+| **単体視認・長文戦況** | **都度 TTS のまま**（§10.5。キュー全展開しない） |
 | 雑談・川柳・workshop | 全文 TTS + 速度プロファイル（#13） |
 
 Minecraft のモブ集合はほぼ閉じているため、名称断片の事前生成は現実的。  
@@ -254,29 +255,101 @@ Minecraft のモブ集合はほぼ閉じているため、名称断片の事前�
 - `CalloutPayload`（text + cue_sequence）
 - **複数体／複数種の「〇〇N体…おるで」**（`_hostile_count_summary`）が断片を優先
   - 欠けがあれば全文 TTS にフォールバック
-- 方向付き単体コール・ボス長文・うしろ系などは **引き続き全文 TTS**
+- **うしろ named**（§11）が名前断片 + `ushiro_tail` で配線済み
+- 方向付き単体コール・ボス長文・**うしろ classic（志村）** は全文 TTS
 
 #### コード地図
 
 | 部品 | パス |
 |---|---|
-| 断片 id 組み立て | `dogido_server/callout_fragments.py` |
+| モブ名・体数断片 id | `dogido_server/callout_fragments.py` |
+| 呼び名断片解決 | `dogido_server/player_name_voice.py` |
 | 再生 | `dogido_server/audio.py`（`cue_sequence`） |
 | サマリー文言 + 断片 | `mixins/auditory.py` `_hostile_count_summary` |
+| うしろ | `mixins/common.py` `_ushiro_callout` |
 | 発火 | `mixins/action_builder.py` / `py_tree_policy.py`（`_callout_audio_action`） |
 
 #### 次
 
-- 単体視認コール（方向＋名前）の部品化
 - 欠けモブ時のログ監視
 - 速度: callout 断片は battle テンポ、平時 speech は slow（#13）
-- うしろ named の **呼び名音声キャッシュ**（call_name キー）。複数人はキー複数。個人名は git 外  
-  → 記憶側のユーザー境界と揃える必要あり: [multi-user-tenancy.md](multi-user-tenancy.md)
-- 置き場（仮）: `cue_voice/player_names/`  
-  - 運用: `player_1.mp3` / `player_2.mp3` … **gitignore**  
-  - サンプル: `player_1_example.mp3` のみリポ（`player_2_example` は置かない）
+- 記憶の人物プロファイル境界（#20 / [multi-user-tenancy.md](multi-user-tenancy.md)）と call_name 切替 UX
+- **単体視認の方向フル部品化はしない**（§10.5）
 
-## 11. 状態ログ
+### 10.5 キューと都度 TTS の線引き（2026-07-29 合意）
+
+**いま全文 TTS（都度生成）の戦況コールは、都度生成のまま残す。**  
+方向×助詞×締めを全部キュー部品に広げない。音質（一文としての自然さ・ブツ切り回避）を優先する。
+
+| 方式 | 対象 |
+|---|---|
+| **キュー／断片パズル** | panic 悲鳴・息；モブ名＋体数＋おるで（サマリー）；うしろ named（名前＋ushiro_tail） |
+| **都度 TTS のまま** | 一般単体視認（`{D}！ {M}や！` 等の全バリアント）；特殊ボス長文；classic 志村；中立転・停滞・圧倒の長い文；雑談・川柳・workshop |
+| **任意・後から耳で判断** | 「増えたで」1定型だけキュー化する、など **型を絞った**追加のみ |
+
+理由:
+
+- 断片連結は助詞・短い切れで **ブツ切り・韻律の不連続**が出やすい  
+- 方向フレーズを `{D}に` / `{D}や` / `{D}！` 全展開するとファイル数が増え、メンテと音質の両方で割に合いにくい  
+- 真後ろ近接は **うしろ専用ルート**があり、一般方向の「後ろ」フルキュー必須ではない  
+- 既にキュー化したのは **名詞・数・決め台詞の尾**など、切れが少なく繰り返し効くものに限定
+
+方針の一文: **戦況の部品箱は閉じたまま。文としてしゃべる部分は都度 TTS。全部キューがゴールではない。**
+
+---
+
+## 11. 呼び名音声・うしろコール（配線済み）
+
+運用の詳細は [../cue_voice/player_names/README.md](../cue_voice/player_names/README.md)。
+
+### 11.1 うしろは二型（名称モブコールではない）
+
+| 型 | 文言 | 音声 |
+|---|---|---|
+| **classic** | `志村！うしろ！うしろ〜！`（カタログ定型） | **全文 TTS**（名前スロット非使用） |
+| **named** | `{call_name}うしろ！うしろ〜！` | **可能なら** `[名前断片] + ushiro_tail.mp3`。解決失敗時は全文 TTS |
+
+シードで classic / named を選ぶ（`use_classic_ushiro_call`）。
+
+### 11.2 call_name の優先順（ハードコードしない）
+
+| 優先 | 出所 |
+|---|---|
+| 1 | イベント `meta.call_name` |
+| 2 | `DOGIDO_DEFAULT_CALL_NAME`（`.env`） |
+| 3 | `player.name`（マイクラ） |
+| 4 | フォールバック「プレイヤー」 |
+
+体力警告など呼びかけも **同じ `_player_call_name`** を使う（ログイン名直差しにしない）。
+
+### 11.3 名前断片の解決（player_1 固定禁止）
+
+`player_1.mp3` は **家庭用スロットのファイル名**にすぎない。コードが常に player_1 を鳴らすことはない。
+
+```text
+call_name
+  → cue_voice/player_names/manifest.json の call_name_to_file
+  → player_names/{call_name}.mp3
+  → 安全化したファイル名.mp3
+  → なし → named は全文 TTS
+```
+
+| ファイル | git |
+|---|---|
+| `player_N.mp3` | **対象外** |
+| `manifest.json` | **対象外**（家庭用マッピング） |
+| `player_1_example.mp3` / `ushiro_tail.mp3` / `manifest.example.json` | リポ |
+
+切替例: `.env` の `DOGIDO_DEFAULT_CALL_NAME=プレイヤーツー` と manifest の対応付けで `player_2` + tail が鳴る。  
+別の人に変えるときは **call_name と manifest** を更新（コードの定数変更は不要）。
+
+### 11.4 世帯・記憶との関係
+
+- 名前音声は call_name キーで複数持てる  
+- 川柳・lesson の人物分離は **まだ単一空間** → [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) / [multi-user-tenancy.md](multi-user-tenancy.md)  
+- 同時に複数人と会話する想定はない（交代プレイのみ）
+
+## 12. 状態ログ
 
 | 日付 | 内容 |
 |---|---|
@@ -285,3 +358,5 @@ Minecraft のモブ集合はほぼ閉じているため、名称断片の事前�
 | 2026-07-29 | VOICEVOX キャッシュに max MB / max age の自動 prune。 |
 | 2026-07-29 | コールアウトはパズル連結を本線と明記。友好名 mp3 を外し敵対・中立のみ復活。 |
 | 2026-07-29 | 体数サマリー系コールアウトの断片再生を配線。欠け時は TTS フォールバック。 |
+| 2026-07-29 | うしろ named を call_name→断片解決で配線。player_1 固定禁止を docs に明記。 |
+| 2026-07-29 | §10.5: 都度 TTS の戦況コールは都度のまま残す。方向フル部品化はしない（音質優先）。 |

@@ -382,7 +382,7 @@ class CueReactionsMixin:
             if self._should_suppress_panic_cues(event) or not self._can_emit_panic_cue(now):
                 self.state.last_ushiro_call_at = now
                 self._mark_visual_priority_callout(now, single_type=None)
-            return True, self._co(self._ushiro_call_text(event))
+            return True, self._ushiro_callout(event)
 
         dark_push_forward = self._peek_dark_push_forward_ambush_target(event, now)
         if dark_push_forward is not None:

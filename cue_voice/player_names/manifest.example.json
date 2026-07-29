@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "call_name_to_file": {
+    "プレイヤーワン": "player_1.mp3",
+    "プレイヤーツー": "player_2.mp3",
+    "メルちゃん": "player_1.mp3"
+  },
+  "_comment": "call_name（meta.call_name / DOGIDO_DEFAULT_CALL_NAME）→ player_names 内のファイル。コピーして manifest.json にし、家庭用に編集。manifest.json は gitignore。"
+}

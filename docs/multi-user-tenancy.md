@@ -36,7 +36,7 @@
 | player_profile | **1 ファイル**（`player_profile.json`） |
 | 呼び名 | `meta.call_name` → なければ `DOGIDO_DEFAULT_CALL_NAME` |
 | セッション | アダプタ session はあるが、記憶の **論理ユーザー境界は弱い** |
-| 名前音声（検討中） | call_name ごとのキャッシュが自然（複数キー） |
+| 名前音声 | **うしろ named は配線済み**（`player_names/` + manifest）。call_name で解決し player_1 固定ではない。詳細は [voice-delivery-plan.md](voice-delivery-plan.md) §11 |
 
 家庭で **交代プレイ**（親→子）や、呼び名・好みの違う人を切り替えると、  
 **「誰の句か・誰への lesson か・誰を呼ぶか」** が分離していないと混線する。
