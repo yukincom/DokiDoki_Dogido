@@ -546,12 +546,24 @@ class AudioDispatcher:
                 self._stop_current_locked()
 
             try:
-                if action.layer == "speech" and action.text:
+                if action.cue_sequence:
+                    handle = self._start_cue_sequence_locked(
+                        action.cue_sequence,
+                        expected_epoch=expected_epoch,
+                    )
+                    if handle is None:
+                        # 断片が欠けた・失敗 → 文言 TTS へ
+                        if action.text:
+                            handle = self.speech_backend.start(action.text)
+                        else:
+                            return None, False
+                elif action.layer == "speech" and action.text:
                     handle = self.speech_backend.start(action.text)
                 elif action.cue_id:
                     handle = self.cue_backend.start(action.cue_id)
                     if handle is not None:
                         self._current = handle
+                        self._set_protect_locked(action.protect_ms)
                         return handle, False
                 elif action.text:
                     handle = self.speech_backend.start(action.text)
@@ -565,12 +577,63 @@ class AudioDispatcher:
                 handle = self.fallback_speech_backend.start(action.text)
 
             self._current = handle
-            if action.protect_ms > 0:
-                # 保護期間をセット（この間は通常割り込みをブロック）
-                self._current_protected_until = time.monotonic() + (action.protect_ms / 1000.0)
-            else:
-                self._current_protected_until = 0.0
+            self._set_protect_locked(action.protect_ms)
             return handle, False
+
+    def _set_protect_locked(self, protect_ms: int) -> None:
+        if protect_ms > 0:
+            self._current_protected_until = time.monotonic() + (protect_ms / 1000.0)
+        else:
+            self._current_protected_until = 0.0
+
+    def _start_cue_sequence_locked(
+        self,
+        cue_sequence: tuple[str, ...] | list[str],
+        *,
+        expected_epoch: int | None,
+    ) -> RunningAudio | None:
+        """断片 id を順に afplay。途中で epoch が変わったら中断。
+
+        ロック保持のまま wait するため、長いシーケンス中は他スレッドの stop が
+        terminate で割り込める（process は _current に載せる）。
+        """
+        ids = [str(item).strip() for item in cue_sequence if str(item).strip()]
+        if not ids:
+            return None
+
+        # 先に全パス解決。欠けがあれば None（TTS フォールバック）
+        paths: list[Path] = []
+        for cue_id in ids:
+            path = resolve_cue_path(self.settings.cue_audio_dir, cue_id)
+            if path is None:
+                LOGGER.warning("callout_fragment_missing cue_id=%s", cue_id)
+                return None
+            paths.append(path)
+
+        last_handle: RunningAudio | None = None
+        for index, path in enumerate(paths):
+            if expected_epoch is not None and expected_epoch != self._epoch:
+                if last_handle is not None:
+                    self._cleanup_handle_locked(last_handle)
+                return None
+            try:
+                process = subprocess.Popen(["afplay", str(path)])
+            except Exception:
+                LOGGER.warning("callout_fragment_play_failed path=%s", path)
+                if last_handle is not None:
+                    self._cleanup_handle_locked(last_handle)
+                return None
+            handle = RunningAudio(process=process, cleanup_path=None, cue_id=ids[index])
+            self._current = handle
+            last_handle = handle
+            # 最後以外はここで完了待ち
+            if index < len(paths) - 1:
+                try:
+                    process.wait()
+                finally:
+                    if self._current is handle:
+                        self._current = None
+        return last_handle
 
     def _wait_for(self, handle: RunningAudio) -> None:
         """プロセス終了まで待機し、終了後にクリーンアップする。

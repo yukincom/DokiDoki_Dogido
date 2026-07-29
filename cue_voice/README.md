@@ -8,18 +8,21 @@
 |---|---|---|
 | `panic/` | 悲鳴・息など戦闘 cue | **使用中**（afplay） |
 | `aftermath.mp3` | 戦闘後など | **使用中** |
-| `mob/` | **敵対・中立**の名称断片 | 素材あり・**連結再生は未配線** |
-| `common/counts/` | `1体`〜`8体` | 素材あり・未配線 |
-| `common/phrases/` | `おるで` / `がおるで` | 素材あり・未配線 |
+| `mob/` | **敵対・中立**の名称断片 | 素材あり・**体数サマリーで連結再生** |
+| `common/counts/` | `1体`〜`8体` | 同上 |
+| `common/phrases/` | `おるで` / `がおるで` | 同上 |
 | `entity_cache_manifest.json` | 上記断片の一覧 | メタデータ |
+| `player_names/` | 呼び名断片（うしろ named） | call_name→manifest で解決。`player_N` は gitignore。`ushiro_tail` / example はリポ |
 
 ## 方針（コールアウト）
 
-- 戦況コールアウトは **全文 TTS 都度生成より、パズル連結を本線**にする  
-  （名称 + 体数 + 定型句。必要なら方向部品も）
-- **友好（pure passive）の名称 mp3 は置かない**（牛・羊・村民など）
-- 名称セットはカタログの **hostile + neutral**（`CALLOUT_MOB_VOICE_LABELS` / `threat_mob_labels`）
-- 雑談・川柳・workshop はこれまでどおり **全文 TTS**
+- **全部をキューにしない。** 名詞・数・決め台詞の尾など、切れが少ないものだけ断片化  
+- 断片パズル: 名称 + 体数 + おるで（サマリー）、うしろ named（名前 + ushiro_tail）  
+- **単体視認（方向＋モブの各種言い回し）・特殊長文は都度 TTS のまま**（音質優先）  
+- **友好（pure passive）の名称 mp3 は置かない**  
+- 名称セットはカタログの **hostile + neutral**  
+- 雑談・川柳・workshop は全文 TTS  
+- 詳細: [docs/voice-delivery-plan.md](../docs/voice-delivery-plan.md) §10.5
 
 ## 生成
 

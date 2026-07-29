@@ -15,7 +15,23 @@ class AudioAction:
     interrupt: bool
     text: str | None = None
     cue_id: str | None = None
+    # コールアウト断片パズル: cue_voice 相対 id の列（例: mob/zombie, common/counts/2, common/phrases/orude）
+    cue_sequence: tuple[str, ...] = ()
     protect_ms: int = 0
+
+
+@dataclass(slots=True)
+class CalloutPayload:
+    """戦況コールの文言 + 任意の断片シーケンス。
+
+    cue_sequence が空なら全文 TTS。揃っていればパズル再生（text はログ・フォールバック用）。
+    """
+
+    text: str
+    cue_sequence: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool((self.text or "").strip() or self.cue_sequence)
 
 
 @dataclass(slots=True)

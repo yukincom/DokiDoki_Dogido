@@ -13,6 +13,7 @@ from dogido_server.state_machine.response_catalog import (
     selected_ushiro_call_text,
     special_biome_entry_lines,
 )
+from dogido_server.state_machine.types import AudioAction, CalloutPayload
 
 
 @lru_cache(maxsize=1)
@@ -21,6 +22,46 @@ def _neutral_mob_type_set() -> frozenset[str]:
 
 
 class CommonMixin:
+    def _co(
+        self,
+        value: str | CalloutPayload | None,
+        sequence: list[str] | tuple[str, ...] | None = None,
+    ) -> CalloutPayload | None:
+        """文言または CalloutPayload を正規化する。"""
+        extra = tuple(sequence or ())
+        if isinstance(value, CalloutPayload):
+            if not value and not extra:
+                return None
+            if extra and not value.cue_sequence:
+                return CalloutPayload(text=value.text, cue_sequence=extra)
+            return value if value else None
+        if value is None:
+            if not extra:
+                return None
+            return CalloutPayload(text="", cue_sequence=extra)
+        text = str(value).strip()
+        if not text and not extra:
+            return None
+        return CalloutPayload(text=text, cue_sequence=extra)
+
+    def _callout_audio_action(
+        self,
+        payload: str | CalloutPayload | None,
+        *,
+        interrupt: bool = False,
+    ) -> AudioAction | None:
+        resolved = self._co(payload)
+        if resolved is None:
+            return None
+        text = (resolved.text or "").strip() or None
+        return AudioAction(
+            layer="callout",
+            interrupt=interrupt,
+            text=text,
+            cue_sequence=resolved.cue_sequence,
+            protect_ms=self._callout_protect_ms(text),
+        )
+
     def _active_status_effects(self, event: GameEvent) -> set[str]:
         return {
             effect.split(":")[-1].strip().lower()
@@ -399,10 +440,12 @@ class CommonMixin:
         if not self._should_emit_low_health_warning(event, signals):
             return None
         self.state.low_health_warning_armed = False
-        name = (event.player.name or "").strip() or self._player_call_name(event)
+        # 呼びかけは call_name（設定／meta）。Minecraft ログイン名を直差ししない
+        name = self._player_call_name(event)
         return f"{name}！体力やばいで！"
 
     def _ushiro_call_text(self, event: GameEvent) -> str:
+        """後方互換: 文言のみ。断片付きは _ushiro_callout。"""
         seed = "|".join(
             [
                 getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
@@ -415,6 +458,36 @@ class CommonMixin:
             ]
         )
         return selected_ushiro_call_text(self._player_call_name(event), seed)
+
+    def _ushiro_callout(self, event: GameEvent) -> CalloutPayload:
+        """うしろコール。named かつ名前断片が解決できればパズル、否则 TTS 用 text のみ。
+
+        player_1 等にハードコードしない。call_name → manifest / ファイル解決。
+        classic（志村）はカタログ定型のまま全文 TTS（名前スロット非依存）。
+        """
+        from dogido_server.player_name_voice import build_named_ushiro_sequence
+        from dogido_server.state_machine.response_catalog import use_classic_ushiro_call
+
+        call_name = self._player_call_name(event)
+        seed = "|".join(
+            [
+                getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
+                str(event.sequence or ""),
+                call_name,
+                ",".join(threat.entity_id or threat.type for threat in event.visual_threats),
+            ]
+        )
+        text = selected_ushiro_call_text(call_name, seed)
+        if use_classic_ushiro_call(seed):
+            return CalloutPayload(text=text)
+
+        sequence = build_named_ushiro_sequence(
+            call_name,
+            cue_audio_dir=self.settings.cue_audio_dir,
+        )
+        if sequence:
+            return CalloutPayload(text=text, cue_sequence=tuple(sequence))
+        return CalloutPayload(text=text)
 
     def _weather_value(self, weather: object) -> str | None:
         return getattr(weather, "value", weather) if weather is not None else None

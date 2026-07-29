@@ -57,20 +57,14 @@ class ActionBuilderMixin:
         if next_mode == "panic":
             actions.extend(self._threat_dark_push_stop_actions(event, signals, now))
             callout = self._panic_callout(event, signals)
-            entry_cue = self._panic_entry_cue(event, signals, now, has_callout=callout is not None)
+            entry_cue = self._panic_entry_cue(event, signals, now, has_callout=bool(callout))
             if entry_cue is not None:
                 actions.append(entry_cue)
                 if entry_cue.cue_id == "panic_scream_start":
                     return actions
-            if callout:
-                actions.append(
-                    AudioAction(
-                        layer="callout",
-                        interrupt=False,
-                        text=callout,
-                        protect_ms=self._callout_protect_ms(callout),
-                    )
-                )
+            callout_action = self._callout_audio_action(callout)
+            if callout_action is not None:
+                actions.append(callout_action)
             return actions
 
         if next_mode == "suppressed_panic":
@@ -79,35 +73,22 @@ class ActionBuilderMixin:
             if cue is not None:
                 actions.append(cue)
                 return actions
-            callout = self._suppressed_callout(event, signals, now)
-            if callout:
-                actions.append(
-                    AudioAction(
-                        layer="callout",
-                        interrupt=False,
-                        text=callout,
-                        protect_ms=self._callout_protect_ms(callout),
-                    )
-                )
+            callout_action = self._callout_audio_action(self._suppressed_callout(event, signals, now))
+            if callout_action is not None:
+                actions.append(callout_action)
             return actions
 
         if next_mode == "alert":
             actions.extend(self._threat_dark_push_stop_actions(event, signals, now))
             threat_callout = self._alert_callout(event, signals)
-            cue = self._alert_entry_cue(event, signals, now, has_callout=threat_callout is not None)
+            cue = self._alert_entry_cue(event, signals, now, has_callout=bool(threat_callout))
             if cue is not None:
                 actions.append(cue)
                 if cue.cue_id == "panic_scream_start":
                     return actions
-            if threat_callout:
-                actions.append(
-                    AudioAction(
-                        layer="callout",
-                        interrupt=False,
-                        text=threat_callout,
-                        protect_ms=self._callout_protect_ms(threat_callout),
-                    )
-                )
+            callout_action = self._callout_audio_action(threat_callout)
+            if callout_action is not None:
+                actions.append(callout_action)
             else:
                 actions.extend(self._environmental_actions(event, signals, previous_mode, now))
             return actions
@@ -157,6 +138,7 @@ class ActionBuilderMixin:
         interrupt: bool,
         text: str | None = None,
         cue_id: str | None = None,
+        cue_sequence: tuple[str, ...] = (),
         protect_ms: int = 0,
     ) -> AudioAction:
         return AudioAction(
@@ -164,6 +146,7 @@ class ActionBuilderMixin:
             interrupt=interrupt,
             text=text,
             cue_id=cue_id,
+            cue_sequence=cue_sequence,
             protect_ms=protect_ms,
         )
 
@@ -207,13 +190,14 @@ class ActionBuilderMixin:
                 event.observed_at.isoformat(),
             )
             LOGGER.info(
-                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s interrupt=%s protect_ms=%s text=%s",
+                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s cue_sequence=%s interrupt=%s protect_ms=%s text=%s",
                 event_name,
                 event.sequence,
                 previous_mode,
                 next_mode,
                 action.layer,
                 action.cue_id,
+                list(action.cue_sequence) if action.cue_sequence else None,
                 action.interrupt,
                 action.protect_ms,
                 summarize_for_log(action.text),

@@ -82,8 +82,11 @@ class AuditoryMixin:
 
         line = self._render_daylight_water_survivor_line(event, survivors, threats)
         followup = self._daylight_water_followup_callout(event, threats, now)
-        if followup:
-            return f"{line} {followup}"
+        if followup is not None:
+            # followup は CalloutPayload（断片付きのこともある）。ここは一文結合の TTS 用。
+            followup_text = getattr(followup, "text", None) or str(followup)
+            if str(followup_text).strip():
+                return f"{line} {followup_text}"
         return line
 
     def _render_daylight_water_survivor_line(
@@ -314,10 +317,13 @@ class AuditoryMixin:
         counts: dict[str, int],
         suppressed: bool,
         threats: list[VisualThreat],
-    ) -> str:
+    ):
+        from dogido_server.callout_fragments import build_count_summary_sequence
+        from dogido_server.state_machine.types import CalloutPayload
+
         total = sum(counts.values())
         if total >= 9 and not self._contains_boss_hostile(threats):
-            return self._hostile_massive_callout(event, suppressed=suppressed)
+            return CalloutPayload(text=self._hostile_massive_callout(event, suppressed=suppressed))
 
         ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         parts = [
@@ -325,7 +331,13 @@ class AuditoryMixin:
             for hostile, count in ordered[:3]
         ]
         suffix = "おる……。" if suppressed else "おるで。"
-        return f"{'、'.join(parts)}{suffix}"
+        text = f"{'、'.join(parts)}{suffix}"
+        sequence = build_count_summary_sequence(
+            dict(ordered[:3]),
+            suppressed=suppressed,
+            cue_dir=self.settings.cue_audio_dir,
+        )
+        return CalloutPayload(text=text, cue_sequence=tuple(sequence or ()))
 
     def _hostile_count_label(self, count: int) -> str:
         if count <= 0:

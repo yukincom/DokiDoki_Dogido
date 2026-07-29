@@ -170,5 +170,10 @@ def response_prewarm_texts(player_name: str | None) -> list[str]:
     ]
 
 
-def _use_classic_ushiro_call(seed_text: str) -> bool:
+def use_classic_ushiro_call(seed_text: str) -> bool:
+    """シードから classic（志村）バリアントを選ぶか。"""
     return sha1(seed_text.encode("utf-8")).digest()[0] < 26
+
+
+# 後方互換
+_use_classic_ushiro_call = use_classic_ushiro_call

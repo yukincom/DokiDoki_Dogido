@@ -70,7 +70,8 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 | 3 | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) | workshop 取り込みパターン調査 |
 | 4 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
 | 4 | [memory-architecture.md](memory-architecture.md) | 記憶モデル |
-| 5 | [senryu-roadmap.md](senryu-roadmap.md) | ロードマップ |
+| 5 | [multi-user-tenancy.md](multi-user-tenancy.md) | 複数ユーザー・記憶境界（課題） |
+| 6 | [senryu-roadmap.md](senryu-roadmap.md) | ロードマップ |
 | 6 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
 | 7 | [rag.md](rag.md) | RAG 初期検討 |
 
@@ -133,6 +134,7 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 - [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md)
 - [haiku-feedback-plan.md](haiku-feedback-plan.md)
 - [memory-architecture.md](memory-architecture.md)
+- [multi-user-tenancy.md](multi-user-tenancy.md)
 - [senryu-roadmap.md](senryu-roadmap.md)
 - [senryu-rag-plan.md](senryu-rag-plan.md)
 - [rag.md](rag.md)
