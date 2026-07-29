@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     # TTS キャッシュ肥大化防止（.dogido_tmp は gitignore。上限超過 or 古い順で削除）
     voicevox_cache_max_mb: float = 256.0
     voicevox_cache_max_age_days: float = 7.0
+    # TTS 読み補正: auto=UniDic あれば使う / unidic=試す / off=例外表のみ
+    # optional: pip install -e ".[tts-reading]"（fugashi + unidic-lite）
+    tts_reading_engine: Literal["auto", "unidic", "off"] = "auto"
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 

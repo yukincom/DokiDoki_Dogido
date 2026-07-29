@@ -110,7 +110,7 @@ class VoicevoxSpeechBackend(SpeechBackend):
         self._prune_cache()
 
     def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
-        spoken = prepare_text_for_tts(text)
+        spoken = prepare_text_for_tts(text, engine=self.settings.tts_reading_engine)
         cached = self._ensure_cached(spoken, speed_scale=speed_scale)
         # cleanup_path=None: キャッシュファイルは再生後も残す
         return RunningAudio(process=subprocess.Popen(["afplay", str(cached)]), cleanup_path=None)
@@ -121,7 +121,9 @@ class VoicevoxSpeechBackend(SpeechBackend):
         合成失敗した文は無視して続行する（1 件のエラーで全部止めない）。
         """
         for text in texts:
-            cleaned = prepare_text_for_tts(text.strip())
+            cleaned = prepare_text_for_tts(
+                text.strip(), engine=self.settings.tts_reading_engine
+            )
             if not cleaned:
                 continue
             try:
@@ -131,7 +133,8 @@ class VoicevoxSpeechBackend(SpeechBackend):
 
     def _ensure_cached(self, text: str, *, speed_scale: float | None = None) -> Path:
         """キャッシュがあれば返す。なければ VoiceVox API で合成してキャッシュに保存する。"""
-        spoken = prepare_text_for_tts(text)
+        # start/prewarm 済みの spoken が来ることもある。冪等に再適用する。
+        spoken = prepare_text_for_tts(text, engine=self.settings.tts_reading_engine)
         effective_speed = (
             float(speed_scale)
             if speed_scale is not None

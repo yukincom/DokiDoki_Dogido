@@ -1,13 +1,13 @@
 # TTS 読み補正 — UniDic / 形態素解析方針
 
 **日付:** 2026-07-29  
-**状態:** 方針メモ（**実装前**。スパイク後に状態を更新）  
+**状態:** Phase 1–2 **実装済み**（optional UniDic + 例外表）。Phase 3 実測・Phase 4 既定オン方針は運用しながら。  
 **きっかけ:** VOICEVOX が「朝」を「ちょう」と読むなど、自由文 TTS の誤読。自前置換の都度追加は非効率。
 
 関連:
 
 - [voice-delivery-plan.md](voice-delivery-plan.md) §12（現状の薄い辞書）
-- 実装現状: `dogido_server/tts_reading.py`（高頻度語の単純 replace）
+- 実装: `dogido_server/tts_reading.py`
 - 川柳ラベル読み: `catalog_readings.py`（本方針とは別系統）
 
 ---
@@ -17,13 +17,13 @@
 | 項目 | 方針 |
 |---|---|
 | 自力で誤読語を都度追加し続ける | **やらない**（スケールしない） |
-| 第一候補 | **MeCab + UniDic**（語種・読みが TTS 向き） |
+| 第一候補 | **MeCab + UniDic**（語種・読みが TTS 向き）→ **fugashi + unidic-lite で実装** |
 | 第二候補 | Sudachi + SudachiDict（導入のしやすさ・現代語） |
 | 第三 | Open JTalk 標準辞書系（軽量・組み込み寄り。サーバー本線ではない） |
 | 載せる場所 | **dogido_server の VOICEVOX 直前**のみ |
 | ログ / `action.text` | **漢字交じりのまま**（表示・デバッグ用） |
-| 自前 `tts_reading.py` | **消さない**。解析のあと **例外・上書き**として残す |
-| 実装順 | **本 docs を正としてから** optional 依存でスパイク |
+| 自前 `tts_reading.py` | **消さない**。UniDic のあと **例外・残差**として残す（優先読み表も同ファイル） |
+| 依存 | **optional** `pip install -e ".[tts-reading]"` |
 
 ---
 
@@ -51,34 +51,25 @@ LLM: 普通の漢字交じり日本語を生成（口調・キャラに集中）
 
 いずれも **商用利用可能な緩いライセンス**が前提（導入時に公式表記を再確認し、README Acknowledgments に記載）。
 
-### 3.1 UniDic（第一候補）
+### 3.1 UniDic（第一候補・採用中）
 
 - 開発: 国立国語研究所  
-- ライセンス: 修正 BSD 等（トリプルライセンスの記述あり。**導入時に版を確認**）  
-- 強み:  
-  - TTS / NLP で広く使われる  
-  - **読み・アクセント情報が厚い**  
-  - **語種（和／漢／外／混 等）** が付き、音読みベースか訓読みベースかの手がかりになる  
-- 湯桶・重箱: 「草（和）+ 地（漢）」のような分解と語種で、混種を検出する材料になる  
-- 組み合わせ: 典型は **MeCab + UniDic**
+- 実装パッケージ: `fugashi` + `unidic-lite`（UniDic 2.1.2 系、ディスク約 250MB）  
+- ライセンス: UniDic は GPL / LGPL / BSD のトリプルライセンス。fugashi は MIT+BSD。詳細はパッケージ同梱 `LICENSE.unidic`  
+- 強み: 読み・語種（和／漢／外／混／固 等）  
 
 ### 3.2 SudachiDict（第二候補）
 
 - ライセンス: Apache 2.0  
-- 強み: 現代語・表記ゆれ・ネット寄り語彙。Python からの導入が比較的楽  
-- 弱み: UniDic ほど「語種で音訓」を前面にした設計ではない（読みは取れる）  
-- 関西弁・崩し文では Sudachi の方が楽な局面もあり得る → スパイクで比較
+- 関西弁・口語が崩れる場合の比較用に残す（未実装）
 
 ### 3.3 Open JTalk 標準辞書（NAIST-jdic ベース）
 
-- ライセンス: 修正 BSD（**標準辞書**）  
-- 強み: 軽い・枯れている・ゲームエンジン組み込み事例が多い  
-- 注意: 有志拡張辞書の一部は商用不可のことがある → **標準のみ**  
-- ドギド: セリフ処理はサーバー側なので **本線ではない**（クライアント完結が要る将来用）
+- 本線ではない（クライアント完結が要る将来用）
 
 ---
 
-## 4. ドギドへの組み込み案
+## 4. ドギドへの組み込み（実装）
 
 ### 4.1 パイプライン
 
@@ -88,76 +79,75 @@ LLM 出力（ログ・UI 用。漢字交じり）
         ▼
 prepare_text_for_tts()
         │
-        ├─ (1) UniDic 経路（あれば）
-        │      形態素解析 → 語種・読みに基づき
-        │      必要な箇所だけひらがな化
-        │      または読みを合成エンジン向けに正規化
+        ├─ (1) UniDic 経路（optional・engine≠off）
+        │      トークン単位でひらがな化
+        │      - 優先読み表（一日→いちにち 等）
+        │      - 語種が和/混の内容語（漢・固は原則触らない）
         │
-        └─ (2) tts_reading 例外表（既存）
-               解析の誤爆修正・ゲーム固有語
+        └─ (2) tts_reading 例外表
+               残差・辞書無し時の本線・複合フレーズ
+               （朝鮮を朝より先に置き単純 replace の誤爆を防ぐ）
         │
         ▼
 VOICEVOX audio_query / synthesis
 ```
 
-- **失敗時:** 原文（または (2) のみ）で合成。落ちない  
-- **対象:** VOICEVOX 経由の全 TTS（ambient / player_chat / 戦況の都度生成 等）  
-- **対象外:** cue mp3・断片パズル（既に読み固定の録音）
+- **失敗時:** UniDic 初期化/解析失敗でも落ちず、例外表結果（または原文）で合成  
+- **対象:** VOICEVOX 経由の全 TTS  
+- **対象外:** cue mp3・断片パズル  
 
-### 4.2 置換ロジックの原則（やりすぎ防止）
+### 4.2 置換ロジック（Phase B 寄りの選択）
 
-「訓読み語を全部ひらがな」は **誤爆しやすい**。
+| 段階 | 内容 | 状態 |
+|---|---|---|
+| B | 語種が **和 / 混** の内容語で漢字を含むものだけひらがな化 | **実装** |
+| D | 例外表 + トークン優先読み（一日・明日など） | **実装** |
+| A | 読みを VOICEVOX の別 API に渡す | 未実施（表記ひらがなで足りる） |
+| C | 混種結合の特別処理 | 語種「混」は B に含む。結合単位の追加ヒューリスティックは未 |
 
-推奨の段階:
-
-| 段階 | 内容 |
-|---|---|
-| A | 解析結果の **読み** を VOICEVOX が受けられる形で渡す（可能な場合） |
-| B | **語種が和（訓）寄り**の内容語など、誤読しやすいものだけ表記をひらがな化 |
-| C | **混種（湯桶・重箱になりやすい結合）** をひらがな化 |
-| D | `tts_reading` で最終上書き |
-
-スパイクでは A〜C のどれが誤読削減と自然さのバランスが良いか実測する。
+「全漢字の機械的ひらがな化」はしない。
 
 ### 4.3 依存の置き方
 
-- **必須依存にしない**（Apple Silicon の `mlx-lm` に加え、辞書未導入でも起動できる）  
-- 例: `pip install -e ".[tts-reading]"`  
-  - MeCab バインディング + UniDic データ（具体パッケージ名はスパイクで確定）  
-- 辞書未導入時は現状どおり `tts_reading` のみ  
+```bash
+pip install -e ".[tts-reading]"
+# 中身: fugashi[unidic-lite]
+```
+
+- 必須依存にしない  
+- 設定: `DOGIDO_TTS_READING_ENGINE=auto|unidic|off`（Settings: `tts_reading_engine`）  
+  - `auto` … UniDic があれば使う（既定）  
+  - `unidic` … 試す（失敗時は例外表のみ）  
+  - `off` … 例外表のみ  
 
 ### 4.4 性能
 
-- 解析器は **プロセス内シングルトン**（リクエストごとに辞書ロードしない）  
-- 短文 TTS ごとに数十 ms 程度を目安に計測。許容を超えたら  
-  - ambient のみ解析  
-  - または結果の短時間キャッシュ（同一文字列）  
+- 解析器は **プロセス内シングルトン**（`tts_reading._get_unidic_tagger`）  
+- Phase 3 で ambient 短文の ms を実測予定  
 
 ---
 
-## 5. 現状（実装済み・薄い層）
+## 5. 現状（例外表）
 
 | 項目 | 内容 |
 |---|---|
 | ファイル | `dogido_server/tts_reading.py` |
-| 辞書の場所 | **同ファイル内** `_TTS_HIRAGANA_REPLACEMENTS`（外部 JSON ではない） |
-| 処理 | 単純な `str.replace`（長い語優先） |
+| 辞書の場所 | `_TTS_HIRAGANA_REPLACEMENTS`（外部 JSON ではない） |
+| 処理 | UniDic（任意）→ 単純 `str.replace`（長い語優先） |
 | 例 | 朝から→あさから、草地→くさち、一日→いちにち 等 |
-| 呼び出し | `VoicevoxSpeechBackend` 合成直前 |
-
-これは UniDic 導入後も **Phase D の例外表**として残す。
+| 呼び出し | `VoicevoxSpeechBackend` 合成直前（`engine=settings.tts_reading_engine`） |
 
 ---
 
 ## 6. 実装フェーズ
 
-| Phase | 内容 | 完了条件 |
+| Phase | 内容 | 状態 |
 |---|---|---|
-| **0** | 本 docs + 現状薄い辞書（済） | — |
-| **1** | MeCab+UniDic の optional 導入スパイク | インストール手順が README か docs に残る |
-| **2** | `prepare_text_for_tts` に解析パスを接続 | オフ時は従来どおり |
-| **3** | ambient 実ログ数十件で A/B（誤読・違和感・ms） | 朝・草地などが改善し、明らかな誤爆が少ない |
-| **4** | 既定オン可否・Acknowledgments・`.env` フラグ | 運用方針が決まる |
+| **0** | 本 docs + 現状薄い辞書 | **済** |
+| **1** | MeCab+UniDic の optional 導入 | **済**（`[tts-reading]` / fugashi+unidic-lite） |
+| **2** | `prepare_text_for_tts` に解析パス接続 | **済**（off 時は従来どおり） |
+| **3** | ambient 実ログ数十件で A/B（誤読・違和感・ms） | 未 |
+| **4** | 既定オン可否の運用確認・Acknowledgments | **一部済**（auto 既定・README 追記）。実機長期確認は未 |
 
 Sudachi は Phase 3 で「関西弁・口語が崩れる」場合の比較用に残す。
 
@@ -165,9 +155,9 @@ Sudachi は Phase 3 で「関西弁・口語が崩れる」場合の比較用に
 
 ## 7. ライセンス・クレジット
 
-- 採用辞書の **正確なライセンス文面を導入バージョンで確認**  
-- `README.md` Acknowledgments に辞書名とライセンスを追記  
-- 拡張・非公式辞書を混ぜない（特に Open JTalk 周辺）  
+- UniDic: GPL / LGPL / BSD（トリプル）。`unidic-lite` 同梱表記に従う  
+- `README.md` Acknowledgments に記載  
+- 拡張・非公式辞書を混ぜない  
 
 本プロジェクト本体は MIT。依存辞書の条件は README で明示する。
 
@@ -188,3 +178,4 @@ Sudachi は Phase 3 で「関西弁・口語が崩れる」場合の比較用に
 | 日付 | 内容 |
 |---|---|
 | 2026-07-29 | 方針文書化。第一候補 UniDic。実装は未着手（薄い tts_reading のみ稼働）。 |
+| 2026-07-29 | Phase 1–2 実装。`prepare_text_for_tts` に例外表→UniDic(和/混) 補完。`[tts-reading]` optional。`DOGIDO_TTS_READING_ENGINE`。 |

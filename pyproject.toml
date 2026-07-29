@@ -25,6 +25,10 @@ dependencies = [
 dev = [
   "pytest>=8.0",
 ]
+# VOICEVOX 誤読補正（MeCab バインディング + UniDic lite）。無くても起動可・例外表のみ
+tts-reading = [
+  "fugashi[unidic-lite]>=1.3",
+]
 
 [project.scripts]
 dogido-server = "dogido_server.app:main"

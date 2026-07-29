@@ -152,9 +152,10 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"   # ランタイム + pytest。サーバーだけなら pip install -e .
-cp .env.example .env   # 必要なら LLM / TTS を設定
+# 任意: TTS 読み補正（UniDic）… pip install -e ".[tts-reading]"
+cp .env.example .env   # 必要なら LLM / TTS を設定（DOGIDO_TTS_READING_ENGINE 等）
 python -m dogido_server
-python -m pytest tests/test_haiku*.py -q
+python -m pytest tests/test_haiku*.py tests/test_tts_reading.py -q
 ```
 
 player テキスト注入（開発用・**アクティブセッション必須**）は
@@ -176,7 +177,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 | パッケージ編集順 | `docs/server-reorg-and-workshop-order.md` |
 | 雑談 | `docs/player-chat-casual-plan.md` |
 | ボイス速度・間・コール断片 | `docs/voice-delivery-plan.md`（#13、うしろ named §11） |
-| TTS 読み・UniDic | `docs/tts-reading-unidic-plan.md`（実装前方針） |
+| TTS 読み・UniDic | `docs/tts-reading-unidic-plan.md`（Phase 1–2 済・optional `[tts-reading]`） |
 | 複数ユーザー（交代） | `docs/multi-user-tenancy.md`（#20） |
 | イベント形 | `docs/event-schema.md` · `docs/adapter-api.md` |
 | 状態機械 | `docs/state-machine.md` |
@@ -190,7 +191,8 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - workshop H1〜H5.2: **済**（soft lesson / loosen / TTL / 明示「気にせんで」）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  
+- TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
-- 任意: 直し案 1 本、H7、Phase E 整理、VLM  
+- 任意: 直し案 1 本、H7、Phase E 整理、VLM、TTS 読み Phase 3 実測  
 
 更新したらこの節と `companion-maturity.md` §6 を揃える。

@@ -378,8 +378,8 @@ call_name
 | 村人 | key は `villager:{職}` のまま。**別職は即出し可**、同職は 120s |
 | 村人一括 CD | **しない**（職ネタの連続を楽しむ） |
 | ambient 文字数目安 | プロンプト **35字以内** |
-| 読み（現状） | プロンプト誘導 + `tts_reading.py` 内の薄い置換表（合成直前）。辞書は同ファイル定数 |
-| 読み（次） | **MeCab + UniDic を第一候補**で解析・語種活用。例外表は `tts_reading` に残す。詳細: [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) |
+| 読み（現状） | 合成直前 `prepare_text_for_tts`: optional **UniDic（トークン単位・和/混＋優先読み）** → **例外表**。`DOGIDO_TTS_READING_ENGINE=auto`。詳細: [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) |
+| 読み（次） | Phase 3 ambient 実測。Sudachi 比較は口語崩れ時のみ |
 
 ## 13. 状態ログ
 

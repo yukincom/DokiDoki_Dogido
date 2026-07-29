@@ -18,6 +18,7 @@ from .haiku import (
     clean_haiku_output,
     count_japanese_sounds,
     haiku_char_sound,
+    is_haiku_soft_emit_ok,
     is_haiku_usable_output,
     split_haiku_phrases,
 )
@@ -158,7 +159,11 @@ class DogidoLLM:
         # 後処理は純粋関数なのでロック外で行うが、将来ここで _model / _tokenizer に触るなら要見直し。
         # kind によってクリーニング・判定ロジックを切り替える
         cleaned = self._clean_haiku_output(text) if request.kind == "haiku" else self._clean_output(text)
-        is_usable = self._is_haiku_usable_output(cleaned, request.details) if request.kind == "haiku" else self._is_usable_output(cleaned, request.details)
+        is_usable = (
+            self._is_haiku_usable_output(cleaned, request.details)
+            if request.kind == "haiku"
+            else self._is_usable_output(cleaned, request.details)
+        )
         if request.kind == "haiku" and not is_usable and cleaned:
             repaired = self._retry_haiku_repair(request, cleaned)
             if repaired:
@@ -168,6 +173,14 @@ class DogidoLLM:
                     self._summarize_for_log(repaired),
                 )
                 return repaired
+            # repair 後も 575 外でも、句らしいなら捨てずに出す（workshop で直す前提）
+            if self._is_haiku_soft_emit_ok(cleaned, request.details):
+                LOGGER.warning(
+                    "llm_leaf kind=%s result=accepted_imperfect text=%s",
+                    request.kind,
+                    self._summarize_for_log(cleaned),
+                )
+                return cleaned
         if not is_usable:
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=unusable_output raw=%s cleaned=%s",
@@ -211,14 +224,21 @@ class DogidoLLM:
                 )
                 return None
         cleaned = self._clean_haiku_output(repaired_text)
-        if not self._is_haiku_usable_output(cleaned, request.details):
+        if self._is_haiku_usable_output(cleaned, request.details):
+            return cleaned
+        if self._is_haiku_soft_emit_ok(cleaned, request.details):
             LOGGER.warning(
-                "llm_leaf kind=haiku_repair result=fallback reason=unusable_output raw=%s cleaned=%s",
+                "llm_leaf kind=haiku_repair result=accepted_imperfect raw=%s cleaned=%s",
                 self._summarize_for_log(repaired_text),
                 self._summarize_for_log(cleaned),
             )
-            return None
-        return cleaned
+            return cleaned
+        LOGGER.warning(
+            "llm_leaf kind=haiku_repair result=fallback reason=unusable_output raw=%s cleaned=%s",
+            self._summarize_for_log(repaired_text),
+            self._summarize_for_log(cleaned),
+        )
+        return None
 
     def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, Any]:
         """JSON オブジェクトを 1 件生成して返す。失敗時は fallback_value を返す。"""
@@ -426,6 +446,9 @@ class DogidoLLM:
 
     def _is_haiku_usable_output(self, text: str, details: dict[str, Any] | None = None) -> bool:
         return is_haiku_usable_output(text, details)
+
+    def _is_haiku_soft_emit_ok(self, text: str, details: dict[str, Any] | None = None) -> bool:
+        return is_haiku_soft_emit_ok(text, details)
 
     def _split_haiku_phrases(self, text: str) -> list[str] | None:
         return split_haiku_phrases(text)

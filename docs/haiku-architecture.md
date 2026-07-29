@@ -29,8 +29,8 @@
 4. 一定時間静かだったら川柳候補を起動
 5. コード側で `HaikuContext` を組み立てる
 6. `chat` route で `IronyContext` を JSON 抽出する
-7. `haiku` route で 5-7-5 の一句を生成する
-8. 失敗時はローカル fallback 句を使う
+7. `haiku` route で 5-7-5 の一句を生成する（厳格不合格時は repair 1 回）
+8. なお音数が外れても **かなの句らしい** 出力は `accepted_imperfect` として出す（workshop で直す前提）。英語・禁止道具・五十音羅列などは従来どおり `まとまらんかった` 系 fallback
 
 ## Snapshot A の考え方
 
