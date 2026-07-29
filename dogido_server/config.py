@@ -209,6 +209,8 @@ class Settings(BaseSettings):
     ender_eye_comment_cooldown_ms: int = 8000
     # 種ごと（村人は villager:職 で別 key → 別職は即出し可、同職は下の秒数）
     ambient_mob_comment_cooldown_ms: int = 120000
+    # この人数以上の非睡眠村人がいると汎用村人1発 + villager:crowd 共有 CD（職連発渋滞防止）
+    ambient_villager_crowd_threshold: int = 3
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
     player_chat_hearing_retention_ms: int = 12000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す

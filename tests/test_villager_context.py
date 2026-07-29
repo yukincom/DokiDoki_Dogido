@@ -161,6 +161,66 @@ class VillagerAmbientIntegrationTests(unittest.TestCase):
         target = machine._next_ambient_mob_target([farmer], event_sleep.observed_at, event_sleep)
         self.assertIsNone(target)
 
+    def test_villager_crowd_uses_shared_cooldown_and_generic_target(self) -> None:
+        """3人以上の非睡眠村人 → 代表1体・crowd CD。職リレーしない。"""
+        settings = Settings(
+            audio_enabled=False,
+            llm_enabled=False,
+            ambient_mob_comment_cooldown_ms=120_000,
+            ambient_villager_crowd_threshold=3,
+        )
+        machine = DogidoStateMachine(settings)
+        now = datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc)
+
+        def villager(prof: str, dist: float) -> PassiveMob:
+            return PassiveMob(
+                type="villager",
+                distance=dist,
+                profession=prof,
+                is_baby=False,
+                direction=Direction(horizontal="front", vertical="same"),
+            )
+
+        farmers = [
+            villager("farmer", 4.0),
+            villager("cleric", 5.0),
+            villager("armorer", 6.0),
+        ]
+        event = GameEvent(
+            schema_version="2026-05-24",
+            adapter="test",
+            observed_at=now,
+            sequence=1,
+            event=EventDescriptor(
+                name=EventName.STATUS_SNAPSHOT,
+                source_kind="system",
+                priority_hint="background",
+                certainty=Certainty.HIGH,
+            ),
+            player=PlayerState(name="p", position=Position(x=0, y=64, z=0)),
+            world=WorldState(time_phase="day", time_of_day=4000, biome="plains"),
+            passive_mobs=farmers,
+        )
+        self.assertTrue(machine._villager_crowd_mode(farmers, event))
+        target = machine._next_ambient_mob_target(farmers, now, event)
+        self.assertIsNotNone(target)
+        assert target is not None
+        self.assertEqual(target.profession, "farmer")  # いちばん近い
+
+        line = machine._emit_ambient_mob_comment_line(event, now)
+        self.assertIsNotNone(line)
+        self.assertIn(
+            machine._VILLAGER_CROWD_COOLDOWN_KEY,
+            machine.state.last_ambient_mob_comment_at_by_type,
+        )
+        # crowd CD 中は村人ターゲットなし
+        again = machine._next_ambient_mob_target(farmers, now, event)
+        self.assertIsNone(again)
+
+        # 1人に戻っても crowd CD 中は村人ミュート
+        one = [villager("farmer", 4.0)]
+        self.assertIsNone(machine._next_ambient_mob_target(one, now, event))
+
 
 if __name__ == "__main__":
     unittest.main()
