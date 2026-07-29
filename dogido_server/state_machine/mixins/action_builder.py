@@ -51,7 +51,14 @@ class ActionBuilderMixin:
             return [self._flush_interrupt_action()]
 
         if event.event.name == EventName.PLAYER_DIED:
-            actions.append(AudioAction(layer="speech", interrupt=True, text=self._render_death_message(event)))
+            actions.append(
+                AudioAction(
+                    layer="speech",
+                    interrupt=True,
+                    text=self._render_death_message(event),
+                    speech_profile="battle",
+                )
+            )
             return actions
 
         if next_mode == "panic":
@@ -140,6 +147,8 @@ class ActionBuilderMixin:
         cue_id: str | None = None,
         cue_sequence: tuple[str, ...] = (),
         protect_ms: int = 0,
+        speech_profile: str | None = None,
+        speed_scale: float | None = None,
     ) -> AudioAction:
         return AudioAction(
             layer=layer,
@@ -148,6 +157,8 @@ class ActionBuilderMixin:
             cue_id=cue_id,
             cue_sequence=cue_sequence,
             protect_ms=protect_ms,
+            speech_profile=speech_profile,
+            speed_scale=speed_scale,
         )
 
     def _flush_interrupt_action(self) -> AudioAction:

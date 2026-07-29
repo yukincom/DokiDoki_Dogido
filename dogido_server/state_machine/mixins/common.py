@@ -60,6 +60,7 @@ class CommonMixin:
             text=text,
             cue_sequence=resolved.cue_sequence,
             protect_ms=self._callout_protect_ms(text),
+            speech_profile="battle",
         )
 
     def _active_status_effects(self, event: GameEvent) -> set[str]:

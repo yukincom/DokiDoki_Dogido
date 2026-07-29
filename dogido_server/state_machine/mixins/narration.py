@@ -153,8 +153,9 @@ class NarrationMixin:
         return None
 
     def _emit_ambient_mob_comment_line(self, event: GameEvent, now: datetime) -> str | None:
-        # クールダウンは種ごと。別の種ならすぐ反応してよい
-        # （⭕️「うしさんや」→「にわとりさんや」 ❌「うしさんや」→「うしさんや」）
+        # クールダウンは種ごと（村人は villager:職 で別 key → 別職は即出し可）。
+        # 既定 120s。同種／同職の連発だけ抑える。全体ギャップは設けない。
+        # （⭕️ 牛→鶏 / 農民→聖職者  ❌ 牛→牛 / 農民→農民）
         target = self._next_ambient_mob_target(event.passive_mobs, now, event)
         if target is None:
             return None

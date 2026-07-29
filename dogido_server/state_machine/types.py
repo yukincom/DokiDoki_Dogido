@@ -18,6 +18,10 @@ class AudioAction:
     # コールアウト断片パズル: cue_voice 相対 id の列（例: mob/zombie, common/counts/2, common/phrases/orude）
     cue_sequence: tuple[str, ...] = ()
     protect_ms: int = 0
+    # TTS 話速プロファイル: battle | peace | haiku。None なら layer から推定
+    speech_profile: str | None = None
+    # 明示 speedScale（入っていれば profile より優先）
+    speed_scale: float | None = None
 
 
 @dataclass(slots=True)

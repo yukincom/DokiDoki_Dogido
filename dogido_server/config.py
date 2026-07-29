@@ -83,7 +83,12 @@ class Settings(BaseSettings):
 
     voicevox_url: str = "http://127.0.0.1:50021"
     voicevox_speaker: int = 21
+    # 既定・battle の話速（callout / 緊急 speech）。cue mp3 には効かない
     voicevox_speed_scale: float = 1.0
+    # プロファイル別（None の battle は voicevox_speed_scale を使う）
+    voicevox_speed_scale_battle: float | None = None
+    voicevox_speed_scale_peace: float = 0.88
+    voicevox_speed_scale_haiku: float = 0.80
     voicevox_pitch_scale: float = 0.0
     voicevox_volume_scale: float = 1.0
     voicevox_output_sampling_rate: int | None = None
@@ -199,7 +204,8 @@ class Settings(BaseSettings):
     # エンダーアイ投擲: 鮮度ウィンドウ（スナップショット間隔より長く）と連投時の発話間隔
     ender_eye_recent_ms: int = 2000
     ender_eye_comment_cooldown_ms: int = 8000
-    ambient_mob_comment_cooldown_ms: int = 60000
+    # 種ごと（村人は villager:職 で別 key → 別職は即出し可、同職は下の秒数）
+    ambient_mob_comment_cooldown_ms: int = 120000
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
     player_chat_hearing_retention_ms: int = 12000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
@@ -253,6 +259,21 @@ class Settings(BaseSettings):
     @property
     def is_local_only(self) -> bool:
         return not self.allow_non_local_bind
+
+    def tts_speed_for_profile(self, profile: str | None) -> float:
+        """speech_profile → VOICEVOX speedScale。
+
+        battle: voicevox_speed_scale_battle または voicevox_speed_scale
+        peace / haiku: 各専用キー
+        """
+        key = (profile or "battle").strip().lower()
+        if key == "peace":
+            return float(self.voicevox_speed_scale_peace)
+        if key == "haiku":
+            return float(self.voicevox_speed_scale_haiku)
+        if self.voicevox_speed_scale_battle is not None:
+            return float(self.voicevox_speed_scale_battle)
+        return float(self.voicevox_speed_scale)
 
     @property
     def llm_uses_remote_api(self) -> bool:
