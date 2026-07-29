@@ -13,6 +13,7 @@ from dogido_server.state_machine.response_catalog import (
     selected_ushiro_call_text,
     special_biome_entry_lines,
 )
+from dogido_server.state_machine.types import AudioAction, CalloutPayload
 
 
 @lru_cache(maxsize=1)
@@ -21,6 +22,46 @@ def _neutral_mob_type_set() -> frozenset[str]:
 
 
 class CommonMixin:
+    def _co(
+        self,
+        value: str | CalloutPayload | None,
+        sequence: list[str] | tuple[str, ...] | None = None,
+    ) -> CalloutPayload | None:
+        """文言または CalloutPayload を正規化する。"""
+        extra = tuple(sequence or ())
+        if isinstance(value, CalloutPayload):
+            if not value and not extra:
+                return None
+            if extra and not value.cue_sequence:
+                return CalloutPayload(text=value.text, cue_sequence=extra)
+            return value if value else None
+        if value is None:
+            if not extra:
+                return None
+            return CalloutPayload(text="", cue_sequence=extra)
+        text = str(value).strip()
+        if not text and not extra:
+            return None
+        return CalloutPayload(text=text, cue_sequence=extra)
+
+    def _callout_audio_action(
+        self,
+        payload: str | CalloutPayload | None,
+        *,
+        interrupt: bool = False,
+    ) -> AudioAction | None:
+        resolved = self._co(payload)
+        if resolved is None:
+            return None
+        text = (resolved.text or "").strip() or None
+        return AudioAction(
+            layer="callout",
+            interrupt=interrupt,
+            text=text,
+            cue_sequence=resolved.cue_sequence,
+            protect_ms=self._callout_protect_ms(text),
+        )
+
     def _active_status_effects(self, event: GameEvent) -> set[str]:
         return {
             effect.split(":")[-1].strip().lower()

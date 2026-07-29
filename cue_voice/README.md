@@ -8,10 +8,11 @@
 |---|---|---|
 | `panic/` | 悲鳴・息など戦闘 cue | **使用中**（afplay） |
 | `aftermath.mp3` | 戦闘後など | **使用中** |
-| `mob/` | **敵対・中立**の名称断片 | 素材あり・**連結再生は未配線** |
-| `common/counts/` | `1体`〜`8体` | 素材あり・未配線 |
-| `common/phrases/` | `おるで` / `がおるで` | 素材あり・未配線 |
+| `mob/` | **敵対・中立**の名称断片 | 素材あり・**体数サマリーで連結再生** |
+| `common/counts/` | `1体`〜`8体` | 同上 |
+| `common/phrases/` | `おるで` / `がおるで` | 同上 |
 | `entity_cache_manifest.json` | 上記断片の一覧 | メタデータ |
+| `player_names/` | 呼び名断片（うしろ等） | `player_N.mp3` は gitignore。`player_1_example.mp3` のみサンプル |
 
 ## 方針（コールアウト）
 

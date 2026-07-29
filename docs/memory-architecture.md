@@ -14,6 +14,12 @@
 - 保存・読取はコードが行う。汎用エージェント基盤（Hermes 等）は使わない
 - 将来の LLM 側ワークフロー整理は LangChain / LangGraph を想定するが、JSONL 正本は変えない
 
+### 1.1 単一プレイヤー前提（現状）
+
+現行の `.dogido_memory/` は **論理ユーザーが 1 人**の前提に近い（川柳・lesson・profile が共有空間）。  
+家庭内の複数人・呼び名の違い・将来のプロファイル切替は未分離。  
+課題と段階案は [multi-user-tenancy.md](multi-user-tenancy.md)。
+
 ## 2. 保存形式
 
 正本は JSON / JSONL とする。

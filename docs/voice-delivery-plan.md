@@ -243,16 +243,38 @@ Minecraft のモブ集合はほぼ閉じているため、名称断片の事前�
 | 項目 | 状態 |
 |---|---|
 | 方針 | **確定**（パズル本線） |
-| 敵対・中立名称 mp3 | リポに配置（一部 threat ラベルは未生成 → manifest の missing） |
+| 敵対・中立名称 mp3 | リポに配置（threat 56 種） |
 | 体数・定型句 mp3 | リポに配置 |
-| **連結再生コード** | **未配線**（現状 callout は全文 TTS） |
+| **連結再生** | **一部配線済み**（体数サマリー系） |
 | 友好名称 mp3 | 置かない |
 
-配線時の注意:
+#### 配線済み（2026-07-29）
 
-- `AudioAction` に複数 cue 連鎖、または callout 専用シーケンス
-- 欠けモブは TTS フォールバック可
+- `AudioAction.cue_sequence` + `AudioDispatcher` が断片を順再生
+- `CalloutPayload`（text + cue_sequence）
+- **複数体／複数種の「〇〇N体…おるで」**（`_hostile_count_summary`）が断片を優先
+  - 欠けがあれば全文 TTS にフォールバック
+- 方向付き単体コール・ボス長文・うしろ系などは **引き続き全文 TTS**
+
+#### コード地図
+
+| 部品 | パス |
+|---|---|
+| 断片 id 組み立て | `dogido_server/callout_fragments.py` |
+| 再生 | `dogido_server/audio.py`（`cue_sequence`） |
+| サマリー文言 + 断片 | `mixins/auditory.py` `_hostile_count_summary` |
+| 発火 | `mixins/action_builder.py` / `py_tree_policy.py`（`_callout_audio_action`） |
+
+#### 次
+
+- 単体視認コール（方向＋名前）の部品化
+- 欠けモブ時のログ監視
 - 速度: callout 断片は battle テンポ、平時 speech は slow（#13）
+- うしろ named の **呼び名音声キャッシュ**（call_name キー）。複数人はキー複数。個人名は git 外  
+  → 記憶側のユーザー境界と揃える必要あり: [multi-user-tenancy.md](multi-user-tenancy.md)
+- 置き場（仮）: `cue_voice/player_names/`  
+  - 運用: `player_1.mp3` / `player_2.mp3` … **gitignore**  
+  - サンプル: `player_1_example.mp3` のみリポ（`player_2_example` は置かない）
 
 ## 11. 状態ログ
 
@@ -262,3 +284,4 @@ Minecraft のモブ集合はほぼ閉じているため、名称断片の事前�
 | 2026-07-28 | TTS 地図・権利の注意を research メモに追加。本線は VOICEVOX 維持。 |
 | 2026-07-29 | VOICEVOX キャッシュに max MB / max age の自動 prune。 |
 | 2026-07-29 | コールアウトはパズル連結を本線と明記。友好名 mp3 を外し敵対・中立のみ復活。 |
+| 2026-07-29 | 体数サマリー系コールアウトの断片再生を配線。欠け時は TTS フォールバック。 |

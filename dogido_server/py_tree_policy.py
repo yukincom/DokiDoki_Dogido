@@ -224,22 +224,16 @@ class EmitPanicActions(_Action):
             context.event,
             context.signals,
             context.now,
-            has_callout=callout is not None,
+            has_callout=bool(callout),
         )
         if entry_cue is not None:
             actions.append(entry_cue)
             if entry_cue.cue_id == "panic_scream_start":
                 return
 
-        if callout:
-            actions.append(
-                context.machine._audio_action(
-                    layer="callout",
-                    interrupt=False,
-                    text=callout,
-                    protect_ms=context.machine._callout_protect_ms(callout),
-                )
-            )
+        callout_action = context.machine._callout_audio_action(callout)
+        if callout_action is not None:
+            actions.append(callout_action)
 
 
 class EmitSuppressedPanicActions(_Action):
@@ -260,15 +254,9 @@ class EmitSuppressedPanicActions(_Action):
             return
 
         callout = context.machine._suppressed_callout(context.event, context.signals, context.now)
-        if callout:
-            actions.append(
-                context.machine._audio_action(
-                    layer="callout",
-                    interrupt=False,
-                    text=callout,
-                    protect_ms=context.machine._callout_protect_ms(callout),
-                )
-            )
+        callout_action = context.machine._callout_audio_action(callout)
+        if callout_action is not None:
+            actions.append(callout_action)
 
 
 class EmitAlertActions(_Action):
@@ -288,22 +276,16 @@ class EmitAlertActions(_Action):
             context.event,
             context.signals,
             context.now,
-            has_callout=threat_callout is not None,
+            has_callout=bool(threat_callout),
         )
         if cue is not None:
             actions.append(cue)
             if cue.cue_id == "panic_scream_start":
                 return
 
-        if threat_callout:
-            actions.append(
-                context.machine._audio_action(
-                    layer="callout",
-                    interrupt=False,
-                    text=threat_callout,
-                    protect_ms=context.machine._callout_protect_ms(threat_callout),
-                )
-            )
+        callout_action = context.machine._callout_audio_action(threat_callout)
+        if callout_action is not None:
+            actions.append(callout_action)
             return
 
         actions.extend(

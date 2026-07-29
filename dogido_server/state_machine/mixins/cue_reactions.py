@@ -250,7 +250,7 @@ class CueReactionsMixin:
             len(event.auditory_threats),
         )
 
-    def _panic_callout(self, event: GameEvent, signals: DerivedSignals) -> str | None:
+    def _panic_callout(self, event: GameEvent, signals: DerivedSignals):
         return self._threat_callout(
             event,
             signals,
@@ -267,7 +267,7 @@ class CueReactionsMixin:
         event: GameEvent,
         signals: DerivedSignals,
         now: datetime,
-    ) -> str | None:
+    ):
         return self._threat_callout(
             event,
             signals,
@@ -279,7 +279,7 @@ class CueReactionsMixin:
             silence_new_close_ambush=False,
         )
 
-    def _alert_callout(self, event: GameEvent, signals: DerivedSignals) -> str | None:
+    def _alert_callout(self, event: GameEvent, signals: DerivedSignals):
         return self._threat_callout(
             event,
             signals,
@@ -301,7 +301,7 @@ class CueReactionsMixin:
         softened_visuals: bool,
         direction_only: bool,
         silence_new_close_ambush: bool,
-    ) -> str | None:
+    ):
         crowded_other_realm = self._is_other_realm_swarm_scene(
             event,
             visual_count=max(len(event.visual_threats), signals.visual_threat_count_within_10),
@@ -309,12 +309,12 @@ class CueReactionsMixin:
         )
         warden_special = self._next_warden_special_callout(event, now)
         if warden_special is not None:
-            return warden_special
+            return self._co(warden_special)
         if self.player_input.asks_dragon_direction and self._is_dragon_combat_context_active(event, now):
-            return self._render_dragon_direction_answer(event)
+            return self._co(self._render_dragon_direction_answer(event))
         dragon_special = self._next_dragon_special_callout(event, now)
         if dragon_special is not None:
-            return dragon_special
+            return self._co(dragon_special)
         if event.visual_threats:
             handled, line = self._priority_visual_callout(
                 event,
@@ -326,19 +326,25 @@ class CueReactionsMixin:
                 silence_new_close_ambush=silence_new_close_ambush,
             )
             if handled:
-                return line
+                return self._co(line)
             if self.player_input.asks_hostile_count:
-                return self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
+                return self._co(
+                    self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
+                )
             if crowded_other_realm:
                 return None
 
             urgent_new = self._new_priority_visual_target(event.visual_threats, now=now)
             if urgent_new is not None and (urgent_new.distance is None or urgent_new.distance > 3.0):
-                return self._render_terminal_visual_callout(urgent_new, mode=mode, direction_only=direction_only)
+                return self._co(
+                    self._render_terminal_visual_callout(urgent_new, mode=mode, direction_only=direction_only)
+                )
 
             nearest = self._next_visual_comment_target(event.visual_threats, now=now)
             if nearest is not None:
-                return self._render_terminal_visual_callout(nearest, mode=mode, direction_only=direction_only)
+                return self._co(
+                    self._render_terminal_visual_callout(nearest, mode=mode, direction_only=direction_only)
+                )
 
             auditory = self._auditory_comment(
                 event,
@@ -347,15 +353,19 @@ class CueReactionsMixin:
                 style=auditory_style,
             )
             if auditory is not None:
-                return auditory
+                return self._co(auditory)
 
         low_health_warning = self._consume_low_health_warning(event, signals)
         if low_health_warning is not None:
-            return low_health_warning
+            return self._co(low_health_warning)
 
         if self.player_input.asks_hostile_count:
-            return self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
-        return self._auditory_comment(event, event.auditory_threats, now=now, style=auditory_style)
+            return self._co(
+                self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
+            )
+        return self._co(
+            self._auditory_comment(event, event.auditory_threats, now=now, style=auditory_style)
+        )
 
     def _priority_visual_callout(
         self,
@@ -366,42 +376,42 @@ class CueReactionsMixin:
         auditory_style: str,
         softened_visuals: bool,
         silence_new_close_ambush: bool,
-    ) -> tuple[bool, str | None]:
+    ):
         ushiro_target = self._peek_ushiro_ambush_target(event, now)
         if ushiro_target is not None:
             if self._should_suppress_panic_cues(event) or not self._can_emit_panic_cue(now):
                 self.state.last_ushiro_call_at = now
                 self._mark_visual_priority_callout(now, single_type=None)
-            return True, self._ushiro_call_text(event)
+            return True, self._co(self._ushiro_call_text(event))
 
         dark_push_forward = self._peek_dark_push_forward_ambush_target(event, now)
         if dark_push_forward is not None:
-            return True, self._render_hostile_visual_callout(dark_push_forward, mode=mode)
+            return True, self._co(self._render_hostile_visual_callout(dark_push_forward, mode=mode))
 
         if silence_new_close_ambush and self._peek_new_close_visual_ambush_target(event, now) is not None:
             return True, None
 
         warden_special = self._next_warden_special_callout(event, now)
         if warden_special is not None:
-            return True, warden_special
+            return True, self._co(warden_special)
 
         boss_line = self._boss_visual_callout(event, now)
         if boss_line is not None:
-            return True, boss_line
+            return True, self._co(boss_line)
 
         neutral_turned = self._neutral_turned_hostile_callout(event, now)
         if neutral_turned is not None:
-            return True, neutral_turned
+            return True, self._co(neutral_turned)
 
         if signals.entered_close_flying_visual is not None:
             target = signals.entered_close_flying_visual
             self.state.commented_visual_keys[self._visual_identity_key(target)] = now
             self._mark_visual_priority_callout(now, single_type=target.type)
-            return True, self._render_flying_visual_callout(target)
+            return True, self._co(self._render_flying_visual_callout(target))
 
         low_health_warning = self._consume_low_health_warning(event, signals)
         if low_health_warning is not None:
-            return True, low_health_warning
+            return True, self._co(low_health_warning)
 
         if signals.ground_hostile_count_within_query_range >= self.settings.hostile_mass_callout_threshold:
             if self.state.mass_hostile_callout_latched:
@@ -414,26 +424,26 @@ class CueReactionsMixin:
                 self.state.mass_hostile_callout_latched = True
                 self.state.last_mass_hostile_callout_at = now
                 self._mark_visual_priority_callout(now, single_type=None)
-                return True, self._hostile_massive_callout(event, suppressed=softened_visuals)
+                return True, self._co(self._hostile_massive_callout(event, suppressed=softened_visuals))
 
         daylight_rain = self._daylight_rain_callout(event, event.visual_threats, now=now)
         if daylight_rain is not None:
-            return True, daylight_rain
+            return True, self._co(daylight_rain)
 
         daylight_water = self._daylight_water_survivor_callout(event, event.visual_threats, now=now)
         if daylight_water is not None:
-            return True, daylight_water
+            return True, self._co(daylight_water)
 
         if signals.newly_burning_visual is not None:
-            return True, self._newly_burning_visual_callout(event, signals.newly_burning_visual, now)
+            return True, self._co(self._newly_burning_visual_callout(event, signals.newly_burning_visual, now))
 
         stalled = self._stalled_visual_callout(event.visual_threats, now=now, suppressed=softened_visuals)
         if stalled is not None:
-            return True, stalled
+            return True, self._co(stalled)
 
         increase = self._single_to_multi_increase_callout(event.visual_threats, now=now)
         if increase is not None:
-            return True, increase
+            return True, self._co(increase)
 
         if self._visual_priority_cooldown_active(now):
             if self._is_other_realm_swarm_scene(
@@ -442,28 +452,30 @@ class CueReactionsMixin:
                 auditory_count=len(event.auditory_threats),
             ):
                 return True, None
-            return True, self._auditory_comment(
-                event,
-                self._unseen_auditory_threats(event.visual_threats, event.auditory_threats),
-                now=now,
-                style=auditory_style,
+            return True, self._co(
+                self._auditory_comment(
+                    event,
+                    self._unseen_auditory_threats(event.visual_threats, event.auditory_threats),
+                    now=now,
+                    style=auditory_style,
+                )
             )
 
         overwhelmed = self._overwhelmed_callout(event.visual_threats, event, now=now, suppressed=softened_visuals)
         if overwhelmed is not None:
-            return True, overwhelmed
+            return True, self._co(overwhelmed)
 
         species = self._multi_species_callout(event, event.visual_threats, now=now, suppressed=softened_visuals)
         if species is not None:
-            return True, species
+            return True, self._co(species)
 
         surge = self._swarm_callout(event, now=now)
         if surge is not None:
-            return True, surge
+            return True, self._co(surge)
 
         multi = self._multi_hostile_callout(event, signals, now=now, suppressed=softened_visuals)
         if multi is not None:
-            return True, multi
+            return True, self._co(multi)
 
         return False, None
 
