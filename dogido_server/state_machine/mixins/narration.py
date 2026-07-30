@@ -727,6 +727,9 @@ class NarrationMixin:
             "space_kind": place_ctx["space_kind"],
             "sky_visible": place_ctx["sky_visible"],
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            # 天気は world.weather（状態）。hearing / 雨音 packet とは混ぜない
+            "weather": self._weather_value(event.world.weather) or "unknown",
+            "weather_label": self._player_chat_weather_label(event),
             "mode": self.state.mode,
             "character_mode": character_mode,
             "combat_active": combat_active,
@@ -777,6 +780,15 @@ class NarrationMixin:
             )
             return preferred_fallback
         return text
+
+    def _player_chat_weather_label(self, event: GameEvent) -> str:
+        """雑談用の天気ラベル。world.weather のみ（音メモと混ぜない）。"""
+        from dogido_server.state_machine.constants import WEATHER_LABELS
+
+        weather = self._weather_value(event.world.weather)
+        if not weather:
+            return "不明"
+        return WEATHER_LABELS.get(str(weather), str(weather))
 
     def _player_chat_place_context(self, event: GameEvent) -> dict[str, object]:
         """地表バイオームと「空間」（地下っぽさ）を分けて chat に渡す。

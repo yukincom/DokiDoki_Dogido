@@ -8091,11 +8091,10 @@ class StateMachineTests(unittest.TestCase):
         self.assertEqual(speech.text, "……暗いのは、にがてなんやけど……。")
         # 川柳の周期（10分）が満ちるまでは詠まない
         self.assertEqual([action.text for action in second.actions if action.layer == "speech"], [])
-        # 周期が満ちたら（見どころがあれば）ここで一句 → 次スナップショットで本句
+        # 周期が満ちたら見どころ preface（「ここで一句」は付けない）→ 次で本句
         third_speech = [action.text for action in third.actions if action.layer == "speech"]
         self.assertEqual(len(third_speech), 1)
-        self.assertIn("ここで一句。", third_speech[0])
-        self.assertTrue(third_speech[0].endswith("ここで一句。"), msg=third_speech[0])
+        self.assertNotIn("ここで一句", third_speech[0])
         fourth_speech = [action.text for action in fourth.actions if action.layer == "speech"]
         self.assertEqual(len(fourth_speech), 1)
         # 情景が弱ければカタログ、強ければ LLM 句
@@ -8105,7 +8104,8 @@ class StateMachineTests(unittest.TestCase):
                 "五月雨を　集めてはやし　シミュレート",
             }
             or "五月雨" in fourth_speech[0]
-            or "はるのかわ" in fourth_speech[0],
+            or "はるのかわ" in fourth_speech[0]
+            or "ここで一句" in fourth_speech[0],
             msg=fourth_speech[0],
         )
 

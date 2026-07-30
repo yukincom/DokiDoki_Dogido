@@ -440,12 +440,8 @@ class HaikuStateMachineTest(unittest.TestCase):
         ).actions
 
         preface_text = preface[0].text if preface else ""
-        self.assertIn("ここで一句。", preface_text)
-        # 見どころ（irony/scene）が先に来る
-        self.assertTrue(
-            preface_text.endswith("ここで一句。"),
-            msg=preface_text,
-        )
+        # 見どころだけ。「ここで一句。」は本句側のみ
+        self.assertNotIn("ここで一句", preface_text)
         self.assertIn("浮かんできた", preface_text)
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
 
@@ -502,7 +498,8 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertTrue(machine.state.pending_haiku_after_preface)
-        self.assertTrue(preface and "ここで一句。" in (preface[0].text or ""))
+        self.assertTrue(preface and (preface[0].text or "").strip())
+        self.assertNotIn("ここで一句", (preface[0].text or ""))
 
         # 詠みの途中に話しかけても本句が先
         verse = machine.process(
@@ -570,10 +567,10 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
 
-        # 必ず発句 → 本句の二段階で出る
+        # 必ず発句 → 本句の二段階で出る（preface に「ここで一句」は付けない）
         preface_text = preface[0].text if preface else ""
-        self.assertIn("ここで一句。", preface_text)
-        self.assertTrue(preface_text.endswith("ここで一句。"), msg=preface_text)
+        self.assertTrue(preface_text, msg=preface)
+        self.assertNotIn("ここで一句", preface_text)
         self.assertEqual([action.text for action in final_line], ["ぽーたるの\nひかりのさきへ\nいざゆかん"])
         # 情景・取り合わせの思考（irony/scene）もポータル近くで省略されない
         self.assertIn("haiku_irony", fake_llm.structured_kinds)

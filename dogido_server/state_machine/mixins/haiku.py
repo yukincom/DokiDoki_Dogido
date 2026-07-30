@@ -258,12 +258,12 @@ class HaikuMixin:
         self._pending_haiku_interpretation = None
 
     def _compose_haiku_preface_speech(self, irony: IronyContext, scene: SceneContext) -> str:
-        """語順: 見どころ → ここで一句。"""
+        """見どころだけ言う。「ここで一句。」は本句側（_format_haiku_line）に任せる。"""
         inspiration = self._haiku_inspiration_spoken_line(irony, scene)
         if inspiration:
-            body = inspiration if inspiration.endswith("。") else f"{inspiration}。"
-            return f"{body}ここで一句。"
-        return "ここで一句。"
+            return inspiration if inspiration.endswith(("。", "わ", "や", "で", "ね")) else f"{inspiration}。"
+        # 見どころが無いときも二重に「ここで一句」と言わない
+        return "なんか浮かんできたわ。"
 
     def _haiku_inspiration_spoken_line(
         self,

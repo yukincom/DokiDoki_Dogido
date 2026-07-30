@@ -393,6 +393,7 @@ class HearingContextTests(unittest.TestCase):
                     "mode": "normal",
                     "biome": "平原",
                     "time_phase": "day",
+                    "weather_label": "晴れ",
                     "hearing_summary": "",
                     "threat_summary": "",
                     "reply_stance": "none",
@@ -404,6 +405,50 @@ class HearingContextTests(unittest.TestCase):
         # E′: 空 hearing は節ごと省略。捏造防止は policy + S2 白リスト
         self.assertNotIn("音のメモ:", content)
         self.assertIn("捏造はしない", content)
+        self.assertIn("天気は晴れ", content)
+
+    def test_player_chat_details_include_weather_from_world(self) -> None:
+        """雨は weather 状態から。hearing とは混ぜない。"""
+        event = make_event(sequence=50, user_text="雨が降ってるね")
+        event = event.model_copy(
+            update={"world": event.world.model_copy(update={"weather": Weather.RAIN})}
+        )
+        details_holder: dict = {}
+
+        class CaptureLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                details_holder.update(request.details)
+                return "ほんまやな、しとしと降っとるわ。"
+
+            def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+                return {}
+
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=llm,
+        )
+        machine.player_input = route_player_input("雨が降ってるね")
+        machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+        self.assertEqual(details_holder.get("weather"), "rain")
+        self.assertEqual(details_holder.get("weather_label"), "雨")
+        self.assertFalse(details_holder.get("asks_about_sound"))
+        self.assertEqual(details_holder.get("hearing_summary") or "", "")
+
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="fallback",
+                details=dict(details_holder),
+            )
+        )
+        content = messages[1]["content"]
+        self.assertIn("天気は雨", content)
+        self.assertIn("モブ音と混同しない", content)
+        self.assertNotIn("音のメモ:", content)
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(
