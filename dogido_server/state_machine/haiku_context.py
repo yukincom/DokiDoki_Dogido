@@ -104,9 +104,16 @@ class HaikuContext:
     candidate_tensions: tuple[str, ...]
     catalog_notes: tuple[str, ...] = ()
     poetic_lines: tuple[str, ...] = ()
+    # structure があるときは場所の主役。climate_hint は参考程度。
+    structure_id: str = ""
+    structure_label: str = ""
+    climate_hint: str = ""
 
     def feature_candidate_labels(self) -> list[str]:
         return [feature.prompt_label() for feature in self.feature_candidates]
+
+    def has_structure(self) -> bool:
+        return bool(self.structure_label or self.structure_id)
 
     def _base_details(self) -> dict[str, object]:
         return {
@@ -115,6 +122,10 @@ class HaikuContext:
             "biome_id": self.biome_id,
             "biome_group": self.biome_group,
             "biome_traits": list(self.biome_traits),
+            "structure_id": self.structure_id,
+            "structure_label": self.structure_label,
+            "has_structure": self.has_structure(),
+            "climate_hint": self.climate_hint,
             "time_phase": self.time_phase,
             "time_label": self.time_label,
             "weather": self.weather,

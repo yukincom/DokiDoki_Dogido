@@ -1,4 +1,10 @@
 # llm/haiku_prompts.py
+"""川柳系プロンプト。
+
+ネガティブの積み上げより、ドギドが材料を見て一句詠みたくなる肯定形を先に置く。
+音数・かな表記など形の約束だけ、短く残す。
+"""
+
 from __future__ import annotations
 
 
@@ -32,23 +38,20 @@ def _scene_block(details: dict[str, object]) -> str:
 def _constraint_block(details: dict[str, object]) -> str:
     constraints = details.get("haiku_constraints")
     if not isinstance(constraints, dict):
-        return "なし"
-    allowed_terms = "、".join(str(term) for term in constraints.get("allowed_terms", []) if term) or "なし"
-    # 道具・読みなどゲーム知識の hard 禁止のみ（プレイヤー lesson は soft 別枠）
-    forbidden_terms = "、".join(str(term) for term in constraints.get("forbidden_terms", []) if term) or "なし"
+        return ""
+    allowed_terms = "、".join(str(term) for term in constraints.get("allowed_terms", []) if term)
+    forbidden_terms = "、".join(str(term) for term in constraints.get("forbidden_terms", []) if term)
     player_lessons = [str(x) for x in constraints.get("player_lessons", []) if x][:3]
-    if allowed_terms == "なし" and forbidden_terms == "なし" and not player_lessons:
-        return "なし"
-    parts = [
-        f"使ってよい語: {allowed_terms}",
-        f"使ってはいけない語: {forbidden_terms}",
-    ]
+    if not allowed_terms and not forbidden_terms and not player_lessons:
+        return ""
+    parts: list[str] = []
+    if allowed_terms:
+        parts.append(f"道具の読みの目安: {allowed_terms}")
+    if forbidden_terms:
+        parts.append(f"道具の読みで避けたい語: {forbidden_terms}")
     if player_lessons:
         lesson_lines = "\n".join(f"- {note}" for note in player_lessons)
-        parts.append(
-            "プレイヤーからの最近の癖・好み（参考。強制ではない。全文を写さない）:\n"
-            f"{lesson_lines}"
-        )
+        parts.append(f"プレイヤーの最近の好み（軽く参考）:\n{lesson_lines}")
     return "\n".join(parts)
 
 
@@ -56,11 +59,7 @@ def _catalog_notes_block(details: dict[str, object]) -> str:
     notes = [str(note) for note in details.get("catalog_notes", []) if note]
     if not notes:
         return "なし"
-    lines = "\n".join(f"- {note}" for note in notes)
-    return (
-        "描写の参考。ここにだけある固有名を句の主役にしない。\n"
-        f"{lines}"
-    )
+    return "\n".join(f"- {note}" for note in notes)
 
 
 def _poetic_lines_block(details: dict[str, object]) -> str:
@@ -71,104 +70,159 @@ def _poetic_lines_block(details: dict[str, object]) -> str:
 
 
 def _haiku_tags_hint(details: dict[str, object]) -> str:
-    """poetic_lines があるときは補助ラベル。無いときだけ従来どおり詩語ヒントとして列挙。"""
     tags = [str(item) for item in details.get("haiku_tags", []) if item]
     if not tags:
         return "なし"
     return "、".join(tags)
 
 
-def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
-    feature_candidates = details.get("feature_candidates", [])
-    candidate_lines = "\n".join(
-        f"- {candidate}" for candidate in feature_candidates if isinstance(candidate, str)
-    )
-    candidate_tensions = details.get("candidate_tensions", [])
-    tension_lines = "\n".join(
-        f"- {candidate}" for candidate in candidate_tensions if isinstance(candidate, str)
-    ) or "- なし"
-    nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
-    passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
-    haiku_tags = _haiku_tags_hint(details)
-    poetic_lines_block = _poetic_lines_block(details)
-    biome_traits = "、".join(str(item) for item in details.get("biome_traits", []) if item) or "なし"
+def _has_structure_focus(details: dict[str, object]) -> bool:
+    if details.get("has_structure"):
+        return True
+    return bool(str(details.get("structure_label") or "").strip())
+
+
+def _list_lines(items: object, *, empty: str = "なし") -> str:
+    if not isinstance(items, (list, tuple)):
+        return empty
+    lines = [f"- {item}" for item in items if isinstance(item, str) and item.strip()]
+    return "\n".join(lines) if lines else empty
+
+
+def _materials_for_dogido(details: dict[str, object]) -> str:
+    """ドギドが見る『いまの材料』一式。禁止文ではなく眺め用。"""
+    structure_label = str(details.get("structure_label") or "").strip()
+    climate_hint = str(details.get("climate_hint") or "").strip()
+    nearby = "、".join(str(x) for x in details.get("nearby_blocks", []) if x) or "とくになし"
+    mobs = "、".join(str(x) for x in details.get("passive_mobs", []) if x) or "とくになし"
     item_hint = _item_hint(details)
+    weather = details.get("weather_label", details.get("weather", "不明"))
+    time_label = details.get("time_label", details.get("time_phase", "不明"))
+
+    chunks: list[str] = []
+    if _has_structure_focus(details) and structure_label:
+        chunks.append(f"いまいる場所: {structure_label}")
+        if climate_hint:
+            chunks.append(f"空気・温度の気配: {climate_hint}")
+    else:
+        biome = details.get("biome", "不明")
+        group = details.get("biome_group", "")
+        traits = "、".join(str(t) for t in details.get("biome_traits", []) if t)
+        place = f"いまの景色: {biome}"
+        if group:
+            place += f"（{group}）"
+        chunks.append(place)
+        if traits:
+            chunks.append(f"土地の感触: {traits}")
+
+    chunks.append(f"空と時間: {weather} / {time_label}")
+    chunks.append(f"そばにあるもの: {nearby}")
+    chunks.append(f"穏やかないきもの: {mobs}")
+    chunks.append(f"手もと: {item_hint}")
+
+    tags = _haiku_tags_hint(details)
+    if tags != "なし":
+        chunks.append(f"ことばの匂い: {tags}")
+
+    catalog = _catalog_notes_block(details)
+    if catalog != "なし":
+        chunks.append(f"ちょっとした知識:\n{catalog}")
+
+    poetic = _poetic_lines_block(details)
+    if poetic != "なし":
+        chunks.append(f"いきものの声・姿:\n{poetic}")
+
+    return "\n".join(chunks)
+
+
+def _form_card(*, force_hiragana: bool = False) -> str:
+    """形の約束。短く、でも漢字混入ははっきり止める（落とすと一句ごと消える）。"""
+    kana_line = (
+        "- ひらがなとカタカナだけ。漢字は一文字も使わない"
+        "（土→つち、夜→よる、闇→やみ、森→もり、灯→ひ）"
+    )
+    if force_hiragana:
+        kana_line = (
+            "- 【必須】下書きに漢字が混ざっている。すべてひらがな（またはカタカナ）に直す。"
+            "漢字を1字でも残すと失格"
+        )
+    return (
+        "かたち:\n"
+        "- 3行（改行で区切る）。五・七・五（各行±1音までゆるく）\n"
+        f"{kana_line}\n"
+        "- 場面メモが漢字でも、句にするときは全部かな\n"
+        "- 句の3行だけ返す（前置きなし）"
+    )
+
+
+def _dogido_haiku_spirit(*, has_structure: bool) -> str:
+    if has_structure:
+        place = (
+            "いまは特別な場所にいる。"
+            "その場所の空気を一句の芯にしてよい。"
+            "名前は詩に馴染む言い方でよい。"
+        )
+    else:
+        place = (
+            "穏やかないきものや、そばの自然が寄り添ってくれる。"
+            "空や土地は味付け。手のものは最後の一滴。"
+        )
+    return (
+        "あなたはドギド。怖がりだけど、プレイヤーと並んで景色を見て、"
+        "ふっと一句詠む関西の相棒や。\n"
+        f"{place}\n"
+        "材料はヒント。写経ではなく、いまの気分で詠む。"
+        "耳で聞いてわかる、あたたかいことばで。"
+    )
+
+
+def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
+    has_structure = _has_structure_focus(details)
+    materials = _materials_for_dogido(details)
+    candidates = _list_lines(details.get("feature_candidates", []))
+    tensions = _list_lines(details.get("candidate_tensions", []))
     scene_block = _scene_block(details)
     constraint_block = _constraint_block(details)
-    catalog_notes_block = _catalog_notes_block(details)
+
     irony = details.get("irony")
     irony_block = "なし"
     if isinstance(irony, dict) and irony.get("description"):
-        irony_focus = "、".join(str(item) for item in irony.get("focus", []) if item) or "なし"
-        irony_elements = "、".join(str(item) for item in irony.get("elements", []) if item) or "なし"
-        irony_block = (
-            f"説明: {irony.get('description')}\n"
-            f"焦点: {irony_focus}\n"
-            f"要素: {irony_elements}\n"
-            f"種類: {irony.get('kind', 'contrast')}"
-        )
+        irony_focus = "、".join(str(item) for item in irony.get("focus", []) if item) or "—"
+        irony_block = f"{irony.get('description')}（焦点: {irony_focus}）"
+
+    constraint_section = ""
+    if constraint_block:
+        constraint_section = f"\n読みのメモ:\n{constraint_block}\n"
 
     user_prompt = (
-        "Minecraft の現在状況から川柳を作る。\n"
-        "以下の候補から、関係が強い2つまでを選び、その候補だけをモチーフにすること。\n"
-        f"{candidate_lines}\n"
+        f"{_dogido_haiku_spirit(has_structure=has_structure)}\n"
         "\n"
-        "コード側で見つけた状況の取り合わせ候補:\n"
-        f"{tension_lines}\n"
+        "【いまの材料】\n"
+        f"{materials}\n"
         "\n"
-        "場面の要約:\n"
+        "【眺めのヒント】\n"
+        f"{candidates}\n"
+        "\n"
+        "【ちょっとした取り合わせ】\n"
+        f"{tensions}\n"
+        "\n"
+        "【先に感じた場面】\n"
         f"{scene_block}\n"
-        "\n"
-        "注目したい取り合わせや場面の要約:\n"
         f"{irony_block}\n"
+        f"{constraint_section}"
         "\n"
-        "カタログ観察:\n"
-        f"{catalog_notes_block}\n"
+        "心あたりのある材料を一つか二つ、やさしく絡めて一句。\n"
+        f"{_form_card()}\n"
         "\n"
-        "詩語（主役Mob）:\n"
-        f"{poetic_lines_block}\n"
-        "\n"
-        "主役語の制約:\n"
-        f"{constraint_block}\n"
-        "\n"
-        "川柳ルール:\n"
-        "- 主題の優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする\n"
-        "- アイテムだけを主題にしない\n"
-        "- 3行で出力する\n"
-        "- 1行目は5音、2行目は7音、3行目は5音。各行ともプラスマイナス1音まで許容\n"
-        "- ひらがなかカタカナだけを使う。漢字、英字、数字、記号、句読点は使わない\n"
-        "- 小さいゃゅょは前の文字と合わせて1音\n"
-        "- 小さいっは1音\n"
-        "- んは1音\n"
-        "- ーは1音\n"
-        "- 説明や前置きは書かない\n"
-        "- 場面の要約があれば、その内容を5-7-5に圧縮するつもりで作る\n"
-        "- 取り合わせや場面の焦点があれば、それを優先してよい\n"
-        "- 候補や現在の状況にないアイテム、ブロック、Mob を勝手に出さない\n"
-        "- もし道具名や主役語を句に入れるなら、『使ってよい語』だけを使い、『使ってはいけない語』へ言い換えない\n"
-        "- 意味のない五十音並びやランダム文字列は禁止\n"
-        "\n"
-        "現在の状況:\n"
-        f"- バイオーム: {details.get('biome', 'unknown')}\n"
-        f"- バイオーム分類: {details.get('biome_group', 'unknown')}\n"
-        f"- バイオーム特徴: {biome_traits}\n"
-        f"- 周辺ブロック: {nearby_blocks}\n"
-        f"- 平和なMob: {passive_mobs}\n"
-        f"- アイテムヒント（弱）: {item_hint}\n"
-        f"- 詩語ヒント（補助）: {haiku_tags}\n"
-        f"- Z座標: {details.get('z_value', 0)}\n"
-        f"- 天気: {details.get('weather_label', details.get('weather', 'unknown'))}\n"
-        f"- 時間: {details.get('time_label', details.get('time_phase', 'unknown'))}\n"
-        "\n"
-        "3行の川柳だけを返す。"
+        "では、詠んで（3行・かなだけ）。"
     )
     return [
         {
             "role": "system",
             "content": (
-                "あなたはMinecraft実況AI『ドギド』です。"
-                "今は実況セリフではなく、日本語の川柳だけを作ります。"
-                "余計な説明は禁止です。"
+                "あなたは Minecraft の相棒『ドギド』。"
+                "いまは実況ではなく、材料を見て日本語の川柳を一句詠む。"
+                "関西の気質はこころの中に置き、句そのものはやわらかいことばで。"
             ),
         },
         {"role": "user", "content": user_prompt},
@@ -178,102 +232,84 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
 def build_haiku_repair_messages(details: dict[str, object]) -> list[dict[str, str]]:
     scene_block = _scene_block(details)
     constraint_block = _constraint_block(details)
-    catalog_notes_block = _catalog_notes_block(details)
+    materials = _materials_for_dogido(details)
     draft = str(details.get("attempted_haiku") or "").strip() or "なし"
+    force_hiragana = bool(details.get("force_hiragana"))
+    constraint_section = f"\n読みのメモ:\n{constraint_block}\n" if constraint_block else ""
+    focus = (
+        "下書きに漢字が混ざっている。意味はそのまま、全部ひらがなの3行に直してほしい。\n"
+        if force_hiragana
+        else "下書きの句を、同じ景色のまま、耳触りよく整えてほしい。\n"
+    )
     user_prompt = (
-        "以下の川柳下書きを、意味を保ったまま自然な日本語の川柳に直す。\n"
-        "返答は3行の川柳だけ。説明は禁止。\n"
+        f"{focus}"
+        "ドギドとして、プレイヤーに聞かせる一句に。\n"
         "\n"
-        "下書き:\n"
-        f"{draft}\n"
+        f"下書き:\n{draft}\n"
         "\n"
-        "場面の要約:\n"
-        f"{scene_block}\n"
+        f"【いまの材料】\n{materials}\n"
         "\n"
-        "カタログ観察:\n"
-        f"{catalog_notes_block}\n"
+        f"【場面】\n{scene_block}\n"
+        f"{constraint_section}"
         "\n"
-        "主役語の制約:\n"
-        f"{constraint_block}\n"
+        f"{_form_card(force_hiragana=force_hiragana)}\n"
         "\n"
-        "修正ルール:\n"
-        "- 3行で出力する\n"
-        "- 1行目は5音、2行目は7音、3行目は5音。全行合計でプラスマイナス1音まで許容\n"
-        "- ひらがなかカタカナだけを使う。漢字、英字、数字、記号、句読点は使わない\n"
-        "- 元の場面や主題は保つ\n"
-        "- 新しいアイテム、ブロック、Mob を足さない\n"
-        "- もし道具名や主役語を句に入れるなら、『使ってよい語』だけを使い、『使ってはいけない語』へ言い換えない\n"
-        "- 読みにくい造語や意味のない並びは使わない\n"
-        "\n"
-        "修正版の3行だけを返す。"
+        "整え直した3行だけ（かなのみ）。"
     )
     return [
         {
             "role": "system",
             "content": (
-                "あなたはMinecraft実況AI『ドギド』です。"
-                "今は実況ではなく、日本語の川柳の下書きを自然な川柳に直します。"
-                "余計な説明は禁止です。"
+                "あなたは Minecraft の相棒『ドギド』。"
+                "川柳の下書きを、同じ場面のまま読みやすく整える。"
             ),
         },
         {"role": "user", "content": user_prompt},
     ]
 
 
+def _structured_json_tail(schema_line: str) -> str:
+    return (
+        "返事は JSON オブジェクト1つだけ。\n"
+        f"形: {schema_line}"
+    )
+
+
 def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str]]:
-    feature_candidates = "\n".join(
-        f"- {candidate}" for candidate in details.get("feature_candidates", []) if isinstance(candidate, str)
-    ) or "- なし"
-    candidate_tensions = "\n".join(
-        f"- {candidate}" for candidate in details.get("candidate_tensions", []) if isinstance(candidate, str)
-    ) or "- なし"
-    haiku_tags = _haiku_tags_hint(details)
-    poetic_lines_block = _poetic_lines_block(details)
-    nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
-    passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
-    item_hint = _item_hint(details)
-    catalog_notes_block = _catalog_notes_block(details)
+    has_structure = _has_structure_focus(details)
+    materials = _materials_for_dogido(details)
+    candidates = _list_lines(details.get("feature_candidates", []))
+    tensions = _list_lines(details.get("candidate_tensions", []))
+    place_nudge = (
+        "いまいる場所の空気を大切に。"
+        if has_structure
+        else "いきものや自然の手触りを大切に。"
+    )
     user_prompt = (
-        "以下の Minecraft 状況から、川柳の焦点になる『関係のある取り合わせ・印象的な場面』を1つだけ選ぶ。\n"
-        "強い違和感がなくても、その場の空気や手触りがあれば found=true でよい。\n"
-        "必ず JSON オブジェクトだけを返す。\n"
-        "説明文や markdown は禁止。\n"
+        "ドギドとして、いまの材料をひと息ながめてほしい。\n"
+        "川柳の芯になりそうな『取り合わせ』か『その場の気配』をひとつだけ拾う。\n"
+        f"{place_nudge}\n"
+        "大げさな矛盾は要らない。平凡でも、ふっと心に残る一点でよい。\n"
+        "ことばは短く、あたたかく。\n"
         "\n"
-        "返答形式:\n"
-        "{\"found\": true/false, \"kind\": \"relation|contrast|juxtaposition|scene\", "
-        "\"description\": \"...\", \"elements\": [\"...\"], \"focus\": [\"...\"], \"confidence\": 0.0}\n"
+        f"【いまの材料】\n{materials}\n"
         "\n"
-        "候補:\n"
-        f"{feature_candidates}\n"
+        f"【眺めのヒント】\n{candidates}\n"
         "\n"
-        "コード側の取り合わせ候補:\n"
-        f"{candidate_tensions}\n"
+        f"【ちょっとした取り合わせ】\n{tensions}\n"
         "\n"
-        "カタログ観察:\n"
-        f"{catalog_notes_block}\n"
-        "\n"
-        "詩語（主役Mob）:\n"
-        f"{poetic_lines_block}\n"
-        "\n"
-        "状況:\n"
-        f"- バイオーム: {details.get('biome', 'unknown')} ({details.get('biome_group', 'unknown')})\n"
-        f"- 天気: {details.get('weather_label', details.get('weather', 'unknown'))}\n"
-        f"- 時間: {details.get('time_label', details.get('time_phase', 'unknown'))}\n"
-        f"- アイテムヒント（弱）: {item_hint}\n"
-        f"- 周辺ブロック: {nearby_blocks}\n"
-        f"- 平和なMob: {passive_mobs}\n"
-        f"- 詩語ヒント（補助）: {haiku_tags}\n"
-        "\n"
-        "優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする。\n"
-        "与えられた状況にないアイテム、ブロック、Mob を書かない。\n"
-        "無理に矛盾を作らず、平凡でも場面として立っていれば拾ってよい。"
+        + _structured_json_tail(
+            '{"found": true/false, "kind": "relation|contrast|juxtaposition|scene", '
+            '"description": "...", "elements": ["..."], "focus": ["..."], "confidence": 0.0}'
+        )
     )
     return [
         {
             "role": "system",
             "content": (
-                "あなたはMinecraftの状況から、川柳に向いた取り合わせや場面の焦点だけを抽出する。"
-                "返答は JSON オブジェクトのみ。"
+                "あなたは Minecraft の相棒『ドギド』。"
+                "材料から、一句の芯になる取り合わせを感じ取る。"
+                "返答は JSON のみ。"
             ),
         },
         {"role": "user", "content": user_prompt},
@@ -281,68 +317,88 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
 
 
 def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str]]:
-    feature_candidates = "\n".join(
-        f"- {candidate}" for candidate in details.get("feature_candidates", []) if isinstance(candidate, str)
-    ) or "- なし"
-    candidate_tensions = "\n".join(
-        f"- {candidate}" for candidate in details.get("candidate_tensions", []) if isinstance(candidate, str)
-    ) or "- なし"
-    nearby_blocks = "、".join(str(item) for item in details.get("nearby_blocks", []) if item) or "なし"
-    passive_mobs = "、".join(str(item) for item in details.get("passive_mobs", []) if item) or "なし"
-    item_hint = _item_hint(details)
-    catalog_notes_block = _catalog_notes_block(details)
-    poetic_lines_block = _poetic_lines_block(details)
+    has_structure = _has_structure_focus(details)
+    materials = _materials_for_dogido(details)
+    candidates = _list_lines(details.get("feature_candidates", []))
+    tensions = _list_lines(details.get("candidate_tensions", []))
     irony = details.get("irony")
-    irony_block = "なし"
+    irony_block = "まだなし"
     if isinstance(irony, dict) and irony.get("description"):
         irony_block = (
-            f"説明: {irony.get('description')}\n"
-            f"焦点: {'、'.join(str(item) for item in irony.get('focus', []) if item) or 'なし'}"
+            f"{irony.get('description')} / "
+            f"焦点: {'、'.join(str(item) for item in irony.get('focus', []) if item) or '—'}"
         )
+    place_nudge = (
+        "場所の気配をひと場面に。"
+        if has_structure
+        else "なんでもない午後でも、空気が見えればそれでよい。"
+    )
     user_prompt = (
-        "以下の Minecraft 状況から、川柳の種になる『ひとつの場面』を短く要約する。\n"
-        "特異でなくても、その場の空気が見えるなら found=true でよい。\n"
-        "必ず JSON オブジェクトだけを返す。\n"
-        "説明文や markdown は禁止。\n"
+        "ドギドとして、川柳の種になる『ひとつの場面』を短く描いてほしい。\n"
+        f"{place_nudge}\n"
+        "あとで五七五に落としやすい、具体的でやさしいことばで。\n"
         "\n"
-        "返答形式:\n"
-        "{\"found\": true/false, \"summary\": \"...\", \"motifs\": [\"...\"], "
-        "\"focus\": [\"...\"], \"confidence\": 0.0}\n"
+        f"【いまの材料】\n{materials}\n"
         "\n"
-        "候補:\n"
-        f"{feature_candidates}\n"
+        f"【眺めのヒント】\n{candidates}\n"
         "\n"
-        "コード側の取り合わせ候補:\n"
-        f"{candidate_tensions}\n"
+        f"【ちょっとした取り合わせ】\n{tensions}\n"
         "\n"
-        "前段の要約候補:\n"
-        f"{irony_block}\n"
+        f"【さきに感じた芯】\n{irony_block}\n"
         "\n"
-        "カタログ観察:\n"
-        f"{catalog_notes_block}\n"
-        "\n"
-        "詩語（主役Mob）:\n"
-        f"{poetic_lines_block}\n"
-        "\n"
-        "状況:\n"
-        f"- バイオーム: {details.get('biome', 'unknown')} ({details.get('biome_group', 'unknown')})\n"
-        f"- 天気: {details.get('weather_label', details.get('weather', 'unknown'))}\n"
-        f"- 時間: {details.get('time_label', details.get('time_phase', 'unknown'))}\n"
-        f"- アイテムヒント（弱）: {item_hint}\n"
-        f"- 周辺ブロック: {nearby_blocks}\n"
-        f"- 平和なMob: {passive_mobs}\n"
-        "\n"
-        "優先度は、平和なMobと周辺の自然物を最優先、次にバイオームや天気、アイテムは最後の弱い味付けにする。\n"
-        "summary は後段で5-7-5に圧縮しやすい、具体的で短い場面説明にする。\n"
-        "与えられた状況にないアイテム、ブロック、Mob を書かない。\n"
-        "村や名所の特定までは要らない。なんでもない場面でも、空気があれば拾ってよい。"
+        + _structured_json_tail(
+            '{"found": true/false, "summary": "...", "motifs": ["..."], '
+            '"focus": ["..."], "confidence": 0.0}'
+        )
     )
     return [
         {
             "role": "system",
             "content": (
-                "あなたはMinecraftの状況から、川柳の種になる短い場面要約だけを抽出する。"
-                "返答は JSON オブジェクトのみ。"
+                "あなたは Minecraft の相棒『ドギド』。"
+                "材料から、一句の種になる短い場面を描く。"
+                "返答は JSON のみ。"
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+def build_haiku_workshop_material_pick_messages(details: dict[str, object]) -> list[dict[str, str]]:
+    """句の断片質問に、材料候補から選んで短く答える（workshop ask_meaning）。"""
+    candidates = details.get("candidates") or []
+    if isinstance(candidates, (list, tuple)):
+        cand_lines = "\n".join(
+            f"{i}: {c}" for i, c in enumerate(candidates) if isinstance(c, str) and c.strip()
+        )
+    else:
+        cand_lines = ""
+    if not cand_lines:
+        cand_lines = "（候補なし）"
+    verse = str(details.get("verse") or "").strip() or "（句なし）"
+    player_text = str(details.get("player_text") or "").strip() or "（なし）"
+    fragment = str(details.get("fragment") or "").strip() or "（特定できず）"
+    user_prompt = (
+        "プレイヤーが、いまの句のことばを聞いてくれた。\n"
+        "ドギドとして、材料のなかからいちばんそれらしいものをそっと指して、短く答える。\n"
+        "言い方は気さくに。わかればそれでええ。\n"
+        "\n"
+        f"句: {verse}\n"
+        f"プレイヤー: {player_text}\n"
+        f"指してそうなところ: {fragment}\n"
+        "\n"
+        f"材料:\n{cand_lines}\n"
+        "\n"
+        + _structured_json_tail('{"pick_index": 0, "reply": "それは、平原やで。"}')
+        + "\nどれも違えば pick_index は null で、正直に短く。"
+    )
+    return [
+        {
+            "role": "system",
+            "content": (
+                "あなたは Minecraft の相棒『ドギド』。"
+                "句の言葉と材料をつないで、短く関西弁で答える。"
+                "返答は JSON のみ。"
             ),
         },
         {"role": "user", "content": user_prompt},

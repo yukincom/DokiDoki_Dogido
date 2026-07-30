@@ -280,6 +280,39 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertIn("地帯 冷帯バイオーム", candidates)
         self.assertIn("地形 雪は Y153から", candidates)
 
+    def test_structure_present_prefers_structure_over_biome_candidates(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="desert",
+            structure="desert_pyramid",
+        )
+        context = self.machine._haiku_context(event)
+        labels = context.feature_candidate_labels()
+        self.assertTrue(any(label.startswith("構造物 ") for label in labels), msg=labels)
+        self.assertTrue(any("ピラミッド" in label for label in labels), msg=labels)
+        # biome 名を主役候補に載せない
+        self.assertFalse(any(label.startswith("バイオーム ") for label in labels), msg=labels)
+        self.assertFalse(any(label.startswith("地帯 ") for label in labels), msg=labels)
+        # 気候は参考程度
+        self.assertTrue(any(label.startswith("気候 ") for label in labels), msg=labels)
+        self.assertEqual(context.structure_label, "砂漠のピラミッド")
+        self.assertTrue(context.climate_hint)
+
+        details = context.irony_details()
+        irony_user = build_haiku_irony_messages(details)[1]["content"]
+        self.assertIn("いまの材料", irony_user)
+        self.assertIn("砂漠のピラミッド", irony_user)
+        self.assertIn("いまいる場所", irony_user)
+        self.assertIn("場所の空気", irony_user)
+        # biome を状況の主役行にしない（structure 時）
+        self.assertNotIn("いまの景色:", irony_user)
+
+        haiku_user = build_haiku_messages(details)[1]["content"]
+        self.assertIn("いまの材料", haiku_user)
+        self.assertIn("砂漠のピラミッド", haiku_user)
+        self.assertIn("詠んで", haiku_user)
+        self.assertIn("ドギド", haiku_user)
+
     def test_haiku_uses_chat_route_for_irony_and_haiku_route_for_final_generation(self) -> None:
         class FakeLLM:
             def __init__(self) -> None:
@@ -407,12 +440,8 @@ class HaikuStateMachineTest(unittest.TestCase):
         ).actions
 
         preface_text = preface[0].text if preface else ""
-        self.assertIn("ここで一句。", preface_text)
-        # 見どころ（irony/scene）が先に来る
-        self.assertTrue(
-            preface_text.endswith("ここで一句。"),
-            msg=preface_text,
-        )
+        # 見どころだけ。「ここで一句。」は本句側のみ
+        self.assertNotIn("ここで一句", preface_text)
         self.assertIn("浮かんできた", preface_text)
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
 
@@ -469,7 +498,8 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
         self.assertTrue(machine.state.pending_haiku_after_preface)
-        self.assertTrue(preface and "ここで一句。" in (preface[0].text or ""))
+        self.assertTrue(preface and (preface[0].text or "").strip())
+        self.assertNotIn("ここで一句", (preface[0].text or ""))
 
         # 詠みの途中に話しかけても本句が先
         verse = machine.process(
@@ -537,10 +567,10 @@ class HaikuStateMachineTest(unittest.TestCase):
             )
         ).actions
 
-        # 必ず発句 → 本句の二段階で出る
+        # 必ず発句 → 本句の二段階で出る（preface に「ここで一句」は付けない）
         preface_text = preface[0].text if preface else ""
-        self.assertIn("ここで一句。", preface_text)
-        self.assertTrue(preface_text.endswith("ここで一句。"), msg=preface_text)
+        self.assertTrue(preface_text, msg=preface)
+        self.assertNotIn("ここで一句", preface_text)
         self.assertEqual([action.text for action in final_line], ["ぽーたるの\nひかりのさきへ\nいざゆかん"])
         # 情景・取り合わせの思考（irony/scene）もポータル近くで省略されない
         self.assertIn("haiku_irony", fake_llm.structured_kinds)
@@ -884,7 +914,12 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         joined = "\n".join(context.catalog_notes)
         self.assertIn("村", joined)
-        self.assertIn("井戸", joined)
+        self.assertIn("鐘", joined)
+        # structure note が先頭（場所の主役）
+        self.assertTrue(
+            context.catalog_notes and "村" in context.catalog_notes[0],
+            msg=context.catalog_notes,
+        )
 
     def test_catalog_notes_include_block_note_when_present(self) -> None:
         event = make_snapshot(
@@ -918,9 +953,9 @@ class HaikuStateMachineTest(unittest.TestCase):
         haiku_user = build_haiku_messages(details)[1]["content"]
         irony_user = build_haiku_irony_messages(details)[1]["content"]
 
-        self.assertIn("カタログ観察", haiku_user)
+        self.assertIn("ちょっとした知識", haiku_user)
         self.assertIn("雪のタイガ", haiku_user)
-        self.assertIn("カタログ観察", irony_user)
+        self.assertIn("いまの材料", irony_user)
         self.assertIn("雪のタイガ", irony_user)
 
     def test_poetic_lines_for_passive_mobs_and_dedupe_tags(self) -> None:
@@ -944,9 +979,9 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         details = context.prompt_details()
         prompt = build_haiku_messages(details)[1]["content"]
-        self.assertIn("詩語（主役Mob）", prompt)
+        self.assertIn("いきものの声・姿", prompt)
         self.assertIn("ウシ:", prompt)
-        self.assertIn("詩語ヒント（補助）", prompt)
+        self.assertIn("ことばの匂い", prompt)
 
     def test_mob_poetic_line_format(self) -> None:
         line = mob_poetic_line("cow")

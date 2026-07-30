@@ -12,13 +12,17 @@ from dogido_server.config import Settings
 from dogido_server.dialogue_context import DialogueContext
 from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
+    build_ask_meaning_llm_details,
     classify_workshop_intent,
     close_workshop,
     extract_conversational_revise,
+    finalize_ask_meaning_reply,
     is_open,
     lessons_from_critique_kind,
     loosen_all_lessons,
     loosen_lesson_for_praise,
+    materials_debug_line,
+    materials_speech_line,
     maybe_close_for_time,
     wants_clear_haiku_lessons,
     open_from_emission,
@@ -26,7 +30,7 @@ from dogido_server.haiku.workshop import (
     record_workshop_activity,
     render_workshop_reply,
 )
-from dogido_server.llm import DogidoLLMRouter
+from dogido_server.llm import DogidoLLMRouter, StructuredGenerationRequest
 from dogido_server.memory import MemoryStore
 from dogido_server.models import (
     AcceptedEventResponse,
@@ -578,8 +582,27 @@ class DogidoService:
             materials["interpretation"] = emission.interpretation
         if emission.biome:
             materials["biome"] = emission.biome
+            # 口頭候補用の日本語ラベル（キー名は出さない）
+            try:
+                from dogido_server.entry_catalog import biome_labels
+
+                bid = str(emission.biome).removeprefix("minecraft:")
+                ja = biome_labels().get(bid) or biome_labels().get(str(emission.biome))
+                if ja:
+                    materials["biome_ja"] = ja
+            except Exception:  # noqa: BLE001
+                pass
         if emission.structure:
             materials["structure"] = emission.structure
+            try:
+                from dogido_server.entry_catalog import structure_labels
+
+                sid = str(emission.structure).removeprefix("minecraft:")
+                ja = structure_labels().get(sid) or structure_labels().get(str(emission.structure))
+                if ja:
+                    materials["structure_ja"] = ja
+            except Exception:  # noqa: BLE001
+                pass
         if emission.time_phase:
             materials["time_phase"] = emission.time_phase
         session.haiku_workshop = open_from_emission(
@@ -589,10 +612,16 @@ class DogidoService:
             now=now,
         )
         LOGGER.warning(
-            "haiku_workshop_opened session_id=%s text=%s entry_id=%s",
+            "haiku_workshop_opened session_id=%s text=%s entry_id=%s "
+            "speech_materials=%s debug_materials=%s materials_keys=%s",
             session.session_id,
             (emission.text or "")[:60],
             entry_id or "-",
+            (materials_speech_line(session.haiku_workshop) or "")[:120] or "-",
+            (materials_debug_line(session.haiku_workshop) or "")[:160] or "-",
+            ",".join(sorted(str(k) for k in (session.haiku_workshop.materials or {})))
+            if session.haiku_workshop
+            else "-",
         )
 
     def _save_haiku_revision_reply(
@@ -637,18 +666,46 @@ class DogidoService:
         if (player_input.normalized_text or "").startswith("/"):
             return []
 
+        verse = workshop.display_line()
+        speech_materials = materials_speech_line(workshop)
+        debug_materials = materials_debug_line(workshop)
+
         # H4: 自然文の直し（workshop open 中）
         conversational = extract_conversational_revise(text)
         if conversational and self.memory is not None:
+            LOGGER.warning(
+                "haiku_workshop_turn session_id=%s path=revise source=conversational "
+                "player=%s verse=%s revised=%s",
+                session.session_id,
+                text[:100],
+                (verse or "")[:80],
+                conversational[:80],
+            )
             return self._save_haiku_revision_reply(
                 session, event, conversational, source="conversational"
             )
         if conversational and self.memory is None:
+            LOGGER.warning(
+                "haiku_workshop_turn session_id=%s path=revise_no_memory player=%s",
+                session.session_id,
+                text[:100],
+            )
             return [AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。")]
 
         # formal 川柳操作は上で処理済み。ここでは自然文の講評のみ。
-        kind = classify_workshop_intent(text)
+        kind = classify_workshop_intent(text, verse=verse)
         if kind is None:
+            LOGGER.warning(
+                "haiku_workshop_miss session_id=%s player=%s verse=%s "
+                "speech_materials=%s debug_materials=%s drift_count=%s "
+                "(intent=None → chat/drift 候補)",
+                session.session_id,
+                text[:100],
+                (verse or "")[:80],
+                (speech_materials or "")[:80] or "-",
+                (debug_materials or "")[:120] or "-",
+                workshop.drift_count,
+            )
             return []
 
         now = event.observed_at
@@ -656,6 +713,12 @@ class DogidoService:
             close_workshop(workshop, reason="explicit")
             session.haiku_workshop = None
             reply = render_workshop_reply("close", workshop, player_text=text)
+            LOGGER.warning(
+                "haiku_workshop_turn session_id=%s path=close player=%s reply=%s",
+                session.session_id,
+                text[:100],
+                (reply or "")[:120],
+            )
             return [AudioAction(layer="speech", interrupt=False, text=reply)]
 
         record_workshop_activity(workshop, now=now)
@@ -665,6 +728,7 @@ class DogidoService:
             "critique_gibberish": "unreadable",
             "critique_offscene": "off_context",
             "ask_meaning": "ask_meaning",
+            "ack": "other",
             "other_haiku": "other",
         }.get(kind, "other")
 
@@ -714,8 +778,58 @@ class DogidoService:
             close_workshop(workshop, reason="praise")
             session.haiku_workshop = None
 
-        reply = render_workshop_reply(kind, workshop, player_text=text)
+        reply_path = "template"
+        if kind == "ask_meaning":
+            reply, reply_path = self._ask_meaning_workshop_reply(workshop, text)
+        else:
+            reply = render_workshop_reply(kind, workshop, player_text=text)
+        # 観察用: intent / 句 / 口頭材料 vs 内部 materials / 返事
+        LOGGER.warning(
+            "haiku_workshop_turn session_id=%s path=reply kind=%s critique_kind=%s "
+            "reply_path=%s player=%s verse=%s speech_materials=%s debug_materials=%s "
+            "materials_keys=%s reply=%s critique_id=%s",
+            session.session_id,
+            kind,
+            critique_kind,
+            reply_path,
+            text[:100],
+            (verse or "")[:80],
+            (speech_materials or "")[:80] or "-",
+            (debug_materials or "")[:120] or "-",
+            ",".join(sorted(str(k) for k in (workshop.materials or {}))) or "-",
+            (reply or "")[:160],
+            critique_id or "-",
+        )
         return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+    def _ask_meaning_workshop_reply(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+    ) -> tuple[str, str]:
+        """材料候補をコードが閉じ、LLM が選び＋短返事（失敗時はテンプレ）。"""
+        details = build_ask_meaning_llm_details(workshop, player_text)
+        candidates = list(details.get("candidates") or [])
+        payload: dict[str, object] | None = None
+        if candidates:
+            try:
+                payload = self.llm.generate_structured_json(
+                    StructuredGenerationRequest(
+                        kind="haiku_workshop_material_pick",
+                        fallback_value={"pick_index": None, "reply": ""},
+                        details=details,
+                        temperature=0.35,
+                        route="chat",
+                        max_tokens=96,
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning(
+                    "haiku_workshop_material_pick_failed detail=%s",
+                    exc,
+                )
+                payload = None
+        return finalize_ask_meaning_reply(workshop, player_text, payload)
 
     def _note_workshop_after_actions(
         self,
@@ -732,7 +846,8 @@ class DogidoService:
         if not text or not player_input.breaks_silence:
             return
         # workshop 経路で既に処理済みなら drift しない（reply が actions に含まれる）
-        if classify_workshop_intent(text) is not None:
+        verse = workshop.display_line() if workshop else None
+        if classify_workshop_intent(text, verse=verse) is not None:
             return
         if player_input.revised_haiku_text or player_input.asks_haiku_recall:
             return
@@ -740,8 +855,26 @@ class DogidoService:
             return
         has_speech = any(bool(a.text) and a.layer == "speech" for a in actions)
         if not has_speech:
+            LOGGER.warning(
+                "haiku_workshop_idle session_id=%s player=%s (open, intent=None, no speech)",
+                session.session_id,
+                text[:100],
+            )
             return
+        speech_preview = next(
+            (a.text for a in actions if a.layer == "speech" and a.text),
+            "",
+        )
+        prev_drift = workshop.drift_count
         updated = record_drift(workshop, now=event.observed_at)
+        LOGGER.warning(
+            "haiku_workshop_drift session_id=%s player=%s speech=%s drift=%s→%s",
+            session.session_id,
+            text[:100],
+            (speech_preview or "")[:120],
+            prev_drift,
+            workshop.drift_count if workshop else prev_drift,
+        )
         if updated is not None and not updated.open:
             LOGGER.warning(
                 "haiku_workshop_closed session_id=%s reason=drift",
