@@ -17,11 +17,16 @@
 
 ## まだやっていないこと
 
-- Minecraft の実サウンド packet 由来の `auditory_threats`
 - 高精度の line-of-sight 判定
 - エンダーマンやウィッチの個別ロジック
 - ベッド/資源候補のワールドスキャン
 - `passive_mobs` と `nearby_resources` の本格収集
+
+## 音まわり（現状）
+
+- Minecraft の sound packet から `auditory_threats` / `ambient_sounds` を載せる
+- クライアント側の音観測 TTL は約 **5秒**（100 tick）。短いと「聞こえたのにサーバ空」になりやすい
+- サーバの player_chat hearing バッファは別途約12秒
 
 ## 設定ファイル
 
