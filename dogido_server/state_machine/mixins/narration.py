@@ -730,6 +730,7 @@ class NarrationMixin:
             # 天気は world.weather（状態）。hearing / 雨音 packet とは混ぜない
             "weather": self._weather_value(event.world.weather) or "unknown",
             "weather_label": self._player_chat_weather_label(event),
+            "weather_fact": self._player_chat_weather_fact(event),
             "mode": self.state.mode,
             "character_mode": character_mode,
             "combat_active": combat_active,
@@ -789,6 +790,19 @@ class NarrationMixin:
         if not weather:
             return "不明"
         return WEATHER_LABELS.get(str(weather), str(weather))
+
+    def _player_chat_weather_fact(self, event: GameEvent) -> str:
+        """昼の雨・雷だけ、地上の敵に関する淡々とした事実。
+
+        日光でアンデッドが燃えない時間帯＝昼間に限る。安全断定はしない。
+        """
+        weather = self._weather_value(event.world.weather)
+        if weather not in {"rain", "thunder"}:
+            return ""
+        phase = getattr(event.world.time_phase, "value", event.world.time_phase) or ""
+        if str(phase) not in {"day", "morning"}:
+            return ""
+        return "薄暗い。敵が地上にいる。"
 
     def _player_chat_place_context(self, event: GameEvent) -> dict[str, object]:
         """地表バイオームと「空間」（地下っぽさ）を分けて chat に渡す。

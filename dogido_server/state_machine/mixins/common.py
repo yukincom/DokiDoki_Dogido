@@ -981,12 +981,20 @@ class CommonMixin:
             return False
         return self.state.night_warning_pending or self._should_schedule_night_warning(event)
 
-    def _render_night_warning_line(self, event: GameEvent) -> str | None:
-        if self.player_input.should_block_ambient:
+    def _render_night_warning_line(
+        self,
+        event: GameEvent,
+        *,
+        allow_during_player_input: bool = False,
+    ) -> str | None:
+        # 地表夕方は割り込み可。それ以外の ambient はプレイヤー発話中は抑止。
+        if self.player_input.should_block_ambient and not allow_during_player_input:
             return None
         if self._is_surface_evening_warning_context(event):
             return EVENING_SURFACE_WARNING_CALL
         if not self._is_cave_or_submerged_night_warning_context(event):
+            return None
+        if self.player_input.should_block_ambient:
             return None
         time_phase = self._effective_time_phase(event)
         if time_phase == "evening":

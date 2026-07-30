@@ -7978,7 +7978,7 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertFalse(
             any(
-                action.text == "夕方や！あと1分もしないうちに敵出るで！"
+                action.text == "！そろそろ夜やで！"
                 for action in result.actions
             )
         )
@@ -8247,10 +8247,10 @@ class StateMachineTests(unittest.TestCase):
         second = self.machine.process(night)
 
         speech = next(action for action in first.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "夕方や！あと1分もしないうちに敵出るで！")
+        self.assertEqual(speech.text, "！そろそろ夜やで！")
         self.assertFalse(
             any(
-                action.text == "夕方や！あと1分もしないうちに敵出るで！"
+                action.text == "！そろそろ夜やで！"
                 for action in second.actions
             )
         )
@@ -8358,7 +8358,7 @@ class StateMachineTests(unittest.TestCase):
         result = self.machine.process(second_evening)
 
         speech = next(action for action in result.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "夕方や！あと1分もしないうちに敵出るで！")
+        self.assertEqual(speech.text, "！そろそろ夜やで！")
 
     def test_cave_biome_evening_uses_surface_exit_warning(self) -> None:
         daytime = GameEvent.model_validate_json(
@@ -8619,7 +8619,7 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertFalse(
             any(
-                action.text == "夕方や！あと1分もしないうちに敵出るで！"
+                action.text == "！そろそろ夜やで！"
                 for action in result.actions
             )
         )
@@ -8694,13 +8694,15 @@ class StateMachineTests(unittest.TestCase):
         first = self.machine.process(talking)
         second = self.machine.process(later)
 
-        # 夕方警告は時限性が高いので、入力中でも注意喚起行で割り込む
+        # 夕方警告は1本だけ。入力中は interrupt で遮る（2段本文は出さない）
         attention = next(action for action in first.actions if action.layer == "speech")
         self.assertEqual(attention.text, "！そろそろ夜やで！")
         self.assertTrue(attention.interrupt)
-        # 本文は次のイベントで出す
-        speech = next(action for action in second.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "夕方や！あと1分もしないうちに敵出るで！")
+        second_speech = [a.text for a in second.actions if a.layer == "speech" and a.text]
+        self.assertFalse(
+            any("夜" in (t or "") or "夕方" in (t or "") for t in second_speech),
+            msg=second_speech,
+        )
 
     def test_mass_hostile_callout_latches_until_query_range_clears(self) -> None:
         first = GameEvent.model_validate_json(

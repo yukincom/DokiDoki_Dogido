@@ -55,9 +55,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "自然なら一度だけ呼び名を入れてよい。\n"
         f"場所メモ: {place}。\n"
         f"時間帯は{detail_str(details, 'time_phase', 'unknown') or 'unknown'}。\n"
-        f"天気は{detail_str(details, 'weather_label') or detail_str(details, 'weather', '不明') or '不明'}"
-        "（ワールドの天気状態。雨の話はここを根拠にする。"
-        "hearing のモブ音と混同しない。晴れなのに雨音を捏造しない）。\n"
+        f"{_weather_block(details)}"
         f"答え方スタンス: {stance}。\n"
         f"{_haiku_workshop_block(details)}"
         f"{observation_block}"
@@ -68,6 +66,20 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "発言に噛み合った返事を、会話っぽく12〜42文字くらいで一言だけ返す。"
     )
     return leaf_dialog("player_chat", request, user_prompt)
+
+
+def _weather_block(details: dict[str, Any]) -> str:
+    """天気は状態。昼の雨・雷だけ短い事実（安全断定は details 側で持たない）。"""
+    label = detail_str(details, "weather_label") or detail_str(details, "weather", "不明") or "不明"
+    fact = detail_str(details, "weather_fact")
+    lines = [
+        f"天気は{label}"
+        "（ワールドの天気状態。雨の話はここを根拠にする。"
+        "hearing のモブ音と混同しない。晴れなのに雨を捏造しない）。"
+    ]
+    if fact:
+        lines.append(f"天気の事実: {fact}")
+    return "\n".join(lines) + "\n"
 
 
 def _haiku_workshop_block(details: dict[str, Any]) -> str:

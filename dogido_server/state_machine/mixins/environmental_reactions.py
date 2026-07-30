@@ -388,16 +388,9 @@ class EnvironmentalReactionsMixin:
         """player_chat より夜警告を先に出すべきか（副作用なし）。workshop 中は False。"""
         if self._haiku_workshop_is_open():
             return False
-        if self.state.pending_night_warning_detail:
-            if (
-                self._boss_presence_active(now)
-                or self._ominous_sound_presence_active(now)
-                or not self._is_surface_evening_warning_context(event)
-            ):
-                return False
-            return True
         if not self._should_consider_night_warning(event):
             return False
+        # 地表の夕方は時限性が高いので、話中でも1発割り込み可
         if self._player_input_priority_active(now) and self._is_surface_evening_warning_context(event):
             return True
         return self._render_night_warning_line(event) is not None
@@ -407,43 +400,31 @@ class EnvironmentalReactionsMixin:
         # 脅威・ターゲティングは panic/alert 枝が別途担当
         if self._haiku_workshop_is_open():
             return []
-        if self.state.pending_night_warning_detail:
-            if (
-                self._boss_presence_active(now)
-                or self._ominous_sound_presence_active(now)
-                or not self._is_surface_evening_warning_context(event)
-            ):
-                self.state.pending_night_warning_detail = False
-                return []
-            self.state.pending_night_warning_detail = False
-            self.state.night_warning_pending = False
-            self.state.night_warning_emitted_this_cycle = True
-            return self._speech_actions(
-                response_text("darkness", "night_warning", "surface_evening")
-            )
+        # 旧2段（注意→あと1分本文）は廃止。1本だけ。
+        self.state.pending_night_warning_detail = False
         if not self._should_consider_night_warning(event):
             return []
-        if (
+        interrupt_surface = (
             self._player_input_priority_active(now)
             and self._is_surface_evening_warning_context(event)
-        ):
-            # 夕方警告は時限性が高いので、プレイヤーの話を遮って
-            # 注意喚起 -> 次イベントで本文 の2段階で出す
-            # （workshop 中は上で抑止済み）
-            self.state.pending_night_warning_detail = True
-            return [
-                AudioAction(
-                    layer="speech",
-                    interrupt=True,
-                    text=response_text("darkness", "night_warning", "surface_evening_attention"),
-                    speech_profile="battle",
-                )
-            ]
-        line = self._render_night_warning_line(event)
+        )
+        line = self._render_night_warning_line(
+            event,
+            allow_during_player_input=interrupt_surface,
+        )
         if line is None:
             return []
         self.state.night_warning_pending = False
         self.state.night_warning_emitted_this_cycle = True
+        if interrupt_surface:
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=True,
+                    text=line,
+                    speech_profile="battle",
+                )
+            ]
         return self._speech_actions(line)
 
     def _ambient_environmental_actions(
