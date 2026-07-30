@@ -91,6 +91,18 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertEqual(classify_workshop_intent("無理やり圧縮しすぎ"), "critique_forced")
         self.assertEqual(classify_workshop_intent("いい句やな"), "praise")
         self.assertEqual(classify_workshop_intent("もうええ"), "close")
+        # 納得は ack（「意味」誤爆しない）
+        self.assertEqual(classify_workshop_intent("なるほどねそういう意味か"), "ack")
+        # 句断片 + 疑問（verse 渡し）
+        verse = "はれのばら\nわびたふどうの\nてのなか"
+        self.assertEqual(
+            classify_workshop_intent("晴れのバラ?", verse=verse),
+            "ask_meaning",
+        )
+        self.assertEqual(
+            classify_workshop_intent("バラとは何でしょうか", verse=verse),
+            "ask_meaning",
+        )
         # 読みメタ + 好み（素材名に依存しない）
         self.assertEqual(
             classify_workshop_intent("こっちの読み方の方がよかったんじゃないかなと思う"),
@@ -109,19 +121,78 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertIsNone(classify_workshop_intent("海やな"))
         self.assertIsNone(classify_workshop_intent("村がある"))
 
-    def test_reply_includes_materials(self) -> None:
-        ws = open_from_emission(_emission())
-        reply = render_workshop_reply("ask_meaning", ws)
-        self.assertIn("平原", reply)
-        self.assertIn("あさひさす", reply)
-        # H5.1: ガチ約束せず soft
-        self.assertIn("ちょっと意識", reply)
-        self.assertNotIn("外れんようにする", reply)
+    def test_reply_fragment_picks_material(self) -> None:
+        from dogido_server.haiku.workshop import (
+            finalize_ask_meaning_reply,
+            material_candidates_for_speech,
+            materials_speech_line,
+            pick_material_for_fragment,
+        )
+
+        ws = open_from_emission(
+            _emission(text="はれのばら\nわびたふどうの\nてのなか"),
+            materials={
+                "interpretation": "広大な平原の昼間の明るさと、錆びた銅のランタンの古びた雰囲気の対比",
+                "biome": "plains",
+                "biome_ja": "平原",
+                "structure": "village_plains",
+                "structure_ja": "平原の村",
+                "motifs": ["錆びた銅のランタン", "平原", "昼"],
+            },
+        )
+
+        speech = materials_speech_line(ws)
+        self.assertNotIn("biome:", speech)
+        self.assertNotIn("plains", speech)
+        cands = material_candidates_for_speech(ws)
+        self.assertIn("平原", cands)
+        self.assertIn("錆びた銅のランタン", cands)
+
+        # LLM 経路: pick + 柔軟な言い回し
+        plains_idx = cands.index("平原")
+        reply, path = finalize_ask_meaning_reply(
+            ws,
+            "晴れのバラ?",
+            {"pick_index": plains_idx, "reply": "平原のことやで。"},
+        )
+        self.assertEqual(path, "llm")
+        self.assertEqual(reply, "平原のことやで。")
+        self.assertNotIn("biome", reply)
+
+        # 言い回しが空でも pick があればテンプレ
+        reply_t, path_t = finalize_ask_meaning_reply(
+            ws,
+            "バラとは何でしょうか",
+            {"pick_index": plains_idx, "reply": ""},
+        )
+        self.assertEqual(path_t, "template")
+        self.assertEqual(reply_t, "それは、平原やで。")
+
+        # meta 漏れは落とす
+        reply_bad, path_bad = finalize_ask_meaning_reply(
+            ws,
+            "晴れのバラ?",
+            {"pick_index": plains_idx, "reply": "biome: plains やで"},
+        )
+        self.assertEqual(path_bad, "template")
+        self.assertEqual(reply_bad, "それは、平原やで。")
+
+        # 部分一致フォールバック（LLM なし）: 「平原」が fragment に含まれる場合のみ
+        self.assertEqual(pick_material_for_fragment("平原", ws), "平原")
+        # 詩的対応はコードでは当てない
+        self.assertIsNone(pick_material_for_fragment("はれのばら", ws))
+
+        soft, soft_path = finalize_ask_meaning_reply(ws, "はれのばらって何", None)
+        self.assertEqual(soft_path, "soft_fail")
+        self.assertIn("はれのばら", soft)
+
+        ack = render_workshop_reply("ack", ws, player_text="なるほどねそういう意味か")
+        self.assertLess(len(ack), 20)
 
     def test_reply_soft_tones(self) -> None:
         ws = open_from_emission(_emission())
-        self.assertIn("ちょっと意識", render_workshop_reply("critique_forced", ws))
-        self.assertIn("外れすぎん", render_workshop_reply("critique_offscene", ws))
+        self.assertIn("余白", render_workshop_reply("critique_forced", ws))
+        self.assertIn("ずれた", render_workshop_reply("critique_offscene", ws))
         praise = render_workshop_reply("praise", ws)
         self.assertIn("緩める", praise)
 
@@ -291,8 +362,13 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             ).route_player_input("グーの木の水って何?")
             actions = service._haiku_workshop_actions(sess, event)
             self.assertEqual(1, len(actions))
-            self.assertIn("読みにく", actions[0].text)
-            self.assertIn("平原", actions[0].text)
+            # 句に無い語への問い → 聞き返し（全文講義しない）
+            self.assertTrue(
+                "どの言葉" in (actions[0].text or "")
+                or "読みにく" in (actions[0].text or ""),
+                msg=actions[0].text,
+            )
+            self.assertNotIn("biome", actions[0].text or "")
             # critique was written via service.memory
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_critiques.jsonl").exists())
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_lessons.jsonl").exists())
@@ -383,6 +459,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
         class CaptureChatLLM:
             def __init__(self) -> None:
                 self.kinds: list[str] = []
+                self.structured_kinds: list[str] = []
 
             def preload(self) -> bool:
                 return False
@@ -392,7 +469,12 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 return "LLMが雑談で答えた文"
 
             def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
-                return {"found": False}
+                self.structured_kinds.append(request.kind)
+                # 材料 pick は正直に soft_fail を返す想定
+                return {
+                    "pick_index": None,
+                    "reply": "「ひらべった」の読みやね。ちょっと分かりにくかったかも。",
+                }
 
         with tempfile.TemporaryDirectory() as tmp:
             llm = CaptureChatLLM()
@@ -417,6 +499,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             sid = session.session_id
             sess = service.sessions[sid]
             sess.machine.llm = llm
+            service.llm = llm  # ask_meaning は service.llm を使う
             emission = _emission(text="ひらべった てのきのき ひるのひ")
             service._open_haiku_workshop(sess, emission, entry_id="h_test", now=emission.created_at)
 
@@ -454,6 +537,93 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 msg=speeches[0],
             )
             self.assertNotIn("player_chat", llm.kinds)
+            self.assertIn("haiku_workshop_material_pick", llm.structured_kinds)
+
+    def test_ask_meaning_llm_picks_material(self) -> None:
+        """ask_meaning は候補を閉じて LLM に選ばせ、柔軟な reply を通す。"""
+
+        class PickLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                raise AssertionError("leaf should not run")
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                self.last = request
+                cands = list(request.details.get("candidates") or [])
+                self.assert_plains = "平原" in cands
+                idx = cands.index("平原") if "平原" in cands else 0
+                return {"pick_index": idx, "reply": "平原のことやで。"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = PickLLM()
+            settings = Settings(
+                llm_enabled=True,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sid = session.session_id
+            sess = service.sessions[sid]
+            service.llm = llm
+            emission = _emission(text="はれのばら\nわびたふどうの\nてのなか")
+            service._open_haiku_workshop(
+                sess,
+                emission,
+                entry_id="h_pick",
+                now=emission.created_at,
+            )
+            # open の materials を上書き（現実に近い候補）
+            assert sess.haiku_workshop is not None
+            sess.haiku_workshop.materials = {
+                "interpretation": "広大な平原と錆びた銅のランタン",
+                "biome": "plains",
+                "biome_ja": "平原",
+                "motifs": ["錆びた銅のランタン", "平原", "昼"],
+            }
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text="晴れのバラ?"),
+            )
+            result = service.process_event(event, session_id=sid)
+            speeches = [a.text for a in result.actions if a.layer == "speech" and a.text]
+            self.assertEqual(speeches, ["平原のことやで。"])
+            self.assertEqual(getattr(llm, "last").kind, "haiku_workshop_material_pick")
+            self.assertTrue(getattr(llm, "assert_plains"))
 
     def test_clear_lessons_without_workshop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

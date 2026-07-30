@@ -656,9 +656,18 @@ class CommonMixin:
         """pin が open で、今の発話が workshop 向けなら True。"""
         if not self._haiku_workshop_is_open():
             return False
-        from dogido_server.haiku.workshop import should_handle_as_workshop
+        from dogido_server.haiku.workshop import is_open, should_handle_as_workshop
 
-        return should_handle_as_workshop(self.player_input.raw_text)
+        provider = getattr(self, "haiku_workshop_provider", None)
+        verse: str | None = None
+        if provider is not None:
+            try:
+                ws = provider()
+                if is_open(ws) and ws is not None:
+                    verse = ws.display_line()
+            except Exception:  # noqa: BLE001
+                verse = None
+        return should_handle_as_workshop(self.player_input.raw_text, verse=verse)
 
     def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
         recent_ms = event.world.ender_eye_launch_recent_ms

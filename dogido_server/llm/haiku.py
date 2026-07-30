@@ -25,8 +25,32 @@ def clean_haiku_output(text: str | None) -> str:
         return ""
     if len(candidates) == 1:
         merged = re.sub(r"[／/|]", "\n", candidates[0])
-        return "\n".join(part.strip() for part in merged.splitlines() if part.strip())
-    return "\n".join(candidates[-3:])
+        joined = "\n".join(part.strip() for part in merged.splitlines() if part.strip())
+        return _normalize_haiku_line_breaks(joined)
+    return _normalize_haiku_line_breaks("\n".join(candidates[-3:]))
+
+
+def _normalize_haiku_line_breaks(text: str) -> str:
+    """スペース区切り3句を改行にそろえる（判定・発話の両方で扱いやすく）。"""
+    stripped = (text or "").strip()
+    if not stripped:
+        return ""
+    if "\n" in stripped:
+        parts = [p.strip() for p in stripped.splitlines() if p.strip()]
+        if len(parts) == 3:
+            return "\n".join(parts)
+        return stripped
+    # 全角スペースも区切りに
+    spaced = re.sub(r"[\u3000\s]+", " ", stripped).strip()
+    whitespace_parts = [p for p in spaced.split(" ") if p]
+    if len(whitespace_parts) == 3:
+        return "\n".join(whitespace_parts)
+    return stripped
+
+
+def haiku_contains_non_kana(text: str) -> bool:
+    """漢字・英数字が混ざっているか（かな句のゲート用）。"""
+    return bool(re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text or ""))
 
 
 def is_haiku_usable_output(text: str, details: dict[str, object] | None = None) -> bool:

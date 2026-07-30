@@ -278,7 +278,7 @@ lesson の効き方（H5.1）:
 
 | 種別 | 返事の型（実装トーン） |
 |---|---|
-| ask_meaning | 「読みにくいかも」＋ **materials 開示** ＋「次は読みやすさ、ちょっと意識するわ」 |
+| ask_meaning | 候補 materials をコードが閉じ、LLM が1つ選んで短く言う（「それは、平原やで」等）。失敗時は正直に読みにくい。**全 materials 羅列や schema 名は禁止** |
 | critique_forced | 「詰め込みすぎたかも」＋「次は余白、ちょっと意識するわ」 |
 | critique_gibberish / offscene | 認める ＋ materials ＋「気をつける／外れすぎんように」 |
 | revise_free | 「覚えといたで」＋ close |

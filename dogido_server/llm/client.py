@@ -18,6 +18,7 @@ from .haiku import (
     clean_haiku_output,
     count_japanese_sounds,
     haiku_char_sound,
+    haiku_contains_non_kana,
     is_haiku_soft_emit_ok,
     is_haiku_usable_output,
     split_haiku_phrases,
@@ -205,11 +206,16 @@ class DogidoLLM:
         return cleaned or request.fallback_text
 
     def _retry_haiku_repair(self, request: LeafGenerationRequest, attempted: str) -> str | None:
+        repair_details = {
+            **request.details,
+            "attempted_haiku": attempted,
+            "force_hiragana": haiku_contains_non_kana(attempted),
+        }
         repair_request = LeafGenerationRequest(
             kind="haiku_repair",
             fallback_text="",
-            details={**request.details, "attempted_haiku": attempted},
-            temperature=0.25,
+            details=repair_details,
+            temperature=0.2,
             route=request.route,
             max_tokens=request.max_tokens,
         )

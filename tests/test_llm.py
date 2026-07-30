@@ -365,8 +365,12 @@ class LLMTests(unittest.TestCase):
                 if request.kind == "haiku":
                     return "はれわたる 草原やよるの えがみ"
                 if request.kind == "haiku_repair":
-                    if request.details["attempted_haiku"] != "はれわたる 草原やよるの えがみ":
-                        raise AssertionError(request.details["attempted_haiku"])
+                    # clean 後は改行区切り・force_hiragana 付き
+                    attempted = str(request.details.get("attempted_haiku") or "")
+                    if "草原" not in attempted and "はれわたる" not in attempted:
+                        raise AssertionError(attempted)
+                    if not request.details.get("force_hiragana"):
+                        raise AssertionError("expected force_hiragana")
                     return "はれわたる\nくさはらのよる\nえをもてり"
                 raise AssertionError(request.kind)
 
@@ -397,6 +401,9 @@ class LLMTests(unittest.TestCase):
         """575 外れでもかなの句なら出し、workshop で直せるようにする。"""
 
         imperfect = "ゆうやけの むらじんふんふん ひらば"
+        from dogido_server.llm.haiku import clean_haiku_output
+
+        imperfect_clean = clean_haiku_output(imperfect)
 
         class ImperfectLLM(DogidoLLM):
             def __init__(self) -> None:
@@ -413,8 +420,8 @@ class LLMTests(unittest.TestCase):
                 raise AssertionError(request.kind)
 
         llm = ImperfectLLM()
-        self.assertFalse(llm._is_haiku_usable_output(imperfect))
-        self.assertTrue(llm._is_haiku_soft_emit_ok(imperfect))
+        self.assertFalse(llm._is_haiku_usable_output(imperfect_clean))
+        self.assertTrue(llm._is_haiku_soft_emit_ok(imperfect_clean))
 
         text = llm.generate_leaf_text(
             LeafGenerationRequest(
@@ -424,7 +431,7 @@ class LLMTests(unittest.TestCase):
                 route="haiku",
             )
         )
-        self.assertEqual(text, imperfect)
+        self.assertEqual(text, imperfect_clean)
         self.assertNotEqual(text, "まとまらんかった。。。")
 
     def test_haiku_soft_emit_still_rejects_forbidden_tool_and_gibberish(self) -> None:
@@ -439,6 +446,46 @@ class LLMTests(unittest.TestCase):
         )
         self.assertFalse(self.llm._is_haiku_soft_emit_ok("あいうえお かきくけこ さしすせそ"))
         self.assertFalse(self.llm._is_haiku_soft_emit_ok("hi there friend"))
+
+    def test_haiku_with_kanji_repairs_to_kana_instead_of_failed_line(self) -> None:
+        """場面要約の漢字が句に混ざると soft も落ちる。repair でかな化できれば一句出す。"""
+        from dogido_server.llm import DogidoLLM, LeafGenerationRequest
+        from dogido_server.llm.haiku import clean_haiku_output
+
+        mixed = "さびたひかり ぬるい土の闇 くらやみ"
+        fixed = "さびたひかり\nぬるいつちのやみ\nくらやみ"
+        cleaned_mixed = clean_haiku_output(mixed)
+        self.assertIn("\n", cleaned_mixed)
+        self.assertFalse(self.llm._is_haiku_soft_emit_ok(cleaned_mixed))
+
+        class KanjiThenKanaLLM(DogidoLLM):
+            def __init__(self) -> None:
+                super().__init__(Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop"))
+                self.repair_details: dict | None = None
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                if request.kind == "haiku":
+                    return mixed
+                if request.kind == "haiku_repair":
+                    self.repair_details = dict(request.details)
+                    return fixed
+                raise AssertionError(request.kind)
+
+        llm = KanjiThenKanaLLM()
+        text = llm.generate_leaf_text(
+            LeafGenerationRequest(
+                kind="haiku",
+                fallback_text="まとまらんかった。。。",
+                details={},
+                route="haiku",
+            )
+        )
+        self.assertEqual(text, fixed)
+        self.assertTrue(llm.repair_details and llm.repair_details.get("force_hiragana"))
+        self.assertNotEqual(text, "まとまらんかった。。。")
 
     def test_preload_loads_mlx_model_once(self) -> None:
         llm = DogidoLLM(

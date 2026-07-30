@@ -235,8 +235,15 @@ class HaikuMixin:
             line = fixed
         else:
             line = self._render_haiku_line(event).strip()
-        line = (line or "").strip() or "まとまらんかった。。。"
-        self._remember_haiku_emission(event, now, line, route="haiku")
+        line = (line or "").strip() or llm_failed_text
+        # 失敗定型句は workshop pin にしない（「まとまらんかった」が句として残るのを防ぐ）
+        if not self._is_llm_failed_haiku_text(line):
+            self._remember_haiku_emission(event, now, line, route="haiku")
+        else:
+            LOGGER.warning(
+                "haiku_emit result=failed_no_pin text=%s",
+                summarize_for_log(line),
+            )
         LOGGER.warning(
             "haiku_emit result=emitted text=%s",
             summarize_for_log(self._format_haiku_line(line)),
@@ -263,12 +270,16 @@ class HaikuMixin:
         irony: IronyContext,
         scene: SceneContext,
     ) -> str | None:
-        """irony/scene を短い口語の見どころにする。無い・空なら None。"""
+        """irony/scene を短い口語の見どころにする。無い・空なら None。
+
+        長文の対比説明は鬱陶しいので、scene.summary を優先し短く切る。
+        """
         raw: str | None = None
-        if irony.found and irony.description.strip():
-            raw = irony.description.strip()
-        elif scene.found and scene.summary.strip():
+        # 口には summary 優先（description は長い）
+        if scene.found and scene.summary.strip():
             raw = scene.summary.strip()
+        elif irony.found and irony.description.strip():
+            raw = irony.description.strip()
         if not raw:
             return None
         body = self._shorten_haiku_inspiration(raw)
@@ -277,28 +288,25 @@ class HaikuMixin:
         # すでに「浮かんだ」系なら重ねない
         if any(marker in body for marker in ("浮か", "おもいつ", "思いつ")):
             return body if body.endswith(("。", "わ", "や", "で", "ね")) else f"{body}。"
-        return f"{body}が頭に浮かんできたわ"
+        return f"{body}、なんか浮かんできたわ"
 
-    def _shorten_haiku_inspiration(self, text: str, *, max_chars: int = 42) -> str:
+    def _shorten_haiku_inspiration(self, text: str, *, max_chars: int = 28) -> str:
         cleaned = text.strip().rstrip("。．.！!？?")
         if not cleaned:
             return ""
-        # 分析っぽい語を少しだけ崩す
         cleaned = cleaned.replace("プレイヤー", "あんた")
+        # 分析っぽい長語を落とす
+        for heavy in ("の対比", "の重厚感", "の雰囲気", "の明るさ"):
+            if cleaned.endswith(heavy):
+                cleaned = cleaned[: -len(heavy)].rstrip("・、 ")
         if len(cleaned) <= max_chars:
             return cleaned
-        # 読点で切れるなら短い塊を優先
-        for sep in ("、", "，", "。"):
+        # 最初の読点まで（短い塊）
+        for sep in ("、", "，", "。", "・"):
             if sep in cleaned:
-                parts = [p.strip() for p in cleaned.split(sep) if p.strip()]
-                if len(parts) >= 2:
-                    # 先頭 + 末尾（対比の芯）をくっつけられるとき
-                    head, tail = parts[0], parts[-1]
-                    joined = f"{head}、{tail}"
-                    if len(joined) <= max_chars + 8:
-                        return joined
-                    if len(head) <= max_chars:
-                        return head
+                first = cleaned.split(sep, 1)[0].strip()
+                if len(first) >= 6:
+                    return first if len(first) <= max_chars else first[: max_chars - 1] + "…"
         return cleaned[: max_chars - 1].rstrip("、， ") + "…"
 
     def _render_haiku_line(self, event: GameEvent) -> str:
@@ -408,6 +416,16 @@ class HaikuMixin:
     def _llm_failed_haiku_line(self) -> str:
         return resolve_llm_failed_haiku()
 
+    def _is_llm_failed_haiku_text(self, text: str) -> bool:
+        stripped = self._strip_haiku_preface(text or "").strip()
+        if not stripped:
+            return True
+        failed = (self._llm_failed_haiku_line() or "").strip()
+        if failed and stripped == failed:
+            return True
+        # カタログ文言の揺れ用
+        return "まとまらん" in stripped
+
     def _structured_status(self, payload: dict[str, object] | None) -> str:
         if not isinstance(payload, dict):
             return "invalid_payload"
@@ -466,6 +484,8 @@ class HaikuMixin:
             )
         )
         poetic_lines, poetic_mob_keys = self._haiku_poetic_lines(event)
+        structure_id, structure_label = self._haiku_structure_fields(event)
+        climate_hint = self._haiku_climate_hint(biome)
         return HaikuContext(
             player_name=self._player_call_name(event),
             biome_id=self._normalized_biome(biome) or "unknown",
@@ -494,6 +514,9 @@ class HaikuMixin:
             candidate_tensions=tuple(self._haiku_candidate_tensions(event, held_item, passive_mobs, nearby_blocks)),
             catalog_notes=tuple(self._haiku_catalog_notes(event)),
             poetic_lines=tuple(poetic_lines),
+            structure_id=structure_id,
+            structure_label=structure_label,
+            climate_hint=climate_hint,
         )
 
     def _haiku_feature_candidates(
@@ -509,7 +532,10 @@ class HaikuMixin:
         weather = self._weather_value(event.world.weather) or "unknown"
         z_value = event.player.position.z
         portal_type = (event.world.nearby_portal_type or "").strip().lower()
-        candidates = []
+        structure_id, structure_label = self._haiku_structure_fields(event)
+        has_structure = bool(structure_label)
+        climate_hint = self._haiku_climate_hint(event.world.biome)
+        candidates: list[HaikuFeature] = []
         if portal_type:
             portal_labels = {
                 "nether_portal": "ネザーポータル",
@@ -520,17 +546,26 @@ class HaikuMixin:
                 "ポータル", "portal", portal_labels.get(portal_type, portal_type),
                 tags=frozenset({"異世界", "ワープ", "光", "不思議"}),
             ))
+        # structure あり: 場所の主役は構造物。バイオーム名は候補に載せない（名称に気候が含まれることが多い）。
+        # 気候は参考程度だけ。
+        if has_structure:
+            candidates.append(HaikuFeature("構造物", "structure", structure_label))
+            if climate_hint:
+                candidates.append(HaikuFeature("気候", "climate", climate_hint))
+        else:
+            candidates.extend([
+                HaikuFeature("バイオーム", "biome", self._biome_label_with_reading(event.world.biome)),
+                HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
+            ])
+            candidates.extend(
+                HaikuFeature("地形", f"trait_{index}", trait)
+                for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
+            )
         candidates.extend([
-            HaikuFeature("バイオーム", "biome", self._biome_label_with_reading(event.world.biome)),
-            HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
             HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
             HaikuFeature("天気", "weather", WEATHER_LABELS.get(weather, "不明")),
             HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
         ])
-        candidates.extend(
-            HaikuFeature("地形", f"trait_{index}", trait)
-            for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
-        )
         if held_item:
             candidates.append(HaikuFeature("手持ち", "held_item", held_item))
         candidates.extend(
@@ -547,6 +582,45 @@ class HaikuMixin:
                 )
             )
         return candidates[:14]
+
+    def _haiku_structure_fields(self, event: GameEvent) -> tuple[str, str]:
+        raw = event.world.structure or getattr(self.state, "current_structure", None)
+        if not raw:
+            return "", ""
+        structure_id = str(raw).removeprefix("minecraft:").strip()
+        if not structure_id:
+            return "", ""
+        entry = self._structure_entry(structure_id) or {}
+        label = (
+            str(entry.get("label") or "").strip()
+            or self._structure_label(structure_id)
+            or structure_id
+        )
+        return structure_id, label
+
+    def _haiku_climate_hint(self, biome: str | None) -> str:
+        """気温・地帯の弱い参考（structure 主役時の背景用）。数値は出さない。"""
+        temperature = self._biome_temperature(biome)
+        group = self._biome_group_label(biome) or ""
+        feel = ""
+        if temperature is not None:
+            if temperature >= 1.5:
+                feel = "とても暑い"
+            elif temperature >= 1.0:
+                feel = "暑い"
+            elif temperature >= 0.5:
+                feel = "穏やか"
+            elif temperature >= 0.2:
+                feel = "涼しい"
+            elif temperature >= 0.0:
+                feel = "寒い"
+            else:
+                feel = "とても寒い"
+        # group_label は「乾燥帯バイオーム」など。短くする
+        band = group.replace("バイオーム", "").strip()
+        if feel and band and band not in feel:
+            return f"{feel}（{band}）"
+        return feel or band
 
     def _haiku_biome_traits(self, biome: str | None) -> list[str]:
         traits: list[str] = []
@@ -690,17 +764,15 @@ class HaikuMixin:
             seen.add(line)
             notes.append(line)
 
-        biome_entry = self._biome_entry(event.world.biome) or {}
-        append_note(self._biome_label_with_reading(event.world.biome), biome_entry.get("note"))
-
-        structure_id = event.world.structure or getattr(self.state, "current_structure", None)
+        # structure があるときは note も構造物を先に（場所の主役）
+        structure_id, structure_label = self._haiku_structure_fields(event)
         if structure_id:
             structure_entry = self._structure_entry(structure_id) or {}
-            structure_label = (
-                str(structure_entry.get("label") or "").strip()
-                or self._structure_label(structure_id)
-            )
             append_note(structure_label, structure_entry.get("note"))
+
+        biome_entry = self._biome_entry(event.world.biome) or {}
+        # structure ありでも biome note は残してよいが後ろ。主役化しない。
+        append_note(self._biome_label_with_reading(event.world.biome), biome_entry.get("note"))
 
         block_note_count = 0
         for resource in sorted(event.nearby_resources, key=lambda candidate: candidate.distance or inf):
