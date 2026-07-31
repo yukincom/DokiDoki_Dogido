@@ -237,9 +237,18 @@ class StateUpdatesMixin:
             self.state.last_single_visual_type = None
             self.state.last_single_visual_at = None
             self.state.announced_hostile_counts.clear()
+            self.state.multi_increase_announced_ids.clear()
         if authoritative_ground_count_event:
             self.state.last_ground_hostile_count_within_query_range = ground_hostile_count
         self.state.active_close_flying_visual_keys = self._current_close_flying_visual_keys(event)
+        # 見えていない ID は捨てる（次の群れではまた「増えた」可）
+        visible_ids = {
+            self._visual_identity_key(threat)
+            for threat in event.visual_threats
+            if threat.type
+        }
+        if self.state.multi_increase_announced_ids:
+            self.state.multi_increase_announced_ids &= visible_ids
         self._log_haiku_block_state(event, now)
 
     def _handle_dimension_change(self, event: GameEvent) -> None:
@@ -294,6 +303,7 @@ class StateUpdatesMixin:
         self.state.last_visual_priority_callout_at = None
         self.state.last_single_visual_type = None
         self.state.last_single_visual_at = None
+        self.state.multi_increase_announced_ids.clear()
         self.state.last_ushiro_call_at = None
         self.state.active_close_flying_visual_keys.clear()
         self.state.pending_dark_push_after_breath_until = None

@@ -51,13 +51,20 @@ def open_from_emission(
 ) -> RecentHaikuWorkshop:
     """発句成功時に pin を立てる。"""
     at = now or emission.created_at
-    mats = dict(materials or {})
+    # emission.materials（厚いシード + fragment_links）を優先。明示 materials があれば上書き合成。
+    mats: dict[str, Any] = {}
+    if getattr(emission, "materials", None):
+        mats.update(dict(emission.materials or {}))
+    if materials:
+        mats.update(dict(materials))
     if emission.interpretation and "interpretation" not in mats:
         mats["interpretation"] = emission.interpretation
     if emission.biome and "biome" not in mats:
         mats["biome"] = emission.biome
     if emission.structure and "structure" not in mats:
         mats["structure"] = emission.structure
+    if emission.time_phase and "time_phase" not in mats:
+        mats["time_phase"] = emission.time_phase
     return RecentHaikuWorkshop(
         surface_text=(emission.text or "").strip(),
         emitted_at=at,
@@ -149,12 +156,50 @@ def workshop_prompt_details(workshop: RecentHaikuWorkshop | None) -> dict[str, s
 
 
 def materials_speech_line(workshop: RecentHaikuWorkshop) -> str:
-    """プレイヤー向けの短い狙い文。内部キー名（biome: 等）は絶対に出さない。"""
-    cands = material_candidates_for_speech(workshop)
-    if not cands:
+    """プレイヤー向けの短い狙い文。内部キー名（biome: 等）は絶対に出さない。
+
+    純最短だと「静寂」「昼」が斧・原木に勝つので、source 優先で具体物を選ぶ。
+    """
+    from dogido_server.haiku.materials import short_material_entries
+
+    mats = dict(workshop.materials or {})
+    if workshop.interpretation and "interpretation" not in mats:
+        mats["interpretation"] = workshop.interpretation
+    if workshop.biome and "biome" not in mats:
+        mats["biome"] = workshop.biome
+    if workshop.structure and "structure" not in mats:
+        mats["structure"] = workshop.structure
+    if workshop.time_phase and "time_phase" not in mats:
+        mats["time_phase"] = workshop.time_phase
+    entries = short_material_entries(mats)
+    if not entries:
         return ""
-    # いちばん短い具体候補（長い対比文より「錆びた銅のランタン」等を優先）
-    return min(cands, key=lambda s: (len(s) > 24, len(s)))
+    # held / nearby / structure / motif を抽象語・解釈条片より先に
+    source_rank = {
+        "held_item": 0,
+        "nearby_block": 1,
+        "structure": 2,
+        "motif": 3,
+        "passive_mob": 4,
+        "biome": 5,
+        "place": 6,
+        "time_phase": 7,
+        "interpretation": 8,
+    }
+
+    def rank(item: tuple[str, str]) -> tuple:
+        label, source = item
+        # 2 文字の雰囲気語（静寂・温もり等）は concrete より後
+        abstract_short = len(label) <= 2
+        return (
+            source_rank.get(source, 9),
+            abstract_short,
+            len(label) > 20,
+            len(label),
+            label,
+        )
+
+    return min(entries, key=rank)[0]
 
 
 def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
@@ -166,84 +211,61 @@ def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
     ).strip()
     if interpretation:
         parts.append(interpretation[:80])
-    for key in ("biome", "structure", "time_phase", "place"):
+    for key in ("biome", "structure", "time_phase", "place", "held_item"):
         val = materials.get(key) or getattr(workshop, key, None)
         if val:
             parts.append(f"{key}={val}")
+    motifs = materials.get("motifs")
+    if isinstance(motifs, (list, tuple)) and motifs:
+        parts.append("motifs=" + ",".join(str(m) for m in motifs[:4] if m))
+    nearby = materials.get("nearby_blocks")
+    if isinstance(nearby, (list, tuple)) and nearby:
+        parts.append("nearby=" + ",".join(str(b) for b in nearby[:3] if b))
+    links = materials.get("fragment_links")
+    if isinstance(links, list) and links:
+        parts.append(f"links={len(links)}")
     return " / ".join(parts) if parts else ""
 
 
 def material_candidates_for_speech(workshop: RecentHaikuWorkshop) -> list[str]:
     """「それは〇〇やで」用の候補。日本語の中身だけ（キー名なし）。
 
-    短い具体物（モチーフ・biome_ja）を先に、長い解釈文は後。
+    短い具体物（motifs / held / nearby / biome_ja）を先に、長い解釈文は後。
+    ドメイン固有の禁止語リストは持たない（materials.short_material_entries に委譲）。
     """
-    materials = workshop.materials or {}
-    out: list[str] = []
-    seen: set[str] = set()
+    from dogido_server.haiku.materials import short_material_entries
 
-    def add(s: str | None, *, max_len: int = 28) -> None:
-        t = (s or "").strip().rstrip("。．.")
-        t = t.replace("プレイヤー", "あんた")
-        if not t or len(t) < 2:
-            return
-        if len(t) > max_len:
-            t = _shorten_for_speech(t, max_chars=max_len)
-        if not t or t in seen:
-            return
-        seen.add(t)
-        out.append(t)
-
-    # 1) 短い具体物を先に（発話の本命）
-    motifs = materials.get("motifs") or materials.get("scene_motifs")
-    if isinstance(motifs, (list, tuple)):
-        for m in motifs:
-            add(str(m) if m else None)
-
-    for key in ("biome_ja", "structure_ja", "place_ja"):
-        add(str(materials[key]) if materials.get(key) else None)
-
-    phase = materials.get("time_phase") or workshop.time_phase
-    phase_ja = {
-        "morning": "朝",
-        "day": "昼",
-        "evening": "夕方",
-        "night": "夜",
-    }.get(str(phase or ""), None)
-    add(phase_ja)
-
-    # biome / structure は日本語ラベルへ
-    try:
-        from dogido_server.entry_catalog import biome_labels, structure_labels
-
-        biome_id = materials.get("biome") or workshop.biome
-        if biome_id:
-            labels = biome_labels()
-            add(labels.get(str(biome_id)) or labels.get(str(biome_id).removeprefix("minecraft:")))
-        struct_id = materials.get("structure") or workshop.structure
-        if struct_id:
-            sl = structure_labels()
-            sid = str(struct_id).removeprefix("minecraft:")
-            add(sl.get(sid) or sl.get(str(struct_id)))
-    except Exception:  # noqa: BLE001
-        pass
-
-    # 2) 解釈文は条片のみ（全文の長い対比は候補にしない＝「それは…やで」が講義になる）
-    interpretation = str(
-        materials.get("interpretation") or workshop.interpretation or ""
-    ).strip()
-    if interpretation:
-        for chunk in _split_material_chunks(interpretation):
-            add(chunk, max_len=22)
-
-    return out
+    mats = dict(workshop.materials or {})
+    if workshop.interpretation and "interpretation" not in mats:
+        mats["interpretation"] = workshop.interpretation
+    if workshop.biome and "biome" not in mats:
+        mats["biome"] = workshop.biome
+    if workshop.structure and "structure" not in mats:
+        mats["structure"] = workshop.structure
+    if workshop.time_phase and "time_phase" not in mats:
+        mats["time_phase"] = workshop.time_phase
+    return [label for label, _source in short_material_entries(mats)]
 
 
 def pick_material_for_fragment(
     fragment: str | None,
     workshop: RecentHaikuWorkshop,
+    *,
+    player_text: str | None = None,
 ) -> str | None:
-    """LLM 失敗時の超単純フォールバック。部分一致のみ（訓読みテーブルは使わない）。"""
+    """LLM 失敗時のフォールバック。fragment_links 優先、なければ部分一致。"""
+    from dogido_server.haiku.materials import resolve_material_from_links
+
+    verse = workshop.display_line() or ""
+    linked = resolve_material_from_links(
+        player_text or "",
+        verse,
+        workshop.materials,
+        fragment=fragment,
+    )
+    if linked:
+        return linked
+
     frag = _compact_kana(fragment or "")
     if len(frag) < 2:
         return None
@@ -319,8 +341,8 @@ def finalize_ask_meaning_reply(
     if pick:
         return f"それは、{pick}やで。", "template"
 
-    # LLM なし / 失敗時: 部分一致だけ試す
-    simple = pick_material_for_fragment(fragment, workshop)
+    # fragment_links（句断片→材料）を優先。無ければ部分一致。
+    simple = pick_material_for_fragment(fragment, workshop, player_text=said)
     if simple:
         return f"それは、{simple}やで。", "template"
 

@@ -78,9 +78,10 @@ import net.minecraft.world.World;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
-    // 音 packet をクライアント側で保持する長さ。旧12tick(0.6s)だと snapshot 間隔に負ける。
-    // 20 tick/s 想定で約5秒。サーバの player_chat hearing バッファ(約12s)より短くてよい。
-    private static final int SOUND_OBSERVATION_TTL_TICKS = 100;
+    // 音 packet をクライアント側で保持する長さ。
+    // 人間が「…？」「今の音なに？」と言うまでの猶予を確保する（旧5秒だと短い）。
+    // 20 tick/s 想定で約15秒。サーバ hearing バッファ（約20s）以下に保つ。
+    private static final int SOUND_OBSERVATION_TTL_TICKS = 300;
     private static final int OMINOUS_SOUND_TTL_TICKS = 80;
     private static final int WEATHER_SOUND_TTL_TICKS = 80;
     private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;

@@ -36,6 +36,8 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [#13](https://github.com/yukincom/DokiDoki_Dogido/issues/13) | ボイス速度・間 | `voice-delivery-plan` |
 | [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) | 複数ユーザー・記憶境界 | `multi-user-tenancy` · `memory-architecture` |
 | [#12](https://github.com/yukincom/DokiDoki_Dogido/issues/12) · [#14](https://github.com/yukincom/DokiDoki_Dogido/issues/14) · [#15](https://github.com/yukincom/DokiDoki_Dogido/issues/15) | うみれおんさんアドバイス | 製品・UI 寄り（対応 doc は issue 本文） |
+| [#28](https://github.com/yukincom/DokiDoki_Dogido/issues/28) | 材料説明と句の不一致・長い口上 | `haiku-player-improvement-plan` · [dogido-display-overlay-plan](dogido-display-overlay-plan.md) |
+| [#29](https://github.com/yukincom/DokiDoki_Dogido/issues/29) | STT が感圧板を誤変換 | [research/minecraft-ja-stt-dictionary-2026-07.md](research/minecraft-ja-stt-dictionary-2026-07.md) |
 
 ---
 
@@ -123,6 +125,7 @@ casual（原則） ──┬── sm-vs-prompt（PR 順）
 | 7 | [senryu-roadmap.md](senryu-roadmap.md) | ロードマップ |
 | 8 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
 | 9 | [rag.md](rag.md) | RAG 検討メモ（`senryu-rag-plan` と併用） |
+| 10 | [dogido-display-overlay-plan.md](dogido-display-overlay-plan.md) | ゲーム内セリフ表示 UI（計画・#28 関連） |
 
 **つながり:**
 
@@ -219,6 +222,7 @@ architecture（どう詠む）
 - [research/mobs/](research/mobs/)
 - [research/code-review-player-reactivity-2026-07-02.md](research/code-review-player-reactivity-2026-07-02.md)
 - [research/tts-landscape-2026.md](research/tts-landscape-2026.md) … TTS 地図・コミュニティ・適性・権利
+- [research/minecraft-ja-stt-dictionary-2026-07.md](research/minecraft-ja-stt-dictionary-2026-07.md) … 日本語 MC × STT 辞書調査（#29）
 
 ---
 

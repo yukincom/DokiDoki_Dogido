@@ -50,6 +50,8 @@ class DogidoStateMachine(
         self._pending_haiku_prompt_details: dict[str, object] | None = None
         # LLM 句をスキップするときの本句固定文（カタログ fallback 等）
         self._pending_haiku_fixed_line: str | None = None
+        # workshop materials シード（motifs/held/nearby。本句で fragment_links を付与）
+        self._pending_haiku_materials: dict[str, object] | None = None
         # service が session.dialogue / haiku_workshop / lessons を返す callable を差し込む
         self.dialogue_context_provider = None
         self.haiku_workshop_provider = None
@@ -61,11 +63,12 @@ class DogidoStateMachine(
         now = event.observed_at
         previous_mode = self.state.mode
         self.emitted_haiku = None
-        # preface 待ち中は見どころ・prompt を消さない（次フレームの本句で使う）
+        # preface 待ち中は見どころ・prompt・materials を消さない（次フレームの本句で使う）
         if not self.state.pending_haiku_after_preface:
             self._pending_haiku_interpretation = None
             self._pending_haiku_prompt_details = None
             self._pending_haiku_fixed_line = None
+            self._pending_haiku_materials = None
         self.player_input = route_player_input(event.meta.user_text)
         dimension_changed = self._did_change_dimension(event)
         self._handle_dimension_change(event)

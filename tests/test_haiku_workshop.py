@@ -372,7 +372,11 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             # critique was written via service.memory
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_critiques.jsonl").exists())
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_lessons.jsonl").exists())
-            lessons = MemoryStore(Path(tmp) / "mem").list_recent_haiku_lessons(limit=3)
+            # list は wall-clock 基準の TTL があるので、発句時刻基準で見る（日付固定テストのゆらぎ防止）
+            lessons = MemoryStore(Path(tmp) / "mem").list_recent_haiku_lessons(
+                limit=3,
+                now=event.observed_at,
+            )
             self.assertTrue(any("読みやす" in str(x.get("note")) for x in lessons))
             # hard 合流用の fragments があっても soft のまま
             self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))

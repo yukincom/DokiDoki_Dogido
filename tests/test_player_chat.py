@@ -402,10 +402,11 @@ class HearingContextTests(unittest.TestCase):
             )
         )
         content = messages[1]["content"]
-        # E′: 空 hearing は節ごと省略。捏造防止は policy + S2 白リスト
+        # E′: 空 hearing は節ごと省略。捏造防止は policy + キャラ枠
         self.assertNotIn("音のメモ:", content)
-        self.assertIn("捏造はしない", content)
         self.assertIn("天気は晴れ", content)
+        self.assertIn("一人称はオレ", content)
+        self.assertIn("びび", content)
 
     def test_player_chat_details_include_weather_from_world(self) -> None:
         """雨は weather 状態から。hearing とは混ぜない。"""

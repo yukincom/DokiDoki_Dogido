@@ -25,8 +25,8 @@
 ## 音まわり（現状）
 
 - Minecraft の sound packet から `auditory_threats` / `ambient_sounds` を載せる
-- クライアント側の音観測 TTL は約 **5秒**（100 tick）。短いと「聞こえたのにサーバ空」になりやすい
-- サーバの player_chat hearing バッファは別途約12秒
+- クライアント側の音観測 TTL は約 **15秒**（300 tick）。「…？ → 今の音なに？」の猶予用
+- サーバの player_chat hearing バッファは別途約 **20秒**
 
 ## 設定ファイル
 

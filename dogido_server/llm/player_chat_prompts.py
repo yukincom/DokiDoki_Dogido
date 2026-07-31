@@ -13,6 +13,18 @@ from .prompt_common import as_str_list, detail_str, leaf_dialog, player_name
 from .types import LeafGenerationRequest
 
 
+def _dogido_chat_spirit() -> str:
+    """禁止の羅列より、なりたい相棒像を先に置く。"""
+    return (
+        "あなたはドギド。怖がりだけどやさしい関西の相棒や。\n"
+        "一人称はオレ。\n"
+        "プレイヤーの一言に、短く乗る。自分が主役の実況にはしない。\n"
+        "脅威メモがあれば、種類と方向を短く共有して、隣でびびる。\n"
+        "逃げたいなら逃げ寄り。わからんなら素直に聞き返す。\n"
+        "セリフだけ返す。"
+    )
+
+
 def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = dict(request.details or {})
     character_mode = character_mode_for_request("player_chat", details)
@@ -35,35 +47,33 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     digest_rules, digest_block = _digest_section(details)
     combat_safety_rules = _combat_safety_rules(details, character_mode)
 
-    # system 側に character_mode トーンがあるので user では mode_hint を重ねない
     user_prompt = (
-        "参考傾向:\n"
-        "- プレイヤーへの相棒としての返事。実況口調や定型あいさつにしない\n"
-        "- わからんことは『わからん』でよい。音声の誤認識っぽい文は軽く聞き返してよい\n"
-        f"- 【答え方】{policy}\n"
+        f"{_dogido_chat_spirit()}\n"
+        "\n"
+        f"いまの答え方: {policy}\n"
         f"{inventory_rules}"
         f"{history_rules}"
         f"{digest_rules}"
         f"{combat_safety_rules}"
         "\n"
         "/no_think\n"
-        "本番:\n"
+        "【材料】\n"
         f"{history_block}"
         f"{digest_block}"
-        f"プレイヤーが話しかけてきた:「{user_text}」\n"
-        f"プレイヤーの呼び名は{player_name(details)}。"
-        "自然なら一度だけ呼び名を入れてよい。\n"
-        f"場所メモ: {place}。\n"
-        f"時間帯は{detail_str(details, 'time_phase', 'unknown') or 'unknown'}。\n"
+        f"プレイヤー:「{user_text}」\n"
+        f"呼び名: {player_name(details)}（自然なら一度だけ）\n"
+        f"場所: {place}\n"
+        f"時間: {detail_str(details, 'time_phase', 'unknown') or 'unknown'}\n"
         f"{_weather_block(details)}"
-        f"答え方スタンス: {stance}。\n"
+        f"スタンス: {stance}\n"
         f"{_haiku_workshop_block(details)}"
         f"{observation_block}"
         f"{topic_block}"
         f"{plausibility_block}"
         f"{hearing_block}"
         f"{inventory_block}"
-        "発言に噛み合った返事を、会話っぽく12〜42文字くらいで一言だけ返す。"
+        "\n"
+        "プレイヤーの言葉に噛み合った一言だけ（12〜42字くらい）。"
     )
     return leaf_dialog("player_chat", request, user_prompt)
 
@@ -188,10 +198,10 @@ def _digest_section(details: dict[str, Any]) -> tuple[str, str]:
 
 
 def _combat_safety_rules(details: dict[str, Any], character_mode: CharacterMode) -> str:
-    """戦闘安全は短く。tactics は観測（nearby_hostile_types）があるときだけ。"""
+    """戦闘まわりは淡々と。tactics は観測種があるときだけ。"""
     rules = (
-        "- プレイヤーを死なせる誤アドバイスは禁止。"
-        "位置・種類の警告と短い応援はよいが、根拠の薄い作戦指示は控える\n"
+        "危ない助言はしない。"
+        "種類と方向の共有が先。\n"
     )
     nearby = as_str_list(details.get("nearby_hostile_types"))
     in_hostile = (
@@ -201,8 +211,7 @@ def _combat_safety_rules(details: dict[str, Any], character_mode: CharacterMode)
         or bool(nearby)
     )
     if in_hostile:
-        rules += "- 敵対中は『じっとして』『止まって』等の静止指示は禁止\n"
-    # tactics は SM が観測種だけ入れたときのみ（トピック仮説だけでは載せない）
+        rules += "いまは落ち着いて動けそうな声で。静止しろ系は言わない。\n"
     if not nearby:
         return rules
     tactics_notes = as_str_list(details.get("mob_tactics_notes"))
@@ -210,11 +219,11 @@ def _combat_safety_rules(details: dict[str, Any], character_mode: CharacterMode)
     safe_hints = as_str_list(details.get("safe_hints"))
     if tactics_notes:
         joined = " / ".join(tactics_notes[:3])
-        rules += f"- 周囲の敵の性質メモ: {joined}\n"
+        rules += f"敵の性質メモ: {joined}\n"
     if forbidden_advice:
         joined = "」「".join(forbidden_advice[:8])
-        rules += f"- 追加の禁止助言: 「{joined}」\n"
+        rules += f"言わない方がよいこと: 「{joined}」\n"
     if safe_hints:
         joined = " / ".join(safe_hints[:5])
-        rules += f"- 言ってよい短いヒント例: {joined}\n"
+        rules += f"短い安全ヒント: {joined}\n"
     return rules

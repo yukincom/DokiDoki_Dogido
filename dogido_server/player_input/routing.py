@@ -1,6 +1,9 @@
 # player_input/routing.py
 from __future__ import annotations
 
+import logging
+
+from dogido_server.player_input.asr_fixes import apply_asr_fixes
 from dogido_server.player_input.guardrails import (
     asks_about_sound,
     asks_dragon_direction,
@@ -19,14 +22,29 @@ from dogido_server.player_input.guardrails import (
 from dogido_server.player_input.normalize import normalize_player_text
 from dogido_server.player_input.types import HaikuRecallQuery, PlayerInputContext, ReadingCorrection
 
+LOGGER = logging.getLogger("uvicorn.error")
+
 
 def route_player_input(raw_text: str | None) -> PlayerInputContext:
+    # player_chat は raw_text を LLM に渡すため、STT 補正後を spoken 面に使う
+    original = (raw_text or "").replace("　", " ").strip()
+    original = " ".join(original.split()) if original else ""
     normalized_text = normalize_player_text(raw_text)
+    if original and normalized_text and original != normalized_text:
+        _, applied = apply_asr_fixes(original)
+        if applied:
+            LOGGER.warning(
+                "asr_fix applied=%s original=%s fixed=%s",
+                ",".join(f"{w}->{r}" for w, r in applied),
+                original[:80],
+                normalized_text[:80],
+            )
+    spoken = normalized_text if normalized_text else (raw_text or "")
     if normalized_text.startswith("/"):
         # スラッシュコマンドはドギドへの話しかけではないので、
         # 会話優先ミュート（player_input_priority_cooldown_ms）を発動しない
         return PlayerInputContext(
-            raw_text=raw_text or "",
+            raw_text=spoken,
             normalized_text=normalized_text,
         )
     blocks_ambient = should_block_ambient(normalized_text)
@@ -63,7 +81,7 @@ def route_player_input(raw_text: str | None) -> PlayerInputContext:
             time_label=time_label,
         )
     return PlayerInputContext(
-        raw_text=raw_text or "",
+        raw_text=spoken,
         normalized_text=normalized_text,
         breaks_silence=blocks_ambient,
         wants_quiet=wants_quiet(normalized_text),

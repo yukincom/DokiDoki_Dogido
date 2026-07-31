@@ -219,7 +219,7 @@ class PlayerChatHearingBufferTests(unittest.TestCase):
         settings = Settings(
             llm_enabled=False,
             decision_policy="py_trees",
-            player_chat_hearing_retention_ms=12000,
+            player_chat_hearing_retention_ms=20000,
         )
         machine = DogidoStateMachine(settings)
         t0 = datetime(2026, 7, 15, 9, 17, 40, tzinfo=timezone.utc)
