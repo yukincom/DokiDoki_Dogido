@@ -150,12 +150,22 @@ def _hearing_block(details: dict[str, Any]) -> str:
 def _observation_block(details: dict[str, Any], threat_summary: str) -> str:
     """観測事実のみ。hypothesis 用 topic は別節。"""
     observation = detail_str(details, "observation_summary")
+    look = detail_str(details, "look_target_label")
+    parts: list[str] = []
     if observation:
-        return f"観測メモ（短い事実）:\n{observation}\n"
-    # 後方互換: observation 未設定時は threat だけ
-    if threat_summary and threat_summary != "とくになし":
-        return f"周囲の脅威メモ: {threat_summary}。\n"
-    return ""
+        parts.append(f"観測メモ（短い事実）:\n{observation}")
+    elif threat_summary and threat_summary != "とくになし":
+        # 後方互換: observation 未設定時は threat だけ
+        parts.append(f"周囲の脅威メモ: {threat_summary}。")
+    # observation に視線先が無い古い経路向けの二重保険（通常は observation 内に含まれる）
+    if look and (not observation or "視線先" not in observation):
+        parts.append(
+            f"プレイヤーが見ているもの（クロスヘア）: {look}。"
+            "「これ」「この花」等の指差しはこれを根拠にする。"
+        )
+    if not parts:
+        return ""
+    return "\n".join(parts) + "\n"
 
 
 def _topic_block(details: dict[str, Any]) -> str:

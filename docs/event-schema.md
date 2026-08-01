@@ -46,6 +46,7 @@
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
+  "look_target": null,
   "combat": {},
   "meta": {}
 }
@@ -75,6 +76,7 @@
 
 - `passive_mobs`
 - `nearby_resources`
+- `look_target` … クロスヘア（＋）が刺さっているブロック/エンティティ。MISS 時は省略可
 - `meta`
 
 ## 6. 共通 enum
@@ -402,6 +404,29 @@ Fabric adapter が実際に送る中心は次のとおり。
   }
 ]
 ```
+
+現行 adapter は用途限定フィルタ（原木・板・羊毛・石炭鉱石など）。  
+**指差しの花・感圧板等は `look_target` を使う**（[look-target-observation-plan.md](look-target-observation-plan.md)）。
+
+## 15b. `look_target`
+
+画面中央クロスヘア（＋）が刺さっている対象。プレイヤーの「これ何？」の共有注意。
+
+```json
+{
+  "kind": "block",
+  "name": "poppy",
+  "distance": 2.4
+}
+```
+
+| フィールド | 内容 |
+|---|---|
+| `kind` | `block` / `entity` |
+| `name` | Minecraft id path（例: `oak_pressure_plate`, `sheep`） |
+| `distance` | プレイヤーからの距離（任意） |
+
+MISS・空気のときは **フィールド自体を省略**する。
 
 ## 16. `combat`
 

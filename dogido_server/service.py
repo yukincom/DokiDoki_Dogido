@@ -259,6 +259,9 @@ class DogidoService:
                 attached_player_text[:80],
             )
 
+        # 視線先・手持ちと照合して STT を寄せる（固定表のあと・process 前）
+        event = self._apply_contextual_asr_to_event(event)
+
         # ambient 抑止: まだ相乗りしていない話しかけがキューにある
         session.machine.player_input_queued = bool((session.pending_player_text or "").strip())
 
@@ -394,6 +397,7 @@ class DogidoService:
         if not original:
             return {"accepted": False, "reason": "empty_text"}
         # STT 既知誤変換を入口で直し、ログには補正後を載せる（#29）
+        # 視線先文脈は次の game-event 相乗り時に _apply_contextual_asr_to_event で補強
         normalized = normalize_player_text(original)
         if not normalized:
             return {"accepted": False, "reason": "empty_text"}
@@ -418,6 +422,36 @@ class DogidoService:
                 normalized[:80],
             )
         return {"accepted": True, "session_id": session.session_id}
+
+    def _apply_contextual_asr_to_event(self, event: GameEvent) -> GameEvent:
+        """user_text があるとき、look_target / held / inventory で STT を寄せる。"""
+        from dogido_server.player_input.asr_fixes import apply_contextual_asr_fixes
+
+        raw = (event.meta.user_text or "").strip()
+        if not raw:
+            return event
+        look_name = None
+        if event.look_target is not None and event.look_target.name:
+            look_name = str(event.look_target.name)
+        fixed, applied = apply_contextual_asr_fixes(
+            raw,
+            look_name=look_name,
+            held_item=event.player.held_item,
+            inventory=event.inventory,
+        )
+        if not applied or fixed == raw:
+            return event
+        LOGGER.warning(
+            "asr_fix_context applied=%s original=%s fixed=%s look=%s held=%s",
+            ",".join(f"{w}->{r}" for w, r in applied),
+            raw[:80],
+            fixed[:80],
+            look_name or "-",
+            (event.player.held_item or "-")[:40],
+        )
+        return event.model_copy(
+            update={"meta": event.meta.model_copy(update={"user_text": fixed})}
+        )
 
     def _should_requeue_player_input(self, session: SessionInfo, actions: list[AudioAction]) -> bool:
         """相乗りした話しかけに対する speech が無ければ再キューする。"""

@@ -39,3 +39,57 @@ def apply_asr_fixes(text: str) -> tuple[str, list[tuple[str, str]]]:
             out = out.replace(wrong, right)
             applied.append((wrong, right))
     return out, applied
+
+
+# 視線先・手持ちに感圧板があるときだけ足す（誤爆を抑える）
+_CONTEXT_PRESSURE_PLATE_EXTRA: tuple[tuple[str, str], ...] = (
+    ("感圧番", "感圧板"),
+    ("間圧板", "感圧板"),
+    ("管圧板", "感圧板"),
+    ("関圧板", "感圧板"),
+    ("環圧板", "感圧板"),
+)
+
+
+def has_pressure_plate_context(
+    *,
+    look_name: str | None = None,
+    held_item: str | None = None,
+    inventory: dict[str, int] | None = None,
+) -> bool:
+    """look_target / 手持ち / 所持に pressure_plate があるか。"""
+
+    def is_pp(value: str | None) -> bool:
+        return bool(value) and "pressure_plate" in str(value).lower()
+
+    if is_pp(look_name) or is_pp(held_item):
+        return True
+    for key in inventory or {}:
+        if is_pp(str(key)):
+            return True
+    return False
+
+
+def apply_contextual_asr_fixes(
+    text: str,
+    *,
+    look_name: str | None = None,
+    held_item: str | None = None,
+    inventory: dict[str, int] | None = None,
+) -> tuple[str, list[tuple[str, str]]]:
+    """固定表 +（感圧板コンテキスト時のみ）追加置換。"""
+    out, applied = apply_asr_fixes(text)
+    if not has_pressure_plate_context(
+        look_name=look_name,
+        held_item=held_item,
+        inventory=inventory,
+    ):
+        return out, applied
+    extras = tuple(
+        sorted(_CONTEXT_PRESSURE_PLATE_EXTRA, key=lambda pair: len(pair[0]), reverse=True)
+    )
+    for wrong, right in extras:
+        if wrong in out:
+            out = out.replace(wrong, right)
+            applied.append((wrong, right))
+    return out, applied

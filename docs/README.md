@@ -38,6 +38,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [#12](https://github.com/yukincom/DokiDoki_Dogido/issues/12) · [#14](https://github.com/yukincom/DokiDoki_Dogido/issues/14) · [#15](https://github.com/yukincom/DokiDoki_Dogido/issues/15) | うみれおんさんアドバイス | 製品・UI 寄り（対応 doc は issue 本文） |
 | [#28](https://github.com/yukincom/DokiDoki_Dogido/issues/28) | 材料説明と句の不一致・長い口上 | `haiku-player-improvement-plan` · [dogido-display-overlay-plan](dogido-display-overlay-plan.md) |
 | [#29](https://github.com/yukincom/DokiDoki_Dogido/issues/29) | STT が感圧板を誤変換 | [research/minecraft-ja-stt-dictionary-2026-07.md](research/minecraft-ja-stt-dictionary-2026-07.md) |
+| [#30](https://github.com/yukincom/DokiDoki_Dogido/issues/30) | 視線先（クロスヘア）観測 | [look-target-observation-plan.md](look-target-observation-plan.md) |
 
 ---
 

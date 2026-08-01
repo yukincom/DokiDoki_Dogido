@@ -8,6 +8,7 @@
 
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
 - `local_light / sky_visible / biome / time_phase / danger_darkness_score`
+- **視線先 `look_target`**（画面中央クロスヘアが刺さっているブロック/エンティティ）
 - 周辺 hostile の簡易スキャン
 - `status_snapshot` の定期送信
 - 近距離 hostile 検知時の `threat_approaching` 送信
@@ -20,7 +21,7 @@
 - 高精度の line-of-sight 判定
 - エンダーマンやウィッチの個別ロジック
 - ベッド/資源候補のワールドスキャン
-- `passive_mobs` と `nearby_resources` の本格収集
+- `nearby_resources` の本格拡張（現状は原木・板・羊毛・石炭等の限定フィルタ）
 
 ## 音まわり（現状）
 

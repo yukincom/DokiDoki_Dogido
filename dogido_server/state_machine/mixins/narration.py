@@ -670,18 +670,21 @@ class NarrationMixin:
             structure_ids = []
             plausibility_lines = []
         plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
+        look_target_label = self._look_target_label(event)
         observation_summary = self._player_chat_observation_summary(
             event,
             threat_summary=threat_summary,
             hearing_summary=hearing_summary,
             passive_types=passive_types,
+            look_target_label=look_target_label,
         )
         LOGGER.warning(
-            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s",
+            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s look=%s",
             len(event.visual_threats),
             ",".join(str(t.type) for t in event.visual_threats if t.type) or "-",
             ",".join(recent_visual_types) or "-",
             (threat_summary or "")[:120] or "-",
+            look_target_label or "-",
         )
         if structure_ids or plausibility_lines:
             LOGGER.warning(
@@ -752,6 +755,13 @@ class NarrationMixin:
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
+            "look_target_label": look_target_label,
+            "look_target_kind": (
+                str(event.look_target.kind) if event.look_target is not None else ""
+            ),
+            "look_target_name": (
+                str(event.look_target.name) if event.look_target is not None else ""
+            ),
             "nearby_hostile_types": nearby_types,
             "mob_tactics_notes": list(tactics.get("notes") or []),
             "forbidden_advice": list(tactics.get("forbidden_advice") or []),
@@ -920,6 +930,23 @@ class NarrationMixin:
                 recent.append(str(mob_type))
         return self._merge_unique_types(current, recent)
 
+    def _look_target_label(self, event: GameEvent) -> str:
+        """クロスヘア対象の日本語ラベル。無ければ空。"""
+        target = getattr(event, "look_target", None)
+        if target is None or not getattr(target, "name", None):
+            return ""
+        name = str(target.name)
+        kind = str(getattr(target, "kind", None) or "block").lower()
+        if kind == "entity":
+            from dogido_server.entry_catalog import mob_entry
+
+            entry = mob_entry(name)
+            if entry and entry.get("label"):
+                return str(entry["label"])
+            return self._hostile_label(name) if hasattr(self, "_hostile_label") else name
+        # block（感圧板・花など）
+        return self._block_label(name) or name
+
     def _player_chat_observation_summary(
         self,
         event: GameEvent,
@@ -927,9 +954,13 @@ class NarrationMixin:
         threat_summary: str,
         hearing_summary: str,
         passive_types: list[str] | tuple[str, ...],
+        look_target_label: str | None = None,
     ) -> str:
         """観測だけの短い事実メモ（topic 仮説は混ぜない）。最大数行。"""
         lines: list[str] = []
+        look = (look_target_label or "").strip()
+        if look:
+            lines.append(f"視線先: {look}")
         threat = (threat_summary or "").strip()
         if threat and threat != "とくになし":
             lines.append(f"脅威: {threat}")

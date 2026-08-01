@@ -69,6 +69,8 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
 import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -1013,6 +1015,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1035,6 +1038,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1057,6 +1061,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1077,6 +1082,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
@@ -1099,6 +1105,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(resolveDeathCause(player)));
         return root;
@@ -1119,6 +1126,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
@@ -1419,6 +1427,58 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             json.addProperty(entry.getKey(), entry.getValue());
         }
         return json;
+    }
+
+    /**
+     * 画面中央クロスヘア（＋）が刺さっているブロック / エンティティ。
+     * MISS・空気はフィールド省略（docs/look-target-observation-plan.md）。
+     */
+    private void attachLookTarget(JsonObject root, ClientPlayerEntity player, ClientWorld world) {
+        JsonObject lookTarget = buildLookTarget(player, world);
+        if (lookTarget != null) {
+            root.add("look_target", lookTarget);
+        }
+    }
+
+    private JsonObject buildLookTarget(ClientPlayerEntity player, ClientWorld world) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            return null;
+        }
+        HitResult hit = client.crosshairTarget;
+        if (hit == null || hit.getType() == HitResult.Type.MISS) {
+            return null;
+        }
+        if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+            BlockPos pos = blockHit.getBlockPos();
+            BlockState state = world.getBlockState(pos);
+            if (state.isAir()) {
+                return null;
+            }
+            Identifier blockId = Registries.BLOCK.getId(state.getBlock());
+            JsonObject json = new JsonObject();
+            json.addProperty("kind", "block");
+            // nearby_resources と同様 path ベース（サーバ catalog が path キー）
+            json.addProperty("name", blockId.getPath());
+            double distance = Math.sqrt(
+                player.squaredDistanceTo(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)
+            );
+            json.addProperty("distance", round(distance));
+            return json;
+        }
+        if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {
+            Entity entity = entityHit.getEntity();
+            if (entity == null || !entity.isAlive()) {
+                return null;
+            }
+            Identifier entityId = Registries.ENTITY_TYPE.getId(entity.getType());
+            JsonObject json = new JsonObject();
+            json.addProperty("kind", "entity");
+            json.addProperty("name", entityId.getPath());
+            json.addProperty("distance", round(Math.sqrt(player.squaredDistanceTo(entity))));
+            return json;
+        }
+        return null;
     }
 
     private JsonArray buildNearbyResources(ClientPlayerEntity player, ClientWorld world) {
