@@ -93,7 +93,7 @@ class HaikuContext:
     weather: str
     weather_label: str
     z_value: int
-    held_item: str
+    held_item: str  # 句の主役に使う持ち物ラベル（手持ち or 所持から選んだ1つ）
     inventory_items: tuple[str, ...]
     inventory_close_pair: tuple[str, ...]
     inventory_far_item: str
@@ -108,6 +108,8 @@ class HaikuContext:
     structure_id: str = ""
     structure_label: str = ""
     climate_hint: str = ""
+    # hand=実際に手にあるもの / pocket=道具手持ち時に所持から重み付き選択
+    poem_item_source: str = "hand"
 
     def feature_candidate_labels(self) -> list[str]:
         return [feature.prompt_label() for feature in self.feature_candidates]
@@ -132,6 +134,7 @@ class HaikuContext:
             "weather_label": self.weather_label,
             "z_value": self.z_value,
             "held_item": self.held_item,
+            "poem_item_source": self.poem_item_source,
             "inventory_items": list(self.inventory_items),
             "inventory_close_pair": list(self.inventory_close_pair),
             "inventory_far_item": self.inventory_far_item,

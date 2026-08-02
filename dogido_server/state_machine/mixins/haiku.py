@@ -572,7 +572,10 @@ class HaikuMixin:
         weather = self._weather_value(event.world.weather) or "unknown"
         z_value = event.player.position.z
         biome = event.world.biome
-        held_item = self._item_label(event.player.held_item)
+        # 実際の手持ち（道具 hard 制約・対比テンション用）
+        real_held_label = self._item_label(event.player.held_item)
+        # 句の主役: 作業道具を持っているときは所持の非道具を重み付きで1つ
+        poem_held, poem_source = self._haiku_poem_item_choice(event, real_held_label)
         inventory_close_pair, inventory_far_item, inventory_items = self._haiku_inventory_values(
             event.inventory,
             held_item_id=event.player.held_item,
@@ -582,7 +585,8 @@ class HaikuMixin:
         feature_candidates = tuple(
             self._haiku_feature_candidates(
                 event,
-                held_item=held_item,
+                held_item=poem_held,
+                poem_item_source=poem_source,
                 inventory_items=inventory_items,
                 nearby_blocks=nearby_blocks,
                 passive_mobs=passive_mobs,
@@ -602,7 +606,8 @@ class HaikuMixin:
             weather=weather,
             weather_label=WEATHER_LABELS.get(weather, "不明"),
             z_value=int(round(z_value)) if z_value is not None else 0,
-            held_item=held_item,
+            held_item=poem_held,
+            poem_item_source=poem_source,
             inventory_items=inventory_items,
             inventory_close_pair=inventory_close_pair,
             inventory_far_item=inventory_far_item,
@@ -616,7 +621,15 @@ class HaikuMixin:
                 )
             ),
             feature_candidates=feature_candidates,
-            candidate_tensions=tuple(self._haiku_candidate_tensions(event, held_item, passive_mobs, nearby_blocks)),
+            # 対比テンションは「実際に手にある道具」を使う
+            candidate_tensions=tuple(
+                self._haiku_candidate_tensions(
+                    event,
+                    real_held_label or poem_held,
+                    passive_mobs,
+                    nearby_blocks,
+                )
+            ),
             catalog_notes=tuple(self._haiku_catalog_notes(event)),
             poetic_lines=tuple(poetic_lines),
             structure_id=structure_id,
@@ -624,11 +637,187 @@ class HaikuMixin:
             climate_hint=climate_hint,
         )
 
+    def _is_haiku_work_tool_item(self, item_id: str | None) -> bool:
+        """探索中に手に握りがちで句が単調になりやすい作業・戦闘道具。"""
+        nid = str(item_id or "").split(":")[-1].strip().lower()
+        if not nid or nid == "air":
+            return False
+        suffixes = (
+            "pickaxe",
+            "shovel",
+            "axe",
+            "hoe",
+            "sword",
+            "bow",
+            "crossbow",
+            "trident",
+            "mace",
+            "spear",
+            "shears",
+            "fishing_rod",
+            "brush",
+            "shield",
+        )
+        return any(nid.endswith(suffix) or nid == suffix for suffix in suffixes)
+
+    def _haiku_pocket_weight(
+        self,
+        item_id: str,
+        *,
+        label: str,
+        count: int,
+    ) -> int:
+        """所持から句の主役を選ぶときの重み（高いほど選ばれやすい）。"""
+        nid = str(item_id).split(":")[-1].strip().lower()
+        # 平凡な埋め草は弱く
+        junk = {
+            "dirt",
+            "coarse_dirt",
+            "cobblestone",
+            "cobbled_deepslate",
+            "stone",
+            "netherrack",
+            "gravel",
+            "sand",
+            "red_sand",
+            "andesite",
+            "diorite",
+            "granite",
+            "tuff",
+            "deepslate",
+            "stick",
+            "arrow",
+        }
+        if nid in junk:
+            return 1
+        if any(
+            nid.endswith(sfx)
+            for sfx in ("_ore", "_ingot", "_nugget", "diamond", "emerald", "netherite")
+        ) or nid in {"totem_of_undying", "elytra", "nether_star"}:
+            return 12
+        if any(
+            marker in nid
+            for marker in (
+                "flower",
+                "tulip",
+                "orchid",
+                "lilac",
+                "rose",
+                "peony",
+                "sunflower",
+                "dandelion",
+                "poppy",
+                "allium",
+                "azure",
+                "cornflower",
+                "lily",
+                "torchflower",
+                "pitcher",
+                "spore_blossom",
+            )
+        ) or "dye" in nid:
+            return 11
+        if any(
+            marker in nid
+            for marker in (
+                "pressure_plate",
+                "button",
+                "lantern",
+                "candle",
+                "book",
+                "map",
+                "banner",
+                "music_disc",
+                "goat_horn",
+                "pottery",
+                "sherd",
+                "smithing",
+            )
+        ):
+            return 10
+        if any(
+            marker in nid
+            for marker in (
+                "apple",
+                "bread",
+                "stew",
+                "soup",
+                "berry",
+                "melon",
+                "potato",
+                "carrot",
+                "beef",
+                "pork",
+                "chicken",
+                "mutton",
+                "fish",
+                "salmon",
+                "cookie",
+                "cake",
+                "pie",
+                "honey",
+            )
+        ):
+            return 9
+        if nid.endswith(("_log", "_planks", "_sapling", "_leaves", "_wool", "_carpet")):
+            return 4
+        if "torch" in nid or nid == "campfire" or nid == "soul_campfire":
+            return 5
+        # 個数は少しだけ効かせる（山積み junk をさらに押し上げない）
+        return 6 + min(max(int(count), 0), 4)
+
+    def _select_haiku_pocket_motif(self, event: GameEvent) -> str | None:
+        """所持から非道具を重み付き・決定的に1つ選ぶ。"""
+        scored: list[tuple[int, str, str]] = []
+        seen_labels: set[str] = set()
+        for item_id, count in (event.inventory or {}).items():
+            if not count or int(count) <= 0:
+                continue
+            if self._is_haiku_work_tool_item(item_id):
+                continue
+            nid = str(item_id).split(":")[-1].strip().lower()
+            if not nid or nid == "air":
+                continue
+            label = self._item_label(item_id)
+            if not label or label in seen_labels:
+                continue
+            seen_labels.add(label)
+            weight = self._haiku_pocket_weight(str(item_id), label=label, count=int(count))
+            scored.append((weight, label, nid))
+        if not scored:
+            return None
+        max_w = max(row[0] for row in scored)
+        # 最高重み近傍だけを候補にして、sequence で決定的に1つ
+        pool = [row for row in scored if row[0] >= max_w - 2]
+        pool.sort(key=lambda row: (row[1], row[2]))
+        seed = int(event.sequence or 0)
+        seed = seed * 1009 + sum(ord(ch) for ch in (event.player.name or "p")[:12])
+        return pool[seed % len(pool)][1]
+
+    def _haiku_poem_item_choice(
+        self,
+        event: GameEvent,
+        real_held_label: str,
+    ) -> tuple[str, str]:
+        """(句の主役ラベル, source hand|pocket)。
+
+        作業道具を握っているときは所持の非道具を優先。道具 hard 制約は event.held のまま。
+        """
+        held_id = event.player.held_item
+        if not self._is_haiku_work_tool_item(held_id):
+            return (real_held_label or ""), "hand"
+        pocket = self._select_haiku_pocket_motif(event)
+        if pocket:
+            return pocket, "pocket"
+        # 非道具が無いときだけ道具を句に出す
+        return (real_held_label or ""), "hand"
+
     def _haiku_feature_candidates(
         self,
         event: GameEvent,
         *,
         held_item: str,
+        poem_item_source: str = "hand",
         inventory_items: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
         passive_mobs: tuple[str, ...],
@@ -672,7 +861,10 @@ class HaikuMixin:
             HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
         ])
         if held_item:
-            candidates.append(HaikuFeature("手持ち", "held_item", held_item))
+            if poem_item_source == "pocket":
+                candidates.append(HaikuFeature("持ち物", "pocket_item", held_item))
+            else:
+                candidates.append(HaikuFeature("手持ち", "held_item", held_item))
         candidates.extend(
             HaikuFeature("周辺", f"nearby_{index}", label)
             for index, label in enumerate(nearby_blocks[:4], start=1)
