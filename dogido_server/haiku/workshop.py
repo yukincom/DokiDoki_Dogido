@@ -529,6 +529,85 @@ _PREFERENCE_MARKERS = (
     "追加しと",
     "足して",
 )
+# Stage1: 字数・長さの指摘（メタ語のみ。固有モチーフ名は載せない）
+_LENGTH_MARKERS = (
+    "長い",
+    "ながい",
+    "短すぎ",
+    "みじかすぎ",
+    "字余り",
+    "字足らず",
+    "音数",
+    "モーラ",
+    "五七五",
+    "575",
+    "字数",
+)
+# Stage1: 言い換え提案の構文（「Aとかにしたら」「だったら」）
+_SOFT_SUGGEST_MARKERS = (
+    "にしたら",
+    "にしてみ",
+    "とかに",
+    "だったら",
+    "言い換え",
+    "に変えて",
+    "変えた方",
+    "変えたほう",
+)
+# Stage1: 教訓・記憶の依頼
+_REMEMBER_MARKERS = (
+    "覚えて",
+    "覚えと",
+    "おぼえて",
+    "おぼえと",
+    "メモしと",
+    "メモして",
+)
+# Stage1: 狙い・由来の問い（materials 寄り。固有名は見ない）
+_ORIGIN_MARKERS = (
+    "どこから来",
+    "どこからき",
+    "何を見て",
+    "なにを見て",
+    "狙いは",
+    "材料は",
+    "どこから",
+)
+# Stage1: 読み・日本語の疑い（「おかしい」「通じる」）
+_SOFT_DOUBT_MARKERS = (
+    "おかしい",
+    "おかしく",
+    "間違いか",
+    "まちがいか",
+    "通じる",
+    "通じな",
+    "変じゃ",
+    "変や",
+    "変だ",
+)
+# Stage2: open 中でも chat+drift に落とす「明確な別件」（ゲーム・挨拶）
+# 固有モチーフを講評に使わない方針と両立するよう、ゲーム行為・挨拶に寄せる。
+_HARD_OFF_TOPIC_MARKERS = (
+    "松明",
+    "たいまつ",
+    "どこ行く",
+    "どこいく",
+    "どっち行く",
+    "どっちいく",
+    "おはよう",
+    "こんにちは",
+    "こんばんは",
+    "インベントリ",
+    "持ち物",
+    "クラフト",
+    "レシピ",
+    "逃げよ",
+    "逃げて",
+    "戦って",
+    "ゾンビ",
+    "クリーパー",
+    "スケルトン",
+)
 # プレイヤー明示で lesson を緩める（workshop open 外でも可）
 _CLEAR_LESSON_MARKERS = (
     "気にせんで",
@@ -569,6 +648,7 @@ def classify_workshop_intent(
            critique_offscene | ask_meaning | ack | other_haiku
 
     verse を渡すと「晴れのバラ?」のように句断片＋疑問を ask_meaning にできる。
+    soft_default はここではなく workshop_open_intent（open 中のみ）。
     """
     text = (user_text or "").strip()
     if not text:
@@ -586,10 +666,16 @@ def classify_workshop_intent(
         return "ack"
     if any(m in text for m in _FORCED_MARKERS):
         return "critique_forced"
+    # 字数・長さ（詰め込み系に寄せる）
+    if any(m in text for m in _LENGTH_MARKERS):
+        return "critique_forced"
     if any(m in text for m in _OFFSCENE_MARKERS):
         return "critique_offscene"
     # 「〜って何／とは何／何でしょう」
     if any(m in text for m in _MEANING_MARKERS):
+        return "ask_meaning"
+    # 狙い・由来（材料の話）
+    if any(m in text for m in _ORIGIN_MARKERS):
         return "ask_meaning"
     # 句の断片を指して疑問（「晴れのバラ?」「はれのばら？」）
     if verse and _looks_like_verse_fragment_question(text, verse):
@@ -605,24 +691,87 @@ def classify_workshop_intent(
         h in text for h in ("方が", "ほうが", "よかった", "良かった", "違う", "ちがう")
     ):
         return "other_haiku"
-    # 「AじゃなくB」「〜の方が〜」など好み・訂正（workshop 中のみ呼ばれる想定）
+    # 「AじゃなくB」「〜の方が〜」「とかにしたら」など好み・訂正を、
+    # 曖昧な「通じる」疑いより先に（言い換え提案を優先）
     if any(m in text for m in _PREFERENCE_MARKERS):
         return "other_haiku"
+    if any(m in text for m in _SOFT_SUGGEST_MARKERS):
+        return "other_haiku"
+    if any(m in text for m in _REMEMBER_MARKERS):
+        return "other_haiku"
+    if any(m in text for m in _SOFT_DOUBT_MARKERS):
+        return "critique_gibberish"
     # 句・川柳・俳句への明示参照（ジャンル語のみ）
     if any(m in text for m in ("句", "川柳", "俳句", "せんりゅう", "詠ん", "よんだ")):
         return "other_haiku"
     return None
 
 
+def is_workshop_hard_off_topic(
+    user_text: str | None,
+    *,
+    player_input: Any | None = None,
+) -> bool:
+    """open 中でも chat+drift に落とす明確な別件か。
+
+    player_input のフラグ（インベントリ・敵数など）を優先し、
+    なければゲーム行為・挨拶のメタ語のみ（固有モチーフ講評は吸わない）。
+    """
+    if player_input is not None:
+        if bool(getattr(player_input, "asks_inventory", False)):
+            return True
+        if bool(getattr(player_input, "asks_hostile_count", False)):
+            return True
+        if bool(getattr(player_input, "asks_dragon_direction", False)):
+            return True
+        if bool(getattr(player_input, "asks_about_sound", False)):
+            return True
+    text = (user_text or "").strip()
+    if not text:
+        return False
+    return any(m in text for m in _HARD_OFF_TOPIC_MARKERS)
+
+
+def workshop_open_intent(
+    user_text: str | None,
+    *,
+    verse: str | None = None,
+    player_input: Any | None = None,
+) -> str | None:
+    """workshop **open 中**の取り込み判定。
+
+    Returns:
+        既知 kind（close / praise / … / other_haiku）
+        ``soft_default`` … マーカー外だが別件でもない → 句の話として扱う
+        ``None`` … hard off-topic（player_chat + drift 候補）
+    """
+    if extract_conversational_revise(user_text):
+        # 呼び出し側は revise 経路を先に見る。ここは safety。
+        return "other_haiku"
+    kind = classify_workshop_intent(user_text or "", verse=verse)
+    if kind is not None:
+        return kind
+    if is_workshop_hard_off_topic(user_text, player_input=player_input):
+        return None
+    text = (user_text or "").strip()
+    if not text:
+        return None
+    return "soft_default"
+
+
 def should_handle_as_workshop(
     user_text: str | None,
     *,
     verse: str | None = None,
+    player_input: Any | None = None,
 ) -> bool:
-    """workshop open 中に service/SM が player_chat より先に扱うべきか。"""
+    """workshop open 中に service/SM が player_chat より先に扱うべきか。
+
+    Stage2 soft 既定: マーカー外でも hard off-topic でなければ True。
+    """
     if extract_conversational_revise(user_text):
         return True
-    return classify_workshop_intent(user_text or "", verse=verse) is not None
+    return workshop_open_intent(user_text, verse=verse, player_input=player_input) is not None
 
 
 def extract_conversational_revise(raw_text: str | None) -> str | None:
@@ -764,11 +913,17 @@ def render_workshop_reply(
     if kind == "critique_offscene":
         aim = f"狙いは{materials}寄りやったんやけどな。" if materials else ""
         return f"場とずれたな、悪かった。{aim}次は外れすぎんようにするわ。"
+    if kind == "soft_default":
+        return "句の話、まだ聞いてるで。気になるところある？"
     # other_haiku（読み・好み・句への言及など）— 短く
+    if any(m in said for m in _REMEMBER_MARKERS):
+        return "おけ、覚えとくわ。次に活かすで。"
     if any(m in said for m in _READING_META_MARKERS):
         return "せやな、読みの話やな。次は読みやすさ、ちょっと意識するわ。"
-    if any(m in said for m in _PREFERENCE_MARKERS):
+    if any(m in said for m in _PREFERENCE_MARKERS) or any(m in said for m in _SOFT_SUGGEST_MARKERS):
         return "なるほど、そっちの方がしっくりくるかもな。次に活かすわ。"
+    if any(m in said for m in _LENGTH_MARKERS):
+        return "せやな、ちょっと長かったかもな。次は短め、意識するわ。"
     return "気になるところあったら、その言葉だけ言ってな。"
 
 

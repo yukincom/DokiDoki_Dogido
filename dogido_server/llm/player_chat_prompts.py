@@ -97,7 +97,11 @@ def _haiku_workshop_block(details: dict[str, Any]) -> str:
         return ""
     verse = detail_str(details, "haiku_workshop_text")
     materials = detail_str(details, "haiku_workshop_materials")
-    lines = ["【いまの句（ワークショップ中・忘れない用）】"]
+    lines = [
+        "【いまの句（ワークショップ中）】",
+        "プレイヤーが句の話をしていないときだけ、通常の雑談でよい。",
+        "look や topic 仮説で句の添削をゲーム道具の話にすりかえない。",
+    ]
     if verse:
         lines.append(f"句: {verse}")
     if materials:
@@ -157,11 +161,11 @@ def _observation_block(details: dict[str, Any], threat_summary: str) -> str:
     elif threat_summary and threat_summary != "とくになし":
         # 後方互換: observation 未設定時は threat だけ
         parts.append(f"周囲の脅威メモ: {threat_summary}。")
-    # observation に視線先が無い古い経路向けの二重保険（通常は observation 内に含まれる）
+    # 指差し時だけ（呼び出し側が look_target_label を空にしている）
     if look and (not observation or "視線先" not in observation):
         parts.append(
-            f"プレイヤーが見ているもの（クロスヘア）: {look}。"
-            "「これ」「この花」等の指差しはこれを根拠にする。"
+            f"指差し（クロスヘア）: {look}。"
+            "『これ何』系のときだけこれを根拠にする。"
         )
     if not parts:
         return ""

@@ -12,10 +12,13 @@ from dogido_server.haiku.workshop import (
     classify_workshop_intent,
     close_workshop,
     is_open,
+    is_workshop_hard_off_topic,
     maybe_close_for_time,
     open_from_emission,
     record_drift,
     render_workshop_reply,
+    should_handle_as_workshop,
+    workshop_open_intent,
 )
 from dogido_server.memory import MemoryStore
 from dogido_server.memory_types import HaikuEmission
@@ -35,6 +38,7 @@ from dogido_server.models import (
     WorldState,
 )
 from dogido_server.service import DogidoService
+from dogido_server.state_machine import AudioAction
 
 
 def _emission(text: str = "あさひさす むらに あかがね", *, interpretation: str | None = None) -> HaikuEmission:
@@ -120,6 +124,60 @@ class WorkshopIntentTests(unittest.TestCase):
         # 固有モチーフ名だけでは hit しない（リストに載せていない）
         self.assertIsNone(classify_workshop_intent("海やな"))
         self.assertIsNone(classify_workshop_intent("村がある"))
+        # Stage1: 実ログ由来の soft マーカー（メタ語のみ）
+        self.assertEqual(
+            classify_workshop_intent("なかなかいいねでも黒い石炭がちょっと長いかも"),
+            "critique_forced",
+        )
+        self.assertEqual(
+            classify_workshop_intent("黒石炭とかにしたらいいんじゃない?"),
+            "other_haiku",
+        )
+        self.assertEqual(
+            classify_workshop_intent("じゃあ覚えておいてください"),
+            "other_haiku",
+        )
+        self.assertEqual(
+            classify_workshop_intent("どこから来たのかな?"),
+            "ask_meaning",
+        )
+        self.assertEqual(
+            classify_workshop_intent("そっち抜くしだったら意味が通じるんじゃない"),
+            "other_haiku",  # だったら + 通じる → soft suggest が先
+        )
+        self.assertEqual(
+            classify_workshop_intent("土の抜くっていうのはちょっと日本語としておかしいんじゃないでしょうか"),
+            "critique_gibberish",
+        )
+
+    def test_soft_default_and_hard_off_topic_gate(self) -> None:
+        """Stage2: open 中は soft 既定。hard off-topic だけ chat/drift。"""
+        verse = "そらまぶし\nくさむらにうかぶ\nくろいせきたん"
+        # マーカー外でも open 中は soft_default
+        self.assertEqual(
+            workshop_open_intent("いや土ぬくしだよ", verse=verse),
+            "soft_default",
+        )
+        self.assertTrue(should_handle_as_workshop("いや土ぬくしだよ", verse=verse))
+        # 明確な別件
+        self.assertTrue(is_workshop_hard_off_topic("松明ある？"))
+        self.assertIsNone(workshop_open_intent("松明ある？", verse=verse))
+        self.assertFalse(should_handle_as_workshop("松明ある？", verse=verse))
+        self.assertIsNone(workshop_open_intent("おはよう", verse=verse))
+        # マーカー hit は soft_default に落ちない
+        self.assertEqual(
+            workshop_open_intent("黒石炭とかにしたらいいんじゃない?", verse=verse),
+            "other_haiku",
+        )
+
+    def test_remember_template_reply(self) -> None:
+        ws = open_from_emission(_emission())
+        reply = render_workshop_reply(
+            "other_haiku",
+            ws,
+            player_text="じゃあ覚えておいてください",
+        )
+        self.assertIn("覚え", reply)
 
     def test_reply_fragment_picks_material(self) -> None:
         from dogido_server.haiku.workshop import (
@@ -628,6 +686,178 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertEqual(speeches, ["平原のことやで。"])
             self.assertEqual(getattr(llm, "last").kind, "haiku_workshop_material_pick")
             self.assertTrue(getattr(llm, "assert_plains"))
+
+    def test_soft_critique_uses_poet_leaf_not_player_chat(self) -> None:
+        """Stage2+4: 添削っぽい自然文は poet leaf。player_chat に落ちない。pin も維持。"""
+
+        class PoetLLM:
+            def __init__(self) -> None:
+                self.kinds: list[str] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                self.kinds.append(request.kind)
+                if request.kind == "haiku_workshop_reply":
+                    return "せやな、くろいせきたんはちょっと長いかもな。"
+                return "LLMが雑談で答えた文"
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                return {}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = PoetLLM()
+            settings = Settings(
+                llm_enabled=True,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sid = session.session_id
+            sess = service.sessions[sid]
+            sess.machine.llm = llm
+            service.llm = llm
+            emission = _emission(text="そらまぶし\nくさむらにうかぶ\nくろいせきたん")
+            service._open_haiku_workshop(sess, emission, entry_id="h_soft", now=emission.created_at)
+
+            def _event(seq: int, user_text: str, *, seconds: int = 5) -> GameEvent:
+                return GameEvent(
+                    schema_version="2026-05-24",
+                    adapter="test",
+                    observed_at=emission.created_at + timedelta(seconds=seconds),
+                    sequence=seq,
+                    event=EventDescriptor(
+                        name=EventName.STATUS_SNAPSHOT,
+                        source_kind=SourceKind.SYSTEM,
+                        priority_hint=PriorityHint.BACKGROUND,
+                        certainty=Certainty.HIGH,
+                    ),
+                    player=PlayerState(
+                        name="p",
+                        position=Position(x=0, y=64, z=0),
+                        dimension="minecraft:overworld",
+                    ),
+                    world=WorldState(
+                        time_phase=TimePhase.DAY,
+                        weather=Weather.CLEAR,
+                        biome="plains",
+                        local_light=15,
+                        sky_visible=True,
+                    ),
+                    meta=MetaState(user_text=user_text),
+                )
+
+            # Stage1 マーカー hit → critique_forced は定型（poet ではない）でも chat に落ちない
+            r1 = service.process_event(
+                _event(2, "なかなかいいねでも黒い石炭がちょっと長いかも", seconds=5),
+                session_id=sid,
+            )
+            speeches1 = [a.text for a in r1.actions if a.layer == "speech" and a.text]
+            self.assertEqual(len(speeches1), 1)
+            self.assertIn("余白", speeches1[0])
+            self.assertNotIn("player_chat", llm.kinds)
+            self.assertTrue(is_open(sess.haiku_workshop))
+            self.assertEqual(sess.haiku_workshop.drift_count if sess.haiku_workshop else -1, 0)
+
+            # Stage4: other_haiku → poet leaf
+            r2 = service.process_event(
+                _event(3, "黒石炭とかにしたらいいんじゃない?", seconds=10),
+                session_id=sid,
+            )
+            speeches2 = [a.text for a in r2.actions if a.layer == "speech" and a.text]
+            self.assertEqual(len(speeches2), 1)
+            self.assertIn("haiku_workshop_reply", llm.kinds)
+            self.assertIn("長いかも", speeches2[0])
+            self.assertTrue(is_open(sess.haiku_workshop), msg="2回添削でも drift close しない")
+            self.assertNotIn("player_chat", llm.kinds)
+
+            # soft_default（マーカー外の読み訂正）→ poet leaf
+            r3 = service.process_event(
+                _event(4, "いや土ぬくしだよ", seconds=15),
+                session_id=sid,
+            )
+            speeches3 = [a.text for a in r3.actions if a.layer == "speech" and a.text]
+            self.assertEqual(len(speeches3), 1)
+            self.assertEqual(llm.kinds.count("haiku_workshop_reply"), 2)
+            self.assertTrue(is_open(sess.haiku_workshop))
+            self.assertNotIn("player_chat", llm.kinds)
+
+    def test_hard_off_topic_can_drift(self) -> None:
+        """Stage2: 松明など明確な別件は chat 側で drift しうる。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                llm_enabled=False,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sid = session.session_id
+            sess = service.sessions[sid]
+            emission = _emission()
+            service._open_haiku_workshop(sess, emission, entry_id="h_off", now=emission.created_at)
+            from dogido_server.player_input.routing import route_player_input
+
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text="松明ある？"),
+            )
+            sess.machine.player_input = route_player_input("松明ある？")
+            actions = service._haiku_workshop_actions(sess, event)
+            self.assertEqual(actions, [])
+            # miss 後に chat speech があると drift
+            service._note_workshop_after_actions(
+                sess,
+                event,
+                [AudioAction(layer="speech", interrupt=False, text="松明は持ってるで")],
+            )
+            self.assertTrue(is_open(sess.haiku_workshop))
+            self.assertEqual(sess.haiku_workshop.drift_count if sess.haiku_workshop else -1, 1)
 
     def test_clear_lessons_without_workshop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

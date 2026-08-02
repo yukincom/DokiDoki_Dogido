@@ -13,7 +13,6 @@ from dogido_server.dialogue_context import DialogueContext
 from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
     build_ask_meaning_llm_details,
-    classify_workshop_intent,
     close_workshop,
     extract_conversational_revise,
     finalize_ask_meaning_reply,
@@ -29,8 +28,9 @@ from dogido_server.haiku.workshop import (
     record_drift,
     record_workshop_activity,
     render_workshop_reply,
+    workshop_open_intent,
 )
-from dogido_server.llm import DogidoLLMRouter, StructuredGenerationRequest
+from dogido_server.llm import DogidoLLMRouter, LeafGenerationRequest, StructuredGenerationRequest
 from dogido_server.memory import MemoryStore
 from dogido_server.models import (
     AcceptedEventResponse,
@@ -83,6 +83,8 @@ class SessionInfo:
     haiku_workshop: RecentHaikuWorkshop | None = None
     # 音声入力など外部から届いたプレイヤー発話。次のイベントの user_text に相乗りさせる
     pending_player_text: str | None = None
+    # panic hold ログの重複抑制（同じ文は1回だけ）
+    panic_hold_logged_text: str | None = None
     # player_chat 用: 直近5往復 + 粗い出来事メモ
     dialogue: DialogueContext = field(default_factory=DialogueContext)
 
@@ -250,14 +252,29 @@ class DogidoService:
                 )
             # pending_player_text のみの場合もこのフレームでは載せない（句完了後に）
         elif session.pending_player_text and not (event.meta.user_text or "").strip():
-            attached_player_text = session.pending_player_text
-            event.meta.user_text = attached_player_text
-            session.pending_player_text = None
-            LOGGER.warning(
-                "player_input_attached_after_hold session_id=%s text=%s",
-                session.session_id,
-                attached_player_text[:80],
-            )
+            # panic 中は player_chat 枝が意図的に無効（絶叫優先）。
+            # ここで毎 tick attach すると speech 無し → requeue → また attach のログ嵐になる。
+            # 落ち着くまで pending に置いたまま次イベントを待つ。
+            if session.machine.state.mode in {"panic", "suppressed_panic"}:
+                # 同じ文の hold は1回だけログ（毎 tick は出さない）
+                pending_text = session.pending_player_text or ""
+                if session.panic_hold_logged_text != pending_text:
+                    session.panic_hold_logged_text = pending_text
+                    LOGGER.warning(
+                        "player_input_held_for_panic session_id=%s mode=%s text=%s",
+                        session.session_id,
+                        session.machine.state.mode,
+                        pending_text[:80],
+                    )
+            else:
+                attached_player_text = session.pending_player_text
+                event.meta.user_text = attached_player_text
+                session.pending_player_text = None
+                LOGGER.warning(
+                    "player_input_attached_after_hold session_id=%s text=%s",
+                    session.session_id,
+                    attached_player_text[:80],
+                )
 
         # 視線先・手持ちと照合して STT を寄せる（固定表のあと・process 前）
         event = self._apply_contextual_asr_to_event(event)
@@ -789,12 +806,17 @@ class DogidoService:
             return [AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。")]
 
         # formal 川柳操作は上で処理済み。ここでは自然文の講評のみ。
-        kind = classify_workshop_intent(text, verse=verse)
+        # Stage2: open 中は soft 既定（hard off-topic だけ None → chat/drift）
+        kind = workshop_open_intent(
+            text,
+            verse=verse,
+            player_input=player_input,
+        )
         if kind is None:
             LOGGER.warning(
                 "haiku_workshop_miss session_id=%s player=%s verse=%s "
                 "speech_materials=%s debug_materials=%s drift_count=%s "
-                "(intent=None → chat/drift 候補)",
+                "(intent=None hard_off_topic → chat/drift 候補)",
                 session.session_id,
                 text[:100],
                 (verse or "")[:80],
@@ -826,6 +848,7 @@ class DogidoService:
             "ask_meaning": "ask_meaning",
             "ack": "other",
             "other_haiku": "other",
+            "soft_default": "other",
         }.get(kind, "other")
 
         critique_id: str | None = None
@@ -877,6 +900,9 @@ class DogidoService:
         reply_path = "template"
         if kind == "ask_meaning":
             reply, reply_path = self._ask_meaning_workshop_reply(workshop, text)
+        elif kind in {"soft_default", "other_haiku"}:
+            # Stage4: 詩人 leaf。失敗時は定型。
+            reply, reply_path = self._poet_workshop_reply(workshop, text, kind=kind)
         else:
             reply = render_workshop_reply(kind, workshop, player_text=text)
         # 観察用: intent / 句 / 口頭材料 vs 内部 materials / 返事
@@ -927,13 +953,53 @@ class DogidoService:
                 payload = None
         return finalize_ask_meaning_reply(workshop, player_text, payload)
 
+    def _poet_workshop_reply(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+        *,
+        kind: str,
+    ) -> tuple[str, str]:
+        """Stage4: 詩人モード leaf。失敗・無効時は定型。"""
+        template_kind = kind if kind != "soft_default" else "soft_default"
+        fallback = render_workshop_reply(template_kind, workshop, player_text=player_text)
+        verse = workshop.display_line() or ""
+        materials = materials_speech_line(workshop)
+        details = {
+            "verse": verse,
+            "materials_speech": materials,
+            "player_text": player_text,
+            "intent_kind": kind,
+            "character_mode": "workshop",
+        }
+        try:
+            text = self.llm.generate_leaf_text(
+                LeafGenerationRequest(
+                    kind="haiku_workshop_reply",
+                    fallback_text=fallback,
+                    details=details,
+                    temperature=0.55,
+                    route="chat",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("haiku_workshop_reply_failed detail=%s", exc)
+            return fallback, "template"
+        cleaned = (text or "").strip()
+        if not cleaned or cleaned == fallback:
+            return fallback, "template"
+        return cleaned, "poet_llm"
+
     def _note_workshop_after_actions(
         self,
         session: SessionInfo,
         event: GameEvent,
         actions: list[AudioAction],
     ) -> None:
-        """通常 chat 等で句以外の speech が出たら drift。"""
+        """hard off-topic で chat speech が出たら drift。
+
+        Stage2: soft 既定の句の話は workshop 経路で処理済み → drift しない。
+        """
         workshop = session.haiku_workshop
         if not is_open(workshop) or workshop is None:
             return
@@ -941,9 +1007,14 @@ class DogidoService:
         text = (player_input.raw_text or "").strip()
         if not text or not player_input.breaks_silence:
             return
-        # workshop 経路で既に処理済みなら drift しない（reply が actions に含まれる）
+        # workshop 経路で既に処理済みなら drift しない
         verse = workshop.display_line() if workshop else None
-        if classify_workshop_intent(text, verse=verse) is not None:
+        open_kind = workshop_open_intent(
+            text,
+            verse=verse,
+            player_input=player_input,
+        )
+        if open_kind is not None:
             return
         if player_input.revised_haiku_text or player_input.asks_haiku_recall:
             return
@@ -952,7 +1023,8 @@ class DogidoService:
         has_speech = any(bool(a.text) and a.layer == "speech" for a in actions)
         if not has_speech:
             LOGGER.warning(
-                "haiku_workshop_idle session_id=%s player=%s (open, intent=None, no speech)",
+                "haiku_workshop_idle session_id=%s player=%s "
+                "(open, hard_off_topic, no speech)",
                 session.session_id,
                 text[:100],
             )

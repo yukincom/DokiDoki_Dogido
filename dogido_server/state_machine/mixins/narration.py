@@ -598,33 +598,46 @@ class NarrationMixin:
         if self.player_input.asks_inventory:
             inventory_summary = self._player_chat_inventory_summary(event)
             held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
-        threat_summary = self._player_chat_threat_summary(event)
-        # 音メモは『今の音なに？』等の明示時だけ LLM に渡す（視覚話題を音で上書きしない）
-        hearing_summary = ""
-        hearing_named_mobs: list[str] = []
-        if self.player_input.asks_about_sound:
-            hearing_summary = self._player_chat_hearing_summary(event)
-            hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
-        place_ctx = self._player_chat_place_context(event)
-        tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
-        nearby_types = list(tactics.get("nearby_hostile_types") or [])
-        if tactics.get("safe_fallback"):
-            fallback = str(tactics["safe_fallback"])
         user_text = (self.player_input.raw_text or "").strip()
-        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
             build_identify_skeleton,
             filter_usable_topic_hits,
+            has_threat_presence_query,
             reply_policy_line,
             resolve_reply_stance,
             should_enforce_speech_whitelist,
         )
 
+        # 音メモ: 音の明示問い または 在否・気配の問い（#33 戦況）
+        # 視覚話題の常時上書きは避けるが、在否では音レンジも材料にする
+        wants_sound = bool(self.player_input.asks_about_sound)
+        wants_presence = has_threat_presence_query(user_text)
+        hearing_summary = ""
+        hearing_named_mobs: list[str] = []
+        hearing_types: list[str] = []
+        if wants_sound or wants_presence:
+            hearing_summary = self._player_chat_hearing_summary(event)
+            hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+            hearing_types = self._player_chat_hearing_mob_types(event)
+        threat_summary = self._player_chat_threat_summary(
+            event,
+            include_hearing=wants_sound or wants_presence,
+            hearing_summary=hearing_summary,
+        )
+        place_ctx = self._player_chat_place_context(event)
+        tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
+        nearby_types = list(tactics.get("nearby_hostile_types") or [])
+        if tactics.get("safe_fallback"):
+            fallback = str(tactics["safe_fallback"])
+        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
+
         passive_types = self._player_chat_observed_passive_types(event)
+        # 存在判定: 視認（recent 含む）∪ 音バッファの種
         observed_ids = self._merge_unique_types(
             effective_visual_types,
             passive_types,
+            hearing_types,
         )
         usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
         reply_stance = resolve_reply_stance(
@@ -671,20 +684,25 @@ class NarrationMixin:
             plausibility_lines = []
         plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
         look_target_label = self._look_target_label(event)
+        # ＋は指差しのときだけ観測メモに載せる（戦況・開いた雑談では控えめ）
+        look_for_observation = (
+            look_target_label if self._player_chat_wants_look_answer(user_text) else ""
+        )
         observation_summary = self._player_chat_observation_summary(
             event,
             threat_summary=threat_summary,
-            hearing_summary=hearing_summary,
+            hearing_summary=hearing_summary if (wants_sound or wants_presence) else "",
             passive_types=passive_types,
-            look_target_label=look_target_label,
+            look_target_label=look_for_observation,
         )
         LOGGER.warning(
-            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s look=%s",
+            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s look=%s hearing_n=%s",
             len(event.visual_threats),
             ",".join(str(t.type) for t in event.visual_threats if t.type) or "-",
             ",".join(recent_visual_types) or "-",
             (threat_summary or "")[:120] or "-",
-            look_target_label or "-",
+            (look_for_observation or look_target_label or "-"),
+            len(hearing_named_mobs),
         )
         if structure_ids or plausibility_lines:
             LOGGER.warning(
@@ -755,12 +773,17 @@ class NarrationMixin:
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
-            "look_target_label": look_target_label,
+            # 指差し時だけラベルを強く渡す（常時は空に近い）
+            "look_target_label": look_for_observation,
             "look_target_kind": (
-                str(event.look_target.kind) if event.look_target is not None else ""
+                str(event.look_target.kind)
+                if event.look_target is not None and look_for_observation
+                else ""
             ),
             "look_target_name": (
-                str(event.look_target.name) if event.look_target is not None else ""
+                str(event.look_target.name)
+                if event.look_target is not None and look_for_observation
+                else ""
             ),
             "nearby_hostile_types": nearby_types,
             "mob_tactics_notes": list(tactics.get("notes") or []),
@@ -769,6 +792,39 @@ class NarrationMixin:
             **self._player_chat_history_details(),
             **self._player_chat_haiku_workshop_details(),
         }
+        # Stage3: workshop open 中の player_chat は脅威以外の look/topic で句を食わない
+        # （soft 既定で本来は workshop 経路。hard off-topic 時の安全網）
+        if self._haiku_workshop_is_open():
+            details["look_target_label"] = ""
+            details["look_target_kind"] = ""
+            details["look_target_name"] = ""
+            details["catalog_topic_hints"] = ""
+            details["catalog_topic_ids"] = []
+            details["plausibility_hints"] = ""
+            details["identify_skeleton"] = ""
+            details["reply_stance"] = "none"
+            details["reply_policy"] = reply_policy_line("none")
+            details["speech_whitelist_enforce"] = False
+            details["allowed_speech_labels"] = []
+            if not self.player_input.asks_about_sound:
+                details["hearing_summary"] = ""
+                details["hearing_named_mobs"] = []
+            if not self.player_input.asks_inventory:
+                details["inventory_summary"] = ""
+                details["held_item_label"] = ""
+            # observation も look/topic 抜きで再構成（脅威は残す）
+            details["observation_summary"] = self._player_chat_observation_summary(
+                event,
+                threat_summary=threat_summary,
+                hearing_summary=str(details.get("hearing_summary") or ""),
+                passive_types=[],
+                look_target_label="",
+            )
+            identify_skeleton = ""
+            LOGGER.warning(
+                "player_chat_workshop_strip open=1 look/topic/hearing stripped "
+                "(keep threat only)"
+            )
         # S3: 高信頼 identify は LLM より骨子を優先できる（オフ時・失敗時の最低限）
         preferred_fallback = identify_skeleton or fallback
         text = self._generate_leaf_text(
@@ -947,6 +1003,42 @@ class NarrationMixin:
         # block（感圧板・花など）
         return self._block_label(name) or name
 
+    def _player_chat_wants_look_answer(self, user_text: str) -> bool:
+        """『これ何』など指差し・視線先を聞いているか（＋を控えめに使う）。"""
+        text = (user_text or "").strip()
+        if not text:
+            return False
+        markers = (
+            "これ何",
+            "これなに",
+            "これは何",
+            "これはなに",
+            "何かな",
+            "なにかな",
+            "何これ",
+            "なにこれ",
+            "それ何",
+            "それなに",
+            "あれ何",
+            "このブロック",
+            "この花",
+            "この石",
+            "見てる",
+            "指して",
+            "指差",
+        )
+        if any(m in text for m in markers):
+            return True
+        # 「これは？」単体・短い指差し
+        compact = text.replace(" ", "").replace("　", "")
+        if compact in {"これ？", "これ?", "これ", "それ？", "それ?", "あれ？", "あれ?"}:
+            return True
+        if ("これ" in text or "それ" in text or "あれ" in text) and (
+            "何" in text or "なに" in text or "？" in text or "?" in text
+        ):
+            return True
+        return False
+
     def _player_chat_observation_summary(
         self,
         event: GameEvent,
@@ -1058,7 +1150,14 @@ class NarrationMixin:
 
         return workshop_prompt_details(workshop)
 
-    def _player_chat_threat_summary(self, event: GameEvent) -> str:
+    def _player_chat_threat_summary(
+        self,
+        event: GameEvent,
+        *,
+        include_hearing: bool = False,
+        hearing_summary: str = "",
+    ) -> str:
+        """戦況メモ。在否・音問いでは音レンジ（hearing）も載せる。"""
         parts: list[str] = []
         if event.visual_threats:
             nearest = min(
@@ -1069,14 +1168,19 @@ class NarrationMixin:
             distance = f"{nearest.distance:.0f}マス" if nearest.distance is not None else "近く"
             label = self._hostile_label(nearest.type)
             parts.append(f"視認 {label} が{direction} {distance}")
-            if len(event.visual_threats) > 1:
-                parts.append(f"ほか{len(event.visual_threats) - 1}体")
+            # 今フレームで渡された本数を素直に（創作しない）
+            n = len(event.visual_threats)
+            if n > 1:
+                parts.append(f"視認リスト{n}体")
+            else:
+                parts.append("視認リスト1体")
         else:
             # 今フレーム 0 でも直近バッファがあれば「ついさっき」
             recent_line = self._player_chat_recent_visual_summary_line(event)
             if recent_line:
                 parts.append(recent_line)
-            elif event.auditory_threats:
+            elif event.auditory_threats and not include_hearing:
+                # 在否・音問い以外のフォールバック（1件だけ）
                 audio = event.auditory_threats[0]
                 direction = self._direction_label(audio)
                 band = getattr(audio.distance_band, "value", audio.distance_band) or ""
@@ -1085,9 +1189,36 @@ class NarrationMixin:
                     parts.append(f"音 {name} {direction} {band}".strip())
                 else:
                     parts.append(f"音（種別未確定） {direction} {band}".strip())
-        if event.combat.combat_active_hint:
+        # 在否・音問い: 音レンジの要約を明示（視認と併記可）
+        if include_hearing and (hearing_summary or "").strip():
+            parts.append(f"音メモ: {hearing_summary.strip()}")
+        if event.combat.combat_active_hint and parts:
             parts.append("交戦中っぽい")
         return "、".join(parts)
+
+    def _player_chat_hearing_mob_types(self, event: GameEvent) -> list[str]:
+        """hearing バッファ＋今フレームから種 id を集める（存在判定用）。"""
+        types: list[str] = []
+        seen: set[str] = set()
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 20000))
+
+        def _add(mob_type: str | None) -> None:
+            mid = str(mob_type or "").removeprefix("minecraft:").strip().lower()
+            if not mid or mid in seen:
+                return
+            seen.add(mid)
+            types.append(mid)
+
+        for audio in event.auditory_threats:
+            _add(self._resolve_hearing_mob_type(audio.label, getattr(audio, "sound_event", None)))
+        for sound in event.ambient_sounds:
+            _add(self._resolve_hearing_mob_type(sound.type, getattr(sound, "sound_event", None)))
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if age is not None and age <= retention_ms:
+                _add(memo.mob_type)
+        return types
 
     def _remember_visual_for_chat(self, event: GameEvent, now: datetime) -> None:
         """今フレームの visual_threats を短期バッファへ。"""

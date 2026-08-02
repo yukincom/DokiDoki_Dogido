@@ -667,7 +667,11 @@ class CommonMixin:
                     verse = ws.display_line()
             except Exception:  # noqa: BLE001
                 verse = None
-        return should_handle_as_workshop(self.player_input.raw_text, verse=verse)
+        return should_handle_as_workshop(
+            self.player_input.raw_text,
+            verse=verse,
+            player_input=self.player_input,
+        )
 
     def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
         recent_ms = event.world.ender_eye_launch_recent_ms
