@@ -69,6 +69,8 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
 import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -78,9 +80,10 @@ import net.minecraft.world.World;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
-    // 音 packet をクライアント側で保持する長さ。旧12tick(0.6s)だと snapshot 間隔に負ける。
-    // 20 tick/s 想定で約5秒。サーバの player_chat hearing バッファ(約12s)より短くてよい。
-    private static final int SOUND_OBSERVATION_TTL_TICKS = 100;
+    // 音 packet をクライアント側で保持する長さ。
+    // 人間が「…？」「今の音なに？」と言うまでの猶予を確保する（旧5秒だと短い）。
+    // 20 tick/s 想定で約15秒。サーバ hearing バッファ（約20s）以下に保つ。
+    private static final int SOUND_OBSERVATION_TTL_TICKS = 300;
     private static final int OMINOUS_SOUND_TTL_TICKS = 80;
     private static final int WEATHER_SOUND_TTL_TICKS = 80;
     private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;
@@ -1012,6 +1015,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1034,6 +1038,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1056,6 +1061,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1076,6 +1082,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
@@ -1098,6 +1105,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(resolveDeathCause(player)));
         return root;
@@ -1118,6 +1126,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
@@ -1418,6 +1427,58 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             json.addProperty(entry.getKey(), entry.getValue());
         }
         return json;
+    }
+
+    /**
+     * 画面中央クロスヘア（＋）が刺さっているブロック / エンティティ。
+     * MISS・空気はフィールド省略（docs/look-target-observation-plan.md）。
+     */
+    private void attachLookTarget(JsonObject root, ClientPlayerEntity player, ClientWorld world) {
+        JsonObject lookTarget = buildLookTarget(player, world);
+        if (lookTarget != null) {
+            root.add("look_target", lookTarget);
+        }
+    }
+
+    private JsonObject buildLookTarget(ClientPlayerEntity player, ClientWorld world) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            return null;
+        }
+        HitResult hit = client.crosshairTarget;
+        if (hit == null || hit.getType() == HitResult.Type.MISS) {
+            return null;
+        }
+        if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+            BlockPos pos = blockHit.getBlockPos();
+            BlockState state = world.getBlockState(pos);
+            if (state.isAir()) {
+                return null;
+            }
+            Identifier blockId = Registries.BLOCK.getId(state.getBlock());
+            JsonObject json = new JsonObject();
+            json.addProperty("kind", "block");
+            // nearby_resources と同様 path ベース（サーバ catalog が path キー）
+            json.addProperty("name", blockId.getPath());
+            double distance = Math.sqrt(
+                player.squaredDistanceTo(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)
+            );
+            json.addProperty("distance", round(distance));
+            return json;
+        }
+        if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {
+            Entity entity = entityHit.getEntity();
+            if (entity == null || !entity.isAlive()) {
+                return null;
+            }
+            Identifier entityId = Registries.ENTITY_TYPE.getId(entity.getType());
+            JsonObject json = new JsonObject();
+            json.addProperty("kind", "entity");
+            json.addProperty("name", entityId.getPath());
+            json.addProperty("distance", round(Math.sqrt(player.squaredDistanceTo(entity))));
+            return json;
+        }
+        return null;
     }
 
     private JsonArray buildNearbyResources(ClientPlayerEntity player, ClientWorld world) {

@@ -212,7 +212,8 @@ class Settings(BaseSettings):
     # この人数以上の非睡眠村人がいると汎用村人1発 + villager:crowd 共有 CD（職連発渋滞防止）
     ambient_villager_crowd_threshold: int = 3
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
-    player_chat_hearing_retention_ms: int = 12000
+    # 人間の「…？ → 今の音なに？」ラグ用。adapter 音 TTL（約15s）より少し長く
+    player_chat_hearing_retention_ms: int = 20000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
     player_chat_visual_retention_ms: int = 12000
     # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。

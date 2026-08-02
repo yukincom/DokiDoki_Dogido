@@ -322,6 +322,18 @@ class NearbyResource(DogidoModel):
     direction: Direction = Field(default_factory=Direction)
 
 
+class LookTarget(DogidoModel):
+    """画面中央クロスヘア（＋）が刺さっている対象（仕様 look_target）。
+
+    プレイヤーの「これ何？」指差し。MISS 時はイベントからフィールド省略。
+    kind: block | entity
+    name: Minecraft id path（例: poppy, oak_pressure_plate, sheep）
+    """
+    kind: str = "block"
+    name: str
+    distance: float | None = None
+
+
 class CombatState(DogidoModel):
     """戦闘・被弾に関する直近の集約状態（仕様 §16）。
 
@@ -378,12 +390,13 @@ class GameEvent(DogidoModel):
 
     必須: schema_version / game / adapter / observed_at / event
     推奨: sequence / visual_threats / auditory_threats / inventory / combat
-    任意: passive_mobs / nearby_resources / meta
+    任意: passive_mobs / nearby_resources / look_target / meta
     passive_mobs には非敵対状態の中立モブも temperament="neutral" で含まれる。
     旧スキーマ名 peaceful_mobs も受信時に受け付ける。
 
     inventory: キーは Minecraft item id、値は所持数。
                松明・石炭・木材・ベッド材料の有無を暗所対処フローで参照する。
+    look_target: クロスヘアが刺さっているブロック/エンティティ（指差し）。
     """
     schema_version: str
     game: str = "minecraft-java"
@@ -399,6 +412,7 @@ class GameEvent(DogidoModel):
     passive_mobs: list[PassiveMob] = Field(default_factory=list)
     inventory: dict[str, int] = Field(default_factory=dict)
     nearby_resources: list[NearbyResource] = Field(default_factory=list)
+    look_target: LookTarget | None = None
     combat: CombatState = Field(default_factory=CombatState)
     meta: MetaState = Field(default_factory=MetaState)
 

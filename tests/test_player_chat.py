@@ -402,10 +402,11 @@ class HearingContextTests(unittest.TestCase):
             )
         )
         content = messages[1]["content"]
-        # E′: 空 hearing は節ごと省略。捏造防止は policy + S2 白リスト
+        # E′: 空 hearing は節ごと省略。種名ガードは白リスト／sanitize
         self.assertNotIn("音のメモ:", content)
-        self.assertIn("捏造はしない", content)
         self.assertIn("天気は晴れ", content)
+        self.assertIn("一人称はオレ", content)
+        self.assertIn("セリフだけ返す", content)
 
     def test_player_chat_details_include_weather_from_world(self) -> None:
         """雨は weather 状態から。hearing とは混ぜない。"""
@@ -435,6 +436,8 @@ class HearingContextTests(unittest.TestCase):
         machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
         self.assertEqual(details_holder.get("weather"), "rain")
         self.assertEqual(details_holder.get("weather_label"), "雨")
+        # 昼+雨 → 淡々とした事実のみ（安全断定しない）
+        self.assertEqual(details_holder.get("weather_fact"), "薄暗い。敵が地上にいる。")
         self.assertFalse(details_holder.get("asks_about_sound"))
         self.assertEqual(details_holder.get("hearing_summary") or "", "")
 
@@ -447,8 +450,38 @@ class HearingContextTests(unittest.TestCase):
         )
         content = messages[1]["content"]
         self.assertIn("天気は雨", content)
-        self.assertIn("モブ音と混同しない", content)
+        self.assertIn("天気の事実: 薄暗い。敵が地上にいる。", content)
+        self.assertIn("モブ音メモとは別", content)
         self.assertNotIn("音のメモ:", content)
+
+        # 夜の雨にはその事実を付けない
+        night = event.model_copy(
+            update={
+                "world": event.world.model_copy(
+                    update={"weather": Weather.RAIN, "time_phase": TimePhase.NIGHT}
+                )
+            }
+        )
+        details_night: dict = {}
+
+        class Capture2:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                details_night.update(request.details)
+                return "夜やな。"
+
+            def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+                return {}
+
+        machine2 = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=Capture2(),
+        )
+        machine2.player_input = route_player_input("雨やね")
+        machine2._render_player_chat_reply(night)  # type: ignore[attr-defined]
+        self.assertEqual(details_night.get("weather_fact") or "", "")
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(
@@ -470,7 +503,7 @@ class HearingContextTests(unittest.TestCase):
         )
         content = messages[1]["content"]
         self.assertIn("村人っぽい声 左 close", content)
-        self.assertIn("音から使ってよい具体モブ名: 村人", content)
+        self.assertIn("音から触れてよい具体モブ名: 村人", content)
 
 
 class PlayerInputEndpointTests(unittest.TestCase):

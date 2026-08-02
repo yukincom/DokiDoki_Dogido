@@ -10,14 +10,19 @@ from __future__ import annotations
 
 def _item_hint(details: dict[str, object]) -> str:
     held_item = str(details.get("held_item") or "").strip()
+    source = str(details.get("poem_item_source") or "hand").strip().lower()
     close_pair = [str(item) for item in details.get("inventory_close_pair", []) if item]
     far_item = str(details.get("inventory_far_item") or "").strip()
     parts: list[str] = []
     if held_item and held_item != "なし":
-        parts.append(f"手には{held_item}")
-    if far_item:
+        # 道具手持ち時は所持から選んだ1つを主役に（つるはし連発を避ける）
+        if source == "pocket":
+            parts.append(f"持ち物のひとつは{held_item}")
+        else:
+            parts.append(f"手には{held_item}")
+    if far_item and far_item != held_item:
         parts.append(f"目立つ別口は{far_item}")
-    elif close_pair:
+    elif close_pair and not (held_item and held_item != "なし"):
         parts.append("同系統の持ち物が少しある")
     return "。".join(parts) if parts else "なし"
 

@@ -150,7 +150,7 @@ class NarrationCasualIntegrationTests(unittest.TestCase):
             )
         )
         content = messages[1]["content"]
-        self.assertIn("答え方スタンス: none", content)
+        self.assertIn("スタンス: none", content)
         self.assertNotIn("カタログからの話題ヒント", content)
         self.assertNotIn("シロクマ", content)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-CharacterMode = Literal["peace", "battle", "tension"]
+CharacterMode = Literal["peace", "battle", "tension", "workshop"]
 
 # 性格は肯定形で構成（禁止の積み上げより「なりたい像」を先に書く）
 BASE_IDENTITY_PROMPT = (
@@ -21,19 +21,18 @@ PEACE_TONE_PROMPT = (
     "【キャラクターモード: 平和時】"
     "気さくで落ち着いた相棒として話す。"
     "怖がり反応は抑え、悲鳴・大げさな狼狽え・『こわい』連発は禁止。"
-    "戦闘警報口調やパニック口調にしない。"
     "観察・相槌・軽い冗談はよいが、説教や長い攻略説明はしない。"
+    "関西的ジョークや軽いツッコミはOK"
 )
 
 BATTLE_TONE_PROMPT = (
     "【キャラクターモード: バトル時】"
-    "わーきゃーと短く狼狽えつつ、プレイヤーを見捨てず応援する。"
-    "怖がりだが諦めない。情報が先、感情は添える程度。"
-    "方向や敵の種類など役に立つ一言を優先する。"
-    "長い愚痴・プレイヤーへの非難・無関係な雑談は禁止。"
-    "『いける』『気いつけや』など短い鼓舞を混ぜてよい。"
-    "誤った攻略で死なせる指示は禁止。"
-    "周囲の敵ごとの禁止助言・安全ヒントは本番メモに従う（カタログ由来）。"
+    "わーきゃーと短く狼狽えつつ、プレイヤーのそばにいる。"
+    "怖がりだが前向きに。方向や敵の種類など、役に立つ一言が先。"
+    "感情は添える程度。情報が先。"
+    "『気いつけや』『こわっ』など、びびりながらの短い言葉でよい。"
+    "長い愚痴・プレイヤーへの非難はしない。"
+    "周囲の敵ごとの安全ヒントは本番メモに従う（カタログ由来）。"
 )
 
 TENSION_TONE_PROMPT = (
@@ -42,6 +41,14 @@ TENSION_TONE_PROMPT = (
     "大げさな戦闘応援やわーきゃー連発はしない。"
     "平和時ほどのんびりもしない。短く用心・不安・助言を出す。"
     "悲鳴の連打や諦め口調は避ける。"
+)
+
+WORKSHOP_TONE_PROMPT = (
+    "【キャラクターモード: 川柳ワークショップ】"
+    "いまはサバイバル攻略ではなく、句の言葉・響き・字数の話。"
+    "プレイヤーの指摘に短く乗る。読みやすさや言い換えを大切にする。"
+    "アイテム用途・採掘・クラフト実用・戦闘の話はしない。"
+    "biome や内部 ID を口にしない。怖がり反応は抑える。"
 )
 
 _KIND_DEFAULT_MODE: dict[str, CharacterMode] = {
@@ -65,12 +72,14 @@ _KIND_DEFAULT_MODE: dict[str, CharacterMode] = {
     "dark_push_no_light": "tension",
     "dark_push_after_breath": "tension",
     "deep_dark_ominous_sound": "tension",
+    "haiku_workshop_reply": "workshop",
 }
 
 _TONE_BY_MODE: dict[CharacterMode, str] = {
     "peace": PEACE_TONE_PROMPT,
     "battle": BATTLE_TONE_PROMPT,
     "tension": TENSION_TONE_PROMPT,
+    "workshop": WORKSHOP_TONE_PROMPT,
 }
 
 
@@ -84,6 +93,8 @@ def normalize_character_mode(value: object | None) -> CharacterMode | None:
         return "battle"
     if text in {"tension", "alert", "caution", "緊張"}:
         return "tension"
+    if text in {"workshop", "poet", "haiku_workshop", "ワークショップ", "詩人"}:
+        return "workshop"
     return None
 
 

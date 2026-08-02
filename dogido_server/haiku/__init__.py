@@ -1,11 +1,17 @@
 """川柳ドメイン: 発句材料・workshop（pin）・フィードバック。"""
 
+from dogido_server.haiku.materials import (
+    attach_fragment_links,
+    build_workshop_materials_seed,
+    short_material_entries,
+)
 from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
     classify_workshop_intent,
     close_workshop,
     extract_conversational_revise,
     is_open,
+    is_workshop_hard_off_topic,
     lessons_from_critique_kind,
     loosen_all_lessons,
     loosen_lesson_for_praise,
@@ -17,15 +23,19 @@ from dogido_server.haiku.workshop import (
     render_workshop_reply,
     should_handle_as_workshop,
     wants_clear_haiku_lessons,
+    workshop_open_intent,
     workshop_prompt_details,
 )
 
 __all__ = [
     "RecentHaikuWorkshop",
+    "attach_fragment_links",
+    "build_workshop_materials_seed",
     "classify_workshop_intent",
     "close_workshop",
     "extract_conversational_revise",
     "is_open",
+    "is_workshop_hard_off_topic",
     "lessons_from_critique_kind",
     "loosen_all_lessons",
     "loosen_lesson_for_praise",
@@ -35,7 +45,9 @@ __all__ = [
     "record_drift",
     "record_workshop_activity",
     "render_workshop_reply",
+    "short_material_entries",
     "should_handle_as_workshop",
     "wants_clear_haiku_lessons",
+    "workshop_open_intent",
     "workshop_prompt_details",
 ]

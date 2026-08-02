@@ -51,13 +51,20 @@ def open_from_emission(
 ) -> RecentHaikuWorkshop:
     """発句成功時に pin を立てる。"""
     at = now or emission.created_at
-    mats = dict(materials or {})
+    # emission.materials（厚いシード + fragment_links）を優先。明示 materials があれば上書き合成。
+    mats: dict[str, Any] = {}
+    if getattr(emission, "materials", None):
+        mats.update(dict(emission.materials or {}))
+    if materials:
+        mats.update(dict(materials))
     if emission.interpretation and "interpretation" not in mats:
         mats["interpretation"] = emission.interpretation
     if emission.biome and "biome" not in mats:
         mats["biome"] = emission.biome
     if emission.structure and "structure" not in mats:
         mats["structure"] = emission.structure
+    if emission.time_phase and "time_phase" not in mats:
+        mats["time_phase"] = emission.time_phase
     return RecentHaikuWorkshop(
         surface_text=(emission.text or "").strip(),
         emitted_at=at,
@@ -149,12 +156,50 @@ def workshop_prompt_details(workshop: RecentHaikuWorkshop | None) -> dict[str, s
 
 
 def materials_speech_line(workshop: RecentHaikuWorkshop) -> str:
-    """プレイヤー向けの短い狙い文。内部キー名（biome: 等）は絶対に出さない。"""
-    cands = material_candidates_for_speech(workshop)
-    if not cands:
+    """プレイヤー向けの短い狙い文。内部キー名（biome: 等）は絶対に出さない。
+
+    純最短だと「静寂」「昼」が斧・原木に勝つので、source 優先で具体物を選ぶ。
+    """
+    from dogido_server.haiku.materials import short_material_entries
+
+    mats = dict(workshop.materials or {})
+    if workshop.interpretation and "interpretation" not in mats:
+        mats["interpretation"] = workshop.interpretation
+    if workshop.biome and "biome" not in mats:
+        mats["biome"] = workshop.biome
+    if workshop.structure and "structure" not in mats:
+        mats["structure"] = workshop.structure
+    if workshop.time_phase and "time_phase" not in mats:
+        mats["time_phase"] = workshop.time_phase
+    entries = short_material_entries(mats)
+    if not entries:
         return ""
-    # いちばん短い具体候補（長い対比文より「錆びた銅のランタン」等を優先）
-    return min(cands, key=lambda s: (len(s) > 24, len(s)))
+    # held / nearby / structure / motif を抽象語・解釈条片より先に
+    source_rank = {
+        "held_item": 0,
+        "nearby_block": 1,
+        "structure": 2,
+        "motif": 3,
+        "passive_mob": 4,
+        "biome": 5,
+        "place": 6,
+        "time_phase": 7,
+        "interpretation": 8,
+    }
+
+    def rank(item: tuple[str, str]) -> tuple:
+        label, source = item
+        # 2 文字の雰囲気語（静寂・温もり等）は concrete より後
+        abstract_short = len(label) <= 2
+        return (
+            source_rank.get(source, 9),
+            abstract_short,
+            len(label) > 20,
+            len(label),
+            label,
+        )
+
+    return min(entries, key=rank)[0]
 
 
 def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
@@ -166,84 +211,61 @@ def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
     ).strip()
     if interpretation:
         parts.append(interpretation[:80])
-    for key in ("biome", "structure", "time_phase", "place"):
+    for key in ("biome", "structure", "time_phase", "place", "held_item"):
         val = materials.get(key) or getattr(workshop, key, None)
         if val:
             parts.append(f"{key}={val}")
+    motifs = materials.get("motifs")
+    if isinstance(motifs, (list, tuple)) and motifs:
+        parts.append("motifs=" + ",".join(str(m) for m in motifs[:4] if m))
+    nearby = materials.get("nearby_blocks")
+    if isinstance(nearby, (list, tuple)) and nearby:
+        parts.append("nearby=" + ",".join(str(b) for b in nearby[:3] if b))
+    links = materials.get("fragment_links")
+    if isinstance(links, list) and links:
+        parts.append(f"links={len(links)}")
     return " / ".join(parts) if parts else ""
 
 
 def material_candidates_for_speech(workshop: RecentHaikuWorkshop) -> list[str]:
     """「それは〇〇やで」用の候補。日本語の中身だけ（キー名なし）。
 
-    短い具体物（モチーフ・biome_ja）を先に、長い解釈文は後。
+    短い具体物（motifs / held / nearby / biome_ja）を先に、長い解釈文は後。
+    ドメイン固有の禁止語リストは持たない（materials.short_material_entries に委譲）。
     """
-    materials = workshop.materials or {}
-    out: list[str] = []
-    seen: set[str] = set()
+    from dogido_server.haiku.materials import short_material_entries
 
-    def add(s: str | None, *, max_len: int = 28) -> None:
-        t = (s or "").strip().rstrip("。．.")
-        t = t.replace("プレイヤー", "あんた")
-        if not t or len(t) < 2:
-            return
-        if len(t) > max_len:
-            t = _shorten_for_speech(t, max_chars=max_len)
-        if not t or t in seen:
-            return
-        seen.add(t)
-        out.append(t)
-
-    # 1) 短い具体物を先に（発話の本命）
-    motifs = materials.get("motifs") or materials.get("scene_motifs")
-    if isinstance(motifs, (list, tuple)):
-        for m in motifs:
-            add(str(m) if m else None)
-
-    for key in ("biome_ja", "structure_ja", "place_ja"):
-        add(str(materials[key]) if materials.get(key) else None)
-
-    phase = materials.get("time_phase") or workshop.time_phase
-    phase_ja = {
-        "morning": "朝",
-        "day": "昼",
-        "evening": "夕方",
-        "night": "夜",
-    }.get(str(phase or ""), None)
-    add(phase_ja)
-
-    # biome / structure は日本語ラベルへ
-    try:
-        from dogido_server.entry_catalog import biome_labels, structure_labels
-
-        biome_id = materials.get("biome") or workshop.biome
-        if biome_id:
-            labels = biome_labels()
-            add(labels.get(str(biome_id)) or labels.get(str(biome_id).removeprefix("minecraft:")))
-        struct_id = materials.get("structure") or workshop.structure
-        if struct_id:
-            sl = structure_labels()
-            sid = str(struct_id).removeprefix("minecraft:")
-            add(sl.get(sid) or sl.get(str(struct_id)))
-    except Exception:  # noqa: BLE001
-        pass
-
-    # 2) 解釈文は条片のみ（全文の長い対比は候補にしない＝「それは…やで」が講義になる）
-    interpretation = str(
-        materials.get("interpretation") or workshop.interpretation or ""
-    ).strip()
-    if interpretation:
-        for chunk in _split_material_chunks(interpretation):
-            add(chunk, max_len=22)
-
-    return out
+    mats = dict(workshop.materials or {})
+    if workshop.interpretation and "interpretation" not in mats:
+        mats["interpretation"] = workshop.interpretation
+    if workshop.biome and "biome" not in mats:
+        mats["biome"] = workshop.biome
+    if workshop.structure and "structure" not in mats:
+        mats["structure"] = workshop.structure
+    if workshop.time_phase and "time_phase" not in mats:
+        mats["time_phase"] = workshop.time_phase
+    return [label for label, _source in short_material_entries(mats)]
 
 
 def pick_material_for_fragment(
     fragment: str | None,
     workshop: RecentHaikuWorkshop,
+    *,
+    player_text: str | None = None,
 ) -> str | None:
-    """LLM 失敗時の超単純フォールバック。部分一致のみ（訓読みテーブルは使わない）。"""
+    """LLM 失敗時のフォールバック。fragment_links 優先、なければ部分一致。"""
+    from dogido_server.haiku.materials import resolve_material_from_links
+
+    verse = workshop.display_line() or ""
+    linked = resolve_material_from_links(
+        player_text or "",
+        verse,
+        workshop.materials,
+        fragment=fragment,
+    )
+    if linked:
+        return linked
+
     frag = _compact_kana(fragment or "")
     if len(frag) < 2:
         return None
@@ -319,8 +341,8 @@ def finalize_ask_meaning_reply(
     if pick:
         return f"それは、{pick}やで。", "template"
 
-    # LLM なし / 失敗時: 部分一致だけ試す
-    simple = pick_material_for_fragment(fragment, workshop)
+    # fragment_links（句断片→材料）を優先。無ければ部分一致。
+    simple = pick_material_for_fragment(fragment, workshop, player_text=said)
     if simple:
         return f"それは、{simple}やで。", "template"
 
@@ -507,6 +529,85 @@ _PREFERENCE_MARKERS = (
     "追加しと",
     "足して",
 )
+# Stage1: 字数・長さの指摘（メタ語のみ。固有モチーフ名は載せない）
+_LENGTH_MARKERS = (
+    "長い",
+    "ながい",
+    "短すぎ",
+    "みじかすぎ",
+    "字余り",
+    "字足らず",
+    "音数",
+    "モーラ",
+    "五七五",
+    "575",
+    "字数",
+)
+# Stage1: 言い換え提案の構文（「Aとかにしたら」「だったら」）
+_SOFT_SUGGEST_MARKERS = (
+    "にしたら",
+    "にしてみ",
+    "とかに",
+    "だったら",
+    "言い換え",
+    "に変えて",
+    "変えた方",
+    "変えたほう",
+)
+# Stage1: 教訓・記憶の依頼
+_REMEMBER_MARKERS = (
+    "覚えて",
+    "覚えと",
+    "おぼえて",
+    "おぼえと",
+    "メモしと",
+    "メモして",
+)
+# Stage1: 狙い・由来の問い（materials 寄り。固有名は見ない）
+_ORIGIN_MARKERS = (
+    "どこから来",
+    "どこからき",
+    "何を見て",
+    "なにを見て",
+    "狙いは",
+    "材料は",
+    "どこから",
+)
+# Stage1: 読み・日本語の疑い（「おかしい」「通じる」）
+_SOFT_DOUBT_MARKERS = (
+    "おかしい",
+    "おかしく",
+    "間違いか",
+    "まちがいか",
+    "通じる",
+    "通じな",
+    "変じゃ",
+    "変や",
+    "変だ",
+)
+# Stage2: open 中でも chat+drift に落とす「明確な別件」（ゲーム・挨拶）
+# 固有モチーフを講評に使わない方針と両立するよう、ゲーム行為・挨拶に寄せる。
+_HARD_OFF_TOPIC_MARKERS = (
+    "松明",
+    "たいまつ",
+    "どこ行く",
+    "どこいく",
+    "どっち行く",
+    "どっちいく",
+    "おはよう",
+    "こんにちは",
+    "こんばんは",
+    "インベントリ",
+    "持ち物",
+    "クラフト",
+    "レシピ",
+    "逃げよ",
+    "逃げて",
+    "戦って",
+    "ゾンビ",
+    "クリーパー",
+    "スケルトン",
+)
 # プレイヤー明示で lesson を緩める（workshop open 外でも可）
 _CLEAR_LESSON_MARKERS = (
     "気にせんで",
@@ -547,6 +648,7 @@ def classify_workshop_intent(
            critique_offscene | ask_meaning | ack | other_haiku
 
     verse を渡すと「晴れのバラ?」のように句断片＋疑問を ask_meaning にできる。
+    soft_default はここではなく workshop_open_intent（open 中のみ）。
     """
     text = (user_text or "").strip()
     if not text:
@@ -564,10 +666,16 @@ def classify_workshop_intent(
         return "ack"
     if any(m in text for m in _FORCED_MARKERS):
         return "critique_forced"
+    # 字数・長さ（詰め込み系に寄せる）
+    if any(m in text for m in _LENGTH_MARKERS):
+        return "critique_forced"
     if any(m in text for m in _OFFSCENE_MARKERS):
         return "critique_offscene"
     # 「〜って何／とは何／何でしょう」
     if any(m in text for m in _MEANING_MARKERS):
+        return "ask_meaning"
+    # 狙い・由来（材料の話）
+    if any(m in text for m in _ORIGIN_MARKERS):
         return "ask_meaning"
     # 句の断片を指して疑問（「晴れのバラ?」「はれのばら？」）
     if verse and _looks_like_verse_fragment_question(text, verse):
@@ -583,24 +691,87 @@ def classify_workshop_intent(
         h in text for h in ("方が", "ほうが", "よかった", "良かった", "違う", "ちがう")
     ):
         return "other_haiku"
-    # 「AじゃなくB」「〜の方が〜」など好み・訂正（workshop 中のみ呼ばれる想定）
+    # 「AじゃなくB」「〜の方が〜」「とかにしたら」など好み・訂正を、
+    # 曖昧な「通じる」疑いより先に（言い換え提案を優先）
     if any(m in text for m in _PREFERENCE_MARKERS):
         return "other_haiku"
+    if any(m in text for m in _SOFT_SUGGEST_MARKERS):
+        return "other_haiku"
+    if any(m in text for m in _REMEMBER_MARKERS):
+        return "other_haiku"
+    if any(m in text for m in _SOFT_DOUBT_MARKERS):
+        return "critique_gibberish"
     # 句・川柳・俳句への明示参照（ジャンル語のみ）
     if any(m in text for m in ("句", "川柳", "俳句", "せんりゅう", "詠ん", "よんだ")):
         return "other_haiku"
     return None
 
 
+def is_workshop_hard_off_topic(
+    user_text: str | None,
+    *,
+    player_input: Any | None = None,
+) -> bool:
+    """open 中でも chat+drift に落とす明確な別件か。
+
+    player_input のフラグ（インベントリ・敵数など）を優先し、
+    なければゲーム行為・挨拶のメタ語のみ（固有モチーフ講評は吸わない）。
+    """
+    if player_input is not None:
+        if bool(getattr(player_input, "asks_inventory", False)):
+            return True
+        if bool(getattr(player_input, "asks_hostile_count", False)):
+            return True
+        if bool(getattr(player_input, "asks_dragon_direction", False)):
+            return True
+        if bool(getattr(player_input, "asks_about_sound", False)):
+            return True
+    text = (user_text or "").strip()
+    if not text:
+        return False
+    return any(m in text for m in _HARD_OFF_TOPIC_MARKERS)
+
+
+def workshop_open_intent(
+    user_text: str | None,
+    *,
+    verse: str | None = None,
+    player_input: Any | None = None,
+) -> str | None:
+    """workshop **open 中**の取り込み判定。
+
+    Returns:
+        既知 kind（close / praise / … / other_haiku）
+        ``soft_default`` … マーカー外だが別件でもない → 句の話として扱う
+        ``None`` … hard off-topic（player_chat + drift 候補）
+    """
+    if extract_conversational_revise(user_text):
+        # 呼び出し側は revise 経路を先に見る。ここは safety。
+        return "other_haiku"
+    kind = classify_workshop_intent(user_text or "", verse=verse)
+    if kind is not None:
+        return kind
+    if is_workshop_hard_off_topic(user_text, player_input=player_input):
+        return None
+    text = (user_text or "").strip()
+    if not text:
+        return None
+    return "soft_default"
+
+
 def should_handle_as_workshop(
     user_text: str | None,
     *,
     verse: str | None = None,
+    player_input: Any | None = None,
 ) -> bool:
-    """workshop open 中に service/SM が player_chat より先に扱うべきか。"""
+    """workshop open 中に service/SM が player_chat より先に扱うべきか。
+
+    Stage2 soft 既定: マーカー外でも hard off-topic でなければ True。
+    """
     if extract_conversational_revise(user_text):
         return True
-    return classify_workshop_intent(user_text or "", verse=verse) is not None
+    return workshop_open_intent(user_text, verse=verse, player_input=player_input) is not None
 
 
 def extract_conversational_revise(raw_text: str | None) -> str | None:
@@ -742,11 +913,17 @@ def render_workshop_reply(
     if kind == "critique_offscene":
         aim = f"狙いは{materials}寄りやったんやけどな。" if materials else ""
         return f"場とずれたな、悪かった。{aim}次は外れすぎんようにするわ。"
+    if kind == "soft_default":
+        return "句の話、まだ聞いてるで。気になるところある？"
     # other_haiku（読み・好み・句への言及など）— 短く
+    if any(m in said for m in _REMEMBER_MARKERS):
+        return "おけ、覚えとくわ。次に活かすで。"
     if any(m in said for m in _READING_META_MARKERS):
         return "せやな、読みの話やな。次は読みやすさ、ちょっと意識するわ。"
-    if any(m in said for m in _PREFERENCE_MARKERS):
+    if any(m in said for m in _PREFERENCE_MARKERS) or any(m in said for m in _SOFT_SUGGEST_MARKERS):
         return "なるほど、そっちの方がしっくりくるかもな。次に活かすわ。"
+    if any(m in said for m in _LENGTH_MARKERS):
+        return "せやな、ちょっと長かったかもな。次は短め、意識するわ。"
     return "気になるところあったら、その言葉だけ言ってな。"
 
 

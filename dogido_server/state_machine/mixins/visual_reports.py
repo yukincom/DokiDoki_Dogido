@@ -52,6 +52,11 @@ class VisualReportsMixin:
         self.state.last_single_visual_at = now if single_type is not None else None
 
     def _single_to_multi_increase_callout(self, threats: list[VisualThreat], now: datetime) -> str | None:
+        """同種が1→2+になったとき1回。「増えたで」は entity ID で抑止。
+
+        きたで（入場）はそのまま。同じ ID の群れで増えたを連呼しない。
+        新しい ID が加わったときだけ再発火する。
+        """
         last_type = self.state.last_single_visual_type
         last_at = self.state.last_single_visual_at
         if last_type is None or last_at is None:
@@ -59,9 +64,16 @@ class VisualReportsMixin:
         recent_ms = self._recent_ms(now, last_at)
         if recent_ms is None or recent_ms >= self.settings.multi_hostile_comment_cooldown_ms:
             return None
-        counts = self._hostile_counts(threats)
-        if counts.get(last_type, 0) < 2:
+        typed = [threat for threat in threats if threat.type == last_type]
+        if len(typed) < 2:
             return None
+        current_ids = {self._visual_identity_key(threat) for threat in typed}
+        announced = self.state.multi_increase_announced_ids
+        # すでにこの群れで増えたを言った（新 ID なし）→ 抑止
+        if current_ids and current_ids <= announced:
+            return None
+        # 今回のメンバーを記録（次回同じ ID 群では言わない）
+        self.state.multi_increase_announced_ids |= current_ids
         self._mark_visual_priority_callout(now, single_type=None)
         return f"{self._hostile_label(last_type)}が増えたで！"
 

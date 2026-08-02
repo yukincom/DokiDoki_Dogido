@@ -189,6 +189,7 @@ def asks_inventory(normalized_text: str) -> bool:
 # 音・聞こえ・曲についての明示（モブ種名リストは使わない。レコード等も含む）
 _SOUND_TOPIC_MARKERS: tuple[str, ...] = (
     "音",
+    "声",  # 「ゾンビの声」「今の声は何」
     "聞こ",
     "きこ",
     "物音",

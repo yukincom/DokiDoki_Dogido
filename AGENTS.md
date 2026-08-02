@@ -189,6 +189,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 ## 9. 現在の実装スナップショット（目安）
 
 - workshop H1〜H5.2: **済**（soft lesson / loosen / TTL / 明示「気にせんで」）  
+- H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  
 - TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  

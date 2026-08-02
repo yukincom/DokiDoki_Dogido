@@ -81,11 +81,12 @@ RecentHaikuWorkshop:
   entry_id
   surface_text          # 詠んだ句
   kana_or_display       # 読み上げ形
-  materials:            # irony/scene から
-    irony_summary
-    scene_motifs[]
-    catalog_notes[]     # 短く
-    biome_id / place
+  materials:            # 発句シード（句テキストに制御タグは埋め込まない）
+    interpretation      # irony/scene 要約
+    motifs[]            # scene/irony focus 含む
+    held_item / nearby_blocks / passive_mobs
+    biome / biome_ja / structure / structure_ja / time_phase
+    fragment_links[]    # surface(句) → material（かな部分一致の対応表）
   emitted_at
   open: bool              # ワークショップ「積極モード」
   last_workshop_at        # 最後に句関連のやり取りをした時刻
@@ -334,6 +335,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 | PR | 内容 | 依存 | 状態 |
 |---|---|---|---|
 | **H1** | 発句時 `RecentHaikuWorkshop`（materials スナップショット保持） | 既存 emission | **済** |
+| **H1.1** | materials 厚み: motifs/held/nearby + 短い候補 + `fragment_links`（#28 phase 0–1） | H1 | **済** |
 | **H2** | workshop 意図判定（ルール）+ open 中は chat より優先 | H1 | **済** |
 | **H3** | `haiku_critiques.jsonl` 保存 + 材料開示つき返事 | H2 | **済** |
 | **H4** | 自然文の直し → revision（`直し:` なし / `こう直して:` 等） | H3 | **済** |
@@ -343,13 +345,14 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H6** | 発句後 materials 突合バリデータ（固定語リスト） | 独立可 | **撤回** |
 | **H7** | （任意）workshop 分類の LLM structured | H2 の後 | 未 |
 
-**H1〜H5.2 実装済み。H6 は撤回。**  
+**H1〜H5.2 + H1.1 実装済み。H6 は撤回。**  
 道具/読みの forbidden は hard のまま。player lesson は soft。  
+**H1.1:** 候補は短い名詞優先。`fragment_links` は句 surface→材料の内部対応表（句に制御タグを埋め込まない）。ask_meaning は links を優先。  
 **H6 をやめた理由:** 発句は渡した materials / scene から作る前提。固定 drift リストは本質でなくメンテだけ増える。  
 「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
 場の違和感は **プレイヤーが言ったとき** workshop で。  
 **strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
-**未（気が向いたら）:** 直し案 1 本、H7、Phase E 整理。  
+**未（気が向いたら）:** 直し案 1 本、H7、Phase E 整理、#28 preface 延長・overlay。  
 
 全体の完成度・優先の考え方は [companion-maturity.md](companion-maturity.md)。
 

@@ -837,8 +837,40 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         candidates = self.machine._haiku_context(event).feature_candidate_labels()
 
+        # 火打石は作業道具扱いにしない → 手持ちのまま
         self.assertIn("手持ち 火打石と打ち金", candidates)
         self.assertFalse(any(candidate.startswith("持ち物 ") for candidate in candidates))
+
+    def test_work_tool_held_prefers_weighted_pocket_motif(self) -> None:
+        """つるはし手持ち時は所持の非道具を句の主役に（dirt より花を優先）。"""
+        event = make_snapshot(
+            self.base_time,
+            biome="plains",
+            held_item="minecraft:diamond_pickaxe",
+            inventory={
+                "minecraft:diamond_pickaxe": 1,
+                "minecraft:dirt": 64,
+                "minecraft:poppy": 3,
+                "minecraft:cobblestone": 32,
+            },
+        )
+        context = self.machine._haiku_context(event)
+        self.assertEqual(context.poem_item_source, "pocket")
+        self.assertIn("ポピー", context.held_item)
+        labels = context.feature_candidate_labels()
+        self.assertTrue(any(x.startswith("持ち物 ") and "ポピー" in x for x in labels))
+        self.assertFalse(any("つるはし" in x or "ツルハシ" in x or "ダイヤモンドのツルハシ" in x for x in labels))
+
+    def test_non_tool_held_stays_hand_source(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="plains",
+            held_item="minecraft:poppy",
+            inventory={"minecraft:dirt": 8, "minecraft:poppy": 1},
+        )
+        context = self.machine._haiku_context(event)
+        self.assertEqual(context.poem_item_source, "hand")
+        self.assertIn("ポピー", context.held_item)
 
     def test_haiku_prompt_details_include_tool_constraints_from_held_item_and_scene(self) -> None:
         event = make_snapshot(

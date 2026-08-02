@@ -5481,6 +5481,142 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertTrue(any(action.text == "ゾンビが増えたで！" for action in result.actions))
 
+    def test_multi_increase_callout_uses_entity_ids_to_avoid_repeat(self) -> None:
+        """同じ entity ID の群れでは「増えたで」を連呼しない。新 ID なら再度可。"""
+        from datetime import datetime, timezone
+
+        t0 = datetime(2026, 6, 5, 23, 0, 0, tzinfo=timezone.utc)
+
+        def phantom_event(sequence: int, seconds: float, threats: list[dict]) -> GameEvent:
+            return GameEvent.model_validate(
+                {
+                    "schema_version": "2026-05-24",
+                    "game": "minecraft-java",
+                    "adapter": "dogido-fabric-client",
+                    "observed_at": t0.replace(microsecond=0).isoformat().replace("+00:00", "+09:00")
+                    if seconds == 0
+                    else (t0.replace(tzinfo=timezone.utc)).isoformat(),
+                    "sequence": sequence,
+                    "event": {
+                        "name": "threat_approaching",
+                        "source_kind": "visual",
+                        "priority_hint": "urgent",
+                        "certainty": "high",
+                    },
+                    "player": {"name": "main_player", "dimension": "minecraft:overworld"},
+                    "world": {
+                        "time_phase": "night",
+                        "biome": "plains",
+                        "danger_darkness_score": 0.6,
+                        "sky_visible": True,
+                    },
+                    "visual_threats": threats,
+                    "combat": {
+                        "recent_hostile_visual_ms": 100,
+                        "hostiles_within_7": 0,
+                        "hostiles_within_10": 0,
+                        "combat_active_hint": True,
+                    },
+                }
+            )
+
+        # observed_at をちゃんとずらす
+        from datetime import timedelta
+
+        def make(
+            sequence: int,
+            offset_s: float,
+            threats: list[dict],
+        ) -> GameEvent:
+            ev = phantom_event(sequence, 0, threats)
+            return ev.model_copy(update={"observed_at": t0 + timedelta(seconds=offset_s)})
+
+        one = [
+            {
+                "type": "phantom",
+                "entity_id": "ph-a",
+                "distance": 12.0,
+                "direction": {"horizontal": "front", "vertical": "above"},
+                "approaching": True,
+                "certainty": "high",
+            }
+        ]
+        two = [
+            one[0],
+            {
+                "type": "phantom",
+                "entity_id": "ph-b",
+                "distance": 14.0,
+                "direction": {"horizontal": "left", "vertical": "above"},
+                "approaching": False,
+                "certainty": "high",
+            },
+        ]
+        two_again = [
+            {
+                "type": "phantom",
+                "entity_id": "ph-a",
+                "distance": 11.0,
+                "direction": {"horizontal": "back", "vertical": "above"},
+                "approaching": False,
+                "certainty": "high",
+            },
+            {
+                "type": "phantom",
+                "entity_id": "ph-b",
+                "distance": 13.0,
+                "direction": {"horizontal": "right", "vertical": "above"},
+                "approaching": True,
+                "certainty": "high",
+            },
+        ]
+        three = two_again + [
+            {
+                "type": "phantom",
+                "entity_id": "ph-c",
+                "distance": 15.0,
+                "direction": {"horizontal": "front_left", "vertical": "above"},
+                "approaching": True,
+                "certainty": "high",
+            }
+        ]
+
+        r1 = self.machine.process(make(1, 0, one))
+        self.assertTrue(
+            any(a.text == "上からファントムきたで！" for a in r1.actions),
+            msg=[a.text for a in r1.actions],
+        )
+        # 2体目の入場は「きたで」優先
+        r2 = self.machine.process(make(2, 1, two))
+        self.assertTrue(
+            any(a.text == "上からファントムきたで！" for a in r2.actions),
+            msg=[a.text for a in r2.actions],
+        )
+        # 同じ2 ID の次フレームで「増えた」1回
+        r3 = self.machine.process(make(3, 2, two_again))
+        self.assertTrue(
+            any(a.text == "ファントムが増えたで！" for a in r3.actions),
+            msg=[a.text for a in r3.actions],
+        )
+        # 同じ2 ID では増えたを繰り返さない
+        r4 = self.machine.process(make(4, 3, two_again))
+        self.assertFalse(
+            any(a.text and "増えた" in a.text for a in r4.actions),
+            msg=[a.text for a in r4.actions],
+        )
+        # 新 ID 入場 → きたで
+        r5 = self.machine.process(make(5, 4, three))
+        self.assertTrue(
+            any(a.text == "上からファントムきたで！" for a in r5.actions),
+            msg=[a.text for a in r5.actions],
+        )
+        # 3体固定の次で増えた（新 ID を含む群れ）
+        r6 = self.machine.process(make(6, 5, three))
+        self.assertTrue(
+            any(a.text == "ファントムが増えたで！" for a in r6.actions),
+            msg=[a.text for a in r6.actions],
+        )
+
     def test_stable_multi_hostile_count_does_not_repeat_on_small_position_changes(self) -> None:
         first = GameEvent.model_validate_json(
             """
@@ -7978,7 +8114,7 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertFalse(
             any(
-                action.text == "夕方や！あと1分もしないうちに敵出るで！"
+                action.text == "！そろそろ夜やで！"
                 for action in result.actions
             )
         )
@@ -8247,10 +8383,10 @@ class StateMachineTests(unittest.TestCase):
         second = self.machine.process(night)
 
         speech = next(action for action in first.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "夕方や！あと1分もしないうちに敵出るで！")
+        self.assertEqual(speech.text, "！そろそろ夜やで！")
         self.assertFalse(
             any(
-                action.text == "夕方や！あと1分もしないうちに敵出るで！"
+                action.text == "！そろそろ夜やで！"
                 for action in second.actions
             )
         )
@@ -8358,7 +8494,7 @@ class StateMachineTests(unittest.TestCase):
         result = self.machine.process(second_evening)
 
         speech = next(action for action in result.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "夕方や！あと1分もしないうちに敵出るで！")
+        self.assertEqual(speech.text, "！そろそろ夜やで！")
 
     def test_cave_biome_evening_uses_surface_exit_warning(self) -> None:
         daytime = GameEvent.model_validate_json(
@@ -8619,7 +8755,7 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertFalse(
             any(
-                action.text == "夕方や！あと1分もしないうちに敵出るで！"
+                action.text == "！そろそろ夜やで！"
                 for action in result.actions
             )
         )
@@ -8694,13 +8830,15 @@ class StateMachineTests(unittest.TestCase):
         first = self.machine.process(talking)
         second = self.machine.process(later)
 
-        # 夕方警告は時限性が高いので、入力中でも注意喚起行で割り込む
+        # 夕方警告は1本だけ。入力中は interrupt で遮る（2段本文は出さない）
         attention = next(action for action in first.actions if action.layer == "speech")
         self.assertEqual(attention.text, "！そろそろ夜やで！")
         self.assertTrue(attention.interrupt)
-        # 本文は次のイベントで出す
-        speech = next(action for action in second.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "夕方や！あと1分もしないうちに敵出るで！")
+        second_speech = [a.text for a in second.actions if a.layer == "speech" and a.text]
+        self.assertFalse(
+            any("夜" in (t or "") or "夕方" in (t or "") for t in second_speech),
+            msg=second_speech,
+        )
 
     def test_mass_hostile_callout_latches_until_query_range_clears(self) -> None:
         first = GameEvent.model_validate_json(
