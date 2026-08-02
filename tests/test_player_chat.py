@@ -402,11 +402,11 @@ class HearingContextTests(unittest.TestCase):
             )
         )
         content = messages[1]["content"]
-        # E′: 空 hearing は節ごと省略。捏造防止は policy + キャラ枠
+        # E′: 空 hearing は節ごと省略。種名ガードは白リスト／sanitize
         self.assertNotIn("音のメモ:", content)
         self.assertIn("天気は晴れ", content)
         self.assertIn("一人称はオレ", content)
-        self.assertIn("びび", content)
+        self.assertIn("セリフだけ返す", content)
 
     def test_player_chat_details_include_weather_from_world(self) -> None:
         """雨は weather 状態から。hearing とは混ぜない。"""
@@ -451,7 +451,7 @@ class HearingContextTests(unittest.TestCase):
         content = messages[1]["content"]
         self.assertIn("天気は雨", content)
         self.assertIn("天気の事実: 薄暗い。敵が地上にいる。", content)
-        self.assertIn("モブ音と混同しない", content)
+        self.assertIn("モブ音メモとは別", content)
         self.assertNotIn("音のメモ:", content)
 
         # 夜の雨にはその事実を付けない
@@ -503,7 +503,7 @@ class HearingContextTests(unittest.TestCase):
         )
         content = messages[1]["content"]
         self.assertIn("村人っぽい声 左 close", content)
-        self.assertIn("音から使ってよい具体モブ名: 村人", content)
+        self.assertIn("音から触れてよい具体モブ名: 村人", content)
 
 
 class PlayerInputEndpointTests(unittest.TestCase):

@@ -5,6 +5,12 @@
   2. 本当の観測だけ短く
   3. 5往復＋LLM で相槌（履歴長は触らない）
 
+役割分担:
+  - reply_policy（ここ）: スタンスごとの「こう返す」肯定ガイドのみ
+  - 種名ガード: allowed_speech_labels + speech_whitelist_enforce → sanitize
+  - 危険助言: forbidden_advice → sanitize
+  - プロンプト本文: 材料の提示。禁止の再掲はしない
+
 実装の正本。旧 import は dogido_server.player_chat_policy が re-export。
 """
 
@@ -15,28 +21,30 @@ from typing import Any, Literal
 
 ReplyStance = Literal["saw", "hypothesis", "clarify", "none"]
 
+# スタンス別の答え方（肯定形のみ）。種名の範囲・捏造防止は sanitize／白リスト側。
 _POLICY_LINES: dict[ReplyStance, str] = {
     "saw": (
-        "脅威メモの方向・種類を短く共有してよい。"
-        "プレイヤーの話と一致するなら種名を言ってよい。"
-        "怖がり相棒として隣でびびる。"
-        "メモに無い種族やNPCは作らない。"
+        "脅威メモの方向・種類・数を短く共有する。"
+        "プレイヤーの話とメモが合うなら、種名をはっきり言ってよい。"
+        "怖がり相棒として隣でびびりつつ、役に立つ一言を先に出す。"
     ),
     "hypothesis": (
-        "自分は視認できていない。『見えてへん』はよいが、"
-        "プレイヤーの感覚を否定しない。"
-        "話題ヒントの候補だけを『かもしれん』と弱く触れてよい。"
-        "ヒント外の種族・NPCは作らない。"
+        "プレイヤーの『見えた／いる』感覚を尊重して乗る。"
+        "自分の視認ははっきりしていないので、"
+        "『見えてへんけど、○○かもしれん』くらいの弱さで話題ヒントに触れる。"
+        "わからんときは素直に『わからへん』でよい。"
     ),
     "clarify": (
-        "種名を当てず、色・形・動きなど特徴を聞き返してよい。"
-        "カタログに無い名前を作らない。"
-        "プレイヤーの『いる／見えてる』を否定しない。"
+        "プレイヤーの『いる／見えてる』を肯定してから、"
+        "色・形・動きなど特徴をやさしく聞き返す。"
+        "名前はカタログの呼び方で話してよい。"
     ),
     "none": (
-        "雑談として自然に返す。"
-        "根拠のない種名・敵・音を足さない。"
-        "観測メモにある生き物には触れてよい。"
+        "気さくな雑談として、プレイヤーの一言に自然に乗る。"
+        "観測メモにある生き物や様子には触れてよい。"
+        "在否を聞かれたら、手元の材料でやわらかく答える。"
+        "材料が空なら『今はおらんとおもうわ』くらいでよい。"
+        "指差しのときは視線先を材料にしてよい。"
     ),
 }
 
@@ -65,6 +73,10 @@ GENERIC_TOPIC_TERMS: frozenset[str] = frozenset(
         "明るい",
         "古い",
         "新しい",
+        "びっくり",
+        "驚",
+        "やばい",
+        "やば",
         "沼",
         "海",
         "夜",
@@ -148,6 +160,27 @@ def has_identify_intent(user_text: str) -> bool:
     return False
 
 
+def has_threat_presence_query(user_text: str) -> bool:
+    """『まだいる？』『おる？』『声聞こえる？』など在否・気配の問い。"""
+    text = (user_text or "").strip()
+    if not text:
+        return False
+    # 在否
+    if any(token in text for token in ("いる", "おる", "居る", "いない", "おらん", "いなく")):
+        if any(m in text for m in ("？", "?", "か", "の", "まだ", "今", "いま", "まだい")):
+            return True
+        if len(text) <= 12:
+            return True
+    if any(m in text for m in ("まだい", "気配", "ついてく", "追いかけ")):
+        return True
+    # 音・声の在否
+    if any(m in text for m in ("聞こ", "きこ", "声", "音")) and any(
+        m in text for m in ("？", "?", "か", "する", "した", "してる", "ない", "へん")
+    ):
+        return True
+    return False
+
+
 def resolve_reply_stance(
     *,
     has_visual_threats: bool,
@@ -160,9 +193,10 @@ def resolve_reply_stance(
 
     - topic あり ≠ 即 hypothesis
     - usable（非 GENERIC 語）があるときだけ hypothesis
+    - 在否問いで観測（視認・音）が無い usable だけ → none（創作断定を避ける）
     """
     threat = (threat_summary or "").strip()
-    if has_visual_threats or "視認" in threat:
+    if has_visual_threats or "視認" in threat or "音メモ" in threat or "気配" in threat:
         return "saw"
 
     raw_hits = list(topic_hits or ())
@@ -174,12 +208,16 @@ def resolve_reply_stance(
     }
 
     if usable:
-        # 観測と一致する usable hit があれば hypothesis（念のため）
-        # usable 自体が識別語を持つので、基本はすべて hypothesis でよい
+        matched_observed = False
+        for hit in usable:
+            entry_id = str(hit.get("entry_id") or "").removeprefix("minecraft:").strip().lower()
+            if entry_id and entry_id in observed:
+                matched_observed = True
+                break
+        # 在否・音の問いで観測にその種が無い → hypothesis にしない（居ると断定されやすい）
+        if has_threat_presence_query(user_text) and not matched_observed and not threat:
+            return "none"
         return "hypothesis"
-
-    # 観測 id だけが raw hit と一致し GENERIC のみ…は usable 空のまま。saw は上で処理済み。
-    _ = observed  # 将来: GENERIC+観測一致の救済に使える
 
     if has_identify_intent(user_text):
         return "clarify"
