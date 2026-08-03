@@ -2,6 +2,11 @@
 
 読み上げの速度・5-7-5 の間・SE 方針は [voice-delivery-plan.md](voice-delivery-plan.md)（Issue #13）。
 
+## プレイヤー指摘の薄い記憶
+
+workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md)（Issue #37）。  
+**読み出しは発句のみ。** 雑談・冒険の長期一貫性は今は狙わない。
+
 ## レイテンシ方針
 
 - 緊急度高 / 低レイテンシ

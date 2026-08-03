@@ -20,6 +20,12 @@
 家庭内の複数人・呼び名の違い・将来のプロファイル切替は未分離。  
 課題と段階案は [multi-user-tenancy.md](multi-user-tenancy.md)。
 
+### 1.2 何を覚えるか（キャラクター）
+
+ドギドは **川柳以外の長期エピソードを精密に保持しない**前提でよい（趣味の川柳以外は忘れがちなおじさん）。  
+セッションを跨いで厚くするのは **workshop での句の指摘・直し**に限る方針。  
+詳細・ため方・発句のみ参照は [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md)（Issue #37）。
+
 ## 2. 保存形式
 
 正本は JSON / JSONL とする。

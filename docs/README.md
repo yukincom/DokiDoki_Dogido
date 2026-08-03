@@ -32,7 +32,8 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 
 | Issue | 主題 | 主ドキュメント |
 |---|---|---|
-| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 取り込み観察（W0） | `haiku-workshop-intake-patterns` · improvement 計画 · `service` / `haiku/workshop` |
+| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 入り口（soft 既定・詩人 leaf） | **closed** · `haiku-workshop-intake-patterns` · `haiku/workshop` |
+| [#37](https://github.com/yukincom/DokiDoki_Dogido/issues/37) | workshop チェックポイント記憶（薄くためて発句のみ） | [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md) · `memory-architecture` |
 | [#13](https://github.com/yukincom/DokiDoki_Dogido/issues/13) | ボイス速度・間 | `voice-delivery-plan` |
 | [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) | 複数ユーザー・記憶境界 | `multi-user-tenancy` · `memory-architecture` |
 | [#12](https://github.com/yukincom/DokiDoki_Dogido/issues/12) · [#14](https://github.com/yukincom/DokiDoki_Dogido/issues/14) · [#15](https://github.com/yukincom/DokiDoki_Dogido/issues/15) | うみれおんさんアドバイス | 製品・UI 寄り（対応 doc は issue 本文） |
