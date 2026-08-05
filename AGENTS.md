@@ -53,7 +53,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - player lessons は **参考行**（「強制ではない」）
 - **道具・読みの allowed/forbidden だけ hard**（例: シャベルなのにつるはし禁止）
 - lesson の `forbidden_fragments` を hard 禁止に合流しない
-- praise / 「気にせんで」→ `polarity: loosen`（全軸抑止可）
+- **praise（いい句）→ lesson は触らない**（過去の指摘をキープ。critique 保存のみ）
+- **「気にせんで」→ `polarity: loosen` + `lesson_type: "*"`**（全軸抑止。明示リセットのみ）
 - TTL: 日数 + 発句回数で自然減衰（`memory.list_recent_haiku_lessons`）
 - **strength 段階は当面使わない**（フィールドはあるが list 未参照）
 

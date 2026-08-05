@@ -252,7 +252,8 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertIn("余白", render_workshop_reply("critique_forced", ws))
         self.assertIn("ずれた", render_workshop_reply("critique_offscene", ws))
         praise = render_workshop_reply("praise", ws)
-        self.assertIn("緩める", praise)
+        self.assertIn("残しとく", praise)
+        self.assertNotIn("緩める", praise)
 
     def test_conversational_revise_extract(self) -> None:
         from dogido_server.haiku.workshop import extract_conversational_revise
@@ -299,7 +300,7 @@ class WorkshopIntentTests(unittest.TestCase):
             self.assertIn("詰め込み注意（新しい方）", notes)
             self.assertNotIn("要素を少し絞って余白を残すとよい", notes)
             self.assertEqual(len(listed), 2)
-            # praise → 全軸 loosen
+            # 明示「気にせんで」相当 → 全軸 loosen（praise ではこれを書かない）
             store.save_haiku_lesson(lesson_type="*", note="", polarity="loosen", strength=0.0)
             self.assertEqual(store.list_recent_haiku_lessons(limit=3), [])
 

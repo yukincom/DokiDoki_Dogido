@@ -826,7 +826,7 @@ def lessons_from_critique_kind(kind: str, *, player_text: str = "") -> list[dict
     """critique 種別から薄い soft lesson を0〜1件生成。
 
     H5.1: 強制禁止ではなく「できれば意識」。praise / other は常駐 lesson を増やさない
-    （praise の可逆は memory 側の loosen 行で扱う）。
+    （praise は lesson を触らない。全軸緩めは明示「気にせんで」のみ）。
     """
     del player_text  # 将来の自然文抽出用。いまは種別のみ
     k = (kind or "other").strip()
@@ -867,12 +867,12 @@ def lessons_from_critique_kind(kind: str, *, player_text: str = "") -> list[dict
 
 
 def loosen_lesson_for_praise() -> dict[str, object]:
-    """ほめられたとき、既存 tighten を弱める（append-only の loosen 行）。"""
+    """後方互換名。praise では使わない。明示緩めと同じ全軸 loosen 行。"""
     return loosen_all_lessons()
 
 
 def loosen_all_lessons() -> dict[str, object]:
-    """全軸の soft lesson を抑止する loosen 行（praise / 明示「気にせんで」共用）。"""
+    """全軸の soft lesson を抑止する loosen 行（明示「気にせんで」用）。"""
     return {
         "lesson_type": "*",
         "note": "",
@@ -899,7 +899,7 @@ def render_workshop_reply(
     if kind == "clear_lessons":
         return "おけ、前の注意は気にせんでええわ。"
     if kind == "praise":
-        return "ありがとうや。その句、残しとくで。前の注意は少し緩めるわ。"
+        return "ありがとうや。その句、残しとくで。"
     if kind == "ack":
         return "うん、そんな感じや。"
     if kind == "ask_meaning":

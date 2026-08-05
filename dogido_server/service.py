@@ -19,7 +19,6 @@ from dogido_server.haiku.workshop import (
     is_open,
     lessons_from_critique_kind,
     loosen_all_lessons,
-    loosen_lesson_for_praise,
     materials_debug_line,
     materials_speech_line,
     maybe_close_for_time,
@@ -864,20 +863,9 @@ class DogidoService:
                     session_id=session.session_id,
                 )
                 critique_id = str(row.get("id") or "") or None
-                # H5.1: soft lesson / praise は loosen（新規常駐しない）
-                if critique_kind == "praise":
-                    loosen = loosen_all_lessons()
-                    self.memory.save_haiku_lesson(
-                        lesson_type=str(loosen.get("lesson_type") or "*"),
-                        note=str(loosen.get("note") or ""),
-                        prefer_materials=bool(loosen.get("prefer_materials")),
-                        from_entry_id=workshop.entry_id,
-                        from_critique_id=critique_id,
-                        observed_at=now,
-                        polarity=str(loosen.get("polarity") or "loosen"),
-                        strength=float(loosen.get("strength") or 0.0),
-                    )
-                else:
+                # praise は critique 保存のみ（lesson は触らない＝過去の指摘をキープ）。
+                # 全軸 loosen は明示「気にせんで」経路だけ（clear_lessons）。
+                if critique_kind != "praise":
                     for lesson in lessons_from_critique_kind(critique_kind, player_text=text):
                         self.memory.save_haiku_lesson(
                             lesson_type=str(lesson.get("lesson_type") or "other"),

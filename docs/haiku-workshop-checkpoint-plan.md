@@ -127,7 +127,7 @@
 | unreadable / gibberish | 読みやすさ・かな連続に注意 |
 | off_context | 材料・場面から大きく外れない |
 | other / soft_default | （プレイヤー文が短ければ prefs は空でも可） |
-| praise | tighten を増やさない（loosen は既存 lesson 経路） |
+| praise | lesson は触らない（キープ）。loosen は「気にせんで」のみ |
 
 ### 3.4 溜めすぎない（容量）
 
