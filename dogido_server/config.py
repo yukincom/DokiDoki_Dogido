@@ -243,6 +243,8 @@ class Settings(BaseSettings):
     neutral_turned_hostile_comment_cooldown_ms: int = 60000
     ushiro_comment_cooldown_ms: int = 60000
     weather_sound_recent_ms: int = 4000
+    # 雷鳴は天候遷移とは別に、実音を聞いた怖がり反応を出す
+    thunder_sound_comment_cooldown_ms: int = 10000
     nearby_lightning_recent_ms: int = 2000
     nearby_lightning_comment_cooldown_ms: int = 10000
     # 川柳は約10分に1回。優先イベント（脅威・モブ反応・入力・発話）の後は

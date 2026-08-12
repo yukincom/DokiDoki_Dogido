@@ -13,9 +13,11 @@ from dogido_server.dialogue_context import DialogueContext
 from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
     build_ask_meaning_llm_details,
+    build_workshop_intent_llm_details,
     close_workshop,
     extract_conversational_revise,
     finalize_ask_meaning_reply,
+    finalize_workshop_intent_llm_payload,
     is_open,
     lessons_from_critique_kind,
     loosen_all_lessons,
@@ -825,6 +827,10 @@ class DogidoService:
             )
             return []
 
+        intent_path = "rule"
+        if kind == "soft_default":
+            kind, intent_path = self._classify_soft_workshop_intent(workshop, text)
+
         now = event.observed_at
         if kind == "close":
             close_workshop(workshop, reason="explicit")
@@ -895,11 +901,12 @@ class DogidoService:
             reply = render_workshop_reply(kind, workshop, player_text=text)
         # 観察用: intent / 句 / 口頭材料 vs 内部 materials / 返事
         LOGGER.warning(
-            "haiku_workshop_turn session_id=%s path=reply kind=%s critique_kind=%s "
+            "haiku_workshop_turn session_id=%s path=reply kind=%s intent_path=%s critique_kind=%s "
             "reply_path=%s player=%s verse=%s speech_materials=%s debug_materials=%s "
             "materials_keys=%s reply=%s critique_id=%s",
             session.session_id,
             kind,
+            intent_path,
             critique_kind,
             reply_path,
             text[:100],
@@ -911,6 +918,36 @@ class DogidoService:
             critique_id or "-",
         )
         return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+    def _classify_soft_workshop_intent(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+    ) -> tuple[str, str]:
+        """H7-lite: soft_default だけを structured LLM で補助分類する。
+
+        close / clear_lessons / revise / reading / hard off-topic は、この関数へ来る前に
+        コードで確定済み。失敗・低信頼・不正 enum は従来の soft_default に戻す。
+        """
+        details = build_workshop_intent_llm_details(workshop, player_text)
+        try:
+            payload = self.llm.generate_structured_json(
+                StructuredGenerationRequest(
+                    kind="haiku_workshop_intent",
+                    fallback_value={"intent": "soft_default", "confidence": 0.0},
+                    details=details,
+                    temperature=0.0,
+                    route="chat",
+                    max_tokens=64,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("haiku_workshop_intent_failed detail=%s", exc)
+            return "soft_default", "soft_default"
+        kind = finalize_workshop_intent_llm_payload(payload)
+        if kind == "soft_default":
+            return kind, "soft_default"
+        return kind, "llm"
 
     def _ask_meaning_workshop_reply(
         self,

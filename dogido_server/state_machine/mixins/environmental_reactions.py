@@ -224,18 +224,27 @@ class EnvironmentalReactionsMixin:
         """normal 時の環境発話。優先は上から。
 
         1. ハード安全（sonic boom）
-        2. 川柳本句完了（preface 後）
-        3. 夜警告（workshop 中は抑止・pending 保持）
-        4. プレイヤー問い／雑談
-        5. 脅威ブロック／高優先／低優先 ambient
-           ※ workshop / 発句集中中は 5 の低優先を抑止。暗所押し等の安全系のみ残す
+        2. 雷の実音（近距離落雷／雷鳴）
+        3. 川柳本句完了（preface 後）
+        4. 夜警告（workshop 中は抑止・pending 保持）
+        5. プレイヤー問い／雑談
+        6. 脅威ブロック／高優先／低優先 ambient
+           ※ workshop / 発句集中中は 6 の低優先を抑止。暗所押し等の安全系のみ残す
         """
         # 1) ハード安全
         sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
         if sonic_boom_cue is not None:
             return [sonic_boom_cue]
 
-        # 2) 川柳本句完了
+        # 実音の雷は時限性が高い。話しかけ・川柳より先に怖がる。
+        lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
+        if lightning_actions:
+            return lightning_actions
+        thunder_actions = self._emit_thunder_sound_actions(event, now)
+        if thunder_actions:
+            return thunder_actions
+
+        # 3) 川柳本句完了
         if self.state.pending_haiku_after_preface:
             haiku_completion = self._emit_haiku_line(event, now)
             if haiku_completion:
@@ -245,12 +254,12 @@ class EnvironmentalReactionsMixin:
                     speech_profile="haiku",
                 )
 
-        # 3) 夜警告（workshop 中は _night_warning_actions 内で []）
+        # 4) 夜警告（workshop 中は _night_warning_actions 内で []）
         night_warning_actions = self._night_warning_actions(event, now)
         if night_warning_actions:
             return night_warning_actions
 
-        # 4) プレイヤー向け（workshop 講評は service 側。ここでは一般 chat / 個数問い）
+        # 5) プレイヤー向け（workshop 講評は service 側。ここでは一般 chat / 個数問い）
         if self.player_input.asks_hostile_count:
             return self._speech_actions(
                 self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
@@ -265,7 +274,7 @@ class EnvironmentalReactionsMixin:
         if blocked is not None:
             return blocked
 
-        # 5) 高優先・低優先（workshop / 発句集中中は安全系以外を抑止）
+        # 6) 高優先・低優先（workshop / 発句集中中は安全系以外を抑止）
         high_priority = self._high_priority_environmental_actions(
             event, signals, now, stop_dark_push
         )
@@ -451,10 +460,6 @@ class EnvironmentalReactionsMixin:
         if overworld_return_line:
             return self._speech_actions(overworld_return_line)
 
-        lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
-        if lightning_actions:
-            return lightning_actions
-
         weather_transition = self._weather_transition_callout(event, signals)
         if weather_transition:
             return self._speech_actions(weather_transition)
@@ -572,6 +577,31 @@ class EnvironmentalReactionsMixin:
         return [
             self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False),
             self._speech_action(fallback_text("general", "weather_transition", "nearby_lightning_strike")),
+        ]
+
+    def _emit_thunder_sound_actions(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> list[AudioAction]:
+        """天候状態の推測ではなく、直近の雷鳴実音にだけ怖がる。"""
+        if not self._has_recent_thunder_sound(event):
+            return []
+        # 近距離落雷は専用の「今、落ちた」を優先する。
+        if self._has_recent_nearby_lightning(event):
+            return []
+        recent_ms = self._recent_ms(now, self.state.last_thunder_sound_comment_at)
+        if recent_ms is not None and recent_ms < self.settings.thunder_sound_comment_cooldown_ms:
+            return []
+        self.state.last_thunder_sound_comment_at = now
+        # 同じ雷を天候遷移として続けて二度説明しない。
+        self.state.pending_weather_transition_from = None
+        self.state.pending_weather_transition_to = None
+        return [
+            self._build_cue_action("suppressed_gasp", "ヒイ！", now, interrupt=False),
+            self._speech_action(
+                fallback_text("general", "weather_transition", "thunder_heard")
+            ),
         ]
 
     def _emit_damaging_light_warning(self, event: GameEvent, now: datetime) -> str | None:
@@ -712,6 +742,13 @@ class EnvironmentalReactionsMixin:
     ) -> list[AudioAction]:
         if not signals.entered_emergency_shelter:
             return []
+        # 形状だけで「避難できた」と言わない。昼・夕方の家や低い屋内は対象外。
+        if not self._is_emergency_shelter_night(event):
+            return []
+        # 周辺形状の観測が一瞬揺れても、同じ夜に安堵を繰り返さない。
+        if self.state.emergency_shelter_entry_announced_this_cycle:
+            return []
+        self.state.emergency_shelter_entry_announced_this_cycle = True
         should_interrupt = stop_dark_push or self._should_stop_dark_push_stage_one(event, signals)
         self._reset_dark_push_state()
         self._log_darkness_decision("emergency_shelter_entry", event, signals)

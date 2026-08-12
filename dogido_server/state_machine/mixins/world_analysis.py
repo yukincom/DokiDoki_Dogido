@@ -109,10 +109,20 @@ class WorldAnalysisMixin:
     def _respawn_point_set(self, event: GameEvent) -> bool:
         return bool(event.world.respawn_point_set)
 
+    def _is_home_respawn_bed_event(self, event: GameEvent) -> bool:
+        """設定済みリスポーン地点のベッド周辺を拠点として扱う。
+
+        nearby_bed だけでは旅先のベッドや仮設シェルターまで拠点になるため、
+        adapter が観測したリスポーン地点との近さも必須にする。
+        """
+        return self._has_nearby_sleepable_bed(event) and self._is_near_respawn_bed(event)
+
     def _is_emergency_shelter_event(self, event: GameEvent) -> bool:
         if event.world.is_submerged:
             return False
         if self._is_safe_zone_with_door_event(event):
+            return False
+        if self._is_home_respawn_bed_event(event):
             return False
         if self._has_double_height_open_side_event(event):
             return False

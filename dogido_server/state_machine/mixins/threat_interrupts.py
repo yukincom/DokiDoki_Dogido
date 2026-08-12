@@ -173,9 +173,11 @@ class ThreatInterruptsMixin:
         signals: DerivedSignals,
     ) -> None:
         LOGGER.warning(
-            "darkness_decision=%s event=%s sky_visible=%s enclosure=%.2f local_light=%s danger=%.2f biome=%s cover=%s ceiling=%s walls=%s open2h=%s drafty=%s dark_volume=%s light_sources=%s nearest_light=%s submerged=%s safe_door=%s shelter=%s occluded=%s entered=%s torch=%s",
+            "darkness_decision=%s event=%s time_phase=%s time_of_day=%s sky_visible=%s enclosure=%.2f local_light=%s danger=%.2f biome=%s cover=%s ceiling=%s walls=%s open2h=%s drafty=%s dark_volume=%s light_sources=%s nearest_light=%s nearby_beds=%s respawn_set=%s respawn_distance=%s submerged=%s safe_door=%s home_bed=%s shelter=%s occluded=%s entered_occluded=%s entered_shelter=%s torch=%s",
             reason,
             getattr(event.event.name, "value", event.event.name),
+            self._effective_time_phase(event),
+            self._effective_time_of_day(event),
             event.world.sky_visible,
             event.world.enclosure_score or 0.0,
             event.world.local_light,
@@ -189,10 +191,15 @@ class ThreatInterruptsMixin:
             event.world.connected_dark_volume,
             event.world.nearby_light_source_count,
             event.world.nearest_light_source_distance,
+            event.world.nearby_bed_count,
+            event.world.respawn_point_set,
+            event.world.respawn_distance,
             signals.submerged,
             signals.safe_zone_with_door,
+            self._is_home_respawn_bed_event(event),
             signals.emergency_shelter,
             signals.occluded_dark_zone,
             signals.entered_occluded_dark_zone,
+            signals.entered_emergency_shelter,
             signals.torch_available,
         )

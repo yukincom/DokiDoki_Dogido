@@ -105,6 +105,7 @@ class RuntimeState:
     last_damaging_light_warning_at: datetime | None = None
     last_magma_block_comment_at: datetime | None = None
     last_nearby_lightning_comment_at: datetime | None = None
+    last_thunder_sound_comment_at: datetime | None = None
     last_mining_fatigue_comment_at: datetime | None = None
     last_boss_omen_comment_at: datetime | None = None
     last_boss_omen_kind: str | None = None
@@ -198,6 +199,7 @@ class RuntimeState:
     emergency_shelter_active: bool = False
     emergency_shelter_advised_this_cycle: bool = False
     emergency_shelter_seen_this_cycle: bool = False
+    emergency_shelter_entry_announced_this_cycle: bool = False
     emergency_shelter_reset_ready: bool = False
     emergency_shelter_morning_announced: bool = False
     current_dimension: str | None = None

@@ -86,7 +86,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 1. 観測 materials をプレイヤー視界に近づける  
 2. 外したあとも関係を壊さない（workshop / soft）  
-3. 飛び道具（VLM 常時 / Vector RAG / H7 LLM 分類）は後回し  
+3. 飛び道具（VLM 常時 / Vector RAG / workshop 全域の LLM 制御）は後回し
 
 → [docs/companion-maturity.md](docs/companion-maturity.md)
 
@@ -94,11 +94,12 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ## 4. よく触るドメイン詳細
 
-### 川柳 workshop（H1–H5.2）
+### 川柳 workshop（H1–H5.2 + H7-lite）
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・revise・明示 close・次の句
-- 意図: `classify_workshop_intent` / 自然文直し: `extract_conversational_revise`
+- 意図: `classify_workshop_intent`。`soft_default` のみ限定 enum の LLM 補助分類
+- 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
 - ロジックの本体は `haiku/workshop.py`。`mixins/haiku.py` は発句と制約注入フックまで
 
@@ -189,7 +190,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2: **済**（soft lesson / loosen / TTL / 明示「気にせんで」）  
+- workshop H1〜H5.2 + H7-lite: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ `soft_default` の限定 LLM 分類）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  
@@ -197,6 +198,6 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
-- 任意: 直し案 1 本、H7、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み  
+- 任意: H7-lite 実ログ評価、直し案 1 本、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
 
 更新したらこの節と `companion-maturity.md` §6 を揃える。

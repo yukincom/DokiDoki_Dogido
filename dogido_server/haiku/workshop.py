@@ -19,6 +19,22 @@ DEFAULT_T_IDLE = timedelta(seconds=120)
 # 句と無関係な入力が連続したら close
 DEFAULT_N_DRIFT = 2
 
+# H7-lite: ルールで soft_default になった句関連発話だけ、LLM がこの範囲で
+# critique の種類を補助分類する。close / clear_lessons / revise / reading は含めない。
+WORKSHOP_LLM_INTENTS = frozenset(
+    {
+        "ask_meaning",
+        "critique_forced",
+        "critique_gibberish",
+        "critique_offscene",
+        "praise",
+        "ack",
+        "other_haiku",
+        "soft_default",
+    }
+)
+WORKSHOP_LLM_MIN_CONFIDENCE = 0.75
+
 
 @dataclass(slots=True)
 class RecentHaikuWorkshop:
@@ -757,6 +773,51 @@ def workshop_open_intent(
     if not text:
         return None
     return "soft_default"
+
+
+def build_workshop_intent_llm_details(
+    workshop: RecentHaikuWorkshop,
+    player_text: str,
+) -> dict[str, object]:
+    """H7-lite の provider 非依存入力。
+
+    ライフサイクルや保存判断は渡さず、句・短い狙い・プレイヤー発話だけを渡す。
+    同じ契約を chat route、ローカルモデル、将来の OS ローカル AI で使える。
+    """
+    return {
+        "verse": " ".join(workshop.display_line().replace("\n", " ").split()),
+        "materials_speech": materials_speech_line(workshop),
+        "player_text": (player_text or "").strip(),
+        "allowed_intents": sorted(WORKSHOP_LLM_INTENTS),
+    }
+
+
+def finalize_workshop_intent_llm_payload(
+    payload: dict[str, object] | None,
+    *,
+    min_confidence: float = WORKSHOP_LLM_MIN_CONFIDENCE,
+) -> str:
+    """structured 出力を閉じた enum と信頼度で検証する。
+
+    soft_default は「分類を見送る」の明示的な棄権。不正値・低信頼・生成失敗も
+    必ず soft_default。LLM 出力から workshop を
+    終了したり lesson を解除したりすることは、この関数の契約上できない。
+    """
+    if not isinstance(payload, dict):
+        return "soft_default"
+    intent = str(payload.get("intent") or "").strip()
+    if intent not in WORKSHOP_LLM_INTENTS:
+        return "soft_default"
+    confidence = payload.get("confidence")
+    if isinstance(confidence, bool):
+        return "soft_default"
+    try:
+        score = float(confidence)
+    except (TypeError, ValueError):
+        return "soft_default"
+    if not 0.0 <= score <= 1.0 or score < min_confidence:
+        return "soft_default"
+    return intent
 
 
 def should_handle_as_workshop(

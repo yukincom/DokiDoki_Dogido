@@ -615,10 +615,12 @@ class NarrationMixin:
         wants_presence = has_threat_presence_query(user_text)
         hearing_summary = ""
         hearing_named_mobs: list[str] = []
+        hearing_source_labels: list[str] = []
         hearing_types: list[str] = []
         if wants_sound or wants_presence:
             hearing_summary = self._player_chat_hearing_summary(event)
             hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+            hearing_source_labels = self._player_chat_hearing_source_labels(event)
             hearing_types = self._player_chat_hearing_mob_types(event)
         threat_summary = self._player_chat_threat_summary(
             event,
@@ -657,7 +659,7 @@ class NarrationMixin:
             topic_hits=topic_for_identify,
             visual_types=effective_visual_types,
             passive_types=passive_types,
-            hearing_named_mobs=hearing_named_mobs,
+            hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
         )
         speech_whitelist_enforce = should_enforce_speech_whitelist(
             reply_stance, allowed_speech_labels
@@ -702,7 +704,7 @@ class NarrationMixin:
             ",".join(recent_visual_types) or "-",
             (threat_summary or "")[:120] or "-",
             (look_for_observation or look_target_label or "-"),
-            len(hearing_named_mobs),
+            len(hearing_named_mobs) + len(hearing_source_labels),
         )
         if structure_ids or plausibility_lines:
             LOGGER.warning(
@@ -727,9 +729,10 @@ class NarrationMixin:
             speech_whitelist_enforce,
         )
         LOGGER.warning(
-            "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
+            "player_chat_hearing empty=%s mobs=%s sources=%s summary=%s auditory=%d ambient=%d buffer=%d",
             not bool(hearing_summary),
             ",".join(hearing_named_mobs) or "-",
+            ",".join(hearing_source_labels) or "-",
             (hearing_summary or "")[:120],
             len(event.auditory_threats),
             len(event.ambient_sounds),
@@ -760,6 +763,7 @@ class NarrationMixin:
             "threat_summary": threat_summary,
             "hearing_summary": hearing_summary,
             "hearing_named_mobs": hearing_named_mobs,
+            "hearing_source_labels": hearing_source_labels,
             "asks_about_sound": self.player_input.asks_about_sound,
             "observation_summary": observation_summary,
             "catalog_topic_hints": catalog_topic_hints,
@@ -809,6 +813,7 @@ class NarrationMixin:
             if not self.player_input.asks_about_sound:
                 details["hearing_summary"] = ""
                 details["hearing_named_mobs"] = []
+                details["hearing_source_labels"] = []
             if not self.player_input.asks_inventory:
                 details["inventory_summary"] = ""
                 details["held_item_label"] = ""
@@ -1313,6 +1318,59 @@ class NarrationMixin:
         mapped = MOB_LABELS.get(mob_type)
         return str(mapped) if mapped else None
 
+    def _resolve_hearing_environment_label(
+        self,
+        raw_type: str | None,
+        sound_event: str | None = None,
+    ) -> str | None:
+        """adapter が実再生音から確定した環境音源だけを表示名へ変換する。
+
+        周辺ブロック名や説明文から「鳴るはず」と推測しない。`block:` / `weather:` /
+        `environment:` は SoundManager で実際に観測した sound_event にのみ付く。
+        """
+        raw = str(raw_type or "").strip().lower()
+        if raw.startswith("weather:"):
+            return {
+                "weather:rain": "雨",
+                "weather:thunder": "雷鳴",
+            }.get(raw)
+        if raw.startswith("environment:"):
+            return {
+                "environment:cave": "洞窟の環境音",
+                "environment:underwater": "水中の環境音",
+                "environment:basalt_deltas": "玄武岩デルタの環境音",
+                "environment:crimson_forest": "真紅の森の環境音",
+                "environment:nether_wastes": "ネザーの荒地の環境音",
+                "environment:soul_sand_valley": "ソウルサンドの谷の環境音",
+                "environment:warped_forest": "歪んだ森の環境音",
+            }.get(raw)
+        if not raw.startswith("block:"):
+            return None
+        block_id = raw.removeprefix("block:").strip()
+        if not block_id:
+            return None
+        from dogido_server.entry_catalog import block_entry
+
+        entry = block_entry(block_id)
+        if entry is not None:
+            label = str(entry.get("label") or entry.get("japanese") or "").strip()
+            if label:
+                return label
+        # sound_event が音源を直接確定しているが、カタログに単独項目がないものだけ。
+        return {
+            "fire": "火",
+            "lava": "溶岩",
+            "water": "水",
+            "nether_portal": "ネザーポータル",
+            "bubble_column": "気泡柱",
+            "trial_spawner": "トライアルスポナー",
+            "pointed_dripstone": "鍾乳石",
+            "wooden_door": "木のドア",
+            "wooden_trapdoor": "木のトラップドア",
+            "wooden_button": "木のボタン",
+            "wooden_pressure_plate": "木の感圧板",
+        }.get(block_id)
+
     def _remember_hearing_for_chat(self, event: GameEvent, now: datetime) -> None:
         """今フレームの音を短期バッファへ。player_chat が数秒遅れても種名を使えるようにする。"""
         retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
@@ -1349,14 +1407,45 @@ class NarrationMixin:
             direction, band = _dir_band(sound)
             raw = str(sound.type or "")
             mob_type = self._resolve_hearing_mob_type(raw, getattr(sound, "sound_event", None))
-            label_ja = self._resolve_hearing_mob_label(raw, getattr(sound, "sound_event", None))
-            key = f"ambient:{mob_type or raw}:{direction}:{band}"
+            environment_label = self._resolve_hearing_environment_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            label_ja = environment_label or self._resolve_hearing_mob_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            kind = "environment" if environment_label else "ambient"
+            key = f"{kind}:{mob_type or raw}:{direction}:{band}"
             by_key[key] = RecentHearingMemo(
-                kind="ambient",
+                kind=kind,
                 mob_type=mob_type,
                 label_ja=label_ja,
                 direction=direction,
                 distance_band=band,
+                heard_at=now,
+                dedupe_key=key,
+            )
+
+        # 雷鳴は落雷座標が通常の音距離より遠くても、クライアントで実際に
+        # 再生されれば world の recent_ms に載る。ambient_sounds 側に距離で
+        # 載らなかった場合だけ補い、「今の音なに？」へ短期記憶から答えられるようにする。
+        observed_environment_types = {
+            str(sound.type or "").strip().lower() for sound in event.ambient_sounds
+        }
+        recent_weather_sounds = (
+            ("thunder", "雷鳴", self._has_recent_thunder_sound(event)),
+            ("rain", "雨", self._has_recent_rain_sound(event)),
+        )
+        for weather_kind, label_ja, heard in recent_weather_sounds:
+            raw = f"weather:{weather_kind}"
+            if not heard or raw in observed_environment_types:
+                continue
+            key = f"environment:{raw}:周囲:"
+            by_key[key] = RecentHearingMemo(
+                kind="environment",
+                mob_type=None,
+                label_ja=label_ja,
+                direction="周囲",
+                distance_band="",
                 heard_at=now,
                 dedupe_key=key,
             )
@@ -1366,7 +1455,7 @@ class NarrationMixin:
         self.state.recent_hearing_memos = memos
 
     def _player_chat_hearing_summary(self, event: GameEvent) -> str:
-        """今フレーム + 直近バッファの音要約。種名はカタログ解決できたものだけ。"""
+        """今フレーム + 直近バッファの音要約。名前は実音またはカタログ解決だけ。"""
         now = event.observed_at
         retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
         parts: list[str] = []
@@ -1393,12 +1482,20 @@ class NarrationMixin:
             direction = self._direction_label(sound)  # type: ignore[arg-type]
             band = getattr(sound.distance_band, "value", sound.distance_band) or ""
             raw = str(sound.type or "")
-            label_ja = self._resolve_hearing_mob_label(raw, getattr(sound, "sound_event", None))
-            key = f"ambient:{label_ja or raw}:{direction}:{band}"
-            if label_ja:
-                _add_line(key, f"{label_ja}っぽい声 {direction} {band}".strip())
+            environment_label = self._resolve_hearing_environment_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            mob_label = self._resolve_hearing_mob_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            kind = "environment" if environment_label else "ambient"
+            key = f"{kind}:{environment_label or mob_label or raw}:{direction}:{band}"
+            if environment_label:
+                _add_line(key, f"{environment_label}の音 {direction} {band}".strip())
+            elif mob_label:
+                _add_line(key, f"{mob_label}っぽい声 {direction} {band}".strip())
             else:
-                _add_line(key, f"なにかの声 {direction} {band}".strip())
+                _add_line(key, f"音（種別未確定） {direction} {band}".strip())
 
         # 2) 直近バッファ（今フレームで埋まらなかった分）
         for memo in self.state.recent_hearing_memos:
@@ -1407,16 +1504,22 @@ class NarrationMixin:
             age = self._recent_ms(now, memo.heard_at)
             if age is None or age > retention_ms:
                 continue
-            if memo.dedupe_key in seen_keys:
+            memo_key = (
+                f"{memo.kind}:{memo.label_ja or memo.mob_type or 'unknown'}:"
+                f"{memo.direction}:{memo.distance_band}"
+            )
+            if memo_key in seen_keys:
                 continue
             if memo.label_ja:
                 if memo.kind == "hostile":
+                    line = f"{memo.label_ja}の音 {memo.direction} {memo.distance_band}（ついさっき）".strip()
+                elif memo.kind == "environment":
                     line = f"{memo.label_ja}の音 {memo.direction} {memo.distance_band}（ついさっき）".strip()
                 else:
                     line = f"{memo.label_ja}っぽい声 {memo.direction} {memo.distance_band}（ついさっき）".strip()
             else:
                 line = f"音（種別未確定） {memo.direction} {memo.distance_band}（ついさっき）".strip()
-            _add_line(memo.dedupe_key, line)
+            _add_line(memo_key, line)
 
         return "、".join(parts)
 
@@ -1440,9 +1543,35 @@ class NarrationMixin:
             _add(self._resolve_hearing_mob_label(sound.type, getattr(sound, "sound_event", None)))
         for memo in self.state.recent_hearing_memos:
             age = self._recent_ms(now, memo.heard_at)
-            if age is not None and age <= retention_ms:
+            if age is not None and age <= retention_ms and memo.kind != "environment":
                 _add(memo.label_ja)
         return names
+
+    def _player_chat_hearing_source_labels(self, event: GameEvent) -> list[str]:
+        """実再生されたブロック・天候・環境音から、発話してよい音源名を返す。"""
+        labels: list[str] = []
+        seen: set[str] = set()
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
+
+        def _add(label: str | None) -> None:
+            text = str(label or "").strip()
+            if not text or text in seen:
+                return
+            seen.add(text)
+            labels.append(text)
+
+        for sound in event.ambient_sounds:
+            _add(
+                self._resolve_hearing_environment_label(
+                    sound.type, getattr(sound, "sound_event", None)
+                )
+            )
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if age is not None and age <= retention_ms and memo.kind == "environment":
+                _add(memo.label_ja)
+        return labels
 
     def _player_chat_inventory_summary(self, event: GameEvent, *, max_items: int = 18) -> str:
         """所持品の短い要約。player_chat 専用。常時注入しない。"""

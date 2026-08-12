@@ -58,6 +58,7 @@ class StateUpdatesMixin:
         if time_phase == "night" and self.state.emergency_shelter_reset_ready:
             self.state.emergency_shelter_advised_this_cycle = False
             self.state.emergency_shelter_seen_this_cycle = False
+            self.state.emergency_shelter_entry_announced_this_cycle = False
             self.state.emergency_shelter_morning_announced = False
             self.state.emergency_shelter_reset_ready = False
         self.state.prior_recent_visual_ms = self._recent_ms(now, self.state.last_visual_threat_at)
@@ -319,6 +320,7 @@ class StateUpdatesMixin:
         self.state.last_occluded_dark_zone = None
         self.state.last_safe_zone_with_door = None
         self.state.last_emergency_shelter = None
+        self.state.emergency_shelter_entry_announced_this_cycle = False
         self.state.last_submerged_dark_zone = None
         self.state.last_foliage_shade_context = None
         self.state.pending_special_biome_line = None
@@ -327,6 +329,7 @@ class StateUpdatesMixin:
         self.state.last_weather = None
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
+        self.state.last_thunder_sound_comment_at = None
         self.state.night_warning_pending = False
         self.state.pending_night_warning_detail = False
         self.state.pending_overworld_return_line = returning_to_overworld

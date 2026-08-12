@@ -1,7 +1,7 @@
 # 川柳: プレイヤー主導の改善設計
 
-**日付:** 2026-07-16  
-**状態:** H1〜H5.2 **実装済み** / H6 **撤回**（詳細は §7）  
+**日付:** 2026-08-12
+**状態:** H1〜H5.2・H7-lite **実装済み** / H6 **撤回**（詳細は §7）
 **関連:** [companion-maturity.md](companion-maturity.md)、[haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
 
 ---
@@ -146,7 +146,7 @@ open 中のプレイヤー入力
 
 **修正不要のとき:**
 
-- 明示ほめ（C3）→ 即 close（lesson は praise 弱保存可）  
+- 明示ほめ（C3）→ critique 保存のうえ即 close。lesson は触らない
 - 無言で歩き続ける → C6 時間切れ  
 - 別の話を2回 → C5  
 - 「いいね」相当がなくても **閉じることに問題はない**（entry は既に自動保存済み）
@@ -193,14 +193,15 @@ open 中のプレイヤー入力
 | **critique_forced** | 「無理やり」「詰め込み」「圧縮」 | critique kind=forced_compress |
 | **critique_offscene** | 「ここ海ちゃう」「村なのに」 | kind=off_context |
 | **critique_gibberish** | 「それ日本語？」「読めん」 | kind=unreadable |
-| **praise** | 「いい句」「うまい」 | kind=praise（正例として弱く残す） |
+| **praise** | 「いい句」「うまい」 | kind=praise（critique 保存・lesson 非変更・close） |
 | **revise_free** | 「こう直して」「〜の方がええ」＋句っぽい | revision 保存（`直し:` なしでも） |
 | **revise_formal** | 既存 `直し:` | 現行どおり |
 | **reading** | 既存 草地はくさち | 現行どおり |
 | **close_workshop** | 「もうええ」「次いこ」 | open=false |
 
-実装は最初 **ルール＋キーワード**で足りる。曖昧なものは  
-`haiku_workshop` 用の短い LLM 分類（structured）に逃がしてもよい。
+明示操作と既知パターンは **ルール＋キーワード**で確定する。open 中で hard off-topic ではなく、ルールで `soft_default` になった自然文だけ、短い LLM structured 分類で既存 intent の候補を補う（H7-lite）。低信頼・不正出力・失敗時は `soft_default` のまま扱う。
+
+LLM が選べるのは `ask_meaning` / 各 critique / `praise` / `ack` / `other_haiku` と、分類を見送る `soft_default` のみ。`close`、`clear_lessons`、revision、reading、open/close の状態管理はコードから動かさない。
 
 **重要:** 通常 chat に落とすと、今回のように一般論の俳句談義になる。  
 `open` 中は workshop を優先。
@@ -257,7 +258,7 @@ open 中のプレイヤー入力
 | unreadable / ask_meaning | `readability` soft: 読みやすさを少し意識… |
 | forced_compress | `compress` soft: 要素を少し絞って… |
 | off_context | `scene` soft: 材料・場面から大きく外れない方がよい |
-| praise | **tighten を作らない**。`polarity: loosen` + `lesson_type: "*"` で既存を抑止 |
+| praise | critique 保存のみ。lesson は触らず、過去の指摘をキープ |
 | other | lesson なし（critique 保存のみ） |
 
 lesson の効き方（H5.1）:
@@ -283,7 +284,7 @@ lesson の効き方（H5.1）:
 | critique_forced | 「詰め込みすぎたかも」＋「次は余白、ちょっと意識するわ」 |
 | critique_gibberish / offscene | 認める ＋ materials ＋「気をつける／外れすぎんように」 |
 | revise_free | 「覚えといたで」＋ close |
-| praise | 「残しとく」＋「**前の注意は少し緩めるわ**」（loosen と対応） |
+| praise | 「ありがとうや。その句、残しとくで。」＋ critique 保存。lesson は触らない |
 
 **材料開示**が鍵。  
 今回のログなら: irony/scene は良かったのに句が逸れた、とプレイヤーと共有できる。
@@ -340,19 +341,20 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H3** | `haiku_critiques.jsonl` 保存 + 材料開示つき返事 | H2 | **済** |
 | **H4** | 自然文の直し → revision（`直し:` なし / `こう直して:` 等） | H3 | **済** |
 | **H5** | lessons 生成・発句制約へ最大 3 行 soft 注入 | H3 | **済** |
-| **H5.1** | ゆるめ・可逆（soft 文言 / hard 非合流 / praise loosen / 口答え soft） | H5 | **済** |
+| **H5.1** | ゆるめ・可逆（soft 文言 / hard 非合流 / praise lesson 非変更 / 明示 loosen / 口答え soft） | H5 | **済** |
 | **H5.2** | 明示「気にせんで」+ lesson 自然減衰（日数・発句回数 TTL） | H5.1 | **済** |
 | **H6** | 発句後 materials 突合バリデータ（固定語リスト） | 独立可 | **撤回** |
-| **H7** | （任意）workshop 分類の LLM structured | H2 の後 | 未 |
+| **H7-lite** | `soft_default` だけを限定 enum の LLM structured で補助分類。低信頼・失敗は従来 fallback | H2 の後 | **済** |
 
-**H1〜H5.2 + H1.1 実装済み。H6 は撤回。**  
+**H1〜H5.2 + H1.1 + H7-lite 実装済み。H6 は撤回。**
 道具/読みの forbidden は hard のまま。player lesson は soft。  
 **H1.1:** 候補は短い名詞優先。`fragment_links` は句 surface→材料の内部対応表（句に制御タグを埋め込まない）。ask_meaning は links を優先。  
 **H6 をやめた理由:** 発句は渡した materials / scene から作る前提。固定 drift リストは本質でなくメンテだけ増える。  
 「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
 場の違和感は **プレイヤーが言ったとき** workshop で。  
 **strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
-**未（気が向いたら）:** 直し案 1 本、H7、Phase E 整理、#28 preface 延長・overlay。  
+**H7-lite:** clear / close / revise / reading / hard off-topic はコード優先。曖昧な句関連発話の critique 種別だけ LLM が補助し、OS ローカル AI 等へ将来差し替えられる provider 非依存の入力・出力契約にした。
+**未（気が向いたら）:** 直し案 1 本、Phase E 整理、#28 preface 延長・overlay。
 
 全体の完成度・優先の考え方は [companion-maturity.md](companion-maturity.md)。
 
@@ -368,7 +370,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 5. ドギド:「せやな、詰め込みすぎたかもな。次は余白、ちょっと意識するわ」→ critique + soft lesson  
 6. プレイヤー:「こう直して: あさひさす / むらのどう / あかがね」  
 7. revision 保存・pin close。次回発句で soft lesson が参考行として出る  
-8. （後で）プレイヤー:「いい句やな」→「前の注意は少し緩めるわ」＋ loosen
+8. （後で）プレイヤー:「いい句やな」→「ありがとうや。その句、残しとくで。」＋ critique 保存（lesson は変更しない）
 
 ---
 
@@ -387,7 +389,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 2. 「何言ってるの」に **materials の正直な開示**が返る  
 3. 講評が **soft lesson** になり、次回に **参考として短く**出る（常駐プロンプト肥大なし・hard にしない）  
 4. `直し:` / 自然文直しでも revision に残せる  
-5. praise で **loosen**（前の注意が弱まる）  
+5. praise は critique 保存のみで **lesson を触らない**（過去の指摘をキープ）
 6. 既存の読み訂正・想起・自動保存・道具 hard 制約は壊さない  
 
 ---
@@ -395,7 +397,8 @@ HaikuContext / 制約ブロックに追加（短く）:
 ## 11. 次の合意ポイント（残作業・ゆるく）
 
 1. 直し案をシステムが1つ出すか（任意。現状は保存 + soft 返事。音数失敗時 repair は既存）  
-2. H7 workshop LLM 分類（ルールで足りている間は不要）  
-3. Phase E パッケージ整理（機能ではない）
+2. H7-lite の実ログ評価（低信頼 fallback と誤分類率）
+3. OS ローカル AI を同じ分類契約へ接続するか（任意）
+4. Phase E パッケージ整理（機能ではない）
 
 合意後に実装。

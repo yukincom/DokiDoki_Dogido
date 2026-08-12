@@ -7,9 +7,11 @@ from dogido_server.haiku.materials import (
 )
 from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
+    build_workshop_intent_llm_details,
     classify_workshop_intent,
     close_workshop,
     extract_conversational_revise,
+    finalize_workshop_intent_llm_payload,
     is_open,
     is_workshop_hard_off_topic,
     lessons_from_critique_kind,
@@ -30,10 +32,12 @@ from dogido_server.haiku.workshop import (
 __all__ = [
     "RecentHaikuWorkshop",
     "attach_fragment_links",
+    "build_workshop_intent_llm_details",
     "build_workshop_materials_seed",
     "classify_workshop_intent",
     "close_workshop",
     "extract_conversational_revise",
+    "finalize_workshop_intent_llm_payload",
     "is_open",
     "is_workshop_hard_off_topic",
     "lessons_from_critique_kind",

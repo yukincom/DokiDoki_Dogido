@@ -9,8 +9,10 @@ from pathlib import Path
 
 from dogido_server.config import Settings
 from dogido_server.haiku.workshop import (
+    build_workshop_intent_llm_details,
     classify_workshop_intent,
     close_workshop,
+    finalize_workshop_intent_llm_payload,
     is_open,
     is_workshop_hard_off_topic,
     maybe_close_for_time,
@@ -169,6 +171,82 @@ class WorkshopIntentTests(unittest.TestCase):
             workshop_open_intent("黒石炭とかにしたらいいんじゃない?", verse=verse),
             "other_haiku",
         )
+
+    def test_llm_intent_payload_is_closed_and_confidence_gated(self) -> None:
+        self.assertEqual(
+            finalize_workshop_intent_llm_payload(
+                {"intent": "critique_gibberish", "confidence": 0.91}
+            ),
+            "critique_gibberish",
+        )
+        self.assertEqual(
+            finalize_workshop_intent_llm_payload(
+                {"intent": "critique_gibberish", "confidence": 0.5}
+            ),
+            "soft_default",
+        )
+        self.assertEqual(
+            finalize_workshop_intent_llm_payload(
+                {"intent": "soft_default", "confidence": 0.95}
+            ),
+            "soft_default",
+        )
+        # LLM から workshop 終了や lesson 解除はできない
+        self.assertEqual(
+            finalize_workshop_intent_llm_payload(
+                {"intent": "close", "confidence": 1.0}
+            ),
+            "soft_default",
+        )
+        self.assertEqual(
+            finalize_workshop_intent_llm_payload(
+                {"intent": "clear_lessons", "confidence": 1.0}
+            ),
+            "soft_default",
+        )
+        self.assertEqual(
+            finalize_workshop_intent_llm_payload(
+                {"intent": "praise", "confidence": True}
+            ),
+            "soft_default",
+        )
+
+    def test_llm_intent_details_are_short_and_do_not_include_raw_materials(self) -> None:
+        ws = open_from_emission(
+            _emission(text="そらまぶし\nくさむらにうかぶ\nくろいせきたん"),
+            materials={
+                "biome": "plains",
+                "biome_ja": "平原",
+                "motifs": ["黒い石炭"],
+                "secret_debug_key": "分類器へ渡さない",
+            },
+        )
+        details = build_workshop_intent_llm_details(ws, "言葉を詰めすぎた感じがする")
+        self.assertIn("そらまぶし", str(details["verse"]))
+        self.assertEqual(details["player_text"], "言葉を詰めすぎた感じがする")
+        self.assertNotIn("secret_debug_key", details)
+        self.assertNotIn("分類器へ渡さない", str(details))
+
+    def test_llm_intent_prompt_is_registered_as_json_classifier(self) -> None:
+        from dogido_server.llm import StructuredGenerationRequest
+        from dogido_server.llm.prompts import build_messages
+
+        messages = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_workshop_intent",
+                fallback_value={"intent": "soft_default", "confidence": 0.0},
+                details={
+                    "verse": "そらまぶし くさむらにうかぶ くろいせきたん",
+                    "materials_speech": "平原",
+                    "player_text": "言葉を詰めすぎた感じがする",
+                    "allowed_intents": ["critique_forced", "other_haiku"],
+                },
+            )
+        )
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        self.assertIn("JSON", messages[0]["content"])
+        self.assertIn("critique_forced", messages[1]["content"])
+        self.assertIn("close、lesson解除", messages[1]["content"])
 
     def test_remember_template_reply(self) -> None:
         ws = open_from_emission(_emission())
@@ -439,6 +517,194 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(any("読みやす" in str(x.get("note")) for x in lessons))
             # hard 合流用の fragments があっても soft のまま
             self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))
+
+    def test_h7_lite_classifies_only_soft_default_and_saves_specific_lesson(self) -> None:
+        class IntentLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+                self.last_intent_request = None
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                raise AssertionError(f"leaf should not run for {request.kind}")
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                self.structured_kinds.append(request.kind)
+                if request.kind == "haiku_workshop_intent":
+                    self.last_intent_request = request
+                    return {"intent": "critique_forced", "confidence": 0.94}
+                return {}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = IntentLLM()
+            settings = Settings(
+                llm_enabled=True,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sess = service.sessions[session.session_id]
+            service.llm = llm
+            emission = _emission(text="そらまぶし\nくさむらにうかぶ\nくろいせきたん")
+            service._open_haiku_workshop(sess, emission, entry_id="h_h7", now=emission.created_at)
+
+            from dogido_server.player_input.routing import route_player_input
+
+            player_text = "ちょっと言葉を詰めすぎた感じがする"
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text=player_text),
+            )
+            sess.machine.player_input = route_player_input(player_text)
+            actions = service._haiku_workshop_actions(sess, event)
+
+            self.assertEqual(len(actions), 1)
+            self.assertIn("余白", actions[0].text or "")
+            self.assertEqual(llm.structured_kinds, ["haiku_workshop_intent"])
+            request = llm.last_intent_request
+            self.assertIsNotNone(request)
+            self.assertEqual(request.route, "chat")
+            self.assertEqual(request.max_tokens, 64)
+            self.assertEqual(request.details["player_text"], player_text)
+            lessons = MemoryStore(Path(tmp) / "mem").list_recent_haiku_lessons(
+                limit=3,
+                now=event.observed_at,
+            )
+            self.assertTrue(any(x.get("lesson_type") == "compress" for x in lessons))
+            self.assertTrue(is_open(sess.haiku_workshop))
+
+    def test_h7_lite_does_not_run_for_rule_intent_and_falls_back_on_error(self) -> None:
+        class ControlledLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+                self.raise_intent = False
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                return request.fallback_text
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                self.structured_kinds.append(request.kind)
+                if self.raise_intent:
+                    raise RuntimeError("local classifier unavailable")
+                return {"intent": "close", "confidence": 1.0}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = ControlledLLM()
+            service = DogidoService(
+                Settings(
+                    llm_enabled=True,
+                    audio_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=Path(tmp) / "mem",
+                )
+            )
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sess = service.sessions[session.session_id]
+            service.llm = llm
+            emission = _emission()
+            service._open_haiku_workshop(sess, emission, entry_id="h_safe", now=emission.created_at)
+            assert sess.haiku_workshop is not None
+
+            # 既知ルールは classifier を呼ばない
+            kind, path = service._classify_soft_workshop_intent(
+                sess.haiku_workshop,
+                "曖昧な句の話",
+            )
+            self.assertEqual(kind, "soft_default")  # close は許可 enum 外
+            self.assertEqual(path, "soft_default")
+            self.assertTrue(is_open(sess.haiku_workshop))
+
+            llm.structured_kinds.clear()
+            # 実際の rule intent は、呼び出し元で classifier に到達しない
+            from dogido_server.player_input.routing import route_player_input
+
+            rule_text = "無理やり圧縮しすぎ"
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text=rule_text),
+            )
+            sess.machine.player_input = route_player_input(rule_text)
+            actions = service._haiku_workshop_actions(sess, event)
+            self.assertEqual(len(actions), 1)
+            self.assertIn("余白", actions[0].text or "")
+            self.assertEqual(llm.structured_kinds, [])
+
+            # provider 例外も従来の soft_default に戻る
+            llm.raise_intent = True
+            kind, path = service._classify_soft_workshop_intent(
+                sess.haiku_workshop,
+                "曖昧な句の話",
+            )
+            self.assertEqual((kind, path), ("soft_default", "soft_default"))
+            self.assertTrue(is_open(sess.haiku_workshop))
 
     def test_workshop_defers_night_warning_until_closed(self) -> None:
         """workshop open 中は夕方割り込みを出さず、閉じたあとに出せる。"""

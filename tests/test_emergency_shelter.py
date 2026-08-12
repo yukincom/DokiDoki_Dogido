@@ -288,6 +288,165 @@ class EmergencyShelterTests(unittest.TestCase):
             ["よし！シャルターやな！これで安心や！"],
         )
 
+    def test_daytime_shelter_shape_does_not_emit_relief_line(self) -> None:
+        event = build_event(
+            self.started_at,
+            sequence=1,
+            time_phase="day",
+            time_of_day=7000,
+            local_light=11,
+            sky_visible=False,
+            ceiling_height=1.0,
+            cardinal_wall_count=4,
+            danger_darkness_score=0.0,
+            inventory={"torch": 5},
+        )
+
+        # 低い屋内という形状は維持するが、昼に「避難できた」とは言わない。
+        self.assertTrue(self.machine._is_emergency_shelter_event(event))
+        result = self.machine.process(event)
+        self.assertFalse(
+            any(action.text == "よし！シャルターやな！これで安心や！" for action in result.actions)
+        )
+
+    def test_home_respawn_bed_is_not_emergency_shelter_even_at_night(self) -> None:
+        event = build_event(
+            self.started_at,
+            sequence=1,
+            time_phase="night",
+            time_of_day=14000,
+            local_light=11,
+            sky_visible=False,
+            ceiling_height=1.0,
+            cardinal_wall_count=4,
+            danger_darkness_score=0.0,
+            respawn_point_set=True,
+            respawn_distance=3.0,
+            nearby_bed_count=1,
+            inventory={"torch": 5},
+        )
+
+        self.assertTrue(self.machine._is_home_respawn_bed_event(event))
+        self.assertFalse(self.machine._is_emergency_shelter_event(event))
+        result = self.machine.process(event)
+        self.assertFalse(
+            any(action.text == "よし！シャルターやな！これで安心や！" for action in result.actions)
+        )
+
+    def test_bed_far_from_respawn_does_not_hide_real_night_shelter(self) -> None:
+        event = build_event(
+            self.started_at,
+            sequence=1,
+            sky_visible=False,
+            ceiling_height=2.0,
+            cardinal_wall_count=4,
+            respawn_point_set=True,
+            respawn_distance=80.0,
+            nearby_bed_count=1,
+        )
+
+        self.assertFalse(self.machine._is_home_respawn_bed_event(event))
+        self.assertTrue(self.machine._is_emergency_shelter_event(event))
+        result = self.machine.process(event)
+        self.assertEqual(
+            [action.text for action in result.actions if action.text],
+            ["よし！シャルターやな！これで安心や！"],
+        )
+
+    def test_shelter_shape_flicker_emits_relief_only_once_per_night(self) -> None:
+        first = self.machine.process(
+            build_event(
+                self.started_at,
+                sequence=1,
+                sky_visible=False,
+                ceiling_height=2.0,
+                cardinal_wall_count=4,
+            )
+        )
+        outside = self.machine.process(
+            build_event(
+                self.started_at + timedelta(seconds=1),
+                sequence=2,
+                local_light=15,
+                sky_visible=True,
+                ceiling_height=24.0,
+                cardinal_wall_count=0,
+            )
+        )
+        reentered = self.machine.process(
+            build_event(
+                self.started_at + timedelta(seconds=2),
+                sequence=3,
+                sky_visible=False,
+                ceiling_height=2.0,
+                cardinal_wall_count=4,
+            )
+        )
+
+        self.assertEqual(
+            [action.text for action in first.actions if action.text],
+            ["よし！シャルターやな！これで安心や！"],
+        )
+        self.assertEqual(outside.actions, [])
+        self.assertEqual(reentered.actions, [])
+
+    def test_shelter_relief_latch_resets_on_next_night(self) -> None:
+        self.machine.process(
+            build_event(
+                self.started_at,
+                sequence=1,
+                sky_visible=False,
+                ceiling_height=2.0,
+                cardinal_wall_count=4,
+            )
+        )
+        self.machine.process(
+            build_event(
+                self.started_at + timedelta(hours=1),
+                sequence=2,
+                time_phase="morning",
+                time_of_day=1000,
+                local_light=15,
+                sky_visible=True,
+                ceiling_height=24.0,
+                cardinal_wall_count=0,
+            )
+        )
+        next_night = self.machine.process(
+            build_event(
+                self.started_at + timedelta(hours=2),
+                sequence=3,
+                time_phase="night",
+                time_of_day=14000,
+                sky_visible=False,
+                ceiling_height=2.0,
+                cardinal_wall_count=4,
+            )
+        )
+
+        self.assertEqual(
+            [action.text for action in next_night.actions if action.text],
+            ["よし！シャルターやな！これで安心や！"],
+        )
+
+    def test_darkness_log_names_shelter_entry_and_time_fields(self) -> None:
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            self.machine.process(
+                build_event(
+                    self.started_at,
+                    sequence=1,
+                    sky_visible=False,
+                    ceiling_height=2.0,
+                    cardinal_wall_count=4,
+                )
+            )
+
+        log_text = "\n".join(captured.output)
+        self.assertIn("time_phase=night", log_text)
+        self.assertIn("time_of_day=14000", log_text)
+        self.assertIn("entered_occluded=False", log_text)
+        self.assertIn("entered_shelter=True", log_text)
+
     def test_emergency_shelter_entry_uses_llm_leaf(self) -> None:
         class FakeLLM(DogidoLLM):
             def __init__(self) -> None:

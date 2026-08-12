@@ -324,6 +324,59 @@ class HearingContextTests(unittest.TestCase):
         self.assertIn("村人", summary)
         self.assertIn("左", summary)
 
+    def test_hearing_summary_includes_observed_campfire_sound(self) -> None:
+        machine = DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
+        event = make_event(sequence=1, user_text="今の音なに？")
+        event.ambient_sounds = [
+            AmbientSound(
+                type="block:campfire",
+                sound_event="block.campfire.crackle",
+                direction=Direction(horizontal=HorizontalDirection.RIGHT),
+                distance_band=DistanceBand.CLOSE,
+                certainty=Certainty.MEDIUM,
+            )
+        ]
+
+        machine._remember_hearing_for_chat(event, event.observed_at)  # type: ignore[attr-defined]
+        summary = machine._player_chat_hearing_summary(event)  # type: ignore[attr-defined]
+        sources = machine._player_chat_hearing_source_labels(event)  # type: ignore[attr-defined]
+
+        self.assertIn("焚き火の音", summary)
+        self.assertEqual(1, summary.count("焚き火の音"))
+        self.assertIn("右", summary)
+        self.assertEqual(["焚き火"], sources)
+
+    def test_environment_sound_name_requires_observed_sound_type(self) -> None:
+        """近くのブロック名だけから『音がした』とは推測しない。"""
+        machine = DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
+        self.assertIsNone(machine._resolve_hearing_environment_label("campfire"))  # type: ignore[attr-defined]
+        self.assertEqual(
+            "アメジストブロック",
+            machine._resolve_hearing_environment_label(  # type: ignore[attr-defined]
+                "block:amethyst_block", "block.amethyst_block.chime"
+            ),
+        )
+        self.assertEqual(
+            "ホタルの茂み",
+            machine._resolve_hearing_environment_label(  # type: ignore[attr-defined]
+                "block:firefly_bush", "block.firefly_bush.idle"
+            ),
+        )
+
+    def test_recent_thunder_sound_is_remembered_for_sound_question(self) -> None:
+        """落雷位置が遠く ambient_sounds に無くても、実雷鳴は短期記憶へ残す。"""
+        machine = DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
+        heard = make_event(sequence=1)
+        heard.world.thunder_sound_recent_ms = 300
+        machine._remember_hearing_for_chat(heard, heard.observed_at)  # type: ignore[attr-defined]
+
+        asked = make_event(sequence=2, at_sec=5.0, user_text="今の音なに？")
+        summary = machine._player_chat_hearing_summary(asked)  # type: ignore[attr-defined]
+        sources = machine._player_chat_hearing_source_labels(asked)  # type: ignore[attr-defined]
+
+        self.assertIn("雷鳴の音", summary)
+        self.assertEqual(["雷鳴"], sources)
+
     def test_hearing_not_injected_unless_player_asks_about_sound(self) -> None:
         """『あっ溶岩だ』など音以外の話題では hearing を details に載せない。"""
         from dogido_server.player_input.routing import route_player_input
@@ -504,6 +557,28 @@ class HearingContextTests(unittest.TestCase):
         content = messages[1]["content"]
         self.assertIn("村人っぽい声 左 close", content)
         self.assertIn("音から触れてよい具体モブ名: 村人", content)
+
+    def test_player_chat_prompt_uses_observed_environment_source(self) -> None:
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="fallback",
+                details={
+                    "user_text": "今の音なに？",
+                    "mode": "normal",
+                    "biome": "平原",
+                    "time_phase": "night",
+                    "hearing_summary": "焚き火の音 右 close",
+                    "hearing_named_mobs": [],
+                    "hearing_source_labels": ["焚き火"],
+                    "threat_summary": "音メモ: 焚き火の音 右 close",
+                    "reply_stance": "saw",
+                },
+            )
+        )
+        content = messages[1]["content"]
+        self.assertIn("焚き火の音 右 close", content)
+        self.assertIn("実再生音から確定した環境音源名: 焚き火", content)
 
 
 class PlayerInputEndpointTests(unittest.TestCase):

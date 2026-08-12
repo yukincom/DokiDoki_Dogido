@@ -29,6 +29,7 @@ import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -110,12 +111,33 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int GATEWAY_SCAN_RADIUS = 15;
     private static final int END_PORTAL_FRAME_SCAN_RADIUS = 5;
     private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
+        // 具体名を先に置く。entity 付き packet は実体から解決するが、座標だけの
+        // hostile sound packet でも主要な敵を取りこぼさないための fallback。
         {"zombified_piglin", "zombified_piglin"},
         {"zombie_pigman", "zombified_piglin"},
         {"zombie_villager", "zombie_villager"},
         {"wither_skeleton", "wither_skeleton"},
+        {"elder_guardian", "elder_guardian"},
+        {"ender_dragon", "ender_dragon"},
+        {"cave_spider", "cave_spider"},
         {"piglin_brute", "piglin_brute"},
         {"magma_cube", "magma_cube"},
+        {"silverfish", "silverfish"},
+        {"endermite", "endermite"},
+        {"vindicator", "vindicator"},
+        {"pillager", "pillager"},
+        {"ravager", "ravager"},
+        {"guardian", "guardian"},
+        {"phantom", "phantom"},
+        {"shulker", "shulker"},
+        {"evoker", "evoker"},
+        {"breeze", "breeze"},
+        {"bogged", "bogged"},
+        {"creaking", "creaking"},
+        {"stray", "stray"},
+        {"husk", "husk"},
+        {"vex", "vex"},
+        {"wither", "wither"},
         {"warden", "warden"},
         {"creeper", "creeper"},
         {"skeleton", "skeleton"},
@@ -149,7 +171,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private final Map<UUID, Long> lineOfSightStartedTicks = new HashMap<>();
     private final Map<UUID, Long> confirmedVisibleTicks = new HashMap<>();
     private final Deque<SoundObservation> recentSoundObservations = new ArrayDeque<>();
-    /** 村人・家畜など非敵対の周囲音。戦闘判定には使わない。 */
+    /** 非敵対 Mob + 実再生されたブロック・天候・環境音。戦闘判定には使わない。 */
     private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
 
     private long tickCounter = 0;
@@ -234,6 +256,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         instance.onEntitySoundPacket(packet);
+    }
+
+    public static void recordPlayedSound(SoundInstance sound) {
+        DogidoClientAdapter instance = INSTANCE;
+        if (instance == null || sound == null) {
+            return;
+        }
+        instance.onPlayedSound(sound);
     }
 
     private void onClientTick(MinecraftClient client) {
@@ -984,8 +1014,51 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
         }
         List<AudioThreatObservation> ambient = new ArrayList<>(deduped.values());
-        ambient.sort(Comparator.comparingInt(observation -> distanceBandRank(observation.distanceBand())));
+        ambient.sort((left, right) -> {
+            int priority = Integer.compare(
+                environmentSoundPriority(right.soundEvent()),
+                environmentSoundPriority(left.soundEvent())
+            );
+            if (priority != 0) {
+                return priority;
+            }
+            int recency = Long.compare(right.observedTick(), left.observedTick());
+            if (recency != 0) {
+                return recency;
+            }
+            return Integer.compare(
+                distanceBandRank(left.distanceBand()),
+                distanceBandRank(right.distanceBand())
+            );
+        });
         return ambient;
+    }
+
+    private int environmentSoundPriority(String soundEventId) {
+        String id = String.valueOf(soundEventId).toLowerCase(Locale.ROOT);
+        if (id.contains("thunder")
+            || id.contains("lightning")
+            || id.contains("shriek")
+            || id.contains("sculk_sensor")) {
+            return 3;
+        }
+        if (id.contains("ambient")
+            || id.contains("crackle")
+            || id.contains("chime")
+            || id.contains("resonate")
+            || id.contains("drip")
+            || id.contains("note_block")
+            || id.contains("bell")) {
+            return 2;
+        }
+        if (id.endsWith(".step")
+            || id.endsWith(".hit")
+            || id.endsWith(".fall")
+            || id.endsWith(".break")
+            || id.endsWith(".place")) {
+            return 0;
+        }
+        return 1;
     }
 
     private long latestAudioObservationTick(List<AudioThreatObservation> audioThreats) {
@@ -1349,7 +1422,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private JsonArray buildAmbientSounds(List<AudioThreatObservation> ambientSounds) {
         JsonArray array = new JsonArray();
-        int limit = Math.min(ambientSounds.size(), 6);
+        int limit = Math.min(ambientSounds.size(), 12);
         for (int index = 0; index < limit; index += 1) {
             AudioThreatObservation sound = ambientSounds.get(index);
             JsonObject entry = new JsonObject();
@@ -2352,6 +2425,90 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             true,
             hostileEntity.getUuid().toString()
         );
+    }
+
+    /**
+     * SoundManager まで届いた実再生音を観測する。
+     *
+     * サーバ packet だけでは、焚き火・ポータルなどクライアントの
+     * randomDisplayTick が直接鳴らす音を拾えない。敵対／中立 Mob は従来の
+     * packet 経路で entity と結び付け、ここでは world の環境音だけを補完する。
+     */
+    private void onPlayedSound(SoundInstance sound) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        if (player == null || client.world == null || sound.getId() == null) {
+            return;
+        }
+        SoundCategory category = sound.getCategory();
+        if (category == SoundCategory.HOSTILE
+            || category == SoundCategory.NEUTRAL
+            || category == SoundCategory.PLAYERS
+            || category == SoundCategory.VOICE
+            || category == SoundCategory.UI
+            || category == SoundCategory.MUSIC) {
+            return;
+        }
+
+        String soundEventId = sound.getId().getPath();
+        String weatherKind = classifyWeatherSoundKind(soundEventId);
+        if (weatherKind != null) {
+            recordWeatherSoundObservation(weatherKind);
+        }
+        String ominousKind = classifyOminousSoundKind(soundEventId);
+        if (ominousKind != null) {
+            recordOminousSoundObservation(ominousKind);
+        }
+
+        String environmentType = environmentTypeFromPlayedSound(soundEventId, category);
+        if (environmentType == null) {
+            return;
+        }
+        Vec3d source = sound.isRelative()
+            ? new Vec3d(player.getX(), player.getY(), player.getZ())
+            : new Vec3d(sound.getX(), sound.getY(), sound.getZ());
+        long bucketX = Math.round(source.x / 2.0);
+        long bucketY = Math.round(source.y / 2.0);
+        long bucketZ = Math.round(source.z / 2.0);
+        String sourceId = "played:" + environmentType + ":" + bucketX + ":" + bucketY + ":" + bucketZ;
+        recordAmbientSoundObservation(player, soundEventId, environmentType, source, sourceId);
+    }
+
+    /**
+     * 実際の sound event から音源種別を機械的に得る。
+     * ブロック名やカタログ説明から「鳴るはず」と推測はしない。
+     */
+    private String environmentTypeFromPlayedSound(String soundEventId, SoundCategory category) {
+        if (soundEventId == null || soundEventId.isBlank()) {
+            return null;
+        }
+        String id = soundEventId.toLowerCase(Locale.ROOT);
+        String weather = classifyWeatherSoundKind(id);
+        if (weather != null) {
+            return "weather:" + weather;
+        }
+        if (category == SoundCategory.RECORDS) {
+            return "block:jukebox";
+        }
+        if (id.startsWith("ambient.")) {
+            String[] parts = id.split("\\.");
+            if (parts.length >= 2 && !parts[1].isBlank()) {
+                return "environment:" + parts[1];
+            }
+        }
+        if (!id.startsWith("block.")) {
+            return null;
+        }
+        String[] parts = id.split("\\.");
+        if (parts.length < 3 || parts[1].isBlank()) {
+            return null;
+        }
+        String source = switch (parts[1]) {
+            case "blastfurnace" -> "blast_furnace";
+            case "portal" -> "nether_portal";
+            default -> parts[1];
+        };
+        return "block:" + source;
     }
 
     private void recordSoundObservation(
