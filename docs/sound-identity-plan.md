@@ -1,7 +1,7 @@
 # 音の正体・モブ名の扱い（計画ドラフト）
 
 **日付:** 2026-07-15  
-**状態:** 実験コードは撤回済み。**実装前の設計メモ**。  
+**状態:** Mob 音の短期記憶・名前解決と、world 環境音の実再生観測まで実装済み。
 **きっかけ:**  
 1. LLM が「野犬」など Minecraft にいない生物名を言う  
 2. 「敵意っぽい気配／敵意っぽい音」というサーバ側の曖昧ラベルが不自然  
@@ -33,7 +33,8 @@ Fabric client adapter（`DogidoClientAdapter`）:
 - **視認脅威** `visual_threats` … type / 距離 / 方向
 - **敵対音** `auditory_threats` … sound packet 由来 + ヒューリスティック  
   - `label`, `sound_event`, `spoken_name_allowed`, 方向, distance_band
-- **非敵対周囲音** `ambient_sounds` … 村人・家畜など（戦闘には使わない）
+- **非敵対／world 周囲音** `ambient_sounds` … 村人・家畜、ブロック、天候、環境音（戦闘には使わない）
+- サーバ packet に来ない焚き火等は、クライアントの `SoundManager` 実再生を補足する
 - モブの **target がプレイヤーか** も client 側で見ている（例: `mob.getTarget()`）
 
 つまり「正体が全く分からない」状態を、サーバが勝手に「敵意っぽい気配」とラベル付けして会話の主語にするのは、**データの貧弱さというより設計の逃げ**になりやすい。
@@ -209,3 +210,13 @@ LLM への指示は短く:
 
 - adapter のターゲット情報と `spoken_name_allowed` ポリシー見直し  
 - 実サウンド対応表の監査（S2）
+
+### world 環境音の追補（2026-08-12）
+
+- 敵対 Mob 音は従来どおり `auditory_threats` で警戒に使う
+- 非敵対 Mob 音と、実再生された `BLOCKS / WEATHER / AMBIENT / RECORDS` は `ambient_sounds`
+- `block:* / weather:* / environment:*` は実際の `sound_event` からだけ生成する
+- アメジストやホタルの茂みも、ブロック名・説明から音を推測せず、対応 sound event を実受信した場合だけ載せる
+- スカルクセンサー／シュリーカーは実音を載せ、従来の ominous 経路も維持する
+- 雷鳴は質問回答の材料に加え、コード決定の怖がり反応をクールダウン付きで出す
+- **実機調整メモ:** 雷鳴反応の現行クールダウン 10 秒は短い可能性がある。連続した雷で騒がしくなりすぎないか確認し、必要なら延長する

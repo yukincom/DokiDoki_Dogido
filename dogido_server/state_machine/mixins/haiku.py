@@ -6,8 +6,19 @@ import logging
 from datetime import datetime
 from math import inf
 
-from dogido_server.entry_catalog import block_entry, item_entry, mob_poetic_line, mob_poetic_tags
+from dogido_server.entry_catalog import block_entry, item_entry, mob_entry, mob_poetic_line, mob_poetic_tags
+from dogido_server.haiku.generation import generate_grounded_haiku
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
+from dogido_server.haiku.source_atoms import (
+    CatalogSourceSnapshot,
+    HaikuSourceAtom,
+    atoms_from_catalog_sources,
+    atoms_from_observations,
+    atoms_from_spoken_preface,
+    catalog_notes_projection,
+    catalog_source_snapshot,
+    merge_source_atoms,
+)
 from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm import StructuredGenerationRequest
 from dogido_server.llm.sanitize import summarize_for_log
@@ -182,16 +193,34 @@ class HaikuMixin:
         irony, irony_status = self._detect_haiku_irony(context)
         scene, scene_status = self._detect_haiku_scene(context, irony)
         self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
-        self._stash_haiku_materials_seed(event, context, irony, scene)
+        spoken = self._compose_haiku_preface_speech(irony, scene)
+        source_atoms = merge_source_atoms(
+            context.source_atoms,
+            atoms_from_spoken_preface(spoken),
+        )
+        self._stash_haiku_materials_seed(
+            event,
+            context,
+            irony,
+            scene,
+            source_atoms=source_atoms,
+            preface_spoken=spoken,
+        )
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
         skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
 
         self._pending_haiku_prompt_details = None
+        self._pending_haiku_source_atoms = source_atoms
         self._pending_haiku_fixed_line = None
+        constraints = self._haiku_constraint_details(event, scene)
+        if constraints and self._pending_haiku_materials is not None:
+            # workshop修正でも、発句時の道具・読みhard制約を同じまま検査する。
+            # 現在値で再計算せず、句と一緒にsnapshotする。
+            self._pending_haiku_materials["haiku_constraints"] = constraints
         if skip_reason is None:
             prompt_details = context.prompt_details(irony, scene)
-            prompt_details["haiku_constraints"] = self._haiku_constraint_details(event, scene)
+            prompt_details["haiku_constraints"] = constraints
             self._pending_haiku_prompt_details = prompt_details
         elif self._should_use_llm_failed_haiku(skip_reason, irony_status, scene_status):
             LOGGER.warning(
@@ -210,7 +239,6 @@ class HaikuMixin:
 
         self.state.pending_haiku_after_preface = True
         self.state.pending_haiku_started_at = now
-        spoken = self._compose_haiku_preface_speech(irony, scene)
         LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log(spoken))
         return spoken
 
@@ -219,18 +247,23 @@ class HaikuMixin:
         self.state.pending_haiku_started_at = None
         self.state.last_haiku_emitted_at = now
         details = self._pending_haiku_prompt_details
+        source_atoms = self._pending_haiku_source_atoms
         fixed = self._pending_haiku_fixed_line
         self._pending_haiku_prompt_details = None
+        self._pending_haiku_source_atoms = ()
         self._pending_haiku_fixed_line = None
         llm_failed_text = self._llm_failed_haiku_line()
         if details is not None:
-            line = self._generate_leaf_text(
-                kind="haiku",
-                fallback_text=llm_failed_text,
+            generated = generate_grounded_haiku(
+                self.llm,
                 details=details,
-                temperature=0.82,
-                route="haiku",
+                source_atoms=source_atoms,
+                fallback_text=llm_failed_text,
+                max_tokens=self.settings.haiku_structured_max_tokens,
             )
+            line = generated.text
+            if generated.accepted and self._pending_haiku_materials is not None:
+                self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
             if line == llm_failed_text:
                 LOGGER.warning(
                     "haiku_decision result=fallback reason=llm_rejected text=%s",
@@ -259,6 +292,7 @@ class HaikuMixin:
         self.state.pending_haiku_after_preface = False
         self.state.pending_haiku_started_at = None
         self._pending_haiku_prompt_details = None
+        self._pending_haiku_source_atoms = ()
         self._pending_haiku_fixed_line = None
         # interpretation / materials は emission 後に残す必要はないが、キャンセル時は捨てる
         self._pending_haiku_interpretation = None
@@ -367,14 +401,20 @@ class HaikuMixin:
             )
             return fallback_text
         prompt_details = context.prompt_details(irony, scene)
-        prompt_details["haiku_constraints"] = self._haiku_constraint_details(event, scene)
-        line = self._generate_leaf_text(
-            kind="haiku",
-            fallback_text=llm_failed_text,
+        constraints = self._haiku_constraint_details(event, scene)
+        prompt_details["haiku_constraints"] = constraints
+        if constraints and self._pending_haiku_materials is not None:
+            self._pending_haiku_materials["haiku_constraints"] = constraints
+        generated = generate_grounded_haiku(
+            self.llm,
             details=prompt_details,
-            temperature=0.82,
-            route="haiku",
+            source_atoms=context.source_atoms,
+            fallback_text=llm_failed_text,
+            max_tokens=self.settings.haiku_structured_max_tokens,
         )
+        line = generated.text
+        if generated.accepted and self._pending_haiku_materials is not None:
+            self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
         if line == llm_failed_text:
             LOGGER.warning(
                 "haiku_decision result=fallback reason=llm_rejected text=%s",
@@ -395,6 +435,9 @@ class HaikuMixin:
         context: HaikuContext,
         irony: IronyContext,
         scene: SceneContext,
+        *,
+        source_atoms: tuple[HaikuSourceAtom, ...] | None = None,
+        preface_spoken: str | None = None,
     ) -> None:
         """発句時点の材料を workshop 用に保持（句テキストへの制御タグは付けない）。"""
         motifs: list[str] = []
@@ -425,6 +468,12 @@ class HaikuMixin:
             mats["biome_ja"] = context.biome_label
         if context.structure_label and not mats.get("structure_ja"):
             mats["structure_ja"] = context.structure_label
+        # あんちょこの正本へ戻れるよう、原文snapshotと派生atomを句に添える。
+        mats["catalog_sources"] = [source.to_dict() for source in context.catalog_sources]
+        effective_atoms = context.source_atoms if source_atoms is None else source_atoms
+        mats["source_atoms"] = [atom.to_prompt_dict() for atom in effective_atoms]
+        if preface_spoken:
+            mats["preface_spoken"] = preface_spoken
 
     def _remember_haiku_emission(
         self,
@@ -459,6 +508,12 @@ class HaikuMixin:
                     materials["biome_ja"] = context.biome_label
                 if context.structure_label:
                     materials["structure_ja"] = context.structure_label
+                materials["catalog_sources"] = [
+                    source.to_dict() for source in context.catalog_sources
+                ]
+                materials["source_atoms"] = [
+                    atom.to_prompt_dict() for atom in context.source_atoms
+                ]
             except Exception:  # noqa: BLE001
                 materials = build_workshop_materials_seed(
                     interpretation=self._pending_haiku_interpretation,
@@ -575,7 +630,7 @@ class HaikuMixin:
         # 実際の手持ち（道具 hard 制約・対比テンション用）
         real_held_label = self._item_label(event.player.held_item)
         # 句の主役: 作業道具を持っているときは所持の非道具を重み付きで1つ
-        poem_held, poem_source = self._haiku_poem_item_choice(event, real_held_label)
+        poem_item_id, poem_held, poem_source = self._haiku_poem_item_choice(event, real_held_label)
         inventory_close_pair, inventory_far_item, inventory_items = self._haiku_inventory_values(
             event.inventory,
             held_item_id=event.player.held_item,
@@ -595,6 +650,18 @@ class HaikuMixin:
         poetic_lines, poetic_mob_keys = self._haiku_poetic_lines(event)
         structure_id, structure_label = self._haiku_structure_fields(event)
         climate_hint = self._haiku_climate_hint(biome)
+        catalog_sources = tuple(
+            self._haiku_catalog_sources(
+                event,
+                poem_item_id=poem_item_id,
+                poem_item_label=poem_held,
+            )
+        )
+        # カタログ由来を先に置き、同じラベルの観測atomは二重に作らない。
+        source_atoms = merge_source_atoms(
+            atoms_from_catalog_sources(catalog_sources),
+            atoms_from_observations(feature_candidates),
+        )
         return HaikuContext(
             player_name=self._player_call_name(event),
             biome_id=self._normalized_biome(biome) or "unknown",
@@ -606,6 +673,7 @@ class HaikuMixin:
             weather=weather,
             weather_label=WEATHER_LABELS.get(weather, "不明"),
             z_value=int(round(z_value)) if z_value is not None else 0,
+            poem_item_id=poem_item_id,
             held_item=poem_held,
             poem_item_source=poem_source,
             inventory_items=inventory_items,
@@ -630,7 +698,9 @@ class HaikuMixin:
                     nearby_blocks,
                 )
             ),
-            catalog_notes=tuple(self._haiku_catalog_notes(event)),
+            catalog_notes=catalog_notes_projection(catalog_sources),
+            catalog_sources=catalog_sources,
+            source_atoms=source_atoms,
             poetic_lines=tuple(poetic_lines),
             structure_id=structure_id,
             structure_label=structure_label,
@@ -766,8 +836,8 @@ class HaikuMixin:
         # 個数は少しだけ効かせる（山積み junk をさらに押し上げない）
         return 6 + min(max(int(count), 0), 4)
 
-    def _select_haiku_pocket_motif(self, event: GameEvent) -> str | None:
-        """所持から非道具を重み付き・決定的に1つ選ぶ。"""
+    def _select_haiku_pocket_motif(self, event: GameEvent) -> tuple[str, str] | None:
+        """所持から非道具を重み付き・決定的に1つ選び、IDも失わず返す。"""
         scored: list[tuple[int, str, str]] = []
         seen_labels: set[str] = set()
         for item_id, count in (event.inventory or {}).items():
@@ -792,25 +862,29 @@ class HaikuMixin:
         pool.sort(key=lambda row: (row[1], row[2]))
         seed = int(event.sequence or 0)
         seed = seed * 1009 + sum(ord(ch) for ch in (event.player.name or "p")[:12])
-        return pool[seed % len(pool)][1]
+        selected = pool[seed % len(pool)]
+        return selected[2], selected[1]
 
     def _haiku_poem_item_choice(
         self,
         event: GameEvent,
         real_held_label: str,
-    ) -> tuple[str, str]:
-        """(句の主役ラベル, source hand|pocket)。
+    ) -> tuple[str, str, str]:
+        """(句の主役ID, ラベル, source hand|pocket)。
 
         作業道具を握っているときは所持の非道具を優先。道具 hard 制約は event.held のまま。
         """
         held_id = event.player.held_item
         if not self._is_haiku_work_tool_item(held_id):
-            return (real_held_label or ""), "hand"
+            normalized = normalize_minecraft_id(held_id) or ""
+            return normalized, (real_held_label or ""), "hand"
         pocket = self._select_haiku_pocket_motif(event)
         if pocket:
-            return pocket, "pocket"
+            pocket_id, pocket_label = pocket
+            return pocket_id, pocket_label, "pocket"
         # 非道具が無いときだけ道具を句に出す
-        return (real_held_label or ""), "hand"
+        normalized = normalize_minecraft_id(held_id) or ""
+        return normalized, (real_held_label or ""), "hand"
 
     def _haiku_feature_candidates(
         self,
@@ -1038,57 +1112,87 @@ class HaikuMixin:
                 break
         return natural_values + other_values
 
-    def _haiku_catalog_notes(self, event: GameEvent) -> list[str]:
-        """いまの ID から取れるカタログ note（biome / structure / nearby block）。
+    def _haiku_catalog_sources(
+        self,
+        event: GameEvent,
+        *,
+        poem_item_id: str,
+        poem_item_label: str,
+    ) -> list[CatalogSourceSnapshot]:
+        """実際に選んだ ID だけから、川柳用の読み取りsnapshotを作る。
 
-        entry_catalog 直引き。詩語ヒント（poetic）とは別枠。ベクトル RAG ではない。
+        entry_catalog の返却型や元JSONは変えない。表示名からの逆引きもしない。
         """
-        notes: list[str] = []
+
+        sources: list[CatalogSourceSnapshot] = []
         seen: set[str] = set()
 
-        def append_note(label: str, note: object, *, max_len: int = 100) -> None:
-            text = str(note or "").strip()
-            if not text:
+        def append(source: CatalogSourceSnapshot | None) -> None:
+            if source is None or source.source_ref in seen:
                 return
-            name = str(label or "").strip()
-            if not name:
-                return
-            if len(text) > max_len:
-                text = text[: max_len - 1].rstrip() + "…"
-            line = f"{name}: {text}"
-            if line in seen:
-                return
-            seen.add(line)
-            notes.append(line)
+            seen.add(source.source_ref)
+            sources.append(source)
 
-        # structure があるときは note も構造物を先に（場所の主役）
+        # 場所の主役 → 選択した手元 → 距離順の周辺 → biome → mob の順。
         structure_id, structure_label = self._haiku_structure_fields(event)
         if structure_id:
-            structure_entry = self._structure_entry(structure_id) or {}
-            append_note(structure_label, structure_entry.get("note"))
-
-        biome_entry = self._biome_entry(event.world.biome) or {}
-        # structure ありでも biome note は残してよいが後ろ。主役化しない。
-        append_note(self._biome_label_with_reading(event.world.biome), biome_entry.get("note"))
-
-        block_note_count = 0
-        for resource in sorted(event.nearby_resources, key=lambda candidate: candidate.distance or inf):
-            if block_note_count >= 3:
-                break
-            entry = block_entry(resource.name) or {}
-            note = entry.get("note")
-            if not str(note or "").strip():
-                continue
-            label = (
-                str(entry.get("japanese") or entry.get("label") or "").strip()
-                or self._block_label(resource.name)
+            append(
+                catalog_source_snapshot(
+                    catalog_type="structure",
+                    catalog_id=structure_id,
+                    entry=self._structure_entry(structure_id),
+                    observation_role="current_structure",
+                    fallback_label=structure_label,
+                )
             )
-            before = len(notes)
-            append_note(label, note)
-            if len(notes) > before:
-                block_note_count += 1
 
-        return notes
+        if poem_item_id and poem_item_id != "air":
+            append(
+                catalog_source_snapshot(
+                    catalog_type="item",
+                    catalog_id=poem_item_id,
+                    entry=item_entry(poem_item_id),
+                    observation_role="selected_item",
+                    fallback_label=poem_item_label,
+                )
+            )
+
+        for resource in sorted(event.nearby_resources, key=lambda candidate: candidate.distance or inf)[:3]:
+            resource_id = normalize_minecraft_id(resource.name) or ""
+            append(
+                catalog_source_snapshot(
+                    catalog_type="block",
+                    catalog_id=resource_id,
+                    entry=block_entry(resource.name),
+                    observation_role="nearby_block",
+                    fallback_label=self._block_label(resource.name),
+                )
+            )
+
+        biome_id = self._normalized_biome(event.world.biome) or ""
+        append(
+            catalog_source_snapshot(
+                catalog_type="biome",
+                catalog_id=biome_id,
+                entry=self._biome_entry(event.world.biome),
+                observation_role="current_biome",
+                fallback_label=self._biome_label_with_reading(event.world.biome),
+            )
+        )
+
+        for passive in event.passive_mobs[:3]:
+            mob_id = normalize_minecraft_id(passive.type) or ""
+            append(
+                catalog_source_snapshot(
+                    catalog_type="mob",
+                    catalog_id=mob_id,
+                    entry=mob_entry(passive.type),
+                    observation_role="passive_mob",
+                    fallback_label=self._mob_label(passive.type),
+                )
+            )
+
+        return sources
 
     def _haiku_passive_mob_values(self, event: GameEvent) -> list[str]:
         values: list[str] = []

@@ -134,16 +134,19 @@ def _inventory_section(details: dict[str, Any]) -> tuple[str, str]:
 
 
 def _hearing_block(details: dict[str, Any]) -> str:
-    """音メモがあるときだけ載せる。種名の範囲は白リスト側。"""
+    """音メモがあるときだけ載せる。名前の範囲は白リスト側。"""
     hearing_summary = detail_str(details, "hearing_summary")
     hearing_named_mobs = as_str_list(details.get("hearing_named_mobs"))
-    if not hearing_summary and not hearing_named_mobs:
+    hearing_source_labels = as_str_list(details.get("hearing_source_labels"))
+    if not hearing_summary and not hearing_named_mobs and not hearing_source_labels:
         return ""
     named_line = "、".join(hearing_named_mobs) if hearing_named_mobs else "（なし）"
+    source_line = "、".join(hearing_source_labels) if hearing_source_labels else "（なし）"
     summary_line = hearing_summary or "（なし）"
     return (
         f"いまドギドが拾っている音のメモ: {summary_line}。\n"
         f"音から触れてよい具体モブ名: {named_line}。\n"
+        f"実再生音から確定した環境音源名: {source_line}。\n"
     )
 
 

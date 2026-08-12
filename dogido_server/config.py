@@ -12,6 +12,7 @@ from dogido_server import __version__
 
 LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
 LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
+PLATFORM_AI_PROVIDER = Literal["auto", "apple", "foundry", "chat"]
 
 PROVIDER_DEFAULT_BASE_URLS = {
     "local": "http://127.0.0.1:8080/v1",
@@ -123,6 +124,18 @@ class Settings(BaseSettings):
     llm_anthropic_version: str = "2023-06-01"
     llm_timeout_sec: float = 20.0
     llm_max_tokens: int = 72
+
+    # 小さな structured task 用の OS / 端末内 AI。
+    # auto: Apple Foundation Models → Foundry Local → chat route fallback。
+    # モデルの実行結果で切り替えず、可用性と設定だけで provider を決める。
+    platform_ai_provider: PLATFORM_AI_PROVIDER = "auto"
+    platform_ai_refresh_sec: float = 300.0
+    platform_ai_timeout_sec: float = 8.0
+    platform_ai_failure_cooldown_sec: float = 60.0
+    # Foundry は model ID でなく alias を使い、SDK に端末向け variant を選ばせる。
+    platform_ai_foundry_model_alias: str = "qwen2.5-7b"
+    # 意図しない大容量 download を避ける。配布UIで同意を取れるまでは false。
+    platform_ai_allow_model_download: bool = False
 
     llm_chat_backend: LLM_BACKEND | None = None
     llm_chat_provider: LLM_PROVIDER | None = None
@@ -243,6 +256,8 @@ class Settings(BaseSettings):
     neutral_turned_hostile_comment_cooldown_ms: int = 60000
     ushiro_comment_cooldown_ms: int = 60000
     weather_sound_recent_ms: int = 4000
+    # 雷鳴は天候遷移とは別に、実音を聞いた怖がり反応を出す
+    thunder_sound_comment_cooldown_ms: int = 10000
     nearby_lightning_recent_ms: int = 2000
     nearby_lightning_comment_cooldown_ms: int = 10000
     # 川柳は約10分に1回。優先イベント（脅威・モブ反応・入力・発話）の後は

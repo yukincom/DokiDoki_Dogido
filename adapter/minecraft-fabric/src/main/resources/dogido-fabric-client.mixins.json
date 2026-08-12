@@ -3,7 +3,8 @@
   "package": "dogido.fabric.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ClientPlayNetworkHandlerMixin"
+    "ClientPlayNetworkHandlerMixin",
+    "SoundManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

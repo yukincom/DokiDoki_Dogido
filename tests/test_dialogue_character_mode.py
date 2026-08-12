@@ -58,6 +58,12 @@ class CharacterModePromptTests(unittest.TestCase):
         self.assertIn("わーきゃー", system)
         self.assertIn("役に立つ一言", system)
 
+    def test_workshop_uses_editor_role_without_fear_persona(self) -> None:
+        system = system_prompt_for_mode("workshop")
+        self.assertIn("素直な共同編集者", system)
+        self.assertIn("弁解せず", system)
+        self.assertNotIn("冒険中のドギドは怖がり", system)
+
     def test_player_chat_peace_prompt(self) -> None:
         messages = build_messages(
             LeafGenerationRequest(

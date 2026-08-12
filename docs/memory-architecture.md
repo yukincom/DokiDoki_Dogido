@@ -20,6 +20,12 @@
 家庭内の複数人・呼び名の違い・将来のプロファイル切替は未分離。  
 課題と段階案は [multi-user-tenancy.md](multi-user-tenancy.md)。
 
+### 1.2 何を覚えるか（キャラクター）
+
+ドギドは **川柳以外の長期エピソードを精密に保持しない**前提でよい（趣味の川柳以外は忘れがちなおじさん）。  
+セッションを跨いで厚くするのは **workshop での句の指摘・直し**に限る方針。  
+詳細・ため方・発句のみ参照は [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md)（Issue #37）。
+
 ## 2. 保存形式
 
 正本は JSON / JSONL とする。
@@ -226,11 +232,21 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
   "id": "rev_20260611_175100_001",
   "created_at": "2026-06-11T17:51:00+09:00",
   "haiku_id": "hk_20260611_172701_4919",
-  "source": "player_feedback",
+  "source": "generated_confirmed",
   "comment": "やみにはかぶる、の意味が少しわかりにくい",
+  "line_sources": [
+    {"line_index": 0, "atom_ids": ["catalog:block:...:note:0"]},
+    {"line_index": 1, "atom_ids": ["observation:weather:rain"]},
+    {"line_index": 2, "atom_ids": ["catalog:structure:...:note:1"]}
+  ],
   "revised_text": "ゆきのよる\nやみをかぶせて\nそらのとびら"
 }
 ```
+
+`source` は `player_feedback`（既定）／`formal`／`conversational`／
+`generated_confirmed` の4値。AIの修正案をプレイヤーが明示採用した
+`generated_confirmed` では、3行すべての検証済み出典を `line_sources` に残す。
+固定行の出典が欠ける旧データは材料重複を検証できないため、自動修正案を出さない。
 
 添削エージェントは、`haiku_entries.jsonl` と `haiku_revisions.jsonl` を読む。
 通常の短期ログ全文は読ませない。

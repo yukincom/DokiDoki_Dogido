@@ -9,14 +9,18 @@ from pathlib import Path
 
 from dogido_server.config import Settings
 from dogido_server.haiku.workshop import (
+    build_workshop_intent_llm_details,
     classify_workshop_intent,
     close_workshop,
+    finalize_workshop_analysis_payload,
     is_open,
     is_workshop_hard_off_topic,
     maybe_close_for_time,
     open_from_emission,
     record_drift,
     render_workshop_reply,
+    pending_revision_decision,
+    repair_target_indices,
     should_handle_as_workshop,
     workshop_open_intent,
 )
@@ -170,6 +174,208 @@ class WorkshopIntentTests(unittest.TestCase):
             "other_haiku",
         )
 
+    def test_explicit_state_change_variants(self) -> None:
+        for text in ("もういいよ", "もうええよ", "わかったわ", "了解しました", "OKです"):
+            with self.subTest(kind="close", text=text):
+                self.assertEqual(classify_workshop_intent(text), "close")
+        for text in (
+            "いい句だと思う",
+            "この句はいい句だと思う",
+            "好きだと思う",
+            "ええ句やと思う",
+            "すごくいい句やな",
+        ):
+            with self.subTest(kind="praise", text=text):
+                self.assertEqual(classify_workshop_intent(text), "praise")
+
+    def test_llm_intent_payload_is_closed_and_confidence_gated(self) -> None:
+        self.assertEqual(
+            finalize_workshop_analysis_payload(
+                {"intent": "critique_gibberish", "confidence": 0.91}
+            ).intent,
+            "critique_gibberish",
+        )
+        self.assertEqual(
+            finalize_workshop_analysis_payload(
+                {"intent": "critique_gibberish", "confidence": 0.5}
+            ).intent,
+            "soft_default",
+        )
+        self.assertEqual(
+            finalize_workshop_analysis_payload(
+                {"intent": "soft_default", "confidence": 0.95}
+            ).intent,
+            "soft_default",
+        )
+        # LLM から workshop 終了や lesson 解除はできない
+        self.assertEqual(
+            finalize_workshop_analysis_payload(
+                {"intent": "close", "confidence": 1.0}
+            ).intent,
+            "soft_default",
+        )
+        self.assertEqual(
+            finalize_workshop_analysis_payload(
+                {"intent": "clear_lessons", "confidence": 1.0}
+            ).intent,
+            "soft_default",
+        )
+        self.assertEqual(
+            finalize_workshop_analysis_payload(
+                {"intent": "praise", "confidence": True}
+            ).intent,
+            "soft_default",
+        )
+
+    def test_analysis_infers_unique_fragment_but_not_an_unknown_line(self) -> None:
+        analysis = finalize_workshop_analysis_payload(
+            {
+                "intent": "request_repair",
+                "confidence": 0.95,
+                "repair_requested": True,
+                "findings": [{
+                    "fragment": "くろいせきたん",
+                    "problem": "unnatural_japanese",
+                    "note": "言い方が不自然",
+                    "confidence": 0.9,
+                }],
+            },
+            verse_lines=["そらまぶし", "くさむらにうかぶ", "くろいせきたん"],
+        )
+
+        self.assertEqual(repair_target_indices(analysis.findings), (2,))
+        self.assertTrue(analysis.repair_requested)
+
+        mismatched = finalize_workshop_analysis_payload(
+            {
+                "intent": "request_repair",
+                "confidence": 0.95,
+                "repair_requested": True,
+                "findings": [{
+                    "line_index": 2,
+                    "fragment": "くさむらにうかぶ",
+                    "problem": "unnatural_japanese",
+                    "note": "二行目の指摘",
+                    "confidence": 0.9,
+                }],
+            },
+            verse_lines=["そらまぶし", "くさむらにうかぶ", "くろいせきたん"],
+        )
+        self.assertEqual(repair_target_indices(mismatched.findings), (1,))
+
+        missing_fragment = finalize_workshop_analysis_payload(
+            {
+                "intent": "request_repair",
+                "confidence": 0.95,
+                "repair_requested": True,
+                "findings": [{
+                    "line_index": 2,
+                    "fragment": "",
+                    "problem": "meter",
+                    "note": "三行目が長い",
+                    "confidence": 0.9,
+                }],
+            },
+            verse_lines=["そらまぶし", "くさむらにうかぶ", "くろいせきたん"],
+        )
+        self.assertEqual(repair_target_indices(missing_fragment.findings), ())
+
+        repeated_fragment = finalize_workshop_analysis_payload(
+            {
+                "intent": "request_repair",
+                "confidence": 0.95,
+                "repair_requested": True,
+                "findings": [{
+                    "line_index": 2,
+                    "fragment": "ひかる",
+                    "problem": "preference",
+                    "note": "光るが重複",
+                    "confidence": 0.9,
+                }],
+            },
+            verse_lines=["ひかるあさ", "くさむらにうかぶ", "ひかるいし"],
+        )
+        self.assertEqual(repair_target_indices(repeated_fragment.findings), ())
+
+    def test_pending_revision_requires_explicit_confirmation(self) -> None:
+        self.assertEqual(pending_revision_decision("その案でいこう"), "accept")
+        self.assertEqual(pending_revision_decision("やっぱり元のまま"), "reject")
+        self.assertIsNone(pending_revision_decision("うん、なるほど"))
+        self.assertIsNone(pending_revision_decision("その案ではまだだめ"))
+        self.assertIsNone(pending_revision_decision("その案でいい？"))
+        self.assertIsNone(pending_revision_decision("元のままじゃなくて、その案で"))
+        self.assertIsNone(pending_revision_decision("元のままにする？"))
+
+    def test_negative_praise_is_not_classified_as_praise(self) -> None:
+        self.assertNotEqual(classify_workshop_intent("いい句じゃない"), "praise")
+        self.assertNotEqual(classify_workshop_intent("これは好きじゃない"), "praise")
+        for text in (
+            "いい句？",
+            "これはうまいとは思わない",
+            "いい句とは思わん",
+            "好きとは言えない",
+            "好きとは言えん",
+            "気に入ったわけじゃない",
+            "そのままでいいとは思わない",
+            "好き嫌いが分かれる句やな",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(classify_workshop_intent(text), "praise")
+
+    def test_close_requires_an_unnegated_statement(self) -> None:
+        for text in (
+            "まだわかった気がしない",
+            "もういいとは思わない",
+            "もういいとは思わん",
+            "OKじゃない",
+            "わかった？",
+        ):
+            with self.subTest(text=text):
+                self.assertNotEqual(classify_workshop_intent(text), "close")
+
+    def test_repair_requires_an_explicit_request(self) -> None:
+        self.assertEqual(classify_workshop_intent("そこ直して"), "request_repair")
+        self.assertEqual(classify_workshop_intent("三行目を直せる？"), "request_repair")
+        self.assertNotEqual(classify_workshop_intent("直してほしいわけじゃない"), "request_repair")
+        self.assertNotEqual(classify_workshop_intent("直してない"), "request_repair")
+
+    def test_llm_intent_details_are_short_and_do_not_include_raw_materials(self) -> None:
+        ws = open_from_emission(
+            _emission(text="そらまぶし\nくさむらにうかぶ\nくろいせきたん"),
+            materials={
+                "biome": "plains",
+                "biome_ja": "平原",
+                "motifs": ["黒い石炭"],
+                "secret_debug_key": "分類器へ渡さない",
+            },
+        )
+        details = build_workshop_intent_llm_details(ws, "言葉を詰めすぎた感じがする")
+        self.assertIn("そらまぶし", str(details["verse"]))
+        self.assertEqual(details["player_text"], "言葉を詰めすぎた感じがする")
+        self.assertNotIn("secret_debug_key", details)
+        self.assertNotIn("分類器へ渡さない", str(details))
+
+    def test_llm_intent_prompt_is_registered_as_json_classifier(self) -> None:
+        from dogido_server.llm import StructuredGenerationRequest
+        from dogido_server.llm.prompts import build_messages
+
+        messages = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_workshop_intent",
+                fallback_value={"intent": "soft_default", "confidence": 0.0},
+                details={
+                    "verse": "そらまぶし くさむらにうかぶ くろいせきたん",
+                    "materials_speech": "平原",
+                    "player_text": "言葉を詰めすぎた感じがする",
+                    "allowed_intents": ["critique_forced", "other_haiku"],
+                },
+            )
+        )
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        self.assertIn("JSON", messages[0]["content"])
+        self.assertIn("critique_forced", messages[1]["content"])
+        self.assertIn("close、lesson解除", messages[1]["content"])
+
     def test_remember_template_reply(self) -> None:
         ws = open_from_emission(_emission())
         reply = render_workshop_reply(
@@ -250,9 +456,10 @@ class WorkshopIntentTests(unittest.TestCase):
     def test_reply_soft_tones(self) -> None:
         ws = open_from_emission(_emission())
         self.assertIn("余白", render_workshop_reply("critique_forced", ws))
-        self.assertIn("ずれた", render_workshop_reply("critique_offscene", ws))
+        self.assertIn("ずれ", render_workshop_reply("critique_offscene", ws))
         praise = render_workshop_reply("praise", ws)
-        self.assertIn("緩める", praise)
+        self.assertIn("残しとく", praise)
+        self.assertNotIn("緩める", praise)
 
     def test_conversational_revise_extract(self) -> None:
         from dogido_server.haiku.workshop import extract_conversational_revise
@@ -299,7 +506,7 @@ class WorkshopIntentTests(unittest.TestCase):
             self.assertIn("詰め込み注意（新しい方）", notes)
             self.assertNotIn("要素を少し絞って余白を残すとよい", notes)
             self.assertEqual(len(listed), 2)
-            # praise → 全軸 loosen
+            # 明示「気にせんで」相当 → 全軸 loosen（praise ではこれを書かない）
             store.save_haiku_lesson(lesson_type="*", note="", polarity="loosen", strength=0.0)
             self.assertEqual(store.list_recent_haiku_lessons(limit=3), [])
 
@@ -308,7 +515,16 @@ class WorkshopIntentTests(unittest.TestCase):
 
         self.assertTrue(wants_clear_haiku_lessons("もう気にせんでええわ"))
         self.assertTrue(wants_clear_haiku_lessons("前の注意いらない"))
+        self.assertTrue(wants_clear_haiku_lessons("気にせんでええよ"))
+        self.assertTrue(wants_clear_haiku_lessons("もう気にしなくていいよ"))
+        self.assertTrue(wants_clear_haiku_lessons("前の注意はいらないよ"))
+        self.assertTrue(wants_clear_haiku_lessons("前の注意はもういらない"))
         self.assertFalse(wants_clear_haiku_lessons("もうええ"))
+        self.assertFalse(wants_clear_haiku_lessons("気にせんでとは言ってない"))
+        self.assertFalse(wants_clear_haiku_lessons("気にせんでとは言っとらん"))
+        self.assertFalse(wants_clear_haiku_lessons("『気にせんで』と言われた"))
+        self.assertFalse(wants_clear_haiku_lessons("前の注意いらないわけじゃない"))
+        self.assertFalse(wants_clear_haiku_lessons("前の注意いらない？"))
         self.assertEqual(classify_workshop_intent("もう気にせんで"), "clear_lessons")
         self.assertEqual(classify_workshop_intent("もうええ"), "close")
 
@@ -363,6 +579,265 @@ class WorkshopIntentTests(unittest.TestCase):
 
 
 class WorkshopServiceIntegrationTests(unittest.TestCase):
+    def test_voice_input_uses_workshop_context_only_for_semantic_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(
+                    llm_enabled=False,
+                    audio_enabled=False,
+                    memory_enabled=False,
+                    memory_dir=Path(tmp) / "mem",
+                )
+            )
+            response = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            session = service.sessions[response.session_id]
+            emission = _emission(text="さむいあめや\nまどのひかりを\nくさちのね")
+            emission.materials = {"time_phase": "evening"}
+            session.last_haiku_emission = emission
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id=None,
+                now=emission.created_at,
+            )
+            service.push_player_input(
+                "それだったらユーグレイヤの方がいいんじゃない?",
+                source="voice",
+            )
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=2),
+                sequence=1,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.EVENING,
+                    weather=Weather.CLEAR,
+                    biome="meadow",
+                    local_light=12,
+                    sky_visible=True,
+                ),
+                meta=MetaState(),
+            )
+
+            service.process_event(event, session_id=response.session_id)
+
+            self.assertEqual(
+                session.machine.player_input.raw_text,
+                "それだったらユーグレイヤの方がいいんじゃない?",
+            )
+            self.assertEqual(
+                session.machine.player_input.semantic_text,
+                "それだったら夕暮れやの方がいいんじゃない?",
+            )
+
+    def test_typed_input_does_not_use_phonetic_workshop_correction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(llm_enabled=False, audio_enabled=False, memory_enabled=False)
+            )
+            response = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            session = service.sessions[response.session_id]
+            emission = _emission(text="さむいあめや\nまどのひかりを\nくさちのね")
+            emission.materials = {"time_phase": "evening"}
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id=None,
+                now=emission.created_at,
+            )
+            service.push_player_input("ユーグレイヤの方がいい", source="text")
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=2),
+                sequence=1,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(name="p", dimension="minecraft:overworld"),
+                world=WorldState(
+                    time_phase=TimePhase.EVENING,
+                    weather=Weather.CLEAR,
+                    biome="meadow",
+                    local_light=12,
+                    sky_visible=True,
+                ),
+                meta=MetaState(),
+            )
+
+            service.process_event(event, session_id=response.session_id)
+
+            self.assertEqual(session.machine.player_input.semantic_text, "ユーグレイヤの方がいい")
+
+    def test_repair_is_proposed_then_saved_only_after_explicit_confirmation(self) -> None:
+        class RepairLLM:
+            def __init__(self) -> None:
+                self.requests = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                return request.fallback_text
+
+            def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+                self.requests.append(request)
+                if request.kind == "haiku_workshop_intent":
+                    return {
+                        "intent": "request_repair",
+                        "confidence": 0.96,
+                        "repair_requested": True,
+                        "findings": [{
+                            "line_index": 1,
+                            "fragment": "ひつじがあるく",
+                            "problem": "preference",
+                            "note": "雨の場面を残したい",
+                            "confidence": 0.92,
+                        }],
+                    }
+                if request.kind == "haiku_workshop_revision":
+                    return {"lines": [{
+                        "line_index": 1,
+                        "text": "あめつよくふる",
+                        "atom_ids": ["observation:test:3"],
+                    }]}
+                if request.kind == "haiku_line_grounding":
+                    return {
+                        "assessments": [{
+                            "line_index": 1,
+                            "atom_ids": ["observation:test:3"],
+                            "meaning_retained": True,
+                            "natural_japanese": True,
+                        }]
+                    }
+                return {}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            from dogido_server.haiku.source_atoms import HaikuSourceAtom
+            from dogido_server.player_input.routing import route_player_input
+
+            atoms = [
+                HaikuSourceAtom(
+                    atom_id=f"observation:test:{index}",
+                    text=text,
+                    source_ref=f"observation:test:{index}",
+                    field_path="observed_label",
+                    observation_role="test",
+                    kind="observation",
+                )
+                for index, text in enumerate(("春の風", "歩く羊", "夜の月", "強い雨"))
+            ]
+            lines = ["はるのかぜ", "ひつじがあるく", "よるのつき"]
+            emission = _emission(text="\n".join(lines))
+            emission.materials = {
+                "source_atoms": [atom.to_prompt_dict() for atom in atoms],
+                "line_sources": [
+                    {"line_index": index, "text": lines[index], "atom_ids": [atoms[index].atom_id]}
+                    for index in range(3)
+                ],
+            }
+            llm = RepairLLM()
+            service = DogidoService(
+                Settings(
+                    llm_enabled=True,
+                    audio_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=Path(tmp) / "mem",
+                    platform_ai_provider="chat",
+                )
+            )
+            response = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            session = service.sessions[response.session_id]
+            service.llm = llm
+            session.last_haiku_emission = emission
+            service._open_haiku_workshop(session, emission, entry_id="h_repair", now=emission.created_at)
+
+            def event(sequence: int, text: str) -> GameEvent:
+                return GameEvent(
+                    schema_version="2026-05-24",
+                    adapter="test",
+                    observed_at=emission.created_at + timedelta(seconds=sequence * 5),
+                    sequence=sequence,
+                    event=EventDescriptor(
+                        name=EventName.STATUS_SNAPSHOT,
+                        source_kind=SourceKind.SYSTEM,
+                        priority_hint=PriorityHint.BACKGROUND,
+                        certainty=Certainty.HIGH,
+                    ),
+                    player=PlayerState(
+                        name="p",
+                        position=Position(x=0, y=64, z=0),
+                        dimension="minecraft:overworld",
+                    ),
+                    world=WorldState(
+                        time_phase=TimePhase.DAY,
+                        weather=Weather.CLEAR,
+                        biome="plains",
+                        local_light=15,
+                        sky_visible=True,
+                    ),
+                    meta=MetaState(user_text=text),
+                )
+
+            session.machine.player_input = route_player_input("そこ直して")
+            proposed = service._haiku_workshop_actions(session, event(2, "そこ直して"))
+            self.assertIn("あめつよくふる", proposed[0].text or "")
+            assert session.haiku_workshop is not None
+            self.assertEqual(session.haiku_workshop.pending_revision, "はるのかぜ\nあめつよくふる\nよるのつき")
+            self.assertEqual(service.memory.list_haiku_revisions(), [])
+            revision_request = next(request for request in llm.requests if request.kind == "haiku_workshop_revision")
+            self.assertEqual(revision_request.route, "haiku")
+
+            session.machine.player_input = route_player_input("その案で")
+            saved = service._haiku_workshop_actions(session, event(3, "その案で"))
+            self.assertIn("覚え", saved[0].text or "")
+            self.assertIsNone(session.haiku_workshop)
+            revisions = service.memory.list_haiku_revisions()
+            self.assertEqual(revisions[0]["revised_text"], "はるのかぜ\nあめつよくふる\nよるのつき")
+            self.assertEqual(revisions[0]["source"], "generated_confirmed")
+            self.assertEqual(revisions[0]["line_sources"][1]["atom_ids"], ["observation:test:3"])
+
     def test_emit_opens_workshop_and_critique_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(
@@ -438,6 +913,226 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(any("読みやす" in str(x.get("note")) for x in lessons))
             # hard 合流用の fragments があっても soft のまま
             self.assertTrue(all(x.get("polarity") != "loosen" for x in lessons))
+
+    def test_h7_lite_classifies_soft_default_without_persisting_ai_only_lesson(self) -> None:
+        class IntentLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+                self.last_intent_request = None
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                raise AssertionError(f"leaf should not run for {request.kind}")
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                self.structured_kinds.append(request.kind)
+                if request.kind == "haiku_workshop_intent":
+                    self.last_intent_request = request
+                    return {"intent": "critique_forced", "confidence": 0.94}
+                return {}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = IntentLLM()
+            settings = Settings(
+                llm_enabled=True,
+                audio_enabled=False,
+                decision_policy="py_trees",
+                memory_enabled=True,
+                memory_dir=Path(tmp) / "mem",
+                platform_ai_provider="chat",
+            )
+            service = DogidoService(settings)
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sess = service.sessions[session.session_id]
+            service.llm = llm
+            emission = _emission(text="そらまぶし\nくさむらにうかぶ\nくろいせきたん")
+            service._open_haiku_workshop(sess, emission, entry_id="h_h7", now=emission.created_at)
+
+            from dogido_server.player_input.routing import route_player_input
+
+            player_text = "ちょっと言葉を詰めすぎた感じがする"
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text=player_text),
+            )
+            sess.machine.player_input = route_player_input(player_text)
+            actions = service._haiku_workshop_actions(sess, event)
+
+            self.assertEqual(len(actions), 1)
+            self.assertIn("余白", actions[0].text or "")
+            self.assertEqual(llm.structured_kinds, ["haiku_workshop_intent"])
+            request = llm.last_intent_request
+            self.assertIsNotNone(request)
+            self.assertEqual(request.route, "chat")
+            self.assertEqual(request.max_tokens, 192)
+            self.assertEqual(request.details["player_text"], player_text)
+            lessons = MemoryStore(Path(tmp) / "mem").list_recent_haiku_lessons(
+                limit=3,
+                now=event.observed_at,
+            )
+            self.assertFalse(any(x.get("lesson_type") == "compress" for x in lessons))
+            self.assertTrue(is_open(sess.haiku_workshop))
+
+    def test_h7_lite_extracts_findings_for_rule_intent_and_falls_back_on_error(self) -> None:
+        class ControlledLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+                self.raise_intent = False
+                self.intent = "close"
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                return request.fallback_text
+
+            def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                self.structured_kinds.append(request.kind)
+                if self.raise_intent:
+                    raise RuntimeError("local classifier unavailable")
+                return {"intent": self.intent, "confidence": 1.0}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = ControlledLLM()
+            service = DogidoService(
+                Settings(
+                    llm_enabled=True,
+                    audio_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=Path(tmp) / "mem",
+                    platform_ai_provider="chat",
+                )
+            )
+            session = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            sess = service.sessions[session.session_id]
+            service.llm = llm
+            emission = _emission()
+            service._open_haiku_workshop(sess, emission, entry_id="h_safe", now=emission.created_at)
+            assert sess.haiku_workshop is not None
+
+            # 曖昧な発話では限定 intent を補助する。
+            analysis, path = service._analyze_workshop_feedback(
+                sess.haiku_workshop,
+                "曖昧な句の話",
+            )
+            self.assertEqual(analysis.intent, "soft_default")  # close は許可 enum 外
+            self.assertEqual(path, "soft_default")
+            self.assertTrue(is_open(sess.haiku_workshop))
+
+            llm.structured_kinds.clear()
+            # 既知の講評では大分類をルールが守り、AIはfinding抽出だけに使う。
+            from dogido_server.player_input.routing import route_player_input
+
+            rule_text = "無理やり圧縮しすぎ"
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(
+                    name="p",
+                    position=Position(x=0, y=64, z=0),
+                    dimension="minecraft:overworld",
+                ),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="plains",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text=rule_text),
+            )
+            sess.machine.player_input = route_player_input(rule_text)
+            actions = service._haiku_workshop_actions(sess, event)
+            self.assertEqual(len(actions), 1)
+            self.assertIn("余白", actions[0].text or "")
+            self.assertEqual(llm.structured_kinds, ["haiku_workshop_intent"])
+
+            # 曖昧文をAIだけが praise と見ても、コード上の明示 praise ではないため閉じない。
+            llm.intent = "praise"
+            ambiguous = "印象に残るなあ"
+            sess.machine.player_input = route_player_input(ambiguous)
+            praise_event = event.model_copy(
+                update={
+                    "sequence": 3,
+                    "observed_at": emission.created_at + timedelta(seconds=7),
+                    "meta": MetaState(user_text=ambiguous),
+                }
+            )
+            service._haiku_workshop_actions(sess, praise_event)
+            self.assertTrue(is_open(sess.haiku_workshop))
+
+            # AIだけが修正要求と分類しても、明示ルールなしではpendingを作らない。
+            llm.intent = "request_repair"
+            repair_event = praise_event.model_copy(
+                update={
+                    "sequence": 4,
+                    "observed_at": emission.created_at + timedelta(seconds=8),
+                    "meta": MetaState(user_text="これどうかな"),
+                }
+            )
+            sess.machine.player_input = route_player_input("これどうかな")
+            service._haiku_workshop_actions(sess, repair_event)
+            assert sess.haiku_workshop is not None
+            self.assertIsNone(sess.haiku_workshop.pending_revision)
+            self.assertNotIn("haiku_workshop_revision", llm.structured_kinds)
+
+            # provider 例外も従来の soft_default に戻る
+            llm.raise_intent = True
+            analysis, path = service._analyze_workshop_feedback(
+                sess.haiku_workshop,
+                "曖昧な句の話",
+            )
+            self.assertEqual((analysis.intent, path), ("soft_default", "soft_default"))
+            self.assertTrue(is_open(sess.haiku_workshop))
 
     def test_workshop_defers_night_warning_until_closed(self) -> None:
         """workshop open 中は夕方割り込みを出さず、閉じたあとに出せる。"""
@@ -687,10 +1382,10 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertEqual(getattr(llm, "last").kind, "haiku_workshop_material_pick")
             self.assertTrue(getattr(llm, "assert_plains"))
 
-    def test_soft_critique_uses_poet_leaf_not_player_chat(self) -> None:
-        """Stage2+4: 添削っぽい自然文は poet leaf。player_chat に落ちない。pin も維持。"""
+    def test_soft_critique_uses_collaborator_leaf_not_player_chat(self) -> None:
+        """Stage2+4: 添削っぽい自然文は共同編集者leaf。chatに落ちずpinも維持。"""
 
-        class PoetLLM:
+        class CollaboratorLLM:
             def __init__(self) -> None:
                 self.kinds: list[str] = []
 
@@ -707,7 +1402,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 return {}
 
         with tempfile.TemporaryDirectory() as tmp:
-            llm = PoetLLM()
+            llm = CollaboratorLLM()
             settings = Settings(
                 llm_enabled=True,
                 audio_enabled=False,
@@ -760,19 +1455,19 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     meta=MetaState(user_text=user_text),
                 )
 
-            # Stage1 マーカー hit → critique_forced は定型（poet ではない）でも chat に落ちない
+            # Stage1 マーカー hitでも、共同編集者 leaf で短く受け止める。
             r1 = service.process_event(
                 _event(2, "なかなかいいねでも黒い石炭がちょっと長いかも", seconds=5),
                 session_id=sid,
             )
             speeches1 = [a.text for a in r1.actions if a.layer == "speech" and a.text]
             self.assertEqual(len(speeches1), 1)
-            self.assertIn("余白", speeches1[0])
+            self.assertIn("くろいせきたん", speeches1[0])
             self.assertNotIn("player_chat", llm.kinds)
             self.assertTrue(is_open(sess.haiku_workshop))
             self.assertEqual(sess.haiku_workshop.drift_count if sess.haiku_workshop else -1, 0)
 
-            # Stage4: other_haiku → poet leaf
+            # Stage4: other_haiku → 共同編集者 leaf
             r2 = service.process_event(
                 _event(3, "黒石炭とかにしたらいいんじゃない?", seconds=10),
                 session_id=sid,
@@ -784,14 +1479,14 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(is_open(sess.haiku_workshop), msg="2回添削でも drift close しない")
             self.assertNotIn("player_chat", llm.kinds)
 
-            # soft_default（マーカー外の読み訂正）→ poet leaf
+            # soft_default（マーカー外の読み訂正）→ 共同編集者 leaf
             r3 = service.process_event(
                 _event(4, "いや土ぬくしだよ", seconds=15),
                 session_id=sid,
             )
             speeches3 = [a.text for a in r3.actions if a.layer == "speech" and a.text]
             self.assertEqual(len(speeches3), 1)
-            self.assertEqual(llm.kinds.count("haiku_workshop_reply"), 2)
+            self.assertEqual(llm.kinds.count("haiku_workshop_reply"), 3)
             self.assertTrue(is_open(sess.haiku_workshop))
             self.assertNotIn("player_chat", llm.kinds)
 

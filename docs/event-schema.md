@@ -69,6 +69,7 @@
 - `sequence`
 - `visual_threats`
 - `auditory_threats`
+- `ambient_sounds`
 - `inventory`
 - `combat`
 
@@ -326,6 +327,29 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `hostile_voice_like`
 - `movement_like`
 - `explosive_threat_like`
+
+## 12.1 `ambient_sounds`
+
+戦闘判定に使わない周囲音。非敵対 Mob の声に加え、クライアントで実際に再生された
+ブロック・天候・環境音を載せる。
+
+```json
+[
+  {
+    "type": "block:campfire",
+    "sound_event": "block.campfire.crackle",
+    "direction": { "horizontal": "right", "vertical": "same" },
+    "distance_band": "close",
+    "certainty": "medium"
+  }
+]
+```
+
+- `type=block:* / weather:* / environment:*` は実再生された `sound_event` から機械的に決める
+- 近くにブロックがあるだけで「その音がした」と推測しない
+- Mob 音は従来どおり、敵対中なら `auditory_threats`、非敵対なら `ambient_sounds`
+- 音源位置は粗い方向・距離帯だけを発話材料にし、exact position は渡さない
+- UI・音楽・プレイヤー自身の声は周囲音から除外する。ジュークボックスのレコードは対象
 
 ## 13. `passive_mobs`
 

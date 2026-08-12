@@ -57,6 +57,8 @@ final class DogidoEventClient {
         capabilities.add("inventory");
         capabilities.add("visual_threats");
         capabilities.add("auditory_threats");
+        capabilities.add("ambient_sounds");
+        capabilities.add("played_world_sounds");
         capabilities.add("danger_darkness");
         capabilities.add("combat_state");
         capabilities.add("death_events");

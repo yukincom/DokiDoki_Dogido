@@ -31,6 +31,7 @@ from pathlib import Path
 import httpx
 
 from dogido_server.config import get_settings
+from dogido_server.player_input.normalize import is_too_short_voice_text
 
 SAMPLE_RATE = 16000
 FRAME_MS = 30
@@ -40,7 +41,6 @@ PRE_ROLL_FRAMES = 10  # 発話開始前 300ms を含める
 
 # 参考: yuno-chan-api の誤認識ノイズパターン
 NOISE_PATTERNS = ("ごおおお", "ごーーー", "ざーーー", "うおおお")
-SHORT_ALLOWLIST = ("ドギド", "おい", "おーい", "うん", "はい", "おう", "なあ")
 
 WHISPER_CLI_CANDIDATES = (
     Path.home() / "AI_assistant" / "whisper.cpp" / "build" / "bin" / "whisper-cli",
@@ -131,8 +131,7 @@ def transcribe(cli: Path, model: Path, pcm: bytes, *, no_speech_thold: float) ->
         if any(noise in transcript for noise in NOISE_PATTERNS):
             print(f"[VOICE] ノイズ判定でスキップ: {transcript}")
             return None
-        compact = transcript.replace(" ", "")
-        if len(compact) <= 3 and compact not in SHORT_ALLOWLIST:
+        if is_too_short_voice_text(transcript):
             print(f"[VOICE] 短すぎるのでスキップ: {transcript}")
             return None
         return transcript
@@ -148,7 +147,7 @@ def deliver(base_url: str, auth_token: str | None, text: str) -> None:
     try:
         response = httpx.post(
             f"{base_url}/api/v1/player-input",
-            json={"text": text},
+            json={"text": text, "source": "voice"},
             headers=headers,
             timeout=3.0,
         )

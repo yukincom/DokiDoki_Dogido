@@ -149,6 +149,8 @@ class MemoryStore:
         *,
         revised_text: str | None = None,
         comment: str | None = None,
+        source: str = "player_feedback",
+        revision_line_sources: list[dict[str, Any]] | None = None,
         observed_at: datetime | None = None,
     ) -> dict[str, Any]:
         """元句を長期に残し、直し句があれば revision にペア保存する。
@@ -157,14 +159,46 @@ class MemoryStore:
         """
         entry, _ = self.save_agent_haiku(emission)
         created_at = observed_at or emission.created_at
+        revision_source = source.strip()
+        if revision_source not in {
+            "player_feedback",
+            "formal",
+            "conversational",
+            "generated_confirmed",
+        }:
+            raise ValueError(f"unknown haiku revision source: {source}")
+        if revision_source == "generated_confirmed":
+            rows = revision_line_sources or []
+            valid_rows = [
+                row
+                for row in rows
+                if isinstance(row, dict)
+                and isinstance(row.get("line_index"), int)
+                and not isinstance(row.get("line_index"), bool)
+                and row.get("line_index") in (0, 1, 2)
+                and isinstance(row.get("atom_ids"), list)
+                and bool(row.get("atom_ids"))
+                and all(
+                    isinstance(atom_id, str) and bool(atom_id.strip())
+                    for atom_id in row["atom_ids"]
+                )
+            ]
+            indices = {row["line_index"] for row in valid_rows}
+            if len(rows) != 3 or len(valid_rows) != 3 or indices != {0, 1, 2}:
+                raise ValueError(
+                    "generated_confirmed revision requires non-empty sources for all three lines"
+                )
         revision = {
             "id": self._revision_id(created_at, emission.event_sequence),
             "created_at": datetime_json(created_at),
             "haiku_id": entry.get("id"),
-            "source": "player_feedback",
+            "source": revision_source,
             "comment": (comment or "").strip() or None,
             "original_text": emission.text.strip(),
             "revised_text": (revised_text or "").strip() or None,
+            # AI修正を明示採用した場合だけ、検証済みの行別出典を監査用に残す。
+            # 元カタログJSONを書き換えるものではない。
+            "line_sources": revision_line_sources or None,
             "world": {
                 "biome": emission.biome,
                 "structure": emission.structure,
@@ -560,6 +594,8 @@ class MemoryStore:
                 "event_sequence": emission.event_sequence,
                 "route": emission.route,
             },
+            # 生成時の出典をsnapshotで残す。後日カタログが更新されても句の根拠を追える。
+            "materials_snapshot": dict(emission.materials or {}),
         }
 
     def _world_payload(self, event: GameEvent) -> dict[str, str | None]:

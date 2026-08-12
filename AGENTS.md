@@ -14,7 +14,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 ```
 
 - **判断の主**はコード（状態機械 / py_trees / policy）
-- **LLM**は雑談・川柳など「言い回し」生成に限定
+- **LLM / OS AI**は言い回し生成と、閉じた型の限定抽出（workshop intent / findings）まで。状態変更・保存判断はコード
 - **記憶**は JSONL（few-shot 山盛りや Hermes 系汎用エージェントは使わない）
 
 汎用チャットボットや「なんでもできるエージェント」に改造しない。
@@ -30,8 +30,10 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/haiku/workshop.py` | 句 pin（open/close）、意図分類、soft 返事、lesson 生成 |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
+| `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
+| `dogido_server/platform_ai.py` | Apple Foundation Models / Foundry Local / chat fallback の限定 structured router |
 | `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
-| `dogido_server/player_input/` | 正規化・`直し:`・ガード |
+| `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
 | `adapter/minecraft-fabric/` | ゲーム → イベント送信 |
 | `docs/` | 方針の正。実装とズレたら **docs を直すか実装を直すか**を明示 |
 | `tests/` | 変更時は関連 `test_haiku*` / `test_player_chat*` 等を回す |
@@ -47,13 +49,17 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - panic / 警告の優先、発話抑制、いつ川柳かは **状態機械側**
 - LLM に「今パニックすべきか」を委ねない
 - leaf 失敗時はカタログ fallback がある前提を壊さない
+- OS AI 出力から直接 close / lesson解除 / revision保存しない。enum・行番号・confidence をコード検証する
+- STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` を明示操作の正、`interpreted/semantic` を会話理解用として混ぜない
+- platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 
 ### 3.2 川柳 lesson は soft
 
 - player lessons は **参考行**（「強制ではない」）
 - **道具・読みの allowed/forbidden だけ hard**（例: シャベルなのにつるはし禁止）
 - lesson の `forbidden_fragments` を hard 禁止に合流しない
-- praise / 「気にせんで」→ `polarity: loosen`（全軸抑止可）
+- **praise（いい句）→ lesson は触らない**（過去の指摘をキープ。critique 保存のみ）
+- **「気にせんで」→ `polarity: loosen` + `lesson_type: "*"`**（全軸抑止。明示リセットのみ）
 - TTL: 日数 + 発句回数で自然減衰（`memory.list_recent_haiku_lessons`）
 - **strength 段階は当面使わない**（フィールドはあるが list 未参照）
 
@@ -85,7 +91,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 1. 観測 materials をプレイヤー視界に近づける  
 2. 外したあとも関係を壊さない（workshop / soft）  
-3. 飛び道具（VLM 常時 / Vector RAG / H7 LLM 分類）は後回し  
+3. 飛び道具（VLM 常時 / Vector RAG / workshop 全域の LLM 制御）は後回し
 
 → [docs/companion-maturity.md](docs/companion-maturity.md)
 
@@ -93,11 +99,13 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ## 4. よく触るドメイン詳細
 
-### 川柳 workshop（H1–H5.2）
+### 川柳 workshop（H1–H5.2 + H7-lite / 修正案1本）
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・revise・明示 close・次の句
-- 意図: `classify_workshop_intent` / 自然文直し: `extract_conversational_revise`
+- 意図: `classify_workshop_intent` が大分類と永続化の正。`soft_default` の AI intent は返答トーン補助だけで、lesson・close・repair開始へ使わない。既知講評では対象行・断片・problem を抽出
+- `request_repair`: 明示ルール時だけ、大きい haiku route が検証済み対象行を修正。別structured評価で意味保持・自然さを照合し、コードで出典ID・重複・音数・発句時hard制約を検証。案は明示採用まで保存しない
+- 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
 - ロジックの本体は `haiku/workshop.py`。`mixins/haiku.py` は発句と制約注入フックまで
 
@@ -112,6 +120,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - `haiku` … 句（irony/scene 経由のことも）  
 - 低レイテンシ戦況は LLM なし  
 - route ごとに provider を分けられる（`.env` / Settings）
+- platform structured は `auto=Apple Foundation Models → Foundry Local → chat`。任意依存で、失敗しても workshop を壊さない
 
 ---
 
@@ -188,14 +197,15 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2: **済**（soft lesson / loosen / TTL / 明示「気にせんで」）  
+- workshop H1〜H5.2 + H7-lite + 修正案1本: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings 抽出 / 明示採用）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  
 - TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  
 - 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
+- 川柳 source atom 品質ゲート: カタログ原文snapshot + 発話済み見どころの別provenance + 行別出典 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ 不合格行のみ最大2回再生成 + fail-closed **済**
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
-- 任意: 直し案 1 本、H7、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み  
+- 任意: OS AI・chat fallback・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
 
 更新したらこの節と `companion-maturity.md` §6 を揃える。

@@ -32,7 +32,8 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 
 | Issue | 主題 | 主ドキュメント |
 |---|---|---|
-| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 取り込み観察（W0） | `haiku-workshop-intake-patterns` · improvement 計画 · `service` / `haiku/workshop` |
+| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 入り口（限定 structured 抽出・共同編集者 leaf） | **closed** · `haiku-workshop-intake-patterns` · `haiku/workshop` |
+| [#37](https://github.com/yukincom/DokiDoki_Dogido/issues/37) | workshop チェックポイント記憶（薄くためて発句のみ） | [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md) · `memory-architecture` |
 | [#13](https://github.com/yukincom/DokiDoki_Dogido/issues/13) | ボイス速度・間 | `voice-delivery-plan` |
 | [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) | 複数ユーザー・記憶境界 | `multi-user-tenancy` · `memory-architecture` |
 | [#12](https://github.com/yukincom/DokiDoki_Dogido/issues/12) · [#14](https://github.com/yukincom/DokiDoki_Dogido/issues/14) · [#15](https://github.com/yukincom/DokiDoki_Dogido/issues/15) | うみれおんさんアドバイス | 製品・UI 寄り（対応 doc は issue 本文） |
@@ -55,6 +56,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 3 | [companion-maturity.md](companion-maturity.md) | 完成度の段階と改善の優先軸 |
 | 4 | [current-spec.md](current-spec.md) | 現行仕様の要約 |
 | 5 | [integration-architecture.md](integration-architecture.md) | コンポーネント連携 |
+| 6 | [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md) | 支援アクション・マイクラ句集UI・あんちょこ・OS 連携の将来構想 |
 
 **つながり:** `concept` → 体験の核 · `project-overview` / `current-spec` → 何を作るか · `companion-maturity` → 次に何を厚くするか。
 
@@ -118,7 +120,7 @@ casual（原則） ──┬── sm-vs-prompt（PR 順）
 | # | Document | Summary |
 |---|---|---|
 | 1 | [haiku-architecture.md](haiku-architecture.md) | 発句パイプライン |
-| 2 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop） |
+| 2 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop・OS／端末内AIの限定抽出） |
 | 3 | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) | 取り込みパターン調査（観察の正本は **#8**） |
 | 4 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
 | 5 | [memory-architecture.md](memory-architecture.md) | 記憶モデル |
@@ -157,6 +159,7 @@ architecture（どう詠む）
 - [project-overview.md](project-overview.md)
 - [companion-maturity.md](companion-maturity.md)
 - [current-spec.md](current-spec.md)
+- [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md)
 
 ### Interface and runtime
 

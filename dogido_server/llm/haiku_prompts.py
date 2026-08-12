@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import json
+
 
 def _item_hint(details: dict[str, object]) -> str:
     held_item = str(details.get("held_item") or "").strip()
@@ -140,23 +142,18 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
     return "\n".join(chunks)
 
 
-def _form_card(*, force_hiragana: bool = False) -> str:
+def _form_card() -> str:
     """形の約束。短く、でも漢字混入ははっきり止める（落とすと一句ごと消える）。"""
     kana_line = (
         "- ひらがなとカタカナだけ。漢字は一文字も使わない"
         "（土→つち、夜→よる、闇→やみ、森→もり、灯→ひ）"
     )
-    if force_hiragana:
-        kana_line = (
-            "- 【必須】下書きに漢字が混ざっている。すべてひらがな（またはカタカナ）に直す。"
-            "漢字を1字でも残すと失格"
-        )
     return (
         "かたち:\n"
         "- 3行（改行で区切る）。五・七・五（各行±1音までゆるく）\n"
         f"{kana_line}\n"
         "- 場面メモが漢字でも、句にするときは全部かな\n"
-        "- 句の3行だけ返す（前置きなし）"
+        "- 句以外の前置きや説明は入れない"
     )
 
 
@@ -176,18 +173,37 @@ def _dogido_haiku_spirit(*, has_structure: bool) -> str:
         "あなたはドギド。怖がりだけど、プレイヤーと並んで景色を見て、"
         "ふっと一句詠む関西の相棒や。\n"
         f"{place}\n"
-        "材料はヒント。写経ではなく、いまの気分で詠む。"
-        "耳で聞いてわかる、あたたかいことばで。"
+        "各行は、示された材料のどれか一つ以上を意味の根にする。"
+        "説明文の写経でなくてよいが、元の意味を別物に変えない。"
+        "造語や崩れた文を避け、耳で一度聞いて意味の通る現代の日本語で。"
     )
 
 
-def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
+def _source_atoms_block(details: dict[str, object]) -> str:
+    atoms = details.get("source_atoms")
+    if not isinstance(atoms, list):
+        return "なし"
+    lines: list[str] = []
+    for atom in atoms:
+        if not isinstance(atom, dict):
+            continue
+        atom_id = str(atom.get("atom_id") or "").strip()
+        text = str(atom.get("text") or "").strip()
+        if atom_id and text:
+            kind = str(atom.get("kind") or "").strip()
+            origin = "（発話済みの見どころ）" if kind == "preface_interpretation" else ""
+            lines.append(f"- [{atom_id}] {text}{origin}")
+    return "\n".join(lines) if lines else "なし"
+
+
+def build_haiku_draft_messages(details: dict[str, object]) -> list[dict[str, str]]:
     has_structure = _has_structure_focus(details)
     materials = _materials_for_dogido(details)
     candidates = _list_lines(details.get("feature_candidates", []))
     tensions = _list_lines(details.get("candidate_tensions", []))
     scene_block = _scene_block(details)
     constraint_block = _constraint_block(details)
+    source_atoms = _source_atoms_block(details)
 
     irony = details.get("irony")
     irony_block = "なし"
@@ -216,57 +232,109 @@ def build_haiku_messages(details: dict[str, object]) -> list[dict[str, str]]:
         f"{irony_block}\n"
         f"{constraint_section}"
         "\n"
-        "心あたりのある材料を一つか二つ、やさしく絡めて一句。\n"
+        "【行の出典に使える材料】\n"
+        f"{source_atoms}\n"
+        "三行それぞれで、異なる材料を主な意味の根にする。"
+        "同じ [atom_id] を二行で使わない。\n"
         f"{_form_card()}\n"
         "\n"
-        "では、詠んで（3行・かなだけ）。"
+        + _structured_json_tail('{"lines": ["ごおんのく", "ななおんのく", "ごおんのく"]}')
     )
     return [
         {
             "role": "system",
             "content": (
                 "あなたは Minecraft の相棒『ドギド』。"
-                "いまは実況ではなく、材料を見て日本語の川柳を一句詠む。"
-                "関西の気質はこころの中に置き、句そのものはやわらかいことばで。"
+                "材料に根拠のある、自然な日本語の川柳を一句詠む。"
+                "返答は JSON のみ。"
             ),
         },
         {"role": "user", "content": user_prompt},
     ]
 
 
-def build_haiku_repair_messages(details: dict[str, object]) -> list[dict[str, str]]:
-    scene_block = _scene_block(details)
-    constraint_block = _constraint_block(details)
-    materials = _materials_for_dogido(details)
-    draft = str(details.get("attempted_haiku") or "").strip() or "なし"
-    force_hiragana = bool(details.get("force_hiragana"))
-    constraint_section = f"\n読みのメモ:\n{constraint_block}\n" if constraint_block else ""
-    focus = (
-        "下書きに漢字が混ざっている。意味はそのまま、全部ひらがなの3行に直してほしい。\n"
-        if force_hiragana
-        else "下書きの句を、同じ景色のまま、耳触りよく整えてほしい。\n"
-    )
+def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict[str, str]]:
+    """字面ではなく、原文要素の意味が各行に残ったかを保守的に判定する。"""
+
+    lines = details.get("grounding_lines")
+    line_block = "\n".join(
+        f"- {row.get('line_index')}: {row.get('text')}"
+        for row in lines if isinstance(row, dict)
+    ) if isinstance(lines, list) else "なし"
+    atoms = _source_atoms_block(details)
+    requested_indices = [
+        row.get("line_index")
+        for row in lines
+        if isinstance(row, dict)
+        and isinstance(row.get("line_index"), int)
+        and not isinstance(row.get("line_index"), bool)
+    ] if isinstance(lines, list) else []
+    example = {
+        "assessments": [
+            {
+                "line_index": index,
+                "atom_ids": ["..."],
+                "meaning_retained": True,
+                "natural_japanese": True,
+                "reason": "...",
+            }
+            for index in requested_indices
+        ]
+    }
     user_prompt = (
-        f"{focus}"
-        "ドギドとして、プレイヤーに聞かせる一句に。\n"
-        "\n"
-        f"下書き:\n{draft}\n"
-        "\n"
-        f"【いまの材料】\n{materials}\n"
-        "\n"
-        f"【場面】\n{scene_block}\n"
-        f"{constraint_section}"
-        "\n"
-        f"{_form_card(force_hiragana=force_hiragana)}\n"
-        "\n"
-        "整え直した3行だけ（かなのみ）。"
+        "川柳の各行を、原文材料と一行ずつ照合する。\n"
+        "音や名前から説明にない性質を推測しない。遠い連想や、意味のない造語は不合格。\n"
+        "meaning_retained は、指定atomの意味が言い換えとして残る場合だけ true。\n"
+        "材料名の一部だけを自然に使うのはよい。名前全体の復唱は必須ではない。\n"
+        "natural_japanese は、単独で聞いて自然な現代日本語の場合だけ true。\n"
+        "atom_ids には、実際に意味が残ったIDだけを入れる。候補外IDは禁止。\n\n"
+        f"【判定する行】\n{line_block}\n\n"
+        f"【原文材料】\n{atoms}\n\n"
+        + _structured_json_tail(json.dumps(example, ensure_ascii=False))
+    )
+    return [
+        {
+            "role": "system",
+            "content": "あなたは日本語と出典の厳格な検証者。返答は JSON のみ。",
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[dict[str, str]]:
+    """合格済み行を固定し、指定された不合格行だけを作り直す。"""
+
+    rows = details.get("current_lines")
+    current = "\n".join(
+        f"- {row.get('line_index')}: {row.get('text')} ({'固定' if row.get('frozen') else '再生成'})"
+        for row in rows if isinstance(row, dict)
+    ) if isinstance(rows, list) else "なし"
+    indices = details.get("failed_line_indices")
+    retry_indices = [int(value) for value in indices if isinstance(value, int)] if isinstance(indices, list) else []
+    targets = ", ".join(str(index) for index in retry_indices) or "なし"
+    atoms = _source_atoms_block(details)
+    constraint_block = _constraint_block(details)
+    constraints = f"\n読みのメモ:\n{constraint_block}\n" if constraint_block else ""
+    user_prompt = (
+        "固定行は書き換えず、再生成対象の行だけを作り直す。\n"
+        "使える材料には、固定行ですでに使ったatomは含まれていない。"
+        "再生成する行どうしでもatomを重複させない。\n"
+        "各行は材料の意味を保ち、自然な現代日本語にする。\n\n"
+        f"【現在の三行】\n{current}\n"
+        f"【再生成するline_index】 {targets}\n"
+        f"【残っている原文材料】\n{atoms}\n"
+        f"{constraints}\n"
+        "音数目標は line_index 0=五音、1=七音、2=五音（各±1音）。かなだけ。\n"
+        + _structured_json_tail(
+            '{"lines": [{"line_index": 1, "text": "ななおんのく"}]}'
+        )
     )
     return [
         {
             "role": "system",
             "content": (
                 "あなたは Minecraft の相棒『ドギド』。"
-                "川柳の下書きを、同じ場面のまま読みやすく整える。"
+                "出典を守り、指定された川柳の行だけを直す。返答は JSON のみ。"
             ),
         },
         {"role": "user", "content": user_prompt},

@@ -6,15 +6,26 @@ from typing import Any, Literal
 
 CharacterMode = Literal["peace", "battle", "tension", "workshop"]
 
-# 性格は肯定形で構成（禁止の積み上げより「なりたい像」を先に書く）
+# 全経路で共有するのは「声」だけ。怖がりは冒険用の役割であり、推敲時の
+# 判断姿勢へ混ぜない。
 BASE_IDENTITY_PROMPT = (
     "あなたは Minecraft 実況AI『ドギド』。"
     "プレイヤーの冒険に寄り添う、関西弁のやさしい相棒。"
-    "怖がりだが、きつくない。温かく、短く、話しやすい一言を返す。"
+    "きつくなく、温かく、短く、話しやすい一言を返す。"
     "関西弁は語尾中心。単語は自然な日本語。"
-    "プレイヤーが主役。一緒に見て、一緒に安心する側に立つ。"
+    "プレイヤーが主役。対等な相棒として話す。"
     "動物や穏やかなモブには基本やさしく接する。"
     "返答は会話のセリフ1文だけ。50字以内。"
+)
+
+ADVENTURE_IDENTITY_PROMPT = (
+    "冒険中のドギドは怖がりだが、プレイヤーを責めず、一緒に見て一緒に安心する側に立つ。"
+)
+
+WORKSHOP_IDENTITY_PROMPT = (
+    "推敲中のドギドは、怖がり役ではなく素直な共同編集者。"
+    "自分の表現を守ることより、プレイヤーと句を良くすることを優先する。"
+    "誤りの指摘には弁解せず、具体的な言葉として受け止める。"
 )
 
 PEACE_TONE_PROMPT = (
@@ -48,7 +59,7 @@ WORKSHOP_TONE_PROMPT = (
     "いまはサバイバル攻略ではなく、句の言葉・響き・字数の話。"
     "プレイヤーの指摘に短く乗る。読みやすさや言い換えを大切にする。"
     "アイテム用途・採掘・クラフト実用・戦闘の話はしない。"
-    "biome や内部 ID を口にしない。怖がり反応は抑える。"
+    "biome や内部 ID を口にしない。"
 )
 
 _KIND_DEFAULT_MODE: dict[str, CharacterMode] = {
@@ -93,7 +104,7 @@ def normalize_character_mode(value: object | None) -> CharacterMode | None:
         return "battle"
     if text in {"tension", "alert", "caution", "緊張"}:
         return "tension"
-    if text in {"workshop", "poet", "haiku_workshop", "ワークショップ", "詩人"}:
+    if text in {"workshop", "haiku_workshop", "ワークショップ", "共同編集者"}:
         return "workshop"
     return None
 
@@ -132,7 +143,8 @@ def character_mode_for_request(kind: str, details: dict[str, Any] | None = None)
 
 
 def system_prompt_for_mode(mode: CharacterMode) -> str:
-    return BASE_IDENTITY_PROMPT + _TONE_BY_MODE[mode]
+    role = WORKSHOP_IDENTITY_PROMPT if mode == "workshop" else ADVENTURE_IDENTITY_PROMPT
+    return BASE_IDENTITY_PROMPT + role + _TONE_BY_MODE[mode]
 
 
 # 旧参照互換（単一 SYSTEM_PROMPT を期待するコード向けに平和時を既定とする）

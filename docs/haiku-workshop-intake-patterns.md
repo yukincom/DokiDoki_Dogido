@@ -1,15 +1,15 @@
 # 川柳 workshop 取り込みパターン調査
 
-**日付:** 2026-07-19  
-**状態:** 調査・比較（実装前）。**観察ログの正本は Issue #8**  
+**日付:** 2026-08-12
+**状態:** 調査・比較（H1〜H5.2・H7-lite 反映済み）。**観察ログの正本は Issue #8**
 **Issue:** [#8 観察台帳](https://github.com/yukincom/DokiDoki_Dogido/issues/8) ← **実例はここにどんどん追加**  
 **関連:** [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)
 
 方針の前提:
 
 - **回数を取る前に解を決めない**（W0 = Issue に観察を貯める）  
-- **判定はコード（SM / pure function）**。プロンプトに「句の話なら拾え」と書かない  
-- open **中だけ**入り口を広げる案は仮説（観察後に採否）  
+- **明示操作・hard off-topic・状態管理はコード（SM / pure function）**。H7-lite は `soft_default` の intent 補助と、既知講評を含む対象行・断片・problem 抽出だけを行う
+- open 中は hard off-topic だけ chat に戻し、それ以外のマーカー外発話を `soft_default` として扱う
 - この docs は比較メモ。**追記の本丸は Issue コメント／本文**
 
 ---
@@ -22,8 +22,13 @@ player-input
   → formal/conversational 直し? → revision
   → その他 haiku 操作?
   → classify_workshop_intent (open 時のみ有効な経路)
-       None → 通常 player_chat
-            → speech あり → workshop drift
+       対象 kind（soft_default / other / request_repair / 各 critique）
+                    → OS／端末内AI優先の限定 structured 抽出
+       既知 intent  → ルールの大分類を維持し、対象行・断片・問題種別だけ抽出
+                    → soft_default のintentは返答トーンだけに利用
+                    → 低信頼・失敗はルール結果／chat fallback
+       hard off-topic → 通常 player_chat
+                        → speech あり → workshop drift
 ```
 
 いま intent に載るもの（マーカー）:
@@ -57,21 +62,21 @@ player-input
 | P01 | グーの木の水って何? | 意味質問 | ask_meaning ✅ | workshop + 材料開示 | YES |
 | P02 | 読めん / 意味わからん | 読みにくい | gibberish ✅ | workshop | YES |
 | P03 | 無理やり圧縮しすぎ | 詰め込み | forced ✅ | workshop + lesson | YES |
-| P04 | いい句やな | ほめ | praise ✅ | workshop + loosen | YES |
+| P04 | いい句やな | ほめ | praise ✅ | workshop + critique 保存 + close（lesson 非変更） | YES |
 | P05 | 直し: あ / い / う | 直し | revision ✅ | revision + close | YES |
 | P06 | こう直して: … | 自然文直し | conversational ✅ | revision | YES |
-| P07 | 腹っぱの間違いかな | 読み・語句の疑い | **None → chat** ❌ | workshop soft / 読み疑い | YES |
+| P07 | 腹っぱの間違いかな | 読み・語句の疑い | critique_gibberish ✅ | workshop soft / 読み疑い | YES |
 | P08 | はらばって何 | 語の意味 | ask_meaning ✅（「って何」） | workshop | YES |
-| P09 | じゃあ平原にハラッパっていう | 読み教え | **None** ❌ | **reading_correction** | YES |
+| P09 | じゃあ平原にハラッパっていう | 読み教え | soft_default → H7-lite ⚠（読み保存にはならない） | **reading_correction** | YES |
 | P10 | 草地はくさち | 読み教え | reading ✅ | reading | YES/外でも |
 | P11 | そうちじゃなくてくさち | 読み訂正 | reading ✅ | reading | YES |
 | P12 | 海ちゃうやろ | 場違い | offscene ✅ | workshop | YES |
 | P13 | この句どう思う? | 句への言及 | other_haiku ✅（「句」） | workshop | YES |
-| P14 | 項目を足した方がいいかも | メタ・システム | None → chat | **chat**（drift 可） | NO |
+| P14 | 項目を足した方がいいかも | メタ・システム | soft_default → H7-lite ⚠ | **chat**（drift 可） | NO |
 | P15 | 松明ある？ | ゲーム雑談 | chat | chat + drift | NO |
 | P16 | おはよう | 雑談 | chat | chat + drift | NO |
-| P17 | （句の一部）はらば おかしくない？ | 断片＋疑い | 要確認 | workshop | YES |
-| P18 | さびたもってランタン？ | 材料確認 | 要確認 | workshop ask_meaning 寄り | YES |
+| P17 | （句の一部）はらば おかしくない？ | 断片＋疑い | critique_gibberish ✅ | workshop | YES |
+| P18 | さびたもってランタン？ | 材料確認 | soft_default → H7-lite | workshop ask_meaning 寄り | YES |
 
 **収集ルール:** 実プレイで「ピンが立ってるのに chat に落ちた／落ちて正解だった」発話を P19… に追記。  
 週に数行でよい。
@@ -179,34 +184,34 @@ intent は狭いまま、chat の stance を none 寄りに。
 
 ---
 
-### 案 F — LLM structured で intent 分類（H7）
+### 案 F — LLM structured で intent 分類（H7-lite、限定採用）
 
 | 長所 | 短所 |
 |---|---|
-| 自然文に強い | 遅延・不安定・方針的に後回し |
-| | ルールで足りる層を先に固める |
+| 自然文に強い | 遅延・不安定さがある |
+| ルールの抜けを講評種別へ寄せられる | 低信頼・失敗時の fallback が必要 |
 
-**P0 では使わない。** パターン台帳が溜まってから再検討。
+**限定採用済み。** ルールで `soft_default` になった場合も、閉じた enum と信頼度ゲートを通した intent は返答トーンだけに使い、lesson・close・repair開始へは使わない。既知 critique / other / repair では対象行・断片・problem の抽出だけに使う。明示操作・hard off-topic・状態管理はコードのまま。
 
 ---
 
 ## 5. 推奨組み合わせ
 
 ```text
-B（句関連ゲート）+ C（読み拡張）+ E（open 中 topic 抑制）
-A はゲート内の intent 精度向上として部分採用
-D/F は見送り
+B（open 中 soft 既定）+ E（hard off-topic は chat）+ F（限定 intent / findings 抽出）
+A は intent 精度向上として部分採用
+C は読み保存の未解決パターンに限定して継続検討、D は不採用
 ```
 
 ### 処理順（open 中）
 
 ```text
-1. reading_correction（拡張後）→ 保存・返事・drift しない
+1. reading_correction → 保存・返事・drift しない
 2. revise / formal 直し
-3. is_about_pinned_haiku?
-     NO  → chat（drift 可）。topic は open 中弱める(E)
-     YES → classify_intent or other_haiku
-           workshop 返事・critique・drift しない
+3. classify_workshop_intent
+     既知 intent    → workshop 返事・critique・drift しない
+     句関連         → H7-lite（OS AI優先、失敗はchat、状態判断はコードのまま）
+     hard off-topic → chat（drift 可）
 ```
 
 ### テスト観点（パターン駆動）
@@ -224,12 +229,12 @@ D/F は見送り
 
 | フェーズ | 内容 | 対応パターン |
 |---|---|---|
-| **W0** | 台帳に実ログを 5〜10 行追記 | 収集 |
-| **W1** | `is_about_pinned_haiku` + YES→other_haiku + drift 抑制 | P07, P13, F1, F3 |
-| **W2** | 読み「AにBっていう」等 | P09, P10, F2 |
-| **W3** | pin 断片マッチ + 誤り語 | P17, P07 |
-| **W4** | open 中 topic 抑制 | F4 |
-| **W5** | 台帳レビュー → マーカー微調整 or H7 検討 | 残り |
+| **W0** | 台帳に実ログを追加 | 継続 |
+| **W1** | open 中 soft 既定 + hard off-topic の chat/drift | **済**。P07, P13, F1, F3 |
+| **W2** | 読み「AにBっていう」等 | P09 は未、P10 は済 |
+| **W3** | pin 断片マッチ + 誤り語 | **済**。P17, P07 |
+| **W4** | open 中 topic 誤爆の抑止 | 継続観察。F4, P14 |
+| **W5** | 限定 structured intent / findings 抽出 | **H7-lite 済**。実ログ評価は継続 |
 
 ---
 
@@ -245,10 +250,8 @@ D/F は見送り
 ## 8. 次のアクション
 
 1. **Issue #8 に観察を足す**（本文 or コメント。テンプレは Issue 先頭）  
-2. ある程度溜まったら案 A–F の採否を決める  
-3. そのあと W1 実装  
-
-実装に入るまで、この docs の「推奨」は **仮** のままにする。
+2. OS AI／chat fallback の低信頼・誤分類・finding 精度を実ログで確認する
+3. P09 の読み保存と P14 のメタ発話は、実害を見てコード側マーカーを調整する
 
 ---
 
@@ -258,3 +261,4 @@ D/F は見送り
 |---|---|
 | 2026-07-19 | 初版。パターン台帳・案 A–F 比較・推奨 B+C+E |
 | 2026-07-19 | 観察の正本を Issue #8 に。回数不足のうちは実装しない |
+| 2026-08-12 | H7-lite を OS／端末内AI優先の限定 intent / findings 抽出へ更新。残る P09 / P14 を明記 |

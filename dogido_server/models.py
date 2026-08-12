@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -275,12 +275,14 @@ class AuditoryThreat(DogidoModel):
 
 
 class AmbientSound(DogidoModel):
-    """非敵対の周囲音（村人・家畜など）。戦闘判定には使わない。
+    """戦闘判定に使わない周囲音（非敵対Mob・ブロック・天候・環境）。
 
-    HOSTILE カテゴリ以外の entity 音を adapter が拾って載せる。
+    非敵対 entity 音に加え、SoundManager で実再生された world 音を adapter が載せる。
+    `type=block:* / weather:* / environment:*` は実際の sound_event が根拠であり、
+    近くのブロック名から音を推測した値ではない。
     player_chat の「音がした？」系の根拠になる。
     """
-    type: str  # 例: villager / cow / unknown
+    type: str  # 例: villager / block:campfire / weather:thunder / unknown
     source_id: str | None = None
     sound_event: str | None = None
     direction: Direction = Field(default_factory=Direction)
@@ -495,6 +497,8 @@ class PlayerInputRequest(DogidoModel):
     プレイヤー発話。次のゲームイベントの meta.user_text に相乗りする。
     """
     text: str
+    # 既存クライアントは text 扱い。voice_input だけ明示して文脈補正を有効にする。
+    source: Literal["text", "voice"] = "text"
 
 
 class StateResponse(DogidoModel):
