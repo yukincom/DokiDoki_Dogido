@@ -4,95 +4,23 @@ from __future__ import annotations
 import re
 
 
-def clean_haiku_output(text: str | None) -> str:
-    if not text:
-        return ""
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-    cleaned = cleaned.replace("<|im_end|>", "").replace("<|endoftext|>", "").strip()
-    cleaned = re.sub(r"(?is)^here'?s a thinking process:.*?(?:final answer:|answer:|返答:|出力:|セリフ:)", "", cleaned).strip()
-    raw_lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
-    candidates: list[str] = []
-    for raw_line in raw_lines:
-        line = re.sub(r"^(Final answer|Answer|返答|出力|セリフ)\s*[:：]\s*", "", raw_line, flags=re.IGNORECASE).strip()
-        if not line:
-            continue
-        if line.startswith(("Here's a thinking process", "Here is a thinking process", "Let's think")):
-            continue
-        if re.match(r"^(Role|Persona|Analyze User Input)\s*[:：]", line, flags=re.IGNORECASE):
-            continue
-        candidates.append(line.strip("「」\"' "))
-    if not candidates:
-        return ""
-    if len(candidates) == 1:
-        merged = re.sub(r"[／/|]", "\n", candidates[0])
-        joined = "\n".join(part.strip() for part in merged.splitlines() if part.strip())
-        return _normalize_haiku_line_breaks(joined)
-    return _normalize_haiku_line_breaks("\n".join(candidates[-3:]))
+def is_haiku_line_usable(
+    text: str,
+    line_index: int,
+    details: dict[str, object] | None = None,
+) -> bool:
+    """出典検証前の一行を、かな・音数・hard制約だけで判定する。"""
 
-
-def _normalize_haiku_line_breaks(text: str) -> str:
-    """スペース区切り3句を改行にそろえる（判定・発話の両方で扱いやすく）。"""
-    stripped = (text or "").strip()
-    if not stripped:
-        return ""
-    if "\n" in stripped:
-        parts = [p.strip() for p in stripped.splitlines() if p.strip()]
-        if len(parts) == 3:
-            return "\n".join(parts)
-        return stripped
-    # 全角スペースも区切りに
-    spaced = re.sub(r"[\u3000\s]+", " ", stripped).strip()
-    whitespace_parts = [p for p in spaced.split(" ") if p]
-    if len(whitespace_parts) == 3:
-        return "\n".join(whitespace_parts)
-    return stripped
-
-
-def haiku_contains_non_kana(text: str) -> bool:
-    """漢字・英数字が混ざっているか（かな句のゲート用）。"""
-    return bool(re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text or ""))
-
-
-def is_haiku_usable_output(text: str, details: dict[str, object] | None = None) -> bool:
-    """厳格な 5-7-5（±1）合格。repair や品質ゲート用。"""
-    if not text:
+    if line_index not in (0, 1, 2) or not text:
         return False
-    if not _is_haiku_script_ok(text):
+    if "\n" in text or "\r" in text or not _is_haiku_script_ok(text):
         return False
     if _contains_forbidden_gibberish_sequence(text):
         return False
-    phrases = split_haiku_phrases(text)
-    if phrases is None:
-        return False
-    counts = [count_japanese_sounds(phrase) for phrase in phrases]
-    targets = (5, 7, 5)
-    if not all(abs(count - target) <= 1 for count, target in zip(counts, targets)):
+    target = (5, 7, 5)[line_index]
+    if abs(count_japanese_sounds(text) - target) > 1:
         return False
     return _respects_haiku_constraints(text, details)
-
-
-def is_haiku_soft_emit_ok(text: str, details: dict[str, object] | None = None) -> bool:
-    """音数外れでもプレイヤー直し用に発話してよい最低ライン。
-
-    「まとまらんかった」より、変でも一句出した方が workshop が楽しい前提。
-    英語・漢字・禁止道具・五十音羅列・極端な短長は弾く。
-    """
-    if not text or not text.strip():
-        return False
-    if not _is_haiku_script_ok(text):
-        return False
-    if _contains_forbidden_gibberish_sequence(text):
-        return False
-    if not _respects_haiku_constraints(text, details):
-        return False
-    compact = re.sub(r"\s+", "", text)
-    # 句らしさのざっくり帯（5+7+5=17 前後）。短すぎ・暴走を除外
-    if len(compact) < 8 or len(compact) > 36:
-        return False
-    total = count_japanese_sounds(compact)
-    if total < 10 or total > 26:
-        return False
-    return True
 
 
 def _is_haiku_script_ok(text: str) -> bool:
@@ -124,43 +52,6 @@ def _contains_forbidden_gibberish_sequence(text: str) -> bool:
         "ラリルレロ",
     )
     return any(pattern in compact for pattern in forbidden)
-
-
-def split_haiku_phrases(text: str) -> list[str] | None:
-    explicit_parts = [part.strip() for part in re.split(r"[\n／/|]+", text) if part.strip()]
-    if len(explicit_parts) == 3:
-        return explicit_parts
-    whitespace_parts = [part.strip() for part in re.split(r"\s+", text.strip()) if part.strip()]
-    if len(whitespace_parts) == 3:
-        return whitespace_parts
-
-    compact = re.sub(r"\s+", "", text)
-    if not compact:
-        return None
-
-    cumulative: list[int] = []
-    count = 0
-    for index, ch in enumerate(compact):
-        count += haiku_char_sound(ch, index)
-        cumulative.append(count)
-
-    if len(cumulative) < 3:
-        return None
-
-    for left in range(len(cumulative) - 2):
-        first = cumulative[left]
-        if abs(first - 5) > 1:
-            continue
-        for right in range(left + 1, len(cumulative) - 1):
-            second = cumulative[right] - first
-            third = cumulative[-1] - cumulative[right]
-            if abs(second - 7) <= 1 and abs(third - 5) <= 1:
-                return [
-                    compact[: left + 1],
-                    compact[left + 1 : right + 1],
-                    compact[right + 1 :],
-                ]
-    return None
 
 
 def count_japanese_sounds(text: str) -> int:

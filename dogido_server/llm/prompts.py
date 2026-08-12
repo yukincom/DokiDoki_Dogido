@@ -26,9 +26,10 @@ from .character_mode import (
     system_prompt_for_mode,
 )
 from .haiku_prompts import (
+    build_haiku_draft_messages,
     build_haiku_irony_messages,
-    build_haiku_messages,
-    build_haiku_repair_messages,
+    build_haiku_line_grounding_messages,
+    build_haiku_line_regeneration_messages,
     build_haiku_scene_messages,
     build_haiku_workshop_material_pick_messages,
 )
@@ -67,8 +68,9 @@ _leaf_dialog = leaf_dialog
 
 def build_messages(request: Any) -> list[dict[str, str]]:
     builders = {
-        "haiku": _build_haiku_messages,
-        "haiku_repair": _build_haiku_repair_messages,
+        "haiku_draft": _build_haiku_draft_messages,
+        "haiku_line_grounding": _build_haiku_line_grounding_messages,
+        "haiku_line_regeneration": _build_haiku_line_regeneration_messages,
         "haiku_irony": _build_haiku_irony_messages,
         "haiku_scene": _build_haiku_scene_messages,
         "haiku_workshop_material_pick": _build_haiku_workshop_material_pick_messages,
@@ -101,12 +103,16 @@ def build_messages(request: Any) -> list[dict[str, str]]:
     return builder(request)
 
 
-def _build_haiku_messages(request: Any) -> list[dict[str, str]]:
-    return build_haiku_messages(request.details)
+def _build_haiku_draft_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_draft_messages(request.details)
 
 
-def _build_haiku_repair_messages(request: Any) -> list[dict[str, str]]:
-    return build_haiku_repair_messages(request.details)
+def _build_haiku_line_grounding_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_line_grounding_messages(request.details)
+
+
+def _build_haiku_line_regeneration_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_line_regeneration_messages(request.details)
 
 
 def _build_haiku_irony_messages(request: Any) -> list[dict[str, str]]:

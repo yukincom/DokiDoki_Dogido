@@ -21,9 +21,40 @@ from dogido_server.models import (
     WorldState,
 )
 from dogido_server.entry_catalog import mob_poetic_line, mob_poetic_tags
-from dogido_server.llm.haiku_prompts import build_haiku_irony_messages, build_haiku_messages
+from dogido_server.llm.haiku_prompts import build_haiku_draft_messages, build_haiku_irony_messages
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.state_machine.haiku_context import SceneContext
+
+
+def grounded_haiku_payload(
+    request: StructuredGenerationRequest,
+    lines: tuple[str, str, str],
+) -> dict[str, object] | None:
+    """state machine テスト用。最終句の新しい厳格JSON契約だけを返す。"""
+
+    if request.kind == "haiku_draft":
+        return {"lines": list(lines)}
+    if request.kind != "haiku_line_grounding":
+        return None
+    atoms = [
+        atom for atom in request.details.get("source_atoms", [])
+        if isinstance(atom, dict) and atom.get("atom_id")
+    ]
+    grounding_lines = [
+        row for row in request.details.get("grounding_lines", [])
+        if isinstance(row, dict)
+    ]
+    return {
+        "assessments": [
+            {
+                "line_index": row["line_index"],
+                "atom_ids": [atoms[index]["atom_id"]],
+                "meaning_retained": True,
+                "natural_japanese": True,
+            }
+            for index, row in enumerate(grounding_lines)
+        ]
+    }
 
 
 def make_snapshot(
@@ -307,10 +338,10 @@ class HaikuStateMachineTest(unittest.TestCase):
         # biome を状況の主役行にしない（structure 時）
         self.assertNotIn("いまの景色:", irony_user)
 
-        haiku_user = build_haiku_messages(details)[1]["content"]
+        haiku_user = build_haiku_draft_messages(details)[1]["content"]
         self.assertIn("いまの材料", haiku_user)
         self.assertIn("砂漠のピラミッド", haiku_user)
-        self.assertIn("詠んで", haiku_user)
+        self.assertIn("行の出典", haiku_user)
         self.assertIn("ドギド", haiku_user)
 
     def test_haiku_uses_chat_route_for_irony_and_haiku_route_for_final_generation(self) -> None:
@@ -328,6 +359,12 @@ class HaikuStateMachineTest(unittest.TestCase):
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
                 self.structured_requests.append(request)
+                haiku = grounded_haiku_payload(
+                    request,
+                    ("すなあつめ", "くりーぱーくる", "こわいわあ"),
+                )
+                if haiku is not None:
+                    return haiku
                 if request.kind == "haiku_scene":
                     return {
                         "found": True,
@@ -367,17 +404,21 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nすなあつめ\nくりーぱーくる\nこわいわあ")
-        self.assertEqual(len(fake_llm.structured_requests), 2)
+        self.assertEqual(len(fake_llm.structured_requests), 4)
         self.assertEqual(fake_llm.structured_requests[0].route, "chat")
         self.assertEqual(fake_llm.structured_requests[0].kind, "haiku_irony")
         self.assertEqual(fake_llm.structured_requests[0].max_tokens, self.settings.haiku_structured_max_tokens)
         self.assertEqual(fake_llm.structured_requests[1].route, "chat")
         self.assertEqual(fake_llm.structured_requests[1].kind, "haiku_scene")
         self.assertEqual(fake_llm.structured_requests[1].max_tokens, self.settings.haiku_structured_max_tokens)
-        haiku_requests = [request for request in fake_llm.leaf_requests if request.kind == "haiku"]
-        self.assertEqual(len(haiku_requests), 1)
-        self.assertEqual(haiku_requests[0].route, "haiku")
-        self.assertEqual(haiku_requests[0].kind, "haiku")
+        self.assertFalse(any(request.kind == "haiku" for request in fake_llm.leaf_requests))
+        draft = fake_llm.structured_requests[2]
+        grounding = fake_llm.structured_requests[3]
+        self.assertEqual((draft.kind, draft.route, draft.temperature), ("haiku_draft", "haiku", 0.60))
+        self.assertEqual((grounding.kind, grounding.route), ("haiku_line_grounding", "chat"))
+        assert machine.emitted_haiku is not None
+        self.assertEqual(len(machine.emitted_haiku.materials["line_sources"]), 3)
+        self.assertTrue(machine.emitted_haiku.materials["catalog_sources"])
 
     def test_llm_haiku_emits_preface_before_generation(self) -> None:
         class FakeLLM:
@@ -388,6 +429,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return "すなあつめ\nくりーぱーくる\nこわいわあ"
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                haiku = grounded_haiku_payload(
+                    request,
+                    ("すなあつめ", "くりーぱーくる", "こわいわあ"),
+                )
+                if haiku is not None:
+                    return haiku
                 if request.kind == "haiku_scene":
                     return {
                         "found": True,
@@ -456,6 +503,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return "あさのひに\nむらびとあるく\nきをかかえ"
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                haiku = grounded_haiku_payload(
+                    request,
+                    ("あさのひに", "むらびとあるく", "きをかかえ"),
+                )
+                if haiku is not None:
+                    return haiku
                 if request.kind == "haiku_scene":
                     return {
                         "found": True,
@@ -529,6 +582,12 @@ class HaikuStateMachineTest(unittest.TestCase):
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
                 self.structured_kinds.append(request.kind)
+                haiku = grounded_haiku_payload(
+                    request,
+                    ("ぽーたるの", "ひかりのさきへ", "いざゆかん"),
+                )
+                if haiku is not None:
+                    return haiku
                 if request.kind == "haiku_scene":
                     return {
                         "found": True,
@@ -696,6 +755,64 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。 まとまらんかった。。。")
 
+    def test_grounding_failure_is_not_pinned_or_saved_as_a_haiku(self) -> None:
+        class FakeLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_irony":
+                    return {"found": False}
+                if request.kind == "haiku_scene":
+                    return {
+                        "found": True,
+                        "summary": "晴れた草地を羊が歩いとる",
+                        "motifs": ["草地", "羊"],
+                        "focus": ["羊"],
+                        "confidence": 0.8,
+                    }
+                if request.kind == "haiku_draft":
+                    return {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]}
+                if request.kind == "haiku_line_regeneration":
+                    current = {
+                        row["line_index"]: row["text"]
+                        for row in request.details["current_lines"]
+                    }
+                    return {
+                        "lines": [
+                            {"line_index": index, "text": current[index]}
+                            for index in request.details["failed_line_indices"]
+                        ]
+                    }
+                atoms = request.details["source_atoms"]
+                return {
+                    "assessments": [
+                        {
+                            "line_index": row["line_index"],
+                            "atom_ids": [atoms[index]["atom_id"]],
+                            "meaning_retained": True,
+                            "natural_japanese": False,
+                        }
+                        for index, row in enumerate(request.details["grounding_lines"])
+                    ]
+                }
+
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        machine = DogidoStateMachine(settings, llm=FakeLLM())
+        machine.process(make_snapshot(self.base_time, biome="meadow"))
+        machine.process(make_snapshot(self.base_time + timedelta(seconds=301), biome="meadow"))
+        final = machine.process(
+            make_snapshot(self.base_time + timedelta(seconds=302), biome="meadow")
+        ).actions
+
+        self.assertEqual([action.text for action in final], ["まとまらんかった。。。"])
+        self.assertIsNone(machine.emitted_haiku)
+
     def test_scene_summary_can_unlock_llm_haiku_when_irony_is_weak(self) -> None:
         class FakeLLM:
             def __init__(self) -> None:
@@ -711,6 +828,12 @@ class HaikuStateMachineTest(unittest.TestCase):
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
                 self.structured_requests.append(request)
+                haiku = grounded_haiku_payload(
+                    request,
+                    ("のにいでて", "ひうちいしもつ", "あまいみや"),
+                )
+                if haiku is not None:
+                    return haiku
                 if request.kind == "haiku_scene":
                     return {
                         "found": True,
@@ -750,9 +873,12 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nのにいでて\nひうちいしもつ\nあまいみや")
-        haiku_requests = [request for request in fake_llm.leaf_requests if request.kind == "haiku"]
-        self.assertEqual(len(haiku_requests), 1)
-        self.assertEqual(haiku_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+        draft_requests = [
+            request for request in fake_llm.structured_requests
+            if request.kind == "haiku_draft"
+        ]
+        self.assertEqual(len(draft_requests), 1)
+        self.assertEqual(draft_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
 
     def test_plain_scene_summary_with_weather_and_held_item_can_use_llm(self) -> None:
         class FakeLLM:
@@ -767,6 +893,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return "はれののに\nたきびかかえて\nかぜやわら"
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                haiku = grounded_haiku_payload(
+                    request,
+                    ("はれののに", "たきびかかえて", "かぜやわら"),
+                )
+                if haiku is not None:
+                    return haiku
                 if request.kind == "haiku_scene":
                     return {
                         "found": True,
@@ -798,7 +930,7 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nはれののに\nたきびかかえて\nかぜやわら")
-        self.assertEqual(len(fake_llm.leaf_requests), 1)
+        self.assertEqual(fake_llm.leaf_requests, [])
 
     def test_inventory_details_are_condensed_to_close_pair_and_outlier(self) -> None:
         event = make_snapshot(
@@ -979,10 +1111,35 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(context.catalog_notes, ())
 
+    def test_haiku_context_keeps_ancient_debris_original_and_runtime_atoms(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="nether_wastes",
+            held_item="minecraft:ancient_debris",
+            inventory={"ancient_debris": 1},
+        )
+
+        context = self.machine._haiku_context(event)
+        source = next(
+            source for source in context.catalog_sources
+            if source.source_ref == "item:ancient_debris"
+        )
+        note_atoms = [
+            atom for atom in context.source_atoms
+            if atom.source_ref == "item:ancient_debris" and atom.field_path.startswith("note[")
+        ]
+
+        self.assertEqual(
+            source.note_raw,
+            "ネザーに生成される珍しい鉱石。茶色で、ひび割れている。"
+            "しかし、非常に高い爆発耐久値を持っており熱に強い。",
+        )
+        self.assertEqual([atom.field_path for atom in note_atoms], ["note[0]", "note[1]", "note[2]"])
+
     def test_haiku_prompt_includes_catalog_notes(self) -> None:
         event = make_snapshot(self.base_time, biome="snowy_taiga")
         details = self.machine._haiku_context(event).prompt_details()
-        haiku_user = build_haiku_messages(details)[1]["content"]
+        haiku_user = build_haiku_draft_messages(details)[1]["content"]
         irony_user = build_haiku_irony_messages(details)[1]["content"]
 
         self.assertIn("ちょっとした知識", haiku_user)
@@ -1010,7 +1167,7 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertFalse(cow_tags & set(context.haiku_tags))
 
         details = context.prompt_details()
-        prompt = build_haiku_messages(details)[1]["content"]
+        prompt = build_haiku_draft_messages(details)[1]["content"]
         self.assertIn("いきものの声・姿", prompt)
         self.assertIn("ウシ:", prompt)
         self.assertIn("ことばの匂い", prompt)

@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from dogido_server.haiku.source_atoms import CatalogSourceSnapshot, HaikuSourceAtom
+
 
 @dataclass(frozen=True, slots=True)
 class HaikuFeature:
@@ -93,6 +95,7 @@ class HaikuContext:
     weather: str
     weather_label: str
     z_value: int
+    poem_item_id: str
     held_item: str  # 句の主役に使う持ち物ラベル（手持ち or 所持から選んだ1つ）
     inventory_items: tuple[str, ...]
     inventory_close_pair: tuple[str, ...]
@@ -103,6 +106,8 @@ class HaikuContext:
     feature_candidates: tuple[HaikuFeature, ...]
     candidate_tensions: tuple[str, ...]
     catalog_notes: tuple[str, ...] = ()
+    catalog_sources: tuple[CatalogSourceSnapshot, ...] = ()
+    source_atoms: tuple[HaikuSourceAtom, ...] = ()
     poetic_lines: tuple[str, ...] = ()
     # structure があるときは場所の主役。climate_hint は参考程度。
     structure_id: str = ""
@@ -133,6 +138,7 @@ class HaikuContext:
             "weather": self.weather,
             "weather_label": self.weather_label,
             "z_value": self.z_value,
+            "poem_item_id": self.poem_item_id,
             "held_item": self.held_item,
             "poem_item_source": self.poem_item_source,
             "inventory_items": list(self.inventory_items),
@@ -145,6 +151,8 @@ class HaikuContext:
             "feature_candidates": self.feature_candidate_labels(),
             "candidate_tensions": list(self.candidate_tensions),
             "catalog_notes": list(self.catalog_notes),
+            "catalog_sources": [source.to_dict() for source in self.catalog_sources],
+            "source_atoms": [atom.to_prompt_dict() for atom in self.source_atoms],
         }
 
     def irony_details(self) -> dict[str, object]:

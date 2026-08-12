@@ -196,6 +196,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 雑談 P1〜P4: **済**（P5 任意）  
 - TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  
 - 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
+- 川柳 source atom 品質ゲート: カタログ原文snapshot + 行別出典 + 不合格行のみ最大2回再生成 + fail-closed **済**
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
 - 任意: H7-lite 実ログ評価、直し案 1 本、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み

@@ -560,6 +560,8 @@ class MemoryStore:
                 "event_sequence": emission.event_sequence,
                 "route": emission.route,
             },
+            # 生成時の出典をsnapshotで残す。後日カタログが更新されても句の根拠を追える。
+            "materials_snapshot": dict(emission.materials or {}),
         }
 
     def _world_payload(self, event: GameEvent) -> dict[str, str | None]:
