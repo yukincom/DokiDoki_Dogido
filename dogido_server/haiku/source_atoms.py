@@ -222,6 +222,38 @@ def atoms_from_observations(features: Iterable[Any]) -> tuple[HaikuSourceAtom, .
     return tuple(atoms)
 
 
+def atoms_from_spoken_preface(spoken_text: str) -> tuple[HaikuSourceAtom, ...]:
+    """プレイヤーへ実際に話した見どころを、解釈由来の句材料へ分ける。
+
+    カタログ事実や実測観測へ昇格はしない。発話に現れた節だけを別 provenance
+    で残し、まだ口にしていない scene / irony の連想は句の出典にしない。
+    """
+
+    text = str(spoken_text or "").strip()
+    if not text:
+        return ()
+    text = re.sub(r"[、，]?なんか浮かんできたわ[。．.!！]*$", "", text).strip()
+    if not text or text in {"なんか浮かんできたわ", "なんか浮かんできた"}:
+        return ()
+    clauses = [
+        clause.strip(" 。．.!！?？…")
+        for clause in re.split(r"[。．.!！?？、，]+", text)
+    ]
+    atoms: list[HaikuSourceAtom] = []
+    for index, clause in enumerate(clause for clause in clauses if len(clause) >= 2):
+        atoms.append(
+            HaikuSourceAtom(
+                atom_id=f"preface:spoken:clause:{index}",
+                text=clause,
+                source_ref="preface:spoken",
+                field_path=f"clause[{index}]",
+                observation_role="spoken_preface",
+                kind="preface_interpretation",
+            )
+        )
+    return tuple(atoms)
+
+
 def merge_source_atoms(*groups: Iterable[HaikuSourceAtom]) -> tuple[HaikuSourceAtom, ...]:
     """同じ ID と同じ表示材料を一度だけ残す。順序は観測優先順を維持する。"""
 
@@ -252,3 +284,87 @@ def catalog_notes_projection(sources: Iterable[CatalogSourceSnapshot]) -> tuple[
             note = note[:99].rstrip() + "…"
         notes.append(f"{source.label}: {note}")
     return tuple(notes)
+
+
+def source_atoms_from_materials(materials: dict[str, Any] | None) -> tuple[HaikuSourceAtom, ...]:
+    """保存済み materials の読取り専用 snapshot を閉じた型へ戻す。
+
+    元カタログへ戻って再解決しない。句を詠んだ時点で保存した atom だけを使い、
+    欠損・重複・不正な行は捨てる。
+    """
+
+    rows = materials.get("source_atoms") if isinstance(materials, dict) else None
+    if not isinstance(rows, list):
+        return ()
+    atoms: list[HaikuSourceAtom] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        values = {
+            key: str(row.get(key) or "").strip()
+            for key in (
+                "atom_id",
+                "text",
+                "source_ref",
+                "field_path",
+                "observation_role",
+                "kind",
+            )
+        }
+        atom_id = values["atom_id"]
+        if not atom_id or atom_id in seen or not values["text"] or not values["source_ref"]:
+            continue
+        seen.add(atom_id)
+        atoms.append(
+            HaikuSourceAtom(
+                atom_id=atom_id,
+                text=values["text"],
+                source_ref=values["source_ref"],
+                field_path=values["field_path"],
+                observation_role=values["observation_role"],
+                kind=values["kind"] or "catalog_fact",
+            )
+        )
+    return tuple(atoms)
+
+
+def line_source_ids_from_materials(
+    materials: dict[str, Any] | None,
+    *,
+    verse_lines: list[str],
+    allowed_atom_ids: set[str],
+) -> dict[int, tuple[str, ...]]:
+    """保存済み行出典を、現在句との一致を確認して復元する。"""
+
+    rows = materials.get("line_sources") if isinstance(materials, dict) else None
+    if not isinstance(rows, list):
+        return {}
+    result: dict[int, tuple[str, ...]] = {}
+    used: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        index = row.get("line_index")
+        text = str(row.get("text") or "").strip()
+        raw_ids = row.get("atom_ids")
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or not 0 <= index < len(verse_lines)
+            or index in result
+            or text != verse_lines[index]
+            or not isinstance(raw_ids, list)
+            or not raw_ids
+        ):
+            continue
+        atom_ids = tuple(str(value).strip() for value in raw_ids)
+        if (
+            any(not atom_id or atom_id not in allowed_atom_ids for atom_id in atom_ids)
+            or len(set(atom_ids)) != len(atom_ids)
+            or used.intersection(atom_ids)
+        ):
+            continue
+        result[index] = atom_ids
+        used.update(atom_ids)
+    return result

@@ -15,6 +15,7 @@ from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm.haiku import is_haiku_line_usable
 from dogido_server.llm.sanitize import summarize_for_log
 
+from .lexical_correction import correct_grounded_catalog_kana
 from .source_atoms import HaikuSourceAtom
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -28,6 +29,14 @@ MAX_REGENERATION_ROUNDS = 2
 @dataclass(frozen=True, slots=True)
 class GroundedHaikuResult:
     text: str
+    accepted: bool
+    line_sources: tuple[dict[str, object], ...] = ()
+    failure_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopRevisionResult:
+    text: str | None
     accepted: bool
     line_sources: tuple[dict[str, object], ...] = ()
     failure_reason: str | None = None
@@ -97,6 +106,7 @@ def generate_grounded_haiku(
             line_indices=failed_indices,
             assessments=assessments,
             details=details,
+            atom_by_id=atom_by_id,
             already_used=used_atom_ids,
             frozen_lines={lines[index] for index in accepted},
         )
@@ -142,6 +152,186 @@ def generate_grounded_haiku(
     return _failed(fallback_text, "max_regeneration_rounds")
 
 
+def generate_workshop_revision(
+    llm: LLMFrontend | None,
+    *,
+    original_text: str,
+    target_indices: tuple[int, ...],
+    findings: tuple[dict[str, object], ...],
+    source_atoms: tuple[HaikuSourceAtom, ...],
+    original_line_sources: dict[int, tuple[str, ...]],
+    details: dict[str, object],
+    max_tokens: int | None,
+    max_attempts: int = 2,
+) -> WorkshopRevisionResult:
+    """検証済み対象行だけを haiku route で直し、提案として返す。
+
+    元句・memory は変更しない。モデルが対象外行、未知の出典、音数外の行を
+    返した場合はその案全体を採用しない。
+    """
+
+    lines = [line.strip() for line in (original_text or "").splitlines() if line.strip()]
+    targets = tuple(sorted(set(target_indices)))
+    if llm is None or len(lines) != 3 or not targets or any(index not in (0, 1, 2) for index in targets):
+        return WorkshopRevisionResult(None, False, failure_reason="invalid_targets")
+    if not source_atoms:
+        return WorkshopRevisionResult(None, False, failure_reason="no_source_atoms")
+
+    atom_by_id = {atom.atom_id: atom for atom in source_atoms}
+    frozen_indices = {index for index in range(3) if index not in targets}
+    # 固定行の出典が一つでも欠ける旧データでは、修正行との材料重複を証明
+    # できない。推測で補わず元句を維持する。
+    if any(not original_line_sources.get(index) for index in frozen_indices):
+        return WorkshopRevisionResult(None, False, failure_reason="missing_frozen_line_sources")
+    if any(
+        atom_id not in atom_by_id
+        for index in frozen_indices
+        for atom_id in original_line_sources[index]
+    ):
+        return WorkshopRevisionResult(None, False, failure_reason="invalid_frozen_line_sources")
+    reserved = {
+        atom_id
+        for index, atom_ids in original_line_sources.items()
+        if index in frozen_indices
+        for atom_id in atom_ids
+    }
+    eligible = tuple(atom for atom in source_atoms if atom.atom_id not in reserved)
+    if len(eligible) < len(targets):
+        return WorkshopRevisionResult(None, False, failure_reason="insufficient_source_atoms")
+
+    request_details = dict(details)
+    request_details.update(
+        {
+            "current_lines": [
+                {"line_index": index, "text": text, "frozen": index not in targets}
+                for index, text in enumerate(lines)
+            ],
+            "target_line_indices": list(targets),
+            "workshop_findings": list(findings),
+            "source_atoms": [atom.to_prompt_dict() for atom in eligible],
+        }
+    )
+    for _attempt in range(max(1, max_attempts)):
+        payload = llm.generate_structured_json(
+            StructuredGenerationRequest(
+                kind="haiku_workshop_revision",
+                fallback_value={"lines": []},
+                details=request_details,
+                temperature=REGENERATION_TEMPERATURE,
+                route="haiku",
+                max_tokens=max_tokens,
+            )
+        )
+        repaired = _validated_workshop_lines(
+            payload,
+            targets=targets,
+            original_lines=lines,
+            eligible_ids={atom.atom_id for atom in eligible},
+            reserved_ids=reserved,
+            details=details,
+        )
+        if repaired is None:
+            continue
+        revised = list(lines)
+        for index, (text, _claimed_atom_ids) in repaired.items():
+            revised[index] = text
+        # 修正AIの自己申告IDだけでは、既知IDを別の意味へ付け替えられる。初回発句と
+        # 同じ意味保持・自然さ評価を別のstructured呼び出しで行い、評価側が選んだ
+        # atom IDを最終出典にする。
+        assessments = _assess_lines(
+            llm,
+            details=details,
+            lines=revised,
+            line_indices=set(targets),
+            eligible_atoms=eligible,
+            max_tokens=max_tokens,
+        )
+        accepted, failed = _accept_lines(
+            revised,
+            line_indices=set(targets),
+            assessments=assessments,
+            details=details,
+            atom_by_id=atom_by_id,
+            already_used=reserved,
+            frozen_lines={text for index, text in enumerate(lines) if index not in targets},
+        )
+        if failed or set(accepted) != set(targets):
+            continue
+        records: list[dict[str, object]] = []
+        for index, text in enumerate(revised):
+            atom_ids = (
+                accepted[index].atom_ids
+                if index in accepted
+                else original_line_sources.get(index, ())
+            )
+            records.append(
+                {
+                    "line_index": index,
+                    "text": text,
+                    "atom_ids": list(atom_ids),
+                    "sources": [
+                        atom_by_id[atom_id].to_prompt_dict()
+                        for atom_id in atom_ids
+                        if atom_id in atom_by_id
+                    ],
+                }
+            )
+        return WorkshopRevisionResult(
+            "\n".join(revised),
+            True,
+            line_sources=tuple(records),
+        )
+    return WorkshopRevisionResult(None, False, failure_reason="invalid_revision")
+
+
+def _validated_workshop_lines(
+    payload: dict[str, Any] | None,
+    *,
+    targets: tuple[int, ...],
+    original_lines: list[str],
+    eligible_ids: set[str],
+    reserved_ids: set[str],
+    details: dict[str, object],
+) -> dict[int, tuple[str, tuple[str, ...]]] | None:
+    if not _structured_accepted(payload):
+        return None
+    rows = payload.get("lines") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return None
+    result: dict[int, tuple[str, tuple[str, ...]]] = {}
+    used = set(reserved_ids)
+    fixed_text = {text for index, text in enumerate(original_lines) if index not in targets}
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        index = row.get("line_index")
+        text = _clean_single_line(row.get("text"))
+        raw_ids = row.get("atom_ids")
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or index not in targets
+            or index in result
+            or not text
+            or text in fixed_text
+            or not isinstance(raw_ids, list)
+            or not raw_ids
+        ):
+            return None
+        atom_ids = tuple(str(value).strip() for value in raw_ids)
+        if (
+            any(not atom_id or atom_id not in eligible_ids for atom_id in atom_ids)
+            or len(set(atom_ids)) != len(atom_ids)
+            or used.intersection(atom_ids)
+            or not is_haiku_line_usable(text, index, details)
+        ):
+            return None
+        result[index] = (text, atom_ids)
+        used.update(atom_ids)
+        fixed_text.add(text)
+    return result if set(result) == set(targets) else None
+
+
 def _draft_lines(payload: dict[str, Any] | None) -> list[str] | None:
     if not _structured_accepted(payload):
         return None
@@ -163,6 +353,38 @@ def _assess_lines(
     eligible_atoms: tuple[HaikuSourceAtom, ...],
     max_tokens: int | None,
 ) -> dict[int, _LineAssessment]:
+    assessments, reported_indices = _request_line_assessments(
+        llm,
+        details=details,
+        lines=lines,
+        line_indices=line_indices,
+        eligible_atoms=eligible_atoms,
+        max_tokens=max_tokens,
+    )
+    # 一部モデルは複数行を頼んでも先頭行だけ、または旧単体objectを返す。
+    # 欠けた行だけ一行ずつ再照合し、句の再生成回数とは別に検証形式を補う。
+    for line_index in sorted(line_indices - reported_indices):
+        single, _reported = _request_line_assessments(
+            llm,
+            details=details,
+            lines=lines,
+            line_indices={line_index},
+            eligible_atoms=eligible_atoms,
+            max_tokens=max_tokens,
+        )
+        assessments.update(single)
+    return assessments
+
+
+def _request_line_assessments(
+    llm: LLMFrontend,
+    *,
+    details: dict[str, object],
+    lines: list[str],
+    line_indices: set[int],
+    eligible_atoms: tuple[HaikuSourceAtom, ...],
+    max_tokens: int | None,
+) -> tuple[dict[int, _LineAssessment], set[int]]:
     request_details = dict(details)
     request_details["grounding_lines"] = [
         {"line_index": index, "text": lines[index]}
@@ -180,13 +402,15 @@ def _assess_lines(
         )
     )
     if not _structured_accepted(payload):
-        return {}
+        return {}, set()
     raw_assessments = payload.get("assessments") if isinstance(payload, dict) else None
     if not isinstance(raw_assessments, list):
-        return {}
+        # 初期実装の単一行shapeも入力としてだけ受ける。採否条件は同じ。
+        raw_assessments = [payload] if isinstance(payload, dict) and "line_index" in payload else []
 
     eligible_ids = {atom.atom_id for atom in eligible_atoms}
     assessments: dict[int, _LineAssessment] = {}
+    reported_indices: set[int] = set()
     for raw in raw_assessments:
         if not isinstance(raw, dict):
             continue
@@ -195,6 +419,7 @@ def _assess_lines(
             continue
         if line_index not in line_indices or line_index in assessments:
             continue
+        reported_indices.add(line_index)
         raw_ids = raw.get("atom_ids")
         if not isinstance(raw_ids, list):
             continue
@@ -210,7 +435,7 @@ def _assess_lines(
             meaning_retained=raw.get("meaning_retained") is True,
             natural_japanese=raw.get("natural_japanese") is True,
         )
-    return assessments
+    return assessments, reported_indices
 
 
 def _accept_lines(
@@ -219,6 +444,7 @@ def _accept_lines(
     line_indices: set[int],
     assessments: dict[int, _LineAssessment],
     details: dict[str, object],
+    atom_by_id: dict[str, HaikuSourceAtom],
     already_used: set[str],
     frozen_lines: set[str],
 ) -> tuple[dict[int, _LineAssessment], set[int]]:
@@ -229,6 +455,27 @@ def _accept_lines(
     for line_index in sorted(line_indices):
         line = lines[line_index]
         assessment = assessments.get(line_index)
+        # 意味保持が確認された catalog_label だけを使い、一意な一字誤りを
+        # 決定的に直す。ラベル全文（例: 「階段」）の出現は要求しない。
+        correction = (
+            correct_grounded_catalog_kana(
+                line,
+                atom_ids=assessment.atom_ids,
+                atom_by_id=atom_by_id,
+            )
+            if assessment is not None and assessment.meaning_retained
+            else None
+        )
+        if correction is not None:
+            line = correction.corrected
+            lines[line_index] = line
+            LOGGER.warning(
+                "haiku_catalog_kana_corrected line_index=%s from=%s to=%s atom_id=%s",
+                line_index,
+                summarize_for_log(correction.original),
+                summarize_for_log(correction.corrected),
+                correction.source_atom_id,
+            )
         valid = (
             assessment is not None
             and assessment.meaning_retained

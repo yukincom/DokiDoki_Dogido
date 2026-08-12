@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import re
 from typing import Any
 
 from dogido_server.memory_types import HaikuEmission
@@ -19,8 +20,8 @@ DEFAULT_T_IDLE = timedelta(seconds=120)
 # 句と無関係な入力が連続したら close
 DEFAULT_N_DRIFT = 2
 
-# H7-lite: ルールで soft_default になった句関連発話だけ、LLM がこの範囲で
-# critique の種類を補助分類する。close / clear_lessons / revise / reading は含めない。
+# H7-lite: soft_default の intent 補助と、既知講評を含む対象行・問題箇所の
+# structured 抽出だけに使う。close / clear_lessons / revise / reading は含めない。
 WORKSHOP_LLM_INTENTS = frozenset(
     {
         "ask_meaning",
@@ -30,10 +31,65 @@ WORKSHOP_LLM_INTENTS = frozenset(
         "praise",
         "ack",
         "other_haiku",
+        "request_repair",
         "soft_default",
     }
 )
 WORKSHOP_LLM_MIN_CONFIDENCE = 0.75
+WORKSHOP_FINDING_MIN_CONFIDENCE = 0.65
+WORKSHOP_PROBLEM_TYPES = frozenset(
+    {
+        "unnatural_japanese",
+        "unreadable",
+        "forced_compression",
+        "off_scene",
+        "meter",
+        "reading",
+        "preference",
+        "other",
+    }
+)
+
+_PENDING_REVISION_REJECT_PATTERN = re.compile(
+    r"^(?:うん[、, ]*)?(?:やっぱり[、, ]*)?(?:"
+    r"やめとく|やめておく|"
+    r"(?:元|もと|前)のまま(?:で(?:いい|ええ)?|に(?:する|しとく))?|"
+    r"その案(?:は)?なし"
+    r")[。！!]*$"
+)
+_PENDING_REVISION_ACCEPT_PATTERN = re.compile(
+    r"^(?:うん[、, ]*)?(?:"
+    r"それでいこう|それで行こう|それでいい|それでええ|"
+    r"その案で(?:いこう|行こう|いい|ええ|お願い(?:します)?)?|"
+    r"採用(?:する|で)?"
+    r")[。！!]*$"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopFinding:
+    line_index: int | None
+    fragment: str
+    problem: str
+    note: str
+    confidence: float
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "line_index": self.line_index,
+            "fragment": self.fragment,
+            "problem": self.problem,
+            "note": self.note,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopAnalysis:
+    intent: str = "soft_default"
+    confidence: float = 0.0
+    repair_requested: bool = False
+    findings: tuple[WorkshopFinding, ...] = ()
 
 
 @dataclass(slots=True)
@@ -53,6 +109,11 @@ class RecentHaikuWorkshop:
     last_workshop_at: datetime | None = None
     drift_count: int = 0
     close_reason: str | None = None
+    # 講評抽出と修正案は会話履歴とは分離。修正案はプレイヤーが採用するまで
+    # 元句や memory を上書きしない。
+    last_findings: list[dict[str, object]] = field(default_factory=list)
+    pending_revision: str | None = None
+    pending_revision_line_sources: list[dict[str, object]] = field(default_factory=list)
 
     def display_line(self) -> str:
         return (self.surface_text or "").strip()
@@ -445,30 +506,43 @@ def _shorten_for_speech(text: str, *, max_chars: int = 36) -> str:
 
 # --- 意図判定（ルール・初版） ---
 
-_CLOSE_MARKERS = (
-    "もうええ",
-    "もういい",
-    "次いこ",
-    "つぎいこ",
-    "わかった",
-    "おk",
-    "おけ",
-    "ok",
-    "OK",
-    "よし",
-    "了解",
+_CLOSE_PATTERN = re.compile(
+    r"^(?:(?:うん|はい)[、, ]*)?(?:"
+    r"もう(?:ええ|いい)(?:わ|よ|で|です)?|"
+    r"(?:次|つぎ)(?:いこ|行こ)(?:う|か)?|"
+    r"わかった(?:よ|で|わ)?|おk(?:です)?|おけ(?:です)?|ok(?:です)?|よし|"
+    r"了解(?:や|です|しました)?"
+    r")[。！!]*$",
+    re.IGNORECASE,
 )
-_PRAISE_MARKERS = (
-    "いい句",
-    "ええ句",
-    "うまい",
-    "上手",
-    "好き",
-    "気に入った",
-    "そのままでいい",
-    "そのままでええ",
-    "良い句",
+_PRAISE_PATTERN = re.compile(
+    r"^(?:(?:うん|ほんまに|めっちゃ|なかなか|すごく)[、, ]*)?"
+    r"(?:(?:これ|この句|その句|句)(?:は|が)?[、, ]*)?"
+    r"(?:いい句|良い句|ええ句|うまい|上手|好き|気に入った|"
+    r"そのままで(?:いい|ええ))"
+    r"(?:やな|やね|やん|やで|やわ|や|だね|ですね|だ|です|な|ね|よ|わ|"
+    r"(?:だ|や)?(?:と|って)思う|(?:だ|や)?(?:と|って)おもう)?[。！!]*$"
 )
+_CLEAR_LESSON_PATTERN = re.compile(
+    r"^(?:(?:うん|はい)[、, ]*)?(?:もう[、, ]*)?(?:"
+    r"気にせんで(?:ええ|いい)?(?:わ|よ|で)?|"
+    r"気にし(?:なくて|んで)(?:ええ|いい)?(?:わ|よ|で)?|"
+    r"(?:前の)?注意(?:は)?(?:もう[、, ]*)?(?:いらない|いらん)(?:わ|よ|で)?|"
+    r"縛らんで(?:ええ|いい)?|(?:ゆるめて|緩めて)(?:ください)?|"
+    r"前の注意やめて(?:ください)?"
+    r")[。！!]*$"
+)
+
+
+def _matches_explicit_state_change(text: str, pattern: re.Pattern[str]) -> bool:
+    """状態変更は引用・複合語を拾わず、閉じた明示形だけを許可する。"""
+
+    normalized = text.strip()
+    if not normalized or "?" in normalized or "？" in normalized:
+        return False
+    return pattern.fullmatch(normalized) is not None
+
+
 _FORCED_MARKERS = ("無理やり", "詰め込み", "つめこみ", "圧縮", "息苦", "ごちゃごちゃ")
 _GIBBERISH_MARKERS = ("読めん", "読めない", "わからん", "意味わから", "日本語", "何言", "なにい")
 # 場面ずれ: 固有モチーフ名（海・村など）は入れない。メタな言い回しだけ。
@@ -522,6 +596,15 @@ _ACK_MARKERS = (
     "せやな",
     "そうやな",
     "了解や",
+)
+_REPAIR_REQUEST_PATTERN = re.compile(
+    r"^(?:(?:うん|じゃあ|なら)[、, ]*)?"
+    r"(?:(?:これ|そこ|(?:この|その)?句|(?:一|二|三|1|2|3)行目|上の句|中の句|下の句)"
+    r"(?:を|だけ)?[、, ]*)?"
+    r"(?:直して|なおして|直そう|なおそう|直すかな|なおすかな|"
+    r"直してみ(?:て)?|なおしてみ(?:て)?|直せる|なおせる|"
+    r"修正して|しゅうせいして)"
+    r"(?:ほしい|ください|くれる|もらえる|みよう)?[。！!？?]*$"
 )
 # 読みの好み（メタ語のみ。素材名・地名は禁止）
 _READING_META_MARKERS = (
@@ -624,33 +707,12 @@ _HARD_OFF_TOPIC_MARKERS = (
     "クリーパー",
     "スケルトン",
 )
-# プレイヤー明示で lesson を緩める（workshop open 外でも可）
-_CLEAR_LESSON_MARKERS = (
-    "気にせんで",
-    "気にしなくて",
-    "気にしんで",
-    "気にしなくていい",
-    "気にしなくてええ",
-    "もう気にせん",
-    "注意いらない",
-    "注意はいらない",
-    "注意いらん",
-    "注意はいらん",
-    "縛らんで",
-    "ゆるめて",
-    "緩めて",
-    "前の注意やめて",
-    "前の注意いらない",
-    "前の注意はいらん",
-)
-
-
 def wants_clear_haiku_lessons(user_text: str | None) -> bool:
     """「もう気にせんで」系。close（もうええ）とは別。"""
     text = (user_text or "").strip()
     if not text:
         return False
-    return any(m in text for m in _CLEAR_LESSON_MARKERS)
+    return _matches_explicit_state_change(text, _CLEAR_LESSON_PATTERN)
 
 
 def classify_workshop_intent(
@@ -660,8 +722,8 @@ def classify_workshop_intent(
 ) -> str | None:
     """句関連なら kind、無関係なら None。
 
-    kinds: close | praise | clear_lessons | critique_forced | critique_gibberish |
-           critique_offscene | ask_meaning | ack | other_haiku
+    kinds: close | praise | clear_lessons | request_repair | critique_forced |
+           critique_gibberish | critique_offscene | ask_meaning | ack | other_haiku
 
     verse を渡すと「晴れのバラ?」のように句断片＋疑問を ask_meaning にできる。
     soft_default はここではなく workshop_open_intent（open 中のみ）。
@@ -669,14 +731,17 @@ def classify_workshop_intent(
     text = (user_text or "").strip()
     if not text:
         return None
-    folded = text.lower()
     # 明示緩めを close より先に（「もう気にせんで」に「もう」が含まれるため）
     if wants_clear_haiku_lessons(text):
         return "clear_lessons"
-    if any(m in text or m in folded for m in _CLOSE_MARKERS):
+    if _matches_explicit_state_change(text, _CLOSE_PATTERN):
         return "close"
-    if any(m in text for m in _PRAISE_MARKERS):
+    if _matches_explicit_state_change(text, _PRAISE_PATTERN):
         return "praise"
+    # 「こう直して: 完成句」は service が先に revision として抽出する。
+    # 句本文のない「直すかな／直して」は、現在句の修正案を求める操作。
+    if _REPAIR_REQUEST_PATTERN.fullmatch(text):
+        return "request_repair"
     # 納得相槌は「意味」より先（「そういう意味か」誤爆防止）
     if any(m in text for m in _ACK_MARKERS):
         return "ack"
@@ -782,17 +847,166 @@ def build_workshop_intent_llm_details(
     """H7-lite の provider 非依存入力。
 
     ライフサイクルや保存判断は渡さず、句・短い狙い・プレイヤー発話だけを渡す。
-    同じ契約を chat route、ローカルモデル、将来の OS ローカル AI で使える。
+    同じ契約を chat route、Apple Foundation Models、Foundry Local で使う。
     """
+    lines = workshop_verse_lines(workshop.display_line())
     return {
-        "verse": " ".join(workshop.display_line().replace("\n", " ").split()),
+        "verse": "\n".join(lines),
+        "verse_lines": [
+            {"line_index": index, "text": line}
+            for index, line in enumerate(lines)
+        ],
         "materials_speech": materials_speech_line(workshop),
         "player_text": (player_text or "").strip(),
         "allowed_intents": sorted(WORKSHOP_LLM_INTENTS),
+        "allowed_problem_types": sorted(WORKSHOP_PROBLEM_TYPES),
     }
 
 
-def finalize_workshop_intent_llm_payload(
+def workshop_verse_lines(verse: str) -> list[str]:
+    normalized = (verse or "").strip()
+    if not normalized:
+        return []
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    if len(lines) == 1:
+        space_parts = [part.strip() for part in normalized.split() if part.strip()]
+        if len(space_parts) == 3:
+            return space_parts
+    return lines[:3]
+
+
+def finalize_workshop_analysis_payload(
+    payload: dict[str, object] | None,
+    *,
+    verse_lines: list[str] | None = None,
+    min_confidence: float = WORKSHOP_LLM_MIN_CONFIDENCE,
+    finding_min_confidence: float = WORKSHOP_FINDING_MIN_CONFIDENCE,
+) -> WorkshopAnalysis:
+    """OS / cloud 共通の講評抽出結果を閉じた値へ変換する。
+
+    LLM が close・lesson解除・保存を実行する余地はない。対象行・問題種別も
+    コードで範囲検査し、不明な finding は捨てる。
+    """
+
+    intent = _finalize_workshop_intent_payload(payload, min_confidence=min_confidence)
+    if not isinstance(payload, dict):
+        return WorkshopAnalysis(intent=intent)
+    raw_confidence = payload.get("confidence")
+    try:
+        confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    findings: list[WorkshopFinding] = []
+    raw_findings = payload.get("findings")
+    if isinstance(raw_findings, list):
+        for row in raw_findings[:3]:
+            if not isinstance(row, dict):
+                continue
+            raw_index = row.get("line_index")
+            line_index: int | None
+            if raw_index is None:
+                line_index = None
+            elif isinstance(raw_index, int) and not isinstance(raw_index, bool) and raw_index in (0, 1, 2):
+                line_index = raw_index
+            else:
+                continue
+            if line_index is not None and verse_lines is not None and line_index >= len(verse_lines):
+                continue
+            fragment = str(row.get("fragment") or "").strip()[:40]
+            if verse_lines is not None:
+                folded_fragment = _compact_kana(fragment)
+                matches = [
+                    index
+                    for index, line in enumerate(verse_lines)
+                    if folded_fragment and folded_fragment in _compact_kana(line)
+                ]
+                # AIの行番号だけでは修正対象にしない。断片が一意に見つかった場合
+                # だけ、コード側で行を確定する。同じ断片が複数行なら曖昧として落とす。
+                line_index = matches[0] if len(matches) == 1 else None
+            problem = str(row.get("problem") or "").strip()
+            if problem not in WORKSHOP_PROBLEM_TYPES:
+                continue
+            raw_finding_confidence = row.get("confidence")
+            if isinstance(raw_finding_confidence, bool):
+                continue
+            try:
+                finding_confidence = float(raw_finding_confidence)
+            except (TypeError, ValueError):
+                continue
+            if not 0.0 <= finding_confidence <= 1.0 or finding_confidence < finding_min_confidence:
+                continue
+            findings.append(
+                WorkshopFinding(
+                    line_index=line_index,
+                    fragment=fragment,
+                    problem=problem,
+                    note=str(row.get("note") or "").strip()[:120],
+                    confidence=finding_confidence,
+                )
+            )
+    repair_requested = payload.get("repair_requested") is True or intent == "request_repair"
+    return WorkshopAnalysis(
+        intent=intent,
+        confidence=confidence,
+        repair_requested=repair_requested,
+        findings=tuple(findings),
+    )
+
+
+def workshop_findings_from_records(
+    rows: list[dict[str, object]] | None,
+) -> tuple[WorkshopFinding, ...]:
+    """セッション中に保存した検証済み finding を型へ戻す。"""
+
+    findings: list[WorkshopFinding] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        index = row.get("line_index")
+        if index is not None and (
+            not isinstance(index, int) or isinstance(index, bool) or index not in (0, 1, 2)
+        ):
+            continue
+        problem = str(row.get("problem") or "").strip()
+        if problem not in WORKSHOP_PROBLEM_TYPES:
+            continue
+        try:
+            confidence = float(row.get("confidence"))
+        except (TypeError, ValueError):
+            continue
+        if not 0.0 <= confidence <= 1.0:
+            continue
+        findings.append(
+            WorkshopFinding(
+                line_index=index,
+                fragment=str(row.get("fragment") or "").strip()[:40],
+                problem=problem,
+                note=str(row.get("note") or "").strip()[:120],
+                confidence=confidence,
+            )
+        )
+    return tuple(findings)
+
+
+def repair_target_indices(findings: tuple[WorkshopFinding, ...]) -> tuple[int, ...]:
+    """行を特定できた finding だけを、修正AIの対象へする。"""
+
+    return tuple(sorted({finding.line_index for finding in findings if finding.line_index is not None}))
+
+
+def pending_revision_decision(user_text: str | None) -> str | None:
+    """提示済み修正案への明示的な採用・却下だけを拾う。"""
+
+    text = (user_text or "").strip()
+    if "?" not in text and "？" not in text and _PENDING_REVISION_REJECT_PATTERN.fullmatch(text):
+        return "reject"
+    # 部分一致だと「その案ではまだだめ」「その案でいい？」を誤採用する。
+    if "?" not in text and "？" not in text and _PENDING_REVISION_ACCEPT_PATTERN.fullmatch(text):
+        return "accept"
+    return None
+
+
+def _finalize_workshop_intent_payload(
     payload: dict[str, object] | None,
     *,
     min_confidence: float = WORKSHOP_LLM_MIN_CONFIDENCE,
@@ -927,11 +1141,6 @@ def lessons_from_critique_kind(kind: str, *, player_text: str = "") -> list[dict
     return []
 
 
-def loosen_lesson_for_praise() -> dict[str, object]:
-    """後方互換名。praise では使わない。明示緩めと同じ全軸 loosen 行。"""
-    return loosen_all_lessons()
-
-
 def loosen_all_lessons() -> dict[str, object]:
     """全軸の soft lesson を抑止する loosen 行（明示「気にせんで」用）。"""
     return {
@@ -968,12 +1177,13 @@ def render_workshop_reply(
         reply, _path = finalize_ask_meaning_reply(workshop, said, None)
         return reply
     if kind == "critique_forced":
-        return "せやな、詰め込みすぎたかもな。次は余白、ちょっと意識するわ。"
+        return "せやな、詰め込みすぎた。余白を残すよう直した方がええな。"
     if kind == "critique_gibberish":
-        return f"うん、読みにくいわ。「{verse_one_line}」。直すでも次で気をつけるでもええで。"
+        return f"うん、「{verse_one_line}」は読みにくい。そこは直した方がええな。"
     if kind == "critique_offscene":
-        aim = f"狙いは{materials}寄りやったんやけどな。" if materials else ""
-        return f"場とずれたな、悪かった。{aim}次は外れすぎんようにするわ。"
+        return "せやな、場とずれとる。そこは直した方がええな。"
+    if kind == "request_repair":
+        return "うん、どの行を直すか確かめてみるわ。"
     if kind == "soft_default":
         return "句の話、まだ聞いてるで。気になるところある？"
     # other_haiku（読み・好み・句への言及など）— 短く
@@ -982,7 +1192,7 @@ def render_workshop_reply(
     if any(m in said for m in _READING_META_MARKERS):
         return "せやな、読みの話やな。次は読みやすさ、ちょっと意識するわ。"
     if any(m in said for m in _PREFERENCE_MARKERS) or any(m in said for m in _SOFT_SUGGEST_MARKERS):
-        return "なるほど、そっちの方がしっくりくるかもな。次に活かすわ。"
+        return "なるほど、その言い方の方が自然やな。"
     if any(m in said for m in _LENGTH_MARKERS):
         return "せやな、ちょっと長かったかもな。次は短め、意識するわ。"
     return "気になるところあったら、その言葉だけ言ってな。"

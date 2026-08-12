@@ -491,6 +491,10 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertNotIn("ここで一句", preface_text)
         self.assertIn("浮かんできた", preface_text)
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
+        assert machine.emitted_haiku is not None
+        saved_atoms = machine.emitted_haiku.materials["source_atoms"]
+        self.assertTrue(any(atom["kind"] == "preface_interpretation" for atom in saved_atoms))
+        self.assertEqual(machine.emitted_haiku.materials["preface_spoken"], preface_text)
 
     def test_haiku_zone_ignores_player_chat_until_verse(self) -> None:
         """自分の世界: preface 中は話しかけより本句完了を優先する。"""
@@ -873,11 +877,14 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nのにいでて\nひうちいしもつ\nあまいみや")
+        assert machine.emitted_haiku is not None
+        saved_constraints = machine.emitted_haiku.materials["haiku_constraints"]
         draft_requests = [
             request for request in fake_llm.structured_requests
             if request.kind == "haiku_draft"
         ]
         self.assertEqual(len(draft_requests), 1)
+        self.assertEqual(saved_constraints, draft_requests[0].details["haiku_constraints"])
         self.assertEqual(draft_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
 
     def test_plain_scene_summary_with_weather_and_held_item_can_use_llm(self) -> None:
@@ -1027,6 +1034,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 "allowed_terms": ["しゃべる"],
                 "forbidden_terms": ["つるはし", "おの", "くわ"],
             },
+        )
+        self.machine._begin_prefaced_haiku(event, self.base_time)
+        assert self.machine._pending_haiku_materials is not None
+        self.assertEqual(
+            self.machine._pending_haiku_materials["haiku_constraints"],
+            constraints,
         )
 
     def test_haiku_constraint_details_include_player_lessons(self) -> None:

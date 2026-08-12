@@ -598,7 +598,9 @@ class NarrationMixin:
         if self.player_input.asks_inventory:
             inventory_summary = self._player_chat_inventory_summary(event)
             held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
-        user_text = (self.player_input.raw_text or "").strip()
+        # 文脈 STT 補正は雑談理解だけに使う。明示操作・永続化の判定は
+        # PlayerInputContext.raw/normalized_text を参照する別経路のまま。
+        user_text = (self.player_input.semantic_text or "").strip()
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
             build_identify_skeleton,

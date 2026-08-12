@@ -34,7 +34,7 @@ workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkp
 4. 一定時間静かだったら川柳候補を起動
 5. コード側で `HaikuContext` を組み立てる
 6. `chat` route で `IronyContext` / scene を JSON 抽出する
-7. 観測 ID から、カタログ原文の読み取り専用 snapshot と `source atom` をコードで作る
+7. 観測 ID からカタログ原文・実測の `source atom` を作り、実際に発話した見どころも別種の解釈 atom にする
 8. `haiku` route（初稿 temperature `0.60`）で、かな三行の JSON を生成する
 9. `chat` route（temperature `0.0`）で、一行ごとに「どの atom の意味が残ったか」「自然な日本語か」を JSON 判定する
 10. コードで、かな・音数・道具 hard 制約・出典 ID・行間の atom 重複を検証する
@@ -49,7 +49,9 @@ workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkp
 - 発句時に観測された ID だけを `catalog_type:catalog_id` へ結び、原文 snapshot を作る
 - `note` は実行時だけ `。！？!?` の直後で分ける。読点 `、` では分けず、終止記号も原文に残す
 - 名前、各 note 文、mob の `poetic` 原文フィールド、実測した時刻・天気・場所・手元・周辺物・mob を、追跡可能な atom として扱う
-- irony / scene の LLM 要約は構成のヒントであり、出典そのものにはしない
+- irony / scene の内部要約をそのまま出典にはしない。ただし、見どころとしてプレイヤーへ**実際に発話した文**は読点・句点単位で `preface_interpretation` atom にし、句がその意味を受け取ることを許す
+- カタログ名は全文の復唱を要求しない。意味保持の検証でその行の出典と確定した `catalog_label` に限り、ラベル中の4文字以上のかな語と一字だけ違う断片をコードで訂正する（例: `シラカバの階段` を根にした `しろかばの` → `しらかばの`）。全カタログへの曖昧検索、短語、複数候補、挿入・削除は自動訂正しない
+- `preface_interpretation` はカタログ事実・実測観測へ昇格させず、`preface:spoken` という別 provenance で保存する。短縮で発話から落ちた連想は atom にしない
 - 生成済みの各行には採用した atom ID と原文 snapshot を添え、`haiku_entries.jsonl` の `materials_snapshot` に保存する
 
 たとえば古代の残骸の `note` は、原文を保持したまま実行時だけ次の三要素になる。

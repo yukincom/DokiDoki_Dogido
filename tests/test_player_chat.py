@@ -638,15 +638,40 @@ class PlayerInputEndpointTests(unittest.TestCase):
     def test_push_without_session_is_rejected(self) -> None:
         with TemporaryDirectory() as tmp:
             service = self.make_service(tmp)
-            result = service.push_player_input("おーい")
+            result = service.push_player_input("おーい", source="voice")
             self.assertFalse(result["accepted"])
             self.assertEqual("no_active_session", result["reason"])
+
+    def test_short_voice_noise_is_rejected_without_queueing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = self.make_service(tmp)
+            service.process_event(make_event(sequence=1, at_sec=0.0))
+
+            for text in ("はい", "はい。", "うん", "おう"):
+                with self.subTest(text=text):
+                    result = service.push_player_input(text, source="voice")
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual("too_short", result["reason"])
+
+            session = next(iter(service.sessions.values()))
+            self.assertIsNone(session.pending_player_text)
+
+    def test_short_voice_call_is_still_accepted(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = self.make_service(tmp)
+            service.process_event(make_event(sequence=1, at_sec=0.0))
+
+            result = service.push_player_input("おーい")
+
+            self.assertTrue(result["accepted"])
+            session = next(iter(service.sessions.values()))
+            self.assertEqual("おーい", session.pending_player_text)
 
     def test_adapter_chat_wins_over_pending_voice_text(self) -> None:
         with TemporaryDirectory() as tmp:
             service = self.make_service(tmp)
             service.process_event(make_event(sequence=1, at_sec=0.0))
-            service.push_player_input("ボイス入力や")
+            service.push_player_input("ボイス入力や", source="voice")
 
             # 同じイベントにチャットが載っていたらチャット優先、ボイスは次イベントへ
             processed = service.process_event(

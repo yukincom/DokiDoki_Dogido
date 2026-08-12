@@ -3,7 +3,7 @@
 **日付:** 2026-08-03  
 **状態:** 方針確定（実装は未着手・段階的）  
 **Issue:** [#37 長期メモリが弱い件](https://github.com/yukincom/DokiDoki_Dogido/issues/37)  
-**前段:** [#8 workshop 入り口](https://github.com/yukincom/DokiDoki_Dogido/issues/8)（入り口・drift・詩人 leaf は完了・closed）  
+**前段:** [#8 workshop 入り口](https://github.com/yukincom/DokiDoki_Dogido/issues/8)（入り口・drift・共同編集者 leaf は完了・closed）
 **関連:** [memory-architecture.md](memory-architecture.md) · [haiku-feedback-plan.md](haiku-feedback-plan.md) · [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) · [senryu-rag-plan.md](senryu-rag-plan.md)
 
 着想メモ（ニューラル置換ではない）: [Memory Caching 系の論文](https://arxiv.org/html/2602.24281v1) の  
@@ -219,7 +219,7 @@ lesson と checkpoint を両方プロンプトに山盛りしない。
 
 | Issue | 役割 |
 |---|---|
-| **#8** | workshop **入り口**（soft 既定・詩人 leaf 等）→ **closed** |
+| **#8** | workshop **入り口**（soft 既定・共同編集者 leaf 等）→ **closed** |
 | **#37** | **記憶（checkpoint）** の本線。実装・観察はこちら |
 
 実装に入るときは #37 に Plan を書き、go サイン後に M1 から。

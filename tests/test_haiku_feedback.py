@@ -153,6 +153,43 @@ class HaikuFeedbackMemoryTest(unittest.TestCase):
             self.assertEqual(hits[0]["kind"], "revision")
             self.assertEqual(hits[0]["revised_text"], rev["revised_text"])
 
+    def test_generated_revision_requires_sources_for_all_three_lines(self) -> None:
+        with TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp))
+            emission = HaikuEmission(
+                created_at=datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc),
+                text="はるのかぜ\nひつじがあるく\nよるのつき",
+                preface="ここで一句。",
+                interpretation="春の草地",
+                biome="meadow",
+                structure=None,
+                time_phase="day",
+                dimension="minecraft:overworld",
+                event_sequence=11,
+            )
+
+            with self.assertRaisesRegex(ValueError, "all three lines"):
+                store.save_haiku_feedback(
+                    emission,
+                    revised_text="はるのかぜ\nあめつよくふる\nよるのつき",
+                    source="generated_confirmed",
+                    revision_line_sources=[
+                        {"line_index": 0, "atom_ids": ["a0"]},
+                        {"line_index": 1, "atom_ids": ["a1"]},
+                    ],
+                )
+            with self.assertRaisesRegex(ValueError, "all three lines"):
+                store.save_haiku_feedback(
+                    emission,
+                    revised_text="はるのかぜ\nあめつよくふる\nよるのつき",
+                    source="generated_confirmed",
+                    revision_line_sources=[
+                        {"line_index": False, "atom_ids": ["a0"]},
+                        {"line_index": 1, "atom_ids": [""]},
+                        {"line_index": 2, "atom_ids": [None]},
+                    ],
+                )
+
     def test_reading_correction_persists_and_applies(self) -> None:
         with TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp))

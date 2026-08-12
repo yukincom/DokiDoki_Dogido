@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -497,6 +497,8 @@ class PlayerInputRequest(DogidoModel):
     プレイヤー発話。次のゲームイベントの meta.user_text に相乗りする。
     """
     text: str
+    # 既存クライアントは text 扱い。voice_input だけ明示して文脈補正を有効にする。
+    source: Literal["text", "voice"] = "text"
 
 
 class StateResponse(DogidoModel):

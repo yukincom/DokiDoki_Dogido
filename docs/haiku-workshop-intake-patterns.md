@@ -8,7 +8,7 @@
 方針の前提:
 
 - **回数を取る前に解を決めない**（W0 = Issue に観察を貯める）  
-- **明示操作・hard off-topic・状態管理はコード（SM / pure function）**。H7-lite は `soft_default` の講評種別だけ補助分類する
+- **明示操作・hard off-topic・状態管理はコード（SM / pure function）**。H7-lite は `soft_default` の intent 補助と、既知講評を含む対象行・断片・problem 抽出だけを行う
 - open 中は hard off-topic だけ chat に戻し、それ以外のマーカー外発話を `soft_default` として扱う
 - この docs は比較メモ。**追記の本丸は Issue コメント／本文**
 
@@ -22,9 +22,11 @@ player-input
   → formal/conversational 直し? → revision
   → その他 haiku 操作?
   → classify_workshop_intent (open 時のみ有効な経路)
-       既知 intent → workshop
-       soft_default → 限定 LLM structured 分類
-                      → 低信頼・失敗は soft_default
+       対象 kind（soft_default / other / request_repair / 各 critique）
+                    → OS／端末内AI優先の限定 structured 抽出
+       既知 intent  → ルールの大分類を維持し、対象行・断片・問題種別だけ抽出
+                    → soft_default のintentは返答トーンだけに利用
+                    → 低信頼・失敗はルール結果／chat fallback
        hard off-topic → 通常 player_chat
                         → speech あり → workshop drift
 ```
@@ -189,14 +191,14 @@ intent は狭いまま、chat の stance を none 寄りに。
 | 自然文に強い | 遅延・不安定さがある |
 | ルールの抜けを講評種別へ寄せられる | 低信頼・失敗時の fallback が必要 |
 
-**限定採用済み。** ルールで `soft_default` になった場合だけ、閉じた enum と信頼度ゲートを通して使う。明示操作・hard off-topic・状態管理はコードのまま。
+**限定採用済み。** ルールで `soft_default` になった場合も、閉じた enum と信頼度ゲートを通した intent は返答トーンだけに使い、lesson・close・repair開始へは使わない。既知 critique / other / repair では対象行・断片・problem の抽出だけに使う。明示操作・hard off-topic・状態管理はコードのまま。
 
 ---
 
 ## 5. 推奨組み合わせ
 
 ```text
-B（open 中 soft 既定）+ E（hard off-topic は chat）+ F（soft_default だけ限定分類）
+B（open 中 soft 既定）+ E（hard off-topic は chat）+ F（限定 intent / findings 抽出）
 A は intent 精度向上として部分採用
 C は読み保存の未解決パターンに限定して継続検討、D は不採用
 ```
@@ -208,7 +210,7 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 2. revise / formal 直し
 3. classify_workshop_intent
      既知 intent    → workshop 返事・critique・drift しない
-     soft_default   → H7-lite（低信頼・失敗は soft_default のまま）
+     句関連         → H7-lite（OS AI優先、失敗はchat、状態判断はコードのまま）
      hard off-topic → chat（drift 可）
 ```
 
@@ -232,7 +234,7 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 | **W2** | 読み「AにBっていう」等 | P09 は未、P10 は済 |
 | **W3** | pin 断片マッチ + 誤り語 | **済**。P17, P07 |
 | **W4** | open 中 topic 誤爆の抑止 | 継続観察。F4, P14 |
-| **W5** | `soft_default` の限定 structured 分類 | **H7-lite 済**。実ログ評価は継続 |
+| **W5** | 限定 structured intent / findings 抽出 | **H7-lite 済**。実ログ評価は継続 |
 
 ---
 
@@ -248,7 +250,7 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 ## 8. 次のアクション
 
 1. **Issue #8 に観察を足す**（本文 or コメント。テンプレは Issue 先頭）  
-2. H7-lite の低信頼 fallback・誤分類を実ログで確認する
+2. OS AI／chat fallback の低信頼・誤分類・finding 精度を実ログで確認する
 3. P09 の読み保存と P14 のメタ発話は、実害を見てコード側マーカーを調整する
 
 ---
@@ -259,4 +261,4 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 |---|---|
 | 2026-07-19 | 初版。パターン台帳・案 A–F 比較・推奨 B+C+E |
 | 2026-07-19 | 観察の正本を Issue #8 に。回数不足のうちは実装しない |
-| 2026-08-12 | 現行 H1〜H5.2 と H7-lite の限定分類を反映。残る P09 / P14 を明記 |
+| 2026-08-12 | H7-lite を OS／端末内AI優先の限定 intent / findings 抽出へ更新。残る P09 / P14 を明記 |

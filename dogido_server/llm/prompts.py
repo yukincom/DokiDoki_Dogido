@@ -38,6 +38,7 @@ from .prompt_common import dialog_messages, leaf_dialog
 from .workshop_prompts import (
     build_haiku_workshop_intent_messages,
     build_haiku_workshop_reply_messages,
+    build_haiku_workshop_revision_messages,
 )
 from .reaction_prompts import (
     _build_aftermath_messages,
@@ -76,6 +77,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "haiku_workshop_material_pick": _build_haiku_workshop_material_pick_messages,
         "haiku_workshop_intent": _build_haiku_workshop_intent_messages,
         "haiku_workshop_reply": _build_haiku_workshop_reply_messages,
+        "haiku_workshop_revision": _build_haiku_workshop_revision_messages,
         "aftermath": _build_aftermath_messages,
         "ambient": _build_ambient_messages,
         "death": _build_death_messages,
@@ -133,6 +135,10 @@ def _build_haiku_workshop_intent_messages(request: Any) -> list[dict[str, str]]:
 
 def _build_haiku_workshop_reply_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_workshop_reply_messages(request)
+
+
+def _build_haiku_workshop_revision_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_workshop_revision_messages(request.details)
 
 
 __all__ = [

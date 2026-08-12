@@ -11,8 +11,10 @@ from dogido_server.haiku.generation import generate_grounded_haiku
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
 from dogido_server.haiku.source_atoms import (
     CatalogSourceSnapshot,
+    HaikuSourceAtom,
     atoms_from_catalog_sources,
     atoms_from_observations,
+    atoms_from_spoken_preface,
     catalog_notes_projection,
     catalog_source_snapshot,
     merge_source_atoms,
@@ -191,17 +193,34 @@ class HaikuMixin:
         irony, irony_status = self._detect_haiku_irony(context)
         scene, scene_status = self._detect_haiku_scene(context, irony)
         self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
-        self._stash_haiku_materials_seed(event, context, irony, scene)
+        spoken = self._compose_haiku_preface_speech(irony, scene)
+        source_atoms = merge_source_atoms(
+            context.source_atoms,
+            atoms_from_spoken_preface(spoken),
+        )
+        self._stash_haiku_materials_seed(
+            event,
+            context,
+            irony,
+            scene,
+            source_atoms=source_atoms,
+            preface_spoken=spoken,
+        )
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
         skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
 
         self._pending_haiku_prompt_details = None
-        self._pending_haiku_source_atoms = context.source_atoms
+        self._pending_haiku_source_atoms = source_atoms
         self._pending_haiku_fixed_line = None
+        constraints = self._haiku_constraint_details(event, scene)
+        if constraints and self._pending_haiku_materials is not None:
+            # workshop修正でも、発句時の道具・読みhard制約を同じまま検査する。
+            # 現在値で再計算せず、句と一緒にsnapshotする。
+            self._pending_haiku_materials["haiku_constraints"] = constraints
         if skip_reason is None:
             prompt_details = context.prompt_details(irony, scene)
-            prompt_details["haiku_constraints"] = self._haiku_constraint_details(event, scene)
+            prompt_details["haiku_constraints"] = constraints
             self._pending_haiku_prompt_details = prompt_details
         elif self._should_use_llm_failed_haiku(skip_reason, irony_status, scene_status):
             LOGGER.warning(
@@ -220,7 +239,6 @@ class HaikuMixin:
 
         self.state.pending_haiku_after_preface = True
         self.state.pending_haiku_started_at = now
-        spoken = self._compose_haiku_preface_speech(irony, scene)
         LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log(spoken))
         return spoken
 
@@ -383,7 +401,10 @@ class HaikuMixin:
             )
             return fallback_text
         prompt_details = context.prompt_details(irony, scene)
-        prompt_details["haiku_constraints"] = self._haiku_constraint_details(event, scene)
+        constraints = self._haiku_constraint_details(event, scene)
+        prompt_details["haiku_constraints"] = constraints
+        if constraints and self._pending_haiku_materials is not None:
+            self._pending_haiku_materials["haiku_constraints"] = constraints
         generated = generate_grounded_haiku(
             self.llm,
             details=prompt_details,
@@ -414,6 +435,9 @@ class HaikuMixin:
         context: HaikuContext,
         irony: IronyContext,
         scene: SceneContext,
+        *,
+        source_atoms: tuple[HaikuSourceAtom, ...] | None = None,
+        preface_spoken: str | None = None,
     ) -> None:
         """発句時点の材料を workshop 用に保持（句テキストへの制御タグは付けない）。"""
         motifs: list[str] = []
@@ -446,7 +470,10 @@ class HaikuMixin:
             mats["structure_ja"] = context.structure_label
         # あんちょこの正本へ戻れるよう、原文snapshotと派生atomを句に添える。
         mats["catalog_sources"] = [source.to_dict() for source in context.catalog_sources]
-        mats["source_atoms"] = [atom.to_prompt_dict() for atom in context.source_atoms]
+        effective_atoms = context.source_atoms if source_atoms is None else source_atoms
+        mats["source_atoms"] = [atom.to_prompt_dict() for atom in effective_atoms]
+        if preface_spoken:
+            mats["preface_spoken"] = preface_spoken
 
     def _remember_haiku_emission(
         self,

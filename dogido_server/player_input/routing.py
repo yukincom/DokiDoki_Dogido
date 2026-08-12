@@ -25,11 +25,16 @@ from dogido_server.player_input.types import HaikuRecallQuery, PlayerInputContex
 LOGGER = logging.getLogger("uvicorn.error")
 
 
-def route_player_input(raw_text: str | None) -> PlayerInputContext:
-    # player_chat は raw_text を LLM に渡すため、STT 補正後を spoken 面に使う
+def route_player_input(
+    raw_text: str | None,
+    *,
+    interpreted_text: str | None = None,
+) -> PlayerInputContext:
+    # raw/normalized は明示操作用に保持し、文脈補正後は semantic 面だけに載せる。
     original = (raw_text or "").replace("　", " ").strip()
     original = " ".join(original.split()) if original else ""
     normalized_text = normalize_player_text(raw_text)
+    normalized_interpreted = normalize_player_text(interpreted_text)
     if original and normalized_text and original != normalized_text:
         _, applied = apply_asr_fixes(original)
         if applied:
@@ -46,6 +51,7 @@ def route_player_input(raw_text: str | None) -> PlayerInputContext:
         return PlayerInputContext(
             raw_text=spoken,
             normalized_text=normalized_text,
+            interpreted_text=normalized_interpreted or spoken,
         )
     blocks_ambient = should_block_ambient(normalized_text)
     player_haiku_text = extract_player_haiku(raw_text)
@@ -83,6 +89,7 @@ def route_player_input(raw_text: str | None) -> PlayerInputContext:
     return PlayerInputContext(
         raw_text=spoken,
         normalized_text=normalized_text,
+        interpreted_text=normalized_interpreted or spoken,
         breaks_silence=blocks_ambient,
         wants_quiet=wants_quiet(normalized_text),
         should_block_ambient=blocks_ambient,

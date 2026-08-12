@@ -8114,7 +8114,7 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertFalse(
             any(
-                action.text == "！そろそろ夜やで！"
+                action.text == "！そろそろ夕方やで！"
                 for action in result.actions
             )
         )
@@ -8383,10 +8383,10 @@ class StateMachineTests(unittest.TestCase):
         second = self.machine.process(night)
 
         speech = next(action for action in first.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "！そろそろ夜やで！")
+        self.assertEqual(speech.text, "！そろそろ夕方やで！")
         self.assertFalse(
             any(
-                action.text == "！そろそろ夜やで！"
+                action.text == "！そろそろ夕方やで！"
                 for action in second.actions
             )
         )
@@ -8494,7 +8494,7 @@ class StateMachineTests(unittest.TestCase):
         result = self.machine.process(second_evening)
 
         speech = next(action for action in result.actions if action.layer == "speech")
-        self.assertEqual(speech.text, "！そろそろ夜やで！")
+        self.assertEqual(speech.text, "！そろそろ夕方やで！")
 
     def test_cave_biome_evening_uses_surface_exit_warning(self) -> None:
         daytime = GameEvent.model_validate_json(
@@ -8755,7 +8755,7 @@ class StateMachineTests(unittest.TestCase):
 
         self.assertFalse(
             any(
-                action.text == "！そろそろ夜やで！"
+                action.text == "！そろそろ夕方やで！"
                 for action in result.actions
             )
         )
@@ -8832,7 +8832,7 @@ class StateMachineTests(unittest.TestCase):
 
         # 夕方警告は1本だけ。入力中は interrupt で遮る（2段本文は出さない）
         attention = next(action for action in first.actions if action.layer == "speech")
-        self.assertEqual(attention.text, "！そろそろ夜やで！")
+        self.assertEqual(attention.text, "！そろそろ夕方やで！")
         self.assertTrue(attention.interrupt)
         second_speech = [a.text for a in second.actions if a.layer == "speech" and a.text]
         self.assertFalse(

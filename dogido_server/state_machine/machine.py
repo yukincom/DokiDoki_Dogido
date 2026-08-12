@@ -62,7 +62,12 @@ class DogidoStateMachine(
         # service が pending_player_text 待ちのとき True（ambient 抑止用）
         self.player_input_queued = False
 
-    def process(self, event: GameEvent) -> StateMachineResult:
+    def process(
+        self,
+        event: GameEvent,
+        *,
+        interpreted_user_text: str | None = None,
+    ) -> StateMachineResult:
         now = event.observed_at
         previous_mode = self.state.mode
         self.emitted_haiku = None
@@ -73,7 +78,10 @@ class DogidoStateMachine(
             self._pending_haiku_source_atoms = ()
             self._pending_haiku_fixed_line = None
             self._pending_haiku_materials = None
-        self.player_input = route_player_input(event.meta.user_text)
+        self.player_input = route_player_input(
+            event.meta.user_text,
+            interpreted_text=interpreted_user_text,
+        )
         dimension_changed = self._did_change_dimension(event)
         self._handle_dimension_change(event)
         newly_burning_visual = self._find_newly_burning_visual(event)

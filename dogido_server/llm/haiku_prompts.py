@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import json
+
 
 def _item_hint(details: dict[str, object]) -> str:
     held_item = str(details.get("held_item") or "").strip()
@@ -188,7 +190,9 @@ def _source_atoms_block(details: dict[str, object]) -> str:
         atom_id = str(atom.get("atom_id") or "").strip()
         text = str(atom.get("text") or "").strip()
         if atom_id and text:
-            lines.append(f"- [{atom_id}] {text}")
+            kind = str(atom.get("kind") or "").strip()
+            origin = "（発話済みの見どころ）" if kind == "preface_interpretation" else ""
+            lines.append(f"- [{atom_id}] {text}{origin}")
     return "\n".join(lines) if lines else "なし"
 
 
@@ -258,18 +262,35 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         for row in lines if isinstance(row, dict)
     ) if isinstance(lines, list) else "なし"
     atoms = _source_atoms_block(details)
+    requested_indices = [
+        row.get("line_index")
+        for row in lines
+        if isinstance(row, dict)
+        and isinstance(row.get("line_index"), int)
+        and not isinstance(row.get("line_index"), bool)
+    ] if isinstance(lines, list) else []
+    example = {
+        "assessments": [
+            {
+                "line_index": index,
+                "atom_ids": ["..."],
+                "meaning_retained": True,
+                "natural_japanese": True,
+                "reason": "...",
+            }
+            for index in requested_indices
+        ]
+    }
     user_prompt = (
         "川柳の各行を、原文材料と一行ずつ照合する。\n"
         "音や名前から説明にない性質を推測しない。遠い連想や、意味のない造語は不合格。\n"
         "meaning_retained は、指定atomの意味が言い換えとして残る場合だけ true。\n"
+        "材料名の一部だけを自然に使うのはよい。名前全体の復唱は必須ではない。\n"
         "natural_japanese は、単独で聞いて自然な現代日本語の場合だけ true。\n"
         "atom_ids には、実際に意味が残ったIDだけを入れる。候補外IDは禁止。\n\n"
         f"【判定する行】\n{line_block}\n\n"
         f"【原文材料】\n{atoms}\n\n"
-        + _structured_json_tail(
-            '{"assessments": [{"line_index": 0, "atom_ids": ["..."], '
-            '"meaning_retained": true, "natural_japanese": true, "reason": "..."}]}'
-        )
+        + _structured_json_tail(json.dumps(example, ensure_ascii=False))
     )
     return [
         {

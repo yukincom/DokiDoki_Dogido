@@ -12,6 +12,7 @@ from dogido_server import __version__
 
 LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
 LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
+PLATFORM_AI_PROVIDER = Literal["auto", "apple", "foundry", "chat"]
 
 PROVIDER_DEFAULT_BASE_URLS = {
     "local": "http://127.0.0.1:8080/v1",
@@ -123,6 +124,18 @@ class Settings(BaseSettings):
     llm_anthropic_version: str = "2023-06-01"
     llm_timeout_sec: float = 20.0
     llm_max_tokens: int = 72
+
+    # 小さな structured task 用の OS / 端末内 AI。
+    # auto: Apple Foundation Models → Foundry Local → chat route fallback。
+    # モデルの実行結果で切り替えず、可用性と設定だけで provider を決める。
+    platform_ai_provider: PLATFORM_AI_PROVIDER = "auto"
+    platform_ai_refresh_sec: float = 300.0
+    platform_ai_timeout_sec: float = 8.0
+    platform_ai_failure_cooldown_sec: float = 60.0
+    # Foundry は model ID でなく alias を使い、SDK に端末向け variant を選ばせる。
+    platform_ai_foundry_model_alias: str = "qwen2.5-7b"
+    # 意図しない大容量 download を避ける。配布UIで同意を取れるまでは false。
+    platform_ai_allow_model_download: bool = False
 
     llm_chat_backend: LLM_BACKEND | None = None
     llm_chat_provider: LLM_PROVIDER | None = None

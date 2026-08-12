@@ -1,7 +1,7 @@
 # 川柳: プレイヤー主導の改善設計
 
 **日付:** 2026-08-12
-**状態:** H1〜H5.2・H7-lite **実装済み** / H6 **撤回**（詳細は §7）
+**状態:** H1〜H5.2・H7-lite（OS／端末内AIの限定講評抽出）・修正案1本 **実装済み** / H6 **撤回**（詳細は §7）
 **関連:** [companion-maturity.md](companion-maturity.md)、[haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
 
 ---
@@ -61,8 +61,12 @@
 
 プレイヤー発話
   ├─ 句に関する講評・質問・直し  → haiku_workshop 経路
-  │     → critique 構造化 → 保存 → 短い返事
-  │     → （任意）一緒に直し案を1つ出す
+  │     → 端末内AI優先で intent / 対象行 / 指摘を構造化
+  │     → コード検証 → critique 保存 → 共同編集者として短く返す
+  │     → 求められたときだけ haiku route が対象行を直す
+  │     → 別structured評価で意味保持・自然さを照合
+  │     → コードで出典ID・重複・対象行・音数・発句時hard制約を検証 → 未保存案として提示
+  │     → プレイヤーが「その案で」と明示して初めて revision 保存
   └─ それ以外                  → 通常 player_chat
 
 次回発句
@@ -194,14 +198,19 @@ open 中のプレイヤー入力
 | **critique_offscene** | 「ここ海ちゃう」「村なのに」 | kind=off_context |
 | **critique_gibberish** | 「それ日本語？」「読めん」 | kind=unreadable |
 | **praise** | 「いい句」「うまい」 | kind=praise（critique 保存・lesson 非変更・close） |
+| **request_repair** | 「直して」「直すかな」 | 検証済みの指摘から対象行だけ修正案を1本作る。自動保存しない |
 | **revise_free** | 「こう直して」「〜の方がええ」＋句っぽい | revision 保存（`直し:` なしでも） |
 | **revise_formal** | 既存 `直し:` | 現行どおり |
 | **reading** | 既存 草地はくさち | 現行どおり |
 | **close_workshop** | 「もうええ」「次いこ」 | open=false |
 
-明示操作と既知パターンは **ルール＋キーワード**で確定する。open 中で hard off-topic ではなく、ルールで `soft_default` になった自然文だけ、短い LLM structured 分類で既存 intent の候補を補う（H7-lite）。低信頼・不正出力・失敗時は `soft_default` のまま扱う。
+明示操作と既知パターンは **ルール＋キーワード**が正。ルールで `soft_default` のとき、AI の intent は信頼度 0.75 以上なら **共同編集者の返答トーンだけ**に使う。lesson 保存・close・修正開始などの状態変更には使わない。既知 critique / `other_haiku` / `request_repair` ではAIが対象行・断片・問題種別を抽出するが、大分類を上書きしない。
 
-LLM が選べるのは `ask_meaning` / 各 critique / `praise` / `ack` / `other_haiku` と、分類を見送る `soft_default` のみ。`close`、`clear_lessons`、revision、reading、open/close の状態管理はコードから動かさない。
+finding は行 0〜2、閉じた problem enum、信頼度 0.65 以上をコードで検証する。行番号がなくても断片が一つの行だけに一致するときはコードで補える。`close`、`clear_lessons`、reading、revision 保存、open/close はAIに実行させない。特に、曖昧文をAIが `praise` と分類しても workshop は閉じない。
+
+structured 抽出の `auto` 順は **Apple Foundation Models → Foundry Local → 既存 chat route**。設定と可用性だけで選び、生成内容で provider を選ばない。端末AIがない・失敗・低信頼・不正出力なら安全に fallback する。Apple はOSの現在の既定モデルを毎回取得し、Foundry は alias の解決先を定期確認する。Foundry の大容量モデル自動ダウンロードは既定 off。
+
+`source=voice` の入力は、句・出典・時間帯など現在の候補内だけで一意な音近傍をコード補正する。STT原文は保持し、補正文はAIの講評理解と返答にだけ渡す。close、採用、lesson解除、revision保存などの明示操作は補正前の原文で判定する。
 
 **重要:** 通常 chat に落とすと、今回のように一般論の俳句談義になる。  
 `open` 中は workshop を優先。
@@ -229,7 +238,7 @@ LLM が選べるのは `ask_meaning` / 各 critique / `praise` / `ack` / `other_
 
 ### `haiku_revisions.jsonl`（既存拡張）
 
-- いまの formal 直しに加え、`source: "formal"|"conversational"`  
+- `source: "player_feedback"|"formal"|"conversational"|"generated_confirmed"`
 - 可能なら `critique_ids[]` を紐づけ  
 
 ### `haiku_lessons.jsonl`（または profile 内）
@@ -275,26 +284,21 @@ lesson の効き方（H5.1）:
 
 ## 4. 返事の型（workshop）
 
-プレイヤーが直せる体験にするには、ただ「はい」では弱い。  
-口答えは **ガチ約束せず soft**（lesson の強度と揃える）。
+workshop の会話 leaf は、冒険時の「怖がり」ではなく **素直な共同編集者**。指摘を弁解せず受け止め、元の狙いを持ち出して句を守らない。実際に修正していない段階で「直した」「必ず直す」と約束しない。
 
 | 種別 | 返事の型（実装トーン） |
 |---|---|
 | ask_meaning | 候補 materials をコードが閉じ、LLM が1つ選んで短く言う（「それは、平原やで」等）。失敗時は正直に読みにくい。**全 materials 羅列や schema 名は禁止** |
-| critique_forced | 「詰め込みすぎたかも」＋「次は余白、ちょっと意識するわ」 |
-| critique_gibberish / offscene | 認める ＋ materials ＋「気をつける／外れすぎんように」 |
+| critique_forced | 詰め込みを認め、直すべき点を短く返す |
+| critique_gibberish / offscene | 読みにくさ／場のずれを具体的に認め、材料説明で反論しない |
+| request_repair | haiku route が対象行だけ修正。コード検証を通った案だけ提示し、採用確認を待つ |
+| soft_default / other_haiku | 検証済み findings を渡した共同編集者 leaf。失敗時は短い定型 |
 | revise_free | 「覚えといたで」＋ close |
 | praise | 「ありがとうや。その句、残しとくで。」＋ critique 保存。lesson は触らない |
 
-**材料開示**が鍵。  
-今回のログなら: irony/scene は良かったのに句が逸れた、とプレイヤーと共有できる。
+材料開示は `ask_meaning` で使う。講評への返事では、材料や狙いを弁明に使わない。
 
-プレイヤーへ見せる直し案は（未実装・任意）:
-
-- ルールベース短いテンプレ（materials の語を並べるだけ）  
-- または発話前ゲートとは別の、プレイヤーが求めた案だけを低温で1本生成
-
-どちらも「プレイヤーが却下できる」前提。発話前の不合格行再生成は [川柳アーキテクチャ](haiku-architecture.md) の品質ゲートであり、この workshop の直し案とは分ける。
+修正案は発話前ゲートとは別に、プレイヤーが明示的に求めたときだけ低温で1本生成する。検証済み finding の行だけを変更し、他の行は固定する。生成AIの自己申告IDだけを信用せず、別structured評価で各修正行の意味保持・自然さを照合する。その後コードが、保存済み source atom ID、固定行との atom 重複、5-7-5±1、発句時にsnapshotした道具・読みhard制約を確認する。不合格なら元句を維持し、合格でも `pending_revision` に置くだけ。疑問・否定を除く「その案で」等の明示採用後に、検証済み行別出典とともに revision 保存する。
 
 ---
 
@@ -344,17 +348,18 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H5.1** | ゆるめ・可逆（soft 文言 / hard 非合流 / praise lesson 非変更 / 明示 loosen / 口答え soft） | H5 | **済** |
 | **H5.2** | 明示「気にせんで」+ lesson 自然減衰（日数・発句回数 TTL） | H5.1 | **済** |
 | **H6** | 発句後 materials 突合バリデータ（固定語リスト） | 独立可 | **撤回** |
-| **H7-lite** | `soft_default` だけを限定 enum の LLM structured で補助分類。低信頼・失敗は従来 fallback | H2 の後 | **済** |
+| **H7-lite** | OS／端末内AI優先の限定 structured 講評抽出。曖昧 intent 補助＋既知講評の行・断片・problem 抽出。コード検証・chat fallback | H2 の後 | **済** |
+| **H7.1** | 要求時だけ大きい haiku route で対象行を修正。コード品質ゲート→未保存案→明示採用 | H7-lite | **済** |
 
-**H1〜H5.2 + H1.1 + H7-lite 実装済み。H6 は撤回。**
+**H1〜H5.2 + H1.1 + H7-lite + H7.1 実装済み。H6 は撤回。**
 道具/読みの forbidden は hard のまま。player lesson は soft。  
 **H1.1:** 候補は短い名詞優先。`fragment_links` は句 surface→材料の内部対応表（句に制御タグを埋め込まない）。ask_meaning は links を優先。  
 **H6 をやめた理由:** 発句は渡した materials / scene から作る前提。固定 drift リストは本質でなくメンテだけ増える。  
 「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
 場の違和感は **プレイヤーが言ったとき** workshop で。  
 **strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
-**H7-lite:** clear / close / revise / reading / hard off-topic はコード優先。曖昧な句関連発話の critique 種別だけ LLM が補助し、OS ローカル AI 等へ将来差し替えられる provider 非依存の入力・出力契約にした。
-**未（気が向いたら）:** 直し案 1 本、Phase E 整理、#28 preface 延長・overlay。
+**H7-lite:** clear / close / revise / reading / hard off-topic はコード優先。Apple Foundation Models / Foundry Local を同じ契約へ接続済みで、利用不可・失敗時は chat route へ戻る。AI は状態や保存を直接変更しない。
+**未（気が向いたら）:** OS AI／chat fallback の実ログ評価、Phase E 整理、#28 preface 延長・overlay。
 
 全体の完成度・優先の考え方は [companion-maturity.md](companion-maturity.md)。
 
@@ -365,11 +370,11 @@ HaikuContext / 制約ブロックに追加（短く）:
 1. ドギド:「平原の村の朝と銅のドアの対比が頭に浮かんできたわ。ここで一句。」→「あさひさす …」  
    （見どころ〜本句のあいだは自分の世界＝プレイヤー雑談に乗らない）  
 2. プレイヤー:「グーの木の水って何?」  
-3. ドギド:「正直あれは読みにくいかもな。狙いは平原の村の朝と銅のドアやったんやけどな。直すなら言ってな。次は読みやすさ、ちょっと意識するわ」  
+3. ドギド:「うん、その言葉は読みにくい。そこは直した方がええな」
 4. プレイヤー:「無理やり圧縮しすぎ」  
-5. ドギド:「せやな、詰め込みすぎたかもな。次は余白、ちょっと意識するわ」→ critique + soft lesson  
-6. プレイヤー:「こう直して: あさひさす / むらのどう / あかがね」  
-7. revision 保存・pin close。次回発句で soft lesson が参考行として出る  
+5. ドギド:「せやな、詰め込みすぎた。余白を残すよう直した方がええな」→ critique + soft lesson
+6. プレイヤー:「そこ直して」→ 対象行だけの案を提示（まだ保存しない）
+7. プレイヤー:「その案で」→ revision 保存・pin close。次回発句で soft lesson が参考行として出る
 8. （後で）プレイヤー:「いい句やな」→「ありがとうや。その句、残しとくで。」＋ critique 保存（lesson は変更しない）
 
 ---
@@ -391,14 +396,15 @@ HaikuContext / 制約ブロックに追加（短く）:
 4. `直し:` / 自然文直しでも revision に残せる  
 5. praise は critique 保存のみで **lesson を触らない**（過去の指摘をキープ）
 6. 既存の読み訂正・想起・自動保存・道具 hard 制約は壊さない  
+7. 対象行・断片・problem だけが閉じた型で抽出され、端末AIがなくても chat fallback で workshop が壊れない
+8. 修正案は意味保持・自然さの別評価と、対象行・出典ID・重複・音数・発句時hard制約のコード検証を通り、明示採用までは元句と revision を変更しない
 
 ---
 
 ## 11. 次の合意ポイント（残作業・ゆるく）
 
-1. プレイヤー向けの直し案をシステムが1つ出すか（任意。現状は保存 + soft 返事）
-2. H7-lite の実ログ評価（低信頼 fallback と誤分類率）
-3. OS ローカル AI を同じ分類契約へ接続するか（任意）
-4. Phase E パッケージ整理（機能ではない）
+1. OS／端末内AI・chat fallback の実ログ評価（誤分類、finding 精度、待ち時間）
+2. 修正案を採用・却下するときの自然な言い回し追加
+3. Phase E パッケージ整理（機能ではない）
 
-合意後に実装。
+H7-lite / H7.1 は実装済み。以後は実ログを見て、誤分類・待ち時間・提案の自然さだけを小さく調整する。

@@ -29,6 +29,18 @@ dev = [
 tts-reading = [
   "fugashi[unidic-lite]>=1.3",
 ]
+# Apple Intelligence の SystemLanguageModel。Xcode 26+ と macOS 26+ が必要。
+os-ai-apple = [
+  "apple-fm-sdk>=0.2.1,<0.3; platform_system == 'Darwin'",
+  # apple-fm-sdk は setuptools>=75 を要求し、Torch 2.11 は <82 を要求する。
+  "setuptools>=75.3.2,<82; platform_system == 'Darwin'",
+]
+# Windows は WinML、macOS/Linux は cross-platform runtime。
+# 同じ環境へ両方を入れると依存が衝突するため platform marker で分ける。
+os-ai-foundry = [
+  "foundry-local-sdk-winml>=1.0,<2; platform_system == 'Windows'",
+  "foundry-local-sdk>=1.0,<2; platform_system != 'Windows'",
+]
 
 [project.scripts]
 dogido-server = "dogido_server.app:main"
