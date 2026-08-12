@@ -80,15 +80,18 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
 
 
 def _weather_block(details: dict[str, Any]) -> str:
-    """天気は world 状態の事実。hearing とは別レイヤ。"""
+    """global天気と、現在地でコード解決した降水・積雪を分けて渡す。"""
     label = detail_str(details, "weather_label") or detail_str(details, "weather", "不明") or "不明"
     fact = detail_str(details, "weather_fact")
     lines = [
-        f"天気は{label}"
-        "（ワールドの天気状態。雨の話の根拠。モブ音メモとは別）。"
+        f"現在地の天気は{label}"
+        "（ワールド天気を標高・バイオーム気温で解決した事実。モブ音メモとは別）。"
     ]
     if fact:
         lines.append(f"天気の事実: {fact}")
+    snow_context = detail_str(details, "snow_context")
+    if snow_context:
+        lines.append(f"標高・降雪の確定情報: {snow_context}")
     return "\n".join(lines) + "\n"
 
 

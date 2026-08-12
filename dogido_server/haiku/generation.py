@@ -12,7 +12,7 @@ from typing import Any
 
 from dogido_server.llm import LLMFrontend, StructuredGenerationRequest
 from dogido_server.llm.client import STRUCTURED_STATUS_KEY
-from dogido_server.llm.haiku import is_haiku_line_usable
+from dogido_server.llm.haiku import count_japanese_sounds, is_haiku_line_usable
 from dogido_server.llm.sanitize import summarize_for_log
 
 from .lexical_correction import correct_grounded_catalog_kana
@@ -504,10 +504,34 @@ def _regenerate_failed_lines(
     max_tokens: int | None,
 ) -> dict[int, str]:
     request_details = dict(details)
-    request_details["current_lines"] = [
-        {"line_index": index, "text": text, "frozen": index not in failed_indices}
-        for index, text in enumerate(lines)
-    ]
+    current_lines: list[dict[str, object]] = []
+    for index, text in enumerate(lines):
+        row: dict[str, object] = {
+            "line_index": index,
+            "text": text,
+            "frozen": index not in failed_indices,
+        }
+        if index in failed_indices:
+            # モデル自身の音数申告には頼らず、採否と同じコード計数を再生成へ返す。
+            target = (5, 7, 5)[index]
+            sound_count = count_japanese_sounds(text)
+            row.update(
+                {
+                    "sound_count": sound_count,
+                    "target_sound_count": target,
+                    "allowed_sound_min": target - 1,
+                    "allowed_sound_max": target + 1,
+                    "meter_status": (
+                        "too_short"
+                        if sound_count < target - 1
+                        else "too_long"
+                        if sound_count > target + 1
+                        else "within_range"
+                    ),
+                }
+            )
+        current_lines.append(row)
+    request_details["current_lines"] = current_lines
     request_details["failed_line_indices"] = sorted(failed_indices)
     request_details["source_atoms"] = [atom.to_prompt_dict() for atom in remaining_atoms]
     payload = llm.generate_structured_json(

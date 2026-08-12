@@ -1605,6 +1605,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private String nearbyResourceNameForBlock(BlockState state) {
         String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        // 地表の積雪は、バイオーム名や気温から推測せず実ブロックを送る。
+        // サーバー側で標高・天気と合わせ、川柳と雑談の共通材料にする。
+        if ("snow".equals(blockId) || "snow_block".equals(blockId) || "powder_snow".equals(blockId)) {
+            return blockId;
+        }
         if (blockId.endsWith("_log") || blockId.endsWith("_planks") || blockId.endsWith("_wool")) {
             return blockId;
         }

@@ -307,9 +307,40 @@ class HaikuStateMachineTest(unittest.TestCase):
             self.base_time,
             biome="taiga",
         )
-        candidates = self.machine._haiku_context(event).feature_candidate_labels()
+        context = self.machine._haiku_context(event)
+        candidates = context.feature_candidate_labels()
         self.assertIn("地帯 冷帯バイオーム", candidates)
-        self.assertIn("地形 雪は Y153から", candidates)
+        self.assertIn("Y座標 64", candidates)
+        # 閾値だけを詩の材料にせず、現在Yと比較したコード判定を別に渡す。
+        self.assertFalse(any("雪は Y153" in label for label in candidates))
+        details = context.prompt_details()
+        self.assertEqual(details["snow_start_y"], 153)
+        self.assertFalse(details["snowfall_zone"])
+        self.assertEqual(details["snow_evidence"], "none")
+        self.assertIn("雪や積雪を現在場面の材料にしない", details["snow_context"])
+
+    def test_haiku_uses_observed_snow_or_active_snowfall_only(self) -> None:
+        observed = make_snapshot(
+            self.base_time,
+            biome="taiga",
+            nearby_resources=[NearbyResource(type="block", name="minecraft:snow", distance=2.0)],
+        )
+        observed_context = self.machine._haiku_context(observed)
+        self.assertEqual(observed_context.prompt_details()["snow_evidence"], "observed_surface")
+        self.assertIn("周辺 雪", observed_context.feature_candidate_labels())
+
+        falling = make_snapshot(
+            self.base_time,
+            biome="taiga",
+            player_y=160,
+        )
+        falling = falling.model_copy(
+            update={"world": falling.world.model_copy(update={"weather": Weather.RAIN})}
+        )
+        falling_context = self.machine._haiku_context(falling)
+        self.assertEqual(falling_context.weather_label, "雪")
+        self.assertEqual(falling_context.prompt_details()["snow_evidence"], "active_snowfall")
+        self.assertIn("降雪 現在は雪", falling_context.feature_candidate_labels())
 
     def test_structure_present_prefers_structure_over_biome_candidates(self) -> None:
         event = make_snapshot(

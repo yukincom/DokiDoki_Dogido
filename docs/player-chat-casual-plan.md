@@ -124,6 +124,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 | recent_visual_memos | ついさっき 視認 | 維持 |
 | passive + recent_passive | **allowed のみ** | **短い observation 行にも載せる** |
 | hearing + buffer | **プレイヤーが音を明示したときだけ** hearing 注入（`asks_about_sound`） | **済** |
+| 標高・気候・積雪 | 現在Y＋気温＋降雪開始高度をコード比較。地表雪は周辺の雪ブロック実測 | **川柳と共通判定で済** |
 | topic（弱い） | hints に載りうる | **none では載せない**（柱1） |
 | topic（強い） | hints | hypothesis のみ |
 
@@ -145,6 +146,8 @@ GENERIC_TOPIC_TERMS = frozenset({
 - 種名はカタログ label 解決できたものだけ（hearing と同じ思想）  
 - トピック仮説の種は **ここに入れない**（観測と仮説を混ぜない）  
 - 重複（視認とついさっきが同じ種）は1行にまとめてよい  
+- global の `rain` は現在Yとバイオーム気温で雨／雪へ解決する。降っている雪と、
+  実ブロックで確認した地表の積雪は分け、未観測の積雪を断定しない
 
 **プロンプト (`player_chat_prompts`):**
 

@@ -31,6 +31,7 @@ from dogido_server.state_machine.haiku_catalog import (
     resolve_llm_failed_haiku,
 )
 from dogido_server.state_machine.haiku_context import HaikuContext, HaikuFeature, IronyContext, SceneContext
+from dogido_server.state_machine.precipitation import PrecipitationContext
 from dogido_server.state_machine.constants import *  # noqa: F403
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -637,6 +638,18 @@ class HaikuMixin:
         )
         nearby_blocks = tuple(self._haiku_nearby_block_values(event.nearby_resources))
         passive_mobs = tuple(self._haiku_passive_mob_values(event))
+        precipitation_context = self._precipitation_context(event)
+        LOGGER.warning(
+            "haiku_precipitation y=%s temp=%s snow_start_y=%s snowfall_zone=%s "
+            "local_precipitation=%s snow_evidence=%s surface_snow=%s",
+            precipitation_context.current_y,
+            precipitation_context.biome_temperature,
+            precipitation_context.snow_start_y,
+            precipitation_context.snowfall_zone,
+            precipitation_context.precipitation_kind,
+            precipitation_context.snow_evidence,
+            precipitation_context.surface_snow_observed,
+        )
         feature_candidates = tuple(
             self._haiku_feature_candidates(
                 event,
@@ -645,6 +658,7 @@ class HaikuMixin:
                 inventory_items=inventory_items,
                 nearby_blocks=nearby_blocks,
                 passive_mobs=passive_mobs,
+                precipitation_context=precipitation_context,
             )
         )
         poetic_lines, poetic_mob_keys = self._haiku_poetic_lines(event)
@@ -671,8 +685,13 @@ class HaikuMixin:
             time_phase=time_phase,
             time_label=TIME_PHASE_LABELS.get(time_phase, "不明"),
             weather=weather,
-            weather_label=WEATHER_LABELS.get(weather, "不明"),
+            weather_label=(
+                "雪"
+                if precipitation_context.precipitation_kind == "snow"
+                else WEATHER_LABELS.get(weather, "不明")
+            ),
             z_value=int(round(z_value)) if z_value is not None else 0,
+            precipitation_context=precipitation_context,
             poem_item_id=poem_item_id,
             held_item=poem_held,
             poem_item_source=poem_source,
@@ -895,6 +914,7 @@ class HaikuMixin:
         inventory_items: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
         passive_mobs: tuple[str, ...],
+        precipitation_context: PrecipitationContext,
     ) -> list[HaikuFeature]:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
@@ -929,9 +949,17 @@ class HaikuMixin:
                 HaikuFeature("地形", f"trait_{index}", trait)
                 for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
             )
+        if event.player.position.y is not None:
+            candidates.append(HaikuFeature("Y座標", "y_value", str(int(round(event.player.position.y)))))
+        if precipitation_context.precipitation_kind == "snow":
+            candidates.append(HaikuFeature("降雪", "local_precipitation", "現在は雪"))
         candidates.extend([
             HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
-            HaikuFeature("天気", "weather", WEATHER_LABELS.get(weather, "不明")),
+            HaikuFeature(
+                "天気",
+                "weather",
+                "雪" if precipitation_context.precipitation_kind == "snow" else WEATHER_LABELS.get(weather, "不明"),
+            ),
             HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
         ])
         if held_item:
@@ -997,13 +1025,10 @@ class HaikuMixin:
         traits: list[str] = []
         temperature = self._biome_temperature(biome)
         downfall = self._biome_downfall(biome)
-        snow_start_y = self._biome_snow_start_y(biome)
         if temperature is not None:
             traits.append(f"気温 {temperature:g}")
         if downfall is not None:
             traits.append(f"降水 {downfall:g}")
-        if snow_start_y is not None:
-            traits.append(f"雪は Y{snow_start_y}から")
         return traits
 
     def _haiku_inventory_values(

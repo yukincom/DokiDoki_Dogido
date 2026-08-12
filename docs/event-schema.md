@@ -429,7 +429,9 @@ Fabric adapter が実際に送る中心は次のとおり。
 ]
 ```
 
-現行 adapter は用途限定フィルタ（原木・板・羊毛・石炭鉱石など）。  
+現行 adapter は用途限定フィルタ（原木・板・羊毛・石炭鉱石に加え、
+積雪の実測用 `snow` / `snow_block` / `powder_snow`）。雪は標高やバイオーム名だけで
+「積もっている」と推測せず、この実ブロック観測を川柳・雑談の共通根拠にする。
 **指差しの花・感圧板等は `look_target` を使う**（[look-target-observation-plan.md](look-target-observation-plan.md)）。
 
 ## 15b. `look_target`

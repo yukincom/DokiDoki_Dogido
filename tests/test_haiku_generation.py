@@ -250,7 +250,16 @@ class GroundedGenerationTest(unittest.TestCase):
             "grounding_lines": [{"line_index": 0, "text": "はるのかぜ"}],
             "current_lines": [
                 {"line_index": 0, "text": "はるのかぜ", "frozen": True},
-                {"line_index": 1, "text": "ひつじがあるく", "frozen": False},
+                {
+                    "line_index": 1,
+                    "text": "ひつじがあるく",
+                    "frozen": False,
+                    "sound_count": 7,
+                    "target_sound_count": 7,
+                    "allowed_sound_min": 6,
+                    "allowed_sound_max": 8,
+                    "meter_status": "within_range",
+                },
                 {"line_index": 2, "text": "よるのつき", "frozen": True},
             ],
             "failed_line_indices": [1],
@@ -271,6 +280,30 @@ class GroundedGenerationTest(unittest.TestCase):
             )
             self.assertEqual([message["role"] for message in messages], ["system", "user"])
             self.assertIn("JSON", messages[1]["content"])
+
+        regeneration = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_line_regeneration",
+                fallback_value={},
+                details=details,
+            )
+        )[1]["content"]
+        self.assertIn("現在7音 → 目標7音、許容6〜8音", regeneration)
+
+    def test_material_selection_prompts_do_not_request_warm_or_gentle_wording(self) -> None:
+        details = {"source_atoms": [atom.to_prompt_dict() for atom in source_atoms()]}
+
+        for kind in ("haiku_irony", "haiku_scene"):
+            prompt = build_messages(
+                StructuredGenerationRequest(
+                    kind=kind,
+                    fallback_value={},
+                    details=details,
+                )
+            )[1]["content"]
+            self.assertIn("材料の意味を変えず", prompt)
+            self.assertNotIn("あたたかく", prompt)
+            self.assertNotIn("やさしいことば", prompt)
 
     def test_workshop_revision_changes_only_target_line_on_haiku_route(self) -> None:
         llm = ScriptedLLM(
@@ -501,6 +534,56 @@ class GroundedGenerationTest(unittest.TestCase):
         remaining_ids = {atom["atom_id"] for atom in retry.details["source_atoms"]}
         self.assertNotIn("observation:test:0", remaining_ids)
         self.assertNotIn("observation:test:2", remaining_ids)
+
+    def test_regeneration_receives_code_counted_meter_feedback(self) -> None:
+        llm = ScriptedLLM(
+            [
+                {"lines": ["あたたかきくさち", "ひつじがあるく", "よるのつき"]},
+                grounding(
+                    (0, "observation:test:0", True, True),
+                    (1, "observation:test:1", True, True),
+                    (2, "observation:test:2", True, True),
+                ),
+                {"lines": [{"line_index": 0, "text": "あめのかぜ"}]},
+                grounding((0, "observation:test:3", True, True)),
+            ]
+        )
+
+        result = generate_grounded_haiku(
+            llm,
+            details={},
+            source_atoms=source_atoms(),
+            fallback_text="まとまらんかった。。。",
+            max_tokens=192,
+        )
+
+        self.assertTrue(result.accepted)
+        retry = llm.requests[2]
+        failed_row = next(
+            row for row in retry.details["current_lines"]
+            if row["line_index"] == 0
+        )
+        self.assertEqual(
+            {
+                key: failed_row[key]
+                for key in (
+                    "sound_count",
+                    "target_sound_count",
+                    "allowed_sound_min",
+                    "allowed_sound_max",
+                    "meter_status",
+                )
+            },
+            {
+                "sound_count": 8,
+                "target_sound_count": 5,
+                "allowed_sound_min": 4,
+                "allowed_sound_max": 6,
+                "meter_status": "too_long",
+            },
+        )
+        prompt = build_messages(retry)[1]["content"]
+        self.assertIn("音数が長い: 現在8音 → 目標5音、許容4〜6音", prompt)
 
     def test_single_assessment_shape_retries_only_missing_checks_one_by_one(self) -> None:
         llm = ScriptedLLM(

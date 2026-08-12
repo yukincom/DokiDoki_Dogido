@@ -17,6 +17,7 @@ from dogido_server.models import (
     GameEvent,
     HorizontalDirection,
     MetaState,
+    NearbyResource,
     PassiveMob,
     PlayerState,
     Position,
@@ -536,6 +537,72 @@ class HearingContextTests(unittest.TestCase):
         machine2._render_player_chat_reply(night)  # type: ignore[attr-defined]
         self.assertEqual(details_night.get("weather_fact") or "", "")
 
+    def test_player_chat_receives_same_height_and_snow_evidence_as_haiku(self) -> None:
+        event = make_event(sequence=52, user_text="雪はないね")
+        event = event.model_copy(
+            update={"world": event.world.model_copy(update={"biome": "taiga"})}
+        )
+        details_holder: dict = {}
+
+        class CaptureLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                details_holder.update(request.details)
+                return "せやな、ここには雪は見えへんな。"
+
+            def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+                return {}
+
+        machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=CaptureLLM(),
+        )
+        machine.player_input = route_player_input("雪はないね")
+        machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual(details_holder["current_y"], 64)
+        self.assertEqual(details_holder["snow_start_y"], 153)
+        self.assertFalse(details_holder["snowfall_zone"])
+        self.assertEqual(details_holder["snow_evidence"], "none")
+        prompt = build_messages(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="fallback",
+                details=details_holder,
+            )
+        )[1]["content"]
+        self.assertIn("標高・降雪の確定情報", prompt)
+        self.assertIn("雪や積雪を現在場面の材料にしない", prompt)
+
+        snowy = event.model_copy(
+            update={
+                "player": event.player.model_copy(
+                    update={"position": event.player.position.model_copy(update={"y": 160.0})}
+                ),
+                "world": event.world.model_copy(update={"weather": Weather.RAIN}),
+                "nearby_resources": [
+                    NearbyResource(type="block", name="minecraft:snow_block", distance=2.0)
+                ],
+            }
+        )
+        details_snow: dict = {}
+
+        class CaptureSnow(CaptureLLM):
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                details_snow.update(request.details)
+                return "ここは雪やな。"
+
+        snowy_machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=CaptureSnow(),
+        )
+        snowy_machine.player_input = route_player_input("雪やね")
+        snowy_machine._render_player_chat_reply(snowy)  # type: ignore[attr-defined]
+        self.assertEqual(details_snow["weather_label"], "雪")
+        self.assertEqual(details_snow["snow_evidence"], "observed_surface")
+
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(
             LeafGenerationRequest(
@@ -647,7 +714,7 @@ class PlayerInputEndpointTests(unittest.TestCase):
             service = self.make_service(tmp)
             service.process_event(make_event(sequence=1, at_sec=0.0))
 
-            for text in ("はい", "はい。", "うん", "おう"):
+            for text in ("はい", "はい。", "おい", "なあ"):
                 with self.subTest(text=text):
                     result = service.push_player_input(text, source="voice")
                     self.assertFalse(result["accepted"])
@@ -656,16 +723,32 @@ class PlayerInputEndpointTests(unittest.TestCase):
             session = next(iter(service.sessions.values()))
             self.assertIsNone(session.pending_player_text)
 
-    def test_short_voice_call_is_still_accepted(self) -> None:
+    def test_known_stt_noise_is_rejected_without_queueing(self) -> None:
         with TemporaryDirectory() as tmp:
             service = self.make_service(tmp)
             service.process_event(make_event(sequence=1, at_sec=0.0))
 
-            result = service.push_player_input("おーい")
+            for text in ("Thank", "THANK.", "Thanks!", "Thank you."):
+                with self.subTest(text=text):
+                    result = service.push_player_input(text, source="voice")
+                    self.assertFalse(result["accepted"])
+                    self.assertEqual("noise_text", result["reason"])
 
-            self.assertTrue(result["accepted"])
             session = next(iter(service.sessions.values()))
-            self.assertEqual("おーい", session.pending_player_text)
+            self.assertIsNone(session.pending_player_text)
+
+    def test_short_voice_allowlist_is_still_accepted(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = self.make_service(tmp)
+            service.process_event(make_event(sequence=1, at_sec=0.0))
+
+            for text in ("おーい", "ドギド", "うん", "おう"):
+                with self.subTest(text=text):
+                    result = service.push_player_input(text, source="voice")
+                    self.assertTrue(result["accepted"])
+
+            session = next(iter(service.sessions.values()))
+            self.assertEqual("おう", session.pending_player_text)
 
     def test_adapter_chat_wins_over_pending_voice_text(self) -> None:
         with TemporaryDirectory() as tmp:
