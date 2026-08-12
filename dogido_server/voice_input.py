@@ -31,7 +31,10 @@ from pathlib import Path
 import httpx
 
 from dogido_server.config import get_settings
-from dogido_server.player_input.normalize import is_too_short_voice_text
+from dogido_server.player_input.normalize import (
+    is_known_voice_noise_text,
+    is_too_short_voice_text,
+)
 
 SAMPLE_RATE = 16000
 FRAME_MS = 30
@@ -130,6 +133,9 @@ def transcribe(cli: Path, model: Path, pcm: bytes, *, no_speech_thold: float) ->
             return None
         if any(noise in transcript for noise in NOISE_PATTERNS):
             print(f"[VOICE] ノイズ判定でスキップ: {transcript}")
+            return None
+        if is_known_voice_noise_text(transcript):
+            print(f"[VOICE] STT定型ノイズとしてスキップ: {transcript}")
             return None
         if is_too_short_voice_text(transcript):
             print(f"[VOICE] 短すぎるのでスキップ: {transcript}")

@@ -105,6 +105,7 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
     item_hint = _item_hint(details)
     weather = details.get("weather_label", details.get("weather", "不明"))
     time_label = details.get("time_label", details.get("time_phase", "不明"))
+    snow_context = str(details.get("snow_context") or "").strip()
 
     chunks: list[str] = []
     if _has_structure_focus(details) and structure_label:
@@ -123,6 +124,8 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
             chunks.append(f"土地の感触: {traits}")
 
     chunks.append(f"空と時間: {weather} / {time_label}")
+    if snow_context:
+        chunks.append(f"標高・降雪の確定情報: {snow_context}")
     chunks.append(f"そばにあるもの: {nearby}")
     chunks.append(f"穏やかないきもの: {mobs}")
     chunks.append(f"手もと: {item_hint}")
@@ -306,7 +309,7 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
 
     rows = details.get("current_lines")
     current = "\n".join(
-        f"- {row.get('line_index')}: {row.get('text')} ({'固定' if row.get('frozen') else '再生成'})"
+        _regeneration_line_prompt(row)
         for row in rows if isinstance(row, dict)
     ) if isinstance(rows, list) else "なし"
     indices = details.get("failed_line_indices")
@@ -324,6 +327,7 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
         f"【再生成するline_index】 {targets}\n"
         f"【残っている原文材料】\n{atoms}\n"
         f"{constraints}\n"
+        "再生成行の現在音数はコードで計測済み。目標音数を優先し、少なくとも許容範囲へ収める。\n"
         "音数目標は line_index 0=五音、1=七音、2=五音（各±1音）。かなだけ。\n"
         + _structured_json_tail(
             '{"lines": [{"line_index": 1, "text": "ななおんのく"}]}'
@@ -339,6 +343,33 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
         },
         {"role": "user", "content": user_prompt},
     ]
+
+
+def _regeneration_line_prompt(row: dict[str, object]) -> str:
+    """コード計測済みの音数を、再生成対象の行だけへ明示する。"""
+
+    line_index = row.get("line_index")
+    text = row.get("text")
+    if row.get("frozen"):
+        return f"- {line_index}: {text}（固定）"
+    count = row.get("sound_count")
+    target = row.get("target_sound_count")
+    minimum = row.get("allowed_sound_min")
+    maximum = row.get("allowed_sound_max")
+    status = {
+        "too_long": "音数が長い",
+        "too_short": "音数が短い",
+        "within_range": "音数は許容内",
+    }.get(str(row.get("meter_status") or ""), "音数を再確認")
+    if all(
+        isinstance(value, int) and not isinstance(value, bool)
+        for value in (count, target, minimum, maximum)
+    ):
+        return (
+            f"- {line_index}: {text}（再生成・{status}: "
+            f"現在{count}音 → 目標{target}音、許容{minimum}〜{maximum}音）"
+        )
+    return f"- {line_index}: {text}（再生成）"
 
 
 def _structured_json_tail(schema_line: str) -> str:
@@ -363,7 +394,7 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
         "川柳の芯になりそうな『取り合わせ』か『その場の気配』をひとつだけ拾う。\n"
         f"{place_nudge}\n"
         "大げさな矛盾は要らない。平凡でも、ふっと心に残る一点でよい。\n"
-        "ことばは短く、あたたかく。\n"
+        "材料の意味を変えず、具体的な一点を短く書く。\n"
         "\n"
         f"【いまの材料】\n{materials}\n"
         "\n"
@@ -409,7 +440,7 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
     user_prompt = (
         "ドギドとして、川柳の種になる『ひとつの場面』を短く描いてほしい。\n"
         f"{place_nudge}\n"
-        "あとで五七五に落としやすい、具体的でやさしいことばで。\n"
+        "材料の意味を変えず、あとで五七五に落としやすい具体的なことばで。\n"
         "\n"
         f"【いまの材料】\n{materials}\n"
         "\n"

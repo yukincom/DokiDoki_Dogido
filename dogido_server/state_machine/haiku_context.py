@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from dogido_server.haiku.source_atoms import CatalogSourceSnapshot, HaikuSourceAtom
+from dogido_server.state_machine.precipitation import PrecipitationContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +96,7 @@ class HaikuContext:
     weather: str
     weather_label: str
     z_value: int
+    precipitation_context: PrecipitationContext
     poem_item_id: str
     held_item: str  # 句の主役に使う持ち物ラベル（手持ち or 所持から選んだ1つ）
     inventory_items: tuple[str, ...]
@@ -138,6 +140,7 @@ class HaikuContext:
             "weather": self.weather,
             "weather_label": self.weather_label,
             "z_value": self.z_value,
+            **self.precipitation_context.to_prompt_details(),
             "poem_item_id": self.poem_item_id,
             "held_item": self.held_item,
             "poem_item_source": self.poem_item_source,

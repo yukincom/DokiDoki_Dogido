@@ -443,6 +443,7 @@ class DogidoService:
     def push_player_input(self, text: str, *, source: str = "text") -> dict[str, object]:
         """音声入力などゲーム外からのプレイヤー発話を、直近のアクティブセッションへ届ける。"""
         from dogido_server.player_input.normalize import (
+            is_known_voice_noise_text,
             is_too_short_voice_text,
             normalize_player_text,
         )
@@ -456,6 +457,12 @@ class DogidoService:
         if not normalized:
             return {"accepted": False, "reason": "empty_text"}
         input_source = "voice" if str(source).strip().lower() == "voice" else "text"
+        if input_source == "voice" and is_known_voice_noise_text(normalized):
+            LOGGER.warning(
+                "player_input_rejected reason=noise_text text=%s",
+                normalized[:80],
+            )
+            return {"accepted": False, "reason": "noise_text"}
         if input_source == "voice" and is_too_short_voice_text(normalized):
             LOGGER.warning(
                 "player_input_rejected reason=too_short text=%s",
