@@ -7,6 +7,7 @@
 ## できること
 
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
+- 乗車中だけ `player.vehicle`（乗り物ID・操縦者か・漕ぐ／走る／移動中）
 - `local_light / sky_visible / biome / time_phase / danger_darkness_score`
 - **視線先 `look_target`**（画面中央クロスヘアが刺さっているブロック/エンティティ）
 - 周辺 hostile の簡易スキャン
@@ -22,6 +23,7 @@
 - エンダーマンやウィッチの個別ロジック
 - ベッド/資源候補のワールドスキャン
 - `nearby_resources` の本格拡張（現状は原木・板・羊毛・石炭に加え、積雪実測用の雪3種だけ）
+- エリトラ滑空など、乗り物ではないプレイヤー活動
 
 ## 音まわり（現状）
 

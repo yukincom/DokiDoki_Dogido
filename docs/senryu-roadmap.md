@@ -65,7 +65,7 @@ API 例: `GET /api/v1/memory/haiku`（entries 一覧。UI の土台になりう�
 | 項目 | 状態 | メモ |
 |---|---|---|
 | 音の正体・非MC生物名 | 一部対応 / 計画 | [sound-identity-plan.md](sound-identity-plan.md)。直近音バッファは実装済み |
-| player_chat 観測ギャップ（旗・地下） | 地下コンテキスト一部済 / 旗は計画 | [bug-player-chat-observation-gaps.md](bug-player-chat-observation-gaps.md)、[pillager-banner-chat-plan.md](pillager-banner-chat-plan.md) |
+| player_chat 観測ギャップ（旗・地下・移動） | 地下コンテキスト一部済 / 乗車中の乗り物は済 / 旗・エリトラは計画 | [bug-player-chat-observation-gaps.md](bug-player-chat-observation-gaps.md)、[pillager-banner-chat-plan.md](pillager-banner-chat-plan.md) |
 | Simple Vector RAG（Chroma 等） | 未実装 | [senryu-rag-plan.md](senryu-rag-plan.md) 第2波。直引きと被らせない |
 | 対話ワークショップ | 計画 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)。自然文の講評→critique/lesson→次回制約 |
 | biome / block note の中身 | データ不足 | 仕組みはある。コンテンツ作業 |

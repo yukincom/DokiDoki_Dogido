@@ -205,7 +205,12 @@ Fabric adapter が実際に送る中心は次のとおり。
   "health": 20,
   "hunger": 18,
   "dimension": "minecraft:overworld",
-  "held_item": "stone_sword"
+  "held_item": "stone_sword",
+  "vehicle": {
+    "vehicle_id": "minecraft:horse",
+    "activity": "running",
+    "controlling": true
+  }
 }
 ```
 
@@ -219,6 +224,18 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `hunger`
 - `dimension`
 - `held_item`
+- `vehicle`（**乗車中だけ存在**。未乗車時はキーごと省略）
+  - `vehicle_id`: 乗っているエンティティの Minecraft ID
+  - `activity`: `riding | moving | running | rowing | dashing`
+  - `controlling`: プレイヤーが操縦者か
+
+`vehicle` の内部値を直接 LLM に見せず、server が
+`プレイヤーはウマに乗って走っている` のような主語付き観測事実へ変換する。
+「プレイヤー」を省略してドギド自身の行動に見せない。船の `rowing` は操縦者かつ
+パドル動作中だけ、馬系の `running` は操縦者かつ方向入力＋水平移動中だけとする。
+
+エリトラ飛行は乗り物ではないため、この `vehicle` には含めない。将来の
+`player_activity` 拡張として別途扱う。
 
 ## 10. `world` オブジェクト
 

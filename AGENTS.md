@@ -33,6 +33,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
 | `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
 | `dogido_server/platform_ai.py` | Apple Foundation Models / Foundry Local / chat fallback の限定 structured router |
+| `dogido_server/player_activity.py` | 乗車中だけ存在する vehicle 状態を、主語付きの雑談・川柳材料へ変換 |
 | `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
 | `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
 | `adapter/minecraft-fabric/` | ゲーム → イベント送信 |
@@ -53,6 +54,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - OS AI 出力から直接 close / lesson解除 / revision保存しない。enum・行番号・confidence をコード検証する
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` を明示操作の正、`interpreted/semantic` を会話理解用として混ぜない
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
+- 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 
 ### 3.2 川柳 lesson は soft
 
@@ -207,6 +209,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 川柳 source atom 品質ゲート: カタログ原文snapshot + 発話済み見どころの別provenance + 行別出典 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ 4生成方式の固定比較 + 不合格スロットを実測中最大6回再生成 + fail-closed **済**
 - 川柳実測中の発句間隔は一時3分。**比較・開発終了時は設定既定・`.env.example`・docsを10分（600000ms）へ必ず戻す**
 - 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定。Y/Z・気温・閾値・downfallはLLMへ出さず、閉じた降水/雷/降雪環境と実測地表雪だけを共有 **済**
+- 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
 - 任意: OS AI・chat fallback・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
