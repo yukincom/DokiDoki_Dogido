@@ -89,9 +89,9 @@ def _weather_block(details: dict[str, Any]) -> str:
     ]
     if fact:
         lines.append(f"天気の事実: {fact}")
-    snow_context = detail_str(details, "snow_context")
-    if snow_context:
-        lines.append(f"標高・降雪の確定情報: {snow_context}")
+    weather_context = detail_str(details, "weather_context")
+    if weather_context:
+        lines.append(f"コードで確定した現在地の気象: {weather_context}")
     return "\n".join(lines) + "\n"
 
 

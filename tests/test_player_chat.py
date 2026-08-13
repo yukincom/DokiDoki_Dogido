@@ -562,10 +562,10 @@ class HearingContextTests(unittest.TestCase):
         machine.player_input = route_player_input("雪はないね")
         machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
 
-        self.assertEqual(details_holder["current_y"], 64)
-        self.assertEqual(details_holder["snow_start_y"], 153)
-        self.assertFalse(details_holder["snowfall_zone"])
-        self.assertEqual(details_holder["snow_evidence"], "none")
+        for internal_key in ("current_y", "biome_temperature", "snow_start_y", "snowfall_zone"):
+            self.assertNotIn(internal_key, details_holder)
+        self.assertEqual(details_holder["precipitation_kind"], "none")
+        self.assertEqual(details_holder["snowfall_environment"], "no")
         prompt = build_messages(
             LeafGenerationRequest(
                 kind="player_chat",
@@ -573,8 +573,11 @@ class HearingContextTests(unittest.TestCase):
                 details=details_holder,
             )
         )[1]["content"]
-        self.assertIn("標高・降雪の確定情報", prompt)
+        self.assertIn("コードで確定した現在地の気象", prompt)
         self.assertIn("雪や積雪を現在場面の材料にしない", prompt)
+        self.assertNotIn("現在Y", prompt)
+        self.assertNotIn("降雪開始Y", prompt)
+        self.assertNotIn("降水 0.", prompt)
 
         snowy = event.model_copy(
             update={
@@ -601,7 +604,7 @@ class HearingContextTests(unittest.TestCase):
         snowy_machine.player_input = route_player_input("雪やね")
         snowy_machine._render_player_chat_reply(snowy)  # type: ignore[attr-defined]
         self.assertEqual(details_snow["weather_label"], "雪")
-        self.assertEqual(details_snow["snow_evidence"], "observed_surface")
+        self.assertTrue(details_snow["surface_snow_observed"])
 
     def test_player_chat_prompt_uses_hearing_when_present(self) -> None:
         messages = build_messages(

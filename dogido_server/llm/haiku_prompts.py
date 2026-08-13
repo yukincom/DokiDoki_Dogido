@@ -105,7 +105,7 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
     item_hint = _item_hint(details)
     weather = details.get("weather_label", details.get("weather", "不明"))
     time_label = details.get("time_label", details.get("time_phase", "不明"))
-    snow_context = str(details.get("snow_context") or "").strip()
+    weather_context = str(details.get("weather_context") or "").strip()
 
     chunks: list[str] = []
     if _has_structure_focus(details) and structure_label:
@@ -124,8 +124,8 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
             chunks.append(f"土地の感触: {traits}")
 
     chunks.append(f"空と時間: {weather} / {time_label}")
-    if snow_context:
-        chunks.append(f"標高・降雪の確定情報: {snow_context}")
+    if weather_context:
+        chunks.append(f"コードで確定した現在地の気象: {weather_context}")
     chunks.append(f"そばにあるもの: {nearby}")
     chunks.append(f"穏やかないきもの: {mobs}")
     chunks.append(f"手もと: {item_hint}")
