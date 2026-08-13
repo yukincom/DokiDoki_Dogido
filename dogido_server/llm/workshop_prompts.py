@@ -119,7 +119,7 @@ def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[
 
 
 def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[dict[str, str]]:
-    """固定行を守り、講評で特定済みの行だけを直す structured prompt。"""
+    """固定行を守り、講評で特定済みの行だけを差分として直す。"""
 
     current_rows = details.get("current_lines")
     current = "\n".join(
@@ -144,6 +144,8 @@ def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[d
     user_prompt = (
         "川柳の固定行は一字も変えず、指定された行だけを直す。\n"
         "プレイヤーの指摘を優先し、元の表現を弁護しない。\n"
+        "各修正は expected_text に現在の対象行を一字も変えず写し、"
+        "replacement_text に置換後の一行を書く。全文や対象外行は返さない。\n"
         "修正行ごとに、意味の根として実際に使った候補の atom_id を付ける。"
         "候補外ID、行どうしのID重複、説明にない性質の推測は禁止。\n"
         "かなだけで、line_index 0=五音、1=七音、2=五音（各±1音）。\n\n"
@@ -152,7 +154,9 @@ def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[d
         f"【確認済みの指摘】\n{finding_lines}\n"
         f"【使える原文材料】\n{atom_lines}\n\n"
         "返答はJSONオブジェクト1つだけ。"
-        "形: {\"lines\": [{\"line_index\": 1, \"text\": \"ななおんのく\", "
+        "形: {\"lines\": [{\"line_index\": 1, "
+        "\"expected_text\": \"もとのななおん\", "
+        "\"replacement_text\": \"なおしたななおん\", "
         "\"atom_ids\": [\"source:id\"]}]}"
     )
     return [

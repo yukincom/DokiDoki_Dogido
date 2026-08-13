@@ -178,7 +178,7 @@ soft workshop 方針は後半をすでに押さえている。
 | 発句 source atom 品質ゲート | 済（原文snapshot・節単位preface provenance/主張範囲・行別出典・一意なカタログ名かな訂正・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P4 | 済（P5 任意） |
 | 観測ギャップ・水辺など | 乗車中の乗り物材料は済（未乗車は省略・主語付き）。水辺・旗・エリトラなどは継続課題（完成度の本丸） |
-| 修正案 1 本 / OS AI・chat fallback 実ログ評価 / Phase E | 修正案まで済。実ログ評価・整理は任意・未 |
+| 修正案 1 本 / OS AI・chat fallback 実ログ評価 / Phase E | 行単位 Locate→Edit→Test（元行一致つき差分・採用時再照合・差分保存）まで済。実ログ評価・整理は任意・未 |
 | VLM / Vector RAG | 将来枠 |
 
 ---

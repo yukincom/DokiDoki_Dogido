@@ -53,7 +53,11 @@ workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkp
 | `one_plus_two` | `[上五] [中七・下五]` | 上五に入口や印象を置き、後二行を一続きに展開 |
 | `two_plus_one` | `[上五・中七] [下五]` | 前二行で場面を作り、下五を独立した着地にする |
 
-一つのスロット内で一行でも不合格なら、そのスロットの全行を作り直す。別スロットの合格行は固定し、使用済み atom を候補から除く。生成方式名と実際の再生成 round 数はログと `materials_snapshot` に残すため、方式別の成功率・失敗理由・時間・人間評価を後から比較できる。
+一つのスロット内で一行でも不合格なら、そのスロットの全行を作り直す。別スロットの合格行は固定し、使用済み atom を候補から除く。生成方式名、実際の再生成 round 数、`prompt_variant` はログと `materials_snapshot` に残すため、方式別の成功率・失敗理由・時間・人間評価を後から比較できる。
+
+自動 `StrategySelector` はこの固定比較の後に載せる。最初から状況・好み・直近評価で方式を切り替えると、方式そのものと selector の誤りを分離できないためである。固定比較後も、選択はコードが担当し、LLM に方式決定や preference 更新を委ねない。一般的な praise / critique をそのまま方式への加減点にはせず、句の品質と方式の相関を実測してから、明示的な形式の好みと限定された状況帯だけを薄く使う。
+
+`generation_strategy` を既存の strategy ID とし、別名フィールドは増やさない。発句 entry と workshop critique の `materials_snapshot` が `generation_strategy` / `prompt_variant` を引き継ぐので、同じ講評を句・生成方式・プロンプト版へ後から結び直せる。
 
 ### 一時的な実環境設定（戻し忘れ禁止）
 
@@ -89,6 +93,19 @@ workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkp
 意味の言い換えと日本語の自然さは LLM が判定するが、候補外 ID の拒否、一次材料の重複排除、生成スロットの展開、最大試行回数、発話・保存の可否はコードが決める。再生成へ返す失敗理由は `meaning_not_retained`、`unnatural_japanese`、`source_reused`、音数／hard制約違反、候補重複などの閉じたコード値である。同一候補は Unicode 正規化・カナ統一・空白／句読点除去後のsignatureで即時棄却する。意味の近さを固定語リストで判定する旧 H6 は復活させない。
 
 workshop は、この発話前ゲートを通った句に対する好み・表現・場面違和感を一緒に扱う場所である。壊れた句を先に出して workshop に修理を任せる品質ゲートではない。
+
+### workshop の Locate → Edit → Test
+
+三行だけの川柳では、コード用ASTや汎用サブエージェントを持ち込まず、**一行を構造ノード**として扱う。役割は呼び出しとコード境界で分離する。
+
+1. 限定抽出AIが、プレイヤーの発話から対象行・一意な断片・問題種別を locate する
+2. コードが対象行を確定し、固定行・使用可能atom・発句時hard制約を閉じる
+3. haiku route の編集AIは全文ではなく、`line_index` / `expected_text` / `replacement_text` / `atom_ids` の差分だけを返す
+4. コードが `expected_text` と現在の元行の完全一致、対象外行の不変、候補の実変更、一意な出典を確認する
+5. 別structured評価と共通検査器が、意味保持・自然さ・音数・hard制約・出典重複を確認する
+6. 合格案も未保存の `pending_revision` に置き、明示採用時に同じ差分が同じ元句へ適用できるか再確認してから保存する
+
+これは行単位の compare-and-swap であり、対象が0件・複数解釈・元行不一致・一部だけ成功のときは元句を維持する。旧 `{line_index, text}` 応答は受け付けない。採用済み revision には `edit_contract` と検証済み `edits` も残し、後から局所修正の成功傾向を監査できるようにする。
 
 ### 発話の語順（[voice-delivery-plan.md](voice-delivery-plan.md)）
 

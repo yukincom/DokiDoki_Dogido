@@ -234,6 +234,10 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
   "haiku_id": "hk_20260611_172701_4919",
   "source": "generated_confirmed",
   "comment": "やみにはかぶる、の意味が少しわかりにくい",
+  "edit_contract": "line_compare_and_swap_v1",
+  "edits": [
+    {"line_index": 1, "expected_text": "やみにはかぶる", "replacement_text": "やみをかぶせて", "atom_ids": ["observation:weather:rain"]}
+  ],
   "line_sources": [
     {"line_index": 0, "atom_ids": ["catalog:block:...:note:0"]},
     {"line_index": 1, "atom_ids": ["observation:weather:rain"]},
@@ -245,7 +249,9 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
 
 `source` は `player_feedback`（既定）／`formal`／`conversational`／
 `generated_confirmed` の4値。AIの修正案をプレイヤーが明示採用した
-`generated_confirmed` では、3行すべての検証済み出典を `line_sources` に残す。
+`generated_confirmed` では、3行すべての検証済み出典を `line_sources` に残す。さらに
+`edit_contract` と、元行完全一致条件を持つ検証済み `edits` を残す。保存時にも
+`edits` を元句へ適用すると `revised_text` になること、対象外行が変わらないことをコードで再確認する。
 固定行の出典が欠ける旧データは材料重複を検証できないため、自動修正案を出さない。
 
 添削エージェントは、`haiku_entries.jsonl` と `haiku_revisions.jsonl` を読む。

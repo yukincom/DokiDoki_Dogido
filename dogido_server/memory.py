@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from dogido_server.haiku.edit_contract import line_edit_plan_applies
 from dogido_server.minecraft_ids import normalize_minecraft_id
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import GameEvent
@@ -151,6 +152,8 @@ class MemoryStore:
         comment: str | None = None,
         source: str = "player_feedback",
         revision_line_sources: list[dict[str, Any]] | None = None,
+        revision_edits: list[dict[str, Any]] | None = None,
+        revision_edit_contract: str | None = None,
         observed_at: datetime | None = None,
     ) -> dict[str, Any]:
         """元句を長期に残し、直し句があれば revision にペア保存する。
@@ -182,12 +185,30 @@ class MemoryStore:
                     isinstance(atom_id, str) and bool(atom_id.strip())
                     for atom_id in row["atom_ids"]
                 )
+                and len(set(row["atom_ids"])) == len(row["atom_ids"])
             ]
             indices = {row["line_index"] for row in valid_rows}
             if len(rows) != 3 or len(valid_rows) != 3 or indices != {0, 1, 2}:
                 raise ValueError(
                     "generated_confirmed revision requires non-empty sources for all three lines"
                 )
+            if not line_edit_plan_applies(
+                original_text=emission.text,
+                revised_text=revised_text or "",
+                edit_contract=revision_edit_contract,
+                edits=revision_edits,
+            ):
+                raise ValueError("generated_confirmed revision does not apply to the original")
+            source_ids_by_index = {
+                row["line_index"]: tuple(row["atom_ids"])
+                for row in valid_rows
+            }
+            if any(
+                tuple(edit.get("atom_ids") or ())
+                != source_ids_by_index.get(edit.get("line_index"))
+                for edit in revision_edits or []
+            ):
+                raise ValueError("generated_confirmed edit sources do not match line sources")
         revision = {
             "id": self._revision_id(created_at, emission.event_sequence),
             "created_at": datetime_json(created_at),
@@ -206,6 +227,9 @@ class MemoryStore:
                 "dimension": emission.dimension,
             },
         }
+        if revision_source == "generated_confirmed":
+            revision["edit_contract"] = revision_edit_contract
+            revision["edits"] = revision_edits
         self._append_jsonl(self.haiku_revisions_path, revision)
         return revision
 

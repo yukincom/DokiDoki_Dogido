@@ -20,6 +20,7 @@ from dogido_server.haiku.workshop import (
     record_drift,
     render_workshop_reply,
     pending_revision_decision,
+    pending_revision_is_current,
     repair_target_indices,
     should_handle_as_workshop,
     workshop_open_intent,
@@ -89,6 +90,22 @@ class WorkshopLifecycleTests(unittest.TestCase):
         assert closed is not None
         self.assertFalse(closed.open)
         self.assertEqual(closed.close_reason, "timeout_idle")
+
+    def test_pending_revision_is_compare_and_swap_on_the_pinned_verse(self) -> None:
+        ws = open_from_emission(_emission("はるのかぜ\nひつじがあるく\nよるのつき"))
+        ws.pending_revision = "はるのかぜ\nあめつよくふる\nよるのつき"
+        ws.pending_revision_base_text = "はるのかぜ\nひつじがあるく\nよるのつき"
+        ws.pending_revision_edits = [{
+            "line_index": 1,
+            "expected_text": "ひつじがあるく",
+            "replacement_text": "あめつよくふる",
+            "atom_ids": ["observation:test:3"],
+        }]
+        ws.pending_revision_edit_contract = "line_compare_and_swap_v1"
+
+        self.assertTrue(pending_revision_is_current(ws))
+        ws.surface_text = "はるのかぜ\nべつのぎょうや\nよるのつき"
+        self.assertFalse(pending_revision_is_current(ws))
 
 
 class WorkshopIntentTests(unittest.TestCase):
@@ -730,7 +747,8 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 if request.kind == "haiku_workshop_revision":
                     return {"lines": [{
                         "line_index": 1,
-                        "text": "あめつよくふる",
+                        "expected_text": "ひつじがあるく",
+                        "replacement_text": "あめつよくふる",
                         "atom_ids": ["observation:test:3"],
                     }]}
                 if request.kind == "haiku_line_grounding":
@@ -839,6 +857,9 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertEqual(revisions[0]["revised_text"], "はるのかぜ\nあめつよくふる\nよるのつき")
             self.assertEqual(revisions[0]["source"], "generated_confirmed")
             self.assertEqual(revisions[0]["line_sources"][1]["atom_ids"], ["observation:test:3"])
+            self.assertEqual(revisions[0]["edit_contract"], "line_compare_and_swap_v1")
+            self.assertEqual(revisions[0]["edits"][0]["expected_text"], "ひつじがあるく")
+            self.assertEqual(revisions[0]["edits"][0]["replacement_text"], "あめつよくふる")
 
     def test_emit_opens_workshop_and_critique_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

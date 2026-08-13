@@ -190,6 +190,40 @@ class HaikuFeedbackMemoryTest(unittest.TestCase):
                     ],
                 )
 
+    def test_generated_revision_rejects_changes_outside_the_edit_plan(self) -> None:
+        with TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp))
+            emission = HaikuEmission(
+                created_at=datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc),
+                text="はるのかぜ\nひつじがあるく\nよるのつき",
+                preface="ここで一句。",
+                interpretation="春の草地",
+                biome="meadow",
+                structure=None,
+                time_phase="day",
+                dimension="minecraft:overworld",
+                event_sequence=12,
+            )
+
+            with self.assertRaisesRegex(ValueError, "does not apply"):
+                store.save_haiku_feedback(
+                    emission,
+                    revised_text="あさのかぜ\nあめつよくふる\nよるのつき",
+                    source="generated_confirmed",
+                    revision_line_sources=[
+                        {"line_index": 0, "atom_ids": ["a0"]},
+                        {"line_index": 1, "atom_ids": ["a1"]},
+                        {"line_index": 2, "atom_ids": ["a2"]},
+                    ],
+                    revision_edit_contract="line_compare_and_swap_v1",
+                    revision_edits=[{
+                        "line_index": 1,
+                        "expected_text": "ひつじがあるく",
+                        "replacement_text": "あめつよくふる",
+                        "atom_ids": ["a1"],
+                    }],
+                )
+
     def test_reading_correction_persists_and_applies(self) -> None:
         with TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp))

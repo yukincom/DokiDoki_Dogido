@@ -271,6 +271,7 @@ class HaikuMixin:
                 self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
                 self._pending_haiku_materials["generation_strategy"] = generated.generation_strategy
                 self._pending_haiku_materials["regeneration_rounds"] = generated.regeneration_rounds
+                self._pending_haiku_materials["prompt_variant"] = generated.prompt_variant
             if line == llm_failed_text:
                 LOGGER.warning(
                     "haiku_decision result=fallback reason=llm_rejected text=%s",
@@ -390,6 +391,7 @@ class HaikuMixin:
             self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
             self._pending_haiku_materials["generation_strategy"] = generated.generation_strategy
             self._pending_haiku_materials["regeneration_rounds"] = generated.regeneration_rounds
+            self._pending_haiku_materials["prompt_variant"] = generated.prompt_variant
         if line == llm_failed_text:
             LOGGER.warning(
                 "haiku_decision result=fallback reason=llm_rejected text=%s",
