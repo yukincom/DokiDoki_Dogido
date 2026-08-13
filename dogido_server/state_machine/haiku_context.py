@@ -4,7 +4,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from dogido_server.haiku.source_atoms import CatalogSourceSnapshot, HaikuSourceAtom
+from dogido_server.haiku.source_atoms import (
+    CatalogSourceSnapshot,
+    HaikuSourceAtom,
+    PrefaceClause,
+    preface_clauses_from_payload,
+)
 from dogido_server.state_machine.precipitation import PrecipitationContext
 
 
@@ -56,32 +61,46 @@ class IronyContext:
 @dataclass(frozen=True, slots=True)
 class SceneContext:
     found: bool = False
-    summary: str = ""
+    clauses: tuple[PrefaceClause, ...] = ()
     motifs: tuple[str, ...] = ()
     focus: tuple[str, ...] = ()
     confidence: float = 0.0
 
     @classmethod
-    def from_mapping(cls, payload: dict[str, Any] | None) -> SceneContext:
+    def from_mapping(
+        cls,
+        payload: dict[str, Any] | None,
+        *,
+        source_atoms: tuple[HaikuSourceAtom, ...],
+    ) -> SceneContext:
         if not isinstance(payload, dict):
             return cls()
         found = bool(payload.get("found"))
-        summary = str(payload.get("summary") or "")
+        clauses = preface_clauses_from_payload(
+            payload.get("clauses"),
+            source_atoms=source_atoms,
+        )
         motifs = tuple(str(value) for value in payload.get("motifs") or [] if value)
         focus = tuple(str(value) for value in payload.get("focus") or [] if value)
         try:
             confidence = float(payload.get("confidence") or 0.0)
         except (TypeError, ValueError):
             confidence = 0.0
-        if not found or not summary:
+        if not found or clauses is None:
             return cls()
         return cls(
             found=True,
-            summary=summary,
+            clauses=clauses,
             motifs=motifs,
             focus=focus,
             confidence=max(0.0, min(1.0, confidence)),
         )
+
+    @property
+    def spoken_text(self) -> str:
+        """検証済み節だけから、実際に口にする文を組み立てる。"""
+
+        return "。".join(clause.text for clause in self.clauses)
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,7 +202,8 @@ class HaikuContext:
             details["scene"] = None
             return details
         details["scene"] = {
-            "summary": scene.summary,
+            "spoken_text": scene.spoken_text,
+            "clauses": [clause.to_dict() for clause in scene.clauses],
             "motifs": list(scene.motifs),
             "focus": list(scene.focus),
             "confidence": scene.confidence,

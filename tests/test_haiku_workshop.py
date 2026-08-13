@@ -756,6 +756,8 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     field_path="observed_label",
                     observation_role="test",
                     kind="observation",
+                    claim_class="factual",
+                    claim_scopes=("observed_state",),
                 )
                 for index, text in enumerate(("春の風", "歩く羊", "夜の月", "強い雨"))
             ]
