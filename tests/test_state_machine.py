@@ -8120,7 +8120,11 @@ class StateMachineTests(unittest.TestCase):
         )
 
     def test_deep_submerged_dark_zone_emits_darkness_then_haiku_after_silence(self) -> None:
-        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
+        # このシナリオは暗所発話から10分静まる順序を検証するため周期を明示固定する。
+        machine = DogidoStateMachine(
+            Settings(audio_enabled=False, haiku_interval_ms=600000),
+            llm=FakeLLM(),
+        )
         first_event = GameEvent.model_validate_json(
             """
             {
@@ -8225,7 +8229,7 @@ class StateMachineTests(unittest.TestCase):
 
         speech = next(action for action in first.actions if action.layer == "speech")
         self.assertEqual(speech.text, "……暗いのは、にがてなんやけど……。")
-        # 川柳の周期（10分）が満ちるまでは詠まない
+        # このテストで固定した川柳周期（10分）が満ちるまでは詠まない
         self.assertEqual([action.text for action in second.actions if action.layer == "speech"], [])
         # 周期が満ちたら見どころ preface（「ここで一句」は付けない）→ 次で本句
         third_speech = [action.text for action in third.actions if action.layer == "speech"]

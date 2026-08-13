@@ -199,6 +199,28 @@ def _source_atoms_block(details: dict[str, object]) -> str:
     return "\n".join(lines) if lines else "なし"
 
 
+def _generation_strategy_block(details: dict[str, object]) -> str:
+    """比較実験中の生成単位を、詩作側へ短く明示する。"""
+
+    strategy = str(details.get("generation_strategy") or "three_slot")
+    descriptions = {
+        "whole_poem": (
+            "一句全体方式: 三行を一つの完成形として組み立てる。"
+            "上から順に独立採用せず、三行全体の流れと着地を優先する。"
+        ),
+        "three_slot": (
+            "三点スロット方式: 上五・中七・下五をそれぞれ独立した観察点として組み立てる。"
+        ),
+        "one_plus_two": (
+            "前1＋後2方式: 上五に入口や印象を置き、中七と下五を一続きの展開として組み立てる。"
+        ),
+        "two_plus_one": (
+            "前2＋後1方式: 上五と中七で場面を作り、下五を独立した着地や印象として組み立てる。"
+        ),
+    }
+    return descriptions.get(strategy, descriptions["three_slot"])
+
+
 def build_haiku_draft_messages(details: dict[str, object]) -> list[dict[str, str]]:
     has_structure = _has_structure_focus(details)
     materials = _materials_for_dogido(details)
@@ -207,6 +229,7 @@ def build_haiku_draft_messages(details: dict[str, object]) -> list[dict[str, str
     scene_block = _scene_block(details)
     constraint_block = _constraint_block(details)
     source_atoms = _source_atoms_block(details)
+    generation_strategy = _generation_strategy_block(details)
 
     irony = details.get("irony")
     irony_block = "なし"
@@ -239,6 +262,8 @@ def build_haiku_draft_messages(details: dict[str, object]) -> list[dict[str, str
         f"{source_atoms}\n"
         "三行それぞれで、異なる材料を主な意味の根にする。"
         "同じ [atom_id] を二行で使わない。\n"
+        "【今回の生成単位】\n"
+        f"{generation_strategy}\n"
         f"{_form_card()}\n"
         "\n"
         + _structured_json_tail('{"lines": ["ごおんのく", "ななおんのく", "ごおんのく"]}')
@@ -316,6 +341,7 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
     retry_indices = [int(value) for value in indices if isinstance(value, int)] if isinstance(indices, list) else []
     targets = ", ".join(str(index) for index in retry_indices) or "なし"
     atoms = _source_atoms_block(details)
+    generation_strategy = _generation_strategy_block(details)
     constraint_block = _constraint_block(details)
     constraints = f"\n読みのメモ:\n{constraint_block}\n" if constraint_block else ""
     user_prompt = (
@@ -323,6 +349,9 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
         "使える材料には、固定行ですでに使ったatomは含まれていない。"
         "再生成する行どうしでもatomを重複させない。\n"
         "各行は材料の意味を保ち、自然な現代日本語にする。\n\n"
+        f"【今回の生成単位】\n{generation_strategy}\n"
+        "再生成対象に同じスロットの複数行が含まれる場合は、"
+        "その全行を一つの流れとして作り直す。\n"
         f"【現在の三行】\n{current}\n"
         f"【再生成するline_index】 {targets}\n"
         f"【残っている原文材料】\n{atoms}\n"

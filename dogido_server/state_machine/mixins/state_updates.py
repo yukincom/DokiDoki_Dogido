@@ -22,7 +22,7 @@ class StateUpdatesMixin:
         if self.state.last_non_silent_at is None:
             self.state.last_non_silent_at = now
         if self.state.last_haiku_emitted_at is None:
-            # 初回イベントから川柳の10分周期を始める
+            # 初回イベントから設定された川柳周期を始める
             self.state.last_haiku_emitted_at = now
         # 平和な姿のモブを種ごとに記録する（中立モブの敵対化検知に使う）
         for mob in event.passive_mobs:

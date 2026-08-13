@@ -499,6 +499,68 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual((llm.requests[0].temperature, llm.requests[0].route), (0.60, "haiku"))
         self.assertEqual((llm.requests[1].temperature, llm.requests[1].route), (0.0, "chat"))
         self.assertEqual(result.line_sources[1]["atom_ids"], ["observation:test:1"])
+        self.assertEqual(result.generation_strategy, "three_slot")
+        self.assertEqual(result.regeneration_rounds, 0)
+
+    def test_four_generation_strategies_retry_their_own_slot_and_share_validation(self) -> None:
+        cases = {
+            "whole_poem": ([0, 1, 2], []),
+            "three_slot": ([1], [0, 2]),
+            "one_plus_two": ([1, 2], [0]),
+            "two_plus_one": ([0, 1], [2]),
+        }
+        initial_lines = ["はるのかぜ", "ひつじがあるく", "よるのつき"]
+        for strategy, (retry_indices, frozen_indices) in cases.items():
+            with self.subTest(strategy=strategy):
+                regenerated_rows = [
+                    {"line_index": index, "text": initial_lines[index]}
+                    for index in retry_indices
+                ]
+                retried_grounding = grounding(
+                    *(
+                        (index, f"observation:test:{index}", True, True)
+                        for index in retry_indices
+                    )
+                )
+                llm = ScriptedLLM(
+                    [
+                        {"lines": initial_lines},
+                        grounding(
+                            (0, "observation:test:0", True, True),
+                            (1, "observation:test:1", True, False),
+                            (2, "observation:test:2", True, True),
+                        ),
+                        {"lines": regenerated_rows},
+                        retried_grounding,
+                    ]
+                )
+
+                result = generate_grounded_haiku(
+                    llm,
+                    details={},
+                    source_atoms=source_atoms(),
+                    fallback_text="まとまらんかった。。。",
+                    max_tokens=192,
+                    generation_strategy=strategy,
+                )
+
+                self.assertTrue(result.accepted)
+                self.assertEqual(result.generation_strategy, strategy)
+                self.assertEqual(result.regeneration_rounds, 1)
+                retry = llm.requests[2]
+                self.assertEqual(retry.details["failed_line_indices"], retry_indices)
+                self.assertEqual(
+                    [
+                        row["line_index"]
+                        for row in retry.details["current_lines"]
+                        if row["frozen"]
+                    ],
+                    frozen_indices,
+                )
+                draft_prompt = build_messages(llm.requests[0])[1]["content"]
+                retry_prompt = build_messages(retry)[1]["content"]
+                self.assertIn("【今回の生成単位】", draft_prompt)
+                self.assertIn("【今回の生成単位】", retry_prompt)
 
     def test_duplicate_atom_regenerates_only_later_line_and_excludes_reserved_atoms(self) -> None:
         llm = ScriptedLLM(
@@ -663,6 +725,7 @@ class GroundedGenerationTest(unittest.TestCase):
             source_atoms=source_atoms(),
             fallback_text="まとまらんかった。。。",
             max_tokens=192,
+            max_regeneration_rounds=2,
         )
 
         self.assertFalse(result.accepted)
