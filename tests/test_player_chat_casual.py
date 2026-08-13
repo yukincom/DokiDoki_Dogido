@@ -9,7 +9,7 @@ from dogido_server.config import Settings
 from dogido_server.entry_catalog import find_catalog_topics
 from dogido_server.llm.prompts import build_messages
 from dogido_server.llm.types import LeafGenerationRequest
-from dogido_server.models import GameEvent
+from dogido_server.models import GameEvent, VehicleState
 from dogido_server.player_chat_policy import (
     filter_usable_topic_hits,
     resolve_reply_stance,
@@ -178,6 +178,48 @@ class NarrationCasualIntegrationTests(unittest.TestCase):
         self.assertIn("サケ", summary)
         self.assertIn("近くの生き物", summary)
         self.assertNotIn("シロクマ", summary)
+
+    def test_observation_summary_includes_vehicle_only_while_riding(self) -> None:
+        machine = self._machine()
+        event = self._event("いい風やな")
+        without_vehicle = machine._player_chat_observation_summary(
+            event,
+            threat_summary="",
+            hearing_summary="",
+            passive_types=[],
+        )
+        self.assertEqual(without_vehicle, "")
+
+        event.player.vehicle = VehicleState(
+            vehicle_id="minecraft:horse",
+            activity="running",
+            controlling=True,
+        )
+        with_vehicle = machine._player_chat_observation_summary(
+            event,
+            threat_summary="",
+            hearing_summary="",
+            passive_types=[],
+        )
+        fact = "プレイヤーはウマに乗って走っている"
+        self.assertIn(f"- {fact}", with_vehicle)
+
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="f",
+                details={
+                    "user_text": "いい風やな",
+                    "mode": "normal",
+                    "time_phase": "day",
+                    "reply_stance": "none",
+                    "reply_policy": "雑談として自然に返す。",
+                    "observation_summary": with_vehicle,
+                    "threat_summary": "とくになし",
+                },
+            )
+        )
+        self.assertIn(fact, messages[1]["content"])
 
 
 if __name__ == "__main__":

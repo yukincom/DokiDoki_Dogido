@@ -6,6 +6,7 @@ from datetime import datetime
 
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags, resolve_mob_catalog_entry
 from dogido_server.models import GameEvent, PassiveMob
+from dogido_server.player_activity import player_vehicle_fact
 from dogido_server.state_machine.ambient_mob_catalog import (
     AmbientMobReactionContext,
     ambient_mob_fallback_candidates,
@@ -1076,6 +1077,10 @@ class NarrationMixin:
         look = (look_target_label or "").strip()
         if look:
             lines.append(f"視線先: {look}")
+        vehicle_fact = player_vehicle_fact(event.player.vehicle)
+        if vehicle_fact:
+            # 「プレイヤー」を保った完成文だけ渡し、ドギド自身の行動にしない。
+            lines.append(vehicle_fact)
         threat = (threat_summary or "").strip()
         if threat and threat != "とくになし":
             lines.append(f"脅威: {threat}")

@@ -156,6 +156,14 @@ class EventDescriptor(DogidoModel):
 
 # ---- プレイヤー状態 ----
 
+class VehicleState(DogidoModel):
+    """プレイヤーが現在乗っている乗り物。未乗車時はオブジェクトごと省略する。"""
+
+    vehicle_id: str = Field(min_length=1)  # 例: minecraft:horse / minecraft:oak_boat
+    activity: Literal["riding", "moving", "running", "rowing", "dashing"] = "riding"
+    controlling: bool = False
+
+
 class PlayerState(DogidoModel):
     """プレイヤー本人の観測状態（仕様 §9）。
 
@@ -170,6 +178,7 @@ class PlayerState(DogidoModel):
     hunger: int | None = None  # 最大 20
     dimension: str | None = None  # 例: "minecraft:overworld" / "minecraft:the_nether"
     held_item: str | None = None  # 手持ちアイテムの Minecraft item id
+    vehicle: VehicleState | None = None  # 未乗車時は None。LLM へ空状態を渡さない
     active_status_effects: list[str] = Field(default_factory=list)  # 例: ["mining_fatigue"]
 
 

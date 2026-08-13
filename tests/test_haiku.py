@@ -17,6 +17,7 @@ from dogido_server.models import (
     Position,
     PriorityHint,
     SourceKind,
+    VehicleState,
     Weather,
     WorldState,
 )
@@ -72,6 +73,7 @@ def make_snapshot(
     inventory: dict[str, int] | None = None,
     nearby_portal_type: str | None = None,
     structure: str | None = None,
+    vehicle: VehicleState | None = None,
 ) -> GameEvent:
     return GameEvent(
         schema_version="2026-05-24",
@@ -88,6 +90,7 @@ def make_snapshot(
             position=Position(x=0, y=player_y, z=12),
             dimension="minecraft:overworld",
             held_item=held_item,
+            vehicle=vehicle,
         ),
         world=WorldState(
             time_of_day=time_of_day,
@@ -334,6 +337,27 @@ class HaikuStateMachineTest(unittest.TestCase):
             "降水 0.8",
         ):
             self.assertNotIn(leaked_value, prompt)
+
+    def test_haiku_vehicle_material_keeps_player_as_subject(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="plains",
+            vehicle=VehicleState(
+                vehicle_id="minecraft:horse",
+                activity="running",
+                controlling=True,
+            ),
+        )
+        context = self.machine._haiku_context(event)
+        fact = "プレイヤーはウマに乗って走っている"
+
+        self.assertIn(f"乗車 {fact}", context.feature_candidate_labels())
+        vehicle_atom = next(
+            atom for atom in context.source_atoms
+            if atom.observation_role == "vehicle_activity"
+        )
+        self.assertEqual(vehicle_atom.text, fact)
+        self.assertIn(fact, build_haiku_draft_messages(context.prompt_details())[1]["content"])
 
     def test_haiku_uses_observed_snow_or_active_snowfall_only(self) -> None:
         observed = make_snapshot(

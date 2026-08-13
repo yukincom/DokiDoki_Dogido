@@ -25,6 +25,7 @@ from dogido_server.llm.sanitize import summarize_for_log
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import EventName, GameEvent, NearbyResource
 from dogido_server.minecraft_ids import normalize_minecraft_id
+from dogido_server.player_activity import player_vehicle_fact
 from dogido_server.state_machine.haiku_catalog import (
     HaikuFallbackContext,
     resolve_fallback_haiku,
@@ -964,6 +965,10 @@ class HaikuMixin:
             ),
             HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
         ])
+        vehicle_fact = player_vehicle_fact(event.player.vehicle)
+        if vehicle_fact:
+            # 主語を省くとドギド自身の乗車と誤解しうるため、一文を崩さず材料化する。
+            candidates.append(HaikuFeature("乗車", "vehicle_activity", vehicle_fact))
         if held_item:
             if poem_item_source == "pocket":
                 candidates.append(HaikuFeature("持ち物", "pocket_item", held_item))

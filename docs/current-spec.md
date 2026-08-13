@@ -140,6 +140,11 @@ Minecraft Java Edition
 - `inventory`
 - `held_item`
 - `dimension`
+- `vehicle`（乗車中だけ。種別・操縦・移動状態を server で主語付き事実へ変換）
+
+未乗車時は `vehicle` を送らない。LLM へ渡すときは
+`プレイヤーはXXに乗っている／移動している／走っている／漕いでいる` の形式に固定する。
+エリトラ飛行は乗り物と混ぜず、将来の活動観測として保留する。
 
 ### ワールド状態
 
