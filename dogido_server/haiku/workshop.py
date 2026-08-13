@@ -13,6 +13,8 @@ from typing import Any
 
 from dogido_server.memory_types import HaikuEmission
 
+from .edit_contract import line_edit_plan_applies
+
 # 発句からの最大 open 時間
 DEFAULT_T_OPEN = timedelta(seconds=240)
 # 句関連の最後のやり取りからの無活動
@@ -114,6 +116,9 @@ class RecentHaikuWorkshop:
     last_findings: list[dict[str, object]] = field(default_factory=list)
     pending_revision: str | None = None
     pending_revision_line_sources: list[dict[str, object]] = field(default_factory=list)
+    pending_revision_base_text: str | None = None
+    pending_revision_edits: list[dict[str, object]] = field(default_factory=list)
+    pending_revision_edit_contract: str | None = None
 
     def display_line(self) -> str:
         return (self.surface_text or "").strip()
@@ -174,6 +179,21 @@ def close_workshop(
     workshop.open = False
     workshop.close_reason = reason
     return workshop
+
+
+def pending_revision_is_current(workshop: RecentHaikuWorkshop) -> bool:
+    """未保存差分が、いま pin されている元句へだけ適用できるか確認する。"""
+
+    base_text = (workshop.pending_revision_base_text or "").strip()
+    revised_text = (workshop.pending_revision or "").strip()
+    if not base_text or base_text != workshop.display_line() or not revised_text:
+        return False
+    return line_edit_plan_applies(
+        original_text=base_text,
+        revised_text=revised_text,
+        edit_contract=workshop.pending_revision_edit_contract,
+        edits=workshop.pending_revision_edits,
+    )
 
 
 def record_workshop_activity(

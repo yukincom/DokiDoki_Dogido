@@ -29,6 +29,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/state_machine/` | 本体判断。mixin 分割済み。**巨大ロジックを haiku mixin に足し続けない** |
 | `dogido_server/state_machine/precipitation.py` | 現在Y・気温・天気・雪ブロック実測から雨／降雪／積雪根拠を確定。LLMには数値を伏せた閉じた気象事実だけを共有 |
 | `dogido_server/haiku/workshop.py` | 句 pin（open/close）、意図分類、soft 返事、lesson 生成 |
+| `dogido_server/haiku/edit_contract.py` | workshop 行差分の compare-and-swap 検証（生成・採用・保存で共有） |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
 | `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
@@ -107,7 +108,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・revise・明示 close・次の句
 - 意図: `classify_workshop_intent` が大分類と永続化の正。`soft_default` の AI intent は返答トーン補助だけで、lesson・close・repair開始へ使わない。既知講評では対象行・断片・problem を抽出
-- `request_repair`: 明示ルール時だけ、大きい haiku route が検証済み対象行を修正。別structured評価で意味保持・自然さを照合し、コードで出典ID・重複・音数・発句時hard制約を検証。案は明示採用まで保存しない
+- `request_repair`: 明示ルール時だけ、大きい haiku route が検証済み対象行を `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。案は明示採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する
 - 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
 - ロジックの本体は `haiku/workshop.py`。`mixins/haiku.py` は発句と制約注入フックまで
@@ -200,7 +201,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2 + H7-lite + 修正案1本: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings 抽出 / 明示採用）
+- workshop H1〜H5.2 + H7-lite + 修正案1本: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings 抽出 / 行単位 Locate→Edit→Test / 明示採用）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  

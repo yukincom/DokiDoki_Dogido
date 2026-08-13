@@ -374,6 +374,16 @@ class GroundedGenerationTest(unittest.TestCase):
             self.assertEqual([message["role"] for message in messages], ["system", "user"])
             self.assertIn("JSON", messages[1]["content"])
 
+        workshop_prompt = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_workshop_revision",
+                fallback_value={},
+                details=details,
+            )
+        )[1]["content"]
+        self.assertIn("expected_text", workshop_prompt)
+        self.assertIn("replacement_text", workshop_prompt)
+
         regeneration = build_messages(
             StructuredGenerationRequest(
                 kind="haiku_line_regeneration",
@@ -412,7 +422,8 @@ class GroundedGenerationTest(unittest.TestCase):
             [
                 {"lines": [{
                     "line_index": 1,
-                    "text": "あめつよくふる",
+                    "expected_text": "ひつじがあるく",
+                    "replacement_text": "あめつよくふる",
                     "atom_ids": ["observation:test:3"],
                 }]},
                 grounding((1, "observation:test:3", True, True)),
@@ -443,6 +454,10 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual(result.text, "はるのかぜ\nあめつよくふる\nよるのつき")
         self.assertEqual((llm.requests[0].kind, llm.requests[0].route), ("haiku_workshop_revision", "haiku"))
         self.assertEqual((llm.requests[1].kind, llm.requests[1].route), ("haiku_line_grounding", "chat"))
+        self.assertEqual(result.base_text, "はるのかぜ\nひつじがあるく\nよるのつき")
+        self.assertEqual(result.edits[0].expected_text, "ひつじがあるく")
+        self.assertEqual(result.edits[0].replacement_text, "あめつよくふる")
+        self.assertEqual(llm.requests[0].details["edit_contract"], "line_compare_and_swap_v1")
         frozen = [row["text"] for row in llm.requests[0].details["current_lines"] if row["frozen"]]
         self.assertEqual(frozen, ["はるのかぜ", "よるのつき"])
 
@@ -451,13 +466,15 @@ class GroundedGenerationTest(unittest.TestCase):
             [
                 {"lines": [{
                     "line_index": 1,
-                    "text": "あめつよくふる",
+                    "expected_text": "ひつじがあるく",
+                    "replacement_text": "あめつよくふる",
                     "atom_ids": ["observation:test:1"],
                 }]},
                 grounding((1, "observation:test:1", False, True)),
                 {"lines": [{
                     "line_index": 1,
-                    "text": "あめつよくふる",
+                    "expected_text": "ひつじがあるく",
+                    "replacement_text": "あめつよくふる",
                     "atom_ids": ["observation:test:1"],
                 }]},
                 grounding((1, "observation:test:1", False, True)),
@@ -512,12 +529,14 @@ class GroundedGenerationTest(unittest.TestCase):
         llm = ScriptedLLM([
             {"lines": [{
                 "line_index": 2,
-                "text": "つるはし",
+                "expected_text": "よるのつき",
+                "replacement_text": "つるはし",
                 "atom_ids": ["observation:test:3"],
             }]},
             {"lines": [{
                 "line_index": 2,
-                "text": "つるはし",
+                "expected_text": "よるのつき",
+                "replacement_text": "つるはし",
                 "atom_ids": ["observation:test:3"],
             }]},
         ])
@@ -538,8 +557,8 @@ class GroundedGenerationTest(unittest.TestCase):
 
     def test_workshop_revision_rejects_unknown_atom_without_touching_original(self) -> None:
         llm = ScriptedLLM([
-            {"lines": [{"line_index": 1, "text": "あめつよくふる", "atom_ids": ["invented"]}]},
-            {"lines": [{"line_index": 1, "text": "あめつよくふる", "atom_ids": ["invented"]}]},
+            {"lines": [{"line_index": 1, "expected_text": "ひつじがあるく", "replacement_text": "あめつよくふる", "atom_ids": ["invented"]}]},
+            {"lines": [{"line_index": 1, "expected_text": "ひつじがあるく", "replacement_text": "あめつよくふる", "atom_ids": ["invented"]}]},
         ])
         result = generate_workshop_revision(
             llm,
@@ -555,6 +574,43 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertFalse(result.accepted)
         self.assertIsNone(result.text)
         self.assertEqual(len(llm.requests), 2)
+
+    def test_workshop_revision_rejects_stale_or_legacy_edit_contract(self) -> None:
+        llm = ScriptedLLM([
+            {"lines": [{
+                "line_index": 1,
+                "expected_text": "べつのもとのぎょう",
+                "replacement_text": "あめつよくふる",
+                "atom_ids": ["observation:test:3"],
+            }]},
+            # 旧 {line_index, text} 形式も互換受理しない。
+            {"lines": [{
+                "line_index": 1,
+                "text": "あめつよくふる",
+                "atom_ids": ["observation:test:3"],
+            }]},
+        ])
+
+        result = generate_workshop_revision(
+            llm,
+            original_text="はるのかぜ\nひつじがあるく\nよるのつき",
+            target_indices=(1,),
+            findings=(),
+            source_atoms=source_atoms(),
+            original_line_sources={
+                0: ("observation:test:0",),
+                2: ("observation:test:2",),
+            },
+            details={},
+            max_tokens=192,
+        )
+
+        self.assertFalse(result.accepted)
+        self.assertEqual(result.failure_reason, "invalid_revision")
+        self.assertEqual(
+            [request.kind for request in llm.requests],
+            ["haiku_workshop_revision", "haiku_workshop_revision"],
+        )
 
     def test_saved_material_sources_are_validated_against_the_current_verse(self) -> None:
         atoms = source_atoms(3)

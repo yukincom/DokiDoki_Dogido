@@ -25,6 +25,7 @@ from dogido_server.haiku.workshop import (
     materials_speech_line,
     maybe_close_for_time,
     pending_revision_decision,
+    pending_revision_is_current,
     repair_target_indices,
     wants_clear_haiku_lessons,
     open_from_emission,
@@ -831,6 +832,8 @@ class DogidoService:
         *,
         source: str,
         revision_line_sources: list[dict[str, object]] | None = None,
+        revision_edits: list[dict[str, object]] | None = None,
+        revision_edit_contract: str | None = None,
     ) -> list[AudioAction]:
         if session.last_haiku_emission is None:
             return [AudioAction(layer="speech", interrupt=False, text="直す元の句がまだないで。")]
@@ -840,6 +843,8 @@ class DogidoService:
             revised_text=revised_text,
             source=source,
             revision_line_sources=revision_line_sources,
+            revision_edits=revision_edits,
+            revision_edit_contract=revision_edit_contract,
             observed_at=event.observed_at,
         )
         if is_open(session.haiku_workshop):
@@ -877,16 +882,34 @@ class DogidoService:
         if workshop.pending_revision:
             decision = pending_revision_decision(text)
             if decision == "accept":
+                # 提案後に pin や差分が食い違った場合は、別の句へ誤適用しない。
+                if not pending_revision_is_current(workshop):
+                    workshop.pending_revision = None
+                    workshop.pending_revision_line_sources.clear()
+                    workshop.pending_revision_base_text = None
+                    workshop.pending_revision_edits.clear()
+                    workshop.pending_revision_edit_contract = None
+                    record_workshop_activity(workshop, now=event.observed_at)
+                    LOGGER.warning(
+                        "haiku_workshop_revision_rejected reason=stale_edit session_id=%s",
+                        session.session_id,
+                    )
+                    return [AudioAction(layer="speech", interrupt=False, text="元の句と合わんくなったから、案はいったん戻すで。")]
                 return self._save_haiku_revision_reply(
                     session,
                     event,
                     workshop.pending_revision,
                     source="generated_confirmed",
                     revision_line_sources=list(workshop.pending_revision_line_sources),
+                    revision_edits=list(workshop.pending_revision_edits),
+                    revision_edit_contract=workshop.pending_revision_edit_contract,
                 )
             if decision == "reject":
                 workshop.pending_revision = None
                 workshop.pending_revision_line_sources.clear()
+                workshop.pending_revision_base_text = None
+                workshop.pending_revision_edits.clear()
+                workshop.pending_revision_edit_contract = None
                 record_workshop_activity(workshop, now=event.observed_at)
                 return [AudioAction(layer="speech", interrupt=False, text="おけ、元の句はそのままにしとくで。")]
 
@@ -1153,6 +1176,9 @@ class DogidoService:
             return "まだうまく直しきれんかったわ。元の句はそのままや。", result.failure_reason or "rejected"
         workshop.pending_revision = result.text
         workshop.pending_revision_line_sources = list(result.line_sources)
+        workshop.pending_revision_base_text = result.base_text
+        workshop.pending_revision_edits = [edit.to_record() for edit in result.edits]
+        workshop.pending_revision_edit_contract = result.edit_contract
         return f"こんなんどうや。\n{result.text}\nよければ『その案で』って言ってな。", "proposed"
 
     def _ask_meaning_workshop_reply(

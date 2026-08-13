@@ -20,6 +20,7 @@ from dogido_server.llm.haiku import (
 )
 from dogido_server.llm.sanitize import summarize_for_log
 
+from .edit_contract import LINE_EDIT_CONTRACT_VERSION
 from .lexical_correction import correct_grounded_catalog_kana
 from .source_atoms import HaikuSourceAtom
 
@@ -30,6 +31,7 @@ REGENERATION_TEMPERATURE = 0.30
 GROUNDING_TEMPERATURE = 0.0
 DEFAULT_MAX_REGENERATION_ROUNDS = 6
 MAX_REGENERATION_ROUNDS_LIMIT = 8
+GENERATION_PROMPT_VARIANT = "source_atoms_slots_v1"
 
 GENERATION_SLOT_GROUPS: dict[str, tuple[tuple[int, ...], ...]] = {
     # 一句全体を一単位として扱う。どこか一行が落ちれば三行とも作り直す。
@@ -51,6 +53,25 @@ class GroundedHaikuResult:
     failure_reason: str | None = None
     generation_strategy: str = "three_slot"
     regeneration_rounds: int = 0
+    prompt_variant: str = GENERATION_PROMPT_VARIANT
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopLineEdit:
+    """検証済みの一行差分。expected_text は適用先の比較条件でもある。"""
+
+    line_index: int
+    expected_text: str
+    replacement_text: str
+    atom_ids: tuple[str, ...]
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "line_index": self.line_index,
+            "expected_text": self.expected_text,
+            "replacement_text": self.replacement_text,
+            "atom_ids": list(self.atom_ids),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +80,9 @@ class WorkshopRevisionResult:
     accepted: bool
     line_sources: tuple[dict[str, object], ...] = ()
     failure_reason: str | None = None
+    base_text: str | None = None
+    edits: tuple[WorkshopLineEdit, ...] = ()
+    edit_contract: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,6 +372,9 @@ def generate_workshop_revision(
             "target_line_indices": list(targets),
             "workshop_findings": list(findings),
             "source_atoms": [atom.to_prompt_dict() for atom in eligible],
+            # Editor の出力を曖昧な全文ではなく、元行との比較条件つき差分にする。
+            # 旧 {line_index, text} 応答は受け付けず fail-closed にする。
+            "edit_contract": LINE_EDIT_CONTRACT_VERSION,
         }
     )
     for _attempt in range(max(1, max_attempts)):
@@ -372,8 +399,8 @@ def generate_workshop_revision(
         if repaired is None:
             continue
         revised = list(lines)
-        for index, (text, _claimed_atom_ids) in repaired.items():
-            revised[index] = text
+        for index, edit in repaired.items():
+            revised[index] = edit.replacement_text
         # 修正AIの自己申告IDだけでは、既知IDを別の意味へ付け替えられる。初回発句と
         # 同じ意味保持・自然さ評価を別のstructured呼び出しで行い、評価側が選んだ
         # atom IDを最終出典にする。
@@ -415,10 +442,22 @@ def generate_workshop_revision(
                     ],
                 }
             )
+        verified_edits = tuple(
+            WorkshopLineEdit(
+                line_index=index,
+                expected_text=lines[index],
+                replacement_text=revised[index],
+                atom_ids=accepted[index].atom_ids,
+            )
+            for index in sorted(targets)
+        )
         return WorkshopRevisionResult(
             "\n".join(revised),
             True,
             line_sources=tuple(records),
+            base_text="\n".join(lines),
+            edits=verified_edits,
+            edit_contract=LINE_EDIT_CONTRACT_VERSION,
         )
     return WorkshopRevisionResult(None, False, failure_reason="invalid_revision")
 
@@ -431,28 +470,35 @@ def _validated_workshop_lines(
     eligible_ids: set[str],
     reserved_ids: set[str],
     details: dict[str, object],
-) -> dict[int, tuple[str, tuple[str, ...]]] | None:
+) -> dict[int, WorkshopLineEdit] | None:
     if not _structured_accepted(payload):
         return None
     rows = payload.get("lines") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         return None
-    result: dict[int, tuple[str, tuple[str, ...]]] = {}
+    result: dict[int, WorkshopLineEdit] = {}
     used = set(reserved_ids)
-    fixed_text = {text for index, text in enumerate(original_lines) if index not in targets}
+    fixed_signatures = {
+        _candidate_signature(text)
+        for index, text in enumerate(original_lines)
+        if index not in targets
+    }
     for row in rows:
         if not isinstance(row, dict):
             return None
         index = row.get("line_index")
-        text = _clean_single_line(row.get("text"))
+        expected_text = _clean_single_line(row.get("expected_text"))
+        replacement_text = _clean_single_line(row.get("replacement_text"))
         raw_ids = row.get("atom_ids")
         if (
             not isinstance(index, int)
             or isinstance(index, bool)
             or index not in targets
             or index in result
-            or not text
-            or text in fixed_text
+            or expected_text != original_lines[index]
+            or not replacement_text
+            or _candidate_signature(replacement_text) == _candidate_signature(expected_text)
+            or _candidate_signature(replacement_text) in fixed_signatures
             or not isinstance(raw_ids, list)
             or not raw_ids
         ):
@@ -462,12 +508,17 @@ def _validated_workshop_lines(
             any(not atom_id or atom_id not in eligible_ids for atom_id in atom_ids)
             or len(set(atom_ids)) != len(atom_ids)
             or used.intersection(atom_ids)
-            or not is_haiku_line_usable(text, index, details)
+            or not is_haiku_line_usable(replacement_text, index, details)
         ):
             return None
-        result[index] = (text, atom_ids)
+        result[index] = WorkshopLineEdit(
+            line_index=index,
+            expected_text=expected_text,
+            replacement_text=replacement_text,
+            atom_ids=atom_ids,
+        )
         used.update(atom_ids)
-        fixed_text.add(text)
+        fixed_signatures.add(_candidate_signature(replacement_text))
     return result if set(result) == set(targets) else None
 
 
