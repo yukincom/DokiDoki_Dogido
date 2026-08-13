@@ -634,7 +634,6 @@ class HaikuMixin:
     def _haiku_context(self, event: GameEvent) -> HaikuContext:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
-        z_value = event.player.position.z
         biome = event.world.biome
         # 実際の手持ち（道具 hard 制約・対比テンション用）
         real_held_label = self._item_label(event.player.held_item)
@@ -698,7 +697,6 @@ class HaikuMixin:
                 if precipitation_context.precipitation_kind == "snow"
                 else WEATHER_LABELS.get(weather, "不明")
             ),
-            z_value=int(round(z_value)) if z_value is not None else 0,
             precipitation_context=precipitation_context,
             poem_item_id=poem_item_id,
             held_item=poem_held,
@@ -926,7 +924,6 @@ class HaikuMixin:
     ) -> list[HaikuFeature]:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
-        z_value = event.player.position.z
         portal_type = (event.world.nearby_portal_type or "").strip().lower()
         structure_id, structure_label = self._haiku_structure_fields(event)
         has_structure = bool(structure_label)
@@ -957,12 +954,9 @@ class HaikuMixin:
                 HaikuFeature("地形", f"trait_{index}", trait)
                 for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
             )
-        if event.player.position.y is not None:
-            candidates.append(HaikuFeature("Y座標", "y_value", str(int(round(event.player.position.y)))))
         if precipitation_context.precipitation_kind == "snow":
             candidates.append(HaikuFeature("降雪", "local_precipitation", "現在は雪"))
         candidates.extend([
-            HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
             HaikuFeature(
                 "天気",
                 "weather",
@@ -1030,14 +1024,10 @@ class HaikuMixin:
         return feel or band
 
     def _haiku_biome_traits(self, biome: str | None) -> list[str]:
-        traits: list[str] = []
-        temperature = self._biome_temperature(biome)
-        downfall = self._biome_downfall(biome)
-        if temperature is not None:
-            traits.append(f"気温 {temperature:g}")
-        if downfall is not None:
-            traits.append(f"降水 {downfall:g}")
-        return traits
+        """創作材料には気候係数を出さず、コードで解釈済みの気配だけを載せる。"""
+
+        climate_hint = self._haiku_climate_hint(biome)
+        return [climate_hint] if climate_hint else []
 
     def _haiku_inventory_values(
         self,

@@ -38,9 +38,23 @@ class PrecipitationContextTests(unittest.TestCase):
         self.assertEqual(context.precipitation_kind, "none")
         self.assertEqual(context.snow_evidence, "none")
         self.assertFalse(context.snow_can_be_scene_material)
-        self.assertIn("現在Y64", context.prompt_line())
-        self.assertIn("現在地は降雪開始Y153未満", context.prompt_line())
+        self.assertIn("現在は降水なし", context.prompt_line())
+        self.assertIn("降雪環境なし", context.prompt_line())
         self.assertIn("雪や積雪を現在場面の材料にしない", context.prompt_line())
+        self.assertNotIn("Y64", context.prompt_line())
+        self.assertNotIn("0.25", context.prompt_line())
+        self.assertNotIn("Y153", context.prompt_line())
+        self.assertEqual(
+            context.to_prompt_details(),
+            {
+                "precipitation_kind": "none",
+                "precipitation_possible": True,
+                "thunder_active": False,
+                "snowfall_environment": "no",
+                "surface_snow_observed": False,
+                "weather_context": context.prompt_line(),
+            },
+        )
 
     def test_rain_world_state_becomes_local_snow_above_threshold(self) -> None:
         context = self.resolve(current_y=160, weather="rain")
@@ -56,6 +70,8 @@ class PrecipitationContextTests(unittest.TestCase):
 
         self.assertEqual(context.precipitation_kind, "rain")
         self.assertEqual(context.snow_evidence, "none")
+        self.assertTrue(context.thunder_active)
+        self.assertIn("雷鳴あり", context.prompt_line())
 
     def test_observed_surface_snow_is_evidence_even_when_clear(self) -> None:
         context = self.resolve(blocks=("minecraft:snow",))
@@ -87,6 +103,8 @@ class PrecipitationContextTests(unittest.TestCase):
 
         self.assertFalse(context.snowfall_zone)
         self.assertEqual(context.precipitation_kind, "none")
+        self.assertFalse(context.precipitation_possible)
+        self.assertIn("降水環境なし", context.prompt_line())
 
 
 if __name__ == "__main__":

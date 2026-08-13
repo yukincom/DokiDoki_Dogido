@@ -22,6 +22,8 @@ class PrecipitationContext:
     snow_start_y: int | None
     snowfall_zone: bool | None
     precipitation_kind: PrecipitationKind
+    precipitation_possible: bool
+    thunder_active: bool
     surface_snow_observed: bool
     snow_evidence: SnowEvidence
 
@@ -32,21 +34,9 @@ class PrecipitationContext:
         return self.snow_evidence != "none"
 
     def prompt_line(self) -> str:
-        """数値と採用境界を一つの事実行にし、LLM の再解釈を防ぐ。"""
+        """内部数値を伏せ、コードで確定した閉じた気象事実だけを返す。"""
 
         parts: list[str] = []
-        if self.current_y is not None:
-            parts.append(f"現在Y{self.current_y}")
-        if self.biome_temperature is not None:
-            parts.append(f"バイオーム基準気温{self.biome_temperature:g}")
-        if self.snow_start_y is not None:
-            if self.snowfall_zone is True:
-                parts.append(f"現在地は降雪開始Y{self.snow_start_y}以上")
-            elif self.snowfall_zone is False:
-                parts.append(f"現在地は降雪開始Y{self.snow_start_y}未満")
-            else:
-                parts.append(f"降雪開始Y{self.snow_start_y}との比較は判定不能")
-
         if self.precipitation_kind == "snow":
             parts.append("現在の降水は雪")
         elif self.precipitation_kind == "rain":
@@ -55,9 +45,20 @@ class PrecipitationContext:
             parts.append("現在は降水なし")
         else:
             parts.append("現在の降水種別は不明")
+        if self.thunder_active:
+            parts.append("雷鳴あり")
+
+        if not self.precipitation_possible:
+            parts.append("降水環境なし")
+        elif self.snowfall_zone is True:
+            parts.append("降雪環境あり")
+        elif self.snowfall_zone is False:
+            parts.append("降雪環境なし")
+        else:
+            parts.append("降雪環境は不明")
 
         if self.surface_snow_observed:
-            parts.append("周辺に雪・雪ブロックを実測")
+            parts.append("地表の積雪を実測")
             parts.append("地表の雪を現在場面の材料にできる")
         elif self.precipitation_kind == "snow":
             parts.append("地表の積雪は未観測")
@@ -68,15 +69,21 @@ class PrecipitationContext:
         return "。".join(parts) + "。"
 
     def to_prompt_details(self) -> dict[str, object]:
+        """LLM 公開用。標高・気温・閾値・気候係数は内部計算にだけ残す。"""
+
         return {
-            "current_y": self.current_y,
-            "biome_temperature": self.biome_temperature,
-            "snow_start_y": self.snow_start_y,
-            "snowfall_zone": self.snowfall_zone,
             "precipitation_kind": self.precipitation_kind,
+            "precipitation_possible": self.precipitation_possible,
+            "thunder_active": self.thunder_active,
+            "snowfall_environment": (
+                "yes"
+                if self.snowfall_zone is True
+                else "no"
+                if self.snowfall_zone is False
+                else "unknown"
+            ),
             "surface_snow_observed": self.surface_snow_observed,
-            "snow_evidence": self.snow_evidence,
-            "snow_context": self.prompt_line(),
+            "weather_context": self.prompt_line(),
         }
 
 
@@ -142,6 +149,8 @@ def resolve_precipitation_context(
         snow_start_y=snow_start_y,
         snowfall_zone=snowfall_zone,
         precipitation_kind=precipitation_kind,
+        precipitation_possible=not precipitation_disabled,
+        thunder_active=normalized_weather == "thunder" and not precipitation_disabled,
         surface_snow_observed=surface_snow_observed,
         snow_evidence=snow_evidence,
     )

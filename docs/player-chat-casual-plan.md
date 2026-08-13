@@ -124,7 +124,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 | recent_visual_memos | ついさっき 視認 | 維持 |
 | passive + recent_passive | **allowed のみ** | **短い observation 行にも載せる** |
 | hearing + buffer | **プレイヤーが音を明示したときだけ** hearing 注入（`asks_about_sound`） | **済** |
-| 標高・気候・積雪 | 現在Y＋気温＋降雪開始高度をコード比較。地表雪は周辺の雪ブロック実測 | **川柳と共通判定で済** |
+| 標高・気候・積雪 | 現在Y＋気温＋降雪開始高度をコード比較し、閉じた気象事実だけを公開。地表雪は周辺の雪ブロック実測 | **川柳と共通判定で済** |
 | topic（弱い） | hints に載りうる | **none では載せない**（柱1） |
 | topic（強い） | hints | hypothesis のみ |
 
@@ -148,6 +148,8 @@ GENERIC_TOPIC_TERMS = frozenset({
 - 重複（視認とついさっきが同じ種）は1行にまとめてよい  
 - global の `rain` は現在Yとバイオーム気温で雨／雪へ解決する。降っている雪と、
   実ブロックで確認した地表の積雪は分け、未観測の積雪を断定しない
+- Y・Z 座標、気温、降雪開始高度、`downfall` は LLM に渡さない。`downfall` を
+  降水確率として解釈させず、現在の降水・雷・降雪環境・実測積雪だけを渡す
 
 **プロンプト (`player_chat_prompts`):**
 

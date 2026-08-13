@@ -27,7 +27,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 |---|---|
 | `dogido_server/service.py` | セッション、player 入力、workshop / memory 配線 |
 | `dogido_server/state_machine/` | 本体判断。mixin 分割済み。**巨大ロジックを haiku mixin に足し続けない** |
-| `dogido_server/state_machine/precipitation.py` | 現在Y・気温・天気・雪ブロック実測から雨／降雪／積雪根拠を確定。川柳と雑談で共有 |
+| `dogido_server/state_machine/precipitation.py` | 現在Y・気温・天気・雪ブロック実測から雨／降雪／積雪根拠を確定。LLMには数値を伏せた閉じた気象事実だけを共有 |
 | `dogido_server/haiku/workshop.py` | 句 pin（open/close）、意図分類、soft 返事、lesson 生成 |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
@@ -206,7 +206,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
 - 川柳 source atom 品質ゲート: カタログ原文snapshot + 発話済み見どころの別provenance + 行別出典 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ 4生成方式の固定比較 + 不合格スロットを実測中最大6回再生成 + fail-closed **済**
 - 川柳実測中の発句間隔は一時3分。**比較・開発終了時は設定既定・`.env.example`・docsを10分（600000ms）へ必ず戻す**
-- 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定し、地表雪は adapter の実ブロック観測だけを川柳・雑談で共有 **済**
+- 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定。Y/Z・気温・閾値・downfallはLLMへ出さず、閉じた降水/雷/降雪環境と実測地表雪だけを共有 **済**
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
 - 任意: OS AI・chat fallback・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
