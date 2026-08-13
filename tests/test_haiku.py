@@ -24,6 +24,7 @@ from dogido_server.models import (
 from dogido_server.entry_catalog import mob_poetic_line, mob_poetic_tags
 from dogido_server.llm.haiku_prompts import build_haiku_draft_messages, build_haiku_irony_messages
 from dogido_server.state_machine import DogidoStateMachine
+from dogido_server.haiku.source_atoms import PrefaceClause
 from dogido_server.state_machine.haiku_context import SceneContext
 
 
@@ -33,6 +34,21 @@ def grounded_haiku_payload(
 ) -> dict[str, object] | None:
     """state machine テスト用。最終句の新しい厳格JSON契約だけを返す。"""
 
+    if request.kind == "haiku_preface_grounding":
+        return {
+            "assessments": [
+                {
+                    "clause_index": index,
+                    "basis_atom_ids": clause["basis_atom_ids"],
+                    "claim_class": clause["claim_class"],
+                    "meaning_retained": True,
+                    "class_correct": True,
+                    "within_claim_scope": True,
+                    "natural_japanese": True,
+                }
+                for index, clause in enumerate(request.details.get("preface_clauses", []))
+            ]
+        }
     if request.kind == "haiku_draft":
         return {"lines": list(lines)}
     if request.kind != "haiku_line_grounding":
@@ -55,6 +71,36 @@ def grounded_haiku_payload(
             }
             for index, row in enumerate(grounding_lines)
         ]
+    }
+
+
+def scene_payload(
+    request: StructuredGenerationRequest,
+    text: str,
+    *,
+    motifs: tuple[str, ...] = (),
+    focus: tuple[str, ...] = (),
+    confidence: float = 0.8,
+) -> dict[str, object]:
+    """state machine テスト用の節単位preface契約。"""
+
+    atom_ids = [
+        atom["atom_id"]
+        for atom in request.details.get("source_atoms", [])
+        if isinstance(atom, dict) and isinstance(atom.get("atom_id"), str)
+    ]
+    if not atom_ids:
+        return {"found": False}
+    return {
+        "found": True,
+        "clauses": [{
+            "text": text,
+            "basis_atom_ids": atom_ids[:3],
+            "claim_class": "interpretive",
+        }],
+        "motifs": list(motifs),
+        "focus": list(focus),
+        "confidence": confidence,
     }
 
 
@@ -437,13 +483,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "深い地下でヒツジがのんびりしとる",
-                        "motifs": ["地下", "ヒツジ"],
-                        "focus": ["地下", "ヒツジ"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "深い地下でヒツジがのんびりしとる",
+                        motifs=("地下", "ヒツジ"),
+                        focus=("地下", "ヒツジ"),
+                    )
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -475,7 +520,7 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nすなあつめ\nくりーぱーくる\nこわいわあ")
-        self.assertEqual(len(fake_llm.structured_requests), 4)
+        self.assertEqual(len(fake_llm.structured_requests), 5)
         self.assertEqual(fake_llm.structured_requests[0].route, "chat")
         self.assertEqual(fake_llm.structured_requests[0].kind, "haiku_irony")
         self.assertEqual(fake_llm.structured_requests[0].max_tokens, self.settings.haiku_structured_max_tokens)
@@ -483,8 +528,10 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(fake_llm.structured_requests[1].kind, "haiku_scene")
         self.assertEqual(fake_llm.structured_requests[1].max_tokens, self.settings.haiku_structured_max_tokens)
         self.assertFalse(any(request.kind == "haiku" for request in fake_llm.leaf_requests))
-        draft = fake_llm.structured_requests[2]
-        grounding = fake_llm.structured_requests[3]
+        preface_grounding = fake_llm.structured_requests[2]
+        draft = fake_llm.structured_requests[3]
+        grounding = fake_llm.structured_requests[4]
+        self.assertEqual((preface_grounding.kind, preface_grounding.route), ("haiku_preface_grounding", "chat"))
         self.assertEqual((draft.kind, draft.route, draft.temperature), ("haiku_draft", "haiku", 0.60))
         self.assertEqual(draft.details["generation_strategy"], "three_slot")
         self.assertEqual(draft.details["generation_slot_groups"], [[0], [1], [2]])
@@ -511,13 +558,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "深い地下でヒツジがのんびりしとる",
-                        "motifs": ["地下", "ヒツジ"],
-                        "focus": ["地下", "ヒツジ"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "深い地下でヒツジがのんびりしとる",
+                        motifs=("地下", "ヒツジ"),
+                        focus=("地下", "ヒツジ"),
+                    )
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -568,7 +614,10 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
         assert machine.emitted_haiku is not None
         saved_atoms = machine.emitted_haiku.materials["source_atoms"]
-        self.assertTrue(any(atom["kind"] == "preface_interpretation" for atom in saved_atoms))
+        preface_atoms = [atom for atom in saved_atoms if atom["kind"] == "preface_clause"]
+        self.assertTrue(preface_atoms)
+        self.assertTrue(all(atom["basis_atom_ids"] for atom in preface_atoms))
+        self.assertTrue(all(atom["claim_class"] in {"factual", "interpretive"} for atom in preface_atoms))
         self.assertEqual(machine.emitted_haiku.materials["preface_spoken"], preface_text)
 
     def test_haiku_zone_ignores_player_chat_until_verse(self) -> None:
@@ -589,13 +638,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "朝の村で木を持つあんた",
-                        "motifs": ["朝", "村", "木"],
-                        "focus": ["村"],
-                        "confidence": 0.85,
-                    }
+                    return scene_payload(
+                        request,
+                        "朝の村で木を持つあんた",
+                        motifs=("朝", "村", "木"),
+                        focus=("村",),
+                        confidence=0.85,
+                    )
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -668,13 +717,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "要塞のポータル前で支度を整えている",
-                        "motifs": ["ポータル", "要塞"],
-                        "focus": ["ポータル"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "要塞のポータル前で支度を整えている",
+                        motifs=("ポータル", "要塞"),
+                        focus=("ポータル",),
+                    )
                 return {"found": False}
 
         settings = Settings(
@@ -840,16 +888,20 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return False
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_preface_grounding":
+                    return grounded_haiku_payload(
+                        request,
+                        ("はるのかぜ", "ひつじがあるく", "よるのつき"),
+                    ) or {"assessments": []}
                 if request.kind == "haiku_irony":
                     return {"found": False}
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "晴れた草地を羊が歩いとる",
-                        "motifs": ["草地", "羊"],
-                        "focus": ["羊"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "晴れた草地を羊が歩いとる",
+                        motifs=("草地", "羊"),
+                        focus=("羊",),
+                    )
                 if request.kind == "haiku_draft":
                     return {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]}
                 if request.kind == "haiku_line_regeneration":
@@ -914,13 +966,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "草地で火打石と打ち金を握り、甘い実をしまっとる",
-                        "motifs": ["草地", "火打石と打ち金", "きらめくスイカの薄切り"],
-                        "focus": ["火打石と打ち金", "きらめくスイカの薄切り"],
-                        "confidence": 0.76,
-                    }
+                    return scene_payload(
+                        request,
+                        "草地で火打石と打ち金を握り、甘い実をしまっとる",
+                        motifs=("草地", "火打石と打ち金", "きらめくスイカの薄切り"),
+                        focus=("火打石と打ち金", "きらめくスイカの薄切り"),
+                        confidence=0.76,
+                    )
                 return {"found": False}
 
         fake_llm = FakeLLM()
@@ -960,7 +1012,8 @@ class HaikuStateMachineTest(unittest.TestCase):
         ]
         self.assertEqual(len(draft_requests), 1)
         self.assertEqual(saved_constraints, draft_requests[0].details["haiku_constraints"])
-        self.assertEqual(draft_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+        self.assertEqual(draft_requests[0].details["scene"]["spoken_text"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+        self.assertTrue(draft_requests[0].details["scene"]["clauses"][0]["basis_atom_ids"])
 
     def test_plain_scene_summary_with_weather_and_held_item_can_use_llm(self) -> None:
         class FakeLLM:
@@ -982,13 +1035,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "晴れた草地でキャンプファイアを抱えて立っとる",
-                        "motifs": ["草地", "晴れ", "キャンプファイア"],
-                        "focus": ["草地", "キャンプファイア"],
-                        "confidence": 0.76,
-                    }
+                    return scene_payload(
+                        request,
+                        "晴れた草地でキャンプファイアを抱えて立っとる",
+                        motifs=("草地", "晴れ", "キャンプファイア"),
+                        focus=("草地", "キャンプファイア"),
+                        confidence=0.76,
+                    )
                 return {"found": False}
 
         fake_llm = FakeLLM()
@@ -1096,7 +1149,12 @@ class HaikuStateMachineTest(unittest.TestCase):
             event,
             SceneContext(
                 found=True,
-                summary="雪原でダイヤモンドシャベルを握る",
+                clauses=(PrefaceClause(
+                    text="雪原でダイヤモンドシャベルを握る",
+                    basis_atom_ids=("test:shovel",),
+                    claim_class="interpretive",
+                    claim_scopes=("poetic_interpretation",),
+                ),),
                 motifs=("ダイヤモンドシャベル", "雪原"),
                 focus=("道具の高級感",),
                 confidence=0.8,
@@ -1134,7 +1192,12 @@ class HaikuStateMachineTest(unittest.TestCase):
             event,
             SceneContext(
                 found=True,
-                summary="雪原でダイヤモンドシャベルを握る",
+                clauses=(PrefaceClause(
+                    text="雪原でダイヤモンドシャベルを握る",
+                    basis_atom_ids=("test:shovel",),
+                    claim_class="interpretive",
+                    claim_scopes=("poetic_interpretation",),
+                ),),
                 motifs=("ダイヤモンドシャベル", "雪原"),
                 focus=("道具の高級感",),
                 confidence=0.8,

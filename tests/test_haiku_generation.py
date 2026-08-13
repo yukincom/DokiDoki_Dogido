@@ -6,11 +6,13 @@ import unittest
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry
 from dogido_server.haiku.generation import generate_grounded_haiku, generate_workshop_revision
 from dogido_server.haiku.lexical_correction import correct_grounded_catalog_kana
+from dogido_server.haiku.preface import validate_preface_clauses
 from dogido_server.haiku.source_atoms import (
     HaikuSourceAtom,
-    atoms_from_spoken_preface,
+    atoms_from_preface_clauses,
     atoms_from_catalog_sources,
     catalog_source_snapshot,
+    preface_clauses_from_payload,
     split_note_sentences,
     line_source_ids_from_materials,
     source_atoms_from_materials,
@@ -30,6 +32,8 @@ def source_atoms(count: int = 4) -> tuple[HaikuSourceAtom, ...]:
             field_path="observed_label",
             observation_role="test",
             kind="observation",
+            claim_class="factual",
+            claim_scopes=("observed_state",),
         )
         for index in range(count)
     )
@@ -76,6 +80,8 @@ class SourceAtomTest(unittest.TestCase):
             field_path="japanese",
             observation_role="selected_item",
             kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
         )
 
         correction = correct_grounded_catalog_kana(
@@ -96,6 +102,8 @@ class SourceAtomTest(unittest.TestCase):
             field_path="japanese",
             observation_role="selected_item",
             kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
         )
         similar = HaikuSourceAtom(
             atom_id="test:similar:japanese",
@@ -104,6 +112,8 @@ class SourceAtomTest(unittest.TestCase):
             field_path="japanese",
             observation_role="test",
             kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
         )
         short = HaikuSourceAtom(
             atom_id="test:short:japanese",
@@ -112,6 +122,8 @@ class SourceAtomTest(unittest.TestCase):
             field_path="japanese",
             observation_role="test",
             kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
         )
         atoms = {atom.atom_id: atom for atom in (birch, similar, short)}
 
@@ -130,24 +142,96 @@ class SourceAtomTest(unittest.TestCase):
             )
         )
 
-    def test_spoken_preface_becomes_separate_interpretation_atoms(self) -> None:
-        atoms = atoms_from_spoken_preface(
-            "湿った土の匂いが漂う温帯の草地。"
-            "夜風が冷たくても、手にしたシラカバの階段だけが白く、"
-            "静かに光っている、なんか浮かんできたわ。"
+    def test_preface_clauses_keep_basis_class_and_code_assigned_scope(self) -> None:
+        bases = source_atoms(3)
+        clauses = preface_clauses_from_payload(
+            [
+                {
+                    "text": "春の風が吹いている",
+                    "basis_atom_ids": [bases[0].atom_id],
+                    "claim_class": "factual",
+                },
+                {
+                    "text": "羊と月が静かに向き合う",
+                    "basis_atom_ids": [bases[1].atom_id, bases[2].atom_id],
+                    "claim_class": "interpretive",
+                },
+            ],
+            source_atoms=bases,
         )
+        assert clauses is not None
+        atoms = atoms_from_preface_clauses(clauses)
 
         self.assertEqual(
             [atom.text for atom in atoms],
             [
-                "湿った土の匂いが漂う温帯の草地",
-                "夜風が冷たくても",
-                "手にしたシラカバの階段だけが白く",
-                "静かに光っている",
+                "春の風が吹いている",
+                "羊と月が静かに向き合う",
             ],
         )
-        self.assertTrue(all(atom.kind == "preface_interpretation" for atom in atoms))
+        self.assertEqual(atoms[0].claim_class, "factual")
+        self.assertEqual(atoms[0].claim_scopes, ("observed_state",))
+        self.assertEqual(atoms[1].claim_class, "interpretive")
+        self.assertEqual(atoms[1].claim_scopes, ("poetic_interpretation",))
+        self.assertEqual(atoms[1].basis_atom_ids, (bases[1].atom_id, bases[2].atom_id))
+        self.assertTrue(all(atom.kind == "preface_clause" for atom in atoms))
         self.assertTrue(all(atom.source_ref == "preface:spoken" for atom in atoms))
+
+    def test_preface_factual_clause_cannot_promote_interpretive_source(self) -> None:
+        base = HaikuSourceAtom(
+            atom_id="catalog:test:poetic",
+            text="のどかさ担当",
+            source_ref="catalog:test",
+            field_path="poetic.role",
+            observation_role="test",
+            kind="catalog_field",
+            claim_class="interpretive",
+            claim_scopes=("source_meaning",),
+        )
+
+        clauses = preface_clauses_from_payload(
+            [{
+                "text": "ここはのどかな場所だ",
+                "basis_atom_ids": [base.atom_id],
+                "claim_class": "factual",
+            }],
+            source_atoms=(base,),
+        )
+
+        self.assertIsNone(clauses)
+
+    def test_preface_scope_evaluator_rejection_fails_closed(self) -> None:
+        bases = source_atoms(2)
+        clauses = preface_clauses_from_payload(
+            [{
+                "text": "雪の積もるタイガだ",
+                "basis_atom_ids": [bases[0].atom_id],
+                "claim_class": "factual",
+            }],
+            source_atoms=bases,
+        )
+        assert clauses is not None
+        llm = ScriptedLLM([{
+            "assessments": [{
+                "clause_index": 0,
+                "basis_atom_ids": [bases[0].atom_id],
+                "claim_class": "factual",
+                "meaning_retained": False,
+                "class_correct": True,
+                "within_claim_scope": False,
+                "natural_japanese": True,
+            }],
+        }])
+
+        accepted = validate_preface_clauses(
+            llm,
+            clauses=clauses,
+            source_atoms=bases,
+            max_tokens=192,
+        )
+
+        self.assertFalse(accepted)
+        self.assertEqual(llm.requests[0].kind, "haiku_preface_grounding")
 
     def test_ancient_debris_note_is_split_without_changing_catalog_source(self) -> None:
         entry = item_entry("ancient_debris")
@@ -219,6 +303,8 @@ class GroundedGenerationTest(unittest.TestCase):
             field_path="japanese",
             observation_role="selected_item",
             kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
         )
         atoms = (birch, *source_atoms(2))
         llm = ScriptedLLM(
@@ -247,6 +333,12 @@ class GroundedGenerationTest(unittest.TestCase):
     def test_all_new_structured_kinds_have_registered_prompts(self) -> None:
         details = {
             "source_atoms": [atom.to_prompt_dict() for atom in source_atoms()],
+            "preface_clauses": [{
+                "text": "春の風が吹いている",
+                "basis_atom_ids": ["observation:test:0"],
+                "claim_class": "factual",
+                "claim_scopes": ["observed_state"],
+            }],
             "grounding_lines": [{"line_index": 0, "text": "はるのかぜ"}],
             "current_lines": [
                 {"line_index": 0, "text": "はるのかぜ", "frozen": True},
@@ -269,6 +361,7 @@ class GroundedGenerationTest(unittest.TestCase):
             "haiku_draft",
             "haiku_line_grounding",
             "haiku_line_regeneration",
+            "haiku_preface_grounding",
             "haiku_workshop_revision",
         ):
             messages = build_messages(
@@ -289,6 +382,15 @@ class GroundedGenerationTest(unittest.TestCase):
             )
         )[1]["content"]
         self.assertIn("現在7音 → 目標7音、許容6〜8音", regeneration)
+        preface = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_preface_grounding",
+                fallback_value={},
+                details=details,
+            )
+        )[1]["content"]
+        self.assertIn("identity_only=名称そのものだけ", preface)
+        self.assertIn("within_claim_scope", preface)
 
     def test_material_selection_prompts_do_not_request_warm_or_gentle_wording(self) -> None:
         details = {"source_atoms": [atom.to_prompt_dict() for atom in source_atoms()]}
@@ -473,6 +575,38 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual(restored, atoms)
         self.assertEqual(line_ids, {0: (atoms[0].atom_id,)})
 
+    def test_old_source_atom_shape_is_not_restored(self) -> None:
+        old_atom = {
+            "atom_id": "observation:test:0",
+            "text": "春の風",
+            "source_ref": "observation:test:0",
+            "field_path": "observed_label",
+            "observation_role": "test",
+            "kind": "observation",
+        }
+
+        self.assertEqual(source_atoms_from_materials({"source_atoms": [old_atom]}), ())
+
+    def test_saved_preface_scope_is_recomputed_from_basis(self) -> None:
+        base = source_atoms(1)[0]
+        tampered = HaikuSourceAtom(
+            atom_id="preface:spoken:clause:0",
+            text="春の風が吹く",
+            source_ref="preface:spoken",
+            field_path="clause[0]",
+            observation_role="spoken_preface",
+            kind="preface_clause",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
+            basis_atom_ids=(base.atom_id,),
+        )
+
+        restored = source_atoms_from_materials({
+            "source_atoms": [base.to_prompt_dict(), tampered.to_prompt_dict()],
+        })
+
+        self.assertEqual(restored, (base,))
+
     def test_accepts_three_grounded_lines_at_lower_temperature(self) -> None:
         llm = ScriptedLLM(
             [
@@ -510,10 +644,11 @@ class GroundedGenerationTest(unittest.TestCase):
             "two_plus_one": ([0, 1], [2]),
         }
         initial_lines = ["はるのかぜ", "ひつじがあるく", "よるのつき"]
+        replacement_lines = ["あめのかぜ", "あめつよくふる", "あめのつき"]
         for strategy, (retry_indices, frozen_indices) in cases.items():
             with self.subTest(strategy=strategy):
                 regenerated_rows = [
-                    {"line_index": index, "text": initial_lines[index]}
+                    {"line_index": index, "text": replacement_lines[index]}
                     for index in retry_indices
                 ]
                 retried_grounding = grounding(
@@ -597,6 +732,51 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertNotIn("observation:test:0", remaining_ids)
         self.assertNotIn("observation:test:2", remaining_ids)
 
+    def test_preface_atom_and_its_basis_cannot_be_used_on_separate_lines(self) -> None:
+        bases = source_atoms()
+        clauses = preface_clauses_from_payload(
+            [{
+                "text": "春の風が残る",
+                "basis_atom_ids": [bases[0].atom_id],
+                "claim_class": "interpretive",
+            }],
+            source_atoms=bases,
+        )
+        assert clauses is not None
+        preface = atoms_from_preface_clauses(clauses)[0]
+        atoms = (*bases, preface)
+        llm = ScriptedLLM(
+            [
+                {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]},
+                grounding(
+                    (0, bases[0].atom_id, True, True),
+                    (1, preface.atom_id, True, True),
+                    (2, bases[2].atom_id, True, True),
+                ),
+                {"lines": [{"line_index": 1, "text": "あめつよくふる"}]},
+                grounding((1, bases[3].atom_id, True, True)),
+            ]
+        )
+
+        result = generate_grounded_haiku(
+            llm,
+            details={},
+            source_atoms=atoms,
+            fallback_text="まとまらんかった。。。",
+            max_tokens=192,
+        )
+
+        self.assertTrue(result.accepted)
+        retry = llm.requests[2]
+        failed = next(
+            row for row in retry.details["current_lines"]
+            if row["line_index"] == 1
+        )
+        self.assertEqual(failed["failure_reasons"], ["source_reused"])
+        remaining_ids = {atom["atom_id"] for atom in retry.details["source_atoms"]}
+        self.assertNotIn(bases[0].atom_id, remaining_ids)
+        self.assertNotIn(preface.atom_id, remaining_ids)
+
     def test_regeneration_receives_code_counted_meter_feedback(self) -> None:
         llm = ScriptedLLM(
             [
@@ -646,29 +826,16 @@ class GroundedGenerationTest(unittest.TestCase):
         )
         prompt = build_messages(retry)[1]["content"]
         self.assertIn("音数が長い: 現在8音 → 目標5音、許容4〜6音", prompt)
+        self.assertEqual(failed_row["failure_reasons"], ["meter_too_long"])
+        self.assertIn("失敗理由: 音数が長い", prompt)
 
-    def test_single_assessment_shape_retries_only_missing_checks_one_by_one(self) -> None:
+    def test_incomplete_assessment_array_retries_only_missing_checks_one_by_one(self) -> None:
         llm = ScriptedLLM(
             [
                 {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]},
-                {
-                    "line_index": 0,
-                    "atom_ids": ["observation:test:0"],
-                    "meaning_retained": True,
-                    "natural_japanese": True,
-                },
-                {
-                    "line_index": 1,
-                    "atom_ids": ["observation:test:1"],
-                    "meaning_retained": True,
-                    "natural_japanese": True,
-                },
-                {
-                    "line_index": 2,
-                    "atom_ids": ["observation:test:2"],
-                    "meaning_retained": True,
-                    "natural_japanese": True,
-                },
+                grounding((0, "observation:test:0", True, True)),
+                grounding((1, "observation:test:1", True, True)),
+                grounding((2, "observation:test:2", True, True)),
             ]
         )
 
@@ -694,7 +861,7 @@ class GroundedGenerationTest(unittest.TestCase):
             ],
         )
 
-    def test_unnatural_line_fails_closed_after_exactly_two_regeneration_rounds(self) -> None:
+    def test_duplicate_regenerations_are_rejected_before_another_grounding_call(self) -> None:
         bad = grounding(
             (0, "observation:test:0", True, False),
             (1, "observation:test:1", True, False),
@@ -705,17 +872,15 @@ class GroundedGenerationTest(unittest.TestCase):
                 {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]},
                 bad,
                 {"lines": [
-                    {"line_index": 0, "text": "はるのかぜ"},
-                    {"line_index": 1, "text": "ひつじがあるく"},
-                    {"line_index": 2, "text": "よるのつき"},
+                    {"line_index": 0, "text": "ハルノカゼ"},
+                    {"line_index": 1, "text": "ヒツジガアルク"},
+                    {"line_index": 2, "text": "ヨルノツキ"},
                 ]},
-                bad,
                 {"lines": [
                     {"line_index": 0, "text": "はるのかぜ"},
                     {"line_index": 1, "text": "ひつじがあるく"},
                     {"line_index": 2, "text": "よるのつき"},
                 ]},
-                bad,
             ]
         )
 
@@ -736,10 +901,16 @@ class GroundedGenerationTest(unittest.TestCase):
                 "haiku_draft",
                 "haiku_line_grounding",
                 "haiku_line_regeneration",
-                "haiku_line_grounding",
                 "haiku_line_regeneration",
-                "haiku_line_grounding",
             ],
+        )
+        second_retry = llm.requests[3]
+        self.assertTrue(
+            all(
+                row.get("failure_reasons") == ["duplicate_candidate"]
+                for row in second_retry.details["current_lines"]
+                if not row["frozen"]
+            )
         )
 
     def test_unknown_atom_id_is_not_accepted(self) -> None:

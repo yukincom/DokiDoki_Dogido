@@ -280,7 +280,7 @@ class LLMTests(unittest.TestCase):
                     "choices": [
                         {
                             "message": {
-                                "content": '{"found": true, "summary": "朝の草原で手持ちの焚き火台", "motifs": ["朝", "草原"], "focus": ["草原"], "confidence": 0.8}'
+                                "content": '{"found": true, "clauses": [{"text": "朝の草原で手持ちの焚き火台", "basis_atom_ids": ["observation:test:0"], "claim_class": "interpretive"}], "motifs": ["朝", "草原"], "focus": ["草原"], "confidence": 0.8}'
                             }
                         }
                     ]
@@ -292,7 +292,7 @@ class LLMTests(unittest.TestCase):
             payload = llm.generate_structured_json(request)
 
         self.assertTrue(payload["found"])
-        self.assertEqual(payload["summary"], "朝の草原で手持ちの焚き火台")
+        self.assertEqual(payload["clauses"][0]["text"], "朝の草原で手持ちの焚き火台")
 
     def test_route_settings_auto_resolve_remote_backends(self) -> None:
         settings = Settings(

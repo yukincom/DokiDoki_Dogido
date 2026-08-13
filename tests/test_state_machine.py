@@ -25,10 +25,36 @@ class FakeLLM(DogidoLLM):
         return f"LLM:{request.kind}"
 
     def generate_structured_json(self, request):  # type: ignore[override]
+        if request.kind == "haiku_preface_grounding":
+            return {
+                "assessments": [
+                    {
+                        "clause_index": index,
+                        "basis_atom_ids": clause["basis_atom_ids"],
+                        "claim_class": clause["claim_class"],
+                        "meaning_retained": True,
+                        "class_correct": True,
+                        "within_claim_scope": True,
+                        "natural_japanese": True,
+                    }
+                    for index, clause in enumerate(request.details.get("preface_clauses", []))
+                ],
+                "__dogido_status": "accepted",
+            }
         if request.kind == "haiku_scene":
+            atoms = request.details.get("source_atoms", [])
+            atom_ids = [
+                atom["atom_id"]
+                for atom in atoms
+                if isinstance(atom, dict) and isinstance(atom.get("atom_id"), str)
+            ]
             return {
                 "found": True,
-                "summary": "川の光と空の対比",
+                "clauses": [{
+                    "text": "川の光と空の対比",
+                    "basis_atom_ids": atom_ids[:2],
+                    "claim_class": "interpretive",
+                }],
                 "motifs": ["川", "光"],
                 "focus": ["川"],
                 "confidence": 0.8,

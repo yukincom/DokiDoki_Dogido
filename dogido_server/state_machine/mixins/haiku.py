@@ -9,12 +9,13 @@ from math import inf
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry, mob_poetic_line, mob_poetic_tags
 from dogido_server.haiku.generation import generate_grounded_haiku
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
+from dogido_server.haiku.preface import validate_preface_clauses
 from dogido_server.haiku.source_atoms import (
     CatalogSourceSnapshot,
     HaikuSourceAtom,
     atoms_from_catalog_sources,
     atoms_from_observations,
-    atoms_from_spoken_preface,
+    atoms_from_preface_clauses,
     catalog_notes_projection,
     catalog_source_snapshot,
     merge_source_atoms,
@@ -195,10 +196,10 @@ class HaikuMixin:
         irony, irony_status = self._detect_haiku_irony(context)
         scene, scene_status = self._detect_haiku_scene(context, irony)
         self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
-        spoken = self._compose_haiku_preface_speech(irony, scene)
+        spoken = self._compose_haiku_preface_speech(scene)
         source_atoms = merge_source_atoms(
             context.source_atoms,
-            atoms_from_spoken_preface(spoken),
+            atoms_from_preface_clauses(scene.clauses),
         )
         self._stash_haiku_materials_seed(
             event,
@@ -323,9 +324,9 @@ class HaikuMixin:
         self._clear_pending_haiku_prep()
         return True
 
-    def _compose_haiku_preface_speech(self, irony: IronyContext, scene: SceneContext) -> str:
+    def _compose_haiku_preface_speech(self, scene: SceneContext) -> str:
         """見どころを口にする。「ここで一句。」は本句側に任せる。"""
-        inspiration = self._haiku_inspiration_spoken_line(irony, scene)
+        inspiration = self._haiku_inspiration_spoken_line(scene)
         if inspiration:
             return inspiration if inspiration.endswith(("。", "わ", "や", "で", "ね")) else f"{inspiration}。"
         # 見どころが無いときも二重に「ここで一句」と言わない
@@ -333,55 +334,19 @@ class HaikuMixin:
 
     def _haiku_inspiration_spoken_line(
         self,
-        irony: IronyContext,
         scene: SceneContext,
     ) -> str | None:
-        """irony/scene を口語の見どころにする。材料（斧・原木など）が残る長さを優先。
+        """検証済み節だけを順に話し、発話後の再分割・切り詰めをしない。"""
 
-        講義じみた超長文だけ切る。最初の読点1つで潰さない（#28 preface）。
-        """
-        raw: str | None = None
-        # 口には summary 優先。無ければ irony description
-        if scene.found and scene.summary.strip():
-            raw = scene.summary.strip()
-        elif irony.found and irony.description.strip():
-            raw = irony.description.strip()
-        if not raw:
+        if not scene.found or not scene.clauses:
             return None
-        body = self._shorten_haiku_inspiration(raw)
+        body = scene.spoken_text.strip()
         if not body:
             return None
         # すでに「浮かんだ」系なら重ねない
         if any(marker in body for marker in ("浮か", "おもいつ", "思いつ")):
             return body if body.endswith(("。", "わ", "や", "で", "ね")) else f"{body}。"
         return f"{body}、なんか浮かんできたわ"
-
-    def _shorten_haiku_inspiration(self, text: str, *, max_chars: int = 56) -> str:
-        cleaned = text.strip().rstrip("。．.！!？?")
-        if not cleaned:
-            return ""
-        cleaned = cleaned.replace("プレイヤー", "あんた")
-        # 分析っぽい長語を落とす
-        for heavy in ("の対比", "の重厚感", "の雰囲気", "の明るさ"):
-            if cleaned.endswith(heavy):
-                cleaned = cleaned[: -len(heavy)].rstrip("・、 ")
-        if len(cleaned) <= max_chars:
-            return cleaned
-        # 読点で自然な区切りまで残す（1つ目が短すぎるなら2つ目まで）
-        for sep in ("、", "，", "。", "・"):
-            if sep not in cleaned:
-                continue
-            parts = [p.strip() for p in cleaned.split(sep) if p.strip()]
-            if not parts:
-                continue
-            acc = parts[0]
-            if len(acc) < 12 and len(parts) > 1:
-                acc = f"{parts[0]}{sep}{parts[1]}"
-            if 6 <= len(acc) <= max_chars:
-                return acc
-            if len(acc) > max_chars:
-                return acc[: max_chars - 1].rstrip("、， ") + "…"
-        return cleaned[: max_chars - 1].rstrip("、， ") + "…"
 
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)
@@ -435,8 +400,8 @@ class HaikuMixin:
     def _haiku_interpretation_text(self, irony: IronyContext, scene: SceneContext) -> str | None:
         if irony.found and irony.description.strip():
             return irony.description.strip()
-        if scene.found and scene.summary.strip():
-            return scene.summary.strip()
+        if scene.found and scene.spoken_text.strip():
+            return scene.spoken_text.strip()
         return None
 
     def _stash_haiku_materials_seed(
@@ -630,7 +595,22 @@ class HaikuMixin:
                 max_tokens=self.settings.haiku_structured_max_tokens,
             )
         )
-        return SceneContext.from_mapping(payload), self._structured_status(payload)
+        scene = SceneContext.from_mapping(
+            payload,
+            source_atoms=context.source_atoms,
+        )
+        status = self._structured_status(payload)
+        if not scene.found:
+            return scene, status
+        if not validate_preface_clauses(
+            self.llm,
+            clauses=scene.clauses,
+            source_atoms=context.source_atoms,
+            max_tokens=self.settings.haiku_structured_max_tokens,
+        ):
+            LOGGER.warning("haiku_preface_grounding result=rejected")
+            return SceneContext(), "preface_rejected"
+        return scene, status
 
     def _haiku_context(self, event: GameEvent) -> HaikuContext:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"

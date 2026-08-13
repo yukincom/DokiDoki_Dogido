@@ -31,12 +31,12 @@ def _item_hint(details: dict[str, object]) -> str:
 
 def _scene_block(details: dict[str, object]) -> str:
     scene = details.get("scene")
-    if not isinstance(scene, dict) or not scene.get("summary"):
+    if not isinstance(scene, dict) or not scene.get("spoken_text"):
         return "なし"
     motifs = "、".join(str(item) for item in scene.get("motifs", []) if item) or "なし"
     focus = "、".join(str(item) for item in scene.get("focus", []) if item) or "なし"
     return (
-        f"要約: {scene.get('summary')}\n"
+        f"発話済みの見どころ: {scene.get('spoken_text')}\n"
         f"モチーフ: {motifs}\n"
         f"焦点: {focus}"
     )
@@ -194,9 +194,29 @@ def _source_atoms_block(details: dict[str, object]) -> str:
         text = str(atom.get("text") or "").strip()
         if atom_id and text:
             kind = str(atom.get("kind") or "").strip()
-            origin = "（発話済みの見どころ）" if kind == "preface_interpretation" else ""
-            lines.append(f"- [{atom_id}] {text}{origin}")
-    return "\n".join(lines) if lines else "なし"
+            claim_class = str(atom.get("claim_class") or "").strip()
+            raw_scopes = atom.get("claim_scopes")
+            scopes = ",".join(
+                str(scope) for scope in raw_scopes if isinstance(scope, str) and scope
+            ) if isinstance(raw_scopes, list) else ""
+            raw_basis = atom.get("basis_atom_ids")
+            basis = ",".join(
+                str(value) for value in raw_basis if isinstance(value, str) and value
+            ) if isinstance(raw_basis, list) else ""
+            origin = " / 発話済みの見どころ" if kind == "preface_clause" else ""
+            basis_note = f" / basis={basis}" if basis else ""
+            lines.append(
+                f"- [{atom_id}] {text}"
+                f" / class={claim_class or 'unknown'} / scopes={scopes or 'none'}"
+                f"{basis_note}{origin}"
+            )
+    if not lines:
+        return "なし"
+    guide = (
+        "scope: identity_only=名称そのものだけ / source_meaning=原文の意味の言い換えまで / "
+        "observed_state=現在の実測状態まで / poetic_interpretation=印象・取り合わせだけ"
+    )
+    return f"{guide}\n" + "\n".join(lines)
 
 
 def _generation_strategy_block(details: dict[str, object]) -> str:
@@ -314,6 +334,10 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         "音や名前から説明にない性質を推測しない。遠い連想や、意味のない造語は不合格。\n"
         "meaning_retained は、指定atomの意味が言い換えとして残る場合だけ true。\n"
         "材料名の一部だけを自然に使うのはよい。名前全体の復唱は必須ではない。\n"
+        "class=factual は scopes の範囲に明記された主張だけを許す。"
+        "class=interpretive は印象・取り合わせとしてだけ使い、新しい事実の根拠にしない。\n"
+        "preface_clause は basis の一次atomから派生した発話であり、"
+        "basisにない状態・感覚・因果を足してはならない。\n"
         "natural_japanese は、単独で聞いて自然な現代日本語の場合だけ true。\n"
         "atom_ids には、実際に意味が残ったIDだけを入れる。候補外IDは禁止。\n\n"
         f"【判定する行】\n{line_block}\n\n"
@@ -348,6 +372,8 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
         "固定行は書き換えず、再生成対象の行だけを作り直す。\n"
         "使える材料には、固定行ですでに使ったatomは含まれていない。"
         "再生成する行どうしでもatomを重複させない。\n"
+        "各行にコード検査の失敗理由がある。理由を解消し、"
+        "現在行や以前の候補と同じ字面・カナ違いだけの案は返さない。\n"
         "各行は材料の意味を保ち、自然な現代日本語にする。\n\n"
         f"【今回の生成単位】\n{generation_strategy}\n"
         "再生成対象に同じスロットの複数行が含まれる場合は、"
@@ -374,6 +400,52 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
     ]
 
 
+def build_haiku_preface_grounding_messages(details: dict[str, object]) -> list[dict[str, str]]:
+    """発話前の各節を、自己申告とは別に一次atomへ照合する。"""
+
+    raw_clauses = details.get("preface_clauses")
+    clauses = [row for row in raw_clauses if isinstance(row, dict)] if isinstance(raw_clauses, list) else []
+    clause_block = "\n".join(
+        f"- {index}: {row.get('text')} / basis={row.get('basis_atom_ids')} / "
+        f"class={row.get('claim_class')} / scopes={row.get('claim_scopes')}"
+        for index, row in enumerate(clauses)
+    ) or "なし"
+    example = {
+        "assessments": [
+            {
+                "clause_index": index,
+                "basis_atom_ids": row.get("basis_atom_ids") or [],
+                "claim_class": row.get("claim_class") or "interpretive",
+                "meaning_retained": True,
+                "class_correct": True,
+                "within_claim_scope": True,
+                "natural_japanese": True,
+            }
+            for index, row in enumerate(clauses)
+        ]
+    }
+    user_prompt = (
+        "川柳の前に話す見どころを、各節の一次atomと厳格に照合する。\n"
+        "basis_atom_ids は自己申告と同じ順序で返し、追加・削除・置換しない。\n"
+        "factual はatomが直接明示する事実の言い換えだけ。"
+        "名前だけのatomから色・動作・感覚・因果を推測したら不合格。\n"
+        "interpretive は印象・取り合わせとして自然な範囲だけ。"
+        "雪・雨・所持・行動など新しい事実を断言したら不合格。\n"
+        "class_correct は節の文法上の主張が申告classと一致する時だけtrue。"
+        "within_claim_scope は表示されたscopeを一つも越えない時だけtrue。\n\n"
+        f"【検証する節】\n{clause_block}\n\n"
+        f"【一次atom】\n{_source_atoms_block(details)}\n\n"
+        + _structured_json_tail(json.dumps(example, ensure_ascii=False))
+    )
+    return [
+        {
+            "role": "system",
+            "content": "あなたは事実・解釈・出典範囲を分ける厳格な検証者。返答はJSONのみ。",
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+
 def _regeneration_line_prompt(row: dict[str, object]) -> str:
     """コード計測済みの音数を、再生成対象の行だけへ明示する。"""
 
@@ -390,15 +462,41 @@ def _regeneration_line_prompt(row: dict[str, object]) -> str:
         "too_short": "音数が短い",
         "within_range": "音数は許容内",
     }.get(str(row.get("meter_status") or ""), "音数を再確認")
+    raw_reasons = row.get("failure_reasons")
+    reason_labels = {
+        "grounding_missing": "出典判定が欠けた",
+        "meaning_not_retained": "元材料の意味が残っていない",
+        "unnatural_japanese": "日本語が不自然",
+        "source_reused": "別行と同じ元材料を使った",
+        "meter_too_short": "音数が短い",
+        "meter_too_long": "音数が長い",
+        "invalid_line_index": "行番号が不正",
+        "empty_line": "行が空",
+        "multiline": "一行に改行が混じった",
+        "invalid_script": "かな以外の文字が混じった",
+        "gibberish_sequence": "五十音列のような無意味な並び",
+        "hard_forbidden_term": "道具・読みのhard禁止語を使った",
+        "duplicate_line": "別行と同じ候補",
+        "duplicate_candidate": "以前と実質同じ候補",
+        "missing_regenerated_line": "再生成結果が欠けた",
+        "slot_dependency": "同じ生成スロットの行が不合格",
+    }
+    reasons = [
+        reason_labels.get(str(reason), str(reason))
+        for reason in raw_reasons
+        if isinstance(reason, str) and reason
+    ] if isinstance(raw_reasons, list) else []
+    reason_note = " / 失敗理由: " + "、".join(reasons) if reasons else ""
     if all(
         isinstance(value, int) and not isinstance(value, bool)
         for value in (count, target, minimum, maximum)
     ):
         return (
             f"- {line_index}: {text}（再生成・{status}: "
-            f"現在{count}音 → 目標{target}音、許容{minimum}〜{maximum}音）"
+            f"現在{count}音 → 目標{target}音、許容{minimum}〜{maximum}音"
+            f"{reason_note}）"
         )
-    return f"- {line_index}: {text}（再生成）"
+    return f"- {line_index}: {text}（再生成{reason_note}）"
 
 
 def _structured_json_tail(schema_line: str) -> str:
@@ -454,6 +552,7 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
     materials = _materials_for_dogido(details)
     candidates = _list_lines(details.get("feature_candidates", []))
     tensions = _list_lines(details.get("candidate_tensions", []))
+    source_atoms = _source_atoms_block(details)
     irony = details.get("irony")
     irony_block = "まだなし"
     if isinstance(irony, dict) and irony.get("description"):
@@ -470,6 +569,11 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         "ドギドとして、川柳の種になる『ひとつの場面』を短く描いてほしい。\n"
         f"{place_nudge}\n"
         "材料の意味を変えず、あとで五七五に落としやすい具体的なことばで。\n"
+        "実際に口にする文を1〜3節へ分け、各節に根拠となる [atom_id] を付ける。\n"
+        "factual は根拠atomが明示する事実の言い換えだけ。"
+        "interpretive は根拠同士の印象・取り合わせだけで、新しい事実を断言しない。\n"
+        "『プレイヤー』『Y座標』『確率』などのメタ語は節に書かない。\n"
+        "一節は36字以内、全節で72字以内。読点で細切れにせず、一節を一つの主張にする。\n"
         "\n"
         f"【いまの材料】\n{materials}\n"
         "\n"
@@ -479,9 +583,12 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         "\n"
         f"【さきに感じた芯】\n{irony_block}\n"
         "\n"
+        f"【節の根拠に使えるatom】\n{source_atoms}\n"
+        "\n"
         + _structured_json_tail(
-            '{"found": true/false, "summary": "...", "motifs": ["..."], '
-            '"focus": ["..."], "confidence": 0.0}'
+            '{"found": true/false, "clauses": [{"text": "...", '
+            '"basis_atom_ids": ["..."], "claim_class": "factual|interpretive"}], '
+            '"motifs": ["..."], "focus": ["..."], "confidence": 0.0}'
         )
     )
     return [

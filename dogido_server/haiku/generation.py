@@ -9,10 +9,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from typing import Any
+import unicodedata
 
 from dogido_server.llm import LLMFrontend, StructuredGenerationRequest
 from dogido_server.llm.client import STRUCTURED_STATUS_KEY
-from dogido_server.llm.haiku import count_japanese_sounds, is_haiku_line_usable
+from dogido_server.llm.haiku import (
+    count_japanese_sounds,
+    haiku_line_failure_reasons,
+    is_haiku_line_usable,
+)
 from dogido_server.llm.sanitize import summarize_for_log
 
 from .lexical_correction import correct_grounded_catalog_kana
@@ -94,7 +99,12 @@ def generate_grounded_haiku(
             "llm_unavailable",
             generation_strategy=generation_strategy,
         )
-    if len(source_atoms) < 3:
+    available_claim_ids = {
+        claim_id
+        for atom in source_atoms
+        for claim_id in _atom_reservation_ids(atom)
+    }
+    if len(available_claim_ids) < 3:
         # 同じ材料を三行へ水増ししない。観測材料自体が薄い場合は静かに閉じる。
         return _failed(
             fallback_text,
@@ -135,33 +145,48 @@ def generate_grounded_haiku(
 
     accepted: dict[int, _LineAssessment] = {}
     failed_indices = {0, 1, 2}
+    # モデルへ戻す前に同一・表記差だけの候補を落とす。全行・全roundで共有し、
+    # 別行への横流しも「新しい案」と数えない。
+    candidate_signatures = {_candidate_signature(line) for line in lines}
+    forced_failures = _duplicate_line_failures(lines)
     for round_index in range(regeneration_limit + 1):
-        used_atom_ids = {
-            atom_id
+        used_claim_ids = {
+            claim_id
             for assessment in accepted.values()
-            for atom_id in assessment.atom_ids
+            for claim_id in _reservation_ids(assessment.atom_ids, atom_by_id)
         }
-        eligible_atoms = tuple(atom for atom in source_atoms if atom.atom_id not in used_atom_ids)
-        assessments = _assess_lines(
-            llm,
-            details=prompt_details,
-            lines=lines,
-            line_indices=failed_indices,
-            eligible_atoms=eligible_atoms,
-            max_tokens=max_tokens,
+        eligible_atoms = tuple(
+            atom
+            for atom in source_atoms
+            if not used_claim_ids.intersection(_atom_reservation_ids(atom))
+        )
+        assessment_indices = failed_indices - set(forced_failures)
+        assessments = (
+            _assess_lines(
+                llm,
+                details=prompt_details,
+                lines=lines,
+                line_indices=assessment_indices,
+                eligible_atoms=eligible_atoms,
+                max_tokens=max_tokens,
+            )
+            if assessment_indices
+            else {}
         )
         tentatively_accepted, line_failures = _accept_lines(
             lines,
-            line_indices=failed_indices,
+            line_indices=assessment_indices,
             assessments=assessments,
             details=details,
             atom_by_id=atom_by_id,
-            already_used=used_atom_ids,
+            already_used=used_claim_ids,
             frozen_lines={lines[index] for index in accepted},
         )
+        line_failures.update(forced_failures)
         # 一行だけが落ちても、その行と意味展開を共有するスロット全体を直す。
         # これにより4方式は検査条件を変えず、探索単位だけを比較できる。
-        failed_indices = _expand_failed_slot_indices(line_failures, slot_groups)
+        expanded_failures = _expand_failure_reasons(line_failures, slot_groups)
+        failed_indices = set(expanded_failures)
         newly_accepted = {
             index: assessment
             for index, assessment in tentatively_accepted.items()
@@ -170,11 +195,12 @@ def generate_grounded_haiku(
         accepted.update(newly_accepted)
 
         LOGGER.warning(
-            "haiku_grounding result=round strategy=%s round=%s accepted=%s failed=%s",
+            "haiku_grounding result=round strategy=%s round=%s accepted=%s failed=%s reasons=%s",
             generation_strategy,
             round_index,
             sorted(accepted),
             sorted(failed_indices),
+            {index: list(reasons) for index, reasons in sorted(expanded_failures.items())},
         )
 
         if not failed_indices:
@@ -189,13 +215,22 @@ def generate_grounded_haiku(
         if round_index >= regeneration_limit:
             break
 
-        used_atom_ids = {
-            atom_id
+        used_claim_ids = {
+            claim_id
             for assessment in accepted.values()
-            for atom_id in assessment.atom_ids
+            for claim_id in _reservation_ids(assessment.atom_ids, atom_by_id)
         }
-        remaining_atoms = tuple(atom for atom in source_atoms if atom.atom_id not in used_atom_ids)
-        if len(remaining_atoms) < len(failed_indices):
+        remaining_atoms = tuple(
+            atom
+            for atom in source_atoms
+            if not used_claim_ids.intersection(_atom_reservation_ids(atom))
+        )
+        remaining_claim_ids = {
+            claim_id
+            for atom in remaining_atoms
+            for claim_id in _atom_reservation_ids(atom)
+        }
+        if len(remaining_claim_ids) < len(failed_indices):
             return _failed(
                 fallback_text,
                 "insufficient_unused_atoms",
@@ -203,18 +238,37 @@ def generate_grounded_haiku(
                 regeneration_rounds=round_index,
             )
 
+        # 一意なカタログ名かな訂正後の字面も、既出候補として履歴へ反映する。
+        candidate_signatures.update(_candidate_signature(line) for line in lines)
         regenerated = _regenerate_failed_lines(
             llm,
             details=prompt_details,
             lines=lines,
             failed_indices=failed_indices,
+            failure_reasons=expanded_failures,
             remaining_atoms=remaining_atoms,
             max_tokens=max_tokens,
         )
-        # 合格行には一切触れない。不足した返答も一試行として数える。
-        for line_index, text in regenerated.items():
-            if line_index in failed_indices:
-                lines[line_index] = text
+        forced_failures = {}
+        # 合格行には一切触れない。不足・既出候補も一試行として数えるが、
+        # grounding AI へは回さず次の再生成理由として即時返却する。
+        for line_index in failed_indices:
+            text = regenerated.get(line_index)
+            if text is None:
+                forced_failures[line_index] = ("missing_regenerated_line",)
+                continue
+            signature = _candidate_signature(text)
+            if not signature or signature in candidate_signatures:
+                forced_failures[line_index] = ("duplicate_candidate",)
+                LOGGER.warning(
+                    "haiku_grounding result=duplicate_candidate round=%s line_index=%s text=%s",
+                    round_index + 1,
+                    line_index,
+                    summarize_for_log(text),
+                )
+                continue
+            candidate_signatures.add(signature)
+            lines[line_index] = text
 
     LOGGER.warning(
         "haiku_grounding result=fallback reason=max_regeneration_rounds strategy=%s "
@@ -275,7 +329,12 @@ def generate_workshop_revision(
         if index in frozen_indices
         for atom_id in atom_ids
     }
-    eligible = tuple(atom for atom in source_atoms if atom.atom_id not in reserved)
+    reserved_claim_ids = _reservation_ids(reserved, atom_by_id)
+    eligible = tuple(
+        atom
+        for atom in source_atoms
+        if not reserved_claim_ids.intersection(_atom_reservation_ids(atom))
+    )
     if len(eligible) < len(targets):
         return WorkshopRevisionResult(None, False, failure_reason="insufficient_source_atoms")
 
@@ -332,7 +391,7 @@ def generate_workshop_revision(
             assessments=assessments,
             details=details,
             atom_by_id=atom_by_id,
-            already_used=reserved,
+            already_used=reserved_claim_ids,
             frozen_lines={text for index, text in enumerate(lines) if index not in targets},
         )
         if failed or set(accepted) != set(targets):
@@ -441,7 +500,7 @@ def _assess_lines(
         eligible_atoms=eligible_atoms,
         max_tokens=max_tokens,
     )
-    # 一部モデルは複数行を頼んでも先頭行だけ、または旧単体objectを返す。
+    # 一部モデルは複数行を頼んでも assessments の一部だけを返す。
     # 欠けた行だけ一行ずつ再照合し、句の再生成回数とは別に検証形式を補う。
     for line_index in sorted(line_indices - reported_indices):
         single, _reported = _request_line_assessments(
@@ -485,8 +544,8 @@ def _request_line_assessments(
         return {}, set()
     raw_assessments = payload.get("assessments") if isinstance(payload, dict) else None
     if not isinstance(raw_assessments, list):
-        # 初期実装の単一行shapeも入力としてだけ受ける。採否条件は同じ。
-        raw_assessments = [payload] if isinstance(payload, dict) and "line_index" in payload else []
+        # 単一行objectだった旧契約は受けない。新契約の配列が無ければ欠落扱い。
+        raw_assessments = []
 
     eligible_ids = {atom.atom_id for atom in eligible_atoms}
     assessments: dict[int, _LineAssessment] = {}
@@ -527,11 +586,11 @@ def _accept_lines(
     atom_by_id: dict[str, HaikuSourceAtom],
     already_used: set[str],
     frozen_lines: set[str],
-) -> tuple[dict[int, _LineAssessment], set[int]]:
+) -> tuple[dict[int, _LineAssessment], dict[int, tuple[str, ...]]]:
     accepted: dict[int, _LineAssessment] = {}
-    failed: set[int] = set()
+    failed: dict[int, tuple[str, ...]] = {}
     used = set(already_used)
-    seen_lines = set(frozen_lines)
+    seen_lines = {_candidate_signature(line) for line in frozen_lines}
     for line_index in sorted(line_indices):
         line = lines[line_index]
         assessment = assessments.get(line_index)
@@ -556,36 +615,43 @@ def _accept_lines(
                 summarize_for_log(correction.corrected),
                 correction.source_atom_id,
             )
-        valid = (
-            assessment is not None
-            and assessment.meaning_retained
-            and assessment.natural_japanese
-            and is_haiku_line_usable(line, line_index, details)
-            and line not in seen_lines
-            and not used.intersection(assessment.atom_ids)
-        )
-        if not valid:
-            failed.add(line_index)
+        reasons: list[str] = []
+        if assessment is None:
+            reasons.append("grounding_missing")
+        else:
+            if not assessment.meaning_retained:
+                reasons.append("meaning_not_retained")
+            if not assessment.natural_japanese:
+                reasons.append("unnatural_japanese")
+            if used.intersection(_reservation_ids(assessment.atom_ids, atom_by_id)):
+                reasons.append("source_reused")
+        reasons.extend(haiku_line_failure_reasons(line, line_index, details))
+        signature = _candidate_signature(line)
+        if not signature or signature in seen_lines:
+            reasons.append("duplicate_line")
+        if reasons:
+            failed[line_index] = tuple(dict.fromkeys(reasons))
             continue
         # 行順で先に合格した材料を予約し、後ろの重複行を再生成へ回す。
         accepted[line_index] = assessment
-        used.update(assessment.atom_ids)
-        seen_lines.add(line)
+        used.update(_reservation_ids(assessment.atom_ids, atom_by_id))
+        seen_lines.add(signature)
     return accepted, failed
 
 
-def _expand_failed_slot_indices(
-    failed_line_indices: set[int],
+def _expand_failure_reasons(
+    failures: dict[int, tuple[str, ...]],
     slot_groups: tuple[tuple[int, ...], ...],
-) -> set[int]:
+) -> dict[int, tuple[str, ...]]:
     """一行の不合格を、その行が属する生成スロット全体へ広げる。"""
 
-    return {
-        line_index
-        for group in slot_groups
-        if failed_line_indices.intersection(group)
-        for line_index in group
-    }
+    expanded: dict[int, tuple[str, ...]] = {}
+    for group in slot_groups:
+        if not set(group).intersection(failures):
+            continue
+        for line_index in group:
+            expanded[line_index] = failures.get(line_index, ("slot_dependency",))
+    return expanded
 
 
 def _regenerate_failed_lines(
@@ -594,6 +660,7 @@ def _regenerate_failed_lines(
     details: dict[str, object],
     lines: list[str],
     failed_indices: set[int],
+    failure_reasons: dict[int, tuple[str, ...]],
     remaining_atoms: tuple[HaikuSourceAtom, ...],
     max_tokens: int | None,
 ) -> dict[int, str]:
@@ -622,6 +689,7 @@ def _regenerate_failed_lines(
                         if sound_count > target + 1
                         else "within_range"
                     ),
+                    "failure_reasons": list(failure_reasons.get(index, ())),
                 }
             )
         current_lines.append(row)
@@ -658,6 +726,48 @@ def _regenerate_failed_lines(
     if set(regenerated) != failed_indices:
         return {}
     return regenerated
+
+
+def _candidate_signature(text: str) -> str:
+    """空白・句読点・カナ種だけが違う候補を同一として扱う。"""
+
+    normalized = unicodedata.normalize("NFKC", str(text or "")).casefold()
+    chars: list[str] = []
+    for char in normalized:
+        code = ord(char)
+        if 0x30A1 <= code <= 0x30F6:
+            char = chr(code - 0x60)
+        if char.isalnum() or "ぁ" <= char <= "ゖ" or "一" <= char <= "鿿":
+            chars.append(char)
+    return "".join(chars)
+
+
+def _duplicate_line_failures(lines: list[str]) -> dict[int, tuple[str, ...]]:
+    seen: set[str] = set()
+    failures: dict[int, tuple[str, ...]] = {}
+    for line_index, line in enumerate(lines):
+        signature = _candidate_signature(line)
+        if not signature or signature in seen:
+            failures[line_index] = ("duplicate_line",)
+        else:
+            seen.add(signature)
+    return failures
+
+
+def _atom_reservation_ids(atom: HaikuSourceAtom) -> set[str]:
+    return set(atom.basis_atom_ids or (atom.atom_id,))
+
+
+def _reservation_ids(
+    atom_ids: Any,
+    atom_by_id: dict[str, HaikuSourceAtom],
+) -> set[str]:
+    reserved: set[str] = set()
+    for atom_id in atom_ids:
+        atom = atom_by_id.get(atom_id)
+        if atom is not None:
+            reserved.update(_atom_reservation_ids(atom))
+    return reserved
 
 
 def _line_source_records(

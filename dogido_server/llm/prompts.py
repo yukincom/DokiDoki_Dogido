@@ -30,6 +30,7 @@ from .haiku_prompts import (
     build_haiku_irony_messages,
     build_haiku_line_grounding_messages,
     build_haiku_line_regeneration_messages,
+    build_haiku_preface_grounding_messages,
     build_haiku_scene_messages,
     build_haiku_workshop_material_pick_messages,
 )
@@ -72,6 +73,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "haiku_draft": _build_haiku_draft_messages,
         "haiku_line_grounding": _build_haiku_line_grounding_messages,
         "haiku_line_regeneration": _build_haiku_line_regeneration_messages,
+        "haiku_preface_grounding": _build_haiku_preface_grounding_messages,
         "haiku_irony": _build_haiku_irony_messages,
         "haiku_scene": _build_haiku_scene_messages,
         "haiku_workshop_material_pick": _build_haiku_workshop_material_pick_messages,
@@ -115,6 +117,10 @@ def _build_haiku_line_grounding_messages(request: Any) -> list[dict[str, str]]:
 
 def _build_haiku_line_regeneration_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_line_regeneration_messages(request.details)
+
+
+def _build_haiku_preface_grounding_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_preface_grounding_messages(request.details)
 
 
 def _build_haiku_irony_messages(request: Any) -> list[dict[str, str]]:
