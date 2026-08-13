@@ -169,13 +169,13 @@ soft workshop 方針は後半をすでに押さえている。
 
 ---
 
-## 6. 現状スナップショット（2026-08-12）
+## 6. 現状スナップショット（2026-08-13）
 
 | 領域 | 状態 |
 |---|---|
 | workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・OS／端末内AI優先の限定 intent/findings 抽出＋chat fallback。praise は critique 保存のみ） |
 | H6 固定語 materials 突合 | **撤回** |
-| 発句 source atom 品質ゲート | 済（原文snapshot・行別出典・出典確定後の一意なカタログ名かな訂正・不合格行のみ最大2回再生成・fail-closed） |
+| 発句 source atom 品質ゲート | 済（原文snapshot・行別出典・一意なカタログ名かな訂正・4生成方式を同じ検査器で固定比較・不合格スロットを実測中最大6回再生成・fail-closed） |
 | 雑談 P1〜P4 | 済（P5 任意） |
 | 観測ギャップ・水辺など | 継続課題（完成度の本丸） |
 | 修正案 1 本 / OS AI・chat fallback 実ログ評価 / Phase E | 修正案まで済。実ログ評価・整理は任意・未 |

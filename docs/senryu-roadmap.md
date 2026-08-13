@@ -1,6 +1,6 @@
 # 川柳・Senryu ロードマップ
 
-**更新:** 2026-07-16  
+**更新:** 2026-08-13
 **ブランチ文脈:** `Senryu-RAG` 以降の対話・カタログ・記憶まわり
 
 関連:
@@ -27,7 +27,7 @@
 | 詩語 | 主役平和 mob の `poetic_lines`（role 中心）。`haiku_tags` と二重にしない |
 | 読み | エントリ `reading` ＋ `catalog_corrections.jsonl` オーバーレイ（例: 草地→くさち） |
 | 発句フロー | irony → scene → haiku。状態機械優先は維持 |
-| 発話前品質ゲート | 行ごとの source atom 照合・重複排除・不合格行だけ最大2回再生成。詳細は [川柳アーキテクチャ](haiku-architecture.md) |
+| 発話前品質ゲート | 行ごとの source atom 照合・重複排除。共通検査のまま4生成方式を固定比較し、不合格スロットを実測中最大6回再生成。詳細は [川柳アーキテクチャ](haiku-architecture.md) |
 
 ### 記憶・フィードバック
 

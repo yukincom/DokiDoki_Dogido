@@ -111,7 +111,7 @@ def make_snapshot(
 class HaikuStateMachineTest(unittest.TestCase):
     def setUp(self) -> None:
         # ルール検証用テストは旧来のタイミング設計（300秒で発句）を維持する。
-        # 実運用デフォルト（10分周期 + 30秒静寂）は
+        # 実測中デフォルト（3分周期 + 30秒静寂）は
         # test_haiku_emits_on_interval_after_quiet_window で検証する。
         self.settings = Settings(
             llm_enabled=False,
@@ -122,29 +122,36 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.machine = DogidoStateMachine(self.settings)
         self.base_time = datetime(2026, 5, 31, 12, 0, 0, tzinfo=timezone.utc)
 
+    def test_temporary_generation_experiment_defaults_are_explicit(self) -> None:
+        settings = Settings(_env_file=None)
+
+        self.assertEqual(settings.haiku_interval_ms, 180000)
+        self.assertEqual(settings.haiku_generation_strategy, "three_slot")
+        self.assertEqual(settings.haiku_max_regeneration_rounds, 6)
+
     def test_haiku_emits_on_interval_after_quiet_window(self) -> None:
         machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
 
-        # 初回イベントから10分周期が始まる
+        # 初回イベントから一時設定の3分周期が始まる
         self.assertEqual(machine.process(make_snapshot(self.base_time)).actions, [])
         self.assertEqual(
-            machine.process(make_snapshot(self.base_time + timedelta(seconds=599))).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=179))).actions,
             [],
         )
 
-        # 10分経過 + 30秒以上の静けさ → 発句
-        emitted = machine.process(make_snapshot(self.base_time + timedelta(seconds=601))).actions
+        # 3分経過 + 30秒以上の静けさ → 発句
+        emitted = machine.process(make_snapshot(self.base_time + timedelta(seconds=181))).actions
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
         # 詠んだ直後は次の周期まで出ない
         self.assertEqual(
-            machine.process(make_snapshot(self.base_time + timedelta(seconds=700))).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=280))).actions,
             [],
         )
 
         # 次の周期で再び詠む
-        second = machine.process(make_snapshot(self.base_time + timedelta(seconds=1202))).actions
+        second = machine.process(make_snapshot(self.base_time + timedelta(seconds=362))).actions
         self.assertEqual(len(second), 1)
         self.assertEqual(second[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
@@ -446,9 +453,13 @@ class HaikuStateMachineTest(unittest.TestCase):
         draft = fake_llm.structured_requests[2]
         grounding = fake_llm.structured_requests[3]
         self.assertEqual((draft.kind, draft.route, draft.temperature), ("haiku_draft", "haiku", 0.60))
+        self.assertEqual(draft.details["generation_strategy"], "three_slot")
+        self.assertEqual(draft.details["generation_slot_groups"], [[0], [1], [2]])
         self.assertEqual((grounding.kind, grounding.route), ("haiku_line_grounding", "chat"))
         assert machine.emitted_haiku is not None
         self.assertEqual(len(machine.emitted_haiku.materials["line_sources"]), 3)
+        self.assertEqual(machine.emitted_haiku.materials["generation_strategy"], "three_slot")
+        self.assertEqual(machine.emitted_haiku.materials["regeneration_rounds"], 0)
         self.assertTrue(machine.emitted_haiku.materials["catalog_sources"])
 
     def test_llm_haiku_emits_preface_before_generation(self) -> None:

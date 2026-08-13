@@ -261,10 +261,14 @@ class HaikuMixin:
                 source_atoms=source_atoms,
                 fallback_text=llm_failed_text,
                 max_tokens=self.settings.haiku_structured_max_tokens,
+                generation_strategy=self.settings.haiku_generation_strategy,
+                max_regeneration_rounds=self.settings.haiku_max_regeneration_rounds,
             )
             line = generated.text
             if generated.accepted and self._pending_haiku_materials is not None:
                 self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
+                self._pending_haiku_materials["generation_strategy"] = generated.generation_strategy
+                self._pending_haiku_materials["regeneration_rounds"] = generated.regeneration_rounds
             if line == llm_failed_text:
                 LOGGER.warning(
                     "haiku_decision result=fallback reason=llm_rejected text=%s",
@@ -412,10 +416,14 @@ class HaikuMixin:
             source_atoms=context.source_atoms,
             fallback_text=llm_failed_text,
             max_tokens=self.settings.haiku_structured_max_tokens,
+            generation_strategy=self.settings.haiku_generation_strategy,
+            max_regeneration_rounds=self.settings.haiku_max_regeneration_rounds,
         )
         line = generated.text
         if generated.accepted and self._pending_haiku_materials is not None:
             self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
+            self._pending_haiku_materials["generation_strategy"] = generated.generation_strategy
+            self._pending_haiku_materials["regeneration_rounds"] = generated.regeneration_rounds
         if line == llm_failed_text:
             LOGGER.warning(
                 "haiku_decision result=fallback reason=llm_rejected text=%s",

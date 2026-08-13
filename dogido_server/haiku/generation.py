@@ -23,7 +23,19 @@ LOGGER = logging.getLogger("uvicorn.error")
 INITIAL_TEMPERATURE = 0.60
 REGENERATION_TEMPERATURE = 0.30
 GROUNDING_TEMPERATURE = 0.0
-MAX_REGENERATION_ROUNDS = 2
+DEFAULT_MAX_REGENERATION_ROUNDS = 6
+MAX_REGENERATION_ROUNDS_LIMIT = 8
+
+GENERATION_SLOT_GROUPS: dict[str, tuple[tuple[int, ...], ...]] = {
+    # 一句全体を一単位として扱う。どこか一行が落ちれば三行とも作り直す。
+    "whole_poem": ((0, 1, 2),),
+    # 現行に近い方式。合格した行は個別に固定する。
+    "three_slot": ((0,), (1,), (2,)),
+    # 上五で入り、下二行を一まとまりとして展開する。
+    "one_plus_two": ((0,), (1, 2)),
+    # 上二行で場面を作り、下五を独立した着地にする。
+    "two_plus_one": ((0, 1), (2,)),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +44,8 @@ class GroundedHaikuResult:
     accepted: bool
     line_sources: tuple[dict[str, object], ...] = ()
     failure_reason: str | None = None
+    generation_strategy: str = "three_slot"
+    regeneration_rounds: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,18 +71,49 @@ def generate_grounded_haiku(
     source_atoms: tuple[HaikuSourceAtom, ...],
     fallback_text: str,
     max_tokens: int | None,
+    generation_strategy: str = "three_slot",
+    max_regeneration_rounds: int = DEFAULT_MAX_REGENERATION_ROUNDS,
 ) -> GroundedHaikuResult:
-    """三行を生成し、合格行を固定したまま不合格行だけを最大2回直す。"""
+    """共通検査を通し、選択中のスロット単位で不合格箇所だけを直す。"""
+
+    slot_groups = GENERATION_SLOT_GROUPS.get(generation_strategy)
+    if slot_groups is None:
+        return _failed(
+            fallback_text,
+            "invalid_generation_strategy",
+            generation_strategy=generation_strategy,
+        )
+    regeneration_limit = max(
+        0,
+        min(int(max_regeneration_rounds), MAX_REGENERATION_ROUNDS_LIMIT),
+    )
 
     if llm is None:
-        return _failed(fallback_text, "llm_unavailable")
+        return _failed(
+            fallback_text,
+            "llm_unavailable",
+            generation_strategy=generation_strategy,
+        )
     if len(source_atoms) < 3:
         # 同じ材料を三行へ水増ししない。観測材料自体が薄い場合は静かに閉じる。
-        return _failed(fallback_text, "insufficient_source_atoms")
+        return _failed(
+            fallback_text,
+            "insufficient_source_atoms",
+            generation_strategy=generation_strategy,
+        )
 
     atom_by_id = {atom.atom_id: atom for atom in source_atoms}
     prompt_details = dict(details)
     prompt_details["source_atoms"] = [atom.to_prompt_dict() for atom in source_atoms]
+    prompt_details["generation_strategy"] = generation_strategy
+    prompt_details["generation_slot_groups"] = [list(group) for group in slot_groups]
+
+    LOGGER.warning(
+        "haiku_grounding result=start strategy=%s max_regeneration_rounds=%s slots=%s",
+        generation_strategy,
+        regeneration_limit,
+        [list(group) for group in slot_groups],
+    )
 
     draft_payload = llm.generate_structured_json(
         StructuredGenerationRequest(
@@ -82,11 +127,15 @@ def generate_grounded_haiku(
     )
     lines = _draft_lines(draft_payload)
     if lines is None:
-        return _failed(fallback_text, "invalid_draft")
+        return _failed(
+            fallback_text,
+            "invalid_draft",
+            generation_strategy=generation_strategy,
+        )
 
     accepted: dict[int, _LineAssessment] = {}
     failed_indices = {0, 1, 2}
-    for round_index in range(MAX_REGENERATION_ROUNDS + 1):
+    for round_index in range(regeneration_limit + 1):
         used_atom_ids = {
             atom_id
             for assessment in accepted.values()
@@ -101,7 +150,7 @@ def generate_grounded_haiku(
             eligible_atoms=eligible_atoms,
             max_tokens=max_tokens,
         )
-        newly_accepted, failed_indices = _accept_lines(
+        tentatively_accepted, line_failures = _accept_lines(
             lines,
             line_indices=failed_indices,
             assessments=assessments,
@@ -110,7 +159,23 @@ def generate_grounded_haiku(
             already_used=used_atom_ids,
             frozen_lines={lines[index] for index in accepted},
         )
+        # 一行だけが落ちても、その行と意味展開を共有するスロット全体を直す。
+        # これにより4方式は検査条件を変えず、探索単位だけを比較できる。
+        failed_indices = _expand_failed_slot_indices(line_failures, slot_groups)
+        newly_accepted = {
+            index: assessment
+            for index, assessment in tentatively_accepted.items()
+            if index not in failed_indices
+        }
         accepted.update(newly_accepted)
+
+        LOGGER.warning(
+            "haiku_grounding result=round strategy=%s round=%s accepted=%s failed=%s",
+            generation_strategy,
+            round_index,
+            sorted(accepted),
+            sorted(failed_indices),
+        )
 
         if not failed_indices:
             text = "\n".join(lines)
@@ -118,8 +183,10 @@ def generate_grounded_haiku(
                 text=text,
                 accepted=True,
                 line_sources=_line_source_records(lines, accepted, atom_by_id),
+                generation_strategy=generation_strategy,
+                regeneration_rounds=round_index,
             )
-        if round_index >= MAX_REGENERATION_ROUNDS:
+        if round_index >= regeneration_limit:
             break
 
         used_atom_ids = {
@@ -129,7 +196,12 @@ def generate_grounded_haiku(
         }
         remaining_atoms = tuple(atom for atom in source_atoms if atom.atom_id not in used_atom_ids)
         if len(remaining_atoms) < len(failed_indices):
-            return _failed(fallback_text, "insufficient_unused_atoms")
+            return _failed(
+                fallback_text,
+                "insufficient_unused_atoms",
+                generation_strategy=generation_strategy,
+                regeneration_rounds=round_index,
+            )
 
         regenerated = _regenerate_failed_lines(
             llm,
@@ -145,11 +217,19 @@ def generate_grounded_haiku(
                 lines[line_index] = text
 
     LOGGER.warning(
-        "haiku_grounding result=fallback reason=max_regeneration_rounds lines=%s failed=%s",
+        "haiku_grounding result=fallback reason=max_regeneration_rounds strategy=%s "
+        "rounds=%s lines=%s failed=%s",
+        generation_strategy,
+        regeneration_limit,
         summarize_for_log(" / ".join(lines)),
         sorted(failed_indices),
     )
-    return _failed(fallback_text, "max_regeneration_rounds")
+    return _failed(
+        fallback_text,
+        "max_regeneration_rounds",
+        generation_strategy=generation_strategy,
+        regeneration_rounds=regeneration_limit,
+    )
 
 
 def generate_workshop_revision(
@@ -494,6 +574,20 @@ def _accept_lines(
     return accepted, failed
 
 
+def _expand_failed_slot_indices(
+    failed_line_indices: set[int],
+    slot_groups: tuple[tuple[int, ...], ...],
+) -> set[int]:
+    """一行の不合格を、その行が属する生成スロット全体へ広げる。"""
+
+    return {
+        line_index
+        for group in slot_groups
+        if failed_line_indices.intersection(group)
+        for line_index in group
+    }
+
+
 def _regenerate_failed_lines(
     llm: LLMFrontend,
     *,
@@ -602,10 +696,23 @@ def _structured_accepted(payload: dict[str, Any] | None) -> bool:
     return status == "accepted"
 
 
-def _failed(fallback_text: str, reason: str) -> GroundedHaikuResult:
-    LOGGER.warning("haiku_grounding result=fallback reason=%s", reason)
+def _failed(
+    fallback_text: str,
+    reason: str,
+    *,
+    generation_strategy: str = "three_slot",
+    regeneration_rounds: int = 0,
+) -> GroundedHaikuResult:
+    LOGGER.warning(
+        "haiku_grounding result=fallback reason=%s strategy=%s rounds=%s",
+        reason,
+        generation_strategy,
+        regeneration_rounds,
+    )
     return GroundedHaikuResult(
         text=fallback_text,
         accepted=False,
         failure_reason=reason,
+        generation_strategy=generation_strategy,
+        regeneration_rounds=regeneration_rounds,
     )
