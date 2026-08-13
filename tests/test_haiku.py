@@ -22,7 +22,11 @@ from dogido_server.models import (
     WorldState,
 )
 from dogido_server.entry_catalog import mob_poetic_line, mob_poetic_tags
-from dogido_server.llm.haiku_prompts import build_haiku_draft_messages, build_haiku_irony_messages
+from dogido_server.llm.haiku_prompts import (
+    build_haiku_draft_messages,
+    build_haiku_irony_messages,
+    build_haiku_scene_messages,
+)
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.haiku.source_atoms import PrefaceClause
 from dogido_server.state_machine.haiku_context import SceneContext
@@ -763,7 +767,7 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertIn("haiku_irony", fake_llm.structured_kinds)
         self.assertIn("haiku_scene", fake_llm.structured_kinds)
 
-    def test_weak_scene_without_relation_uses_fallback_instead_of_llm(self) -> None:
+    def test_missing_scene_still_runs_grounded_generator(self) -> None:
         class FakeLLM:
             def __init__(self) -> None:
                 self.leaf_requests: list[LeafGenerationRequest] = []
@@ -781,7 +785,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return {"found": False}
 
         fake_llm = FakeLLM()
-        machine = DogidoStateMachine(self.settings, llm=fake_llm)
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        machine = DogidoStateMachine(settings, llm=fake_llm)
         machine.process(
             make_snapshot(
                 self.base_time,
@@ -792,7 +802,7 @@ class HaikuStateMachineTest(unittest.TestCase):
                 inventory={},
             )
         )
-        emitted = machine.process(
+        preface = machine.process(
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="forest",
@@ -802,20 +812,46 @@ class HaikuStateMachineTest(unittest.TestCase):
                 inventory={},
             )
         ).actions
+        emitted = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=302),
+                biome="forest",
+                time_phase="day",
+                player_y=64,
+                held_item="minecraft:air",
+                inventory={},
+            )
+        ).actions
 
-        self.assertEqual(len(fake_llm.structured_requests), 2)
+        self.assertEqual([action.text for action in preface], ["なんか浮かんできたわ。"])
+        self.assertEqual(
+            [request.kind for request in fake_llm.structured_requests],
+            ["haiku_irony", "haiku_scene", "haiku_draft"],
+        )
         self.assertEqual(fake_llm.leaf_requests, [])
-        self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
+        self.assertEqual(emitted[0].text, "まとまらんかった。。。")
+        self.assertIsNone(machine.emitted_haiku)
 
-    def test_weak_scene_logs_fallback_decision_and_emitted_haiku(self) -> None:
+    def test_invalid_scene_contract_logs_rejection_and_does_not_use_catalog_fallback(self) -> None:
         class FakeLLM:
             def preload(self) -> bool:
                 return False
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_scene":
+                    return {
+                        "text": "昼の森に光が落ちる",
+                        "basis_atom_ids": ["observation:observed:biome"],
+                    }
                 return {"found": False}
 
-        machine = DogidoStateMachine(self.settings, llm=FakeLLM())
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        machine = DogidoStateMachine(settings, llm=FakeLLM())
         machine.process(
             make_snapshot(
                 self.base_time,
@@ -828,7 +864,7 @@ class HaikuStateMachineTest(unittest.TestCase):
         )
 
         with self.assertLogs("uvicorn.error", level="WARNING") as captured:
-            emitted = machine.process(
+            machine.process(
                 make_snapshot(
                     self.base_time + timedelta(seconds=301),
                     biome="forest",
@@ -837,20 +873,37 @@ class HaikuStateMachineTest(unittest.TestCase):
                     held_item="minecraft:air",
                     inventory={},
                 )
+            )
+            emitted = machine.process(
+                make_snapshot(
+                    self.base_time + timedelta(seconds=302),
+                    biome="forest",
+                    time_phase="day",
+                    player_y=64,
+                    held_item="minecraft:air",
+                    inventory={},
+                )
             ).actions
 
-        self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
-        self.assertTrue(
-            any("haiku_decision result=fallback reason=weak_scene" in line for line in captured.output)
-        )
+        self.assertEqual(emitted[0].text, "まとまらんかった。。。")
+        self.assertIsNone(machine.emitted_haiku)
         self.assertTrue(
             any(
-                "haiku_emit result=emitted text=ここで一句。" in line
-                and "ふみだして" in line
-                and "葉の香り" in line
+                "haiku_scene result=rejected reason=invalid_contract" in line
                 for line in captured.output
             )
         )
+        self.assertTrue(
+            any(
+                "haiku_grounding result=fallback reason=invalid_draft" in line
+                for line in captured.output
+            )
+        )
+        self.assertTrue(
+            any("haiku_emit result=failed_no_pin" in line for line in captured.output)
+        )
+        self.assertFalse(any("reason=weak_scene" in line for line in captured.output))
+        self.assertFalse(any("ふみだして" in line for line in captured.output))
 
     def test_invalid_structured_haiku_uses_llm_failed_line_instead_of_catalog_fallback(self) -> None:
         class FakeLLM:
@@ -1293,11 +1346,14 @@ class HaikuStateMachineTest(unittest.TestCase):
         details = self.machine._haiku_context(event).prompt_details()
         haiku_user = build_haiku_draft_messages(details)[1]["content"]
         irony_user = build_haiku_irony_messages(details)[1]["content"]
+        scene_user = build_haiku_scene_messages(details)[1]["content"]
 
         self.assertIn("ちょっとした知識", haiku_user)
         self.assertIn("雪のタイガ", haiku_user)
         self.assertIn("いまの材料", irony_user)
         self.assertIn("雪のタイガ", irony_user)
+        self.assertIn("最上位には必ず found と clauses", scene_user)
+        self.assertIn("ID文字列に [ ] を含めない", scene_user)
 
     def test_poetic_lines_for_passive_mobs_and_dedupe_tags(self) -> None:
         event = make_snapshot(

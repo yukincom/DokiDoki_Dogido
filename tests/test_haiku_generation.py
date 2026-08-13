@@ -503,6 +503,60 @@ class GroundedGenerationTest(unittest.TestCase):
                 "haiku_workshop_revision",
                 "haiku_line_grounding",
                 "haiku_workshop_revision",
+            ],
+        )
+        retry = llm.requests[2]
+        self.assertEqual(
+            retry.details["edit_retry_feedback"]["line_failures"][0]["failure_reasons"],
+            ["meaning_not_retained"],
+        )
+        retry_prompt = build_messages(retry)[1]["content"]
+        self.assertIn("meaning_not_retained", retry_prompt)
+        self.assertIn("あめつよくふる", retry_prompt)
+
+    def test_workshop_revision_uses_failure_feedback_to_accept_a_different_retry(self) -> None:
+        llm = ScriptedLLM(
+            [
+                {"lines": [{
+                    "line_index": 1,
+                    "expected_text": "ひつじがあるく",
+                    "replacement_text": "あめつよくふる",
+                    "atom_ids": ["observation:test:1"],
+                }]},
+                grounding((1, "observation:test:1", False, True)),
+                {"lines": [{
+                    "line_index": 1,
+                    "expected_text": "ひつじがあるく",
+                    "replacement_text": "あめふりつづく",
+                    "atom_ids": ["observation:test:3"],
+                }]},
+                grounding((1, "observation:test:3", True, True)),
+            ]
+        )
+
+        result = generate_workshop_revision(
+            llm,
+            original_text="はるのかぜ\nひつじがあるく\nよるのつき",
+            target_indices=(1,),
+            findings=(),
+            source_atoms=source_atoms(),
+            original_line_sources={
+                0: ("observation:test:0",),
+                1: ("observation:test:1",),
+                2: ("observation:test:2",),
+            },
+            details={},
+            max_tokens=192,
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.text, "はるのかぜ\nあめふりつづく\nよるのつき")
+        self.assertEqual(
+            [request.kind for request in llm.requests],
+            [
+                "haiku_workshop_revision",
+                "haiku_line_grounding",
+                "haiku_workshop_revision",
                 "haiku_line_grounding",
             ],
         )
@@ -610,6 +664,10 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual(
             [request.kind for request in llm.requests],
             ["haiku_workshop_revision", "haiku_workshop_revision"],
+        )
+        self.assertEqual(
+            llm.requests[1].details["edit_retry_feedback"]["line_failures"][0]["failure_reasons"],
+            ["expected_text_mismatch"],
         )
 
     def test_saved_material_sources_are_validated_against_the_current_verse(self) -> None:

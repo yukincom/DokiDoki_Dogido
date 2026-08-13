@@ -8,6 +8,7 @@ import httpx
 
 from dogido_server.config import Settings
 from dogido_server.llm import DogidoLLM, LeafGenerationRequest, StructuredGenerationRequest
+from dogido_server.llm.router import DogidoLLMRouter
 
 
 class LLMTests(unittest.TestCase):
@@ -20,6 +21,12 @@ class LLMTests(unittest.TestCase):
         cleaned = self.llm._clean_output(text)
 
         self.assertEqual(cleaned, "あー……こわかった……")
+
+    def test_router_reports_disabled_configuration(self) -> None:
+        router = DogidoLLMRouter(Settings(audio_enabled=False, llm_enabled=False))
+
+        self.assertFalse(router.enabled())
+        self.assertFalse(router.route_enabled("haiku"))
 
     def test_clean_output_prefers_final_japanese_line_after_english_reasoning(self) -> None:
         text = (

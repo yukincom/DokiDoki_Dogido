@@ -1050,7 +1050,11 @@ class DogidoService:
                     repair_requested=True,
                     findings=workshop_findings_from_records(workshop.last_findings),
                 )
-            reply, repair_path = self._workshop_revision_reply(workshop, repair_analysis)
+            reply, repair_path = self._workshop_revision_reply(
+                workshop,
+                repair_analysis,
+                semantic_text,
+            )
             LOGGER.warning(
                 "haiku_workshop_repair session_id=%s path=%s targets=%s accepted=%s",
                 session.session_id,
@@ -1145,6 +1149,7 @@ class DogidoService:
         self,
         workshop: RecentHaikuWorkshop,
         analysis: WorkshopAnalysis,
+        player_text: str,
     ) -> tuple[str, str]:
         """大きい haiku route に対象行だけを直させ、未保存の案として保持する。"""
 
@@ -1179,7 +1184,19 @@ class DogidoService:
         workshop.pending_revision_base_text = result.base_text
         workshop.pending_revision_edits = [edit.to_record() for edit in result.edits]
         workshop.pending_revision_edit_contract = result.edit_contract
-        return f"こんなんどうや。\n{result.text}\nよければ『その案で』って言ってな。", "proposed"
+        # 修正句と採用条件はコードが固定し、対話AIには差し出し方だけを任せる。
+        introduction, introduction_path = self._collaborator_workshop_reply(
+            workshop,
+            player_text,
+            kind="request_repair",
+            analysis=analysis,
+            repair_state="proposed",
+            proposed_revision=result.text,
+        )
+        return (
+            f"{introduction}\n{result.text}\nよければ『その案で』って言ってな。",
+            f"proposed_{introduction_path}",
+        )
 
     def _ask_meaning_workshop_reply(
         self,
@@ -1217,10 +1234,16 @@ class DogidoService:
         *,
         kind: str,
         analysis: WorkshopAnalysis | None = None,
+        repair_state: str = "not_run",
+        proposed_revision: str | None = None,
     ) -> tuple[str, str]:
         """共同編集者モード leaf。実行結果だけを受けて自由に一言返す。"""
         template_kind = kind if kind != "soft_default" else "soft_default"
-        fallback = render_workshop_reply(template_kind, workshop, player_text=player_text)
+        fallback = (
+            "こんなんどうや。"
+            if repair_state == "proposed"
+            else render_workshop_reply(template_kind, workshop, player_text=player_text)
+        )
         verse = workshop.display_line() or ""
         materials = materials_speech_line(workshop)
         details = {
@@ -1232,7 +1255,8 @@ class DogidoService:
             "workshop_findings": [
                 finding.to_dict() for finding in (analysis.findings if analysis else ())
             ],
-            "repair_state": "not_run",
+            "repair_state": repair_state,
+            "proposed_revision": proposed_revision,
         }
         try:
             text = self.llm.generate_leaf_text(

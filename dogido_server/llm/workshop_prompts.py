@@ -82,6 +82,12 @@ def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[
             parts.append(f"行={line_index} 断片={fragment or '不明'} 問題={problem or 'other'}")
         findings_text = " / ".join(parts) or "なし"
     repair_state = detail_str(details, "repair_state") or "not_run"
+    proposed_revision = detail_str(details, "proposed_revision")
+    proposed_line = (
+        f"コード検証済みの修正案:\n{proposed_revision}\n"
+        if repair_state == "proposed" and proposed_revision
+        else ""
+    )
 
     materials_line = f"狙いの一言: {materials}\n" if materials else "狙いの一言: （特になし）\n"
     user_prompt = (
@@ -93,6 +99,7 @@ def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[
         "- 字余り・響き・読み・狙いの話をしてよい\n"
         "- プレイヤーが誤りを指摘したら、まず素直に受け止める\n"
         "- 修正案が確定しているときは、弁解せず短く紹介する\n"
+        "- repair_state=proposed のときは、下の修正案を作り直さず、差し出す一言だけを話す\n"
         "- 1文だけ。だいたい12〜42字\n"
         "\n"
         "【やらない】\n"
@@ -102,6 +109,7 @@ def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[
         "- 内部キー名（biome や ID）を口にしない\n"
         "- 元の句を好きだと言って守る、狙いを持ち出して反論する\n"
         "- 実際には直していないのに『直した』『次は必ず直す』と約束する\n"
+        "- 修正案の句本文を復唱する、別案へ書き換える、保存済みだと言う\n"
         "\n"
         "/no_think\n"
         "【材料】\n"
@@ -111,6 +119,7 @@ def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[
         f"取り込み種別: {intent_kind}\n"
         f"コード確認済みの指摘: {findings_text}\n"
         f"修正処理: {repair_state}\n"
+        f"{proposed_line}"
         "\n"
         "句の言葉の話として、セリフ1文だけ返す。"
     )
@@ -141,6 +150,7 @@ def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[d
         for row in atoms
         if isinstance(row, dict)
     ) if isinstance(atoms, list) else "なし"
+    retry_block = _workshop_edit_retry_block(details)
     user_prompt = (
         "川柳の固定行は一字も変えず、指定された行だけを直す。\n"
         "プレイヤーの指摘を優先し、元の表現を弁護しない。\n"
@@ -153,6 +163,7 @@ def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[d
         f"【修正対象】 {target_text}\n"
         f"【確認済みの指摘】\n{finding_lines}\n"
         f"【使える原文材料】\n{atom_lines}\n\n"
+        f"{retry_block}"
         "返答はJSONオブジェクト1つだけ。"
         "形: {\"lines\": [{\"line_index\": 1, "
         "\"expected_text\": \"もとのななおん\", "
@@ -163,3 +174,76 @@ def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[d
         {"role": "system", "content": "あなたは日本語川柳の共同編集者。返答はJSONのみ。"},
         {"role": "user", "content": user_prompt},
     ]
+
+
+_EDIT_FAILURE_GUIDANCE = {
+    "structured_rejected": "JSON契約として受理できなかった",
+    "invalid_edit_rows": "lines が配列ではなかった",
+    "invalid_edit_row": "編集行がobjectではなかった",
+    "unexpected_line_index": "修正対象外または不正な行番号を返した",
+    "duplicate_target_edit": "同じ対象行を二度返した",
+    "expected_text_mismatch": "expected_text が現在の元行と完全一致しなかった",
+    "empty_replacement": "replacement_text が空だった",
+    "unchanged_replacement": "元行と実質同じ案だった",
+    "duplicate_fixed_line": "固定行と実質同じ案だった",
+    "invalid_atom_ids": "atom_ids が空または文字列配列ではなかった",
+    "unknown_atom_id": "候補外のatom_idを使った",
+    "duplicate_atom_id": "同じatom_idを重ねた",
+    "source_reused": "固定行または別の修正行と材料が重複した",
+    "missing_target_edit": "必要な対象行の編集が欠けた",
+    "duplicate_candidate": "前に不合格になった案と実質同じだった",
+    "grounding_missing": "出典との意味照合結果が欠けた",
+    "meaning_not_retained": "選んだ材料の意味が行に残っていなかった",
+    "unnatural_japanese": "自然な現代日本語として通らなかった",
+    "duplicate_line": "別の行と実質同じだった",
+    "meter_too_short": "目標音数より短すぎた",
+    "meter_too_long": "目標音数より長すぎた",
+    "invalid_script": "かな以外の字や不正な表記を含んだ",
+    "gibberish_sequence": "意味のないかな並びと判定された",
+    "hard_forbidden_term": "発句時のhard禁止語を含んだ",
+}
+
+
+def _workshop_edit_retry_block(details: dict[str, object]) -> str:
+    """前の案を盲目的に繰り返さず、確定済み失敗だけを editor へ返す。"""
+
+    feedback = details.get("edit_retry_feedback")
+    if not isinstance(feedback, dict):
+        return ""
+    lines: list[str] = ["【前の修正案が不合格だった理由】"]
+    global_reasons = feedback.get("global_failure_reasons")
+    if isinstance(global_reasons, list):
+        for reason in global_reasons:
+            code = str(reason or "").strip()
+            if code:
+                lines.append(f"- 全体: {code}（{_EDIT_FAILURE_GUIDANCE.get(code, '契約違反')}）")
+    line_failures = feedback.get("line_failures")
+    if isinstance(line_failures, list):
+        for row in line_failures:
+            if not isinstance(row, dict):
+                continue
+            index = row.get("line_index")
+            raw_reasons = row.get("failure_reasons")
+            if not isinstance(raw_reasons, list):
+                continue
+            rendered = "、".join(
+                f"{code}（{_EDIT_FAILURE_GUIDANCE.get(code, '検査不合格')}）"
+                for code in (str(value or "").strip() for value in raw_reasons)
+                if code
+            )
+            if rendered:
+                lines.append(f"- 行{index}: {rendered}")
+    rejected = details.get("rejected_replacements")
+    rejected_lines: list[str] = []
+    if isinstance(rejected, list):
+        for row in rejected:
+            if not isinstance(row, dict):
+                continue
+            text = str(row.get("replacement_text") or "").strip()
+            if text:
+                rejected_lines.append(f"- 行{row.get('line_index')}: {text}")
+    if rejected_lines:
+        lines.append("【繰り返してはいけない不合格案】")
+        lines.extend(rejected_lines)
+    lines.append("失敗理由だけを直し、前の案の表記替えではない別案を返す。")
+    return "\n".join(lines) + "\n\n"
