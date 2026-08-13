@@ -570,6 +570,8 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         f"{place_nudge}\n"
         "材料の意味を変えず、あとで五七五に落としやすい具体的なことばで。\n"
         "実際に口にする文を1〜3節へ分け、各節に根拠となる [atom_id] を付ける。\n"
+        "最上位には必ず found と clauses を置く。text や basis_atom_ids を最上位へ置かない。\n"
+        "basis_atom_ids は一覧の角括弧の内側だけを正確にコピーし、ID文字列に [ ] を含めない。\n"
         "factual は根拠atomが明示する事実の言い換えだけ。"
         "interpretive は根拠同士の印象・取り合わせだけで、新しい事実を断言しない。\n"
         "『プレイヤー』『Y座標』『確率』などのメタ語は節に書かない。\n"

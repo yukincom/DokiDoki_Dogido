@@ -722,11 +722,15 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
         class RepairLLM:
             def __init__(self) -> None:
                 self.requests = []
+                self.leaf_requests = []
 
             def preload(self) -> bool:
                 return False
 
             def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                self.leaf_requests.append(request)
+                if request.kind == "haiku_workshop_reply":
+                    return "二行目を、雨の場面に寄せてみたで。"
                 return request.fallback_text
 
             def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
@@ -843,11 +847,23 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             session.machine.player_input = route_player_input("そこ直して")
             proposed = service._haiku_workshop_actions(session, event(2, "そこ直して"))
             self.assertIn("あめつよくふる", proposed[0].text or "")
+            self.assertIn("雨の場面に寄せて", proposed[0].text or "")
             assert session.haiku_workshop is not None
             self.assertEqual(session.haiku_workshop.pending_revision, "はるのかぜ\nあめつよくふる\nよるのつき")
             self.assertEqual(service.memory.list_haiku_revisions(), [])
             revision_request = next(request for request in llm.requests if request.kind == "haiku_workshop_revision")
             self.assertEqual(revision_request.route, "haiku")
+            proposal_leaf = next(request for request in llm.leaf_requests if request.kind == "haiku_workshop_reply")
+            self.assertEqual(proposal_leaf.details["repair_state"], "proposed")
+            self.assertEqual(
+                proposal_leaf.details["proposed_revision"],
+                "はるのかぜ\nあめつよくふる\nよるのつき",
+            )
+            from dogido_server.llm.prompts import build_messages
+
+            proposal_prompt = build_messages(proposal_leaf)[1]["content"]
+            self.assertIn("コード検証済みの修正案", proposal_prompt)
+            self.assertIn("句本文を復唱", proposal_prompt)
 
             session.machine.player_input = route_player_input("その案で")
             saved = service._haiku_workshop_actions(session, event(3, "その案で"))

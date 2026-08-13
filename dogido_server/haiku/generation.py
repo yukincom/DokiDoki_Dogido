@@ -16,7 +16,6 @@ from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm.haiku import (
     count_japanese_sounds,
     haiku_line_failure_reasons,
-    is_haiku_line_usable,
 )
 from dogido_server.llm.sanitize import summarize_for_log
 
@@ -91,6 +90,17 @@ class _LineAssessment:
     atom_ids: tuple[str, ...]
     meaning_retained: bool
     natural_japanese: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _WorkshopEditValidation:
+    """編集AIの差分を、意味評価へ渡す前にコードで検査した結果。"""
+
+    edits: dict[int, WorkshopLineEdit] | None
+    line_failures: dict[int, tuple[str, ...]]
+    global_failures: tuple[str, ...] = ()
+    replacements: tuple[dict[str, object], ...] = ()
+    candidate_signature: tuple[tuple[int, str], ...] | None = None
 
 
 def generate_grounded_haiku(
@@ -377,18 +387,23 @@ def generate_workshop_revision(
             "edit_contract": LINE_EDIT_CONTRACT_VERSION,
         }
     )
-    for _attempt in range(max(1, max_attempts)):
+    seen_candidate_signatures: set[tuple[tuple[int, str], ...]] = set()
+    rejected_replacements: list[dict[str, object]] = []
+    last_failures: dict[int, tuple[str, ...]] = {}
+    last_global_failures: tuple[str, ...] = ()
+    for attempt in range(max(1, max_attempts)):
         payload = llm.generate_structured_json(
             StructuredGenerationRequest(
                 kind="haiku_workshop_revision",
                 fallback_value={"lines": []},
-                details=request_details,
+                # 次roundで feedback を差し替えても、この試行の監査snapshotは変えない。
+                details=dict(request_details),
                 temperature=REGENERATION_TEMPERATURE,
                 route="haiku",
                 max_tokens=max_tokens,
             )
         )
-        repaired = _validated_workshop_lines(
+        validation = _validate_workshop_lines(
             payload,
             targets=targets,
             original_lines=lines,
@@ -396,8 +411,44 @@ def generate_workshop_revision(
             reserved_ids=reserved,
             details=details,
         )
-        if repaired is None:
+        if validation.edits is None:
+            last_failures = validation.line_failures
+            last_global_failures = validation.global_failures
+            rejected_replacements.extend(validation.replacements)
+            _set_workshop_retry_feedback(
+                request_details,
+                attempt=attempt + 1,
+                line_failures=last_failures,
+                global_failures=last_global_failures,
+                rejected_replacements=rejected_replacements,
+            )
+            LOGGER.warning(
+                "haiku_workshop_revision result=retry attempt=%s stage=edit_contract "
+                "global=%s lines=%s",
+                attempt + 1,
+                list(last_global_failures),
+                {index: list(reasons) for index, reasons in sorted(last_failures.items())},
+            )
             continue
+        repaired = validation.edits
+        candidate_signature = validation.candidate_signature
+        if candidate_signature is None or candidate_signature in seen_candidate_signatures:
+            last_failures = {index: ("duplicate_candidate",) for index in targets}
+            last_global_failures = ()
+            rejected_replacements.extend(validation.replacements)
+            _set_workshop_retry_feedback(
+                request_details,
+                attempt=attempt + 1,
+                line_failures=last_failures,
+                global_failures=last_global_failures,
+                rejected_replacements=rejected_replacements,
+            )
+            LOGGER.warning(
+                "haiku_workshop_revision result=retry attempt=%s stage=duplicate_candidate",
+                attempt + 1,
+            )
+            continue
+        seen_candidate_signatures.add(candidate_signature)
         revised = list(lines)
         for index, edit in repaired.items():
             revised[index] = edit.replacement_text
@@ -422,6 +473,23 @@ def generate_workshop_revision(
             frozen_lines={text for index, text in enumerate(lines) if index not in targets},
         )
         if failed or set(accepted) != set(targets):
+            last_failures = dict(failed)
+            for index in set(targets) - set(accepted) - set(last_failures):
+                last_failures[index] = ("grounding_missing",)
+            last_global_failures = ()
+            rejected_replacements.extend(validation.replacements)
+            _set_workshop_retry_feedback(
+                request_details,
+                attempt=attempt + 1,
+                line_failures=last_failures,
+                global_failures=last_global_failures,
+                rejected_replacements=rejected_replacements,
+            )
+            LOGGER.warning(
+                "haiku_workshop_revision result=retry attempt=%s stage=grounding lines=%s",
+                attempt + 1,
+                {index: list(reasons) for index, reasons in sorted(last_failures.items())},
+            )
             continue
         records: list[dict[str, object]] = []
         for index, text in enumerate(revised):
@@ -459,10 +527,15 @@ def generate_workshop_revision(
             edits=verified_edits,
             edit_contract=LINE_EDIT_CONTRACT_VERSION,
         )
+    LOGGER.warning(
+        "haiku_workshop_revision result=fallback reason=max_attempts global=%s lines=%s",
+        list(last_global_failures),
+        {index: list(reasons) for index, reasons in sorted(last_failures.items())},
+    )
     return WorkshopRevisionResult(None, False, failure_reason="invalid_revision")
 
 
-def _validated_workshop_lines(
+def _validate_workshop_lines(
     payload: dict[str, Any] | None,
     *,
     targets: tuple[int, ...],
@@ -470,47 +543,79 @@ def _validated_workshop_lines(
     eligible_ids: set[str],
     reserved_ids: set[str],
     details: dict[str, object],
-) -> dict[int, WorkshopLineEdit] | None:
+) -> _WorkshopEditValidation:
     if not _structured_accepted(payload):
-        return None
+        return _WorkshopEditValidation(None, {}, ("structured_rejected",))
     rows = payload.get("lines") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
-        return None
+        return _WorkshopEditValidation(None, {}, ("invalid_edit_rows",))
     result: dict[int, WorkshopLineEdit] = {}
+    line_failures: dict[int, tuple[str, ...]] = {}
+    global_failures: list[str] = []
+    replacements: list[dict[str, object]] = []
+    replacement_signatures: dict[int, str] = {}
     used = set(reserved_ids)
     fixed_signatures = {
         _candidate_signature(text)
         for index, text in enumerate(original_lines)
         if index not in targets
     }
+    seen_line_signatures = set(fixed_signatures)
     for row in rows:
         if not isinstance(row, dict):
-            return None
+            global_failures.append("invalid_edit_row")
+            continue
         index = row.get("line_index")
-        expected_text = _clean_single_line(row.get("expected_text"))
-        replacement_text = _clean_single_line(row.get("replacement_text"))
-        raw_ids = row.get("atom_ids")
         if (
             not isinstance(index, int)
             or isinstance(index, bool)
             or index not in targets
-            or index in result
-            or expected_text != original_lines[index]
-            or not replacement_text
-            or _candidate_signature(replacement_text) == _candidate_signature(expected_text)
-            or _candidate_signature(replacement_text) in fixed_signatures
-            or not isinstance(raw_ids, list)
-            or not raw_ids
         ):
-            return None
-        atom_ids = tuple(str(value).strip() for value in raw_ids)
+            global_failures.append("unexpected_line_index")
+            continue
+        expected_text = _clean_single_line(row.get("expected_text"))
+        replacement_text = _clean_single_line(row.get("replacement_text"))
+        raw_ids = row.get("atom_ids")
+        if replacement_text:
+            replacements.append(
+                {"line_index": index, "replacement_text": replacement_text}
+            )
+            replacement_signatures[index] = _candidate_signature(replacement_text)
+        reasons: list[str] = []
+        if index in result or index in line_failures:
+            reasons.append("duplicate_target_edit")
+        if expected_text != original_lines[index]:
+            reasons.append("expected_text_mismatch")
+        if not replacement_text:
+            reasons.append("empty_replacement")
+        else:
+            replacement_signature = _candidate_signature(replacement_text)
+            if replacement_signature == _candidate_signature(expected_text):
+                reasons.append("unchanged_replacement")
+            if replacement_signature in fixed_signatures:
+                reasons.append("duplicate_fixed_line")
+            elif replacement_signature in seen_line_signatures:
+                reasons.append("duplicate_line")
+        atom_ids: tuple[str, ...] = ()
         if (
-            any(not atom_id or atom_id not in eligible_ids for atom_id in atom_ids)
-            or len(set(atom_ids)) != len(atom_ids)
-            or used.intersection(atom_ids)
-            or not is_haiku_line_usable(replacement_text, index, details)
+            not isinstance(raw_ids, list)
+            or not raw_ids
+            or any(not isinstance(value, str) or not value.strip() for value in raw_ids)
         ):
-            return None
+            reasons.append("invalid_atom_ids")
+        else:
+            atom_ids = tuple(value.strip() for value in raw_ids)
+            if any(atom_id not in eligible_ids for atom_id in atom_ids):
+                reasons.append("unknown_atom_id")
+            if len(set(atom_ids)) != len(atom_ids):
+                reasons.append("duplicate_atom_id")
+            if used.intersection(atom_ids):
+                reasons.append("source_reused")
+        if replacement_text:
+            reasons.extend(haiku_line_failure_reasons(replacement_text, index, details))
+        if reasons:
+            line_failures[index] = tuple(dict.fromkeys(reasons))
+            continue
         result[index] = WorkshopLineEdit(
             line_index=index,
             expected_text=expected_text,
@@ -518,8 +623,49 @@ def _validated_workshop_lines(
             atom_ids=atom_ids,
         )
         used.update(atom_ids)
-        fixed_signatures.add(_candidate_signature(replacement_text))
-    return result if set(result) == set(targets) else None
+        seen_line_signatures.add(_candidate_signature(replacement_text))
+    for missing_index in set(targets) - set(result) - set(line_failures):
+        line_failures[missing_index] = ("missing_target_edit",)
+    candidate_signature = (
+        tuple(
+            (index, replacement_signatures[index])
+            for index in targets
+        )
+        if set(replacement_signatures) == set(targets)
+        and all(replacement_signatures.values())
+        else None
+    )
+    failed = bool(global_failures or line_failures or set(result) != set(targets))
+    return _WorkshopEditValidation(
+        None if failed else result,
+        line_failures,
+        tuple(dict.fromkeys(global_failures)),
+        tuple(replacements),
+        candidate_signature,
+    )
+
+
+def _set_workshop_retry_feedback(
+    details: dict[str, object],
+    *,
+    attempt: int,
+    line_failures: dict[int, tuple[str, ...]],
+    global_failures: tuple[str, ...],
+    rejected_replacements: list[dict[str, object]],
+) -> None:
+    """次の editor 呼び出しへ、コードで確定した失敗だけを閉じた型で渡す。"""
+
+    details["edit_retry_feedback"] = {
+        "attempt": attempt,
+        "global_failure_reasons": list(global_failures),
+        "line_failures": [
+            {"line_index": index, "failure_reasons": list(reasons)}
+            for index, reasons in sorted(line_failures.items())
+        ],
+    }
+    # 直前の不合格案を再び「新案」として返させない。最大試行数が小さいため
+    # 全履歴を保持しても prompt は肥大しない。
+    details["rejected_replacements"] = list(rejected_replacements)
 
 
 def _draft_lines(payload: dict[str, Any] | None) -> list[str] | None:
