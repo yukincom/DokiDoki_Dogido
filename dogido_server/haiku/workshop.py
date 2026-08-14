@@ -12,6 +12,13 @@ import re
 from typing import Any
 
 from dogido_server.memory_types import HaikuEmission
+from dogido_server.llm.haiku import count_japanese_sounds, haiku_line_failure_reasons
+from dogido_server.tts_reading import hiraganize_japanese_text, katakana_to_hiragana
+
+from .edit_contract import (
+    PLAYER_LINE_EDIT_CONTRACT_VERSION,
+    line_edit_plan_applies,
+)
 
 # 発句からの最大 open 時間
 DEFAULT_T_OPEN = timedelta(seconds=240)
@@ -65,6 +72,51 @@ _PENDING_REVISION_ACCEPT_PATTERN = re.compile(
     r")[。！!]*$"
 )
 
+_EXPLICIT_LINE_PATTERNS: tuple[tuple[int, re.Pattern[str]], ...] = (
+    (0, re.compile(r"(?:一|1)行目|上五|上の句|最初の行")),
+    (1, re.compile(r"(?:二|2)行目|中七|中の句|真ん中の行")),
+    (2, re.compile(r"(?:三|3)行目|下五|下の句|最後の行")),
+)
+_PLAYER_REPLACEMENT_PATTERNS = (
+    re.compile(
+        r"(?P<value>[^、，。！？!?\n]{1,48}?)(?:に|へ)"
+        r"(?:変えた|かえた|変える|かえる|した)"
+        r"(?:方|ほう)が(?:いい|ええ|良い|よい)"
+    ),
+    re.compile(
+        r"(?P<value>[^、，。！？!?\n]{1,48}?)(?:に|へ)"
+        r"(?:"
+        r"(?:変えて|かえて)(?=$|[。！!]|(?:ほしい|ください|くれる|みて|みよう))|"
+        r"してみて(?=$|[。！!]|(?:ほしい|ください|みよう))|"
+        r"したら(?=$|[。！!]|(?:いい|ええ|どう))"
+        r")"
+    ),
+    re.compile(
+        r"(?P<value>[^、，。！？!?\n]{1,48}?)(?:の方|のほう)が"
+        r"(?:いい|ええ|良い|よい)"
+    ),
+    # 講評で対象行を固定したあとに自然に出やすい
+    # 「おだやかなでいいんじゃない」も、明示された置換語として扱う。
+    # 候補を日本語の連続部分へ閉じ、前段の説明やSTT由来の数字を巻き込まない。
+    re.compile(
+        r"(?P<value>[ぁ-ゖァ-ヶ一-龯々ー]{1,24})で"
+        r"(?:いい|ええ|良い|よい)"
+        r"(?:んじゃない|んやない|んちゃう)?"
+    ),
+)
+_PLAYER_REPLACEMENT_NEGATION = re.compile(
+    r"(?:"
+    r"(?:方|ほう)が(?:いい|ええ|良い|よい)|"
+    r"で(?:いい|ええ|良い|よい)"
+    r")"
+    r"(?:とは|わけ(?:では|じゃ)?)"
+    r".{0,12}(?:ない|へん|思わん|おもわん|言ってない|いってない)"
+)
+_PLAYER_REPLACEMENT_REPORT = re.compile(
+    r"(?:と|って)(?:言われた|いわれた|聞いた|きいた|書いてある|かいてある)"
+)
+_STRICT_HIRAGANA_LINE = re.compile(r"[\u3041-\u3096ー]+")
+
 
 @dataclass(frozen=True, slots=True)
 class WorkshopFinding:
@@ -92,6 +144,32 @@ class WorkshopAnalysis:
     findings: tuple[WorkshopFinding, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class PlayerLineReplacement:
+    """プレイヤーが明示した一行分の置換語。行番号はコード抽出時だけ入る。"""
+
+    text: str
+    explicit_line_index: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerLineReplacementParse:
+    """置換らしい発話と、採用可能な一意の置換を区別する。"""
+
+    status: str
+    replacement: PlayerLineReplacement | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerLineRevisionResult:
+    """LLMを通さず組み立てた、未保存の局所編集結果。"""
+
+    text: str | None
+    base_text: str
+    edits: tuple[dict[str, object], ...] = ()
+    failure_reasons: tuple[str, ...] = ()
+
+
 @dataclass(slots=True)
 class RecentHaikuWorkshop:
     """セッション用 pin。closed 後は open=False（または session 側で None）。"""
@@ -114,9 +192,22 @@ class RecentHaikuWorkshop:
     last_findings: list[dict[str, object]] = field(default_factory=list)
     pending_revision: str | None = None
     pending_revision_line_sources: list[dict[str, object]] = field(default_factory=list)
+    pending_revision_base_text: str | None = None
+    pending_revision_edits: list[dict[str, object]] = field(default_factory=list)
+    pending_revision_edit_contract: str | None = None
+    pending_revision_source: str | None = None
+    current_revision_id: str | None = None
+    marked_line_index: int | None = None
 
     def display_line(self) -> str:
+        """明示採用済みの現在句。pending案とは混ぜない。"""
+
         return (self.surface_text or "").strip()
+
+    def editing_line(self) -> str:
+        """対話・次の局所編集で見せる最新版（未採用案があればそちら）。"""
+
+        return (self.pending_revision or self.surface_text or "").strip()
 
 
 def open_from_emission(
@@ -142,8 +233,9 @@ def open_from_emission(
         mats["structure"] = emission.structure
     if emission.time_phase and "time_phase" not in mats:
         mats["time_phase"] = emission.time_phase
+    initial_text = normalize_workshop_verse(emission.text) or (emission.text or "").strip()
     return RecentHaikuWorkshop(
-        surface_text=(emission.text or "").strip(),
+        surface_text=initial_text,
         emitted_at=at,
         entry_id=entry_id,
         preface=emission.preface,
@@ -174,6 +266,56 @@ def close_workshop(
     workshop.open = False
     workshop.close_reason = reason
     return workshop
+
+
+def pending_revision_is_current(workshop: RecentHaikuWorkshop) -> bool:
+    """未保存差分が、いま pin されている元句へだけ適用できるか確認する。"""
+
+    base_text = (workshop.pending_revision_base_text or "").strip()
+    revised_text = (workshop.pending_revision or "").strip()
+    if not base_text or base_text != workshop.display_line() or not revised_text:
+        return False
+    return line_edit_plan_applies(
+        original_text=base_text,
+        revised_text=revised_text,
+        edit_contract=workshop.pending_revision_edit_contract,
+        edits=workshop.pending_revision_edits,
+    )
+
+
+def clear_pending_revision(workshop: RecentHaikuWorkshop) -> None:
+    """未採用案だけを捨てる。現在句と長期記憶は変更しない。"""
+
+    workshop.pending_revision = None
+    workshop.pending_revision_line_sources.clear()
+    workshop.pending_revision_base_text = None
+    workshop.pending_revision_edits.clear()
+    workshop.pending_revision_edit_contract = None
+    workshop.pending_revision_source = None
+
+
+def advance_workshop_revision(
+    workshop: RecentHaikuWorkshop,
+    *,
+    revision_id: str | None,
+) -> None:
+    """採用済みpendingを現在句へ昇格し、次の行を続けて直せるようにする。"""
+
+    revised = (workshop.pending_revision or "").strip()
+    if not revised:
+        return
+    line_sources = list(workshop.pending_revision_line_sources)
+    source = workshop.pending_revision_source
+    workshop.surface_text = revised
+    workshop.current_revision_id = revision_id
+    workshop.marked_line_index = None
+    workshop.last_findings.clear()
+    clear_pending_revision(workshop)
+    if source == "generated_confirmed" and line_sources:
+        workshop.materials["line_sources"] = line_sources
+    else:
+        # プレイヤーの語を観測atomへ偽装しない。以後のAI修正は出典不足ならfail closed。
+        workshop.materials.pop("line_sources", None)
 
 
 def record_workshop_activity(
@@ -227,7 +369,7 @@ def workshop_prompt_details(workshop: RecentHaikuWorkshop | None) -> dict[str, s
         }
     return {
         "haiku_workshop_open": "1",
-        "haiku_workshop_text": workshop.display_line(),
+        "haiku_workshop_text": workshop.editing_line(),
         "haiku_workshop_materials": materials_speech_line(workshop),
     }
 
@@ -333,7 +475,7 @@ def pick_material_for_fragment(
     """LLM 失敗時のフォールバック。fragment_links 優先、なければ部分一致。"""
     from dogido_server.haiku.materials import resolve_material_from_links
 
-    verse = workshop.display_line() or ""
+    verse = workshop.editing_line() or ""
     linked = resolve_material_from_links(
         player_text or "",
         verse,
@@ -367,7 +509,7 @@ def build_ask_meaning_llm_details(
     player_text: str,
 ) -> dict[str, Any]:
     """structured material pick 用の details（候補はコードが閉じる）。"""
-    verse = workshop.display_line() or ""
+    verse = workshop.editing_line() or ""
     verse_one = " ".join(verse.replace("\n", " ").split())
     fragment = _quoted_or_fragment_about_verse(player_text or "", verse)
     candidates = material_candidates_for_speech(workshop)
@@ -389,7 +531,7 @@ def finalize_ask_meaning_reply(
     path: llm | template | soft_fail
     検証は緩め（言い回しの面白さを潰さない）。schema 漏れと長文だけ切る。
     """
-    verse = workshop.display_line() or "（句なし）"
+    verse = workshop.editing_line() or "（句なし）"
     verse_one = " ".join(verse.replace("\n", " ").split())
     said = player_text or ""
     fragment = _quoted_or_fragment_about_verse(said, verse)
@@ -849,7 +991,7 @@ def build_workshop_intent_llm_details(
     ライフサイクルや保存判断は渡さず、句・短い狙い・プレイヤー発話だけを渡す。
     同じ契約を chat route、Apple Foundation Models、Foundry Local で使う。
     """
-    lines = workshop_verse_lines(workshop.display_line())
+    lines = workshop_verse_lines(workshop.editing_line())
     return {
         "verse": "\n".join(lines),
         "verse_lines": [
@@ -872,7 +1014,228 @@ def workshop_verse_lines(verse: str) -> list[str]:
         space_parts = [part.strip() for part in normalized.split() if part.strip()]
         if len(space_parts) == 3:
             return space_parts
-    return lines[:3]
+    return lines
+
+
+def normalize_player_haiku_line(text: str | None) -> str | None:
+    """プレイヤーの置換語をコードで読みへ展開し、ひらがなだけなら返す。"""
+
+    source = str(text or "").strip().strip("「」『』\"' 。．.!！?？…")
+    if not source or "\n" in source or "\r" in source:
+        return None
+    normalized = hiraganize_japanese_text(source)
+    normalized = katakana_to_hiragana(normalized)
+    normalized = re.sub(r"\s+", "", normalized).strip()
+    if not normalized or _STRICT_HIRAGANA_LINE.fullmatch(normalized) is None:
+        return None
+    return normalized
+
+
+def normalize_workshop_verse(text: str | None) -> str | None:
+    """三行の句を、内容を作り替えずひらがな表記へ正規化する。"""
+
+    lines = workshop_verse_lines(text or "")
+    if len(lines) != 3:
+        return None
+    normalized = [normalize_player_haiku_line(line) for line in lines]
+    if any(line is None for line in normalized):
+        return None
+    return "\n".join(str(line) for line in normalized)
+
+
+def explicit_workshop_line_index(text: str | None) -> int | None:
+    """上五／二行目など、コードで確定できる行指定だけを返す。"""
+
+    source = str(text or "")
+    matches = _explicit_workshop_line_indices(source)
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
+def _explicit_workshop_line_indices(text: str | None) -> set[int]:
+    source = str(text or "")
+    return {
+        line_index
+        for line_index, pattern in _EXPLICIT_LINE_PATTERNS
+        if pattern.search(source)
+    }
+
+
+def update_marked_workshop_line(
+    workshop: RecentHaikuWorkshop,
+    *,
+    findings: tuple[WorkshopFinding, ...] = (),
+    player_text: str | None = None,
+) -> int | None:
+    """明示行、または一意に検証済みのfindingだけを次の編集対象に固定する。"""
+
+    explicit_indices = _explicit_workshop_line_indices(player_text)
+    explicit = next(iter(explicit_indices)) if len(explicit_indices) == 1 else None
+    if explicit is not None:
+        workshop.marked_line_index = explicit
+        return explicit
+    if len(explicit_indices) > 1:
+        workshop.marked_line_index = None
+        return None
+    targets = {finding.line_index for finding in findings if finding.line_index is not None}
+    if len(targets) == 1:
+        workshop.marked_line_index = next(iter(targets))
+    elif len(targets) > 1:
+        workshop.marked_line_index = None
+    return workshop.marked_line_index
+
+
+def parse_player_line_replacement(raw_text: str | None) -> PlayerLineReplacementParse:
+    """置換発話を no_match / rejected / ambiguous / accepted へ閉じる。"""
+
+    text = str(raw_text or "").strip()
+    if not text:
+        return PlayerLineReplacementParse("no_match")
+    replacementish = any(pattern.search(text) for pattern in _PLAYER_REPLACEMENT_PATTERNS)
+    if not replacementish:
+        return PlayerLineReplacementParse("no_match")
+    if _PLAYER_REPLACEMENT_NEGATION.search(text) or _PLAYER_REPLACEMENT_REPORT.search(text):
+        return PlayerLineReplacementParse("rejected")
+    if len(_explicit_workshop_line_indices(text)) > 1:
+        return PlayerLineReplacementParse("ambiguous")
+    candidates: list[str] = []
+    for pattern in _PLAYER_REPLACEMENT_PATTERNS:
+        for match in pattern.finditer(text):
+            candidate = match.group("value").strip()
+            quoted_parts = re.findall(r"[「『]([^」』]+)[」』]", candidate)
+            had_quoted = len(quoted_parts) == 1
+            if len(quoted_parts) == 1:
+                candidate = quoted_parts[0].strip()
+                had_line_prefix = False
+            else:
+                had_line_prefix = False
+            line_prefix = re.compile(
+                r"^(?:(?:一|二|三|1|2|3)行目|上五|中七|下五|上の句|中の句|下の句)"
+                r"(?:は|を|だけ|なら)?[、， ]*"
+            )
+            had_line_prefix = had_line_prefix or line_prefix.match(candidate) is not None
+            candidate = re.sub(
+                line_prefix,
+                "",
+                candidate,
+            ).strip()
+            # 「元の語を新しい語に変える」「元より新しい語の方が」の左側を落とす。
+            for separator in ("じゃなくて", "じゃなく", "ではなくて", "ではなく", "より", "から"):
+                if separator in candidate:
+                    candidate = candidate.rsplit(separator, 1)[-1].strip()
+            quoted = re.fullmatch(r"[「『](.+)[」』]", candidate)
+            if quoted:
+                candidate = quoted.group(1).strip()
+            elif (
+                not had_line_prefix
+                and not had_quoted
+                and "を" in candidate
+                and ("変え" in match.group(0) or "かえ" in match.group(0))
+            ):
+                candidate = candidate.rsplit("を", 1)[-1].strip()
+            candidate = candidate.strip("「」『』\"' 、，:：")
+            if candidate.endswith("とか"):
+                candidate = candidate[:-2].rstrip()
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+    if len(candidates) != 1:
+        return PlayerLineReplacementParse("ambiguous")
+    return PlayerLineReplacementParse(
+        "accepted",
+        PlayerLineReplacement(
+            text=candidates[0],
+            explicit_line_index=explicit_workshop_line_index(text),
+        ),
+    )
+
+
+def extract_player_line_replacement(raw_text: str | None) -> PlayerLineReplacement | None:
+    """互換用の単値helper。採用可能な一意の置換だけを返す。"""
+
+    return parse_player_line_replacement(raw_text).replacement
+
+
+def build_player_line_revision(
+    workshop: RecentHaikuWorkshop,
+    replacement: PlayerLineReplacement,
+) -> PlayerLineRevisionResult:
+    """明示語だけを対象行へ置き、現在句に対するCAS差分を作る。"""
+
+    base_text = workshop.display_line()
+    if workshop.pending_revision and workshop.pending_revision_source not in {
+        None,
+        "player_line_confirmed",
+    }:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("pending_source_conflict",),
+        )
+    base_lines = workshop_verse_lines(base_text)
+    draft_lines = workshop_verse_lines(workshop.editing_line())
+    if len(base_lines) != 3 or len(draft_lines) != 3:
+        return PlayerLineRevisionResult(None, base_text, failure_reasons=("invalid_verse",))
+    if any(normalize_player_haiku_line(line) != line for line in base_lines + draft_lines):
+        return PlayerLineRevisionResult(None, base_text, failure_reasons=("verse_not_hiragana",))
+    target = replacement.explicit_line_index
+    if target is None:
+        target = workshop.marked_line_index
+    if target not in (0, 1, 2):
+        return PlayerLineRevisionResult(None, base_text, failure_reasons=("missing_target",))
+    normalized = normalize_player_haiku_line(replacement.text)
+    if normalized is None:
+        return PlayerLineRevisionResult(None, base_text, failure_reasons=("not_hiragana",))
+    reasons = list(haiku_line_failure_reasons(normalized, target, workshop.materials))
+    # プレイヤーの明示編集は「新5-7-5」を作るため、±1ではなく対象音数に合わせる。
+    if count_japanese_sounds(normalized) != (5, 7, 5)[target]:
+        reasons.append("meter_not_exact")
+    if any(
+        index != target and _compact_kana(line) == _compact_kana(normalized)
+        for index, line in enumerate(draft_lines)
+    ):
+        reasons.append("duplicate_line")
+    if reasons:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=tuple(dict.fromkeys(reasons)),
+        )
+    draft_lines[target] = normalized
+    revised_text = "\n".join(draft_lines)
+    if revised_text == workshop.editing_line():
+        return PlayerLineRevisionResult(None, base_text, failure_reasons=("no_change",))
+    edits = tuple(
+        {
+            "line_index": index,
+            "expected_text": base_lines[index],
+            "replacement_text": draft_lines[index],
+            "provenance": "player_explicit",
+        }
+        for index in range(3)
+        if base_lines[index] != draft_lines[index]
+    )
+    if not line_edit_plan_applies(
+        original_text=base_text,
+        revised_text=revised_text,
+        edit_contract=PLAYER_LINE_EDIT_CONTRACT_VERSION,
+        edits=edits,
+    ):
+        return PlayerLineRevisionResult(None, base_text, failure_reasons=("invalid_edit",))
+    return PlayerLineRevisionResult(revised_text, base_text, edits=edits)
+
+
+def wants_show_workshop_verse(text: str | None) -> bool:
+    """現在の三行を尋ねる発話。本文はLLMではなくコードから返す。"""
+
+    source = str(text or "").strip()
+    if not source:
+        return False
+    return bool(
+        re.search(
+            r"(?:全体|全部|今の句|いまの句|直した句|修正した句)"
+            r".{0,12}(?:どんな|どうな|見せて|みせて|読んで|よんで|言って|いって)",
+            source,
+        )
+    )
 
 
 def finalize_workshop_analysis_payload(
@@ -1159,7 +1522,7 @@ def render_workshop_reply(
     player_text: str = "",
 ) -> str:
     """ルールベースの短い返事（LLM なし）。断片質問は短く、講義しない。"""
-    verse = workshop.display_line() or "（句なし）"
+    verse = workshop.editing_line() or "（句なし）"
     verse_one_line = " ".join(verse.replace("\n", " ").split())
     materials = materials_speech_line(workshop)
     said = player_text or ""

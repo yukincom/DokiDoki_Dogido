@@ -6,6 +6,7 @@ from datetime import datetime
 
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags, resolve_mob_catalog_entry
 from dogido_server.models import GameEvent, PassiveMob
+from dogido_server.player_activity import player_vehicle_fact
 from dogido_server.state_machine.ambient_mob_catalog import (
     AmbientMobReactionContext,
     ambient_mob_fallback_candidates,
@@ -630,6 +631,18 @@ class NarrationMixin:
             hearing_summary=hearing_summary,
         )
         place_ctx = self._player_chat_place_context(event)
+        precipitation_context = self._precipitation_context(event)
+        LOGGER.warning(
+            "player_chat_precipitation y=%s temp=%s snow_start_y=%s snowfall_zone=%s "
+            "local_precipitation=%s snow_evidence=%s surface_snow=%s",
+            precipitation_context.current_y,
+            precipitation_context.biome_temperature,
+            precipitation_context.snow_start_y,
+            precipitation_context.snowfall_zone,
+            precipitation_context.precipitation_kind,
+            precipitation_context.snow_evidence,
+            precipitation_context.surface_snow_observed,
+        )
         tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
         if tactics.get("safe_fallback"):
@@ -753,10 +766,12 @@ class NarrationMixin:
             "space_kind": place_ctx["space_kind"],
             "sky_visible": place_ctx["sky_visible"],
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
-            # 天気は world.weather（状態）。hearing / 雨音 packet とは混ぜない
+            # raw weather は world 状態、weather_label は現在Y・気温で雨/雪を解決済み。
+            # hearing / 雨音 packet とは混ぜない。
             "weather": self._weather_value(event.world.weather) or "unknown",
             "weather_label": self._player_chat_weather_label(event),
             "weather_fact": self._player_chat_weather_fact(event),
+            **precipitation_context.to_prompt_details(),
             "mode": self.state.mode,
             "character_mode": character_mode,
             "combat_active": combat_active,
@@ -856,9 +871,11 @@ class NarrationMixin:
         return text
 
     def _player_chat_weather_label(self, event: GameEvent) -> str:
-        """雑談用の天気ラベル。world.weather のみ（音メモと混ぜない）。"""
+        """雑談用。globalな雨を、現在地の気温・標高で雪へ解決する。"""
         from dogido_server.state_machine.constants import WEATHER_LABELS
 
+        if self._precipitation_context(event).precipitation_kind == "snow":
+            return "雪"
         weather = self._weather_value(event.world.weather)
         if not weather:
             return "不明"
@@ -1060,6 +1077,10 @@ class NarrationMixin:
         look = (look_target_label or "").strip()
         if look:
             lines.append(f"視線先: {look}")
+        vehicle_fact = player_vehicle_fact(event.player.vehicle)
+        if vehicle_fact:
+            # 「プレイヤー」を保った完成文だけ渡し、ドギド自身の行動にしない。
+            lines.append(vehicle_fact)
         threat = (threat_summary or "").strip()
         if threat and threat != "とくになし":
             lines.append(f"脅威: {threat}")

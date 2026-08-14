@@ -9,12 +9,13 @@ from math import inf
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry, mob_poetic_line, mob_poetic_tags
 from dogido_server.haiku.generation import generate_grounded_haiku
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
+from dogido_server.haiku.preface import validate_preface_clauses
 from dogido_server.haiku.source_atoms import (
     CatalogSourceSnapshot,
     HaikuSourceAtom,
     atoms_from_catalog_sources,
     atoms_from_observations,
-    atoms_from_spoken_preface,
+    atoms_from_preface_clauses,
     catalog_notes_projection,
     catalog_source_snapshot,
     merge_source_atoms,
@@ -25,12 +26,14 @@ from dogido_server.llm.sanitize import summarize_for_log
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import EventName, GameEvent, NearbyResource
 from dogido_server.minecraft_ids import normalize_minecraft_id
+from dogido_server.player_activity import player_vehicle_fact
 from dogido_server.state_machine.haiku_catalog import (
     HaikuFallbackContext,
     resolve_fallback_haiku,
     resolve_llm_failed_haiku,
 )
 from dogido_server.state_machine.haiku_context import HaikuContext, HaikuFeature, IronyContext, SceneContext
+from dogido_server.state_machine.precipitation import PrecipitationContext
 from dogido_server.state_machine.constants import *  # noqa: F403
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -182,7 +185,15 @@ class HaikuMixin:
             return self._begin_prefaced_haiku(event, now)
         self.state.last_haiku_emitted_at = now
         raw_line = self._render_haiku_line(event)
-        self._remember_haiku_emission(event, now, raw_line, route="haiku")
+        # LLM は有効だが品質ゲートを通せなかった場合、失敗定型を句として
+        # workshop pin・長期保存しない。preface 経路と同じ境界にそろえる。
+        if not self._is_llm_failed_haiku_text(raw_line):
+            self._remember_haiku_emission(event, now, raw_line, route="haiku")
+        else:
+            LOGGER.warning(
+                "haiku_emit result=failed_no_pin text=%s",
+                summarize_for_log(raw_line),
+            )
         line = self._format_haiku_line(raw_line)
         LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))
         return line
@@ -190,13 +201,13 @@ class HaikuMixin:
     def _begin_prefaced_haiku(self, event: GameEvent, now: datetime) -> str:
         """見どころ + ここで一句。irony/scene はここで回し、本句は次フレーム。"""
         context = self._haiku_context(event)
-        irony, irony_status = self._detect_haiku_irony(context)
-        scene, scene_status = self._detect_haiku_scene(context, irony)
+        irony, _ = self._detect_haiku_irony(context)
+        scene, _ = self._detect_haiku_scene(context, irony)
         self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
-        spoken = self._compose_haiku_preface_speech(irony, scene)
+        spoken = self._compose_haiku_preface_speech(scene)
         source_atoms = merge_source_atoms(
             context.source_atoms,
-            atoms_from_spoken_preface(spoken),
+            atoms_from_preface_clauses(scene.clauses),
         )
         self._stash_haiku_materials_seed(
             event,
@@ -208,7 +219,7 @@ class HaikuMixin:
         )
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
-        skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
+        skip_reason = self._haiku_generation_skip_reason()
 
         self._pending_haiku_prompt_details = None
         self._pending_haiku_source_atoms = source_atoms
@@ -222,14 +233,9 @@ class HaikuMixin:
             prompt_details = context.prompt_details(irony, scene)
             prompt_details["haiku_constraints"] = constraints
             self._pending_haiku_prompt_details = prompt_details
-        elif self._should_use_llm_failed_haiku(skip_reason, irony_status, scene_status):
-            LOGGER.warning(
-                "haiku_decision result=fallback reason=%s text=%s",
-                self._haiku_llm_failure_reason(skip_reason, irony_status, scene_status),
-                summarize_for_log(llm_failed_text),
-            )
-            self._pending_haiku_fixed_line = llm_failed_text
         else:
+            # 固定カタログ句は LLM 自体が無い場合だけ使う。scene の契約不合格や
+            # 材料の薄さは、下流の source-atom 品質ゲートで fail-closed にする。
             LOGGER.warning(
                 "haiku_decision result=fallback reason=%s text=%s",
                 skip_reason,
@@ -260,10 +266,15 @@ class HaikuMixin:
                 source_atoms=source_atoms,
                 fallback_text=llm_failed_text,
                 max_tokens=self.settings.haiku_structured_max_tokens,
+                generation_strategy=self.settings.haiku_generation_strategy,
+                max_regeneration_rounds=self.settings.haiku_max_regeneration_rounds,
             )
             line = generated.text
             if generated.accepted and self._pending_haiku_materials is not None:
                 self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
+                self._pending_haiku_materials["generation_strategy"] = generated.generation_strategy
+                self._pending_haiku_materials["regeneration_rounds"] = generated.regeneration_rounds
+                self._pending_haiku_materials["prompt_variant"] = generated.prompt_variant
             if line == llm_failed_text:
                 LOGGER.warning(
                     "haiku_decision result=fallback reason=llm_rejected text=%s",
@@ -317,9 +328,9 @@ class HaikuMixin:
         self._clear_pending_haiku_prep()
         return True
 
-    def _compose_haiku_preface_speech(self, irony: IronyContext, scene: SceneContext) -> str:
+    def _compose_haiku_preface_speech(self, scene: SceneContext) -> str:
         """見どころを口にする。「ここで一句。」は本句側に任せる。"""
-        inspiration = self._haiku_inspiration_spoken_line(irony, scene)
+        inspiration = self._haiku_inspiration_spoken_line(scene)
         if inspiration:
             return inspiration if inspiration.endswith(("。", "わ", "や", "で", "ね")) else f"{inspiration}。"
         # 見どころが無いときも二重に「ここで一句」と言わない
@@ -327,22 +338,13 @@ class HaikuMixin:
 
     def _haiku_inspiration_spoken_line(
         self,
-        irony: IronyContext,
         scene: SceneContext,
     ) -> str | None:
-        """irony/scene を口語の見どころにする。材料（斧・原木など）が残る長さを優先。
+        """検証済み節だけを順に話し、発話後の再分割・切り詰めをしない。"""
 
-        講義じみた超長文だけ切る。最初の読点1つで潰さない（#28 preface）。
-        """
-        raw: str | None = None
-        # 口には summary 優先。無ければ irony description
-        if scene.found and scene.summary.strip():
-            raw = scene.summary.strip()
-        elif irony.found and irony.description.strip():
-            raw = irony.description.strip()
-        if not raw:
+        if not scene.found or not scene.clauses:
             return None
-        body = self._shorten_haiku_inspiration(raw)
+        body = scene.spoken_text.strip()
         if not body:
             return None
         # すでに「浮かんだ」系なら重ねない
@@ -350,50 +352,16 @@ class HaikuMixin:
             return body if body.endswith(("。", "わ", "や", "で", "ね")) else f"{body}。"
         return f"{body}、なんか浮かんできたわ"
 
-    def _shorten_haiku_inspiration(self, text: str, *, max_chars: int = 56) -> str:
-        cleaned = text.strip().rstrip("。．.！!？?")
-        if not cleaned:
-            return ""
-        cleaned = cleaned.replace("プレイヤー", "あんた")
-        # 分析っぽい長語を落とす
-        for heavy in ("の対比", "の重厚感", "の雰囲気", "の明るさ"):
-            if cleaned.endswith(heavy):
-                cleaned = cleaned[: -len(heavy)].rstrip("・、 ")
-        if len(cleaned) <= max_chars:
-            return cleaned
-        # 読点で自然な区切りまで残す（1つ目が短すぎるなら2つ目まで）
-        for sep in ("、", "，", "。", "・"):
-            if sep not in cleaned:
-                continue
-            parts = [p.strip() for p in cleaned.split(sep) if p.strip()]
-            if not parts:
-                continue
-            acc = parts[0]
-            if len(acc) < 12 and len(parts) > 1:
-                acc = f"{parts[0]}{sep}{parts[1]}"
-            if 6 <= len(acc) <= max_chars:
-                return acc
-            if len(acc) > max_chars:
-                return acc[: max_chars - 1].rstrip("、， ") + "…"
-        return cleaned[: max_chars - 1].rstrip("、， ") + "…"
-
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)
-        irony, irony_status = self._detect_haiku_irony(context)
-        scene, scene_status = self._detect_haiku_scene(context, irony)
+        irony, _ = self._detect_haiku_irony(context)
+        scene, _ = self._detect_haiku_scene(context, irony)
         self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
         self._stash_haiku_materials_seed(event, context, irony, scene)
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
-        skip_reason = self._haiku_llm_skip_reason(context, irony, scene)
+        skip_reason = self._haiku_generation_skip_reason()
         if skip_reason is not None:
-            if self._should_use_llm_failed_haiku(skip_reason, irony_status, scene_status):
-                LOGGER.warning(
-                    "haiku_decision result=fallback reason=%s text=%s",
-                    self._haiku_llm_failure_reason(skip_reason, irony_status, scene_status),
-                    summarize_for_log(llm_failed_text),
-                )
-                return llm_failed_text
             LOGGER.warning(
                 "haiku_decision result=fallback reason=%s text=%s",
                 skip_reason,
@@ -411,10 +379,15 @@ class HaikuMixin:
             source_atoms=context.source_atoms,
             fallback_text=llm_failed_text,
             max_tokens=self.settings.haiku_structured_max_tokens,
+            generation_strategy=self.settings.haiku_generation_strategy,
+            max_regeneration_rounds=self.settings.haiku_max_regeneration_rounds,
         )
         line = generated.text
         if generated.accepted and self._pending_haiku_materials is not None:
             self._pending_haiku_materials["line_sources"] = list(generated.line_sources)
+            self._pending_haiku_materials["generation_strategy"] = generated.generation_strategy
+            self._pending_haiku_materials["regeneration_rounds"] = generated.regeneration_rounds
+            self._pending_haiku_materials["prompt_variant"] = generated.prompt_variant
         if line == llm_failed_text:
             LOGGER.warning(
                 "haiku_decision result=fallback reason=llm_rejected text=%s",
@@ -425,8 +398,8 @@ class HaikuMixin:
     def _haiku_interpretation_text(self, irony: IronyContext, scene: SceneContext) -> str | None:
         if irony.found and irony.description.strip():
             return irony.description.strip()
-        if scene.found and scene.summary.strip():
-            return scene.summary.strip()
+        if scene.found and scene.spoken_text.strip():
+            return scene.spoken_text.strip()
         return None
 
     def _stash_haiku_materials_seed(
@@ -620,12 +593,37 @@ class HaikuMixin:
                 max_tokens=self.settings.haiku_structured_max_tokens,
             )
         )
-        return SceneContext.from_mapping(payload), self._structured_status(payload)
+        scene = SceneContext.from_mapping(
+            payload,
+            source_atoms=context.source_atoms,
+        )
+        status = self._structured_status(payload)
+        if not scene.found:
+            # structured client の accepted は JSON として読めたことだけを示す。
+            # found=false は正常な「見どころなし」だが、found/clauses を欠く旧形式や
+            # 壊れた atom ID はドメイン契約不合格としてログ上も区別する。
+            explicitly_not_found = isinstance(payload, dict) and payload.get("found") is False
+            if status == "accepted" and not explicitly_not_found:
+                keys = ",".join(sorted(str(key) for key in (payload or {}).keys())) or "-"
+                LOGGER.warning(
+                    "haiku_scene result=rejected reason=invalid_contract keys=%s",
+                    keys,
+                )
+                return scene, "invalid_payload"
+            return scene, status
+        if not validate_preface_clauses(
+            self.llm,
+            clauses=scene.clauses,
+            source_atoms=context.source_atoms,
+            max_tokens=self.settings.haiku_structured_max_tokens,
+        ):
+            LOGGER.warning("haiku_preface_grounding result=rejected")
+            return SceneContext(), "preface_rejected"
+        return scene, status
 
     def _haiku_context(self, event: GameEvent) -> HaikuContext:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
-        z_value = event.player.position.z
         biome = event.world.biome
         # 実際の手持ち（道具 hard 制約・対比テンション用）
         real_held_label = self._item_label(event.player.held_item)
@@ -637,6 +635,18 @@ class HaikuMixin:
         )
         nearby_blocks = tuple(self._haiku_nearby_block_values(event.nearby_resources))
         passive_mobs = tuple(self._haiku_passive_mob_values(event))
+        precipitation_context = self._precipitation_context(event)
+        LOGGER.warning(
+            "haiku_precipitation y=%s temp=%s snow_start_y=%s snowfall_zone=%s "
+            "local_precipitation=%s snow_evidence=%s surface_snow=%s",
+            precipitation_context.current_y,
+            precipitation_context.biome_temperature,
+            precipitation_context.snow_start_y,
+            precipitation_context.snowfall_zone,
+            precipitation_context.precipitation_kind,
+            precipitation_context.snow_evidence,
+            precipitation_context.surface_snow_observed,
+        )
         feature_candidates = tuple(
             self._haiku_feature_candidates(
                 event,
@@ -645,6 +655,7 @@ class HaikuMixin:
                 inventory_items=inventory_items,
                 nearby_blocks=nearby_blocks,
                 passive_mobs=passive_mobs,
+                precipitation_context=precipitation_context,
             )
         )
         poetic_lines, poetic_mob_keys = self._haiku_poetic_lines(event)
@@ -671,8 +682,12 @@ class HaikuMixin:
             time_phase=time_phase,
             time_label=TIME_PHASE_LABELS.get(time_phase, "不明"),
             weather=weather,
-            weather_label=WEATHER_LABELS.get(weather, "不明"),
-            z_value=int(round(z_value)) if z_value is not None else 0,
+            weather_label=(
+                "雪"
+                if precipitation_context.precipitation_kind == "snow"
+                else WEATHER_LABELS.get(weather, "不明")
+            ),
+            precipitation_context=precipitation_context,
             poem_item_id=poem_item_id,
             held_item=poem_held,
             poem_item_source=poem_source,
@@ -895,10 +910,10 @@ class HaikuMixin:
         inventory_items: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
         passive_mobs: tuple[str, ...],
+        precipitation_context: PrecipitationContext,
     ) -> list[HaikuFeature]:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
-        z_value = event.player.position.z
         portal_type = (event.world.nearby_portal_type or "").strip().lower()
         structure_id, structure_label = self._haiku_structure_fields(event)
         has_structure = bool(structure_label)
@@ -929,11 +944,20 @@ class HaikuMixin:
                 HaikuFeature("地形", f"trait_{index}", trait)
                 for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
             )
+        if precipitation_context.precipitation_kind == "snow":
+            candidates.append(HaikuFeature("降雪", "local_precipitation", "現在は雪"))
         candidates.extend([
-            HaikuFeature("Z座標", "z_value", str(int(round(z_value)) if z_value is not None else 0)),
-            HaikuFeature("天気", "weather", WEATHER_LABELS.get(weather, "不明")),
+            HaikuFeature(
+                "天気",
+                "weather",
+                "雪" if precipitation_context.precipitation_kind == "snow" else WEATHER_LABELS.get(weather, "不明"),
+            ),
             HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
         ])
+        vehicle_fact = player_vehicle_fact(event.player.vehicle)
+        if vehicle_fact:
+            # 主語を省くとドギド自身の乗車と誤解しうるため、一文を崩さず材料化する。
+            candidates.append(HaikuFeature("乗車", "vehicle_activity", vehicle_fact))
         if held_item:
             if poem_item_source == "pocket":
                 candidates.append(HaikuFeature("持ち物", "pocket_item", held_item))
@@ -994,17 +1018,10 @@ class HaikuMixin:
         return feel or band
 
     def _haiku_biome_traits(self, biome: str | None) -> list[str]:
-        traits: list[str] = []
-        temperature = self._biome_temperature(biome)
-        downfall = self._biome_downfall(biome)
-        snow_start_y = self._biome_snow_start_y(biome)
-        if temperature is not None:
-            traits.append(f"気温 {temperature:g}")
-        if downfall is not None:
-            traits.append(f"降水 {downfall:g}")
-        if snow_start_y is not None:
-            traits.append(f"雪は Y{snow_start_y}から")
-        return traits
+        """創作材料には気候係数を出さず、コードで解釈済みの気配だけを載せる。"""
+
+        climate_hint = self._haiku_climate_hint(biome)
+        return [climate_hint] if climate_hint else []
 
     def _haiku_inventory_values(
         self,
@@ -1315,68 +1332,23 @@ class HaikuMixin:
                 return mob.type
         return None
 
-    def _should_use_llm_haiku(
-        self,
-        context: HaikuContext,
-        irony: IronyContext,
-        scene: SceneContext,
-    ) -> bool:
-        return self._haiku_llm_skip_reason(context, irony, scene) is None
+    def _haiku_generation_skip_reason(self) -> str | None:
+        """固定カタログへ切り替える理由を返す。
 
-    def _haiku_llm_skip_reason(
-        self,
-        context: HaikuContext,
-        irony: IronyContext,
-        scene: SceneContext,
-    ) -> str | None:
+        scene は見どころ発話の品質にだけ使う。本句は一次 source atom を正として
+        共通生成器が材料数・出典・音数を検査するため、scene の弱さを理由に
+        生成前から固定句へ置き換えない。
+        """
+
         if self.llm is None:
             return "llm_unavailable"
-        scene_strength = self._haiku_scene_strength(context)
-        if scene.found and scene_strength >= 3:
-            return None
-        if irony.found and scene_strength >= 4:
-            return None
-        if scene_strength < 4:
-            return "weak_scene"
+        route_enabled = getattr(self.llm, "route_enabled", None)
+        if callable(route_enabled) and not route_enabled("haiku"):
+            return "llm_unavailable"
+        enabled = getattr(self.llm, "enabled", None)
+        if callable(enabled) and not enabled():
+            return "llm_unavailable"
         return None
-
-    def _should_use_llm_failed_haiku(
-        self,
-        skip_reason: str,
-        irony_status: str,
-        scene_status: str,
-    ) -> bool:
-        if skip_reason == "llm_unavailable":
-            return False
-        failure_statuses = {"invalid_json", "generation_error", "invalid_payload"}
-        return irony_status in failure_statuses or scene_status in failure_statuses
-
-    def _haiku_llm_failure_reason(
-        self,
-        skip_reason: str,
-        irony_status: str,
-        scene_status: str,
-    ) -> str:
-        if irony_status != "accepted":
-            return f"{skip_reason}:{irony_status}"
-        if scene_status != "accepted":
-            return f"{skip_reason}:{scene_status}"
-        return skip_reason
-
-    def _haiku_scene_strength(self, context: HaikuContext) -> int:
-        score = 0
-        if context.passive_mobs:
-            score += 3
-        if context.nearby_blocks:
-            score += 3
-        if context.biome_id != "unknown" or context.weather != "unknown":
-            score += 2
-        if (
-            (context.held_item and context.held_item != "なし")
-            or context.inventory_items
-        ):
-            score += 1
-        return score
 
     def _haiku_constraint_details(self, event: GameEvent, scene: SceneContext) -> dict[str, object] | None:
         from dogido_server.catalog_readings import haiku_reading_terms

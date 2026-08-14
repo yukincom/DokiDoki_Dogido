@@ -27,11 +27,14 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 |---|---|
 | `dogido_server/service.py` | セッション、player 入力、workshop / memory 配線 |
 | `dogido_server/state_machine/` | 本体判断。mixin 分割済み。**巨大ロジックを haiku mixin に足し続けない** |
+| `dogido_server/state_machine/precipitation.py` | 現在Y・気温・天気・雪ブロック実測から雨／降雪／積雪根拠を確定。LLMには数値を伏せた閉じた気象事実だけを共有 |
 | `dogido_server/haiku/workshop.py` | 句 pin（open/close）、意図分類、soft 返事、lesson 生成 |
+| `dogido_server/haiku/edit_contract.py` | workshop 行差分の compare-and-swap 検証（生成・採用・保存で共有） |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
 | `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
 | `dogido_server/platform_ai.py` | Apple Foundation Models / Foundry Local / chat fallback の限定 structured router |
+| `dogido_server/player_activity.py` | 乗車中だけ存在する vehicle 状態を、主語付きの雑談・川柳材料へ変換 |
 | `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
 | `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
 | `adapter/minecraft-fabric/` | ゲーム → イベント送信 |
@@ -52,6 +55,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - OS AI 出力から直接 close / lesson解除 / revision保存しない。enum・行番号・confidence をコード検証する
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` を明示操作の正、`interpreted/semantic` を会話理解用として混ぜない
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
+- 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 
 ### 3.2 川柳 lesson は soft
 
@@ -99,12 +103,13 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ## 4. よく触るドメイン詳細
 
-### 川柳 workshop（H1–H5.2 + H7-lite / 修正案1本）
+### 川柳 workshop（H1–H5.2 + H7-lite / 修正案1本 / 連続局所編集）
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
-- open: 発句後 / close: drift・timeout・praise・revise・明示 close・次の句
+- open: 発句後 / close: drift・timeout・praise・完成三行のformal/conversational revise・明示 close・次の句。pending案の明示採用は現在句へ昇格してopen維持
 - 意図: `classify_workshop_intent` が大分類と永続化の正。`soft_default` の AI intent は返答トーン補助だけで、lesson・close・repair開始へ使わない。既知講評では対象行・断片・problem を抽出
-- `request_repair`: 明示ルール時だけ、大きい haiku route が検証済み対象行を修正。別structured評価で意味保持・自然さを照合し、コードで出典ID・重複・音数・発句時hard制約を検証。案は明示採用まで保存しない
+- `request_repair`: 明示ルール時だけ、大きい haiku route が検証済み対象行を `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は明示採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
+- プレイヤー局所編集: findingまたは上五／中七／下五の明示で一行だけ固定し、「〜に変えた方が」の語をコードでひらがな化する。正確な5/7/5音・hard制約・重複を検査し、未保存三行へ連続CASする。本文・現在句照会はLLMに生成させない。明示採用後は採用句を次の基準へ昇格しpinを維持。`player_explicit` をatomへ偽装しない
 - 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
 - ロジックの本体は `haiku/workshop.py`。`mixins/haiku.py` は発句と制約注入フックまで
@@ -113,6 +118,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 - `_haiku_constraint_details`: 道具・読み hard + `player_lessons` soft（空ならキー省略）
 - `haiku_lessons_provider` は service が memory に bind
+- scene は見どころ発話の補助。`found=false` / 契約不合格でも一次 source atom が足りれば共通生成器へ進み、固定川柳カタログは LLM 利用不可時だけ使う
+- 漢字混じり候補は既存UniDicが使える場合だけコードでかな化し、同じ行を共通検査へ戻す。未知語や辞書無しで読みを推測しない
 
 ### LLM routes
 
@@ -197,13 +204,16 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2 + H7-lite + 修正案1本: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings 抽出 / 明示採用）
+- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings 抽出 / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 明示採用後も継続）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  
 - TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  
 - 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
-- 川柳 source atom 品質ゲート: カタログ原文snapshot + 発話済み見どころの別provenance + 行別出典 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ 不合格行のみ最大2回再生成 + fail-closed **済**
+- 川柳 source atom 品質ゲート: カタログ原文snapshot + 節単位preface provenance/主張範囲の別評価 + 行別出典 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ UniDicによる漢字候補の事前かな化 + 4生成方式の固定比較 + 行別失敗理由つき最大6回再生成 + 既出候補即時棄却 + fail-closed **済**
+- 川柳実測中の発句間隔は一時3分。**比較・開発終了時は設定既定・`.env.example`・docsを10分（600000ms）へ必ず戻す**
+- 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定。Y/Z・気温・閾値・downfallはLLMへ出さず、閉じた降水/雷/降雪環境と実測地表雪だけを共有 **済**
+- 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
 - 任意: OS AI・chat fallback・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み

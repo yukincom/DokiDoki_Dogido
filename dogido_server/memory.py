@@ -5,9 +5,14 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 from pathlib import Path
+import re
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from dogido_server.haiku.edit_contract import (
+    PLAYER_LINE_EDIT_CONTRACT_VERSION,
+    line_edit_plan_applies,
+)
 from dogido_server.minecraft_ids import normalize_minecraft_id
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import GameEvent
@@ -23,6 +28,30 @@ PROGRESS_ITEMS: dict[str, str] = {
     "nether/root": "ネザー",
     "end/elytra": "空はどこまでも高く",
 }
+
+
+def _canonical_revision_verse(text: str | None) -> str:
+    """保存差分のCAS用に、空白区切りの三行も改行区切りへ揃える。"""
+
+    normalized = str(text or "").strip()
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    if len(lines) == 1:
+        parts = [part.strip() for part in normalized.split() if part.strip()]
+        if len(parts) == 3:
+            lines = parts
+    return "\n".join(lines) if len(lines) == 3 else normalized
+
+
+def _is_strict_hiragana_verse(text: str | None) -> bool:
+    lines = _canonical_revision_verse(text).splitlines()
+    return len(lines) == 3 and all(
+        re.fullmatch(r"[\u3041-\u3096ー]+", line) is not None
+        for line in lines
+    )
+
+
+def _is_strict_hiragana_line(text: object) -> bool:
+    return re.fullmatch(r"[\u3041-\u3096ー]+", str(text or "")) is not None
 
 
 def datetime_json(value: datetime | None) -> str | None:
@@ -151,6 +180,10 @@ class MemoryStore:
         comment: str | None = None,
         source: str = "player_feedback",
         revision_line_sources: list[dict[str, Any]] | None = None,
+        revision_edits: list[dict[str, Any]] | None = None,
+        revision_edit_contract: str | None = None,
+        revision_base_text: str | None = None,
+        parent_revision_id: str | None = None,
         observed_at: datetime | None = None,
     ) -> dict[str, Any]:
         """元句を長期に残し、直し句があれば revision にペア保存する。
@@ -165,8 +198,27 @@ class MemoryStore:
             "formal",
             "conversational",
             "generated_confirmed",
+            "player_line_confirmed",
         }:
             raise ValueError(f"unknown haiku revision source: {source}")
+        base_text = _canonical_revision_verse(revision_base_text or emission.text)
+        emission_base_text = _canonical_revision_verse(emission.text)
+        parent_id = (parent_revision_id or "").strip() or None
+        if revision_source in {"generated_confirmed", "player_line_confirmed"}:
+            if base_text != emission_base_text and parent_id is None:
+                raise ValueError("continued line revision requires a parent revision")
+            if parent_id is not None:
+                parents = [
+                    row
+                    for row in self.list_haiku_revisions()
+                    if row.get("id") == parent_id
+                ]
+                if (
+                    len(parents) != 1
+                    or parents[0].get("haiku_id") != entry.get("id")
+                    or str(parents[0].get("revised_text") or "").strip() != base_text
+                ):
+                    raise ValueError("parent revision does not match the edit base")
         if revision_source == "generated_confirmed":
             rows = revision_line_sources or []
             valid_rows = [
@@ -182,12 +234,47 @@ class MemoryStore:
                     isinstance(atom_id, str) and bool(atom_id.strip())
                     for atom_id in row["atom_ids"]
                 )
+                and len(set(row["atom_ids"])) == len(row["atom_ids"])
             ]
             indices = {row["line_index"] for row in valid_rows}
             if len(rows) != 3 or len(valid_rows) != 3 or indices != {0, 1, 2}:
                 raise ValueError(
                     "generated_confirmed revision requires non-empty sources for all three lines"
                 )
+            if not line_edit_plan_applies(
+                original_text=base_text,
+                revised_text=revised_text or "",
+                edit_contract=revision_edit_contract,
+                edits=revision_edits,
+            ):
+                raise ValueError("generated_confirmed revision does not apply to the original")
+            source_ids_by_index = {
+                row["line_index"]: tuple(row["atom_ids"])
+                for row in valid_rows
+            }
+            if any(
+                tuple(edit.get("atom_ids") or ())
+                != source_ids_by_index.get(edit.get("line_index"))
+                for edit in revision_edits or []
+            ):
+                raise ValueError("generated_confirmed edit sources do not match line sources")
+        elif revision_source == "player_line_confirmed":
+            if revision_edit_contract != PLAYER_LINE_EDIT_CONTRACT_VERSION:
+                raise ValueError("player line revision requires the player edit contract")
+            if not _is_strict_hiragana_verse(base_text) or not _is_strict_hiragana_verse(revised_text):
+                raise ValueError("player line revision requires hiragana for all three lines")
+            if any(
+                not _is_strict_hiragana_line(edit.get("replacement_text"))
+                for edit in revision_edits or []
+            ):
+                raise ValueError("player line revision edit replacement must be hiragana")
+            if not line_edit_plan_applies(
+                original_text=base_text,
+                revised_text=revised_text or "",
+                edit_contract=revision_edit_contract,
+                edits=revision_edits,
+            ):
+                raise ValueError("player line revision does not apply to its base verse")
         revision = {
             "id": self._revision_id(created_at, emission.event_sequence),
             "created_at": datetime_json(created_at),
@@ -195,6 +282,9 @@ class MemoryStore:
             "source": revision_source,
             "comment": (comment or "").strip() or None,
             "original_text": emission.text.strip(),
+            # 連続編集では初回発句ではなく、直前に採用した三行がCASの基準。
+            "base_text": base_text,
+            "parent_revision_id": parent_id,
             "revised_text": (revised_text or "").strip() or None,
             # AI修正を明示採用した場合だけ、検証済みの行別出典を監査用に残す。
             # 元カタログJSONを書き換えるものではない。
@@ -206,6 +296,9 @@ class MemoryStore:
                 "dimension": emission.dimension,
             },
         }
+        if revision_source in {"generated_confirmed", "player_line_confirmed"}:
+            revision["edit_contract"] = revision_edit_contract
+            revision["edits"] = revision_edits
         self._append_jsonl(self.haiku_revisions_path, revision)
         return revision
 
@@ -625,7 +718,8 @@ class MemoryStore:
     def _revision_id(self, created_at: datetime, sequence: int | None) -> str:
         timestamp = created_at.strftime("%Y%m%d_%H%M%S")
         sequence_part = str(sequence) if sequence is not None else created_at.strftime("%f")
-        return f"rev_{timestamp}_{sequence_part}"
+        # 同じ発句を同一秒に連続採用しても、親revisionを一意に辿れるようにする。
+        return f"rev_{timestamp}_{sequence_part}_{uuid4().hex[:8]}"
 
     def _default_profile(self, player_name: str) -> dict[str, Any]:
         return {

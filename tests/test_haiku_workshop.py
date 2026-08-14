@@ -8,10 +8,21 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dogido_server.config import Settings
+from dogido_server.haiku.edit_contract import (
+    LINE_EDIT_CONTRACT_VERSION,
+    PLAYER_LINE_EDIT_CONTRACT_VERSION,
+    line_edit_plan_applies,
+)
 from dogido_server.haiku.workshop import (
+    PlayerLineReplacement,
+    WorkshopAnalysis,
+    WorkshopFinding,
+    advance_workshop_revision,
+    build_player_line_revision,
     build_workshop_intent_llm_details,
     classify_workshop_intent,
     close_workshop,
+    extract_player_line_replacement,
     finalize_workshop_analysis_payload,
     is_open,
     is_workshop_hard_off_topic,
@@ -20,9 +31,13 @@ from dogido_server.haiku.workshop import (
     record_drift,
     render_workshop_reply,
     pending_revision_decision,
+    pending_revision_is_current,
+    parse_player_line_replacement,
     repair_target_indices,
     should_handle_as_workshop,
+    update_marked_workshop_line,
     workshop_open_intent,
+    wants_show_workshop_verse,
 )
 from dogido_server.memory import MemoryStore
 from dogido_server.memory_types import HaikuEmission
@@ -89,6 +104,22 @@ class WorkshopLifecycleTests(unittest.TestCase):
         assert closed is not None
         self.assertFalse(closed.open)
         self.assertEqual(closed.close_reason, "timeout_idle")
+
+    def test_pending_revision_is_compare_and_swap_on_the_pinned_verse(self) -> None:
+        ws = open_from_emission(_emission("はるのかぜ\nひつじがあるく\nよるのつき"))
+        ws.pending_revision = "はるのかぜ\nあめつよくふる\nよるのつき"
+        ws.pending_revision_base_text = "はるのかぜ\nひつじがあるく\nよるのつき"
+        ws.pending_revision_edits = [{
+            "line_index": 1,
+            "expected_text": "ひつじがあるく",
+            "replacement_text": "あめつよくふる",
+            "atom_ids": ["observation:test:3"],
+        }]
+        ws.pending_revision_edit_contract = "line_compare_and_swap_v1"
+
+        self.assertTrue(pending_revision_is_current(ws))
+        ws.surface_text = "はるのかぜ\nべつのぎょうや\nよるのつき"
+        self.assertFalse(pending_revision_is_current(ws))
 
 
 class WorkshopIntentTests(unittest.TestCase):
@@ -305,6 +336,177 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertIsNone(pending_revision_decision("その案でいい？"))
         self.assertIsNone(pending_revision_decision("元のままじゃなくて、その案で"))
         self.assertIsNone(pending_revision_decision("元のままにする？"))
+
+    def test_generated_and_player_edit_contracts_do_not_cross(self) -> None:
+        original = "ゆうぐれの\nてのなかのくさ\nあめふりや"
+        revised = "ゆうぐれや\nてのなかのくさ\nあめふりや"
+        player_edit = [{
+            "line_index": 0,
+            "expected_text": "ゆうぐれの",
+            "replacement_text": "ゆうぐれや",
+            "provenance": "player_explicit",
+        }]
+        generated_edit = [{
+            "line_index": 0,
+            "expected_text": "ゆうぐれの",
+            "replacement_text": "ゆうぐれや",
+            "atom_ids": ["observation:test:0"],
+        }]
+        self.assertTrue(
+            line_edit_plan_applies(
+                original_text=original,
+                revised_text=revised,
+                edit_contract=PLAYER_LINE_EDIT_CONTRACT_VERSION,
+                edits=player_edit,
+            )
+        )
+        self.assertFalse(
+            line_edit_plan_applies(
+                original_text=original,
+                revised_text=revised,
+                edit_contract=LINE_EDIT_CONTRACT_VERSION,
+                edits=player_edit,
+            )
+        )
+        self.assertFalse(
+            line_edit_plan_applies(
+                original_text=original,
+                revised_text=revised,
+                edit_contract=PLAYER_LINE_EDIT_CONTRACT_VERSION,
+                edits=generated_edit,
+            )
+        )
+
+    def test_player_line_replacement_is_explicit_and_normalized_by_code(self) -> None:
+        replacement = extract_player_line_replacement("上五を夕暮れやに変えた方がいい")
+        self.assertEqual(
+            replacement,
+            PlayerLineReplacement(text="夕暮れや", explicit_line_index=0),
+        )
+        self.assertEqual(
+            extract_player_line_replacement("夕暮れのより夕暮れやの方がいいんじゃないかな"),
+            PlayerLineReplacement(text="夕暮れや"),
+        )
+        self.assertEqual(
+            extract_player_line_replacement(
+                "穏やかなじゃ4文字だからさ 穏やかなでいいんじゃない"
+            ),
+            PlayerLineReplacement(text="穏やかな"),
+        )
+        self.assertEqual(
+            extract_player_line_replacement("上五は穏やかなでいいんじゃない"),
+            PlayerLineReplacement(text="穏やかな", explicit_line_index=0),
+        )
+        self.assertIsNone(extract_player_line_replacement("夕暮れやの方がいいとは思わない"))
+        self.assertIsNone(extract_player_line_replacement("穏やかなでいいとは思わない"))
+        self.assertIsNone(extract_player_line_replacement("穏やかなでいいと言われた"))
+        self.assertIsNone(extract_player_line_replacement("夕暮れやに変えてない"))
+        self.assertIsNone(extract_player_line_replacement("夕暮れやに変えた方がいいと言われた"))
+        self.assertIsNone(extract_player_line_replacement("上五と下五を夕暮れやに変えた方がいい"))
+        self.assertEqual(
+            parse_player_line_replacement("上五と下五を夕暮れやに変えた方がいい").status,
+            "ambiguous",
+        )
+
+        ws = open_from_emission(
+            _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや")
+        )
+        assert replacement is not None
+        staged = build_player_line_revision(ws, replacement)
+        self.assertEqual(
+            staged.text,
+            "ゆうぐれや\nてのなかのくさ\nあめふりや",
+        )
+        self.assertEqual(staged.edits[0]["provenance"], "player_explicit")
+        self.assertNotIn("夕暮", staged.text or "")
+
+    def test_player_line_revision_accumulates_other_lines_before_acceptance(self) -> None:
+        ws = open_from_emission(
+            _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや")
+        )
+        first = build_player_line_revision(
+            ws,
+            PlayerLineReplacement("夕暮れや", explicit_line_index=0),
+        )
+        assert first.text is not None
+        ws.pending_revision = first.text
+        ws.pending_revision_base_text = first.base_text
+        ws.pending_revision_edits = [dict(edit) for edit in first.edits]
+        ws.pending_revision_edit_contract = "player_line_compare_and_swap_v1"
+        ws.pending_revision_source = "player_line_confirmed"
+
+        second = build_player_line_revision(
+            ws,
+            PlayerLineReplacement("雨の夜", explicit_line_index=2),
+        )
+        self.assertEqual(
+            second.text,
+            "ゆうぐれや\nてのなかのくさ\nあめのよる",
+        )
+        self.assertEqual([edit["line_index"] for edit in second.edits], [0, 2])
+        self.assertEqual(ws.display_line(), "ゆうぐれの\nてのなかのくさ\nあめふりや")
+
+        ws.pending_revision = second.text
+        ws.pending_revision_edits = [dict(edit) for edit in second.edits]
+        advance_workshop_revision(ws, revision_id="rev_2")
+        self.assertEqual(ws.display_line(), second.text)
+        self.assertEqual(ws.current_revision_id, "rev_2")
+        self.assertTrue(is_open(ws))
+        self.assertIsNone(ws.pending_revision)
+
+    def test_validated_finding_marks_the_next_player_replacement_line(self) -> None:
+        ws = open_from_emission(
+            _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや")
+        )
+        marked = update_marked_workshop_line(
+            ws,
+            findings=(
+                WorkshopFinding(
+                    line_index=1,
+                    fragment="てのなかのくさ",
+                    problem="preference",
+                    note="中七を直したい",
+                    confidence=0.95,
+                ),
+            ),
+            player_text="真ん中がおかしい",
+        )
+        self.assertEqual(marked, 1)
+        staged = build_player_line_revision(
+            ws,
+            PlayerLineReplacement("草を握って"),
+        )
+        self.assertEqual(
+            staged.text,
+            "ゆうぐれの\nくさをにぎって\nあめふりや",
+        )
+
+    def test_player_line_revision_rejects_non_exact_meter_and_ambiguous_target(self) -> None:
+        ws = open_from_emission(
+            _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや")
+        )
+        missing = build_player_line_revision(ws, PlayerLineReplacement("夕暮れや"))
+        self.assertIn("missing_target", missing.failure_reasons)
+        too_long = build_player_line_revision(
+            ws,
+            PlayerLineReplacement("夕暮れやん", explicit_line_index=0),
+        )
+        self.assertIn("meter_not_exact", too_long.failure_reasons)
+        self.assertIsNone(too_long.text)
+
+        four_lines = open_from_emission(
+            _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや\nよけいなぎょう")
+        )
+        invalid = build_player_line_revision(
+            four_lines,
+            PlayerLineReplacement("夕暮れや", explicit_line_index=0),
+        )
+        self.assertIn("invalid_verse", invalid.failure_reasons)
+
+    def test_show_workshop_verse_is_a_closed_code_intent(self) -> None:
+        self.assertTrue(wants_show_workshop_verse("全体はどうなった？"))
+        self.assertTrue(wants_show_workshop_verse("今の句を読んで"))
+        self.assertFalse(wants_show_workshop_verse("全体的にいい句やな"))
 
     def test_negative_praise_is_not_classified_as_praise(self) -> None:
         self.assertNotEqual(classify_workshop_intent("いい句じゃない"), "praise")
@@ -579,6 +781,230 @@ class WorkshopIntentTests(unittest.TestCase):
 
 
 class WorkshopServiceIntegrationTests(unittest.TestCase):
+    def test_player_line_edits_accumulate_and_continue_after_confirmation(self) -> None:
+        from dogido_server.player_input.routing import route_player_input
+
+        with tempfile.TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(
+                    llm_enabled=False,
+                    audio_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=Path(tmp) / "mem",
+                )
+
+            )
+            response = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            session = service.sessions[response.session_id]
+            emission = _emission(
+                text="おだやかなる\nてのなかのくさ\nあめふりや"
+            )
+            session.last_haiku_emission = emission
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id="h_player_edit",
+                now=emission.created_at,
+            )
+
+            def analyze(workshop: RecentHaikuWorkshop, player_text: str):
+                findings = (
+                    (
+                        WorkshopFinding(
+                            line_index=0,
+                            fragment="おだやかなる",
+                            problem="meter",
+                            note="語尾の一音が長い",
+                            confidence=0.95,
+                        ),
+                    )
+                    if "長い" in player_text
+                    else ()
+                )
+                return (
+                    WorkshopAnalysis(
+                        intent="critique_forced",
+                        confidence=1.0,
+                        findings=findings,
+                    ),
+                    "test",
+                )
+
+            service._analyze_workshop_feedback = analyze  # type: ignore[method-assign]
+
+            def event(sequence: int, text: str) -> GameEvent:
+                return GameEvent(
+                    schema_version="2026-05-24",
+                    adapter="test",
+                    observed_at=emission.created_at + timedelta(seconds=sequence * 5),
+                    sequence=sequence,
+                    event=EventDescriptor(
+                        name=EventName.STATUS_SNAPSHOT,
+                        source_kind=SourceKind.SYSTEM,
+                        priority_hint=PriorityHint.BACKGROUND,
+                        certainty=Certainty.HIGH,
+                    ),
+                    player=PlayerState(name="p", dimension="minecraft:overworld"),
+                    world=WorldState(
+                        time_phase=TimePhase.DAY,
+                        weather=Weather.CLEAR,
+                        biome="meadow",
+                        local_light=15,
+                        sky_visible=True,
+                    ),
+                    meta=MetaState(user_text=text),
+                )
+
+            def send(sequence: int, text: str) -> list[AudioAction]:
+                session.machine.player_input = route_player_input(text)
+                return service._haiku_workshop_actions(session, event(sequence, text))
+
+            with self.assertLogs("uvicorn.error", level="WARNING") as locate_logs:
+                send(1, "おだやかなるの『る』がちょっと長い")
+            assert session.haiku_workshop is not None
+            self.assertEqual(session.haiku_workshop.marked_line_index, 0)
+            self.assertIn("haiku_workshop_locate", "\n".join(locate_logs.output))
+            with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+                first = send(
+                    2,
+                    "穏やかなじゃ4文字だからさ 穏やかなでいいんじゃない",
+                )
+            self.assertIn("おだやかな", first[0].text or "")
+            joined_logs = "\n".join(captured.output)
+            self.assertIn("haiku_workshop_player_line_parse", joined_logs)
+            self.assertIn("result=accepted", joined_logs)
+            self.assertIn("haiku_workshop_player_line_edit", joined_logs)
+            self.assertIn("result=staged", joined_logs)
+            second = send(3, "下五を雨の夜に変えた方がいい")
+            self.assertIn("あめのよる", second[0].text or "")
+            assert session.haiku_workshop is not None
+            self.assertEqual(
+                session.haiku_workshop.pending_revision,
+                "おだやかな\nてのなかのくさ\nあめのよる",
+            )
+            self.assertEqual(service.memory.list_haiku_revisions(), [])
+            self.assertEqual(
+                build_workshop_intent_llm_details(
+                    session.haiku_workshop,
+                    "この句どうかな",
+                )["verse"],
+                session.haiku_workshop.pending_revision,
+            )
+
+            ambiguous = send(4, "上五と下五を朝の雨に変えた方がいい")
+            self.assertIn("一つ", ambiguous[0].text or "")
+            self.assertEqual(
+                session.haiku_workshop.pending_revision,
+                "おだやかな\nてのなかのくさ\nあめのよる",
+            )
+
+            shown = send(5, "全体はどうなった？")
+            self.assertIn(session.haiku_workshop.pending_revision, shown[0].text or "")
+
+            accepted = send(6, "その案で")
+            self.assertIn("まだ直したい行", accepted[0].text or "")
+            assert session.haiku_workshop is not None
+            self.assertTrue(is_open(session.haiku_workshop))
+            self.assertEqual(
+                session.haiku_workshop.display_line(),
+                "おだやかな\nてのなかのくさ\nあめのよる",
+            )
+            first_revision = service.memory.list_haiku_revisions()[0]
+            self.assertEqual(first_revision["source"], "player_line_confirmed")
+            self.assertEqual(first_revision["base_text"], emission.text)
+            self.assertEqual([edit["line_index"] for edit in first_revision["edits"]], [0, 2])
+            self.assertNotRegex(first_revision["revised_text"], r"[一-龯ァ-ヶ]")
+
+            third = send(7, "中七を草を握ってに変えた方がいい")
+            self.assertIn("くさをにぎって", third[0].text or "")
+            send(8, "その案で")
+            assert session.haiku_workshop is not None
+            revisions = service.memory.list_haiku_revisions()
+            self.assertEqual(len(revisions), 2)
+            self.assertEqual(revisions[1]["base_text"], revisions[0]["revised_text"])
+            self.assertEqual(revisions[1]["parent_revision_id"], revisions[0]["id"])
+            self.assertEqual(
+                session.haiku_workshop.display_line(),
+                "おだやかな\nくさをにぎって\nあめのよる",
+            )
+            with self.assertRaisesRegex(ValueError, "parent revision"):
+                service.memory.save_haiku_feedback(
+                    emission,
+                    revised_text=revisions[1]["revised_text"],
+                    source="player_line_confirmed",
+                    revision_base_text=revisions[1]["base_text"],
+                    parent_revision_id="rev_wrong_parent",
+                    revision_edit_contract=revisions[1]["edit_contract"],
+                    revision_edits=revisions[1]["edits"],
+                    observed_at=emission.created_at + timedelta(seconds=60),
+                )
+
+    def test_full_conversational_revision_is_not_taken_as_a_line_replacement(self) -> None:
+        from dogido_server.player_input.routing import route_player_input
+
+        with tempfile.TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(
+                    llm_enabled=False,
+                    audio_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=Path(tmp) / "mem",
+                )
+            )
+            response = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            session = service.sessions[response.session_id]
+            emission = _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや")
+            session.last_haiku_emission = emission
+            service._open_haiku_workshop(session, emission, entry_id="h_full", now=emission.created_at)
+            text = "こう直して: はるのかぜ / よるのつき / ゆきにかえて"
+            session.machine.player_input = route_player_input(text)
+            event = GameEvent(
+                schema_version="2026-05-24",
+                adapter="test",
+                observed_at=emission.created_at + timedelta(seconds=5),
+                sequence=2,
+                event=EventDescriptor(
+                    name=EventName.STATUS_SNAPSHOT,
+                    source_kind=SourceKind.SYSTEM,
+                    priority_hint=PriorityHint.BACKGROUND,
+                    certainty=Certainty.HIGH,
+                ),
+                player=PlayerState(name="p", dimension="minecraft:overworld"),
+                world=WorldState(
+                    time_phase=TimePhase.DAY,
+                    weather=Weather.CLEAR,
+                    biome="meadow",
+                    local_light=15,
+                    sky_visible=True,
+                ),
+                meta=MetaState(user_text=text),
+            )
+            reply = service._haiku_workshop_actions(session, event)
+            self.assertIn("覚え", reply[0].text or "")
+            self.assertIsNone(session.haiku_workshop)
+            self.assertEqual(
+                service.memory.list_haiku_revisions()[0]["revised_text"],
+                "はるのかぜ\nよるのつき\nゆきにかえて",
+            )
+
     def test_voice_input_uses_workshop_context_only_for_semantic_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             service = DogidoService(
@@ -705,11 +1131,15 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
         class RepairLLM:
             def __init__(self) -> None:
                 self.requests = []
+                self.leaf_requests = []
 
             def preload(self) -> bool:
                 return False
 
             def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                self.leaf_requests.append(request)
+                if request.kind == "haiku_workshop_reply":
+                    return "二行目を、雨の場面に寄せてみたで。"
                 return request.fallback_text
 
             def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
@@ -730,7 +1160,8 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 if request.kind == "haiku_workshop_revision":
                     return {"lines": [{
                         "line_index": 1,
-                        "text": "あめつよくふる",
+                        "expected_text": "ひつじがあるく",
+                        "replacement_text": "あめつよくふる",
                         "atom_ids": ["observation:test:3"],
                     }]}
                 if request.kind == "haiku_line_grounding":
@@ -756,6 +1187,8 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     field_path="observed_label",
                     observation_role="test",
                     kind="observation",
+                    claim_class="factual",
+                    claim_scopes=("observed_state",),
                 )
                 for index, text in enumerate(("春の風", "歩く羊", "夜の月", "強い雨"))
             ]
@@ -823,20 +1256,36 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             session.machine.player_input = route_player_input("そこ直して")
             proposed = service._haiku_workshop_actions(session, event(2, "そこ直して"))
             self.assertIn("あめつよくふる", proposed[0].text or "")
+            self.assertIn("雨の場面に寄せて", proposed[0].text or "")
             assert session.haiku_workshop is not None
             self.assertEqual(session.haiku_workshop.pending_revision, "はるのかぜ\nあめつよくふる\nよるのつき")
             self.assertEqual(service.memory.list_haiku_revisions(), [])
             revision_request = next(request for request in llm.requests if request.kind == "haiku_workshop_revision")
             self.assertEqual(revision_request.route, "haiku")
+            proposal_leaf = next(request for request in llm.leaf_requests if request.kind == "haiku_workshop_reply")
+            self.assertEqual(proposal_leaf.details["repair_state"], "proposed")
+            self.assertEqual(
+                proposal_leaf.details["proposed_revision"],
+                "はるのかぜ\nあめつよくふる\nよるのつき",
+            )
+            from dogido_server.llm.prompts import build_messages
+
+            proposal_prompt = build_messages(proposal_leaf)[1]["content"]
+            self.assertIn("コード検証済みの修正案", proposal_prompt)
+            self.assertIn("句本文を復唱", proposal_prompt)
 
             session.machine.player_input = route_player_input("その案で")
             saved = service._haiku_workshop_actions(session, event(3, "その案で"))
             self.assertIn("覚え", saved[0].text or "")
-            self.assertIsNone(session.haiku_workshop)
+            self.assertIsNotNone(session.haiku_workshop)
+            self.assertTrue(is_open(session.haiku_workshop))
             revisions = service.memory.list_haiku_revisions()
             self.assertEqual(revisions[0]["revised_text"], "はるのかぜ\nあめつよくふる\nよるのつき")
             self.assertEqual(revisions[0]["source"], "generated_confirmed")
             self.assertEqual(revisions[0]["line_sources"][1]["atom_ids"], ["observation:test:3"])
+            self.assertEqual(revisions[0]["edit_contract"], "line_compare_and_swap_v1")
+            self.assertEqual(revisions[0]["edits"][0]["expected_text"], "ひつじがあるく")
+            self.assertEqual(revisions[0]["edits"][0]["replacement_text"], "あめつよくふる")
 
     def test_emit_opens_workshop_and_critique_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1467,7 +1916,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(is_open(sess.haiku_workshop))
             self.assertEqual(sess.haiku_workshop.drift_count if sess.haiku_workshop else -1, 0)
 
-            # Stage4: other_haiku → 共同編集者 leaf
+            # Stage4: 置換語は取れたが対象行が曖昧なら、コードが行を確認する。
             r2 = service.process_event(
                 _event(3, "黒石炭とかにしたらいいんじゃない?", seconds=10),
                 session_id=sid,
@@ -1475,7 +1924,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             speeches2 = [a.text for a in r2.actions if a.layer == "speech" and a.text]
             self.assertEqual(len(speeches2), 1)
             self.assertIn("haiku_workshop_reply", llm.kinds)
-            self.assertIn("長いかも", speeches2[0])
+            self.assertIn("どの行", speeches2[0])
             self.assertTrue(is_open(sess.haiku_workshop), msg="2回添削でも drift close しない")
             self.assertNotIn("player_chat", llm.kinds)
 
@@ -1486,7 +1935,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
             speeches3 = [a.text for a in r3.actions if a.layer == "speech" and a.text]
             self.assertEqual(len(speeches3), 1)
-            self.assertEqual(llm.kinds.count("haiku_workshop_reply"), 3)
+            self.assertEqual(llm.kinds.count("haiku_workshop_reply"), 2)
             self.assertTrue(is_open(sess.haiku_workshop))
             self.assertNotIn("player_chat", llm.kinds)
 

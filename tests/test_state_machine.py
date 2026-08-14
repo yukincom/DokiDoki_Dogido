@@ -25,10 +25,36 @@ class FakeLLM(DogidoLLM):
         return f"LLM:{request.kind}"
 
     def generate_structured_json(self, request):  # type: ignore[override]
+        if request.kind == "haiku_preface_grounding":
+            return {
+                "assessments": [
+                    {
+                        "clause_index": index,
+                        "basis_atom_ids": clause["basis_atom_ids"],
+                        "claim_class": clause["claim_class"],
+                        "meaning_retained": True,
+                        "class_correct": True,
+                        "within_claim_scope": True,
+                        "natural_japanese": True,
+                    }
+                    for index, clause in enumerate(request.details.get("preface_clauses", []))
+                ],
+                "__dogido_status": "accepted",
+            }
         if request.kind == "haiku_scene":
+            atoms = request.details.get("source_atoms", [])
+            atom_ids = [
+                atom["atom_id"]
+                for atom in atoms
+                if isinstance(atom, dict) and isinstance(atom.get("atom_id"), str)
+            ]
             return {
                 "found": True,
-                "summary": "川の光と空の対比",
+                "clauses": [{
+                    "text": "川の光と空の対比",
+                    "basis_atom_ids": atom_ids[:2],
+                    "claim_class": "interpretive",
+                }],
                 "motifs": ["川", "光"],
                 "focus": ["川"],
                 "confidence": 0.8,
@@ -8120,7 +8146,11 @@ class StateMachineTests(unittest.TestCase):
         )
 
     def test_deep_submerged_dark_zone_emits_darkness_then_haiku_after_silence(self) -> None:
-        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
+        # このシナリオは暗所発話から10分静まる順序を検証するため周期を明示固定する。
+        machine = DogidoStateMachine(
+            Settings(audio_enabled=False, haiku_interval_ms=600000),
+            llm=FakeLLM(),
+        )
         first_event = GameEvent.model_validate_json(
             """
             {
@@ -8225,7 +8255,7 @@ class StateMachineTests(unittest.TestCase):
 
         speech = next(action for action in first.actions if action.layer == "speech")
         self.assertEqual(speech.text, "……暗いのは、にがてなんやけど……。")
-        # 川柳の周期（10分）が満ちるまでは詠まない
+        # このテストで固定した川柳周期（10分）が満ちるまでは詠まない
         self.assertEqual([action.text for action in second.actions if action.layer == "speech"], [])
         # 周期が満ちたら見どころ preface（「ここで一句」は付けない）→ 次で本句
         third_speech = [action.text for action in third.actions if action.layer == "speech"]
@@ -8233,11 +8263,13 @@ class StateMachineTests(unittest.TestCase):
         self.assertNotIn("ここで一句", third_speech[0])
         fourth_speech = [action.text for action in fourth.actions if action.layer == "speech"]
         self.assertEqual(len(fourth_speech), 1)
-        # 情景が弱ければカタログ、強ければ LLM 句
+        # 情景が弱ければカタログ、強ければ LLM 句。生成品質ゲートを
+        # 通らなかった場合は、不完全な句を出さず失敗返答で閉じる。
         self.assertTrue(
             fourth_speech[0] in {
                 "はるのかわ\nみずのひかりに\nうごくそら",
                 "五月雨を　集めてはやし　シミュレート",
+                "まとまらんかった。。。",
             }
             or "五月雨" in fourth_speech[0]
             or "はるのかわ" in fourth_speech[0]

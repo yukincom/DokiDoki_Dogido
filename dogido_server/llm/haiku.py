@@ -11,16 +11,36 @@ def is_haiku_line_usable(
 ) -> bool:
     """出典検証前の一行を、かな・音数・hard制約だけで判定する。"""
 
-    if line_index not in (0, 1, 2) or not text:
-        return False
-    if "\n" in text or "\r" in text or not _is_haiku_script_ok(text):
-        return False
+    return not haiku_line_failure_reasons(text, line_index, details)
+
+
+def haiku_line_failure_reasons(
+    text: str,
+    line_index: int,
+    details: dict[str, object] | None = None,
+) -> tuple[str, ...]:
+    """採否と同じコード検査を、再生成へ返せる閉じた理由へ分解する。"""
+
+    reasons: list[str] = []
+    if line_index not in (0, 1, 2):
+        return ("invalid_line_index",)
+    if not text:
+        return ("empty_line",)
+    if "\n" in text or "\r" in text:
+        reasons.append("multiline")
+    if not _is_haiku_script_ok(text):
+        reasons.append("invalid_script")
     if _contains_forbidden_gibberish_sequence(text):
-        return False
+        reasons.append("gibberish_sequence")
     target = (5, 7, 5)[line_index]
-    if abs(count_japanese_sounds(text) - target) > 1:
-        return False
-    return _respects_haiku_constraints(text, details)
+    sound_count = count_japanese_sounds(text)
+    if sound_count < target - 1:
+        reasons.append("meter_too_short")
+    elif sound_count > target + 1:
+        reasons.append("meter_too_long")
+    if not _respects_haiku_constraints(text, details):
+        reasons.append("hard_forbidden_term")
+    return tuple(reasons)
 
 
 def _is_haiku_script_ok(text: str) -> bool:

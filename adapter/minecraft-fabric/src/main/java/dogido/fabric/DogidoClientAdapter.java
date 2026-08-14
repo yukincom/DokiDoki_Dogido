@@ -42,7 +42,9 @@ import net.minecraft.entity.mob.PiglinEntity;
 import net.minecraft.entity.mob.ShulkerEntity;
 import net.minecraft.entity.mob.SpiderEntity;
 import net.minecraft.entity.mob.ZombifiedPiglinEntity;
+import net.minecraft.entity.passive.AbstractHorseEntity;
 import net.minecraft.entity.passive.BeeEntity;
+import net.minecraft.entity.passive.CamelEntity;
 import net.minecraft.entity.passive.DolphinEntity;
 import net.minecraft.entity.passive.FoxEntity;
 import net.minecraft.entity.passive.GoatEntity;
@@ -54,6 +56,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.passive.WolfEntity;
+import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.village.VillagerData;
@@ -70,6 +73,7 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
 import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -90,6 +94,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;
     private static final int WARDEN_SPECIAL_LATCH_TICKS = 100;
     private static final double LARGE_POSITION_JUMP_BLOCKS = 48.0;
+    // 乗り物の微小な同期揺れを「移動中」と誤認しないための水平速度閾値。
+    // 単位は block/tick の二乗。実際の歩行・航行速度より十分小さい。
+    private static final double VEHICLE_MOVING_SPEED_SQUARED = 0.0001;
     private static final int BOSS_OMEN_SCAN_RADIUS = 20;
     private static final int WITHER_OMEN_SCAN_RADIUS = 8;
     private static final int LIT_INTERIOR_SAFE_LIGHT_THRESHOLD = 9;
@@ -1242,6 +1249,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             "held_item",
             held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
         );
+        JsonObject vehicle = buildVehicleState(player);
+        if (vehicle != null) {
+            // 未乗車時はキーごと省略する。「乗っていない」をLLM材料にしない。
+            json.add("vehicle", vehicle);
+        }
         JsonArray activeEffects = new JsonArray();
         for (net.minecraft.entity.effect.StatusEffectInstance effect : player.getStatusEffects()) {
             Identifier effectId = effect.getEffectType().getKey().map(key -> key.getValue()).orElse(null);
@@ -1251,6 +1263,48 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             activeEffects.add(effectId.getPath());
         }
         json.add("active_status_effects", activeEffects);
+        return json;
+    }
+
+    private JsonObject buildVehicleState(ClientPlayerEntity player) {
+        Entity vehicle = player.getVehicle();
+        if (vehicle == null) {
+            return null;
+        }
+
+        boolean controlling = vehicle.getControllingPassenger() == player;
+        Vec3d velocity = vehicle.getVelocity();
+        double horizontalSpeedSquared = (velocity.x * velocity.x) + (velocity.z * velocity.z);
+        boolean moving = horizontalSpeedSquared >= VEHICLE_MOVING_SPEED_SQUARED;
+        PlayerInput input = player.getLastPlayerInput();
+        boolean directionalInput = input.forward() || input.backward() || input.left() || input.right();
+
+        String activity = "riding";
+        if (
+            controlling
+                && vehicle instanceof AbstractBoatEntity boat
+                && (boat.isPaddleMoving(0) || boat.isPaddleMoving(1))
+        ) {
+            // 船・いかだだけは、パドル実測があるときに限り「漕いでいる」。
+            activity = "rowing";
+        } else if (controlling && vehicle instanceof CamelEntity camel && camel.isDashing()) {
+            activity = "dashing";
+        } else if (
+            controlling
+                && moving
+                && directionalInput
+                && vehicle instanceof AbstractHorseEntity
+        ) {
+            // 落下・押し流し・ノックバックだけでは「走っている」にしない。
+            activity = "running";
+        } else if (moving) {
+            activity = "moving";
+        }
+
+        JsonObject json = new JsonObject();
+        json.addProperty("vehicle_id", Registries.ENTITY_TYPE.getId(vehicle.getType()).toString());
+        json.addProperty("activity", activity);
+        json.addProperty("controlling", controlling);
         return json;
     }
 
@@ -1605,6 +1659,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private String nearbyResourceNameForBlock(BlockState state) {
         String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        // 地表の積雪は、バイオーム名や気温から推測せず実ブロックを送る。
+        // サーバー側で標高・天気と合わせ、川柳と雑談の共通材料にする。
+        if ("snow".equals(blockId) || "snow_block".equals(blockId) || "powder_snow".equals(blockId)) {
+            return blockId;
+        }
         if (blockId.endsWith("_log") || blockId.endsWith("_planks") || blockId.endsWith("_wool")) {
             return blockId;
         }

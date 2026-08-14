@@ -105,7 +105,7 @@ def _has_kanji(text: str) -> bool:
     return bool(_KANJI_RE.search(text))
 
 
-def _katakana_to_hiragana(text: str) -> str:
+def katakana_to_hiragana(text: str) -> str:
     """カタカナをひらがなへ。長音・その他はそのまま。"""
     out: list[str] = []
     for ch in text:
@@ -187,7 +187,7 @@ def _token_to_hiragana(surface: str, feature: Any) -> str:
         return preferred
     # kana は表記寄り（キョウ）、pron は長音記号寄り（キョー）。VOICEVOX には kana を優先。
     kana = (getattr(feature, "kana", None) or getattr(feature, "pron", None) or "").strip()
-    return _katakana_to_hiragana(kana)
+    return katakana_to_hiragana(kana)
 
 
 def apply_unidic_reading(text: str) -> str:
@@ -209,6 +209,35 @@ def apply_unidic_reading(text: str) -> str:
     except Exception as exc:  # noqa: BLE001
         logger.warning("tts_reading: UniDic parse failed (%s); skipping", exc)
         return text
+
+
+def hiraganize_japanese_text(text: str) -> str:
+    """漢字混じりの短文を、意味・語順を変えずUniDicの読みへ展開する。
+
+    TTSの自然さ調整とは異なり、川柳などの表記検査前に使う中立な正規化。
+    漢字を含む全トークンを対象とし、辞書に読みが無い語・UniDic未導入・
+    解析失敗では推測せず原文を残す。呼び出し側が残留漢字を検査する。
+    """
+
+    source = str(text or "")
+    if not source or not _has_kanji(source):
+        return source
+    tagger = _get_unidic_tagger()
+    if tagger is None:
+        return source
+    try:
+        parts: list[str] = []
+        for word in tagger(source):
+            surface = word.surface
+            if _has_kanji(surface):
+                reading = _token_to_hiragana(surface, word.feature)
+                parts.append(reading if reading else surface)
+            else:
+                parts.append(surface)
+        return "".join(parts)
+    except Exception as exc:  # noqa: BLE001 — optional path must never break generation
+        logger.warning("tts_reading: UniDic full reading failed (%s); skipping", exc)
+        return source
 
 
 def prepare_text_for_tts(text: str, *, engine: str | None = None) -> str:

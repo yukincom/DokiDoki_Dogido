@@ -11,6 +11,17 @@ import re
 from typing import Any, Iterable
 
 
+CLAIM_CLASSES = frozenset({"factual", "interpretive"})
+CLAIM_SCOPES = frozenset(
+    {
+        "identity_only",
+        "source_meaning",
+        "observed_state",
+        "poetic_interpretation",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogSourceSnapshot:
     """観測したカタログ項目の、その時点での原文スナップショット。"""
@@ -54,9 +65,15 @@ class HaikuSourceAtom:
     source_ref: str
     field_path: str
     observation_role: str
-    kind: str = "catalog_fact"
+    kind: str
+    # factual はカタログ原文・実測の範囲、interpretive は印象・取り合わせの範囲。
+    # どちらも basis に無い新しい事実を足す許可にはしない。
+    claim_class: str
+    claim_scopes: tuple[str, ...]
+    # 発話済み見どころの節だけが持つ、派生元の一次 atom ID。
+    basis_atom_ids: tuple[str, ...] = ()
 
-    def to_prompt_dict(self) -> dict[str, str]:
+    def to_prompt_dict(self) -> dict[str, object]:
         return {
             "atom_id": self.atom_id,
             "text": self.text,
@@ -64,6 +81,27 @@ class HaikuSourceAtom:
             "field_path": self.field_path,
             "observation_role": self.observation_role,
             "kind": self.kind,
+            "claim_class": self.claim_class,
+            "claim_scopes": list(self.claim_scopes),
+            "basis_atom_ids": list(self.basis_atom_ids),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PrefaceClause:
+    """実際に話す見どころの一節と、その主張可能範囲。"""
+
+    text: str
+    basis_atom_ids: tuple[str, ...]
+    claim_class: str
+    claim_scopes: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "text": self.text,
+            "basis_atom_ids": list(self.basis_atom_ids),
+            "claim_class": self.claim_class,
+            "claim_scopes": list(self.claim_scopes),
         }
 
 
@@ -159,6 +197,8 @@ def atoms_from_catalog_sources(
                     field_path="japanese",
                     observation_role=source.observation_role,
                     kind="catalog_label",
+                    claim_class="factual",
+                    claim_scopes=("identity_only",),
                 )
             )
         for index, sentence in enumerate(split_note_sentences(source.note_raw)):
@@ -176,6 +216,9 @@ def atoms_from_catalog_sources(
                     source_ref=source.source_ref,
                     field_path=f"note[{index}]",
                     observation_role=source.observation_role,
+                    kind="catalog_fact",
+                    claim_class="factual",
+                    claim_scopes=("source_meaning",),
                 )
             )
         for field_path, text in source.extra_fields[:max_extra_atoms_per_source]:
@@ -192,6 +235,8 @@ def atoms_from_catalog_sources(
                     field_path=field_path,
                     observation_role=source.observation_role,
                     kind="catalog_field",
+                    claim_class="interpretive",
+                    claim_scopes=("source_meaning",),
                 )
             )
     return tuple(atoms)
@@ -217,41 +262,104 @@ def atoms_from_observations(features: Iterable[Any]) -> tuple[HaikuSourceAtom, .
                 field_path="observed_label",
                 observation_role=key,
                 kind="observation",
+                claim_class="factual",
+                claim_scopes=("observed_state",),
             )
         )
     return tuple(atoms)
 
 
-def atoms_from_spoken_preface(spoken_text: str) -> tuple[HaikuSourceAtom, ...]:
-    """プレイヤーへ実際に話した見どころを、解釈由来の句材料へ分ける。
+def preface_clauses_from_payload(
+    raw_clauses: object,
+    *,
+    source_atoms: Iterable[HaikuSourceAtom],
+) -> tuple[PrefaceClause, ...] | None:
+    """LLM の節ごとの自己申告を、一次 atom と閉じた主張範囲へ束縛する。
 
-    カタログ事実や実測観測へ昇格はしない。発話に現れた節だけを別 provenance
-    で残し、まだ口にしていない scene / irony の連想は句の出典にしない。
+    scope はモデルに決めさせない。factual は引用した一次 atom の scope を継承し、
+    interpretive は印象・関係の表現だけに狭める。一節でも不正なら見どころ全体を
+    捨て、部分的に根拠の無い発話を作らない。
     """
 
-    text = str(spoken_text or "").strip()
-    if not text:
-        return ()
-    text = re.sub(r"[、，]?なんか浮かんできたわ[。．.!！]*$", "", text).strip()
-    if not text or text in {"なんか浮かんできたわ", "なんか浮かんできた"}:
-        return ()
-    clauses = [
-        clause.strip(" 。．.!！?？…")
-        for clause in re.split(r"[。．.!！?？、，]+", text)
-    ]
-    atoms: list[HaikuSourceAtom] = []
-    for index, clause in enumerate(clause for clause in clauses if len(clause) >= 2):
-        atoms.append(
-            HaikuSourceAtom(
-                atom_id=f"preface:spoken:clause:{index}",
-                text=clause,
-                source_ref="preface:spoken",
-                field_path=f"clause[{index}]",
-                observation_role="spoken_preface",
-                kind="preface_interpretation",
+    if not isinstance(raw_clauses, list) or not 1 <= len(raw_clauses) <= 3:
+        return None
+    atom_by_id = {atom.atom_id: atom for atom in source_atoms if not atom.basis_atom_ids}
+    if not atom_by_id:
+        return None
+    clauses: list[PrefaceClause] = []
+    seen_text: set[str] = set()
+    total_chars = 0
+    for raw in raw_clauses:
+        if not isinstance(raw, dict):
+            return None
+        text = _single_spoken_clause(raw.get("text"))
+        raw_ids = raw.get("basis_atom_ids")
+        claim_class = str(raw.get("claim_class") or "").strip()
+        if (
+            not text
+            or not isinstance(raw_ids, list)
+            or not 1 <= len(raw_ids) <= 4
+            or claim_class not in CLAIM_CLASSES
+        ):
+            return None
+        basis_atom_ids = tuple(str(value).strip() for value in raw_ids)
+        if (
+            any(not atom_id or atom_id not in atom_by_id for atom_id in basis_atom_ids)
+            or len(set(basis_atom_ids)) != len(basis_atom_ids)
+        ):
+            return None
+        normalized_text = re.sub(r"\s+", "", text)
+        if normalized_text in seen_text:
+            return None
+        seen_text.add(normalized_text)
+        total_chars += len(text)
+        if total_chars > 72:
+            return None
+
+        bases = tuple(atom_by_id[atom_id] for atom_id in basis_atom_ids)
+        if claim_class == "factual":
+            # 解釈 atom を事実へ昇格させる自己申告は受け入れない。
+            if any(atom.claim_class != "factual" for atom in bases):
+                return None
+            claim_scopes = tuple(
+                scope
+                for scope in ("identity_only", "source_meaning", "observed_state")
+                if any(scope in atom.claim_scopes for atom in bases)
+            )
+        else:
+            claim_scopes = ("poetic_interpretation",)
+        if not claim_scopes:
+            return None
+        clauses.append(
+            PrefaceClause(
+                text=text,
+                basis_atom_ids=basis_atom_ids,
+                claim_class=claim_class,
+                claim_scopes=claim_scopes,
             )
         )
-    return tuple(atoms)
+    return tuple(clauses)
+
+
+def atoms_from_preface_clauses(
+    clauses: Iterable[PrefaceClause],
+) -> tuple[HaikuSourceAtom, ...]:
+    """検証済みで実際に話す節だけを、句が参照できる派生 atom にする。"""
+
+    return tuple(
+        HaikuSourceAtom(
+            atom_id=f"preface:spoken:clause:{index}",
+            text=clause.text,
+            source_ref="preface:spoken",
+            field_path=f"clause[{index}]",
+            observation_role="spoken_preface",
+            kind="preface_clause",
+            claim_class=clause.claim_class,
+            claim_scopes=clause.claim_scopes,
+            basis_atom_ids=clause.basis_atom_ids,
+        )
+        for index, clause in enumerate(clauses)
+    )
 
 
 def merge_source_atoms(*groups: Iterable[HaikuSourceAtom]) -> tuple[HaikuSourceAtom, ...]:
@@ -263,7 +371,8 @@ def merge_source_atoms(*groups: Iterable[HaikuSourceAtom]) -> tuple[HaikuSourceA
     for group in groups:
         for atom in group:
             normalized_text = re.sub(r"\s+", "", atom.text)
-            if atom.atom_id in seen_ids or normalized_text in seen_text:
+            # 発話節は同じ字面でも一次 atom とは別の主張範囲を持つため残す。
+            if atom.atom_id in seen_ids or (not atom.basis_atom_ids and normalized_text in seen_text):
                 continue
             seen_ids.add(atom.atom_id)
             seen_text.add(normalized_text)
@@ -310,10 +419,26 @@ def source_atoms_from_materials(materials: dict[str, Any] | None) -> tuple[Haiku
                 "field_path",
                 "observation_role",
                 "kind",
+                "claim_class",
             )
         }
+        raw_scopes = row.get("claim_scopes")
+        raw_basis = row.get("basis_atom_ids")
         atom_id = values["atom_id"]
-        if not atom_id or atom_id in seen or not values["text"] or not values["source_ref"]:
+        if (
+            not atom_id
+            or atom_id in seen
+            or not values["text"]
+            or not values["source_ref"]
+            or values["claim_class"] not in CLAIM_CLASSES
+            or not isinstance(raw_scopes, list)
+            or not raw_scopes
+            or any(not isinstance(scope, str) or scope not in CLAIM_SCOPES for scope in raw_scopes)
+            or len(set(raw_scopes)) != len(raw_scopes)
+            or not isinstance(raw_basis, list)
+            or any(not isinstance(value, str) or not value.strip() for value in raw_basis)
+            or len(set(raw_basis)) != len(raw_basis)
+        ):
             continue
         seen.add(atom_id)
         atoms.append(
@@ -323,10 +448,73 @@ def source_atoms_from_materials(materials: dict[str, Any] | None) -> tuple[Haiku
                 source_ref=values["source_ref"],
                 field_path=values["field_path"],
                 observation_role=values["observation_role"],
-                kind=values["kind"] or "catalog_fact",
+                kind=values["kind"],
+                claim_class=values["claim_class"],
+                claim_scopes=tuple(raw_scopes),
+                basis_atom_ids=tuple(value.strip() for value in raw_basis),
             )
         )
-    return tuple(atoms)
+    atom_by_id = {atom.atom_id: atom for atom in atoms}
+    valid: list[HaikuSourceAtom] = []
+    for atom in atoms:
+        if atom.kind == "preface_clause":
+            bases = tuple(atom_by_id.get(atom_id) for atom_id in atom.basis_atom_ids)
+            expected_scopes = (
+                tuple(
+                    scope
+                    for scope in ("identity_only", "source_meaning", "observed_state")
+                    if any(
+                        base is not None and scope in base.claim_scopes
+                        for base in bases
+                    )
+                )
+                if atom.claim_class == "factual"
+                else ("poetic_interpretation",)
+            )
+            if (
+                not bases
+                or any(
+                    base is None
+                    or base.kind == "preface_clause"
+                    or not _primary_claim_contract_valid(base)
+                    for base in bases
+                )
+                or (
+                    atom.claim_class == "factual"
+                    and any(base.claim_class != "factual" for base in bases if base is not None)
+                )
+                or atom.claim_scopes != expected_scopes
+            ):
+                continue
+        elif atom.basis_atom_ids:
+            continue
+        elif not _primary_claim_contract_valid(atom):
+            continue
+        valid.append(atom)
+    return tuple(valid)
+
+
+def _single_spoken_clause(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip().strip("「」\"' 。．.!！?？…")
+    if (
+        not 2 <= len(text) <= 36
+        or any(marker in text for marker in ("\n", "\r"))
+        or any(marker in text for marker in ("プレイヤー", "Y座標", "ｙ座標", "%", "％", "確率"))
+    ):
+        return ""
+    return text
+
+
+def _primary_claim_contract_valid(atom: HaikuSourceAtom) -> bool:
+    expected = {
+        "catalog_label": ("factual", ("identity_only",)),
+        "catalog_fact": ("factual", ("source_meaning",)),
+        "catalog_field": ("interpretive", ("source_meaning",)),
+        "observation": ("factual", ("observed_state",)),
+    }.get(atom.kind)
+    return expected == (atom.claim_class, atom.claim_scopes)
 
 
 def line_source_ids_from_materials(

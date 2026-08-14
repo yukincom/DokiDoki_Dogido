@@ -8,6 +8,7 @@ import httpx
 
 from dogido_server.config import Settings
 from dogido_server.llm import DogidoLLM, LeafGenerationRequest, StructuredGenerationRequest
+from dogido_server.llm.router import DogidoLLMRouter
 
 
 class LLMTests(unittest.TestCase):
@@ -20,6 +21,12 @@ class LLMTests(unittest.TestCase):
         cleaned = self.llm._clean_output(text)
 
         self.assertEqual(cleaned, "あー……こわかった……")
+
+    def test_router_reports_disabled_configuration(self) -> None:
+        router = DogidoLLMRouter(Settings(audio_enabled=False, llm_enabled=False))
+
+        self.assertFalse(router.enabled())
+        self.assertFalse(router.route_enabled("haiku"))
 
     def test_clean_output_prefers_final_japanese_line_after_english_reasoning(self) -> None:
         text = (
@@ -280,7 +287,7 @@ class LLMTests(unittest.TestCase):
                     "choices": [
                         {
                             "message": {
-                                "content": '{"found": true, "summary": "朝の草原で手持ちの焚き火台", "motifs": ["朝", "草原"], "focus": ["草原"], "confidence": 0.8}'
+                                "content": '{"found": true, "clauses": [{"text": "朝の草原で手持ちの焚き火台", "basis_atom_ids": ["observation:test:0"], "claim_class": "interpretive"}], "motifs": ["朝", "草原"], "focus": ["草原"], "confidence": 0.8}'
                             }
                         }
                     ]
@@ -292,7 +299,7 @@ class LLMTests(unittest.TestCase):
             payload = llm.generate_structured_json(request)
 
         self.assertTrue(payload["found"])
-        self.assertEqual(payload["summary"], "朝の草原で手持ちの焚き火台")
+        self.assertEqual(payload["clauses"][0]["text"], "朝の草原で手持ちの焚き火台")
 
     def test_route_settings_auto_resolve_remote_backends(self) -> None:
         settings = Settings(

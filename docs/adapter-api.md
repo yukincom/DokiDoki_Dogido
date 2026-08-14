@@ -426,7 +426,8 @@ batch 可。
 adapter 経路ではない。`dogido_server.voice_input`（マイク）や開発時のテキスト注入用。
 
 - 直近のアクティブセッションへ `pending_player_text` を載せる
-- `source: "voice"` のときだけ、音声認識の短い誤検出を避けるため3文字以下は原則受け付けない（`ドギド` / `おーい` は例外）
+- `source: "voice"` のときだけ、音声認識の短い誤検出を避けるため3文字以下は原則受け付けない（`ドギド` / `おーい` / `うん` / `おう` は例外）
+- `source: "voice"` では、環境音から生じやすい `Thank` 系の定型誤認識を受け付けない
 - `source: "voice"` では、現在のworkshop句・原文材料・時間帯などから作った候補内に限り、音の近いかな断片を会話理解用に補正する。原文は明示操作判定用に保持する
 - **次の game-event** の `meta.user_text` としてチャットと同じ経路に合流する
 - **セッションが無いと受け付けない**（`accepted: false`, `reason: no_active_session`）

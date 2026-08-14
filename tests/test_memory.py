@@ -85,6 +85,8 @@ class MemoryStoreTest(unittest.TestCase):
                     "line_sources": [
                         {"line_index": 0, "atom_ids": ["biome:snowy_taiga:note:0"]}
                     ],
+                    "generation_strategy": "three_slot",
+                    "prompt_variant": "source_atoms_slots_v1",
                 },
             )
 
@@ -102,6 +104,8 @@ class MemoryStoreTest(unittest.TestCase):
                 entry["materials_snapshot"]["catalog_sources"][0]["source_ref"],
                 "biome:snowy_taiga",
             )
+            self.assertEqual(entry["materials_snapshot"]["generation_strategy"], "three_slot")
+            self.assertEqual(entry["materials_snapshot"]["prompt_variant"], "source_atoms_slots_v1")
             self.assertEqual(store.list_haiku_entries(), [entry])
 
     def test_record_progress_keeps_only_selected_advancements(self) -> None:

@@ -4,7 +4,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from dogido_server.haiku.source_atoms import CatalogSourceSnapshot, HaikuSourceAtom
+from dogido_server.haiku.source_atoms import (
+    CatalogSourceSnapshot,
+    HaikuSourceAtom,
+    PrefaceClause,
+    preface_clauses_from_payload,
+)
+from dogido_server.state_machine.precipitation import PrecipitationContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,32 +61,46 @@ class IronyContext:
 @dataclass(frozen=True, slots=True)
 class SceneContext:
     found: bool = False
-    summary: str = ""
+    clauses: tuple[PrefaceClause, ...] = ()
     motifs: tuple[str, ...] = ()
     focus: tuple[str, ...] = ()
     confidence: float = 0.0
 
     @classmethod
-    def from_mapping(cls, payload: dict[str, Any] | None) -> SceneContext:
+    def from_mapping(
+        cls,
+        payload: dict[str, Any] | None,
+        *,
+        source_atoms: tuple[HaikuSourceAtom, ...],
+    ) -> SceneContext:
         if not isinstance(payload, dict):
             return cls()
         found = bool(payload.get("found"))
-        summary = str(payload.get("summary") or "")
+        clauses = preface_clauses_from_payload(
+            payload.get("clauses"),
+            source_atoms=source_atoms,
+        )
         motifs = tuple(str(value) for value in payload.get("motifs") or [] if value)
         focus = tuple(str(value) for value in payload.get("focus") or [] if value)
         try:
             confidence = float(payload.get("confidence") or 0.0)
         except (TypeError, ValueError):
             confidence = 0.0
-        if not found or not summary:
+        if not found or clauses is None:
             return cls()
         return cls(
             found=True,
-            summary=summary,
+            clauses=clauses,
             motifs=motifs,
             focus=focus,
             confidence=max(0.0, min(1.0, confidence)),
         )
+
+    @property
+    def spoken_text(self) -> str:
+        """検証済み節だけから、実際に口にする文を組み立てる。"""
+
+        return "。".join(clause.text for clause in self.clauses)
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +114,7 @@ class HaikuContext:
     time_label: str
     weather: str
     weather_label: str
-    z_value: int
+    precipitation_context: PrecipitationContext
     poem_item_id: str
     held_item: str  # 句の主役に使う持ち物ラベル（手持ち or 所持から選んだ1つ）
     inventory_items: tuple[str, ...]
@@ -137,7 +157,7 @@ class HaikuContext:
             "time_label": self.time_label,
             "weather": self.weather,
             "weather_label": self.weather_label,
-            "z_value": self.z_value,
+            **self.precipitation_context.to_prompt_details(),
             "poem_item_id": self.poem_item_id,
             "held_item": self.held_item,
             "poem_item_source": self.poem_item_source,
@@ -182,7 +202,8 @@ class HaikuContext:
             details["scene"] = None
             return details
         details["scene"] = {
-            "summary": scene.summary,
+            "spoken_text": scene.spoken_text,
+            "clauses": [clause.to_dict() for clause in scene.clauses],
             "motifs": list(scene.motifs),
             "focus": list(scene.focus),
             "confidence": scene.confidence,

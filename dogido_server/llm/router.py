@@ -29,6 +29,16 @@ class DogidoLLMRouter:
             results.append(client.preload())
         return any(results)
 
+    def enabled(self) -> bool:
+        """少なくとも一つのrouteで生成可能ならTrue。"""
+
+        return any(client.enabled() for client in self._client_by_route.values())
+
+    def route_enabled(self, route: str) -> bool:
+        """指定routeが実際に生成可能かを返す。"""
+
+        return self._client_by_route.get(route, self._client_by_route["chat"]).enabled()
+
     def generate_leaf_text(self, request: LeafGenerationRequest) -> str:
         return self._resolve_client(request.route, request.kind).generate_leaf_text(request)
 

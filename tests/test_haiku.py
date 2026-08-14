@@ -17,12 +17,18 @@ from dogido_server.models import (
     Position,
     PriorityHint,
     SourceKind,
+    VehicleState,
     Weather,
     WorldState,
 )
 from dogido_server.entry_catalog import mob_poetic_line, mob_poetic_tags
-from dogido_server.llm.haiku_prompts import build_haiku_draft_messages, build_haiku_irony_messages
+from dogido_server.llm.haiku_prompts import (
+    build_haiku_draft_messages,
+    build_haiku_irony_messages,
+    build_haiku_scene_messages,
+)
 from dogido_server.state_machine import DogidoStateMachine
+from dogido_server.haiku.source_atoms import PrefaceClause
 from dogido_server.state_machine.haiku_context import SceneContext
 
 
@@ -32,6 +38,21 @@ def grounded_haiku_payload(
 ) -> dict[str, object] | None:
     """state machine テスト用。最終句の新しい厳格JSON契約だけを返す。"""
 
+    if request.kind == "haiku_preface_grounding":
+        return {
+            "assessments": [
+                {
+                    "clause_index": index,
+                    "basis_atom_ids": clause["basis_atom_ids"],
+                    "claim_class": clause["claim_class"],
+                    "meaning_retained": True,
+                    "class_correct": True,
+                    "within_claim_scope": True,
+                    "natural_japanese": True,
+                }
+                for index, clause in enumerate(request.details.get("preface_clauses", []))
+            ]
+        }
     if request.kind == "haiku_draft":
         return {"lines": list(lines)}
     if request.kind != "haiku_line_grounding":
@@ -57,6 +78,36 @@ def grounded_haiku_payload(
     }
 
 
+def scene_payload(
+    request: StructuredGenerationRequest,
+    text: str,
+    *,
+    motifs: tuple[str, ...] = (),
+    focus: tuple[str, ...] = (),
+    confidence: float = 0.8,
+) -> dict[str, object]:
+    """state machine テスト用の節単位preface契約。"""
+
+    atom_ids = [
+        atom["atom_id"]
+        for atom in request.details.get("source_atoms", [])
+        if isinstance(atom, dict) and isinstance(atom.get("atom_id"), str)
+    ]
+    if not atom_ids:
+        return {"found": False}
+    return {
+        "found": True,
+        "clauses": [{
+            "text": text,
+            "basis_atom_ids": atom_ids[:3],
+            "claim_class": "interpretive",
+        }],
+        "motifs": list(motifs),
+        "focus": list(focus),
+        "confidence": confidence,
+    }
+
+
 def make_snapshot(
     observed_at: datetime,
     *,
@@ -72,6 +123,7 @@ def make_snapshot(
     inventory: dict[str, int] | None = None,
     nearby_portal_type: str | None = None,
     structure: str | None = None,
+    vehicle: VehicleState | None = None,
 ) -> GameEvent:
     return GameEvent(
         schema_version="2026-05-24",
@@ -88,6 +140,7 @@ def make_snapshot(
             position=Position(x=0, y=player_y, z=12),
             dimension="minecraft:overworld",
             held_item=held_item,
+            vehicle=vehicle,
         ),
         world=WorldState(
             time_of_day=time_of_day,
@@ -111,7 +164,7 @@ def make_snapshot(
 class HaikuStateMachineTest(unittest.TestCase):
     def setUp(self) -> None:
         # ルール検証用テストは旧来のタイミング設計（300秒で発句）を維持する。
-        # 実運用デフォルト（10分周期 + 30秒静寂）は
+        # 実測中デフォルト（3分周期 + 30秒静寂）は
         # test_haiku_emits_on_interval_after_quiet_window で検証する。
         self.settings = Settings(
             llm_enabled=False,
@@ -122,29 +175,36 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.machine = DogidoStateMachine(self.settings)
         self.base_time = datetime(2026, 5, 31, 12, 0, 0, tzinfo=timezone.utc)
 
+    def test_temporary_generation_experiment_defaults_are_explicit(self) -> None:
+        settings = Settings(_env_file=None)
+
+        self.assertEqual(settings.haiku_interval_ms, 180000)
+        self.assertEqual(settings.haiku_generation_strategy, "three_slot")
+        self.assertEqual(settings.haiku_max_regeneration_rounds, 6)
+
     def test_haiku_emits_on_interval_after_quiet_window(self) -> None:
         machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
 
-        # 初回イベントから10分周期が始まる
+        # 初回イベントから一時設定の3分周期が始まる
         self.assertEqual(machine.process(make_snapshot(self.base_time)).actions, [])
         self.assertEqual(
-            machine.process(make_snapshot(self.base_time + timedelta(seconds=599))).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=179))).actions,
             [],
         )
 
-        # 10分経過 + 30秒以上の静けさ → 発句
-        emitted = machine.process(make_snapshot(self.base_time + timedelta(seconds=601))).actions
+        # 3分経過 + 30秒以上の静けさ → 発句
+        emitted = machine.process(make_snapshot(self.base_time + timedelta(seconds=181))).actions
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
         # 詠んだ直後は次の周期まで出ない
         self.assertEqual(
-            machine.process(make_snapshot(self.base_time + timedelta(seconds=700))).actions,
+            machine.process(make_snapshot(self.base_time + timedelta(seconds=280))).actions,
             [],
         )
 
         # 次の周期で再び詠む
-        second = machine.process(make_snapshot(self.base_time + timedelta(seconds=1202))).actions
+        second = machine.process(make_snapshot(self.base_time + timedelta(seconds=362))).actions
         self.assertEqual(len(second), 1)
         self.assertEqual(second[0].text, "ここで一句。 砂集め　燃えろやハスク　ガラス吹き")
 
@@ -307,9 +367,70 @@ class HaikuStateMachineTest(unittest.TestCase):
             self.base_time,
             biome="taiga",
         )
-        candidates = self.machine._haiku_context(event).feature_candidate_labels()
+        context = self.machine._haiku_context(event)
+        candidates = context.feature_candidate_labels()
         self.assertIn("地帯 冷帯バイオーム", candidates)
-        self.assertIn("地形 雪は Y153から", candidates)
+        self.assertFalse(any("Y座標" in label or "Z座標" in label for label in candidates))
+        self.assertFalse(any("降水 0." in label or "気温 0." in label for label in candidates))
+        details = context.prompt_details()
+        for internal_key in ("current_y", "biome_temperature", "snow_start_y", "snowfall_zone", "z_value"):
+            self.assertNotIn(internal_key, details)
+        self.assertEqual(details["snowfall_environment"], "no")
+        self.assertIn("雪や積雪を現在場面の材料にしない", details["weather_context"])
+        prompt = build_haiku_draft_messages(details)[1]["content"]
+        for leaked_value in (
+            "Y座標",
+            "Z座標",
+            "現在Y",
+            "降雪開始Y",
+            "バイオーム基準気温",
+            "降水 0.8",
+        ):
+            self.assertNotIn(leaked_value, prompt)
+
+    def test_haiku_vehicle_material_keeps_player_as_subject(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="plains",
+            vehicle=VehicleState(
+                vehicle_id="minecraft:horse",
+                activity="running",
+                controlling=True,
+            ),
+        )
+        context = self.machine._haiku_context(event)
+        fact = "プレイヤーはウマに乗って走っている"
+
+        self.assertIn(f"乗車 {fact}", context.feature_candidate_labels())
+        vehicle_atom = next(
+            atom for atom in context.source_atoms
+            if atom.observation_role == "vehicle_activity"
+        )
+        self.assertEqual(vehicle_atom.text, fact)
+        self.assertIn(fact, build_haiku_draft_messages(context.prompt_details())[1]["content"])
+
+    def test_haiku_uses_observed_snow_or_active_snowfall_only(self) -> None:
+        observed = make_snapshot(
+            self.base_time,
+            biome="taiga",
+            nearby_resources=[NearbyResource(type="block", name="minecraft:snow", distance=2.0)],
+        )
+        observed_context = self.machine._haiku_context(observed)
+        self.assertTrue(observed_context.prompt_details()["surface_snow_observed"])
+        self.assertIn("周辺 雪", observed_context.feature_candidate_labels())
+
+        falling = make_snapshot(
+            self.base_time,
+            biome="taiga",
+            player_y=160,
+        )
+        falling = falling.model_copy(
+            update={"world": falling.world.model_copy(update={"weather": Weather.RAIN})}
+        )
+        falling_context = self.machine._haiku_context(falling)
+        self.assertEqual(falling_context.weather_label, "雪")
+        self.assertEqual(falling_context.prompt_details()["precipitation_kind"], "snow")
+        self.assertIn("降雪 現在は雪", falling_context.feature_candidate_labels())
 
     def test_structure_present_prefers_structure_over_biome_candidates(self) -> None:
         event = make_snapshot(
@@ -366,13 +487,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "深い地下でヒツジがのんびりしとる",
-                        "motifs": ["地下", "ヒツジ"],
-                        "focus": ["地下", "ヒツジ"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "深い地下でヒツジがのんびりしとる",
+                        motifs=("地下", "ヒツジ"),
+                        focus=("地下", "ヒツジ"),
+                    )
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -404,7 +524,7 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nすなあつめ\nくりーぱーくる\nこわいわあ")
-        self.assertEqual(len(fake_llm.structured_requests), 4)
+        self.assertEqual(len(fake_llm.structured_requests), 5)
         self.assertEqual(fake_llm.structured_requests[0].route, "chat")
         self.assertEqual(fake_llm.structured_requests[0].kind, "haiku_irony")
         self.assertEqual(fake_llm.structured_requests[0].max_tokens, self.settings.haiku_structured_max_tokens)
@@ -412,12 +532,22 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(fake_llm.structured_requests[1].kind, "haiku_scene")
         self.assertEqual(fake_llm.structured_requests[1].max_tokens, self.settings.haiku_structured_max_tokens)
         self.assertFalse(any(request.kind == "haiku" for request in fake_llm.leaf_requests))
-        draft = fake_llm.structured_requests[2]
-        grounding = fake_llm.structured_requests[3]
+        preface_grounding = fake_llm.structured_requests[2]
+        draft = fake_llm.structured_requests[3]
+        grounding = fake_llm.structured_requests[4]
+        self.assertEqual((preface_grounding.kind, preface_grounding.route), ("haiku_preface_grounding", "chat"))
         self.assertEqual((draft.kind, draft.route, draft.temperature), ("haiku_draft", "haiku", 0.60))
+        self.assertEqual(draft.details["generation_strategy"], "three_slot")
+        self.assertEqual(draft.details["generation_slot_groups"], [[0], [1], [2]])
         self.assertEqual((grounding.kind, grounding.route), ("haiku_line_grounding", "chat"))
         assert machine.emitted_haiku is not None
         self.assertEqual(len(machine.emitted_haiku.materials["line_sources"]), 3)
+        self.assertEqual(machine.emitted_haiku.materials["generation_strategy"], "three_slot")
+        self.assertEqual(
+            machine.emitted_haiku.materials["prompt_variant"],
+            "source_atoms_slots_v2_kana_normalize",
+        )
+        self.assertEqual(machine.emitted_haiku.materials["regeneration_rounds"], 0)
         self.assertTrue(machine.emitted_haiku.materials["catalog_sources"])
 
     def test_llm_haiku_emits_preface_before_generation(self) -> None:
@@ -436,13 +566,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "深い地下でヒツジがのんびりしとる",
-                        "motifs": ["地下", "ヒツジ"],
-                        "focus": ["地下", "ヒツジ"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "深い地下でヒツジがのんびりしとる",
+                        motifs=("地下", "ヒツジ"),
+                        focus=("地下", "ヒツジ"),
+                    )
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -493,7 +622,10 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
         assert machine.emitted_haiku is not None
         saved_atoms = machine.emitted_haiku.materials["source_atoms"]
-        self.assertTrue(any(atom["kind"] == "preface_interpretation" for atom in saved_atoms))
+        preface_atoms = [atom for atom in saved_atoms if atom["kind"] == "preface_clause"]
+        self.assertTrue(preface_atoms)
+        self.assertTrue(all(atom["basis_atom_ids"] for atom in preface_atoms))
+        self.assertTrue(all(atom["claim_class"] in {"factual", "interpretive"} for atom in preface_atoms))
         self.assertEqual(machine.emitted_haiku.materials["preface_spoken"], preface_text)
 
     def test_haiku_zone_ignores_player_chat_until_verse(self) -> None:
@@ -514,13 +646,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "朝の村で木を持つあんた",
-                        "motifs": ["朝", "村", "木"],
-                        "focus": ["村"],
-                        "confidence": 0.85,
-                    }
+                    return scene_payload(
+                        request,
+                        "朝の村で木を持つあんた",
+                        motifs=("朝", "村", "木"),
+                        focus=("村",),
+                        confidence=0.85,
+                    )
                 return {
                     "found": True,
                     "kind": "contrast",
@@ -593,13 +725,12 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "要塞のポータル前で支度を整えている",
-                        "motifs": ["ポータル", "要塞"],
-                        "focus": ["ポータル"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "要塞のポータル前で支度を整えている",
+                        motifs=("ポータル", "要塞"),
+                        focus=("ポータル",),
+                    )
                 return {"found": False}
 
         settings = Settings(
@@ -639,7 +770,7 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertIn("haiku_irony", fake_llm.structured_kinds)
         self.assertIn("haiku_scene", fake_llm.structured_kinds)
 
-    def test_weak_scene_without_relation_uses_fallback_instead_of_llm(self) -> None:
+    def test_missing_scene_still_runs_grounded_generator(self) -> None:
         class FakeLLM:
             def __init__(self) -> None:
                 self.leaf_requests: list[LeafGenerationRequest] = []
@@ -657,7 +788,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return {"found": False}
 
         fake_llm = FakeLLM()
-        machine = DogidoStateMachine(self.settings, llm=fake_llm)
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        machine = DogidoStateMachine(settings, llm=fake_llm)
         machine.process(
             make_snapshot(
                 self.base_time,
@@ -668,7 +805,7 @@ class HaikuStateMachineTest(unittest.TestCase):
                 inventory={},
             )
         )
-        emitted = machine.process(
+        preface = machine.process(
             make_snapshot(
                 self.base_time + timedelta(seconds=301),
                 biome="forest",
@@ -678,20 +815,46 @@ class HaikuStateMachineTest(unittest.TestCase):
                 inventory={},
             )
         ).actions
+        emitted = machine.process(
+            make_snapshot(
+                self.base_time + timedelta(seconds=302),
+                biome="forest",
+                time_phase="day",
+                player_y=64,
+                held_item="minecraft:air",
+                inventory={},
+            )
+        ).actions
 
-        self.assertEqual(len(fake_llm.structured_requests), 2)
+        self.assertEqual([action.text for action in preface], ["なんか浮かんできたわ。"])
+        self.assertEqual(
+            [request.kind for request in fake_llm.structured_requests],
+            ["haiku_irony", "haiku_scene", "haiku_draft"],
+        )
         self.assertEqual(fake_llm.leaf_requests, [])
-        self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
+        self.assertEqual(emitted[0].text, "まとまらんかった。。。")
+        self.assertIsNone(machine.emitted_haiku)
 
-    def test_weak_scene_logs_fallback_decision_and_emitted_haiku(self) -> None:
+    def test_invalid_scene_contract_logs_rejection_and_does_not_use_catalog_fallback(self) -> None:
         class FakeLLM:
             def preload(self) -> bool:
                 return False
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_scene":
+                    return {
+                        "text": "昼の森に光が落ちる",
+                        "basis_atom_ids": ["observation:observed:biome"],
+                    }
                 return {"found": False}
 
-        machine = DogidoStateMachine(self.settings, llm=FakeLLM())
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        machine = DogidoStateMachine(settings, llm=FakeLLM())
         machine.process(
             make_snapshot(
                 self.base_time,
@@ -704,7 +867,7 @@ class HaikuStateMachineTest(unittest.TestCase):
         )
 
         with self.assertLogs("uvicorn.error", level="WARNING") as captured:
-            emitted = machine.process(
+            machine.process(
                 make_snapshot(
                     self.base_time + timedelta(seconds=301),
                     biome="forest",
@@ -713,20 +876,37 @@ class HaikuStateMachineTest(unittest.TestCase):
                     held_item="minecraft:air",
                     inventory={},
                 )
+            )
+            emitted = machine.process(
+                make_snapshot(
+                    self.base_time + timedelta(seconds=302),
+                    biome="forest",
+                    time_phase="day",
+                    player_y=64,
+                    held_item="minecraft:air",
+                    inventory={},
+                )
             ).actions
 
-        self.assertEqual(emitted[0].text, "ここで一句。 ふみだして　風にたなびく　葉の香り")
-        self.assertTrue(
-            any("haiku_decision result=fallback reason=weak_scene" in line for line in captured.output)
-        )
+        self.assertEqual(emitted[0].text, "まとまらんかった。。。")
+        self.assertIsNone(machine.emitted_haiku)
         self.assertTrue(
             any(
-                "haiku_emit result=emitted text=ここで一句。" in line
-                and "ふみだして" in line
-                and "葉の香り" in line
+                "haiku_scene result=rejected reason=invalid_contract" in line
                 for line in captured.output
             )
         )
+        self.assertTrue(
+            any(
+                "haiku_grounding result=fallback reason=invalid_draft" in line
+                for line in captured.output
+            )
+        )
+        self.assertTrue(
+            any("haiku_emit result=failed_no_pin" in line for line in captured.output)
+        )
+        self.assertFalse(any("reason=weak_scene" in line for line in captured.output))
+        self.assertFalse(any("ふみだして" in line for line in captured.output))
 
     def test_invalid_structured_haiku_uses_llm_failed_line_instead_of_catalog_fallback(self) -> None:
         class FakeLLM:
@@ -765,16 +945,20 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return False
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                if request.kind == "haiku_preface_grounding":
+                    return grounded_haiku_payload(
+                        request,
+                        ("はるのかぜ", "ひつじがあるく", "よるのつき"),
+                    ) or {"assessments": []}
                 if request.kind == "haiku_irony":
                     return {"found": False}
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "晴れた草地を羊が歩いとる",
-                        "motifs": ["草地", "羊"],
-                        "focus": ["羊"],
-                        "confidence": 0.8,
-                    }
+                    return scene_payload(
+                        request,
+                        "晴れた草地を羊が歩いとる",
+                        motifs=("草地", "羊"),
+                        focus=("羊",),
+                    )
                 if request.kind == "haiku_draft":
                     return {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]}
                 if request.kind == "haiku_line_regeneration":
@@ -839,13 +1023,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "草地で火打石と打ち金を握り、甘い実をしまっとる",
-                        "motifs": ["草地", "火打石と打ち金", "きらめくスイカの薄切り"],
-                        "focus": ["火打石と打ち金", "きらめくスイカの薄切り"],
-                        "confidence": 0.76,
-                    }
+                    return scene_payload(
+                        request,
+                        "草地で火打石と打ち金を握り、甘い実をしまっとる",
+                        motifs=("草地", "火打石と打ち金", "きらめくスイカの薄切り"),
+                        focus=("火打石と打ち金", "きらめくスイカの薄切り"),
+                        confidence=0.76,
+                    )
                 return {"found": False}
 
         fake_llm = FakeLLM()
@@ -885,7 +1069,8 @@ class HaikuStateMachineTest(unittest.TestCase):
         ]
         self.assertEqual(len(draft_requests), 1)
         self.assertEqual(saved_constraints, draft_requests[0].details["haiku_constraints"])
-        self.assertEqual(draft_requests[0].details["scene"]["summary"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+        self.assertEqual(draft_requests[0].details["scene"]["spoken_text"], "草地で火打石と打ち金を握り、甘い実をしまっとる")
+        self.assertTrue(draft_requests[0].details["scene"]["clauses"][0]["basis_atom_ids"])
 
     def test_plain_scene_summary_with_weather_and_held_item_can_use_llm(self) -> None:
         class FakeLLM:
@@ -907,13 +1092,13 @@ class HaikuStateMachineTest(unittest.TestCase):
                 if haiku is not None:
                     return haiku
                 if request.kind == "haiku_scene":
-                    return {
-                        "found": True,
-                        "summary": "晴れた草地でキャンプファイアを抱えて立っとる",
-                        "motifs": ["草地", "晴れ", "キャンプファイア"],
-                        "focus": ["草地", "キャンプファイア"],
-                        "confidence": 0.76,
-                    }
+                    return scene_payload(
+                        request,
+                        "晴れた草地でキャンプファイアを抱えて立っとる",
+                        motifs=("草地", "晴れ", "キャンプファイア"),
+                        focus=("草地", "キャンプファイア"),
+                        confidence=0.76,
+                    )
                 return {"found": False}
 
         fake_llm = FakeLLM()
@@ -1021,7 +1206,12 @@ class HaikuStateMachineTest(unittest.TestCase):
             event,
             SceneContext(
                 found=True,
-                summary="雪原でダイヤモンドシャベルを握る",
+                clauses=(PrefaceClause(
+                    text="雪原でダイヤモンドシャベルを握る",
+                    basis_atom_ids=("test:shovel",),
+                    claim_class="interpretive",
+                    claim_scopes=("poetic_interpretation",),
+                ),),
                 motifs=("ダイヤモンドシャベル", "雪原"),
                 focus=("道具の高級感",),
                 confidence=0.8,
@@ -1059,7 +1249,12 @@ class HaikuStateMachineTest(unittest.TestCase):
             event,
             SceneContext(
                 found=True,
-                summary="雪原でダイヤモンドシャベルを握る",
+                clauses=(PrefaceClause(
+                    text="雪原でダイヤモンドシャベルを握る",
+                    basis_atom_ids=("test:shovel",),
+                    claim_class="interpretive",
+                    claim_scopes=("poetic_interpretation",),
+                ),),
                 motifs=("ダイヤモンドシャベル", "雪原"),
                 focus=("道具の高級感",),
                 confidence=0.8,
@@ -1154,11 +1349,14 @@ class HaikuStateMachineTest(unittest.TestCase):
         details = self.machine._haiku_context(event).prompt_details()
         haiku_user = build_haiku_draft_messages(details)[1]["content"]
         irony_user = build_haiku_irony_messages(details)[1]["content"]
+        scene_user = build_haiku_scene_messages(details)[1]["content"]
 
         self.assertIn("ちょっとした知識", haiku_user)
         self.assertIn("雪のタイガ", haiku_user)
         self.assertIn("いまの材料", irony_user)
         self.assertIn("雪のタイガ", irony_user)
+        self.assertIn("最上位には必ず found と clauses", scene_user)
+        self.assertIn("ID文字列に [ ] を含めない", scene_user)
 
     def test_poetic_lines_for_passive_mobs_and_dedupe_tags(self) -> None:
         event = make_snapshot(
