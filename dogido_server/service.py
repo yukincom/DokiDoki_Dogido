@@ -30,6 +30,7 @@ from dogido_server.haiku.workshop import (
     loosen_all_lessons,
     materials_debug_line,
     materials_speech_line,
+    mentioned_workshop_line_fragment,
     maybe_close_for_time,
     pending_revision_decision,
     pending_revision_is_current,
@@ -965,15 +966,30 @@ class DogidoService:
             else parse_player_line_replacement(None)
         )
         player_line_replacement = replacement_parse.replacement
+        if player_line_replacement is not None:
+            # 「下五」はSTTで崩れやすい。現在句の一行を発話中に含めた
+            # 「旧句より新句」の形なら、その旧句をコードで置換対象に固定する。
+            target_fragment = mentioned_workshop_line_fragment(workshop, text)
+            if target_fragment is not None:
+                player_line_replacement = PlayerLineReplacement(
+                    text=player_line_replacement.text,
+                    explicit_line_index=player_line_replacement.explicit_line_index,
+                    target_fragment=target_fragment,
+                )
         if replacement_parse.status != "no_match":
             LOGGER.warning(
                 "haiku_workshop_player_line_parse session_id=%s result=%s "
-                "candidate=%s explicit_line=%s marked_line=%s player=%s",
+                "candidate=%s explicit_line=%s target_fragment=%s marked_line=%s player=%s",
                 session.session_id,
                 replacement_parse.status,
                 (player_line_replacement.text[:40] if player_line_replacement else "-"),
                 (
                     player_line_replacement.explicit_line_index
+                    if player_line_replacement is not None
+                    else None
+                ),
+                (
+                    player_line_replacement.target_fragment
                     if player_line_replacement is not None
                     else None
                 ),
@@ -1136,10 +1152,30 @@ class DogidoService:
             if analysis.line_proposal is not None:
                 # 自然な置換提案は OS AI の意味抽出を優先する。上で得た
                 # closed regex の候補は、OS AI が提案を確定できない場合だけ
-                # fallback として残る。
+                # fallback として残る。ただし現在句そのものが発話に含まれて
+                # コードで一意に取れた置換元は、AIの空欄で上書きしない。
+                code_target_fragment = (
+                    player_line_replacement.target_fragment
+                    if player_line_replacement is not None
+                    else None
+                )
+                code_explicit_line = (
+                    player_line_replacement.explicit_line_index
+                    if player_line_replacement is not None
+                    else None
+                )
                 player_line_replacement = PlayerLineReplacement(
                     text=analysis.line_proposal.replacement_text,
-                    explicit_line_index=analysis.line_proposal.line_index,
+                    explicit_line_index=(
+                        analysis.line_proposal.line_index
+                        if analysis.line_proposal.line_index is not None
+                        else code_explicit_line
+                    ),
+                    target_fragment=(
+                        code_target_fragment
+                        or analysis.line_proposal.target_fragment
+                        or None
+                    ),
                 )
                 effective_kind = "propose_line_edit"
                 LOGGER.warning(
@@ -1188,7 +1224,10 @@ class DogidoService:
                 AudioAction(
                     layer="speech",
                     interrupt=False,
-                    text="置き換える言葉か行が一つに決められへんかったわ。上五・中七・下五の一つと、新しい言葉を一つ教えてな。",
+                    text=(
+                        "置き換えるところが一つに決められへんかったわ。"
+                        "『くさちのねよりくさちかな』みたいに、元の一行と新しい一行を教えてな。"
+                    ),
                 )
             ]
 
@@ -1262,10 +1301,8 @@ class DogidoService:
                 LOGGER.warning("haiku_critique_save_failed detail=%s", exc)
 
         if player_line_replacement is not None:
-            target_line = player_line_replacement.explicit_line_index
-            if target_line is None:
-                target_line = workshop.marked_line_index
             result = build_player_line_revision(workshop, player_line_replacement)
+            target_line = result.target_line_index
             if result.text is None:
                 LOGGER.warning(
                     "haiku_workshop_player_line_edit session_id=%s result=rejected "
@@ -1389,7 +1426,16 @@ class DogidoService:
 
         reason_set = set(reasons)
         if "missing_target" in reason_set:
-            return "どの行を変えるか、上五・中七・下五のどれか教えてな。"
+            return "『くさちのねよりくさちかな』みたいに、元の一行と新しい一行を教えてな。"
+        if reason_set.intersection(
+            {
+                "target_fragment_not_readable",
+                "target_fragment_not_found",
+                "ambiguous_target_fragment",
+                "target_conflict",
+            }
+        ):
+            return "元の一行が今の句と一つに決まらへんかったわ。元の句をそのまま言ってから、新しい一行を教えてな。"
         if "pending_source_conflict" in reason_set:
             return "先に出した案を『その案で』か『元のまま』で決めてから直そか。"
         if reason_set.intersection({"not_hiragana", "verse_not_hiragana"}):

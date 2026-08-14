@@ -183,10 +183,11 @@ class PendingRevisionAnalysis:
 
 @dataclass(frozen=True, slots=True)
 class PlayerLineReplacement:
-    """プレイヤーが明示した一行分の置換語。行番号はコード抽出時だけ入る。"""
+    """プレイヤーが明示した一行分の置換語と、句中の置換元。"""
 
     text: str
     explicit_line_index: int | None = None
+    target_fragment: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +206,7 @@ class PlayerLineRevisionResult:
     base_text: str
     edits: tuple[dict[str, object], ...] = ()
     failure_reasons: tuple[str, ...] = ()
+    target_line_index: int | None = None
 
 
 @dataclass(slots=True)
@@ -1104,6 +1106,35 @@ def explicit_workshop_line_index(text: str | None) -> int | None:
     return next(iter(matches)) if len(matches) == 1 else None
 
 
+def mentioned_workshop_line_fragment(
+    workshop: RecentHaikuWorkshop,
+    player_text: str | None,
+) -> str | None:
+    """発話にそのまま現れた現在句の一行を、読みで一意に特定する。
+
+    音声入力では「下五」が安定して文字化されないため、
+    「くさちのねよりくさちかな」のような置換元の句を行指定として使う。
+    STTが漢字へ変換してもUniDicで読みに戻して照合し、複数行が含まれる
+    発話は誤置換を避けるため確定しない。
+    """
+
+    source = str(player_text or "").strip()
+    if not source:
+        return None
+    spoken = _compact_kana(katakana_to_hiragana(hiraganize_japanese_text(source)))
+    if not spoken:
+        return None
+    lines = workshop_verse_lines(workshop.editing_line())
+    if len(lines) != 3:
+        return None
+    matches = [
+        line
+        for line in lines
+        if len(_compact_kana(line)) >= 2 and _compact_kana(line) in spoken
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _explicit_workshop_line_indices(text: str | None) -> set[int]:
     source = str(text or "")
     return {
@@ -1229,14 +1260,53 @@ def build_player_line_revision(
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("invalid_verse",))
     if any(normalize_player_haiku_line(line) != line for line in base_lines + draft_lines):
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("verse_not_hiragana",))
+    fragment_target: int | None = None
+    if replacement.target_fragment:
+        normalized_fragment = normalize_player_haiku_line(replacement.target_fragment)
+        if normalized_fragment is None:
+            return PlayerLineRevisionResult(
+                None,
+                base_text,
+                failure_reasons=("target_fragment_not_readable",),
+            )
+        folded_fragment = _compact_kana(normalized_fragment)
+        fragment_matches = [
+            index
+            for index, line in enumerate(draft_lines)
+            if folded_fragment and folded_fragment in _compact_kana(line)
+        ]
+        if len(fragment_matches) != 1:
+            return PlayerLineRevisionResult(
+                None,
+                base_text,
+                failure_reasons=(
+                    "ambiguous_target_fragment"
+                    if len(fragment_matches) > 1
+                    else "target_fragment_not_found",
+                ),
+            )
+        fragment_target = fragment_matches[0]
     target = replacement.explicit_line_index
+    if target is not None and fragment_target is not None and target != fragment_target:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("target_conflict",),
+        )
+    if target is None:
+        target = fragment_target
     if target is None:
         target = workshop.marked_line_index
     if target not in (0, 1, 2):
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("missing_target",))
     normalized = normalize_player_haiku_line(replacement.text)
     if normalized is None:
-        return PlayerLineRevisionResult(None, base_text, failure_reasons=("not_hiragana",))
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("not_hiragana",),
+            target_line_index=target,
+        )
     reasons = list(haiku_line_failure_reasons(normalized, target, workshop.materials))
     # プレイヤーの明示編集は「新5-7-5」を作るため、±1ではなく対象音数に合わせる。
     if count_japanese_sounds(normalized) != (5, 7, 5)[target]:
@@ -1251,11 +1321,17 @@ def build_player_line_revision(
             None,
             base_text,
             failure_reasons=tuple(dict.fromkeys(reasons)),
+            target_line_index=target,
         )
     draft_lines[target] = normalized
     revised_text = "\n".join(draft_lines)
     if revised_text == workshop.editing_line():
-        return PlayerLineRevisionResult(None, base_text, failure_reasons=("no_change",))
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("no_change",),
+            target_line_index=target,
+        )
     edits = tuple(
         {
             "line_index": index,
@@ -1272,8 +1348,18 @@ def build_player_line_revision(
         edit_contract=PLAYER_LINE_EDIT_CONTRACT_VERSION,
         edits=edits,
     ):
-        return PlayerLineRevisionResult(None, base_text, failure_reasons=("invalid_edit",))
-    return PlayerLineRevisionResult(revised_text, base_text, edits=edits)
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("invalid_edit",),
+            target_line_index=target,
+        )
+    return PlayerLineRevisionResult(
+        revised_text,
+        base_text,
+        edits=edits,
+        target_line_index=target,
+    )
 
 
 def wants_show_workshop_verse(text: str | None) -> bool:

@@ -17,6 +17,7 @@ from dogido_server.haiku.workshop import (
     PlayerLineReplacement,
     WorkshopAnalysis,
     WorkshopFinding,
+    WorkshopLineProposal,
     advance_workshop_revision,
     build_player_line_revision,
     build_workshop_intent_llm_details,
@@ -589,6 +590,25 @@ class WorkshopIntentTests(unittest.TestCase):
         )
         self.assertIn("invalid_verse", invalid.failure_reasons)
 
+        conflict = build_player_line_revision(
+            ws,
+            PlayerLineReplacement(
+                "雨の夜",
+                explicit_line_index=0,
+                target_fragment="雨降りや",
+            ),
+        )
+        self.assertIn("target_conflict", conflict.failure_reasons)
+
+        repeated = open_from_emission(
+            _emission(text="あめふりや\nてのなかのくさ\nあめふりや")
+        )
+        ambiguous_fragment = build_player_line_revision(
+            repeated,
+            PlayerLineReplacement("夕暮れや", target_fragment="雨降りや"),
+        )
+        self.assertIn("ambiguous_target_fragment", ambiguous_fragment.failure_reasons)
+
     def test_show_workshop_verse_is_a_closed_code_intent(self) -> None:
         self.assertTrue(wants_show_workshop_verse("全体はどうなった？"))
         self.assertTrue(wants_show_workshop_verse("今の句を読んで"))
@@ -1015,6 +1035,23 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
 
             def analyze(workshop: RecentHaikuWorkshop, player_text: str):
+                if "手の中の草より" in player_text:
+                    # OS AIが新語は取れても対象断片を空で返す場合がある。
+                    # 発話中の現在句をコードで特定した結果は保持する。
+                    return (
+                        WorkshopAnalysis(
+                            intent="propose_line_edit",
+                            confidence=0.95,
+                            line_proposal=WorkshopLineProposal(
+                                replacement_text="草を握って",
+                                target_fragment="",
+                                line_index=None,
+                                evidence=player_text,
+                                confidence=0.95,
+                            ),
+                        ),
+                        "test_os_ai",
+                    )
                 findings = (
                     (
                         WorkshopFinding(
@@ -1065,6 +1102,31 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             def send(sequence: int, text: str) -> list[AudioAction]:
                 session.machine.player_input = route_player_input(text)
                 return service._haiku_workshop_actions(session, event(sequence, text))
+
+            # 「下五」などの行名がSTTで崩れても、現在句の一行を旧句として
+            # 読み上げれば、その一行だけをコードで置換対象に固定できる。
+            with self.assertLogs("uvicorn.error", level="WARNING") as phrase_logs:
+                phrase_edit = send(
+                    0,
+                    "手の中の草より草を握っての方がいい気がするね",
+                )
+            self.assertIn("くさをにぎって", phrase_edit[0].text or "")
+            assert session.haiku_workshop is not None
+            self.assertEqual(
+                session.haiku_workshop.pending_revision,
+                "おだやかなる\nくさをにぎって\nあめふりや",
+            )
+            joined_phrase_logs = "\n".join(phrase_logs.output)
+            self.assertIn("target_fragment=てのなかのくさ", joined_phrase_logs)
+            self.assertIn("target_line=1", joined_phrase_logs)
+
+            # 以下の連続編集シナリオは、同じ発句を新しく開き直して確認する。
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id="h_player_edit",
+                now=emission.created_at,
+            )
 
             with self.assertLogs("uvicorn.error", level="WARNING") as locate_logs:
                 send(1, "おだやかなるの『る』がちょっと長い")
@@ -2243,7 +2305,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             speeches2 = [a.text for a in r2.actions if a.layer == "speech" and a.text]
             self.assertEqual(len(speeches2), 1)
             self.assertIn("haiku_workshop_reply", llm.kinds)
-            self.assertIn("どの行", speeches2[0])
+            self.assertIn("元の一行", speeches2[0])
             self.assertTrue(is_open(sess.haiku_workshop), msg="2回添削でも drift close しない")
             self.assertNotIn("player_chat", llm.kinds)
 
