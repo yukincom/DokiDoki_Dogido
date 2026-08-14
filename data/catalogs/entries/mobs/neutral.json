@@ -9,6 +9,8 @@
     "aquatic",
     "dies_on_land",
     "undead",
+    "observed_speech_aliases",
+    "observed_speech_rewrite_from_ids",
     "poetic"
   ],
   "items": {
@@ -47,6 +49,9 @@
     },
     "cave_spider": {
       "label": "洞窟スパイダー",
+      "observed_speech_aliases": [
+        "スパイダー"
+      ],
       "threat_class": "melee",
       "priority": "medium",
       "poetic": {
@@ -477,6 +482,9 @@
     },
     "trader_llama": {
       "label": "商人のラマ",
+      "observed_speech_aliases": [
+        "ラマ"
+      ],
       "threat_class": "ranged",
       "priority": "low",
       "provoked_only": true,

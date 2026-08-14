@@ -5,6 +5,8 @@
     "aquatic",
     "dies_on_land",
     "burns_in_daylight",
+    "observed_speech_aliases",
+    "observed_speech_rewrite_from_ids",
     "poetic"
   ],
   "items": {
@@ -371,6 +373,9 @@
     },
     "glow_squid": {
       "label": "ヒカリイカ",
+      "observed_speech_aliases": [
+        "イカ"
+      ],
       "aquatic": true,
       "dies_on_land": true,
       "poetic": {

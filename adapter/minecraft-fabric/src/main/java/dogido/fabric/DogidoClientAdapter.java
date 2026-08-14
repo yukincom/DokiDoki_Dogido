@@ -363,9 +363,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.eventClient.postEvent(deathEvent);
             this.combatActive = false;
         } else if (shouldSendCombatEnded(visibleThreats, audioThreats, deadNow)) {
+            // combat_ended 自体にも終了後の状態を載せる。旧順序では
+            // buildCombat() が combat_active_hint=true を書いてしまっていた。
+            this.combatActive = false;
             JsonObject combatEndedEvent = buildCombatEnded(player, world, ambientMobs);
             this.eventClient.postEvent(combatEndedEvent);
-            this.combatActive = false;
         }
 
         this.wasDead = deadNow;

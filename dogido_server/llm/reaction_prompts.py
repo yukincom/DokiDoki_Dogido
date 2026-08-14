@@ -9,10 +9,22 @@ from .types import LeafGenerationRequest
 def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
     hostiles = "、".join(details.get("hostiles", [])) or "敵"
+    clear_confirmed = bool(details.get("hostile_clear_confirmed"))
+    clear_fact = (
+        "コード側で現在の視認敵・敵音・周辺敵数がすべて空と確認済み。"
+        "戦闘は終了し、残っている敵は0体。敵の排除完了として話す。\n"
+        if clear_confirmed
+        else "戦闘は一段落したが、残敵なしの確認までは取れていない。\n"
+    )
+    clear_guard = (
+        "確認済みなので『まだいるかも』『ほんまにおらんのか』のように残敵を疑わない。"
+        if clear_confirmed
+        else "残敵を断定しない。"
+    )
     user_prompt = (
         "参考傾向:\n"
-        "- 戦闘直後の余韻。まだ気が抜けていない\n"
-        "- 少し怯えは残るが、プレイヤーを労う・安堵する寄り\n"
+        "- 戦闘直後の余韻。怖かった気持ちから力が抜ける\n"
+        "- プレイヤーを労う、安堵する、短く感謝する、のどれかを自然に入れる\n"
         "- 大げさな勝利宣言や説教はしない\n"
         "- 助言・次の行動指示はしない\n\n"
         "/no_think\n"
@@ -21,9 +33,11 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけその呼び名を入れてよい。\n"
         f"直前の敵は{hostiles}。\n"
+        f"{clear_fact}"
         f"プレイヤーの消耗具合は{details.get('health_state', '不明')}。\n"
         "見えていたことや確実に分かることだけを話す。"
         "未確認の爆発音や攻撃描写を勝手に足さない。"
+        f"{clear_guard}"
         "体力の数値やHPを言わない。"
         "『次は逃げよう』『油断するな』『回復しよう』のような助言や指示を言わない。"
         "例文の言い回しをそのまま使わず、会話っぽく24〜34文字くらいで一言だけ返す。"

@@ -283,6 +283,9 @@ class StateUpdatesMixin:
         self.state.commented_visual_keys.clear()
         self.state.commented_auditory_keys.clear()
         self.state.auditory_presence_states.clear()
+        # 移動前の敵を、新ディメンションで「視界から消えた＝討伐」と数えない。
+        self.state.tracked_hostile_entities.clear()
+        self.state.recent_kill_seen_at_by_type.clear()
         self.state.announced_hostile_counts.clear()
         self.state.burning_visual_keys.clear()
         self.state.daylight_water_comment_keys.clear()
@@ -454,6 +457,16 @@ class StateUpdatesMixin:
         if event.event.name == EventName.PLAYER_DIED:
             return "aftermath"
 
+        boss_context = any(
+            self._is_boss_type(hostile)
+            for hostile in self.state.last_confirmed_hostiles
+        )
+        if (
+            self._combat_end_clear_confirmed(event)
+            and (not boss_context or self._boss_defeat_confirmed(event))
+        ):
+            return "aftermath"
+
         if (
             self.state.pending_safe_aftermath
             and self._recent_ms(now, self.state.last_combat_end_at) is not None
@@ -523,7 +536,14 @@ class StateUpdatesMixin:
 
         return "normal"
 
-    def _apply_mode_transition(self, previous_mode: str, next_mode: str, now: datetime) -> None:
+    def _apply_mode_transition(
+        self,
+        previous_mode: str,
+        next_mode: str,
+        now: datetime,
+        *,
+        combat_end_already_flushed: bool = False,
+    ) -> None:
         self.state.mode = next_mode
 
         if previous_mode != next_mode and next_mode == "suppressed_panic":
@@ -535,7 +555,8 @@ class StateUpdatesMixin:
             self.state.last_combat_end_at = now
             self.state.pending_safe_aftermath = False
             # combat_ended イベント無しでも余韻入りで撃破メモをまとめる
-            self._flush_combat_dialogue_notes_from_mode(now)
+            if not combat_end_already_flushed:
+                self._flush_combat_dialogue_notes_from_mode(now)
 
         if previous_mode == "aftermath" and next_mode == "normal":
             self.state.shut_up_count = 0
@@ -544,6 +565,14 @@ class StateUpdatesMixin:
 
     def _update_dialogue_kill_tracking(self, event: GameEvent, now: datetime) -> None:
         """視界から消えた敵対を粗い撃破候補として数える（完全正確ではない）。"""
+        retention_ms = int(
+            getattr(self.settings, "player_chat_name_correction_retention_ms", 10000)
+        )
+        self.state.recent_kill_seen_at_by_type = {
+            mob_type: killed_at
+            for mob_type, killed_at in self.state.recent_kill_seen_at_by_type.items()
+            if (age := self._recent_ms(now, killed_at)) is not None and age <= retention_ms
+        }
         current: dict[str, str] = {}
         for threat in event.visual_threats:
             if not threat.entity_id:
@@ -562,6 +591,14 @@ class StateUpdatesMixin:
                 if entity_id not in current:
                     key = entity_type or "敵"
                     self.state.recent_kill_counts[key] = self.state.recent_kill_counts.get(key, 0) + 1
+                    normalized = (
+                        str(entity_type or "")
+                        .removeprefix("minecraft:")
+                        .strip()
+                        .lower()
+                    )
+                    if normalized:
+                        self.state.recent_kill_seen_at_by_type[normalized] = now
         self.state.tracked_hostile_entities = current
 
     def _update_dialogue_inventory_gains(self, event: GameEvent, now: datetime) -> None:

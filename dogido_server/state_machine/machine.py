@@ -5,7 +5,7 @@ from dogido_server.config import Settings
 from dogido_server.haiku.source_atoms import HaikuSourceAtom
 from dogido_server.llm import LLMFrontend
 from dogido_server.memory_types import HaikuEmission
-from dogido_server.models import GameEvent
+from dogido_server.models import EventName, GameEvent
 from dogido_server.player_input import PlayerInputContext, route_player_input
 from dogido_server.py_tree_policy import PyTreeActionPolicy
 from dogido_server.state_machine.mixins.action_builder import ActionBuilderMixin
@@ -116,7 +116,12 @@ class DogidoStateMachine(
         signals.dry_weather_biome = self._is_dry_weather_biome(event.world.biome)
         self.state.emergency_shelter_active = signals.emergency_shelter
         next_mode = self._resolve_mode(event, signals, now)
-        self._apply_mode_transition(previous_mode, next_mode, now)
+        self._apply_mode_transition(
+            previous_mode,
+            next_mode,
+            now,
+            combat_end_already_flushed=event.event.name == EventName.COMBAT_ENDED,
+        )
         actions = self._build_actions(event, previous_mode, next_mode, signals, now)
         self._log_emitted_actions(event, previous_mode, next_mode, actions)
         self._update_silence_break_state(event, actions, now)
@@ -128,6 +133,10 @@ class DogidoStateMachine(
         self.state.last_foliage_shade_context = self._is_foliage_shade_context(event)
 
         combat_active = next_mode in {"panic", "suppressed_panic"} or signals.combat_active_hint
+        if next_mode == "aftermath" and self._combat_end_clear_confirmed(event):
+            # 旧 Fabric adapter では combat_ended だけ
+            # combat_active_hint=true のまま届くことがある。
+            combat_active = False
         return StateMachineResult(
             state=self.state,
             combat_active=combat_active,

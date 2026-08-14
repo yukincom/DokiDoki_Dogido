@@ -158,6 +158,25 @@ class DogidoLLM:
                 self._summarize_for_log(cleaned),
             )
             return request.fallback_text
+        if request.kind == "player_chat":
+            # 観測済みの亜種を一般名にしてしまった場合は、白リスト判定より先に
+            # カタログで許可された一意な正式名へ戻す。
+            from dogido_server.player_chat_policy import rewrite_observed_speech_names
+
+            cleaned, applied_name_corrections = rewrite_observed_speech_names(
+                cleaned,
+                request.details.get("speech_name_corrections"),
+            )
+            if applied_name_corrections:
+                LOGGER.warning(
+                    "llm_leaf kind=%s result=name_corrected corrections=%s text=%s",
+                    request.kind,
+                    ",".join(
+                        f"{source}->{target}"
+                        for source, target in applied_name_corrections
+                    ),
+                    self._summarize_for_log(cleaned),
+                )
         if not self._is_style_acceptable(request.kind, cleaned, request.details):
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=style_mismatch cleaned=%s",

@@ -136,6 +136,19 @@ class CommonMixin:
             return False
         return True
 
+    def _combat_end_clear_confirmed(self, event: GameEvent) -> bool:
+        """明示 combat_ended に、現在の残敵情報が載っていないことを確認する。"""
+        if event.event.name != EventName.COMBAT_ENDED:
+            return False
+        if event.visual_threats or event.auditory_threats:
+            return False
+        counts = (
+            event.combat.hostiles_within_7,
+            event.combat.hostiles_within_10,
+            event.combat.hostiles_within_30_ground,
+        )
+        return all(count is None or count <= 0 for count in counts)
+
     def _reset_warden_combat_comment_state(self) -> None:
         self.state.last_warden_chasing_comment_at = None
         self.state.last_warden_sonic_boom_scream_at = None

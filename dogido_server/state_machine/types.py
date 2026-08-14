@@ -142,6 +142,7 @@ class RuntimeState:
     # 撃破推定: 直近に見えていた敵対 entity_id -> type
     tracked_hostile_entities: dict[str, str] = field(default_factory=dict)
     recent_kill_counts: dict[str, int] = field(default_factory=dict)
+    recent_kill_seen_at_by_type: dict[str, datetime] = field(default_factory=dict)
     commented_visual_keys: dict[str, datetime] = field(default_factory=dict)
     commented_auditory_keys: dict[str, tuple[datetime, int]] = field(default_factory=dict)
     auditory_presence_states: dict[str, AuditoryPresenceState] = field(default_factory=dict)

@@ -237,13 +237,15 @@ def build_allowed_speech_labels(
     visual_types: list[str] | tuple[str, ...] | None = None,
     passive_types: list[str] | tuple[str, ...] | None = None,
     hearing_named_mobs: list[str] | tuple[str, ...] | None = None,
+    recent_mob_types: list[str] | tuple[str, ...] | None = None,
 ) -> list[str]:
     """出力に使ってよい表示名。
 
     topic ∪ 視認脅威 ∪ 平和/ambient 観測 ∪ hearing の union。
-    種 id は呼び出し側が渡す（特定 mob 専用ではない）。
+    観測・討伐された mob だけは、カタログで明示した安全な上位名・略称も許可する。
+    topic だけからは略称を展開しない。
     """
-    from dogido_server.entry_catalog import mob_entry, structure_entries
+    from dogido_server.entry_catalog import all_mob_entries, mob_entry, structure_entries
 
     labels: list[str] = []
     seen: set[str] = set()
@@ -255,15 +257,31 @@ def build_allowed_speech_labels(
         seen.add(text)
         labels.append(text)
 
-    def add_mob_type(raw_type: object | None) -> None:
+    def add_observed_entry(entry: dict[str, Any]) -> None:
+        add(entry.get("label"))
+        aliases = entry.get("observed_speech_aliases")
+        if isinstance(aliases, list):
+            for alias in aliases:
+                add(alias)
+
+    def add_observed_mob_type(raw_type: object | None) -> None:
         mob_id = str(raw_type or "").removeprefix("minecraft:").strip().lower()
         if not mob_id:
             return
         entry = mob_entry(mob_id)
         if entry:
-            add(entry.get("label"))
+            add_observed_entry(entry)
         else:
             add(mob_id)
+
+    def add_observed_mob_label(raw_label: object | None) -> None:
+        label = str(raw_label or "").strip()
+        add(label)
+        if not label:
+            return
+        for entry in all_mob_entries().values():
+            if str(entry.get("label") or "").strip() == label:
+                add_observed_entry(entry)
 
     for hit in topic_hits or ():
         add(hit.get("label_ja"))
@@ -278,13 +296,55 @@ def build_allowed_speech_labels(
             add(entry.get("label"))
 
     for raw_type in visual_types or ():
-        add_mob_type(raw_type)
+        add_observed_mob_type(raw_type)
     for raw_type in passive_types or ():
-        add_mob_type(raw_type)
+        add_observed_mob_type(raw_type)
     for name in hearing_named_mobs or ():
-        add(name)
+        add_observed_mob_label(name)
+    for raw_type in recent_mob_types or ():
+        add_observed_mob_type(raw_type)
 
     return labels
+
+
+def build_observed_speech_name_corrections(
+    observed_mob_types: list[str] | tuple[str, ...] | set[str] | None,
+) -> dict[str, str]:
+    """直近に確定した mob から、一般名→正式名の一意な修正表を作る。
+
+    一般種そのものも観測済みならプレイヤーに合わせるため修正しない。
+    同じ一般名に複数の修正先がある場合も、曖昧なので修正しない。
+    """
+    from dogido_server.entry_catalog import mob_entry
+
+    observed = {
+        str(raw or "").removeprefix("minecraft:").strip().lower()
+        for raw in (observed_mob_types or ())
+        if str(raw or "").strip()
+    }
+    candidates: dict[str, set[str]] = {}
+    for target_id in observed:
+        target = mob_entry(target_id)
+        if not target:
+            continue
+        target_label = str(target.get("label") or "").strip()
+        rewrite_from_ids = target.get("observed_speech_rewrite_from_ids")
+        if not target_label or not isinstance(rewrite_from_ids, list):
+            continue
+        for raw_source_id in rewrite_from_ids:
+            source_id = str(raw_source_id or "").removeprefix("minecraft:").strip().lower()
+            if not source_id or source_id in observed:
+                continue
+            source = mob_entry(source_id)
+            source_label = str((source or {}).get("label") or "").strip()
+            if not source_label or source_label == target_label:
+                continue
+            candidates.setdefault(source_label, set()).add(target_label)
+    return {
+        source_label: next(iter(target_labels))
+        for source_label, target_labels in candidates.items()
+        if len(target_labels) == 1
+    }
 
 
 def should_enforce_speech_whitelist(
@@ -298,7 +358,7 @@ def should_enforce_speech_whitelist(
 
 @lru_cache(maxsize=1)
 def catalog_speech_labels() -> tuple[str, ...]:
-    """照合用: カタログ上の表示名（長い順）。"""
+    """照合用: カタログ上の表示名と安全な観測時略称（長い順）。"""
     from dogido_server.entry_catalog import all_mob_entries, structure_entries
 
     labels: set[str] = set()
@@ -306,6 +366,13 @@ def catalog_speech_labels() -> tuple[str, ...]:
         label = str(entry.get("label") or "").strip()
         if len(label) >= 2:
             labels.add(label)
+        aliases = entry.get("observed_speech_aliases")
+        if isinstance(aliases, list):
+            labels.update(
+                str(alias).strip()
+                for alias in aliases
+                if len(str(alias).strip()) >= 2
+            )
     for entry in structure_entries().values():
         label = str(entry.get("label") or "").strip()
         if len(label) >= 2:
@@ -333,6 +400,48 @@ def catalog_labels_mentioned_in_text(text: str) -> list[str]:
                     covered[pos] = True
             start = index + 1
     return found
+
+
+def rewrite_observed_speech_names(
+    text: str,
+    corrections: dict[str, str] | None,
+) -> tuple[str, list[tuple[str, str]]]:
+    """既知の一般名だけを、長い正式名の内側を壊さず一意な正式名へ戻す。"""
+    raw = text or ""
+    rules = {
+        str(source).strip(): str(target).strip()
+        for source, target in (corrections or {}).items()
+        if str(source).strip() and str(target).strip() and str(source).strip() != str(target).strip()
+    }
+    if not raw or not rules:
+        return raw, []
+
+    covered = [False] * len(raw)
+    replacements: list[tuple[int, int, str, str]] = []
+    for label in catalog_speech_labels():
+        start = 0
+        while True:
+            index = raw.find(label, start)
+            if index < 0:
+                break
+            end = index + len(label)
+            if not any(covered[index:end]):
+                for pos in range(index, end):
+                    covered[pos] = True
+                target = rules.get(label)
+                if target:
+                    replacements.append((index, end, label, target))
+            start = index + 1
+    if not replacements:
+        return raw, []
+
+    corrected = raw
+    applied: list[tuple[str, str]] = []
+    for start, end, source, target in sorted(replacements, reverse=True):
+        corrected = corrected[:start] + target + corrected[end:]
+        applied.append((source, target))
+    applied.reverse()
+    return corrected, applied
 
 
 def contains_unlisted_speech_names(
