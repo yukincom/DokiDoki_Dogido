@@ -224,6 +224,92 @@ class HaikuFeedbackMemoryTest(unittest.TestCase):
                     }],
                 )
 
+    def test_player_line_revision_requires_hiragana_and_its_own_contract(self) -> None:
+        with TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp))
+            emission = HaikuEmission(
+                created_at=datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc),
+                text="ゆうぐれの\nてのなかのくさ\nあめふりや",
+                preface="ここで一句。",
+                interpretation="夕方の草地",
+                biome="meadow",
+                structure=None,
+                time_phase="evening",
+                dimension="minecraft:overworld",
+                event_sequence=13,
+            )
+            player_edit = [{
+                "line_index": 0,
+                "expected_text": "ゆうぐれの",
+                "replacement_text": "夕暮れや",
+                "provenance": "player_explicit",
+            }]
+            with self.assertRaisesRegex(ValueError, "hiragana"):
+                store.save_haiku_feedback(
+                    emission,
+                    revised_text="夕暮れや\nてのなかのくさ\nあめふりや",
+                    source="player_line_confirmed",
+                    revision_edit_contract="player_line_compare_and_swap_v1",
+                    revision_edits=player_edit,
+                )
+            with self.assertRaisesRegex(ValueError, "player edit contract"):
+                store.save_haiku_feedback(
+                    emission,
+                    revised_text="ゆうぐれや\nてのなかのくさ\nあめふりや",
+                    source="player_line_confirmed",
+                    revision_edit_contract="line_compare_and_swap_v1",
+                    revision_edits=[{
+                        "line_index": 0,
+                        "expected_text": "ゆうぐれの",
+                        "replacement_text": "ゆうぐれや",
+                        "atom_ids": ["a0"],
+                    }],
+                )
+
+    def test_same_second_player_revisions_have_unique_parent_ids(self) -> None:
+        with TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp))
+            observed_at = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
+            emission = HaikuEmission(
+                created_at=observed_at,
+                text="ゆうぐれの\nてのなかのくさ\nあめふりや",
+                preface="ここで一句。",
+                interpretation="夕方の草地",
+                biome="meadow",
+                structure=None,
+                time_phase="evening",
+                dimension="minecraft:overworld",
+                event_sequence=14,
+            )
+
+            def save(base: str, revised: str, index: int, parent: str | None = None):  # type: ignore[no-untyped-def]
+                base_lines = base.splitlines()
+                revised_lines = revised.splitlines()
+                return store.save_haiku_feedback(
+                    emission,
+                    revised_text=revised,
+                    source="player_line_confirmed",
+                    revision_base_text=base,
+                    parent_revision_id=parent,
+                    revision_edit_contract="player_line_compare_and_swap_v1",
+                    revision_edits=[{
+                        "line_index": index,
+                        "expected_text": base_lines[index],
+                        "replacement_text": revised_lines[index],
+                        "provenance": "player_explicit",
+                    }],
+                    observed_at=observed_at,
+                )
+
+            first_text = "ゆうぐれや\nてのなかのくさ\nあめふりや"
+            second_text = "ゆうぐれや\nくさをにぎって\nあめふりや"
+            third_text = "ゆうぐれや\nくさをにぎって\nあめのよる"
+            first = save(emission.text, first_text, 0)
+            second = save(first_text, second_text, 1, first["id"])
+            third = save(second_text, third_text, 2, second["id"])
+            self.assertEqual(len({first["id"], second["id"], third["id"]}), 3)
+            self.assertEqual(third["parent_revision_id"], second["id"])
+
     def test_reading_correction_persists_and_applies(self) -> None:
         with TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp))

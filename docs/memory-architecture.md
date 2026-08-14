@@ -12,7 +12,7 @@
 - 記憶は状態機械の判定正本にはしない
 - ただし、実際に発話された警告・反応・川柳と、その発話意図は会話参照のため短期記憶に残す
 - 保存・読取はコードが行う。汎用エージェント基盤（Hermes 等）は使わない
-- 将来の LLM 側ワークフロー整理は LangChain / LangGraph を想定するが、JSONL 正本は変えない
+- 将来の LLM 側ワークフローも特定の汎用基盤を前提にせず、閉じた route とコード検証で構成する。JSONL 正本は変えない
 
 ### 1.1 単一プレイヤー前提（現状）
 
@@ -37,7 +37,7 @@
     rolling_summary.json
   long_term/
     haiku_entries.jsonl
-    haiku_revisions.jsonl   # 予約。添削履歴を載せる想定だが、現行実装は未使用
+    haiku_revisions.jsonl   # 添削履歴。AI案とプレイヤー局所編集の採用差分を保存
     player_profile.json
 ```
 
@@ -45,7 +45,7 @@
 
 - 時系列で追記するログ
 - 川柳エントリ
-- 添削履歴（`haiku_revisions.jsonl` はパス予約。Hermes 前提の自動整理はしない）
+- 添削履歴（`haiku_revisions.jsonl`。Hermes 前提の自動整理はしない）
 
 ### JSON を使うもの
 
@@ -233,6 +233,8 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
   "created_at": "2026-06-11T17:51:00+09:00",
   "haiku_id": "hk_20260611_172701_4919",
   "source": "generated_confirmed",
+  "base_text": "ゆきのよる\nやみにはかぶる\nそらのとびら",
+  "parent_revision_id": null,
   "comment": "やみにはかぶる、の意味が少しわかりにくい",
   "edit_contract": "line_compare_and_swap_v1",
   "edits": [
@@ -248,11 +250,16 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
 ```
 
 `source` は `player_feedback`（既定）／`formal`／`conversational`／
-`generated_confirmed` の4値。AIの修正案をプレイヤーが明示採用した
+`generated_confirmed`／`player_line_confirmed` の5値。AIの修正案をプレイヤーが明示採用した
 `generated_confirmed` では、3行すべての検証済み出典を `line_sources` に残す。さらに
 `edit_contract` と、元行完全一致条件を持つ検証済み `edits` を残す。保存時にも
 `edits` を元句へ適用すると `revised_text` になること、対象外行が変わらないことをコードで再確認する。
 固定行の出典が欠ける旧データは材料重複を検証できないため、自動修正案を出さない。
+
+プレイヤー明示語による局所編集は `player_line_compare_and_swap_v1` を使う。editの
+`provenance` は `player_explicit` とし、source atom IDを捏造しない。連続編集では
+`base_text` を直前の採用句、`parent_revision_id` を直前revisionへ向ける。初回発句の
+`original_text` は変えず、各段階のCAS基準を履歴として残す。
 
 添削エージェントは、`haiku_entries.jsonl` と `haiku_revisions.jsonl` を読む。
 通常の短期ログ全文は読ませない。

@@ -103,7 +103,7 @@ H1〜H5.2 で **関係性の側はかなりできた**（pin / 講評 / soft les
 
 足すなら（任意）:
 
-- 修正案は実装済み。次は実ログで対象行・出典・自然さを見る
+- AI修正案と、プレイヤー語による連続局所編集は実装済み。次は実ログで対象行・読み・自然さを見る
 - 「前よりマシ？」の短い自己参照（lessons が効いた感）  
 
 **やらない方がいい:**
@@ -175,10 +175,10 @@ soft workshop 方針は後半をすでに押さえている。
 |---|---|
 | workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・OS／端末内AI優先の限定 intent/findings 抽出＋chat fallback。praise は critique 保存のみ） |
 | H6 固定語 materials 突合 | **撤回** |
-| 発句 source atom 品質ゲート | 済（原文snapshot・節単位preface provenance/主張範囲・行別出典・一意なカタログ名かな訂正・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
+| 発句 source atom 品質ゲート | 済（原文snapshot・節単位preface provenance/主張範囲・行別出典・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P4 | 済（P5 任意） |
 | 観測ギャップ・水辺など | 乗車中の乗り物材料は済（未乗車は省略・主語付き）。水辺・旗・エリトラなどは継続課題（完成度の本丸） |
-| 修正案 1 本 / OS AI・chat fallback 実ログ評価 / Phase E | 行単位 Locate→Edit→Test（元行一致つき差分・失敗理由つき再編集・同一案棄却・採用時再照合・差分保存・提示だけ共同編集者leaf）まで済。実ログ評価・整理は任意・未 |
+| 修正案 1 本・連続局所編集 / OS AI・chat fallback 実ログ評価 / Phase E | AIのLocate→Edit→Testに加え、finding／明示行→プレイヤー語のひらがな化→正確な5/7/5音→未保存三行へ連続CAS→明示採用後もpin維持まで済。句本文と現在句照会はコード固定。実ログ評価・整理は任意・未 |
 | VLM / Vector RAG | 将来枠 |
 
 ---

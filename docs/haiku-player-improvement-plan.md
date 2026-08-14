@@ -1,7 +1,7 @@
 # 川柳: プレイヤー主導の改善設計
 
 **日付:** 2026-08-12
-**状態:** H1〜H5.2・H7-lite（OS／端末内AIの限定講評抽出）・修正案1本 **実装済み** / H6 **撤回**（詳細は §7）
+**状態:** H1〜H5.2・H7-lite（OS／端末内AIの限定講評抽出）・修正案1本・連続局所編集 **実装済み** / H6 **撤回**（詳細は §7）
 **関連:** [companion-maturity.md](companion-maturity.md)、[haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
 
 ---
@@ -63,6 +63,9 @@
   ├─ 句に関する講評・質問・直し  → haiku_workshop 経路
   │     → 端末内AI優先で intent / 対象行 / 指摘を構造化
   │     → コード検証 → critique 保存 → 共同編集者として短く返す
+  │     → プレイヤーの「〜に変えた方が」は、検証済み対象行だけへコードで置換
+  │     → 置換語と三行をひらがな化・音数検査し、未保存の新しい三行をコード提示
+  │     → 未保存案を基準に別の行も続けて置換できる
   │     → 求められたときだけ haiku route が対象行を直す
   │     → 別structured評価で意味保持・自然さを照合
   │     → コードで出典ID・重複・対象行・音数・発句時hard制約を検証 → 未保存案として提示
@@ -84,6 +87,10 @@
 RecentHaikuWorkshop:
   entry_id
   surface_text          # 詠んだ句
+  marked_line_index     # 次の明示置換を適用する一意な行。曖昧なら None
+  pending_revision      # 未採用の最新三行。次の局所編集ではこちらを基準にする
+  pending_revision_source
+  current_revision_id   # 連続保存の親revision
   kana_or_display       # 読み上げ形
   materials:            # 発句シード（句テキストに制御タグは埋め込まない）
     interpretation      # irony/scene 要約
@@ -199,7 +206,8 @@ open 中のプレイヤー入力
 | **critique_gibberish** | 「それ日本語？」「読めん」 | kind=unreadable |
 | **praise** | 「いい句」「うまい」 | kind=praise（critique 保存・lesson 非変更・close） |
 | **request_repair** | 「直して」「直すかな」 | 検証済みの指摘から対象行だけ修正案を1本作る。自動保存しない |
-| **revise_free** | 「こう直して」「〜の方がええ」＋句っぽい | revision 保存（`直し:` なしでも） |
+| **player_line_edit** | 「夕暮れやに変えた方が」「中七を〜にして」 | finding／明示行で対象を固定し、その行だけプレイヤー語へ置換。未保存案を三行で提示 |
+| **revise_free** | 「こう直して」＋完成した三行 | revision 保存（`直し:` なしでも） |
 | **revise_formal** | 既存 `直し:` | 現行どおり |
 | **reading** | 既存 草地はくさち | 現行どおり |
 | **close_workshop** | 「もうええ」「次いこ」 | open=false |
@@ -238,7 +246,8 @@ structured 抽出の `auto` 順は **Apple Foundation Models → Foundry Local �
 
 ### `haiku_revisions.jsonl`（既存拡張）
 
-- `source: "player_feedback"|"formal"|"conversational"|"generated_confirmed"`
+- `source: "player_feedback"|"formal"|"conversational"|"generated_confirmed"|"player_line_confirmed"`
+- 連続局所編集は `base_text` と `parent_revision_id` を持ち、直前に採用した三行へだけ差分を適用する
 - 可能なら `critique_ids[]` を紐づけ  
 
 ### `haiku_lessons.jsonl`（または profile 内）
@@ -292,6 +301,7 @@ workshop の会話 leaf は、冒険時の「怖がり」ではなく **素直�
 | critique_forced | 詰め込みを認め、直すべき点を短く返す |
 | critique_gibberish / offscene | 読みにくさ／場のずれを具体的に認め、材料説明で反論しない |
 | request_repair | haiku route が対象行だけ修正。コード検証を通った案だけ提示し、採用確認を待つ |
+| player_line_edit | 置換語と完成三行はコード固定。LLMに本文を補作・復唱させず、別の行も続けて直せる |
 | soft_default / other_haiku | 検証済み findings を渡した共同編集者 leaf。失敗時は短い定型 |
 | revise_free | 「覚えといたで」＋ close |
 | praise | 「ありがとうや。その句、残しとくで。」＋ critique 保存。lesson は触らない |
@@ -299,6 +309,8 @@ workshop の会話 leaf は、冒険時の「怖がり」ではなく **素直�
 材料開示は `ask_meaning` で使う。講評への返事では、材料や狙いを弁明に使わない。
 
 修正案は発話前ゲートとは別に、プレイヤーが明示的に求めたときだけ低温で1本生成する。検証済み finding の行だけを変更し、他の行は固定する。編集AIは全文ではなく、対象行ごとの `expected_text` と `replacement_text` を持つ差分を返す。コードが元行との完全一致・対象外行の不変・実際に字面が変わったことを先に確認し、生成AIの自己申告IDだけを信用せず、別structured評価で各修正行の意味保持・自然さを照合する。その後コードが、保存済み source atom ID、固定行との atom 重複、5-7-5±1、発句時にsnapshotした道具・読みhard制約を確認する。一回目が不合格なら、確定した失敗理由と不合格案を二回目の編集へ返し、同じ案は評価前に棄却する。二回とも不合格なら元句を維持する。合格でも `pending_revision` に置くだけで、句本文と採用案内はコードが固定し、前置きの一言だけ共同編集者 leaf が話す。疑問・否定を除く「その案で」等の明示採用時に、同じ差分が同じ元句へ適用できるか再確認し、検証済み行別出典・差分契約とともに revision 保存する。
+
+プレイヤー自身が「〜に変えた方が」と語を示した場合は、生成AIを使わない。直前の検証済み finding、または「上五／中七／下五」の明示指定が一意なときだけ行を固定する。置換語はコードでUniDic読みへ展開し、カタカナもひらがなへ寄せる。残留漢字・英数・カタカナがあれば推測せず、ひらがな入力を求める。対象行は正確な5／7／5音、hard制約、他行重複を検査する。合格案は `player_line_compare_and_swap_v1` の未保存差分にし、さらに別の行を指摘された場合は、その未保存三行を表示上の基準にして差分を積み上げる。「全体はどうなった」への本文もコードが返す。最後に「その案で」と明示されたときだけ `player_line_confirmed` として保存し、採用句を次の編集基準へ昇格する。workshop は閉じない。プレイヤー語を source atom に偽装しないため、以後AI修正に必要な固定行出典が足りなければ、その経路はfail closedとする。
 
 ---
 
@@ -350,8 +362,9 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H6** | 発句後 materials 突合バリデータ（固定語リスト） | 独立可 | **撤回** |
 | **H7-lite** | OS／端末内AI優先の限定 structured 講評抽出。曖昧 intent 補助＋既知講評の行・断片・problem 抽出。コード検証・chat fallback | H2 の後 | **済** |
 | **H7.1** | 要求時だけ大きい haiku route で対象行を修正。コード品質ゲート→未保存案→明示採用 | H7-lite | **済** |
+| **H7.2** | finding／明示行を固定し、プレイヤー語をコードでひらがな化して連続局所編集。三行提示・CAS・採用後の次編集もコード所有 | H7-lite | **済** |
 
-**H1〜H5.2 + H1.1 + H7-lite + H7.1 実装済み。H6 は撤回。**
+**H1〜H5.2 + H1.1 + H7-lite + H7.1 + H7.2 実装済み。H6 は撤回。**
 道具/読みの forbidden は hard のまま。player lesson は soft。  
 **H1.1:** 候補は短い名詞優先。`fragment_links` は句 surface→材料の内部対応表（句に制御タグを埋め込まない）。ask_meaning は links を優先。  
 **H6 をやめた理由:** 発句は渡した materials / scene から作る前提。固定 drift リストは本質でなくメンテだけ増える。  
@@ -374,8 +387,10 @@ HaikuContext / 制約ブロックに追加（短く）:
 4. プレイヤー:「無理やり圧縮しすぎ」  
 5. ドギド:「せやな、詰め込みすぎた。余白を残すよう直した方がええな」→ critique + soft lesson
 6. プレイヤー:「そこ直して」→ 対象行だけの案を提示（まだ保存しない）
-7. プレイヤー:「その案で」→ revision 保存・pin close。次回発句で soft lesson が参考行として出る
-8. （後で）プレイヤー:「いい句やな」→「ありがとうや。その句、残しとくで。」＋ critique 保存（lesson は変更しない）
+7. プレイヤー:「上五は夕暮れやに変えた方が」→ コードがひらがな化・5音検査し、新しい三行を提示
+8. プレイヤー:「下五は雨の夜に」→ 未保存の新三行を基準にもう一行だけ置換
+9. プレイヤー:「その案で」→ revision 保存。採用句を現在句にしてpinを維持し、さらに別行も直せる
+10. （後で）プレイヤー:「いい句やな」→「ありがとうや。その句、残しとくで。」＋ critique 保存（lesson は変更しない）
 
 ---
 
@@ -398,6 +413,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 6. 既存の読み訂正・想起・自動保存・道具 hard 制約は壊さない  
 7. 対象行・断片・problem だけが閉じた型で抽出され、端末AIがなくても chat fallback で workshop が壊れない
 8. 修正案は元行一致つきの行差分で、意味保持・自然さの別評価と、対象行・対象外不変・出典ID・重複・音数・発句時hard制約のコード検証を通る。不合格理由を再編集へ返し、同一案を再評価せず、明示採用までは元句と revision を変更しない
+9. プレイヤーの局所置換は本文をLLMに生成させず、必ずひらがな三行として提示する。複数行を順に直しても、各差分の基準と親revisionがつながり、採用後もworkshopを続けられる
 
 ---
 
@@ -407,4 +423,4 @@ HaikuContext / 制約ブロックに追加（短く）:
 2. 修正案を採用・却下するときの自然な言い回し追加
 3. Phase E パッケージ整理（機能ではない）
 
-H7-lite / H7.1 は実装済み。以後は実ログを見て、誤分類・待ち時間・提案の自然さだけを小さく調整する。
+H7-lite / H7.1 / H7.2 は実装済み。以後は実ログを見て、誤分類・待ち時間・提案の自然さだけを小さく調整する。

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from dogido_server.tts_reading import (
     apply_manual_tts_replacements,
+    hiraganize_japanese_text,
     prepare_text_for_tts,
     unidic_available,
 )
@@ -36,6 +39,24 @@ class TtsReadingManualTests(unittest.TestCase):
         once = prepare_text_for_tts("朝から元気", engine="off")
         twice = prepare_text_for_tts(once, engine="off")
         self.assertEqual(once, twice)
+
+    def test_full_hiraganizer_uses_dictionary_reading_without_rewriting_words(self) -> None:
+        class FakeTagger:
+            def __call__(self, _text: str):
+                return [
+                    SimpleNamespace(surface="のんびり", feature=SimpleNamespace()),
+                    SimpleNamespace(
+                        surface="草",
+                        feature=SimpleNamespace(kana="クサ", pron="クサ"),
+                    ),
+                ]
+
+        with patch("dogido_server.tts_reading._get_unidic_tagger", return_value=FakeTagger()):
+            self.assertEqual(hiraganize_japanese_text("のんびり草"), "のんびりくさ")
+
+    def test_full_hiraganizer_keeps_original_without_dictionary(self) -> None:
+        with patch("dogido_server.tts_reading._get_unidic_tagger", return_value=None):
+            self.assertEqual(hiraganize_japanese_text("のんびり草"), "のんびり草")
 
 
 @unittest.skipUnless(unidic_available(), "fugashi+unidic-lite not installed")
