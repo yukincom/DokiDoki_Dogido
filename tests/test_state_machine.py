@@ -8263,11 +8263,13 @@ class StateMachineTests(unittest.TestCase):
         self.assertNotIn("ここで一句", third_speech[0])
         fourth_speech = [action.text for action in fourth.actions if action.layer == "speech"]
         self.assertEqual(len(fourth_speech), 1)
-        # 情景が弱ければカタログ、強ければ LLM 句
+        # 情景が弱ければカタログ、強ければ LLM 句。生成品質ゲートを
+        # 通らなかった場合は、不完全な句を出さず失敗返答で閉じる。
         self.assertTrue(
             fourth_speech[0] in {
                 "はるのかわ\nみずのひかりに\nうごくそら",
                 "五月雨を　集めてはやし　シミュレート",
+                "まとまらんかった。。。",
             }
             or "五月雨" in fourth_speech[0]
             or "はるのかわ" in fourth_speech[0]
