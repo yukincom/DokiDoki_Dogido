@@ -19,13 +19,18 @@ PC からドギドの声を鳴らすだけなら、まず必要なのはこれ�
 - `PyYAML`
 - `mlx-lm`
 
+### 推奨 optional
+
+- `pip install -e ".[tts-reading]"` … VOICEVOX の音読み誤読補正（UniDic）。必須ではない  
+- `pip install -e ".[dev]"` … pytest
+
 ### まだ不要なもの
 
 - `whisper.cpp`
 - `mlx-whisper`
-- `ffmpeg`
+- `ffmpeg`（cue 結合や voice_input を使うなら別途）
 
-これらは **マイク入力や音声認識を入れる段階になってから** で十分です。
+`whisper` / `mlx-whisper` は **マイク入力や音声認識を入れる段階になってから** で十分です。
 
 ## 2. `whisper.cpp` は今いるか
 
@@ -175,8 +180,26 @@ macOS 標準を使う。
 
 ### 現時点のおすすめ方針
 
-- まずは `say` で実装を進める
-- あとで voice quality が必要になった段階で TTS を差し替える
+- 本線 TTS は **VOICEVOX**（`DOGIDO_TTS_BACKEND=voicevox`）
+- 合成直前の読み補正は `dogido_server/tts_reading.py`
+  - 必須ではない: 例外表だけでも動く
+  - 任意: **UniDic** で和語漢字の誤読を減らす
+
+### 読み補正（optional UniDic）
+
+```bash
+pip install -e ".[tts-reading]"
+# = fugashi[unidic-lite]（辞書データ込み・ディスク約 250MB）
+```
+
+| 項目 | 内容 |
+|---|---|
+| 設定 | `DOGIDO_TTS_READING_ENGINE=auto\|unidic\|off`（既定 `auto`） |
+| 未導入時 | 例外表のみ。起動・合成は継続 |
+| 方針 docs | [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) |
+| ライセンス | UniDic は GPL/LGPL/BSD トリプル。README Acknowledgments 参照 |
+
+`py_trees` は判断用で、読み補正とは無関係です（`pyproject.toml` の必須依存）。
 
 ## 7. FastAPI まわり
 

@@ -46,12 +46,18 @@
 
 ## 5. API 一覧
 
+adapter → server の主経路:
+
 - `GET /healthz`
 - `POST /api/v1/adapter-sessions`
 - `POST /api/v1/game-events`
 - `POST /api/v1/game-events/batch`
 - `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
 - `DELETE /api/v1/adapter-sessions/{session_id}`
+
+プレイヤー発話のサイドチャネル（adapter 以外）:
+
+- `POST /api/v1/player-input` … マイク入力・開発時のテキスト注入。詳細は [§21](#21-post-apiv1player-input)
 
 ## 6. `GET /healthz`
 
@@ -84,6 +90,7 @@ adapter の起動時に session を作る。
   "capabilities": [
     "visual_threats",
     "auditory_threats",
+    "ambient_sounds",
     "inventory",
     "danger_darkness"
   ]
@@ -413,3 +420,55 @@ batch 可。
 4. `DELETE /api/v1/adapter-sessions/{session_id}`
 5. `POST /api/v1/game-events/batch`
 6. `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
+
+## 21. `POST /api/v1/player-input`
+
+adapter 経路ではない。`dogido_server.voice_input`（マイク）や開発時のテキスト注入用。
+
+- 直近のアクティブセッションへ `pending_player_text` を載せる
+- `source: "voice"` のときだけ、音声認識の短い誤検出を避けるため3文字以下は原則受け付けない（`ドギド` / `おーい` / `うん` / `おう` は例外）
+- `source: "voice"` では、環境音から生じやすい `Thank` 系の定型誤認識を受け付けない
+- `source: "voice"` では、現在のworkshop句・原文材料・時間帯などから作った候補内に限り、音の近いかな断片を会話理解用に補正する。原文は明示操作判定用に保持する
+- **次の game-event** の `meta.user_text` としてチャットと同じ経路に合流する
+- **セッションが無いと受け付けない**（`accepted: false`, `reason: no_active_session`）
+- 製品 README のプレイヤー向け手順には載せない（開発・デバッグ用）
+
+相乗り・再キューの挙動は [対話設計](dialogue-design.md) を参照。
+
+### request
+
+```json
+{
+  "text": "おはようさん",
+  "source": "voice"
+}
+```
+
+`source` は `voice | text`。省略時は `text` で、開発用curlや手入力を音近傍補正しない。`dogido_server.voice_input` は `voice` を送る。
+
+### response 例
+
+```json
+{
+  "accepted": true,
+  "session_id": "…"
+}
+```
+
+```json
+{
+  "accepted": false,
+  "reason": "no_active_session"
+}
+```
+
+### 開発時の例
+
+```bash
+# アダプタ接続中（セッションあり）のサーバーへ
+curl -X POST http://127.0.0.1:5055/api/v1/player-input \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "おはようさん"}'
+```
+
+auth が有効なときは adapter 系と同様に `Authorization: Bearer <token>` を付ける。

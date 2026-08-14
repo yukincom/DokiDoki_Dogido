@@ -29,6 +29,7 @@ import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -41,7 +42,9 @@ import net.minecraft.entity.mob.PiglinEntity;
 import net.minecraft.entity.mob.ShulkerEntity;
 import net.minecraft.entity.mob.SpiderEntity;
 import net.minecraft.entity.mob.ZombifiedPiglinEntity;
+import net.minecraft.entity.passive.AbstractHorseEntity;
 import net.minecraft.entity.passive.BeeEntity;
+import net.minecraft.entity.passive.CamelEntity;
 import net.minecraft.entity.passive.DolphinEntity;
 import net.minecraft.entity.passive.FoxEntity;
 import net.minecraft.entity.passive.GoatEntity;
@@ -53,6 +56,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.passive.WolfEntity;
+import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.village.VillagerData;
@@ -69,6 +73,9 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
 import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.PlayerInput;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -78,12 +85,18 @@ import net.minecraft.world.World;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
-    private static final int SOUND_OBSERVATION_TTL_TICKS = 12;
+    // 音 packet をクライアント側で保持する長さ。
+    // 人間が「…？」「今の音なに？」と言うまでの猶予を確保する（旧5秒だと短い）。
+    // 20 tick/s 想定で約15秒。サーバ hearing バッファ（約20s）以下に保つ。
+    private static final int SOUND_OBSERVATION_TTL_TICKS = 300;
     private static final int OMINOUS_SOUND_TTL_TICKS = 80;
     private static final int WEATHER_SOUND_TTL_TICKS = 80;
     private static final int LIGHTNING_STRIKE_TTL_TICKS = 40;
     private static final int WARDEN_SPECIAL_LATCH_TICKS = 100;
     private static final double LARGE_POSITION_JUMP_BLOCKS = 48.0;
+    // 乗り物の微小な同期揺れを「移動中」と誤認しないための水平速度閾値。
+    // 単位は block/tick の二乗。実際の歩行・航行速度より十分小さい。
+    private static final double VEHICLE_MOVING_SPEED_SQUARED = 0.0001;
     private static final int BOSS_OMEN_SCAN_RADIUS = 20;
     private static final int WITHER_OMEN_SCAN_RADIUS = 8;
     private static final int LIT_INTERIOR_SAFE_LIGHT_THRESHOLD = 9;
@@ -105,12 +118,33 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int GATEWAY_SCAN_RADIUS = 15;
     private static final int END_PORTAL_FRAME_SCAN_RADIUS = 5;
     private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
+        // 具体名を先に置く。entity 付き packet は実体から解決するが、座標だけの
+        // hostile sound packet でも主要な敵を取りこぼさないための fallback。
         {"zombified_piglin", "zombified_piglin"},
         {"zombie_pigman", "zombified_piglin"},
         {"zombie_villager", "zombie_villager"},
         {"wither_skeleton", "wither_skeleton"},
+        {"elder_guardian", "elder_guardian"},
+        {"ender_dragon", "ender_dragon"},
+        {"cave_spider", "cave_spider"},
         {"piglin_brute", "piglin_brute"},
         {"magma_cube", "magma_cube"},
+        {"silverfish", "silverfish"},
+        {"endermite", "endermite"},
+        {"vindicator", "vindicator"},
+        {"pillager", "pillager"},
+        {"ravager", "ravager"},
+        {"guardian", "guardian"},
+        {"phantom", "phantom"},
+        {"shulker", "shulker"},
+        {"evoker", "evoker"},
+        {"breeze", "breeze"},
+        {"bogged", "bogged"},
+        {"creaking", "creaking"},
+        {"stray", "stray"},
+        {"husk", "husk"},
+        {"vex", "vex"},
+        {"wither", "wither"},
         {"warden", "warden"},
         {"creeper", "creeper"},
         {"skeleton", "skeleton"},
@@ -144,7 +178,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private final Map<UUID, Long> lineOfSightStartedTicks = new HashMap<>();
     private final Map<UUID, Long> confirmedVisibleTicks = new HashMap<>();
     private final Deque<SoundObservation> recentSoundObservations = new ArrayDeque<>();
-    /** 村人・家畜など非敵対の周囲音。戦闘判定には使わない。 */
+    /** 非敵対 Mob + 実再生されたブロック・天候・環境音。戦闘判定には使わない。 */
     private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
 
     private long tickCounter = 0;
@@ -229,6 +263,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         instance.onEntitySoundPacket(packet);
+    }
+
+    public static void recordPlayedSound(SoundInstance sound) {
+        DogidoClientAdapter instance = INSTANCE;
+        if (instance == null || sound == null) {
+            return;
+        }
+        instance.onPlayedSound(sound);
     }
 
     private void onClientTick(MinecraftClient client) {
@@ -981,8 +1023,51 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
         }
         List<AudioThreatObservation> ambient = new ArrayList<>(deduped.values());
-        ambient.sort(Comparator.comparingInt(observation -> distanceBandRank(observation.distanceBand())));
+        ambient.sort((left, right) -> {
+            int priority = Integer.compare(
+                environmentSoundPriority(right.soundEvent()),
+                environmentSoundPriority(left.soundEvent())
+            );
+            if (priority != 0) {
+                return priority;
+            }
+            int recency = Long.compare(right.observedTick(), left.observedTick());
+            if (recency != 0) {
+                return recency;
+            }
+            return Integer.compare(
+                distanceBandRank(left.distanceBand()),
+                distanceBandRank(right.distanceBand())
+            );
+        });
         return ambient;
+    }
+
+    private int environmentSoundPriority(String soundEventId) {
+        String id = String.valueOf(soundEventId).toLowerCase(Locale.ROOT);
+        if (id.contains("thunder")
+            || id.contains("lightning")
+            || id.contains("shriek")
+            || id.contains("sculk_sensor")) {
+            return 3;
+        }
+        if (id.contains("ambient")
+            || id.contains("crackle")
+            || id.contains("chime")
+            || id.contains("resonate")
+            || id.contains("drip")
+            || id.contains("note_block")
+            || id.contains("bell")) {
+            return 2;
+        }
+        if (id.endsWith(".step")
+            || id.endsWith(".hit")
+            || id.endsWith(".fall")
+            || id.endsWith(".break")
+            || id.endsWith(".place")) {
+            return 0;
+        }
+        return 1;
     }
 
     private long latestAudioObservationTick(List<AudioThreatObservation> audioThreats) {
@@ -1012,6 +1097,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1034,6 +1120,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1056,6 +1143,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
         return root;
@@ -1076,6 +1164,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
@@ -1098,6 +1187,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(resolveDeathCause(player)));
         return root;
@@ -1118,6 +1208,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
         root.add("nearby_resources", nearbyResources);
+        attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
@@ -1160,6 +1251,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             "held_item",
             held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
         );
+        JsonObject vehicle = buildVehicleState(player);
+        if (vehicle != null) {
+            // 未乗車時はキーごと省略する。「乗っていない」をLLM材料にしない。
+            json.add("vehicle", vehicle);
+        }
         JsonArray activeEffects = new JsonArray();
         for (net.minecraft.entity.effect.StatusEffectInstance effect : player.getStatusEffects()) {
             Identifier effectId = effect.getEffectType().getKey().map(key -> key.getValue()).orElse(null);
@@ -1169,6 +1265,48 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             activeEffects.add(effectId.getPath());
         }
         json.add("active_status_effects", activeEffects);
+        return json;
+    }
+
+    private JsonObject buildVehicleState(ClientPlayerEntity player) {
+        Entity vehicle = player.getVehicle();
+        if (vehicle == null) {
+            return null;
+        }
+
+        boolean controlling = vehicle.getControllingPassenger() == player;
+        Vec3d velocity = vehicle.getVelocity();
+        double horizontalSpeedSquared = (velocity.x * velocity.x) + (velocity.z * velocity.z);
+        boolean moving = horizontalSpeedSquared >= VEHICLE_MOVING_SPEED_SQUARED;
+        PlayerInput input = player.getLastPlayerInput();
+        boolean directionalInput = input.forward() || input.backward() || input.left() || input.right();
+
+        String activity = "riding";
+        if (
+            controlling
+                && vehicle instanceof AbstractBoatEntity boat
+                && (boat.isPaddleMoving(0) || boat.isPaddleMoving(1))
+        ) {
+            // 船・いかだだけは、パドル実測があるときに限り「漕いでいる」。
+            activity = "rowing";
+        } else if (controlling && vehicle instanceof CamelEntity camel && camel.isDashing()) {
+            activity = "dashing";
+        } else if (
+            controlling
+                && moving
+                && directionalInput
+                && vehicle instanceof AbstractHorseEntity
+        ) {
+            // 落下・押し流し・ノックバックだけでは「走っている」にしない。
+            activity = "running";
+        } else if (moving) {
+            activity = "moving";
+        }
+
+        JsonObject json = new JsonObject();
+        json.addProperty("vehicle_id", Registries.ENTITY_TYPE.getId(vehicle.getType()).toString());
+        json.addProperty("activity", activity);
+        json.addProperty("controlling", controlling);
         return json;
     }
 
@@ -1340,7 +1478,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private JsonArray buildAmbientSounds(List<AudioThreatObservation> ambientSounds) {
         JsonArray array = new JsonArray();
-        int limit = Math.min(ambientSounds.size(), 6);
+        int limit = Math.min(ambientSounds.size(), 12);
         for (int index = 0; index < limit; index += 1) {
             AudioThreatObservation sound = ambientSounds.get(index);
             JsonObject entry = new JsonObject();
@@ -1420,6 +1558,58 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return json;
     }
 
+    /**
+     * 画面中央クロスヘア（＋）が刺さっているブロック / エンティティ。
+     * MISS・空気はフィールド省略（docs/look-target-observation-plan.md）。
+     */
+    private void attachLookTarget(JsonObject root, ClientPlayerEntity player, ClientWorld world) {
+        JsonObject lookTarget = buildLookTarget(player, world);
+        if (lookTarget != null) {
+            root.add("look_target", lookTarget);
+        }
+    }
+
+    private JsonObject buildLookTarget(ClientPlayerEntity player, ClientWorld world) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            return null;
+        }
+        HitResult hit = client.crosshairTarget;
+        if (hit == null || hit.getType() == HitResult.Type.MISS) {
+            return null;
+        }
+        if (hit.getType() == HitResult.Type.BLOCK && hit instanceof BlockHitResult blockHit) {
+            BlockPos pos = blockHit.getBlockPos();
+            BlockState state = world.getBlockState(pos);
+            if (state.isAir()) {
+                return null;
+            }
+            Identifier blockId = Registries.BLOCK.getId(state.getBlock());
+            JsonObject json = new JsonObject();
+            json.addProperty("kind", "block");
+            // nearby_resources と同様 path ベース（サーバ catalog が path キー）
+            json.addProperty("name", blockId.getPath());
+            double distance = Math.sqrt(
+                player.squaredDistanceTo(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)
+            );
+            json.addProperty("distance", round(distance));
+            return json;
+        }
+        if (hit.getType() == HitResult.Type.ENTITY && hit instanceof EntityHitResult entityHit) {
+            Entity entity = entityHit.getEntity();
+            if (entity == null || !entity.isAlive()) {
+                return null;
+            }
+            Identifier entityId = Registries.ENTITY_TYPE.getId(entity.getType());
+            JsonObject json = new JsonObject();
+            json.addProperty("kind", "entity");
+            json.addProperty("name", entityId.getPath());
+            json.addProperty("distance", round(Math.sqrt(player.squaredDistanceTo(entity))));
+            return json;
+        }
+        return null;
+    }
+
     private JsonArray buildNearbyResources(ClientPlayerEntity player, ClientWorld world) {
         BlockPos origin = player.getBlockPos();
         Map<String, Double> nearestDistances = new LinkedHashMap<>();
@@ -1471,6 +1661,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private String nearbyResourceNameForBlock(BlockState state) {
         String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        // 地表の積雪は、バイオーム名や気温から推測せず実ブロックを送る。
+        // サーバー側で標高・天気と合わせ、川柳と雑談の共通材料にする。
+        if ("snow".equals(blockId) || "snow_block".equals(blockId) || "powder_snow".equals(blockId)) {
+            return blockId;
+        }
         if (blockId.endsWith("_log") || blockId.endsWith("_planks") || blockId.endsWith("_wool")) {
             return blockId;
         }
@@ -2291,6 +2486,90 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             true,
             hostileEntity.getUuid().toString()
         );
+    }
+
+    /**
+     * SoundManager まで届いた実再生音を観測する。
+     *
+     * サーバ packet だけでは、焚き火・ポータルなどクライアントの
+     * randomDisplayTick が直接鳴らす音を拾えない。敵対／中立 Mob は従来の
+     * packet 経路で entity と結び付け、ここでは world の環境音だけを補完する。
+     */
+    private void onPlayedSound(SoundInstance sound) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        if (player == null || client.world == null || sound.getId() == null) {
+            return;
+        }
+        SoundCategory category = sound.getCategory();
+        if (category == SoundCategory.HOSTILE
+            || category == SoundCategory.NEUTRAL
+            || category == SoundCategory.PLAYERS
+            || category == SoundCategory.VOICE
+            || category == SoundCategory.UI
+            || category == SoundCategory.MUSIC) {
+            return;
+        }
+
+        String soundEventId = sound.getId().getPath();
+        String weatherKind = classifyWeatherSoundKind(soundEventId);
+        if (weatherKind != null) {
+            recordWeatherSoundObservation(weatherKind);
+        }
+        String ominousKind = classifyOminousSoundKind(soundEventId);
+        if (ominousKind != null) {
+            recordOminousSoundObservation(ominousKind);
+        }
+
+        String environmentType = environmentTypeFromPlayedSound(soundEventId, category);
+        if (environmentType == null) {
+            return;
+        }
+        Vec3d source = sound.isRelative()
+            ? new Vec3d(player.getX(), player.getY(), player.getZ())
+            : new Vec3d(sound.getX(), sound.getY(), sound.getZ());
+        long bucketX = Math.round(source.x / 2.0);
+        long bucketY = Math.round(source.y / 2.0);
+        long bucketZ = Math.round(source.z / 2.0);
+        String sourceId = "played:" + environmentType + ":" + bucketX + ":" + bucketY + ":" + bucketZ;
+        recordAmbientSoundObservation(player, soundEventId, environmentType, source, sourceId);
+    }
+
+    /**
+     * 実際の sound event から音源種別を機械的に得る。
+     * ブロック名やカタログ説明から「鳴るはず」と推測はしない。
+     */
+    private String environmentTypeFromPlayedSound(String soundEventId, SoundCategory category) {
+        if (soundEventId == null || soundEventId.isBlank()) {
+            return null;
+        }
+        String id = soundEventId.toLowerCase(Locale.ROOT);
+        String weather = classifyWeatherSoundKind(id);
+        if (weather != null) {
+            return "weather:" + weather;
+        }
+        if (category == SoundCategory.RECORDS) {
+            return "block:jukebox";
+        }
+        if (id.startsWith("ambient.")) {
+            String[] parts = id.split("\\.");
+            if (parts.length >= 2 && !parts[1].isBlank()) {
+                return "environment:" + parts[1];
+            }
+        }
+        if (!id.startsWith("block.")) {
+            return null;
+        }
+        String[] parts = id.split("\\.");
+        if (parts.length < 3 || parts[1].isBlank()) {
+            return null;
+        }
+        String source = switch (parts[1]) {
+            case "blastfurnace" -> "blast_furnace";
+            case "portal" -> "nether_portal";
+            default -> parts[1];
+        };
+        return "block:" + source;
     }
 
     private void recordSoundObservation(

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags, resolve_mob_catalog_entry
 from dogido_server.models import GameEvent, PassiveMob
+from dogido_server.player_activity import player_vehicle_fact
 from dogido_server.state_machine.ambient_mob_catalog import (
     AmbientMobReactionContext,
     ambient_mob_fallback_candidates,
@@ -35,7 +36,16 @@ class NarrationMixin:
             return None
         return candidates[0]
 
-    def _render_ambient_mob_line(self, event: GameEvent, mobs: list[PassiveMob]) -> str | None:
+    # 村人団子: 職別連発を止める共有 CD key
+    _VILLAGER_CROWD_COOLDOWN_KEY = "villager:crowd"
+
+    def _render_ambient_mob_line(
+        self,
+        event: GameEvent,
+        mobs: list[PassiveMob],
+        *,
+        villager_crowd: bool = False,
+    ) -> str | None:
         fallback = self._ambient_mob_line(event, mobs)
         if fallback is None or not mobs:
             return fallback
@@ -43,39 +53,53 @@ class NarrationMixin:
         direction = self._direction_label(mob)
         is_baby = bool(getattr(mob, "is_baby", None))
         raw_profession = getattr(mob, "profession", None)
-        is_villager = (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager"
+        is_villager = self._is_passive_villager(mob)
 
         # 村人: SM が「明確/不明」を判定してから details を組み立てる（プロンプト判定にしない）
+        # 団子（crowd）時は職を渡さず汎用「村人」
         speech_prof: str | None = None
         speech_baby = is_baby
         if is_villager:
             facts = project_villager_speech_facts(
                 day_time=self._effective_time_of_day(event),
                 is_baby=is_baby,
-                profession=raw_profession,
+                profession=None if villager_crowd else raw_profession,
             )
-            label = facts.label
-            speech_prof = facts.profession  # 明確なときだけ
-            speech_baby = facts.is_baby
-            entry = (
-                resolve_mob_catalog_entry(
-                    "villager",
-                    profession=speech_prof,
-                    is_baby=speech_baby,
+            if villager_crowd:
+                # 汎用村人（人数は言わない。職・人数を LLM に渡さない）
+                label = "村人"
+                speech_prof = None
+                speech_baby = False
+                entry = resolve_mob_catalog_entry("villager", profession=None, is_baby=False) or {}
+                LOGGER.warning(
+                    "ambient_villager mode=crowd raw_profession=%s label=%s day_time=%s",
+                    raw_profession,
+                    label,
+                    self._effective_time_of_day(event),
                 )
-                or {}
-            )
-            LOGGER.warning(
-                "ambient_villager raw_profession=%s known=%s profession=%s is_baby=%s "
-                "schedule=%s label=%s day_time=%s",
-                raw_profession,
-                facts.profession_known,
-                speech_prof,
-                speech_baby,
-                facts.schedule,
-                label,
-                self._effective_time_of_day(event),
-            )
+            else:
+                label = facts.label
+                speech_prof = facts.profession  # 明確なときだけ
+                speech_baby = facts.is_baby
+                entry = (
+                    resolve_mob_catalog_entry(
+                        "villager",
+                        profession=speech_prof,
+                        is_baby=speech_baby,
+                    )
+                    or {}
+                )
+                LOGGER.warning(
+                    "ambient_villager raw_profession=%s known=%s profession=%s is_baby=%s "
+                    "schedule=%s label=%s day_time=%s",
+                    raw_profession,
+                    facts.profession_known,
+                    speech_prof,
+                    speech_baby,
+                    facts.schedule,
+                    label,
+                    self._effective_time_of_day(event),
+                )
         else:
             entry = resolve_mob_catalog_entry(mob.type) or {}
             label = str(entry.get("label") or self._mob_label(mob.type))
@@ -83,10 +107,12 @@ class NarrationMixin:
         poetic = entry.get("poetic") if isinstance(entry, dict) else {}
         role = poetic.get("role") if isinstance(poetic, dict) else ""
         variation_slot = event.sequence % 4 if event.sequence is not None else 0
+        # crowd 時は mob_count=1（人数を言わせない）
+        detail_mobs = [mob] if villager_crowd else mobs
         details: dict[str, object] = {
             "mob": label,
             "direction": direction,
-            "mob_count": len(mobs),
+            "mob_count": 1 if villager_crowd else len(mobs),
             "distance": mob.distance,
             "biome": self._biome_label(event.world.biome),
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
@@ -96,10 +122,10 @@ class NarrationMixin:
             "mob_role": str(role) if role else "",
             "mob_temperament": getattr(mob, "temperament", None) or "friendly",
             "mob_caution_reason": getattr(mob, "caution_reason", None) or "",
-            "fallback_candidates": self._ambient_mob_fallback_candidates(event, mobs),
+            "fallback_candidates": self._ambient_mob_fallback_candidates(event, detail_mobs),
             "variation_slot": variation_slot,
         }
-        if is_villager:
+        if is_villager and not villager_crowd:
             # 日課は常にコード解決。職は明確なときだけキーを載せる
             details["mob_is_baby"] = speech_baby
             details["villager_schedule"] = facts.schedule
@@ -108,12 +134,19 @@ class NarrationMixin:
                 details["mob_profession"] = facts.profession
             if facts.job_site:
                 details["mob_job_site"] = facts.job_site
+        elif is_villager and villager_crowd:
+            details["mob_is_baby"] = False
+            details["villager_schedule"] = facts.schedule
+            details["villager_schedule_ja"] = facts.schedule_ja
         return self._generate_leaf_text(
             kind="ambient",
             fallback_text=fallback,
             details=details,
             temperature=0.48,
         )
+
+    def _is_passive_villager(self, mob: PassiveMob) -> bool:
+        return (mob.type or "").strip().lower().removeprefix("minecraft:") == "villager"
 
     def _ambient_mob_type_key(self, mob: PassiveMob) -> str:
         base = (mob.type or "").strip().lower().removeprefix("minecraft:")
@@ -125,7 +158,7 @@ class NarrationMixin:
         return f"villager:{prof}"
 
     def _villager_activity_for_mob(self, event: GameEvent, mob: PassiveMob) -> str | None:
-        if (mob.type or "").strip().lower().removeprefix("minecraft:") != "villager":
+        if not self._is_passive_villager(mob):
             return None
         return resolve_villager_schedule(
             self._effective_time_of_day(event),
@@ -133,45 +166,111 @@ class NarrationMixin:
             profession=getattr(mob, "profession", None),
         )
 
+    def _awake_villagers(
+        self, mobs: list[PassiveMob], event: GameEvent | None
+    ) -> list[PassiveMob]:
+        """睡眠中を除く村人。crowd 判定用。"""
+        out: list[PassiveMob] = []
+        for mob in mobs:
+            if not self._is_passive_villager(mob):
+                continue
+            if event is not None:
+                activity = self._villager_activity_for_mob(event, mob)
+                if activity is not None and should_suppress_ambient_for_sleep(activity):
+                    continue
+            out.append(mob)
+        return out
+
+    def _villager_crowd_mode(self, mobs: list[PassiveMob], event: GameEvent | None) -> bool:
+        threshold = max(1, int(getattr(self.settings, "ambient_villager_crowd_threshold", 3)))
+        return len(self._awake_villagers(mobs, event)) >= threshold
+
+    def _ambient_type_cooldown_ready(self, key: str, now: datetime) -> bool:
+        recent_ms = self._recent_ms(
+            now, self.state.last_ambient_mob_comment_at_by_type.get(key)
+        )
+        return recent_ms is None or recent_ms >= self.settings.ambient_mob_comment_cooldown_ms
+
     def _next_ambient_mob_target(
         self, mobs: list[PassiveMob], now: datetime, event: GameEvent | None = None
     ) -> PassiveMob | None:
+        awake_villagers = self._awake_villagers(mobs, event)
+        crowd = len(awake_villagers) >= max(
+            1, int(getattr(self.settings, "ambient_villager_crowd_threshold", 3))
+        )
+        crowd_cd_ready = self._ambient_type_cooldown_ready(self._VILLAGER_CROWD_COOLDOWN_KEY, now)
+
+        # 団子 or crowd CD 中: 村人は crowd key だけで制御（職別連発しない）
+        if crowd or not crowd_cd_ready:
+            if crowd and crowd_cd_ready and awake_villagers:
+                # いちばん近い村人を代表に（距離不明は後ろ）
+                return min(
+                    awake_villagers,
+                    key=lambda m: (
+                        m.distance is None,
+                        m.distance if m.distance is not None else 1e9,
+                    ),
+                )
+            # crowd CD 中、または crowd だが代表なし → 村人はスキップし他モブへ
+            for mob in mobs:
+                if self._is_passive_villager(mob):
+                    continue
+                key = self._ambient_mob_type_key(mob)
+                if not key:
+                    continue
+                if self._ambient_type_cooldown_ready(key, now):
+                    return mob
+            return None
+
         for mob in mobs:
             key = self._ambient_mob_type_key(mob)
             if not key:
                 continue
             # 睡眠中の村人は ambient を出さない（起こさない）
-            if event is not None:
+            if event is not None and self._is_passive_villager(mob):
                 activity = self._villager_activity_for_mob(event, mob)
                 if activity is not None and should_suppress_ambient_for_sleep(activity):
                     continue
-            recent_ms = self._recent_ms(
-                now, self.state.last_ambient_mob_comment_at_by_type.get(key)
-            )
-            if recent_ms is None or recent_ms >= self.settings.ambient_mob_comment_cooldown_ms:
+            if self._ambient_type_cooldown_ready(key, now):
                 return mob
         return None
 
     def _emit_ambient_mob_comment_line(self, event: GameEvent, now: datetime) -> str | None:
-        # クールダウンは種ごと。別の種ならすぐ反応してよい
-        # （⭕️「うしさんや」→「にわとりさんや」 ❌「うしさんや」→「うしさんや」）
+        # クールダウンは種ごと（村人は villager:職 で別 key → 別職は即出し可）。
+        # 村人 N>=threshold は汎用1発 + villager:crowd 共有 CD（職連発渋滞防止）。
+        # 既定 120s。同種／同職の連発だけ抑える。全体ギャップは設けない。
+        # （⭕️ 牛→鶏 / 農民→聖職者  ❌ 牛→牛 / 農民→農民 / 団子村の職リレー）
         target = self._next_ambient_mob_target(event.passive_mobs, now, event)
         if target is None:
             return None
-        ordered_mobs = [target] + [mob for mob in event.passive_mobs if mob is not target]
-        line = self._render_ambient_mob_line(event, ordered_mobs)
+        villager_crowd = self._is_passive_villager(target) and self._villager_crowd_mode(
+            event.passive_mobs, event
+        )
+        if villager_crowd:
+            ordered_mobs = [target]
+        else:
+            ordered_mobs = [target] + [mob for mob in event.passive_mobs if mob is not target]
+        line = self._render_ambient_mob_line(
+            event, ordered_mobs, villager_crowd=villager_crowd
+        )
         if not line:
             return None
         self.state.last_ambient_mob_comment_at = now
-        self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
+        if villager_crowd:
+            self.state.last_ambient_mob_comment_at_by_type[self._VILLAGER_CROWD_COOLDOWN_KEY] = now
+        else:
+            self.state.last_ambient_mob_comment_at_by_type[self._ambient_mob_type_key(target)] = now
         # モブ反応が優先。発句中の川柳はキャンセルし、静けさが戻ってから再発句する
-        self.state.pending_haiku_after_preface = False
-        entry = resolve_mob_catalog_entry(
-            target.type,
-            profession=getattr(target, "profession", None),
-            is_baby=bool(getattr(target, "is_baby", None)),
-        ) or {}
-        label = str(entry.get("label") or self._mob_label(target.type))
+        self._clear_pending_haiku_prep()
+        if villager_crowd:
+            label = "村人"
+        else:
+            entry = resolve_mob_catalog_entry(
+                target.type,
+                profession=getattr(target, "profession", None),
+                is_baby=bool(getattr(target, "is_baby", None)),
+            ) or {}
+            label = str(entry.get("label") or self._mob_label(target.type))
         self.state.pending_dialogue_notes.append(f"{label}を見た")
         return line
 
@@ -537,31 +636,64 @@ class NarrationMixin:
         if self.player_input.asks_inventory:
             inventory_summary = self._player_chat_inventory_summary(event)
             held_item_label = self._item_label(event.player.held_item) if event.player.held_item else ""
-        threat_summary = self._player_chat_threat_summary(event)
-        hearing_summary = self._player_chat_hearing_summary(event)
-        hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
-        place_ctx = self._player_chat_place_context(event)
-        tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
-        nearby_types = list(tactics.get("nearby_hostile_types") or [])
-        if tactics.get("safe_fallback"):
-            fallback = str(tactics["safe_fallback"])
-        user_text = (self.player_input.raw_text or "").strip()
-        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
+        # 文脈 STT 補正は雑談理解だけに使う。明示操作・永続化の判定は
+        # PlayerInputContext.raw/normalized_text を参照する別経路のまま。
+        user_text = (self.player_input.semantic_text or "").strip()
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
             build_identify_skeleton,
             build_observed_speech_name_corrections,
             filter_usable_topic_hits,
+            has_threat_presence_query,
             reply_policy_line,
             resolve_reply_stance,
             should_enforce_speech_whitelist,
         )
 
+        # 音メモ: 音の明示問い または 在否・気配の問い（#33 戦況）
+        # 視覚話題の常時上書きは避けるが、在否では音レンジも材料にする
+        wants_sound = bool(self.player_input.asks_about_sound)
+        wants_presence = has_threat_presence_query(user_text)
+        hearing_summary = ""
+        hearing_named_mobs: list[str] = []
+        hearing_source_labels: list[str] = []
+        hearing_types: list[str] = []
+        if wants_sound or wants_presence:
+            hearing_summary = self._player_chat_hearing_summary(event)
+            hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+            hearing_source_labels = self._player_chat_hearing_source_labels(event)
+            hearing_types = self._player_chat_hearing_mob_types(event)
+        threat_summary = self._player_chat_threat_summary(
+            event,
+            include_hearing=wants_sound or wants_presence,
+            hearing_summary=hearing_summary,
+        )
+        place_ctx = self._player_chat_place_context(event)
+        precipitation_context = self._precipitation_context(event)
+        LOGGER.warning(
+            "player_chat_precipitation y=%s temp=%s snow_start_y=%s snowfall_zone=%s "
+            "local_precipitation=%s snow_evidence=%s surface_snow=%s",
+            precipitation_context.current_y,
+            precipitation_context.biome_temperature,
+            precipitation_context.snow_start_y,
+            precipitation_context.snowfall_zone,
+            precipitation_context.precipitation_kind,
+            precipitation_context.snow_evidence,
+            precipitation_context.surface_snow_observed,
+        )
+        tactics = self._player_chat_mob_tactics(event, extra_types=recent_visual_types)
+        nearby_types = list(tactics.get("nearby_hostile_types") or [])
+        if tactics.get("safe_fallback"):
+            fallback = str(tactics["safe_fallback"])
+        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
+
         passive_types = self._player_chat_observed_passive_types(event)
         recent_name_context_types = self._player_chat_recent_name_context_types(event)
+        # 存在判定: 視認（recent 含む）∪ 音バッファの種
         observed_ids = self._merge_unique_types(
             effective_visual_types,
             passive_types,
+            hearing_types,
         )
         usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
         reply_stance = resolve_reply_stance(
@@ -581,7 +713,7 @@ class NarrationMixin:
             topic_hits=topic_for_identify,
             visual_types=effective_visual_types,
             passive_types=passive_types,
-            hearing_named_mobs=hearing_named_mobs,
+            hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
             recent_mob_types=recent_name_context_types,
         )
         speech_name_corrections = build_observed_speech_name_corrections(
@@ -611,18 +743,26 @@ class NarrationMixin:
             structure_ids = []
             plausibility_lines = []
         plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
+        look_target_label = self._look_target_label(event)
+        # ＋は指差しのときだけ観測メモに載せる（戦況・開いた雑談では控えめ）
+        look_for_observation = (
+            look_target_label if self._player_chat_wants_look_answer(user_text) else ""
+        )
         observation_summary = self._player_chat_observation_summary(
             event,
             threat_summary=threat_summary,
-            hearing_summary=hearing_summary,
+            hearing_summary=hearing_summary if (wants_sound or wants_presence) else "",
             passive_types=passive_types,
+            look_target_label=look_for_observation,
         )
         LOGGER.warning(
-            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s",
+            "player_chat_visual count=%s types=%s recent=%s threat_summary=%s look=%s hearing_n=%s",
             len(event.visual_threats),
             ",".join(str(t.type) for t in event.visual_threats if t.type) or "-",
             ",".join(recent_visual_types) or "-",
             (threat_summary or "")[:120] or "-",
+            (look_for_observation or look_target_label or "-"),
+            len(hearing_named_mobs) + len(hearing_source_labels),
         )
         if structure_ids or plausibility_lines:
             LOGGER.warning(
@@ -647,9 +787,10 @@ class NarrationMixin:
             speech_whitelist_enforce,
         )
         LOGGER.warning(
-            "player_chat_hearing empty=%s named=%s summary=%s auditory=%d ambient=%d buffer=%d",
+            "player_chat_hearing empty=%s mobs=%s sources=%s summary=%s auditory=%d ambient=%d buffer=%d",
             not bool(hearing_summary),
             ",".join(hearing_named_mobs) or "-",
+            ",".join(hearing_source_labels) or "-",
             (hearing_summary or "")[:120],
             len(event.auditory_threats),
             len(event.ambient_sounds),
@@ -668,6 +809,12 @@ class NarrationMixin:
             "space_kind": place_ctx["space_kind"],
             "sky_visible": place_ctx["sky_visible"],
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            # raw weather は world 状態、weather_label は現在Y・気温で雨/雪を解決済み。
+            # hearing / 雨音 packet とは混ぜない。
+            "weather": self._weather_value(event.world.weather) or "unknown",
+            "weather_label": self._player_chat_weather_label(event),
+            "weather_fact": self._player_chat_weather_fact(event),
+            **precipitation_context.to_prompt_details(),
             "mode": self.state.mode,
             "character_mode": character_mode,
             "combat_active": combat_active,
@@ -676,6 +823,8 @@ class NarrationMixin:
             "threat_summary": threat_summary,
             "hearing_summary": hearing_summary,
             "hearing_named_mobs": hearing_named_mobs,
+            "hearing_source_labels": hearing_source_labels,
+            "asks_about_sound": self.player_input.asks_about_sound,
             "observation_summary": observation_summary,
             "catalog_topic_hints": catalog_topic_hints,
             "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_for_identify],
@@ -689,6 +838,18 @@ class NarrationMixin:
             "asks_inventory": self.player_input.asks_inventory,
             "inventory_summary": inventory_summary,
             "held_item_label": held_item_label,
+            # 指差し時だけラベルを強く渡す（常時は空に近い）
+            "look_target_label": look_for_observation,
+            "look_target_kind": (
+                str(event.look_target.kind)
+                if event.look_target is not None and look_for_observation
+                else ""
+            ),
+            "look_target_name": (
+                str(event.look_target.name)
+                if event.look_target is not None and look_for_observation
+                else ""
+            ),
             "nearby_hostile_types": nearby_types,
             "mob_tactics_notes": list(tactics.get("notes") or []),
             "forbidden_advice": list(tactics.get("forbidden_advice") or []),
@@ -696,6 +857,40 @@ class NarrationMixin:
             **self._player_chat_history_details(),
             **self._player_chat_haiku_workshop_details(),
         }
+        # Stage3: workshop open 中の player_chat は脅威以外の look/topic で句を食わない
+        # （soft 既定で本来は workshop 経路。hard off-topic 時の安全網）
+        if self._haiku_workshop_is_open():
+            details["look_target_label"] = ""
+            details["look_target_kind"] = ""
+            details["look_target_name"] = ""
+            details["catalog_topic_hints"] = ""
+            details["catalog_topic_ids"] = []
+            details["plausibility_hints"] = ""
+            details["identify_skeleton"] = ""
+            details["reply_stance"] = "none"
+            details["reply_policy"] = reply_policy_line("none")
+            details["speech_whitelist_enforce"] = False
+            details["allowed_speech_labels"] = []
+            if not self.player_input.asks_about_sound:
+                details["hearing_summary"] = ""
+                details["hearing_named_mobs"] = []
+                details["hearing_source_labels"] = []
+            if not self.player_input.asks_inventory:
+                details["inventory_summary"] = ""
+                details["held_item_label"] = ""
+            # observation も look/topic 抜きで再構成（脅威は残す）
+            details["observation_summary"] = self._player_chat_observation_summary(
+                event,
+                threat_summary=threat_summary,
+                hearing_summary=str(details.get("hearing_summary") or ""),
+                passive_types=[],
+                look_target_label="",
+            )
+            identify_skeleton = ""
+            LOGGER.warning(
+                "player_chat_workshop_strip open=1 look/topic/hearing stripped "
+                "(keep threat only)"
+            )
         # S3: 高信頼 identify は LLM より骨子を優先できる（オフ時・失敗時の最低限）
         preferred_fallback = identify_skeleton or fallback
         text = self._generate_leaf_text(
@@ -730,6 +925,30 @@ class NarrationMixin:
             )
             return preferred_fallback
         return text
+
+    def _player_chat_weather_label(self, event: GameEvent) -> str:
+        """雑談用。globalな雨を、現在地の気温・標高で雪へ解決する。"""
+        from dogido_server.state_machine.constants import WEATHER_LABELS
+
+        if self._precipitation_context(event).precipitation_kind == "snow":
+            return "雪"
+        weather = self._weather_value(event.world.weather)
+        if not weather:
+            return "不明"
+        return WEATHER_LABELS.get(str(weather), str(weather))
+
+    def _player_chat_weather_fact(self, event: GameEvent) -> str:
+        """昼の雨・雷だけ、地上の敵に関する淡々とした事実。
+
+        日光でアンデッドが燃えない時間帯＝昼間に限る。安全断定はしない。
+        """
+        weather = self._weather_value(event.world.weather)
+        if weather not in {"rain", "thunder"}:
+            return ""
+        phase = getattr(event.world.time_phase, "value", event.world.time_phase) or ""
+        if str(phase) not in {"day", "morning"}:
+            return ""
+        return "薄暗い。敵が地上にいる。"
 
     def _player_chat_place_context(self, event: GameEvent) -> dict[str, object]:
         """地表バイオームと「空間」（地下っぽさ）を分けて chat に渡す。
@@ -912,6 +1131,59 @@ class NarrationMixin:
                 recent.append(str(mob_type))
         return self._merge_unique_types(current, recent)
 
+    def _look_target_label(self, event: GameEvent) -> str:
+        """クロスヘア対象の日本語ラベル。無ければ空。"""
+        target = getattr(event, "look_target", None)
+        if target is None or not getattr(target, "name", None):
+            return ""
+        name = str(target.name)
+        kind = str(getattr(target, "kind", None) or "block").lower()
+        if kind == "entity":
+            from dogido_server.entry_catalog import mob_entry
+
+            entry = mob_entry(name)
+            if entry and entry.get("label"):
+                return str(entry["label"])
+            return self._hostile_label(name) if hasattr(self, "_hostile_label") else name
+        # block（感圧板・花など）
+        return self._block_label(name) or name
+
+    def _player_chat_wants_look_answer(self, user_text: str) -> bool:
+        """『これ何』など指差し・視線先を聞いているか（＋を控えめに使う）。"""
+        text = (user_text or "").strip()
+        if not text:
+            return False
+        markers = (
+            "これ何",
+            "これなに",
+            "これは何",
+            "これはなに",
+            "何かな",
+            "なにかな",
+            "何これ",
+            "なにこれ",
+            "それ何",
+            "それなに",
+            "あれ何",
+            "このブロック",
+            "この花",
+            "この石",
+            "見てる",
+            "指して",
+            "指差",
+        )
+        if any(m in text for m in markers):
+            return True
+        # 「これは？」単体・短い指差し
+        compact = text.replace(" ", "").replace("　", "")
+        if compact in {"これ？", "これ?", "これ", "それ？", "それ?", "あれ？", "あれ?"}:
+            return True
+        if ("これ" in text or "それ" in text or "あれ" in text) and (
+            "何" in text or "なに" in text or "？" in text or "?" in text
+        ):
+            return True
+        return False
+
     def _player_chat_observation_summary(
         self,
         event: GameEvent,
@@ -919,9 +1191,17 @@ class NarrationMixin:
         threat_summary: str,
         hearing_summary: str,
         passive_types: list[str] | tuple[str, ...],
+        look_target_label: str | None = None,
     ) -> str:
         """観測だけの短い事実メモ（topic 仮説は混ぜない）。最大数行。"""
         lines: list[str] = []
+        look = (look_target_label or "").strip()
+        if look:
+            lines.append(f"視線先: {look}")
+        vehicle_fact = player_vehicle_fact(event.player.vehicle)
+        if vehicle_fact:
+            # 「プレイヤー」を保った完成文だけ渡し、ドギド自身の行動にしない。
+            lines.append(vehicle_fact)
         threat = (threat_summary or "").strip()
         if threat and threat != "とくになし":
             lines.append(f"脅威: {threat}")
@@ -1019,7 +1299,14 @@ class NarrationMixin:
 
         return workshop_prompt_details(workshop)
 
-    def _player_chat_threat_summary(self, event: GameEvent) -> str:
+    def _player_chat_threat_summary(
+        self,
+        event: GameEvent,
+        *,
+        include_hearing: bool = False,
+        hearing_summary: str = "",
+    ) -> str:
+        """戦況メモ。在否・音問いでは音レンジ（hearing）も載せる。"""
         parts: list[str] = []
         if event.visual_threats:
             nearest = min(
@@ -1030,14 +1317,19 @@ class NarrationMixin:
             distance = f"{nearest.distance:.0f}マス" if nearest.distance is not None else "近く"
             label = self._hostile_label(nearest.type)
             parts.append(f"視認 {label} が{direction} {distance}")
-            if len(event.visual_threats) > 1:
-                parts.append(f"ほか{len(event.visual_threats) - 1}体")
+            # 今フレームで渡された本数を素直に（創作しない）
+            n = len(event.visual_threats)
+            if n > 1:
+                parts.append(f"視認リスト{n}体")
+            else:
+                parts.append("視認リスト1体")
         else:
             # 今フレーム 0 でも直近バッファがあれば「ついさっき」
             recent_line = self._player_chat_recent_visual_summary_line(event)
             if recent_line:
                 parts.append(recent_line)
-            elif event.auditory_threats:
+            elif event.auditory_threats and not include_hearing:
+                # 在否・音問い以外のフォールバック（1件だけ）
                 audio = event.auditory_threats[0]
                 direction = self._direction_label(audio)
                 band = getattr(audio.distance_band, "value", audio.distance_band) or ""
@@ -1046,9 +1338,36 @@ class NarrationMixin:
                     parts.append(f"音 {name} {direction} {band}".strip())
                 else:
                     parts.append(f"音（種別未確定） {direction} {band}".strip())
-        if event.combat.combat_active_hint:
+        # 在否・音問い: 音レンジの要約を明示（視認と併記可）
+        if include_hearing and (hearing_summary or "").strip():
+            parts.append(f"音メモ: {hearing_summary.strip()}")
+        if event.combat.combat_active_hint and parts:
             parts.append("交戦中っぽい")
         return "、".join(parts)
+
+    def _player_chat_hearing_mob_types(self, event: GameEvent) -> list[str]:
+        """hearing バッファ＋今フレームから種 id を集める（存在判定用）。"""
+        types: list[str] = []
+        seen: set[str] = set()
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 20000))
+
+        def _add(mob_type: str | None) -> None:
+            mid = str(mob_type or "").removeprefix("minecraft:").strip().lower()
+            if not mid or mid in seen:
+                return
+            seen.add(mid)
+            types.append(mid)
+
+        for audio in event.auditory_threats:
+            _add(self._resolve_hearing_mob_type(audio.label, getattr(audio, "sound_event", None)))
+        for sound in event.ambient_sounds:
+            _add(self._resolve_hearing_mob_type(sound.type, getattr(sound, "sound_event", None)))
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if age is not None and age <= retention_ms:
+                _add(memo.mob_type)
+        return types
 
     def _remember_visual_for_chat(self, event: GameEvent, now: datetime) -> None:
         """今フレームの visual_threats を短期バッファへ。"""
@@ -1143,6 +1462,59 @@ class NarrationMixin:
         mapped = MOB_LABELS.get(mob_type)
         return str(mapped) if mapped else None
 
+    def _resolve_hearing_environment_label(
+        self,
+        raw_type: str | None,
+        sound_event: str | None = None,
+    ) -> str | None:
+        """adapter が実再生音から確定した環境音源だけを表示名へ変換する。
+
+        周辺ブロック名や説明文から「鳴るはず」と推測しない。`block:` / `weather:` /
+        `environment:` は SoundManager で実際に観測した sound_event にのみ付く。
+        """
+        raw = str(raw_type or "").strip().lower()
+        if raw.startswith("weather:"):
+            return {
+                "weather:rain": "雨",
+                "weather:thunder": "雷鳴",
+            }.get(raw)
+        if raw.startswith("environment:"):
+            return {
+                "environment:cave": "洞窟の環境音",
+                "environment:underwater": "水中の環境音",
+                "environment:basalt_deltas": "玄武岩デルタの環境音",
+                "environment:crimson_forest": "真紅の森の環境音",
+                "environment:nether_wastes": "ネザーの荒地の環境音",
+                "environment:soul_sand_valley": "ソウルサンドの谷の環境音",
+                "environment:warped_forest": "歪んだ森の環境音",
+            }.get(raw)
+        if not raw.startswith("block:"):
+            return None
+        block_id = raw.removeprefix("block:").strip()
+        if not block_id:
+            return None
+        from dogido_server.entry_catalog import block_entry
+
+        entry = block_entry(block_id)
+        if entry is not None:
+            label = str(entry.get("label") or entry.get("japanese") or "").strip()
+            if label:
+                return label
+        # sound_event が音源を直接確定しているが、カタログに単独項目がないものだけ。
+        return {
+            "fire": "火",
+            "lava": "溶岩",
+            "water": "水",
+            "nether_portal": "ネザーポータル",
+            "bubble_column": "気泡柱",
+            "trial_spawner": "トライアルスポナー",
+            "pointed_dripstone": "鍾乳石",
+            "wooden_door": "木のドア",
+            "wooden_trapdoor": "木のトラップドア",
+            "wooden_button": "木のボタン",
+            "wooden_pressure_plate": "木の感圧板",
+        }.get(block_id)
+
     def _remember_hearing_for_chat(self, event: GameEvent, now: datetime) -> None:
         """今フレームの音を短期バッファへ。player_chat が数秒遅れても種名を使えるようにする。"""
         retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
@@ -1179,14 +1551,45 @@ class NarrationMixin:
             direction, band = _dir_band(sound)
             raw = str(sound.type or "")
             mob_type = self._resolve_hearing_mob_type(raw, getattr(sound, "sound_event", None))
-            label_ja = self._resolve_hearing_mob_label(raw, getattr(sound, "sound_event", None))
-            key = f"ambient:{mob_type or raw}:{direction}:{band}"
+            environment_label = self._resolve_hearing_environment_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            label_ja = environment_label or self._resolve_hearing_mob_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            kind = "environment" if environment_label else "ambient"
+            key = f"{kind}:{mob_type or raw}:{direction}:{band}"
             by_key[key] = RecentHearingMemo(
-                kind="ambient",
+                kind=kind,
                 mob_type=mob_type,
                 label_ja=label_ja,
                 direction=direction,
                 distance_band=band,
+                heard_at=now,
+                dedupe_key=key,
+            )
+
+        # 雷鳴は落雷座標が通常の音距離より遠くても、クライアントで実際に
+        # 再生されれば world の recent_ms に載る。ambient_sounds 側に距離で
+        # 載らなかった場合だけ補い、「今の音なに？」へ短期記憶から答えられるようにする。
+        observed_environment_types = {
+            str(sound.type or "").strip().lower() for sound in event.ambient_sounds
+        }
+        recent_weather_sounds = (
+            ("thunder", "雷鳴", self._has_recent_thunder_sound(event)),
+            ("rain", "雨", self._has_recent_rain_sound(event)),
+        )
+        for weather_kind, label_ja, heard in recent_weather_sounds:
+            raw = f"weather:{weather_kind}"
+            if not heard or raw in observed_environment_types:
+                continue
+            key = f"environment:{raw}:周囲:"
+            by_key[key] = RecentHearingMemo(
+                kind="environment",
+                mob_type=None,
+                label_ja=label_ja,
+                direction="周囲",
+                distance_band="",
                 heard_at=now,
                 dedupe_key=key,
             )
@@ -1196,7 +1599,7 @@ class NarrationMixin:
         self.state.recent_hearing_memos = memos
 
     def _player_chat_hearing_summary(self, event: GameEvent) -> str:
-        """今フレーム + 直近バッファの音要約。種名はカタログ解決できたものだけ。"""
+        """今フレーム + 直近バッファの音要約。名前は実音またはカタログ解決だけ。"""
         now = event.observed_at
         retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
         parts: list[str] = []
@@ -1223,12 +1626,20 @@ class NarrationMixin:
             direction = self._direction_label(sound)  # type: ignore[arg-type]
             band = getattr(sound.distance_band, "value", sound.distance_band) or ""
             raw = str(sound.type or "")
-            label_ja = self._resolve_hearing_mob_label(raw, getattr(sound, "sound_event", None))
-            key = f"ambient:{label_ja or raw}:{direction}:{band}"
-            if label_ja:
-                _add_line(key, f"{label_ja}っぽい声 {direction} {band}".strip())
+            environment_label = self._resolve_hearing_environment_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            mob_label = self._resolve_hearing_mob_label(
+                raw, getattr(sound, "sound_event", None)
+            )
+            kind = "environment" if environment_label else "ambient"
+            key = f"{kind}:{environment_label or mob_label or raw}:{direction}:{band}"
+            if environment_label:
+                _add_line(key, f"{environment_label}の音 {direction} {band}".strip())
+            elif mob_label:
+                _add_line(key, f"{mob_label}っぽい声 {direction} {band}".strip())
             else:
-                _add_line(key, f"なにかの声 {direction} {band}".strip())
+                _add_line(key, f"音（種別未確定） {direction} {band}".strip())
 
         # 2) 直近バッファ（今フレームで埋まらなかった分）
         for memo in self.state.recent_hearing_memos:
@@ -1237,16 +1648,22 @@ class NarrationMixin:
             age = self._recent_ms(now, memo.heard_at)
             if age is None or age > retention_ms:
                 continue
-            if memo.dedupe_key in seen_keys:
+            memo_key = (
+                f"{memo.kind}:{memo.label_ja or memo.mob_type or 'unknown'}:"
+                f"{memo.direction}:{memo.distance_band}"
+            )
+            if memo_key in seen_keys:
                 continue
             if memo.label_ja:
                 if memo.kind == "hostile":
+                    line = f"{memo.label_ja}の音 {memo.direction} {memo.distance_band}（ついさっき）".strip()
+                elif memo.kind == "environment":
                     line = f"{memo.label_ja}の音 {memo.direction} {memo.distance_band}（ついさっき）".strip()
                 else:
                     line = f"{memo.label_ja}っぽい声 {memo.direction} {memo.distance_band}（ついさっき）".strip()
             else:
                 line = f"音（種別未確定） {memo.direction} {memo.distance_band}（ついさっき）".strip()
-            _add_line(memo.dedupe_key, line)
+            _add_line(memo_key, line)
 
         return "、".join(parts)
 
@@ -1270,9 +1687,35 @@ class NarrationMixin:
             _add(self._resolve_hearing_mob_label(sound.type, getattr(sound, "sound_event", None)))
         for memo in self.state.recent_hearing_memos:
             age = self._recent_ms(now, memo.heard_at)
-            if age is not None and age <= retention_ms:
+            if age is not None and age <= retention_ms and memo.kind != "environment":
                 _add(memo.label_ja)
         return names
+
+    def _player_chat_hearing_source_labels(self, event: GameEvent) -> list[str]:
+        """実再生されたブロック・天候・環境音から、発話してよい音源名を返す。"""
+        labels: list[str] = []
+        seen: set[str] = set()
+        now = event.observed_at
+        retention_ms = int(getattr(self.settings, "player_chat_hearing_retention_ms", 12000))
+
+        def _add(label: str | None) -> None:
+            text = str(label or "").strip()
+            if not text or text in seen:
+                return
+            seen.add(text)
+            labels.append(text)
+
+        for sound in event.ambient_sounds:
+            _add(
+                self._resolve_hearing_environment_label(
+                    sound.type, getattr(sound, "sound_event", None)
+                )
+            )
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if age is not None and age <= retention_ms and memo.kind == "environment":
+                _add(memo.label_ja)
+        return labels
 
     def _player_chat_inventory_summary(self, event: GameEvent, *, max_items: int = 18) -> str:
         """所持品の短い要約。player_chat 専用。常時注入しない。"""

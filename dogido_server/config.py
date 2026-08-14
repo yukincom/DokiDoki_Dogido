@@ -12,6 +12,13 @@ from dogido_server import __version__
 
 LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
 LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
+PLATFORM_AI_PROVIDER = Literal["auto", "apple", "foundry", "chat"]
+HAIKU_GENERATION_STRATEGY = Literal[
+    "whole_poem",
+    "three_slot",
+    "one_plus_two",
+    "two_plus_one",
+]
 
 PROVIDER_DEFAULT_BASE_URLS = {
     "local": "http://127.0.0.1:8080/v1",
@@ -83,11 +90,22 @@ class Settings(BaseSettings):
 
     voicevox_url: str = "http://127.0.0.1:50021"
     voicevox_speaker: int = 21
+    # 既定・battle の話速（callout / 緊急 speech）。cue mp3 には効かない
     voicevox_speed_scale: float = 1.0
+    # プロファイル別（None の battle は voicevox_speed_scale を使う）
+    voicevox_speed_scale_battle: float | None = None
+    voicevox_speed_scale_peace: float = 0.88
+    voicevox_speed_scale_haiku: float = 0.80
     voicevox_pitch_scale: float = 0.0
     voicevox_volume_scale: float = 1.0
     voicevox_output_sampling_rate: int | None = None
     voicevox_temp_dir: Path = Field(default_factory=lambda: Path(".dogido_tmp") / "voicevox")
+    # TTS キャッシュ肥大化防止（.dogido_tmp は gitignore。上限超過 or 古い順で削除）
+    voicevox_cache_max_mb: float = 256.0
+    voicevox_cache_max_age_days: float = 7.0
+    # TTS 読み補正: auto=UniDic あれば使う / unidic=試す / off=例外表のみ
+    # optional: pip install -e ".[tts-reading]"（fugashi + unidic-lite）
+    tts_reading_engine: Literal["auto", "unidic", "off"] = "auto"
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 
@@ -112,6 +130,18 @@ class Settings(BaseSettings):
     llm_anthropic_version: str = "2023-06-01"
     llm_timeout_sec: float = 20.0
     llm_max_tokens: int = 72
+
+    # 小さな structured task 用の OS / 端末内 AI。
+    # auto: Apple Foundation Models → Foundry Local → chat route fallback。
+    # モデルの実行結果で切り替えず、可用性と設定だけで provider を決める。
+    platform_ai_provider: PLATFORM_AI_PROVIDER = "auto"
+    platform_ai_refresh_sec: float = 300.0
+    platform_ai_timeout_sec: float = 8.0
+    platform_ai_failure_cooldown_sec: float = 60.0
+    # Foundry は model ID でなく alias を使い、SDK に端末向け variant を選ばせる。
+    platform_ai_foundry_model_alias: str = "qwen2.5-7b"
+    # 意図しない大容量 download を避ける。配布UIで同意を取れるまでは false。
+    platform_ai_allow_model_download: bool = False
 
     llm_chat_backend: LLM_BACKEND | None = None
     llm_chat_provider: LLM_PROVIDER | None = None
@@ -196,18 +226,23 @@ class Settings(BaseSettings):
     # エンダーアイ投擲: 鮮度ウィンドウ（スナップショット間隔より長く）と連投時の発話間隔
     ender_eye_recent_ms: int = 2000
     ender_eye_comment_cooldown_ms: int = 8000
-    ambient_mob_comment_cooldown_ms: int = 60000
+    # 種ごと（村人は villager:職 で別 key → 別職は即出し可、同職は下の秒数）
+    ambient_mob_comment_cooldown_ms: int = 120000
+    # この人数以上の非睡眠村人がいると汎用村人1発 + villager:crowd 共有 CD（職連発渋滞防止）
+    ambient_villager_crowd_threshold: int = 3
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
-    player_chat_hearing_retention_ms: int = 12000
+    # 人間の「…？ → 今の音なに？」ラグ用。adapter 音 TTL（約15s）より少し長く
+    player_chat_hearing_retention_ms: int = 20000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
     player_chat_visual_retention_ms: int = 12000
     # player_chat: 危険な一般名を正式 mob 名へ戻すための視認・聴取・討伐履歴
     player_chat_name_correction_retention_ms: int = 10000
-    # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
+    # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
+    # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。
     player_input_priority_cooldown_ms: int = 20000
-    # 友好・中立モブ反応だけはもう少し早く復帰（会話の余韻だけ残す）
-    player_input_ambient_mute_ms: int = 12000
+    # 互換のため残す。参照箇所は priority に統一済み（設定しても mute 長には使わない）
+    player_input_ambient_mute_ms: int = 20000
     damaging_light_warning_cooldown_ms: int = 600000
     magma_block_comment_cooldown_ms: int = 1200000
     damaging_light_warning_max_distance: float = 2.0
@@ -229,13 +264,18 @@ class Settings(BaseSettings):
     neutral_turned_hostile_comment_cooldown_ms: int = 60000
     ushiro_comment_cooldown_ms: int = 60000
     weather_sound_recent_ms: int = 4000
+    # 雷鳴は天候遷移とは別に、実音を聞いた怖がり反応を出す
+    thunder_sound_comment_cooldown_ms: int = 10000
     nearby_lightning_recent_ms: int = 2000
     nearby_lightning_comment_cooldown_ms: int = 10000
-    # 川柳は約10分に1回。優先イベント（脅威・モブ反応・入力・発話）の後は
-    # 30秒の静けさを待ってから詠む
-    haiku_interval_ms: int = 600000
+    # 実環境比較中だけ3分に短縮。比較終了後は必ず 600000（10分）へ戻す。
+    # 優先イベント（脅威・モブ反応・入力・発話）の後は30秒の静けさを待つ。
+    haiku_interval_ms: int = 180000
     haiku_quiet_time_ms: int = 30000
     haiku_structured_max_tokens: int = 192
+    # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
+    haiku_generation_strategy: HAIKU_GENERATION_STRATEGY = "three_slot"
+    haiku_max_regeneration_rounds: int = Field(default=6, ge=0, le=8)
     hostile_comment_cooldown_ms: int = 60000
     occluded_hostile_presence_comment_cooldown_ms: int = 180000
     other_realm_swarm_visual_threshold: int = 4
@@ -252,6 +292,21 @@ class Settings(BaseSettings):
     @property
     def is_local_only(self) -> bool:
         return not self.allow_non_local_bind
+
+    def tts_speed_for_profile(self, profile: str | None) -> float:
+        """speech_profile → VOICEVOX speedScale。
+
+        battle: voicevox_speed_scale_battle または voicevox_speed_scale
+        peace / haiku: 各専用キー
+        """
+        key = (profile or "battle").strip().lower()
+        if key == "peace":
+            return float(self.voicevox_speed_scale_peace)
+        if key == "haiku":
+            return float(self.voicevox_speed_scale_haiku)
+        if self.voicevox_speed_scale_battle is not None:
+            return float(self.voicevox_speed_scale_battle)
+        return float(self.voicevox_speed_scale)
 
     @property
     def llm_uses_remote_api(self) -> bool:

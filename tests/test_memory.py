@@ -62,7 +62,7 @@ def make_snapshot(
 
 
 class MemoryStoreTest(unittest.TestCase):
-    def test_save_agent_haiku_uses_minimal_long_term_schema(self) -> None:
+    def test_save_agent_haiku_keeps_generation_source_snapshot(self) -> None:
         with TemporaryDirectory() as tmp:
             store = MemoryStore(Path(tmp))
             emission = HaikuEmission(
@@ -75,6 +75,19 @@ class MemoryStoreTest(unittest.TestCase):
                 time_phase="night",
                 dimension="minecraft:overworld",
                 event_sequence=4919,
+                materials={
+                    "catalog_sources": [
+                        {
+                            "source_ref": "biome:snowy_taiga",
+                            "note_raw": "針葉樹に雪が積もる。",
+                        }
+                    ],
+                    "line_sources": [
+                        {"line_index": 0, "atom_ids": ["biome:snowy_taiga:note:0"]}
+                    ],
+                    "generation_strategy": "three_slot",
+                    "prompt_variant": "source_atoms_slots_v1",
+                },
             )
 
             entry, created = store.save_agent_haiku(emission)
@@ -87,6 +100,12 @@ class MemoryStoreTest(unittest.TestCase):
             self.assertEqual(entry["author"], "dogido")
             self.assertNotIn("saved_at", entry)
             self.assertEqual(entry["world"]["biome"], "snowy_taiga")
+            self.assertEqual(
+                entry["materials_snapshot"]["catalog_sources"][0]["source_ref"],
+                "biome:snowy_taiga",
+            )
+            self.assertEqual(entry["materials_snapshot"]["generation_strategy"], "three_slot")
+            self.assertEqual(entry["materials_snapshot"]["prompt_variant"], "source_atoms_slots_v1")
             self.assertEqual(store.list_haiku_entries(), [entry])
 
     def test_record_progress_keeps_only_selected_advancements(self) -> None:

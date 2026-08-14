@@ -186,6 +186,84 @@ def asks_inventory(normalized_text: str) -> bool:
     return False
 
 
+# 音・聞こえ・曲についての明示（モブ種名リストは使わない。レコード等も含む）
+_SOUND_TOPIC_MARKERS: tuple[str, ...] = (
+    "音",
+    "声",  # 「ゾンビの声」「今の声は何」
+    "聞こ",
+    "きこ",
+    "物音",
+    "爆音",
+    "鳴き声",
+    "なく声",
+    "なき声",
+    "ざわ",
+    "どよめ",
+    "ひびき",
+    "響き",
+    "音楽",
+    "曲",
+    "レコード",
+    "ジューク",
+)
+# 「音」単体より明確な問い形（誤爆低減の補助。マーカー本体は上）
+_SOUND_QUERY_SHAPES: tuple[str, ...] = (
+    "なに",
+    "何",
+    "した",
+    "する",
+    "しな",
+    "しなかった",
+    "してる",
+    "してた",
+    "どこ",
+    "どっち",
+    "ある",
+    "ない",
+    "せん",
+    "へん",
+    "やろ",
+    "やった",
+    "？",
+    "?",
+)
+
+
+# 曲・レコードは言及だけで音チャンネル（ジュークボックス）。fold 後と両対応
+_MUSIC_TOPIC_MARKERS: tuple[str, ...] = (
+    "音楽",
+    "曲",
+    "レコード",
+    "れこーど",
+    "ジューク",
+    "じゅーく",
+)
+
+
+def asks_about_sound(normalized_text: str) -> bool:
+    """プレイヤーが『今の音なに？』『なんか音した？』『この曲』など音を明示したか。
+
+    常時 hearing を LLM に渡すと視覚話題を音で上書きしやすいので、
+    このときだけ hearing メモを注入する（inventory と同じパターン）。
+    """
+    normalized_text = _fold_kana(normalized_text)
+    if not normalized_text:
+        return False
+    # 曲・レコード・音楽は言及だけで可（レコード盤など）
+    if any(m in normalized_text for m in _MUSIC_TOPIC_MARKERS):
+        return True
+    if not any(m in normalized_text for m in _SOUND_TOPIC_MARKERS):
+        return False
+    # 環境音: 問い・報告の形（なに／した／どこ／？ 等）
+    if any(s in normalized_text for s in _SOUND_QUERY_SHAPES):
+        return True
+    # 「音！」「聞こえた」などごく短い反応
+    compact = normalized_text.replace(" ", "").replace("　", "")
+    if len(compact) <= 5 and any(m in compact for m in _SOUND_TOPIC_MARKERS):
+        return True
+    return False
+
+
 def _parse_haiku_payload(payload: str) -> str | None:
     payload = payload.replace("　", " ").strip()
     if not payload:

@@ -15,7 +15,27 @@ class AudioAction:
     interrupt: bool
     text: str | None = None
     cue_id: str | None = None
+    # コールアウト断片パズル: cue_voice 相対 id の列（例: mob/zombie, common/counts/2, common/phrases/orude）
+    cue_sequence: tuple[str, ...] = ()
     protect_ms: int = 0
+    # TTS 話速プロファイル: battle | peace | haiku。None なら layer から推定
+    speech_profile: str | None = None
+    # 明示 speedScale（入っていれば profile より優先）
+    speed_scale: float | None = None
+
+
+@dataclass(slots=True)
+class CalloutPayload:
+    """戦況コールの文言 + 任意の断片シーケンス。
+
+    cue_sequence が空なら全文 TTS。揃っていればパズル再生（text はログ・フォールバック用）。
+    """
+
+    text: str
+    cue_sequence: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool((self.text or "").strip() or self.cue_sequence)
 
 
 @dataclass(slots=True)
@@ -59,6 +79,8 @@ class RuntimeState:
     last_player_input_at: datetime | None = None
     last_haiku_emitted_at: datetime | None = None
     pending_haiku_after_preface: bool = False
+    # preface 開始時刻。本句がブロックされたまま張り付いたときの強制解除用
+    pending_haiku_started_at: datetime | None = None
     # 友好・中立モブへの反応クールダウンは種ごとに管理する
     last_ambient_mob_comment_at_by_type: dict[str, datetime] = field(default_factory=dict)
     last_warden_sonic_boom_scream_at: datetime | None = None
@@ -83,6 +105,7 @@ class RuntimeState:
     last_damaging_light_warning_at: datetime | None = None
     last_magma_block_comment_at: datetime | None = None
     last_nearby_lightning_comment_at: datetime | None = None
+    last_thunder_sound_comment_at: datetime | None = None
     last_mining_fatigue_comment_at: datetime | None = None
     last_boss_omen_comment_at: datetime | None = None
     last_boss_omen_kind: str | None = None
@@ -138,6 +161,8 @@ class RuntimeState:
     last_visual_priority_callout_at: datetime | None = None
     last_single_visual_type: str | None = None
     last_single_visual_at: datetime | None = None
+    # 「増えたで」済みの個体 ID（entity_id 優先）。同じ群れの再トリガ抑止用
+    multi_increase_announced_ids: set[str] = field(default_factory=set)
     last_ushiro_call_at: datetime | None = None
     last_daylight_water_comment_at: datetime | None = None
     last_daylight_rain_comment_at: datetime | None = None
@@ -175,6 +200,7 @@ class RuntimeState:
     emergency_shelter_active: bool = False
     emergency_shelter_advised_this_cycle: bool = False
     emergency_shelter_seen_this_cycle: bool = False
+    emergency_shelter_entry_announced_this_cycle: bool = False
     emergency_shelter_reset_ready: bool = False
     emergency_shelter_morning_announced: bool = False
     current_dimension: str | None = None

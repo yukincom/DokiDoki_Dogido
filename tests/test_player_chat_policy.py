@@ -66,8 +66,18 @@ class ReplyStanceTests(unittest.TestCase):
         for stance in ("saw", "hypothesis", "clarify", "none"):
             line = reply_policy_line(stance)
             self.assertTrue(line)
-        self.assertIn("おらへん", reply_policy_line("hypothesis"))
+        # 肯定形の答え方ガイド（「だけにする」系の禁止再掲はしない）
+        for stance in ("saw", "hypothesis", "clarify", "none"):
+            line = reply_policy_line(stance)
+            self.assertNotIn("だけにする", line)
+            self.assertNotIn("作らない", line)
+            self.assertNotIn("捏造", line)
+        self.assertIn("尊重", reply_policy_line("hypothesis"))
         self.assertIn("見えてへん", reply_policy_line("hypothesis"))
+        self.assertIn("かもしれん", reply_policy_line("hypothesis"))
+        self.assertIn("おらんとおもうわ", reply_policy_line("none"))
+        self.assertIn("隣でびび", reply_policy_line("saw"))
+        self.assertIn("聞き返す", reply_policy_line("clarify"))
 
 
 class AllowedSpeechLabelsTests(unittest.TestCase):
@@ -298,10 +308,10 @@ class PlayerChatPromptStanceTests(unittest.TestCase):
         )
         content = messages[1]["content"]
         self.assertEqual(stance, "hypothesis")
-        self.assertIn("答え方スタンス: hypothesis", content)
-        self.assertIn("【答え方】", content)
+        self.assertIn("スタンス: hypothesis", content)
+        self.assertIn("いまの答え方:", content)
         self.assertIn("見えてへん", content)
-        self.assertIn("おらへん", content)
+        self.assertIn("かもしれん", content)
         self.assertIn("ウィッチ", content)
         # 旧の長文 mode_hint / 場所ルールは載せない
         self.assertNotIn("平和時: 気さくで落ち着いて返す", content)
@@ -327,7 +337,8 @@ class PlayerChatPromptStanceTests(unittest.TestCase):
             )
         )
         content = messages[1]["content"]
-        self.assertIn("答え方スタンス: none", content)
+        self.assertIn("スタンス: none", content)
+        self.assertIn("いまの答え方:", content)
         self.assertNotIn("カタログからの話題ヒント", content)
         # 規則 bullet はスタンス中心で少なめ
         rule_lines = [line for line in content.splitlines() if line.startswith("- ")]

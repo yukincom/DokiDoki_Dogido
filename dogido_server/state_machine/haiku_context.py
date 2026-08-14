@@ -4,6 +4,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from dogido_server.haiku.source_atoms import (
+    CatalogSourceSnapshot,
+    HaikuSourceAtom,
+    PrefaceClause,
+    preface_clauses_from_payload,
+)
+from dogido_server.state_machine.precipitation import PrecipitationContext
+
 
 @dataclass(frozen=True, slots=True)
 class HaikuFeature:
@@ -53,32 +61,46 @@ class IronyContext:
 @dataclass(frozen=True, slots=True)
 class SceneContext:
     found: bool = False
-    summary: str = ""
+    clauses: tuple[PrefaceClause, ...] = ()
     motifs: tuple[str, ...] = ()
     focus: tuple[str, ...] = ()
     confidence: float = 0.0
 
     @classmethod
-    def from_mapping(cls, payload: dict[str, Any] | None) -> SceneContext:
+    def from_mapping(
+        cls,
+        payload: dict[str, Any] | None,
+        *,
+        source_atoms: tuple[HaikuSourceAtom, ...],
+    ) -> SceneContext:
         if not isinstance(payload, dict):
             return cls()
         found = bool(payload.get("found"))
-        summary = str(payload.get("summary") or "")
+        clauses = preface_clauses_from_payload(
+            payload.get("clauses"),
+            source_atoms=source_atoms,
+        )
         motifs = tuple(str(value) for value in payload.get("motifs") or [] if value)
         focus = tuple(str(value) for value in payload.get("focus") or [] if value)
         try:
             confidence = float(payload.get("confidence") or 0.0)
         except (TypeError, ValueError):
             confidence = 0.0
-        if not found or not summary:
+        if not found or clauses is None:
             return cls()
         return cls(
             found=True,
-            summary=summary,
+            clauses=clauses,
             motifs=motifs,
             focus=focus,
             confidence=max(0.0, min(1.0, confidence)),
         )
+
+    @property
+    def spoken_text(self) -> str:
+        """検証済み節だけから、実際に口にする文を組み立てる。"""
+
+        return "。".join(clause.text for clause in self.clauses)
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +114,9 @@ class HaikuContext:
     time_label: str
     weather: str
     weather_label: str
-    z_value: int
-    held_item: str
+    precipitation_context: PrecipitationContext
+    poem_item_id: str
+    held_item: str  # 句の主役に使う持ち物ラベル（手持ち or 所持から選んだ1つ）
     inventory_items: tuple[str, ...]
     inventory_close_pair: tuple[str, ...]
     inventory_far_item: str
@@ -103,10 +126,21 @@ class HaikuContext:
     feature_candidates: tuple[HaikuFeature, ...]
     candidate_tensions: tuple[str, ...]
     catalog_notes: tuple[str, ...] = ()
+    catalog_sources: tuple[CatalogSourceSnapshot, ...] = ()
+    source_atoms: tuple[HaikuSourceAtom, ...] = ()
     poetic_lines: tuple[str, ...] = ()
+    # structure があるときは場所の主役。climate_hint は参考程度。
+    structure_id: str = ""
+    structure_label: str = ""
+    climate_hint: str = ""
+    # hand=実際に手にあるもの / pocket=道具手持ち時に所持から重み付き選択
+    poem_item_source: str = "hand"
 
     def feature_candidate_labels(self) -> list[str]:
         return [feature.prompt_label() for feature in self.feature_candidates]
+
+    def has_structure(self) -> bool:
+        return bool(self.structure_label or self.structure_id)
 
     def _base_details(self) -> dict[str, object]:
         return {
@@ -115,12 +149,18 @@ class HaikuContext:
             "biome_id": self.biome_id,
             "biome_group": self.biome_group,
             "biome_traits": list(self.biome_traits),
+            "structure_id": self.structure_id,
+            "structure_label": self.structure_label,
+            "has_structure": self.has_structure(),
+            "climate_hint": self.climate_hint,
             "time_phase": self.time_phase,
             "time_label": self.time_label,
             "weather": self.weather,
             "weather_label": self.weather_label,
-            "z_value": self.z_value,
+            **self.precipitation_context.to_prompt_details(),
+            "poem_item_id": self.poem_item_id,
             "held_item": self.held_item,
+            "poem_item_source": self.poem_item_source,
             "inventory_items": list(self.inventory_items),
             "inventory_close_pair": list(self.inventory_close_pair),
             "inventory_far_item": self.inventory_far_item,
@@ -131,6 +171,8 @@ class HaikuContext:
             "feature_candidates": self.feature_candidate_labels(),
             "candidate_tensions": list(self.candidate_tensions),
             "catalog_notes": list(self.catalog_notes),
+            "catalog_sources": [source.to_dict() for source in self.catalog_sources],
+            "source_atoms": [atom.to_prompt_dict() for atom in self.source_atoms],
         }
 
     def irony_details(self) -> dict[str, object]:
@@ -160,7 +202,8 @@ class HaikuContext:
             details["scene"] = None
             return details
         details["scene"] = {
-            "summary": scene.summary,
+            "spoken_text": scene.spoken_text,
+            "clauses": [clause.to_dict() for clause in scene.clauses],
             "motifs": list(scene.motifs),
             "focus": list(scene.focus),
             "confidence": scene.confidence,

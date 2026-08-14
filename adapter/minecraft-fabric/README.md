@@ -7,7 +7,9 @@
 ## できること
 
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
+- 乗車中だけ `player.vehicle`（乗り物ID・操縦者か・漕ぐ／走る／移動中）
 - `local_light / sky_visible / biome / time_phase / danger_darkness_score`
+- **視線先 `look_target`**（画面中央クロスヘアが刺さっているブロック/エンティティ）
 - 周辺 hostile の簡易スキャン
 - `status_snapshot` の定期送信
 - 近距離 hostile 検知時の `threat_approaching` 送信
@@ -17,11 +19,17 @@
 
 ## まだやっていないこと
 
-- Minecraft の実サウンド packet 由来の `auditory_threats`
 - 高精度の line-of-sight 判定
 - エンダーマンやウィッチの個別ロジック
 - ベッド/資源候補のワールドスキャン
-- `passive_mobs` と `nearby_resources` の本格収集
+- `nearby_resources` の本格拡張（現状は原木・板・羊毛・石炭に加え、積雪実測用の雪3種だけ）
+- エリトラ滑空など、乗り物ではないプレイヤー活動
+
+## 音まわり（現状）
+
+- Minecraft の sound packet から `auditory_threats` / `ambient_sounds` を載せる
+- クライアント側の音観測 TTL は約 **15秒**（300 tick）。「…？ → 今の音なに？」の猶予用
+- サーバの player_chat hearing バッファは別途約 **20秒**
 
 ## 設定ファイル
 

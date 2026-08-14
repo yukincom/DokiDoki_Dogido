@@ -46,6 +46,7 @@
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
+  "look_target": null,
   "combat": {},
   "meta": {}
 }
@@ -68,6 +69,7 @@
 - `sequence`
 - `visual_threats`
 - `auditory_threats`
+- `ambient_sounds`
 - `inventory`
 - `combat`
 
@@ -75,6 +77,7 @@
 
 - `passive_mobs`
 - `nearby_resources`
+- `look_target` … クロスヘア（＋）が刺さっているブロック/エンティティ。MISS 時は省略可
 - `meta`
 
 ## 6. 共通 enum
@@ -202,7 +205,12 @@ Fabric adapter が実際に送る中心は次のとおり。
   "health": 20,
   "hunger": 18,
   "dimension": "minecraft:overworld",
-  "held_item": "stone_sword"
+  "held_item": "stone_sword",
+  "vehicle": {
+    "vehicle_id": "minecraft:horse",
+    "activity": "running",
+    "controlling": true
+  }
 }
 ```
 
@@ -216,6 +224,18 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `hunger`
 - `dimension`
 - `held_item`
+- `vehicle`（**乗車中だけ存在**。未乗車時はキーごと省略）
+  - `vehicle_id`: 乗っているエンティティの Minecraft ID
+  - `activity`: `riding | moving | running | rowing | dashing`
+  - `controlling`: プレイヤーが操縦者か
+
+`vehicle` の内部値を直接 LLM に見せず、server が
+`プレイヤーはウマに乗って走っている` のような主語付き観測事実へ変換する。
+「プレイヤー」を省略してドギド自身の行動に見せない。船の `rowing` は操縦者かつ
+パドル動作中だけ、馬系の `running` は操縦者かつ方向入力＋水平移動中だけとする。
+
+エリトラ飛行は乗り物ではないため、この `vehicle` には含めない。将来の
+`player_activity` 拡張として別途扱う。
 
 ## 10. `world` オブジェクト
 
@@ -325,6 +345,29 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `movement_like`
 - `explosive_threat_like`
 
+## 12.1 `ambient_sounds`
+
+戦闘判定に使わない周囲音。非敵対 Mob の声に加え、クライアントで実際に再生された
+ブロック・天候・環境音を載せる。
+
+```json
+[
+  {
+    "type": "block:campfire",
+    "sound_event": "block.campfire.crackle",
+    "direction": { "horizontal": "right", "vertical": "same" },
+    "distance_band": "close",
+    "certainty": "medium"
+  }
+]
+```
+
+- `type=block:* / weather:* / environment:*` は実再生された `sound_event` から機械的に決める
+- 近くにブロックがあるだけで「その音がした」と推測しない
+- Mob 音は従来どおり、敵対中なら `auditory_threats`、非敵対なら `ambient_sounds`
+- 音源位置は粗い方向・距離帯だけを発話材料にし、exact position は渡さない
+- UI・音楽・プレイヤー自身の声は周囲音から除外する。ジュークボックスのレコードは対象
+
 ## 13. `passive_mobs`
 
 旧スキーマ名 `peaceful_mobs` も受信時には受け付ける（移行用）。非敵対状態の中立モブも `temperament="neutral"` として含まれる。
@@ -402,6 +445,31 @@ Fabric adapter が実際に送る中心は次のとおり。
   }
 ]
 ```
+
+現行 adapter は用途限定フィルタ（原木・板・羊毛・石炭鉱石に加え、
+積雪の実測用 `snow` / `snow_block` / `powder_snow`）。雪は標高やバイオーム名だけで
+「積もっている」と推測せず、この実ブロック観測を川柳・雑談の共通根拠にする。
+**指差しの花・感圧板等は `look_target` を使う**（[look-target-observation-plan.md](look-target-observation-plan.md)）。
+
+## 15b. `look_target`
+
+画面中央クロスヘア（＋）が刺さっている対象。プレイヤーの「これ何？」の共有注意。
+
+```json
+{
+  "kind": "block",
+  "name": "poppy",
+  "distance": 2.4
+}
+```
+
+| フィールド | 内容 |
+|---|---|
+| `kind` | `block` / `entity` |
+| `name` | Minecraft id path（例: `oak_pressure_plate`, `sheep`） |
+| `distance` | プレイヤーからの距離（任意） |
+
+MISS・空気のときは **フィールド自体を省略**する。
 
 ## 16. `combat`
 

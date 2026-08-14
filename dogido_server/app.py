@@ -1,8 +1,11 @@
 # app.py
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Annotated
+from functools import partial
+from typing import Annotated, Any, Callable, TypeVar
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Response, status
@@ -26,17 +29,35 @@ from dogido_server.models import (
 from dogido_server.service import DogidoService
 
 
+_T = TypeVar("_T")
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     # settings を外から注入できるようにしている（テスト時にモック設定を渡すため）
     resolved_settings = settings or get_settings()
     service = DogidoService(resolved_settings)
+    # service はセッション状態を持つため、専用の単一workerへ全操作を積む。
+    # handlerが接続断で何度cancelされても、実行中threadと次操作は並行しない。
+    service_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dogido-service")
+
+    async def run_serialized(
+        function: Callable[..., _T],
+        /,
+        *args: Any,
+        **kwargs: Any,
+    ) -> _T:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(service_executor, partial(function, *args, **kwargs))
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         # アプリ起動時に LLM の preload とフォールバック音声の prewarm を走らせる
-        service.warmup()
-        yield
-        # yield 後はシャットダウン処理を書く場所（現時点では何もしない）
+        try:
+            await run_serialized(service.warmup)
+            yield
+        finally:
+            await run_serialized(service.shutdown)
+            service_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(
         title=resolved_settings.service_name,
@@ -76,7 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Fabric アダプタ起動時にセッションを登録する
         # セッション ID はこの後の game-events / heartbeat に必要
         _ensure_authorized(resolved_settings, authorization)
-        return service.create_session(payload)
+        return await run_serialized(service.create_session, payload)
 
     @app.post("/api/v1/game-events", response_model=AcceptedEventResponse)
     async def post_game_event(
@@ -86,14 +107,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         idempotency_key: Annotated[str | None, Header()] = None,
     ) -> Response:
         _ensure_authorized(resolved_settings, authorization)
-        result = service.process_event(
-            payload,
-            session_id=x_dogido_session_id,
-            idempotency_key=idempotency_key,
-        )
-        # アクションがあればその場で dispatch する（TTS・M5Stack送信など）
-        if result.actions:
-            service.dispatch_actions(result.actions)
+        def process_and_dispatch():
+            result = service.process_event(
+                payload,
+                session_id=x_dogido_session_id,
+                idempotency_key=idempotency_key,
+            )
+            # 順序を崩さないため、dispatchまで同じ直列worker内で完了させる。
+            if result.actions:
+                service.dispatch_actions(result.actions)
+            return result
+
+        result = await run_serialized(process_and_dispatch)
 
         # 重複扱いのイベントは 200、新規受付は 202 を返す
         status_code = status.HTTP_200_OK if result.response.deduplicated else status.HTTP_202_ACCEPTED
@@ -117,9 +142,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"events exceeds max_batch_size={resolved_settings.max_batch_size}",
             )
-        result, actions = service.process_batch(payload.events, session_id=x_dogido_session_id)
-        if actions:
-            service.dispatch_actions(actions)
+        def process_and_dispatch():
+            result, actions = service.process_batch(
+                payload.events,
+                session_id=x_dogido_session_id,
+            )
+            if actions:
+                service.dispatch_actions(actions)
+            return result
+
+        result = await run_serialized(process_and_dispatch)
         return result
 
     @app.post("/api/v1/adapter-sessions/{session_id}/heartbeat", response_model=HeartbeatResponse)
@@ -130,9 +162,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> HeartbeatResponse:
         # アダプタが生きているかの死活確認と、最後に受け取ったシーケンス番号の記録
         _ensure_authorized(resolved_settings, authorization)
-        if session_id not in service.sessions:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown session_id")
-        return service.heartbeat(session_id, payload.last_sequence)
+        def heartbeat() -> HeartbeatResponse:
+            if session_id not in service.sessions:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="unknown session_id",
+                )
+            return service.heartbeat(session_id, payload.last_sequence)
+
+        return await run_serialized(heartbeat)
 
     @app.delete("/api/v1/adapter-sessions/{session_id}", response_model=CloseSessionResponse)
     async def delete_session(
@@ -142,7 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # アダプタ正常終了時にセッションを明示クローズする
         # 異常終了時はハートビートのタイムアウトで検知する想定
         _ensure_authorized(resolved_settings, authorization)
-        return service.close_session(session_id)
+        return await run_serialized(service.close_session, session_id)
 
     @app.post("/api/v1/player-input")
     async def post_player_input(
@@ -152,28 +190,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # 音声入力（dogido_server.voice_input）やテスト用 curl からの話しかけ。
         # 次のゲームイベントの user_text としてチャットと同じ経路に合流する
         _ensure_authorized(resolved_settings, authorization)
-        return service.push_player_input(payload.text)
+        return await run_serialized(
+            service.push_player_input,
+            payload.text,
+            source=payload.source,
+        )
 
     @app.get("/api/v1/memory/haiku")
     async def get_haiku_memory(
         authorization: Annotated[str | None, Header()] = None,
     ) -> list[dict[str, object]]:
         _ensure_authorized(resolved_settings, authorization)
-        return service.list_haiku_memory()
+        return await run_serialized(service.list_haiku_memory)
 
     @app.get("/api/v1/memory/profile")
     async def get_memory_profile(
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, object]:
         _ensure_authorized(resolved_settings, authorization)
-        return service.memory_profile()
+        return await run_serialized(service.memory_profile)
 
     @app.get("/api/v1/memory/summary")
     async def get_memory_summary(
         authorization: Annotated[str | None, Header()] = None,
     ) -> dict[str, object]:
         _ensure_authorized(resolved_settings, authorization)
-        return service.memory_startup_summary()
+        return await run_serialized(service.memory_startup_summary)
 
     return app
 

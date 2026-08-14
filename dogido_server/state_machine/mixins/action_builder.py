@@ -51,26 +51,27 @@ class ActionBuilderMixin:
             return [self._flush_interrupt_action()]
 
         if event.event.name == EventName.PLAYER_DIED:
-            actions.append(AudioAction(layer="speech", interrupt=True, text=self._render_death_message(event)))
+            actions.append(
+                AudioAction(
+                    layer="speech",
+                    interrupt=True,
+                    text=self._render_death_message(event),
+                    speech_profile="battle",
+                )
+            )
             return actions
 
         if next_mode == "panic":
             actions.extend(self._threat_dark_push_stop_actions(event, signals, now))
             callout = self._panic_callout(event, signals)
-            entry_cue = self._panic_entry_cue(event, signals, now, has_callout=callout is not None)
+            entry_cue = self._panic_entry_cue(event, signals, now, has_callout=bool(callout))
             if entry_cue is not None:
                 actions.append(entry_cue)
                 if entry_cue.cue_id == "panic_scream_start":
                     return actions
-            if callout:
-                actions.append(
-                    AudioAction(
-                        layer="callout",
-                        interrupt=False,
-                        text=callout,
-                        protect_ms=self._callout_protect_ms(callout),
-                    )
-                )
+            callout_action = self._callout_audio_action(callout)
+            if callout_action is not None:
+                actions.append(callout_action)
             return actions
 
         if next_mode == "suppressed_panic":
@@ -79,35 +80,22 @@ class ActionBuilderMixin:
             if cue is not None:
                 actions.append(cue)
                 return actions
-            callout = self._suppressed_callout(event, signals, now)
-            if callout:
-                actions.append(
-                    AudioAction(
-                        layer="callout",
-                        interrupt=False,
-                        text=callout,
-                        protect_ms=self._callout_protect_ms(callout),
-                    )
-                )
+            callout_action = self._callout_audio_action(self._suppressed_callout(event, signals, now))
+            if callout_action is not None:
+                actions.append(callout_action)
             return actions
 
         if next_mode == "alert":
             actions.extend(self._threat_dark_push_stop_actions(event, signals, now))
             threat_callout = self._alert_callout(event, signals)
-            cue = self._alert_entry_cue(event, signals, now, has_callout=threat_callout is not None)
+            cue = self._alert_entry_cue(event, signals, now, has_callout=bool(threat_callout))
             if cue is not None:
                 actions.append(cue)
                 if cue.cue_id == "panic_scream_start":
                     return actions
-            if threat_callout:
-                actions.append(
-                    AudioAction(
-                        layer="callout",
-                        interrupt=False,
-                        text=threat_callout,
-                        protect_ms=self._callout_protect_ms(threat_callout),
-                    )
-                )
+            callout_action = self._callout_audio_action(threat_callout)
+            if callout_action is not None:
+                actions.append(callout_action)
             else:
                 actions.extend(self._environmental_actions(event, signals, previous_mode, now))
             return actions
@@ -129,14 +117,19 @@ class ActionBuilderMixin:
                 )
             return actions
 
-        if next_mode == "normal" and self._should_emit_ambient_mob_comment(event, now):
-            line = self._emit_ambient_mob_comment_line(event, now)
-            if line:
-                actions.append(AudioAction(layer="speech", interrupt=False, text=line))
-            return actions
-
+        # ambient は environmental（player_chat 含む）より後。legacy でも chat を先に見る
         if next_mode == "normal":
             actions.extend(self._environmental_actions(event, signals, previous_mode, now))
+            if actions:
+                return actions
+            if (
+                not self.state.pending_haiku_after_preface
+                and self._should_emit_ambient_mob_comment(event, now)
+            ):
+                line = self._emit_ambient_mob_comment_line(event, now)
+                if line:
+                    actions.append(AudioAction(layer="speech", interrupt=False, text=line))
+            return actions
 
         return actions
 
@@ -158,14 +151,20 @@ class ActionBuilderMixin:
         interrupt: bool,
         text: str | None = None,
         cue_id: str | None = None,
+        cue_sequence: tuple[str, ...] = (),
         protect_ms: int = 0,
+        speech_profile: str | None = None,
+        speed_scale: float | None = None,
     ) -> AudioAction:
         return AudioAction(
             layer=layer,
             interrupt=interrupt,
             text=text,
             cue_id=cue_id,
+            cue_sequence=cue_sequence,
             protect_ms=protect_ms,
+            speech_profile=speech_profile,
+            speed_scale=speed_scale,
         )
 
     def _flush_interrupt_action(self) -> AudioAction:
@@ -208,13 +207,14 @@ class ActionBuilderMixin:
                 event.observed_at.isoformat(),
             )
             LOGGER.info(
-                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s interrupt=%s protect_ms=%s text=%s",
+                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s cue_sequence=%s interrupt=%s protect_ms=%s text=%s",
                 event_name,
                 event.sequence,
                 previous_mode,
                 next_mode,
                 action.layer,
                 action.cue_id,
+                list(action.cue_sequence) if action.cue_sequence else None,
                 action.interrupt,
                 action.protect_ms,
                 summarize_for_log(action.text),

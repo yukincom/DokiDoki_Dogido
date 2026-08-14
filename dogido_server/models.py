@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -156,6 +156,14 @@ class EventDescriptor(DogidoModel):
 
 # ---- プレイヤー状態 ----
 
+class VehicleState(DogidoModel):
+    """プレイヤーが現在乗っている乗り物。未乗車時はオブジェクトごと省略する。"""
+
+    vehicle_id: str = Field(min_length=1)  # 例: minecraft:horse / minecraft:oak_boat
+    activity: Literal["riding", "moving", "running", "rowing", "dashing"] = "riding"
+    controlling: bool = False
+
+
 class PlayerState(DogidoModel):
     """プレイヤー本人の観測状態（仕様 §9）。
 
@@ -170,6 +178,7 @@ class PlayerState(DogidoModel):
     hunger: int | None = None  # 最大 20
     dimension: str | None = None  # 例: "minecraft:overworld" / "minecraft:the_nether"
     held_item: str | None = None  # 手持ちアイテムの Minecraft item id
+    vehicle: VehicleState | None = None  # 未乗車時は None。LLM へ空状態を渡さない
     active_status_effects: list[str] = Field(default_factory=list)  # 例: ["mining_fatigue"]
 
 
@@ -275,12 +284,14 @@ class AuditoryThreat(DogidoModel):
 
 
 class AmbientSound(DogidoModel):
-    """非敵対の周囲音（村人・家畜など）。戦闘判定には使わない。
+    """戦闘判定に使わない周囲音（非敵対Mob・ブロック・天候・環境）。
 
-    HOSTILE カテゴリ以外の entity 音を adapter が拾って載せる。
+    非敵対 entity 音に加え、SoundManager で実再生された world 音を adapter が載せる。
+    `type=block:* / weather:* / environment:*` は実際の sound_event が根拠であり、
+    近くのブロック名から音を推測した値ではない。
     player_chat の「音がした？」系の根拠になる。
     """
-    type: str  # 例: villager / cow / unknown
+    type: str  # 例: villager / block:campfire / weather:thunder / unknown
     source_id: str | None = None
     sound_event: str | None = None
     direction: Direction = Field(default_factory=Direction)
@@ -320,6 +331,18 @@ class NearbyResource(DogidoModel):
     name: str  # Minecraft block/item id（例: "coal_ore", "oak_log"）
     distance: float | None = None
     direction: Direction = Field(default_factory=Direction)
+
+
+class LookTarget(DogidoModel):
+    """画面中央クロスヘア（＋）が刺さっている対象（仕様 look_target）。
+
+    プレイヤーの「これ何？」指差し。MISS 時はイベントからフィールド省略。
+    kind: block | entity
+    name: Minecraft id path（例: poppy, oak_pressure_plate, sheep）
+    """
+    kind: str = "block"
+    name: str
+    distance: float | None = None
 
 
 class CombatState(DogidoModel):
@@ -378,12 +401,13 @@ class GameEvent(DogidoModel):
 
     必須: schema_version / game / adapter / observed_at / event
     推奨: sequence / visual_threats / auditory_threats / inventory / combat
-    任意: passive_mobs / nearby_resources / meta
+    任意: passive_mobs / nearby_resources / look_target / meta
     passive_mobs には非敵対状態の中立モブも temperament="neutral" で含まれる。
     旧スキーマ名 peaceful_mobs も受信時に受け付ける。
 
     inventory: キーは Minecraft item id、値は所持数。
                松明・石炭・木材・ベッド材料の有無を暗所対処フローで参照する。
+    look_target: クロスヘアが刺さっているブロック/エンティティ（指差し）。
     """
     schema_version: str
     game: str = "minecraft-java"
@@ -399,6 +423,7 @@ class GameEvent(DogidoModel):
     passive_mobs: list[PassiveMob] = Field(default_factory=list)
     inventory: dict[str, int] = Field(default_factory=dict)
     nearby_resources: list[NearbyResource] = Field(default_factory=list)
+    look_target: LookTarget | None = None
     combat: CombatState = Field(default_factory=CombatState)
     meta: MetaState = Field(default_factory=MetaState)
 
@@ -481,6 +506,8 @@ class PlayerInputRequest(DogidoModel):
     プレイヤー発話。次のゲームイベントの meta.user_text に相乗りする。
     """
     text: str
+    # 既存クライアントは text 扱い。voice_input だけ明示して文脈補正を有効にする。
+    source: Literal["text", "voice"] = "text"
 
 
 class StateResponse(DogidoModel):

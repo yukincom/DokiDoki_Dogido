@@ -22,7 +22,7 @@
 | **今** | PC 上の音声出力 | VOICEVOX / say / afplay |
 | **後回し** | M5Stack Push Avatar | 出力デバイス差し替え。対話設計が固まってから |
 | **後回し** | LINE / Discord・定時お知らせ等の外部メッセージ | 入力チャネル追加。対話設計が固まってから |
-| **使わない** | Hermes などの汎用エージェント基盤 | 機能過剰。将来の LLM ワークフローは LangChain / LangGraph を想定 |
+| **使わない** | Hermes などの汎用エージェント基盤 | 機能過剰。必要な LLM 経路は閉じた route とコード検証で小さく構成する |
 
 ## 2. システム構成
 
@@ -118,6 +118,7 @@ Minecraft Java Edition
 
 - 音だけで存在を感じた脅威
 - 方向は出してよいが、断定は抑える
+- 非敵対 Mob・ブロック・天候・環境の実再生音も別トラックで保持する
 
 #### `inferred`
 
@@ -139,6 +140,11 @@ Minecraft Java Edition
 - `inventory`
 - `held_item`
 - `dimension`
+- `vehicle`（乗車中だけ。種別・操縦・移動状態を server で主語付き事実へ変換）
+
+未乗車時は `vehicle` を送らない。LLM へ渡すときは
+`プレイヤーはXXに乗っている／移動している／走っている／漕いでいる` の形式に固定する。
+エリトラ飛行は乗り物と混ぜず、将来の活動観測として保留する。
 
 ### ワールド状態
 
@@ -158,6 +164,7 @@ Minecraft Java Edition
 - 最近の被弾
 - 死亡原因
 - モンスターの音
+- クライアントで実際に再生されたブロック・天候・環境音
 - ブロック破壊の方向と対象
 
 ## 5. 音由来の脅威検知
@@ -197,6 +204,10 @@ Minecraft Java Edition
 - 音イベントは粗い方向へ量子化する
 - 音だけで得た情報は `certainty=low` として扱う
 - 出力時は断定語を避ける
+- 敵対音は `auditory_threats`、それ以外の world 音は `ambient_sounds` に分離する
+- 焚き火・ポータル等のクライアント内再生音は SoundManager 経路で観測する
+- 音源名は実際の `sound_event` を根拠にし、近くのブロックから鳴ったと推測しない
+- 雷鳴の実音には、天候変化の説明とは別に怖がり反応を返す
 
 ## 6. 暗さと危険度の判定
 
@@ -250,6 +261,10 @@ Minecraft Java Edition
 - `暗い` と `危ない` は別概念にする
 - 松明を促す判断は、単なる照度より湧きリスクを優先する
 - 反応は単発コールアウトにせず、`dark_push` / shelter などの内部状態で連続的に扱う
+- emergency shelter の形状（低い天井・四方の壁）と、入場安堵を話す条件は分ける
+  - 入場安堵は夜（`time_phase=night` または hostile spawn 開始 tick 以降）のみ
+  - 設定済みリスポーン地点の近くにベッドがある場所は拠点として扱い、emergency shelter から除外
+  - 周辺形状の観測が揺れても、同じ夜の入場安堵は1回だけ
 
 ## 7. 音声出力方針
 
@@ -371,6 +386,7 @@ Minecraft Java Edition
 - `world`
 - `visual_threats`
 - `auditory_threats`
+- `ambient_sounds`
 - `inventory`
 - `combat`
 
@@ -423,7 +439,7 @@ adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕�
 
 - 対話品質（プレイヤー入力への反応、状況コンテキスト、ハルシネーション抑制）
 - 暗所・戦闘・ボスなどの実プレイ調整
-- 川柳フローの安定化（保存は JSONL。将来の LLM グラフは LangChain / LangGraph 想定）
+- 川柳フローの安定化（保存は JSONL。LLM 経路は閉じた route とコード検証で構成）
 
 ### 対話設計が固まってから
 

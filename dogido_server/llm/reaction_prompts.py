@@ -107,7 +107,9 @@ def _build_ambient_messages(request: LeafGenerationRequest) -> list[dict[str, st
         "neutral なら『怒らせんほうがええ』『優しくしとこか』程度はよいが、"
         "もう敵だと断定したり、戦闘警報みたいな調子にはしない。"
         "参考候補は雰囲気だけ借りて、出だし・語尾・言い回しは少し変える。"
-        "会話っぽく一言だけ返す（50字以内）。"
+        "会話っぽく一言だけ返す（35字以内。短く）。"
+        "VOICEVOX向け: 訓読み・湯桶読み・重箱読みになりやすい語はひらがなで書く"
+        "（例: 朝→あさ、草地→くさち、一日→いちにち）。音読みで誤読されやすい漢字を残さない。"
     )
     return leaf_dialog("ambient", request, user_prompt)
 def _build_death_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:

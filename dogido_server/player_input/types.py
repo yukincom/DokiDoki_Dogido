@@ -29,6 +29,8 @@ class HaikuRecallQuery:
 class PlayerInputContext:
     raw_text: str = ""
     normalized_text: str = ""
+    # STT の文脈補正は会話理解だけに使う。raw/normalized は明示操作の正として残す。
+    interpreted_text: str = ""
     breaks_silence: bool = False
     wants_quiet: bool = False
     should_block_ambient: bool = False
@@ -36,6 +38,8 @@ class PlayerInputContext:
     asks_dragon_direction: bool = False
     asks_save_last_haiku: bool = False
     asks_inventory: bool = False
+    # 『今の音なに？』等。true のときだけ player_chat に hearing を載せる
+    asks_about_sound: bool = False
     player_haiku_text: str | None = None
     # 川柳フィードバック（長期保存・読み修正）。player_chat には回さない。
     revised_haiku_text: str | None = None
@@ -43,3 +47,7 @@ class PlayerInputContext:
     asks_haiku_recall: bool = False
     haiku_recall_biome_hint: str | None = None
     haiku_recall_query: HaikuRecallQuery | None = None
+
+    @property
+    def semantic_text(self) -> str:
+        return self.interpreted_text or self.raw_text

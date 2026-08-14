@@ -54,8 +54,15 @@ class CharacterModePromptTests(unittest.TestCase):
     def test_battle_system_prompt_encourages(self) -> None:
         system = system_prompt_for_mode("battle")
         self.assertIn("バトル時", system)
-        self.assertIn("応援", system)
+        self.assertIn("前向き", system)
         self.assertIn("わーきゃー", system)
+        self.assertIn("役に立つ一言", system)
+
+    def test_workshop_uses_editor_role_without_fear_persona(self) -> None:
+        system = system_prompt_for_mode("workshop")
+        self.assertIn("素直な共同編集者", system)
+        self.assertIn("弁解せず", system)
+        self.assertNotIn("冒険中のドギドは怖がり", system)
 
     def test_player_chat_peace_prompt(self) -> None:
         messages = build_messages(
@@ -94,11 +101,11 @@ class CharacterModePromptTests(unittest.TestCase):
             )
         )
         self.assertIn("バトル時", messages[0]["content"])
-        self.assertIn("応援", messages[0]["content"])
+        self.assertIn("前向き", messages[0]["content"])
         self.assertIn("視認 クリーパー", messages[1]["content"])
-        # S1: user の「バトル時:」mode_hint は廃止。敵対時の静止禁止は残す
-        self.assertIn("静止指示は禁止", messages[1]["content"])
-        self.assertIn("答え方スタンス: saw", messages[1]["content"])
+        # S1: user の mode_hint 廃止。スタンスと答え方は policy 側
+        self.assertIn("スタンス: saw", messages[1]["content"])
+        self.assertIn("いまの答え方:", messages[1]["content"])
 
     def test_ambient_uses_peace_system(self) -> None:
         messages = build_messages(
@@ -109,7 +116,8 @@ class CharacterModePromptTests(unittest.TestCase):
             )
         )
         self.assertIn("平和時", messages[0]["content"])
-        self.assertIn("怖がり連発は禁止", messages[1]["content"])
+        self.assertIn("怖がり反応は抑え", messages[0]["content"])
+        self.assertIn("やさしい相棒", messages[1]["content"])
 
     def test_hostile_callout_uses_battle_system(self) -> None:
         messages = build_messages(
@@ -120,7 +128,8 @@ class CharacterModePromptTests(unittest.TestCase):
             )
         )
         self.assertIn("バトル時", messages[0]["content"])
-        self.assertIn("応援", messages[1]["content"])
+        self.assertIn("ゾンビ", messages[1]["content"])
+        self.assertIn("わーきゃー", messages[0]["content"])
 
 
 if __name__ == "__main__":

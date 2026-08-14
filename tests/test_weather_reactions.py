@@ -137,7 +137,7 @@ class DryBiomeWeatherReactionTests(unittest.TestCase):
         speech_texts = [action.text for action in result.actions if action.layer == "speech" and action.text]
         self.assertEqual(["なんか雨の音する気が・・・"], speech_texts)
 
-    def test_underground_thunder_transition_with_thunder_sound_uses_low_certainty_line(self) -> None:
+    def test_underground_thunder_sound_uses_frightened_reaction(self) -> None:
         machine = self.make_machine()
         machine.process(make_event(sequence=30, biome="deep_dark", weather=Weather.RAIN, sky_visible=False))
         event = make_event(sequence=31, biome="deep_dark", weather=Weather.THUNDER, sky_visible=False)
@@ -146,7 +146,7 @@ class DryBiomeWeatherReactionTests(unittest.TestCase):
         result = machine.process(event)
 
         speech_texts = [action.text for action in result.actions if action.layer == "speech" and action.text]
-        self.assertEqual(["なんかゴロゴロ聞こえるな……雷きとるんか？"], speech_texts)
+        self.assertEqual(["うひゃあっ！雷や！あの音ほんま苦手やねん……！"], speech_texts)
 
     def test_nearby_lightning_strike_emits_gasp_and_callout(self) -> None:
         machine = self.make_machine()
@@ -158,6 +158,47 @@ class DryBiomeWeatherReactionTests(unittest.TestCase):
 
         self.assertTrue(any(action.layer == "panic_cue" and action.text == "ひいっ！" for action in result.actions))
         self.assertTrue(any(action.layer == "speech" and action.text == "今、落ちたで！" for action in result.actions))
+
+    def test_heard_thunder_emits_frightened_reaction_without_weather_transition(self) -> None:
+        machine = self.make_machine()
+        event = make_event(sequence=50, biome="plains", weather=Weather.THUNDER)
+        event.world.thunder_sound_recent_ms = 500
+
+        result = machine.process(event)
+
+        self.assertTrue(any(action.layer == "panic_cue" and action.text == "ヒイ！" for action in result.actions))
+        self.assertTrue(
+            any(
+                action.layer == "speech"
+                and action.text == "うひゃあっ！雷や！あの音ほんま苦手やねん……！"
+                for action in result.actions
+            )
+        )
+
+    def test_heard_thunder_reaction_has_cooldown(self) -> None:
+        machine = self.make_machine()
+        first = make_event(sequence=60, biome="plains", weather=Weather.THUNDER)
+        first.world.thunder_sound_recent_ms = 300
+        repeated = make_event(sequence=61, biome="plains", weather=Weather.THUNDER)
+        repeated.world.thunder_sound_recent_ms = 1300
+
+        first_result = machine.process(first)
+        repeated_result = machine.process(repeated)
+
+        self.assertTrue(any(action.text for action in first_result.actions))
+        self.assertFalse(any(action.text for action in repeated_result.actions))
+
+    def test_nearby_lightning_is_more_specific_than_generic_thunder(self) -> None:
+        machine = self.make_machine()
+        event = make_event(sequence=70, biome="plains", weather=Weather.THUNDER)
+        event.world.thunder_sound_recent_ms = 300
+        event.world.nearby_lightning_strike_recent_ms = 300
+        event.world.nearby_lightning_strike_distance = 12.0
+
+        result = machine.process(event)
+        speech = [action.text for action in result.actions if action.layer == "speech" and action.text]
+
+        self.assertEqual(["今、落ちたで！"], speech)
 
 
 if __name__ == "__main__":

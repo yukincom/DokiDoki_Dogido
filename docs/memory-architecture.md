@@ -12,7 +12,19 @@
 - 記憶は状態機械の判定正本にはしない
 - ただし、実際に発話された警告・反応・川柳と、その発話意図は会話参照のため短期記憶に残す
 - 保存・読取はコードが行う。汎用エージェント基盤（Hermes 等）は使わない
-- 将来の LLM 側ワークフロー整理は LangChain / LangGraph を想定するが、JSONL 正本は変えない
+- 将来の LLM 側ワークフローも特定の汎用基盤を前提にせず、閉じた route とコード検証で構成する。JSONL 正本は変えない
+
+### 1.1 単一プレイヤー前提（現状）
+
+現行の `.dogido_memory/` は **論理ユーザーが 1 人**の前提に近い（川柳・lesson・profile が共有空間）。  
+家庭内の複数人・呼び名の違い・将来のプロファイル切替は未分離。  
+課題と段階案は [multi-user-tenancy.md](multi-user-tenancy.md)。
+
+### 1.2 何を覚えるか（キャラクター）
+
+ドギドは **川柳以外の長期エピソードを精密に保持しない**前提でよい（趣味の川柳以外は忘れがちなおじさん）。  
+セッションを跨いで厚くするのは **workshop での句の指摘・直し**に限る方針。  
+詳細・ため方・発句のみ参照は [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md)（Issue #37）。
 
 ## 2. 保存形式
 
@@ -25,7 +37,7 @@
     rolling_summary.json
   long_term/
     haiku_entries.jsonl
-    haiku_revisions.jsonl   # 予約。添削履歴を載せる想定だが、現行実装は未使用
+    haiku_revisions.jsonl   # 添削履歴。AI案とプレイヤー局所編集の採用差分を保存
     player_profile.json
 ```
 
@@ -33,7 +45,7 @@
 
 - 時系列で追記するログ
 - 川柳エントリ
-- 添削履歴（`haiku_revisions.jsonl` はパス予約。Hermes 前提の自動整理はしない）
+- 添削履歴（`haiku_revisions.jsonl`。Hermes 前提の自動整理はしない）
 
 ### JSON を使うもの
 
@@ -220,11 +232,34 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
   "id": "rev_20260611_175100_001",
   "created_at": "2026-06-11T17:51:00+09:00",
   "haiku_id": "hk_20260611_172701_4919",
-  "source": "player_feedback",
+  "source": "generated_confirmed",
+  "base_text": "ゆきのよる\nやみにはかぶる\nそらのとびら",
+  "parent_revision_id": null,
   "comment": "やみにはかぶる、の意味が少しわかりにくい",
+  "edit_contract": "line_compare_and_swap_v1",
+  "edits": [
+    {"line_index": 1, "expected_text": "やみにはかぶる", "replacement_text": "やみをかぶせて", "atom_ids": ["observation:weather:rain"]}
+  ],
+  "line_sources": [
+    {"line_index": 0, "atom_ids": ["catalog:block:...:note:0"]},
+    {"line_index": 1, "atom_ids": ["observation:weather:rain"]},
+    {"line_index": 2, "atom_ids": ["catalog:structure:...:note:1"]}
+  ],
   "revised_text": "ゆきのよる\nやみをかぶせて\nそらのとびら"
 }
 ```
+
+`source` は `player_feedback`（既定）／`formal`／`conversational`／
+`generated_confirmed`／`player_line_confirmed` の5値。AIの修正案をプレイヤーが明示採用した
+`generated_confirmed` では、3行すべての検証済み出典を `line_sources` に残す。さらに
+`edit_contract` と、元行完全一致条件を持つ検証済み `edits` を残す。保存時にも
+`edits` を元句へ適用すると `revised_text` になること、対象外行が変わらないことをコードで再確認する。
+固定行の出典が欠ける旧データは材料重複を検証できないため、自動修正案を出さない。
+
+プレイヤー明示語による局所編集は `player_line_compare_and_swap_v1` を使う。editの
+`provenance` は `player_explicit` とし、source atom IDを捏造しない。連続編集では
+`base_text` を直前の採用句、`parent_revision_id` を直前revisionへ向ける。初回発句の
+`original_text` は変えず、各段階のCAS基準を履歴として残す。
 
 添削エージェントは、`haiku_entries.jsonl` と `haiku_revisions.jsonl` を読む。
 通常の短期ログ全文は読ませない。

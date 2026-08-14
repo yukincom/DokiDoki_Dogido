@@ -14,13 +14,6 @@ from .providers import (
     generate_chat_completions_text,
     generate_gemini_text,
 )
-from .haiku import (
-    clean_haiku_output,
-    count_japanese_sounds,
-    haiku_char_sound,
-    is_haiku_usable_output,
-    split_haiku_phrases,
-)
 from .prompts import build_messages
 from .sanitize import (
     clean_output,
@@ -133,7 +126,7 @@ class DogidoLLM:
 
         処理フロー:
             1. バックエンドで生成
-            2. 種別（haiku / 通常）に応じたクリーニング
+            2. 発話テキストをクリーニング
             3. 使用可否チェック
             4. スタイルチェック
             5. 全チェック通過で採用、失敗なら fallback_text を返す
@@ -156,19 +149,8 @@ class DogidoLLM:
 
         # ロックはバックエンド呼び出しだけを保護する。
         # 後処理は純粋関数なのでロック外で行うが、将来ここで _model / _tokenizer に触るなら要見直し。
-        # kind によってクリーニング・判定ロジックを切り替える
-        cleaned = self._clean_haiku_output(text) if request.kind == "haiku" else self._clean_output(text)
-        is_usable = self._is_haiku_usable_output(cleaned, request.details) if request.kind == "haiku" else self._is_usable_output(cleaned, request.details)
-        if request.kind == "haiku" and not is_usable and cleaned:
-            repaired = self._retry_haiku_repair(request, cleaned)
-            if repaired:
-                LOGGER.warning(
-                    "llm_leaf kind=%s result=accepted_repaired text=%s",
-                    request.kind,
-                    self._summarize_for_log(repaired),
-                )
-                return repaired
-        if not is_usable:
+        cleaned = self._clean_output(text)
+        if not self._is_usable_output(cleaned, request.details):
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=unusable_output raw=%s cleaned=%s",
                 request.kind,
@@ -195,8 +177,7 @@ class DogidoLLM:
                     ),
                     self._summarize_for_log(cleaned),
                 )
-        # haiku はスタイルチェック不要（音節数チェックを is_haiku_usable_output 側で完結させている）
-        if request.kind != "haiku" and not self._is_style_acceptable(request.kind, cleaned, request.details):
+        if not self._is_style_acceptable(request.kind, cleaned, request.details):
             LOGGER.warning(
                 "llm_leaf kind=%s result=fallback reason=style_mismatch cleaned=%s",
                 request.kind,
@@ -209,35 +190,6 @@ class DogidoLLM:
             self._summarize_for_log(cleaned),
         )
         return cleaned or request.fallback_text
-
-    def _retry_haiku_repair(self, request: LeafGenerationRequest, attempted: str) -> str | None:
-        repair_request = LeafGenerationRequest(
-            kind="haiku_repair",
-            fallback_text="",
-            details={**request.details, "attempted_haiku": attempted},
-            temperature=0.25,
-            route=request.route,
-            max_tokens=request.max_tokens,
-        )
-        with self._lock:
-            try:
-                repaired_text = self._generate_backend_text(repair_request)
-            except Exception as exc:
-                self._disabled_reason = str(exc)
-                LOGGER.warning(
-                    "llm_leaf kind=haiku_repair result=fallback reason=generation_error detail=%s",
-                    self._disabled_reason,
-                )
-                return None
-        cleaned = self._clean_haiku_output(repaired_text)
-        if not self._is_haiku_usable_output(cleaned, request.details):
-            LOGGER.warning(
-                "llm_leaf kind=haiku_repair result=fallback reason=unusable_output raw=%s cleaned=%s",
-                self._summarize_for_log(repaired_text),
-                self._summarize_for_log(cleaned),
-            )
-            return None
-        return cleaned
 
     def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, Any]:
         """JSON オブジェクトを 1 件生成して返す。失敗時は fallback_value を返す。"""
@@ -431,29 +383,12 @@ class DogidoLLM:
             return payload
         return None
 
-    # ---- 以下は sanitize / haiku モジュールへの委譲メソッド ----
+    # ---- 以下は sanitize モジュールへの委譲メソッド ----
     # DogidoLLM 自身がロジックを持たず、モジュール関数をインスタンスメソッドとして
     # 呼び出せるようにしているだけ（テスト時にサブクラスでオーバーライドしやすくするため）
-    # 一部は現時点で generate_leaf_text から直接は使っていないが、
-    # 将来の差し替え点とテスト用フックとして残している。
 
     def _clean_output(self, text: str | None) -> str:
         return clean_output(text)
-
-    def _clean_haiku_output(self, text: str | None) -> str:
-        return clean_haiku_output(text)
-
-    def _is_haiku_usable_output(self, text: str, details: dict[str, Any] | None = None) -> bool:
-        return is_haiku_usable_output(text, details)
-
-    def _split_haiku_phrases(self, text: str) -> list[str] | None:
-        return split_haiku_phrases(text)
-
-    def _count_japanese_sounds(self, text: str) -> int:
-        return count_japanese_sounds(text)
-
-    def _haiku_char_sound(self, ch: str, index: int) -> int:
-        return haiku_char_sound(ch, index)
 
     def _is_usable_output(self, text: str, details: dict[str, Any] | None = None) -> bool:
         return is_usable_output(text, details)

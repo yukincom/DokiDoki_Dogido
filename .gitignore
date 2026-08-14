@@ -5,13 +5,20 @@ __pycache__/
 .env
 .dogido_tmp/
 .dogido_memory/
+# 家庭ごとの呼び名音声（*_example.mp3 / ushiro_tail / README / manifest.example 以外はコミットしない）
+cue_voice/player_names/player_[0-9].mp3
+cue_voice/player_names/player_[0-9][0-9].mp3
+cue_voice/player_names/manifest.json
 adapter/minecraft-fabric/.gradle/
 adapter/minecraft-fabric/build/
 adapter/minecraft-fabric/run/
 /資料
 .DS_Store
 /dogido-llm
+.venv/
+venv/
 /dogido_server.egg-info
+/data
 models/
 *.safetensors
 *.gguf

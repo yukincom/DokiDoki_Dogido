@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dogido_server.config import Settings
+from dogido_server.haiku.source_atoms import HaikuSourceAtom
 from dogido_server.llm import LLMFrontend
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import EventName, GameEvent
@@ -46,17 +47,41 @@ class DogidoStateMachine(
         self.policy_tree = PyTreeActionPolicy() if settings.decision_policy == "py_trees" else None
         self.emitted_haiku: HaikuEmission | None = None
         self._pending_haiku_interpretation: str | None = None
+        # preface フレームで作った構造化発句用 details（次フレームの本句まで保持）
+        self._pending_haiku_prompt_details: dict[str, object] | None = None
+        # details の JSON 表現とは別に、検証器へ渡す不変 source atom を保持する。
+        self._pending_haiku_source_atoms: tuple[HaikuSourceAtom, ...] = ()
+        # LLM 句をスキップするときの本句固定文（カタログ fallback 等）
+        self._pending_haiku_fixed_line: str | None = None
+        # workshop materials シード（motifs/held/nearby。本句で fragment_links を付与）
+        self._pending_haiku_materials: dict[str, object] | None = None
         # service が session.dialogue / haiku_workshop / lessons を返す callable を差し込む
         self.dialogue_context_provider = None
         self.haiku_workshop_provider = None
         self.haiku_lessons_provider = None
+        # service が pending_player_text 待ちのとき True（ambient 抑止用）
+        self.player_input_queued = False
 
-    def process(self, event: GameEvent) -> StateMachineResult:
+    def process(
+        self,
+        event: GameEvent,
+        *,
+        interpreted_user_text: str | None = None,
+    ) -> StateMachineResult:
         now = event.observed_at
         previous_mode = self.state.mode
         self.emitted_haiku = None
-        self._pending_haiku_interpretation = None
-        self.player_input = route_player_input(event.meta.user_text)
+        # preface 待ち中は見どころ・prompt・materials を消さない（次フレームの本句で使う）
+        if not self.state.pending_haiku_after_preface:
+            self._pending_haiku_interpretation = None
+            self._pending_haiku_prompt_details = None
+            self._pending_haiku_source_atoms = ()
+            self._pending_haiku_fixed_line = None
+            self._pending_haiku_materials = None
+        self.player_input = route_player_input(
+            event.meta.user_text,
+            interpreted_text=interpreted_user_text,
+        )
         dimension_changed = self._did_change_dimension(event)
         self._handle_dimension_change(event)
         newly_burning_visual = self._find_newly_burning_visual(event)

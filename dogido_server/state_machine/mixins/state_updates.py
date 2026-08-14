@@ -22,24 +22,23 @@ class StateUpdatesMixin:
         if self.state.last_non_silent_at is None:
             self.state.last_non_silent_at = now
         if self.state.last_haiku_emitted_at is None:
-            # 初回イベントから川柳の10分周期を始める
+            # 初回イベントから設定された川柳周期を始める
             self.state.last_haiku_emitted_at = now
         # 平和な姿のモブを種ごとに記録する（中立モブの敵対化検知に使う）
         for mob in event.passive_mobs:
             mob_type = (mob.type or "").strip().lower()
             if mob_type:
                 self.state.recent_passive_mob_seen_at_by_type[mob_type] = now
-        # 優先イベント（脅威・プレイヤー入力）が来たら発句中の川柳はキャンセルする。
+        # 脅威が来たら発句中の川柳（自分の世界）はキャンセルする。
+        # プレイヤー雑談ではキャンセルしない（入力は service 側でキュー保持）。
         # 周期 (last_haiku_emitted_at) はそのままなので、静けさが戻って
         # haiku_quiet_time_ms 経過後に再発句される。
         if self.state.pending_haiku_after_preface and (
-            event.visual_threats
-            or event.auditory_threats
-            or self.player_input.breaks_silence
+            event.visual_threats or event.auditory_threats
         ):
-            self.state.pending_haiku_after_preface = False
+            self._clear_pending_haiku_prep()
         if time_phase == "morning" and self.state.last_time_phase != "morning":
-            self.state.pending_haiku_after_preface = False
+            self._clear_pending_haiku_prep()
         self.state.last_time_phase = time_phase
         if time_phase != "night":
             self.state.firefly_reacted_this_night = False
@@ -59,6 +58,7 @@ class StateUpdatesMixin:
         if time_phase == "night" and self.state.emergency_shelter_reset_ready:
             self.state.emergency_shelter_advised_this_cycle = False
             self.state.emergency_shelter_seen_this_cycle = False
+            self.state.emergency_shelter_entry_announced_this_cycle = False
             self.state.emergency_shelter_morning_announced = False
             self.state.emergency_shelter_reset_ready = False
         self.state.prior_recent_visual_ms = self._recent_ms(now, self.state.last_visual_threat_at)
@@ -238,9 +238,18 @@ class StateUpdatesMixin:
             self.state.last_single_visual_type = None
             self.state.last_single_visual_at = None
             self.state.announced_hostile_counts.clear()
+            self.state.multi_increase_announced_ids.clear()
         if authoritative_ground_count_event:
             self.state.last_ground_hostile_count_within_query_range = ground_hostile_count
         self.state.active_close_flying_visual_keys = self._current_close_flying_visual_keys(event)
+        # 見えていない ID は捨てる（次の群れではまた「増えた」可）
+        visible_ids = {
+            self._visual_identity_key(threat)
+            for threat in event.visual_threats
+            if threat.type
+        }
+        if self.state.multi_increase_announced_ids:
+            self.state.multi_increase_announced_ids &= visible_ids
         self._log_haiku_block_state(event, now)
 
     def _handle_dimension_change(self, event: GameEvent) -> None:
@@ -298,6 +307,7 @@ class StateUpdatesMixin:
         self.state.last_visual_priority_callout_at = None
         self.state.last_single_visual_type = None
         self.state.last_single_visual_at = None
+        self.state.multi_increase_announced_ids.clear()
         self.state.last_ushiro_call_at = None
         self.state.active_close_flying_visual_keys.clear()
         self.state.pending_dark_push_after_breath_until = None
@@ -313,6 +323,7 @@ class StateUpdatesMixin:
         self.state.last_occluded_dark_zone = None
         self.state.last_safe_zone_with_door = None
         self.state.last_emergency_shelter = None
+        self.state.emergency_shelter_entry_announced_this_cycle = False
         self.state.last_submerged_dark_zone = None
         self.state.last_foliage_shade_context = None
         self.state.pending_special_biome_line = None
@@ -321,6 +332,7 @@ class StateUpdatesMixin:
         self.state.last_weather = None
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
+        self.state.last_thunder_sound_comment_at = None
         self.state.night_warning_pending = False
         self.state.pending_night_warning_detail = False
         self.state.pending_overworld_return_line = returning_to_overworld

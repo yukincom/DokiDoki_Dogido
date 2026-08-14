@@ -13,6 +13,7 @@ from dogido_server.state_machine.response_catalog import (
     selected_ushiro_call_text,
     special_biome_entry_lines,
 )
+from dogido_server.state_machine.types import AudioAction, CalloutPayload
 
 
 @lru_cache(maxsize=1)
@@ -21,6 +22,47 @@ def _neutral_mob_type_set() -> frozenset[str]:
 
 
 class CommonMixin:
+    def _co(
+        self,
+        value: str | CalloutPayload | None,
+        sequence: list[str] | tuple[str, ...] | None = None,
+    ) -> CalloutPayload | None:
+        """文言または CalloutPayload を正規化する。"""
+        extra = tuple(sequence or ())
+        if isinstance(value, CalloutPayload):
+            if not value and not extra:
+                return None
+            if extra and not value.cue_sequence:
+                return CalloutPayload(text=value.text, cue_sequence=extra)
+            return value if value else None
+        if value is None:
+            if not extra:
+                return None
+            return CalloutPayload(text="", cue_sequence=extra)
+        text = str(value).strip()
+        if not text and not extra:
+            return None
+        return CalloutPayload(text=text, cue_sequence=extra)
+
+    def _callout_audio_action(
+        self,
+        payload: str | CalloutPayload | None,
+        *,
+        interrupt: bool = False,
+    ) -> AudioAction | None:
+        resolved = self._co(payload)
+        if resolved is None:
+            return None
+        text = (resolved.text or "").strip() or None
+        return AudioAction(
+            layer="callout",
+            interrupt=interrupt,
+            text=text,
+            cue_sequence=resolved.cue_sequence,
+            protect_ms=self._callout_protect_ms(text),
+            speech_profile="battle",
+        )
+
     def _active_status_effects(self, event: GameEvent) -> set[str]:
         return {
             effect.split(":")[-1].strip().lower()
@@ -412,10 +454,12 @@ class CommonMixin:
         if not self._should_emit_low_health_warning(event, signals):
             return None
         self.state.low_health_warning_armed = False
-        name = (event.player.name or "").strip() or self._player_call_name(event)
+        # 呼びかけは call_name（設定／meta）。Minecraft ログイン名を直差ししない
+        name = self._player_call_name(event)
         return f"{name}！体力やばいで！"
 
     def _ushiro_call_text(self, event: GameEvent) -> str:
+        """後方互換: 文言のみ。断片付きは _ushiro_callout。"""
         seed = "|".join(
             [
                 getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
@@ -428,6 +472,36 @@ class CommonMixin:
             ]
         )
         return selected_ushiro_call_text(self._player_call_name(event), seed)
+
+    def _ushiro_callout(self, event: GameEvent) -> CalloutPayload:
+        """うしろコール。named かつ名前断片が解決できればパズル、否则 TTS 用 text のみ。
+
+        player_1 等にハードコードしない。call_name → manifest / ファイル解決。
+        classic（志村）はカタログ定型のまま全文 TTS（名前スロット非依存）。
+        """
+        from dogido_server.player_name_voice import build_named_ushiro_sequence
+        from dogido_server.state_machine.response_catalog import use_classic_ushiro_call
+
+        call_name = self._player_call_name(event)
+        seed = "|".join(
+            [
+                getattr(event.observed_at, "isoformat", lambda: str(event.observed_at))(),
+                str(event.sequence or ""),
+                call_name,
+                ",".join(threat.entity_id or threat.type for threat in event.visual_threats),
+            ]
+        )
+        text = selected_ushiro_call_text(call_name, seed)
+        if use_classic_ushiro_call(seed):
+            return CalloutPayload(text=text)
+
+        sequence = build_named_ushiro_sequence(
+            call_name,
+            cue_audio_dir=self.settings.cue_audio_dir,
+        )
+        if sequence:
+            return CalloutPayload(text=text, cue_sequence=tuple(sequence))
+        return CalloutPayload(text=text)
 
     def _weather_value(self, weather: object) -> str | None:
         return getattr(weather, "value", weather) if weather is not None else None
@@ -453,9 +527,8 @@ class CommonMixin:
     def _player_input_priority_active(self, now: datetime, *, purpose: str = "default") -> bool:
         """話しかけ後の自発発話ミュート。
 
-        purpose:
-          - default: 川柳・環境雑談など
-          - ambient: 友好/中立モブ反応（より短い mute）
+        purpose は互換のため残す。ambient も default と同じ
+        ``player_input_priority_cooldown_ms`` を使う（短い別 mute は廃止）。
         """
         if self.player_input.breaks_silence:
             # 今このイベントが話しかけそのものなら、同 tick の自発発話は抑える
@@ -463,10 +536,7 @@ class CommonMixin:
         recent_ms = self._recent_ms(now, self.state.last_player_input_at)
         if recent_ms is None:
             return False
-        if purpose == "ambient":
-            cooldown = self.settings.player_input_ambient_mute_ms
-        else:
-            cooldown = self.settings.player_input_priority_cooldown_ms
+        cooldown = self.settings.player_input_priority_cooldown_ms
         return recent_ms < cooldown
 
     def _weather_transition(self, event: GameEvent) -> tuple[str, str] | None:
@@ -570,7 +640,51 @@ class CommonMixin:
             or self.player_input.asks_haiku_recall
         ):
             return False
+        # workshop open 中の講評・「〜って何」は service 側が返す（player_chat と二重にしない）
+        if self._haiku_workshop_should_handle_player_input():
+            return False
         return bool(self.player_input.normalized_text)
+
+    def _haiku_workshop_is_open(self) -> bool:
+        """service が bind した pin が open か。未 bind なら False。"""
+        provider = getattr(self, "haiku_workshop_provider", None)
+        if provider is None:
+            return False
+        try:
+            workshop = provider()
+        except Exception:  # noqa: BLE001
+            return False
+        from dogido_server.haiku.workshop import is_open
+
+        return is_open(workshop)
+
+    def _haiku_focus_active(self) -> bool:
+        """川柳に集中している（発句 preface 待ち or workshop pin）。
+
+        この間は低優先の自発発話を抑止する。脅威（panic/alert）は別枝。
+        """
+        return bool(self.state.pending_haiku_after_preface) or self._haiku_workshop_is_open()
+
+    def _haiku_workshop_should_handle_player_input(self) -> bool:
+        """pin が open で、今の発話が workshop 向けなら True。"""
+        if not self._haiku_workshop_is_open():
+            return False
+        from dogido_server.haiku.workshop import is_open, should_handle_as_workshop
+
+        provider = getattr(self, "haiku_workshop_provider", None)
+        verse: str | None = None
+        if provider is not None:
+            try:
+                ws = provider()
+                if is_open(ws) and ws is not None:
+                    verse = ws.editing_line()
+            except Exception:  # noqa: BLE001
+                verse = None
+        return should_handle_as_workshop(
+            self.player_input.raw_text,
+            verse=verse,
+            player_input=self.player_input,
+        )
 
     def _has_recent_ender_eye_launch(self, event: GameEvent) -> bool:
         recent_ms = event.world.ender_eye_launch_recent_ms
@@ -662,7 +776,16 @@ class CommonMixin:
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
         if not event.passive_mobs:
             return False
-        if self._player_input_priority_active(now, purpose="ambient"):
+        # 川柳集中中（workshop / 発句 preface）は ambient を出さない
+        if self._haiku_focus_active():
+            return False
+        # 相乗り待ちの話しかけがある間は ambient を出さない（プレイヤー入力優先）
+        if getattr(self, "player_input_queued", False):
+            return False
+        if self._has_pending_player_chat(event):
+            return False
+        # 話しかけ後の mute は川柳・環境と同じ長さ（短い ambient 専用 mute は使わない）
+        if self._player_input_priority_active(now):
             return False
         if event.visual_threats or event.auditory_threats:
             return False
@@ -875,12 +998,20 @@ class CommonMixin:
             return False
         return self.state.night_warning_pending or self._should_schedule_night_warning(event)
 
-    def _render_night_warning_line(self, event: GameEvent) -> str | None:
-        if self.player_input.should_block_ambient:
+    def _render_night_warning_line(
+        self,
+        event: GameEvent,
+        *,
+        allow_during_player_input: bool = False,
+    ) -> str | None:
+        # 地表夕方は割り込み可。それ以外の ambient はプレイヤー発話中は抑止。
+        if self.player_input.should_block_ambient and not allow_during_player_input:
             return None
         if self._is_surface_evening_warning_context(event):
             return EVENING_SURFACE_WARNING_CALL
         if not self._is_cave_or_submerged_night_warning_context(event):
+            return None
+        if self.player_input.should_block_ambient:
             return None
         time_phase = self._effective_time_phase(event)
         if time_phase == "evening":

@@ -43,8 +43,10 @@ class PlayerChatEPrimePromptTests(unittest.TestCase):
         )
         rules = [line for line in content.splitlines() if line.startswith("- ")]
         self.assertLessEqual(len(rules), 5)
-        self.assertIn("【答え方】", content)
+        self.assertIn("スタンス: hypothesis", content)
         self.assertIn("hypothesis", content)
+        self.assertIn("見えてへん", content)
+        self.assertIn("かもしれん", content)
         # 旧 §2.5b 長文・空 hearing 常時行・mode 二重
         self.assertNotIn("平和時:", content)
         self.assertNotIn("バイオーム名だけ見て", content)
@@ -72,9 +74,10 @@ class PlayerChatEPrimePromptTests(unittest.TestCase):
                 "reply_policy": reply_policy_line("saw"),
             }
         )
-        self.assertIn("静止指示は禁止", content)
-        self.assertIn("周囲の敵の性質メモ", content)
-        self.assertIn("言ってよい短いヒント例", content)
+        self.assertIn("戦況寄り", content)
+        self.assertIn("短い安全ヒント", content)
+        self.assertIn("敵の性質メモ", content)
+        self.assertIn("短い安全ヒント", content)
 
     def test_hearing_block_only_when_present(self) -> None:
         with_hearing = self._content(
@@ -90,7 +93,7 @@ class PlayerChatEPrimePromptTests(unittest.TestCase):
             }
         )
         self.assertIn("ゾンビの音 前 far", with_hearing)
-        self.assertIn("音から使ってよい具体モブ名: ゾンビ", with_hearing)
+        self.assertIn("音から触れてよい具体モブ名: ゾンビ", with_hearing)
 
 
 if __name__ == "__main__":

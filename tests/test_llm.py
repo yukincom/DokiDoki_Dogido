@@ -8,6 +8,7 @@ import httpx
 
 from dogido_server.config import Settings
 from dogido_server.llm import DogidoLLM, LeafGenerationRequest, StructuredGenerationRequest
+from dogido_server.llm.router import DogidoLLMRouter
 
 
 class LLMTests(unittest.TestCase):
@@ -20,6 +21,12 @@ class LLMTests(unittest.TestCase):
         cleaned = self.llm._clean_output(text)
 
         self.assertEqual(cleaned, "あー……こわかった……")
+
+    def test_router_reports_disabled_configuration(self) -> None:
+        router = DogidoLLMRouter(Settings(audio_enabled=False, llm_enabled=False))
+
+        self.assertFalse(router.enabled())
+        self.assertFalse(router.route_enabled("haiku"))
 
     def test_clean_output_prefers_final_japanese_line_after_english_reasoning(self) -> None:
         text = (
@@ -305,7 +312,7 @@ class LLMTests(unittest.TestCase):
                     "choices": [
                         {
                             "message": {
-                                "content": '{"found": true, "summary": "朝の草原で手持ちの焚き火台", "motifs": ["朝", "草原"], "focus": ["草原"], "confidence": 0.8}'
+                                "content": '{"found": true, "clauses": [{"text": "朝の草原で手持ちの焚き火台", "basis_atom_ids": ["observation:test:0"], "claim_class": "interpretive"}], "motifs": ["朝", "草原"], "focus": ["草原"], "confidence": 0.8}'
                             }
                         }
                     ]
@@ -317,21 +324,7 @@ class LLMTests(unittest.TestCase):
             payload = llm.generate_structured_json(request)
 
         self.assertTrue(payload["found"])
-        self.assertEqual(payload["summary"], "朝の草原で手持ちの焚き火台")
-
-    def test_haiku_output_rejects_gibberish_gojuon_sequence(self) -> None:
-        self.assertFalse(self.llm._is_haiku_usable_output("しろいよるの\nいばらのくさむら\nあいうえお"))
-
-    def test_haiku_output_rejects_sibling_tool_name_when_constraints_forbid_it(self) -> None:
-        details = {
-            "haiku_constraints": {
-                "allowed_terms": ["しゃべる"],
-                "forbidden_terms": ["つるはし", "おの", "くわ"],
-            }
-        }
-
-        self.assertFalse(self.llm._is_haiku_usable_output("ゆきのやま\nゆうぐれにひかる\nつるはし", details))
-        self.assertTrue(self.llm._is_haiku_usable_output("ひろびろと\nはれるだいちに\nだいやかな", details))
+        self.assertEqual(payload["clauses"][0]["text"], "朝の草原で手持ちの焚き火台")
 
     def test_route_settings_auto_resolve_remote_backends(self) -> None:
         settings = Settings(
@@ -375,48 +368,6 @@ class LLMTests(unittest.TestCase):
         self.assertTrue(llm._is_style_acceptable("dark_push_after_breath", "メルちゃん、心臓に悪いわ……ほんま勘弁してや……。"))
         self.assertTrue(llm._is_style_acceptable("newly_burning_visual", "うわっ、燃えたん助かるわ！そのまま頼むで！"))
         self.assertTrue(llm._is_style_acceptable("daylight_water_skeleton", "うわっ、スケルトン水やん！頼むから岸へ寄って燃えてくれや！"))
-
-    def test_haiku_retries_with_repair_prompt_when_first_output_is_close_but_unusable(self) -> None:
-        class RepairLLM(DogidoLLM):
-            def __init__(self) -> None:
-                super().__init__(Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop"))
-                self.kinds: list[str] = []
-
-            def enabled(self) -> bool:
-                return True
-
-            def _generate_backend_text(self, request):  # type: ignore[override]
-                self.kinds.append(request.kind)
-                if request.kind == "haiku":
-                    return "はれわたる 草原やよるの えがみ"
-                if request.kind == "haiku_repair":
-                    if request.details["attempted_haiku"] != "はれわたる 草原やよるの えがみ":
-                        raise AssertionError(request.details["attempted_haiku"])
-                    return "はれわたる\nくさはらのよる\nえをもてり"
-                raise AssertionError(request.kind)
-
-        llm = RepairLLM()
-        text = llm.generate_leaf_text(
-            LeafGenerationRequest(
-                kind="haiku",
-                fallback_text="まとまらんかった。。。",
-                details={
-                    "scene": {
-                        "summary": "晴れ渡る温帯草原の夜、手には絵画",
-                        "motifs": ["草原", "夜", "絵画"],
-                        "focus": ["静かな夜の草原", "手持ちの絵画"],
-                    },
-                    "haiku_constraints": {
-                        "allowed_terms": [],
-                        "forbidden_terms": [],
-                    },
-                },
-                route="haiku",
-            )
-        )
-
-        self.assertEqual(text, "はれわたる\nくさはらのよる\nえをもてり")
-        self.assertEqual(llm.kinds, ["haiku", "haiku_repair"])
 
     def test_preload_loads_mlx_model_once(self) -> None:
         llm = DogidoLLM(

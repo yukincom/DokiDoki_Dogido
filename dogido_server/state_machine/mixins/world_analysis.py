@@ -5,6 +5,10 @@ from datetime import datetime
 
 from dogido_server.models import GameEvent
 from dogido_server.state_machine.constants import *  # noqa: F403
+from dogido_server.state_machine.precipitation import (
+    PrecipitationContext,
+    resolve_precipitation_context,
+)
 from dogido_server.state_machine.types import DerivedSignals
 
 MATERIAL_TOKEN_LABELS = {
@@ -40,6 +44,25 @@ MATERIAL_TOKEN_LABELS = {
 
 
 class WorldAnalysisMixin:
+    def _precipitation_context(self, event: GameEvent) -> PrecipitationContext:
+        """川柳と雑談が共有する、コード確定済みの降水・積雪境界。"""
+
+        biome_entry = self._biome_entry(event.world.biome) or {}
+        return resolve_precipitation_context(
+            current_y=event.player.position.y,
+            biome_temperature=self._biome_temperature(event.world.biome),
+            snow_start_y=self._biome_snow_start_y(event.world.biome),
+            biome_group_id=str(biome_entry.get("group_id") or ""),
+            biome_downfall=self._biome_downfall(event.world.biome),
+            weather=self._weather_value(event.world.weather) or "unknown",
+            dimension=event.player.dimension,
+            nearby_block_names=(
+                resource.name
+                for resource in event.nearby_resources
+                if str(resource.type or "").lower() == "block"
+            ),
+        )
+
     def _has_double_height_open_side_event(self, event: GameEvent) -> bool:
         return (event.world.double_height_open_side_count or 0) > 0
 
@@ -109,10 +132,20 @@ class WorldAnalysisMixin:
     def _respawn_point_set(self, event: GameEvent) -> bool:
         return bool(event.world.respawn_point_set)
 
+    def _is_home_respawn_bed_event(self, event: GameEvent) -> bool:
+        """設定済みリスポーン地点のベッド周辺を拠点として扱う。
+
+        nearby_bed だけでは旅先のベッドや仮設シェルターまで拠点になるため、
+        adapter が観測したリスポーン地点との近さも必須にする。
+        """
+        return self._has_nearby_sleepable_bed(event) and self._is_near_respawn_bed(event)
+
     def _is_emergency_shelter_event(self, event: GameEvent) -> bool:
         if event.world.is_submerged:
             return False
         if self._is_safe_zone_with_door_event(event):
+            return False
+        if self._is_home_respawn_bed_event(event):
             return False
         if self._has_double_height_open_side_event(event):
             return False

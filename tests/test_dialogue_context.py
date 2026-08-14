@@ -219,7 +219,7 @@ class PlayerChatHearingBufferTests(unittest.TestCase):
         settings = Settings(
             llm_enabled=False,
             decision_policy="py_trees",
-            player_chat_hearing_retention_ms=12000,
+            player_chat_hearing_retention_ms=20000,
         )
         machine = DogidoStateMachine(settings)
         t0 = datetime(2026, 7, 15, 9, 17, 40, tzinfo=timezone.utc)
@@ -308,7 +308,7 @@ class PlayerChatHearingBufferTests(unittest.TestCase):
         )
         user = messages[1]["content"]
         self.assertIn("ゾンビ", user)
-        self.assertIn("音から使ってよい具体モブ名", user)
+        self.assertIn("音から触れてよい具体モブ名", user)
 
 
 class PlayerChatVisualBufferTests(unittest.TestCase):
@@ -561,7 +561,7 @@ class PlayerChatPlaceContextTests(unittest.TestCase):
             )
         )
         user = messages[1]["content"]
-        self.assertIn("場所メモ:", user)
+        self.assertIn("場所:", user)
         self.assertIn("地下", user)
         # S1: 場所は place_line を正とし、長文ルールは載せない
         self.assertNotIn("バイオーム名だけ見て地上", user)
