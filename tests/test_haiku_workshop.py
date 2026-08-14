@@ -387,7 +387,19 @@ class WorkshopIntentTests(unittest.TestCase):
             extract_player_line_replacement("夕暮れのより夕暮れやの方がいいんじゃないかな"),
             PlayerLineReplacement(text="夕暮れや"),
         )
+        self.assertEqual(
+            extract_player_line_replacement(
+                "穏やかなじゃ4文字だからさ 穏やかなでいいんじゃない"
+            ),
+            PlayerLineReplacement(text="穏やかな"),
+        )
+        self.assertEqual(
+            extract_player_line_replacement("上五は穏やかなでいいんじゃない"),
+            PlayerLineReplacement(text="穏やかな", explicit_line_index=0),
+        )
         self.assertIsNone(extract_player_line_replacement("夕暮れやの方がいいとは思わない"))
+        self.assertIsNone(extract_player_line_replacement("穏やかなでいいとは思わない"))
+        self.assertIsNone(extract_player_line_replacement("穏やかなでいいと言われた"))
         self.assertIsNone(extract_player_line_replacement("夕暮れやに変えてない"))
         self.assertIsNone(extract_player_line_replacement("夕暮れやに変えた方がいいと言われた"))
         self.assertIsNone(extract_player_line_replacement("上五と下五を夕暮れやに変えた方がいい"))
@@ -794,7 +806,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
             session = service.sessions[response.session_id]
             emission = _emission(
-                text="ゆうぐれの\nてのなかのくさ\nあめふりや"
+                text="おだやかなる\nてのなかのくさ\nあめふりや"
             )
             session.last_haiku_emission = emission
             service._open_haiku_workshop(
@@ -803,12 +815,31 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 entry_id="h_player_edit",
                 now=emission.created_at,
             )
-            service._analyze_workshop_feedback = (  # type: ignore[method-assign]
-                lambda workshop, player_text: (
-                    WorkshopAnalysis(intent="other_haiku", confidence=1.0),
+
+            def analyze(workshop: RecentHaikuWorkshop, player_text: str):
+                findings = (
+                    (
+                        WorkshopFinding(
+                            line_index=0,
+                            fragment="おだやかなる",
+                            problem="meter",
+                            note="語尾の一音が長い",
+                            confidence=0.95,
+                        ),
+                    )
+                    if "長い" in player_text
+                    else ()
+                )
+                return (
+                    WorkshopAnalysis(
+                        intent="critique_forced",
+                        confidence=1.0,
+                        findings=findings,
+                    ),
                     "test",
                 )
-            )
+
+            service._analyze_workshop_feedback = analyze  # type: ignore[method-assign]
 
             def event(sequence: int, text: str) -> GameEvent:
                 return GameEvent(
@@ -837,14 +868,28 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 session.machine.player_input = route_player_input(text)
                 return service._haiku_workshop_actions(session, event(sequence, text))
 
-            first = send(2, "上五を夕暮れやに変えた方がいい")
-            self.assertIn("ゆうぐれや", first[0].text or "")
+            with self.assertLogs("uvicorn.error", level="WARNING") as locate_logs:
+                send(1, "おだやかなるの『る』がちょっと長い")
+            assert session.haiku_workshop is not None
+            self.assertEqual(session.haiku_workshop.marked_line_index, 0)
+            self.assertIn("haiku_workshop_locate", "\n".join(locate_logs.output))
+            with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+                first = send(
+                    2,
+                    "穏やかなじゃ4文字だからさ 穏やかなでいいんじゃない",
+                )
+            self.assertIn("おだやかな", first[0].text or "")
+            joined_logs = "\n".join(captured.output)
+            self.assertIn("haiku_workshop_player_line_parse", joined_logs)
+            self.assertIn("result=accepted", joined_logs)
+            self.assertIn("haiku_workshop_player_line_edit", joined_logs)
+            self.assertIn("result=staged", joined_logs)
             second = send(3, "下五を雨の夜に変えた方がいい")
             self.assertIn("あめのよる", second[0].text or "")
             assert session.haiku_workshop is not None
             self.assertEqual(
                 session.haiku_workshop.pending_revision,
-                "ゆうぐれや\nてのなかのくさ\nあめのよる",
+                "おだやかな\nてのなかのくさ\nあめのよる",
             )
             self.assertEqual(service.memory.list_haiku_revisions(), [])
             self.assertEqual(
@@ -859,7 +904,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertIn("一つ", ambiguous[0].text or "")
             self.assertEqual(
                 session.haiku_workshop.pending_revision,
-                "ゆうぐれや\nてのなかのくさ\nあめのよる",
+                "おだやかな\nてのなかのくさ\nあめのよる",
             )
 
             shown = send(5, "全体はどうなった？")
@@ -871,7 +916,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertTrue(is_open(session.haiku_workshop))
             self.assertEqual(
                 session.haiku_workshop.display_line(),
-                "ゆうぐれや\nてのなかのくさ\nあめのよる",
+                "おだやかな\nてのなかのくさ\nあめのよる",
             )
             first_revision = service.memory.list_haiku_revisions()[0]
             self.assertEqual(first_revision["source"], "player_line_confirmed")
@@ -889,7 +934,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertEqual(revisions[1]["parent_revision_id"], revisions[0]["id"])
             self.assertEqual(
                 session.haiku_workshop.display_line(),
-                "ゆうぐれや\nくさをにぎって\nあめのよる",
+                "おだやかな\nくさをにぎって\nあめのよる",
             )
             with self.assertRaisesRegex(ValueError, "parent revision"):
                 service.memory.save_haiku_feedback(
