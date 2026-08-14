@@ -18,6 +18,7 @@ from dogido_server.llm.haiku import (
     haiku_line_failure_reasons,
 )
 from dogido_server.llm.sanitize import summarize_for_log
+from dogido_server.tts_reading import hiraganize_japanese_text
 
 from .edit_contract import LINE_EDIT_CONTRACT_VERSION
 from .lexical_correction import correct_grounded_catalog_kana
@@ -30,7 +31,7 @@ REGENERATION_TEMPERATURE = 0.30
 GROUNDING_TEMPERATURE = 0.0
 DEFAULT_MAX_REGENERATION_ROUNDS = 6
 MAX_REGENERATION_ROUNDS_LIMIT = 8
-GENERATION_PROMPT_VARIANT = "source_atoms_slots_v1"
+GENERATION_PROMPT_VARIANT = "source_atoms_slots_v2_kana_normalize"
 
 GENERATION_SLOT_GROUPS: dict[str, tuple[tuple[int, ...], ...]] = {
     # 一句全体を一単位として扱う。どこか一行が落ちれば三行とも作り直す。
@@ -176,6 +177,7 @@ def generate_grounded_haiku(
             "invalid_draft",
             generation_strategy=generation_strategy,
         )
+    _normalize_candidate_lines(lines, stage="draft")
 
     accepted: dict[int, _LineAssessment] = {}
     failed_indices = {0, 1, 2}
@@ -291,6 +293,11 @@ def generate_grounded_haiku(
             if text is None:
                 forced_failures[line_index] = ("missing_regenerated_line",)
                 continue
+            text = _normalize_candidate_kana(
+                text,
+                line_index=line_index,
+                stage=f"regeneration_{round_index + 1}",
+            )
             signature = _candidate_signature(text)
             if not signature or signature in candidate_signatures:
                 forced_failures[line_index] = ("duplicate_candidate",)
@@ -575,6 +582,12 @@ def _validate_workshop_lines(
             continue
         expected_text = _clean_single_line(row.get("expected_text"))
         replacement_text = _clean_single_line(row.get("replacement_text"))
+        if replacement_text:
+            replacement_text = _normalize_candidate_kana(
+                replacement_text,
+                line_index=index,
+                stage="workshop_revision",
+            )
         raw_ids = row.get("atom_ids")
         if replacement_text:
             replacements.append(
@@ -937,6 +950,33 @@ def _candidate_signature(text: str) -> str:
         if char.isalnum() or "ぁ" <= char <= "ゖ" or "一" <= char <= "鿿":
             chars.append(char)
     return "".join(chars)
+
+
+def _normalize_candidate_lines(lines: list[str], *, stage: str) -> None:
+    """生成済み三行をその場でかな化し、以後の全検査を正規化後へ統一する。"""
+
+    for line_index, text in enumerate(lines):
+        lines[line_index] = _normalize_candidate_kana(
+            text,
+            line_index=line_index,
+            stage=stage,
+        )
+
+
+def _normalize_candidate_kana(text: str, *, line_index: int, stage: str) -> str:
+    """UniDicで展開できた場合だけ採用し、意味内容には触れない。"""
+
+    normalized = _clean_single_line(hiraganize_japanese_text(text))
+    if not normalized or normalized == text:
+        return text
+    LOGGER.warning(
+        "haiku_kana_normalized stage=%s line_index=%s from=%s to=%s",
+        stage,
+        line_index,
+        summarize_for_log(text),
+        summarize_for_log(normalized),
+    )
+    return normalized
 
 
 def _duplicate_line_failures(lines: list[str]) -> dict[int, tuple[str, ...]]:

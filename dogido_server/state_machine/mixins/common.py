@@ -664,7 +664,7 @@ class CommonMixin:
             try:
                 ws = provider()
                 if is_open(ws) and ws is not None:
-                    verse = ws.display_line()
+                    verse = ws.editing_line()
             except Exception:  # noqa: BLE001
                 verse = None
         return should_handle_as_workshop(
@@ -1008,4 +1008,3 @@ class CommonMixin:
         else:
             return None
         return response_text("darkness", "night_warning", "cave_or_submerged", phase_label=phase_label)
-

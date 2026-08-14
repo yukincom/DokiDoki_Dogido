@@ -20,7 +20,7 @@
 ### 2. 更新されたRAG導入方針（Simple Vector優先）
 **目標**: JSONイベント + 状態をRAGで補完 → 川柳/雑談の質向上。状態機械の優先制御は崩さない。
 
-- **タイプ**: **Simple Vector RAG**（Chroma + LlamaIndex or LangChain最小）。GraphRAGは不要。
+- **タイプ**: **Simple Vector RAG**。ライブラリ選定は未決とし、導入する場合も `dogido_server/rag/` 内に限定して、プロジェクト全体のワークフロー基盤にはしない。GraphRAGは不要。
 - **LLM役割**:
   - **構築時**: ほぼ不要（embeddingモデルだけ）。
   - **運用時**: Retrieval後 → 既存の27B/35B-A3Bで生成（chat/haiku route活用）。

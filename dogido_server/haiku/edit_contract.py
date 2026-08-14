@@ -11,6 +11,7 @@ from typing import Any
 
 
 LINE_EDIT_CONTRACT_VERSION = "line_compare_and_swap_v1"
+PLAYER_LINE_EDIT_CONTRACT_VERSION = "player_line_compare_and_swap_v1"
 
 
 def line_edit_plan_applies(
@@ -22,7 +23,10 @@ def line_edit_plan_applies(
 ) -> bool:
     """差分を元句へ適用すると修正句になり、対象外行が不変なら True。"""
 
-    if edit_contract != LINE_EDIT_CONTRACT_VERSION or not edits:
+    if edit_contract not in {
+        LINE_EDIT_CONTRACT_VERSION,
+        PLAYER_LINE_EDIT_CONTRACT_VERSION,
+    } or not edits:
         return False
     original_lines = _three_lines(original_text)
     revised_lines = _three_lines(revised_text)
@@ -36,6 +40,7 @@ def line_edit_plan_applies(
         expected = edit.get("expected_text")
         replacement = edit.get("replacement_text")
         atom_ids = edit.get("atom_ids")
+        provenance = edit.get("provenance")
         if (
             not isinstance(index, int)
             or isinstance(index, bool)
@@ -46,14 +51,24 @@ def line_edit_plan_applies(
             or not isinstance(expected, str)
             or not isinstance(replacement, str)
             or expected == replacement
-            or not isinstance(atom_ids, list)
-            or not atom_ids
-            or any(
-                not isinstance(atom_id, str) or not atom_id.strip()
-                for atom_id in atom_ids
-            )
         ):
             return False
+        if edit_contract == LINE_EDIT_CONTRACT_VERSION:
+            # AI生成行は、従来どおり検証済みsource atomを必須にする。
+            if (
+                provenance not in (None, "generated_grounded")
+                or not isinstance(atom_ids, list)
+                or not atom_ids
+                or any(
+                    not isinstance(atom_id, str) or not atom_id.strip()
+                    for atom_id in atom_ids
+                )
+            ):
+                return False
+        else:
+            # プレイヤーが明示した語は、観測atomへ偽装しない。
+            if provenance != "player_explicit" or atom_ids not in (None, []):
+                return False
         changed.add(index)
     return all(
         index in changed or revised_lines[index] == original_lines[index]

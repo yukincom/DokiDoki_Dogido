@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import unittest
+from unittest.mock import patch
 
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry
 from dogido_server.haiku.generation import generate_grounded_haiku, generate_workshop_revision
@@ -749,6 +750,77 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual(result.line_sources[1]["atom_ids"], ["observation:test:1"])
         self.assertEqual(result.generation_strategy, "three_slot")
         self.assertEqual(result.regeneration_rounds, 0)
+
+    def test_draft_kanji_is_hiraganized_before_grounding_and_meter_checks(self) -> None:
+        llm = ScriptedLLM(
+            [
+                {"lines": ["やみあめや", "のんびり草", "くさちのほ"]},
+                grounding(
+                    (0, "observation:test:0", True, True),
+                    (1, "observation:test:1", True, True),
+                    (2, "observation:test:2", True, True),
+                ),
+            ]
+        )
+
+        with patch(
+            "dogido_server.haiku.generation.hiraganize_japanese_text",
+            side_effect=lambda text: "のんびりくさ" if text == "のんびり草" else text,
+        ):
+            result = generate_grounded_haiku(
+                llm,
+                details={},
+                source_atoms=source_atoms(),
+                fallback_text="まとまらんかった。。。",
+                max_tokens=192,
+            )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.text, "やみあめや\nのんびりくさ\nくさちのほ")
+        self.assertEqual(
+            llm.requests[1].details["grounding_lines"][1]["text"],
+            "のんびりくさ",
+        )
+        self.assertEqual(result.prompt_variant, "source_atoms_slots_v2_kana_normalize")
+
+    def test_workshop_revision_kanji_is_hiraganized_before_validation(self) -> None:
+        llm = ScriptedLLM(
+            [
+                {"lines": [{
+                    "line_index": 1,
+                    "expected_text": "ひつじがあるく",
+                    "replacement_text": "のんびり草",
+                    "atom_ids": ["observation:test:1"],
+                }]},
+                grounding((1, "observation:test:1", True, True)),
+            ]
+        )
+
+        with patch(
+            "dogido_server.haiku.generation.hiraganize_japanese_text",
+            side_effect=lambda text: "のんびりくさ" if text == "のんびり草" else text,
+        ):
+            result = generate_workshop_revision(
+                llm,
+                original_text="はるのかぜ\nひつじがあるく\nよるのつき",
+                target_indices=(1,),
+                findings=(),
+                source_atoms=source_atoms(),
+                original_line_sources={
+                    0: ("observation:test:0",),
+                    2: ("observation:test:2",),
+                },
+                details={},
+                max_tokens=192,
+            )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.text, "はるのかぜ\nのんびりくさ\nよるのつき")
+        self.assertEqual(result.edits[0].replacement_text, "のんびりくさ")
+        self.assertEqual(
+            llm.requests[1].details["grounding_lines"],
+            [{"line_index": 1, "text": "のんびりくさ"}],
+        )
 
     def test_four_generation_strategies_retry_their_own_slot_and_share_validation(self) -> None:
         cases = {

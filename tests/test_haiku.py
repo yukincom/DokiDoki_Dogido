@@ -543,7 +543,10 @@ class HaikuStateMachineTest(unittest.TestCase):
         assert machine.emitted_haiku is not None
         self.assertEqual(len(machine.emitted_haiku.materials["line_sources"]), 3)
         self.assertEqual(machine.emitted_haiku.materials["generation_strategy"], "three_slot")
-        self.assertEqual(machine.emitted_haiku.materials["prompt_variant"], "source_atoms_slots_v1")
+        self.assertEqual(
+            machine.emitted_haiku.materials["prompt_variant"],
+            "source_atoms_slots_v2_kana_normalize",
+        )
         self.assertEqual(machine.emitted_haiku.materials["regeneration_rounds"], 0)
         self.assertTrue(machine.emitted_haiku.materials["catalog_sources"])
 
