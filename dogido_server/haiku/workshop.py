@@ -237,6 +237,10 @@ class RecentHaikuWorkshop:
     pending_revision_source: str | None = None
     current_revision_id: str | None = None
     marked_line_index: int | None = None
+    # 意味説明の直後だけ、短い納得を一般のsoft_defaultへ落とさない。
+    # 終了確認は別状態にし、納得だけでpinを勝手に閉じない。
+    awaiting_meaning_ack: bool = False
+    awaiting_close_confirmation: bool = False
 
     def display_line(self) -> str:
         """明示採用済みの現在句。pending案とは混ぜない。"""
@@ -349,6 +353,8 @@ def advance_workshop_revision(
     workshop.current_revision_id = revision_id
     workshop.marked_line_index = None
     workshop.last_findings.clear()
+    workshop.awaiting_meaning_ack = False
+    workshop.awaiting_close_confirmation = False
     clear_pending_revision(workshop)
     if source == "generated_confirmed" and line_sources:
         workshop.materials["line_sources"] = line_sources
@@ -780,6 +786,26 @@ _ACK_MARKERS = (
     "そうやな",
     "了解や",
 )
+_MEANING_ACK_PATTERN = re.compile(
+    r"^(?:(?:ああ|あー|うん|はい)[、, ]*)?(?:"
+    r"そうなん(?:だ|や)(?:ね|な)?|"
+    r"そういうこと(?:か|ね|なんだ|なんや)|"
+    r"なるほど(?:ね|な)?|そっか|そうか|"
+    r"わかった(?:よ|わ|で)?|理解した|りかいした|腑に落ちた"
+    r")[。！!]*$"
+)
+_CLOSE_CONFIRM_ACCEPT_PATTERN = re.compile(
+    r"^(?:(?:うん|はい|ええ|そう)(?:[、, ]*)?){0,2}(?:"
+    r"うん|はい|ええよ|いいよ|そうしよ(?:う)?|それで(?:いい|ええ)?|"
+    r"ここまで(?:で|にしよう)?|終わ(?:り|ろう|っていい)|終了(?:で|にしよう)?"
+    r")[。！!]*$"
+)
+_CLOSE_CONFIRM_CONTINUE_PATTERN = re.compile(
+    r"^(?:(?:いや|ううん|まだ)[、, ]*)?(?:"
+    r"まだ|まだ続け(?:る|たい|よう)|続け(?:る|たい|よう)|"
+    r"もう少し|まだ気になる|まだ直したい|終わらない|ここまでじゃない"
+    r")[。！!]*$"
+)
 _REPAIR_REQUEST_PATTERN = re.compile(
     r"^(?:(?:うん|じゃあ|なら)[、, ]*)?"
     r"(?:(?:これ|そこ|(?:この|その)?句|(?:一|二|三|1|2|3)行目|上の句|中の句|下の句)"
@@ -789,6 +815,28 @@ _REPAIR_REQUEST_PATTERN = re.compile(
     r"修正して|しゅうせいして)"
     r"(?:ほしい|ください|くれる|もらえる|みよう)?[。！!？?]*$"
 )
+
+
+def is_meaning_acknowledgement(text: str | None) -> bool:
+    """意味説明の直後だけ使う、代表的な納得表現の安全なfallback。"""
+
+    source = str(text or "").strip()
+    return bool(source and _MEANING_ACK_PATTERN.fullmatch(source))
+
+
+def close_confirmation_decision(text: str | None) -> str | None:
+    """終了確認への短い返答を、accept / continueへ閉じて判定する。"""
+
+    source = str(text or "").strip()
+    if not source or source.endswith(("?", "？")):
+        return None
+    if _CLOSE_CONFIRM_CONTINUE_PATTERN.fullmatch(source):
+        return "continue"
+    if _CLOSE_CONFIRM_ACCEPT_PATTERN.fullmatch(source):
+        return "accept"
+    return None
+
+
 # 読みの好み（メタ語のみ。素材名・地名は禁止）
 _READING_META_MARKERS = (
     "読み",
@@ -1033,6 +1081,11 @@ def build_workshop_intent_llm_details(
     同じ契約を chat route、Apple Foundation Models、Foundry Local で使う。
     """
     lines = workshop_verse_lines(workshop.editing_line())
+    conversation_stage = "discussion"
+    if workshop.awaiting_close_confirmation:
+        conversation_stage = "close_confirmation"
+    elif workshop.awaiting_meaning_ack:
+        conversation_stage = "meaning_explained"
     return {
         "verse": "\n".join(lines),
         "verse_lines": [
@@ -1041,6 +1094,7 @@ def build_workshop_intent_llm_details(
         ],
         "materials_speech": materials_speech_line(workshop),
         "player_text": (player_text or "").strip(),
+        "conversation_stage": conversation_stage,
         "allowed_intents": sorted(WORKSHOP_LLM_INTENTS),
         "allowed_problem_types": sorted(WORKSHOP_PROBLEM_TYPES),
     }

@@ -108,6 +108,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・完成三行のformal/conversational revise・明示 close・次の句。pending案の明示採用は現在句へ昇格してopen維持
 - 意図: close / clear_lessons / 明示praise / 完成三行revision / 明示reading はコードが正。それ以外の自然文はOS AI優先の閉じたschemaでintent・対象行・断片・problemを抽出し、コードが永続化と実行条件を決める
+- 意味説明後の納得: `ask_meaning` 返答後だけ会話段階を保持し、「そうなんだ」等の意味的ackをOS AIで抽出する。ackターンはfinding・critique・lessonへ流さずコード固定の終了確認へ進み、次の肯定でclose、続行意思ならopenへ戻す
 - `request_repair`: OS AIが高信頼に修正要求を抽出し、コードが検証済みfindingを確定できたときだけ、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
 - プレイヤー局所編集: 自然な提案はOS AIが発話中の置換語・evidenceと句中target fragmentを先に抽出し、従来の閉じた文字列解析は利用不可・低信頼時のfallbackに限る。finding／明示行／一意なfragmentに加え、「旧句より新句」の発話中にある現在句の一行でも対象を固定する。句フレーズ指定はSTTが漢字化しても読みへ戻し、現在の三行へ一意に一致するときだけ採用する。コードでひらがな化・正確な5/7/5音・hard制約・重複を検査して未保存三行へ連続CASする。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない
 - pending採否: 専用OS AI schemaで accept / reject / modify / show / discuss 等を意味抽出。confidence・evidence・現在pending・CASをコード検証し、合格時だけ保存／破棄する。利用不可時は代表的な完全一致規則へfallback。採用後は句を次の基準へ昇格しpinを維持

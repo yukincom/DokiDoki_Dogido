@@ -22,11 +22,13 @@ from dogido_server.haiku.workshop import (
     build_player_line_revision,
     build_workshop_intent_llm_details,
     classify_workshop_intent,
+    close_confirmation_decision,
     close_workshop,
     extract_player_line_replacement,
     finalize_pending_revision_payload,
     finalize_workshop_analysis_payload,
     is_open,
+    is_meaning_acknowledgement,
     is_workshop_hard_off_topic,
     maybe_close_for_time,
     open_from_emission,
@@ -654,6 +656,21 @@ class WorkshopIntentTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertNotEqual(classify_workshop_intent(text), "close")
 
+    def test_meaning_ack_and_close_confirmation_fallbacks_are_closed(self) -> None:
+        for text in ("そうなんだ", "そうなんやね", "なるほど", "わかったよ"):
+            with self.subTest(text=text):
+                self.assertTrue(is_meaning_acknowledgement(text))
+        for text in ("そうなんだ？", "まだわからない", "そうなんだと言われた"):
+            with self.subTest(text=text):
+                self.assertFalse(is_meaning_acknowledgement(text))
+
+        self.assertEqual(close_confirmation_decision("うん"), "accept")
+        self.assertEqual(close_confirmation_decision("ここまでにしよう"), "accept")
+        self.assertEqual(close_confirmation_decision("まだ続けたい"), "continue")
+        self.assertEqual(close_confirmation_decision("もう少し"), "continue")
+        self.assertIsNone(close_confirmation_decision("うん？"))
+        self.assertIsNone(close_confirmation_decision("別の行も気になる"))
+
     def test_repair_requires_an_explicit_request(self) -> None:
         self.assertEqual(classify_workshop_intent("そこ直して"), "request_repair")
         self.assertEqual(classify_workshop_intent("三行目を直せる？"), "request_repair")
@@ -675,6 +692,15 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertEqual(details["player_text"], "言葉を詰めすぎた感じがする")
         self.assertNotIn("secret_debug_key", details)
         self.assertNotIn("分類器へ渡さない", str(details))
+        self.assertEqual(details["conversation_stage"], "discussion")
+
+        ws.awaiting_meaning_ack = True
+        details = build_workshop_intent_llm_details(ws, "そうなんだ")
+        self.assertEqual(details["conversation_stage"], "meaning_explained")
+
+        ws.awaiting_close_confirmation = True
+        details = build_workshop_intent_llm_details(ws, "うん")
+        self.assertEqual(details["conversation_stage"], "close_confirmation")
 
     def test_llm_intent_prompt_is_registered_as_json_classifier(self) -> None:
         from dogido_server.llm import StructuredGenerationRequest
@@ -2211,6 +2237,156 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertEqual(speeches, ["平原のことやで。"])
             self.assertEqual(getattr(llm, "last").kind, "haiku_workshop_material_pick")
             self.assertTrue(getattr(llm, "assert_plains"))
+
+    def test_meaning_ack_moves_to_close_confirmation_without_new_critique(self) -> None:
+        """説明への納得を別箇所の講評にせず、確認してからpinを閉じる。"""
+
+        from dogido_server.player_input.routing import route_player_input
+
+        class FollowupService(DogidoService):
+            def __init__(self, settings: Settings) -> None:
+                super().__init__(settings)
+                self.stages: list[tuple[str, str]] = []
+
+            def _analyze_workshop_feedback(  # type: ignore[override]
+                self,
+                workshop,
+                player_text: str,
+            ) -> tuple[WorkshopAnalysis, str]:
+                details = build_workshop_intent_llm_details(workshop, player_text)
+                self.stages.append((player_text, str(details["conversation_stage"])))
+                if player_text == "腑に落ちたよ":
+                    return WorkshopAnalysis(intent="ack", confidence=0.95), "apple_test"
+                # 「そうなんだ」はOS AIが誤分類してもclosed fallbackで拾えることを守る。
+                if "って何" in player_text:
+                    return WorkshopAnalysis(intent="ask_meaning", confidence=0.95), "apple_test"
+                if player_text == "そうなんだ":
+                    return (
+                        WorkshopAnalysis(
+                            intent="other_haiku",
+                            confidence=0.95,
+                            findings=(
+                                WorkshopFinding(
+                                    line_index=2,
+                                    fragment="ほねはくさち",
+                                    problem="unnatural_japanese",
+                                    note="別の行を誤って拾った",
+                                    confidence=0.95,
+                                ),
+                            ),
+                        ),
+                        "apple_test",
+                    )
+                return WorkshopAnalysis(), "soft_default"
+
+            def _ask_meaning_workshop_reply(  # type: ignore[override]
+                self,
+                workshop,
+                player_text: str,
+            ) -> tuple[str, str]:
+                return "それやろ、オオカミの耳やで。", "test_explanation"
+
+            def _collaborator_workshop_reply(self, *args, **kwargs):  # type: ignore[no-untyped-def, override]
+                raise AssertionError("納得と終了確認を共同編集者leafへ渡してはいけない")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            memory_dir = Path(tmp) / "mem"
+            service = FollowupService(
+                Settings(
+                    llm_enabled=False,
+                    audio_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=memory_dir,
+                )
+            )
+            response = service.create_session(
+                AdapterSessionCreateRequest(
+                    schema_version="2026-05-24",
+                    adapter_name="test",
+                    adapter_version="0",
+                    game="minecraft",
+                    player_name="p",
+                    capabilities=[],
+                )
+            )
+            session = service.sessions[response.session_id]
+            emission = _emission(text="はなのしろ\nみみふえてゆく\nほねはくさち")
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id="h_meaning_followup",
+                now=emission.created_at,
+            )
+
+            def event(sequence: int, text: str) -> GameEvent:
+                return GameEvent(
+                    schema_version="2026-05-24",
+                    adapter="test",
+                    observed_at=emission.created_at + timedelta(seconds=sequence),
+                    sequence=sequence,
+                    event=EventDescriptor(
+                        name=EventName.STATUS_SNAPSHOT,
+                        source_kind=SourceKind.SYSTEM,
+                        priority_hint=PriorityHint.BACKGROUND,
+                        certainty=Certainty.HIGH,
+                    ),
+                    player=PlayerState(
+                        name="p",
+                        position=Position(x=0, y=64, z=0),
+                        dimension="minecraft:overworld",
+                    ),
+                    world=WorldState(
+                        time_phase=TimePhase.DAY,
+                        weather=Weather.CLEAR,
+                        biome="plains",
+                        local_light=15,
+                        sky_visible=True,
+                    ),
+                    meta=MetaState(user_text=text),
+                )
+
+            def send(sequence: int, text: str) -> str:
+                session.machine.player_input = route_player_input(text)
+                actions = service._haiku_workshop_actions(session, event(sequence, text))
+                speeches = [action.text for action in actions if action.text]
+                self.assertEqual(len(speeches), 1)
+                return str(speeches[0])
+
+            critique_path = memory_dir / "long_term" / "haiku_critiques.jsonl"
+
+            self.assertIn("オオカミの耳", send(2, "みみふえての耳って何？"))
+            assert session.haiku_workshop is not None
+            self.assertTrue(session.haiku_workshop.awaiting_meaning_ack)
+            critique_count = len(critique_path.read_text(encoding="utf-8").splitlines())
+
+            self.assertIn("ここまででええ", send(3, "そうなんだ"))
+            assert session.haiku_workshop is not None
+            self.assertTrue(session.haiku_workshop.awaiting_close_confirmation)
+            self.assertEqual(session.haiku_workshop.last_findings, [])
+            self.assertEqual(
+                len(critique_path.read_text(encoding="utf-8").splitlines()),
+                critique_count,
+            )
+            self.assertEqual(service.stages[-1], ("そうなんだ", "meaning_explained"))
+
+            self.assertIn("まだ続けよか", send(4, "まだ続けたい"))
+            assert session.haiku_workshop is not None
+            self.assertFalse(session.haiku_workshop.awaiting_close_confirmation)
+
+            self.assertIn("オオカミの耳", send(5, "みみふえての耳って何？"))
+            session.machine.player_input = route_player_input("松明ある？")
+            self.assertEqual(
+                service._haiku_workshop_actions(session, event(6, "松明ある？")),
+                [],
+            )
+            assert session.haiku_workshop is not None
+            self.assertFalse(session.haiku_workshop.awaiting_meaning_ack)
+
+            self.assertIn("オオカミの耳", send(7, "みみふえての耳って何？"))
+            self.assertIn("ここまででええ", send(8, "腑に落ちたよ"))
+            self.assertEqual(service.stages[-1], ("腑に落ちたよ", "meaning_explained"))
+            self.assertIn("ここまでや", send(9, "うん"))
+            self.assertIsNone(session.haiku_workshop)
 
     def test_soft_critique_uses_collaborator_leaf_not_player_chat(self) -> None:
         """Stage2+4: 添削っぽい自然文は共同編集者leaf。chatに落ちずpinも維持。"""

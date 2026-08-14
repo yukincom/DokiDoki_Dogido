@@ -20,12 +20,14 @@ from dogido_server.haiku.workshop import (
     build_pending_revision_llm_details,
     build_workshop_intent_llm_details,
     clear_pending_revision,
+    close_confirmation_decision,
     close_workshop,
     extract_conversational_revise,
     finalize_ask_meaning_reply,
     finalize_pending_revision_payload,
     finalize_workshop_analysis_payload,
     is_open,
+    is_meaning_acknowledgement,
     lessons_from_critique_kind,
     loosen_all_lessons,
     materials_debug_line,
@@ -1048,9 +1050,13 @@ class DogidoService:
             if decision == "reject":
                 clear_pending_revision(workshop)
                 workshop.marked_line_index = None
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
                 record_workshop_activity(workshop, now=event.observed_at)
                 return [AudioAction(layer="speech", interrupt=False, text="おけ、元の句はそのままにしとくで。")]
             if pending_analysis.action == "show_pending":
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
                 record_workshop_activity(workshop, now=event.observed_at)
                 return [
                     AudioAction(
@@ -1061,6 +1067,8 @@ class DogidoService:
                 ]
 
         if wants_show_workshop_verse(text):
+            workshop.awaiting_meaning_ack = False
+            workshop.awaiting_close_confirmation = False
             record_workshop_activity(workshop, now=event.observed_at)
             return [
                 AudioAction(
@@ -1093,12 +1101,30 @@ class DogidoService:
 
         # formal 川柳操作は上で処理済み。ここでは自然文の講評のみ。
         # Stage2: open 中は soft 既定（hard off-topic だけ None → chat/drift）
-        kind = workshop_open_intent(
-            text,
-            verse=verse,
-            player_input=player_input,
+        meaning_ack_fallback = (
+            workshop.awaiting_meaning_ack
+            and is_meaning_acknowledgement(text)
+        )
+        close_confirmation_fallback = (
+            close_confirmation_decision(text)
+            if workshop.awaiting_close_confirmation
+            else None
+        )
+        # 「わかった」は通常なら明示closeにもなり得るが、意味説明の直後は
+        # まず「説明を理解した」と解釈し、終了確認を一段はさむ。
+        kind = (
+            "ack"
+            if meaning_ack_fallback
+            else workshop_open_intent(
+                text,
+                verse=verse,
+                player_input=player_input,
+            )
         )
         if kind is None:
+            # 明確な別件へ移ったら、古い「説明への返事待ち」を次の発話へ残さない。
+            workshop.awaiting_meaning_ack = False
+            workshop.awaiting_close_confirmation = False
             LOGGER.warning(
                 "haiku_workshop_miss session_id=%s player=%s verse=%s "
                 "speech_materials=%s debug_materials=%s drift_count=%s "
@@ -1142,14 +1168,24 @@ class DogidoService:
                 "propose_line_edit",
             }
             if (
-                kind in {"soft_default", "other_haiku", "ask_meaning", "ack"}
+                not meaning_ack_fallback
+                and kind in {"soft_default", "other_haiku", "ask_meaning", "ack"}
                 and analysis.intent in semantic_intents
                 and analysis.confidence >= 0.75
             ):
                 effective_kind = analysis.intent
             if effective_kind == "request_repair" and not analysis.repair_requested:
                 effective_kind = "other_haiku"
-            if analysis.line_proposal is not None:
+            followup_control_turn = (
+                workshop.awaiting_meaning_ack and effective_kind == "ack"
+            ) or (
+                workshop.awaiting_close_confirmation
+                and (
+                    effective_kind == "ack"
+                    or close_confirmation_fallback in {"accept", "continue"}
+                )
+            )
+            if analysis.line_proposal is not None and not followup_control_turn:
                 # 自然な置換提案は OS AI の意味抽出を優先する。上で得た
                 # closed regex の候補は、OS AI が提案を確定できない場合だけ
                 # fallback として残る。ただし現在句そのものが発話に含まれて
@@ -1190,25 +1226,27 @@ class DogidoService:
                     intent_path,
                     analysis.line_proposal.evidence[:80],
                 )
-            if analysis.findings:
+            if analysis.findings and not followup_control_turn:
                 workshop.last_findings = [finding.to_dict() for finding in analysis.findings]
-            marked_line = update_marked_workshop_line(
-                workshop,
-                findings=analysis.findings,
-                player_text=(
-                    text
-                    if player_line_replacement is not None
-                    or effective_kind
-                    in {
-                        "request_repair",
-                        "critique_forced",
-                        "critique_gibberish",
-                        "critique_offscene",
-                    }
-                    else None
-                ),
-            )
-            if analysis.findings:
+            marked_line = workshop.marked_line_index
+            if not followup_control_turn:
+                marked_line = update_marked_workshop_line(
+                    workshop,
+                    findings=analysis.findings,
+                    player_text=(
+                        text
+                        if player_line_replacement is not None
+                        or effective_kind
+                        in {
+                            "request_repair",
+                            "critique_forced",
+                            "critique_gibberish",
+                            "critique_offscene",
+                        }
+                        else None
+                    ),
+                )
+            if analysis.findings and not followup_control_turn:
                 LOGGER.warning(
                     "haiku_workshop_locate session_id=%s result=%s marked_line=%s findings=%s",
                     session.session_id,
@@ -1216,6 +1254,68 @@ class DogidoService:
                     marked_line,
                     [finding.to_dict() for finding in analysis.findings],
                 )
+
+        # 意味説明への納得は講評ではない。別の句断片を拾わせず、コード固定の
+        # 終了確認へ進める。OS AIが使えない場合も代表的な短文だけfallbackする。
+        if workshop.awaiting_meaning_ack:
+            if effective_kind == "ack":
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = True
+                record_workshop_activity(workshop, now=event.observed_at)
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=meaning_explained "
+                    "result=close_confirmation intent_path=%s player=%s",
+                    session.session_id,
+                    intent_path,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="うん、伝わってよかった。この句の話はここまででええ？",
+                    )
+                ]
+            # 新しい質問・講評が来たなら、前の説明待ちは終えて通常処理を続ける。
+            workshop.awaiting_meaning_ack = False
+
+        if workshop.awaiting_close_confirmation:
+            if close_confirmation_fallback == "continue":
+                workshop.awaiting_close_confirmation = False
+                record_workshop_activity(workshop, now=event.observed_at)
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=close_confirmation "
+                    "result=continue player=%s",
+                    session.session_id,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="おけ、まだ続けよか。気になるとこ教えてな。",
+                    )
+                ]
+            if close_confirmation_fallback == "accept" or effective_kind == "ack":
+                close_workshop(workshop, reason="meaning_confirmed")
+                session.haiku_workshop = None
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=close_confirmation "
+                    "result=closed intent_path=%s player=%s",
+                    session.session_id,
+                    intent_path,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="おけ、この句の話はここまでや。",
+                    )
+                ]
+            # 終了への返事ではなく新しい句の話なら、確認状態だけ解除して続ける。
+            workshop.awaiting_close_confirmation = False
+
         # 正規表現で曖昧でも、OS AIが発話中の一意な置換語と句中断片を取れた
         # 場合は先へ進める。どちらでも確定しなければコード固定で聞き返す。
         if replacement_parse.status == "ambiguous" and player_line_replacement is None:
@@ -1270,7 +1370,7 @@ class DogidoService:
         }.get(kind, "other")
 
         critique_id: str | None = None
-        if kind != "close" and self.memory is not None:
+        if kind not in {"close", "ack"} and self.memory is not None:
             try:
                 row = self.memory.save_haiku_critique(
                     entry_id=workshop.entry_id,
@@ -1379,6 +1479,8 @@ class DogidoService:
         reply_path = "template"
         if reply_kind == "ask_meaning":
             reply, reply_path = self._ask_meaning_workshop_reply(workshop, semantic_text)
+            workshop.awaiting_meaning_ack = True
+            workshop.awaiting_close_confirmation = False
         elif reply_kind in {
             "soft_default",
             "other_haiku",

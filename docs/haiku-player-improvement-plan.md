@@ -175,7 +175,7 @@ open 中のプレイヤー入力
 1. **会話用 pin は短命**（上の close）  
 2. **長期記憶は長命**（entries / critiques / lessons）  
 3. pin を履歴の長さに依存させない（5往復のまま）  
-4. close 理由をログに残す（`close_reason=praise|drift|timeout|next_haiku|explicit|panic`）
+4. close 理由をログに残す（`close_reason=praise|drift|timeout|next_haiku|explicit|meaning_confirmed|panic`）
 
 ### 状態遷移（要約）
 
@@ -203,6 +203,7 @@ open 中のプレイヤー入力
 | 種別 | シグナル例（粗い） | 動作 |
 |---|---|---|
 | **ask_meaning** | 「〜って何」「意味わからん」「ぐうの」 | 句の説明 or 正直に「読みにくい」 |
+| **ack_after_meaning** | 説明直後の「そうなんだ」「なるほど」「腑に落ちた」 | OS AIが直前状態込みで納得を抽出し、別箇所の講評にせず終了確認へ進む |
 | **critique_forced** | 「無理やり」「詰め込み」「圧縮」 | critique kind=forced_compress |
 | **critique_offscene** | 「ここ海ちゃう」「村なのに」 | kind=off_context |
 | **critique_gibberish** | 「それ日本語？」「読めん」 | kind=unreadable |
@@ -217,6 +218,8 @@ open 中のプレイヤー入力
 | **close_workshop** | 「もうええ」「次いこ」「これで終了」「今日はここまで」 | open=false |
 
 スラッシュコマンド、明示reading、完成三行revision、`close`、`clear_lessons`、明示praiseなど、短い閉じた操作はコードが正。それ以外の workshop 自然文は端末内AI優先で意味を取り、信頼度 0.75 以上の閉じた intent、対象行、句断片、問題種別をコードへ渡す。AIが高信頼に講評種別を確定した場合も、critique／lesson／修正開始の実行条件と保存形式はコードが決める。
+
+`ask_meaning` の返答後は、コードが一時的に「意味説明済み」を保持する。次の発話はこの状態と一緒にOS AIへ渡し、意味として納得・理解が得られた場合は `ack` として扱う。このターンでは新しいfindingを採らず、critique／lessonにも保存せず、コード固定で「この句の話はここまででよいか」を確認する。次の肯定で `meaning_confirmed` close、続行の意思ならopenへ戻す。単独の「そうなんだ」を常にcloseへ使うのではなく、説明直後だけの文脈依存操作とする。
 
 プレイヤー自身の一行置換では、AI出力に `replacement_text`、句中の `target_fragment`、プレイヤー発話中の `evidence`、confidence を要求する。置換語と evidence が実際の発話に連続部分として存在し、target fragment が現在の三行の一行だけに一致した場合だけ、コードのひらがな化・音数・hard制約・CASへ進む。AIが発話にない句本文を補作した場合は捨てる。
 
@@ -306,6 +309,7 @@ workshop の会話 leaf は、冒険時の「怖がり」ではなく **素直�
 | 種別 | 返事の型（実装トーン） |
 |---|---|
 | ask_meaning | 候補 materials をコードが閉じ、LLM が1つ選んで短く言う（「それは、平原やで」等）。失敗時は正直に読みにくい。**全 materials 羅列や schema 名は禁止** |
+| ack_after_meaning | 説明を理解した相槌として受け、別の行を持ち出さず、コード固定の終了確認へ進む。納得自体はcritique／lessonにしない |
 | critique_forced | 詰め込みを認め、直すべき点を短く返す |
 | critique_gibberish / offscene | 読みにくさ／場のずれを具体的に認め、材料説明で反論しない |
 | request_repair | haiku route が対象行だけ修正。コード検証を通った案だけ提示し、採用確認を待つ |
@@ -379,7 +383,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
 場の違和感は **プレイヤーが言ったとき** workshop で。  
 **strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
-**H7-lite:** clear / close / 完成三行 revise / 明示 reading / hard off-topic はコード優先。自然な講評・一行置換・pending採否はApple Foundation Models / Foundry Localを同じ閉じた契約へ接続し、利用不可・失敗時はchat route、さらに代表的な明示形だけコードfallbackへ戻る。AIは状態や保存を直接変更しない。
+**H7-lite:** clear / close / 完成三行 revise / 明示 reading / hard off-topic はコード優先。自然な講評・一行置換・pending採否に加え、意味説明直後の納得を会話段階つきでApple Foundation Models / Foundry Localの同じ閉じた契約へ接続する。利用不可・失敗時はchat route、さらに代表的な明示形だけコードfallbackへ戻る。AIは状態や保存を直接変更しない。
 **未（気が向いたら）:** OS AI／chat fallback の実ログ評価、Phase E 整理、#28 preface 延長・overlay。
 
 全体の完成度・優先の考え方は [companion-maturity.md](companion-maturity.md)。
@@ -421,7 +425,8 @@ HaikuContext / 制約ブロックに追加（短く）:
 6. 既存の読み訂正・想起・自動保存・道具 hard 制約は壊さない  
 7. 対象行・断片・problem・プレイヤー置換語・pending採否が文脈別の閉じた型で抽出され、発話根拠とconfidenceをコード検証し、端末AIがなくてもchat／明示規則fallbackでworkshopが壊れない
 8. 修正案は元行一致つきの行差分で、意味保持・自然さの別評価と、対象行・対象外不変・出典ID・重複・音数・発句時hard制約のコード検証を通る。不合格理由を再編集へ返し、同一案を再評価せず、明示採用までは元句と revision を変更しない
-9. プレイヤーの局所置換は本文をLLMに生成させず、必ずひらがな三行として提示する。複数行を順に直しても、各差分の基準と親revisionがつながり、採用後もworkshopを続けられる
+9. 意味説明直後の納得は別の句断片への講評に化けず、保存なしで終了確認へ進み、肯定または続行をコードが確定する
+10. プレイヤーの局所置換は本文をLLMに生成させず、必ずひらがな三行として提示する。複数行を順に直しても、各差分の基準と親revisionがつながり、採用後もworkshopを続けられる
 
 ---
 

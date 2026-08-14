@@ -17,6 +17,7 @@ def build_haiku_workshop_intent_messages(details: dict[str, object]) -> list[dic
     verse = str(details.get("verse") or "").strip() or "（句なし）"
     materials = str(details.get("materials_speech") or "").strip() or "（特になし）"
     player_text = str(details.get("player_text") or "").strip() or "（聞き取れなかった）"
+    conversation_stage = str(details.get("conversation_stage") or "discussion").strip()
     intents = details.get("allowed_intents") or []
     allowed = "、".join(str(item) for item in intents if item) or "other_haiku"
     problem_types = details.get("allowed_problem_types") or []
@@ -40,6 +41,13 @@ def build_haiku_workshop_intent_messages(details: dict[str, object]) -> list[dic
         "- propose_line_edit: プレイヤー自身が一行の新しい言い方を提案する\n"
         "- soft_default: 句のどの話か確信がなく、分類を見送る\n"
         "\n"
+        "直前状態の意味:\n"
+        "- meaning_explained: 直前に句の語や狙いを説明した。『そうなんだ』のような"
+        "短い納得は ack。新しい講評を推測しない\n"
+        "- close_confirmation: 直前に『この句の話はここまででよいか』と尋ねた。"
+        "終了への肯定は ack。続けたい発話は内容に応じて他のintent\n"
+        "- discussion: 通常の句の相談\n"
+        "\n"
         "findings は、プレイヤーが実際に問題として挙げた箇所だけ。"
         "行番号は上から0、1、2。行を特定できなければ line_index を省略する。"
         "言及のない問題を推測で増やさない。\n"
@@ -51,6 +59,7 @@ def build_haiku_workshop_intent_messages(details: dict[str, object]) -> list[dic
         f"句（上から0〜2行）:\n{verse}\n"
         f"狙いの一言: {materials}\n"
         f"プレイヤー: {player_text}\n"
+        f"直前状態: {conversation_stage}\n"
         f"許可された intent: {allowed}\n"
         "\n"
         "返答はJSONオブジェクトのみ。"
