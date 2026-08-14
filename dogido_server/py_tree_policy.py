@@ -64,6 +64,17 @@ class EventIs(_Condition):
         return context.event.event.name == self.event_name
 
 
+class CombatEndedAftermath(_Condition):
+    def __init__(self) -> None:
+        super().__init__(name="CombatEndedAftermath")
+
+    def check(self, context: PolicyContext) -> bool:
+        return (
+            context.event.event.name == EventName.COMBAT_ENDED
+            and context.next_mode == "aftermath"
+        )
+
+
 class ModeIs(_Condition):
     def __init__(self, mode: str) -> None:
         super().__init__(name=f"ModeIs[{mode}]")
@@ -321,9 +332,13 @@ class EmitAftermathActions(_Action):
         super().__init__(name="EmitAftermathActions")
 
     def run(self, context: PolicyContext, actions: list[Any]) -> None:
-        if context.machine._player_input_priority_active(context.now):
+        explicit_combat_end = context.event.event.name == EventName.COMBAT_ENDED
+        if (
+            context.machine._player_input_priority_active(context.now)
+            and not explicit_combat_end
+        ):
             return
-        if context.previous_mode != "aftermath" or context.event.event.name == EventName.COMBAT_ENDED:
+        if context.previous_mode != "aftermath" or explicit_combat_end:
             boss_aftermath = any(
                 context.machine._is_boss_type(hostile)
                 for hostile in context.machine.state.last_confirmed_hostiles
@@ -331,7 +346,7 @@ class EmitAftermathActions(_Action):
             actions.append(
                 context.machine._audio_action(
                     layer="speech",
-                    interrupt=boss_aftermath,
+                    interrupt=explicit_combat_end or boss_aftermath,
                     cue_id="aftermath_relief",
                     text=context.machine._render_aftermath_line(context.event),
                     protect_ms=2500 if boss_aftermath else 0,
@@ -393,6 +408,8 @@ class PyTreeActionPolicy:
                 self._sequence("Death", EventIs(EventName.PLAYER_DIED), EmitDeathActions()),
                 self._sequence("Panic", ModeIs("panic"), EmitPanicActions()),
                 self._sequence("SuppressedPanic", ModeIs("suppressed_panic"), EmitSuppressedPanicActions()),
+                # 明示戦闘終了は古い戦闘音声を止めるため、同tickのplayer chatより先に処理する。
+                self._sequence("CombatEndedAftermath", CombatEndedAftermath(), EmitAftermathActions()),
                 # 話しかけは alert/aftermath/ambient より先（次イベントに相乗りした瞬間に落とさない）
                 self._sequence("PlayerChat", HasPlayerChat(), EmitPlayerChatActions()),
                 self._sequence("Alert", ModeIs("alert"), EmitAlertActions()),

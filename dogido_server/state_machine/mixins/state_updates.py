@@ -445,6 +445,16 @@ class StateUpdatesMixin:
         if event.event.name == EventName.PLAYER_DIED:
             return "aftermath"
 
+        boss_context = any(
+            self._is_boss_type(hostile)
+            for hostile in self.state.last_confirmed_hostiles
+        )
+        if (
+            self._combat_end_clear_confirmed(event)
+            and (not boss_context or self._boss_defeat_confirmed(event))
+        ):
+            return "aftermath"
+
         if (
             self.state.pending_safe_aftermath
             and self._recent_ms(now, self.state.last_combat_end_at) is not None
@@ -514,7 +524,14 @@ class StateUpdatesMixin:
 
         return "normal"
 
-    def _apply_mode_transition(self, previous_mode: str, next_mode: str, now: datetime) -> None:
+    def _apply_mode_transition(
+        self,
+        previous_mode: str,
+        next_mode: str,
+        now: datetime,
+        *,
+        combat_end_already_flushed: bool = False,
+    ) -> None:
         self.state.mode = next_mode
 
         if previous_mode != next_mode and next_mode == "suppressed_panic":
@@ -526,7 +543,8 @@ class StateUpdatesMixin:
             self.state.last_combat_end_at = now
             self.state.pending_safe_aftermath = False
             # combat_ended イベント無しでも余韻入りで撃破メモをまとめる
-            self._flush_combat_dialogue_notes_from_mode(now)
+            if not combat_end_already_flushed:
+                self._flush_combat_dialogue_notes_from_mode(now)
 
         if previous_mode == "aftermath" and next_mode == "normal":
             self.state.shut_up_count = 0

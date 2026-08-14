@@ -113,14 +113,15 @@ class ActionBuilderMixin:
             return actions
 
         if next_mode == "aftermath":
-            if self._player_input_priority_active(now):
+            explicit_combat_end = event.event.name == EventName.COMBAT_ENDED
+            if self._player_input_priority_active(now) and not explicit_combat_end:
                 return actions
-            if previous_mode != "aftermath" or event.event.name == EventName.COMBAT_ENDED:
+            if previous_mode != "aftermath" or explicit_combat_end:
                 boss_aftermath = any(self._is_boss_type(hostile) for hostile in self.state.last_confirmed_hostiles)
                 actions.append(
                     AudioAction(
                         layer="speech",
-                        interrupt=boss_aftermath,
+                        interrupt=explicit_combat_end or boss_aftermath,
                         cue_id="aftermath_relief",
                         text=self._render_aftermath_line(event),
                         protect_ms=2500 if boss_aftermath else 0,

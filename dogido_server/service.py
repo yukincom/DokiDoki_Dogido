@@ -370,8 +370,15 @@ class DogidoService:
             or player_input.asks_haiku_recall
         ):
             return False
-        has_speech = any(bool(action.text) and action.layer == "speech" for action in actions)
-        return not has_speech
+        # 戦闘終了の安堵はプレイヤー発話への返事ではない。同じイベントに
+        # 音声入力が相乗りした場合は、次イベントへ戻して会話も取りこぼさない。
+        has_player_reply = any(
+            bool(action.text)
+            and action.layer == "speech"
+            and action.cue_id != "aftermath_relief"
+            for action in actions
+        )
+        return not has_player_reply
 
     def _update_dialogue_context(
         self,

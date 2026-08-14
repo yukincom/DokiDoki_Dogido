@@ -216,6 +216,47 @@ class NarrationMixin:
             },
         )
 
+    def _aftermath_hostile_labels(self, event: GameEvent) -> list[str]:
+        """戦闘終了時に、直前まで根拠のあった敵名だけを日本語名で返す。"""
+        now = event.observed_at
+        visual_retention_ms = int(
+            getattr(self.settings, "player_chat_visual_retention_ms", 12000)
+        )
+        hearing_retention_ms = int(
+            getattr(self.settings, "player_chat_hearing_retention_ms", 12000)
+        )
+        kill_retention_ms = int(
+            getattr(self.settings, "player_chat_name_correction_retention_ms", 10000)
+        )
+        labels: list[str] = []
+        seen: set[str] = set()
+
+        def _add(label: str | None) -> None:
+            normalized = str(label or "").strip()
+            if not normalized or normalized in seen:
+                return
+            seen.add(normalized)
+            labels.append(normalized)
+
+        for hostile in self.state.last_confirmed_hostiles:
+            _add(self._hostile_label(hostile))
+        for mob_type, killed_at in self.state.recent_kill_seen_at_by_type.items():
+            age = self._recent_ms(now, killed_at)
+            if age is not None and age <= kill_retention_ms:
+                _add(self._hostile_label(mob_type))
+        for memo in self.state.recent_visual_memos:
+            age = self._recent_ms(now, memo.seen_at)
+            if age is not None and age <= visual_retention_ms:
+                _add(memo.label_ja or self._hostile_label(memo.mob_type))
+        for memo in self.state.recent_hearing_memos:
+            age = self._recent_ms(now, memo.heard_at)
+            if memo.kind == "hostile" and age is not None and age <= hearing_retention_ms:
+                _add(
+                    memo.label_ja
+                    or (self._hostile_label(memo.mob_type) if memo.mob_type else None)
+                )
+        return labels[:4]
+
     def _render_aftermath_line(self, event: GameEvent) -> str:
         if any(hostile == "warden" for hostile in self.state.last_confirmed_hostiles):
             return response_text("boss", "warden", "defeated")
@@ -223,7 +264,6 @@ class NarrationMixin:
             return response_text("boss", "ender_dragon", "defeated")
         fallback = fallback_text("aftermath", "line")
         health = event.player.health
-        recent_combat_end_ms = self._recent_ms(event.observed_at, self.state.last_combat_end_at)
         if health is None:
             health_state = "不明"
         elif health <= 8:
@@ -232,19 +272,16 @@ class NarrationMixin:
             health_state = "少し減ってる"
         else:
             health_state = "まだ余力はある"
-        hostiles = (
-            list(self.state.last_confirmed_hostiles)
-            if recent_combat_end_ms is not None
-            and recent_combat_end_ms <= self.settings.pending_safe_aftermath_window_ms
-            else []
-        )
+        clear_confirmed = self._combat_end_clear_confirmed(event)
         return self._generate_leaf_text(
             kind="aftermath",
             fallback_text=fallback,
             details={
                 "player_name": self._player_call_name(event),
-                "hostiles": hostiles,
+                "hostiles": self._aftermath_hostile_labels(event),
                 "health_state": health_state,
+                "hostile_clear_confirmed": clear_confirmed,
+                "remaining_hostiles": 0 if clear_confirmed else None,
             },
         )
 

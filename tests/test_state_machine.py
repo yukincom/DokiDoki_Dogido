@@ -1431,7 +1431,7 @@ class StateMachineTests(unittest.TestCase):
         self.assertFalse(any(action.layer == "speech" for action in second_result.actions))
         self.assertFalse(any(action.layer == "speech" for action in third_result.actions))
 
-    def test_combat_ended_waits_for_safe_zone_with_door_before_aftermath(self) -> None:
+    def test_confirmed_combat_ended_enters_aftermath_before_safe_zone(self) -> None:
         combat_ended = GameEvent.model_validate_json(
             """
             {
@@ -1505,11 +1505,12 @@ class StateMachineTests(unittest.TestCase):
         first_actions = list(first_result.actions)
         second_result = self.machine.process(safe_zone)
 
-        self.assertEqual(first_mode, "normal")
-        self.assertFalse(first_actions)
+        self.assertEqual(first_mode, "aftermath")
+        self.assertFalse(first_result.combat_active)
+        self.assertTrue(any(action.cue_id == "aftermath_relief" for action in first_actions))
+        self.assertTrue(any(action.interrupt for action in first_actions))
         self.assertEqual(second_result.state.mode, "aftermath")
-        self.assertTrue(any(action.layer == "speech" for action in second_result.actions))
-        self.assertTrue(any(action.cue_id == "aftermath_relief" for action in second_result.actions))
+        self.assertFalse(any(action.cue_id == "aftermath_relief" for action in second_result.actions))
 
     def test_special_biome_line_has_ten_minute_cooldown_on_reentry(self) -> None:
         plains_first = GameEvent.model_validate_json(
@@ -7349,11 +7350,12 @@ class StateMachineTests(unittest.TestCase):
             """
         )
 
-        machine.process(combat_ended)
-        result = machine.process(safe_zone)
+        result = machine.process(combat_ended)
+        later = machine.process(safe_zone)
 
         speech = next(action for action in result.actions if action.layer == "speech")
         self.assertEqual(speech.text, "LLM:aftermath")
+        self.assertFalse(any(action.cue_id == "aftermath_relief" for action in later.actions))
 
     def test_stone_house_with_torches_and_door_is_not_treated_as_occluded_dark_entry(self) -> None:
         event = GameEvent.model_validate_json(
