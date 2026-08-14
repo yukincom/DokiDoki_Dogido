@@ -103,7 +103,7 @@ H1〜H5.2 で **関係性の側はかなりできた**（pin / 講評 / soft les
 
 足すなら（任意）:
 
-- AI修正案と、プレイヤー語による連続局所編集は実装済み。次は実ログで対象行・読み・自然さを見る
+- AI修正案と、プレイヤー語による連続局所編集、戦闘時の句保持pause／OS AI優先＋chat fallbackの再開意思抽出／コード安全確認後の再開は実装済み。次は実ログで対象行・読み・自然さを見る
 - 「前よりマシ？」の短い自己参照（lessons が効いた感）  
 
 **やらない方がいい:**
@@ -173,7 +173,7 @@ soft workshop 方針は後半をすでに押さえている。
 
 | 領域 | 状態 |
 |---|---|
-| workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・OS／端末内AI優先の限定 intent/findings／一行置換／pending採否抽出＋chat fallback。実行と保存はコード。praise は critique 保存のみ） |
+| workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・OS／端末内AI優先の限定 intent/findings／一行置換／pending採否／戦闘中断中の再開意思抽出＋chat fallback。実行・保存・敵の安全判定はコード。praise は critique 保存のみ。戦闘中は句とpendingを保持してpauseし、安全確認後に再開） |
 | H6 固定語 materials 突合 | **撤回** |
 | 発句 source atom 品質ゲート | 済（原文snapshot・節単位preface provenance/主張範囲・行別出典・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P4 | 済（P5 任意） |

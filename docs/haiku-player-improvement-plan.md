@@ -1,7 +1,7 @@
 # 川柳: プレイヤー主導の改善設計
 
 **日付:** 2026-08-12
-**状態:** H1〜H5.2・H7-lite（OS／端末内AIの限定意味抽出）・修正案1本・連続局所編集 **実装済み** / H6 **撤回**（詳細は §7）
+**状態:** H1〜H5.2・H7-lite（OS／端末内AIの限定意味抽出）・修正案1本・連続局所編集・戦闘中断／再開 **実装済み** / H6 **撤回**（詳細は §7）
 **関連:** [companion-maturity.md](companion-maturity.md)、[haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
 
 ---
@@ -101,7 +101,11 @@ RecentHaikuWorkshop:
     biome / biome_ja / structure / structure_ja / time_phase
     fragment_links[]    # surface(句) → material（かな部分一致の対応表）
   emitted_at
-  open: bool              # ワークショップ「積極モード」
+  open: bool              # pinのライフサイクル。combat_paused中もTrue
+  combat_paused: bool     # 句とpendingを保持した一時中断。会話経路には載せない
+  combat_paused_at
+  combat_resume_pending_reason  # victory / escaped / safe
+  combat_override_signature     # 動けない単独敵を明示無視した間だけ保持
   last_workshop_at        # 最後に句関連のやり取りをした時刻
   close_reason            # 閉じた理由（ログ用）
 ```
@@ -113,11 +117,12 @@ RecentHaikuWorkshop:
 
 ## 1b. 句を忘れる／閉じるタイミング
 
-状態は2段ある。
+状態は3段ある。
 
 | 状態 | pin（句＋材料） | 入力の扱い |
 |---|---|---|
-| **open** | 毎回 details に載せる | 句関連意図を **優先**判定 |
+| **open / active** | 毎回 details に載せる | 句関連意図を **優先**判定 |
+| **open / combat_paused** | 本文・pendingを保持するが details には載せない | 戦況を優先。workshop用ASR補正・drift・timeoutを停止 |
 | **closed** | **捨てる**（または短期キャッシュのみ） | 通常 player_chat。句の話は「さっきの句」想起が無い限り一般論 |
 
 `closed` になったら **その句の workshop は終了**。  
@@ -134,7 +139,7 @@ RecentHaikuWorkshop:
 | **C5** | **話題の流れ（ソフト）** | 句を放置して別件へ | 下記 |
 | **C6** | **時間切れ** | 放置 | 発句から **T_open**（案: 3〜5分）、または **最後の句関連から T_idle**（案: 90〜120秒）無入力の句関連 |
 | **C7** | **セッション終了／切断** | 当然 | サーバ session 破棄 |
-| **C8** | **緊急ゲーム状況** | 安全・優先 | panic / 死亡 等。close して脅威対応（句 pin は捨ててよい） |
+| **C8** | **戦闘割り込み** | 安全・優先 | visual／auditory脅威・直近被弾で `combat_paused`。句と未採用案は保持し、戦況を優先 |
 
 ### C5: 話題を流したとき（ソフトクローズ）
 
@@ -157,6 +162,16 @@ open 中のプレイヤー入力
 | `T_idle` | 90〜120s | 句関連の最後から無活動で close |
 | `T_drift` | 60s | 流し開始からの猶予（任意） |
 
+### 戦闘からの復帰
+
+- 敵を倒した根拠（ボス撃破確認または近傍経験値オーブ）がある場合は「倒せたみたい」と戻す。
+- 撃破根拠なしの `combat_ended` は勝利と断定せず「離れられたみたい」と戻す。
+- 戦闘終了／余韻のセリフがある間は復帰文を重ねず、次の静かな `normal` フレームまで待つ。
+- 復帰時は保持していた最新版三行をコードから再掲し、「続ける？」と確認する。継続なら active、辞退なら close。
+- 中断中の自然な発話はOS／端末内AI優先（失敗時は既存chat route）で `resume_workshop / workshop_input / unrelated / uncertain` の閉じた型へ分類し、confidenceと発話中の連続evidenceをコードで検証する。全AIが利用不可・低信頼・不正出力のときだけ「句を続けよう」等の閉じた規則へfallbackする。AIはclose・保存・安全判定を実行しない。
+- 敵がまだ見えていても、単独・3マスより遠い・非接近・聴覚脅威なし・直近被弾なし・同一個体が8秒以上安定し、かつOS AI／fallbackからプレイヤーの再開意思を確定できた場合だけ暫定復帰できる。再接近・被弾・敵数増加・個体変化で即pauseへ戻す。
+- pause中は戦闘時間をopen／idle timeoutへ加算せず、意味説明待ち・終了確認待ち・一時的な対象行markだけを破棄する。現在句と未採用revisionは破棄しない。
+
 **修正不要のとき:**
 
 - 明示ほめ（C3）→ critique 保存のうえ即 close。lesson は触らない
@@ -175,7 +190,7 @@ open 中のプレイヤー入力
 1. **会話用 pin は短命**（上の close）  
 2. **長期記憶は長命**（entries / critiques / lessons）  
 3. pin を履歴の長さに依存させない（5往復のまま）  
-4. close 理由をログに残す（`close_reason=praise|drift|timeout|next_haiku|explicit|meaning_confirmed|panic`）
+4. close 理由をログに残す（`close_reason=praise|drift|timeout|next_haiku|explicit|meaning_confirmed|combat_interrupted_close`）
 
 ### 状態遷移（要約）
 
@@ -185,13 +200,16 @@ open 中のプレイヤー入力
             ▼
          [open]  ←── 「さっきの句」再open（任意）
         ／  │  ＼
-   句関連  流し  時間/明示/ほめ/直し/次発句/panic
+   句関連  流し  時間/明示/ほめ/直し/次発句
         ＼  │  ／
             ▼
-         [closed]  pin 破棄
-            │
-            ▼
-      長期 JSONL のみ残る
+         [closed]  pin 破棄 → 長期 JSONL のみ残る
+
+ [open] --脅威--> [combat_paused] --戦闘終了--> [再開確認]
+                      │                         ├─ 継続 → [open]
+                      │                         └─ 辞退 → [closed]
+                      └─ 安定した単独敵＋明示継続 → [open暫定]
+                                      再接近／被弾 → [combat_paused]
 ```
 
 ---
@@ -375,8 +393,9 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H7-lite** | OS／端末内AI優先の限定 structured 意味抽出。intent／findingに加え、発話根拠つき一行置換とpending採否を小さなschemaで抽出。コード検証・chat fallback | H2 の後 | **済** |
 | **H7.1** | 要求時だけ大きい haiku route で対象行を修正。コード品質ゲート→未保存案→明示採用 | H7-lite | **済** |
 | **H7.2** | finding／明示行を固定し、プレイヤー語をコードでひらがな化して連続局所編集。三行提示・CAS・採用後の次編集もコード所有 | H7-lite | **済** |
+| **H8** | 戦闘時は句・pendingを保持してpause。OS／端末内AI優先＋chat fallbackで再開意思／句への具体的発話だけを限定抽出し、コード安全確認後に勝利／離脱を言い分けて再開。安定した単独敵も意思確認時だけ暫定再開 | H2 | **済** |
 
-**H1〜H5.2 + H1.1 + H7-lite + H7.1 + H7.2 実装済み。H6 は撤回。**
+**H1〜H5.2 + H1.1 + H7-lite + H7.1 + H7.2 + H8 実装済み。H6 は撤回。**
 道具/読みの forbidden は hard のまま。player lesson は soft。  
 **H1.1:** 候補は短い名詞優先。`fragment_links` は句 surface→材料の内部対応表（句に制御タグを埋め込まない）。ask_meaning は links を優先。  
 **H6 をやめた理由:** 発句は渡した materials / scene から作る前提。固定 drift リストは本質でなくメンテだけ増える。  
@@ -427,6 +446,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 8. 修正案は元行一致つきの行差分で、意味保持・自然さの別評価と、対象行・対象外不変・出典ID・重複・音数・発句時hard制約のコード検証を通る。不合格理由を再編集へ返し、同一案を再評価せず、明示採用までは元句と revision を変更しない
 9. 意味説明直後の納得は別の句断片への講評に化けず、保存なしで終了確認へ進み、肯定または続行をコードが確定する
 10. プレイヤーの局所置換は本文をLLMに生成させず、必ずひらがな三行として提示する。複数行を順に直しても、各差分の基準と親revisionがつながり、採用後もworkshopを続けられる
+11. 戦闘では句と未採用案を失わず会話だけ中断する。中断中発話の再開意思はOS AIの閉じた型＋根拠検証、敵の安全性と状態変更はコードに分ける。勝利／離脱後の静かなフレームで再開確認し、安定した単独敵を無視した後も再接近・被弾で即中断へ戻る
 
 ---
 
@@ -436,4 +456,4 @@ HaikuContext / 制約ブロックに追加（短く）:
 2. OS AIによる採用・却下・追加修正の実ログ評価
 3. Phase E パッケージ整理（機能ではない）
 
-H7-lite / H7.1 / H7.2 は実装済み。以後は実ログを見て、誤分類・待ち時間・提案の自然さだけを小さく調整する。
+H7-lite / H7.1 / H7.2 / H8 は実装済み。以後は実ログを見て、誤分類・待ち時間・提案の自然さだけを小さく調整する。

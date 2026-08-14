@@ -242,6 +242,33 @@ class PlatformAIRouterTests(unittest.TestCase):
             ["accept_pending", "uncertain"],
         )
 
+    def test_combat_workshop_input_has_a_separate_closed_schema(self) -> None:
+        request = StructuredGenerationRequest(
+            kind="haiku_workshop_combat_input",
+            fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+            details={
+                "verse": "はるのかぜ\nひつじがあるく\nよるのつき",
+                "player_text": "さっき話してたやつに戻ろうか",
+                "allowed_actions": [
+                    "resume_workshop",
+                    "workshop_input",
+                    "unrelated",
+                    "uncertain",
+                ],
+            },
+            temperature=0.0,
+            route="chat",
+            max_tokens=96,
+        )
+
+        schema = _json_schema_for(request)
+
+        self.assertEqual(schema["x-order"], ["action", "confidence", "evidence"])
+        self.assertEqual(
+            schema["properties"]["action"]["enum"],
+            ["resume_workshop", "workshop_input", "unrelated", "uncertain"],
+        )
+
     def test_provider_is_reprobed_when_failure_cooldown_expires_before_refresh(self) -> None:
         router = PlatformStructuredAIRouter(
             Settings(platform_ai_provider="apple", platform_ai_refresh_sec=300)

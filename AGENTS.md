@@ -29,6 +29,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/state_machine/` | 本体判断。mixin 分割済み。**巨大ロジックを haiku mixin に足し続けない** |
 | `dogido_server/state_machine/precipitation.py` | 現在Y・気温・天気・雪ブロック実測から雨／降雪／積雪根拠を確定。LLMには数値を伏せた閉じた気象事実だけを共有 |
 | `dogido_server/haiku/workshop.py` | 句 pin（open/close）、意図分類、soft 返事、lesson 生成 |
+| `dogido_server/haiku/combat_pause.py` | 戦闘中の句保持pause、勝利／離脱後の再開、安定した単独敵の暫定継続 |
 | `dogido_server/haiku/edit_contract.py` | workshop 行差分の compare-and-swap 検証（生成・採用・保存で共有） |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
@@ -103,7 +104,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ## 4. よく触るドメイン詳細
 
-### 川柳 workshop（H1–H5.2 + H7-lite / 修正案1本 / 連続局所編集）
+### 川柳 workshop（H1–H5.2 + H7-lite / 修正案1本 / 連続局所編集 / 戦闘中断）
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・完成三行のformal/conversational revise・明示 close・次の句。pending案の明示採用は現在句へ昇格してopen維持
@@ -112,6 +113,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - `request_repair`: OS AIが高信頼に修正要求を抽出し、コードが検証済みfindingを確定できたときだけ、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
 - プレイヤー局所編集: 自然な提案はOS AIが発話中の置換語・evidenceと句中target fragmentを先に抽出し、従来の閉じた文字列解析は利用不可・低信頼時のfallbackに限る。finding／明示行／一意なfragmentに加え、「旧句より新句」の発話中にある現在句の一行でも対象を固定する。句フレーズ指定はSTTが漢字化しても読みへ戻し、現在の三行へ一意に一致するときだけ採用する。コードでひらがな化・正確な5/7/5音・hard制約・重複を検査して未保存三行へ連続CASする。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない
 - pending採否: 専用OS AI schemaで accept / reject / modify / show / discuss 等を意味抽出。confidence・evidence・現在pending・CASをコード検証し、合格時だけ保存／破棄する。利用不可時は代表的な完全一致規則へfallback。採用後は句を次の基準へ昇格しpinを維持
+- 戦闘中断: visual／auditory脅威・直近被弾で句とpendingを保持したままpauseし、workshop用ASR補正・timeout・driftを止める。勝利根拠あり／離脱で復帰文を分け、戦闘音声後の静かなnormalフレームで三行を再掲して継続確認する。中断中発話はOS／端末内AI優先（失敗時はchat fallback）で `resume_workshop / workshop_input / unrelated / uncertain` だけを根拠つき抽出し、全AIが利用不可・低信頼・不正出力のときだけ閉じた規則へfallbackする。安全判定と実際の再開はコード。AIからcloseしない。単独敵が8秒以上非接近・無被弾でも、再開意思を確定できたときだけ暫定再開。再接近・被弾・敵数／個体変化で即pause
 - 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
 - ロジックの本体は `haiku/workshop.py`。`mixins/haiku.py` は発句と制約注入フックまで
@@ -206,7 +208,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings・一行置換・pending採否抽出 / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続）
+- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集 + 戦闘中断: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings・一行置換・pending採否・戦闘中断中の再開意思抽出 / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続 / 戦闘中は句とpendingを保持してpause→コード安全確認後に再掲・継続確認）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  

@@ -214,6 +214,26 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
                 "evidence": {"type": "string"},
             },
         }
+    if request.kind == "haiku_workshop_combat_input":
+        actions = [str(value) for value in request.details.get("allowed_actions", []) if value]
+        if not actions:
+            actions = ["uncertain"]
+        return {
+            "title": "DogidoWorkshopCombatInput",
+            "type": "object",
+            "x-order": ["action", "confidence", "evidence"],
+            "additionalProperties": False,
+            "required": ["action", "confidence", "evidence"],
+            "properties": {
+                "action": {"type": "string", "enum": actions},
+                "confidence": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                },
+                "evidence": {"type": "string"},
+            },
+        }
     raise ValueError(f"unsupported platform AI task: {request.kind}")
 
 

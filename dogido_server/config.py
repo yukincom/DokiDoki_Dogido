@@ -274,6 +274,9 @@ class Settings(BaseSettings):
     # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
     haiku_generation_strategy: HAIKU_GENERATION_STRATEGY = "three_slot"
     haiku_max_regeneration_rounds: int = Field(default=6, ge=0, le=8)
+    # 動けない敵を無視して句へ戻る場合も、同じ敵がこの時間以上静止し、
+    # プレイヤーの再開意思をOS AI／fallback規則から確定できたときだけ暫定許可する。
+    workshop_low_threat_resume_delay_ms: int = Field(default=8000, ge=1000)
     hostile_comment_cooldown_ms: int = 60000
     occluded_hostile_presence_comment_cooldown_ms: int = 180000
     other_realm_swarm_visual_threshold: int = 4

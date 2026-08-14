@@ -241,6 +241,16 @@ class RecentHaikuWorkshop:
     # 終了確認は別状態にし、納得だけでpinを勝手に閉じない。
     awaiting_meaning_ack: bool = False
     awaiting_close_confirmation: bool = False
+    # 戦闘割り込みは close ではない。
+    # 句と未採用差分を保持したまま会話経路だけ止める。
+    combat_paused: bool = False
+    combat_paused_at: datetime | None = None
+    combat_pause_reason: str | None = None
+    combat_hostile_types: list[str] = field(default_factory=list)
+    combat_resume_pending_reason: str | None = None
+    combat_last_resume_reason: str | None = None
+    combat_override_signature: str | None = None
+    awaiting_combat_resume_confirmation: bool = False
 
     def display_line(self) -> str:
         """明示採用済みの現在句。pending案とは混ぜない。"""
@@ -298,6 +308,70 @@ def is_open(workshop: RecentHaikuWorkshop | None) -> bool:
     return workshop is not None and bool(workshop.open)
 
 
+def is_active(workshop: RecentHaikuWorkshop | None) -> bool:
+    """open かつ戦闘中断中でない、会話可能な workshop か。"""
+
+    return is_open(workshop) and workshop is not None and not workshop.combat_paused
+
+
+def pause_workshop_for_combat(
+    workshop: RecentHaikuWorkshop,
+    *,
+    now: datetime,
+    hostile_types: list[str] | tuple[str, ...] = (),
+) -> bool:
+    """句とpendingを残して戦闘中断する。新規中断ならTrue。"""
+
+    if not workshop.open:
+        return False
+    if workshop.combat_paused:
+        return False
+    workshop.combat_paused = True
+    workshop.combat_paused_at = now
+    workshop.combat_pause_reason = "combat"
+    workshop.combat_hostile_types = list(
+        dict.fromkeys(str(item) for item in hostile_types if item)
+    )
+    workshop.combat_resume_pending_reason = None
+    workshop.combat_last_resume_reason = None
+    workshop.combat_override_signature = None
+    # 「意味説明の返事待ち」や一時的な行マークは戦闘後に持ち越さない。
+    # 一方、プレイヤーが組み立てた未採用三行は失わない。
+    workshop.awaiting_meaning_ack = False
+    workshop.awaiting_close_confirmation = False
+    workshop.awaiting_combat_resume_confirmation = False
+    workshop.marked_line_index = None
+    workshop.last_findings.clear()
+    return True
+
+
+def resume_workshop_after_combat(
+    workshop: RecentHaikuWorkshop,
+    *,
+    now: datetime,
+    reason: str,
+    ask_confirmation: bool,
+    override_signature: str | None = None,
+) -> bool:
+    """中断時間をtimeoutから除外し、保存済み句を会話経路へ戻す。"""
+
+    if not workshop.open or not workshop.combat_paused:
+        return False
+    if workshop.combat_paused_at is not None and now >= workshop.combat_paused_at:
+        workshop.emitted_at += now - workshop.combat_paused_at
+    workshop.combat_paused = False
+    workshop.combat_paused_at = None
+    workshop.combat_pause_reason = None
+    workshop.combat_hostile_types.clear()
+    workshop.combat_resume_pending_reason = None
+    workshop.combat_last_resume_reason = reason
+    workshop.combat_override_signature = override_signature
+    workshop.awaiting_combat_resume_confirmation = ask_confirmation
+    workshop.last_workshop_at = now
+    workshop.drift_count = 0
+    return True
+
+
 def close_workshop(
     workshop: RecentHaikuWorkshop | None,
     *,
@@ -308,6 +382,13 @@ def close_workshop(
         return None
     workshop.open = False
     workshop.close_reason = reason
+    workshop.combat_paused = False
+    workshop.combat_paused_at = None
+    workshop.combat_pause_reason = None
+    workshop.combat_hostile_types.clear()
+    workshop.combat_resume_pending_reason = None
+    workshop.combat_override_signature = None
+    workshop.awaiting_combat_resume_confirmation = False
     return workshop
 
 
@@ -396,6 +477,9 @@ def maybe_close_for_time(
     """時間切れで close。変化なければそのまま返す。"""
     if not is_open(workshop) or workshop is None:
         return workshop
+    # 戦闘の長さはプレイヤーが句を放置した時間ではない。
+    if workshop.combat_paused:
+        return workshop
     if now - workshop.emitted_at >= t_open:
         return close_workshop(workshop, reason="timeout_open")
     last = workshop.last_workshop_at or workshop.emitted_at
@@ -406,7 +490,7 @@ def maybe_close_for_time(
 
 def workshop_prompt_details(workshop: RecentHaikuWorkshop | None) -> dict[str, str]:
     """player_chat / workshop 返事用に details へ足す短いブロック。"""
-    if not is_open(workshop) or workshop is None:
+    if not is_active(workshop) or workshop is None:
         return {
             "haiku_workshop_open": "",
             "haiku_workshop_text": "",
@@ -806,6 +890,21 @@ _CLOSE_CONFIRM_CONTINUE_PATTERN = re.compile(
     r"もう少し|まだ気になる|まだ直したい|終わらない|ここまでじゃない"
     r")[。！!]*$"
 )
+_COMBAT_RESUME_ACCEPT_PATTERN = re.compile(
+    r"^(?:(?:うん|はい|ええ|おけ|OK|ok)[、, ]*)?(?:"
+    r"うん|はい|ええよ|いいよ|おけ|OK|ok|"
+    r"お願い(?:します)?|頼む|"
+    r"続け(?:る|よう|よか|て(?:ください)?|たい)|再開(?:する|しよう|して)?|"
+    r"句(?:を|の話を)?続け(?:る|よう|て(?:ください)?)|"
+    r"大丈夫[、, ]*続け(?:る|よう|て(?:ください)?)"
+    r")[。！!]*$"
+)
+_COMBAT_RESUME_DECLINE_PATTERN = re.compile(
+    r"^(?:(?:いや|ううん|もう)[、, ]*)?(?:"
+    r"やめ(?:る|とく|よう)|続けない|再開しない|"
+    r"もういい|もうええ|ここまで|終わり|終了"
+    r")[。！!]*$"
+)
 _REPAIR_REQUEST_PATTERN = re.compile(
     r"^(?:(?:うん|じゃあ|なら)[、, ]*)?"
     r"(?:(?:これ|そこ|(?:この|その)?句|(?:一|二|三|1|2|3)行目|上の句|中の句|下の句)"
@@ -834,6 +933,19 @@ def close_confirmation_decision(text: str | None) -> str | None:
         return "continue"
     if _CLOSE_CONFIRM_ACCEPT_PATTERN.fullmatch(source):
         return "accept"
+    return None
+
+
+def combat_resume_confirmation_decision(text: str | None) -> str | None:
+    """戦闘後の「続ける？」への返事を resume / close へ閉じて判定する。"""
+
+    source = str(text or "").strip()
+    if not source or source.endswith(("?", "？")):
+        return None
+    if _COMBAT_RESUME_ACCEPT_PATTERN.fullmatch(source):
+        return "resume"
+    if _COMBAT_RESUME_DECLINE_PATTERN.fullmatch(source):
+        return "close"
     return None
 
 
