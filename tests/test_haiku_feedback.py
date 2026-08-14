@@ -101,6 +101,7 @@ class CatalogReadingTest(unittest.TestCase):
 class PlayerInputHaikuFeedbackTest(unittest.TestCase):
     def test_extract_reading_and_revise(self) -> None:
         self.assertEqual(extract_reading_correction("草地はくさち"), ("草地", "くさち", None))
+        self.assertIsNone(extract_reading_correction("広がる緑はにしてはどうでした"))
         self.assertEqual(
             extract_reading_correction("そうちじゃなくてくさち"),
             ("そうち", "くさち", "そうち"),
@@ -115,6 +116,17 @@ class PlayerInputHaikuFeedbackTest(unittest.TestCase):
         assert ctx.reading_correction is not None
         self.assertEqual(ctx.reading_correction.surface, "草地")
         self.assertEqual(ctx.reading_correction.reading, "くさち")
+        self.assertTrue(ctx.reading_correction.explicit)
+
+        shorthand = route_player_input("草地はくさち")
+        self.assertIsNotNone(shorthand.reading_correction)
+        assert shorthand.reading_correction is not None
+        self.assertFalse(shorthand.reading_correction.explicit)
+
+        wrong_reading = route_player_input("そうちじゃなくてくさち")
+        self.assertIsNotNone(wrong_reading.reading_correction)
+        assert wrong_reading.reading_correction is not None
+        self.assertTrue(wrong_reading.reading_correction.explicit)
 
         ctx2 = route_player_input("直し: あああ / いいい / ううう")
         self.assertEqual(ctx2.revised_haiku_text, "あああ\nいいい\nううう")

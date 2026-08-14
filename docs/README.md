@@ -32,7 +32,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 
 | Issue | 主題 | 主ドキュメント |
 |---|---|---|
-| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 入り口（限定 structured 抽出・共同編集者 leaf） | **closed** · `haiku-workshop-intake-patterns` · `haiku/workshop` |
+| [#8](https://github.com/yukincom/DokiDoki_Dogido/issues/8) | workshop 入り口（OS AIの限定意味抽出・共同編集者 leaf） | **closed** · `haiku-workshop-intake-patterns` · `haiku/workshop` |
 | [#37](https://github.com/yukincom/DokiDoki_Dogido/issues/37) | workshop チェックポイント記憶（薄くためて発句のみ） | [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md) · `memory-architecture` |
 | [#13](https://github.com/yukincom/DokiDoki_Dogido/issues/13) | ボイス速度・間 | `voice-delivery-plan` |
 | [#20](https://github.com/yukincom/DokiDoki_Dogido/issues/20) | 複数ユーザー・記憶境界 | `multi-user-tenancy` · `memory-architecture` |
@@ -120,7 +120,7 @@ casual（原則） ──┬── sm-vs-prompt（PR 順）
 | # | Document | Summary |
 |---|---|---|
 | 1 | [haiku-architecture.md](haiku-architecture.md) | 発句パイプライン |
-| 2 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop・OS／端末内AIの限定抽出） |
+| 2 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md) | プレイヤー主導の改善（workshop・OS／端末内AIの限定意味抽出） |
 | 3 | [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md) | 取り込みパターン調査（観察の正本は **#8**） |
 | 4 | [haiku-feedback-plan.md](haiku-feedback-plan.md) | フィードバックと長期保存 |
 | 5 | [memory-architecture.md](memory-architecture.md) | 記憶モデル |

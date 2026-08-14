@@ -1,6 +1,8 @@
 # player_input/guardrails.py
 from __future__ import annotations
 
+import re
+
 HUSH_KEYWORDS = ("うるさい", "静かにして", "黙れ")
 HOSTILE_QUERY_KEYWORDS = ("敵", "モンスター", "モブ", "敵対モブ")
 HOSTILE_COUNT_QUERY_KEYWORDS = ("何体", "なんたい", "何匹", "残り", "何人", "何個体")
@@ -364,7 +366,13 @@ def extract_reading_correction(raw_text: str | None) -> tuple[str, str, str | No
             and reading
             and surface != reading
             and 1 <= len(surface) <= 20
-            and 1 <= len(reading) <= 20
+            and 1 <= len(reading) <= 16
+            # 「広がる緑は、にしてはどうでした」のような自然文を読み訂正へ
+            # 横取りしない。省略形は短い語の読みだけに閉じる。
+            and not re.search(
+                r"(?:にして|として|どう|でした|ですか|なら|けど|から|ので|ほう|まま)",
+                reading,
+            )
         ):
             return surface, reading, None
 
@@ -379,6 +387,18 @@ def extract_reading_correction(raw_text: str | None) -> tuple[str, str, str | No
             return wrong, right, wrong
 
     return None
+
+
+def is_explicit_reading_correction(raw_text: str | None) -> bool:
+    """読み訂正だと明示された形式か。曖昧な「AはB」は False。"""
+
+    text = (raw_text or "").strip()
+    if not text:
+        return False
+    return bool(
+        re.match(r"^(?:読み|よみ)(?:\s*[:：])?\s*.+?[=＝:：]", text)
+        or re.match(r"^.+?(?:の読みは|のよみは)", text)
+    )
 
 
 def asks_haiku_recall(normalized_text: str) -> bool:

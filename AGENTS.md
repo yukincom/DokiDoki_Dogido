@@ -14,7 +14,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 ```
 
 - **判断の主**はコード（状態機械 / py_trees / policy）
-- **LLM / OS AI**は言い回し生成と、閉じた型の限定抽出（workshop intent / findings）まで。状態変更・保存判断はコード
+- **LLM / OS AI**は言い回し生成と、閉じた型の限定抽出（workshop intent / findings / 一行置換 / pending採否）まで。状態変更・保存判断はコード
 - **記憶**は JSONL（few-shot 山盛りや Hermes 系汎用エージェントは使わない）
 
 汎用チャットボットや「なんでもできるエージェント」に改造しない。
@@ -52,8 +52,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - panic / 警告の優先、発話抑制、いつ川柳かは **状態機械側**
 - LLM に「今パニックすべきか」を委ねない
 - leaf 失敗時はカタログ fallback がある前提を壊さない
-- OS AI 出力から直接 close / lesson解除 / revision保存しない。enum・行番号・confidence をコード検証する
-- STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` を明示操作の正、`interpreted/semantic` を会話理解用として混ぜない
+- OS AI 出力から直接 close / lesson解除 / revision保存しない。enum・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
+- STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 
@@ -107,9 +107,10 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・完成三行のformal/conversational revise・明示 close・次の句。pending案の明示採用は現在句へ昇格してopen維持
-- 意図: `classify_workshop_intent` が大分類と永続化の正。`soft_default` の AI intent は返答トーン補助だけで、lesson・close・repair開始へ使わない。既知講評では対象行・断片・problem を抽出
-- `request_repair`: 明示ルール時だけ、大きい haiku route が検証済み対象行を `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は明示採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
-- プレイヤー局所編集: findingまたは上五／中七／下五の明示で一行だけ固定し、「〜に変えた方が」の語をコードでひらがな化する。正確な5/7/5音・hard制約・重複を検査し、未保存三行へ連続CASする。本文・現在句照会はLLMに生成させない。明示採用後は採用句を次の基準へ昇格しpinを維持。`player_explicit` をatomへ偽装しない
+- 意図: close / clear_lessons / 明示praise / 完成三行revision / 明示reading はコードが正。それ以外の自然文はOS AI優先の閉じたschemaでintent・対象行・断片・problemを抽出し、コードが永続化と実行条件を決める
+- `request_repair`: OS AIが高信頼に修正要求を抽出し、コードが検証済みfindingを確定できたときだけ、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
+- プレイヤー局所編集: 自然な提案はOS AIが発話中の置換語・evidenceと句中target fragmentを先に抽出し、従来の閉じた文字列解析は利用不可・低信頼時のfallbackに限る。finding／明示行／一意なfragmentで一行だけ固定し、コードでひらがな化・正確な5/7/5音・hard制約・重複を検査して未保存三行へ連続CASする。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない
+- pending採否: 専用OS AI schemaで accept / reject / modify / show / discuss 等を意味抽出。confidence・evidence・現在pending・CASをコード検証し、合格時だけ保存／破棄する。利用不可時は代表的な完全一致規則へfallback。採用後は句を次の基準へ昇格しpinを維持
 - 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
 - ロジックの本体は `haiku/workshop.py`。`mixins/haiku.py` は発句と制約注入フックまで
@@ -204,7 +205,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings 抽出 / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 明示採用後も継続）
+- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings・一行置換・pending採否抽出 / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  

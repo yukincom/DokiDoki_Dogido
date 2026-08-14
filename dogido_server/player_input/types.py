@@ -10,6 +10,9 @@ class ReadingCorrection:
     surface: str
     reading: str
     wrong_reading: str | None = None
+    # 「読み: A=B」「Aの読みはB」のように、読み訂正だと明示された形式。
+    # 省略形「AはB」は workshop の自然文より優先しない。
+    explicit: bool = False
 
 
 @dataclass(slots=True)
@@ -29,7 +32,8 @@ class HaikuRecallQuery:
 class PlayerInputContext:
     raw_text: str = ""
     normalized_text: str = ""
-    # STT の文脈補正は会話理解だけに使う。raw/normalized は明示操作の正として残す。
+    # STT の文脈補正は会話理解と限定意味抽出に使う。raw/normalized は
+    # 明示操作の正として残し、意味抽出からの実行時もコード検証を挟む。
     interpreted_text: str = ""
     breaks_silence: bool = False
     wants_quiet: bool = False

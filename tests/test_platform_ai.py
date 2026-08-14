@@ -210,11 +210,37 @@ class PlatformAIRouterTests(unittest.TestCase):
 
         self.assertEqual(
             schema["x-order"],
-            ["intent", "confidence", "repair_requested", "findings"],
+            ["intent", "confidence", "repair_requested", "findings", "line_proposal"],
         )
         finding_schema = schema["properties"]["findings"]["items"]
         self.assertIn("x-order", finding_schema)
         self.assertNotIn("line_index", finding_schema["required"])
+        proposal_schema = schema["properties"]["line_proposal"]
+        self.assertIn("x-order", proposal_schema)
+        self.assertNotIn("line_index", proposal_schema["required"])
+
+    def test_pending_decision_has_a_separate_closed_schema(self) -> None:
+        request = StructuredGenerationRequest(
+            kind="haiku_workshop_pending_decision",
+            fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+            details={
+                "current_verse": "はるのかぜ\nひつじがあるく\nよるのつき",
+                "pending_verse": "はるのかぜ\nあめつよくふる\nよるのつき",
+                "player_text": "よし、それで完成にしよう",
+                "allowed_actions": ["accept_pending", "uncertain"],
+            },
+            temperature=0.0,
+            route="chat",
+            max_tokens=96,
+        )
+
+        schema = _json_schema_for(request)
+
+        self.assertEqual(schema["x-order"], ["action", "confidence", "evidence"])
+        self.assertEqual(
+            schema["properties"]["action"]["enum"],
+            ["accept_pending", "uncertain"],
+        )
 
     def test_provider_is_reprobed_when_failure_cooldown_expires_before_refresh(self) -> None:
         router = PlatformStructuredAIRouter(

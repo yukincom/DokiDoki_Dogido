@@ -6,13 +6,17 @@ from dogido_server.haiku.materials import (
     short_material_entries,
 )
 from dogido_server.haiku.workshop import (
+    PendingRevisionAnalysis,
     RecentHaikuWorkshop,
     WorkshopAnalysis,
     WorkshopFinding,
+    WorkshopLineProposal,
+    build_pending_revision_llm_details,
     build_workshop_intent_llm_details,
     classify_workshop_intent,
     close_workshop,
     extract_conversational_revise,
+    finalize_pending_revision_payload,
     finalize_workshop_analysis_payload,
     is_open,
     is_workshop_hard_off_topic,
@@ -32,15 +36,19 @@ from dogido_server.haiku.workshop import (
 )
 
 __all__ = [
+    "PendingRevisionAnalysis",
     "RecentHaikuWorkshop",
     "WorkshopAnalysis",
     "WorkshopFinding",
+    "WorkshopLineProposal",
     "attach_fragment_links",
+    "build_pending_revision_llm_details",
     "build_workshop_intent_llm_details",
     "build_workshop_materials_seed",
     "classify_workshop_intent",
     "close_workshop",
     "extract_conversational_revise",
+    "finalize_pending_revision_payload",
     "finalize_workshop_analysis_payload",
     "is_open",
     "is_workshop_hard_off_topic",

@@ -134,7 +134,7 @@ P1〜P4 で過適合は改善済み。残り（任意）:
 |---|---|
 | VLM 常時 | コスト大。イベント駆動の「あれ見て」だけで十分 |
 | Vector RAG | 直引きと被りやすい。材料が薄い問題を先に |
-| workshop 全域の LLM 制御 | 限定 intent / findings 抽出で十分。状態・保存判断まで渡すとノイズ |
+| workshop 全域の LLM 制御 | 文脈別の限定 intent / findings / 一行置換 / pending採否抽出で十分。状態・保存判断まで渡すとノイズ |
 | 巨大パッケージ整理（Phase E） | 完成度というより開発者快適さ |
 
 ---
@@ -169,16 +169,16 @@ soft workshop 方針は後半をすでに押さえている。
 
 ---
 
-## 6. 現状スナップショット（2026-08-13）
+## 6. 現状スナップショット（2026-08-14）
 
 | 領域 | 状態 |
 |---|---|
-| workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・OS／端末内AI優先の限定 intent/findings 抽出＋chat fallback。praise は critique 保存のみ） |
+| workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・OS／端末内AI優先の限定 intent/findings／一行置換／pending採否抽出＋chat fallback。実行と保存はコード。praise は critique 保存のみ） |
 | H6 固定語 materials 突合 | **撤回** |
 | 発句 source atom 品質ゲート | 済（原文snapshot・節単位preface provenance/主張範囲・行別出典・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P4 | 済（P5 任意） |
 | 観測ギャップ・水辺など | 乗車中の乗り物材料は済（未乗車は省略・主語付き）。水辺・旗・エリトラなどは継続課題（完成度の本丸） |
-| 修正案 1 本・連続局所編集 / OS AI・chat fallback 実ログ評価 / Phase E | AIのLocate→Edit→Testに加え、finding／明示行→プレイヤー語のひらがな化→正確な5/7/5音→未保存三行へ連続CAS→明示採用後もpin維持まで済。句本文と現在句照会はコード固定。実ログ評価・整理は任意・未 |
+| 修正案 1 本・連続局所編集 / OS AI・chat fallback 実ログ評価 / Phase E | AIのLocate→Edit→Testに加え、OS AIが発話根拠つきでプレイヤー置換語とpending採否を抽出→コードでひらがな化・正確な5/7/5音・hard制約・CAS→未保存三行へ連続編集→採用後もpin維持まで済。句本文はコード固定。実ログ評価・整理は任意・未 |
 | VLM / Vector RAG | 将来枠 |
 
 ---

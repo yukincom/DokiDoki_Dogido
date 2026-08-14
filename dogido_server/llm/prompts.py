@@ -38,6 +38,7 @@ from .player_chat_prompts import build_player_chat_messages
 from .prompt_common import dialog_messages, leaf_dialog
 from .workshop_prompts import (
     build_haiku_workshop_intent_messages,
+    build_haiku_workshop_pending_decision_messages,
     build_haiku_workshop_reply_messages,
     build_haiku_workshop_revision_messages,
 )
@@ -78,6 +79,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "haiku_scene": _build_haiku_scene_messages,
         "haiku_workshop_material_pick": _build_haiku_workshop_material_pick_messages,
         "haiku_workshop_intent": _build_haiku_workshop_intent_messages,
+        "haiku_workshop_pending_decision": _build_haiku_workshop_pending_decision_messages,
         "haiku_workshop_reply": _build_haiku_workshop_reply_messages,
         "haiku_workshop_revision": _build_haiku_workshop_revision_messages,
         "aftermath": _build_aftermath_messages,
@@ -137,6 +139,10 @@ def _build_haiku_workshop_material_pick_messages(request: Any) -> list[dict[str,
 
 def _build_haiku_workshop_intent_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_workshop_intent_messages(request.details)
+
+
+def _build_haiku_workshop_pending_decision_messages(request: Any) -> list[dict[str, str]]:
+    return build_haiku_workshop_pending_decision_messages(request.details)
 
 
 def _build_haiku_workshop_reply_messages(request: Any) -> list[dict[str, str]]:

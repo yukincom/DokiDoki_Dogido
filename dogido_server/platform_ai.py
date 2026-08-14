@@ -83,8 +83,8 @@ def _reason_text(value: object | None) -> str:
 def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
     """端末内 guided generation 用 schema。
 
-    現在 OS AI に渡すのは workshop 講評抽出だけ。未知 kind は閉じて fallback
-    させ、汎用エージェント経路へ育てない。
+    現在 OS AI に渡すのは workshop の限定意味抽出だけ。未知 kind は閉じて
+    fallback させ、汎用エージェント経路へ育てない。
     """
 
     if request.kind == "haiku_workshop_intent":
@@ -100,9 +100,21 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
             # Foundation Models の raw JSON Schema は、生成順を明示する
             # ``x-order`` を object ごとに要求する。標準 JSON Schema の
             # properties 順へ暗黙依存しない。
-            "x-order": ["intent", "confidence", "repair_requested", "findings"],
+            "x-order": [
+                "intent",
+                "confidence",
+                "repair_requested",
+                "findings",
+                "line_proposal",
+            ],
             "additionalProperties": False,
-            "required": ["intent", "confidence", "repair_requested", "findings"],
+            "required": [
+                "intent",
+                "confidence",
+                "repair_requested",
+                "findings",
+                "line_proposal",
+            ],
             "properties": {
                 "intent": {"type": "string", "enum": allowed},
                 "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
@@ -144,6 +156,62 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
                         },
                     },
                 },
+                "line_proposal": {
+                    "title": "DogidoWorkshopLineProposal",
+                    "type": "object",
+                    "x-order": [
+                        "found",
+                        "line_index",
+                        "target_fragment",
+                        "replacement_text",
+                        "evidence",
+                        "confidence",
+                    ],
+                    "additionalProperties": False,
+                    "required": [
+                        "found",
+                        "target_fragment",
+                        "replacement_text",
+                        "evidence",
+                        "confidence",
+                    ],
+                    "properties": {
+                        "found": {"type": "boolean"},
+                        "line_index": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2,
+                        },
+                        "target_fragment": {"type": "string"},
+                        "replacement_text": {"type": "string"},
+                        "evidence": {"type": "string"},
+                        "confidence": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                        },
+                    },
+                },
+            },
+        }
+    if request.kind == "haiku_workshop_pending_decision":
+        actions = [str(value) for value in request.details.get("allowed_actions", []) if value]
+        if not actions:
+            actions = ["uncertain"]
+        return {
+            "title": "DogidoWorkshopPendingDecision",
+            "type": "object",
+            "x-order": ["action", "confidence", "evidence"],
+            "additionalProperties": False,
+            "required": ["action", "confidence", "evidence"],
+            "properties": {
+                "action": {"type": "string", "enum": actions},
+                "confidence": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                },
+                "evidence": {"type": "string"},
             },
         }
     raise ValueError(f"unsupported platform AI task: {request.kind}")
