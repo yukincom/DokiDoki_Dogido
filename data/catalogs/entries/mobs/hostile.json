@@ -8,6 +8,8 @@
     "aquatic",
     "dies_on_land",
     "undead",
+    "observed_speech_aliases",
+    "observed_speech_rewrite_from_ids",
     "poetic",
     "dogido_tactics"
   ],
@@ -1158,6 +1160,9 @@
     },
     "zombie_villager": {
       "label": "村人ゾンビ",
+      "observed_speech_rewrite_from_ids": [
+        "zombie"
+      ],
       "threat_class": "melee",
       "priority": "high",
       "burns_in_daylight": true,

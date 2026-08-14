@@ -157,6 +157,9 @@ GENERIC_TOPIC_TERMS = frozenset({
 - allowed = **観測由来 ∪（hypothesis 時のみ usable topic labels）**  
 - none 時: enforce オフだが、**観測名を observation に載せる**ことで LLM が正しく触れる  
 - 動物園: 観測があれば載る → habitat 不要  
+- 観測した種に限り、カタログの `observed_speech_aliases` を allowed に加える。現在は商人のラマ→ラマ、洞窟スパイダー→スパイダー、ヒカリイカ→イカ
+- 危険な一般化は `observed_speech_rewrite_from_ids` を持つ種だけ、直近10秒の視認・聴取・討伐推定を根拠に白リスト判定前へ戻す。現在は村人ゾンビを「ゾンビ」とした場合だけ「村人ゾンビ」へ修正
+- 一般種そのものも同時に観測済み、または同じ一般名に複数の修正先がある場合は曖昧なので修正しない。ガーディアン／エルダーガーディアンのような併存は両方を allowed にし、プレイヤーに合わせる言い方を LLM に任せる
 
 ### 2.4 digest（任意・小さめ）
 
@@ -239,7 +242,9 @@ user_text
   → enforce_wl = saw|hypothesis
   → hints / skeleton / plausibility = hypothesis 時のみ（条件付き）
   → details → LLM
-  → sanitize
+  → usable sanitize
+  → 直近観測に基づく一意な危険一般名の修正
+  → style / allowed_speech_labels sanitize
   → emit された文だけ履歴5往復へ
 ```
 

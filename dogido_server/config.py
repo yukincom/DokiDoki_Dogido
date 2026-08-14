@@ -201,6 +201,8 @@ class Settings(BaseSettings):
     player_chat_hearing_retention_ms: int = 12000
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
     player_chat_visual_retention_ms: int = 12000
+    # player_chat: 危険な一般名を正式 mob 名へ戻すための視認・聴取・討伐履歴
+    player_chat_name_correction_retention_ms: int = 10000
     # 話しかけたあと、自発発話（バイオーム・川柳など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
     player_input_priority_cooldown_ms: int = 20000

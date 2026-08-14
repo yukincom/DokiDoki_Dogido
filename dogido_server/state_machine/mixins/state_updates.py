@@ -274,6 +274,9 @@ class StateUpdatesMixin:
         self.state.commented_visual_keys.clear()
         self.state.commented_auditory_keys.clear()
         self.state.auditory_presence_states.clear()
+        # 移動前の敵を、新ディメンションで「視界から消えた＝討伐」と数えない。
+        self.state.tracked_hostile_entities.clear()
+        self.state.recent_kill_seen_at_by_type.clear()
         self.state.announced_hostile_counts.clear()
         self.state.burning_visual_keys.clear()
         self.state.daylight_water_comment_keys.clear()
@@ -532,6 +535,14 @@ class StateUpdatesMixin:
 
     def _update_dialogue_kill_tracking(self, event: GameEvent, now: datetime) -> None:
         """視界から消えた敵対を粗い撃破候補として数える（完全正確ではない）。"""
+        retention_ms = int(
+            getattr(self.settings, "player_chat_name_correction_retention_ms", 10000)
+        )
+        self.state.recent_kill_seen_at_by_type = {
+            mob_type: killed_at
+            for mob_type, killed_at in self.state.recent_kill_seen_at_by_type.items()
+            if (age := self._recent_ms(now, killed_at)) is not None and age <= retention_ms
+        }
         current: dict[str, str] = {}
         for threat in event.visual_threats:
             if not threat.entity_id:
@@ -550,6 +561,14 @@ class StateUpdatesMixin:
                 if entity_id not in current:
                     key = entity_type or "敵"
                     self.state.recent_kill_counts[key] = self.state.recent_kill_counts.get(key, 0) + 1
+                    normalized = (
+                        str(entity_type or "")
+                        .removeprefix("minecraft:")
+                        .strip()
+                        .lower()
+                    )
+                    if normalized:
+                        self.state.recent_kill_seen_at_by_type[normalized] = now
         self.state.tracked_hostile_entities = current
 
     def _update_dialogue_inventory_gains(self, event: GameEvent, now: datetime) -> None:

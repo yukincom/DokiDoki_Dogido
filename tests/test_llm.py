@@ -43,6 +43,31 @@ class LLMTests(unittest.TestCase):
         self.assertTrue(self.llm._is_usable_output("プレイヤーちゃん、ほんまに行くん？", {"player_name": "プレイヤーちゃん"}))
         self.assertFalse(self.llm._is_usable_output("プレイヤーちゃん、ほんまに行くん？"))
 
+    def test_player_chat_corrects_observed_name_before_style_whitelist(self) -> None:
+        class PlayerChatLLM(DogidoLLM):
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                return "あれ、ゾンビやったんか。ほんま怖かったわ。"
+
+        llm = PlayerChatLLM(
+            Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+        )
+        text = llm.generate_leaf_text(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="ようわからん、もうちょい教えて。",
+                details={
+                    "allowed_speech_labels": ["村人ゾンビ"],
+                    "speech_whitelist_enforce": True,
+                    "speech_name_corrections": {"ゾンビ": "村人ゾンビ"},
+                },
+            )
+        )
+
+        self.assertEqual(text, "あれ、村人ゾンビやったんか。ほんま怖かったわ。")
+
     def test_openai_compatible_backend_uses_chat_completions(self) -> None:
         llm = DogidoLLM(
             Settings(

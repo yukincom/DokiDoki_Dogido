@@ -513,6 +513,7 @@ class NarrationMixin:
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
             build_identify_skeleton,
+            build_observed_speech_name_corrections,
             filter_usable_topic_hits,
             reply_policy_line,
             resolve_reply_stance,
@@ -520,6 +521,7 @@ class NarrationMixin:
         )
 
         passive_types = self._player_chat_observed_passive_types(event)
+        recent_name_context_types = self._player_chat_recent_name_context_types(event)
         observed_ids = self._merge_unique_types(
             effective_visual_types,
             passive_types,
@@ -543,6 +545,10 @@ class NarrationMixin:
             visual_types=effective_visual_types,
             passive_types=passive_types,
             hearing_named_mobs=hearing_named_mobs,
+            recent_mob_types=recent_name_context_types,
+        )
+        speech_name_corrections = build_observed_speech_name_corrections(
+            recent_name_context_types
         )
         speech_whitelist_enforce = should_enforce_speech_whitelist(
             reply_stance, allowed_speech_labels
@@ -640,6 +646,7 @@ class NarrationMixin:
             "reply_policy": reply_policy,
             "allowed_speech_labels": allowed_speech_labels,
             "speech_whitelist_enforce": speech_whitelist_enforce,
+            "speech_name_corrections": speech_name_corrections,
             "identify_skeleton": identify_skeleton or "",
             "plausibility_hints": plausibility_hints,
             "asks_inventory": self.player_input.asks_inventory,
@@ -661,6 +668,18 @@ class NarrationMixin:
             temperature=0.65,
         )
         from dogido_server.llm.sanitize import contains_forbidden_mob_advice, is_style_acceptable
+        from dogido_server.player_chat_policy import rewrite_observed_speech_names
+
+        text, applied_name_corrections = rewrite_observed_speech_names(
+            text,
+            speech_name_corrections,
+        )
+        if applied_name_corrections:
+            LOGGER.warning(
+                "player_chat_name_corrected corrections=%s text=%s",
+                ",".join(f"{source}->{target}" for source, target in applied_name_corrections),
+                (text or "")[:80],
+            )
 
         if contains_forbidden_mob_advice(text, details):
             return preferred_fallback
@@ -776,6 +795,71 @@ class NarrationMixin:
                 seen.add(text)
                 merged.append(text)
         return merged
+
+    def _player_chat_recent_name_context_types(self, event: GameEvent) -> list[str]:
+        """危険な一般名の修正にだけ使う、直近の視認・聴取・討伐ID。"""
+        now = event.observed_at
+        retention_ms = int(
+            getattr(self.settings, "player_chat_name_correction_retention_ms", 10000)
+        )
+        dimension_changed_at = self.state.last_dimension_change_at
+
+        def is_recent_in_current_dimension(seen_at: datetime) -> bool:
+            age = self._recent_ms(now, seen_at)
+            return (
+                age is not None
+                and age <= retention_ms
+                and (dimension_changed_at is None or seen_at >= dimension_changed_at)
+            )
+
+        current_visual = [str(threat.type) for threat in event.visual_threats if threat.type]
+        current_passive = [str(mob.type) for mob in event.passive_mobs if mob.type]
+        current_hearing: list[str] = []
+        for audio in event.auditory_threats:
+            resolved = self._resolve_hearing_mob_type(
+                audio.label,
+                getattr(audio, "sound_event", None),
+            )
+            if resolved:
+                current_hearing.append(resolved)
+        for sound in event.ambient_sounds:
+            resolved = self._resolve_hearing_mob_type(
+                sound.type,
+                getattr(sound, "sound_event", None),
+            )
+            if resolved:
+                current_hearing.append(resolved)
+
+        recent_visual = [
+            memo.mob_type
+            for memo in self.state.recent_visual_memos
+            if is_recent_in_current_dimension(memo.seen_at)
+        ]
+        recent_passive = [
+            mob_type
+            for mob_type, seen_at in self.state.recent_passive_mob_seen_at_by_type.items()
+            if is_recent_in_current_dimension(seen_at)
+        ]
+        recent_hearing = [
+            memo.mob_type
+            for memo in self.state.recent_hearing_memos
+            if memo.mob_type
+            and is_recent_in_current_dimension(memo.heard_at)
+        ]
+        recent_kills = [
+            mob_type
+            for mob_type, killed_at in self.state.recent_kill_seen_at_by_type.items()
+            if is_recent_in_current_dimension(killed_at)
+        ]
+        return self._merge_unique_types(
+            current_visual,
+            current_passive,
+            current_hearing,
+            recent_visual,
+            recent_passive,
+            recent_hearing,
+            recent_kills,
+        )
 
     def _player_chat_observed_passive_types(self, event: GameEvent) -> list[str]:
         """今フレームの passive_mobs + 直近見た平和/中立（ambient 根拠）。"""

@@ -11,9 +11,11 @@ from dogido_server.llm.sanitize import is_style_acceptable
 from dogido_server.player_chat_policy import (
     build_allowed_speech_labels,
     build_identify_skeleton,
+    build_observed_speech_name_corrections,
     catalog_labels_mentioned_in_text,
     contains_unlisted_speech_names,
     reply_policy_line,
+    rewrite_observed_speech_names,
     resolve_reply_stance,
 )
 
@@ -135,6 +137,109 @@ class AllowedSpeechLabelsTests(unittest.TestCase):
         for name in ("ピリジャー", "サケ", "ウシ", "ヒツジ", "村人"):
             self.assertIn(name, labels)
             self.assertFalse(contains_unlisted_speech_names(f"{name}やな", labels))
+
+    def test_observed_safe_aliases_expand_from_catalog(self) -> None:
+        cases = (
+            ("trader_llama", "商人のラマ", "ラマ"),
+            ("cave_spider", "洞窟スパイダー", "スパイダー"),
+            ("glow_squid", "ヒカリイカ", "イカ"),
+        )
+        for mob_type, exact_name, alias in cases:
+            with self.subTest(mob_type=mob_type):
+                labels = build_allowed_speech_labels(
+                    topic_hits=[],
+                    visual_types=[mob_type],
+                )
+                self.assertIn(exact_name, labels)
+                self.assertIn(alias, labels)
+                self.assertFalse(contains_unlisted_speech_names(f"{alias}やな", labels))
+
+    def test_heard_trader_llama_allows_llm_to_say_llama(self) -> None:
+        labels = build_allowed_speech_labels(
+            topic_hits=[],
+            hearing_named_mobs=["商人のラマ", "行商人"],
+        )
+        details = {
+            "allowed_speech_labels": labels,
+            "speech_whitelist_enforce": True,
+        }
+        self.assertIn("ラマ", labels)
+        self.assertTrue(
+            is_style_acceptable(
+                "player_chat",
+                "右がやけにうるさいで…行商人かラマやろか、そっと覗いてみるか",
+                details,
+            )
+        )
+
+    def test_topic_only_does_not_expand_observation_alias(self) -> None:
+        labels = build_allowed_speech_labels(
+            topic_hits=[
+                {
+                    "kind": "mob",
+                    "entry_id": "trader_llama",
+                    "label_ja": "商人のラマ",
+                }
+            ],
+        )
+        self.assertIn("商人のラマ", labels)
+        self.assertNotIn("ラマ", labels)
+
+    def test_unrelated_wandering_trader_does_not_allow_llama(self) -> None:
+        labels = build_allowed_speech_labels(
+            topic_hits=[],
+            visual_types=["wandering_trader"],
+        )
+        self.assertNotIn("ラマ", labels)
+
+    def test_zombie_villager_builds_unique_general_name_correction(self) -> None:
+        self.assertEqual(
+            build_observed_speech_name_corrections(["zombie_villager"]),
+            {"ゾンビ": "村人ゾンビ"},
+        )
+        # 一般種も同時に観測した場合は、どちらを指すか曖昧なので直さない。
+        self.assertEqual(
+            build_observed_speech_name_corrections(["zombie_villager", "zombie"]),
+            {},
+        )
+
+    def test_guardian_pair_stays_with_llm_wording(self) -> None:
+        labels = build_allowed_speech_labels(
+            topic_hits=[],
+            visual_types=["guardian", "elder_guardian"],
+        )
+        self.assertIn("ガーディアン", labels)
+        self.assertIn("エルダーガーディアン", labels)
+        self.assertEqual(
+            build_observed_speech_name_corrections(["guardian", "elder_guardian"]),
+            {},
+        )
+        details = {
+            "allowed_speech_labels": labels,
+            "speech_whitelist_enforce": True,
+        }
+        self.assertTrue(is_style_acceptable("player_chat", "ガーディアンがおるで", details))
+        self.assertTrue(
+            is_style_acceptable("player_chat", "エルダーガーディアンもおるで", details)
+        )
+
+    def test_rewrite_general_name_without_touching_longer_catalog_names(self) -> None:
+        corrections = {"ゾンビ": "村人ゾンビ"}
+        corrected, applied = rewrite_observed_speech_names(
+            "さっきのゾンビ、怖かったわ",
+            corrections,
+        )
+        self.assertEqual(corrected, "さっきの村人ゾンビ、怖かったわ")
+        self.assertEqual(applied, [("ゾンビ", "村人ゾンビ")])
+
+        for already_specific in ("村人ゾンビがおったで", "ゾンビピグリンがおったで"):
+            with self.subTest(text=already_specific):
+                unchanged, applied = rewrite_observed_speech_names(
+                    already_specific,
+                    corrections,
+                )
+                self.assertEqual(unchanged, already_specific)
+                self.assertEqual(applied, [])
 
     def test_whitelist_enforce_only_for_identify_stances(self) -> None:
         from dogido_server.player_chat_policy import should_enforce_speech_whitelist

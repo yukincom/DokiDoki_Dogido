@@ -414,6 +414,88 @@ class PlayerChatVisualBufferTests(unittest.TestCase):
         self.assertIn("ピリジャー", labels)
 
 
+class PlayerChatNameCorrectionContextTests(unittest.TestCase):
+    def test_visual_and_inferred_kill_type_expire_after_ten_seconds(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(
+            Settings(
+                llm_enabled=False,
+                decision_policy="py_trees",
+                player_chat_name_correction_retention_ms=10000,
+            )
+        )
+        seen = make_event(
+            sequence=1,
+            at_sec=0.0,
+            visual_threats=[
+                VisualThreat(
+                    type="zombie_villager",
+                    entity_id="zv1",
+                    distance=5.0,
+                    direction=Direction(horizontal=HorizontalDirection.FRONT),
+                )
+            ],
+        )
+        seen.combat.combat_active_hint = True
+        machine.process(seen)
+
+        disappeared = make_event(sequence=2, at_sec=1.0)
+        disappeared.combat.combat_active_hint = True
+        machine.process(disappeared)
+
+        self.assertIn("zombie_villager", machine.state.recent_kill_seen_at_by_type)
+        within_retention = make_event(sequence=3, at_sec=9.5)
+        self.assertIn(
+            "zombie_villager",
+            machine._player_chat_recent_name_context_types(within_retention),
+        )
+
+        expired = make_event(sequence=4, at_sec=12.0)
+        machine.process(expired)
+        self.assertNotIn("zombie_villager", machine.state.recent_kill_seen_at_by_type)
+        self.assertNotIn(
+            "zombie_villager",
+            machine._player_chat_recent_name_context_types(expired),
+        )
+
+    def test_dimension_change_drops_old_name_correction_context(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(
+            Settings(
+                llm_enabled=False,
+                decision_policy="py_trees",
+                player_chat_name_correction_retention_ms=10000,
+            )
+        )
+        seen = make_event(
+            sequence=1,
+            at_sec=0.0,
+            visual_threats=[
+                VisualThreat(
+                    type="zombie_villager",
+                    entity_id="zv1",
+                    distance=5.0,
+                )
+            ],
+        )
+        seen.combat.combat_active_hint = True
+        machine.process(seen)
+
+        changed_dimension = make_event(sequence=2, at_sec=1.0)
+        changed_dimension.player.dimension = "minecraft:the_nether"
+        changed_dimension.combat.combat_active_hint = True
+        machine.process(changed_dimension)
+
+        self.assertEqual(machine.state.tracked_hostile_entities, {})
+        self.assertEqual(machine.state.recent_kill_seen_at_by_type, {})
+        self.assertNotIn(
+            "zombie_villager",
+            machine._player_chat_recent_name_context_types(changed_dimension),
+        )
+
+
 class PlayerChatPlaceContextTests(unittest.TestCase):
     def test_underground_context_despite_surface_biome(self) -> None:
         """地表バイオームでも sky_visible=false なら地下っぽい空間として渡す。"""
