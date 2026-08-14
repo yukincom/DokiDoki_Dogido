@@ -909,6 +909,21 @@ class DogidoService:
             else parse_player_line_replacement(None)
         )
         player_line_replacement = replacement_parse.replacement
+        if replacement_parse.status != "no_match":
+            LOGGER.warning(
+                "haiku_workshop_player_line_parse session_id=%s result=%s "
+                "candidate=%s explicit_line=%s marked_line=%s player=%s",
+                session.session_id,
+                replacement_parse.status,
+                (player_line_replacement.text[:40] if player_line_replacement else "-"),
+                (
+                    player_line_replacement.explicit_line_index
+                    if player_line_replacement is not None
+                    else None
+                ),
+                workshop.marked_line_index,
+                text[:100],
+            )
         speech_materials = materials_speech_line(workshop)
         debug_materials = materials_debug_line(workshop)
 
@@ -1034,7 +1049,7 @@ class DogidoService:
                 )
             if analysis.findings:
                 workshop.last_findings = [finding.to_dict() for finding in analysis.findings]
-            update_marked_workshop_line(
+            marked_line = update_marked_workshop_line(
                 workshop,
                 findings=analysis.findings,
                 player_text=(
@@ -1050,6 +1065,14 @@ class DogidoService:
                     else None
                 ),
             )
+            if analysis.findings:
+                LOGGER.warning(
+                    "haiku_workshop_locate session_id=%s result=%s marked_line=%s findings=%s",
+                    session.session_id,
+                    "accepted" if marked_line is not None else "ambiguous",
+                    marked_line,
+                    [finding.to_dict() for finding in analysis.findings],
+                )
         elif player_line_replacement is not None:
             # 明示行または直前markがあれば、置換のためにAIを呼ばない。
             update_marked_workshop_line(workshop, player_text=text)
@@ -1111,8 +1134,20 @@ class DogidoService:
                 LOGGER.warning("haiku_critique_save_failed detail=%s", exc)
 
         if player_line_replacement is not None:
+            target_line = player_line_replacement.explicit_line_index
+            if target_line is None:
+                target_line = workshop.marked_line_index
             result = build_player_line_revision(workshop, player_line_replacement)
             if result.text is None:
+                LOGGER.warning(
+                    "haiku_workshop_player_line_edit session_id=%s result=rejected "
+                    "target_line=%s candidate=%s reasons=%s base=%s",
+                    session.session_id,
+                    target_line,
+                    player_line_replacement.text[:40],
+                    list(result.failure_reasons),
+                    result.base_text[:80],
+                )
                 return [
                     AudioAction(
                         layer="speech",
@@ -1129,8 +1164,11 @@ class DogidoService:
             workshop.marked_line_index = None
             workshop.last_findings.clear()
             LOGGER.warning(
-                "haiku_workshop_player_line_edit session_id=%s base=%s revised=%s edits=%s",
+                "haiku_workshop_player_line_edit session_id=%s result=staged "
+                "target_line=%s candidate=%s base=%s revised=%s edits=%s",
                 session.session_id,
+                target_line,
+                player_line_replacement.text[:40],
                 result.base_text[:80],
                 result.text[:80],
                 len(result.edits),
