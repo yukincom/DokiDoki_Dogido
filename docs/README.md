@@ -57,6 +57,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 4 | [current-spec.md](current-spec.md) | 現行仕様の要約 |
 | 5 | [integration-architecture.md](integration-architecture.md) | コンポーネント連携 |
 | 6 | [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md) | 支援アクション・マイクラ句集UI・あんちょこ・OS 連携の将来構想 |
+| 7 | [assist-action-architecture.md](assist-action-architecture.md) | 支援アクションの実装箱と、実装済み episode 決定ログ |
 
 **つながり:** `concept` → 体験の核 · `project-overview` / `current-spec` → 何を作るか · `companion-maturity` → 次に何を厚くするか。
 
@@ -160,6 +161,7 @@ architecture（どう詠む）
 - [companion-maturity.md](companion-maturity.md)
 - [current-spec.md](current-spec.md)
 - [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md)
+- [assist-action-architecture.md](assist-action-architecture.md)
 
 ### Interface and runtime
 

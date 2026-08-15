@@ -26,6 +26,8 @@
 セッションを跨いで厚くするのは **workshop での句の指摘・直し**に限る方針。  
 詳細・ため方・発句のみ参照は [haiku-workshop-checkpoint-plan.md](haiku-workshop-checkpoint-plan.md)（Issue #37）。
 
+`.dogido_memory/eval/episodes.jsonl` は名前に episode を含むが、キャラクターが覚える長期記憶ではない。誤反応分析と将来の支援アクション監査に使う評価ログであり、`MemoryStore` から読まず、会話や川柳生成へ注入しない。仕様は [支援アクションの操縦席 §A](assist-action-architecture.md#a-エピソード-jsonl実装済み) を正とする。
+
 ## 2. 保存形式
 
 正本は JSON / JSONL とする。
@@ -39,6 +41,8 @@
     haiku_entries.jsonl
     haiku_revisions.jsonl   # 添削履歴。AI案とプレイヤー局所編集の採用差分を保存
     player_profile.json
+  eval/
+    episodes.jsonl          # 評価用の決定記録。会話・川柳記憶の正本ではない
 ```
 
 ### JSONL を使うもの
@@ -46,6 +50,7 @@
 - 時系列で追記するログ
 - 川柳エントリ
 - 添削履歴（`haiku_revisions.jsonl`。Hermes 前提の自動整理はしない）
+- 評価用の決定記録（`eval/episodes.jsonl`。記憶として読み戻さない）
 
 ### JSON を使うもの
 

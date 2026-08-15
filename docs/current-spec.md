@@ -43,6 +43,7 @@ Minecraft Java Edition
      -> state machine
      -> py_trees action policy
      -> LLM response generator（必要なときだけ）
+     -> episode decision log（評価用。会話・川柳記憶とは分離）
      -> audio router
   -> PC 音声 (VOICEVOX / say / afplay)
 ```
@@ -71,6 +72,7 @@ Minecraft Java Edition
 - 発話優先度を判定する
 - 緊急音声と通常会話を分離する
 - 必要なときだけ LLM を呼ぶ
+- 非重複イベントごとの判断と最終アクションを評価用 JSONL へbest-effortで記録する
 
 #### 音声出力（現行: PC / 将来: M5Stack）
 
@@ -434,6 +436,7 @@ adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕�
 3. `visual / auditory / inferred` の扱いを明文化する
 4. state machine を仕様化する
 5. audio cue 一覧と優先度を定義する（PC 再生まで）
+6. 発話あり／なしの決定を schema version 付き episode JSONL へ記録する
 
 ### 進行中 / 優先して磨く
 

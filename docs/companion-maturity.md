@@ -95,6 +95,8 @@
 
 workshop の critique JSONL は、そのまま改善キューになる（プレイヤーが教師）。
 
+通常の反応は、受理した非重複イベント1件につき `trigger → observation → state_before → decision → action → result` を `.dogido_memory/eval/episodes.jsonl` へ記録する。発話なしも含むため、誤反応だけでなく無反応も同じ集計面で比較できる。これは会話・川柳の記憶ではなく、runtimeへ読み戻さない評価ログ。詳細は [支援アクションの操縦席 §A](assist-action-architecture.md#a-エピソード-jsonl実装済み)。
+
 ### 3.3 川柳は「当たる率」より「外したあとの関係」
 
 H1〜H5.2 で **関係性の側はかなりできた**（pin / 講評 / soft lesson / 緩め / TTL）。

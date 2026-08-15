@@ -10,6 +10,7 @@ from uuid import uuid4
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
 from dogido_server.dialogue_context import DialogueContext
+from dogido_server.episode_log import EpisodeRecorder
 from dogido_server.haiku.combat_pause import (
     CombatWorkshopInputAnalysis,
     build_combat_workshop_input_details,
@@ -92,6 +93,7 @@ from dogido_server.state_machine import (
     AudioAction,
     DogidoStateMachine,
     HaikuEmission,
+    StateMachineResult,
 )
 from dogido_server.state_machine.fallback_catalog import fallback_prewarm_texts
 from dogido_server.state_machine.response_catalog import response_prewarm_texts
@@ -182,6 +184,8 @@ class DogidoService:
         self.llm = DogidoLLMRouter(settings)
         self.platform_ai = PlatformStructuredAIRouter(settings)
         self.memory = MemoryStore(settings.memory_dir) if settings.memory_enabled else None
+        # 評価用の決定記録。会話・川柳の正本 MemoryStore とは別writer／別path。
+        self.episodes = EpisodeRecorder(settings.memory_dir) if settings.memory_enabled else None
         if self.memory is not None:
             from dogido_server.catalog_readings import configure_corrections_path
 
@@ -288,6 +292,9 @@ class DogidoService:
                 server_time=datetime.now().astimezone(),
             )
             return ProcessedEvent(response=response, actions=[])
+
+        # このフレームのservice処理が状態を変える前を、決定記録の基準点にする。
+        state_before = self._episode_state_before(session)
 
         # 音声入力（/api/v1/player-input）はチャットと同じ user_text 経路に合流させる。
         # アダプタからのチャットが同じイベントに載っていた場合はそちらを優先し、保留分は次イベントへ
@@ -499,6 +506,7 @@ class DogidoService:
                     attached_player_text[:80],
                 )
 
+        output_flags = self._output_flags(actions)
         response = AcceptedEventResponse(
             accepted=True,
             event_id=_new_id("evt"),
@@ -506,10 +514,71 @@ class DogidoService:
             sequence=event.sequence,
             deduplicated=False,
             state=StateResponse(mode=machine_result.state.mode, combat_active=machine_result.combat_active),
-            outputs=self._output_flags(actions),
+            outputs=output_flags,
             server_time=datetime.now().astimezone(),
         )
+        self._record_episode(
+            session=session,
+            event=event,
+            response=response,
+            state_before=state_before,
+            machine_result=machine_result,
+            actions=actions,
+            output_flags=output_flags,
+            interpreted_user_text=interpreted_player_text,
+        )
         return ProcessedEvent(response=response, actions=actions)
+
+    def _episode_state_before(self, session: SessionInfo) -> dict[str, object]:
+        workshop = session.haiku_workshop
+        return {
+            "mode": session.machine.state.mode,
+            "pending_haiku_after_preface": session.machine.state.pending_haiku_after_preface,
+            "player_input_queued": bool((session.pending_player_text or "").strip()),
+            "workshop": (
+                "combat_paused"
+                if workshop is not None and workshop.combat_paused
+                else "open"
+                if workshop is not None and workshop.open
+                else "none"
+            ),
+        }
+
+    def _record_episode(
+        self,
+        *,
+        session: SessionInfo,
+        event: GameEvent,
+        response: AcceptedEventResponse,
+        state_before: dict[str, object],
+        machine_result: StateMachineResult,
+        actions: list[AudioAction],
+        output_flags: OutputFlags,
+        interpreted_user_text: str | None,
+    ) -> None:
+        if self.episodes is None:
+            return
+        try:
+            self.episodes.record(
+                event=event,
+                event_id=response.event_id,
+                session_id=session.session_id,
+                state_before=state_before,
+                mode_after=machine_result.state.mode,
+                combat_active=machine_result.combat_active,
+                actions=actions,
+                output_flags=output_flags,
+                haiku_emitted=machine_result.haiku_emission is not None,
+                interpreted_user_text=interpreted_user_text,
+                recorded_at=response.server_time,
+            )
+        except Exception as exc:  # recorder自体の不具合もリアルタイム経路へ伝播させない
+            LOGGER.warning(
+                "episode_record_failed session_id=%s sequence=%s detail=%s",
+                session.session_id,
+                event.sequence,
+                exc,
+            )
 
     def process_batch(
         self,

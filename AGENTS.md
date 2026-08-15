@@ -38,6 +38,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/platform_ai.py` | Apple Foundation Models / Foundry Local / chat fallback の限定 structured router |
 | `dogido_server/player_activity.py` | 乗車中だけ存在する vehicle 状態を、主語付きの雑談・川柳材料へ変換 |
 | `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
+| `dogido_server/episode_log.py` | 非重複イベント1件につき1行の評価用決定記録。`.dogido_memory/eval/episodes.jsonl`（会話・川柳記憶とは別） |
 | `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
 | `adapter/minecraft-fabric/` | ゲーム → イベント送信 |
 | `docs/` | 方針の正。実装とズレたら **docs を直すか実装を直すか**を明示 |
@@ -92,6 +93,14 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - revision / critique / lesson は JSONL
 - **プロンプトに過去 revision を常時 few-shot しない**
 - 想起は明示クエリ時（「句思い出して」等）
+
+### 3.5b エピソード決定記録は記憶ではない
+
+- `episode_log.py` は `trigger → observation → state_before → decision → action → result` を schema version 付きで追記する
+- 発話なしも含む非重複イベント1件を1行とし、重複受信は新しい判断として記録しない
+- `eval/episodes.jsonl` を `MemoryStore`、会話文脈、川柳生成へ読み戻さない
+- `result.scope=service_decision` はserviceが選んだ結果であり、TTS／スピーカーの実再生成功ではない
+- serialize・ディレクトリ作成・追記失敗をリアルタイム処理へ伝播させない
 
 ### 3.6 完成度の本丸（機能追加の前に）
 
@@ -176,13 +185,13 @@ pip install -e ".[dev]"   # ランタイム + pytest。サーバーだけなら 
 # 任意: TTS 読み補正（UniDic）… pip install -e ".[tts-reading]"
 cp .env.example .env   # 必要なら LLM / TTS を設定（DOGIDO_TTS_READING_ENGINE 等）
 python -m dogido_server
-python -m pytest tests/test_haiku*.py tests/test_tts_reading.py -q
+python -m pytest tests/test_haiku*.py tests/test_tts_reading.py tests/test_episode_log.py -q
 ```
 
 player テキスト注入（開発用・**アクティブセッション必須**）は
 [docs/adapter-api.md §21](docs/adapter-api.md#21-post-apiv1player-input) を参照。
 
-記憶ディレクトリは設定の `memory_dir`（多くの場合 `.dogido_memory` 系）。JSONL を手で壊すと lesson/entry がおかしくなる。
+永続化ルートは設定の `memory_dir`（多くの場合 `.dogido_memory` 系）。`long_term/` 等は記憶の正本、`eval/episodes.jsonl` は読み戻さない評価ログ。JSONL を手で壊すと履歴・集計がおかしくなる。
 
 ---
 
@@ -220,6 +229,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定。Y/Z・気温・閾値・downfallはLLMへ出さず、閉じた降水/雷/降雪環境と実測地表雪だけを共有 **済**
 - 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）+ 地表雷雨中の友好・中立 Mob 抑止（洞窟は維持）**済**
+- エピソード決定記録 A: 非重複イベントごとに発話あり／なしを `eval/episodes.jsonl` へbest-effort追記 **済**（記憶へは混ぜない）
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
 - 任意: 戦闘中断用 OS AI・chat fallback、通常workshop抽出・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
 
