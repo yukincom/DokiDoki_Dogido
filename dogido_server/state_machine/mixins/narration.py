@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from dogido_server.dialogue.player_plan import extract_player_turn_plan
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags, resolve_mob_catalog_entry
 from dogido_server.models import GameEvent, PassiveMob
 from dogido_server.player_activity import player_vehicle_fact
@@ -639,6 +640,13 @@ class NarrationMixin:
         # 文脈 STT 補正は雑談理解だけに使う。明示操作・永続化の判定は
         # PlayerInputContext.raw/normalized_text を参照する別経路のまま。
         user_text = (self.player_input.semantic_text or "").strip()
+        player_turn_plan = extract_player_turn_plan(user_text)
+        safety_priority = self._player_chat_safety_priority(event)
+        home_progress = (
+            self._player_chat_home_progress(event)
+            if player_turn_plan.action == "return_home"
+            else "unknown"
+        )
         from dogido_server.player_chat_policy import (
             build_allowed_speech_labels,
             build_identify_skeleton,
@@ -685,6 +693,11 @@ class NarrationMixin:
         nearby_types = list(tactics.get("nearby_hostile_types") or [])
         if tactics.get("safe_fallback"):
             fallback = str(tactics["safe_fallback"])
+        elif player_turn_plan.action == "return_home" and not combat_active and not nearby_types:
+            if self._effective_time_phase(event) == "evening":
+                fallback = "せやな、暗なる前に帰ろか。気いつけてな。"
+            else:
+                fallback = "せやな、気いつけて帰ろか。"
         raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
 
         passive_types = self._player_chat_observed_passive_types(event)
@@ -748,11 +761,16 @@ class NarrationMixin:
         look_for_observation = (
             look_target_label if self._player_chat_wants_look_answer(user_text) else ""
         )
+        # 明示された帰宅予定があるターンは、直近の友好モブを主題より前へ出さない。
+        # 脅威・音・指差しは安全に必要なので従来どおり残す。
+        passive_observation_types = (
+            [] if player_turn_plan.action == "return_home" else passive_types
+        )
         observation_summary = self._player_chat_observation_summary(
             event,
             threat_summary=threat_summary,
             hearing_summary=hearing_summary if (wants_sound or wants_presence) else "",
-            passive_types=passive_types,
+            passive_types=passive_observation_types,
             look_target_label=look_for_observation,
         )
         LOGGER.warning(
@@ -787,6 +805,16 @@ class NarrationMixin:
             speech_whitelist_enforce,
         )
         LOGGER.warning(
+            "player_chat_guidance time_phase=%s safety=%s turn_plan=%s evidence=%s "
+            "home_progress=%s passive_suppressed=%s",
+            self._effective_time_phase(event) or "unknown",
+            safety_priority,
+            player_turn_plan.action,
+            player_turn_plan.evidence or "-",
+            home_progress,
+            bool(passive_types and not passive_observation_types),
+        )
+        LOGGER.warning(
             "player_chat_hearing empty=%s mobs=%s sources=%s summary=%s auditory=%d ambient=%d buffer=%d",
             not bool(hearing_summary),
             ",".join(hearing_named_mobs) or "-",
@@ -809,6 +837,10 @@ class NarrationMixin:
             "space_kind": place_ctx["space_kind"],
             "sky_visible": place_ctx["sky_visible"],
             "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            "safety_priority": safety_priority,
+            "player_turn_plan": player_turn_plan.action,
+            "player_turn_plan_evidence": player_turn_plan.evidence,
+            "home_progress": home_progress,
             # raw weather は world 状態、weather_label は現在Y・気温で雨/雪を解決済み。
             # hearing / 雨音 packet とは混ぜない。
             "weather": self._weather_value(event.world.weather) or "unknown",

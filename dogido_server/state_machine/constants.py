@@ -160,6 +160,13 @@ TIME_PHASE_LABELS = {
     "night": "夜",
 }
 
+# player_chat の「家へ向かっている」補助判定。単発の距離差では決めず、
+# 短い窓の複数サンプルでのみ approaching / leaving を確定する。
+PLAYER_CHAT_HOME_PROGRESS_WINDOW_MS = 10000
+PLAYER_CHAT_HOME_PROGRESS_MAX_SAMPLES = 5
+PLAYER_CHAT_HOME_PROGRESS_STEP_BLOCKS = 0.25
+PLAYER_CHAT_HOME_PROGRESS_NET_BLOCKS = 1.0
+
 DIRECTION_LABELS = {
     HorizontalDirection.FRONT: "前",
     HorizontalDirection.FRONT_RIGHT: "右前",

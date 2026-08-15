@@ -947,13 +947,12 @@ class CommonMixin:
     def _render_sleeping_neighbor_line(self, event: GameEvent, now: datetime) -> str | None:
         return None
 
-    def _is_surface_evening_warning_context(self, event: GameEvent) -> bool:
-        time_phase = self._effective_time_phase(event)
-        if time_phase != "evening":
+    def _is_surface_safety_guidance_context(self, event: GameEvent) -> bool:
+        """夜警告と雑談の安全方針で共有する、地表の対象場所判定。"""
+
+        if not self._is_overworld_dimension(event):
             return False
         if self._is_night_warning_suppressed_biome(event.world.biome):
-            return False
-        if self._weather_value(event.world.weather) == "thunder":
             return False
         if not bool(event.world.sky_visible):
             return False
@@ -964,6 +963,53 @@ class CommonMixin:
         if self._is_safe_zone_with_door_event(event):
             return False
         return True
+
+    def _is_surface_evening_warning_context(self, event: GameEvent) -> bool:
+        time_phase = self._effective_time_phase(event)
+        if time_phase != "evening":
+            return False
+        if self._weather_value(event.world.weather) == "thunder":
+            return False
+        return self._is_surface_safety_guidance_context(event)
+
+    def _player_chat_safety_priority(self, event: GameEvent) -> str:
+        """現在フレームから毎回導出する。保存しないので朝昼には自然に消える。"""
+
+        if not self._is_surface_safety_guidance_context(event):
+            return "none"
+        if self._effective_time_phase(event) == "evening":
+            return "seek_safe_place"
+        if self._weather_value(event.world.weather) == "thunder":
+            return "seek_safe_place"
+        return "none"
+
+    def _player_chat_home_progress(self, event: GameEvent) -> str:
+        """リスポーン地点距離が複数回同方向へ動いたときだけ傾向を返す。"""
+
+        if not self._respawn_point_set(event) or event.world.respawn_distance is None:
+            return "unknown"
+        if self._is_home_respawn_bed_event(event):
+            return "at_home"
+        samples = list(self.state.recent_respawn_distance_samples)
+        if len(samples) < 3:
+            return "unknown"
+        distances = [float(distance) for _, distance in samples]
+        deltas = [current - previous for previous, current in zip(distances, distances[1:])]
+        approaching_steps = sum(
+            delta <= -PLAYER_CHAT_HOME_PROGRESS_STEP_BLOCKS for delta in deltas
+        )
+        leaving_steps = sum(
+            delta >= PLAYER_CHAT_HOME_PROGRESS_STEP_BLOCKS for delta in deltas
+        )
+        net_change = distances[-1] - distances[0]
+        if (
+            approaching_steps >= 2
+            and net_change <= -PLAYER_CHAT_HOME_PROGRESS_NET_BLOCKS
+        ):
+            return "approaching"
+        if leaving_steps >= 2 and net_change >= PLAYER_CHAT_HOME_PROGRESS_NET_BLOCKS:
+            return "leaving"
+        return "unknown"
 
     def _is_cave_or_submerged_night_warning_context(self, event: GameEvent) -> bool:
         if not self._is_overworld_dimension(event):

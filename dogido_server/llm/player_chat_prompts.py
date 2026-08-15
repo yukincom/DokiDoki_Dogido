@@ -47,6 +47,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     history_rules, history_block = _history_section(details)
     digest_rules, digest_block = _digest_section(details)
     combat_safety_rules = _combat_safety_rules(details, character_mode)
+    priority_rules, priority_block = _current_turn_priority_section(details)
 
     user_prompt = (
         f"{_dogido_chat_spirit()}\n"
@@ -56,6 +57,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"{history_rules}"
         f"{digest_rules}"
         f"{combat_safety_rules}"
+        f"{priority_rules}"
         "\n"
         "/no_think\n"
         "【材料】\n"
@@ -67,6 +69,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"時間: {detail_str(details, 'time_phase', 'unknown') or 'unknown'}\n"
         f"{_weather_block(details)}"
         f"スタンス: {stance}\n"
+        f"{priority_block}"
         f"{_haiku_workshop_block(details)}"
         f"{observation_block}"
         f"{topic_block}"
@@ -77,6 +80,42 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "プレイヤーの言葉に噛み合った一言だけ（12〜42字くらい）。"
     )
     return leaf_dialog("player_chat", request, user_prompt)
+
+
+def _current_turn_priority_section(details: dict[str, Any]) -> tuple[str, str]:
+    """現在ターンの明示予定と、コード導出の安全方針。メモリは扱わない。"""
+
+    plan = detail_str(details, "player_turn_plan", "none") or "none"
+    evidence = detail_str(details, "player_turn_plan_evidence")
+    safety = detail_str(details, "safety_priority", "none") or "none"
+    home_progress = detail_str(details, "home_progress", "unknown") or "unknown"
+    rules: list[str] = []
+    lines: list[str] = []
+
+    if plan == "return_home":
+        rules.append(
+            "- 今回の発話でプレイヤーが明示した予定を最優先し、反対方向の行動を提案しない"
+        )
+        lines.append("プレイヤーの今回の予定: リスポーン地点に設定されたベッドのある家へ帰る")
+        if evidence:
+            lines.append(f"予定の発話根拠: {evidence}")
+        progress_labels = {
+            "approaching": "家へ接近中",
+            "leaving": "家から遠ざかっている",
+            "at_home": "家へ到着済み",
+            "unknown": "不明",
+        }
+        lines.append(f"家への移動状況: {progress_labels.get(home_progress, '不明')}")
+
+    if safety == "seek_safe_place":
+        rules.append(
+            "- 移動や次の行動に触れる場合は現在の安全方針と両立させ、追加の遠出や探索を勧めない"
+        )
+        lines.append("現在の安全方針: 帰宅・避難を優先")
+
+    if not lines:
+        return "", ""
+    return "\n".join(rules) + "\n", "【今回だけの優先情報】\n" + "\n".join(lines) + "\n"
 
 
 def _weather_block(details: dict[str, Any]) -> str:

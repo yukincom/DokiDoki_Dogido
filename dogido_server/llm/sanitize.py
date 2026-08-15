@@ -104,6 +104,15 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
 
         if contains_unlisted_speech_names(text, details.get("allowed_speech_labels") or []):
             return False
+    if kind == "player_chat":
+        from dogido_server.dialogue.player_plan import conflicts_with_player_travel_guidance
+
+        if conflicts_with_player_travel_guidance(
+            text,
+            player_turn_plan=str(details.get("player_turn_plan") or "none"),
+            safety_priority=str(details.get("safety_priority") or "none"),
+        ):
+            return False
     if kind not in {
         "aftermath",
         "darkness_escape",

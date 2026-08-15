@@ -212,7 +212,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集 + 戦闘中断: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ 常駐会話モデルの限定 intent・findings・句評価・行呼称→`line_1/2/3`・一行置換・pending採否・自然な終了意図、OS AI優先は戦闘中断中の再開／終了意思抽出のみ / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続 / 戦闘中は句とpendingを保持してpause→コード安全確認後に再掲・継続確認）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
-- 雑談 P1〜P4: **済**（P5 任意）  
+- 雑談 P1〜P5 + 現在ターン予定／安全方針: **済**（帰宅予定は現在発話だけ、地表夕方／雷雨は毎フレーム導出、洞窟オフ）
 - TTS 読み: 例外表 + optional UniDic（`[tts-reading]`）**Phase 1–2 済**  
 - 川柳 preface: **見どころ→ここで一句→句** + 自分の世界（pending 中 chat 抑止）**済**  
 - 川柳 source atom 品質ゲート: カタログ原文snapshot + 節単位preface provenance/主張範囲の別評価 + 表示／読み／行概念／行別出典を束ねた一行正本 + 出典確定後の一意なカタログ名かな訂正（全文必須ではない）+ UniDicによる漢字候補の事前かな化 + 4生成方式の固定比較 + 行別失敗理由つき最大6回再生成 + 既出候補即時棄却 + fail-closed **済**

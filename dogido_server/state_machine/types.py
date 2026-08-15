@@ -87,6 +87,8 @@ class RuntimeState:
     # 中立モブの敵対化検知: 平和な姿を最後に見た時刻と、警告の種別クールダウン
     recent_passive_mob_seen_at_by_type: dict[str, datetime] = field(default_factory=dict)
     last_neutral_turned_hostile_comment_at_by_type: dict[str, datetime] = field(default_factory=dict)
+    # リスポーン地点への接近傾向。短期目標ではなく、現在移動の補助観測だけ。
+    recent_respawn_distance_samples: list[tuple[datetime, float]] = field(default_factory=list)
     last_time_phase: str | None = None
     suppression_started_at: datetime | None = None
     suppression_until: datetime | None = None

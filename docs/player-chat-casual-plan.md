@@ -1,8 +1,7 @@
 # player_chat 雑談3本柱 — 実装計画
 
 **日付:** 2026-07-16  
-**状態:** **P1〜P5 実装済み**
-
+**状態:** **P1〜P5 + 現在ターンの予定／安全方針 実装済み**
 **関連:** [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)、[player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md)
 
 ---
@@ -245,6 +244,8 @@ GENERIC_TOPIC_TERMS = frozenset({
 
 ```text
 user_text
+  → 現在ターンの明示予定（return_home のみ。保存しない）
+  → 現在フレームの安全方針（地表夕方 or 雷雨。保存しない）
   → find_catalog_topics (raw)
   → filter_usable_topic_hits (GENERIC 除去)
   → resolve_reply_stance (saw / hypothesis? / clarify / none)
@@ -258,6 +259,17 @@ user_text
   → style / allowed_speech_labels sanitize
   → emit された文だけ履歴5往復へ
 ```
+
+## 現在ターンの予定と安全方針（2026-08-15）
+
+- `time_phase` と `safety_priority` は別フィールド。`夕方なので帰宅` のような結合文として保存しない
+- `safety_priority=seek_safe_place` は、夜警告と共有する地表判定が有効で、現在が夕方または雷雨のときだけ毎フレーム導出する
+- 洞窟バイオーム・水中・空が見えない場所・安全な屋内では安全方針を載せない。朝昼や雷雨終了では次フレームから自然に `none` へ戻る
+- `player_turn_plan=return_home` は「帰らなくちゃ」「拠点に戻ろう」等、現在発話に根拠があるときだけ。会話メモリや JSONL へ保存しない
+- 帰宅予定のターンでは無関係な passive 観測を `observation_summary` から外し、明示予定を優先する
+- `respawn_distance` は短い窓の複数サンプルが同方向へ動いたときだけ `approaching / leaving`。単発差分は `unknown`
+- 帰宅・避難方針と衝突する追加の遠出提案は style 不合格として、安全な固定 fallback へ戻す
+- 「洞窟探検」「家を作る」等の短期目標スロットはまだ設けない。行動ログから目標を推測しない
 
 ---
 

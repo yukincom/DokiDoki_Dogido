@@ -20,16 +20,26 @@ from dogido_server.dialogue.chat_policy import (
     should_enforce_speech_whitelist,
     term_is_identify_signal,
 )
+from dogido_server.dialogue.player_plan import (
+    PlayerTurnPlan,
+    PlayerTurnPlanKind,
+    conflicts_with_player_travel_guidance,
+    extract_player_turn_plan,
+)
 
 __all__ = [
     "GENERIC_TOPIC_TERMS",
     "ReplyStance",
+    "PlayerTurnPlan",
+    "PlayerTurnPlanKind",
     "build_allowed_speech_labels",
     "build_identify_skeleton",
     "build_observed_speech_name_corrections",
     "catalog_labels_mentioned_in_text",
     "catalog_speech_labels",
     "contains_unlisted_speech_names",
+    "conflicts_with_player_travel_guidance",
+    "extract_player_turn_plan",
     "filter_usable_topic_hits",
     "has_identify_intent",
     "has_threat_presence_query",

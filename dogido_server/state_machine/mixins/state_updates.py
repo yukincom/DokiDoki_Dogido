@@ -6,7 +6,11 @@ from datetime import datetime, timedelta
 from math import inf
 
 from dogido_server.models import EventName, GameEvent, HorizontalDirection
-from dogido_server.state_machine.constants import DRAGON_PERCH_PHASES
+from dogido_server.state_machine.constants import (
+    DRAGON_PERCH_PHASES,
+    PLAYER_CHAT_HOME_PROGRESS_MAX_SAMPLES,
+    PLAYER_CHAT_HOME_PROGRESS_WINDOW_MS,
+)
 from dogido_server.state_machine.types import AuditoryPresenceState, DerivedSignals, RecentHearingMemo
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -29,6 +33,7 @@ class StateUpdatesMixin:
             mob_type = (mob.type or "").strip().lower()
             if mob_type:
                 self.state.recent_passive_mob_seen_at_by_type[mob_type] = now
+        self._update_respawn_distance_samples(event, now)
         # 脅威が来たら発句中の川柳（自分の世界）はキャンセルする。
         # プレイヤー雑談ではキャンセルしない（入力は service 側でキュー保持）。
         # 周期 (last_haiku_emitted_at) はそのままなので、静けさが戻って
@@ -252,12 +257,40 @@ class StateUpdatesMixin:
             self.state.multi_increase_announced_ids &= visible_ids
         self._log_haiku_block_state(event, now)
 
+    def _update_respawn_distance_samples(self, event: GameEvent, now: datetime) -> None:
+        """同じディメンション内の短い距離列だけを保持する。目標メモリではない。"""
+
+        distance = event.world.respawn_distance
+        if (
+            not self._respawn_point_set(event)
+            or distance is None
+            or not self._is_overworld_dimension(event)
+        ):
+            self.state.recent_respawn_distance_samples.clear()
+            return
+
+        samples = list(self.state.recent_respawn_distance_samples)
+        if samples:
+            latest_age_ms = max(0.0, (now - samples[-1][0]).total_seconds() * 1000.0)
+            if latest_age_ms > PLAYER_CHAT_HOME_PROGRESS_WINDOW_MS:
+                samples.clear()
+        cutoff = now - timedelta(milliseconds=PLAYER_CHAT_HOME_PROGRESS_WINDOW_MS)
+        samples = [(at, value) for at, value in samples if at >= cutoff]
+        if samples and samples[-1][0] == now:
+            samples[-1] = (now, float(distance))
+        else:
+            samples.append((now, float(distance)))
+        self.state.recent_respawn_distance_samples = samples[
+            -PLAYER_CHAT_HOME_PROGRESS_MAX_SAMPLES:
+        ]
+
     def _handle_dimension_change(self, event: GameEvent) -> None:
         current_dimension = self._normalized_dimension(event) or None
         previous_dimension = self.state.current_dimension
         if current_dimension == previous_dimension:
             return
         self.state.current_dimension = current_dimension
+        self.state.recent_respawn_distance_samples.clear()
         # 初観測が非オーバーワールドの場合もワープ到着直後とみなす
         if current_dimension is not None and (
             previous_dimension is not None
