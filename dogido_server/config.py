@@ -268,9 +268,9 @@ class Settings(BaseSettings):
     thunder_sound_comment_cooldown_ms: int = 10000
     nearby_lightning_recent_ms: int = 2000
     nearby_lightning_comment_cooldown_ms: int = 10000
-    # 実環境比較中だけ3分に短縮。比較終了後は必ず 600000（10分）へ戻す。
+    # 通常は10分。短期の生成比較で一時変更するときは環境変数だけで上書きする。
     # 優先イベント（脅威・モブ反応・入力・発話）の後は30秒の静けさを待つ。
-    haiku_interval_ms: int = 180000
+    haiku_interval_ms: int = 600000
     haiku_quiet_time_ms: int = 30000
     haiku_structured_max_tokens: int = 192
     # 4方式は一つずつ固定して比較する。材料からの自動選択はまだ行わない。
