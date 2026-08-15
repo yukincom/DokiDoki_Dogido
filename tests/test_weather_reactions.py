@@ -5,6 +5,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from dogido_server.config import Settings
+from dogido_server.llm.prompts import build_messages
+from dogido_server.llm.types import LeafGenerationRequest
 from dogido_server.models import (
     Certainty,
     CombatState,
@@ -13,6 +15,8 @@ from dogido_server.models import (
     EventName,
     GameEvent,
     HorizontalDirection,
+    MetaState,
+    PassiveMob,
     PlayerState,
     Position,
     PriorityHint,
@@ -33,6 +37,7 @@ def make_event(
     time_phase: TimePhase = TimePhase.DAY,
     sky_visible: bool = True,
     visual_threats: list[VisualThreat] | None = None,
+    user_text: str | None = None,
 ) -> GameEvent:
     threats = visual_threats or []
     return GameEvent(
@@ -74,6 +79,7 @@ def make_event(
             hostiles_within_10=sum(1 for threat in threats if (threat.distance or 999.0) <= 10.0),
             combat_active_hint=bool(threats),
         ),
+        meta=MetaState(user_text=user_text),
     )
 
 
@@ -87,7 +93,7 @@ def make_visual_threat(hostile_type: str, *, distance: float = 12.0) -> VisualTh
     )
 
 
-class DryBiomeWeatherReactionTests(unittest.TestCase):
+class WeatherReactionTests(unittest.TestCase):
     def make_machine(self) -> DogidoStateMachine:
         return DogidoStateMachine(Settings(decision_policy="py_trees", llm_enabled=False))
 
@@ -146,7 +152,7 @@ class DryBiomeWeatherReactionTests(unittest.TestCase):
         result = machine.process(event)
 
         speech_texts = [action.text for action in result.actions if action.layer == "speech" and action.text]
-        self.assertEqual(["うひゃあっ！雷や！あの音ほんま苦手やねん……！"], speech_texts)
+        self.assertEqual(["また鳴った……ほんま雷だけは落ち着かへんな。"], speech_texts)
 
     def test_nearby_lightning_strike_emits_gasp_and_callout(self) -> None:
         machine = self.make_machine()
@@ -170,7 +176,7 @@ class DryBiomeWeatherReactionTests(unittest.TestCase):
         self.assertTrue(
             any(
                 action.layer == "speech"
-                and action.text == "うひゃあっ！雷や！あの音ほんま苦手やねん……！"
+                and action.text == "また鳴った……ほんま雷だけは落ち着かへんな。"
                 for action in result.actions
             )
         )
@@ -199,6 +205,158 @@ class DryBiomeWeatherReactionTests(unittest.TestCase):
         speech = [action.text for action in result.actions if action.layer == "speech" and action.text]
 
         self.assertEqual(["今、落ちたで！"], speech)
+
+    def test_thunder_message_and_panic_cue_have_separate_cooldowns(self) -> None:
+        machine = self.make_machine()
+        first = make_event(sequence=100, biome="plains", weather=Weather.THUNDER)
+        after_three_minutes = make_event(
+            sequence=281,
+            biome="plains",
+            weather=Weather.THUNDER,
+        )
+        after_ten_minutes = make_event(
+            sequence=700,
+            biome="plains",
+            weather=Weather.THUNDER,
+        )
+        for event in (first, after_three_minutes, after_ten_minutes):
+            event.world.thunder_sound_recent_ms = 300
+
+        first_result = machine.process(first)
+        three_minute_result = machine.process(after_three_minutes)
+        ten_minute_result = machine.process(after_ten_minutes)
+
+        self.assertTrue(any(action.layer == "panic_cue" for action in first_result.actions))
+        self.assertTrue(any(action.layer == "speech" for action in first_result.actions))
+        self.assertFalse(
+            any(action.layer == "panic_cue" for action in three_minute_result.actions)
+        )
+        self.assertTrue(any(action.layer == "speech" for action in three_minute_result.actions))
+        self.assertTrue(any(action.layer == "panic_cue" for action in ten_minute_result.actions))
+        self.assertTrue(any(action.layer == "speech" for action in ten_minute_result.actions))
+
+    def test_thunder_message_uses_llm_weather_route(self) -> None:
+        class CaptureLLM:
+            def __init__(self) -> None:
+                self.requests = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                self.requests.append(request)
+                return "またゴロゴロ言うとる……落ち着かへんな。"
+
+            def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+                return {}
+
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=llm,
+        )
+        event = make_event(sequence=800, biome="plains", weather=Weather.THUNDER)
+        event.world.thunder_sound_recent_ms = 300
+
+        result = machine.process(event)
+
+        speech = [action.text for action in result.actions if action.layer == "speech"]
+        self.assertEqual(["またゴロゴロ言うとる……落ち着かへんな。"], speech)
+        self.assertEqual("weather_transition", llm.requests[0].kind)
+        self.assertEqual("thunder_heard", llm.requests[0].details.get("scene"))
+        self.assertTrue(llm.requests[0].details.get("thunder_reaction"))
+
+    def test_thunder_llm_prompt_is_a_mutter_not_an_extra_scream(self) -> None:
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="weather_transition",
+                fallback_text="fallback",
+                details={
+                    "scene": "thunder_heard",
+                    "thunder_reaction": True,
+                    "nearby_lightning": False,
+                    "weather_from": "thunder",
+                    "weather_to": "thunder",
+                },
+            )
+        )
+        prompt = "\n".join(message["content"] for message in messages)
+
+        self.assertIn("悲鳴を文字で重ねず小さく怖がる", prompt)
+        self.assertIn("近くへ落雷したとは断定しない", prompt)
+        self.assertIn("ぶつぶつ漏れる", prompt)
+
+    def test_player_reply_during_thunder_suppresses_autonomous_reaction_for_three_minutes(
+        self,
+    ) -> None:
+        machine = self.make_machine()
+        chat = make_event(
+            sequence=900,
+            biome="plains",
+            weather=Weather.THUNDER,
+            user_text="まだ雷すごいな",
+        )
+        chat.world.thunder_sound_recent_ms = 300
+        within_three_minutes = make_event(
+            sequence=1000,
+            biome="plains",
+            weather=Weather.THUNDER,
+        )
+        within_three_minutes.world.thunder_sound_recent_ms = 300
+        after_three_minutes = make_event(
+            sequence=1081,
+            biome="plains",
+            weather=Weather.THUNDER,
+        )
+        after_three_minutes.world.thunder_sound_recent_ms = 300
+
+        chat_result = machine.process(chat)
+        muted_result = machine.process(within_three_minutes)
+        resumed_result = machine.process(after_three_minutes)
+
+        self.assertTrue(any(action.layer == "speech" for action in chat_result.actions))
+        self.assertFalse(any(action.layer == "panic_cue" for action in chat_result.actions))
+        self.assertEqual([], [action.text for action in muted_result.actions if action.text])
+        self.assertTrue(any(action.layer == "panic_cue" for action in resumed_result.actions))
+        self.assertTrue(any(action.layer == "speech" for action in resumed_result.actions))
+
+    def test_surface_thunder_suppresses_passive_mob_comment_but_cave_keeps_it(self) -> None:
+        machine = self.make_machine()
+        surface = make_event(sequence=1100, biome="plains", weather=Weather.THUNDER)
+        surface.passive_mobs = [
+            PassiveMob(
+                type="cow",
+                distance=4.0,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+            )
+        ]
+        cave = make_event(
+            sequence=1101,
+            biome="dripstone_caves",
+            weather=Weather.THUNDER,
+            sky_visible=False,
+        )
+        cave.passive_mobs = list(surface.passive_mobs)
+
+        self.assertFalse(machine._should_emit_ambient_mob_comment(surface, surface.observed_at))
+        self.assertTrue(machine._should_emit_ambient_mob_comment(cave, cave.observed_at))
+
+    def test_surface_thunder_does_not_suppress_creeper_warning(self) -> None:
+        machine = self.make_machine()
+        creeper = make_visual_threat("creeper", distance=12.0)
+        creeper.approaching = True
+        event = make_event(
+            sequence=1200,
+            biome="plains",
+            weather=Weather.THUNDER,
+            visual_threats=[creeper],
+        )
+
+        result = machine.process(event)
+
+        self.assertTrue(
+            any("クリーパー" in (action.text or "") for action in result.actions)
+        )
 
 
 if __name__ == "__main__":

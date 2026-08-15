@@ -237,13 +237,20 @@ class EnvironmentalReactionsMixin:
         if sonic_boom_cue is not None:
             return [sonic_boom_cue]
 
-        # 実音の雷は時限性が高い。話しかけ・川柳より先に怖がる。
-        lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
-        if lightning_actions:
-            return lightning_actions
-        thunder_actions = self._emit_thunder_sound_actions(event, now)
-        if thunder_actions:
-            return thunder_actions
+        # プレイヤーへ返す入力がある tick は雷の自発反応を差し込まない。
+        # 実際に返答できた場合は、下の player 向け分岐で以後3分も抑える。
+        player_reply_pending = (
+            self.player_input.asks_hostile_count
+            or self.player_input.asks_dragon_direction
+            or self._has_pending_player_chat(event)
+        )
+        if not player_reply_pending:
+            lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
+            if lightning_actions:
+                return lightning_actions
+            thunder_actions = self._emit_thunder_sound_actions(event, now)
+            if thunder_actions:
+                return thunder_actions
 
         # 3) 川柳本句完了
         if self.state.pending_haiku_after_preface:
@@ -264,13 +271,19 @@ class EnvironmentalReactionsMixin:
 
         # 5) プレイヤー向け（workshop 講評は service 側。ここでは一般 chat / 個数問い）
         if self.player_input.asks_hostile_count:
-            return self._speech_actions(
+            actions = self._speech_actions(
                 self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
             )
+            self._suppress_thunder_after_player_reply(event, now, actions)
+            return actions
         if self.player_input.asks_dragon_direction:
-            return self._speech_actions(self._render_dragon_direction_answer(event))
+            actions = self._speech_actions(self._render_dragon_direction_answer(event))
+            self._suppress_thunder_after_player_reply(event, now, actions)
+            return actions
         if self._has_pending_player_chat(event):
-            return self._speech_actions(self._render_player_chat_reply(event))
+            actions = self._speech_actions(self._render_player_chat_reply(event))
+            self._suppress_thunder_after_player_reply(event, now, actions)
+            return actions
 
         stop_dark_push = self._should_stop_dark_push_audio(event, signals)
         blocked = self._blocked_environmental_actions(event, signals, now, stop_dark_push)
@@ -576,14 +589,14 @@ class EnvironmentalReactionsMixin:
     ) -> list[AudioAction]:
         if not self._has_recent_nearby_lightning(event):
             return []
-        recent_ms = self._recent_ms(now, self.state.last_nearby_lightning_comment_at)
-        if recent_ms is not None and recent_ms < self.settings.nearby_lightning_comment_cooldown_ms:
-            return []
-        self.state.last_nearby_lightning_comment_at = now
-        return [
-            self._build_cue_action("spot_hostile_gasp", "ひいっ！", now, interrupt=False),
-            self._speech_action(fallback_text("general", "weather_transition", "nearby_lightning_strike")),
-        ]
+        return self._emit_thunder_reaction_actions(
+            event,
+            now,
+            scene="nearby_lightning_strike",
+            cue_id="spot_hostile_gasp",
+            cue_text="ひいっ！",
+            fallback=fallback_text("general", "weather_transition", "nearby_lightning_strike"),
+        )
 
     def _emit_thunder_sound_actions(
         self,
@@ -596,19 +609,114 @@ class EnvironmentalReactionsMixin:
         # 近距離落雷は専用の「今、落ちた」を優先する。
         if self._has_recent_nearby_lightning(event):
             return []
-        recent_ms = self._recent_ms(now, self.state.last_thunder_sound_comment_at)
-        if recent_ms is not None and recent_ms < self.settings.thunder_sound_comment_cooldown_ms:
-            return []
-        self.state.last_thunder_sound_comment_at = now
-        # 同じ雷を天候遷移として続けて二度説明しない。
+        return self._emit_thunder_reaction_actions(
+            event,
+            now,
+            scene="thunder_heard",
+            cue_id="suppressed_gasp",
+            cue_text="ヒイ！",
+            fallback=fallback_text("general", "weather_transition", "thunder_heard"),
+        )
+
+    def _emit_thunder_reaction_actions(
+        self,
+        event: GameEvent,
+        now: datetime,
+        *,
+        scene: str,
+        cue_id: str,
+        cue_text: str,
+        fallback: str,
+    ) -> list[AudioAction]:
+        """雷の cue（10分）と一言（3分）を独立して組み立てる。"""
+
+        # 実音を根拠に扱った時点で、同じ雷を天候遷移として重ねて説明しない。
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
-        return [
-            self._build_cue_action("suppressed_gasp", "ヒイ！", now, interrupt=False),
-            self._speech_action(
-                fallback_text("general", "weather_transition", "thunder_heard")
-            ),
-        ]
+        suppressed_until = self.state.thunder_reaction_suppressed_until
+        if suppressed_until is not None and now < suppressed_until:
+            return []
+
+        message_recent_ms = self._recent_ms(
+            now,
+            self.state.last_thunder_reaction_message_at,
+        )
+        cue_recent_ms = self._recent_ms(now, self.state.last_thunder_panic_cue_at)
+        message_ready = (
+            message_recent_ms is None
+            or message_recent_ms >= self.settings.thunder_reaction_message_cooldown_ms
+        )
+        cue_ready = (
+            cue_recent_ms is None
+            or cue_recent_ms >= self.settings.thunder_reaction_panic_cue_cooldown_ms
+        )
+        if not message_ready and not cue_ready:
+            return []
+
+        actions: list[AudioAction] = []
+        if cue_ready:
+            actions.append(self._build_cue_action(cue_id, cue_text, now, interrupt=False))
+            self.state.last_thunder_panic_cue_at = now
+        if message_ready:
+            line = self._render_thunder_reaction_line(
+                event,
+                scene=scene,
+                fallback=fallback,
+            )
+            actions.append(self._speech_action(line))
+            self.state.last_thunder_reaction_message_at = now
+        return actions
+
+    def _render_thunder_reaction_line(
+        self,
+        event: GameEvent,
+        *,
+        scene: str,
+        fallback: str,
+    ) -> str:
+        """繰り返す雷への短い独り言を LLM で揺らし、失敗時だけ固定文へ戻す。"""
+
+        return self._generate_leaf_text(
+            kind="weather_transition",
+            fallback_text=fallback,
+            details={
+                "scene": scene,
+                "thunder_reaction": True,
+                "nearby_lightning": scene == "nearby_lightning_strike",
+                "player_name": self._player_call_name(event),
+                "biome": self._biome_label(event.world.biome),
+                "time_phase": (
+                    getattr(event.world.time_phase, "value", event.world.time_phase)
+                    or "unknown"
+                ),
+                "weather_from": "thunder",
+                "weather_to": "thunder",
+                "cold_biome": self._is_cold_weather_biome(event.world.biome),
+                "dry_biome": self._is_dry_weather_biome(event.world.biome),
+            },
+            temperature=0.72,
+        )
+
+    def _suppress_thunder_after_player_reply(
+        self,
+        event: GameEvent,
+        now: datetime,
+        actions: list[AudioAction],
+    ) -> None:
+        """雷雨中にプレイヤーへ返答できたら、自発的な雷反応を3分休ませる。"""
+
+        if self._weather_value(event.world.weather) != "thunder":
+            return
+        if not any(action.layer == "speech" and action.text for action in actions):
+            return
+        suppressed_until = now + timedelta(
+            milliseconds=self.settings.thunder_reaction_message_cooldown_ms
+        )
+        current_until = self.state.thunder_reaction_suppressed_until
+        if current_until is None or suppressed_until > current_until:
+            self.state.thunder_reaction_suppressed_until = suppressed_until
+        self.state.pending_weather_transition_from = None
+        self.state.pending_weather_transition_to = None
 
     def _emit_damaging_light_warning(self, event: GameEvent, now: datetime) -> str | None:
         if not self._should_consider_damaging_light_warning(event, now):

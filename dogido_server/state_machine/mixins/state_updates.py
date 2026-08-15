@@ -365,7 +365,6 @@ class StateUpdatesMixin:
         self.state.last_weather = None
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
-        self.state.last_thunder_sound_comment_at = None
         self.state.night_warning_pending = False
         self.state.pending_night_warning_detail = False
         self.state.pending_overworld_return_line = returning_to_overworld

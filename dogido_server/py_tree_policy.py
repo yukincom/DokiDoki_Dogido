@@ -214,12 +214,16 @@ class EmitPlayerChatActions(_Action):
         else:
             text = machine._render_player_chat_reply(context.event)
         if text:
-            actions.append(
-                machine._audio_action(
-                    layer="speech",
-                    interrupt=False,
-                    text=text,
-                )
+            reply_action = machine._audio_action(
+                layer="speech",
+                interrupt=False,
+                text=text,
+            )
+            actions.append(reply_action)
+            machine._suppress_thunder_after_player_reply(
+                context.event,
+                context.now,
+                [reply_action],
             )
 
 

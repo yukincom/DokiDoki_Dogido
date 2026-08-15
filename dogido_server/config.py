@@ -264,10 +264,10 @@ class Settings(BaseSettings):
     neutral_turned_hostile_comment_cooldown_ms: int = 60000
     ushiro_comment_cooldown_ms: int = 60000
     weather_sound_recent_ms: int = 4000
-    # 雷鳴は天候遷移とは別に、実音を聞いた怖がり反応を出す
-    thunder_sound_comment_cooldown_ms: int = 10000
+    # 雷鳴は天候遷移とは別に実音へ反応する。発話と cue は別クールダウン。
+    thunder_reaction_message_cooldown_ms: int = 180000
+    thunder_reaction_panic_cue_cooldown_ms: int = 600000
     nearby_lightning_recent_ms: int = 2000
-    nearby_lightning_comment_cooldown_ms: int = 10000
     # 通常は10分。短期の生成比較で一時変更するときは環境変数だけで上書きする。
     # 優先イベント（脅威・モブ反応・入力・発話）の後は30秒の静けさを待つ。
     haiku_interval_ms: int = 600000

@@ -417,6 +417,21 @@ def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[d
     scene = details.get("scene", "weather_transition")
     cold_biome_note = "寒い地域なので、雨は雪っぽい感覚で受け取る。\n" if details.get("cold_biome") else ""
     dry_biome_note = "乾燥帯なので、雨は降らず空が曇ったり雷が鳴るだけ。\n" if details.get("dry_biome") else ""
+    thunder_reaction = bool(details.get("thunder_reaction"))
+    thunder_note = ""
+    length_note = "会話っぽい一言を24〜42文字くらいで返す。"
+    if thunder_reaction:
+        strike_note = (
+            "近くへの落雷を実測しているので『今落ちた』『近かった』程度は言ってよい。"
+            if details.get("nearby_lightning")
+            else "雷鳴を聞いただけなので、近くへ落雷したとは断定しない。"
+        )
+        thunder_note = (
+            "これは天候変化の説明ではなく、鳴り続ける雷への短い独り言。\n"
+            "cue 側で驚き声は済んでいるので、悲鳴を文字で重ねず小さく怖がる。\n"
+            f"{strike_note}\n"
+        )
+        length_note = "ぶつぶつ漏れる会話っぽい一言を18〜34文字くらいで返す。"
     user_prompt = (
         "参考傾向:\n"
         "- 天気の変化に対する怖がりなおじさんの素直な反応\n"
@@ -433,9 +448,10 @@ def _build_weather_transition_messages(request: LeafGenerationRequest) -> list[d
         f"シーン名は{scene}。\n"
         f"{cold_biome_note}"
         f"{dry_biome_note}"
+        f"{thunder_note}"
         "場所の固有名詞や地形説明を無理に入れない。"
         "空の明るさや天気そのものへの反応を優先する。"
-        "会話っぽい一言を24〜42文字くらいで返す。"
+        f"{length_note}"
         "例文の語句を丸写しせず、怖がりなおじさんらしい自然な関西弁にする。"
     )
     return leaf_dialog('weather_transition', request, user_prompt)

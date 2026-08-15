@@ -776,6 +776,13 @@ class CommonMixin:
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
         if not event.passive_mobs:
             return False
+        # 地表の雷雨中は低優先の友好・中立モブ雑談を積まない。
+        # 洞窟バイオームでは地上天候を材料にしないため従来どおり反応する。
+        if (
+            self._weather_value(event.world.weather) == "thunder"
+            and not self._is_cave_biome(event.world.biome)
+        ):
+            return False
         # 川柳集中中（workshop / 発句 preface）は ambient を出さない
         if self._haiku_focus_active():
             return False
