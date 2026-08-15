@@ -11,13 +11,20 @@ from datetime import datetime, timedelta
 import re
 from typing import Any
 
-from dogido_server.memory_types import HaikuEmission
+from dogido_server.memory_types import HaikuEmission, HaikuLine
 from dogido_server.llm.haiku import count_japanese_sounds, haiku_line_failure_reasons
 from dogido_server.tts_reading import hiraganize_japanese_text, katakana_to_hiragana
 
 from .edit_contract import (
     PLAYER_LINE_EDIT_CONTRACT_VERSION,
     line_edit_plan_applies,
+)
+from .verse import (
+    build_haiku_lines,
+    line_source_records,
+    replace_haiku_line,
+    verse_reading_text,
+    verse_surface_text,
 )
 
 # 発句からの最大 open 時間
@@ -27,8 +34,9 @@ DEFAULT_T_IDLE = timedelta(seconds=120)
 # 句と無関係な入力が連続したら close
 DEFAULT_N_DRIFT = 2
 
-# H7-lite: soft_default の intent 補助と、既知講評を含む対象行・問題箇所の
-# structured 抽出だけに使う。close / clear_lessons / revise / reading は含めない。
+# H7-lite: 自然な講評・句評価・現在句照会・プレイヤー自身の一行置換を structured
+# 抽出する。終了も要求だけを別フィールドへ抽出し、実行はコードに残す。
+# clear_lessons / 完成三行 revise / reading は含めない。
 WORKSHOP_LLM_INTENTS = frozenset(
     {
         "ask_meaning",
@@ -39,11 +47,34 @@ WORKSHOP_LLM_INTENTS = frozenset(
         "ack",
         "other_haiku",
         "request_repair",
+        "show_current",
+        "propose_line_edit",
         "soft_default",
     }
 )
 WORKSHOP_LLM_MIN_CONFIDENCE = 0.75
 WORKSHOP_FINDING_MIN_CONFIDENCE = 0.65
+WORKSHOP_PROPOSAL_MIN_CONFIDENCE = 0.75
+WORKSHOP_PENDING_DECISION_MIN_CONFIDENCE = 0.80
+WORKSHOP_LINE_REFERENCE_MIN_CONFIDENCE = 0.75
+WORKSHOP_CLOSE_REQUEST_MIN_CONFIDENCE = 0.85
+WORKSHOP_CLOSE_SCOPES = frozenset({"workshop", "next_haiku"})
+WORKSHOP_EVALUATION_MIN_CONFIDENCE = 0.80
+WORKSHOP_EVALUATION_SENTIMENTS = frozenset(
+    {"positive", "negative", "mixed", "unknown"}
+)
+WORKSHOP_EVALUATION_SCOPES = frozenset({"whole_verse", "part", "unknown"})
+WORKSHOP_PENDING_ACTIONS = frozenset(
+    {
+        "accept_pending",
+        "reject_pending",
+        "modify_pending",
+        "show_pending",
+        "discuss",
+        "unrelated",
+        "uncertain",
+    }
+)
 WORKSHOP_PROBLEM_TYPES = frozenset(
     {
         "unnatural_japanese",
@@ -52,6 +83,7 @@ WORKSHOP_PROBLEM_TYPES = frozenset(
         "off_scene",
         "meter",
         "reading",
+        "repetition",
         "preference",
         "other",
     }
@@ -73,9 +105,26 @@ _PENDING_REVISION_ACCEPT_PATTERN = re.compile(
 )
 
 _EXPLICIT_LINE_PATTERNS: tuple[tuple[int, re.Pattern[str]], ...] = (
-    (0, re.compile(r"(?:一|1)行目|上五|上の句|最初の行")),
-    (1, re.compile(r"(?:二|2)行目|中七|中の句|真ん中の行")),
-    (2, re.compile(r"(?:三|3)行目|下五|下の句|最後の行")),
+    (
+        0,
+        re.compile(
+            r"(?:一|1)行目|上五|上の句|最初の行|最初の句|最初のパート|前の行|前のパート"
+        ),
+    ),
+    (
+        1,
+        re.compile(
+            r"(?:二|2)行目|中七|中の句|二の句|真ん中の行|真ん中の句|"
+            r"真ん中のパート|中央の行|中央のパート"
+        ),
+    ),
+    (
+        2,
+        re.compile(
+            r"(?:三|3)行目|下五|下の句|最後の行|最後の句|最後のパート|"
+            r"後ろの行|後ろの句|後ろのパート"
+        ),
+    ),
 )
 _PLAYER_REPLACEMENT_PATTERNS = (
     re.compile(
@@ -119,6 +168,80 @@ _STRICT_HIRAGANA_LINE = re.compile(r"[\u3041-\u3096ー]+")
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopLineConcept:
+    """表現揺れから独立した、三行の安定した概念ID。"""
+
+    concept_id: str
+    concept_number: int
+    line_index: int
+    position: str
+    canonical_name: str
+    reference_examples: tuple[str, ...]
+
+    def to_llm_dict(self) -> dict[str, object]:
+        return {
+            "concept_id": self.concept_id,
+            "concept_number": self.concept_number,
+            "line_index": self.line_index,
+            "position": self.position,
+            "canonical_name": self.canonical_name,
+            "reference_examples": list(self.reference_examples),
+        }
+
+
+WORKSHOP_LINE_CONCEPTS: tuple[WorkshopLineConcept, ...] = (
+    WorkshopLineConcept(
+        concept_id="line_1",
+        concept_number=1,
+        line_index=0,
+        position="upper",
+        canonical_name="上五",
+        reference_examples=(
+            "一行目",
+            "上五",
+            "上の句",
+            "最初の句",
+            "最初のパート",
+            "前のパート",
+        ),
+    ),
+    WorkshopLineConcept(
+        concept_id="line_2",
+        concept_number=2,
+        line_index=1,
+        position="middle",
+        canonical_name="中七",
+        reference_examples=(
+            "二行目",
+            "中七",
+            "中の句",
+            "二の句",
+            "真ん中",
+            "真ん中のパート",
+        ),
+    ),
+    WorkshopLineConcept(
+        concept_id="line_3",
+        concept_number=3,
+        line_index=2,
+        position="lower",
+        canonical_name="下五",
+        reference_examples=(
+            "三行目",
+            "下五",
+            "下の句",
+            "最後の句",
+            "後ろのパート",
+            "終わりのパート",
+        ),
+    ),
+)
+WORKSHOP_LINE_CONCEPT_BY_ID = {
+    concept.concept_id: concept for concept in WORKSHOP_LINE_CONCEPTS
+}
+
+
+@dataclass(frozen=True, slots=True)
 class WorkshopFinding:
     line_index: int | None
     fragment: str
@@ -137,19 +260,88 @@ class WorkshopFinding:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopLineProposal:
+    """会話モデルがプレイヤー発話から抽出した一行置換。実行可否はコードが決める。"""
+
+    replacement_text: str
+    target_fragment: str
+    line_index: int | None
+    evidence: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopLineReference:
+    """プレイヤーの行呼称を、発話根拠つき概念IDへ写した結果。"""
+
+    concept_id: str
+    concept_number: int
+    line_index: int
+    position: str
+    canonical_name: str
+    evidence: str
+    confidence: float
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "concept_id": self.concept_id,
+            "concept_number": self.concept_number,
+            "line_index": self.line_index,
+            "position": self.position,
+            "canonical_name": self.canonical_name,
+            "evidence": self.evidence,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopCloseRequest:
+    """OS AIが抽出し、コード検証を通ったworkshop終了要求。"""
+
+    scope: str
+    evidence: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopEvaluation:
+    """OS AIが発話から抽出した、現在句に対する明示的な評価。"""
+
+    sentiment: str
+    scope: str
+    evidence: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
 class WorkshopAnalysis:
     intent: str = "soft_default"
     confidence: float = 0.0
     repair_requested: bool = False
     findings: tuple[WorkshopFinding, ...] = ()
+    line_proposal: WorkshopLineProposal | None = None
+    line_reference: WorkshopLineReference | None = None
+    close_request: WorkshopCloseRequest | None = None
+    evaluation: WorkshopEvaluation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PendingRevisionAnalysis:
+    """未採用案に対する自然文の意味。保存・破棄はコード側で再検証する。"""
+
+    action: str = "uncertain"
+    confidence: float = 0.0
+    evidence: str = ""
+    close_request: WorkshopCloseRequest | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class PlayerLineReplacement:
-    """プレイヤーが明示した一行分の置換語。行番号はコード抽出時だけ入る。"""
+    """プレイヤーが明示した一行分の置換語と、句中の置換元。"""
 
     text: str
     explicit_line_index: int | None = None
+    target_fragment: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,8 +358,11 @@ class PlayerLineRevisionResult:
 
     text: str | None
     base_text: str
+    surface_text: str | None = None
+    lines: tuple[HaikuLine, ...] = ()
     edits: tuple[dict[str, object], ...] = ()
     failure_reasons: tuple[str, ...] = ()
+    target_line_index: int | None = None
 
 
 @dataclass(slots=True)
@@ -176,6 +371,8 @@ class RecentHaikuWorkshop:
 
     surface_text: str
     emitted_at: datetime
+    # surface_text は互換用の確定読み。表示表記・読み・出典の正本はこちら。
+    current_lines: tuple[HaikuLine, ...] = ()
     entry_id: str | None = None
     preface: str | None = "ここで一句。"
     interpretation: str | None = None
@@ -187,10 +384,12 @@ class RecentHaikuWorkshop:
     last_workshop_at: datetime | None = None
     drift_count: int = 0
     close_reason: str | None = None
-    # 講評抽出と修正案は会話履歴とは分離。修正案はプレイヤーが採用するまで
-    # 元句や memory を上書きしない。
+    # 限定意味抽出と修正案は会話履歴とは分離。修正案はOS AIが採用意図を
+    # 抽出しても、コードがpendingとCASを再検証するまで元句やmemoryを上書きしない。
     last_findings: list[dict[str, object]] = field(default_factory=list)
     pending_revision: str | None = None
+    pending_revision_surface_text: str | None = None
+    pending_revision_lines: tuple[HaikuLine, ...] = ()
     pending_revision_line_sources: list[dict[str, object]] = field(default_factory=list)
     pending_revision_base_text: str | None = None
     pending_revision_edits: list[dict[str, object]] = field(default_factory=list)
@@ -198,16 +397,57 @@ class RecentHaikuWorkshop:
     pending_revision_source: str | None = None
     current_revision_id: str | None = None
     marked_line_index: int | None = None
+    # 意味説明の直後だけ、短い納得を一般のsoft_defaultへ落とさない。
+    # 終了確認は別状態にし、納得だけでpinを勝手に閉じない。
+    awaiting_meaning_ack: bool = False
+    awaiting_close_confirmation: bool = False
+    close_confirmation_source: str | None = None
+    # 戦闘割り込みは close ではない。
+    # 句と未採用差分を保持したまま会話経路だけ止める。
+    combat_paused: bool = False
+    combat_paused_at: datetime | None = None
+    combat_pause_reason: str | None = None
+    combat_hostile_types: list[str] = field(default_factory=list)
+    combat_resume_pending_reason: str | None = None
+    combat_last_resume_reason: str | None = None
+    combat_override_signature: str | None = None
+    awaiting_combat_resume_confirmation: bool = False
 
     def display_line(self) -> str:
-        """明示採用済みの現在句。pending案とは混ぜない。"""
+        """明示採用済みの確定読み。pending案とは混ぜない。"""
 
+        if (
+            len(self.current_lines) == 3
+            and verse_reading_text(self.current_lines) == (self.surface_text or "").strip()
+        ):
+            return verse_reading_text(self.current_lines)
         return (self.surface_text or "").strip()
 
+    def display_surface(self) -> str:
+        """明示採用済みの漢字・カタカナを含みうる表示三行。"""
+
+        if (
+            len(self.current_lines) == 3
+            and verse_reading_text(self.current_lines) == (self.surface_text or "").strip()
+        ):
+            return verse_surface_text(self.current_lines)
+        return self.display_line()
+
     def editing_line(self) -> str:
-        """対話・次の局所編集で見せる最新版（未採用案があればそちら）。"""
+        """対話・次の局所編集で使う確定読み（未採用案優先）。"""
 
         return (self.pending_revision or self.surface_text or "").strip()
+
+    def editing_surface(self) -> str:
+        """対話・UI用の表示三行（未採用案優先）。"""
+
+        if len(self.pending_revision_lines) == 3:
+            return verse_surface_text(self.pending_revision_lines)
+        if self.pending_revision_surface_text:
+            return self.pending_revision_surface_text.strip()
+        if self.pending_revision:
+            return self.pending_revision.strip()
+        return self.display_surface()
 
 
 def open_from_emission(
@@ -233,10 +473,20 @@ def open_from_emission(
         mats["structure"] = emission.structure
     if emission.time_phase and "time_phase" not in mats:
         mats["time_phase"] = emission.time_phase
-    initial_text = normalize_workshop_verse(emission.text) or (emission.text or "").strip()
+    current_lines = emission.lines or build_haiku_lines(
+        emission.surface_text or emission.text,
+        line_sources=mats.get("line_sources") if isinstance(mats.get("line_sources"), list) else None,
+    )
+    initial_text = (
+        verse_reading_text(current_lines)
+        if len(current_lines) == 3
+        else normalize_workshop_verse(emission.reading_text or emission.text)
+        or (emission.reading_text or emission.text or "").strip()
+    )
     return RecentHaikuWorkshop(
         surface_text=initial_text,
         emitted_at=at,
+        current_lines=current_lines,
         entry_id=entry_id,
         preface=emission.preface,
         interpretation=emission.interpretation,
@@ -255,6 +505,71 @@ def is_open(workshop: RecentHaikuWorkshop | None) -> bool:
     return workshop is not None and bool(workshop.open)
 
 
+def is_active(workshop: RecentHaikuWorkshop | None) -> bool:
+    """open かつ戦闘中断中でない、会話可能な workshop か。"""
+
+    return is_open(workshop) and workshop is not None and not workshop.combat_paused
+
+
+def pause_workshop_for_combat(
+    workshop: RecentHaikuWorkshop,
+    *,
+    now: datetime,
+    hostile_types: list[str] | tuple[str, ...] = (),
+) -> bool:
+    """句とpendingを残して戦闘中断する。新規中断ならTrue。"""
+
+    if not workshop.open:
+        return False
+    if workshop.combat_paused:
+        return False
+    workshop.combat_paused = True
+    workshop.combat_paused_at = now
+    workshop.combat_pause_reason = "combat"
+    workshop.combat_hostile_types = list(
+        dict.fromkeys(str(item) for item in hostile_types if item)
+    )
+    workshop.combat_resume_pending_reason = None
+    workshop.combat_last_resume_reason = None
+    workshop.combat_override_signature = None
+    # 「意味説明の返事待ち」や一時的な行マークは戦闘後に持ち越さない。
+    # 一方、プレイヤーが組み立てた未採用三行は失わない。
+    workshop.awaiting_meaning_ack = False
+    workshop.awaiting_close_confirmation = False
+    workshop.close_confirmation_source = None
+    workshop.awaiting_combat_resume_confirmation = False
+    workshop.marked_line_index = None
+    workshop.last_findings.clear()
+    return True
+
+
+def resume_workshop_after_combat(
+    workshop: RecentHaikuWorkshop,
+    *,
+    now: datetime,
+    reason: str,
+    ask_confirmation: bool,
+    override_signature: str | None = None,
+) -> bool:
+    """中断時間をtimeoutから除外し、保存済み句を会話経路へ戻す。"""
+
+    if not workshop.open or not workshop.combat_paused:
+        return False
+    if workshop.combat_paused_at is not None and now >= workshop.combat_paused_at:
+        workshop.emitted_at += now - workshop.combat_paused_at
+    workshop.combat_paused = False
+    workshop.combat_paused_at = None
+    workshop.combat_pause_reason = None
+    workshop.combat_hostile_types.clear()
+    workshop.combat_resume_pending_reason = None
+    workshop.combat_last_resume_reason = reason
+    workshop.combat_override_signature = override_signature
+    workshop.awaiting_combat_resume_confirmation = ask_confirmation
+    workshop.last_workshop_at = now
+    workshop.drift_count = 0
+    return True
+
+
 def close_workshop(
     workshop: RecentHaikuWorkshop | None,
     *,
@@ -265,6 +580,16 @@ def close_workshop(
         return None
     workshop.open = False
     workshop.close_reason = reason
+    workshop.combat_paused = False
+    workshop.combat_paused_at = None
+    workshop.combat_pause_reason = None
+    workshop.combat_hostile_types.clear()
+    workshop.combat_resume_pending_reason = None
+    workshop.combat_override_signature = None
+    workshop.awaiting_combat_resume_confirmation = False
+    workshop.awaiting_meaning_ack = False
+    workshop.awaiting_close_confirmation = False
+    workshop.close_confirmation_source = None
     return workshop
 
 
@@ -287,6 +612,8 @@ def clear_pending_revision(workshop: RecentHaikuWorkshop) -> None:
     """未採用案だけを捨てる。現在句と長期記憶は変更しない。"""
 
     workshop.pending_revision = None
+    workshop.pending_revision_surface_text = None
+    workshop.pending_revision_lines = ()
     workshop.pending_revision_line_sources.clear()
     workshop.pending_revision_base_text = None
     workshop.pending_revision_edits.clear()
@@ -304,17 +631,21 @@ def advance_workshop_revision(
     revised = (workshop.pending_revision or "").strip()
     if not revised:
         return
-    line_sources = list(workshop.pending_revision_line_sources)
-    source = workshop.pending_revision_source
     workshop.surface_text = revised
+    if len(workshop.pending_revision_lines) == 3:
+        workshop.current_lines = workshop.pending_revision_lines
     workshop.current_revision_id = revision_id
     workshop.marked_line_index = None
     workshop.last_findings.clear()
+    workshop.awaiting_meaning_ack = False
+    workshop.awaiting_close_confirmation = False
+    workshop.close_confirmation_source = None
     clear_pending_revision(workshop)
-    if source == "generated_confirmed" and line_sources:
-        workshop.materials["line_sources"] = line_sources
+    synchronized_sources = line_source_records(workshop.current_lines)
+    if synchronized_sources:
+        # プレイヤー行の出典は空のまま。生成由来の固定行だけを引き継ぐ。
+        workshop.materials["line_sources"] = synchronized_sources
     else:
-        # プレイヤーの語を観測atomへ偽装しない。以後のAI修正は出典不足ならfail closed。
         workshop.materials.pop("line_sources", None)
 
 
@@ -351,6 +682,9 @@ def maybe_close_for_time(
     """時間切れで close。変化なければそのまま返す。"""
     if not is_open(workshop) or workshop is None:
         return workshop
+    # 戦闘の長さはプレイヤーが句を放置した時間ではない。
+    if workshop.combat_paused:
+        return workshop
     if now - workshop.emitted_at >= t_open:
         return close_workshop(workshop, reason="timeout_open")
     last = workshop.last_workshop_at or workshop.emitted_at
@@ -361,7 +695,7 @@ def maybe_close_for_time(
 
 def workshop_prompt_details(workshop: RecentHaikuWorkshop | None) -> dict[str, str]:
     """player_chat / workshop 返事用に details へ足す短いブロック。"""
-    if not is_open(workshop) or workshop is None:
+    if not is_active(workshop) or workshop is None:
         return {
             "haiku_workshop_open": "",
             "haiku_workshop_text": "",
@@ -502,6 +836,61 @@ def pick_material_for_fragment(
         return None
     # 短い具体語を優先
     return min(hits, key=lambda s: (len(s), s.count("の")))
+
+
+def grounded_material_for_question(
+    workshop: RecentHaikuWorkshop,
+    player_text: str,
+) -> str | None:
+    """質問された行の保存済み出典だけを返す。候補一覧から推測しない。"""
+
+    records = (
+        workshop.pending_revision_lines
+        if len(workshop.pending_revision_lines) == 3
+        else workshop.current_lines
+    )
+    player_reading = hiraganize_japanese_text(player_text or "")
+    player_reading = katakana_to_hiragana(player_reading)
+    probe = _compact_kana(player_reading)
+    matched: list[tuple[int, int]] = []
+    for line in records:
+        reading = _compact_kana(line.reading_text)
+        surface = _compact_kana(line.surface_text)
+        score = 0
+        if reading and (reading in probe or probe in reading):
+            score = len(reading)
+        elif surface and (surface in probe or probe in surface):
+            score = len(surface)
+        else:
+            # STTが一部を漢字化しても、三文字以上の一意な読み断片なら行を特定できる。
+            for width in range(min(len(reading), len(probe)), 2, -1):
+                if any(reading[start : start + width] in probe for start in range(len(reading) - width + 1)):
+                    score = width
+                    break
+        if score >= 3:
+            matched.append((score, line.line_index))
+    if matched:
+        best_score = max(score for score, _index in matched)
+        best_indices = {index for score, index in matched if score == best_score}
+        if len(best_indices) == 1:
+            line = records[next(iter(best_indices))]
+            labels: list[str] = []
+            # identityを先にし、note断片だけを名称のように答えない。
+            ordered_sources = sorted(
+                line.source_atoms,
+                key=lambda source: 0 if source.get("kind") == "catalog_label" else 1,
+            )
+            for source in ordered_sources:
+                label = str(source.get("text") or "").strip()
+                if label and label not in labels:
+                    labels.append(label)
+            if labels:
+                return "、".join(labels[:2])
+
+    # 古い発句やテスト用emissionでは行レコードに出典がないことがある。
+    # その場合も、一意な句断片リンクだけを使い、全候補からAIに選ばせない。
+    fragment = _quoted_or_fragment_about_verse(player_text, workshop.editing_line())
+    return pick_material_for_fragment(fragment, workshop, player_text=player_text)
 
 
 def build_ask_meaning_llm_details(
@@ -652,6 +1041,8 @@ _CLOSE_PATTERN = re.compile(
     r"^(?:(?:うん|はい)[、, ]*)?(?:"
     r"もう(?:ええ|いい)(?:わ|よ|で|です)?|"
     r"(?:次|つぎ)(?:いこ|行こ)(?:う|か)?|"
+    r"(?:(?:これ|ここ)で[、, ]*)?(?:終了|終わり)(?:に(?:しよう|する|します)|で|や|です)?|"
+    r"(?:今日は|きょうは)?[、, ]*ここまで(?:に(?:しよう|する|します)|で|です)?|"
     r"わかった(?:よ|で|わ)?|おk(?:です)?|おけ(?:です)?|ok(?:です)?|よし|"
     r"了解(?:や|です|しました)?"
     r")[。！!]*$",
@@ -660,7 +1051,7 @@ _CLOSE_PATTERN = re.compile(
 _PRAISE_PATTERN = re.compile(
     r"^(?:(?:うん|ほんまに|めっちゃ|なかなか|すごく)[、, ]*)?"
     r"(?:(?:これ|この句|その句|句)(?:は|が)?[、, ]*)?"
-    r"(?:いい句|良い句|ええ句|うまい|上手|好き|気に入った|"
+    r"(?:いい句|良い句|ええ句|いい|ええ|うまい|上手|好き|気に入った|"
     r"そのままで(?:いい|ええ))"
     r"(?:やな|やね|やん|やで|やわ|や|だね|ですね|だ|です|な|ね|よ|わ|"
     r"(?:だ|や)?(?:と|って)思う|(?:だ|や)?(?:と|って)おもう)?[。！!]*$"
@@ -739,6 +1130,41 @@ _ACK_MARKERS = (
     "そうやな",
     "了解や",
 )
+_MEANING_ACK_PATTERN = re.compile(
+    r"^(?:(?:ああ|あー|うん|はい)[、, ]*)?(?:"
+    r"そうなん(?:だ|や)(?:ね|な)?|"
+    r"そういうこと(?:か|ね|なんだ|なんや)|"
+    r"なるほど(?:ね|な)?|そっか|そうか|"
+    r"わかった(?:よ|わ|で)?|理解した|りかいした|腑に落ちた"
+    r")[。！!]*$"
+)
+_CLOSE_CONFIRM_ACCEPT_PATTERN = re.compile(
+    r"^(?:(?:うん|はい|ええ|そう)(?:[、, ]*)?){0,2}(?:"
+    r"うん|はい|ええよ|いいよ|そうしよ(?:う)?|それで(?:いい|ええ)?|"
+    r"ここまで(?:で|にしよう)?|終わ(?:り|ろう|っていい)|終了(?:で|にしよう)?"
+    r")[。！!]*$"
+)
+_CLOSE_CONFIRM_CONTINUE_PATTERN = re.compile(
+    r"^(?:(?:いや|ううん|まだ)[、, ]*)?(?:"
+    r"まだ|まだ続け(?:る|たい|よう)|続け(?:る|たい|よう)|"
+    r"もう少し|まだ気になる|まだ直したい|終わらない|ここまでじゃない"
+    r")[。！!]*$"
+)
+_COMBAT_RESUME_ACCEPT_PATTERN = re.compile(
+    r"^(?:(?:うん|はい|ええ|おけ|OK|ok)[、, ]*)?(?:"
+    r"うん|はい|ええよ|いいよ|おけ|OK|ok|"
+    r"お願い(?:します)?|頼む|"
+    r"続け(?:る|よう|よか|て(?:ください)?|たい)|再開(?:する|しよう|して)?|"
+    r"句(?:を|の話を)?続け(?:る|よう|て(?:ください)?)|"
+    r"大丈夫[、, ]*続け(?:る|よう|て(?:ください)?)"
+    r")[。！!]*$"
+)
+_COMBAT_RESUME_DECLINE_PATTERN = re.compile(
+    r"^(?:(?:いや|ううん|もう)[、, ]*)?(?:"
+    r"やめ(?:る|とく|よう)|続けない|再開しない|"
+    r"もういい|もうええ|ここまで|終わり|終了"
+    r")[。！!]*$"
+)
 _REPAIR_REQUEST_PATTERN = re.compile(
     r"^(?:(?:うん|じゃあ|なら)[、, ]*)?"
     r"(?:(?:これ|そこ|(?:この|その)?句|(?:一|二|三|1|2|3)行目|上の句|中の句|下の句)"
@@ -748,6 +1174,41 @@ _REPAIR_REQUEST_PATTERN = re.compile(
     r"修正して|しゅうせいして)"
     r"(?:ほしい|ください|くれる|もらえる|みよう)?[。！!？?]*$"
 )
+
+
+def is_meaning_acknowledgement(text: str | None) -> bool:
+    """意味説明の直後だけ使う、代表的な納得表現の安全なfallback。"""
+
+    source = str(text or "").strip()
+    return bool(source and _MEANING_ACK_PATTERN.fullmatch(source))
+
+
+def close_confirmation_decision(text: str | None) -> str | None:
+    """終了確認への短い返答を、accept / continueへ閉じて判定する。"""
+
+    source = str(text or "").strip()
+    if not source or source.endswith(("?", "？")):
+        return None
+    if _CLOSE_CONFIRM_CONTINUE_PATTERN.fullmatch(source):
+        return "continue"
+    if _CLOSE_CONFIRM_ACCEPT_PATTERN.fullmatch(source):
+        return "accept"
+    return None
+
+
+def combat_resume_confirmation_decision(text: str | None) -> str | None:
+    """戦闘後の「続ける？」への返事を resume / close へ閉じて判定する。"""
+
+    source = str(text or "").strip()
+    if not source or source.endswith(("?", "？")):
+        return None
+    if _COMBAT_RESUME_ACCEPT_PATTERN.fullmatch(source):
+        return "resume"
+    if _COMBAT_RESUME_DECLINE_PATTERN.fullmatch(source):
+        return "close"
+    return None
+
+
 # 読みの好み（メタ語のみ。素材名・地名は禁止）
 _READING_META_MARKERS = (
     "読み",
@@ -992,16 +1453,41 @@ def build_workshop_intent_llm_details(
     同じ契約を chat route、Apple Foundation Models、Foundry Local で使う。
     """
     lines = workshop_verse_lines(workshop.editing_line())
+    conversation_stage = "discussion"
+    if workshop.awaiting_close_confirmation:
+        conversation_stage = "close_confirmation"
+    elif workshop.awaiting_meaning_ack:
+        conversation_stage = "meaning_explained"
     return {
         "verse": "\n".join(lines),
         "verse_lines": [
             {"line_index": index, "text": line}
             for index, line in enumerate(lines)
         ],
+        # 1-basedの概念番号と0-basedの配列indexを明示的に分ける。
+        # reference_examplesは意味抽出用で、将来の言い換え学習にも再利用できる。
+        "line_concepts": [
+            concept.to_llm_dict() for concept in WORKSHOP_LINE_CONCEPTS
+        ],
         "materials_speech": materials_speech_line(workshop),
         "player_text": (player_text or "").strip(),
+        "conversation_stage": conversation_stage,
         "allowed_intents": sorted(WORKSHOP_LLM_INTENTS),
         "allowed_problem_types": sorted(WORKSHOP_PROBLEM_TYPES),
+    }
+
+
+def build_pending_revision_llm_details(
+    workshop: RecentHaikuWorkshop,
+    player_text: str,
+) -> dict[str, object]:
+    """未採用案への返答だけを、小さな閉じた意味分類へ渡す。"""
+
+    return {
+        "current_verse": workshop.display_line(),
+        "pending_verse": workshop.pending_revision or "",
+        "player_text": (player_text or "").strip(),
+        "allowed_actions": sorted(WORKSHOP_PENDING_ACTIONS),
     }
 
 
@@ -1051,6 +1537,35 @@ def explicit_workshop_line_index(text: str | None) -> int | None:
     return next(iter(matches)) if len(matches) == 1 else None
 
 
+def mentioned_workshop_line_fragment(
+    workshop: RecentHaikuWorkshop,
+    player_text: str | None,
+) -> str | None:
+    """発話にそのまま現れた現在句の一行を、読みで一意に特定する。
+
+    音声入力では「下五」が安定して文字化されないため、
+    「くさちのねよりくさちかな」のような置換元の句を行指定として使う。
+    STTが漢字へ変換してもUniDicで読みに戻して照合し、複数行が含まれる
+    発話は誤置換を避けるため確定しない。
+    """
+
+    source = str(player_text or "").strip()
+    if not source:
+        return None
+    spoken = _compact_kana(katakana_to_hiragana(hiraganize_japanese_text(source)))
+    if not spoken:
+        return None
+    lines = workshop_verse_lines(workshop.editing_line())
+    if len(lines) != 3:
+        return None
+    matches = [
+        line
+        for line in lines
+        if len(_compact_kana(line)) >= 2 and _compact_kana(line) in spoken
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _explicit_workshop_line_indices(text: str | None) -> set[int]:
     source = str(text or "")
     return {
@@ -1065,8 +1580,9 @@ def update_marked_workshop_line(
     *,
     findings: tuple[WorkshopFinding, ...] = (),
     player_text: str | None = None,
+    line_reference: WorkshopLineReference | None = None,
 ) -> int | None:
-    """明示行、または一意に検証済みのfindingだけを次の編集対象に固定する。"""
+    """明示行・概念参照・一意なfindingから次の編集対象を固定する。"""
 
     explicit_indices = _explicit_workshop_line_indices(player_text)
     explicit = next(iter(explicit_indices)) if len(explicit_indices) == 1 else None
@@ -1077,10 +1593,16 @@ def update_marked_workshop_line(
         workshop.marked_line_index = None
         return None
     targets = {finding.line_index for finding in findings if finding.line_index is not None}
+    semantic_target = line_reference.line_index if line_reference is not None else None
+    if semantic_target is not None and targets and semantic_target not in targets:
+        workshop.marked_line_index = None
+        return None
     if len(targets) == 1:
         workshop.marked_line_index = next(iter(targets))
     elif len(targets) > 1:
         workshop.marked_line_index = None
+    elif semantic_target is not None:
+        workshop.marked_line_index = semantic_target
     return workshop.marked_line_index
 
 
@@ -1109,7 +1631,10 @@ def parse_player_line_replacement(raw_text: str | None) -> PlayerLineReplacement
             else:
                 had_line_prefix = False
             line_prefix = re.compile(
-                r"^(?:(?:一|二|三|1|2|3)行目|上五|中七|下五|上の句|中の句|下の句)"
+                r"^(?:(?:一|二|三|1|2|3)行目|上五|中七|下五|上の句|中の句|下の句|"
+                r"二の句|最初の(?:行|句|パート)|前の(?:行|パート)|"
+                r"真ん中の(?:行|句|パート)|中央の(?:行|パート)|"
+                r"最後の(?:行|句|パート)|後ろの(?:行|句|パート))"
                 r"(?:は|を|だけ|なら)?[、， ]*"
             )
             had_line_prefix = had_line_prefix or line_prefix.match(candidate) is not None
@@ -1154,6 +1679,20 @@ def extract_player_line_replacement(raw_text: str | None) -> PlayerLineReplaceme
     return parse_player_line_replacement(raw_text).replacement
 
 
+def is_explicit_player_line_replacement_command(text: str | None) -> bool:
+    """「〜に変えて／したら」のように、変更動詞を明示した発話か。"""
+
+    source = str(text or "").strip()
+    if not source:
+        return False
+    return bool(
+        re.search(
+            r"(?:に|へ)(?:変え|かえ|して|した)",
+            source,
+        )
+    )
+
+
 def build_player_line_revision(
     workshop: RecentHaikuWorkshop,
     replacement: PlayerLineReplacement,
@@ -1176,14 +1715,53 @@ def build_player_line_revision(
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("invalid_verse",))
     if any(normalize_player_haiku_line(line) != line for line in base_lines + draft_lines):
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("verse_not_hiragana",))
+    fragment_target: int | None = None
+    if replacement.target_fragment:
+        normalized_fragment = normalize_player_haiku_line(replacement.target_fragment)
+        if normalized_fragment is None:
+            return PlayerLineRevisionResult(
+                None,
+                base_text,
+                failure_reasons=("target_fragment_not_readable",),
+            )
+        folded_fragment = _compact_kana(normalized_fragment)
+        fragment_matches = [
+            index
+            for index, line in enumerate(draft_lines)
+            if folded_fragment and folded_fragment in _compact_kana(line)
+        ]
+        if len(fragment_matches) != 1:
+            return PlayerLineRevisionResult(
+                None,
+                base_text,
+                failure_reasons=(
+                    "ambiguous_target_fragment"
+                    if len(fragment_matches) > 1
+                    else "target_fragment_not_found",
+                ),
+            )
+        fragment_target = fragment_matches[0]
     target = replacement.explicit_line_index
+    if target is not None and fragment_target is not None and target != fragment_target:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("target_conflict",),
+        )
+    if target is None:
+        target = fragment_target
     if target is None:
         target = workshop.marked_line_index
     if target not in (0, 1, 2):
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("missing_target",))
     normalized = normalize_player_haiku_line(replacement.text)
     if normalized is None:
-        return PlayerLineRevisionResult(None, base_text, failure_reasons=("not_hiragana",))
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("not_hiragana",),
+            target_line_index=target,
+        )
     reasons = list(haiku_line_failure_reasons(normalized, target, workshop.materials))
     # プレイヤーの明示編集は「新5-7-5」を作るため、±1ではなく対象音数に合わせる。
     if count_japanese_sounds(normalized) != (5, 7, 5)[target]:
@@ -1198,11 +1776,40 @@ def build_player_line_revision(
             None,
             base_text,
             failure_reasons=tuple(dict.fromkeys(reasons)),
+            target_line_index=target,
         )
-    draft_lines[target] = normalized
-    revised_text = "\n".join(draft_lines)
+    if workshop.pending_revision:
+        source_lines = workshop.pending_revision_lines
+    else:
+        source_lines = workshop.current_lines
+    if len(source_lines) != 3:
+        source_lines = build_haiku_lines(workshop.editing_surface(), provenance="generated")
+    surface_candidate = str(replacement.text or "").strip().strip(
+        "「」『』\"' 。．.!！?？…"
+    )
+    revised_line_records = replace_haiku_line(
+        source_lines,
+        line_index=target,
+        surface_text=surface_candidate,
+        reading_text=normalized,
+        provenance="player_explicit",
+    )
+    if len(revised_line_records) != 3:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("invalid_line_records",),
+            target_line_index=target,
+        )
+    revised_text = verse_reading_text(revised_line_records)
+    draft_lines = workshop_verse_lines(revised_text)
     if revised_text == workshop.editing_line():
-        return PlayerLineRevisionResult(None, base_text, failure_reasons=("no_change",))
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("no_change",),
+            target_line_index=target,
+        )
     edits = tuple(
         {
             "line_index": index,
@@ -1219,8 +1826,20 @@ def build_player_line_revision(
         edit_contract=PLAYER_LINE_EDIT_CONTRACT_VERSION,
         edits=edits,
     ):
-        return PlayerLineRevisionResult(None, base_text, failure_reasons=("invalid_edit",))
-    return PlayerLineRevisionResult(revised_text, base_text, edits=edits)
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("invalid_edit",),
+            target_line_index=target,
+        )
+    return PlayerLineRevisionResult(
+        revised_text,
+        base_text,
+        surface_text=verse_surface_text(revised_line_records),
+        lines=revised_line_records,
+        edits=edits,
+        target_line_index=target,
+    )
 
 
 def wants_show_workshop_verse(text: str | None) -> bool:
@@ -1235,25 +1854,197 @@ def wants_show_workshop_verse(text: str | None) -> bool:
             r".{0,12}(?:どんな|どうな|見せて|みせて|読んで|よんで|言って|いって)",
             source,
         )
+        or re.search(
+            r"(?:どんな|どういう)句.{0,12}(?:なった|なりました|できた|出来た)",
+            source,
+        )
     )
+
+
+def _finalize_workshop_line_reference(
+    raw_reference: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_LINE_REFERENCE_MIN_CONFIDENCE,
+) -> WorkshopLineReference | None:
+    """OS AIの行呼称を、根拠つきのline_1/2/3だけへ閉じる。"""
+
+    if not isinstance(raw_reference, dict) or raw_reference.get("found") is not True:
+        return None
+    concept_id = str(raw_reference.get("concept_id") or "").strip()
+    concept = WORKSHOP_LINE_CONCEPT_BY_ID.get(concept_id)
+    if concept is None:
+        return None
+    raw_confidence = raw_reference.get("confidence")
+    try:
+        confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    evidence = str(raw_reference.get("evidence") or "").strip()[:48]
+    player_compact = _compact_kana(player_text or "")
+    evidence_compact = _compact_kana(evidence)
+    if (
+        not 0.0 <= confidence <= 1.0
+        or confidence < min_confidence
+        or len(evidence_compact) < 2
+        or evidence_compact not in player_compact
+    ):
+        return None
+
+    # コードで既知の呼称はAIの概念IDと突き合わせる。発話中に複数行の
+    # 明示呼称があれば、一行へ勝手に丸めず曖昧として捨てる。
+    explicit_indices = _explicit_workshop_line_indices(player_text)
+    if len(explicit_indices) > 1:
+        return None
+    explicit_evidence_index = explicit_workshop_line_index(evidence)
+    if (
+        explicit_evidence_index is not None
+        and explicit_evidence_index != concept.line_index
+    ):
+        return None
+    if explicit_indices and concept.line_index not in explicit_indices:
+        return None
+    return WorkshopLineReference(
+        concept_id=concept.concept_id,
+        concept_number=concept.concept_number,
+        line_index=concept.line_index,
+        position=concept.position,
+        canonical_name=concept.canonical_name,
+        evidence=evidence,
+        confidence=confidence,
+    )
+
+
+def _finalize_workshop_close_request(
+    raw_request: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_CLOSE_REQUEST_MIN_CONFIDENCE,
+) -> WorkshopCloseRequest | None:
+    """終了意図を、発話根拠つきの安全なコード入力へ閉じる。"""
+
+    if not isinstance(raw_request, dict) or raw_request.get("found") is not True:
+        return None
+    scope = str(raw_request.get("scope") or "unknown").strip()
+    if scope not in WORKSHOP_CLOSE_SCOPES:
+        # 「次の行へ」のような編集継続をworkshop終了へ丸めない。
+        return None
+    raw_confidence = raw_request.get("confidence")
+    try:
+        confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    evidence = str(raw_request.get("evidence") or "").strip()[:120]
+    player_compact = _compact_kana(player_text or "")
+    evidence_compact = _compact_kana(evidence)
+    if (
+        not 0.0 <= confidence <= 1.0
+        or confidence < min_confidence
+        or len(evidence_compact) < 2
+        or evidence_compact not in player_compact
+    ):
+        return None
+    return WorkshopCloseRequest(
+        scope=scope,
+        evidence=evidence,
+        confidence=confidence,
+    )
+
+
+def validate_workshop_evaluation_payload(
+    raw_evaluation: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_EVALUATION_MIN_CONFIDENCE,
+) -> tuple[WorkshopEvaluation | None, str]:
+    """句評価を検証し、採用値または観察用の棄却理由を返す。"""
+
+    if not isinstance(raw_evaluation, dict):
+        return None, "missing_payload"
+    if raw_evaluation.get("found") is not True:
+        return None, "not_found"
+    sentiment = str(raw_evaluation.get("sentiment") or "unknown").strip()
+    scope = str(raw_evaluation.get("scope") or "unknown").strip()
+    if sentiment not in WORKSHOP_EVALUATION_SENTIMENTS or sentiment == "unknown":
+        return None, "invalid_sentiment"
+    if scope not in WORKSHOP_EVALUATION_SCOPES:
+        return None, "invalid_scope"
+    raw_confidence = raw_evaluation.get("confidence")
+    try:
+        confidence = (
+            float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+        )
+    except (TypeError, ValueError):
+        return None, "invalid_confidence"
+    evidence = str(raw_evaluation.get("evidence") or "").strip()[:120]
+    player_compact = _compact_kana(player_text or "")
+    evidence_compact = _compact_kana(evidence)
+    if not 0.0 <= confidence <= 1.0:
+        return None, "invalid_confidence"
+    if confidence < min_confidence:
+        return None, "low_confidence"
+    if len(evidence_compact) < 2:
+        return None, "missing_evidence"
+    if evidence_compact not in player_compact:
+        return None, "ungrounded_evidence"
+    return (
+        WorkshopEvaluation(
+            sentiment=sentiment,
+            scope=scope,
+            evidence=evidence,
+            confidence=confidence,
+        ),
+        "accepted",
+    )
+
+
+def finalize_workshop_evaluation_payload(
+    payload: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_EVALUATION_MIN_CONFIDENCE,
+) -> WorkshopEvaluation | None:
+    """OS AI／会話モデル共通の句評価payloadを閉じた値へ変換する。"""
+
+    evaluation, _reason = validate_workshop_evaluation_payload(
+        payload,
+        player_text=player_text,
+        min_confidence=min_confidence,
+    )
+    return evaluation
 
 
 def finalize_workshop_analysis_payload(
     payload: dict[str, object] | None,
     *,
     verse_lines: list[str] | None = None,
+    player_text: str | None = None,
     min_confidence: float = WORKSHOP_LLM_MIN_CONFIDENCE,
     finding_min_confidence: float = WORKSHOP_FINDING_MIN_CONFIDENCE,
+    proposal_min_confidence: float = WORKSHOP_PROPOSAL_MIN_CONFIDENCE,
 ) -> WorkshopAnalysis:
-    """OS / cloud 共通の講評抽出結果を閉じた値へ変換する。
+    """OS / cloud 共通の限定意味抽出結果を閉じた値へ変換する。
 
-    LLM が close・lesson解除・保存を実行する余地はない。対象行・問題種別も
-    コードで範囲検査し、不明な finding は捨てる。
+    LLM が close・lesson解除・保存を実行する余地はない。句評価・終了要求・
+    対象行・問題種別・置換語・発話根拠をコードで範囲／一致検査し、
+    不明な値は捨てる。
     """
 
     intent = _finalize_workshop_intent_payload(payload, min_confidence=min_confidence)
     if not isinstance(payload, dict):
         return WorkshopAnalysis(intent=intent)
+    line_reference = _finalize_workshop_line_reference(
+        payload.get("line_reference"),
+        player_text=player_text,
+    )
+    close_request = _finalize_workshop_close_request(
+        payload.get("close_request"),
+        player_text=player_text,
+    )
+    evaluation = finalize_workshop_evaluation_payload(
+        payload.get("evaluation"),
+        player_text=player_text,
+    )
     raw_confidence = payload.get("confidence")
     try:
         confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
@@ -1307,12 +2098,123 @@ def finalize_workshop_analysis_payload(
                     confidence=finding_confidence,
                 )
             )
+    line_proposal: WorkshopLineProposal | None = None
+    raw_proposal = payload.get("line_proposal")
+    if isinstance(raw_proposal, dict) and raw_proposal.get("found") is True:
+        replacement_text = str(raw_proposal.get("replacement_text") or "").strip()[:48]
+        target_fragment = str(raw_proposal.get("target_fragment") or "").strip()[:48]
+        evidence = str(raw_proposal.get("evidence") or "").strip()[:120]
+        raw_proposal_confidence = raw_proposal.get("confidence")
+        try:
+            proposal_confidence = (
+                float(raw_proposal_confidence)
+                if not isinstance(raw_proposal_confidence, bool)
+                else 0.0
+            )
+        except (TypeError, ValueError):
+            proposal_confidence = 0.0
+        # 置換語はプレイヤー発話に実在する連続部分だけを許す。AIに句本文を
+        # 補作させないため、evidence も同じ発話から取れなければ捨てる。
+        player_compact = _compact_kana(player_text or "")
+        replacement_compact = _compact_kana(replacement_text)
+        evidence_compact = _compact_kana(evidence)
+        replacement_is_grounded = bool(
+            replacement_compact
+            and player_compact
+            and replacement_compact in player_compact
+        )
+        evidence_is_grounded = bool(
+            len(evidence_compact) >= 2
+            and player_compact
+            and evidence_compact in player_compact
+        )
+        proposal_line_index: int | None = None
+        if target_fragment and verse_lines is not None:
+            folded_target = _compact_kana(target_fragment)
+            matches = [
+                index
+                for index, line in enumerate(verse_lines)
+                if folded_target and folded_target in _compact_kana(line)
+            ]
+            if len(matches) == 1:
+                proposal_line_index = matches[0]
+        # 「後ろのパート」等は句本文の断片ではない。OS AIが発話中の根拠を
+        # line_1/2/3へ写し、コード検証を通った場合だけ対象行として使う。
+        concept_line_index = (
+            line_reference.line_index if line_reference is not None else None
+        )
+        target_conflict = bool(
+            proposal_line_index is not None
+            and concept_line_index is not None
+            and proposal_line_index != concept_line_index
+        )
+        if proposal_line_index is None:
+            proposal_line_index = concept_line_index
+        if (
+            0.0 <= proposal_confidence <= 1.0
+            and proposal_confidence >= proposal_min_confidence
+            and replacement_is_grounded
+            and evidence_is_grounded
+            and not target_conflict
+        ):
+            line_proposal = WorkshopLineProposal(
+                replacement_text=replacement_text,
+                target_fragment=target_fragment,
+                line_index=proposal_line_index,
+                evidence=evidence,
+                confidence=proposal_confidence,
+            )
+
     repair_requested = payload.get("repair_requested") is True or intent == "request_repair"
     return WorkshopAnalysis(
         intent=intent,
         confidence=confidence,
         repair_requested=repair_requested,
         findings=tuple(findings),
+        line_proposal=line_proposal,
+        line_reference=line_reference,
+        close_request=close_request,
+        evaluation=evaluation,
+    )
+
+
+def finalize_pending_revision_payload(
+    payload: dict[str, object] | None,
+    *,
+    player_text: str,
+    min_confidence: float = WORKSHOP_PENDING_DECISION_MIN_CONFIDENCE,
+) -> PendingRevisionAnalysis:
+    """OS AIの採否分類を、発話根拠つきの閉じた値へ変換する。"""
+
+    if not isinstance(payload, dict):
+        return PendingRevisionAnalysis()
+    close_request = _finalize_workshop_close_request(
+        payload.get("close_request"),
+        player_text=player_text,
+    )
+    action = str(payload.get("action") or "uncertain").strip()
+    if action not in WORKSHOP_PENDING_ACTIONS:
+        return PendingRevisionAnalysis(close_request=close_request)
+    raw_confidence = payload.get("confidence")
+    try:
+        confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    evidence = str(payload.get("evidence") or "").strip()[:120]
+    player_compact = _compact_kana(player_text)
+    evidence_compact = _compact_kana(evidence)
+    if (
+        not 0.0 <= confidence <= 1.0
+        or confidence < min_confidence
+        or len(evidence_compact) < 2
+        or evidence_compact not in player_compact
+    ):
+        return PendingRevisionAnalysis(close_request=close_request)
+    return PendingRevisionAnalysis(
+        action=action,
+        confidence=confidence,
+        evidence=evidence,
+        close_request=close_request,
     )
 
 
@@ -1358,7 +2260,7 @@ def repair_target_indices(findings: tuple[WorkshopFinding, ...]) -> tuple[int, .
 
 
 def pending_revision_decision(user_text: str | None) -> str | None:
-    """提示済み修正案への明示的な採用・却下だけを拾う。"""
+    """OS AI利用不可時に、代表的な採用・却下だけを拾うfallback。"""
 
     text = (user_text or "").strip()
     if "?" not in text and "？" not in text and _PENDING_REVISION_REJECT_PATTERN.fullmatch(text):
@@ -1585,7 +2487,10 @@ def _looks_like_verse_fragment_question(player_text: str, verse: str) -> bool:
     text = (player_text or "").strip()
     if not text or not verse:
         return False
-    questionish = any(c in text for c in ("?", "？", "何", "なに", "って", "とは"))
+    # 活用語中の「って」（例: かぶってる）を意味質問にしない。
+    questionish = any(c in text for c in ("?", "？", "何", "なに", "とは")) or bool(
+        re.search(r"って(?:何|なに|どういう|どんな|意味|こと)", text)
+    )
     if not questionish and len(_compact_kana(text)) > 10:
         return False
     # 短い疑問・「〜?」は questionish とみなす

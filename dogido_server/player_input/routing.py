@@ -15,6 +15,7 @@ from dogido_server.player_input.guardrails import (
     extract_reading_correction,
     extract_revised_haiku,
     haiku_recall_biome_hint,
+    is_explicit_reading_correction,
     parse_haiku_time_range,
     should_block_ambient,
     wants_quiet,
@@ -64,6 +65,7 @@ def route_player_input(
             surface=surface,
             reading=reading,
             wrong_reading=wrong,
+            explicit=is_explicit_reading_correction(raw_text) or wrong is not None,
         )
     recall = asks_haiku_recall(normalized_text)
     biome_hint = None

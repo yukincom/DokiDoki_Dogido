@@ -13,6 +13,7 @@ adapter/minecraft-fabric/.gradle/
 adapter/minecraft-fabric/build/
 adapter/minecraft-fabric/run/
 /資料
+animation/
 .DS_Store
 /dogido-llm
 .venv/

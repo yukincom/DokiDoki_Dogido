@@ -10,22 +10,40 @@ from uuid import uuid4
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
 from dogido_server.dialogue_context import DialogueContext
+from dogido_server.haiku.combat_pause import (
+    CombatWorkshopInputAnalysis,
+    build_combat_workshop_input_details,
+    event_interrupts_workshop,
+    fallback_combat_workshop_input_analysis,
+    finalize_combat_workshop_input_payload,
+    update_workshop_combat_state,
+)
 from dogido_server.haiku.workshop import (
+    PendingRevisionAnalysis,
+    PlayerLineReplacement,
     RecentHaikuWorkshop,
     advance_workshop_revision,
     build_player_line_revision,
-    build_ask_meaning_llm_details,
+    build_pending_revision_llm_details,
     build_workshop_intent_llm_details,
+    classify_workshop_intent,
     clear_pending_revision,
+    combat_resume_confirmation_decision,
+    close_confirmation_decision,
     close_workshop,
     extract_conversational_revise,
-    finalize_ask_meaning_reply,
+    finalize_pending_revision_payload,
     finalize_workshop_analysis_payload,
+    grounded_material_for_question,
+    is_active,
+    is_explicit_player_line_replacement_command,
     is_open,
+    is_meaning_acknowledgement,
     lessons_from_critique_kind,
     loosen_all_lessons,
     materials_debug_line,
     materials_speech_line,
+    mentioned_workshop_line_fragment,
     maybe_close_for_time,
     pending_revision_decision,
     pending_revision_is_current,
@@ -39,6 +57,8 @@ from dogido_server.haiku.workshop import (
     update_marked_workshop_line,
     wants_show_workshop_verse,
     WorkshopAnalysis,
+    WorkshopEvaluation,
+    validate_workshop_evaluation_payload,
     workshop_findings_from_records,
     workshop_open_intent,
     workshop_verse_lines,
@@ -48,6 +68,10 @@ from dogido_server.haiku.edit_contract import PLAYER_LINE_EDIT_CONTRACT_VERSION
 from dogido_server.haiku.source_atoms import (
     line_source_ids_from_materials,
     source_atoms_from_materials,
+)
+from dogido_server.haiku.verse import (
+    build_haiku_lines,
+    verse_reading_text,
 )
 from dogido_server.llm import DogidoLLMRouter, LeafGenerationRequest, StructuredGenerationRequest
 from dogido_server.memory import MemoryStore
@@ -106,6 +130,10 @@ class SessionInfo:
     pending_player_source: str | None = None
     # panic hold ログの重複抑制（同じ文は1回だけ）
     panic_hold_logged_text: str | None = None
+    # 戦闘中断中にpanicで保留している同じ発話を、毎tick OS AIへ再送しない。
+    combat_input_analysis_text: str | None = None
+    combat_input_analysis: CombatWorkshopInputAnalysis | None = None
+    combat_input_analysis_path: str = "none"
     # player_chat 用: 直近5往復 + 粗い出来事メモ
     dialogue: DialogueContext = field(default_factory=DialogueContext)
 
@@ -269,6 +297,8 @@ class DogidoService:
 
         attached_player_text: str | None = None
         attached_player_source = "text"
+        combat_input_analysis: CombatWorkshopInputAnalysis | None = None
+        combat_input_path = "none"
         haiku_pending_before = bool(session.machine.state.pending_haiku_after_preface)
         if haiku_pending_before:
             incoming = (event.meta.user_text or "").strip()
@@ -286,7 +316,48 @@ class DogidoService:
             # panic 中は player_chat 枝が意図的に無効（絶叫優先）。
             # ここで毎 tick attach すると speech 無し → requeue → また attach のログ嵐になる。
             # 落ち着くまで pending に置いたまま次イベントを待つ。
-            if session.machine.state.mode in {"panic", "suppressed_panic"}:
+            paused_workshop = (
+                session.haiku_workshop
+                if session.haiku_workshop is not None
+                and session.haiku_workshop.combat_paused
+                else None
+            )
+            if paused_workshop is not None:
+                pending_combat_text = session.pending_player_text or ""
+                if (
+                    session.combat_input_analysis_text == pending_combat_text
+                    and session.combat_input_analysis is not None
+                ):
+                    combat_input_analysis = session.combat_input_analysis
+                    combat_input_path = session.combat_input_analysis_path
+                else:
+                    combat_input_analysis, combat_input_path = (
+                        self._analyze_combat_workshop_input(
+                            paused_workshop,
+                            pending_combat_text,
+                        )
+                    )
+                    session.combat_input_analysis_text = pending_combat_text
+                    session.combat_input_analysis = combat_input_analysis
+                    session.combat_input_analysis_path = combat_input_path
+            paused_workshop_input = bool(
+                combat_input_analysis is not None
+                and combat_input_analysis.action
+                in {"resume_workshop", "workshop_input"}
+            )
+            paused_workshop_close = bool(
+                paused_workshop is not None
+                and classify_workshop_intent(
+                    session.pending_player_text or "",
+                    verse=paused_workshop.editing_line(),
+                )
+                == "close"
+            )
+            if (
+                session.machine.state.mode in {"panic", "suppressed_panic"}
+                and not paused_workshop_input
+                and not paused_workshop_close
+            ):
                 # 同じ文の hold は1回だけログ（毎 tick は出さない）
                 pending_text = session.pending_player_text or ""
                 if session.panic_hold_logged_text != pending_text:
@@ -303,6 +374,9 @@ class DogidoService:
                 event.meta.user_text = attached_player_text
                 session.pending_player_text = None
                 session.pending_player_source = None
+                session.combat_input_analysis_text = None
+                session.combat_input_analysis = None
+                session.combat_input_analysis_path = "none"
                 LOGGER.warning(
                     "player_input_attached_after_hold session_id=%s text=%s",
                     session.session_id,
@@ -320,11 +394,17 @@ class DogidoService:
         # ambient 抑止: まだ相乗りしていない話しかけがキューにある
         session.machine.player_input_queued = bool((session.pending_player_text or "").strip())
 
-        # pin の時間切れ（発話の有無に関係なく）
-        session.haiku_workshop = maybe_close_for_time(
-            session.haiku_workshop,
-            now=event.observed_at,
-        )
+        # 脅威が来たフレームは、古いpinをtimeoutで先に消さない。状態機械が
+        # 戦況を確定した直後に、句を保持したまま戦闘中断へ移す。
+        workshop_danger = self._event_interrupts_workshop(event)
+        if not (
+            session.haiku_workshop is not None
+            and (session.haiku_workshop.combat_paused or workshop_danger)
+        ):
+            session.haiku_workshop = maybe_close_for_time(
+                session.haiku_workshop,
+                now=event.observed_at,
+            )
         if session.haiku_workshop is not None and not session.haiku_workshop.open:
             LOGGER.warning(
                 "haiku_workshop_closed session_id=%s reason=%s",
@@ -341,7 +421,12 @@ class DogidoService:
             session.last_haiku_emission = machine_result.haiku_emission
             # memory の有無に関わらず pin を立てる（entry_id は memory 側で埋める）
             if session.haiku_workshop is None or (
-                session.haiku_workshop.surface_text != (machine_result.haiku_emission.text or "").strip()
+                session.haiku_workshop.display_line()
+                != (
+                    machine_result.haiku_emission.reading_text
+                    or machine_result.haiku_emission.text
+                    or ""
+                ).strip()
             ):
                 self._open_haiku_workshop(
                     session,
@@ -361,8 +446,31 @@ class DogidoService:
                 session.pending_player_text[:80],
             )
         actions = list(machine_result.actions)
+        combat_actions, workshop_input_consumed, replace_noncombat_speech = (
+            self._update_workshop_combat_state(
+                session,
+                event,
+                actions,
+                state_mode=machine_result.state.mode,
+                input_analysis=combat_input_analysis,
+                input_analysis_path=combat_input_path,
+            )
+        )
+        if replace_noncombat_speech:
+            # 安定した単独敵をプレイヤー判断で無視する場合だけ、同じ入力への
+            # 通常chatを置き換える。panic cue / callout は安全のため残す。
+            actions = [action for action in actions if action.layer != "speech"]
+        actions.extend(combat_actions)
+        workshop_input_enabled = not workshop_input_consumed and not bool(
+            session.haiku_workshop is not None
+            and session.haiku_workshop.combat_paused
+        )
         memory_actions = self._memory_actions(
-            session, event, actions, machine_result.haiku_emission
+            session,
+            event,
+            actions,
+            machine_result.haiku_emission,
+            allow_player_input=workshop_input_enabled,
         )
         # workshop 返事があるときは player_chat と二重にしない（講評を優先）
         if memory_actions and any(a.layer == "speech" and a.text for a in memory_actions):
@@ -543,7 +651,7 @@ class DogidoService:
             )
 
         workshop = session.haiku_workshop
-        if input_source != "voice" or not is_open(workshop) or workshop is None:
+        if input_source != "voice" or not is_active(workshop) or workshop is None:
             return fixed_event, None
         candidates = workshop_asr_candidates(
             verse=workshop.editing_line(),
@@ -589,6 +697,142 @@ class DogidoService:
             for action in actions
         )
         return not has_player_reply
+
+    def _event_interrupts_workshop(self, event: GameEvent) -> bool:
+        return event_interrupts_workshop(
+            event,
+            recent_damage_window_ms=self.settings.recent_damage_window_ms,
+        )
+
+    def _update_workshop_combat_state(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        actions: list[AudioAction],
+        *,
+        state_mode: str,
+        input_analysis: CombatWorkshopInputAnalysis | None = None,
+        input_analysis_path: str = "none",
+    ) -> tuple[list[AudioAction], bool, bool]:
+        workshop = session.haiku_workshop
+        semantic_text = (session.machine.player_input.semantic_text or "").strip()
+        if (
+            workshop is not None
+            and workshop.combat_paused
+            and semantic_text
+            and input_analysis is None
+        ):
+            input_analysis, input_analysis_path = self._analyze_combat_workshop_input(
+                workshop,
+                semantic_text,
+            )
+        if input_analysis is None:
+            input_analysis = CombatWorkshopInputAnalysis()
+        if workshop is not None and workshop.combat_paused and semantic_text:
+            LOGGER.warning(
+                "haiku_workshop_combat_input session_id=%s action=%s confidence=%.2f "
+                "path=%s evidence=%s player=%s",
+                session.session_id,
+                input_analysis.action,
+                input_analysis.confidence,
+                input_analysis_path,
+                input_analysis.evidence[:80] or "-",
+                semantic_text[:100],
+            )
+        update = update_workshop_combat_state(
+            workshop,
+            event,
+            raw_player_text=session.machine.player_input.raw_text,
+            input_action=input_analysis.action,
+            input_present=bool(
+                semantic_text
+                or (
+                    session.combat_input_analysis_text
+                    and session.pending_player_text
+                )
+            ),
+            state_mode=state_mode,
+            has_speech=any(action.layer == "speech" and action.text for action in actions),
+            stable_since=session.machine.state.stalled_visual_started_at,
+            recent_damage_window_ms=self.settings.recent_damage_window_ms,
+            combat_clear_time_ms=self.settings.combat_clear_time_ms,
+            resume_delay_ms=self.settings.workshop_low_threat_resume_delay_ms,
+            session_id=session.session_id,
+        )
+        if update.closed:
+            session.haiku_workshop = None
+        added = (
+            [AudioAction(layer="speech", interrupt=False, text=update.reply_text)]
+            if update.reply_text
+            else []
+        )
+        return added, update.consume_player_input, update.replace_speech
+
+    def _analyze_combat_workshop_input(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+    ) -> tuple[CombatWorkshopInputAnalysis, str]:
+        """OS AIで再開意思を抽出する。安全判定・終了・保存は行わない。"""
+
+        details = build_combat_workshop_input_details(workshop, player_text)
+        try:
+            payload = self.platform_ai.generate_structured_json(
+                StructuredGenerationRequest(
+                    kind="haiku_workshop_combat_input",
+                    fallback_value={
+                        "action": "uncertain",
+                        "confidence": 0.0,
+                        "evidence": "",
+                    },
+                    details=details,
+                    temperature=0.0,
+                    route="chat",
+                    max_tokens=120,
+                ),
+                fallback=self.llm,
+            )
+            analysis = finalize_combat_workshop_input_payload(
+                payload,
+                player_text=player_text,
+            )
+            provider = str(payload.get("__dogido_platform_ai_provider") or "llm")
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("haiku_workshop_combat_input_failed detail=%s", exc)
+            analysis = CombatWorkshopInputAnalysis()
+            provider = "failed"
+        if analysis.action != "uncertain":
+            return analysis, provider
+        fallback = fallback_combat_workshop_input_analysis(workshop, player_text)
+        if fallback.action != "uncertain":
+            return fallback, "rule_fallback"
+        return analysis, provider
+
+    @staticmethod
+    def _reading_correction_is_grounded_in_workshop(
+        workshop: RecentHaikuWorkshop | None,
+        correction: object | None,
+    ) -> bool:
+        """省略形「AはB」を、現在句の既知ラベルに一致するときだけ優先する。"""
+
+        if not is_active(workshop) or workshop is None or correction is None:
+            return False
+        surface = str(getattr(correction, "surface", "") or "").strip()
+        if not surface:
+            return False
+        materials = dict(workshop.materials or {})
+        candidates = {
+            str(materials.get(key) or "").strip()
+            for key in ("biome_ja", "structure_ja", "held_item")
+            if materials.get(key)
+        }
+        for row in materials.get("catalog_sources") or []:
+            if isinstance(row, dict):
+                candidates.add(str(row.get("label") or "").strip())
+        for row in materials.get("source_atoms") or []:
+            if isinstance(row, dict) and row.get("kind") == "catalog_label":
+                candidates.add(str(row.get("text") or "").strip())
+        return surface in candidates
 
     def _update_dialogue_context(
         self,
@@ -639,20 +883,42 @@ class DogidoService:
         event: GameEvent,
         actions: list[AudioAction],
         haiku_emission: HaikuEmission | None,
+        *,
+        allow_player_input: bool = True,
     ) -> list[AudioAction]:
         player_input = session.machine.player_input
         extra_actions: list[AudioAction] = []
         if self.memory is None:
-            if (
+            reading_is_explicit = bool(
+                player_input.reading_correction is not None
+                and (
+                    getattr(player_input.reading_correction, "explicit", False)
+                    or self._reading_correction_is_grounded_in_workshop(
+                        session.haiku_workshop,
+                        player_input.reading_correction,
+                    )
+                )
+            )
+            formal_memory_action = allow_player_input and (
                 player_input.asks_save_last_haiku
                 or player_input.player_haiku_text
                 or player_input.revised_haiku_text
-                or player_input.reading_correction is not None
+                or reading_is_explicit
                 or player_input.asks_haiku_recall
+            )
+            if formal_memory_action:
+                extra_actions.append(AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。"))
+                return extra_actions
+            # 省略形「AはB」は workshop の自然文を横取りしない。pin の返事を
+            # 先に試し、扱えなかった場合だけ読み訂正として失敗を伝える。
+            if allow_player_input:
+                extra_actions.extend(self._haiku_workshop_actions(session, event))
+            if (
+                allow_player_input
+                and not extra_actions
+                and player_input.reading_correction is not None
             ):
                 extra_actions.append(AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。"))
-            # pin の講評返事は memory 無しでも動く
-            extra_actions.extend(self._haiku_workshop_actions(session, event))
             return extra_actions
 
         try:
@@ -681,7 +947,8 @@ class DogidoService:
                 if haiku_emission is not None and self._action_contains_haiku(action, haiku_emission):
                     continue
                 self.memory.append_speech_action(event, session.session_id, action)
-            extra_actions.extend(self._memory_input_actions(session, event))
+            if allow_player_input:
+                extra_actions.extend(self._memory_input_actions(session, event))
             for action in extra_actions:
                 if action.text:
                     self.memory.append_speech_action(event, session.session_id, action)
@@ -693,7 +960,13 @@ class DogidoService:
         assert self.memory is not None
         player_input = session.machine.player_input
 
-        if player_input.reading_correction is not None:
+        if player_input.reading_correction is not None and (
+            bool(getattr(player_input.reading_correction, "explicit", False))
+            or self._reading_correction_is_grounded_in_workshop(
+                session.haiku_workshop,
+                player_input.reading_correction,
+            )
+        ):
             return self._handle_reading_correction(session, event, player_input.reading_correction)
 
         if player_input.revised_haiku_text:
@@ -728,6 +1001,11 @@ class DogidoService:
         workshop_actions = self._haiku_workshop_actions(session, event)
         if workshop_actions:
             return workshop_actions
+
+        # 「草地はくさち」の省略形は通常時だけ。workshop 中の自然な提案は
+        # 会話モデルによる意味抽出を先に通し、読み訂正へ誤保存しない。
+        if player_input.reading_correction is not None:
+            return self._handle_reading_correction(session, event, player_input.reading_correction)
 
         return []
 
@@ -829,7 +1107,7 @@ class DogidoService:
             "haiku_workshop_opened session_id=%s text=%s entry_id=%s "
             "speech_materials=%s debug_materials=%s materials_keys=%s",
             session.session_id,
-            (emission.text or "")[:60],
+            (emission.surface_text or emission.text or "")[:60],
             entry_id or "-",
             (materials_speech_line(session.haiku_workshop) or "")[:120] or "-",
             (materials_debug_line(session.haiku_workshop) or "")[:160] or "-",
@@ -849,6 +1127,8 @@ class DogidoService:
         revision_edits: list[dict[str, object]] | None = None,
         revision_edit_contract: str | None = None,
         revision_base_text: str | None = None,
+        revision_base_surface_text: str | None = None,
+        revision_lines: list[dict[str, object]] | None = None,
         parent_revision_id: str | None = None,
         keep_workshop_open: bool = False,
     ) -> list[AudioAction]:
@@ -856,17 +1136,41 @@ class DogidoService:
             return [AudioAction(layer="speech", interrupt=False, text="直す元の句がまだないで。")]
         if self.memory is None:
             return [AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。")]
-        revision = self.memory.save_haiku_feedback(
-            session.last_haiku_emission,
-            revised_text=revised_text,
-            source=source,
-            revision_line_sources=revision_line_sources,
-            revision_edits=revision_edits,
-            revision_edit_contract=revision_edit_contract,
-            revision_base_text=revision_base_text,
-            parent_revision_id=parent_revision_id,
-            observed_at=event.observed_at,
-        )
+        if revision_lines is None:
+            built_lines = build_haiku_lines(revised_text, provenance=source)
+            if len(built_lines) == 3:
+                revised_text = verse_reading_text(built_lines)
+                revision_lines = [line.to_dict() for line in built_lines]
+        try:
+            revision = self.memory.save_haiku_feedback(
+                session.last_haiku_emission,
+                revised_text=revised_text,
+                source=source,
+                revision_line_sources=revision_line_sources,
+                revision_edits=revision_edits,
+                revision_edit_contract=revision_edit_contract,
+                revision_base_text=revision_base_text,
+                revision_base_surface_text=revision_base_surface_text,
+                revision_lines=revision_lines,
+                parent_revision_id=parent_revision_id,
+                observed_at=event.observed_at,
+            )
+        except (OSError, ValueError) as exc:
+            # 保存境界の不変条件違反をHTTP 500へ漏らさない。pendingは保持し、
+            # プレイヤーが案を失わず再試行・確認できる状態にする。
+            LOGGER.warning(
+                "haiku_revision_save_failed session_id=%s source=%s detail=%s",
+                session.session_id,
+                source,
+                exc,
+            )
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=False,
+                    text="案は残しとるけど、保存だけ失敗したわ。すまん。",
+                )
+            ]
         if keep_workshop_open and is_open(session.haiku_workshop):
             assert session.haiku_workshop is not None
             advance_workshop_revision(
@@ -896,7 +1200,7 @@ class DogidoService:
         event: GameEvent,
     ) -> list[AudioAction]:
         workshop = session.haiku_workshop
-        if not is_open(workshop) or workshop is None:
+        if not is_active(workshop) or workshop is None:
             return []
         player_input = session.machine.player_input
         text = (player_input.raw_text or "").strip()
@@ -905,6 +1209,43 @@ class DogidoService:
             return []
         if (player_input.normalized_text or "").startswith("/"):
             return []
+
+        # 戦闘後は句を勝手に再開せず、一度だけプレイヤーへ戻すか確認する。
+        # 新しい具体的な講評が来た場合は、その発話自体を再開の意思として
+        # 確認状態だけ外し、同じターンを通常のworkshop処理へ流す。
+        if workshop.awaiting_combat_resume_confirmation:
+            resume_decision = combat_resume_confirmation_decision(text)
+            if resume_decision == "resume":
+                workshop.awaiting_combat_resume_confirmation = False
+                record_workshop_activity(workshop, now=event.observed_at)
+                LOGGER.warning(
+                    "haiku_workshop_combat_resume_confirmed session_id=%s player=%s",
+                    session.session_id,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="おけ、続けよか。気になるとこ教えてな。",
+                    )
+                ]
+            if resume_decision == "close":
+                close_workshop(workshop, reason="combat_resume_declined")
+                session.haiku_workshop = None
+                LOGGER.warning(
+                    "haiku_workshop_combat_resume_declined session_id=%s player=%s",
+                    session.session_id,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="おけ、句はここまでにしよか。",
+                    )
+                ]
+            workshop.awaiting_combat_resume_confirmation = False
 
         # 未採用の局所案も、次の講評・置換では最新版として扱う。
         verse = workshop.editing_line()
@@ -916,15 +1257,30 @@ class DogidoService:
             else parse_player_line_replacement(None)
         )
         player_line_replacement = replacement_parse.replacement
+        if player_line_replacement is not None:
+            # 「下五」はSTTで崩れやすい。現在句の一行を発話中に含めた
+            # 「旧句より新句」の形なら、その旧句をコードで置換対象に固定する。
+            target_fragment = mentioned_workshop_line_fragment(workshop, text)
+            if target_fragment is not None:
+                player_line_replacement = PlayerLineReplacement(
+                    text=player_line_replacement.text,
+                    explicit_line_index=player_line_replacement.explicit_line_index,
+                    target_fragment=target_fragment,
+                )
         if replacement_parse.status != "no_match":
             LOGGER.warning(
                 "haiku_workshop_player_line_parse session_id=%s result=%s "
-                "candidate=%s explicit_line=%s marked_line=%s player=%s",
+                "candidate=%s explicit_line=%s target_fragment=%s marked_line=%s player=%s",
                 session.session_id,
                 replacement_parse.status,
                 (player_line_replacement.text[:40] if player_line_replacement else "-"),
                 (
                     player_line_replacement.explicit_line_index
+                    if player_line_replacement is not None
+                    else None
+                ),
+                (
+                    player_line_replacement.target_fragment
                     if player_line_replacement is not None
                     else None
                 ),
@@ -934,9 +1290,37 @@ class DogidoService:
         speech_materials = materials_speech_line(workshop)
         debug_materials = materials_debug_line(workshop)
 
-        # AI生成案は自動保存しない。提示後の明示的な採用・却下だけコードで扱う。
+        # AI生成案は自動保存しない。自然文の意味は常駐する chat LLM で
+        # 閉じた action に変換し、現在pendingとの整合と保存・破棄はコードで扱う。
         if workshop.pending_revision:
-            decision = pending_revision_decision(text)
+            pending_analysis, pending_path = self._analyze_pending_revision_reply(
+                workshop,
+                semantic_text,
+            )
+            semantic_decision = {
+                "accept_pending": "accept",
+                "reject_pending": "reject",
+            }.get(pending_analysis.action)
+            semantic_close_requested = pending_analysis.close_request is not None
+            # chat LLM が使えないときも、代表的な明示形だけは従来の
+            # closed fullmatch で扱えるようにする。
+            decision = semantic_decision or pending_revision_decision(text)
+            LOGGER.warning(
+                "haiku_workshop_pending_decision session_id=%s action=%s "
+                "confidence=%.2f close=%s close_scope=%s path=%s fallback=%s player=%s",
+                session.session_id,
+                pending_analysis.action,
+                pending_analysis.confidence,
+                semantic_close_requested,
+                (
+                    pending_analysis.close_request.scope
+                    if pending_analysis.close_request is not None
+                    else "-"
+                ),
+                pending_path,
+                "used" if semantic_decision is None and decision is not None else "-",
+                text[:100],
+            )
             if decision == "accept":
                 # 提案後に pin や差分が食い違った場合は、別の句へ誤適用しない。
                 if not pending_revision_is_current(workshop):
@@ -956,26 +1340,67 @@ class DogidoService:
                     revision_edits=list(workshop.pending_revision_edits),
                     revision_edit_contract=workshop.pending_revision_edit_contract,
                     revision_base_text=workshop.pending_revision_base_text,
+                    revision_base_surface_text=workshop.display_surface(),
+                    revision_lines=[
+                        line.to_dict() for line in workshop.pending_revision_lines
+                    ] or None,
                     parent_revision_id=workshop.current_revision_id,
-                    keep_workshop_open=True,
+                    keep_workshop_open=not semantic_close_requested,
                 )
             if decision == "reject":
                 clear_pending_revision(workshop)
                 workshop.marked_line_index = None
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
+                if semantic_close_requested:
+                    close_workshop(workshop, reason="pending_rejected_close")
+                    session.haiku_workshop = None
+                    LOGGER.warning(
+                        "haiku_workshop_closed session_id=%s "
+                        "reason=pending_rejected_close evidence=%s",
+                        session.session_id,
+                        pending_analysis.close_request.evidence[:80]
+                        if pending_analysis.close_request is not None
+                        else "-",
+                    )
+                    return [
+                        AudioAction(
+                            layer="speech",
+                            interrupt=False,
+                            text="おけ、案は使わず、この句の話はここまでや。",
+                        )
+                    ]
                 record_workshop_activity(workshop, now=event.observed_at)
                 return [AudioAction(layer="speech", interrupt=False, text="おけ、元の句はそのままにしとくで。")]
-
-        if replacement_parse.status == "ambiguous":
-            record_workshop_activity(workshop, now=event.observed_at)
-            return [
-                AudioAction(
-                    layer="speech",
-                    interrupt=False,
-                    text="置き換える言葉か行が一つに決められへんかったわ。上五・中七・下五の一つと、新しい言葉を一つ教えてな。",
-                )
-            ]
+            if semantic_close_requested:
+                # pendingの採否をAIに補わせない。どちらを残すか明示された
+                # ターンだけ、採用／却下とcloseを一つのコード操作として行う。
+                record_workshop_activity(workshop, now=event.observed_at)
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text=(
+                            "いまの案を採用して終わるか、元の句のまま終わるか、"
+                            "そこだけ教えてな。"
+                        ),
+                    )
+                ]
+            if pending_analysis.action == "show_pending":
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
+                record_workshop_activity(workshop, now=event.observed_at)
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text=f"いまの案はこれやで。\n{workshop.editing_line()}",
+                    )
+                ]
 
         if wants_show_workshop_verse(text):
+            workshop.awaiting_meaning_ack = False
+            workshop.awaiting_close_confirmation = False
             record_workshop_activity(workshop, now=event.observed_at)
             return [
                 AudioAction(
@@ -1008,12 +1433,30 @@ class DogidoService:
 
         # formal 川柳操作は上で処理済み。ここでは自然文の講評のみ。
         # Stage2: open 中は soft 既定（hard off-topic だけ None → chat/drift）
-        kind = workshop_open_intent(
-            text,
-            verse=verse,
-            player_input=player_input,
+        meaning_ack_fallback = (
+            workshop.awaiting_meaning_ack
+            and is_meaning_acknowledgement(text)
+        )
+        close_confirmation_fallback = (
+            close_confirmation_decision(text)
+            if workshop.awaiting_close_confirmation
+            else None
+        )
+        # 「わかった」は通常なら明示closeにもなり得るが、意味説明の直後は
+        # まず「説明を理解した」と解釈し、終了確認を一段はさむ。
+        kind = (
+            "ack"
+            if meaning_ack_fallback
+            else workshop_open_intent(
+                text,
+                verse=verse,
+                player_input=player_input,
+            )
         )
         if kind is None:
+            # 明確な別件へ移ったら、古い「説明への返事待ち」を次の発話へ残さない。
+            workshop.awaiting_meaning_ack = False
+            workshop.awaiting_close_confirmation = False
             LOGGER.warning(
                 "haiku_workshop_miss session_id=%s player=%s verse=%s "
                 "speech_materials=%s debug_materials=%s drift_count=%s "
@@ -1029,50 +1472,265 @@ class DogidoService:
 
         intent_path = "rule"
         analysis = WorkshopAnalysis(intent=kind, confidence=1.0)
-        reply_kind = kind
+        effective_kind = kind
+        semantic_close_accepted = False
+        semantic_evaluation_positive = False
+        semantic_evaluation_needs_revision = False
+        semantic_evaluation_unresolved = False
         analysis_kinds = {
             "soft_default",
             "other_haiku",
+            "ask_meaning",
+            "ack",
             "request_repair",
             "critique_forced",
             "critique_gibberish",
             "critique_offscene",
         }
-        player_target_is_known = player_line_replacement is not None and (
-            player_line_replacement.explicit_line_index is not None
-            or workshop.marked_line_index is not None
-        )
-        if kind in analysis_kinds and not player_target_is_known:
+        if kind in analysis_kinds:
             analysis, intent_path = self._analyze_workshop_feedback(workshop, semantic_text)
-            # 明示ルールは状態・大分類の正。AI は対象行と問題箇所の抽出に使う。
-            # ルールで曖昧だったときも、AI intent は返答トーンの補助だけにする。
-            # lesson・close・修正開始などの状態変更には使わない。
-            if kind == "soft_default":
-                reply_kind = (
-                    analysis.intent
-                    if analysis.intent
-                    not in {"praise", "ack", "request_repair", "soft_default"}
-                    else "other_haiku"
+            # clear_lessons / 固定規則のpraiseのような操作はコードを正にする。
+            # 規則外の句評価は会話モデルから根拠つきで受けるが、positiveでも即closeせず
+            # コード所有の終了確認へ進める。
+            semantic_intents = {
+                "ask_meaning",
+                "critique_forced",
+                "critique_gibberish",
+                "critique_offscene",
+                "ack",
+                "other_haiku",
+                "request_repair",
+                "show_current",
+                "propose_line_edit",
+            }
+            if (
+                not meaning_ack_fallback
+                and kind in {"soft_default", "other_haiku", "ask_meaning", "ack"}
+                and analysis.intent in semantic_intents
+                and analysis.confidence >= 0.75
+            ):
+                effective_kind = analysis.intent
+            if effective_kind == "request_repair" and not analysis.repair_requested:
+                effective_kind = "other_haiku"
+            if analysis.close_request is not None:
+                if analysis.line_proposal is None and not analysis.repair_requested:
+                    semantic_close_accepted = True
+                    effective_kind = "close"
+                    LOGGER.warning(
+                        "haiku_workshop_close_request session_id=%s result=accepted "
+                        "scope=%s confidence=%.2f path=%s evidence=%s",
+                        session.session_id,
+                        analysis.close_request.scope,
+                        analysis.close_request.confidence,
+                        intent_path,
+                        analysis.close_request.evidence[:80],
+                    )
+                else:
+                    LOGGER.warning(
+                        "haiku_workshop_close_request session_id=%s result=rejected "
+                        "reason=edit_conflict path=%s evidence=%s",
+                        session.session_id,
+                        intent_path,
+                        analysis.close_request.evidence[:80],
+                    )
+            followup_control_turn = (
+                workshop.awaiting_meaning_ack and effective_kind == "ack"
+            ) or (
+                workshop.awaiting_close_confirmation
+                and (
+                    effective_kind == "ack"
+                    or close_confirmation_fallback in {"accept", "continue"}
                 )
-            if analysis.findings:
-                workshop.last_findings = [finding.to_dict() for finding in analysis.findings]
-            marked_line = update_marked_workshop_line(
-                workshop,
-                findings=analysis.findings,
-                player_text=(
-                    text
-                    if player_line_replacement is not None
-                    or kind
-                    in {
-                        "request_repair",
-                        "critique_forced",
-                        "critique_gibberish",
-                        "critique_offscene",
-                    }
-                    else None
-                ),
             )
-            if analysis.findings:
+            evaluation = analysis.evaluation
+            replacement_targeted = bool(
+                player_line_replacement is not None
+                and (
+                    player_line_replacement.explicit_line_index is not None
+                    or player_line_replacement.target_fragment
+                    or workshop.marked_line_index is not None
+                )
+            )
+            semantic_proposal_targeted = bool(
+                analysis.line_proposal is not None
+                and analysis.line_proposal.line_index is not None
+            )
+            explicit_replacement_command = (
+                is_explicit_player_line_replacement_command(text)
+            )
+            if (
+                evaluation is None
+                and player_line_replacement is not None
+                and not replacement_targeted
+                and not semantic_proposal_targeted
+                and not explicit_replacement_command
+                and not followup_control_turn
+                and not semantic_close_accepted
+                and not analysis.repair_requested
+            ):
+                # 一次の複合schemaが意味判定を確定できなければ、同じchat routeの
+                # 評価専用schemaへ進める。provider切替ではなく意味上の二段目。
+                LOGGER.warning(
+                    "haiku_workshop_evaluation session_id=%s stage=primary "
+                    "result=rejected reason=no_accepted_evaluation path=%s candidate=%s",
+                    session.session_id,
+                    intent_path,
+                    player_line_replacement.text[:48],
+                )
+                evaluation, evaluation_reason = self._analyze_workshop_evaluation_with_chat(
+                    workshop,
+                    semantic_text,
+                )
+                if evaluation is not None:
+                    intent_path = f"{intent_path}->chat_evaluation"
+                else:
+                    semantic_evaluation_unresolved = True
+                    LOGGER.warning(
+                        "haiku_workshop_evaluation session_id=%s stage=chat_second_pass "
+                        "result=rejected reason=%s candidate=%s",
+                        session.session_id,
+                        evaluation_reason,
+                        player_line_replacement.text[:48],
+                    )
+            if (
+                evaluation is not None
+                and not followup_control_turn
+                and not semantic_close_accepted
+                and not analysis.repair_requested
+            ):
+                # 固定置換規則は「〜でいい」を一行案と誤読し得る。対象行が
+                # コードで確定していない候補より、根拠つきの句評価を優先する。
+                if not replacement_targeted and not semantic_proposal_targeted:
+                    player_line_replacement = None
+                    if (
+                        evaluation.sentiment == "positive"
+                        and evaluation.scope == "whole_verse"
+                    ):
+                        effective_kind = "praise"
+                        semantic_evaluation_positive = True
+                    elif evaluation.sentiment in {"negative", "mixed"}:
+                        semantic_evaluation_needs_revision = True
+                        if analysis.intent in {
+                            "critique_forced",
+                            "critique_gibberish",
+                            "critique_offscene",
+                        }:
+                            effective_kind = analysis.intent
+                        else:
+                            effective_kind = "other_haiku"
+                    LOGGER.warning(
+                        "haiku_workshop_evaluation session_id=%s result=accepted "
+                        "sentiment=%s scope=%s confidence=%.2f path=%s evidence=%s",
+                        session.session_id,
+                        evaluation.sentiment,
+                        evaluation.scope,
+                        evaluation.confidence,
+                        intent_path,
+                        evaluation.evidence[:80],
+                    )
+            if analysis.line_reference is not None and not followup_control_turn:
+                LOGGER.warning(
+                    "haiku_workshop_line_reference session_id=%s concept=%s number=%s "
+                    "line_index=%s canonical=%s evidence=%s confidence=%.2f path=%s",
+                    session.session_id,
+                    analysis.line_reference.concept_id,
+                    analysis.line_reference.concept_number,
+                    analysis.line_reference.line_index,
+                    analysis.line_reference.canonical_name,
+                    analysis.line_reference.evidence[:48],
+                    analysis.line_reference.confidence,
+                    intent_path,
+                )
+            if (
+                analysis.line_proposal is not None
+                and not followup_control_turn
+                and not semantic_evaluation_positive
+                and not semantic_evaluation_needs_revision
+                and not semantic_evaluation_unresolved
+            ):
+                # 自然な置換提案は会話モデルの意味抽出を優先する。上で得た
+                # closed regex の候補は、会話モデルが提案を確定できない場合だけ
+                # fallback として残る。ただし現在句そのものが発話に含まれて
+                # コードで一意に取れた置換元は、AIの空欄で上書きしない。
+                code_target_fragment = (
+                    player_line_replacement.target_fragment
+                    if player_line_replacement is not None
+                    else None
+                )
+                code_explicit_line = (
+                    player_line_replacement.explicit_line_index
+                    if player_line_replacement is not None
+                    else None
+                )
+                semantic_line = (
+                    analysis.line_reference.line_index
+                    if analysis.line_reference is not None
+                    else None
+                )
+                target_indices = {
+                    index
+                    for index in (
+                        analysis.line_proposal.line_index,
+                        semantic_line,
+                        code_explicit_line,
+                    )
+                    if index is not None
+                }
+                if len(target_indices) <= 1:
+                    player_line_replacement = PlayerLineReplacement(
+                        text=analysis.line_proposal.replacement_text,
+                        explicit_line_index=(
+                            next(iter(target_indices)) if target_indices else None
+                        ),
+                        target_fragment=(
+                            code_target_fragment
+                            or analysis.line_proposal.target_fragment
+                            or None
+                        ),
+                    )
+                    effective_kind = "propose_line_edit"
+                    LOGGER.warning(
+                        "haiku_workshop_line_proposal session_id=%s result=accepted "
+                        "target_line=%s target_fragment=%s replacement=%s confidence=%.2f "
+                        "path=%s evidence=%s",
+                        session.session_id,
+                        player_line_replacement.explicit_line_index,
+                        analysis.line_proposal.target_fragment[:40],
+                        analysis.line_proposal.replacement_text[:40],
+                        analysis.line_proposal.confidence,
+                        intent_path,
+                        analysis.line_proposal.evidence[:80],
+                    )
+                else:
+                    LOGGER.warning(
+                        "haiku_workshop_line_proposal session_id=%s result=rejected "
+                        "reason=line_reference_conflict targets=%s evidence=%s",
+                        session.session_id,
+                        sorted(target_indices),
+                        analysis.line_proposal.evidence[:80],
+                    )
+            if analysis.findings and not followup_control_turn:
+                workshop.last_findings = [finding.to_dict() for finding in analysis.findings]
+            marked_line = workshop.marked_line_index
+            if not followup_control_turn:
+                marked_line = update_marked_workshop_line(
+                    workshop,
+                    findings=analysis.findings,
+                    player_text=(
+                        text
+                        if player_line_replacement is not None
+                        or effective_kind
+                        in {
+                            "request_repair",
+                            "critique_forced",
+                            "critique_gibberish",
+                            "critique_offscene",
+                        }
+                        else None
+                    ),
+                    line_reference=analysis.line_reference,
+                )
+            if analysis.findings and not followup_control_turn:
                 LOGGER.warning(
                     "haiku_workshop_locate session_id=%s result=%s marked_line=%s findings=%s",
                     session.session_id,
@@ -1080,18 +1738,145 @@ class DogidoService:
                     marked_line,
                     [finding.to_dict() for finding in analysis.findings],
                 )
-        elif player_line_replacement is not None:
-            # 明示行または直前markがあれば、置換のためにAIを呼ばない。
-            update_marked_workshop_line(workshop, player_text=text)
+
+        # 意味説明への納得は講評ではない。別の句断片を拾わせず、コード固定の
+        # 終了確認へ進める。会話モデルが使えない場合も代表的な短文だけfallbackする。
+        if workshop.awaiting_meaning_ack:
+            if effective_kind == "ack":
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = True
+                workshop.close_confirmation_source = "meaning"
+                record_workshop_activity(workshop, now=event.observed_at)
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=meaning_explained "
+                    "result=close_confirmation intent_path=%s player=%s",
+                    session.session_id,
+                    intent_path,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="うん、伝わってよかった。この句の話はここまででええ？",
+                    )
+                ]
+            # 新しい質問・講評が来たなら、前の説明待ちは終えて通常処理を続ける。
+            workshop.awaiting_meaning_ack = False
+
+        if workshop.awaiting_close_confirmation:
+            if close_confirmation_fallback == "continue":
+                workshop.awaiting_close_confirmation = False
+                workshop.close_confirmation_source = None
+                record_workshop_activity(workshop, now=event.observed_at)
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=close_confirmation "
+                    "result=continue player=%s",
+                    session.session_id,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="おけ、まだ続けよか。気になるとこ教えてな。",
+                    )
+                ]
+            if (
+                close_confirmation_fallback == "accept"
+                or effective_kind == "ack"
+                or semantic_evaluation_positive
+            ):
+                confirmation_source = workshop.close_confirmation_source
+                close_workshop(
+                    workshop,
+                    reason=(
+                        "evaluation_confirmed"
+                        if confirmation_source == "evaluation"
+                        else "meaning_confirmed"
+                    ),
+                )
+                session.haiku_workshop = None
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=close_confirmation "
+                    "result=closed intent_path=%s player=%s",
+                    session.session_id,
+                    intent_path,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="おけ、この句の話はここまでや。",
+                    )
+                ]
+            # 終了への返事ではなく新しい句の話なら、確認状態だけ解除して続ける。
+            workshop.awaiting_close_confirmation = False
+            workshop.close_confirmation_source = None
+
+        if semantic_evaluation_unresolved:
+            # 評価か置換かを会話モデルでも確定できなかった。対象のない語を
+            # 一行へ勝手に入れず、次の発話で意図を一つにしてもらう。
+            record_workshop_activity(workshop, now=event.observed_at)
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=False,
+                    text=(
+                        "これは句全体の感想やろか？ "
+                        "それとも、どこか一行をその言葉に変えたいん？"
+                    ),
+                )
+            ]
+
+        # 正規表現で曖昧でも、会話モデルが発話中の一意な置換語と句中断片を取れた
+        # 場合は先へ進める。どちらでも確定しなければコード固定で聞き返す。
+        if (
+            replacement_parse.status == "ambiguous"
+            and player_line_replacement is None
+            and not semantic_evaluation_positive
+            and not semantic_evaluation_needs_revision
+        ):
+            record_workshop_activity(workshop, now=event.observed_at)
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=False,
+                    text=(
+                        "置き換えるところが一つに決められへんかったわ。"
+                        "『くさちのねよりくさちかな』みたいに、元の一行と新しい一行を教えてな。"
+                    ),
+                )
+            ]
+
+        if effective_kind == "show_current":
+            record_workshop_activity(workshop, now=event.observed_at)
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=False,
+                    text=f"いまはこうやで。\n{workshop.editing_line()}",
+                )
+            ]
+
+        kind = effective_kind
+        reply_kind = kind
 
         now = event.observed_at
         if kind == "close":
-            close_workshop(workshop, reason="explicit")
+            close_workshop(
+                workshop,
+                reason="semantic_explicit" if semantic_close_accepted else "explicit",
+            )
             session.haiku_workshop = None
             reply = render_workshop_reply("close", workshop, player_text=text)
             LOGGER.warning(
-                "haiku_workshop_turn session_id=%s path=close player=%s reply=%s",
+                "haiku_workshop_turn session_id=%s path=close intent_path=%s "
+                "semantic=%s player=%s reply=%s",
                 session.session_id,
+                intent_path,
+                semantic_close_accepted,
                 text[:100],
                 (reply or "")[:120],
             )
@@ -1110,7 +1895,7 @@ class DogidoService:
         }.get(kind, "other")
 
         critique_id: str | None = None
-        if kind != "close" and self.memory is not None:
+        if kind not in {"close", "ack"} and self.memory is not None:
             try:
                 row = self.memory.save_haiku_critique(
                     entry_id=workshop.entry_id,
@@ -1141,10 +1926,8 @@ class DogidoService:
                 LOGGER.warning("haiku_critique_save_failed detail=%s", exc)
 
         if player_line_replacement is not None:
-            target_line = player_line_replacement.explicit_line_index
-            if target_line is None:
-                target_line = workshop.marked_line_index
             result = build_player_line_revision(workshop, player_line_replacement)
+            target_line = result.target_line_index
             if result.text is None:
                 LOGGER.warning(
                     "haiku_workshop_player_line_edit session_id=%s result=rejected "
@@ -1163,6 +1946,8 @@ class DogidoService:
                     )
                 ]
             workshop.pending_revision = result.text
+            workshop.pending_revision_surface_text = result.surface_text
+            workshop.pending_revision_lines = result.lines
             workshop.pending_revision_line_sources.clear()
             workshop.pending_revision_base_text = result.base_text
             workshop.pending_revision_edits = [dict(edit) for edit in result.edits]
@@ -1184,14 +1969,31 @@ class DogidoService:
                 AudioAction(
                     layer="speech",
                     interrupt=False,
-                    text=(
-                        f"こうなるで。\n{result.text}\n"
-                        "このまま別の行も直せるで。よければ最後に『その案で』って言ってな。"
-                    ),
+                    # 修正句の直後へ案内を連結するとTTSで境界が潰れる。
+                    # pending状態は維持し、音声は変更後の三行だけで止める。
+                    text=result.text,
                 )
             ]
 
         if kind == "praise":
+            if semantic_evaluation_positive:
+                workshop.awaiting_close_confirmation = True
+                workshop.close_confirmation_source = "evaluation"
+                record_workshop_activity(workshop, now=event.observed_at)
+                LOGGER.warning(
+                    "haiku_workshop_followup session_id=%s stage=evaluation_positive "
+                    "result=close_confirmation intent_path=%s player=%s",
+                    session.session_id,
+                    intent_path,
+                    text[:100],
+                )
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text="気にいってもらえてよかった。この句の話はここまででええ？",
+                    )
+                ]
             close_workshop(workshop, reason="praise")
             session.haiku_workshop = None
 
@@ -1221,6 +2023,8 @@ class DogidoService:
         reply_path = "template"
         if reply_kind == "ask_meaning":
             reply, reply_path = self._ask_meaning_workshop_reply(workshop, semantic_text)
+            workshop.awaiting_meaning_ack = True
+            workshop.awaiting_close_confirmation = False
         elif reply_kind in {
             "soft_default",
             "other_haiku",
@@ -1238,6 +2042,11 @@ class DogidoService:
                 semantic_text,
                 kind=reply_kind,
                 analysis=analysis,
+                reply_goal=(
+                    "ask_revision_direction"
+                    if semantic_evaluation_needs_revision
+                    else "respond_to_feedback"
+                ),
             )
         else:
             reply = render_workshop_reply(reply_kind, workshop, player_text=text)
@@ -1268,7 +2077,16 @@ class DogidoService:
 
         reason_set = set(reasons)
         if "missing_target" in reason_set:
-            return "どの行を変えるか、上五・中七・下五のどれか教えてな。"
+            return "『くさちのねよりくさちかな』みたいに、元の一行と新しい一行を教えてな。"
+        if reason_set.intersection(
+            {
+                "target_fragment_not_readable",
+                "target_fragment_not_found",
+                "ambiguous_target_fragment",
+                "target_conflict",
+            }
+        ):
+            return "元の一行が今の句と一つに決まらへんかったわ。元の句をそのまま言ってから、新しい一行を教えてな。"
         if "pending_source_conflict" in reason_set:
             return "先に出した案を『その案で』か『元のまま』で決めてから直そか。"
         if reason_set.intersection({"not_hiragana", "verse_not_hiragana"}):
@@ -1292,7 +2110,7 @@ class DogidoService:
 
         details = build_workshop_intent_llm_details(workshop, player_text)
         try:
-            payload = self.platform_ai.generate_structured_json(
+            payload = self.llm.generate_structured_json(
                 StructuredGenerationRequest(
                     kind="haiku_workshop_intent",
                     fallback_value={
@@ -1300,13 +2118,31 @@ class DogidoService:
                         "confidence": 0.0,
                         "repair_requested": False,
                         "findings": [],
+                        "evaluation": {
+                            "found": False,
+                            "sentiment": "unknown",
+                            "scope": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
+                        "close_request": {
+                            "found": False,
+                            "scope": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
+                        "line_reference": {
+                            "found": False,
+                            "concept_id": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
                     },
                     details=details,
                     temperature=0.0,
                     route="chat",
-                    max_tokens=192,
-                ),
-                fallback=self.llm,
+                    max_tokens=320,
+                )
             )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("haiku_workshop_intent_failed detail=%s", exc)
@@ -1314,11 +2150,106 @@ class DogidoService:
         analysis = finalize_workshop_analysis_payload(
             payload,
             verse_lines=workshop_verse_lines(workshop.editing_line()),
+            player_text=player_text,
         )
-        if analysis.intent == "soft_default" and not analysis.findings:
+        if (
+            analysis.intent == "soft_default"
+            and not analysis.findings
+            and analysis.line_proposal is None
+            and analysis.line_reference is None
+            and analysis.close_request is None
+            and analysis.evaluation is None
+        ):
             return analysis, "soft_default"
-        provider = str(payload.get("__dogido_platform_ai_provider") or "llm")
-        return analysis, provider
+        return analysis, "chat"
+
+    def _analyze_workshop_evaluation_with_chat(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+    ) -> tuple[WorkshopEvaluation | None, str]:
+        """一次分類で未確定の評価だけを、会話モデルへ直接問い合わせる。"""
+
+        fallback = {
+            "found": False,
+            "sentiment": "unknown",
+            "scope": "unknown",
+            "evidence": "",
+            "confidence": 0.0,
+        }
+        try:
+            payload = self.llm.generate_structured_json(
+                StructuredGenerationRequest(
+                    kind="haiku_workshop_evaluation",
+                    fallback_value=fallback,
+                    details={
+                        "verse": workshop.editing_line(),
+                        "player_text": player_text,
+                    },
+                    temperature=0.0,
+                    route="chat",
+                    max_tokens=96,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning(
+                "haiku_workshop_evaluation stage=chat_second_pass "
+                "result=error detail=%s",
+                exc,
+            )
+            return None, "generation_error"
+        evaluation, reason = validate_workshop_evaluation_payload(
+            payload,
+            player_text=player_text,
+        )
+        if evaluation is not None:
+            LOGGER.warning(
+                "haiku_workshop_evaluation stage=chat_second_pass result=accepted "
+                "sentiment=%s scope=%s confidence=%.2f evidence=%s",
+                evaluation.sentiment,
+                evaluation.scope,
+                evaluation.confidence,
+                evaluation.evidence[:80],
+            )
+        return evaluation, reason
+
+    def _analyze_pending_revision_reply(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+    ) -> tuple[PendingRevisionAnalysis, str]:
+        """未採用案への自然文を常駐 chat LLM で分類し、実行はまだ行わない。"""
+
+        details = build_pending_revision_llm_details(workshop, player_text)
+        try:
+            payload = self.llm.generate_structured_json(
+                StructuredGenerationRequest(
+                    kind="haiku_workshop_pending_decision",
+                    fallback_value={
+                        "action": "uncertain",
+                        "confidence": 0.0,
+                        "evidence": "",
+                        "close_request": {
+                            "found": False,
+                            "scope": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
+                    },
+                    details=details,
+                    temperature=0.0,
+                    route="chat",
+                    max_tokens=96,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("haiku_workshop_pending_decision_failed detail=%s", exc)
+            return PendingRevisionAnalysis(), "fallback"
+        analysis = finalize_pending_revision_payload(
+            payload,
+            player_text=player_text,
+        )
+        return analysis, "chat"
 
     def _workshop_revision_reply(
         self,
@@ -1357,7 +2288,16 @@ class DogidoService:
             return "まだうまく直しきれんかったわ。元の句はそのままや。", "failed"
         if not result.accepted or not result.text:
             return "まだうまく直しきれんかったわ。元の句はそのままや。", result.failure_reason or "rejected"
+        pending_lines = build_haiku_lines(
+            result.text,
+            line_sources=result.line_sources,
+            provenance="generated_confirmed",
+        )
+        if len(pending_lines) != 3:
+            return "まだうまく直しきれんかったわ。元の句はそのままや。", "invalid_line_records"
         workshop.pending_revision = result.text
+        workshop.pending_revision_surface_text = result.text
+        workshop.pending_revision_lines = pending_lines
         workshop.pending_revision_line_sources = list(result.line_sources)
         workshop.pending_revision_base_text = result.base_text
         workshop.pending_revision_edits = [edit.to_record() for edit in result.edits]
@@ -1382,29 +2322,15 @@ class DogidoService:
         workshop: RecentHaikuWorkshop,
         player_text: str,
     ) -> tuple[str, str]:
-        """材料候補をコードが閉じ、LLM が選び＋短返事（失敗時はテンプレ）。"""
-        details = build_ask_meaning_llm_details(workshop, player_text)
-        candidates = list(details.get("candidates") or [])
-        payload: dict[str, object] | None = None
-        if candidates:
-            try:
-                payload = self.llm.generate_structured_json(
-                    StructuredGenerationRequest(
-                        kind="haiku_workshop_material_pick",
-                        fallback_value={"pick_index": None, "reply": ""},
-                        details=details,
-                        temperature=0.35,
-                        route="chat",
-                        max_tokens=96,
-                    )
-                )
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.warning(
-                    "haiku_workshop_material_pick_failed detail=%s",
-                    exc,
-                )
-                payload = None
-        return finalize_ask_meaning_reply(workshop, player_text, payload)
+        """行出典だけで意味を説明し、不明なら推測せず正直に返す。"""
+
+        material = grounded_material_for_question(workshop, player_text)
+        if material:
+            return (
+                f"「{material}」を元にした行やで。言葉が崩れてたら、そこはオレの失敗や。",
+                "line_source",
+            )
+        return "すまん。オレにももう分からんわ。", "unknown_source"
 
     def _collaborator_workshop_reply(
         self,
@@ -1415,14 +2341,20 @@ class DogidoService:
         analysis: WorkshopAnalysis | None = None,
         repair_state: str = "not_run",
         proposed_revision: str | None = None,
+        reply_goal: str = "respond_to_feedback",
     ) -> tuple[str, str]:
         """共同編集者モード leaf。実行結果だけを受けて自由に一言返す。"""
         template_kind = kind if kind != "soft_default" else "soft_default"
-        fallback = (
-            "こんなんどうや。"
-            if repair_state == "proposed"
-            else render_workshop_reply(template_kind, workshop, player_text=player_text)
-        )
+        if repair_state == "proposed":
+            fallback = "こんなんどうや。"
+        elif reply_goal == "ask_revision_direction":
+            fallback = "どの行や言葉を、どう直したいか教えてな。"
+        else:
+            fallback = render_workshop_reply(
+                template_kind,
+                workshop,
+                player_text=player_text,
+            )
         verse = workshop.editing_line() or ""
         materials = materials_speech_line(workshop)
         details = {
@@ -1430,6 +2362,7 @@ class DogidoService:
             "materials_speech": materials,
             "player_text": player_text,
             "intent_kind": kind,
+            "reply_goal": reply_goal,
             "character_mode": "workshop",
             "workshop_findings": [
                 finding.to_dict() for finding in (analysis.findings if analysis else ())
@@ -1466,7 +2399,7 @@ class DogidoService:
         Stage2: soft 既定の句の話は workshop 経路で処理済み → drift しない。
         """
         workshop = session.haiku_workshop
-        if not is_open(workshop) or workshop is None:
+        if not is_active(workshop) or workshop is None:
             return
         player_input = session.machine.player_input
         text = (player_input.raw_text or "").strip()

@@ -101,6 +101,7 @@ class CatalogReadingTest(unittest.TestCase):
 class PlayerInputHaikuFeedbackTest(unittest.TestCase):
     def test_extract_reading_and_revise(self) -> None:
         self.assertEqual(extract_reading_correction("草地はくさち"), ("草地", "くさち", None))
+        self.assertIsNone(extract_reading_correction("広がる緑はにしてはどうでした"))
         self.assertEqual(
             extract_reading_correction("そうちじゃなくてくさち"),
             ("そうち", "くさち", "そうち"),
@@ -115,6 +116,17 @@ class PlayerInputHaikuFeedbackTest(unittest.TestCase):
         assert ctx.reading_correction is not None
         self.assertEqual(ctx.reading_correction.surface, "草地")
         self.assertEqual(ctx.reading_correction.reading, "くさち")
+        self.assertTrue(ctx.reading_correction.explicit)
+
+        shorthand = route_player_input("草地はくさち")
+        self.assertIsNotNone(shorthand.reading_correction)
+        assert shorthand.reading_correction is not None
+        self.assertFalse(shorthand.reading_correction.explicit)
+
+        wrong_reading = route_player_input("そうちじゃなくてくさち")
+        self.assertIsNotNone(wrong_reading.reading_correction)
+        assert wrong_reading.reading_correction is not None
+        self.assertTrue(wrong_reading.reading_correction.explicit)
 
         ctx2 = route_player_input("直し: あああ / いいい / ううう")
         self.assertEqual(ctx2.revised_haiku_text, "あああ\nいいい\nううう")
@@ -126,6 +138,114 @@ class HaikuFeedbackMemoryTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         clear_overlay_for_tests()
+
+    def test_emission_binds_surface_reading_line_identity_and_sources(self) -> None:
+        emission = HaikuEmission(
+            created_at=datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc),
+            text="しろいひかり\nまるいこいぬし\nタイガのもり",
+            preface="ここで一句。",
+            interpretation="丸石とタイガ",
+            biome="taiga",
+            structure=None,
+            time_phase="day",
+            dimension="minecraft:overworld",
+            event_sequence=9,
+            materials={
+                "line_sources": [
+                    {
+                        "line_index": 1,
+                        "text": "まるいこいぬし",
+                        "atom_ids": ["item:cobblestone:japanese"],
+                        "sources": [
+                            {
+                                "atom_id": "item:cobblestone:japanese",
+                                "kind": "catalog_label",
+                                "text": "丸石",
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(emission.surface_text, "しろいひかり\nまるいこいぬし\nタイガのもり")
+        self.assertEqual(emission.text, "しろいひかり\nまるいこいぬし\nタイガのもり")
+        self.assertEqual(emission.reading_text, "しろいひかり\nまるいこいぬし\nたいがのもり")
+        self.assertEqual([line.line_id for line in emission.lines], ["line_1", "line_2", "line_3"])
+        self.assertEqual([line.canonical_name for line in emission.lines], ["上五", "中七", "下五"])
+        self.assertEqual(emission.lines[2].surface_text, "タイガのもり")
+        self.assertEqual(emission.lines[2].reading_text, "たいがのもり")
+        self.assertEqual(emission.lines[1].source_atom_ids, ("item:cobblestone:japanese",))
+        self.assertEqual(emission.lines[1].source_atoms[0]["text"], "丸石")
+
+    def test_player_line_revision_treats_katakana_surface_as_the_same_base_verse(self) -> None:
+        with TemporaryDirectory() as tmp:
+            store = MemoryStore(Path(tmp))
+            observed_at = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
+            emission = HaikuEmission(
+                created_at=observed_at,
+                text="しろいひかり\nまるいこいぬし\nタイガのもり",
+                preface="ここで一句。",
+                interpretation="丸石とタイガ",
+                biome="taiga",
+                structure=None,
+                time_phase="day",
+                dimension="minecraft:overworld",
+                event_sequence=10,
+            )
+            revised_lines = [line.to_dict() for line in emission.lines]
+            revised_lines[1] = {
+                **revised_lines[1],
+                "surface_text": "丸っこい石",
+                "reading_text": "まるっこいいし",
+                "source_atom_ids": [],
+                "source_atoms": [],
+                "provenance": "player_explicit",
+            }
+
+            revision = store.save_haiku_feedback(
+                emission,
+                revised_text="しろいひかり\nまるっこいいし\nたいがのもり",
+                source="player_line_confirmed",
+                revision_base_text=emission.reading_text,
+                revision_base_surface_text=emission.surface_text,
+                revision_edit_contract="player_line_compare_and_swap_v1",
+                revision_edits=[
+                    {
+                        "line_index": 1,
+                        "expected_text": "まるいこいぬし",
+                        "replacement_text": "まるっこいいし",
+                        "provenance": "player_explicit",
+                    }
+                ],
+                revision_lines=revised_lines,
+                observed_at=observed_at,
+            )
+
+            self.assertEqual(revision["original_text"].splitlines()[2], "タイガのもり")
+            self.assertEqual(revision["original_reading_text"].splitlines()[2], "たいがのもり")
+            self.assertEqual(revision["revised_surface_text"].splitlines()[1], "丸っこい石")
+            self.assertEqual(revision["revised_text"].splitlines()[1], "まるっこいいし")
+
+            invalid_lines = [dict(row) for row in revised_lines]
+            invalid_lines[0]["line_index"] = False
+            with self.assertRaisesRegex(ValueError, "revision lines"):
+                store.save_haiku_feedback(
+                    emission,
+                    revised_text="しろいひかり\nまるっこいいし\nたいがのもり",
+                    source="player_line_confirmed",
+                    revision_base_text=emission.reading_text,
+                    revision_edit_contract="player_line_compare_and_swap_v1",
+                    revision_edits=[
+                        {
+                            "line_index": 1,
+                            "expected_text": "まるいこいぬし",
+                            "replacement_text": "まるっこいいし",
+                            "provenance": "player_explicit",
+                        }
+                    ],
+                    revision_lines=invalid_lines,
+                )
 
     def test_save_feedback_pair_and_search(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -31,8 +31,8 @@ class _FoundryClient:
                 SimpleNamespace(
                     message=SimpleNamespace(
                         content=(
-                            '{"intent":"critique_gibberish","confidence":0.94,'
-                            '"repair_requested":false,"findings":[]}'
+                            '{"action":"resume_workshop","confidence":0.94,'
+                            '"evidence":"句に戻ろう"}'
                         )
                     )
                 )
@@ -93,7 +93,11 @@ class _Provider:
             raise ProviderBusyError("still working")
         if self.fail:
             raise RuntimeError("provider failed")
-        return {"intent": "critique_gibberish", "confidence": 0.94}
+        return {
+            "action": "resume_workshop",
+            "confidence": 0.94,
+            "evidence": "句に戻ろう",
+        }
 
 
 class _Fallback:
@@ -108,19 +112,17 @@ class _Fallback:
 
     def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
         self.calls += 1
-        return {"intent": "soft_default", "confidence": 0.0}
+        return {"action": "uncertain", "confidence": 0.0, "evidence": ""}
 
 
 def _request() -> StructuredGenerationRequest:
     return StructuredGenerationRequest(
-        kind="haiku_workshop_intent",
-        fallback_value={"intent": "soft_default", "confidence": 0.0},
+        kind="haiku_workshop_combat_input",
+        fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
         details={
-            "verse": "そらまぶし くさむらにうかぶ くろいせきたん",
-            "materials_speech": "平原",
-            "player_text": "日本語としておかしい",
-            "allowed_intents": ["critique_gibberish", "soft_default"],
-            "allowed_problem_types": ["unreadable", "other"],
+            "verse": "はるのかぜ\nひつじがあるく\nよるのつき",
+            "player_text": "句に戻ろう",
+            "allowed_actions": ["resume_workshop", "uncertain"],
         },
         temperature=0.0,
         route="chat",
@@ -139,7 +141,7 @@ class PlatformAIRouterTests(unittest.TestCase):
 
         payload = router.generate_structured_json(_request(), fallback=fallback)
 
-        self.assertEqual(payload["intent"], "critique_gibberish")
+        self.assertEqual(payload["action"], "resume_workshop")
         self.assertEqual(payload[STRUCTURED_STATUS_KEY], "accepted")
         self.assertEqual(payload[PLATFORM_AI_PROVIDER_KEY], "test_os")
         self.assertEqual(provider.calls, 1)
@@ -159,7 +161,7 @@ class PlatformAIRouterTests(unittest.TestCase):
 
         payload = router.generate_structured_json(_request(), fallback=fallback)
 
-        self.assertEqual(payload["intent"], "soft_default")
+        self.assertEqual(payload["action"], "uncertain")
         self.assertEqual(payload[PLATFORM_AI_PROVIDER_KEY], "chat_fallback")
         self.assertEqual(provider.calls, 1)
         self.assertEqual(fallback.calls, 1)
@@ -205,16 +207,56 @@ class PlatformAIRouterTests(unittest.TestCase):
         self.assertEqual(payload[PLATFORM_AI_PROVIDER_KEY], "foundry_local")
         self.assertNotIn("apple_foundation_models", router._failed_until)
 
-    def test_apple_json_schema_has_required_generation_order(self) -> None:
-        schema = _json_schema_for(_request())
+    def test_normal_workshop_tasks_are_not_platform_ai_tasks(self) -> None:
+        for kind in (
+            "haiku_workshop_intent",
+            "haiku_workshop_pending_decision",
+        ):
+            with self.subTest(kind=kind):
+                request = StructuredGenerationRequest(
+                    kind=kind,
+                    fallback_value={},
+                    details={},
+                    temperature=0.0,
+                    route="chat",
+                    max_tokens=96,
+                )
+                with self.assertRaisesRegex(ValueError, "unsupported platform AI task"):
+                    _json_schema_for(request)
 
-        self.assertEqual(
-            schema["x-order"],
-            ["intent", "confidence", "repair_requested", "findings"],
+    def test_combat_workshop_input_has_a_separate_closed_schema(self) -> None:
+        request = StructuredGenerationRequest(
+            kind="haiku_workshop_combat_input",
+            fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+            details={
+                "verse": "はるのかぜ\nひつじがあるく\nよるのつき",
+                "player_text": "さっき話してたやつに戻ろうか",
+                "allowed_actions": [
+                    "resume_workshop",
+                    "workshop_input",
+                    "close_workshop",
+                    "unrelated",
+                    "uncertain",
+                ],
+            },
+            temperature=0.0,
+            route="chat",
+            max_tokens=96,
         )
-        finding_schema = schema["properties"]["findings"]["items"]
-        self.assertIn("x-order", finding_schema)
-        self.assertNotIn("line_index", finding_schema["required"])
+
+        schema = _json_schema_for(request)
+
+        self.assertEqual(schema["x-order"], ["action", "confidence", "evidence"])
+        self.assertEqual(
+            schema["properties"]["action"]["enum"],
+            [
+                "resume_workshop",
+                "workshop_input",
+                "close_workshop",
+                "unrelated",
+                "uncertain",
+            ],
+        )
 
     def test_provider_is_reprobed_when_failure_cooldown_expires_before_refresh(self) -> None:
         router = PlatformStructuredAIRouter(
@@ -295,7 +337,7 @@ class FoundryLocalProviderTests(unittest.TestCase):
 
             self.assertTrue(probe.available)
             self.assertIn("update_ready", probe.reason)
-            self.assertEqual(payload["intent"], "critique_gibberish")
+            self.assertEqual(payload["action"], "resume_workshop")
             self.assertIs(provider._model, fresh)
             self.assertEqual(fresh.load_calls, 1)
             self.assertEqual(current.unload_calls, 1)

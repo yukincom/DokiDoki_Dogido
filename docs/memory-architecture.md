@@ -154,7 +154,9 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
 - `created_at`: 長期記憶エントリを作成した時刻
 - `author`: `dogido` または `player`
 - `kind`: `agent_haiku` または `player_haiku`
-- `text`: 3 行の川柳本文
+- `text` / `surface_text`: 漢字・カタカナを含みうる表示三行（`text` は互換フィールド）
+- `reading_text`: TTS・音数・CASに使う確定ひらがな三行
+- `lines`: 各行の安定ID・位置・表示・読み・出典・provenanceを束ねた3件。表示と読みを別の句として保存しない
 - `interpretation`: 川柳の読解・意図説明。プレイヤー川柳では未入力なら `null`
 - `world`: 生成または保存時の Minecraft 文脈
 - `trigger`: 元イベントに紐づく最小情報
@@ -260,6 +262,8 @@ Markdown は正本にしない。人間が読む日記・共有文・UI エク�
 `provenance` は `player_explicit` とし、source atom IDを捏造しない。連続編集では
 `base_text` を直前の採用句、`parent_revision_id` を直前revisionへ向ける。初回発句の
 `original_text` は変えず、各段階のCAS基準を履歴として残す。
+
+ドギド発句とrevisionは、三行それぞれを `line_id / line_index / position / canonical_name / surface_text / reading_text / source_atom_ids / source_atoms / provenance` の一オブジェクトで保存する。revisionには初回の `original_text`（表示）と `original_reading_text`（読み）、各段階の `base_surface_text` / `base_text`、採用後の `revised_surface_text` / `revised_text` を残す。プレイヤー局所編集は対象行の `surface_text` と `reading_text` を同時に差し替え、他の二行をそのまま引き継ぐ。
 
 添削エージェントは、`haiku_entries.jsonl` と `haiku_revisions.jsonl` を読む。
 通常の短期ログ全文は読ませない。

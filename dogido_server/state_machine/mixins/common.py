@@ -654,9 +654,9 @@ class CommonMixin:
             workshop = provider()
         except Exception:  # noqa: BLE001
             return False
-        from dogido_server.haiku.workshop import is_open
+        from dogido_server.haiku.workshop import is_active
 
-        return is_open(workshop)
+        return is_active(workshop)
 
     def _haiku_focus_active(self) -> bool:
         """川柳に集中している（発句 preface 待ち or workshop pin）。
@@ -669,14 +669,14 @@ class CommonMixin:
         """pin が open で、今の発話が workshop 向けなら True。"""
         if not self._haiku_workshop_is_open():
             return False
-        from dogido_server.haiku.workshop import is_open, should_handle_as_workshop
+        from dogido_server.haiku.workshop import is_active, should_handle_as_workshop
 
         provider = getattr(self, "haiku_workshop_provider", None)
         verse: str | None = None
         if provider is not None:
             try:
                 ws = provider()
-                if is_open(ws) and ws is not None:
+                if is_active(ws) and ws is not None:
                     verse = ws.editing_line()
             except Exception:  # noqa: BLE001
                 verse = None
