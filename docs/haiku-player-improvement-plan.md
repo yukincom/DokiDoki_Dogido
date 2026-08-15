@@ -1,7 +1,7 @@
 # 川柳: プレイヤー主導の改善設計
 
 **日付:** 2026-08-12
-**状態:** H1〜H5.2・H7-lite（OS／端末内AIの限定意味抽出）・修正案1本・連続局所編集・戦闘中断／再開 **実装済み** / H6 **撤回**（詳細は §7）
+**状態:** H1〜H5.2・H7-lite（常駐会話モデルの限定意味抽出。OS／端末内AIは戦闘中断中の小分類のみ）・修正案1本・連続局所編集・戦闘中断／再開 **実装済み** / H6 **撤回**（詳細は §7）
 **関連:** [companion-maturity.md](companion-maturity.md)、[haiku-feedback-plan.md](haiku-feedback-plan.md)、[senryu-roadmap.md](senryu-roadmap.md)、[senryu-rag-plan.md](senryu-rag-plan.md)、[haiku-architecture.md](haiku-architecture.md)
 
 ---
@@ -61,16 +61,16 @@
 
 プレイヤー発話
   ├─ 句に関する講評・質問・直し  → haiku_workshop 経路
-  │     → 端末内AI優先で intent / 行概念(line_1/2/3) / 指摘 / プレイヤー自身の置換語を構造化
+  │     → 常駐会話モデルで intent / 行概念(line_1/2/3) / 指摘 / プレイヤー自身の置換語を構造化
   │     → コード検証 → critique 保存 → 共同編集者として短く返す
-  │     → 「〜にしてはどう」等は、OS AIが発話中の置換語と句中の対象断片を抽出
+  │     → 「〜にしてはどう」等は、会話モデルが発話中の置換語と句中の対象断片を抽出
   │     → コードが発話根拠・行概念・対象の一意性を検証し、対象行だけへ置換
   │     → 置換語と三行をひらがな化・音数検査し、未保存の新しい三行をコード提示
   │     → 未保存案を基準に別の行も続けて置換できる
   │     → 求められたときだけ haiku route が対象行を直す
   │     → 別structured評価で意味保持・自然さを照合
   │     → コードで出典ID・重複・対象行・音数・発句時hard制約を検証 → 未保存案として提示
-  │     → 未採用案への返答は別の小さなOS AI schemaで採用／却下／追加修正等を分類
+  │     → 未採用案への返答は別の小さな会話モデルschemaで採用／却下／追加修正等を分類
   │     → コードが confidence・発話根拠・現在pending・CASを確認して初めて revision 保存
   └─ それ以外                  → 通常 player_chat
 
@@ -133,8 +133,8 @@ RecentHaikuWorkshop:
 | # | 条件 | 意図 | 例 |
 |---|---|---|---|
 | **C1** | **次の発句** | 新しい句が主役 | 次の「ここで一句」 |
-| **C2** | **終了意図** | プレイヤーが区切る | 「もうええ」「お開き」「次へ行こう」「そのままでおしまい」「今日はここまで」等をOS AIが閉じた `close_request` へ抽出し、コードが根拠を検証してclose |
-| **C3** | **肯定で完了** | 修正不要・満足 | 「いい句」「うまい」「うん、いいと思う」「そのままでいい」「気に入った」→ praise 保存のうえ close |
+| **C2** | **終了意図** | プレイヤーが区切る | 「もうええ」「お開き」「次へ行こう」「そのままでおしまい」「今日はここまで」等を会話モデルが閉じた `close_request` へ抽出し、コードが根拠を検証してclose |
+| **C3** | **肯定で完了** | 修正不要・満足 | 固定規則で明白な「いい句」「うまい」は praise 保存のうえ即close。規則外の自然な肯定評価は会話モデルが根拠つきで抽出し、コード固定の終了確認を一段はさむ |
 | **C4** | **直しの確定** | 改善が一段落 | `直し:` 成功、または自然文直しを保存した直後（任意で「まだ直す？」は出さず close） |
 | **C5** | **話題の流れ（ソフト）** | 句を放置して別件へ | 下記 |
 | **C6** | **時間切れ** | 放置 | 発句から **T_open**（案: 3〜5分）、または **最後の句関連から T_idle**（案: 90〜120秒）無入力の句関連 |
@@ -174,7 +174,9 @@ open 中のプレイヤー入力
 
 **修正不要のとき:**
 
-- 明示ほめ（C3）→ critique 保存のうえ即 close。lesson は触らない
+- 固定規則に一致する明示ほめ（C3）→ critique 保存のうえ即 close。lesson は触らない
+- 固定規則外だが句全体への肯定評価と意味抽出できた場合 → praise critiqueを保存し、「ここまででよいか」をコード固定で確認。肯定後にclose
+- 否定／賛否混在の評価 → openを維持。共同編集者leafへ「自分で完成句を作らず、どの行・言葉をどう直したいか一問だけ尋ねる」とコードから指示
 - 無言で歩き続ける → C6 時間切れ  
 - 別の話を2回 → C5  
 - 「いいね」相当がなくても **閉じることに問題はない**（entry は既に自動保存済み）
@@ -190,7 +192,7 @@ open 中のプレイヤー入力
 1. **会話用 pin は短命**（上の close）  
 2. **長期記憶は長命**（entries / critiques / lessons）  
 3. pin を履歴の長さに依存させない（5往復のまま）  
-4. close 理由をログに残す（`close_reason=praise|drift|timeout|next_haiku|explicit|meaning_confirmed|combat_interrupted_close`）
+4. close 理由をログに残す（`close_reason=praise|drift|timeout|next_haiku|explicit|meaning_confirmed|evaluation_confirmed|combat_interrupted_close`）
 
 ### 状態遷移（要約）
 
@@ -221,35 +223,40 @@ open 中のプレイヤー入力
 | 種別 | シグナル例（粗い） | 動作 |
 |---|---|---|
 | **ask_meaning** | 「〜って何」「意味わからん」「ぐうの」 | 句の説明 or 正直に「読みにくい」 |
-| **ack_after_meaning** | 説明直後の「そうなんだ」「なるほど」「腑に落ちた」 | OS AIが直前状態込みで納得を抽出し、別箇所の講評にせず終了確認へ進む |
+| **ack_after_meaning** | 説明直後の「そうなんだ」「なるほど」「腑に落ちた」 | 会話モデルが直前状態込みで納得を抽出し、別箇所の講評にせず終了確認へ進む |
 | **critique_forced** | 「無理やり」「詰め込み」「圧縮」 | critique kind=forced_compress |
 | **critique_offscene** | 「ここ海ちゃう」「村なのに」 | kind=off_context |
 | **critique_gibberish** | 「それ日本語？」「読めん」 | kind=unreadable |
 | **praise** | 「いい句」「うまい」「うん、いいと思う」 | kind=praise（critique 保存・lesson 非変更・close） |
+| **semantic_evaluation** | 「素直でいい句だと思う」「なんか微妙」「前半はいいけど後半が惜しい」等、固定規則外の評価 | 会話モデルが `positive / negative / mixed`、句全体／一部、発話根拠を抽出。全体肯定は終了確認、否定・mixedは改善方向を質問して継続 |
 | **request_repair** | 「直して」「直すかな」 | 検証済みの指摘から対象行だけ修正案を1本作る。自動保存しない |
-| **player_line_edit** | 「夕暮れやに変えた方が」「おだやかなでいいんじゃない」「〜にしてはどう」 | OS AIがプレイヤー発話から置換語・根拠と句中の対象断片を抽出。コード検証後、その行だけ置換して未保存三行を提示 |
-| **show_current** | 「どんな句になった？」「今の案を見せて」 | OS AIまたは明示fallbackで意図を取り、句本文はコードからそのまま返す |
+| **player_line_edit** | 「夕暮れやに変えた方が」「おだやかなでいいんじゃない」「〜にしてはどう」 | 会話モデルがプレイヤー発話から置換語・根拠と句中の対象断片を抽出。コード検証後、その行だけ置換して未保存三行を提示 |
+| **show_current** | 「どんな句になった？」「今の案を見せて」 | 会話モデルまたは明示fallbackで意図を取り、句本文はコードからそのまま返す |
 | **pending_decision** | 「それで完成にしよう」「やっぱり元へ」「もう一行直したい」 | pending専用schemaで採用／却下／追加修正／表示／相談を分類。コード再検証後だけ保存・破棄 |
 | **revise_free** | 「こう直して」＋完成した三行 | revision 保存（`直し:` なしでも） |
 | **revise_formal** | 既存 `直し:` | 現行どおり |
 | **reading** | 既存 草地はくさち | 現行どおり |
-| **close_workshop** | 「もうええ」「お開き」「次いこ」「そのままでおしまい」「今日はここまで」 | OS AIが `close_request` を抽出し、コード検証後にopen=false |
+| **close_workshop** | 「もうええ」「お開き」「次いこ」「そのままでおしまい」「今日はここまで」 | 会話モデルが `close_request` を抽出し、コード検証後にopen=false |
 
-スラッシュコマンド、明示reading、完成三行revision、`clear_lessons`、明示praiseなど、短い閉じた操作はコードが正。それ以外の workshop 自然文は端末内AI優先で意味を取り、信頼度 0.75 以上の閉じた intent、対象行、句断片、問題種別をコードへ渡す。終了意図は語彙が広いため、代表的な明示形のコード規則に加えて専用 `close_request` を抽出する。AIが高信頼に講評種別や終了要求を確定した場合も、critique／lesson／修正開始／closeの実行条件と保存形式はコードが決める。
+スラッシュコマンド、明示reading、完成三行revision、`clear_lessons`、固定規則に一致する明示praiseなど、短い閉じた操作はコードが正。それ以外の workshop 自然文は、既に常駐する会話モデルの `chat` routeを1回だけ呼び、信頼度 0.75 以上の閉じた intent、対象行、句断片、問題種別をコードへ渡す。固定規則外の評価は専用 `evaluation` へ `sentiment / scope / evidence / confidence` を抽出し、confidence 0.80以上かつ発話中にevidenceがある場合だけ採用する。句全体へのpositiveは即closeせず終了確認へ、negative／mixedはopenのまま改善方向の質問へ進む。終了意図は語彙が広いため、代表的な明示形のコード規則に加えて専用 `close_request` を抽出する。AIが高信頼に講評種別・評価・終了要求を確定した場合も、critique／lesson／修正開始／確認状態／closeの実行条件と保存形式はコードが決める。
+
+音声入力の同音異字は、文字列置換候補として先に確定しない。固定置換規則が候補を作っても、対象行・句中断片・直前markのいずれでも置換先を確定できず、会話モデルが根拠つき評価を返した場合は評価を優先する。実ログ固有の誤認識例はプロンプトへ追加せず、回帰テストにだけ残す。
+
+会話モデルが有効なJSONを返しても評価自体が `found=false`・低信頼・根拠不一致なら、それを構造成功と意味判定成功で混同しない。対象行のない「〜でいい」「〜の方がいい」型の候補だけは、同じ `chat` routeの小さな `haiku_workshop_evaluation` schemaで評価だけを再判定する。再判定も不明なら置換・保存を行わず、句全体の感想か一行変更かをコード固定文で確認する。「〜に変えて／したら」のように変更動詞が明示された発話は再評価へ回さず、従来どおり対象行の確認へ進む。一次未確定・再判定の採用／棄却理由は `haiku_workshop_evaluation stage=...` に残す。
 
 `close_request` は `scope / evidence / confidence` を持つ。コードが採用するのは、発話中の連続したevidenceがあり、confidence 0.85以上で、scopeがworkshop全体または次の句への移行を表す場合だけとする。「次の行」「下の句」のような現在句内の移動、否定、引用・伝聞、終了したかを尋ねるだけの疑問はcloseしない。未採用案がある場合は、`accept_pending + close` なら保存後にclose、`reject_pending + close` なら破棄後にcloseする。案の採否を伴わないclose要求では、どちらを残すかコード固定文で確認し、AIに補完させない。
 
-`ask_meaning` の返答後は、コードが一時的に「意味説明済み」を保持する。次の発話はこの状態と一緒にOS AIへ渡し、意味として納得・理解が得られた場合は `ack` として扱う。このターンでは新しいfindingを採らず、critique／lessonにも保存せず、コード固定で「この句の話はここまででよいか」を確認する。次の肯定で `meaning_confirmed` close、続行の意思ならopenへ戻す。単独の「そうなんだ」を常にcloseへ使うのではなく、説明直後だけの文脈依存操作とする。
+`ask_meaning` の返答後は、コードが一時的に「意味説明済み」を保持する。次の発話はこの状態と一緒に会話モデルへ渡し、意味として納得・理解が得られた場合は `ack` として扱う。このターンでは新しいfindingを採らず、critique／lessonにも保存せず、コード固定で「この句の話はここまででよいか」を確認する。次の肯定で `meaning_confirmed` close、続行の意思ならopenへ戻す。単独の「そうなんだ」を常にcloseへ使うのではなく、説明直後だけの文脈依存操作とする。
 
 プレイヤー自身の一行置換では、AI出力に `replacement_text`、句中の `target_fragment`、プレイヤー発話中の `evidence`、confidence を要求する。置換語と evidence が実際の発話に連続部分として存在し、target fragment が現在の三行の一行だけに一致した場合だけ、コードのひらがな化・音数・hard制約・CASへ進む。AIが発話にない句本文を補作した場合は捨てる。
 
-三行には、言い方から独立した安定IDとして `line_1 / line_2 / line_3` を持たせる。人向けの概念番号は 1／2／3、コード配列の index は 0／1／2、位置概念は upper／middle／lower、現在の正規名は上五／中七／下五とする。OS AIは「上の句」「中の句」「二の句」「最初の句」「真ん中」「後ろのパート」などをこの三概念のどれかへ写し、発話中の連続した `evidence` と confidence を返す。コードは既知の明示呼称、finding、target fragmentとの衝突や複数行への曖昧さを検査し、一行へ確定できない場合は編集しない。現在はプレイヤーの呼び方を訂正しない。抽出した生の呼び方・正規名・概念IDをログへ残し、将来のlearning版で自然な正規呼称を案内するためのフックにする。
+三行には、言い方から独立した安定IDとして `line_1 / line_2 / line_3` を持たせる。人向けの概念番号は 1／2／3、コード配列の index は 0／1／2、位置概念は upper／middle／lower、現在の正規名は上五／中七／下五とする。会話モデルは「上の句」「中の句」「二の句」「最初の句」「真ん中」「後ろのパート」などをこの三概念のどれかへ写し、発話中の連続した `evidence` と confidence を返す。コードは既知の明示呼称、finding、target fragmentとの衝突や複数行への曖昧さを検査し、一行へ確定できない場合は編集しない。現在はプレイヤーの呼び方を訂正しない。抽出した生の呼び方・正規名・概念IDをログへ残し、将来のlearning版で自然な正規呼称を案内するためのフックにする。
 
-未採用案がある間は、さらに小さい専用schemaで `accept_pending / reject_pending / modify_pending / show_pending / discuss / unrelated / uncertain` のいずれかと、必要なら上記 `close_request` を別々に抽出する。confidence 0.80以上かつ evidence が発話中にある場合だけ採否候補として扱い、revision保存前に現在pendingと元句のCASをコードで再確認する。端末AIとchat fallbackが使えない場合に限り、「その案で」等の代表的な完全一致規則へ戻る。
+未採用案がある間は、さらに小さい専用schemaで `accept_pending / reject_pending / modify_pending / show_pending / discuss / unrelated / uncertain` のいずれかと、必要なら上記 `close_request` を別々に抽出する。confidence 0.80以上かつ evidence が発話中にある場合だけ採否候補として扱い、revision保存前に現在pendingと元句のCASをコードで再確認する。会話モデルが使えない場合に限り、「その案で」等の代表的な完全一致規則へ戻る。
 
 finding は行 0〜2、閉じた problem enum、信頼度 0.65 以上をコードで検証する。行番号がなくても断片が一つの行だけに一致するときはコードで補える。`close_request` やpending採否をAIが抽出しても、`clear_lessons`、reading、revision 保存、open/closeの実行はAIに渡さない。特に、曖昧文をAIが `praise` と分類しただけでは workshop を閉じない。
 
-structured 抽出の `auto` 順は **Apple Foundation Models → Foundry Local → 既存 chat route**。設定と可用性だけで選び、生成内容で provider を選ばない。端末AIがない・失敗・低信頼・不正出力なら安全に fallback する。Apple はOSの現在の既定モデルを毎回取得し、Foundry は alias の解決先を定期確認する。Foundry の大容量モデル自動ダウンロードは既定 off。
+OS／端末内AIの `auto` 順 **Apple Foundation Models → Foundry Local → 既存 chat route** は、戦闘中断中の `resume_workshop / workshop_input / close_workshop / unrelated / uncertain` 分類にだけ使う。通常の `haiku_workshop_intent` と `haiku_workshop_pending_decision` はOS AIへ問い合わせず、常駐する `chat` routeを1回呼ぶ。Apple はOSの現在の既定モデルを毎回取得し、Foundry は alias の解決先を定期確認する。Foundry の大容量モデル自動ダウンロードは既定 off。
 
 `source=voice` の入力は、句・出典・時間帯など現在の候補内だけで一意な音近傍をコード補正する。STT原文は必ず保持し、補正文はAIの意味抽出と返答へ渡せる。lesson解除、明示reading、完成三行revisionは補正前の原文が正。自然な終了意図とpending採否はAIが意味を抽出するが、原文・補正文・evidence・confidenceをログに残し、終了や保存はコードのscope／pending／CAS検証後に限る。
 
@@ -337,14 +344,16 @@ workshop の会話 leaf は、冒険時の「怖がり」ではなく **素直�
 | request_repair | haiku route が対象行だけ修正。コード検証を通った案だけ提示し、採用確認を待つ |
 | player_line_edit | 置換語と完成三行はコード固定。LLMに本文を補作・復唱させず、別の行も続けて直せる |
 | soft_default / other_haiku | 検証済み findings を渡した共同編集者 leaf。失敗時は短い定型 |
+| semantic evaluation: positive / whole_verse | praise critiqueを保存し、コード固定で「この句の話はここまででよいか」を確認。即closeしない |
+| semantic evaluation: negative / mixed | pinを維持し、共同編集者leafへ「自分で案を作らず、どの行・言葉をどう直したいか一問だけ尋ねる」と渡す |
 | revise_free | 「覚えといたで」＋ close |
 | praise | 「ありがとうや。その句、残しとくで。」＋ critique 保存。lesson は触らない |
 
 材料開示は `ask_meaning` で使う。講評への返事では、材料や狙いを弁明に使わない。
 
-修正案は発話前ゲートとは別に、プレイヤーが意味として明確に求めたとOS AIが高信頼に抽出し、コードが対象 finding を検証できたときだけ、低温で1本生成する。検証済み finding の行だけを変更し、他の行は固定する。編集AIは全文ではなく、対象行ごとの `expected_text` と `replacement_text` を持つ差分を返す。コードが元行との完全一致・対象外行の不変・実際に字面が変わったことを先に確認し、生成AIの自己申告IDだけを信用せず、別structured評価で各修正行の意味保持・自然さを照合する。その後コードが、保存済み source atom ID、固定行との atom 重複、5-7-5±1、発句時にsnapshotした道具・読みhard制約を確認する。一回目が不合格なら、確定した失敗理由と不合格案を二回目の編集へ返し、同じ案は評価前に棄却する。二回とも不合格なら元句を維持する。合格でも `pending_revision` に置くだけで、句本文と採用案内はコードが固定し、前置きの一言だけ共同編集者 leaf が話す。採用意図もpending専用OS AIが閉じたactionへ抽出し、コードが同じ差分を同じ元句へ適用できるか再確認してから、検証済み行別出典・差分契約とともに revision 保存する。
+修正案は発話前ゲートとは別に、プレイヤーが意味として明確に求めたと会話モデルが高信頼に抽出し、コードが対象 finding を検証できたときだけ、低温で1本生成する。検証済み finding の行だけを変更し、他の行は固定する。編集AIは全文ではなく、対象行ごとの `expected_text` と `replacement_text` を持つ差分を返す。コードが元行との完全一致・対象外行の不変・実際に字面が変わったことを先に確認し、生成AIの自己申告IDだけを信用せず、別structured評価で各修正行の意味保持・自然さを照合する。その後コードが、保存済み source atom ID、固定行との atom 重複、5-7-5±1、発句時にsnapshotした道具・読みhard制約を確認する。一回目が不合格なら、確定した失敗理由と不合格案を二回目の編集へ返し、同じ案は評価前に棄却する。二回とも不合格なら元句を維持する。合格でも `pending_revision` に置くだけで、句本文と採用案内はコードが固定し、前置きの一言だけ共同編集者 leaf が話す。採用意図も会話モデルのpending専用schemaが閉じたactionへ抽出し、コードが同じ差分を同じ元句へ適用できるか再確認してから、検証済み行別出典・差分契約とともに revision 保存する。
 
-プレイヤー自身が「〜に変えた方が」「〜でいいんじゃない」「〜にしてはどう」と語を示した場合は、まずOS AIが置換語・evidence・句中のtarget fragmentに加え、言及された行を安定ID `line_1 / line_2 / line_3` へ写すが、句本文は生成しない。従来の閉じた文字列解析は、OS AIが利用不可・低信頼・契約不合格だった場合のfallbackに限る。音声入力で「上五／中七／下五」が崩れても、「上の句」「二の句」「真ん中」「後ろのパート」等の位置表現を発話根拠つきで意味対応できる。また「くさちのねよりくさちかな」のように現在句の一行と新しい一行を同じ発話に含めた場合は、コードが旧句をUniDicで読みへ戻し、現在の三行に一意に一致する行を置換対象として固定する。直前の検証済み finding、明示行、検証済み行概念、または現在句の一行だけに一致するtarget fragmentで行を固定できる場合だけコードへ進む。複数行への一致や各根拠の衝突はfail closedとする。置換語はコードでUniDic読みへ展開し、カタカナもひらがなへ寄せる。残留漢字・英数・カタカナがあれば推測せず、ひらがな入力を求める。対象行は正確な5／7／5音、hard制約、他行重複を検査する。合格案は `player_line_compare_and_swap_v1` の未保存差分にし、さらに別の行を指摘された場合は、その未保存三行を表示上の基準にして差分を積み上げる。対象行の locate、OS AIの行概念／proposal accepted・rejected、未保存案の staged・rejected は warning ログへ段階別に残す。「どんな句になった」「今の案を見せて」への本文もコードが返す。最後に採用意図をOS AIが高信頼に抽出し、コードのpending・CAS再検証を通ったときだけ `player_line_confirmed` として保存し、採用句を次の編集基準へ昇格する。workshop は閉じない。プレイヤー語を source atom に偽装しないため、以後AI修正に必要な固定行出典が足りなければ、その経路はfail closedとする。
+プレイヤー自身が「〜に変えた方が」「〜でいいんじゃない」「〜にしてはどう」と語を示した場合は、まず会話モデルが置換語・evidence・句中のtarget fragmentに加え、言及された行を安定ID `line_1 / line_2 / line_3` へ写すが、句本文は生成しない。従来の閉じた文字列解析は、会話モデルが利用不可・低信頼・契約不合格だった場合のfallbackに限る。音声入力で「上五／中七／下五」が崩れても、「上の句」「二の句」「真ん中」「後ろのパート」等の位置表現を発話根拠つきで意味対応できる。また「くさちのねよりくさちかな」のように現在句の一行と新しい一行を同じ発話に含めた場合は、コードが旧句をUniDicで読みへ戻し、現在の三行に一意に一致する行を置換対象として固定する。直前の検証済み finding、明示行、検証済み行概念、または現在句の一行だけに一致するtarget fragmentで行を固定できる場合だけコードへ進む。複数行への一致や各根拠の衝突はfail closedとする。置換語はコードでUniDic読みへ展開し、カタカナもひらがなへ寄せる。残留漢字・英数・カタカナがあれば推測せず、ひらがな入力を求める。対象行は正確な5／7／5音、hard制約、他行重複を検査する。合格案は `player_line_compare_and_swap_v1` の未保存差分にし、さらに別の行を指摘された場合は、その未保存三行を表示上の基準にして差分を積み上げる。対象行の locate、会話モデルの行概念／proposal accepted・rejected、未保存案の staged・rejected は warning ログへ段階別に残す。「どんな句になった」「今の案を見せて」への本文もコードが返す。最後に採用意図を会話モデルが高信頼に抽出し、コードのpending・CAS再検証を通ったときだけ `player_line_confirmed` として保存し、採用句を次の編集基準へ昇格する。workshop は閉じない。プレイヤー語を source atom に偽装しないため、以後AI修正に必要な固定行出典が足りなければ、その経路はfail closedとする。
 
 ---
 
@@ -394,7 +403,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 | **H5.1** | ゆるめ・可逆（soft 文言 / hard 非合流 / praise lesson 非変更 / 明示 loosen / 口答え soft） | H5 | **済** |
 | **H5.2** | 明示「気にせんで」+ lesson 自然減衰（日数・発句回数 TTL） | H5.1 | **済** |
 | **H6** | 発句後 materials 突合バリデータ（固定語リスト） | 独立可 | **撤回** |
-| **H7-lite** | OS／端末内AI優先の限定 structured 意味抽出。intent／findingに加え、行呼称→`line_1/2/3`、発話根拠つき一行置換、pending採否、自然な終了意図を小さなschemaで抽出。コード検証・chat fallback | H2 の後 | **済** |
+| **H7-lite** | 常駐する会話モデルの `chat` routeによる限定 structured 意味抽出。intent／findingに加え、句評価（極性・範囲・根拠）、行呼称→`line_1/2/3`、発話根拠つき一行置換、pending採否、自然な終了意図を閉じたschemaで抽出する。OS AIは通常workshopでは呼ばない。実行・保存はコード検証 | H2 の後 | **済** |
 | **H7.1** | 要求時だけ大きい haiku route で対象行を修正。コード品質ゲート→未保存案→明示採用 | H7-lite | **済** |
 | **H7.2** | finding／明示行を固定し、プレイヤー語をコードでひらがな化して連続局所編集。三行提示・CAS・採用後の次編集もコード所有 | H7-lite | **済** |
 | **H8** | 戦闘時は句・pendingを保持してpause。OS／端末内AI優先＋chat fallbackで再開意思／句への具体的発話だけを限定抽出し、コード安全確認後に勝利／離脱を言い分けて再開。安定した単独敵も意思確認時だけ暫定再開 | H2 | **済** |
@@ -406,8 +415,8 @@ HaikuContext / 制約ブロックに追加（短く）:
 「うみ」も場外れ断定は危うい（湖の圧縮・隣バイオームなどプレイヤー視点では自然なことがある）。  
 場の違和感は **プレイヤーが言ったとき** workshop で。  
 **strength 段階は当面やらない**（フィールドは残すが list 未参照。TTL で足りる）。  
-**H7-lite:** clear / 完成三行 revise / 明示 reading / hard off-topic と、代表的なclose形のfallbackはコード優先。自然な講評・一行置換・pending採否・終了意図、行の曖昧な呼び方から安定した三概念への対応、意味説明直後の納得を会話段階つきでApple Foundation Models / Foundry Localの閉じた契約へ接続する。利用不可・失敗時はchat route、さらに代表的な明示形だけコードfallbackへ戻る。AIは状態や保存を直接変更せず、終了意図もscope・evidence・confidence・pendingとの組み合わせをコード検証する。
-**未（気が向いたら）:** OS AI／chat fallback の実ログ評価、Phase E 整理、#28 preface 延長・overlay。
+**H7-lite:** clear / 完成三行 revise / 明示 reading / hard off-topic と、代表的なpraise／close形のfallbackはコード優先。自然な講評・句評価・一行置換・pending採否・終了意図、行の曖昧な呼び方から安定した三概念への対応、意味説明直後の納得は、常駐する会話モデルの `chat` routeへ直接つなぐ。別providerへの先行問い合わせは行わない。代表的な明示形だけコードfallbackへ戻る。AIは状態や保存を直接変更せず、評価は極性・対象範囲・evidence・confidence、終了意図はscope・evidence・confidence・pendingとの組み合わせをコード検証する。OS AI優先はH8の戦闘中断中小分類だけに残す。
+**未（気が向いたら）:** 戦闘中断用 OS AI／chat fallback と、通常workshop structured抽出の実ログ評価、Phase E 整理、#28 preface 延長・overlay。
 
 全体の完成度・優先の考え方は [companion-maturity.md](companion-maturity.md)。
 
@@ -422,9 +431,9 @@ HaikuContext / 制約ブロックに追加（短く）:
 4. プレイヤー:「無理やり圧縮しすぎ」  
 5. ドギド:「せやな、詰め込みすぎた。余白を残すよう直した方がええな」→ critique + soft lesson
 6. プレイヤー:「そこ直して」→ 対象行だけの案を提示（まだ保存しない）
-7. プレイヤー:「最初の句は夕暮れやに変えた方が」→ OS AIが `line_1` へ対応させ、コードが根拠・ひらがな化・5音を検査して新しい三行を提示
-8. プレイヤー:「後ろのパートは雨の夜に」→ OS AIが `line_3` へ対応させ、未保存の新三行を基準にもう一行だけ置換
-9. プレイヤー:「よし、それで完成にしよう」→ OS AIが `accept_pending` を抽出し、コードのpending・CAS再検証後にrevision保存。採用句を現在句にしてpinを維持し、さらに別行も直せる
+7. プレイヤー:「最初の句は夕暮れやに変えた方が」→ 会話モデルが `line_1` へ対応させ、コードが根拠・ひらがな化・5音を検査して新しい三行を提示
+8. プレイヤー:「後ろのパートは雨の夜に」→ 会話モデルが `line_3` へ対応させ、未保存の新三行を基準にもう一行だけ置換
+9. プレイヤー:「よし、それで完成にしよう」→ 会話モデルが `accept_pending` を抽出し、コードのpending・CAS再検証後にrevision保存。採用句を現在句にしてpinを維持し、さらに別行も直せる
 10. （後で）プレイヤー:「いい句やな」→「ありがとうや。その句、残しとくで。」＋ critique 保存（lesson は変更しない）
 
 ---
@@ -446,7 +455,7 @@ HaikuContext / 制約ブロックに追加（短く）:
 4. `直し:` / 自然文直しでも revision に残せる  
 5. praise は critique 保存のみで **lesson を触らない**（過去の指摘をキープ）
 6. 既存の読み訂正・想起・自動保存・道具 hard 制約は壊さない  
-7. 対象行・断片・problem・プレイヤー置換語・pending採否・終了意図が文脈別の閉じた型で抽出される。「上の句」「二の句」「真ん中」「後ろのパート」等は `line_1/2/3` へ対応し、終了意図はworkshop／次の句と現在句内の移動を区別し、発話根拠・confidence・他の操作との衝突をコード検証する。端末AIがなくてもchat／明示規則fallbackでworkshopが壊れない
+7. 対象行・断片・problem・句評価・プレイヤー置換語・pending採否・終了意図が文脈別の閉じた型で抽出される。「上の句」「二の句」「真ん中」「後ろのパート」等は `line_1/2/3` へ対応し、句評価はpositive／negative／mixedと全体／一部、終了意図はworkshop／次の句と現在句内の移動を区別し、発話根拠・confidence・他の操作との衝突をコード検証する。会話モデルが使えない場合も代表的な明示規則fallbackでworkshopが壊れない
 8. 修正案は元行一致つきの行差分で、意味保持・自然さの別評価と、対象行・対象外不変・出典ID・重複・音数・発句時hard制約のコード検証を通る。不合格理由を再編集へ返し、同一案を再評価せず、明示採用までは元句と revision を変更しない
 9. 意味説明直後の納得は別の句断片への講評に化けず、保存なしで終了確認へ進み、肯定または続行をコードが確定する
 10. プレイヤーの局所置換は本文をLLMに生成させず、必ずひらがな三行として提示する。複数行を順に直しても、各差分の基準と親revisionがつながり、採用後もworkshopを続けられる。現在は行の呼び方を訂正せず、抽出した呼び方と正規名を将来のlearning版用フックとして残す
@@ -456,8 +465,8 @@ HaikuContext / 制約ブロックに追加（短く）:
 
 ## 11. 次の合意ポイント（残作業・ゆるく）
 
-1. OS／端末内AI・chat fallback の実ログ評価（誤分類、finding 精度、待ち時間）
-2. OS AIによる採用・却下・追加修正の実ログ評価
+1. 通常workshopの常駐会話モデルstructured抽出と、戦闘中断用OS AI／chat fallbackの実ログ評価（誤分類、finding 精度、待ち時間）
+2. 会話モデルによる採用・却下・追加修正の実ログ評価
 3. Phase E パッケージ整理（機能ではない）
 
 H7-lite / H7.1 / H7.2 / H8 は実装済み。以後は実ログを見て、誤分類・待ち時間・提案の自然さだけを小さく調整する。

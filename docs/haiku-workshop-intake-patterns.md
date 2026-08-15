@@ -23,10 +23,10 @@ player-input
   → その他 haiku 操作?
   → classify_workshop_intent (open 時のみ有効な経路)
        対象 kind（soft_default / other / request_repair / 各 critique）
-                    → OS／端末内AI優先の限定 structured 抽出
+                    → 常駐会話モデルの限定 structured 抽出
        既知 intent  → ルールの大分類を維持し、対象行・断片・問題種別だけ抽出
                     → soft_default のintentは返答トーンだけに利用
-                    → 低信頼・失敗はルール結果／chat fallback
+                    → 低信頼・失敗はルール結果へfallback
        hard off-topic → 通常 player_chat
                         → speech あり → workshop drift
 ```
@@ -184,7 +184,7 @@ intent は狭いまま、chat の stance を none 寄りに。
 
 ---
 
-### 案 F — OS AI structured で文脈別の意味抽出（H7-lite、限定採用）
+### 案 F — 会話モデルの structured 出力で文脈別の意味抽出（H7-lite、限定採用）
 
 | 長所 | 短所 |
 |---|---|
@@ -208,8 +208,8 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 ```text
 1. 明示reading、または現在句の既知カタログ名に一致する短いreading → 保存・返事
 2. 完成三行 revise / formal 直し
-3. pendingあり → pending専用OS AI（採否・追加修正等）→コード再検証
-4. workshop自然文 → H7-lite（intent / findings / 一行置換、失敗はchat）
+3. pendingあり → 常駐会話モデルのpending専用schema（採否・追加修正等）→コード再検証
+4. workshop自然文 → H7-lite（常駐会話モデルでintent / findings / 一行置換、失敗は規則fallback）
 5. hard off-topic → chat（drift 可）
 ```
 
@@ -249,7 +249,7 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 ## 8. 次のアクション
 
 1. **Issue #8 に観察を足す**（本文 or コメント。テンプレは Issue 先頭）  
-2. OS AI／chat fallback の低信頼・誤分類・finding 精度を実ログで確認する
+2. 通常workshopの会話モデル抽出と、戦闘中断用OS AI／chat fallbackの低信頼・誤分類・finding精度を実ログで確認する
 3. P09 の読み保存と P14 のメタ発話は、実害を見てコード側マーカーを調整する
 
 ---
@@ -262,3 +262,4 @@ C は読み保存の未解決パターンに限定して継続検討、D は不�
 | 2026-07-19 | 観察の正本を Issue #8 に。回数不足のうちは実装しない |
 | 2026-08-12 | H7-lite を OS／端末内AI優先の限定 intent / findings 抽出へ更新。残る P09 / P14 を明記 |
 | 2026-08-14 | 自然な一行置換とpending採否も文脈別OS AI schemaへ移し、発話根拠・CASをコード検証する構成へ更新 |
+| 2026-08-15 | 実ログで端末内AIの空判定が続いたため、通常workshopのintent／findings／一行置換／pending採否を常駐会話モデルへ直結。OS AIは戦闘中断中の小分類だけに限定 |

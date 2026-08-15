@@ -1,9 +1,9 @@
-"""OS 管理・端末内モデルを、小さな structured task へ使う共通入口。
+"""OS 管理・端末内モデルを、戦闘中断中の小分類へ使う共通入口。
 
 優先順位と fallback はコードで固定し、各モデルには状態変更を任せない。
 Apple は OS の ``SystemLanguageModel``、Windows / Linux は任意導入の
-Microsoft Foundry Local を同じ契約で扱う。どちらも使えなければ呼び出し元が
-渡した既存 chat LLM へ戻る。
+Microsoft Foundry Local を同じ契約で扱う。通常workshopのintentとpending採否は
+ここを通さない。どちらも使えなければ呼び出し元が渡した既存 chat LLM へ戻る。
 """
 
 from __future__ import annotations
@@ -80,197 +80,15 @@ def _reason_text(value: object | None) -> str:
     return str(name or value)
 
 
-def _workshop_close_request_schema(*, title: str) -> dict[str, object]:
-    """通常相談とpending判断で共有する、終了意図だけの閉じたschema。"""
-
-    return {
-        "title": title,
-        "type": "object",
-        "x-order": ["found", "scope", "evidence", "confidence"],
-        "additionalProperties": False,
-        "required": ["found", "scope", "evidence", "confidence"],
-        "properties": {
-            "found": {"type": "boolean"},
-            "scope": {
-                "type": "string",
-                "enum": ["workshop", "current_line", "next_haiku", "unknown"],
-            },
-            "evidence": {"type": "string"},
-            "confidence": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-            },
-        },
-    }
-
-
 def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
-    """端末内 guided generation 用 schema。
+    """戦闘中断中の小分類にだけ使う、端末内 guided generation schema。"""
 
-    現在 OS AI に渡すのは workshop の限定意味抽出だけ。未知 kind は閉じて
-    fallback させ、汎用エージェント経路へ育てない。
-    """
-
-    if request.kind == "haiku_workshop_intent":
-        allowed = [str(value) for value in request.details.get("allowed_intents", []) if value]
-        if not allowed:
-            allowed = ["soft_default"]
-        problem_types = [
-            str(value) for value in request.details.get("allowed_problem_types", []) if value
-        ] or ["other"]
-        return {
-            "title": "DogidoWorkshopAnalysis",
-            "type": "object",
-            # Foundation Models の raw JSON Schema は、生成順を明示する
-            # ``x-order`` を object ごとに要求する。標準 JSON Schema の
-            # properties 順へ暗黙依存しない。
-            "x-order": [
-                "intent",
-                "confidence",
-                "repair_requested",
-                "findings",
-                "close_request",
-                "line_reference",
-                "line_proposal",
-            ],
-            "additionalProperties": False,
-            "required": [
-                "intent",
-                "confidence",
-                "repair_requested",
-                "findings",
-                "close_request",
-                "line_reference",
-                "line_proposal",
-            ],
-            "properties": {
-                "intent": {"type": "string", "enum": allowed},
-                "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                "repair_requested": {"type": "boolean"},
-                "findings": {
-                    "type": "array",
-                    "maxItems": 3,
-                    "items": {
-                        "title": "DogidoWorkshopFinding",
-                        "type": "object",
-                        "x-order": [
-                            "line_index",
-                            "fragment",
-                            "problem",
-                            "note",
-                            "confidence",
-                        ],
-                        "additionalProperties": False,
-                        "required": [
-                            "fragment",
-                            "problem",
-                            "note",
-                            "confidence",
-                        ],
-                        "properties": {
-                            "line_index": {
-                                "type": "integer",
-                                "minimum": 0,
-                                "maximum": 2,
-                            },
-                            "fragment": {"type": "string"},
-                            "problem": {"type": "string", "enum": problem_types},
-                            "note": {"type": "string"},
-                            "confidence": {
-                                "type": "number",
-                                "minimum": 0.0,
-                                "maximum": 1.0,
-                            },
-                        },
-                    },
-                },
-                "close_request": _workshop_close_request_schema(
-                    title="DogidoWorkshopCloseRequest"
-                ),
-                "line_reference": {
-                    "title": "DogidoWorkshopLineReference",
-                    "type": "object",
-                    "x-order": ["found", "concept_id", "evidence", "confidence"],
-                    "additionalProperties": False,
-                    "required": ["found", "concept_id", "evidence", "confidence"],
-                    "properties": {
-                        "found": {"type": "boolean"},
-                        "concept_id": {
-                            "type": "string",
-                            "enum": ["line_1", "line_2", "line_3", "unknown"],
-                        },
-                        "evidence": {"type": "string"},
-                        "confidence": {
-                            "type": "number",
-                            "minimum": 0.0,
-                            "maximum": 1.0,
-                        },
-                    },
-                },
-                "line_proposal": {
-                    "title": "DogidoWorkshopLineProposal",
-                    "type": "object",
-                    "x-order": [
-                        "found",
-                        "line_index",
-                        "target_fragment",
-                        "replacement_text",
-                        "evidence",
-                        "confidence",
-                    ],
-                    "additionalProperties": False,
-                    "required": [
-                        "found",
-                        "target_fragment",
-                        "replacement_text",
-                        "evidence",
-                        "confidence",
-                    ],
-                    "properties": {
-                        "found": {"type": "boolean"},
-                        "line_index": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 2,
-                        },
-                        "target_fragment": {"type": "string"},
-                        "replacement_text": {"type": "string"},
-                        "evidence": {"type": "string"},
-                        "confidence": {
-                            "type": "number",
-                            "minimum": 0.0,
-                            "maximum": 1.0,
-                        },
-                    },
-                },
-            },
-        }
-    if request.kind == "haiku_workshop_pending_decision":
-        actions = [str(value) for value in request.details.get("allowed_actions", []) if value]
-        if not actions:
-            actions = ["uncertain"]
-        return {
-            "title": "DogidoWorkshopPendingDecision",
-            "type": "object",
-            "x-order": ["action", "confidence", "evidence", "close_request"],
-            "additionalProperties": False,
-            "required": ["action", "confidence", "evidence", "close_request"],
-            "properties": {
-                "action": {"type": "string", "enum": actions},
-                "confidence": {
-                    "type": "number",
-                    "minimum": 0.0,
-                    "maximum": 1.0,
-                },
-                "evidence": {"type": "string"},
-                "close_request": _workshop_close_request_schema(
-                    title="DogidoPendingCloseRequest"
-                ),
-            },
-        }
     if request.kind == "haiku_workshop_combat_input":
-        actions = [str(value) for value in request.details.get("allowed_actions", []) if value]
+        actions = [
+            str(value)
+            for value in request.details.get("allowed_actions", [])
+            if value
+        ]
         if not actions:
             actions = ["uncertain"]
         return {

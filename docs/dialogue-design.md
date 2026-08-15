@@ -244,7 +244,7 @@
 - `raw_text / normalized_text`: STT原文と固定補正。スラッシュコマンド、close、lesson解除、明示reading、完成三行revisionの正
 - `interpreted_text / semantic_text`: 文脈補正後。共同編集者AI・通常会話に加え、自然な一行置換やpending採否の限定意味抽出へ使用
 
-workshop の自然文は、端末内AI優先で文脈専用の閉じたJSONへ変換する。一行置換では発話中の置換語・evidenceと句中のtarget fragment、pending中は採用／却下／追加修正／表示／相談を抽出する。コードがevidence・confidence・対象の一意性・音数・hard制約・現在pending・CASを検証し、AI出力だけで保存や破棄を行わない。typed chat（`source=text`）には音近傍補正を掛けない。
+workshop の自然文は、常駐する会話モデルの `chat` routeで文脈専用の閉じたJSONへ変換する。一行置換では発話中の置換語・evidenceと句中のtarget fragment、pending中は採用／却下／追加修正／表示／相談を抽出する。通常workshopでOS AIは先行呼び出しせず、戦闘中断中の小分類だけに限る。コードがevidence・confidence・対象の一意性・音数・hard制約・現在pending・CASを検証し、AI出力だけで保存や破棄を行わない。typed chat（`source=text`）には音近傍補正を掛けない。
 
 旧 120 秒 mute だと「たまに話しただけ」でもモブ反応がほぼ出なくなっていた。逆に ambient だけ 12s だと話しかけ直後に羊コメントが割り込みやすかったため、**会話と同じ 20s** に揃えた。
 

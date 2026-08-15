@@ -1,7 +1,7 @@
 # パッケージ整理 ＋ 川柳ワークショップ — 編集順
 
 **日付:** 2026-07-16  
-**状態:** Phase A〜D（H1〜H5.2）・H7-lite（OS／端末内AI優先の限定意味抽出: intent / findings / 一行置換 / pending採否）・修正案1本・プレイヤー語の連続局所編集 実装済み。H6 固定語 materials 突合は**撤回**。catalog 分割（Phase E）は未
+**状態:** Phase A〜D（H1〜H5.2）・H7-lite（常駐会話モデルの限定意味抽出: intent / findings / 一行置換 / pending採否。OS／端末内AIは戦闘中断中の小分類のみ）・修正案1本・プレイヤー語の連続局所編集 実装済み。H6 固定語 materials 突合は**撤回**。catalog 分割（Phase E）は未
 **方針:** [server-package-layout-proposal.md](server-package-layout-proposal.md)  
 **workshop:** [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)  
 **pin の閉じ方:** 同計画 §1b  

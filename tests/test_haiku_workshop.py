@@ -18,6 +18,7 @@ from dogido_server.haiku.workshop import (
     PendingRevisionAnalysis,
     WorkshopAnalysis,
     WorkshopCloseRequest,
+    WorkshopEvaluation,
     WorkshopFinding,
     WorkshopLineProposal,
     advance_workshop_revision,
@@ -43,6 +44,7 @@ from dogido_server.haiku.workshop import (
     repair_target_indices,
     should_handle_as_workshop,
     update_marked_workshop_line,
+    validate_workshop_evaluation_payload,
     workshop_open_intent,
     wants_show_workshop_verse,
 )
@@ -305,7 +307,7 @@ class WorkshopIntentTests(unittest.TestCase):
 
         self.assertIsNone(explicit_workshop_line_index("最初の句と最後の句"))
 
-    def test_os_ai_line_reference_requires_grounded_unambiguous_evidence(self) -> None:
+    def test_ai_line_reference_requires_grounded_unambiguous_evidence(self) -> None:
         player_text = "後ろのパートをくさちかなに変えてほしい"
         accepted = finalize_workshop_analysis_payload(
             {
@@ -369,7 +371,7 @@ class WorkshopIntentTests(unittest.TestCase):
         )
         self.assertIsNone(multiple.line_reference)
 
-    def test_os_ai_close_request_uses_meaning_scope_and_grounded_evidence(self) -> None:
+    def test_ai_close_request_uses_meaning_scope_and_grounded_evidence(self) -> None:
         accepted = finalize_workshop_analysis_payload(
             {
                 "intent": "soft_default",
@@ -431,6 +433,69 @@ class WorkshopIntentTests(unittest.TestCase):
             player_text="まだ句を続けたい",
         )
         self.assertIsNone(invented.close_request)
+
+    def test_ai_evaluation_requires_grounded_high_confidence_evidence(self) -> None:
+        positive = finalize_workshop_analysis_payload(
+            {
+                "intent": "praise",
+                "confidence": 0.94,
+                "evaluation": {
+                    "found": True,
+                    "sentiment": "positive",
+                    "scope": "whole_verse",
+                    "evidence": "素直でいい師だと思います",
+                    "confidence": 0.95,
+                },
+            },
+            player_text="素直でいい師だと思います",
+        )
+        self.assertIsNotNone(positive.evaluation)
+        assert positive.evaluation is not None
+        self.assertEqual(positive.evaluation.sentiment, "positive")
+
+        negative = finalize_workshop_analysis_payload(
+            {
+                "intent": "other_haiku",
+                "confidence": 0.91,
+                "evaluation": {
+                    "found": True,
+                    "sentiment": "negative",
+                    "scope": "whole_verse",
+                    "evidence": "この句は微妙",
+                    "confidence": 0.92,
+                },
+            },
+            player_text="どうもこの句は微妙だな",
+        )
+        self.assertIsNotNone(negative.evaluation)
+
+        invented = finalize_workshop_analysis_payload(
+            {
+                "intent": "praise",
+                "confidence": 0.99,
+                "evaluation": {
+                    "found": True,
+                    "sentiment": "positive",
+                    "scope": "whole_verse",
+                    "evidence": "すごくいい句",
+                    "confidence": 0.99,
+                },
+            },
+            player_text="この句はまだ迷っている",
+        )
+        self.assertIsNone(invented.evaluation)
+
+        _evaluation, reason = validate_workshop_evaluation_payload(
+            {
+                "found": True,
+                "sentiment": "positive",
+                "scope": "whole_verse",
+                "evidence": "すごくいい句",
+                "confidence": 0.99,
+            },
+            player_text="この句はまだ迷っている",
+        )
+        self.assertEqual(reason, "ungrounded_evidence")
 
     def test_analysis_infers_unique_fragment_but_not_an_unknown_line(self) -> None:
         analysis = finalize_workshop_analysis_payload(
@@ -511,7 +576,7 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertIsNone(pending_revision_decision("元のままじゃなくて、その案で"))
         self.assertIsNone(pending_revision_decision("元のままにする？"))
 
-    def test_os_ai_pending_decision_requires_grounded_high_confidence_evidence(self) -> None:
+    def test_ai_pending_decision_requires_grounded_high_confidence_evidence(self) -> None:
         accepted = finalize_pending_revision_payload(
             {
                 "action": "accept_pending",
@@ -576,7 +641,7 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertEqual(close_without_decision.action, "uncertain")
         self.assertIsNotNone(close_without_decision.close_request)
 
-    def test_os_ai_line_proposal_must_quote_player_and_locate_current_line(self) -> None:
+    def test_ai_line_proposal_must_quote_player_and_locate_current_line(self) -> None:
         player_text = "二行目はくさちひろがるにしてはどうですか"
         analysis = finalize_workshop_analysis_payload(
             {
@@ -915,8 +980,58 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertEqual([message["role"] for message in messages], ["system", "user"])
         self.assertIn("JSON", messages[0]["content"])
         self.assertIn("critique_forced", messages[1]["content"])
+        self.assertIn("evaluation", messages[1]["content"])
         self.assertIn("close_request", messages[1]["content"])
         self.assertIn("lesson解除", messages[1]["content"])
+
+    def test_negative_evaluation_reply_prompt_asks_player_how_to_revise(self) -> None:
+        from dogido_server.llm import LeafGenerationRequest
+        from dogido_server.llm.prompts import build_messages
+
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="haiku_workshop_reply",
+                fallback_text="どの行や言葉を、どう直したいか教えてな。",
+                details={
+                    "verse": "たいがのそら\nひるのまるいし\nひるのそら",
+                    "player_text": "どうもこの句は微妙だな",
+                    "intent_kind": "other_haiku",
+                    "reply_goal": "ask_revision_direction",
+                    "workshop_findings": [],
+                    "character_mode": "workshop",
+                },
+                route="chat",
+            )
+        )
+
+        prompt = messages[-1]["content"]
+        self.assertIn("返答目的: ask_revision_direction", prompt)
+        self.assertIn("どの行・言葉をどう直したいか", prompt)
+        self.assertIn("自分で修正案や完成句を作る", prompt)
+
+    def test_chat_second_pass_evaluation_prompt_is_small_and_specific(self) -> None:
+        from dogido_server.llm import StructuredGenerationRequest
+        from dogido_server.llm.prompts import build_messages
+
+        messages = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_workshop_evaluation",
+                fallback_value={"found": False},
+                details={
+                    "verse": "あさのひや\nおだやかなる\nくさちのね",
+                    "player_text": "朝らしい爽やかな句でいいね",
+                },
+                route="chat",
+            )
+        )
+
+        prompt = messages[-1]["content"]
+        self.assertIn("現在句への評価か", prompt)
+        self.assertIn("朝らしい爽やかな句でいいね", prompt)
+        self.assertIn("発話全体の意味", prompt)
+        self.assertIn("positive/negative/mixed/unknown", prompt)
+        self.assertNotIn("いい師", prompt)
+        self.assertNotIn("文字列候補", prompt)
 
     def test_pending_decision_prompt_is_registered_as_json_classifier(self) -> None:
         from dogido_server.llm import StructuredGenerationRequest
@@ -1239,7 +1354,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                             confidence=0.96,
                         ),
                     ),
-                    "apple_foundation_models",
+                    "chat",
                 )
 
             service._analyze_workshop_feedback = analyze_close  # type: ignore[method-assign]
@@ -1278,7 +1393,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                             confidence=0.97,
                         ),
                     ),
-                    "apple_foundation_models",
+                    "chat",
                 )
 
             service._analyze_pending_revision_reply = analyze_pending_close  # type: ignore[method-assign]
@@ -1289,6 +1404,124 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
             self.assertIsNone(session.haiku_workshop)
             self.assertIn("案は使わず", pending_actions[0].text or "")
+
+            # STTの「いい句」→「いい師」と、固定置換規則の「〜でいい」が
+            # 重なっても、根拠つきの全体評価を優先して終了確認へ進む。
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id="h_semantic_evaluation",
+                now=emission.created_at + timedelta(seconds=8),
+            )
+
+            def analyze_evaluation(
+                workshop: RecentHaikuWorkshop,
+                player_text: str,
+            ) -> tuple[WorkshopAnalysis, str]:
+                sentiment = "negative" if "微妙" in player_text else "positive"
+                return (
+                    WorkshopAnalysis(
+                        intent="other_haiku" if sentiment == "negative" else "praise",
+                        confidence=0.95,
+                        # 実ログ同様、STT由来の「〜でいい」をAIが置換候補に
+                        # しても、対象行を確定できない候補は句全体評価に負ける。
+                        line_proposal=(
+                            None
+                            if sentiment == "negative"
+                            else WorkshopLineProposal(
+                                replacement_text="素直",
+                                target_fragment="",
+                                line_index=None,
+                                evidence=player_text,
+                                confidence=0.90,
+                            )
+                        ),
+                        evaluation=WorkshopEvaluation(
+                            sentiment=sentiment,
+                            scope="whole_verse",
+                            evidence=player_text,
+                            confidence=0.96,
+                        ),
+                    ),
+                    "chat",
+                )
+
+            service._analyze_workshop_feedback = analyze_evaluation  # type: ignore[method-assign]
+            positive_text = "素直でいい師だと思います"
+            session.machine.player_input = route_player_input(positive_text)
+            positive_actions = service._haiku_workshop_actions(
+                session,
+                event(9, positive_text),
+            )
+            assert session.haiku_workshop is not None
+            self.assertTrue(session.haiku_workshop.awaiting_close_confirmation)
+            self.assertIsNone(session.haiku_workshop.pending_revision)
+            self.assertIn("ここまででええ", positive_actions[0].text or "")
+            positive_workshop = session.haiku_workshop
+
+            session.machine.player_input = route_player_input("うん")
+            confirmed_actions = service._haiku_workshop_actions(
+                session,
+                event(10, "うん"),
+            )
+            self.assertIsNone(session.haiku_workshop)
+            self.assertEqual(positive_workshop.close_reason, "evaluation_confirmed")
+            self.assertIn("ここまで", confirmed_actions[0].text or "")
+
+            service._open_haiku_workshop(
+                session,
+                emission,
+                entry_id="h_negative_evaluation",
+                now=emission.created_at + timedelta(seconds=11),
+            )
+            negative_text = "どうもこの句は微妙だな"
+            session.machine.player_input = route_player_input(negative_text)
+            negative_actions = service._haiku_workshop_actions(
+                session,
+                event(12, negative_text),
+            )
+            self.assertTrue(is_open(session.haiku_workshop))
+            self.assertIn("どう直したい", negative_actions[0].text or "")
+
+            # 一次の複合schemaが評価を返さなかった場合は、
+            # 対象行のない固定置換候補を会話モデルの専用評価器へ直接回す。
+            def analyze_without_evaluation(
+                workshop: RecentHaikuWorkshop,
+                player_text: str,
+            ) -> tuple[WorkshopAnalysis, str]:
+                return (
+                    WorkshopAnalysis(intent="soft_default", confidence=0.0),
+                    "chat",
+                )
+
+            chat_requests: list[object] = []
+
+            def chat_evaluation(request):  # type: ignore[no-untyped-def]
+                chat_requests.append(request)
+                return {
+                    "found": True,
+                    "sentiment": "positive",
+                    "scope": "whole_verse",
+                    "evidence": "朝らしい爽やかな句でいいね",
+                    "confidence": 0.97,
+                    "__dogido_status": "accepted",
+                }
+
+            service._analyze_workshop_feedback = analyze_without_evaluation  # type: ignore[method-assign]
+            service.llm.generate_structured_json = chat_evaluation  # type: ignore[method-assign]
+            second_pass_text = "朝らしい爽やかな句でいいね"
+            session.machine.player_input = route_player_input(second_pass_text)
+            second_pass_actions = service._haiku_workshop_actions(
+                session,
+                event(13, second_pass_text),
+            )
+            assert session.haiku_workshop is not None
+            self.assertTrue(session.haiku_workshop.awaiting_close_confirmation)
+            self.assertIsNone(session.haiku_workshop.pending_revision)
+            self.assertIn("ここまででええ", second_pass_actions[0].text or "")
+            self.assertEqual(len(chat_requests), 1)
+            self.assertEqual(chat_requests[0].kind, "haiku_workshop_evaluation")
+            self.assertEqual(chat_requests[0].route, "chat")
 
     def test_player_line_edits_accumulate_and_continue_after_confirmation(self) -> None:
         from dogido_server.player_input.routing import route_player_input
@@ -1327,7 +1560,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
 
             def analyze(workshop: RecentHaikuWorkshop, player_text: str):
                 if "手の中の草より" in player_text:
-                    # OS AIが新語は取れても対象断片を空で返す場合がある。
+                    # AIが新語は取れても対象断片を空で返す場合がある。
                     # 発話中の現在句をコードで特定した結果は保持する。
                     return (
                         WorkshopAnalysis(
@@ -1341,7 +1574,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                                 confidence=0.95,
                             ),
                         ),
-                        "test_os_ai",
+                        "test_chat_ai",
                     )
                 findings = (
                     (
@@ -1508,7 +1741,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                             confidence=0.98,
                         ),
                     ),
-                    "apple_foundation_models",
+                    "chat",
                 )
 
             service._analyze_pending_revision_reply = accept_and_close  # type: ignore[method-assign]
@@ -1535,7 +1768,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     observed_at=emission.created_at + timedelta(seconds=60),
                 )
 
-    def test_os_ai_extracts_natural_line_proposal_and_semantic_acceptance(self) -> None:
+    def test_chat_llm_extracts_natural_line_proposal_and_semantic_acceptance(self) -> None:
         from dogido_server.player_input.routing import route_player_input
 
         class SemanticWorkshopLLM:
@@ -1602,6 +1835,11 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
             session = service.sessions[response.session_id]
             service.llm = llm
+
+            def reject_platform_ai(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+                raise AssertionError("workshop intent/pending must bypass platform AI")
+
+            service.platform_ai.generate_structured_json = reject_platform_ai  # type: ignore[method-assign]
             emission = _emission(text="つちのくさ\nひろがるくさち\nひるのそら")
             session.last_haiku_emission = emission
             service._open_haiku_workshop(
@@ -1634,7 +1872,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     meta=MetaState(user_text=text),
                 )
 
-            # bareな「真ん中」はコードfallbackでは広く拾わず、OS AIの
+            # bareな「真ん中」はコードfallbackでは広く拾わず、chat LLMの
             # line_2概念マッチを根拠検証して対象行へ接続する。
             proposal_text = "真ん中はくさちひろがるにしてはどうですか"
             session.machine.player_input = route_player_input(proposal_text)
@@ -2565,7 +2803,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 self.stages.append((player_text, str(details["conversation_stage"])))
                 if player_text == "腑に落ちたよ":
                     return WorkshopAnalysis(intent="ack", confidence=0.95), "apple_test"
-                # 「そうなんだ」はOS AIが誤分類してもclosed fallbackで拾えることを守る。
+                # 「そうなんだ」はAIが誤分類してもclosed fallbackで拾えることを守る。
                 if "って何" in player_text:
                     return WorkshopAnalysis(intent="ask_meaning", confidence=0.95), "apple_test"
                 if player_text == "そうなんだ":

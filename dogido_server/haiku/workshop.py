@@ -27,7 +27,7 @@ DEFAULT_T_IDLE = timedelta(seconds=120)
 # 句と無関係な入力が連続したら close
 DEFAULT_N_DRIFT = 2
 
-# H7-lite: 自然な講評・現在句照会・プレイヤー自身の一行置換を structured
+# H7-lite: 自然な講評・句評価・現在句照会・プレイヤー自身の一行置換を structured
 # 抽出する。終了も要求だけを別フィールドへ抽出し、実行はコードに残す。
 # clear_lessons / 完成三行 revise / reading は含めない。
 WORKSHOP_LLM_INTENTS = frozenset(
@@ -52,6 +52,11 @@ WORKSHOP_PENDING_DECISION_MIN_CONFIDENCE = 0.80
 WORKSHOP_LINE_REFERENCE_MIN_CONFIDENCE = 0.75
 WORKSHOP_CLOSE_REQUEST_MIN_CONFIDENCE = 0.85
 WORKSHOP_CLOSE_SCOPES = frozenset({"workshop", "next_haiku"})
+WORKSHOP_EVALUATION_MIN_CONFIDENCE = 0.80
+WORKSHOP_EVALUATION_SENTIMENTS = frozenset(
+    {"positive", "negative", "mixed", "unknown"}
+)
+WORKSHOP_EVALUATION_SCOPES = frozenset({"whole_verse", "part", "unknown"})
 WORKSHOP_PENDING_ACTIONS = frozenset(
     {
         "accept_pending",
@@ -249,7 +254,7 @@ class WorkshopFinding:
 
 @dataclass(frozen=True, slots=True)
 class WorkshopLineProposal:
-    """OS AIがプレイヤー発話から抽出した一行置換。実行可否はコードが決める。"""
+    """会話モデルがプレイヤー発話から抽出した一行置換。実行可否はコードが決める。"""
 
     replacement_text: str
     target_fragment: str
@@ -292,6 +297,16 @@ class WorkshopCloseRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopEvaluation:
+    """OS AIが発話から抽出した、現在句に対する明示的な評価。"""
+
+    sentiment: str
+    scope: str
+    evidence: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
 class WorkshopAnalysis:
     intent: str = "soft_default"
     confidence: float = 0.0
@@ -300,6 +315,7 @@ class WorkshopAnalysis:
     line_proposal: WorkshopLineProposal | None = None
     line_reference: WorkshopLineReference | None = None
     close_request: WorkshopCloseRequest | None = None
+    evaluation: WorkshopEvaluation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -372,6 +388,7 @@ class RecentHaikuWorkshop:
     # 終了確認は別状態にし、納得だけでpinを勝手に閉じない。
     awaiting_meaning_ack: bool = False
     awaiting_close_confirmation: bool = False
+    close_confirmation_source: str | None = None
     # 戦闘割り込みは close ではない。
     # 句と未採用差分を保持したまま会話経路だけ止める。
     combat_paused: bool = False
@@ -470,6 +487,7 @@ def pause_workshop_for_combat(
     # 一方、プレイヤーが組み立てた未採用三行は失わない。
     workshop.awaiting_meaning_ack = False
     workshop.awaiting_close_confirmation = False
+    workshop.close_confirmation_source = None
     workshop.awaiting_combat_resume_confirmation = False
     workshop.marked_line_index = None
     workshop.last_findings.clear()
@@ -520,6 +538,9 @@ def close_workshop(
     workshop.combat_resume_pending_reason = None
     workshop.combat_override_signature = None
     workshop.awaiting_combat_resume_confirmation = False
+    workshop.awaiting_meaning_ack = False
+    workshop.awaiting_close_confirmation = False
+    workshop.close_confirmation_source = None
     return workshop
 
 
@@ -567,6 +588,7 @@ def advance_workshop_revision(
     workshop.last_findings.clear()
     workshop.awaiting_meaning_ack = False
     workshop.awaiting_close_confirmation = False
+    workshop.close_confirmation_source = None
     clear_pending_revision(workshop)
     if source == "generated_confirmed" and line_sources:
         workshop.materials["line_sources"] = line_sources
@@ -1550,6 +1572,20 @@ def extract_player_line_replacement(raw_text: str | None) -> PlayerLineReplaceme
     return parse_player_line_replacement(raw_text).replacement
 
 
+def is_explicit_player_line_replacement_command(text: str | None) -> bool:
+    """「〜に変えて／したら」のように、変更動詞を明示した発話か。"""
+
+    source = str(text or "").strip()
+    if not source:
+        return False
+    return bool(
+        re.search(
+            r"(?:に|へ)(?:変え|かえ|して|した)",
+            source,
+        )
+    )
+
+
 def build_player_line_revision(
     workshop: RecentHaikuWorkshop,
     replacement: PlayerLineReplacement,
@@ -1783,6 +1819,69 @@ def _finalize_workshop_close_request(
     )
 
 
+def validate_workshop_evaluation_payload(
+    raw_evaluation: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_EVALUATION_MIN_CONFIDENCE,
+) -> tuple[WorkshopEvaluation | None, str]:
+    """句評価を検証し、採用値または観察用の棄却理由を返す。"""
+
+    if not isinstance(raw_evaluation, dict):
+        return None, "missing_payload"
+    if raw_evaluation.get("found") is not True:
+        return None, "not_found"
+    sentiment = str(raw_evaluation.get("sentiment") or "unknown").strip()
+    scope = str(raw_evaluation.get("scope") or "unknown").strip()
+    if sentiment not in WORKSHOP_EVALUATION_SENTIMENTS or sentiment == "unknown":
+        return None, "invalid_sentiment"
+    if scope not in WORKSHOP_EVALUATION_SCOPES:
+        return None, "invalid_scope"
+    raw_confidence = raw_evaluation.get("confidence")
+    try:
+        confidence = (
+            float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+        )
+    except (TypeError, ValueError):
+        return None, "invalid_confidence"
+    evidence = str(raw_evaluation.get("evidence") or "").strip()[:120]
+    player_compact = _compact_kana(player_text or "")
+    evidence_compact = _compact_kana(evidence)
+    if not 0.0 <= confidence <= 1.0:
+        return None, "invalid_confidence"
+    if confidence < min_confidence:
+        return None, "low_confidence"
+    if len(evidence_compact) < 2:
+        return None, "missing_evidence"
+    if evidence_compact not in player_compact:
+        return None, "ungrounded_evidence"
+    return (
+        WorkshopEvaluation(
+            sentiment=sentiment,
+            scope=scope,
+            evidence=evidence,
+            confidence=confidence,
+        ),
+        "accepted",
+    )
+
+
+def finalize_workshop_evaluation_payload(
+    payload: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_EVALUATION_MIN_CONFIDENCE,
+) -> WorkshopEvaluation | None:
+    """OS AI／会話モデル共通の句評価payloadを閉じた値へ変換する。"""
+
+    evaluation, _reason = validate_workshop_evaluation_payload(
+        payload,
+        player_text=player_text,
+        min_confidence=min_confidence,
+    )
+    return evaluation
+
+
 def finalize_workshop_analysis_payload(
     payload: dict[str, object] | None,
     *,
@@ -1794,8 +1893,9 @@ def finalize_workshop_analysis_payload(
 ) -> WorkshopAnalysis:
     """OS / cloud 共通の限定意味抽出結果を閉じた値へ変換する。
 
-    LLM が close・lesson解除・保存を実行する余地はない。終了要求・対象行・
-    問題種別・置換語・発話根拠をコードで範囲／一致検査し、不明な値は捨てる。
+    LLM が close・lesson解除・保存を実行する余地はない。句評価・終了要求・
+    対象行・問題種別・置換語・発話根拠をコードで範囲／一致検査し、
+    不明な値は捨てる。
     """
 
     intent = _finalize_workshop_intent_payload(payload, min_confidence=min_confidence)
@@ -1807,6 +1907,10 @@ def finalize_workshop_analysis_payload(
     )
     close_request = _finalize_workshop_close_request(
         payload.get("close_request"),
+        player_text=player_text,
+    )
+    evaluation = finalize_workshop_evaluation_payload(
+        payload.get("evaluation"),
         player_text=player_text,
     )
     raw_confidence = payload.get("confidence")
@@ -1938,6 +2042,7 @@ def finalize_workshop_analysis_payload(
         line_proposal=line_proposal,
         line_reference=line_reference,
         close_request=close_request,
+        evaluation=evaluation,
     )
 
 

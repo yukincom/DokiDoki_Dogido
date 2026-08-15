@@ -14,7 +14,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 ```
 
 - **判断の主**はコード（状態機械 / py_trees / policy）
-- **LLM / OS AI**は言い回し生成と、閉じた型の限定抽出（workshop intent / findings / 一行置換 / pending採否 / 終了意図）まで。状態変更・保存判断はコード
+- **LLM**は言い回し生成と、閉じた型の限定抽出（workshop intent / findings / 句評価 / 一行置換 / pending採否 / 終了意図）まで。**OS AI**は戦闘中断中の小さな5分類だけに限る。状態変更・保存判断はコード
 - **記憶**は JSONL（few-shot 山盛りや Hermes 系汎用エージェントは使わない）
 
 汎用チャットボットや「なんでもできるエージェント」に改造しない。
@@ -53,7 +53,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - panic / 警告の優先、発話抑制、いつ川柳かは **状態機械側**
 - LLM に「今パニックすべきか」を委ねない
 - leaf 失敗時はカタログ fallback がある前提を壊さない
-- OS AI 出力から直接 close / lesson解除 / revision保存しない。終了scope・enum・行概念ID・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
+- AI 出力から直接 close / lesson解除 / revision保存しない。評価極性・評価範囲・終了scope・enum・行概念ID・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
@@ -108,11 +108,11 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・完成三行のformal/conversational revise・自然な終了意図・次の句。pending案の明示採用は現在句へ昇格してopen維持
-- 意図: clear_lessons / 明示praise / 完成三行revision / 明示reading と代表的なclose fallbackはコードが正。それ以外の自然文はOS AI優先の閉じたschemaでintent・対象行・断片・problem・終了scopeを抽出し、コードが永続化と実行条件を決める。終了はscopeがworkshop全体または次の句、発話中evidenceあり、confidence 0.85以上の場合だけコードが実行する
-- 意味説明後の納得: `ask_meaning` 返答後だけ会話段階を保持し、「そうなんだ」等の意味的ackをOS AIで抽出する。ackターンはfinding・critique・lessonへ流さずコード固定の終了確認へ進み、次の肯定でclose、続行意思ならopenへ戻す
-- `request_repair`: OS AIが高信頼に修正要求を抽出し、コードが検証済みfindingを確定できたときだけ、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
-- プレイヤー局所編集: 三行は安定ID `line_1/2/3`、概念番号1/2/3、配列index 0/1/2、位置upper/middle/lower、正規名上五/中七/下五を持つ。自然な提案ではOS AIが「上の句」「二の句」「真ん中」「後ろのパート」等をこの概念へ対応させ、発話中の行呼称evidence・置換語・句中target fragmentを抽出する。コードが既知呼称・finding・fragmentとの衝突と一意性を検証し、従来の閉じた文字列解析は利用不可・低信頼時のfallbackに限る。finding／明示行／検証済み行概念／一意なfragmentに加え、「旧句より新句」の発話中にある現在句の一行でも対象を固定する。句フレーズ指定はSTTが漢字化しても読みへ戻し、現在の三行へ一意に一致するときだけ採用する。コードでひらがな化・正確な5/7/5音・hard制約・重複を検査して未保存三行へ連続CASする。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない。現在はプレイヤーの呼称を訂正せず、生の呼称・正規名・概念IDを将来learning版のフックとしてログへ残す
-- pending採否: 専用OS AI schemaで accept / reject / modify / show / discuss 等と終了意図を別々に意味抽出。confidence・evidence・現在pending・CASをコード検証し、`accept+close` は保存後、`reject+close` は破棄後にcloseする。採否なしのclose要求はコード固定文で確認する。利用不可時は代表的な完全一致規則へfallback。closeを伴わない採用後は句を次の基準へ昇格しpinを維持
+- 意図: clear_lessons / 固定規則に一致する明示praise / 完成三行revision / 明示reading と代表的なclose fallbackはコードが正。それ以外の自然文は常駐する会話モデルの閉じたschemaでintent・対象行・断片・problem・句評価・終了scopeを抽出し、コードが永続化と実行条件を決める。句全体へのpositive評価は即closeせずコード固定の終了確認、negative／mixedは共同編集者へ改善方向を一問だけ尋ねさせる。終了はscopeがworkshop全体または次の句、発話中evidenceあり、confidence 0.85以上の場合だけコードが実行する
+- 意味説明後の納得: `ask_meaning` 返答後だけ会話段階を保持し、「そうなんだ」等の意味的ackを会話モデルで抽出する。ackターンはfinding・critique・lessonへ流さずコード固定の終了確認へ進み、次の肯定でclose、続行意思ならopenへ戻す
+- `request_repair`: 会話モデルが高信頼に修正要求を抽出し、コードが検証済みfindingを確定できたときだけ、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
+- プレイヤー局所編集: 三行は安定ID `line_1/2/3`、概念番号1/2/3、配列index 0/1/2、位置upper/middle/lower、正規名上五/中七/下五を持つ。自然な提案では会話モデルが「上の句」「二の句」「真ん中」「後ろのパート」等をこの概念へ対応させ、発話中の行呼称evidence・置換語・句中target fragmentを抽出する。コードが既知呼称・finding・fragmentとの衝突と一意性を検証し、従来の閉じた文字列解析は利用不可・低信頼時のfallbackに限る。finding／明示行／検証済み行概念／一意なfragmentに加え、「旧句より新句」の発話中にある現在句の一行でも対象を固定する。句フレーズ指定はSTTが漢字化しても読みへ戻し、現在の三行へ一意に一致するときだけ採用する。コードでひらがな化・正確な5/7/5音・hard制約・重複を検査して未保存三行へ連続CASする。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない。現在はプレイヤーの呼称を訂正せず、生の呼称・正規名・概念IDを将来learning版のフックとしてログへ残す
+- pending採否: 常駐する会話モデルの専用schemaで accept / reject / modify / show / discuss 等と終了意図を別々に意味抽出。confidence・evidence・現在pending・CASをコード検証し、`accept+close` は保存後、`reject+close` は破棄後にcloseする。採否なしのclose要求はコード固定文で確認する。利用不可時は代表的な完全一致規則へfallback。closeを伴わない採用後は句を次の基準へ昇格しpinを維持
 - 戦闘中断: visual／auditory脅威・直近被弾で句とpendingを保持したままpauseし、workshop用ASR補正・timeout・driftを止める。勝利根拠あり／離脱で復帰文を分け、戦闘音声後の静かなnormalフレームで三行を再掲して継続確認する。中断中発話はOS／端末内AI優先（失敗時はchat fallback）で `resume_workshop / workshop_input / close_workshop / unrelated / uncertain` だけを根拠つき抽出し、全AIが利用不可・低信頼・不正出力のときだけ閉じた規則へfallbackする。安全判定と実際の再開／closeはコード。単独敵が8秒以上非接近・無被弾でも、再開意思を確定できたときだけ暫定再開。再接近・被弾・敵数／個体変化で即pause
 - 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
@@ -131,7 +131,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - `haiku` … 句（irony/scene 経由のことも）  
 - 低レイテンシ戦況は LLM なし  
 - route ごとに provider を分けられる（`.env` / Settings）
-- platform structured は `auto=Apple Foundation Models → Foundry Local → chat`。任意依存で、失敗しても workshop を壊さない
+- platform structured は戦闘中断中の小分類だけに使い、`auto=Apple Foundation Models → Foundry Local → chat`。任意依存で、失敗しても workshop を壊さない
 
 ---
 
@@ -208,7 +208,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集 + 戦闘中断: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ OS AI優先の限定 intent・findings・行呼称→`line_1/2/3`・一行置換・pending採否・自然な終了意図・戦闘中断中の再開／終了意思抽出 / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続 / 戦闘中は句とpendingを保持してpause→コード安全確認後に再掲・継続確認）
+- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集 + 戦闘中断: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ 常駐会話モデルの限定 intent・findings・句評価・行呼称→`line_1/2/3`・一行置換・pending採否・自然な終了意図、OS AI優先は戦闘中断中の再開／終了意思抽出のみ / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続 / 戦闘中は句とpendingを保持してpause→コード安全確認後に再掲・継続確認）
 - H1.1 materials 厚み（motifs/held/nearby + short candidates + fragment_links）: **済**（#28 phase 0–1）  
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P4: **済**（P5 任意）  
@@ -220,6 +220,6 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）**済**  
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
-- 任意: OS AI・chat fallback・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
+- 任意: 戦闘中断用 OS AI・chat fallback、通常workshop抽出・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
 
 更新したらこの節と `companion-maturity.md` §6 を揃える。
