@@ -1257,15 +1257,22 @@ class DogidoService:
                 "accept_pending": "accept",
                 "reject_pending": "reject",
             }.get(pending_analysis.action)
+            semantic_close_requested = pending_analysis.close_request is not None
             # OS AI / chat が使えないときも、代表的な明示形だけは従来の
             # closed fullmatch で扱えるようにする。
             decision = semantic_decision or pending_revision_decision(text)
             LOGGER.warning(
                 "haiku_workshop_pending_decision session_id=%s action=%s "
-                "confidence=%.2f path=%s fallback=%s player=%s",
+                "confidence=%.2f close=%s close_scope=%s path=%s fallback=%s player=%s",
                 session.session_id,
                 pending_analysis.action,
                 pending_analysis.confidence,
+                semantic_close_requested,
+                (
+                    pending_analysis.close_request.scope
+                    if pending_analysis.close_request is not None
+                    else "-"
+                ),
                 pending_path,
                 "used" if semantic_decision is None and decision is not None else "-",
                 text[:100],
@@ -1290,15 +1297,47 @@ class DogidoService:
                     revision_edit_contract=workshop.pending_revision_edit_contract,
                     revision_base_text=workshop.pending_revision_base_text,
                     parent_revision_id=workshop.current_revision_id,
-                    keep_workshop_open=True,
+                    keep_workshop_open=not semantic_close_requested,
                 )
             if decision == "reject":
                 clear_pending_revision(workshop)
                 workshop.marked_line_index = None
                 workshop.awaiting_meaning_ack = False
                 workshop.awaiting_close_confirmation = False
+                if semantic_close_requested:
+                    close_workshop(workshop, reason="pending_rejected_close")
+                    session.haiku_workshop = None
+                    LOGGER.warning(
+                        "haiku_workshop_closed session_id=%s "
+                        "reason=pending_rejected_close evidence=%s",
+                        session.session_id,
+                        pending_analysis.close_request.evidence[:80]
+                        if pending_analysis.close_request is not None
+                        else "-",
+                    )
+                    return [
+                        AudioAction(
+                            layer="speech",
+                            interrupt=False,
+                            text="おけ、案は使わず、この句の話はここまでや。",
+                        )
+                    ]
                 record_workshop_activity(workshop, now=event.observed_at)
                 return [AudioAction(layer="speech", interrupt=False, text="おけ、元の句はそのままにしとくで。")]
+            if semantic_close_requested:
+                # pendingの採否をAIに補わせない。どちらを残すか明示された
+                # ターンだけ、採用／却下とcloseを一つのコード操作として行う。
+                record_workshop_activity(workshop, now=event.observed_at)
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text=(
+                            "いまの案を採用して終わるか、元の句のまま終わるか、"
+                            "そこだけ教えてな。"
+                        ),
+                    )
+                ]
             if pending_analysis.action == "show_pending":
                 workshop.awaiting_meaning_ack = False
                 workshop.awaiting_close_confirmation = False
@@ -1386,6 +1425,7 @@ class DogidoService:
         intent_path = "rule"
         analysis = WorkshopAnalysis(intent=kind, confidence=1.0)
         effective_kind = kind
+        semantic_close_accepted = False
         analysis_kinds = {
             "soft_default",
             "other_haiku",
@@ -1421,6 +1461,27 @@ class DogidoService:
                 effective_kind = analysis.intent
             if effective_kind == "request_repair" and not analysis.repair_requested:
                 effective_kind = "other_haiku"
+            if analysis.close_request is not None:
+                if analysis.line_proposal is None and not analysis.repair_requested:
+                    semantic_close_accepted = True
+                    effective_kind = "close"
+                    LOGGER.warning(
+                        "haiku_workshop_close_request session_id=%s result=accepted "
+                        "scope=%s confidence=%.2f path=%s evidence=%s",
+                        session.session_id,
+                        analysis.close_request.scope,
+                        analysis.close_request.confidence,
+                        intent_path,
+                        analysis.close_request.evidence[:80],
+                    )
+                else:
+                    LOGGER.warning(
+                        "haiku_workshop_close_request session_id=%s result=rejected "
+                        "reason=edit_conflict path=%s evidence=%s",
+                        session.session_id,
+                        intent_path,
+                        analysis.close_request.evidence[:80],
+                    )
             followup_control_turn = (
                 workshop.awaiting_meaning_ack and effective_kind == "ack"
             ) or (
@@ -1430,6 +1491,19 @@ class DogidoService:
                     or close_confirmation_fallback in {"accept", "continue"}
                 )
             )
+            if analysis.line_reference is not None and not followup_control_turn:
+                LOGGER.warning(
+                    "haiku_workshop_line_reference session_id=%s concept=%s number=%s "
+                    "line_index=%s canonical=%s evidence=%s confidence=%.2f path=%s",
+                    session.session_id,
+                    analysis.line_reference.concept_id,
+                    analysis.line_reference.concept_number,
+                    analysis.line_reference.line_index,
+                    analysis.line_reference.canonical_name,
+                    analysis.line_reference.evidence[:48],
+                    analysis.line_reference.confidence,
+                    intent_path,
+                )
             if analysis.line_proposal is not None and not followup_control_turn:
                 # 自然な置換提案は OS AI の意味抽出を優先する。上で得た
                 # closed regex の候補は、OS AI が提案を確定できない場合だけ
@@ -1445,32 +1519,53 @@ class DogidoService:
                     if player_line_replacement is not None
                     else None
                 )
-                player_line_replacement = PlayerLineReplacement(
-                    text=analysis.line_proposal.replacement_text,
-                    explicit_line_index=(
-                        analysis.line_proposal.line_index
-                        if analysis.line_proposal.line_index is not None
-                        else code_explicit_line
-                    ),
-                    target_fragment=(
-                        code_target_fragment
-                        or analysis.line_proposal.target_fragment
-                        or None
-                    ),
+                semantic_line = (
+                    analysis.line_reference.line_index
+                    if analysis.line_reference is not None
+                    else None
                 )
-                effective_kind = "propose_line_edit"
-                LOGGER.warning(
-                    "haiku_workshop_line_proposal session_id=%s result=accepted "
-                    "target_line=%s target_fragment=%s replacement=%s confidence=%.2f "
-                    "path=%s evidence=%s",
-                    session.session_id,
-                    analysis.line_proposal.line_index,
-                    analysis.line_proposal.target_fragment[:40],
-                    analysis.line_proposal.replacement_text[:40],
-                    analysis.line_proposal.confidence,
-                    intent_path,
-                    analysis.line_proposal.evidence[:80],
-                )
+                target_indices = {
+                    index
+                    for index in (
+                        analysis.line_proposal.line_index,
+                        semantic_line,
+                        code_explicit_line,
+                    )
+                    if index is not None
+                }
+                if len(target_indices) <= 1:
+                    player_line_replacement = PlayerLineReplacement(
+                        text=analysis.line_proposal.replacement_text,
+                        explicit_line_index=(
+                            next(iter(target_indices)) if target_indices else None
+                        ),
+                        target_fragment=(
+                            code_target_fragment
+                            or analysis.line_proposal.target_fragment
+                            or None
+                        ),
+                    )
+                    effective_kind = "propose_line_edit"
+                    LOGGER.warning(
+                        "haiku_workshop_line_proposal session_id=%s result=accepted "
+                        "target_line=%s target_fragment=%s replacement=%s confidence=%.2f "
+                        "path=%s evidence=%s",
+                        session.session_id,
+                        player_line_replacement.explicit_line_index,
+                        analysis.line_proposal.target_fragment[:40],
+                        analysis.line_proposal.replacement_text[:40],
+                        analysis.line_proposal.confidence,
+                        intent_path,
+                        analysis.line_proposal.evidence[:80],
+                    )
+                else:
+                    LOGGER.warning(
+                        "haiku_workshop_line_proposal session_id=%s result=rejected "
+                        "reason=line_reference_conflict targets=%s evidence=%s",
+                        session.session_id,
+                        sorted(target_indices),
+                        analysis.line_proposal.evidence[:80],
+                    )
             if analysis.findings and not followup_control_turn:
                 workshop.last_findings = [finding.to_dict() for finding in analysis.findings]
             marked_line = workshop.marked_line_index
@@ -1490,6 +1585,7 @@ class DogidoService:
                         }
                         else None
                     ),
+                    line_reference=analysis.line_reference,
                 )
             if analysis.findings and not followup_control_turn:
                 LOGGER.warning(
@@ -1591,12 +1687,18 @@ class DogidoService:
 
         now = event.observed_at
         if kind == "close":
-            close_workshop(workshop, reason="explicit")
+            close_workshop(
+                workshop,
+                reason="semantic_explicit" if semantic_close_accepted else "explicit",
+            )
             session.haiku_workshop = None
             reply = render_workshop_reply("close", workshop, player_text=text)
             LOGGER.warning(
-                "haiku_workshop_turn session_id=%s path=close player=%s reply=%s",
+                "haiku_workshop_turn session_id=%s path=close intent_path=%s "
+                "semantic=%s player=%s reply=%s",
                 session.session_id,
+                intent_path,
+                semantic_close_accepted,
                 text[:100],
                 (reply or "")[:120],
             )
@@ -1814,6 +1916,18 @@ class DogidoService:
                         "confidence": 0.0,
                         "repair_requested": False,
                         "findings": [],
+                        "close_request": {
+                            "found": False,
+                            "scope": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
+                        "line_reference": {
+                            "found": False,
+                            "concept_id": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
                     },
                     details=details,
                     temperature=0.0,
@@ -1830,7 +1944,13 @@ class DogidoService:
             verse_lines=workshop_verse_lines(workshop.editing_line()),
             player_text=player_text,
         )
-        if analysis.intent == "soft_default" and not analysis.findings:
+        if (
+            analysis.intent == "soft_default"
+            and not analysis.findings
+            and analysis.line_proposal is None
+            and analysis.line_reference is None
+            and analysis.close_request is None
+        ):
             return analysis, "soft_default"
         provider = str(payload.get("__dogido_platform_ai_provider") or "llm")
         return analysis, provider
@@ -1851,6 +1971,12 @@ class DogidoService:
                         "action": "uncertain",
                         "confidence": 0.0,
                         "evidence": "",
+                        "close_request": {
+                            "found": False,
+                            "scope": "unknown",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
                     },
                     details=details,
                     temperature=0.0,

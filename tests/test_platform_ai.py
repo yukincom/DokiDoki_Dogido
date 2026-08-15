@@ -210,7 +210,15 @@ class PlatformAIRouterTests(unittest.TestCase):
 
         self.assertEqual(
             schema["x-order"],
-            ["intent", "confidence", "repair_requested", "findings", "line_proposal"],
+            [
+                "intent",
+                "confidence",
+                "repair_requested",
+                "findings",
+                "close_request",
+                "line_reference",
+                "line_proposal",
+            ],
         )
         finding_schema = schema["properties"]["findings"]["items"]
         self.assertIn("x-order", finding_schema)
@@ -218,11 +226,31 @@ class PlatformAIRouterTests(unittest.TestCase):
         proposal_schema = schema["properties"]["line_proposal"]
         self.assertIn("x-order", proposal_schema)
         self.assertNotIn("line_index", proposal_schema["required"])
+        reference_schema = schema["properties"]["line_reference"]
+        self.assertEqual(
+            reference_schema["properties"]["concept_id"]["enum"],
+            ["line_1", "line_2", "line_3", "unknown"],
+        )
+        close_schema = schema["properties"]["close_request"]
+        self.assertEqual(
+            close_schema["properties"]["scope"]["enum"],
+            ["workshop", "current_line", "next_haiku", "unknown"],
+        )
 
     def test_pending_decision_has_a_separate_closed_schema(self) -> None:
         request = StructuredGenerationRequest(
             kind="haiku_workshop_pending_decision",
-            fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+            fallback_value={
+                "action": "uncertain",
+                "confidence": 0.0,
+                "evidence": "",
+                "close_request": {
+                    "found": False,
+                    "scope": "unknown",
+                    "evidence": "",
+                    "confidence": 0.0,
+                },
+            },
             details={
                 "current_verse": "はるのかぜ\nひつじがあるく\nよるのつき",
                 "pending_verse": "はるのかぜ\nあめつよくふる\nよるのつき",
@@ -236,7 +264,10 @@ class PlatformAIRouterTests(unittest.TestCase):
 
         schema = _json_schema_for(request)
 
-        self.assertEqual(schema["x-order"], ["action", "confidence", "evidence"])
+        self.assertEqual(
+            schema["x-order"],
+            ["action", "confidence", "evidence", "close_request"],
+        )
         self.assertEqual(
             schema["properties"]["action"]["enum"],
             ["accept_pending", "uncertain"],
@@ -252,6 +283,7 @@ class PlatformAIRouterTests(unittest.TestCase):
                 "allowed_actions": [
                     "resume_workshop",
                     "workshop_input",
+                    "close_workshop",
                     "unrelated",
                     "uncertain",
                 ],
@@ -266,7 +298,13 @@ class PlatformAIRouterTests(unittest.TestCase):
         self.assertEqual(schema["x-order"], ["action", "confidence", "evidence"])
         self.assertEqual(
             schema["properties"]["action"]["enum"],
-            ["resume_workshop", "workshop_input", "unrelated", "uncertain"],
+            [
+                "resume_workshop",
+                "workshop_input",
+                "close_workshop",
+                "unrelated",
+                "uncertain",
+            ],
         )
 
     def test_provider_is_reprobed_when_failure_cooldown_expires_before_refresh(self) -> None:

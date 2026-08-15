@@ -598,6 +598,41 @@ class WorkshopCombatServiceTests(unittest.TestCase):
         self.assertFalse(replaced)
         self.assertEqual(added, [])
 
+    def test_os_ai_close_request_is_executed_by_code_while_paused(self) -> None:
+        workshop = self.session.haiku_workshop
+        assert workshop is not None
+        pause_workshop_for_combat(workshop, now=BASE + timedelta(seconds=1), hostile_types=["zombie"])
+        player_text = "句の相談はもうお開きにしよう"
+        self.session.machine.player_input = route_player_input(player_text)
+
+        def generate(request, *, fallback):  # type: ignore[no-untyped-def]
+            return {
+                "action": "close_workshop",
+                "confidence": 0.96,
+                "evidence": "お開きにしよう",
+                "__dogido_platform_ai_provider": "apple_foundation_models",
+            }
+
+        self.service.platform_ai.generate_structured_json = generate  # type: ignore[method-assign]
+        danger = _event(
+            3,
+            text=player_text,
+            threats=[_zombie(approaching=True, distance=2.5)],
+            combat=CombatState(combat_active_hint=True, hostiles_within_7=1),
+        )
+
+        added, consumed, replaced = self.service._update_workshop_combat_state(
+            self.session,
+            danger,
+            [],
+            state_mode="panic",
+        )
+
+        self.assertIsNone(self.session.haiku_workshop)
+        self.assertTrue(consumed)
+        self.assertFalse(replaced)
+        self.assertIn("ここまで", added[0].text or "")
+
     def test_resume_confirmation_can_continue_or_close(self) -> None:
         workshop = self.session.haiku_workshop
         assert workshop is not None
@@ -645,6 +680,16 @@ class WorkshopCombatInputContractTests(unittest.TestCase):
             player_text="さっきの相談に戻ろう",
         )
         self.assertEqual(low_confidence.action, "uncertain")
+
+        close_request = finalize_combat_workshop_input_payload(
+            {
+                "action": "close_workshop",
+                "confidence": 0.96,
+                "evidence": "お開きにしよう",
+            },
+            player_text="句はお開きにしよう",
+        )
+        self.assertEqual(close_request.action, "close_workshop")
 
 
 if __name__ == "__main__":

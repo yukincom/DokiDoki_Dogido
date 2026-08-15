@@ -28,7 +28,8 @@ DEFAULT_T_IDLE = timedelta(seconds=120)
 DEFAULT_N_DRIFT = 2
 
 # H7-lite: 自然な講評・現在句照会・プレイヤー自身の一行置換を structured
-# 抽出する。close / clear_lessons / 完成三行 revise / reading は含めない。
+# 抽出する。終了も要求だけを別フィールドへ抽出し、実行はコードに残す。
+# clear_lessons / 完成三行 revise / reading は含めない。
 WORKSHOP_LLM_INTENTS = frozenset(
     {
         "ask_meaning",
@@ -48,6 +49,9 @@ WORKSHOP_LLM_MIN_CONFIDENCE = 0.75
 WORKSHOP_FINDING_MIN_CONFIDENCE = 0.65
 WORKSHOP_PROPOSAL_MIN_CONFIDENCE = 0.75
 WORKSHOP_PENDING_DECISION_MIN_CONFIDENCE = 0.80
+WORKSHOP_LINE_REFERENCE_MIN_CONFIDENCE = 0.75
+WORKSHOP_CLOSE_REQUEST_MIN_CONFIDENCE = 0.85
+WORKSHOP_CLOSE_SCOPES = frozenset({"workshop", "next_haiku"})
 WORKSHOP_PENDING_ACTIONS = frozenset(
     {
         "accept_pending",
@@ -89,9 +93,26 @@ _PENDING_REVISION_ACCEPT_PATTERN = re.compile(
 )
 
 _EXPLICIT_LINE_PATTERNS: tuple[tuple[int, re.Pattern[str]], ...] = (
-    (0, re.compile(r"(?:一|1)行目|上五|上の句|最初の行")),
-    (1, re.compile(r"(?:二|2)行目|中七|中の句|真ん中の行")),
-    (2, re.compile(r"(?:三|3)行目|下五|下の句|最後の行")),
+    (
+        0,
+        re.compile(
+            r"(?:一|1)行目|上五|上の句|最初の行|最初の句|最初のパート|前の行|前のパート"
+        ),
+    ),
+    (
+        1,
+        re.compile(
+            r"(?:二|2)行目|中七|中の句|二の句|真ん中の行|真ん中の句|"
+            r"真ん中のパート|中央の行|中央のパート"
+        ),
+    ),
+    (
+        2,
+        re.compile(
+            r"(?:三|3)行目|下五|下の句|最後の行|最後の句|最後のパート|"
+            r"後ろの行|後ろの句|後ろのパート"
+        ),
+    ),
 )
 _PLAYER_REPLACEMENT_PATTERNS = (
     re.compile(
@@ -135,6 +156,80 @@ _STRICT_HIRAGANA_LINE = re.compile(r"[\u3041-\u3096ー]+")
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopLineConcept:
+    """表現揺れから独立した、三行の安定した概念ID。"""
+
+    concept_id: str
+    concept_number: int
+    line_index: int
+    position: str
+    canonical_name: str
+    reference_examples: tuple[str, ...]
+
+    def to_llm_dict(self) -> dict[str, object]:
+        return {
+            "concept_id": self.concept_id,
+            "concept_number": self.concept_number,
+            "line_index": self.line_index,
+            "position": self.position,
+            "canonical_name": self.canonical_name,
+            "reference_examples": list(self.reference_examples),
+        }
+
+
+WORKSHOP_LINE_CONCEPTS: tuple[WorkshopLineConcept, ...] = (
+    WorkshopLineConcept(
+        concept_id="line_1",
+        concept_number=1,
+        line_index=0,
+        position="upper",
+        canonical_name="上五",
+        reference_examples=(
+            "一行目",
+            "上五",
+            "上の句",
+            "最初の句",
+            "最初のパート",
+            "前のパート",
+        ),
+    ),
+    WorkshopLineConcept(
+        concept_id="line_2",
+        concept_number=2,
+        line_index=1,
+        position="middle",
+        canonical_name="中七",
+        reference_examples=(
+            "二行目",
+            "中七",
+            "中の句",
+            "二の句",
+            "真ん中",
+            "真ん中のパート",
+        ),
+    ),
+    WorkshopLineConcept(
+        concept_id="line_3",
+        concept_number=3,
+        line_index=2,
+        position="lower",
+        canonical_name="下五",
+        reference_examples=(
+            "三行目",
+            "下五",
+            "下の句",
+            "最後の句",
+            "後ろのパート",
+            "終わりのパート",
+        ),
+    ),
+)
+WORKSHOP_LINE_CONCEPT_BY_ID = {
+    concept.concept_id: concept for concept in WORKSHOP_LINE_CONCEPTS
+}
+
+
+@dataclass(frozen=True, slots=True)
 class WorkshopFinding:
     line_index: int | None
     fragment: str
@@ -164,12 +259,47 @@ class WorkshopLineProposal:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkshopLineReference:
+    """プレイヤーの行呼称を、発話根拠つき概念IDへ写した結果。"""
+
+    concept_id: str
+    concept_number: int
+    line_index: int
+    position: str
+    canonical_name: str
+    evidence: str
+    confidence: float
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "concept_id": self.concept_id,
+            "concept_number": self.concept_number,
+            "line_index": self.line_index,
+            "position": self.position,
+            "canonical_name": self.canonical_name,
+            "evidence": self.evidence,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class WorkshopCloseRequest:
+    """OS AIが抽出し、コード検証を通ったworkshop終了要求。"""
+
+    scope: str
+    evidence: str
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
 class WorkshopAnalysis:
     intent: str = "soft_default"
     confidence: float = 0.0
     repair_requested: bool = False
     findings: tuple[WorkshopFinding, ...] = ()
     line_proposal: WorkshopLineProposal | None = None
+    line_reference: WorkshopLineReference | None = None
+    close_request: WorkshopCloseRequest | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +309,7 @@ class PendingRevisionAnalysis:
     action: str = "uncertain"
     confidence: float = 0.0
     evidence: str = ""
+    close_request: WorkshopCloseRequest | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1204,6 +1335,11 @@ def build_workshop_intent_llm_details(
             {"line_index": index, "text": line}
             for index, line in enumerate(lines)
         ],
+        # 1-basedの概念番号と0-basedの配列indexを明示的に分ける。
+        # reference_examplesは意味抽出用で、将来の言い換え学習にも再利用できる。
+        "line_concepts": [
+            concept.to_llm_dict() for concept in WORKSHOP_LINE_CONCEPTS
+        ],
         "materials_speech": materials_speech_line(workshop),
         "player_text": (player_text or "").strip(),
         "conversation_stage": conversation_stage,
@@ -1315,8 +1451,9 @@ def update_marked_workshop_line(
     *,
     findings: tuple[WorkshopFinding, ...] = (),
     player_text: str | None = None,
+    line_reference: WorkshopLineReference | None = None,
 ) -> int | None:
-    """明示行、または一意に検証済みのfindingだけを次の編集対象に固定する。"""
+    """明示行・概念参照・一意なfindingから次の編集対象を固定する。"""
 
     explicit_indices = _explicit_workshop_line_indices(player_text)
     explicit = next(iter(explicit_indices)) if len(explicit_indices) == 1 else None
@@ -1327,10 +1464,16 @@ def update_marked_workshop_line(
         workshop.marked_line_index = None
         return None
     targets = {finding.line_index for finding in findings if finding.line_index is not None}
+    semantic_target = line_reference.line_index if line_reference is not None else None
+    if semantic_target is not None and targets and semantic_target not in targets:
+        workshop.marked_line_index = None
+        return None
     if len(targets) == 1:
         workshop.marked_line_index = next(iter(targets))
     elif len(targets) > 1:
         workshop.marked_line_index = None
+    elif semantic_target is not None:
+        workshop.marked_line_index = semantic_target
     return workshop.marked_line_index
 
 
@@ -1359,7 +1502,10 @@ def parse_player_line_replacement(raw_text: str | None) -> PlayerLineReplacement
             else:
                 had_line_prefix = False
             line_prefix = re.compile(
-                r"^(?:(?:一|二|三|1|2|3)行目|上五|中七|下五|上の句|中の句|下の句)"
+                r"^(?:(?:一|二|三|1|2|3)行目|上五|中七|下五|上の句|中の句|下の句|"
+                r"二の句|最初の(?:行|句|パート)|前の(?:行|パート)|"
+                r"真ん中の(?:行|句|パート)|中央の(?:行|パート)|"
+                r"最後の(?:行|句|パート)|後ろの(?:行|句|パート))"
                 r"(?:は|を|だけ|なら)?[、， ]*"
             )
             had_line_prefix = had_line_prefix or line_prefix.match(candidate) is not None
@@ -1547,6 +1693,96 @@ def wants_show_workshop_verse(text: str | None) -> bool:
     )
 
 
+def _finalize_workshop_line_reference(
+    raw_reference: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_LINE_REFERENCE_MIN_CONFIDENCE,
+) -> WorkshopLineReference | None:
+    """OS AIの行呼称を、根拠つきのline_1/2/3だけへ閉じる。"""
+
+    if not isinstance(raw_reference, dict) or raw_reference.get("found") is not True:
+        return None
+    concept_id = str(raw_reference.get("concept_id") or "").strip()
+    concept = WORKSHOP_LINE_CONCEPT_BY_ID.get(concept_id)
+    if concept is None:
+        return None
+    raw_confidence = raw_reference.get("confidence")
+    try:
+        confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    evidence = str(raw_reference.get("evidence") or "").strip()[:48]
+    player_compact = _compact_kana(player_text or "")
+    evidence_compact = _compact_kana(evidence)
+    if (
+        not 0.0 <= confidence <= 1.0
+        or confidence < min_confidence
+        or len(evidence_compact) < 2
+        or evidence_compact not in player_compact
+    ):
+        return None
+
+    # コードで既知の呼称はAIの概念IDと突き合わせる。発話中に複数行の
+    # 明示呼称があれば、一行へ勝手に丸めず曖昧として捨てる。
+    explicit_indices = _explicit_workshop_line_indices(player_text)
+    if len(explicit_indices) > 1:
+        return None
+    explicit_evidence_index = explicit_workshop_line_index(evidence)
+    if (
+        explicit_evidence_index is not None
+        and explicit_evidence_index != concept.line_index
+    ):
+        return None
+    if explicit_indices and concept.line_index not in explicit_indices:
+        return None
+    return WorkshopLineReference(
+        concept_id=concept.concept_id,
+        concept_number=concept.concept_number,
+        line_index=concept.line_index,
+        position=concept.position,
+        canonical_name=concept.canonical_name,
+        evidence=evidence,
+        confidence=confidence,
+    )
+
+
+def _finalize_workshop_close_request(
+    raw_request: object,
+    *,
+    player_text: str | None,
+    min_confidence: float = WORKSHOP_CLOSE_REQUEST_MIN_CONFIDENCE,
+) -> WorkshopCloseRequest | None:
+    """終了意図を、発話根拠つきの安全なコード入力へ閉じる。"""
+
+    if not isinstance(raw_request, dict) or raw_request.get("found") is not True:
+        return None
+    scope = str(raw_request.get("scope") or "unknown").strip()
+    if scope not in WORKSHOP_CLOSE_SCOPES:
+        # 「次の行へ」のような編集継続をworkshop終了へ丸めない。
+        return None
+    raw_confidence = raw_request.get("confidence")
+    try:
+        confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    evidence = str(raw_request.get("evidence") or "").strip()[:120]
+    player_compact = _compact_kana(player_text or "")
+    evidence_compact = _compact_kana(evidence)
+    if (
+        not 0.0 <= confidence <= 1.0
+        or confidence < min_confidence
+        or len(evidence_compact) < 2
+        or evidence_compact not in player_compact
+    ):
+        return None
+    return WorkshopCloseRequest(
+        scope=scope,
+        evidence=evidence,
+        confidence=confidence,
+    )
+
+
 def finalize_workshop_analysis_payload(
     payload: dict[str, object] | None,
     *,
@@ -1558,13 +1794,21 @@ def finalize_workshop_analysis_payload(
 ) -> WorkshopAnalysis:
     """OS / cloud 共通の限定意味抽出結果を閉じた値へ変換する。
 
-    LLM が close・lesson解除・保存を実行する余地はない。対象行・問題種別・
-    置換語・発話根拠もコードで範囲／一致検査し、不明な値は捨てる。
+    LLM が close・lesson解除・保存を実行する余地はない。終了要求・対象行・
+    問題種別・置換語・発話根拠をコードで範囲／一致検査し、不明な値は捨てる。
     """
 
     intent = _finalize_workshop_intent_payload(payload, min_confidence=min_confidence)
     if not isinstance(payload, dict):
         return WorkshopAnalysis(intent=intent)
+    line_reference = _finalize_workshop_line_reference(
+        payload.get("line_reference"),
+        player_text=player_text,
+    )
+    close_request = _finalize_workshop_close_request(
+        payload.get("close_request"),
+        player_text=player_text,
+    )
     raw_confidence = payload.get("confidence")
     try:
         confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
@@ -1658,11 +1902,24 @@ def finalize_workshop_analysis_payload(
             ]
             if len(matches) == 1:
                 proposal_line_index = matches[0]
+        # 「後ろのパート」等は句本文の断片ではない。OS AIが発話中の根拠を
+        # line_1/2/3へ写し、コード検証を通った場合だけ対象行として使う。
+        concept_line_index = (
+            line_reference.line_index if line_reference is not None else None
+        )
+        target_conflict = bool(
+            proposal_line_index is not None
+            and concept_line_index is not None
+            and proposal_line_index != concept_line_index
+        )
+        if proposal_line_index is None:
+            proposal_line_index = concept_line_index
         if (
             0.0 <= proposal_confidence <= 1.0
             and proposal_confidence >= proposal_min_confidence
             and replacement_is_grounded
             and evidence_is_grounded
+            and not target_conflict
         ):
             line_proposal = WorkshopLineProposal(
                 replacement_text=replacement_text,
@@ -1679,6 +1936,8 @@ def finalize_workshop_analysis_payload(
         repair_requested=repair_requested,
         findings=tuple(findings),
         line_proposal=line_proposal,
+        line_reference=line_reference,
+        close_request=close_request,
     )
 
 
@@ -1692,9 +1951,13 @@ def finalize_pending_revision_payload(
 
     if not isinstance(payload, dict):
         return PendingRevisionAnalysis()
+    close_request = _finalize_workshop_close_request(
+        payload.get("close_request"),
+        player_text=player_text,
+    )
     action = str(payload.get("action") or "uncertain").strip()
     if action not in WORKSHOP_PENDING_ACTIONS:
-        return PendingRevisionAnalysis()
+        return PendingRevisionAnalysis(close_request=close_request)
     raw_confidence = payload.get("confidence")
     try:
         confidence = float(raw_confidence) if not isinstance(raw_confidence, bool) else 0.0
@@ -1709,11 +1972,12 @@ def finalize_pending_revision_payload(
         or len(evidence_compact) < 2
         or evidence_compact not in player_compact
     ):
-        return PendingRevisionAnalysis()
+        return PendingRevisionAnalysis(close_request=close_request)
     return PendingRevisionAnalysis(
         action=action,
         confidence=confidence,
         evidence=evidence,
+        close_request=close_request,
     )
 
 

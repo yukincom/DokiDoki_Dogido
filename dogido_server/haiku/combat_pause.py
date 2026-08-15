@@ -31,6 +31,7 @@ COMBAT_WORKSHOP_INPUT_ACTIONS = frozenset(
     {
         "resume_workshop",
         "workshop_input",
+        "close_workshop",
         "unrelated",
         "uncertain",
     }
@@ -252,6 +253,7 @@ def update_workshop_combat_state(
     player_input_present = bool(raw_text) if input_present is None else bool(input_present)
     resume_requested = input_action in {"resume_workshop", "workshop_input"}
     substantive_resume = input_action == "workshop_input"
+    semantic_close_requested = input_action == "close_workshop"
 
     if not workshop.combat_paused:
         if danger:
@@ -284,15 +286,19 @@ def update_workshop_combat_state(
             workshop.combat_override_signature = None
         return WorkshopCombatUpdate()
 
-    # 中断中でも明示終了だけは安全なコード判定で受け付ける。
-    if (
+    # 中断中でも終了要求は受け付ける。OS AIは意味抽出だけで、実際の
+    # closeはここで確定する。利用不可時は代表的な明示規則へ戻る。
+    fallback_close_requested = bool(
         raw_text
         and classify_workshop_intent(raw_text, verse=workshop.editing_line()) == "close"
-    ):
+    )
+    if semantic_close_requested or fallback_close_requested:
         close_workshop(workshop, reason="combat_interrupted_close")
         LOGGER.warning(
-            "haiku_workshop_closed session_id=%s reason=combat_interrupted_close",
+            "haiku_workshop_closed session_id=%s reason=combat_interrupted_close "
+            "semantic=%s",
             session_id,
+            semantic_close_requested,
         )
         return WorkshopCombatUpdate(
             reply_text=None if has_speech else "おけ、句はここまでにしよか。",

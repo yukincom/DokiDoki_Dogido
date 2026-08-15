@@ -80,6 +80,31 @@ def _reason_text(value: object | None) -> str:
     return str(name or value)
 
 
+def _workshop_close_request_schema(*, title: str) -> dict[str, object]:
+    """通常相談とpending判断で共有する、終了意図だけの閉じたschema。"""
+
+    return {
+        "title": title,
+        "type": "object",
+        "x-order": ["found", "scope", "evidence", "confidence"],
+        "additionalProperties": False,
+        "required": ["found", "scope", "evidence", "confidence"],
+        "properties": {
+            "found": {"type": "boolean"},
+            "scope": {
+                "type": "string",
+                "enum": ["workshop", "current_line", "next_haiku", "unknown"],
+            },
+            "evidence": {"type": "string"},
+            "confidence": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0,
+            },
+        },
+    }
+
+
 def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
     """端末内 guided generation 用 schema。
 
@@ -105,6 +130,8 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
                 "confidence",
                 "repair_requested",
                 "findings",
+                "close_request",
+                "line_reference",
                 "line_proposal",
             ],
             "additionalProperties": False,
@@ -113,6 +140,8 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
                 "confidence",
                 "repair_requested",
                 "findings",
+                "close_request",
+                "line_reference",
                 "line_proposal",
             ],
             "properties": {
@@ -153,6 +182,29 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
                                 "minimum": 0.0,
                                 "maximum": 1.0,
                             },
+                        },
+                    },
+                },
+                "close_request": _workshop_close_request_schema(
+                    title="DogidoWorkshopCloseRequest"
+                ),
+                "line_reference": {
+                    "title": "DogidoWorkshopLineReference",
+                    "type": "object",
+                    "x-order": ["found", "concept_id", "evidence", "confidence"],
+                    "additionalProperties": False,
+                    "required": ["found", "concept_id", "evidence", "confidence"],
+                    "properties": {
+                        "found": {"type": "boolean"},
+                        "concept_id": {
+                            "type": "string",
+                            "enum": ["line_1", "line_2", "line_3", "unknown"],
+                        },
+                        "evidence": {"type": "string"},
+                        "confidence": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
                         },
                     },
                 },
@@ -201,9 +253,9 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
         return {
             "title": "DogidoWorkshopPendingDecision",
             "type": "object",
-            "x-order": ["action", "confidence", "evidence"],
+            "x-order": ["action", "confidence", "evidence", "close_request"],
             "additionalProperties": False,
-            "required": ["action", "confidence", "evidence"],
+            "required": ["action", "confidence", "evidence", "close_request"],
             "properties": {
                 "action": {"type": "string", "enum": actions},
                 "confidence": {
@@ -212,6 +264,9 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
                     "maximum": 1.0,
                 },
                 "evidence": {"type": "string"},
+                "close_request": _workshop_close_request_schema(
+                    title="DogidoPendingCloseRequest"
+                ),
             },
         }
     if request.kind == "haiku_workshop_combat_input":
