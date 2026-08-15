@@ -72,6 +72,9 @@ def is_usable_output(text: str, details: dict[str, Any] | None = None) -> bool:
 
 def strip_allowed_ascii_tokens(text: str, details: dict[str, Any]) -> str:
     stripped = text
+    # 日本語の会話に普通に混ざる短い表記まで「英語の説明文」として落とさない。
+    # 前後が英字でない完全な token だけを検査対象から外し、OKAY / USER 等は通さない。
+    stripped = re.sub(r"(?i)(?<![A-Za-z])(?:OK|NG)(?![A-Za-z])", "", stripped)
     player_name = details.get("player_name")
     if isinstance(player_name, str):
         token = player_name.strip()

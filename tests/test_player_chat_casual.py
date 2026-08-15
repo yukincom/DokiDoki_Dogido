@@ -16,6 +16,10 @@ from dogido_server.player_chat_policy import (
 )
 from dogido_server.player_input import route_player_input
 from dogido_server.state_machine import DogidoStateMachine
+from dogido_server.state_machine.fallback_catalog import fallback_text
+
+
+CHAT_REPLY = fallback_text("general", "chat", "reply")
 
 
 class UsableTopicAndStanceTests(unittest.TestCase):
@@ -118,12 +122,13 @@ class NarrationCasualIntegrationTests(unittest.TestCase):
         self.assertNotIn("シロクマ", text)
         self.assertNotIn("スニッファー", text)
 
-    def test_babaa_skeleton_still_works(self) -> None:
+    def test_babaa_uses_neutral_fallback_when_llm_is_off(self) -> None:
         machine = self._machine()
         event = self._event("なんだあのババア")
         machine.player_input = route_player_input("なんだあのババア")
         text = machine._render_player_chat_reply(event)
-        self.assertIn("ウィッチ", text)
+        self.assertEqual(text, CHAT_REPLY)
+        self.assertNotIn("ウィッチ", text)
 
     def test_none_prompt_has_no_topic_hints_for_big_tree(self) -> None:
         hits = find_catalog_topics("大きい木があるね")

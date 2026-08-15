@@ -32,6 +32,10 @@ class FindCatalogTopicsTests(unittest.TestCase):
         self.assertEqual(self._ids("おはよう"), [])
         self.assertEqual(self._ids("こんにちは"), [])
 
+    def test_short_katakana_name_does_not_match_inside_hiragana_phrase(self) -> None:
+        self.assertNotIn("squid", self._ids("いいんじゃないかな"))
+        self.assertIn("squid", self._ids("イカかな"))
+
     def test_observed_boosts_matching_type(self) -> None:
         hits = find_catalog_topics("変な旗", observed_ids=["pillager"])
         self.assertTrue(hits)

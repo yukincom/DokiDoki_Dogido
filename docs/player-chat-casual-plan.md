@@ -1,7 +1,8 @@
 # player_chat 雑談3本柱 — 実装計画
 
 **日付:** 2026-07-16  
-**状態:** **P1〜P4 実装済み**（P5 fallback 任意は未）  
+**状態:** **P1〜P5 実装済み**
+
 **関連:** [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)、[player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md)
 
 ---
@@ -99,6 +100,10 @@ GENERIC_TOPIC_TERMS = frozenset({
 
 - matched に非 GENERIC がある  
 - 同点トップ2がどちらも GENERIC 由来なら骨子禁止  
+- 骨子は LLM の生成材料に限る。LLM 無効・生成失敗・usable 不合格時の
+  fallback 本文には流用せず、話題非依存の中立文へ戻す
+- 2文字以下の短いカタカナ名は、かな折り畳み部分一致を使わない
+  （例: 「いいんじゃないかな」内の「いか」を「イカ」と誤認しない）
 
 ### 1.4 テスト（柱1）
 
@@ -218,7 +223,8 @@ GENERIC_TOPIC_TERMS = frozenset({
 - [ ] none で **偽 topic / 偽骨子が details に無い**  
 - [ ] 観測があるときだけ **短い事実行**がある  
 - [ ] style reject が none で種名を殺さない（現行 enforce オフ）  
-- [ ] fallback は unusable 時のみ。**none の相槌を「ようわからん」にしない**のが理想  
+- [x] fallback は unusable 時のみ。topic hit や identify 骨子を本文にせず、
+  **話題非依存の中立文**へ戻す
   - 任意改善: none + unusable のときだけ、もう少し相槌寄りの fallback  
   - 例: 「おう、聞こえてるで」は以前問題になったので使わない。  
     「うん」「そうやな、もうちょい Tra 言って」程度の中立相槌を別キーにしてもよい  
@@ -263,7 +269,7 @@ user_text
 | **P2** | 1 | none/clarify で hints・骨子・plausibility を載せない | `narration.py`, prompts はほぼそのまま |
 | **P3** | 2 | `observation_summary`（passive 行含む）を details + プロンプト | `narration.py`, `player_chat_prompts.py` |
 | **P4** | 1+2 | 回帰テスト一式（木／ババア／旗／サケ観測／もしもし） | tests |
-| **P5** | 3 | （任意）none 用 fallback の見直し、履歴汚染の確認 | fallbacks, service |
+| **P5** | 3 | topic 非依存の中立 fallback、履歴汚染の確認 | fallbacks, service |
 
 推奨: **P1 → P2 → P4 の一部 → P3 → P4 完了**。  
 P1 だけで「大きい気→シロクマ」は止まる。
@@ -298,7 +304,7 @@ P1 だけで「大きい気→シロクマ」は止まる。
 | P2 none で hints/骨子/plausibility 非載荷 | ✅ |
 | P3 observation_summary | ✅ |
 | P4 回帰テスト `tests/test_player_chat_casual.py` | ✅ |
-| P5 none 用 fallback 見直し | 任意・未着手 |
+| P5 topic 非依存の中立 fallback | ✅ |
 
 ### 変更ファイル（要約）
 

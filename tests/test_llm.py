@@ -50,6 +50,12 @@ class LLMTests(unittest.TestCase):
         self.assertTrue(self.llm._is_usable_output("プレイヤーちゃん、ほんまに行くん？", {"player_name": "プレイヤーちゃん"}))
         self.assertFalse(self.llm._is_usable_output("プレイヤーちゃん、ほんまに行くん？"))
 
+    def test_common_short_ascii_in_japanese_reply_is_usable(self) -> None:
+        self.assertTrue(
+            self.llm._is_usable_output("今の俳句の案、OKってこと？えらいことやん。")
+        )
+        self.assertFalse(self.llm._is_usable_output("今の案はOKAY desu"))
+
     def test_player_chat_corrects_observed_name_before_style_whitelist(self) -> None:
         class PlayerChatLLM(DogidoLLM):
             def enabled(self) -> bool:

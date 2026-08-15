@@ -840,6 +840,14 @@ def _topic_term_score(field_kind: str, term_len: int) -> float:
     return weight * float(max(term_len, 1))
 
 
+def _is_short_katakana_term(term: str) -> bool:
+    """助詞列へ誤爆しやすい2文字以下のカタカナ語か。"""
+    text = str(term or "").strip()
+    return bool(text) and len(text) <= 2 and all(
+        "\u30a0" <= char <= "\u30ff" for char in text
+    )
+
+
 @lru_cache(maxsize=1)
 def _topic_term_index() -> tuple[tuple[str, str, str, str], ...]:
     """(term, entry_id, kind, field_kind) を長い term 優先で返す。"""
@@ -927,7 +935,14 @@ def find_catalog_topics(
         term_folded = _fold_kana_for_match(term)
         if not term_folded:
             continue
-        if term not in raw and term_folded not in folded:
+        raw_match = term in raw
+        folded_match = term_folded in folded
+        # 「いいんじゃないかな」の「いか」をカタログの「イカ」とみなす等、
+        # 短いカタカナ名のかな折り畳み部分一致は通常文で誤爆しやすい。
+        # この長さだけは、STTが確定したカタカナ表記そのものを要求する。
+        if _is_short_katakana_term(term) and not raw_match:
+            continue
+        if not raw_match and not folded_match:
             continue
         key = (kind, entry_id)
         scores[key] = scores.get(key, 0.0) + _topic_term_score(field_kind, len(term))

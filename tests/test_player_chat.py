@@ -132,12 +132,11 @@ class PlayerChatReplyTests(unittest.TestCase):
         texts = self.texts(make_event(sequence=1, user_text="今日もよろしくな"))
         self.assertEqual([CHAT_REPLY], texts)
 
-    def test_identify_skeleton_when_llm_off(self) -> None:
-        """S3: LLM オフでもババア→ウィッチ骨子が返る。"""
+    def test_llm_off_uses_neutral_fallback_not_identify_skeleton(self) -> None:
+        """推測骨子は生成材料に限り、失敗時は中立文へ戻す。"""
         texts = self.texts(make_event(sequence=1, user_text="なんだあのババア"))
-        self.assertEqual(1, len(texts))
-        self.assertIn("ウィッチ", texts[0])
-        self.assertIn("見えん", texts[0])
+        self.assertEqual([CHAT_REPLY], texts)
+        self.assertNotIn("ウィッチ", texts[0])
 
     def test_romaji_chat_gets_reply(self) -> None:
         texts = self.texts(make_event(sequence=1, user_text="outouseyo"))

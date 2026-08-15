@@ -891,8 +891,10 @@ class NarrationMixin:
                 "player_chat_workshop_strip open=1 look/topic/hearing stripped "
                 "(keep threat only)"
             )
-        # S3: 高信頼 identify は LLM より骨子を優先できる（オフ時・失敗時の最低限）
-        preferred_fallback = identify_skeleton or fallback
+        # カタログ照合は生成材料にだけ使う。LLM が失敗したときに推測骨子を
+        # そのまま発話すると、誤照合した過去トピックを現在の返答として断言しかねない。
+        # fallback は入力内容を捏造しない中立文へ必ず戻す。
+        preferred_fallback = fallback
         text = self._generate_leaf_text(
             kind="player_chat",
             fallback_text=preferred_fallback,
