@@ -36,6 +36,7 @@ from dogido_server.haiku.workshop import (
     is_workshop_hard_off_topic,
     maybe_close_for_time,
     open_from_emission,
+    grounded_material_for_question,
     record_drift,
     render_workshop_reply,
     pending_revision_decision,
@@ -777,7 +778,12 @@ class WorkshopIntentTests(unittest.TestCase):
             PlayerLineReplacement("夕暮れや", explicit_line_index=0),
         )
         assert first.text is not None
+        self.assertEqual(first.surface_text, "夕暮れや\nてのなかのくさ\nあめふりや")
+        self.assertEqual(first.lines[0].surface_text, "夕暮れや")
+        self.assertEqual(first.lines[0].reading_text, "ゆうぐれや")
         ws.pending_revision = first.text
+        ws.pending_revision_surface_text = first.surface_text
+        ws.pending_revision_lines = first.lines
         ws.pending_revision_base_text = first.base_text
         ws.pending_revision_edits = [dict(edit) for edit in first.edits]
         ws.pending_revision_edit_contract = "player_line_compare_and_swap_v1"
@@ -792,9 +798,14 @@ class WorkshopIntentTests(unittest.TestCase):
             "ゆうぐれや\nてのなかのくさ\nあめのよる",
         )
         self.assertEqual([edit["line_index"] for edit in second.edits], [0, 2])
+        self.assertEqual(second.surface_text, "夕暮れや\nてのなかのくさ\n雨の夜")
+        self.assertEqual(second.lines[2].surface_text, "雨の夜")
+        self.assertEqual(second.lines[2].reading_text, "あめのよる")
         self.assertEqual(ws.display_line(), "ゆうぐれの\nてのなかのくさ\nあめふりや")
 
         ws.pending_revision = second.text
+        ws.pending_revision_surface_text = second.surface_text
+        ws.pending_revision_lines = second.lines
         ws.pending_revision_edits = [dict(edit) for edit in second.edits]
         advance_workshop_revision(ws, revision_id="rev_2")
         self.assertEqual(ws.display_line(), second.text)
@@ -1456,13 +1467,18 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             assert session.haiku_workshop is not None
             self.assertTrue(session.haiku_workshop.awaiting_close_confirmation)
             self.assertIsNone(session.haiku_workshop.pending_revision)
+            self.assertIn("気にいってもらえてよかった", positive_actions[0].text or "")
+            self.assertNotIn("気に入って", positive_actions[0].text or "")
             self.assertIn("ここまででええ", positive_actions[0].text or "")
             positive_workshop = session.haiku_workshop
 
-            session.machine.player_input = route_player_input("うん")
+            # 終了確認中にもう一度句全体を肯定しても、確認を立て直して
+            # ループせず、その肯定を確認への同意として閉じる。
+            followup_praise = "句を読むの上手になったね"
+            session.machine.player_input = route_player_input(followup_praise)
             confirmed_actions = service._haiku_workshop_actions(
                 session,
-                event(10, "うん"),
+                event(10, followup_praise),
             )
             self.assertIsNone(session.haiku_workshop)
             self.assertEqual(positive_workshop.close_reason, "evaluation_confirmed")
@@ -1634,7 +1650,10 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     0,
                     "手の中の草より草を握っての方がいい気がするね",
                 )
-            self.assertIn("くさをにぎって", phrase_edit[0].text or "")
+            self.assertEqual(
+                phrase_edit[0].text,
+                "おだやかなる\nくさをにぎって\nあめふりや",
+            )
             assert session.haiku_workshop is not None
             self.assertEqual(
                 session.haiku_workshop.pending_revision,
@@ -1662,14 +1681,20 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                     2,
                     "穏やかなじゃ4文字だからさ 穏やかなでいいんじゃない",
                 )
-            self.assertIn("おだやかな", first[0].text or "")
+            self.assertEqual(
+                first[0].text,
+                "おだやかな\nてのなかのくさ\nあめふりや",
+            )
             joined_logs = "\n".join(captured.output)
             self.assertIn("haiku_workshop_player_line_parse", joined_logs)
             self.assertIn("result=accepted", joined_logs)
             self.assertIn("haiku_workshop_player_line_edit", joined_logs)
             self.assertIn("result=staged", joined_logs)
             second = send(3, "下五を雨の夜に変えた方がいい")
-            self.assertIn("あめのよる", second[0].text or "")
+            self.assertEqual(
+                second[0].text,
+                "おだやかな\nてのなかのくさ\nあめのよる",
+            )
             assert session.haiku_workshop is not None
             self.assertEqual(
                 session.haiku_workshop.pending_revision,
@@ -2297,12 +2322,8 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             ).route_player_input("グーの木の水って何?")
             actions = service._haiku_workshop_actions(sess, event)
             self.assertEqual(1, len(actions))
-            # 句に無い語への問い → 聞き返し（全文講義しない）
-            self.assertTrue(
-                "どの言葉" in (actions[0].text or "")
-                or "読みにく" in (actions[0].text or ""),
-                msg=actions[0].text,
-            )
+            # 句に無い語・出典なしの問いには、別材料を推測で割り当てない。
+            self.assertIn("分からん", actions[0].text or "")
             self.assertNotIn("biome", actions[0].text or "")
             # critique was written via service.memory
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_critiques.jsonl").exists())
@@ -2629,7 +2650,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
 
             def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
                 self.structured_kinds.append(request.kind)
-                # 材料 pick は正直に soft_fail を返す想定
+                # workshop intent 等の限定抽出だけ。材料pickは呼ばれない。
                 return {
                     "pick_index": None,
                     "reply": "「ひらべった」の読みやね。ちょっと分かりにくかったかも。",
@@ -2691,17 +2712,17 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             speeches = [a.text for a in result.actions if a.layer == "speech" and a.text]
             self.assertEqual(len(speeches), 1)
             self.assertNotIn("LLMが雑談で答えた文", speeches[0])
-            self.assertTrue(
-                "ひらべった" in (speeches[0] or "") or "読みにく" in (speeches[0] or ""),
-                msg=speeches[0],
-            )
+            self.assertIn("分からん", speeches[0])
             self.assertNotIn("player_chat", llm.kinds)
-            self.assertIn("haiku_workshop_material_pick", llm.structured_kinds)
+            self.assertNotIn("haiku_workshop_material_pick", llm.structured_kinds)
 
-    def test_ask_meaning_llm_picks_material(self) -> None:
-        """ask_meaning は候補を閉じて LLM に選ばせ、柔軟な reply を通す。"""
+    def test_ask_meaning_does_not_guess_from_unrelated_material_candidates(self) -> None:
+        """ask_meaning は全材料候補から関係のない由来を推測しない。"""
 
         class PickLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+
             def preload(self) -> bool:
                 return False
 
@@ -2709,11 +2730,8 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 raise AssertionError("leaf should not run")
 
             def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
-                self.last = request
-                cands = list(request.details.get("candidates") or [])
-                self.assert_plains = "平原" in cands
-                idx = cands.index("平原") if "平原" in cands else 0
-                return {"pick_index": idx, "reply": "平原のことやで。"}
+                self.structured_kinds.append(request.kind)
+                return {}
 
         with tempfile.TemporaryDirectory() as tmp:
             llm = PickLLM()
@@ -2780,9 +2798,55 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
             result = service.process_event(event, session_id=sid)
             speeches = [a.text for a in result.actions if a.layer == "speech" and a.text]
-            self.assertEqual(speeches, ["平原のことやで。"])
-            self.assertEqual(getattr(llm, "last").kind, "haiku_workshop_material_pick")
-            self.assertTrue(getattr(llm, "assert_plains"))
+            self.assertEqual(speeches, ["すまん。オレにももう分からんわ。"])
+            self.assertNotIn("haiku_workshop_material_pick", llm.structured_kinds)
+
+    def test_ask_meaning_uses_the_matched_line_provenance(self) -> None:
+        emission = HaikuEmission(
+            created_at=datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc),
+            text="しろいひかり\nまるいこいぬし\nタイガのもり",
+            preface="ここで一句。",
+            interpretation="丸石とタイガ",
+            biome="taiga",
+            structure=None,
+            time_phase="day",
+            dimension="minecraft:overworld",
+            event_sequence=7,
+            materials={
+                "line_sources": [
+                    {
+                        "line_index": 0,
+                        "text": "しろいひかり",
+                        "atom_ids": ["observation:light"],
+                        "sources": [{"atom_id": "observation:light", "text": "白い光"}],
+                    },
+                    {
+                        "line_index": 1,
+                        "text": "まるいこいぬし",
+                        "atom_ids": ["item:cobblestone:japanese"],
+                        "sources": [
+                            {
+                                "atom_id": "item:cobblestone:japanese",
+                                "kind": "catalog_label",
+                                "text": "丸石",
+                            }
+                        ],
+                    },
+                    {
+                        "line_index": 2,
+                        "text": "たいがのもり",
+                        "atom_ids": ["observation:biome"],
+                        "sources": [{"atom_id": "observation:biome", "text": "タイガ"}],
+                    },
+                ]
+            },
+        )
+        workshop = open_from_emission(emission)
+
+        self.assertEqual(
+            grounded_material_for_question(workshop, "丸い子い主とは何？"),
+            "丸石",
+        )
 
     def test_meaning_ack_moves_to_close_confirmation_without_new_critique(self) -> None:
         """説明への納得を別箇所の講評にせず、確認してからpinを閉じる。"""

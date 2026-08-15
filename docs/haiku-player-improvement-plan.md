@@ -222,7 +222,7 @@ open 中のプレイヤー入力
 
 | 種別 | シグナル例（粗い） | 動作 |
 |---|---|---|
-| **ask_meaning** | 「〜って何」「意味わからん」「ぐうの」 | 句の説明 or 正直に「読みにくい」 |
+| **ask_meaning** | 「〜って何」「意味わからん」「ぐうの」 | 質問と一意に対応する行の保存済み出典だけを説明。対応・出典なしは正直に「オレにも分からん」 |
 | **ack_after_meaning** | 説明直後の「そうなんだ」「なるほど」「腑に落ちた」 | 会話モデルが直前状態込みで納得を抽出し、別箇所の講評にせず終了確認へ進む |
 | **critique_forced** | 「無理やり」「詰め込み」「圧縮」 | critique kind=forced_compress |
 | **critique_offscene** | 「ここ海ちゃう」「村なのに」 | kind=off_context |
@@ -238,7 +238,7 @@ open 中のプレイヤー入力
 | **reading** | 既存 草地はくさち | 現行どおり |
 | **close_workshop** | 「もうええ」「お開き」「次いこ」「そのままでおしまい」「今日はここまで」 | 会話モデルが `close_request` を抽出し、コード検証後にopen=false |
 
-スラッシュコマンド、明示reading、完成三行revision、`clear_lessons`、固定規則に一致する明示praiseなど、短い閉じた操作はコードが正。それ以外の workshop 自然文は、既に常駐する会話モデルの `chat` routeを1回だけ呼び、信頼度 0.75 以上の閉じた intent、対象行、句断片、問題種別をコードへ渡す。固定規則外の評価は専用 `evaluation` へ `sentiment / scope / evidence / confidence` を抽出し、confidence 0.80以上かつ発話中にevidenceがある場合だけ採用する。句全体へのpositiveは即closeせず終了確認へ、negative／mixedはopenのまま改善方向の質問へ進む。終了意図は語彙が広いため、代表的な明示形のコード規則に加えて専用 `close_request` を抽出する。AIが高信頼に講評種別・評価・終了要求を確定した場合も、critique／lesson／修正開始／確認状態／closeの実行条件と保存形式はコードが決める。
+スラッシュコマンド、明示reading、完成三行revision、`clear_lessons`、固定規則に一致する明示praiseなど、短い閉じた操作はコードが正。それ以外の workshop 自然文は、既に常駐する会話モデルの `chat` routeを1回だけ呼び、信頼度 0.75 以上の閉じた intent、対象行、句断片、問題種別をコードへ渡す。固定規則外の評価は専用 `evaluation` へ `sentiment / scope / evidence / confidence` を抽出し、confidence 0.80以上かつ発話中にevidenceがある場合だけ採用する。句全体へのpositiveは即closeせず終了確認へ進み、確認中の次発話も句全体へのpositiveなら確認への同意としてcloseする。negative／mixedはopenのまま改善方向の質問へ進む。終了意図は語彙が広いため、代表的な明示形のコード規則に加えて専用 `close_request` を抽出する。AIが高信頼に講評種別・評価・終了要求を確定した場合も、critique／lesson／修正開始／確認状態／closeの実行条件と保存形式はコードが決める。
 
 音声入力の同音異字は、文字列置換候補として先に確定しない。固定置換規則が候補を作っても、対象行・句中断片・直前markのいずれでも置換先を確定できず、会話モデルが根拠つき評価を返した場合は評価を優先する。実ログ固有の誤認識例はプロンプトへ追加せず、回帰テストにだけ残す。
 
@@ -250,7 +250,9 @@ open 中のプレイヤー入力
 
 プレイヤー自身の一行置換では、AI出力に `replacement_text`、句中の `target_fragment`、プレイヤー発話中の `evidence`、confidence を要求する。置換語と evidence が実際の発話に連続部分として存在し、target fragment が現在の三行の一行だけに一致した場合だけ、コードのひらがな化・音数・hard制約・CASへ進む。AIが発話にない句本文を補作した場合は捨てる。
 
-三行には、言い方から独立した安定IDとして `line_1 / line_2 / line_3` を持たせる。人向けの概念番号は 1／2／3、コード配列の index は 0／1／2、位置概念は upper／middle／lower、現在の正規名は上五／中七／下五とする。会話モデルは「上の句」「中の句」「二の句」「最初の句」「真ん中」「後ろのパート」などをこの三概念のどれかへ写し、発話中の連続した `evidence` と confidence を返す。コードは既知の明示呼称、finding、target fragmentとの衝突や複数行への曖昧さを検査し、一行へ確定できない場合は編集しない。現在はプレイヤーの呼び方を訂正しない。抽出した生の呼び方・正規名・概念IDをログへ残し、将来のlearning版で自然な正規呼称を案内するためのフックにする。
+三行は本文文字列を二重管理せず、一行ごとに `line_id / line_index / position / canonical_name / surface_text / reading_text / source_atom_ids / source_atoms / provenance` を束ねる。漢字・カタカナを含む表示表記と確定ひらがな読みは同一句の二表現であり、TTS・音数・CASは読みを使う。プレイヤーの局所置換では、対象行の表示表記と読みを必ず同じ操作で更新し、未採用案から採用済み句への昇格・revision保存でも二つを分離しない。
+
+三行には、言い方から独立した安定IDとして `line_1 / line_2 / line_3` を持たせる。人向けの概念番号は 1／2／3、コード配列の index は 0／1／2、位置概念は upper／middle／lower、現在の正規名は上五／中七／下五とする。会話モデルは「上の句」「中の句」「二の句」「最初の句」「真ん中」「後ろのパート」などをこの三概念のどれかへ写し、発話中の連続した `evidence` と confidence を返す。コードは既知の明示呼称、finding、target fragmentとの衝突や複数行への曖昧さを検査し、一行へ確定できない場合は編集しない。現在はプレイヤーの呼び方を訂正しない。抽出した生の呼び方・正規名・概念IDをログへ残し、将来のlearning版で自然な正規呼称を案内するためのフックにする。意味質問はこの行IDへ対応づけた `source_atoms` だけから答え、句断片と対応しないバイオーム・motif等を候補内という理由だけで割り当てない。
 
 未採用案がある間は、さらに小さい専用schemaで `accept_pending / reject_pending / modify_pending / show_pending / discuss / unrelated / uncertain` のいずれかと、必要なら上記 `close_request` を別々に抽出する。confidence 0.80以上かつ evidence が発話中にある場合だけ採否候補として扱い、revision保存前に現在pendingと元句のCASをコードで再確認する。会話モデルが使えない場合に限り、「その案で」等の代表的な完全一致規則へ戻る。
 
@@ -342,7 +344,7 @@ workshop の会話 leaf は、冒険時の「怖がり」ではなく **素直�
 | critique_forced | 詰め込みを認め、直すべき点を短く返す |
 | critique_gibberish / offscene | 読みにくさ／場のずれを具体的に認め、材料説明で反論しない |
 | request_repair | haiku route が対象行だけ修正。コード検証を通った案だけ提示し、採用確認を待つ |
-| player_line_edit | 置換語と完成三行はコード固定。LLMに本文を補作・復唱させず、別の行も続けて直せる |
+| player_line_edit | 置換語と完成三行はコード固定。LLMに本文を補作・復唱させない。TTSは変更後の三行だけを読み、直後に案内文を連結しない。pendingは維持するため、別の行も続けて直せる |
 | soft_default / other_haiku | 検証済み findings を渡した共同編集者 leaf。失敗時は短い定型 |
 | semantic evaluation: positive / whole_verse | praise critiqueを保存し、コード固定で「この句の話はここまででよいか」を確認。即closeしない |
 | semantic evaluation: negative / mixed | pinを維持し、共同編集者leafへ「自分で案を作らず、どの行・言葉をどう直したいか一問だけ尋ねる」と渡す |

@@ -24,7 +24,6 @@ from dogido_server.haiku.workshop import (
     RecentHaikuWorkshop,
     advance_workshop_revision,
     build_player_line_revision,
-    build_ask_meaning_llm_details,
     build_pending_revision_llm_details,
     build_workshop_intent_llm_details,
     classify_workshop_intent,
@@ -33,9 +32,9 @@ from dogido_server.haiku.workshop import (
     close_confirmation_decision,
     close_workshop,
     extract_conversational_revise,
-    finalize_ask_meaning_reply,
     finalize_pending_revision_payload,
     finalize_workshop_analysis_payload,
+    grounded_material_for_question,
     is_active,
     is_explicit_player_line_replacement_command,
     is_open,
@@ -69,6 +68,10 @@ from dogido_server.haiku.edit_contract import PLAYER_LINE_EDIT_CONTRACT_VERSION
 from dogido_server.haiku.source_atoms import (
     line_source_ids_from_materials,
     source_atoms_from_materials,
+)
+from dogido_server.haiku.verse import (
+    build_haiku_lines,
+    verse_reading_text,
 )
 from dogido_server.llm import DogidoLLMRouter, LeafGenerationRequest, StructuredGenerationRequest
 from dogido_server.memory import MemoryStore
@@ -418,7 +421,12 @@ class DogidoService:
             session.last_haiku_emission = machine_result.haiku_emission
             # memory の有無に関わらず pin を立てる（entry_id は memory 側で埋める）
             if session.haiku_workshop is None or (
-                session.haiku_workshop.surface_text != (machine_result.haiku_emission.text or "").strip()
+                session.haiku_workshop.display_line()
+                != (
+                    machine_result.haiku_emission.reading_text
+                    or machine_result.haiku_emission.text
+                    or ""
+                ).strip()
             ):
                 self._open_haiku_workshop(
                     session,
@@ -1092,7 +1100,7 @@ class DogidoService:
             "haiku_workshop_opened session_id=%s text=%s entry_id=%s "
             "speech_materials=%s debug_materials=%s materials_keys=%s",
             session.session_id,
-            (emission.text or "")[:60],
+            (emission.surface_text or emission.text or "")[:60],
             entry_id or "-",
             (materials_speech_line(session.haiku_workshop) or "")[:120] or "-",
             (materials_debug_line(session.haiku_workshop) or "")[:160] or "-",
@@ -1112,6 +1120,8 @@ class DogidoService:
         revision_edits: list[dict[str, object]] | None = None,
         revision_edit_contract: str | None = None,
         revision_base_text: str | None = None,
+        revision_base_surface_text: str | None = None,
+        revision_lines: list[dict[str, object]] | None = None,
         parent_revision_id: str | None = None,
         keep_workshop_open: bool = False,
     ) -> list[AudioAction]:
@@ -1119,17 +1129,41 @@ class DogidoService:
             return [AudioAction(layer="speech", interrupt=False, text="直す元の句がまだないで。")]
         if self.memory is None:
             return [AudioAction(layer="speech", interrupt=False, text="記憶機能は今止まっとるで。")]
-        revision = self.memory.save_haiku_feedback(
-            session.last_haiku_emission,
-            revised_text=revised_text,
-            source=source,
-            revision_line_sources=revision_line_sources,
-            revision_edits=revision_edits,
-            revision_edit_contract=revision_edit_contract,
-            revision_base_text=revision_base_text,
-            parent_revision_id=parent_revision_id,
-            observed_at=event.observed_at,
-        )
+        if revision_lines is None:
+            built_lines = build_haiku_lines(revised_text, provenance=source)
+            if len(built_lines) == 3:
+                revised_text = verse_reading_text(built_lines)
+                revision_lines = [line.to_dict() for line in built_lines]
+        try:
+            revision = self.memory.save_haiku_feedback(
+                session.last_haiku_emission,
+                revised_text=revised_text,
+                source=source,
+                revision_line_sources=revision_line_sources,
+                revision_edits=revision_edits,
+                revision_edit_contract=revision_edit_contract,
+                revision_base_text=revision_base_text,
+                revision_base_surface_text=revision_base_surface_text,
+                revision_lines=revision_lines,
+                parent_revision_id=parent_revision_id,
+                observed_at=event.observed_at,
+            )
+        except (OSError, ValueError) as exc:
+            # 保存境界の不変条件違反をHTTP 500へ漏らさない。pendingは保持し、
+            # プレイヤーが案を失わず再試行・確認できる状態にする。
+            LOGGER.warning(
+                "haiku_revision_save_failed session_id=%s source=%s detail=%s",
+                session.session_id,
+                source,
+                exc,
+            )
+            return [
+                AudioAction(
+                    layer="speech",
+                    interrupt=False,
+                    text="案は残しとるけど、保存だけ失敗したわ。すまん。",
+                )
+            ]
         if keep_workshop_open and is_open(session.haiku_workshop):
             assert session.haiku_workshop is not None
             advance_workshop_revision(
@@ -1299,6 +1333,10 @@ class DogidoService:
                     revision_edits=list(workshop.pending_revision_edits),
                     revision_edit_contract=workshop.pending_revision_edit_contract,
                     revision_base_text=workshop.pending_revision_base_text,
+                    revision_base_surface_text=workshop.display_surface(),
+                    revision_lines=[
+                        line.to_dict() for line in workshop.pending_revision_lines
+                    ] or None,
                     parent_revision_id=workshop.current_revision_id,
                     keep_workshop_open=not semantic_close_requested,
                 )
@@ -1737,7 +1775,11 @@ class DogidoService:
                         text="おけ、まだ続けよか。気になるとこ教えてな。",
                     )
                 ]
-            if close_confirmation_fallback == "accept" or effective_kind == "ack":
+            if (
+                close_confirmation_fallback == "accept"
+                or effective_kind == "ack"
+                or semantic_evaluation_positive
+            ):
                 confirmation_source = workshop.close_confirmation_source
                 close_workshop(
                     workshop,
@@ -1897,6 +1939,8 @@ class DogidoService:
                     )
                 ]
             workshop.pending_revision = result.text
+            workshop.pending_revision_surface_text = result.surface_text
+            workshop.pending_revision_lines = result.lines
             workshop.pending_revision_line_sources.clear()
             workshop.pending_revision_base_text = result.base_text
             workshop.pending_revision_edits = [dict(edit) for edit in result.edits]
@@ -1918,10 +1962,9 @@ class DogidoService:
                 AudioAction(
                     layer="speech",
                     interrupt=False,
-                    text=(
-                        f"こうなるで。\n{result.text}\n"
-                        "このまま別の行も直せるで。よければ最後に『その案で』って言ってな。"
-                    ),
+                    # 修正句の直後へ案内を連結するとTTSで境界が潰れる。
+                    # pending状態は維持し、音声は変更後の三行だけで止める。
+                    text=result.text,
                 )
             ]
 
@@ -1941,7 +1984,7 @@ class DogidoService:
                     AudioAction(
                         layer="speech",
                         interrupt=False,
-                        text="気に入ってもらえてよかった。この句の話はここまででええ？",
+                        text="気にいってもらえてよかった。この句の話はここまででええ？",
                     )
                 ]
             close_workshop(workshop, reason="praise")
@@ -2238,7 +2281,16 @@ class DogidoService:
             return "まだうまく直しきれんかったわ。元の句はそのままや。", "failed"
         if not result.accepted or not result.text:
             return "まだうまく直しきれんかったわ。元の句はそのままや。", result.failure_reason or "rejected"
+        pending_lines = build_haiku_lines(
+            result.text,
+            line_sources=result.line_sources,
+            provenance="generated_confirmed",
+        )
+        if len(pending_lines) != 3:
+            return "まだうまく直しきれんかったわ。元の句はそのままや。", "invalid_line_records"
         workshop.pending_revision = result.text
+        workshop.pending_revision_surface_text = result.text
+        workshop.pending_revision_lines = pending_lines
         workshop.pending_revision_line_sources = list(result.line_sources)
         workshop.pending_revision_base_text = result.base_text
         workshop.pending_revision_edits = [edit.to_record() for edit in result.edits]
@@ -2263,29 +2315,15 @@ class DogidoService:
         workshop: RecentHaikuWorkshop,
         player_text: str,
     ) -> tuple[str, str]:
-        """材料候補をコードが閉じ、LLM が選び＋短返事（失敗時はテンプレ）。"""
-        details = build_ask_meaning_llm_details(workshop, player_text)
-        candidates = list(details.get("candidates") or [])
-        payload: dict[str, object] | None = None
-        if candidates:
-            try:
-                payload = self.llm.generate_structured_json(
-                    StructuredGenerationRequest(
-                        kind="haiku_workshop_material_pick",
-                        fallback_value={"pick_index": None, "reply": ""},
-                        details=details,
-                        temperature=0.35,
-                        route="chat",
-                        max_tokens=96,
-                    )
-                )
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.warning(
-                    "haiku_workshop_material_pick_failed detail=%s",
-                    exc,
-                )
-                payload = None
-        return finalize_ask_meaning_reply(workshop, player_text, payload)
+        """行出典だけで意味を説明し、不明なら推測せず正直に返す。"""
+
+        material = grounded_material_for_question(workshop, player_text)
+        if material:
+            return (
+                f"「{material}」を元にした行やで。言葉が崩れてたら、そこはオレの失敗や。",
+                "line_source",
+            )
+        return "すまん。オレにももう分からんわ。", "unknown_source"
 
     def _collaborator_workshop_reply(
         self,

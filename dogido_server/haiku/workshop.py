@@ -11,13 +11,20 @@ from datetime import datetime, timedelta
 import re
 from typing import Any
 
-from dogido_server.memory_types import HaikuEmission
+from dogido_server.memory_types import HaikuEmission, HaikuLine
 from dogido_server.llm.haiku import count_japanese_sounds, haiku_line_failure_reasons
 from dogido_server.tts_reading import hiraganize_japanese_text, katakana_to_hiragana
 
 from .edit_contract import (
     PLAYER_LINE_EDIT_CONTRACT_VERSION,
     line_edit_plan_applies,
+)
+from .verse import (
+    build_haiku_lines,
+    line_source_records,
+    replace_haiku_line,
+    verse_reading_text,
+    verse_surface_text,
 )
 
 # 発句からの最大 open 時間
@@ -351,6 +358,8 @@ class PlayerLineRevisionResult:
 
     text: str | None
     base_text: str
+    surface_text: str | None = None
+    lines: tuple[HaikuLine, ...] = ()
     edits: tuple[dict[str, object], ...] = ()
     failure_reasons: tuple[str, ...] = ()
     target_line_index: int | None = None
@@ -362,6 +371,8 @@ class RecentHaikuWorkshop:
 
     surface_text: str
     emitted_at: datetime
+    # surface_text は互換用の確定読み。表示表記・読み・出典の正本はこちら。
+    current_lines: tuple[HaikuLine, ...] = ()
     entry_id: str | None = None
     preface: str | None = "ここで一句。"
     interpretation: str | None = None
@@ -377,6 +388,8 @@ class RecentHaikuWorkshop:
     # 抽出しても、コードがpendingとCASを再検証するまで元句やmemoryを上書きしない。
     last_findings: list[dict[str, object]] = field(default_factory=list)
     pending_revision: str | None = None
+    pending_revision_surface_text: str | None = None
+    pending_revision_lines: tuple[HaikuLine, ...] = ()
     pending_revision_line_sources: list[dict[str, object]] = field(default_factory=list)
     pending_revision_base_text: str | None = None
     pending_revision_edits: list[dict[str, object]] = field(default_factory=list)
@@ -401,14 +414,40 @@ class RecentHaikuWorkshop:
     awaiting_combat_resume_confirmation: bool = False
 
     def display_line(self) -> str:
-        """明示採用済みの現在句。pending案とは混ぜない。"""
+        """明示採用済みの確定読み。pending案とは混ぜない。"""
 
+        if (
+            len(self.current_lines) == 3
+            and verse_reading_text(self.current_lines) == (self.surface_text or "").strip()
+        ):
+            return verse_reading_text(self.current_lines)
         return (self.surface_text or "").strip()
 
+    def display_surface(self) -> str:
+        """明示採用済みの漢字・カタカナを含みうる表示三行。"""
+
+        if (
+            len(self.current_lines) == 3
+            and verse_reading_text(self.current_lines) == (self.surface_text or "").strip()
+        ):
+            return verse_surface_text(self.current_lines)
+        return self.display_line()
+
     def editing_line(self) -> str:
-        """対話・次の局所編集で見せる最新版（未採用案があればそちら）。"""
+        """対話・次の局所編集で使う確定読み（未採用案優先）。"""
 
         return (self.pending_revision or self.surface_text or "").strip()
+
+    def editing_surface(self) -> str:
+        """対話・UI用の表示三行（未採用案優先）。"""
+
+        if len(self.pending_revision_lines) == 3:
+            return verse_surface_text(self.pending_revision_lines)
+        if self.pending_revision_surface_text:
+            return self.pending_revision_surface_text.strip()
+        if self.pending_revision:
+            return self.pending_revision.strip()
+        return self.display_surface()
 
 
 def open_from_emission(
@@ -434,10 +473,20 @@ def open_from_emission(
         mats["structure"] = emission.structure
     if emission.time_phase and "time_phase" not in mats:
         mats["time_phase"] = emission.time_phase
-    initial_text = normalize_workshop_verse(emission.text) or (emission.text or "").strip()
+    current_lines = emission.lines or build_haiku_lines(
+        emission.surface_text or emission.text,
+        line_sources=mats.get("line_sources") if isinstance(mats.get("line_sources"), list) else None,
+    )
+    initial_text = (
+        verse_reading_text(current_lines)
+        if len(current_lines) == 3
+        else normalize_workshop_verse(emission.reading_text or emission.text)
+        or (emission.reading_text or emission.text or "").strip()
+    )
     return RecentHaikuWorkshop(
         surface_text=initial_text,
         emitted_at=at,
+        current_lines=current_lines,
         entry_id=entry_id,
         preface=emission.preface,
         interpretation=emission.interpretation,
@@ -563,6 +612,8 @@ def clear_pending_revision(workshop: RecentHaikuWorkshop) -> None:
     """未採用案だけを捨てる。現在句と長期記憶は変更しない。"""
 
     workshop.pending_revision = None
+    workshop.pending_revision_surface_text = None
+    workshop.pending_revision_lines = ()
     workshop.pending_revision_line_sources.clear()
     workshop.pending_revision_base_text = None
     workshop.pending_revision_edits.clear()
@@ -580,9 +631,9 @@ def advance_workshop_revision(
     revised = (workshop.pending_revision or "").strip()
     if not revised:
         return
-    line_sources = list(workshop.pending_revision_line_sources)
-    source = workshop.pending_revision_source
     workshop.surface_text = revised
+    if len(workshop.pending_revision_lines) == 3:
+        workshop.current_lines = workshop.pending_revision_lines
     workshop.current_revision_id = revision_id
     workshop.marked_line_index = None
     workshop.last_findings.clear()
@@ -590,10 +641,11 @@ def advance_workshop_revision(
     workshop.awaiting_close_confirmation = False
     workshop.close_confirmation_source = None
     clear_pending_revision(workshop)
-    if source == "generated_confirmed" and line_sources:
-        workshop.materials["line_sources"] = line_sources
+    synchronized_sources = line_source_records(workshop.current_lines)
+    if synchronized_sources:
+        # プレイヤー行の出典は空のまま。生成由来の固定行だけを引き継ぐ。
+        workshop.materials["line_sources"] = synchronized_sources
     else:
-        # プレイヤーの語を観測atomへ偽装しない。以後のAI修正は出典不足ならfail closed。
         workshop.materials.pop("line_sources", None)
 
 
@@ -784,6 +836,61 @@ def pick_material_for_fragment(
         return None
     # 短い具体語を優先
     return min(hits, key=lambda s: (len(s), s.count("の")))
+
+
+def grounded_material_for_question(
+    workshop: RecentHaikuWorkshop,
+    player_text: str,
+) -> str | None:
+    """質問された行の保存済み出典だけを返す。候補一覧から推測しない。"""
+
+    records = (
+        workshop.pending_revision_lines
+        if len(workshop.pending_revision_lines) == 3
+        else workshop.current_lines
+    )
+    player_reading = hiraganize_japanese_text(player_text or "")
+    player_reading = katakana_to_hiragana(player_reading)
+    probe = _compact_kana(player_reading)
+    matched: list[tuple[int, int]] = []
+    for line in records:
+        reading = _compact_kana(line.reading_text)
+        surface = _compact_kana(line.surface_text)
+        score = 0
+        if reading and (reading in probe or probe in reading):
+            score = len(reading)
+        elif surface and (surface in probe or probe in surface):
+            score = len(surface)
+        else:
+            # STTが一部を漢字化しても、三文字以上の一意な読み断片なら行を特定できる。
+            for width in range(min(len(reading), len(probe)), 2, -1):
+                if any(reading[start : start + width] in probe for start in range(len(reading) - width + 1)):
+                    score = width
+                    break
+        if score >= 3:
+            matched.append((score, line.line_index))
+    if matched:
+        best_score = max(score for score, _index in matched)
+        best_indices = {index for score, index in matched if score == best_score}
+        if len(best_indices) == 1:
+            line = records[next(iter(best_indices))]
+            labels: list[str] = []
+            # identityを先にし、note断片だけを名称のように答えない。
+            ordered_sources = sorted(
+                line.source_atoms,
+                key=lambda source: 0 if source.get("kind") == "catalog_label" else 1,
+            )
+            for source in ordered_sources:
+                label = str(source.get("text") or "").strip()
+                if label and label not in labels:
+                    labels.append(label)
+            if labels:
+                return "、".join(labels[:2])
+
+    # 古い発句やテスト用emissionでは行レコードに出典がないことがある。
+    # その場合も、一意な句断片リンクだけを使い、全候補からAIに選ばせない。
+    fragment = _quoted_or_fragment_about_verse(player_text, workshop.editing_line())
+    return pick_material_for_fragment(fragment, workshop, player_text=player_text)
 
 
 def build_ask_meaning_llm_details(
@@ -1671,8 +1778,31 @@ def build_player_line_revision(
             failure_reasons=tuple(dict.fromkeys(reasons)),
             target_line_index=target,
         )
-    draft_lines[target] = normalized
-    revised_text = "\n".join(draft_lines)
+    if workshop.pending_revision:
+        source_lines = workshop.pending_revision_lines
+    else:
+        source_lines = workshop.current_lines
+    if len(source_lines) != 3:
+        source_lines = build_haiku_lines(workshop.editing_surface(), provenance="generated")
+    surface_candidate = str(replacement.text or "").strip().strip(
+        "「」『』\"' 。．.!！?？…"
+    )
+    revised_line_records = replace_haiku_line(
+        source_lines,
+        line_index=target,
+        surface_text=surface_candidate,
+        reading_text=normalized,
+        provenance="player_explicit",
+    )
+    if len(revised_line_records) != 3:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("invalid_line_records",),
+            target_line_index=target,
+        )
+    revised_text = verse_reading_text(revised_line_records)
+    draft_lines = workshop_verse_lines(revised_text)
     if revised_text == workshop.editing_line():
         return PlayerLineRevisionResult(
             None,
@@ -1705,6 +1835,8 @@ def build_player_line_revision(
     return PlayerLineRevisionResult(
         revised_text,
         base_text,
+        surface_text=verse_surface_text(revised_line_records),
+        lines=revised_line_records,
         edits=edits,
         target_line_index=target,
     )

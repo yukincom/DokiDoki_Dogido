@@ -188,7 +188,12 @@ class HaikuMixin:
         # LLM は有効だが品質ゲートを通せなかった場合、失敗定型を句として
         # workshop pin・長期保存しない。preface 経路と同じ境界にそろえる。
         if not self._is_llm_failed_haiku_text(raw_line):
-            self._remember_haiku_emission(event, now, raw_line, route="haiku")
+            raw_line = self._remember_haiku_emission(
+                event,
+                now,
+                raw_line,
+                route="haiku",
+            )
         else:
             LOGGER.warning(
                 "haiku_emit result=failed_no_pin text=%s",
@@ -287,7 +292,12 @@ class HaikuMixin:
         line = (line or "").strip() or llm_failed_text
         # 失敗定型句は workshop pin にしない（「まとまらんかった」が句として残るのを防ぐ）
         if not self._is_llm_failed_haiku_text(line):
-            self._remember_haiku_emission(event, now, line, route="haiku")
+            line = self._remember_haiku_emission(
+                event,
+                now,
+                line,
+                route="haiku",
+            )
         else:
             LOGGER.warning(
                 "haiku_emit result=failed_no_pin text=%s",
@@ -455,10 +465,12 @@ class HaikuMixin:
         text: str,
         *,
         route: str | None,
-    ) -> None:
+    ) -> str:
+        """確定行の表示・読み・出典を同じemissionへ記憶する。"""
+
         stripped = self._strip_haiku_preface(text).strip()
         if not stripped:
-            return
+            return ""
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase)
         biome = normalize_minecraft_id(event.world.biome)
         structure = normalize_minecraft_id(event.world.structure)
@@ -501,6 +513,7 @@ class HaikuMixin:
         self.emitted_haiku = HaikuEmission(
             created_at=now,
             text=stripped,
+            surface_text=stripped,
             preface="ここで一句。",
             interpretation=self._pending_haiku_interpretation,
             biome=biome,
@@ -511,6 +524,9 @@ class HaikuMixin:
             route=route,
             materials=materials,
         )
+        # HaikuEmission が表示表記・読み・出典を一行レコードへ束ねる。
+        # 画面・ログ用の表記は維持し、workshop/CASは同じ行のreading_textを使う。
+        return stripped
 
     def _strip_haiku_preface(self, text: str) -> str:
         stripped = text.strip()

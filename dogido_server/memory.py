@@ -54,6 +54,55 @@ def _is_strict_hiragana_line(text: object) -> bool:
     return re.fullmatch(r"[\u3041-\u3096ー]+", str(text or "")) is not None
 
 
+_HAIKU_LINE_META = (
+    ("line_1", "upper", "上五"),
+    ("line_2", "middle", "中七"),
+    ("line_3", "lower", "下五"),
+)
+
+
+def _valid_revision_line_rows(
+    rows: list[dict[str, Any]],
+    *,
+    revised_text: str | None,
+) -> bool:
+    """保存APIを迂回しても、三行正本のID・表記・読みを崩さない。"""
+
+    if len(rows) != 3:
+        return False
+    for index, (line_id, position, canonical_name) in enumerate(_HAIKU_LINE_META):
+        row = rows[index]
+        row_index = row.get("line_index")
+        if not isinstance(row_index, int) or isinstance(row_index, bool) or row_index != index:
+            return False
+        if (
+            row.get("line_id") != line_id
+            or row.get("position") != position
+            or row.get("canonical_name") != canonical_name
+        ):
+            return False
+        surface = str(row.get("surface_text") or "").strip()
+        if not surface or "\n" in surface or "\r" in surface:
+            return False
+        if not _is_strict_hiragana_line(row.get("reading_text")):
+            return False
+        source_atom_ids = row.get("source_atom_ids")
+        if not isinstance(source_atom_ids, list) or any(
+            not isinstance(atom_id, str) or not atom_id.strip()
+            for atom_id in source_atom_ids
+        ):
+            return False
+        source_atoms = row.get("source_atoms")
+        if not isinstance(source_atoms, list) or any(
+            not isinstance(source, dict) for source in source_atoms
+        ):
+            return False
+        if not str(row.get("provenance") or "").strip():
+            return False
+    readings = "\n".join(str(row.get("reading_text") or "") for row in rows)
+    return _canonical_revision_verse(readings) == _canonical_revision_verse(revised_text)
+
+
 def datetime_json(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
@@ -137,7 +186,10 @@ class MemoryStore:
                 "time": datetime_json(emission.created_at),
                 "session_id": session_id,
                 "sequence": emission.event_sequence,
-                "text": emission.text,
+                "text": (emission.surface_text or emission.text),
+                "surface_text": emission.surface_text,
+                "reading_text": emission.reading_text,
+                "lines": [line.to_dict() for line in emission.lines] or None,
                 "interpretation": emission.interpretation,
                 "biome": emission.biome,
                 "structure": emission.structure,
@@ -183,6 +235,8 @@ class MemoryStore:
         revision_edits: list[dict[str, Any]] | None = None,
         revision_edit_contract: str | None = None,
         revision_base_text: str | None = None,
+        revision_base_surface_text: str | None = None,
+        revision_lines: list[dict[str, Any]] | None = None,
         parent_revision_id: str | None = None,
         observed_at: datetime | None = None,
     ) -> dict[str, Any]:
@@ -201,8 +255,16 @@ class MemoryStore:
             "player_line_confirmed",
         }:
             raise ValueError(f"unknown haiku revision source: {source}")
-        base_text = _canonical_revision_verse(revision_base_text or emission.text)
-        emission_base_text = _canonical_revision_verse(emission.text)
+        emission_reading = emission.reading_text or emission.text
+        base_text = _canonical_revision_verse(revision_base_text or emission_reading)
+        emission_base_text = _canonical_revision_verse(emission_reading)
+        line_rows = sorted(
+            (dict(row) for row in revision_lines or [] if isinstance(row, dict)),
+            key=lambda row: row.get("line_index") if isinstance(row.get("line_index"), int) else 99,
+        )
+        if line_rows:
+            if not _valid_revision_line_rows(line_rows, revised_text=revised_text):
+                raise ValueError("revision lines do not match the revised reading")
         parent_id = (parent_revision_id or "").strip() or None
         if revision_source in {"generated_confirmed", "player_line_confirmed"}:
             if base_text != emission_base_text and parent_id is None:
@@ -281,11 +343,21 @@ class MemoryStore:
             "haiku_id": entry.get("id"),
             "source": revision_source,
             "comment": (comment or "").strip() or None,
-            "original_text": emission.text.strip(),
+            "original_text": (emission.surface_text or emission.text).strip(),
+            "original_reading_text": (emission.reading_text or emission.text).strip(),
             # 連続編集では初回発句ではなく、直前に採用した三行がCASの基準。
             "base_text": base_text,
+            "base_surface_text": (
+                revision_base_surface_text or emission.surface_text or base_text
+            ).strip(),
             "parent_revision_id": parent_id,
             "revised_text": (revised_text or "").strip() or None,
+            "revised_surface_text": (
+                "\n".join(str(row.get("surface_text") or "") for row in line_rows)
+                if line_rows
+                else (revised_text or "")
+            ).strip() or None,
+            "lines": line_rows or None,
             # AI修正を明示採用した場合だけ、検証済みの行別出典を監査用に残す。
             # 元カタログJSONを書き換えるものではない。
             "line_sources": revision_line_sources or None,
@@ -674,7 +746,10 @@ class MemoryStore:
             "created_at": datetime_json(emission.created_at),
             "author": "dogido",
             "kind": "agent_haiku",
-            "text": emission.text.strip(),
+            "text": (emission.surface_text or emission.text).strip(),
+            "surface_text": (emission.surface_text or emission.text).strip(),
+            "reading_text": (emission.reading_text or emission.text).strip(),
+            "lines": [line.to_dict() for line in emission.lines] or None,
             "preface": emission.preface,
             "interpretation": emission.interpretation,
             "world": {
