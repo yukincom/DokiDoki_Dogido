@@ -1,0 +1,5 @@
+{
+  "key.category.dogido_client_adapter.training_feedback": "ドギド：学習候補の評価",
+  "key.dogido_client_adapter.good_example": "↑ 👍 良い例に残す",
+  "key.dogido_client_adapter.needs_review": "↓ 👎 要レビューにする"
+}

@@ -6,8 +6,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 
@@ -62,6 +64,7 @@ final class DogidoEventClient {
         capabilities.add("danger_darkness");
         capabilities.add("combat_state");
         capabilities.add("death_events");
+        capabilities.add("training_feedback_flags");
         payload.add("capabilities", capabilities);
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(this.config.sessionEndpoint()))
@@ -131,4 +134,57 @@ final class DogidoEventClient {
                 return null;
             });
     }
+
+    CompletableFuture<TrainingFeedbackResult> postTrainingFeedback(String label) {
+        if (!this.config.enabled) {
+            return CompletableFuture.completedFuture(
+                new TrainingFeedbackResult(false, "adapter_disabled", label, false)
+            );
+        }
+        if (this.sessionId == null) {
+            return CompletableFuture.completedFuture(
+                new TrainingFeedbackResult(false, "no_active_session", label, false)
+            );
+        }
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("label", label);
+        payload.addProperty("client_event_id", "fabric-" + UUID.randomUUID());
+        payload.addProperty("pressed_at", OffsetDateTime.now().toString());
+
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(
+                URI.create(this.config.trainingFeedbackEndpoint())
+            )
+            .timeout(Duration.ofSeconds(5))
+            .header("Content-Type", "application/json")
+            .header("X-Dogido-Session-Id", this.sessionId)
+            .POST(HttpRequest.BodyPublishers.ofString(this.gson.toJson(payload)));
+        if (this.config.hasAuthToken()) {
+            requestBuilder.header("Authorization", "Bearer " + this.config.authToken);
+        }
+
+        return this.httpClient.sendAsync(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+            .thenApply(response -> {
+                if (response.statusCode() / 100 != 2) {
+                    this.logger.warn(
+                        "Dogido training feedback rejected: status={} body={}",
+                        response.statusCode(),
+                        response.body()
+                    );
+                    return new TrainingFeedbackResult(false, "http_" + response.statusCode(), label, false);
+                }
+                JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
+                boolean accepted = body.has("accepted") && body.get("accepted").getAsBoolean();
+                String reason = body.has("reason") ? body.get("reason").getAsString() : "unknown";
+                boolean replaced = body.has("replaced_previous")
+                    && body.get("replaced_previous").getAsBoolean();
+                return new TrainingFeedbackResult(accepted, reason, label, replaced);
+            })
+            .exceptionally(error -> {
+                this.logger.warn("Dogido training feedback send failed: {}", error.getMessage());
+                return new TrainingFeedbackResult(false, "send_failed", label, false);
+            });
+    }
 }
+
+record TrainingFeedbackResult(boolean accepted, String reason, String label, boolean replacedPrevious) {}

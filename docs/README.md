@@ -129,6 +129,7 @@ casual（原則） ──┬── sm-vs-prompt（PR 順）
 | 8 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
 | 9 | [rag.md](rag.md) | RAG 検討メモ（`senryu-rag-plan` と併用） |
 | 10 | [dogido-display-overlay-plan.md](dogido-display-overlay-plan.md) | ゲーム内セリフ表示 UI（計画・#28 関連） |
+| 11 | [training-data-plan.md](training-data-plan.md) | 私的ログから学習候補・人間レビュー・評価splitを作る境界 |
 
 **つながり:**
 
@@ -206,6 +207,7 @@ architecture（どう詠む）
 - [senryu-roadmap.md](senryu-roadmap.md)
 - [senryu-rag-plan.md](senryu-rag-plan.md)
 - [rag.md](rag.md)
+- [training-data-plan.md](training-data-plan.md)
 
 ### Engineering notes
 

@@ -109,6 +109,10 @@ final class DogidoConfig {
         return this.serverBaseUrl + "/api/v1/adapter-sessions";
     }
 
+    String trainingFeedbackEndpoint() {
+        return this.serverBaseUrl + "/api/v1/training-feedback";
+    }
+
     boolean hasAuthToken() {
         return !this.authToken.isBlank();
     }

@@ -85,6 +85,8 @@ from dogido_server.models import (
     HeartbeatResponse,
     OutputFlags,
     StateResponse,
+    TrainingFeedbackRequest,
+    TrainingFeedbackResponse,
     VoiceInputContextResponse,
 )
 from dogido_server.platform_ai import PlatformStructuredAIRouter
@@ -95,6 +97,11 @@ from dogido_server.state_machine import (
 )
 from dogido_server.state_machine.fallback_catalog import fallback_prewarm_texts
 from dogido_server.state_machine.response_catalog import response_prewarm_texts
+from dogido_server.training_feedback import (
+    TrainingEvaluationTarget,
+    TrainingFeedbackStore,
+    build_training_evaluation_target,
+)
 
 LOGGER = logging.getLogger("uvicorn.error")
 
@@ -137,6 +144,14 @@ class SessionInfo:
     combat_input_analysis_path: str = "none"
     # player_chat 用: 直近5往復 + 粗い出来事メモ
     dialogue: DialogueContext = field(default_factory=DialogueContext)
+    # 通常ログを教師化せず、評価キーが押された時だけ保存するためのRAM上の直前応答。
+    latest_training_target: TrainingEvaluationTarget | None = None
+    latest_training_flag_id: str | None = None
+    latest_training_flag_label: str | None = None
+    latest_training_flag_target_id: str | None = None
+    latest_training_flag_pressed_at: datetime | None = None
+    training_feedback_request_ids: deque[str] = field(default_factory=lambda: deque(maxlen=256))
+    training_feedback_request_id_set: set[str] = field(default_factory=set)
 
     def is_stale_sequence(self, sequence: int) -> bool:
         return (
@@ -167,6 +182,19 @@ class SessionInfo:
         self.seen_idempotency_set.add(key)
         return False
 
+    def remember_training_feedback_request(self, key: str) -> bool:
+        if key in self.training_feedback_request_id_set:
+            return True
+        if len(self.training_feedback_request_ids) == self.training_feedback_request_ids.maxlen:
+            old = self.training_feedback_request_ids.popleft()
+            self.training_feedback_request_id_set.discard(old)
+        self.training_feedback_request_ids.append(key)
+        self.training_feedback_request_id_set.add(key)
+        return False
+
+    def has_training_feedback_request(self, key: str) -> bool:
+        return key in self.training_feedback_request_id_set
+
 
 @dataclass(slots=True)
 class ProcessedEvent:
@@ -182,6 +210,11 @@ class DogidoService:
         self.llm = DogidoLLMRouter(settings)
         self.platform_ai = PlatformStructuredAIRouter(settings)
         self.memory = MemoryStore(settings.memory_dir) if settings.memory_enabled else None
+        self.training_feedback = (
+            TrainingFeedbackStore(settings.training_data_dir)
+            if settings.training_feedback_enabled
+            else None
+        )
         if self.memory is not None:
             from dogido_server.catalog_readings import configure_corrections_path
 
@@ -499,9 +532,22 @@ class DogidoService:
                     attached_player_text[:80],
                 )
 
+        event_id = _new_id("evt")
+        if self.training_feedback is not None:
+            self._remember_training_evaluation_target(
+                session,
+                event,
+                actions,
+                target_id=f"target_{event_id}",
+                state_mode=machine_result.state.mode,
+                combat_active=machine_result.combat_active,
+                input_source=attached_player_source,
+                interpreted_player_text=interpreted_player_text,
+                haiku_emission=machine_result.haiku_emission,
+            )
         response = AcceptedEventResponse(
             accepted=True,
-            event_id=_new_id("evt"),
+            event_id=event_id,
             session_id=session.session_id,
             sequence=event.sequence,
             deduplicated=False,
@@ -571,6 +617,182 @@ class DogidoService:
             prompt_mode=prompt_mode,
             session_id=session.session_id,
         )
+
+    def submit_training_feedback(
+        self,
+        session_id: str | None,
+        request: TrainingFeedbackRequest,
+    ) -> TrainingFeedbackResponse:
+        """直前の応答を、↑/↓の明示signal付きで私的候補箱へ入れる。"""
+
+        if not session_id:
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="missing_session",
+                label=request.label,
+            )
+        session = self.sessions.get(session_id)
+        if session is None:
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="unknown_session",
+                label=request.label,
+            )
+        if self.training_feedback is None:
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="feedback_disabled",
+                label=request.label,
+            )
+        target = session.latest_training_target
+        if target is None:
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="no_recent_target",
+                label=request.label,
+            )
+        now = datetime.now().astimezone()
+        age_sec = max(0.0, (now - target.captured_at).total_seconds())
+        if age_sec > self.settings.training_feedback_target_max_age_sec:
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="target_expired",
+                label=request.label,
+                target_id=target.target_id,
+            )
+        if session.has_training_feedback_request(request.client_event_id):
+            return TrainingFeedbackResponse(
+                accepted=True,
+                reason="duplicate_request",
+                label=request.label,
+                target_id=target.target_id,
+                flag_id=session.latest_training_flag_id,
+                duplicate=True,
+            )
+        same_target = session.latest_training_flag_target_id == target.target_id
+        pressed_at = request.pressed_at or now
+        if pressed_at.tzinfo is None:
+            pressed_at = pressed_at.replace(tzinfo=now.tzinfo)
+        else:
+            pressed_at = pressed_at.astimezone(now.tzinfo)
+        if (
+            same_target
+            and session.latest_training_flag_pressed_at is not None
+            and pressed_at < session.latest_training_flag_pressed_at
+        ):
+            session.remember_training_feedback_request(request.client_event_id)
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="stale_key_event",
+                label=request.label,
+                target_id=target.target_id,
+                flag_id=session.latest_training_flag_id,
+                duplicate=True,
+            )
+        if same_target and session.latest_training_flag_label == request.label:
+            session.latest_training_flag_pressed_at = pressed_at
+            session.remember_training_feedback_request(request.client_event_id)
+            return TrainingFeedbackResponse(
+                accepted=True,
+                reason="already_flagged",
+                label=request.label,
+                target_id=target.target_id,
+                flag_id=session.latest_training_flag_id,
+                duplicate=True,
+            )
+        supersedes = session.latest_training_flag_id if same_target else None
+        try:
+            row = self.training_feedback.append_flag(
+                session_id=session.session_id,
+                target=target,
+                label=request.label,
+                client_event_id=request.client_event_id,
+                flagged_at=now,
+                pressed_at=pressed_at,
+                supersedes_flag_id=supersedes,
+            )
+        except OSError as exc:
+            LOGGER.warning(
+                "training_feedback result=failed reason=storage_error target=%s error=%s",
+                target.target_id,
+                exc,
+            )
+            return TrainingFeedbackResponse(
+                accepted=False,
+                reason="storage_error",
+                label=request.label,
+                target_id=target.target_id,
+            )
+        flag_id = str(row["flag_id"])
+        session.latest_training_flag_id = flag_id
+        session.latest_training_flag_label = request.label
+        session.latest_training_flag_target_id = target.target_id
+        session.latest_training_flag_pressed_at = pressed_at
+        # 保存が成功したrequestだけを冪等キーとして確定する。I/O失敗時の再送は許す。
+        session.remember_training_feedback_request(request.client_event_id)
+        LOGGER.warning(
+            "training_feedback result=accepted label=%s target=%s replaced=%s",
+            request.label,
+            target.target_id,
+            bool(supersedes),
+        )
+        return TrainingFeedbackResponse(
+            accepted=True,
+            reason="replaced" if supersedes else "recorded",
+            label=request.label,
+            target_id=target.target_id,
+            flag_id=flag_id,
+            replaced_previous=bool(supersedes),
+        )
+
+    def _remember_training_evaluation_target(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        actions: list[AudioAction],
+        *,
+        target_id: str,
+        state_mode: str,
+        combat_active: bool,
+        input_source: str,
+        interpreted_player_text: str | None,
+        haiku_emission: HaikuEmission | None,
+    ) -> None:
+        """本文を伴う直前応答だけをRAMに更新する。"""
+
+        target = build_training_evaluation_target(
+            target_id=target_id,
+            captured_at=datetime.now().astimezone(),
+            event=event,
+            actions=actions,
+            state_mode=state_mode,
+            combat_active=combat_active,
+            input_source=input_source,
+            interpreted_player_text=interpreted_player_text,
+            player_input=session.machine.player_input,
+            workshop=session.haiku_workshop,
+            conversation_history=session.dialogue.conversation_lines(),
+            event_digest=session.dialogue.digest_lines(),
+            haiku_emission=haiku_emission,
+            service_version=self.settings.service_version,
+            adapter_version=session.adapter_version,
+            chat_model=self.settings.llm_chat_model
+            or self.settings.llm_chat_mlx_model_id
+            or self.settings.llm_model
+            or self.settings.mlx_model_id,
+            haiku_model=self.settings.llm_haiku_model
+            or self.settings.llm_haiku_mlx_model_id
+            or self.settings.llm_model
+            or self.settings.mlx_model_id,
+        )
+        if target is None:
+            return
+        session.latest_training_target = target
+        # 新しい応答になったら、前の応答に対する上書き状態は引き継がない。
+        session.latest_training_flag_id = None
+        session.latest_training_flag_label = None
+        session.latest_training_flag_target_id = None
+        session.latest_training_flag_pressed_at = None
 
     def push_player_input(self, text: str, *, source: str = "text") -> dict[str, object]:
         """音声入力などゲーム外からのプレイヤー発話を、直近のアクティブセッションへ届ける。"""

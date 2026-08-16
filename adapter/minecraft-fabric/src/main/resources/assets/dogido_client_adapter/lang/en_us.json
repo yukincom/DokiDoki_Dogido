@@ -1,0 +1,5 @@
+{
+  "key.category.dogido_client_adapter.training_feedback": "Dogido: Training feedback",
+  "key.dogido_client_adapter.good_example": "↑ 👍 Keep as a good example",
+  "key.dogido_client_adapter.needs_review": "↓ 👎 Mark for review"
+}

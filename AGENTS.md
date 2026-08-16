@@ -38,6 +38,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/platform_ai.py` | Apple Foundation Models / Foundry Local / chat fallback の限定 structured router |
 | `dogido_server/player_activity.py` | 乗車中だけ存在する vehicle 状態を、主語付きの雑談・川柳材料へ変換 |
 | `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
+| `dogido_server/training_feedback.py` | ↑/↓で明示評価された直前応答だけをGit除外の候補箱へ保存 |
 | `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
 | `adapter/minecraft-fabric/` | ゲーム → イベント送信 |
 | `docs/` | 方針の正。実装とズレたら **docs を直すか実装を直すか**を明示 |
@@ -90,6 +91,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 - 発句は基本 auto-save（entries）
 - revision / critique / lesson は JSONL
+- 学習候補の実データは `.dogido_training/`（Git除外）。runtimeログを正解扱いせず、人間レビュー後だけ学習へ回す
+- ↑/↓は候補の一次振り分けであり、`good_example` も自動で教師データへ昇格させない。同じ応答への押し直しは履歴を残して最後の評価を正とする
 - **プロンプトに過去 revision を常時 few-shot しない**
 - 想起は明示クエリ時（「句思い出して」等）
 

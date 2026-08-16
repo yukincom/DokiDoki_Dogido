@@ -24,10 +24,12 @@ import com.google.gson.JsonObject;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.world.ClientWorld;
@@ -73,6 +75,9 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
 import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.client.util.InputUtil;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
@@ -82,6 +87,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
+import org.lwjgl.glfw.GLFW;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
@@ -117,6 +123,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int PORTAL_SCAN_RADIUS = 5;
     private static final int GATEWAY_SCAN_RADIUS = 15;
     private static final int END_PORTAL_FRAME_SCAN_RADIUS = 5;
+    private static final KeyBinding.Category DOGIDO_KEY_CATEGORY = KeyBinding.Category.create(
+        Identifier.of("dogido_client_adapter", "training_feedback")
+    );
     private static final String[][] HOSTILE_SOUND_LABEL_PATTERNS = {
         // 具体名を先に置く。entity 付き packet は実体から解決するが、座標だけの
         // hostile sound packet でも主要な敵を取りこぼさないための fallback。
@@ -172,6 +181,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private DogidoConfig config;
     private DogidoEventClient eventClient;
+    private KeyBinding goodExampleKey;
+    private KeyBinding needsReviewKey;
     private final Map<UUID, Double> lastThreatDistances = new HashMap<>();
     private final Map<UUID, Long> lastThreatSeenTicks = new HashMap<>();
     private final Map<UUID, Float> lastThreatHealths = new HashMap<>();
@@ -232,12 +243,29 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private double lastPlayerX = Double.NaN;
     private double lastPlayerY = Double.NaN;
     private double lastPlayerZ = Double.NaN;
+    private long lastTrainingFeedbackTick = -1000;
 
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
         this.config = DogidoConfig.load();
         this.eventClient = new DogidoEventClient(LOGGER, this.config);
+        this.goodExampleKey = KeyBindingHelper.registerKeyBinding(
+            new KeyBinding(
+                "key.dogido_client_adapter.good_example",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_UP,
+                DOGIDO_KEY_CATEGORY
+            )
+        );
+        this.needsReviewKey = KeyBindingHelper.registerKeyBinding(
+            new KeyBinding(
+                "key.dogido_client_adapter.needs_review",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_DOWN,
+                DOGIDO_KEY_CATEGORY
+            )
+        );
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientSendMessageEvents.CHAT.register(this::rememberUserText);
         ClientSendMessageEvents.COMMAND.register(command -> rememberUserText("/" + command));
@@ -300,6 +328,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
+        handleTrainingFeedbackKeys(client);
         this.eventClient.ensureSession(resolvePlayerName(player));
         expireSoundObservations();
         observeNearbyLightning(player, world);
@@ -372,6 +401,69 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         this.wasDead = deadNow;
         expireThreatMemory();
+    }
+
+    private void handleTrainingFeedbackKeys(MinecraftClient client) {
+        boolean goodPressed = consumePresses(this.goodExampleKey);
+        boolean reviewPressed = consumePresses(this.needsReviewKey);
+        // チャット、コマンド、看板、本、インベントリなど文字入力を含む全GUIでは無効。
+        // wasPressed() は先に消費し、画面を閉じた直後の遅延発火も防ぐ。
+        if (client.currentScreen != null || client.player == null || client.world == null) {
+            return;
+        }
+        if (goodPressed == reviewPressed) {
+            // どちらも未入力、または同時押し。相反するlabelを勝手に選ばない。
+            return;
+        }
+        if (this.tickCounter - this.lastTrainingFeedbackTick < 5) {
+            return;
+        }
+        this.lastTrainingFeedbackTick = this.tickCounter;
+        String label = goodPressed ? "good_example" : "needs_review";
+        this.eventClient.postTrainingFeedback(label).thenAccept(result -> client.execute(() -> {
+            ClientPlayerEntity currentPlayer = client.player;
+            if (currentPlayer == null) {
+                return;
+            }
+            if (result.accepted()) {
+                String message;
+                Formatting color;
+                if (result.reason().equals("already_flagged") || result.reason().equals("duplicate_request")) {
+                    message = goodPressed
+                        ? "↑ 👍 直前の応答は良い例として記録済みです"
+                        : "↓ 👎 直前の応答は要レビューとして記録済みです";
+                    color = Formatting.GRAY;
+                } else if (result.replacedPrevious()) {
+                    message = goodPressed
+                        ? "↑ 👍 直前の評価を『良い例』へ変更しました"
+                        : "↓ 👎 直前の評価を『要レビュー』へ変更しました";
+                    color = Formatting.YELLOW;
+                } else {
+                    message = goodPressed
+                        ? "↑ 👍 良い例として記録しました"
+                        : "↓ 👎 要レビューとして記録しました";
+                    color = goodPressed ? Formatting.GREEN : Formatting.GOLD;
+                }
+                currentPlayer.sendMessage(Text.literal(message).formatted(color), true);
+                return;
+            }
+            String message = switch (result.reason()) {
+                case "no_recent_target", "target_expired" -> "評価できる直前のドギド応答がありません";
+                case "no_active_session", "missing_session", "unknown_session" -> "ドギドサーバーとの接続後に使えます";
+                case "feedback_disabled" -> "評価データの保存が無効です";
+                case "stale_key_event" -> "より新しい評価を記録済みです";
+                default -> "評価を保存できませんでした";
+            };
+            currentPlayer.sendMessage(Text.literal(message).formatted(Formatting.RED), true);
+        }));
+    }
+
+    private static boolean consumePresses(KeyBinding keyBinding) {
+        boolean pressed = false;
+        while (keyBinding.wasPressed()) {
+            pressed = true;
+        }
+        return pressed;
     }
 
     private void resetTransientState() {

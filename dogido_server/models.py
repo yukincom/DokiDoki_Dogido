@@ -517,6 +517,26 @@ class VoiceInputContextResponse(DogidoModel):
     session_id: str | None = None
 
 
+class TrainingFeedbackRequest(DogidoModel):
+    """POST /api/v1/training-feedback の明示評価。"""
+
+    label: Literal["good_example", "needs_review"]
+    client_event_id: str = Field(min_length=8, max_length=96, pattern=r"^[A-Za-z0-9_.:-]+$")
+    pressed_at: datetime | None = None
+
+
+class TrainingFeedbackResponse(DogidoModel):
+    """評価候補箱への保存結果。拒否も200で返し、ゲーム表示へ理由を渡す。"""
+
+    accepted: bool
+    reason: str
+    label: Literal["good_example", "needs_review"]
+    target_id: str | None = None
+    flag_id: str | None = None
+    replaced_previous: bool = False
+    duplicate: bool = False
+
+
 class StateResponse(DogidoModel):
     """イベント受付レスポンスに含まれる現在のドギドの状態サマリ。"""
     mode: str

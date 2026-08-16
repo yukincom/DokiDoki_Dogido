@@ -5,6 +5,7 @@ __pycache__/
 .env
 .dogido_tmp/
 .dogido_memory/
+.dogido_training/
 # 家庭ごとの呼び名音声（*_example.mp3 / ushiro_tail / README / manifest.example 以外はコミットしない）
 cue_voice/player_names/player_[0-9].mp3
 cue_voice/player_names/player_[0-9][0-9].mp3

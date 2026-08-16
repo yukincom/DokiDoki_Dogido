@@ -16,6 +16,18 @@
 - 遮蔽された近距離 hostile を `hostile_audio_detected` として送信
 - プレイヤー死亡時の `player_died` 送信
 - 戦闘収束時の `combat_ended` 送信
+- 直前のドギド応答を、`↑`＝良い例・`↓`＝要レビューとして私的候補箱へ記録
+
+## 学習候補の評価キー
+
+- `↑`：直前の応答を `👍 good_example` として候補化
+- `↓`：直前の応答を `👎 needs_review` として候補化
+- 同じ応答で反対側を押すと評価を上書きする。履歴は消さず、エクスポート時に最後の評価を正とする
+- チャット、コマンド、看板、本、インベントリなど、**画面を開いている間は両キーとも無効**
+- 評価できる応答は既定で直近3分以内。通常のプレイログを常時学習データとして保存する機能ではない
+- キー割り当てはMinecraftの「設定 → キー設定 → ドギド：学習候補の評価」で変更できる
+
+保存先はサーバー側の `.dogido_training/inbox/evaluation_flags.jsonl`。Git対象外で、人間レビュー前には学習へ投入しない。
 
 ## まだやっていないこと
 
@@ -50,6 +62,6 @@
 ## 開発メモ
 
 - `dogido-server` を先に起動する
-- この mod は `POST /api/v1/adapter-sessions` と `POST /api/v1/game-events` を使う
+- この mod は `POST /api/v1/adapter-sessions`、`POST /api/v1/game-events`、`POST /api/v1/training-feedback` を使う
 - JSON の形は親プロジェクトの `docs/event-schema.md` に寄せている
 - いまの `hostile_audio_detected` は sound packet ではなく、遮蔽 hostile を使った初期ヒューリスティック

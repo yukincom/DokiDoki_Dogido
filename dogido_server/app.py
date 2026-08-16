@@ -25,6 +25,8 @@ from dogido_server.models import (
     HeartbeatRequest,
     HeartbeatResponse,
     PlayerInputRequest,
+    TrainingFeedbackRequest,
+    TrainingFeedbackResponse,
     VoiceInputContextResponse,
 )
 from dogido_server.service import DogidoService
@@ -204,6 +206,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # voice_input は別プロセスなので、書き起こし直前にworkshop状態だけを取得する。
         _ensure_authorized(resolved_settings, authorization)
         return await run_serialized(service.voice_input_context)
+
+    @app.post("/api/v1/training-feedback", response_model=TrainingFeedbackResponse)
+    async def post_training_feedback(
+        payload: TrainingFeedbackRequest,
+        authorization: Annotated[str | None, Header()] = None,
+        x_dogido_session_id: Annotated[str | None, Header()] = None,
+    ) -> TrainingFeedbackResponse:
+        # Fabricの評価キーから来る明示signal。直前応答はservice側のRAM snapshotを使い、
+        # クライアントに本文やゲーム状況を再送させない。
+        _ensure_authorized(resolved_settings, authorization)
+        return await run_serialized(
+            service.submit_training_feedback,
+            x_dogido_session_id,
+            payload,
+        )
 
     @app.get("/api/v1/memory/haiku")
     async def get_haiku_memory(

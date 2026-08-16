@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 
+    # プレイヤーが↑/↓で明示した応答だけを私的な候補箱へ保存する。
+    # 通常ログの自動教師化や外部送信は行わない。
+    training_feedback_enabled: bool = True
+    training_data_dir: Path = Path(".dogido_training")
+    training_feedback_target_max_age_sec: float = 180.0
+
     # 音声入力（dogido_server.voice_input プロセス）。
     # whisper のパスは未設定なら ~/AI_assistant/whisper.cpp/ などから自動検出する
     voice_whisper_cli: Path | None = None

@@ -54,6 +54,7 @@ adapter → server の主経路:
 - `POST /api/v1/game-events/batch`
 - `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
 - `DELETE /api/v1/adapter-sessions/{session_id}`
+- `POST /api/v1/training-feedback`
 
 プレイヤー発話のサイドチャネル（adapter 以外）:
 
@@ -92,7 +93,8 @@ adapter の起動時に session を作る。
     "auditory_threats",
     "ambient_sounds",
     "inventory",
-    "danger_darkness"
+    "danger_darkness",
+    "training_feedback_flags"
   ]
 }
 ```
@@ -421,6 +423,7 @@ batch 可。
 5. `POST /api/v1/game-events/batch`
 6. `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
 7. `GET /api/v1/voice-input/context`
+8. `POST /api/v1/training-feedback`
 
 ## 21. `POST /api/v1/player-input`
 
@@ -489,3 +492,45 @@ auth が有効なときは adapter 系と同様に `Authorization: Bearer <token
 - 句本文や材料は返さない
 - 取得に失敗した音声入力プロセスは `normal` を使い、書き起こしを止めない
 - auth が有効なときは `Authorization: Bearer <token>` が必要
+
+## 23. `POST /api/v1/training-feedback`
+
+Fabricの評価キーから、直前のドギド応答へ明示的な一次評価を付ける。クライアントは本文や座標を再送せず、serverがRAMに保持した直前応答snapshotを使う。
+
+### headers
+
+- `Content-Type: application/json`
+- `X-Dogido-Session-Id: <session_id>` 必須
+- auth が有効なときは `Authorization: Bearer <token>`
+
+### request
+
+```json
+{
+  "label": "good_example",
+  "client_event_id": "fabric-2da935cf-710e-4f39-8e71-f92ae70134f4",
+  "pressed_at": "2026-08-16T19:10:00+09:00"
+}
+```
+
+`label` は `good_example | needs_review`。`client_event_id` はHTTP再送の重複保存を防ぐ。
+
+### response
+
+```json
+{
+  "accepted": true,
+  "reason": "recorded",
+  "label": "good_example",
+  "target_id": "target_evt_...",
+  "flag_id": "feedback_...",
+  "replaced_previous": false,
+  "duplicate": false
+}
+```
+
+- 本文を伴う直前応答だけが対象。既定の有効時間は180秒
+- 同じ応答へ同じlabelを再入力しても重複保存しない
+- 反対labelを押すと新しい行を追記し、`supersedes_flag_id` で前の評価へつなぐ
+- 保存先は `.dogido_training/inbox/evaluation_flags.jsonl`。生のsession ID、プレイヤー識別子、座標フィールドは保存しない（発話本文は別途privacy reviewする）
+- キー評価は候補の振り分けであり、学習用の正解ではない。人間レビュー後だけ `approved/` と `splits/` へ昇格する
