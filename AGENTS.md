@@ -39,10 +39,11 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/player_activity.py` | 乗車中だけ存在する vehicle 状態を、主語付きの雑談・川柳材料へ変換 |
 | `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
 | `dogido_server/episode_log.py` | 非重複イベント1件につき1行の評価用決定記録。`.dogido_memory/eval/episodes.jsonl`（会話・川柳記憶とは別） |
+| `dogido_server/assist/` | 型付きの限定世界操作。明示registry・AUTO/CONFIRM/DENY gate・現在snapshotのavailable・`select_sword`。LLM toolsではない |
 | `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
-| `adapter/minecraft-fabric/` | ゲーム → イベント送信 |
+| `adapter/minecraft-fabric/` | ゲーム観測 → イベント送信 + 許可済みtyped commandのクライアント実行 |
 | `docs/` | 方針の正。実装とズレたら **docs を直すか実装を直すか**を明示 |
-| `tests/` | 変更時は関連 `test_haiku*` / `test_player_chat*` 等を回す |
+| `tests/` | 変更時は関連 `test_haiku*` / `test_player_chat*` / `test_assist*` 等を回す |
 
 パッケージ移動時は **新場所に置いて → 旧は re-export → import 置換**。一発削除しない。
 
@@ -56,9 +57,11 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - LLM に「今パニックすべきか」を委ねない
 - leaf 失敗時はカタログ fallback がある前提を壊さない
 - AI 出力から直接 close / lesson解除 / revision保存しない。評価極性・評価範囲・終了scope・enum・行概念ID・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
-- STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する
+- STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する。剣支援の実測誤変換 `県に持ち替え/変えて/ハインコ（変更）/チェンに変更` は voice-only・操作語直結の閉じた規則で解釈面だけ補正し、typed・単独の候補語・その語の会話は対象外
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
+- 世界操作はLLMへtools一覧として渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。実行capability・現在snapshot・slot・期限・期待item・重複はコード検証する
+- `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。通常Qwenの限定抽出を使い、OS AIの用途を広げない
 
 ### 3.2 川柳 lesson は soft
 
@@ -99,7 +102,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - `episode_log.py` は `trigger → observation → state_before → decision → action → result` を schema version 付きで追記する
 - 発話なしも含む非重複イベント1件を1行とし、重複受信は新しい判断として記録しない
 - `eval/episodes.jsonl` を `MemoryStore`、会話文脈、川柳生成へ読み戻さない
-- `result.scope=service_decision` はserviceが選んだ結果であり、TTS／スピーカーの実再生成功ではない
+- `result.scope=service_decision` はserviceが選んだ結果であり、TTS／スピーカーの実再生成功ではない。adapter結果を受けた行だけ `adapter_execution_observed` とcommand IDで記録する
 - serialize・ディレクトリ作成・追記失敗をリアルタイム処理へ伝播させない
 
 ### 3.6 完成度の本丸（機能追加の前に）
@@ -230,6 +233,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
 - ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）+ 地表雷雨中の友好・中立 Mob 抑止（洞窟は維持）**済**
 - エピソード決定記録 A: 非重複イベントごとに発話あり／なしを `eval/episodes.jsonl` へbest-effort追記 **済**（記憶へは混ぜない）
+- 支援 B/C `select_sword`: hotbar 0〜8実測 + 実行capability分離 + game-event応答のtyped command + Fabricメインスレッド再検証 + result/ack + episode相関まで **コード・自動テスト・Minecraft実機確認済み**（2026-08-16。自動持ち替え・救助・馬は未）
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗・地下など）  
 - 任意: 戦闘中断用 OS AI・chat fallback、通常workshop抽出・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
 

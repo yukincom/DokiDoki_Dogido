@@ -39,6 +39,7 @@
     "nearby_lightning_strike": "今、落ちたで！"
   },
   "chat": {
-    "reply": "ようわからん、もうちょい教えて。"
+    "reply": "ようわからん、もうちょい教えて。",
+    "no_hearing_evidence": "ごめん、こっちには今の音の記録が残ってへんわ。"
   }
 }

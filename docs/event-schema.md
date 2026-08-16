@@ -48,7 +48,8 @@
   "nearby_resources": [],
   "look_target": null,
   "combat": {},
-  "meta": {}
+  "meta": {},
+  "command_results": []
 }
 ```
 
@@ -79,6 +80,7 @@
 - `nearby_resources`
 - `look_target` … クロスヘア（＋）が刺さっているブロック/エンティティ。MISS 時は省略可
 - `meta`
+- `command_results` … adapterで未ackの型付きcommand実行結果。通常は空配列
 
 ## 6. 共通 enum
 
@@ -205,7 +207,21 @@ Fabric adapter が実際に送る中心は次のとおり。
   "health": 20,
   "hunger": 18,
   "dimension": "minecraft:overworld",
-  "held_item": "stone_sword",
+  "held_item": "minecraft:stone_sword",
+  "hotbar": {
+    "selected_slot": 2,
+    "slots": [
+      {
+        "slot": 2,
+        "item_id": "minecraft:stone_sword",
+        "count": 1,
+        "damage": 120,
+        "max_damage": 131,
+        "attack_damage": 5.0,
+        "weapon_kind": "sword"
+      }
+    ]
+  },
   "vehicle": {
     "vehicle_id": "minecraft:horse",
     "activity": "running",
@@ -216,6 +232,8 @@ Fabric adapter が実際に送る中心は次のとおり。
 
 ### 項目
 
+上の `hotbar.slots` は1枠だけの抜粋。現行Fabric adapterは空枠を含む0〜8の9行を送る。
+
 - `name`
 - `position`
 - `yaw`
@@ -224,6 +242,13 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `hunger`
 - `dimension`
 - `held_item`
+- `hotbar`（Fabric adapterは0〜8の全枠を送る）
+  - `selected_slot`: 現在選択中の0〜8
+  - `slots[].slot`: 安定した0〜8のslot番号
+  - `item_id / count`: namespaced item IDと個数。空枠はitem IDを省略し `count: 0`
+  - `damage / max_damage`: 消費済み耐久と最大耐久
+  - `attack_damage`: main handへ装備した場合の実測属性値
+  - `weapon_kind`: `empty | sword | trident | axe | bow | tool | other`。候補分類であり、選択判断はserver
 - `vehicle`（**乗車中だけ存在**。未乗車時はキーごと省略）
   - `vehicle_id`: 乗っているエンティティの Minecraft ID
   - `activity`: `riding | moving | running | rowing | dashing`
@@ -424,6 +449,29 @@ Fabric adapter が実際に送る中心は次のとおり。
 - キーは Minecraft の item id ベース
 - 値は所持数
 - ドギド側で松明やベッド材料の判定に使う
+
+## 14b. `command_results`
+
+serverから受けた型付き支援commandの実行結果。adapterはackされるまで後続イベントへ再添付する。
+
+```json
+[
+  {
+    "command_id": "cmd_01JY2ABCXYZ",
+    "command_type": "select_hotbar",
+    "status": "succeeded",
+    "executed_at": "2026-08-15T12:00:01.510+09:00",
+    "selected_slot": 2,
+    "selected_item_id": "minecraft:stone_sword",
+    "detail_code": "selected"
+  }
+]
+```
+
+- `status`: `succeeded | rejected | failed | expired`
+- staleなhotbar観測と現在のitemが一致しない場合は `rejected / expected_item_mismatch`
+- serverはcommand IDで発行記録と相関し、`acknowledged_command_ids`をgame-event応答へ返す
+- server → adapter のcommand本文はイベントではなく [Adapter API §8](adapter-api.md#8-post-apiv1game-events) の応答に載る
 
 ## 15. `nearby_resources`
 

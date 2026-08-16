@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .assist_prompts import build_select_sword_intent_messages
 from .character_mode import (
     BASE_IDENTITY_PROMPT,
     BATTLE_TONE_PROMPT,
@@ -106,6 +107,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "ender_eye_throw": _build_ender_eye_throw_messages,
         "portal_appearance": _build_portal_appearance_messages,
         "player_chat": build_player_chat_messages,
+        "assist_select_sword_intent": _build_select_sword_intent_messages,
     }
     builder = builders.get(request.kind)
     if builder is None:
@@ -115,6 +117,10 @@ def build_messages(request: Any) -> list[dict[str, str]]:
 
 def _build_haiku_draft_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_draft_messages(request.details)
+
+
+def _build_select_sword_intent_messages(request: Any) -> list[dict[str, str]]:
+    return build_select_sword_intent_messages(request.details)
 
 
 def _build_haiku_line_grounding_messages(request: Any) -> list[dict[str, str]]:

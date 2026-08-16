@@ -8,6 +8,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
@@ -22,13 +23,22 @@ final class DogidoEventClient {
     private final HttpClient httpClient;
     private final Gson gson;
     private final AtomicLong sequence;
+    private final DogidoCommandProtocol.State commandState;
+    private final Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler;
     private volatile String sessionId;
+    private volatile String lastPlayerName = "unknown";
 
-    DogidoEventClient(Logger logger, DogidoConfig config) {
+    DogidoEventClient(
+        Logger logger,
+        DogidoConfig config,
+        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler
+    ) {
         this.logger = logger;
         this.config = config;
+        this.commandHandler = commandHandler;
         this.gson = new Gson();
         this.sequence = new AtomicLong();
+        this.commandState = new DogidoCommandProtocol.State();
         this.httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(3))
@@ -39,7 +49,10 @@ final class DogidoEventClient {
         return this.sequence.incrementAndGet();
     }
 
-    void ensureSession(String playerName) {
+    synchronized void ensureSession(String playerName) {
+        if (playerName != null && !playerName.isBlank()) {
+            this.lastPlayerName = playerName;
+        }
         if (this.sessionId != null || !this.config.enabled) {
             return;
         }
@@ -55,6 +68,7 @@ final class DogidoEventClient {
         JsonArray capabilities = new JsonArray();
         capabilities.add("player_state");
         capabilities.add("inventory");
+        capabilities.add("hotbar_slots");
         capabilities.add("visual_threats");
         capabilities.add("auditory_threats");
         capabilities.add("ambient_sounds");
@@ -63,6 +77,9 @@ final class DogidoEventClient {
         capabilities.add("combat_state");
         capabilities.add("death_events");
         payload.add("capabilities", capabilities);
+        JsonArray executionCapabilities = new JsonArray();
+        executionCapabilities.add("client.hotbar.select.v1");
+        payload.add("execution_capabilities", executionCapabilities);
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(this.config.sessionEndpoint()))
             .timeout(Duration.ofSeconds(5))
@@ -104,13 +121,16 @@ final class DogidoEventClient {
             return CompletableFuture.completedFuture(null);
         }
 
+        JsonObject outbound = payload.deepCopy();
+        outbound.add("command_results", this.commandState.pendingResultsJson());
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(this.config.eventEndpoint()))
             .timeout(Duration.ofSeconds(5))
             .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(this.gson.toJson(payload)));
+            .POST(HttpRequest.BodyPublishers.ofString(this.gson.toJson(outbound)));
 
-        if (this.sessionId != null) {
-            requestBuilder.header("X-Dogido-Session-Id", this.sessionId);
+        String requestSessionId = this.sessionId;
+        if (requestSessionId != null) {
+            requestBuilder.header("X-Dogido-Session-Id", requestSessionId);
         }
         if (this.config.hasAuthToken()) {
             requestBuilder.header("Authorization", "Bearer " + this.config.authToken);
@@ -118,17 +138,81 @@ final class DogidoEventClient {
 
         return this.httpClient.sendAsync(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
             .thenAccept(response -> {
+                if (
+                    DogidoCommandProtocol.isUnknownSessionResponse(
+                        response.statusCode(),
+                        response.body()
+                    )
+                ) {
+                    this.recoverUnknownSession(requestSessionId);
+                    return;
+                }
                 if (response.statusCode() / 100 != 2) {
                     this.logger.warn(
                         "Dogido event rejected: status={} body={}",
                         response.statusCode(),
                         response.body()
                     );
+                    return;
                 }
+                this.handleAcceptedResponse(response.body());
             })
             .exceptionally(error -> {
                 this.logger.warn("Dogido event send failed: {}", error.getMessage());
                 return null;
             });
+    }
+
+    private void recoverUnknownSession(String rejectedSessionId) {
+        String playerName;
+        synchronized (this) {
+            if (rejectedSessionId == null || !rejectedSessionId.equals(this.sessionId)) {
+                return;
+            }
+            this.logger.warn(
+                "Dogido session expired on server; re-registering: {}",
+                rejectedSessionId
+            );
+            this.sessionId = null;
+            playerName = this.lastPlayerName;
+        }
+        this.ensureSession(playerName);
+    }
+
+    void rememberCommandResult(JsonObject result) {
+        this.commandState.rememberResult(result);
+    }
+
+    private void handleAcceptedResponse(String body) {
+        this.commandState.acknowledge(
+            DogidoCommandProtocol.parseAcknowledgedCommandIds(body)
+        );
+        for (
+            DogidoCommandProtocol.SelectHotbarCommand command
+                : DogidoCommandProtocol.parseSelectHotbarCommands(body)
+        ) {
+            if (!this.commandState.markCommandSeen(command.commandId())) {
+                continue;
+            }
+            try {
+                this.commandHandler.accept(command);
+            } catch (RuntimeException error) {
+                this.logger.warn(
+                    "Dogido command dispatch failed: command_id={} detail={}",
+                    command.commandId(),
+                    error.getMessage()
+                );
+                this.commandState.rememberResult(
+                    DogidoCommandProtocol.commandResult(
+                        command,
+                        "failed",
+                        java.time.Instant.now(),
+                        null,
+                        null,
+                        "dispatch_failed"
+                    )
+                );
+            }
+        }
     }
 }

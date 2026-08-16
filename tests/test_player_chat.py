@@ -39,6 +39,7 @@ from dogido_server.state_machine.fallback_catalog import fallback_text
 BASE = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
 
 CHAT_REPLY = fallback_text("general", "chat", "reply")
+NO_HEARING_REPLY = fallback_text("general", "chat", "no_hearing_evidence")
 
 
 def make_event(
@@ -146,7 +147,25 @@ class PlayerChatReplyTests(unittest.TestCase):
         first = self.texts(make_event(sequence=1, at_sec=0, user_text="おーい"))
         second = self.texts(make_event(sequence=2, at_sec=5, user_text="聞こえとる？"))
         self.assertEqual([CHAT_REPLY], first)
-        self.assertEqual([CHAT_REPLY], second)
+        self.assertEqual([NO_HEARING_REPLY], second)
+
+    def test_sound_question_without_observation_does_not_invent_source(self) -> None:
+        class HallucinatingLLM:
+            def preload(self) -> bool:
+                return False
+
+            def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
+                raise AssertionError("音の観測が空ならLLMを呼ばない")
+
+        machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=HallucinatingLLM(),  # type: ignore[arg-type]
+        )
+        result = machine.process(make_event(sequence=1, user_text="今の音なに？"))
+        self.assertEqual(
+            [NO_HEARING_REPLY],
+            [action.text for action in result.actions if action.text],
+        )
 
     def test_hush_request_gets_no_reply(self) -> None:
         texts = self.texts(make_event(sequence=1, user_text="うるさい"))

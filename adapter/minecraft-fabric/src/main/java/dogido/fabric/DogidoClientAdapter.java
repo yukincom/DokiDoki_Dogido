@@ -1,5 +1,6 @@
 package dogido.fabric;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
@@ -31,8 +32,12 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.AttributeModifiersComponent;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.boss.dragon.phase.PhaseType;
 import net.minecraft.entity.mob.HostileEntity;
@@ -58,6 +63,7 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.village.VillagerData;
 import net.minecraft.village.VillagerProfession;
@@ -67,6 +73,7 @@ import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -237,7 +244,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     public void onInitializeClient() {
         INSTANCE = this;
         this.config = DogidoConfig.load();
-        this.eventClient = new DogidoEventClient(LOGGER, this.config);
+        this.eventClient = new DogidoEventClient(LOGGER, this.config, this::handleSelectHotbarCommand);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientSendMessageEvents.CHAT.register(this::rememberUserText);
         ClientSendMessageEvents.COMMAND.register(command -> rememberUserText("/" + command));
@@ -271,6 +278,95 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         instance.onPlayedSound(sound);
+    }
+
+    private void handleSelectHotbarCommand(DogidoCommandProtocol.SelectHotbarCommand command) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            rememberSelectHotbarResult(command, "failed", null, null, "client_unavailable");
+            return;
+        }
+        client.execute(() -> executeSelectHotbarCommand(client, command));
+    }
+
+    private void executeSelectHotbarCommand(
+        MinecraftClient client,
+        DogidoCommandProtocol.SelectHotbarCommand command
+    ) {
+        Instant now = Instant.now();
+        if (!now.isBefore(command.expiresAt())) {
+            rememberSelectHotbarResult(command, "expired", null, null, "expired");
+            return;
+        }
+        ClientPlayerEntity player = client.player;
+        if (player == null || client.world == null) {
+            rememberSelectHotbarResult(command, "failed", null, null, "player_or_world_unavailable");
+            return;
+        }
+        if (!net.minecraft.entity.player.PlayerInventory.isValidHotbarIndex(command.slot())) {
+            rememberSelectHotbarResult(
+                command,
+                "rejected",
+                player.getInventory().getSelectedSlot(),
+                itemId(player.getMainHandStack()),
+                "invalid_slot"
+            );
+            return;
+        }
+        ItemStack target = player.getInventory().getStack(command.slot());
+        String targetItemId = itemId(target);
+        if (target.isEmpty() || !command.expectedItemId().equals(targetItemId)) {
+            rememberSelectHotbarResult(
+                command,
+                "rejected",
+                player.getInventory().getSelectedSlot(),
+                itemId(player.getMainHandStack()),
+                "expected_item_mismatch"
+            );
+            return;
+        }
+
+        player.getInventory().setSelectedSlot(command.slot());
+        String selectedItemId = itemId(player.getMainHandStack());
+        if (
+            player.getInventory().getSelectedSlot() != command.slot()
+                || !command.expectedItemId().equals(selectedItemId)
+        ) {
+            rememberSelectHotbarResult(
+                command,
+                "failed",
+                player.getInventory().getSelectedSlot(),
+                selectedItemId,
+                "selection_not_applied"
+            );
+            return;
+        }
+        rememberSelectHotbarResult(command, "succeeded", command.slot(), selectedItemId, "selected");
+    }
+
+    private void rememberSelectHotbarResult(
+        DogidoCommandProtocol.SelectHotbarCommand command,
+        String status,
+        Integer selectedSlot,
+        String selectedItemId,
+        String detailCode
+    ) {
+        this.eventClient.rememberCommandResult(
+            DogidoCommandProtocol.commandResult(
+                command,
+                status,
+                Instant.now(),
+                selectedSlot,
+                selectedItemId,
+                detailCode
+            )
+        );
+        LOGGER.info(
+            "Dogido command result: command_id={} status={} detail={}",
+            command.commandId(),
+            status,
+            detailCode
+        );
     }
 
     private void onClientTick(MinecraftClient client) {
@@ -1251,6 +1347,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             "held_item",
             held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
         );
+        json.add("hotbar", buildHotbar(player));
         JsonObject vehicle = buildVehicleState(player);
         if (vehicle != null) {
             // 未乗車時はキーごと省略する。「乗っていない」をLLM材料にしない。
@@ -1556,6 +1653,72 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             json.addProperty(entry.getKey(), entry.getValue());
         }
         return json;
+    }
+
+    private JsonObject buildHotbar(ClientPlayerEntity player) {
+        JsonObject hotbar = new JsonObject();
+        hotbar.addProperty("selected_slot", player.getInventory().getSelectedSlot());
+        JsonArray slots = new JsonArray();
+        for (int slot = 0; slot < net.minecraft.entity.player.PlayerInventory.getHotbarSize(); slot += 1) {
+            ItemStack stack = player.getInventory().getStack(slot);
+            JsonObject row = new JsonObject();
+            row.addProperty("slot", slot);
+            if (stack.isEmpty()) {
+                row.addProperty("count", 0);
+                row.addProperty("damage", 0);
+                row.addProperty("max_damage", 0);
+                row.addProperty("weapon_kind", "empty");
+            } else {
+                row.addProperty("item_id", itemId(stack));
+                row.addProperty("count", stack.getCount());
+                row.addProperty("damage", stack.getDamage());
+                row.addProperty("max_damage", stack.getMaxDamage());
+                row.addProperty("attack_damage", round(attackDamage(player, stack)));
+                row.addProperty("weapon_kind", weaponKind(stack));
+            }
+            slots.add(row);
+        }
+        hotbar.add("slots", slots);
+        return hotbar;
+    }
+
+    private double attackDamage(ClientPlayerEntity player, ItemStack stack) {
+        AttributeModifiersComponent modifiers = stack.getOrDefault(
+            DataComponentTypes.ATTRIBUTE_MODIFIERS,
+            AttributeModifiersComponent.DEFAULT
+        );
+        return modifiers.applyOperations(
+            EntityAttributes.ATTACK_DAMAGE,
+            player.getAttributeBaseValue(EntityAttributes.ATTACK_DAMAGE),
+            EquipmentSlot.MAINHAND
+        );
+    }
+
+    private String weaponKind(ItemStack stack) {
+        if (stack.isIn(ItemTags.SWORDS)) {
+            return "sword";
+        }
+        if (stack.isOf(Items.TRIDENT)) {
+            return "trident";
+        }
+        if (stack.isIn(ItemTags.AXES)) {
+            return "axe";
+        }
+        if (stack.isOf(Items.BOW)) {
+            return "bow";
+        }
+        if (
+            stack.isIn(ItemTags.HOES)
+                || stack.isIn(ItemTags.PICKAXES)
+                || stack.isIn(ItemTags.SHOVELS)
+        ) {
+            return "tool";
+        }
+        return "other";
+    }
+
+    private String itemId(ItemStack stack) {
+        return stack.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(stack.getItem()).toString();
     }
 
     /**
@@ -2326,11 +2489,23 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (resolution == null) {
             return;
         }
+        if (!resolution.threatNow()) {
+            // 蜘蛛・エンダーマン等はHOSTILEカテゴリの音を出しても、まだプレイヤーを
+            // 狙っていないことがある。脅威扱いにはせず、実際に聞いた音として残す。
+            recordAmbientSoundObservation(
+                player,
+                soundEventId,
+                resolution.label(),
+                source,
+                resolution.sourceId()
+            );
+            return;
+        }
         recordSoundObservation(
             player,
             world,
             soundEventId,
-            resolution.hostileLabel(),
+            resolution.label(),
             source,
             resolution.spokenNameAllowed(),
             resolution.sourceId()
@@ -2346,7 +2521,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     ) {
         LivingEntity nearest = null;
         double nearestDistance = GLOBAL_SOUND_SOURCE_MATCH_RADIUS;
-        boolean calmNeutralSourceNearby = false;
+        LivingEntity nearestCalmNeutral = null;
+        double nearestCalmNeutralDistance = GLOBAL_SOUND_SOURCE_MATCH_RADIUS;
         for (Entity entity : world.getOtherEntities(null, new net.minecraft.util.math.Box(
             source.x - GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.y - GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.z - GLOBAL_SOUND_SOURCE_MATCH_RADIUS,
             source.x + GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.y + GLOBAL_SOUND_SOURCE_MATCH_RADIUS, source.z + GLOBAL_SOUND_SOURCE_MATCH_RADIUS
@@ -2360,8 +2536,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             double dz = entity.getZ() - source.z;
             double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (!disposition.threatNow()) {
-                if (disposition.ambientEligible() && likelyMatchesNeutralHostileSound(defaultHostileLabel, disposition.type())) {
-                    calmNeutralSourceNearby = true;
+                if (
+                    disposition.ambientEligible()
+                        && likelyMatchesNeutralHostileSound(defaultHostileLabel, disposition.type())
+                        && distance < nearestCalmNeutralDistance
+                ) {
+                    nearestCalmNeutral = living;
+                    nearestCalmNeutralDistance = distance;
                 }
                 continue;
             }
@@ -2371,12 +2552,21 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
         }
         if (nearest == null) {
-            if (calmNeutralSourceNearby) {
-                return null;
+            if (nearestCalmNeutral != null) {
+                String neutralType = entityTypeName(nearestCalmNeutral);
+                return new SoundSourceResolution(
+                    neutralType == null || neutralType.isBlank()
+                        ? defaultHostileLabel
+                        : neutralType,
+                    nearestCalmNeutral.getUuid().toString(),
+                    true,
+                    false
+                );
             }
             return new SoundSourceResolution(
                 defaultHostileLabel,
                 resolveSoundSourceId(world, source, defaultHostileLabel, soundEventId),
+                true,
                 true
             );
         }
@@ -2385,10 +2575,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return new SoundSourceResolution(
                 defaultHostileLabel,
                 nearest.getUuid().toString(),
+                true,
                 true
             );
         }
-        return new SoundSourceResolution(nearestType, nearest.getUuid().toString(), true);
+        return new SoundSourceResolution(nearestType, nearest.getUuid().toString(), true, true);
     }
 
     private boolean likelyMatchesNeutralHostileSound(String hostileLabel, String entityType) {
@@ -2589,7 +2780,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
 
-        this.recentSoundObservations.removeIf(existing -> existing.sourceId().equals(sourceId));
+        boolean refreshed = this.recentSoundObservations.removeIf(
+            existing -> existing.sourceId().equals(sourceId)
+        );
         this.recentSoundObservations.addLast(
             new SoundObservation(
                 this.tickCounter,
@@ -2604,6 +2797,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         );
         expireSoundObservations();
         this.lastAudioThreatObservedTick = this.tickCounter;
+        if (!refreshed) {
+            LOGGER.info(
+                "Dogido sound observed: route=hostile label={} sound={} distance={}",
+                hostileLabel,
+                soundEventId,
+                round(distance)
+            );
+        }
     }
 
     private void recordAmbientSoundObservation(
@@ -2620,7 +2821,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String id = sourceId == null || sourceId.isBlank()
             ? "ambient:" + entityType + ":" + Math.round(source.x) + ":" + Math.round(source.z)
             : sourceId;
-        this.recentAmbientSoundObservations.removeIf(existing -> existing.sourceId().equals(id));
+        boolean refreshed = this.recentAmbientSoundObservations.removeIf(
+            existing -> existing.sourceId().equals(id)
+        );
         this.recentAmbientSoundObservations.addLast(
             new SoundObservation(
                 this.tickCounter,
@@ -2634,6 +2837,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             )
         );
         expireAmbientSoundObservations();
+        if (!refreshed) {
+            LOGGER.info(
+                "Dogido sound observed: route=ambient label={} sound={} distance={}",
+                entityType,
+                soundEventId,
+                round(distance)
+            );
+        }
     }
 
     private boolean tryRecordAmbientFromGlobalSound(
@@ -4015,9 +4226,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private record SoundSourceResolution(
-        String hostileLabel,
+        String label,
         String sourceId,
-        boolean spokenNameAllowed
+        boolean spokenNameAllowed,
+        boolean threatNow
     ) {
     }
 

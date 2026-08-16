@@ -95,7 +95,7 @@
 
 workshop の critique JSONL は、そのまま改善キューになる（プレイヤーが教師）。
 
-通常の反応は、受理した非重複イベント1件につき `trigger → observation → state_before → decision → action → result` を `.dogido_memory/eval/episodes.jsonl` へ記録する。発話なしも含むため、誤反応だけでなく無反応も同じ集計面で比較できる。これは会話・川柳の記憶ではなく、runtimeへ読み戻さない評価ログ。詳細は [支援アクションの操縦席 §A](assist-action-architecture.md#a-エピソード-jsonl実装済み)。
+通常の反応は、受理した非重複イベント1件につき `trigger → observation → state_before → decision → action → result` を `.dogido_memory/eval/episodes.jsonl` へ記録する。発話なしも含むため、誤反応だけでなく無反応も同じ集計面で比較できる。支援commandは発行時の `action` と、後続イベントで観測したadapter実結果をcommand IDで相関する。これは会話・川柳の記憶ではなく、runtimeへ読み戻さない評価ログ。詳細は [支援アクションの操縦席 §A](assist-action-architecture.md#a-エピソード-jsonl実装済み)。
 
 ### 3.3 川柳は「当たる率」より「外したあとの関係」
 
@@ -179,6 +179,7 @@ soft workshop 方針は後半をすでに押さえている。
 | 発句 source atom 品質ゲート | 済（原文snapshot・節単位preface provenance/主張範囲・行別出典・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P5 + 現在ターン予定／安全方針 | 済（帰宅予定は発話ターンのみ、地表夕方／雷雨は導出型、洞窟オフ） |
 | 観測ギャップ・水辺など | 乗車中の乗り物材料は済（未乗車は省略・主語付き）。水辺・旗・エリトラなどは継続課題（完成度の本丸） |
+| 支援アクション | `select_sword` の縦切り（hotbar実測→コード/Qwen限定意図→capability gate→typed command→Fabric再検証→result/ack→episode相関）はコード・自動テスト・Minecraft実機確認済み。自動持ち替え・救助・馬は未 |
 | 修正案 1 本・連続局所編集 / structured抽出実ログ評価 / Phase E | AIのLocate→Edit→Testに加え、常駐会話モデルが発話根拠つきで行の位置概念・プレイヤー置換語・pending採否・終了意図を抽出→コードで根拠衝突・ひらがな化・正確な5/7/5音・hard制約・CAS・終了scopeを検証→未保存三行へ連続編集→採用後もpin維持まで済。句本文と状態変更はコード固定。生の行呼称と正規名は将来learning版のフックとしてログに残すが、現在は呼び方を訂正しない。実ログ評価・整理は任意・未 |
 | VLM / Vector RAG | 将来枠 |
 

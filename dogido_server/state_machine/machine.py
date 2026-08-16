@@ -67,6 +67,7 @@ class DogidoStateMachine(
         event: GameEvent,
         *,
         interpreted_user_text: str | None = None,
+        player_input_context: PlayerInputContext | None = None,
     ) -> StateMachineResult:
         now = event.observed_at
         previous_mode = self.state.mode
@@ -78,7 +79,7 @@ class DogidoStateMachine(
             self._pending_haiku_source_atoms = ()
             self._pending_haiku_fixed_line = None
             self._pending_haiku_materials = None
-        self.player_input = route_player_input(
+        self.player_input = player_input_context or route_player_input(
             event.meta.user_text,
             interpreted_text=interpreted_user_text,
         )

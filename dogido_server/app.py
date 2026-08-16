@@ -109,6 +109,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         _ensure_authorized(resolved_settings, authorization)
         def process_and_dispatch():
+            if x_dogido_session_id and x_dogido_session_id not in service.sessions:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "unknown_session_id",
+                        "session_id": x_dogido_session_id,
+                    },
+                )
             result = service.process_event(
                 payload,
                 session_id=x_dogido_session_id,
@@ -144,6 +152,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 detail=f"events exceeds max_batch_size={resolved_settings.max_batch_size}",
             )
         def process_and_dispatch():
+            if x_dogido_session_id and x_dogido_session_id not in service.sessions:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "unknown_session_id",
+                        "session_id": x_dogido_session_id,
+                    },
+                )
             result, actions = service.process_batch(
                 payload.events,
                 session_id=x_dogido_session_id,

@@ -8,7 +8,12 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from dogido_server.models import GameEvent, OutputFlags
+from dogido_server.models import (
+    AdapterCommandResult,
+    GameEvent,
+    OutputFlags,
+    SelectHotbarCommand,
+)
 
 if TYPE_CHECKING:
     from dogido_server.state_machine.types import AudioAction
@@ -16,7 +21,7 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger("uvicorn.error")
 
-EPISODE_SCHEMA_VERSION = 1
+EPISODE_SCHEMA_VERSION = 2
 EPISODE_RELATIVE_PATH = Path("eval") / "episodes.jsonl"
 
 
@@ -82,6 +87,11 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
             "held_item": player.held_item,
             "yaw": player.yaw,
             "pitch": player.pitch,
+            "hotbar": (
+                player.hotbar.model_dump(mode="json")
+                if player.hotbar is not None
+                else None
+            ),
             "vehicle": (
                 player.vehicle.model_dump(mode="json")
                 if player.vehicle is not None
@@ -237,8 +247,16 @@ class EpisodeRecorder:
         haiku_emitted: bool,
         interpreted_user_text: str | None,
         recorded_at: datetime,
+        adapter_commands: list[SelectHotbarCommand] | None = None,
+        command_results: list[AdapterCommandResult] | None = None,
     ) -> bool:
         action_items = [_action_payload(action) for action in actions]
+        adapter_command_items = [
+            command.model_dump(mode="json") for command in (adapter_commands or [])
+        ]
+        command_result_items = [
+            result.model_dump(mode="json") for result in (command_results or [])
+        ]
         raw_user_text = (event.meta.user_text or "").strip() or None
         interpreted = (interpreted_user_text or "").strip() or None
         payload: dict[str, Any] = {
@@ -271,7 +289,13 @@ class EpisodeRecorder:
             "state_before": state_before,
             "decision": {
                 "source": "state_machine_and_service_policy",
-                "kind": "emit_actions" if action_items else "no_action",
+                "kind": (
+                    "emit_actions"
+                    if action_items or adapter_command_items
+                    else "observe_adapter_result"
+                    if command_result_items
+                    else "no_action"
+                ),
                 "mode_after": mode_after,
                 "mode_changed": state_before.get("mode") != mode_after,
                 "combat_active": combat_active,
@@ -281,11 +305,25 @@ class EpisodeRecorder:
             "action": {
                 "count": len(action_items),
                 "items": action_items,
+                "adapter_commands": adapter_command_items,
             },
             "result": {
-                "status": "actions_selected" if action_items else "no_action",
-                "scope": "service_decision",
+                "status": (
+                    "actions_selected"
+                    if action_items
+                    else "commands_selected"
+                    if adapter_command_items
+                    else "adapter_result_observed"
+                    if command_result_items
+                    else "no_action"
+                ),
+                "scope": (
+                    "adapter_execution_observed"
+                    if command_result_items
+                    else "service_decision"
+                ),
                 "output_flags": output_flags.model_dump(mode="json"),
+                "adapter_command_results": command_result_items,
             },
         }
         return self._append(payload)

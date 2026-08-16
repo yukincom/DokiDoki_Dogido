@@ -280,6 +280,9 @@ class EnvironmentalReactionsMixin:
             actions = self._speech_actions(self._render_dragon_direction_answer(event))
             self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
+        # 型付きassistはserviceが処理する。通常player_chatを生成して二重返答しない。
+        if self.player_input.requests_sword:
+            return []
         if self._has_pending_player_chat(event):
             actions = self._speech_actions(self._render_player_chat_reply(event))
             self._suppress_thunder_after_player_reply(event, now, actions)

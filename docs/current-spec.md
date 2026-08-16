@@ -4,6 +4,7 @@
 
 - 骨格: 2026-05-24
 - スコープ・暗所・LLM 方針の更新: 2026-07-09
+- 最初の支援アクション（剣への持ち替え）: 2026-08-16（コード・自動テスト・Minecraft実機確認済み）
 
 既存のメモより優先して参照する前提です。
 
@@ -37,8 +38,9 @@
 
 ```text
 Minecraft Java Edition
-  -> Minecraft client adapter (Fabric client mod)
-  -> dogido-server (Python / FastAPI)
+  <-> Minecraft client adapter (Fabric client mod: 観測 / 選択slot変更)
+       -- game events --> dogido-server (Python / FastAPI)
+       <-- typed assist command --
      -> event normalizer
      -> state machine
      -> py_trees action policy
@@ -64,6 +66,8 @@ Minecraft Java Edition
 - ゲーム固有イベントを検出する
 - `dogido-server` にローカル送信する
   - 受信 endpoint の正本は [受信 API 仕様](adapter-api.md)
+- `player.hotbar` を0〜8の実測として送り、型付き `select_hotbar` commandだけを受ける
+- command ID・期限・期待item IDを再検証し、Minecraftメインスレッドで選択slotだけを変更する
 
 #### dogido-server
 
@@ -73,6 +77,8 @@ Minecraft Java Edition
 - 緊急音声と通常会話を分離する
 - 必要なときだけ LLM を呼ぶ
 - 非重複イベントごとの判断と最終アクションを評価用 JSONL へbest-effortで記録する
+- 明示的な剣持ち替え要求を限定抽出し、capability・hotbarをコード検証して型付きcommandを返す
+- command発行とadapter実結果をcommand IDで同じ評価JSONLへ相関記録する
 
 #### 音声出力（現行: PC / 将来: M5Stack）
 
@@ -141,12 +147,21 @@ Minecraft Java Edition
 - `hunger`
 - `inventory`
 - `held_item`
+- `hotbar`（0〜8、選択中slot、item ID、耐久、攻撃属性、候補種別）
 - `dimension`
 - `vehicle`（乗車中だけ。種別・操縦・移動状態を server で主語付き事実へ変換）
 
 未乗車時は `vehicle` を送らない。LLM へ渡すときは
 `プレイヤーはXXに乗っている／移動している／走っている／漕いでいる` の形式に固定する。
 エリトラ飛行は乗り物と混ぜず、将来の活動観測として保留する。
+
+### 現行の限定支援アクション
+
+- プレイヤーの明示的な「剣」「剣に持ち替えて」でだけ動く。非戦闘中でも明示依頼なら可
+- 代表形はコードで即時判定し、剣に触れた曖昧な自然形だけ既存chat route（通常Qwen）の閉じたschemaで抽出する
+- LLMはintent・対象・依頼性・発話中evidence・confidenceまで。実行可否、slot選択、期限・重複・期待item検証はコード
+- ドギドからの自動持ち替えはしない。OS AIの用途も戦闘中断中の小分類から広げない
+- 救助、馬、ActionBudget、安全地点は未実装
 
 ### ワールド状態
 
@@ -437,6 +452,7 @@ adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕�
 4. state machine を仕様化する
 5. audio cue 一覧と優先度を定義する（PC 再生まで）
 6. 発話あり／なしの決定を schema version 付き episode JSONL へ記録する
+7. 最初の限定支援 `select_sword` をhotbar実測・typed command・Fabric再検証・実結果ログまで接続する（実機確認済み）
 
 ### 進行中 / 優先して磨く
 

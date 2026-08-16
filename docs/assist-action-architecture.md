@@ -1,7 +1,7 @@
 # 支援アクションの操縦席 — Hermes Agent の設計パターン評価
 
 **日付:** 2026-08-14  
-**状態:** A「エピソード JSONL」は実装済み（2026-08-15）。B 以降は方針メモ・未実装で、完成度の本丸を置き換えない
+**状態:** A「エピソード JSONL」と、B/C の最初の縦切り `select_sword` は実装済み（2026-08-15）。D 以降は方針メモ・未実装で、完成度の本丸を置き換えない
 **参照元:** [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)（2026-08-14 参照）。公開実装から設計パターンを調査するが、コードや agent loop は取り込まない。
 
 関連:
@@ -72,11 +72,10 @@ Hermes Agent には似た部品がある。ただしドギドは汎用エージ�
 
 ### 3.2 registry より先に効くもの
 
-1. **未実装: server → adapter の逆チャネル**
+1. **実装済み: server → adapter の最初の逆チャネル**
 
-   adapter はイベントを POST するだけ。capabilities は観測種別（`inventory`, `visual_threats` など）。  
-   ホットバー選択・ワープ・召喚の受け口は Java にも受信 API にも無い。  
-   registry だけ先に置くと、押しても世界が動かない空の操縦席になる。
+   `POST /api/v1/game-events` の応答に、閉じた型の `select_hotbar` command を載せる。adapter は `player.hotbar` を観測し、実行capability `client.hotbar.select.v1` を観測capabilitiesと分けて宣言する。commandは結果が返るまでserverから再提示され、adapterの結果もackされるまで次のgame eventへ再添付される。
+   heartbeatはFabric側の主経路にせず、約1秒ごとのsnapshotを既存の往復路として使う。command ID・期限・期待item IDを実行直前に検証し、重複応答でも二重実行しない。
 
    実行権限はワールド種別で異なる。ホットバー選択は client 側で完結するが、プレイヤーの移動や entity の再配置は logical server 側の操作になる。シングルプレイでは同一プロセスの integrated server 上で実行でき、LAN 公開は不要。リモートのマルチプレイではプレイヤー権限を偽装せず、server-side mod または許可済みコマンドなど、サーバーが明示的に認める経路が必要になる。
 
@@ -163,7 +162,7 @@ Hermes の approval は汎用コマンド実行を対象にした設計で、ド
 
 ```text
 dogido_server/assist/
-  types.py       # ActionSpec, ActionContext, ActionResult, RiskPolicy
+  types.py       # ActionSpec, ActionContext, ActionDispatch, RiskPolicy
   registry.py    # 明示登録。dispatch は必ず gate 経由
   gate.py        # AUTO / CONFIRM / DENY + 実行直前の再 available
   select_sword.py
@@ -175,7 +174,7 @@ dogido_server/assist/
 ### 5.1 ActionSpec
 
 - `name` — 閉じた識別子（`select_sword`）
-- `schema` — 引数検証用。OpenAI tools 配列ではない
+- 型付き入出力 — `select_sword` v1は自由引数を持たず、閉じた `ActionName` とPydanticの `SelectHotbarCommand` で契約を固定。将来引数が増えてもOpenAI tools配列にはしない
 - `handler` — コード。Minecraft コマンド文字列を LLM から受け取らない
 - `available(ctx) -> bool` — **今の snapshot**。キャッシュしない
 - `policy` — `auto` / `confirm` / `deny`
@@ -229,8 +228,8 @@ world result
 
 ```text
 A. ✅ エピソード JSONL（2026-08-15 実装済み。ボタン無しでも効く）
-B. adapter 逆チャネル + 実行 capabilities（押した先）
-C. assist registry + gate + select_sword（最初の1ボタン）
+B. ✅ adapter 逆チャネル + 実行 capabilities（`select_hotbar` 1種）
+C. ✅ assist registry + gate + select_sword（最初の1ボタン）
 D. LLM 世代 ID（生成中の脅威で結果破棄。可能なら生成を service 外へ）
 E. ActionBudget（2ステップ支援＝救助の確認フローができたとき）
 F. 安全地点のワールド状態ファイル（救助の直前）
@@ -250,7 +249,7 @@ C を空箱だけで先行させず、**実装済みAを再利用して、剣1�
 
 ここでいう「1反応」は、server が受理して実際に処理した **非重複のゲームイベント1件**。発話しなかった判断も `no_action` として1行にする。同一 sequence / idempotency key の重複受信は再判断していないため、新しい行を作らない。
 
-初版は `schema_version: 1` と `record_type: decision_episode` を持ち、次を追跡する。
+初版は `schema_version: 1`、支援結果を接続した現行版は `schema_version: 2` と `record_type: decision_episode` を持つ。既存行を書き換えないため、同じJSONL内に版が混在してよい。
 
 | キー | 内容 |
 |---|---|
@@ -258,8 +257,8 @@ C を空箱だけで先行させず、**実装済みAを再利用して、剣1�
 | `observation` | プレイヤー・ワールド・暗所形状・視覚／聴覚脅威・mob・所持品・戦闘ヒント等の安定した要約 |
 | `state_before` | service が入力保留・workshop timeout・状態機械処理を行う前の mode / 句pending / workshop状態 |
 | `decision` | action有無、処理後mode、mode遷移、combat、川柳、選択したlayer |
-| `action` | workshop・会話記憶の後処理まで含め、service が最終的に選んだ音声アクション |
-| `result` | `scope: service_decision` と出力フラグ。**TTSやスピーカーでの実再生成功を表すものではない** |
+| `action` | workshop・会話記憶の後処理まで含め、service が最終的に選んだ音声アクションと、新規発行したadapter command |
+| `result` | 通常は `scope: service_decision`。adapter結果を受けた行だけ `adapter_execution_observed` とcommand IDつき実結果。音声については**TTSやスピーカーでの実再生成功を表さない** |
 
 `EpisodeRecorder` は `MemoryStore` へ追加せず、runtime から読み戻したりプロンプトへ注入したりしない。保存ルートと永続化のon/off（`memory_enabled`）だけを既存設定と共有する。ディレクトリ作成・serialize・追記の失敗は警告ログに留め、イベント処理結果へ例外を返さない。
 
@@ -267,17 +266,28 @@ episode はプレイヤー入力の raw / interpreted と、選択された発�
 
 最初の勝ちは、壁越し誤警報・panic 上げ忘れ・無反応を同じ形式で集計できること。将来 assist action を追加するときは同じ episode の `action` / `result` を拡張し、別のtrajectory基盤を増やさない。
 
-### B. 逆チャネル
+### B. 逆チャネル（実装済み）
 
-heartbeat 応答に pending commands を載せるか、短い poll。  
-最初の command は `select_hotbar` だけ。server がスロット番号を決め、adapter は選択するだけ。  
-チートコマンドを文字列で送らない。
+既存のgame-event応答へpending commandを載せる。最初のcommandは `select_hotbar` だけ。serverがスロット番号を決め、adapterはMinecraftメインスレッドで選択するだけ。チートコマンドを文字列で送らない。
 
-### C. 剣
+- server → adapter: `command_id / type / slot / expected_item_id / issued_at / expires_at`
+- adapter → server: `command_id / command_type / status / executed_at / selected_slot / selected_item_id / detail_code`
+- server → adapter: `acknowledged_command_ids`
+- adapterは期限・slot範囲・player/world・expected itemを実行直前に再検証
+- 両側でIDを記録し、並行中のHTTP応答や結果再送を冪等に処理
 
-`available`: ホットバーに剣（なければ [支援計画のフォールバック順](future-assistance-and-senryu-app-plan.md)）があり、adapter が `hotbar_select` を出している。  
-戦闘中のみにするかは実装時に決める（誤認識抑制）。連続実行はここで抑える。  
-これが ActionBudget の最初の実体（incident あたり1回）で、汎用 IterationBudget は不要。
+### C. 剣（実装済み）
+
+`available`: 最新イベントの `player.hotbar` に剣（なければ [支援計画のフォールバック順](future-assistance-and-senryu-app-plan.md)）があり、sessionが `client.hotbar.select.v1` を宣言している。TTL cacheは使わない。
+
+- 代表的な「剣」「剣に持ち替えて」はコードで即時判定
+- 音声入力で実測した「県に持ち替え」「県に変えて」「県にハインコ（変更）」「チェンに変更」は、`source=voice`で閉じた剣の音近傍候補の直後に対応する操作語がある場合だけ解釈面を「剣」へ直し、同じ明示依頼ガードを再適用する。rawは評価ログへ残し、単独の候補語やその語についての会話、typed入力は補正しない
+- 所持確認・雑談・否定形（「剣に持ち替えないで」等）はコードとLLM出力検証の両方で候補から外す
+- 剣に触れたがコードで確定できない自然な依頼だけ、既存chat route（通常Qwen）の閉じたschemaで intent / weapon kind / request / evidence / confidence を抽出
+- confidence 0.90以上かつ発話中の剣を含む連続evidenceがある場合だけ候補化。OS AIの適用範囲は広げない
+- 明示依頼なら非戦闘中でも実行するが、ドギドからの自動持ち替えはしない
+- workshop open中の「剣にして」のような語替えと衝突する形はworkshopを優先し、「剣に持ち替えて」のような操作語つきだけ支援へ通す
+- pending中の再発行と、成功直後3秒の連続実行を小さく抑える。汎用ActionBudgetはまだ入れない
 
 ### D. LLM 世代
 
@@ -308,7 +318,7 @@ AGENTS.md の「Hermes 導入禁止」は維持する。実装に入るとき、
 
 ---
 
-## 8. 最初の実装単位（支援に入るとき）
+## 8. 最初の実装単位（実装済み）
 
 川柳・観測・workshop の PR に混ぜない。1本の縦貫通:
 
@@ -317,4 +327,4 @@ AGENTS.md の「Hermes 導入禁止」は維持する。実装に入るとき、
 3. `select_sword` のみ
 4. その1回を既存の episode JSONL の `action` / `result` に接続する
 
-B/C は go サインと adapter 調査（ホットバー選択の可否）が揃うまでコードを書かない。A の決定記録はすでに稼働する。
+B/C は上記4点を1本の縦切りとして接続済み。次は実機でクライアント同期・期限・slot内容変更時の拒否を確認し、その後D以降を別差分で扱う。

@@ -164,6 +164,36 @@ class VehicleState(DogidoModel):
     controlling: bool = False
 
 
+class HotbarSlot(DogidoModel):
+    """クライアントが実測したホットバー1枠。
+
+    weapon_kind は候補分類までで、どの枠を選ぶかはサーバー側の policy が決める。
+    damage は消費済み耐久、max_damage は最大耐久。空き枠も slot を保つため1行送る。
+    """
+
+    slot: int = Field(ge=0, le=8)
+    item_id: str | None = None
+    count: int = Field(default=0, ge=0)
+    damage: int = Field(default=0, ge=0)
+    max_damage: int = Field(default=0, ge=0)
+    attack_damage: float | None = Field(default=None, ge=0)
+    weapon_kind: Literal["empty", "sword", "trident", "axe", "bow", "tool", "other"] = "empty"
+
+
+class HotbarState(DogidoModel):
+    """選択中slotと0〜8の実測内容。"""
+
+    selected_slot: int = Field(ge=0, le=8)
+    slots: list[HotbarSlot] = Field(default_factory=list, max_length=9)
+
+    @model_validator(mode="after")
+    def _slot_indices_are_unique(self) -> "HotbarState":
+        indices = [slot.slot for slot in self.slots]
+        if len(indices) != len(set(indices)):
+            raise ValueError("hotbar slot indices must be unique")
+        return self
+
+
 class PlayerState(DogidoModel):
     """プレイヤー本人の観測状態（仕様 §9）。
 
@@ -178,6 +208,7 @@ class PlayerState(DogidoModel):
     hunger: int | None = None  # 最大 20
     dimension: str | None = None  # 例: "minecraft:overworld" / "minecraft:the_nether"
     held_item: str | None = None  # 手持ちアイテムの Minecraft item id
+    hotbar: HotbarState | None = None  # 実行capabilityがあるadapterの0〜8実測
     vehicle: VehicleState | None = None  # 未乗車時は None。LLM へ空状態を渡さない
     active_status_effects: list[str] = Field(default_factory=list)  # 例: ["mining_fatigue"]
 
@@ -394,6 +425,18 @@ class MetaState(DogidoModel):
     advancements: list[str] = Field(default_factory=list)
 
 
+class AdapterCommandResult(DogidoModel):
+    """adapter が実行した型付きcommandの結果。ackされるまで再送される。"""
+
+    command_id: str = Field(min_length=1)
+    command_type: Literal["select_hotbar"]
+    status: Literal["succeeded", "rejected", "failed", "expired"]
+    executed_at: datetime
+    selected_slot: int | None = Field(default=None, ge=0, le=8)
+    selected_item_id: str | None = None
+    detail_code: str = Field(default="", max_length=80)
+
+
 # ---- トップレベルイベント ----
 
 class GameEvent(DogidoModel):
@@ -426,6 +469,7 @@ class GameEvent(DogidoModel):
     look_target: LookTarget | None = None
     combat: CombatState = Field(default_factory=CombatState)
     meta: MetaState = Field(default_factory=MetaState)
+    command_results: list[AdapterCommandResult] = Field(default_factory=list, max_length=32)
 
     @model_validator(mode="before")
     @classmethod
@@ -447,6 +491,7 @@ class AdapterSessionCreateRequest(DogidoModel):
 
     capabilities: アダプタが対応しているイベント種別の一覧。
                   サーバー側が「このアダプタは auditory_threats を送れるか」を把握するために使う。
+    execution_capabilities: adapterが実行できる閉じた操作。観測capabilitiesとは分離する。
     call_name: ドギドがプレイヤーを呼ぶときの名前（セッション単位で上書き可能）。
     """
     adapter_name: str
@@ -457,6 +502,8 @@ class AdapterSessionCreateRequest(DogidoModel):
     profile_name: str | None = None
     call_name: str | None = None
     capabilities: list[str] = Field(default_factory=list)
+    # 世界を観測できることと、クライアント操作を実行できることを混ぜない。
+    execution_capabilities: list[str] = Field(default_factory=list)
 
 
 class AdapterSessionCreateResponse(DogidoModel):
@@ -533,6 +580,23 @@ class OutputFlags(DogidoModel):
     speech_enqueued: bool = False
 
 
+class SelectHotbarCommand(DogidoModel):
+    """server → adapter の最初の型付き世界操作。"""
+
+    command_id: str = Field(min_length=1)
+    type: Literal["select_hotbar"] = "select_hotbar"
+    slot: int = Field(ge=0, le=8)
+    expected_item_id: str = Field(min_length=1)
+    issued_at: datetime
+    expires_at: datetime
+
+    @model_validator(mode="after")
+    def _expires_after_issue(self) -> "SelectHotbarCommand":
+        if self.expires_at <= self.issued_at:
+            raise ValueError("command expires_at must be after issued_at")
+        return self
+
+
 class AcceptedEventResponse(DogidoModel):
     """POST /api/v1/game-events のレスポンス。
 
@@ -547,6 +611,8 @@ class AcceptedEventResponse(DogidoModel):
     deduplicated: bool = False
     state: StateResponse | None = None
     outputs: OutputFlags | None = None
+    commands: list[SelectHotbarCommand] = Field(default_factory=list)
+    acknowledged_command_ids: list[str] = Field(default_factory=list)
     server_time: datetime
 
 
@@ -556,6 +622,8 @@ class BatchAcceptedResponse(DogidoModel):
     received: int  # 受け取ったイベント総数
     processed: int  # 実際に処理したイベント数
     deduplicated: int  # 重複としてスキップしたイベント数
+    commands: list[SelectHotbarCommand] = Field(default_factory=list)
+    acknowledged_command_ids: list[str] = Field(default_factory=list)
     server_time: datetime
 
 

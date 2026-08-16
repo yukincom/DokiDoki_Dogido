@@ -7,7 +7,7 @@
 関連:
 
 - [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)（workshop / preface）
-- [adapter-api.md](adapter-api.md)（現状は adapter→server 一方向が基本）
+- [adapter-api.md](adapter-api.md)（観測はadapter→server。支援commandだけgame-event応答に逆向きで載る）
 - [integration-architecture.md](integration-architecture.md)
 - [companion-maturity.md](companion-maturity.md)
 - Fabric: [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md)
@@ -51,11 +51,12 @@ preface を根拠と無関係に短く切ると口上は「温かい平原」だ
 ```text
 Minecraft (Fabric adapter)
     --HTTP game-events-->  dogido_server
+    <--typed assist command--   （持ち替えだけ）
                               |-- TTS --> スピーカー
-                              (adapter へ発話テキストを返していない)
+                              (adapter へ発話・表示テキストは返していない)
 ```
 
-- adapter は主に **送信専用**（[adapter-api.md](adapter-api.md)）
+- game-event応答の逆向き経路は型付き支援command専用で、表示キューではない（[adapter-api.md](adapter-api.md)）
 - 画面オーバーレイには **server → client の表示チャネル** が必要
 
 ---

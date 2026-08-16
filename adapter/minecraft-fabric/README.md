@@ -7,6 +7,7 @@
 ## できること
 
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
+- `player.hotbar`（0〜8、選択中slot、item ID、耐久、main-hand攻撃属性、武器候補種別）
 - 乗車中だけ `player.vehicle`（乗り物ID・操縦者か・漕ぐ／走る／移動中）
 - `local_light / sky_visible / biome / time_phase / danger_darkness_score`
 - **視線先 `look_target`**（画面中央クロスヘアが刺さっているブロック/エンティティ）
@@ -16,6 +17,10 @@
 - 遮蔽された近距離 hostile を `hostile_audio_detected` として送信
 - プレイヤー死亡時の `player_died` 送信
 - 戦闘収束時の `combat_ended` 送信
+- game-event応答の型付き `select_hotbar` command受信
+- command ID・期限・slot・期待itemをMinecraftメインスレッドで再検証し、選択slotだけを変更
+- 実行結果をserverがackするまで後続イベントへ再送
+- 新しい音源を短期保持へ追加したとき、Minecraftの `latest.log` に `Dogido sound observed` を出す（hostile / ambientの切り分け用）
 
 ## まだやっていないこと
 
@@ -28,6 +33,8 @@
 ## 音まわり（現状）
 
 - Minecraft の sound packet から `auditory_threats` / `ambient_sounds` を載せる
+- 敵対中のモブ音は `auditory_threats`、友好モブ音とまだ敵対していない蜘蛛・エンダーマン等の音は `ambient_sounds` へ分ける
+- `SoundManager` まで届いた焚き火などのブロック音・環境音・天候音も `ambient_sounds` へ載せる
 - クライアント側の音観測 TTL は約 **15秒**（300 tick）。「…？ → 今の音なに？」の猶予用
 - サーバの player_chat hearing バッファは別途約 **20秒**
 
@@ -51,5 +58,21 @@
 
 - `dogido-server` を先に起動する
 - この mod は `POST /api/v1/adapter-sessions` と `POST /api/v1/game-events` を使う
+- 観測capabilityと `client.hotbar.select.v1` の実行capabilityは分けてsession登録する
+- server再起動でsession IDが失効した場合は `409 unknown_session_id` を受けて自動再登録する。serverだけの再起動でMinecraftを再起動する必要はない
+- 支援commandはheartbeatではなくgame-event応答で受ける。任意のMinecraftコマンド文字列は実行しない
 - JSON の形は親プロジェクトの `docs/event-schema.md` に寄せている
-- いまの `hostile_audio_detected` は sound packet ではなく、遮蔽 hostile を使った初期ヒューリスティック
+- `hostile_audio_detected` は、視認されていない近距離の hostile 音観測が更新されたときに送る
+
+## `select_sword` 実機確認
+
+1. `dogido-server` を起動する
+2. このディレクトリで `./gradlew test build`
+3. `build/libs/dogido-fabric-client-0.1.0.jar` をMinecraftの `mods` へ入れ、同名の旧jarを外す
+4. ワールドへ入り、hotbarに弱い剣と強い剣を置く
+5. 「剣」または「剣に持ち替えて」と入力・発話し、弱い剣へ切り替わることを確認する
+6. 剣を外し、トライデント→斧→弓→道具の順でfallbackすることを確認する
+7. 依頼直後に対象slotのitemを動かし、別itemへ勝手に切り替わらないことを確認する
+8. 「剣の話をしよう」「剣ある？」「剣に持ち替えないで」では切り替わらないことを確認する
+
+選択だけはクライアント内で完結するため、シングルプレイのLAN公開は不要。

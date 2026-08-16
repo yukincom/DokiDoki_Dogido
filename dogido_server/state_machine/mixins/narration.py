@@ -824,6 +824,14 @@ class NarrationMixin:
             len(event.ambient_sounds),
             len(self.state.recent_hearing_memos),
         )
+        if (
+            wants_sound
+            and not hearing_summary
+            and not hearing_named_mobs
+            and not hearing_source_labels
+        ):
+            # 根拠なしでLLMに音源を補わせない。観測漏れも正直に伝える。
+            return fallback_text("general", "chat", "no_hearing_evidence")
         details = {
             "player_name": self._player_call_name(event),
             "user_text": user_text[:160],

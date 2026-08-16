@@ -2,7 +2,7 @@
 
 この文書は、Minecraft のモンスターデータを調査メモとして保存するためのスキーマです。
 
-runtime の正本は [data/catalogs/entries/mobs](/Users/yukin_co/Documents/DokiDoki-Dogido/data/catalogs/entries/mobs) です。
+runtime の正本は [data/catalogs/entries/mobs](../data/catalogs/entries/mobs) です。
 ここで説明する YAML は、Wiki から抽出した事実や未確定メモを残すための資料用フォーマットです。
 
 ## 1. 基本方針

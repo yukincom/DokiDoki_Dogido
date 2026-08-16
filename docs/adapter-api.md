@@ -1,4 +1,4 @@
-# Adapter -> dogido-server 受信 API 仕様
+# Adapter ↔ dogido-server API 仕様
 
 この文書は、Minecraft client adapter から `dogido-server` へイベントを送るための受信 API 仕様です。
 
@@ -14,7 +14,7 @@
 
 - 初期実装は単一プレイヤー、単一 adapter 前提
 - 通信先は原則 `127.0.0.1` のみ
-- イベントは adapter から server への一方向送信が基本
+- 観測は adapter から server への送信が基本。限定支援commandだけ既存応答で逆向きに返す
 - 音声出力は `dogido-server` が直接処理し、adapter へ返さない
 
 ## 3. 基本方針
@@ -92,7 +92,11 @@ adapter の起動時に session を作る。
     "auditory_threats",
     "ambient_sounds",
     "inventory",
+    "hotbar_slots",
     "danger_darkness"
+  ],
+  "execution_capabilities": [
+    "client.hotbar.select.v1"
   ]
 }
 ```
@@ -116,6 +120,8 @@ adapter の起動時に session を作る。
 - `session_id` は server 発行
 - 以後のイベント送信では `X-Dogido-Session-Id` ヘッダで送る
 - session を作らずにイベント送信してもよいが、初期実装でも session ありを推奨する
+- `capabilities` は観測できる情報、`execution_capabilities` は実行できる操作。混ぜない
+- sessionなしの暗黙sessionは実行capabilityを持たず、世界操作を返さない
 
 ## 8. `POST /api/v1/game-events`
 
@@ -129,7 +135,23 @@ adapter の起動時に session を作る。
 
 ### request body
 
-[イベントスキーマ](event-schema.md) に準拠する JSON。
+[イベントスキーマ](event-schema.md) に準拠する JSON。adapterに未ackの実行結果がある場合は、トップレベルの `command_results` へ添付する。
+
+```json
+{
+  "command_results": [
+    {
+      "command_id": "cmd_01JY2ABCXYZ",
+      "command_type": "select_hotbar",
+      "status": "succeeded",
+      "executed_at": "2026-08-15T12:00:01.510+09:00",
+      "selected_slot": 2,
+      "selected_item_id": "minecraft:stone_sword",
+      "detail_code": "selected"
+    }
+  ]
+}
+```
 
 ### response `202`
 
@@ -149,6 +171,17 @@ adapter の起動時に session を作る。
     "callout_enqueued": true,
     "speech_enqueued": false
   },
+  "commands": [
+    {
+      "command_id": "cmd_01JY2ABCXYZ",
+      "type": "select_hotbar",
+      "slot": 2,
+      "expected_item_id": "minecraft:stone_sword",
+      "issued_at": "2026-08-15T12:00:00.200+09:00",
+      "expires_at": "2026-08-15T12:00:02.200+09:00"
+    }
+  ],
+  "acknowledged_command_ids": [],
   "server_time": "2026-05-24T15:10:01.221+09:00"
 }
 ```
@@ -164,9 +197,32 @@ adapter の起動時に session を作る。
   "session_id": "ses_01JY2ABCXYZ",
   "sequence": 1842,
   "deduplicated": true,
+  "commands": [],
+  "acknowledged_command_ids": ["cmd_01JY2ABCXYZ"],
   "server_time": "2026-05-24T15:10:01.221+09:00"
 }
 ```
+
+### response `409`
+
+`X-Dogido-Session-Id` がサーバー再起動などで失効している場合、イベントを暗黙セッションとして処理せず `detail.code=unknown_session_id` を返す。現行Fabric adapterはこれを受けると同じプレイヤー・capabilitiesでセッションを再登録する。Minecraftの再起動は不要。
+
+```json
+{
+  "detail": {
+    "code": "unknown_session_id",
+    "session_id": "ses_01JY2ABCXYZ"
+  }
+}
+```
+
+### `select_hotbar` のルール
+
+- commandは閉じた型だけ。任意のMinecraftコマンド文字列は受け付けない
+- serverは結果を受け取るか期限が切れるまで、後続のgame-event応答にもpending commandを再提示する
+- adapterはcommand IDを重複実行せず、Minecraftメインスレッドで期限・slot 0〜8・player/world・`expected_item_id`を再検証する
+- 実行結果はserverがackするまで後続イベントへ再添付する
+- `succeeded` は実際の選択slotとitem IDがcommandに一致したときだけ。古いsnapshotなら `rejected / expected_item_mismatch`
 
 ## 9. `POST /api/v1/game-events/batch`
 
@@ -204,6 +260,8 @@ adapter の起動時に session を作る。
   "received": 1,
   "processed": 1,
   "deduplicated": 0,
+  "commands": [],
+  "acknowledged_command_ids": [],
   "server_time": "2026-05-24T15:10:01.400+09:00"
 }
 ```
@@ -213,10 +271,14 @@ adapter の起動時に session を作る。
 - `events` は最大 `25`
 - 同一 batch 内では `sequence` 昇順を推奨
 - 緊急イベントは batch より単送信を優先する
+- batch内で発行・再提示されたcommandとackは、トップレベルへcommand ID単位で集約する
+- 明示したsession IDが失効している場合は単送信と同じ `409 unknown_session_id` を返す
 
 ## 10. `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
 
 adapter は生きているがイベントが発生していない場合の keepalive。
+
+現行Fabric adapterの支援逆チャネルはgame-event応答を使う。heartbeatはcommand配信経路ではない。
 
 ### request
 

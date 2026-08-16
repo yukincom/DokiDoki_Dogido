@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import logging
 from typing import Iterable
 from uuid import uuid4
 
+from dogido_server.assist import ActionContext, ActionName, build_assist_registry
+from dogido_server.assist.select_sword import (
+    SELECT_SWORD_RULE_VERSION,
+    finalize_select_sword_intent_payload,
+    interpret_voice_select_sword_request,
+    is_explicit_select_sword_request,
+    is_unambiguous_select_sword_request,
+    mentions_sword_target,
+    select_weapon_slot,
+)
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
 from dogido_server.dialogue_context import DialogueContext
@@ -80,14 +90,17 @@ from dogido_server.models import (
     AcceptedEventResponse,
     AdapterSessionCreateRequest,
     AdapterSessionCreateResponse,
+    AdapterCommandResult,
     BatchAcceptedResponse,
     CloseSessionResponse,
     GameEvent,
     HeartbeatResponse,
     OutputFlags,
+    SelectHotbarCommand,
     StateResponse,
     VoiceInputContextResponse,
 )
+from dogido_server.player_input import PlayerInputContext, route_player_input
 from dogido_server.platform_ai import PlatformStructuredAIRouter
 from dogido_server.state_machine import (
     AudioAction,
@@ -116,6 +129,7 @@ class SessionInfo:
     profile_name: str | None
     call_name: str | None
     capabilities: list[str]
+    execution_capabilities: list[str]
     created_at: datetime
     machine: DogidoStateMachine
     last_seen_at: datetime | None = None
@@ -124,6 +138,10 @@ class SessionInfo:
     seen_sequence_set: set[int] = field(default_factory=set)
     seen_idempotency: deque[str] = field(default_factory=lambda: deque(maxlen=2048))
     seen_idempotency_set: set[str] = field(default_factory=set)
+    pending_commands: dict[str, SelectHotbarCommand] = field(default_factory=dict)
+    seen_command_results: deque[str] = field(default_factory=lambda: deque(maxlen=2048))
+    seen_command_result_set: set[str] = field(default_factory=set)
+    last_select_sword_command_at: datetime | None = None
     first_event_logged: bool = False
     last_haiku_emission: HaikuEmission | None = None
     # 発句の pin（会話履歴とは別。open 中は句本文を忘れない）
@@ -169,6 +187,16 @@ class SessionInfo:
         self.seen_idempotency_set.add(key)
         return False
 
+    def remember_command_result(self, command_id: str) -> bool:
+        if command_id in self.seen_command_result_set:
+            return True
+        if len(self.seen_command_results) == self.seen_command_results.maxlen:
+            old = self.seen_command_results.popleft()
+            self.seen_command_result_set.discard(old)
+        self.seen_command_results.append(command_id)
+        self.seen_command_result_set.add(command_id)
+        return False
+
 
 @dataclass(slots=True)
 class ProcessedEvent:
@@ -183,6 +211,7 @@ class DogidoService:
         self.audio = AudioDispatcher(settings)
         self.llm = DogidoLLMRouter(settings)
         self.platform_ai = PlatformStructuredAIRouter(settings)
+        self.assist = build_assist_registry()
         self.memory = MemoryStore(settings.memory_dir) if settings.memory_enabled else None
         # 評価用の決定記録。会話・川柳の正本 MemoryStore とは別writer／別path。
         self.episodes = EpisodeRecorder(settings.memory_dir) if settings.memory_enabled else None
@@ -192,6 +221,10 @@ class DogidoService:
             configure_corrections_path(self.memory.catalog_corrections_path)
 
     def warmup(self) -> None:
+        LOGGER.warning(
+            "assist_ready action=select_sword rule_version=%s",
+            SELECT_SWORD_RULE_VERSION,
+        )
         self.llm.preload()
         # 可用性確認だけ。Apple の初回推論や Foundry のモデル download はしない。
         self.platform_ai.preload()
@@ -216,6 +249,7 @@ class DogidoService:
             profile_name=request.profile_name,
             call_name=request.call_name or self.settings.default_call_name,
             capabilities=request.capabilities,
+            execution_capabilities=request.execution_capabilities,
             created_at=now,
             machine=machine,
         )
@@ -223,12 +257,14 @@ class DogidoService:
         self.sessions[session_id] = session
         self.audio.prewarm_speech_texts(self._fallback_speech_catalog(request.call_name or self.settings.default_call_name))
         LOGGER.info(
-            "adapter_session_created session_id=%s adapter=%s version=%s schema=%s capabilities=%s",
+            "adapter_session_created session_id=%s adapter=%s version=%s schema=%s "
+            "capabilities=%s execution_capabilities=%s",
             session_id,
             request.adapter_name,
             request.adapter_version,
             request.schema_version,
             ",".join(request.capabilities) or "none",
+            ",".join(request.execution_capabilities) or "none",
         )
         return AdapterSessionCreateResponse(
             session_id=session_id,
@@ -264,6 +300,11 @@ class DogidoService:
             )
             session.first_event_logged = True
         session.last_seen_at = event.observed_at
+        command_result_acks, observed_command_results = self._consume_command_results(
+            session,
+            event.command_results,
+            now=datetime.now().astimezone(),
+        )
 
         deduplicated = False
         if idempotency_key:
@@ -283,13 +324,16 @@ class DogidoService:
                 deduplicated = session.remember_sequence(event.sequence)
 
         if deduplicated:
+            response_time = datetime.now().astimezone()
             response = AcceptedEventResponse(
                 accepted=True,
                 event_id=_new_id("evt"),
                 session_id=session.session_id,
                 sequence=event.sequence,
                 deduplicated=True,
-                server_time=datetime.now().astimezone(),
+                commands=self._pending_commands_for_response(session, response_time),
+                acknowledged_command_ids=command_result_acks,
+                server_time=response_time,
             )
             return ProcessedEvent(response=response, actions=[])
 
@@ -361,10 +405,18 @@ class DogidoService:
                 )
                 == "close"
             )
+            pending_assist_text = session.pending_player_text or ""
+            if (session.pending_player_source or "text") == "voice":
+                pending_assist_text = (
+                    interpret_voice_select_sword_request(pending_assist_text)
+                    or pending_assist_text
+                )
+            explicit_assist_request = is_explicit_select_sword_request(pending_assist_text)
             if (
                 session.machine.state.mode in {"panic", "suppressed_panic"}
                 and not paused_workshop_input
                 and not paused_workshop_close
+                and not explicit_assist_request
             ):
                 # 同じ文の hold は1回だけログ（毎 tick は出さない）
                 pending_text = session.pending_player_text or ""
@@ -391,11 +443,18 @@ class DogidoService:
                     attached_player_text[:80],
                 )
 
-        # 固定表は本文へ、現在語彙による音近傍補正は会話解釈面だけへ載せる。
+        # 固定表は本文へ、現在語彙による音近傍補正は解釈面だけへ載せる。
         # adapter の typed chat は source=text のため、音近傍補正しない。
+        # 剣assistは voice-only の閉じた補正後も同じ明示命令ガードを再適用する。
         event, interpreted_player_text = self._apply_contextual_asr_to_event(
             event,
             session=session,
+            input_source=attached_player_source,
+        )
+        routed_player_input = self._route_assist_player_input(
+            session,
+            event.meta.user_text,
+            interpreted_player_text=interpreted_player_text,
             input_source=attached_player_source,
         )
 
@@ -424,6 +483,7 @@ class DogidoService:
         machine_result = session.machine.process(
             event,
             interpreted_user_text=interpreted_player_text,
+            player_input_context=routed_player_input,
         )
         if machine_result.haiku_emission is not None:
             session.last_haiku_emission = machine_result.haiku_emission
@@ -469,6 +529,14 @@ class DogidoService:
             # 通常chatを置き換える。panic cue / callout は安全のため残す。
             actions = [action for action in actions if action.layer != "speech"]
         actions.extend(combat_actions)
+        issued_commands, assist_actions = self._assist_actions(
+            session,
+            event,
+            actions,
+            now=datetime.now().astimezone(),
+        )
+        actions.extend(assist_actions)
+        actions.extend(self._command_result_feedback_actions(observed_command_results, actions))
         workshop_input_enabled = not workshop_input_consumed and not bool(
             session.haiku_workshop is not None
             and session.haiku_workshop.combat_paused
@@ -478,7 +546,9 @@ class DogidoService:
             event,
             actions,
             machine_result.haiku_emission,
-            allow_player_input=workshop_input_enabled,
+            allow_player_input=(
+                workshop_input_enabled and not session.machine.player_input.requests_sword
+            ),
         )
         # workshop 返事があるときは player_chat と二重にしない（講評を優先）
         if memory_actions and any(a.layer == "speech" and a.text for a in memory_actions):
@@ -495,7 +565,11 @@ class DogidoService:
 
         # 話しかけをイベントに載せたが speech が出なかった場合は捨てずに再キュー
         # （ambient_mob 枝や panic 枝に食われたケースの取りこぼし防止）
-        if attached_player_text and self._should_requeue_player_input(session, actions):
+        if (
+            attached_player_text
+            and not session.machine.player_input.requests_sword
+            and self._should_requeue_player_input(session, actions)
+        ):
             if not session.pending_player_text:
                 session.pending_player_text = attached_player_text
                 session.pending_player_source = attached_player_source
@@ -507,6 +581,7 @@ class DogidoService:
                 )
 
         output_flags = self._output_flags(actions)
+        response_time = datetime.now().astimezone()
         response = AcceptedEventResponse(
             accepted=True,
             event_id=_new_id("evt"),
@@ -515,7 +590,9 @@ class DogidoService:
             deduplicated=False,
             state=StateResponse(mode=machine_result.state.mode, combat_active=machine_result.combat_active),
             outputs=output_flags,
-            server_time=datetime.now().astimezone(),
+            commands=self._pending_commands_for_response(session, response_time),
+            acknowledged_command_ids=command_result_acks,
+            server_time=response_time,
         )
         self._record_episode(
             session=session,
@@ -526,8 +603,281 @@ class DogidoService:
             actions=actions,
             output_flags=output_flags,
             interpreted_user_text=interpreted_player_text,
+            adapter_commands=issued_commands,
+            command_results=observed_command_results,
         )
         return ProcessedEvent(response=response, actions=actions)
+
+    def _route_assist_player_input(
+        self,
+        session: SessionInfo,
+        raw_text: str | None,
+        *,
+        interpreted_player_text: str | None,
+        input_source: str = "text",
+    ) -> PlayerInputContext:
+        routed = route_player_input(
+            raw_text,
+            interpreted_text=interpreted_player_text,
+        )
+        if routed.normalized_text.startswith("/"):
+            return routed
+        command_text = routed.normalized_text
+        if (
+            input_source == "voice"
+            and not routed.requests_sword
+            and interpreted_player_text
+            and is_explicit_select_sword_request(routed.interpreted_text)
+        ):
+            command_text = routed.interpreted_text
+            routed = replace(
+                routed,
+                requests_sword=True,
+                assist_intent_source="code_voice_asr",
+                assist_intent_evidence=command_text,
+                assist_intent_confidence=1.0,
+            )
+        workshop_owns_ambiguous_sword = bool(
+            session.haiku_workshop is not None
+            and session.haiku_workshop.open
+            and not session.haiku_workshop.combat_paused
+            and not is_unambiguous_select_sword_request(command_text)
+        )
+        if workshop_owns_ambiguous_sword:
+            if routed.requests_sword:
+                return replace(
+                    routed,
+                    requests_sword=False,
+                    assist_intent_source="none",
+                    assist_intent_evidence="",
+                    assist_intent_confidence=0.0,
+                )
+            return routed
+        if routed.requests_sword:
+            return routed
+
+        # 通常会話を毎回分類しない。「剣」に触れた曖昧形だけQwen chat routeへ。
+        player_text = (
+            routed.semantic_text
+            if input_source == "voice"
+            else (routed.normalized_text or routed.raw_text)
+        ).strip()
+        if not player_text or not mentions_sword_target(player_text):
+            return routed
+        if not self.llm.route_enabled("chat"):
+            return routed
+        fallback = {
+            "intent": "other",
+            "weapon_kind": "unknown",
+            "is_request": False,
+            "evidence": "",
+            "confidence": 0.0,
+        }
+        try:
+            payload = self.llm.generate_structured_json(
+                StructuredGenerationRequest(
+                    kind="assist_select_sword_intent",
+                    fallback_value=fallback,
+                    details={"player_text": player_text},
+                    temperature=0.0,
+                    route="chat",
+                    max_tokens=96,
+                )
+            )
+        except Exception as exc:  # fail closed。会話自体は通常経路へ戻す。
+            LOGGER.warning("assist_select_sword_intent_failed detail=%s", exc)
+            return routed
+        intent = finalize_select_sword_intent_payload(payload, player_text=player_text)
+        if not intent.requested:
+            return routed
+        LOGGER.warning(
+            "assist_intent action=select_sword source=%s confidence=%.2f evidence=%s",
+            intent.source,
+            intent.confidence,
+            intent.evidence[:80],
+        )
+        return replace(
+            routed,
+            requests_sword=True,
+            assist_intent_source=intent.source,
+            assist_intent_evidence=intent.evidence,
+            assist_intent_confidence=intent.confidence,
+        )
+
+    def _assist_actions(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        existing_actions: list[AudioAction],
+        *,
+        now: datetime,
+    ) -> tuple[list[SelectHotbarCommand], list[AudioAction]]:
+        if not session.machine.player_input.requests_sword:
+            return [], []
+
+        already_pending = next(
+            (
+                command
+                for command in session.pending_commands.values()
+                if command.type == "select_hotbar" and command.expires_at > now
+            ),
+            None,
+        )
+        if already_pending is not None:
+            if any(action.layer == "speech" and action.text for action in existing_actions):
+                return [], []
+            return [], [AudioAction(layer="speech", interrupt=False, text="いま持ち替え中やで！")]
+
+        if (
+            session.last_select_sword_command_at is not None
+            and (now - session.last_select_sword_command_at).total_seconds() < 3.0
+        ):
+            if any(action.layer == "speech" and action.text for action in existing_actions):
+                return [], []
+            return [], [AudioAction(layer="speech", interrupt=False, text="もう持ち替えたで！")]
+
+        context = ActionContext(
+            event=event,
+            execution_capabilities=frozenset(session.execution_capabilities),
+            now=now,
+        )
+        dispatch = self.assist.propose(ActionName.SELECT_SWORD, context)
+        response_actions: list[AudioAction] = []
+        has_speech = any(action.layer == "speech" and action.text for action in existing_actions)
+        if dispatch.command is None:
+            if not has_speech:
+                if dispatch.detail_code == "capability_missing":
+                    text = "今のアダプターでは、まだ持ち替え操作が使えへんで。"
+                else:
+                    text = "剣も代わりの武器も、ホットバーにないで！"
+                response_actions.append(AudioAction(layer="speech", interrupt=False, text=text))
+            return [], response_actions
+
+        command = dispatch.command
+        session.pending_commands[command.command_id] = command
+        session.last_select_sword_command_at = now
+        selection = select_weapon_slot(event.player.hotbar.slots if event.player.hotbar else [])
+        if not has_speech:
+            text = (
+                "剣がない！ これでどうや！？"
+                if selection is not None and selection.used_fallback
+                else "剣やな、持ち替えるで！"
+            )
+            response_actions.append(AudioAction(layer="speech", interrupt=False, text=text))
+        LOGGER.warning(
+            "assist_command_issued session_id=%s command_id=%s type=%s slot=%s expected_item=%s "
+            "intent_source=%s confidence=%.2f",
+            session.session_id,
+            command.command_id,
+            command.type,
+            command.slot,
+            command.expected_item_id,
+            session.machine.player_input.assist_intent_source,
+            session.machine.player_input.assist_intent_confidence,
+        )
+        return [command], response_actions
+
+    def _consume_command_results(
+        self,
+        session: SessionInfo,
+        results: list[AdapterCommandResult],
+        *,
+        now: datetime,
+    ) -> tuple[list[str], list[AdapterCommandResult]]:
+        acknowledged: list[str] = []
+        observed: list[AdapterCommandResult] = []
+        for incoming in results:
+            acknowledged.append(incoming.command_id)
+            if session.remember_command_result(incoming.command_id):
+                continue
+            command = session.pending_commands.pop(incoming.command_id, None)
+            result = incoming
+            if (
+                command is not None
+                and incoming.status == "succeeded"
+            ):
+                if not (command.issued_at <= incoming.executed_at < command.expires_at):
+                    result = incoming.model_copy(
+                        update={
+                            "status": "failed",
+                            "detail_code": "result_outside_validity_window",
+                        }
+                    )
+                elif (
+                    incoming.selected_slot != command.slot
+                    or incoming.selected_item_id != command.expected_item_id
+                ):
+                    result = incoming.model_copy(
+                        update={"status": "failed", "detail_code": "result_mismatch"}
+                    )
+            if command is None:
+                LOGGER.warning(
+                    "assist_command_result_unknown session_id=%s command_id=%s status=%s",
+                    session.session_id,
+                    incoming.command_id,
+                    incoming.status,
+                )
+            else:
+                LOGGER.warning(
+                    "assist_command_result session_id=%s command_id=%s status=%s detail=%s",
+                    session.session_id,
+                    incoming.command_id,
+                    result.status,
+                    result.detail_code or "-",
+                )
+                if result.status != "succeeded":
+                    session.last_select_sword_command_at = None
+            observed.append(result)
+
+        for command_id, command in list(session.pending_commands.items()):
+            if command.expires_at > now:
+                continue
+            session.pending_commands.pop(command_id, None)
+            if session.remember_command_result(command_id):
+                continue
+            observed.append(
+                AdapterCommandResult(
+                    command_id=command_id,
+                    command_type=command.type,
+                    status="expired",
+                    executed_at=now,
+                    detail_code="server_result_timeout",
+                )
+            )
+            session.last_select_sword_command_at = None
+        return list(dict.fromkeys(acknowledged)), observed
+
+    def _pending_commands_for_response(
+        self,
+        session: SessionInfo,
+        now: datetime,
+    ) -> list[SelectHotbarCommand]:
+        return sorted(
+            (
+                command
+                for command in session.pending_commands.values()
+                if command.expires_at > now
+            ),
+            key=lambda command: (command.issued_at, command.command_id),
+        )
+
+    def _command_result_feedback_actions(
+        self,
+        results: list[AdapterCommandResult],
+        existing_actions: list[AudioAction],
+    ) -> list[AudioAction]:
+        if any(action.layer == "speech" and action.text for action in existing_actions):
+            return []
+        failure = next((result for result in results if result.status != "succeeded"), None)
+        if failure is None:
+            return []
+        if failure.status == "expired":
+            text = "持ち替えが間に合わへんかったわ。もう一回言うてな。"
+        elif failure.detail_code in {"expected_item_mismatch", "result_mismatch"}:
+            text = "手元が変わったから、勝手に別の枠へは替えんかったで。"
+        else:
+            text = "うまく持ち替えられへんかったわ。手元を確認してな。"
+        return [AudioAction(layer="speech", interrupt=False, text=text)]
 
     def _episode_state_before(self, session: SessionInfo) -> dict[str, object]:
         workshop = session.haiku_workshop
@@ -555,6 +905,8 @@ class DogidoService:
         actions: list[AudioAction],
         output_flags: OutputFlags,
         interpreted_user_text: str | None,
+        adapter_commands: list[SelectHotbarCommand],
+        command_results: list[AdapterCommandResult],
     ) -> None:
         if self.episodes is None:
             return
@@ -570,6 +922,8 @@ class DogidoService:
                 output_flags=output_flags,
                 haiku_emitted=machine_result.haiku_emission is not None,
                 interpreted_user_text=interpreted_user_text,
+                adapter_commands=adapter_commands,
+                command_results=command_results,
                 recorded_at=response.server_time,
             )
         except Exception as exc:  # recorder自体の不具合もリアルタイム経路へ伝播させない
@@ -588,6 +942,8 @@ class DogidoService:
         processed = 0
         deduplicated = 0
         actions: list[AudioAction] = []
+        commands_by_id: dict[str, SelectHotbarCommand] = {}
+        acknowledged_command_ids: list[str] = []
 
         for event in events:
             result = self.process_event(event, session_id=session_id)
@@ -596,12 +952,17 @@ class DogidoService:
             else:
                 processed += 1
                 actions.extend(result.actions)
+            for command in result.response.commands:
+                commands_by_id[command.command_id] = command
+            acknowledged_command_ids.extend(result.response.acknowledged_command_ids)
 
         response = BatchAcceptedResponse(
             accepted=True,
             received=processed + deduplicated,
             processed=processed,
             deduplicated=deduplicated,
+            commands=list(commands_by_id.values()),
+            acknowledged_command_ids=list(dict.fromkeys(acknowledged_command_ids)),
             server_time=datetime.now().astimezone(),
         )
         return response, actions
@@ -702,7 +1063,7 @@ class DogidoService:
         session: SessionInfo,
         input_source: str,
     ) -> tuple[GameEvent, str | None]:
-        """固定補正後の本文と、状態変更に使わない文脈解釈面を返す。"""
+        """固定補正後の本文と、voice限定候補の文脈解釈面を返す。"""
         from dogido_server.player_input.asr_fixes import apply_contextual_asr_fixes
         from dogido_server.player_input.contextual_asr import (
             apply_candidate_asr_fixes,
@@ -734,6 +1095,19 @@ class DogidoService:
             fixed_event = event.model_copy(
                 update={"meta": event.meta.model_copy(update={"user_text": fixed})}
             )
+
+        if input_source == "voice":
+            assist_interpreted = interpret_voice_select_sword_request(fixed)
+            if assist_interpreted is not None and assist_interpreted != fixed:
+                LOGGER.warning(
+                    "asr_fix_assist session_id=%s original=%s interpreted=%s "
+                    "rule=select_sword_homophone rule_version=%s",
+                    session.session_id,
+                    fixed[:100],
+                    assist_interpreted[:100],
+                    SELECT_SWORD_RULE_VERSION,
+                )
+                return fixed_event, assist_interpreted
 
         workshop = session.haiku_workshop
         if input_source != "voice" or not is_active(workshop) or workshop is None:
@@ -2680,6 +3054,7 @@ class DogidoService:
                 profile_name=event.meta.profile_name,
                 call_name=event.meta.call_name or self.settings.default_call_name,
                 capabilities=[],
+                execution_capabilities=[],
                 created_at=datetime.now().astimezone(),
                 machine=machine,
             )

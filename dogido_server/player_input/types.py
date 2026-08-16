@@ -33,7 +33,7 @@ class PlayerInputContext:
     raw_text: str = ""
     normalized_text: str = ""
     # STT の文脈補正は会話理解と限定意味抽出に使う。raw/normalized は
-    # 明示操作の正として残し、意味抽出からの実行時もコード検証を挟む。
+    # 原文の正として残し、意味抽出からの保存・実行時もコード検証を挟む。
     interpreted_text: str = ""
     breaks_silence: bool = False
     wants_quiet: bool = False
@@ -42,6 +42,11 @@ class PlayerInputContext:
     asks_dragon_direction: bool = False
     asks_save_last_haiku: bool = False
     asks_inventory: bool = False
+    # 明示的な代表形だけのfast path。自然な曖昧形はserviceで限定structured抽出する。
+    requests_sword: bool = False
+    assist_intent_source: str = "none"
+    assist_intent_evidence: str = ""
+    assist_intent_confidence: float = 0.0
     # 『今の音なに？』等。true のときだけ player_chat に hearing を載せる
     asks_about_sound: bool = False
     player_haiku_text: str | None = None

@@ -112,6 +112,8 @@ class HasPlayerChat(_Condition):
         # 見どころ〜本句のあいだは自分の世界（雑談に乗らない）
         if context.machine.state.pending_haiku_after_preface:
             return False
+        if context.machine.player_input.requests_sword:
+            return False
         # 夕方・夜警告は時限性が高いので player_chat より先（workshop 中は抑止）
         if context.machine._night_warning_should_preempt_player_chat(
             context.event, context.now

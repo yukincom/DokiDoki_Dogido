@@ -57,7 +57,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 4 | [current-spec.md](current-spec.md) | 現行仕様の要約 |
 | 5 | [integration-architecture.md](integration-architecture.md) | コンポーネント連携 |
 | 6 | [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md) | 支援アクション・マイクラ句集UI・あんちょこ・OS 連携の将来構想 |
-| 7 | [assist-action-architecture.md](assist-action-architecture.md) | 支援アクションの実装箱と、実装済み episode 決定ログ |
+| 7 | [assist-action-architecture.md](assist-action-architecture.md) | 支援アクションの実装箱、episode決定ログ、実装済み `select_sword` 縦切り |
 
 **つながり:** `concept` → 体験の核 · `project-overview` / `current-spec` → 何を作るか · `companion-maturity` → 次に何を厚くするか。
 
@@ -73,7 +73,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 
-**つながり:** adapter → HTTP → `event-schema` → `state-machine`。endpoint 形は `adapter-api`、payload 中身は `event-schema`。
+**つながり:** adapter → HTTP観測 → `event-schema` → `state-machine`。限定支援だけgame-event応答のtyped commandでadapterへ戻る。endpointと往復形は `adapter-api`、観測payloadは `event-schema`。
 
 ### 3. Behavior and decision-making
 
