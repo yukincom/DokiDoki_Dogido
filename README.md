@@ -121,6 +121,23 @@ python -m dogido_server.smoke_test --mode all
 
 ---
 
+## 評価協力版（実験ブランチ）
+
+ドギドの返答を、Minecraft 上で `↑`（良い例）／`↓`（要レビュー）に振り分ける
+**[評価協力版ブランチ](https://github.com/yukincom/DokiDoki_Dogido/tree/codex/training-feedback-pipeline)** を公開しています。
+
+- 評価したデータは各自の PC 内にある Git 対象外の `.dogido_training/` へ保存されます
+- データを外部へ自動送信・自動アップロードする機能はありません
+- `↑`を押した内容もそのまま学習へ使わず、人が確認したものだけを候補にします
+- JSONL の形は、実データを含まない[架空データ例](https://github.com/yukincom/DokiDoki_Dogido/tree/codex/training-feedback-pipeline/examples/training-feedback)で確認できます
+
+現時点では評価データの送信受付を設けていません。
+試してみたい方、将来のデータ作りに協力してくださる方がいれば、
+まずは [Issues](https://github.com/yukincom/DokiDoki_Dogido/issues) でお知らせください。
+協力者が現れた段階で、本人による内容確認と同意を前提に、安全な共有方法を検討します。
+
+---
+
 ## ライセンス・開発
 
 MIT ライセンス
