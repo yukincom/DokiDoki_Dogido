@@ -420,6 +420,7 @@ batch 可。
 4. `DELETE /api/v1/adapter-sessions/{session_id}`
 5. `POST /api/v1/game-events/batch`
 6. `POST /api/v1/adapter-sessions/{session_id}/heartbeat`
+7. `GET /api/v1/voice-input/context`
 
 ## 21. `POST /api/v1/player-input`
 
@@ -472,3 +473,19 @@ curl -X POST http://127.0.0.1:5055/api/v1/player-input \
 ```
 
 auth が有効なときは adapter 系と同様に `Authorization: Bearer <token>` を付ける。
+
+## 22. `GET /api/v1/voice-input/context`
+
+別プロセスの `dogido_server.voice_input` が、書き起こし直前に Whisper の文脈を選ぶための内部API。直近のアクティブセッションだけを見て、`prompt_mode` を返す。
+
+```json
+{
+  "prompt_mode": "haiku_workshop",
+  "session_id": "…"
+}
+```
+
+- workshop が open なら `haiku_workshop`、それ以外とセッションなしは `normal`
+- 句本文や材料は返さない
+- 取得に失敗した音声入力プロセスは `normal` を使い、書き起こしを止めない
+- auth が有効なときは `Authorization: Bearer <token>` が必要

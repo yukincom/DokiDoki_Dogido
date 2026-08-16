@@ -510,6 +510,13 @@ class PlayerInputRequest(DogidoModel):
     source: Literal["text", "voice"] = "text"
 
 
+class VoiceInputContextResponse(DogidoModel):
+    """音声認識が使う、直近セッションの小さな会話文脈。"""
+
+    prompt_mode: Literal["normal", "haiku_workshop"] = "normal"
+    session_id: str | None = None
+
+
 class StateResponse(DogidoModel):
     """イベント受付レスポンスに含まれる現在のドギドの状態サマリ。"""
     mode: str

@@ -27,6 +27,7 @@ import wave
 from array import array
 from collections import deque
 from pathlib import Path
+from typing import Literal
 
 import httpx
 
@@ -44,6 +45,18 @@ PRE_ROLL_FRAMES = 10  # 発話開始前 300ms を含める
 
 # 参考: yuno-chan-api の誤認識ノイズパターン
 NOISE_PATTERNS = ("ごおおお", "ごーーー", "ざーーー", "うおおお")
+
+VoicePromptMode = Literal["normal", "haiku_workshop"]
+
+NORMAL_STT_PROMPT = (
+    "Minecraftのプレイ内容について日本語で会話しています。"
+    "話題はブロック、アイテム、モブ、バイオーム、建築、戦闘です。"
+)
+HAIKU_WORKSHOP_STT_PROMPT = (
+    "Minecraftのプレイ内容について日本語で会話しています。"
+    "話題はブロック、アイテム、モブ、バイオーム、建築、戦闘と、"
+    "日本語の読み方、言い換え、川柳の上五・中七・下五の推敲です。"
+)
 
 WHISPER_CLI_CANDIDATES = (
     Path.home() / "AI_assistant" / "whisper.cpp" / "build" / "bin" / "whisper-cli",
@@ -99,7 +112,44 @@ def write_wav(path: str, pcm: bytes) -> None:
         handle.writeframes(pcm)
 
 
-def transcribe(cli: Path, model: Path, pcm: bytes, *, no_speech_thold: float) -> str | None:
+def stt_prompt(mode: VoicePromptMode) -> str:
+    """通常会話と川柳推敲で、Whisperへ渡す短い文脈だけを切り替える。"""
+
+    if mode == "haiku_workshop":
+        return HAIKU_WORKSHOP_STT_PROMPT
+    return NORMAL_STT_PROMPT
+
+
+def fetch_voice_prompt_mode(
+    base_url: str,
+    auth_token: str | None,
+) -> VoicePromptMode:
+    """直近セッションの文脈を取得する。失敗時も音声入力を止めず通常扱いにする。"""
+
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
+    try:
+        response = httpx.get(
+            f"{base_url}/api/v1/voice-input/context",
+            headers=headers,
+            timeout=1.0,
+        )
+        response.raise_for_status()
+        prompt_mode = response.json().get("prompt_mode")
+        if prompt_mode == "haiku_workshop":
+            return "haiku_workshop"
+    except (httpx.HTTPError, ValueError, AttributeError):
+        pass
+    return "normal"
+
+
+def transcribe(
+    cli: Path,
+    model: Path,
+    pcm: bytes,
+    *,
+    no_speech_thold: float,
+    prompt: str = NORMAL_STT_PROMPT,
+) -> str | None:
     """whisper.cpp で書き起こす（yuno-chan-api の speech_service.py と同じ流儀）。"""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
         tmp_path = handle.name
@@ -111,7 +161,7 @@ def transcribe(cli: Path, model: Path, pcm: bytes, *, no_speech_thold: float) ->
                 "-m", str(model),
                 "-f", tmp_path,
                 "-l", "ja",
-                "--prompt", "Minecraftを遊びながらの日本語の話しかけです。",
+                "--prompt", prompt,
                 "--no-speech-thold", str(no_speech_thold),
             ],
             capture_output=True,
@@ -209,6 +259,7 @@ def main() -> None:
     voiced_frames = 0
     silent_frames = 0
     recording = False
+    last_prompt_mode: VoicePromptMode | None = None
 
     print("[VOICE] 待機中…話しかけてや")
     try:
@@ -241,8 +292,17 @@ def main() -> None:
                 recording = False
                 pre_roll.clear()
                 if voiced_frames >= min_speech_frames:
+                    prompt_mode = fetch_voice_prompt_mode(base_url, settings.auth_token)
+                    if prompt_mode != last_prompt_mode:
+                        label = "川柳workshop" if prompt_mode == "haiku_workshop" else "通常会話"
+                        print(f"[VOICE] STT文脈: {label}")
+                        last_prompt_mode = prompt_mode
                     transcript = transcribe(
-                        cli, model, b"".join(speech), no_speech_thold=settings.voice_no_speech_thold
+                        cli,
+                        model,
+                        b"".join(speech),
+                        no_speech_thold=settings.voice_no_speech_thold,
+                        prompt=stt_prompt(prompt_mode),
                     )
                     if transcript:
                         print(f"[VOICE] 認識: {transcript}")

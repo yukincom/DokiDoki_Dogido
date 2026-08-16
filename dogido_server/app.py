@@ -25,6 +25,7 @@ from dogido_server.models import (
     HeartbeatRequest,
     HeartbeatResponse,
     PlayerInputRequest,
+    VoiceInputContextResponse,
 )
 from dogido_server.service import DogidoService
 
@@ -195,6 +196,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             payload.text,
             source=payload.source,
         )
+
+    @app.get("/api/v1/voice-input/context", response_model=VoiceInputContextResponse)
+    async def get_voice_input_context(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> VoiceInputContextResponse:
+        # voice_input は別プロセスなので、書き起こし直前にworkshop状態だけを取得する。
+        _ensure_authorized(resolved_settings, authorization)
+        return await run_serialized(service.voice_input_context)
 
     @app.get("/api/v1/memory/haiku")
     async def get_haiku_memory(

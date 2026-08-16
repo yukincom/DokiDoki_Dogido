@@ -85,6 +85,7 @@ from dogido_server.models import (
     HeartbeatResponse,
     OutputFlags,
     StateResponse,
+    VoiceInputContextResponse,
 )
 from dogido_server.platform_ai import PlatformStructuredAIRouter
 from dogido_server.state_machine import (
@@ -555,6 +556,21 @@ class DogidoService:
         if not self.settings.audio_enabled or not actions:
             return
         self.audio.play_actions(actions)
+
+    def voice_input_context(self) -> VoiceInputContextResponse:
+        """直近セッションが川柳workshop中かだけを音声認識へ公開する。"""
+
+        if not self.sessions:
+            return VoiceInputContextResponse()
+        session = max(
+            self.sessions.values(),
+            key=lambda candidate: candidate.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
+        )
+        prompt_mode = "haiku_workshop" if is_open(session.haiku_workshop) else "normal"
+        return VoiceInputContextResponse(
+            prompt_mode=prompt_mode,
+            session_id=session.session_id,
+        )
 
     def push_player_input(self, text: str, *, source: str = "text") -> dict[str, object]:
         """音声入力などゲーム外からのプレイヤー発話を、直近のアクティブセッションへ届ける。"""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -17,6 +18,37 @@ class AppTests(unittest.TestCase):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
+
+    def test_voice_input_context_switches_with_workshop(self) -> None:
+        response = self.client.get("/api/v1/voice-input/context")
+        self.assertEqual(
+            response.json(),
+            {"prompt_mode": "normal", "session_id": None},
+        )
+
+        self.client.post(
+            "/api/v1/adapter-sessions",
+            json={
+                "adapter_name": "dogido-fabric-client",
+                "adapter_version": "test",
+                "schema_version": "2026-05-24",
+                "player_name": "main_player",
+            },
+        )
+        service = self.client.app.state.service
+        session = next(iter(service.sessions.values()))
+
+        response = self.client.get("/api/v1/voice-input/context")
+        self.assertEqual(response.json()["prompt_mode"], "normal")
+        self.assertEqual(response.json()["session_id"], session.session_id)
+
+        session.haiku_workshop = SimpleNamespace(open=True)
+        response = self.client.get("/api/v1/voice-input/context")
+        self.assertEqual(response.json()["prompt_mode"], "haiku_workshop")
+
+        session.haiku_workshop.open = False
+        response = self.client.get("/api/v1/voice-input/context")
+        self.assertEqual(response.json()["prompt_mode"], "normal")
 
     def test_game_event_endpoint_accepts_threat(self) -> None:
         response = self.client.post(
