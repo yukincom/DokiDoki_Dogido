@@ -47,8 +47,8 @@ class LLMTests(unittest.TestCase):
         self.assertFalse(self.llm._is_usable_output("user: こわい desu"))
         self.assertFalse(self.llm._is_usable_output("ふぁぁぁぁぁ"))
         self.assertTrue(self.llm._is_usable_output("あー……こわかった……"))
-        self.assertTrue(self.llm._is_usable_output("プレイヤーちゃん、ほんまに行くん？", {"player_name": "プレイヤーちゃん"}))
-        self.assertFalse(self.llm._is_usable_output("プレイヤーちゃん、ほんまに行くん？"))
+        self.assertTrue(self.llm._is_usable_output("Yukinちゃん、ほんまに行くん？", {"player_name": "Yukinちゃん"}))
+        self.assertFalse(self.llm._is_usable_output("Yukinちゃん、ほんまに行くん？"))
 
     def test_common_short_ascii_in_japanese_reply_is_usable(self) -> None:
         self.assertTrue(

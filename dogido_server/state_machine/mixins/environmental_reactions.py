@@ -226,10 +226,11 @@ class EnvironmentalReactionsMixin:
         1. ハード安全（sonic boom）
         2. 雷の実音（近距離落雷／雷鳴）
         3. 川柳本句完了（preface 後）
-        4. 夜警告（workshop 中は抑止・pending 保持）
+        4. 地表の夕方警告（workshop 中は抑止・pending 保持）
         5. プレイヤー問い／雑談
-        6. 脅威ブロック／高優先／低優先 ambient
-           ※ workshop / 発句集中中は 6 の低優先を抑止。暗所押し等の安全系のみ残す
+        6. 脅威ブロック／高優先の安全反応
+        7. 洞窟・水中の夜警告／低優先 ambient
+           ※ workshop / 発句集中中は 7 の低優先を抑止。暗所押し等の安全系のみ残す
         """
         # 1) ハード安全
         sonic_boom_cue = self._warden_sonic_boom_scream_cue(event, now)
@@ -254,10 +255,12 @@ class EnvironmentalReactionsMixin:
                     speech_profile="haiku",
                 )
 
-        # 4) 夜警告（workshop 中は _night_warning_actions 内で []）
-        night_warning_actions = self._night_warning_actions(event, now)
-        if night_warning_actions:
-            return night_warning_actions
+        # 4) 地表の夕方警告だけは、時限性が高いので player chat より先。
+        # 洞窟・水中の警告は目の前の暗所・低体力等を1ターン遅らせないよう後段へ回す。
+        if self._night_warning_should_preempt_player_chat(event, now):
+            night_warning_actions = self._night_warning_actions(event, now)
+            if night_warning_actions:
+                return night_warning_actions
 
         # 5) プレイヤー向け（workshop 講評は service 側。ここでは一般 chat / 個数問い）
         if self.player_input.asks_hostile_count:
@@ -283,6 +286,11 @@ class EnvironmentalReactionsMixin:
 
         if self._haiku_focus_active():
             return []
+
+        # 7) 洞窟・水中の夜警告は、安全反応を先に出した次の静かな tick で伝える。
+        night_warning_actions = self._night_warning_actions(event, now)
+        if night_warning_actions:
+            return night_warning_actions
 
         return self._ambient_environmental_actions(event, signals, previous_mode, now, stop_dark_push)
 
@@ -394,15 +402,12 @@ class EnvironmentalReactionsMixin:
         return [self._speech_action(line)]
 
     def _night_warning_should_preempt_player_chat(self, event: GameEvent, now: datetime) -> bool:
-        """player_chat より夜警告を先に出すべきか（副作用なし）。workshop 中は False。"""
+        """地表の夕方警告を player_chat より先に出すべきか（副作用なし）。"""
         if self._haiku_workshop_is_open():
             return False
         if not self._should_consider_night_warning(event):
             return False
-        # 地表の夕方は時限性が高いので、話中でも1発割り込み可
-        if self._player_input_priority_active(now) and self._is_surface_evening_warning_context(event):
-            return True
-        return self._render_night_warning_line(event) is not None
+        return self._is_surface_evening_warning_context(event)
 
     def _night_warning_actions(self, event: GameEvent, now: datetime) -> list[AudioAction]:
         # 川柳 workshop 中は出さない（pending は残し、pin が閉じたあとで出す）
@@ -448,13 +453,14 @@ class EnvironmentalReactionsMixin:
         # 呼び出し元で _haiku_focus_active を弾いているが二重に
         if self._haiku_focus_active():
             return []
-        if self._player_input_priority_active(now):
-            return []
-
         # ドラゴン戦の特殊コールアウト（normal でも時限性が高い）
+        # 突進・着地・クリスタル残数は、話しかけ後の ambient mute 対象外。
         dragon_special = self._next_dragon_special_callout(event, now)
         if dragon_special:
             return self._speech_actions(dragon_special)
+
+        if self._player_input_priority_active(now):
+            return []
 
         overworld_return_line = self._emit_pending_overworld_return_line(now)
         if overworld_return_line:

@@ -74,6 +74,7 @@
         },
         "pillager_outpost": {
           "japanese": "ピリジャーぜんしょう基地",
+          "spoken_aliases": ["前哨基地", "ピリジャー前哨基地"],
           "biomes": ["plains", "desert", "savanna", "taiga", "snowy_plains", "meadow", "grove", "snowy_slopes", "jagged_peaks", "frozen_peaks", "stony_peaks", "cherry_grove"],
           "related_mobs": ["pillager", "ravager"],
           "note": "開けた場所に建つ石造りの塔。周囲には木の檻や荷車が散乱し、最上部の宝箱にレアなアイテムが眠る。何やら敵意に満ちた視線を感じる。"

@@ -124,7 +124,7 @@ class PlayerChatPlausibilityIntegrationTests(unittest.TestCase):
         content = messages[1]["content"]
         self.assertIn("知識リンク", content)
         self.assertIn("ありうる", content)
-        self.assertIn("生成しうる", content)
+        self.assertIn("生成されうる", content)
 
 
 if __name__ == "__main__":

@@ -818,9 +818,10 @@ class StateMachineTests(unittest.TestCase):
         self.machine.process(recovered)
         third_result = self.machine.process(third)
 
-        self.assertTrue(any(action.text == "main_player！体力やばいで！" for action in first_result.actions))
-        self.assertFalse(any(action.text == "main_player！体力やばいで！" for action in second_result.actions))
-        self.assertTrue(any(action.text == "main_player！体力やばいで！" for action in third_result.actions))
+        # Minecraft のログイン名を呼びかけに直差しせず、設定済みの既定呼称を使う。
+        self.assertTrue(any(action.text == "プレイヤー！体力やばいで！" for action in first_result.actions))
+        self.assertFalse(any(action.text == "プレイヤー！体力やばいで！" for action in second_result.actions))
+        self.assertTrue(any(action.text == "プレイヤー！体力やばいで！" for action in third_result.actions))
 
     def test_dimension_change_emits_flush_interrupt_only(self) -> None:
         first = GameEvent.model_validate_json(

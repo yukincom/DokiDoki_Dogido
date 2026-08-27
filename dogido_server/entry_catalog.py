@@ -896,6 +896,10 @@ def _topic_term_index() -> tuple[tuple[str, str, str, str], ...]:
         label = str(entry.get("label") or entry.get("japanese") or "").strip()
         if label:
             add(label, structure_id, "structure", "structure_label")
+        aliases = entry.get("spoken_aliases")
+        if isinstance(aliases, list):
+            for alias in aliases:
+                add(str(alias), structure_id, "structure", "spoken_aliases")
         note = entry.get("note")
         if note:
             add(str(note), structure_id, "structure", "note")
