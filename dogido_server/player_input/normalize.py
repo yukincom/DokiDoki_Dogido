@@ -8,7 +8,7 @@ from dogido_server.player_input.asr_fixes import apply_asr_fixes
 
 VOICE_SHORT_TEXT_MAX_CHARS = 3
 VOICE_SHORT_TEXT_ALLOWLIST = frozenset(
-    {"ドギド", "おーい", "うん", "おう", "剣", "けん", "つるぎ", "ソード"}
+    {"ドギド", "おーい", "うん", "おう", "剣", "つるぎ", "ソード"}
 )
 VOICE_NOISE_TEXTS = frozenset({"thank", "thanks", "thankyou"})
 

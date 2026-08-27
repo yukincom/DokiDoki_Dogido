@@ -12,13 +12,12 @@ from dogido_server.models import HotbarSlot, SelectHotbarCommand
 
 SELECT_HOTBAR_CAPABILITY = "client.hotbar.select.v1"
 SELECT_SWORD_LLM_MIN_CONFIDENCE = 0.90
-SELECT_SWORD_RULE_VERSION = "2026-08-16.3"
+SELECT_SWORD_RULE_VERSION = "2026-08-27.1"
 
 _SWORD_TARGETS = ("剣", "けん", "つるぎ", "ソード", "そーど")
 _DIRECT_SWORD_REQUESTS = frozenset(
     {
         "剣",
-        "けん",
         "つるぎ",
         "ソード",
         "剣お願い",
@@ -65,6 +64,12 @@ def _compact(text: str) -> str:
 def mentions_sword_target(text: str) -> bool:
     compact = _compact(text)
     return any(target in compact for target in _SWORD_TARGETS)
+
+
+def is_bare_sword_target(text: str) -> bool:
+    """操作語のない単独語。かなの「けん」を実行キーにしないためにも使う。"""
+
+    return _compact(text) in _SWORD_TARGETS
 
 
 def is_explicit_select_sword_request(text: str) -> bool:
@@ -155,6 +160,7 @@ def finalize_select_sword_intent_payload(
         len(_compact(evidence)) < 2
         or evidence not in player_text
         or not mentions_sword_target(evidence)
+        or is_bare_sword_target(evidence)
         or any(marker in _compact(evidence) for marker in _NEGATED_ACTION_MARKERS)
     ):
         return SelectSwordIntent()

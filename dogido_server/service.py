@@ -12,6 +12,7 @@ from dogido_server.assist.select_sword import (
     SELECT_SWORD_RULE_VERSION,
     finalize_select_sword_intent_payload,
     interpret_voice_select_sword_request,
+    is_bare_sword_target,
     is_explicit_select_sword_request,
     is_unambiguous_select_sword_request,
     mentions_sword_target,
@@ -662,7 +663,11 @@ class DogidoService:
             if input_source == "voice"
             else (routed.normalized_text or routed.raw_text)
         ).strip()
-        if not player_text or not mentions_sword_target(player_text):
+        if (
+            not player_text
+            or not mentions_sword_target(player_text)
+            or is_bare_sword_target(player_text)
+        ):
             return routed
         if not self.llm.route_enabled("chat"):
             return routed

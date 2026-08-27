@@ -16,6 +16,7 @@ from dogido_server.assist.select_sword import (
     select_weapon_slot,
 )
 from dogido_server.config import Settings
+from dogido_server.llm.assist_prompts import build_select_sword_intent_messages
 from dogido_server.models import (
     AdapterCommandResult,
     AdapterSessionCreateRequest,
@@ -151,6 +152,8 @@ class SelectSwordRulesTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertTrue(is_explicit_select_sword_request(text))
                 self.assertTrue(route_player_input(text).requests_sword)
+        self.assertFalse(is_explicit_select_sword_request("けん"))
+        self.assertFalse(route_player_input("けん").requests_sword)
         for text in (
             "剣の話をしよう",
             "剣ある？",
@@ -163,14 +166,15 @@ class SelectSwordRulesTest(unittest.TestCase):
                 self.assertFalse(is_explicit_select_sword_request(text))
         self.assertFalse(route_player_input("/say 剣").requests_sword)
 
-    def test_voice_short_sword_is_allowed(self) -> None:
+    def test_bare_kana_sword_is_rejected_as_short_voice_noise(self) -> None:
         self.assertFalse(is_too_short_voice_text("剣"))
-        self.assertFalse(is_too_short_voice_text("けん"))
+        self.assertTrue(is_too_short_voice_text("けん"))
 
     def test_voice_sword_homophone_repair_requires_adjacent_action_and_stays_narrow(self) -> None:
         examples = {
             "ドギドを県に持ち替えてください": "ドギドを剣に持ち替えてください",
             "ドギド、県に変えてください": "ドギド、剣に変えてください",
+            "県を変えて": "剣を変えて",
             "県にハインコをしてください": "剣に変更をしてください",
             "チェンに変更してください": "剣に変更してください",
             "ケンに装備して": "剣に装備して",
@@ -241,6 +245,25 @@ class SelectSwordRulesTest(unittest.TestCase):
                     ),
                 ).requested
             )
+
+        self.assertFalse(
+            finalize_select_sword_intent_payload(
+                {
+                    "intent": "select_weapon",
+                    "weapon_kind": "sword",
+                    "is_request": True,
+                    "evidence": "けん",
+                    "confidence": 0.99,
+                },
+                player_text="けん",
+            ).requested
+        )
+
+    def test_intent_prompt_mentions_stt_but_forbids_mob_only_inference(self) -> None:
+        system = build_select_sword_intent_messages({"player_text": "県を変えて"})[0]["content"]
+        self.assertIn("STT", system)
+        self.assertIn("県・件・券", system)
+        self.assertIn("mobの存在だけで依頼を補作せず", system)
 
     def test_selection_prefers_lower_attack_then_lower_remaining_durability(self) -> None:
         selection = select_weapon_slot(
@@ -459,6 +482,7 @@ class SelectSwordServiceTest(unittest.TestCase):
     def test_observed_voice_change_variants_execute_but_typed_variant_does_not(self) -> None:
         for sequence, raw in enumerate(
             (
+                "県を変えて",
                 "時と県に変えて",
                 "チェンに変更してください",
                 "持ち物を県に変えてください",
