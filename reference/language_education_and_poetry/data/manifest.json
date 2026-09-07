@@ -1,0 +1,208 @@
+{
+  "attribution_ja": [
+    "パルデシ・プラシャント、砂川有里子『日本語文型データベース（バージョン2026.01）』、国立国語研究所、DOI:10.15084/0002000610、CC BY 4.0（https://creativecommons.org/licenses/by/4.0/）。XMLをJSON Linesへ変換し、ルビ・削除記号を構造化した。",
+    "国立国語研究所『教育基本語彙データベース・日本語教育基本語彙データベース』（2009年版）、CC BY 4.0。",
+    "Unicode Consortium『Unicode Character Database 17.0.0』、Unicode License v3。歴史的平仮名・変体仮名を抽出し、公式文字名のローマ字構成要素を保持した上で、検索補助用の現代仮名候補を編集派生として付した。",
+    "文部科学省『学習指導要領コードのコード表（全体版）』。正規化・国語科抽出を行った。",
+    "文化庁『常用漢字表（平成22年内閣告示第2号）』および公式音訓索引。2,136字、音訓4,388件（音2,352件・訓2,036件）を一字一件へ正規化した。音訓と例欄の個別対応は推定していない。",
+    "文部科学省『小学校学習指導要領（平成29年告示）』別表「学年別漢字配当表」。公式PDFで画像化された文字を転記・目視照合し、1,026字を配当学年だけを示す一字一件へ正規化した。"
+  ],
+  "editorial_inputs": [
+    {
+      "bytes": 4133,
+      "id": "grade_level_kanji_allocation_transcription",
+      "path": "grade_level_kanji_allocation_transcription.json",
+      "reviewed_at": "2026-09-01",
+      "role": "official_pdf_visual_transcription",
+      "sha256": "d510e93ff3bf367306efa1208fb3db05822d5bcc559371a2a24c563f7266836c",
+      "source_id": "src.mext.grade-level-kanji-table"
+    }
+  ],
+  "normalized_datasets": [
+    {
+      "id": "grammar_patterns",
+      "index_path": "grammar_patterns.index.jsonl",
+      "index_sha256": "d436b6fb5ead1b1deac2f878d846c42531ca6159d7b0bbc8616175e61884421c",
+      "path": "grammar_patterns.jsonl",
+      "record_count": 800,
+      "sha256": "529bee64e24c629494641f22d6c939e9463689f83d3fdf608c5a653a53f00cf7"
+    },
+    {
+      "id": "education_basic_vocabulary",
+      "index_path": "education_basic_vocabulary.index.jsonl",
+      "index_sha256": "758a3b512094bcd818db9ce9317aafcbac7f43717cecd494d59895d05f1e90cc",
+      "path": "education_basic_vocabulary.jsonl",
+      "record_count": 27234,
+      "sha256": "9237f27e00b544f16cef218c0f913f0cc495072e9d75ca13b1bae8c5358035d1"
+    },
+    {
+      "id": "japanese_education_basic_vocabulary",
+      "index_path": "japanese_education_basic_vocabulary.index.jsonl",
+      "index_sha256": "c883155554c9dacc1374d754714d8a350ff97a3bb638128ad292c14f0280b2d0",
+      "path": "japanese_education_basic_vocabulary.jsonl",
+      "record_count": 11826,
+      "sha256": "90edf40d85008285e17ba7cd9d058bed35536b8cd3118ad5248381386a4bb29c"
+    },
+    {
+      "id": "historical_hiragana_unicode",
+      "index_path": "historical_hiragana_unicode.index.jsonl",
+      "index_sha256": "fe5365913e5a993c1707e3199136ece6199dc29f5ad43d73c17061467b47e1ce",
+      "path": "historical_hiragana_unicode.jsonl",
+      "record_count": 287,
+      "sha256": "51a32c08f35209ca63bda83d43cdd21d1f07008c9c64467fa2857150869a41aa"
+    },
+    {
+      "id": "curriculum_japanese",
+      "index_path": "curriculum_japanese.index.jsonl",
+      "index_sha256": "7c66076abc4c76f8f54b2e47f7fddad7606fb415d80c0d97091362f104a0d7e6",
+      "path": "curriculum_japanese.jsonl",
+      "record_count": 1859,
+      "sha256": "0f1d1444e73da7e702aa0f6befd0b0cfcef54ea373dd0ef8e1781b7026eb8d0c"
+    },
+    {
+      "id": "joyo_kanji",
+      "index_path": "joyo_kanji.index.jsonl",
+      "index_sha256": "64c1eda30e2383e83f3f381f92a416426167c6d770c2833b8eb1013da00a3f9b",
+      "path": "joyo_kanji.jsonl",
+      "record_count": 2136,
+      "sha256": "4c47983300fcb474a378025fbbf86e51dfac244b36d2ad8712dac314c643f6e4"
+    },
+    {
+      "id": "grade_level_kanji_allocation",
+      "index_path": "grade_level_kanji_allocation.index.jsonl",
+      "index_sha256": "c1fdc9219af2283eb705c07df3fa2279bc3c8025cae1a251154eeeed45e9fe53",
+      "path": "grade_level_kanji_allocation.jsonl",
+      "record_count": 1026,
+      "sha256": "12302e3d5b4b7049b96437d40bbcf1ed701d464a0071223700a76e3e3b03ef6a"
+    }
+  ],
+  "raw_datasets": [
+    {
+      "bytes": 1658481,
+      "canonical_url": "https://repository.ninjal.ac.jp/records/2000610",
+      "downloaded_at": "2026-09-01",
+      "id": "ninjal_sentence_patterns_2026_01",
+      "license": "CC BY 4.0",
+      "path": "ninjal/nihongo_bunkei_database20260126.zip",
+      "sha256": "21db3087c49c9e05eaf50f735d5c704b971df20d206b56a079dee1f50bf3a6a9",
+      "source_id": "src.ninjal.sentence-patterns",
+      "version": "2026.01"
+    },
+    {
+      "bytes": 1703649,
+      "canonical_url": "https://mmsrv.ninjal.ac.jp/brfvep/",
+      "downloaded_at": "2026-09-01",
+      "id": "ninjal_education_vocabulary_2009_a",
+      "license": "CC BY 4.0",
+      "path": "ninjal/kyoikukihongoi_2009A.csv",
+      "sha256": "ee003f2d98acbb4642e70f032cc04b5501361aabfabc1d603439935b878f3829",
+      "source_id": "src.ninjal.education-vocabulary",
+      "version": "2009A"
+    },
+    {
+      "bytes": 1638985,
+      "canonical_url": "https://mmsrv.ninjal.ac.jp/brfvep/",
+      "downloaded_at": "2026-09-01",
+      "id": "ninjal_education_vocabulary_2009_b",
+      "license": "CC BY 4.0",
+      "path": "ninjal/kyoikukihongoi_2009B.csv",
+      "sha256": "e6936dd184ce3d0bc0b714a94d40a6863ce9bcb827ffd5288ed12457c58a98bd",
+      "source_id": "src.ninjal.education-vocabulary",
+      "version": "2009B"
+    },
+    {
+      "bytes": 494006,
+      "canonical_url": "https://mmsrv.ninjal.ac.jp/brfvep/",
+      "downloaded_at": "2026-09-01",
+      "id": "ninjal_japanese_education_vocabulary_2009",
+      "license": "CC BY 4.0",
+      "path": "ninjal/rokushutaisho.csv",
+      "sha256": "80f190abebfe5fdfc52aec06a6c9c842eb4b1ff25b6687f135547a81902607af",
+      "source_id": "src.ninjal.education-vocabulary",
+      "version": "2009"
+    },
+    {
+      "bytes": 2198209,
+      "canonical_url": "https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt",
+      "downloaded_at": "2026-09-01",
+      "id": "unicode_character_database_17_0_0",
+      "license": "Unicode License v3",
+      "license_path": "unicode/LICENSE.txt",
+      "license_sha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+      "path": "unicode/UnicodeData-17.0.0.txt",
+      "sha256": "2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c",
+      "source_id": "src.unicode.ucd",
+      "version": "17.0.0"
+    },
+    {
+      "bytes": 525205,
+      "canonical_url": "https://www.mext.go.jp/a_menu/other/data_00002.htm",
+      "downloaded_at": "2026-09-01",
+      "id": "mext_curriculum_codes_elementary_82v12",
+      "license": "公共データ利用規約（第1.0版）準拠（文部科学省ウェブサイト利用規約）",
+      "path": "mext/curriculum_codes_elementary_82V12.csv",
+      "sha256": "6d9a6dadf1593e15bad7c4e480eeea8dd91866600be2a94965582c8c774d3d7f",
+      "source_id": "src.mext.curriculum-codes",
+      "version": "82V12"
+    },
+    {
+      "bytes": 443375,
+      "canonical_url": "https://www.mext.go.jp/a_menu/other/data_00002.htm",
+      "downloaded_at": "2026-09-01",
+      "id": "mext_curriculum_codes_junior_high_83v11",
+      "license": "公共データ利用規約（第1.0版）準拠（文部科学省ウェブサイト利用規約）",
+      "path": "mext/curriculum_codes_junior_high_83V11.csv",
+      "sha256": "b8b5ad6cb52e5cfe5e390312b732b1325fffc5044b20a25e666075c74a569311",
+      "source_id": "src.mext.curriculum-codes",
+      "version": "83V11"
+    },
+    {
+      "bytes": 1808468,
+      "canonical_url": "https://www.mext.go.jp/a_menu/other/data_00002.htm",
+      "downloaded_at": "2026-09-01",
+      "id": "mext_curriculum_codes_senior_high_84v10",
+      "license": "公共データ利用規約（第1.0版）準拠（文部科学省ウェブサイト利用規約）",
+      "path": "mext/curriculum_codes_senior_high_84V10.csv",
+      "sha256": "1073408f7b0396e79413be9f8a80a6ab3a79dcd063b7412929a4517b8b8bc67d",
+      "source_id": "src.mext.curriculum-codes",
+      "version": "84V10"
+    },
+    {
+      "bytes": 298857,
+      "canonical_url": "https://www.bunka.go.jp/kokugo_nihongo/sisaku/joho/joho/kijun/naikaku/kanji/joyokanjisakuin/index.html",
+      "downloaded_at": "2026-09-01",
+      "id": "bunka_joyo_kanji_index_2010",
+      "license": "公共データ利用規約（第1.0版）準拠（文部科学省ウェブサイト利用規約）",
+      "path": "bunka/joyokanjisakuin.html",
+      "sha256": "33cb7b99d88d069a5e6e228a71f587285c9fa3cc6937e74022928524569f26f3",
+      "source_id": "src.bunka.joyo-kanji-table",
+      "version": "平成22年内閣告示第2号"
+    },
+    {
+      "bytes": 3551021,
+      "canonical_url": "https://www.bunka.go.jp/kokugo_nihongo/sisaku/joho/joho/kijun/naikaku/pdf/joyokanjihyo_20101130.pdf",
+      "downloaded_at": "2026-09-01",
+      "id": "bunka_joyo_kanji_table_2010",
+      "license": "公共データ利用規約（第1.0版）準拠（文部科学省ウェブサイト利用規約）",
+      "path": "bunka/joyokanjihyo_20101130.pdf",
+      "sha256": "d9f28aeb4ce8250dbde07de20ac66cca71805ba09d94e4942c752dffa84d8d42",
+      "source_id": "src.bunka.joyo-kanji-table",
+      "version": "平成22年内閣告示第2号"
+    },
+    {
+      "bytes": 5838238,
+      "canonical_url": "https://www.mext.go.jp/content/20230120-mxt_kyoiku02-100002604_01.pdf",
+      "downloaded_at": "2026-09-01",
+      "id": "mext_elementary_curriculum_2017",
+      "license": "公共データ利用規約（第1.0版）準拠（文部科学省ウェブサイト利用規約）",
+      "path": "mext/elementary_curriculum_2017.pdf",
+      "sha256": "6af90f134b243e44f9767c37ee3079fac092883fd6359b836a5733dd25b43902",
+      "source_id": "src.mext.grade-level-kanji-table",
+      "version": "平成29年文部科学省告示第63号"
+    }
+  ],
+  "runtime_network_access": false,
+  "schema_version": 1,
+  "snapshot_date": "2026-09-01",
+  "source_policy": "official_and_public_institutions_only"
+}

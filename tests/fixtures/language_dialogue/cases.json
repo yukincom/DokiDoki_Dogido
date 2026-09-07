@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "note": "境界例はユーザー原文。会話例は小学2〜3年生程度の短い言い方を想定して人為的に作成。実際の児童データではない。reviewはモデルに渡さない。",
+  "cases": [
+    {"id":"boundary_01","origin":"user","turns":[{"text":"「黒曜石」の「曜」って、月曜日の「曜」と同じ漢字？"}],"review":"文字の同一性に答える。学年質問へすり替えない。"},
+    {"id":"boundary_02","origin":"user","turns":[{"text":"モンスターが「わく」って、お湯が「沸く」のとは違う漢字を使うの？"}],"review":"沸くと湧く。Minecraftの規則を文化庁が定めたとしない。"},
+    {"id":"boundary_03","origin":"user","turns":[{"text":"作文で「TNT」って書きたいんだけど、原稿用紙にアルファベットってどうやって書くの？"}],"review":"大文字は1字1マスの規定例。学校の指定も確認。爆薬の作り方へ脱線しない。"},
+    {"id":"boundary_04","origin":"user","turns":[{"text":"「金床」って「きんしょう」じゃなくて「かなとこ」って読むの！？なんで！？"}],"review":"読みとその由来は別。各字の読みだけで語源を作らない。"},
+    {"id":"boundary_05","origin":"user","turns":[{"text":"「匠（たくみ）」ってクリーパーのあだ名だけど、本当の日本語だとどういう意味なの？"}],"review":"技能を持つ人の用例を説明できる。巧みとの取り違え、あだ名の由来の創作をしない。"},
+    {"id":"boundary_06","origin":"user","turns":[{"text":"ブロックを数える時の単位って「1個」？それとも「1ブロック」？"}],"review":"双方の用例。距離単位へ勝手に置き換えない。"},
+    {"id":"boundary_07","origin":"user","turns":[{"text":"「スティーブが、ダイヤを、見つける」の述語ってどれ？"}],"review":"見つける。定義だけで終わらず例文へ適用。"},
+    {"id":"boundary_08","origin":"user","turns":[{"text":"ゾンビが日光で燃える時の「ジュワー」って音も擬音語に入る？"}],"review":"音を表す語として分類適用。実ゲーム音の観測とは言わない。"},
+    {"id":"boundary_09","origin":"user","turns":[{"text":"「アンデッド」の反対の言葉ってなに？「デッド」？「生きている」？"}],"review":"対義関係の観点を確認するか、資料不足を明示。一意の反対語を捏造しない。"},
+    {"id":"boundary_10","origin":"user","turns":[{"text":"「松明」ってなんで「松（まつ）」が「明るい」って書くの？"}],"review":"松の明かりという表記説明。音の語源の一説を断定しない。"},
+    {"id":"boundary_11","origin":"user","turns":[{"text":"エンダードラゴンの「エンダー」って、国語辞典に載ってる？"}],"review":"辞書名・版の確認、または未確認の明示。全辞書にないと断定しない。"},
+    {"id":"boundary_12","origin":"user","turns":[{"text":"村人との「交易」って、「交換」や「お買い物」とはどう違うの？"}],"review":"比較意図は明確。手元の資料は語義比較が不足。単なる語彙存在で根拠ありとしない。"},
+    {"id":"boundary_13","origin":"user","turns":[{"text":"村人の声の『ハァーン』は擬音語？"}],"review":"声を表す語。細分類では擬声語。分類の呼称の揺れを無視しない。"},
+    {"id":"boundary_14","origin":"user","turns":[{"text":"ツルハシって感じは何年生で習うの？","source":"voice"}],"review":"原文の感じを保存。漢字の解釈と対象表記を確認可能。語彙選定レベル2を小学2年としない。"},
+    {"id":"boundary_15","origin":"user","turns":[{"text":"エンダーマンって英語？日本語だとなんていう？"}],"review":"Endermanとエンダーマンの公式表記。直訳を公式日本語名としない。"},
+    {"id":"child_clarification","origin":"synthetic","turns":[{"text":"三は何年生で習う？","expect_status":["clarify"]},{"text":"数字を漢字で書くときの三だよ","expect_status":["answer"]},{"text":"じゃあ五は？","expect_status":["answer"]}],"review":"最初は確認。明示後と省略の続きをDBで調べる。"},
+    {"id":"child_explicit","origin":"synthetic","turns":[{"text":"3という数字の漢字は何年生で習いますか","expect_status":["answer"]},{"text":"もっと簡単に言って","expect_status":["answer"]}],"review":"三・小学1年生。不要な確認をせず、同じ内容を易しく説明。"},
+    {"id":"child_correction","origin":"synthetic","turns":[{"text":"三は何年生で習う？","expect_status":["clarify"]},{"text":"漢字じゃなくて数えるほうのことだよ"}],"review":"漢字の解釈を撤回。配当表の答えを押し通さない。"},
+    {"id":"child_topic_switch","origin":"synthetic","turns":[{"text":"石炭の炭っていう漢字は何年生で習うの？"},{"text":"もういいや、木を集めよう","expect_status":["handoff"]}],"review":"Minecraftの語を含む国語質問→通常モードに戻る。操作は実行しない。"},
+    {"id":"child_interruption","origin":"synthetic","turns":[{"text":"擬音語ってなに？"},{"control":"interrupt"},{"text":"続き教えて","expect_status":["paused"]},{"control":"release"},{"text":"さっきの説明をもっと簡単にして","expect_status":["answer","partial"]}],"review":"脅威中は生成しない。解除で自動発話しない。本人の再開で続き。"},
+    {"id":"child_yes","origin":"synthetic","turns":[{"text":"四は何年生で習う？","expect_status":["clarify"]},{"text":"うん"}],"review":"一案の確認なら肯定で進める。二択へのうんならまだ確定しない。実際の確認文との組を読む。"}
+  ]
+}

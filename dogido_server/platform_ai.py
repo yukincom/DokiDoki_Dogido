@@ -23,6 +23,7 @@ from typing import Any, Protocol
 from dogido_server.config import Settings
 from dogido_server.llm.client import STRUCTURED_STATUS_KEY
 from dogido_server.llm.prompts import build_messages
+from dogido_server.llm.structured_contracts import validate_structured_payload
 from dogido_server.llm.types import LLMFrontend, StructuredGenerationRequest
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -504,6 +505,15 @@ class PlatformStructuredAIRouter:
             try:
                 payload = provider.generate(request)
                 if isinstance(payload, dict):
+                    contract = validate_structured_payload(
+                        request.kind,
+                        payload,
+                        details=request.details,
+                    )
+                    if not contract.accepted:
+                        raise ValueError(
+                            f"schema_contract_error:{contract.summary}"
+                        )
                     result = dict(payload)
                     result[STRUCTURED_STATUS_KEY] = "accepted"
                     result[PLATFORM_AI_PROVIDER_KEY] = provider.name

@@ -1,0 +1,1264 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-09-01",
+  "source_policy": "official_and_public_institutions_only",
+  "scope_note": "歴史的仮名遣い、変体仮名、くずし字を、原文保存と検索用正規化を分離して扱うための知識レコード。変換表ではなく、候補生成と人手確認の境界を含む。",
+  "rights_policy": "文化庁・国立国会図書館・国立国語研究所・国文学研究資料館の公式資料を根拠にした事実の要約。原資料の本文・画像・字形表は転載しない。",
+  "entries": [
+    {
+      "id": "knowledge.orthography.kana.modern-scope",
+      "kind": "orthography_rule",
+      "title_ja": "現代仮名遣いの適用範囲",
+      "aliases": [
+        "現代仮名遣い"
+      ],
+      "search_terms": [
+        "現代仮名遣い",
+        "現代語",
+        "口語文",
+        "仮名遣いの適用範囲"
+      ],
+      "tags": [
+        "orthography",
+        "modern_kana",
+        "scope"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "仮名遣い",
+      "definition_ja": "現代仮名遣いは、現代語を仮名で書き表す場合のよりどころであり、現代口語文を主な対象とする。歴史的資料の原表記を改める規則ではない。",
+      "rules": [
+        {
+          "type": "scope",
+          "label_ja": "適用範囲",
+          "statement_ja": "現代語の仮名表記に適用する。古典本文、引用、固有の表記を正本上で上書きしない。",
+          "scope": "現代語の一般的な表記",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "normalization_policy": "原表記と検索用正規化表記を別フィールドに保存する"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": false,
+        "required_inputs": [
+          "資料の時代",
+          "原文か現代文かの区別"
+        ],
+        "prohibited_inferences": [
+          "歴史資料の原表記を誤記と断定する"
+        ],
+        "human_review_when": [
+          "引用・固有名詞・古典本文を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "現代仮名遣いの対象と原則"
+          ],
+          "locator": "解説 第一・第二"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.historical-preservation",
+      "kind": "orthography_rule",
+      "title_ja": "歴史的表記の保存",
+      "aliases": [
+        "歴史的仮名遣いの保存"
+      ],
+      "search_terms": [
+        "歴史的仮名遣い",
+        "原文保存",
+        "現代仮名遣いへの変換",
+        "検索用正規化"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "provenance"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_status": "editorial_synthesis",
+      "definition_ja": "歴史的仮名遣いを含む原文は原表記のまま保存し、現代仮名遣いによる形は検索・読み支援用の別データとして持つ。",
+      "rules": [
+        {
+          "type": "data_integrity",
+          "label_ja": "正本の保持",
+          "statement_ja": "原表記、現代仮名遣いによる候補、確定した読み、典拠を別々に保存する。",
+          "scope": "歴史資料・古典引用",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "required_fields": [
+          "surface_original",
+          "surface_normalized",
+          "reading_confirmed",
+          "source_locator"
+        ],
+        "authoritative_field": "surface_original"
+      },
+      "machine_use": {
+        "judgement_level": "exact",
+        "candidate_only": false,
+        "required_inputs": [
+          "原表記",
+          "典拠"
+        ],
+        "prohibited_inferences": [
+          "正規化形を原文として表示する"
+        ],
+        "human_review_when": [
+          "読みが典拠で確定できない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名遣いを原則の対象外とすること"
+          ],
+          "locator": "解説 第二"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.orthography.kana.wi-to-i",
+      "kind": "orthography_rule",
+      "title_ja": "歴史的仮名『ゐ』と現代仮名『い』",
+      "aliases": [
+        "ゐ",
+        "ヰ",
+        "ワ行イ段",
+        "ワ行イ段の仮名",
+        "わぎょういだん"
+      ],
+      "search_terms": [
+        "ゐ",
+        "ヰ",
+        "wi",
+        "ワ行イ段",
+        "わぎょういだん",
+        "歴史的仮名",
+        "いへの正規化"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "wi"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "歴史的仮名遣いの『ゐ』は、対応する現代語の検索候補として『い』を持ち得る。ただし原文の『ゐ』は保存する。",
+      "rules": [
+        {
+          "type": "candidate_mapping",
+          "label_ja": "対応候補",
+          "statement_ja": "ゐ → いを検索候補として扱う。無条件置換はしない。",
+          "scope": "歴史的仮名遣いから現代仮名遣いへの検索支援",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_kana": "ゐ",
+        "modern_candidate": "い",
+        "mapping_direction": "historical_to_modern_candidate"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "歴史的表記であること"
+        ],
+        "prohibited_inferences": [
+          "原文を書き換える",
+          "固有名詞の正式表記を変更する"
+        ],
+        "human_review_when": [
+          "語の同定ができない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名と現代仮名の対応"
+          ],
+          "locator": "付表 イ列・ワ列"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.we-to-e",
+      "kind": "orthography_rule",
+      "title_ja": "歴史的仮名『ゑ』と現代仮名『え』",
+      "aliases": [
+        "ゑ",
+        "ヱ"
+      ],
+      "search_terms": [
+        "ゑ",
+        "ヱ",
+        "we",
+        "歴史的仮名",
+        "えへの正規化"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "we"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "歴史的仮名遣いの『ゑ』は、対応する現代語の検索候補として『え』を持ち得る。ただし原文の『ゑ』は保存する。",
+      "rules": [
+        {
+          "type": "candidate_mapping",
+          "label_ja": "対応候補",
+          "statement_ja": "ゑ → えを検索候補として扱う。無条件置換はしない。",
+          "scope": "歴史的仮名遣いから現代仮名遣いへの検索支援",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_kana": "ゑ",
+        "modern_candidate": "え",
+        "mapping_direction": "historical_to_modern_candidate"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "歴史的表記であること"
+        ],
+        "prohibited_inferences": [
+          "原文を書き換える",
+          "固有名詞の正式表記を変更する"
+        ],
+        "human_review_when": [
+          "語の同定ができない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名と現代仮名の対応"
+          ],
+          "locator": "付表 イ列・ワ列"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.lexical-wo",
+      "kind": "orthography_rule",
+      "title_ja": "語中の歴史的仮名『を』",
+      "aliases": [
+        "歴史的仮名のを"
+      ],
+      "search_terms": [
+        "語中のを",
+        "歴史的仮名遣い",
+        "をとお",
+        "助詞のを"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "particle_exception"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "語中などに現れる歴史的仮名遣いの『を』には現代仮名『お』に対応する語がある。一方、助詞の『を』は現代仮名遣いでも『を』と書く。",
+      "rules": [
+        {
+          "type": "conditional_mapping",
+          "label_ja": "品詞による区別",
+          "statement_ja": "語彙上の歴史的な『を』は『お』を候補とするが、助詞の『を』は変換しない。",
+          "scope": "語彙的用法と助詞用法の区別",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_kana": "を",
+        "modern_candidate": "お",
+        "preserved_usage": "格助詞・間投助詞のを"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語彙・品詞の同定"
+        ],
+        "prohibited_inferences": [
+          "全ての『を』を『お』へ変換する"
+        ],
+        "human_review_when": [
+          "助詞か語の一部か判定できない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "現代仮名遣いにおける『を』の扱い"
+          ],
+          "locator": "本文 第二・付表"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.lexical-ha",
+      "kind": "orthography_rule",
+      "title_ja": "語中の歴史的仮名『は』と助詞『は』",
+      "aliases": [
+        "歴史的仮名のは"
+      ],
+      "search_terms": [
+        "歴史的仮名のは",
+        "はとわ",
+        "助詞のは",
+        "現代仮名遣い"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "particle_exception"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "歴史的仮名遣いの語中・語尾の『は』には現代仮名『わ』に対応する語がある。一方、助詞の『は』は現代仮名遣いでも『は』と書く。",
+      "rules": [
+        {
+          "type": "conditional_mapping",
+          "label_ja": "品詞による区別",
+          "statement_ja": "語彙上の歴史的な『は』は『わ』を候補とするが、助詞の『は』は変換しない。",
+          "scope": "語彙的用法と助詞用法の区別",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_kana": "は",
+        "modern_candidate": "わ",
+        "preserved_usage": "係助詞のは"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語彙・品詞の同定"
+        ],
+        "prohibited_inferences": [
+          "全ての『は』を『わ』へ変換する"
+        ],
+        "human_review_when": [
+          "助詞か語の一部か判定できない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "助詞『は』の表記と歴史的仮名の対応"
+          ],
+          "locator": "本文 第二・付表"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.lexical-he",
+      "kind": "orthography_rule",
+      "title_ja": "語中の歴史的仮名『へ』と助詞『へ』",
+      "aliases": [
+        "歴史的仮名のへ"
+      ],
+      "search_terms": [
+        "歴史的仮名のへ",
+        "へとえ",
+        "助詞のへ",
+        "現代仮名遣い"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "particle_exception"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "歴史的仮名遣いの語中・語尾の『へ』には現代仮名『え』に対応する語がある。一方、助詞の『へ』は現代仮名遣いでも『へ』と書く。",
+      "rules": [
+        {
+          "type": "conditional_mapping",
+          "label_ja": "品詞による区別",
+          "statement_ja": "語彙上の歴史的な『へ』は『え』を候補とするが、助詞の『へ』は変換しない。",
+          "scope": "語彙的用法と助詞用法の区別",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_kana": "へ",
+        "modern_candidate": "え",
+        "preserved_usage": "格助詞のへ"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語彙・品詞の同定"
+        ],
+        "prohibited_inferences": [
+          "全ての『へ』を『え』へ変換する"
+        ],
+        "human_review_when": [
+          "助詞か語の一部か判定できない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "助詞『へ』の表記と歴史的仮名の対応"
+          ],
+          "locator": "本文 第二・付表"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.kwa-gwa",
+      "kind": "orthography_rule",
+      "title_ja": "歴史的表記『くわ・ぐわ』の扱い",
+      "aliases": [
+        "合拗音",
+        "くゎ",
+        "ぐゎ"
+      ],
+      "search_terms": [
+        "くわ",
+        "ぐわ",
+        "くゎ",
+        "ぐゎ",
+        "合拗音",
+        "かとが"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "labialized_velar"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "歴史的表記の『くわ・ぐわ』には、現代共通語で『か・が』に対応する語がある。地域語や固有名詞を含むため、文字列だけで一律に変換しない。",
+      "rules": [
+        {
+          "type": "candidate_mapping",
+          "label_ja": "語単位の対応",
+          "statement_ja": "くわ・ぐわ → か・がは、語彙を同定した場合だけ候補とする。",
+          "scope": "歴史的仮名遣いの語彙検索",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_sequences": [
+          "くわ",
+          "ぐわ"
+        ],
+        "modern_candidates": [
+          "か",
+          "が"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語彙辞書",
+          "資料の地域・時代"
+        ],
+        "prohibited_inferences": [
+          "文字列の一括置換"
+        ],
+        "human_review_when": [
+          "地域語・固有名詞・音価を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名遣いとの対照"
+          ],
+          "locator": "付表 カ列・ガ列"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.kyou-historical",
+      "kind": "orthography_rule",
+      "title_ja": "『きょう』に対応する歴史的仮名遣い",
+      "aliases": [
+        "きよう",
+        "きやう",
+        "けう",
+        "けふ"
+      ],
+      "search_terms": [
+        "きょう",
+        "きよう",
+        "きやう",
+        "けう",
+        "けふ",
+        "歴史的仮名遣い"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "contracted_sound"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "現代仮名『きょう』に対応し得る歴史的仮名遣いには『きよう・きやう・けう・けふ』などがある。対応は語ごとに異なる。",
+      "rules": [
+        {
+          "type": "many_to_one_mapping",
+          "label_ja": "複数表記から一表記への候補",
+          "statement_ja": "歴史的表記の候補群を辞書照合し、語を確定してから『きょう』へ対応付ける。",
+          "scope": "歴史的仮名遣いの検索",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_candidates": [
+          "きよう",
+          "きやう",
+          "けう",
+          "けふ"
+        ],
+        "modern_candidate": "きょう"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語彙辞書"
+        ],
+        "prohibited_inferences": [
+          "候補群を同一語と断定する"
+        ],
+        "human_review_when": [
+          "語が辞書で一意に定まらない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名遣いとの対照"
+          ],
+          "locator": "付表 キョウの項"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.chou-historical",
+      "kind": "orthography_rule",
+      "title_ja": "『ちょう』に対応する歴史的仮名遣い",
+      "aliases": [
+        "ちよう",
+        "ちやう",
+        "てう",
+        "てふ"
+      ],
+      "search_terms": [
+        "ちょう",
+        "ちよう",
+        "ちやう",
+        "てう",
+        "てふ",
+        "歴史的仮名遣い"
+      ],
+      "tags": [
+        "orthography",
+        "historical_kana",
+        "contracted_sound"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "歴史的仮名遣い",
+      "definition_ja": "現代仮名『ちょう』に対応し得る歴史的仮名遣いには『ちよう・ちやう・てう・てふ』などがある。対応は語ごとに異なる。",
+      "rules": [
+        {
+          "type": "many_to_one_mapping",
+          "label_ja": "複数表記から一表記への候補",
+          "statement_ja": "歴史的表記の候補群を辞書照合し、語を確定してから『ちょう』へ対応付ける。",
+          "scope": "歴史的仮名遣いの検索",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "historical_candidates": [
+          "ちよう",
+          "ちやう",
+          "てう",
+          "てふ"
+        ],
+        "modern_candidate": "ちょう"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語彙辞書"
+        ],
+        "prohibited_inferences": [
+          "候補群を同一語と断定する"
+        ],
+        "human_review_when": [
+          "語が辞書で一意に定まらない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名遣いとの対照"
+          ],
+          "locator": "付表 チョウの項"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kana.ji-zu",
+      "kind": "orthography_rule",
+      "title_ja": "『じ・ぢ』『ず・づ』の書き分け",
+      "aliases": [
+        "四つ仮名",
+        "じぢずづ"
+      ],
+      "search_terms": [
+        "じ",
+        "ぢ",
+        "ず",
+        "づ",
+        "四つ仮名",
+        "同音の連呼",
+        "二語の連合"
+      ],
+      "tags": [
+        "orthography",
+        "modern_kana",
+        "four_kana"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "現代仮名遣い",
+      "definition_ja": "現代仮名遣いでは『じ・ず』を本則としつつ、同音の連呼で生じた濁音や二語の連合による連濁などでは『ぢ・づ』を用いる場合がある。",
+      "rules": [
+        {
+          "type": "conditional_rule",
+          "label_ja": "語構成による書き分け",
+          "statement_ja": "音だけで決めず、同音の連呼・二語の連合・語意識を確認する。",
+          "scope": "現代語の一般的な表記",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "default_kana": [
+          "じ",
+          "ず"
+        ],
+        "conditional_kana": [
+          "ぢ",
+          "づ"
+        ],
+        "conditions": [
+          "同音の連呼によって生じた濁音",
+          "二語の連合によって生じた濁音"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": false,
+        "required_inputs": [
+          "形態素境界",
+          "語構成"
+        ],
+        "prohibited_inferences": [
+          "発音だけから表記を確定する"
+        ],
+        "human_review_when": [
+          "語構成・語意識が一意でない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "じ・ぢ、ず・づの本則と例外"
+          ],
+          "locator": "本文 第二 5"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.script.hentaigana.definition",
+      "kind": "script_knowledge",
+      "title_ja": "変体仮名",
+      "aliases": [
+        "異体仮名"
+      ],
+      "search_terms": [
+        "変体仮名",
+        "異体仮名",
+        "字母",
+        "平仮名の異体"
+      ],
+      "tags": [
+        "script",
+        "hentaigana",
+        "glyph_variant"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "script",
+      "category_ja": "文字・字形",
+      "definition_ja": "変体仮名は、現在一般に用いられる平仮名とは異なる仮名字形である。仮名のもとになった漢字を字母という。",
+      "rules": [
+        {
+          "type": "definition",
+          "label_ja": "用語の区別",
+          "statement_ja": "変体仮名の字形、字母、現代の平仮名への対応を別々の項目として扱う。",
+          "scope": "変体仮名の記述",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "concepts": {
+          "hentaigana": "現在一般に用いられる平仮名とは異なる仮名字形",
+          "jibo": "仮名のもとになった漢字"
+        }
+      },
+      "machine_use": {
+        "judgement_level": "lookup_only",
+        "candidate_only": false,
+        "required_inputs": [
+          "字形画像または符号位置"
+        ],
+        "prohibited_inferences": [
+          "字母と読みを同一の値として扱う"
+        ],
+        "human_review_when": [
+          "字形が不鮮明な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ninjal.hentaigana-table",
+          "supports": [
+            "変体仮名・字母の区別"
+          ],
+          "locator": "一覧表・使用方法"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.script.hentaigana.many-to-one",
+      "kind": "script_knowledge",
+      "title_ja": "変体仮名と現代平仮名の多対一対応",
+      "aliases": [
+        "変体仮名の異体"
+      ],
+      "search_terms": [
+        "変体仮名",
+        "字母",
+        "多対一",
+        "同じ読みの異体"
+      ],
+      "tags": [
+        "script",
+        "hentaigana",
+        "many_to_one"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "script",
+      "category_ja": "文字・字形",
+      "definition_ja": "一つの現代平仮名に、異なる字母・異なる字形の変体仮名が複数対応することがある。",
+      "rules": [
+        {
+          "type": "mapping_cardinality",
+          "label_ja": "対応関係",
+          "statement_ja": "変体仮名から現代平仮名への対応を一対一と仮定しない。",
+          "scope": "字形の正規化",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "mapping_cardinality": "many_to_one",
+        "preserve_fields": [
+          "glyph",
+          "jibo",
+          "modern_hiragana_candidate"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "字形一覧",
+          "字母情報"
+        ],
+        "prohibited_inferences": [
+          "現代平仮名だけから元の字形・字母を復元する"
+        ],
+        "human_review_when": [
+          "複数候補が残る場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ninjal.hentaigana-table",
+          "supports": [
+            "変体仮名の一覧と字母"
+          ],
+          "locator": "一覧表"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.script.hentaigana.unicode",
+      "kind": "script_knowledge",
+      "title_ja": "変体仮名のUnicode収録",
+      "aliases": [
+        "Kana Supplement",
+        "Kana Extended-A"
+      ],
+      "search_terms": [
+        "変体仮名",
+        "Unicode",
+        "U+1B001",
+        "U+1B11E",
+        "符号化"
+      ],
+      "tags": [
+        "script",
+        "hentaigana",
+        "unicode"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "script",
+      "category_ja": "文字コード",
+      "definition_ja": "変体仮名はUnicode 10.0で追加され、関連する一覧にはU+1B001からU+1B11Eまでが掲載されている。ただし、実在する全字形が符号化済みとは限らない。",
+      "rules": [
+        {
+          "type": "coverage_caution",
+          "label_ja": "符号化範囲の限界",
+          "statement_ja": "Unicode範囲内かどうかだけで、変体仮名の実在・不存在を断定しない。",
+          "scope": "文字コードによる保存",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "unicode_version_added": "10.0",
+        "listed_range": {
+          "start": "U+1B001",
+          "end": "U+1B11E"
+        },
+        "coverage_complete": false
+      },
+      "machine_use": {
+        "judgement_level": "exact",
+        "candidate_only": false,
+        "required_inputs": [
+          "Unicode符号位置"
+        ],
+        "prohibited_inferences": [
+          "未符号化字形は存在しないとみなす"
+        ],
+        "human_review_when": [
+          "画像にある字形が一覧にない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ninjal.hentaigana-table",
+          "supports": [
+            "Unicode収録範囲と未収録字形への注意"
+          ],
+          "locator": "一覧表・変体仮名フォント"
+        },
+        {
+          "source_id": "src.unicode.ucd",
+          "supports": [
+            "Unicode 17.0.0における符号位置と公式文字名"
+          ],
+          "locator": "UnicodeData.txt U+1B001〜U+1B11F"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.script.kuzushiji.definition",
+      "kind": "script_knowledge",
+      "title_ja": "くずし字",
+      "aliases": [
+        "崩し字"
+      ],
+      "search_terms": [
+        "くずし字",
+        "崩し字",
+        "古文書",
+        "古典籍",
+        "変体仮名"
+      ],
+      "tags": [
+        "script",
+        "kuzushiji",
+        "historical_document"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "script",
+      "category_ja": "文字・字形",
+      "definition_ja": "くずし字は、古文書・古典籍などで用いられた、漢字や仮名を崩して書いた字形の総称である。変体仮名だけを指す語ではない。",
+      "rules": [
+        {
+          "type": "scope",
+          "label_ja": "概念の広さ",
+          "statement_ja": "くずし字を変体仮名と同義にせず、漢字・仮名の崩しを含む上位の記述対象として扱う。",
+          "scope": "古文書・古典籍の字形",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "includes": [
+          "漢字のくずし",
+          "仮名のくずし",
+          "変体仮名"
+        ],
+        "same_as_hentaigana": false
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "字形画像",
+          "前後の文字",
+          "資料の時代・書き手"
+        ],
+        "prohibited_inferences": [
+          "一字画像だけで読みを確定する"
+        ],
+        "human_review_when": [
+          "常に。機械認識は候補生成に限る"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.kuzushiji-guide",
+          "supports": [
+            "くずし字の調査方法と資料"
+          ],
+          "locator": "くずし字を調べる"
+        },
+        {
+          "source_id": "src.nijl.kuzushiji-introduction",
+          "supports": [
+            "くずし字の概要"
+          ],
+          "locator": "くずし字って何？"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.script.kuzushiji.image-reading",
+      "kind": "script_knowledge",
+      "title_ja": "くずし字画像の読解",
+      "aliases": [
+        "くずし字認識"
+      ],
+      "search_terms": [
+        "くずし字画像",
+        "くずし字認識",
+        "字形検索",
+        "人手確認"
+      ],
+      "tags": [
+        "script",
+        "kuzushiji",
+        "image_recognition",
+        "human_review"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "script",
+      "category_ja": "文字資料の読解",
+      "definition_ja": "くずし字の読解では、字形だけでなく前後の文脈、同じ資料内の書き癖、時代、語彙を照合する。画像認識結果は候補であり、確定読みではない。",
+      "rules": [
+        {
+          "type": "human_review_boundary",
+          "label_ja": "機械認識の位置付け",
+          "statement_ja": "画像認識・字形検索は候補生成に用い、確定結果には人手確認と典拠を要求する。",
+          "scope": "くずし字画像の読解",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "recognition_output_status": "candidate",
+        "confirmation_requirements": [
+          "前後文脈",
+          "資料内の異字同定",
+          "人手確認",
+          "典拠"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "字形画像",
+          "前後文脈"
+        ],
+        "prohibited_inferences": [
+          "OCR結果を確定読みとして保存する"
+        ],
+        "human_review_when": [
+          "全件"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.kuzushiji-guide",
+          "supports": [
+            "字形・辞典・文脈を用いる調査方法"
+          ],
+          "locator": "くずし字を調べる"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.script.kana.obsolete-vs-hentaigana",
+      "kind": "script_knowledge",
+      "title_ja": "歴史的仮名と変体仮名の区別",
+      "aliases": [
+        "使われないひらがな",
+        "古いひらがな"
+      ],
+      "search_terms": [
+        "使われないひらがな",
+        "古いひらがな",
+        "歴史的仮名",
+        "変体仮名",
+        "ゐ",
+        "ゑ"
+      ],
+      "tags": [
+        "script",
+        "historical_kana",
+        "hentaigana",
+        "terminology"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "script",
+      "category_ja": "文字・表記の用語",
+      "definition_ja": "『ゐ・ゑ』のように現代の一般表記で通常用いない歴史的な仮名と、同じ音節を表す異なる字母・字形である変体仮名は、別の概念である。",
+      "rules": [
+        {
+          "type": "terminology",
+          "label_ja": "概念の分離",
+          "statement_ja": "『現在あまり使われない仮名』を一括して変体仮名と呼ばない。文字、字形、仮名遣いを分けて記録する。",
+          "scope": "歴史的な仮名資料の分類",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "distinctions": [
+          {
+            "term": "歴史的な仮名",
+            "example": [
+              "ゐ",
+              "ゑ"
+            ],
+            "axis": "現代一般表記での使用"
+          },
+          {
+            "term": "変体仮名",
+            "example": [],
+            "axis": "字母・字形の異体"
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "exact",
+        "candidate_only": false,
+        "required_inputs": [
+          "文字または字形"
+        ],
+        "prohibited_inferences": [
+          "ゐ・ゑを変体仮名の総称に含める"
+        ],
+        "human_review_when": [
+          "画像字形の同定が必要な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "歴史的仮名遣いとの対照"
+          ],
+          "locator": "付表"
+        },
+        {
+          "source_id": "src.ninjal.hentaigana-table",
+          "supports": [
+            "変体仮名と字母の定義"
+          ],
+          "locator": "一覧表・使用方法"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    }
+  ]
+}

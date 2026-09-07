@@ -1,0 +1,1743 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-09-01",
+  "source_policy": "official_and_public_institutions_only",
+  "scope_note": "日本の主要な詩歌・歌謡の形式を、標準的な型、歴史的・自由な型、慣習、機械判定限界に分けて収録する。詩作品本文は収録しない。",
+  "rights_policy": "国立国会図書館、文化庁、国文学研究資料館、国立大学法人の公式資料を根拠にした事実の要約。作品本文・論文本文は転載しない。",
+  "entries": [
+    {
+      "id": "knowledge.prosody.japanese.mora",
+      "kind": "prosody_rule",
+      "title_ja": "日本語詩歌の音数単位",
+      "aliases": [
+        "拍",
+        "モーラ",
+        "音数"
+      ],
+      "search_terms": [
+        "拍",
+        "モーラ",
+        "音数",
+        "拗音",
+        "促音",
+        "撥音",
+        "長音",
+        "二重母音"
+      ],
+      "tags": [
+        "prosody",
+        "mora",
+        "japanese_poetry"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "prosody",
+      "category_ja": "韻律",
+      "definition_ja": "日本語の定型詩歌でいう五音・七音などの音数は、原則として拍（モーラ）で数える。文字数や英語の音節数とは一致しない。",
+      "rules": [
+        {
+          "type": "counting_rule",
+          "label_ja": "拍の数え方",
+          "statement_ja": "拗音の小書き仮名は前の仮名と合わせて一拍とし、促音『っ』、撥音『ん』、長音、二重母音の後半はそれぞれ一拍と数える。",
+          "scope": "確定した日本語の読み",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "data_integrity",
+          "label_ja": "確定読みの使用",
+          "statement_ja": "表記本文と読みを分け、音数判定は確定した読みだけに適用する。",
+          "scope": "ドギドの詩歌判定",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "unit": "mora",
+        "counts_as_one_mora": [
+          "拗音を構成する一まとまり",
+          "促音",
+          "撥音",
+          "長音",
+          "二重母音の第二要素"
+        ],
+        "not_equivalent_to": [
+          "文字数",
+          "英語のsyllable"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "exact",
+        "candidate_only": false,
+        "required_inputs": [
+          "確定した仮名読み"
+        ],
+        "prohibited_inferences": [
+          "漢字表記から未知語の読みを推測する",
+          "文字数をそのまま音数とする"
+        ],
+        "human_review_when": [
+          "歴史的読み・方言・歌唱上の伸縮を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.tufs.mora",
+          "supports": [
+            "拍の定義、拗音・促音・撥音・長音・二重母音の数え方"
+          ],
+          "locator": "拍感覚基礎 解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.waka",
+      "kind": "japanese_poetry_tradition",
+      "title_ja": "和歌",
+      "aliases": [
+        "倭歌",
+        "やまとうた"
+      ],
+      "search_terms": [
+        "和歌",
+        "倭歌",
+        "やまとうた",
+        "日本詩歌",
+        "歌体",
+        "長歌",
+        "短歌",
+        "旋頭歌",
+        "片歌"
+      ],
+      "tags": [
+        "poetry",
+        "waka",
+        "tradition_family"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_tradition",
+      "category_ja": "詩歌の伝統",
+      "definition_ja": "和歌は、上代以来の日本固有の詩歌の総称で、長歌・短歌・旋頭歌・片歌などを含む。平安時代以後は主として短歌を指す場合が多い。",
+      "rules": [
+        {
+          "type": "family_scope",
+          "label_ja": "歌体の総称",
+          "statement_ja": "和歌全体には単一の音数配列を設定しない。歌体を確認してから構造を判定する。",
+          "scope": "和歌の総称",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "tradition_family",
+        "prosodic_basis": "五音・七音を基調",
+        "subforms": [
+          "knowledge.poetry.japanese.tanka",
+          "knowledge.poetry.japanese.choka",
+          "knowledge.poetry.japanese.sedoka",
+          "knowledge.poetry.japanese.katauta",
+          "knowledge.poetry.japanese.bussokusekika"
+        ],
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "歌体名または典拠",
+          "資料の年代"
+        ],
+        "prohibited_inferences": [
+          "和歌全体へ五・七・五・七・七を一律適用する"
+        ],
+        "human_review_when": [
+          "歌体・時代・詞書・修辞を同定する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.waka-forms",
+          "supports": [
+            "和歌の総称性と歌体の種類"
+          ],
+          "locator": "回答『和歌』および各歌体の項"
+        },
+        {
+          "source_id": "src.ndl.authorities",
+          "supports": [
+            "和歌の同義語・上位語・下位語"
+          ],
+          "locator": "典拠ID 00574117"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.tanka",
+      "kind": "japanese_poetry_form",
+      "title_ja": "短歌",
+      "aliases": [
+        "三十一文字",
+        "みそひともじ"
+      ],
+      "search_terms": [
+        "短歌",
+        "五七五七七",
+        "三十一音",
+        "上句",
+        "下句",
+        "近代短歌",
+        "現代短歌"
+      ],
+      "tags": [
+        "poetry",
+        "waka",
+        "tanka",
+        "fixed_form"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "歌体",
+      "definition_ja": "短歌は、和歌の一歌体で、標準的な定型は五・七・五・七・七の五句、計三十一拍である。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七・五・七・七。初めの五・七・五を上句、後の七・七を下句という。",
+          "scope": "標準的な短歌",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "variation",
+          "label_ja": "破調",
+          "statement_ja": "字余り・字足らず、口語短歌などを音数不一致だけで短歌ではないと断定しない。",
+          "scope": "歴史資料・近現代作品",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard_strict",
+            "label_ja": "標準的定型",
+            "mora_pattern": [
+              5,
+              7,
+              5,
+              7,
+              7
+            ],
+            "total_mora": 31
+          },
+          {
+            "id": "historical_or_open",
+            "label_ja": "字余り・字足らず等を含む型",
+            "mora_pattern": null,
+            "total_mora": null
+          }
+        ],
+        "semantic_sections": [
+          {
+            "name_ja": "上句",
+            "positions": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "name_ja": "下句",
+            "positions": [
+              4,
+              5
+            ]
+          }
+        ],
+        "written_line_count_defining": false,
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句境界"
+        ],
+        "prohibited_inferences": [
+          "音数一致だけで短歌と確定する",
+          "一行表記・五行表記を定義条件にする"
+        ],
+        "human_review_when": [
+          "句またがり、破調、修辞、ジャンル帰属を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.waka-forms",
+          "supports": [
+            "短歌の形式と歴史的位置"
+          ],
+          "locator": "回答『短歌』"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.choka",
+      "kind": "japanese_poetry_form",
+      "title_ja": "長歌",
+      "aliases": [
+        "ながうた"
+      ],
+      "search_terms": [
+        "長歌",
+        "ちょうか",
+        "五七反復",
+        "反歌",
+        "万葉集",
+        "長歌形式"
+      ],
+      "tags": [
+        "poetry",
+        "waka",
+        "choka",
+        "variable_length"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "歌体",
+      "definition_ja": "長歌は、五・七の句を三回以上繰り返し、末尾を七音で結ぶことを標準とする、句数不定の和歌の歌体である。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七の組を三回以上反復し、末尾を七で結ぶ。総句数は固定しない。",
+          "scope": "標準的な長歌",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "convention",
+          "label_ja": "反歌",
+          "statement_ja": "長歌の後に短歌形式の反歌を伴う場合があるが、全ての長歌に必須とはしない。",
+          "scope": "長歌と付随する反歌",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard_strict",
+            "label_ja": "標準的定型",
+            "repeating_pattern": [
+              5,
+              7
+            ],
+            "minimum_repetitions": 3,
+            "closing_pattern": [
+              7
+            ]
+          },
+          {
+            "id": "historical_or_open",
+            "label_ja": "破調を含む歴史的用例",
+            "repeating_pattern": null,
+            "closing_pattern": null
+          }
+        ],
+        "line_count": "variable",
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句境界"
+        ],
+        "prohibited_inferences": [
+          "句数に上限を設ける",
+          "短歌・俳句の最大句数で切り詰める"
+        ],
+        "human_review_when": [
+          "反歌関係、歴史的読み、破調を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.waka-forms",
+          "supports": [
+            "長歌の形式"
+          ],
+          "locator": "回答『長歌』"
+        },
+        {
+          "source_id": "src.kagoshima.choka",
+          "supports": [
+            "長歌の五・七反復と終止形"
+          ],
+          "locator": "研究紀要 p.82『長歌の形式』"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.sedoka",
+      "kind": "japanese_poetry_form",
+      "title_ja": "旋頭歌",
+      "aliases": [
+        "せどうか"
+      ],
+      "search_terms": [
+        "旋頭歌",
+        "せどうか",
+        "五七七五七七",
+        "万葉集",
+        "唱和",
+        "片歌"
+      ],
+      "tags": [
+        "poetry",
+        "waka",
+        "sedoka",
+        "fixed_form"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "歌体",
+      "definition_ja": "旋頭歌は、五・七・七を二度重ねる六句の和歌の歌体で、標準形は計三十八拍である。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七・七／五・七・七。",
+          "scope": "標準的な旋頭歌",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "convention",
+          "label_ja": "唱和性",
+          "statement_ja": "二つの片歌による問答・唱和との関係は重要だが、本文だけから必須条件としない。",
+          "scope": "歴史的な成立・用法",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard_strict",
+            "label_ja": "標準的定型",
+            "mora_pattern": [
+              5,
+              7,
+              7,
+              5,
+              7,
+              7
+            ],
+            "total_mora": 38
+          }
+        ],
+        "sections": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            4,
+            5,
+            6
+          ]
+        ],
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句境界"
+        ],
+        "prohibited_inferences": [
+          "五・七・七を二つ並べただけで旋頭歌と確定する"
+        ],
+        "human_review_when": [
+          "問答性・史料上の歌体名・歴史的読みを扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.waka-forms",
+          "supports": [
+            "旋頭歌の形式"
+          ],
+          "locator": "回答『旋頭歌』"
+        },
+        {
+          "source_id": "src.ndl.authorities",
+          "supports": [
+            "旋頭歌の典拠"
+          ],
+          "locator": "典拠ID 00570249"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.katauta",
+      "kind": "japanese_poetry_form",
+      "title_ja": "片歌",
+      "aliases": [
+        "かたうた"
+      ],
+      "search_terms": [
+        "片歌",
+        "かたうた",
+        "五七七",
+        "十九音",
+        "問答歌",
+        "旋頭歌"
+      ],
+      "tags": [
+        "poetry",
+        "waka",
+        "katauta",
+        "fixed_form"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "歌体",
+      "definition_ja": "片歌は、標準形を五・七・七の三句、計十九拍とする上代の歌体である。問答の片側となることがある。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七・七。",
+          "scope": "標準的な片歌",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "classification_caution",
+          "label_ja": "音数だけでは確定しない",
+          "statement_ja": "五・七・七は他歌体の一部や破調でも生じ得るため、典拠・配置を確認する。",
+          "scope": "歌体の同定",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard_strict",
+            "label_ja": "標準的定型",
+            "mora_pattern": [
+              5,
+              7,
+              7
+            ],
+            "total_mora": 19
+          }
+        ],
+        "dialogue_role_status": "common_not_required",
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句境界",
+          "史料上の配置"
+        ],
+        "prohibited_inferences": [
+          "五・七・七だけで片歌と確定する"
+        ],
+        "human_review_when": [
+          "問答相手・伝承上の読み・歌体帰属を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.waka-forms",
+          "supports": [
+            "片歌の形式"
+          ],
+          "locator": "回答『片歌』"
+        },
+        {
+          "source_id": "src.ndl.authorities",
+          "supports": [
+            "片歌の典拠"
+          ],
+          "locator": "典拠ID 00755562"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.bussokusekika",
+      "kind": "japanese_poetry_form",
+      "title_ja": "仏足石歌体",
+      "aliases": [
+        "仏足跡歌体",
+        "仏足石歌"
+      ],
+      "search_terms": [
+        "仏足石歌",
+        "仏足跡歌体",
+        "五七五七七七",
+        "薬師寺",
+        "仏足跡歌碑"
+      ],
+      "tags": [
+        "poetry",
+        "waka",
+        "bussokusekika",
+        "historical_form"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "歌体",
+      "definition_ja": "仏足石歌体は、標準形を五・七・五・七・七・七の六句、計三十八拍とする奈良時代の歌体である。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七・五・七・七・七。短歌型に七音の第六句を加えた形。",
+          "scope": "標準的な仏足石歌体",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "use_boundary",
+          "label_ja": "利用範囲",
+          "statement_ja": "主に歴史知識として扱い、通常の自動生成候補にはしない。",
+          "scope": "ドギドでの利用",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard_strict",
+            "label_ja": "標準的定型",
+            "mora_pattern": [
+              5,
+              7,
+              5,
+              7,
+              7,
+              7
+            ],
+            "total_mora": 38
+          }
+        ],
+        "historical_period": "奈良時代",
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句境界",
+          "典拠"
+        ],
+        "prohibited_inferences": [
+          "音数一致だけで歴史的歌体と確定する"
+        ],
+        "human_review_when": [
+          "碑文の訓読・欠損・異説を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.waka-forms",
+          "supports": [
+            "仏足石歌体の形式"
+          ],
+          "locator": "回答『仏足石歌体』"
+        },
+        {
+          "source_id": "src.bunka.bussokuseki",
+          "supports": [
+            "仏足跡歌碑の年代・文化財情報"
+          ],
+          "locator": "文化遺産オンライン 仏足跡歌碑"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.renga",
+      "kind": "japanese_poetry_form",
+      "title_ja": "連歌",
+      "aliases": [
+        "renga"
+      ],
+      "search_terms": [
+        "連歌",
+        "付合",
+        "百韻",
+        "式目",
+        "発句",
+        "脇句",
+        "長句",
+        "短句"
+      ],
+      "tags": [
+        "poetry",
+        "renga",
+        "linked_verse",
+        "collaborative"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "連歌・連句",
+      "definition_ja": "連歌は、五・七・五の長句と七・七の短句を交互に付け、複数の作者で連ねる連鎖的な詩歌である。百句を連ねる百韻が代表的な形式である。",
+      "rules": [
+        {
+          "type": "structural_rule",
+          "label_ja": "長句・短句の交替",
+          "statement_ja": "連鎖形式では五・七・五の長句と七・七の短句を交互に置く。",
+          "scope": "連歌の連鎖",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "profile_rule",
+          "label_ja": "百韻と式目",
+          "statement_ja": "百韻では百句を連ねる。使用語や句の配置に関する細則は、形式・時代ごとの式目として分ける。",
+          "scope": "百韻および個別の連歌形式",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "alternating_units": [
+          [
+            5,
+            7,
+            5
+          ],
+          [
+            7,
+            7
+          ]
+        ],
+        "profiles": [
+          {
+            "id": "hyakuin",
+            "label_ja": "百韻",
+            "verse_count": 100
+          }
+        ],
+        "composition_mode": "collaborative_common",
+        "season_word_status": "ruleset_specific",
+        "cut_status": "not_established_in_this_record",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句位置",
+          "作者順",
+          "適用する式目"
+        ],
+        "prohibited_inferences": [
+          "全句に季語を要求する",
+          "一回生成の単独詩として扱う"
+        ],
+        "human_review_when": [
+          "付合、転じ、歴史的式目を評価する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.kyoto.renga",
+          "supports": [
+            "長句・短句の交替、共同制作、百韻、式目"
+          ],
+          "locator": "『連歌』この作品について"
+        },
+        {
+          "source_id": "src.tmd.renga-renku",
+          "supports": [
+            "連歌の共同制作と百韻"
+          ],
+          "locator": "授業の目的・内容 第2段落"
+        },
+        {
+          "source_id": "src.nijl.literature-history",
+          "supports": [
+            "連歌集と歴史的位置"
+          ],
+          "locator": "『新撰菟玖波集』解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.haikai",
+      "kind": "japanese_poetry_tradition",
+      "title_ja": "俳諧",
+      "aliases": [
+        "俳諧の連歌"
+      ],
+      "search_terms": [
+        "俳諧",
+        "俳諧の連歌",
+        "俳言",
+        "貞門",
+        "談林",
+        "蕉風",
+        "連句"
+      ],
+      "tags": [
+        "poetry",
+        "haikai",
+        "tradition_family"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_tradition",
+      "category_ja": "詩歌の伝統",
+      "definition_ja": "俳諧は、俳諧の連歌を中心とする近世文芸の系統で、連歌から派生し、口語・俳言・滑稽などを取り入れた。発句と連句を含み、系統全体に単一の音数形式はない。",
+      "rules": [
+        {
+          "type": "family_scope",
+          "label_ja": "文芸系統",
+          "statement_ja": "俳諧全体を五・七・五の独立した俳句と同一視しない。発句・連句などの位置付けを確認する。",
+          "scope": "俳諧の文芸系統",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "tradition_family",
+        "subforms": [
+          "knowledge.poetry.japanese.hokku",
+          "knowledge.poetry.japanese.renku"
+        ],
+        "single_mora_pattern": null,
+        "season_word_status": "position_specific",
+        "cut_status": "position_specific",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "作品・集・時代のメタデータ"
+        ],
+        "prohibited_inferences": [
+          "俳諧を俳句の別名とする"
+        ],
+        "human_review_when": [
+          "流派、雅俗、付合、発句・連句の区別を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.iwate.haikai",
+          "supports": [
+            "俳諧の連歌、連歌からの派生、口語・滑稽の導入"
+          ],
+          "locator": "『俳諧の誕生』"
+        },
+        {
+          "source_id": "src.nijl.haikai",
+          "supports": [
+            "俳諧の連歌と近世俳諧の歴史的位置"
+          ],
+          "locator": "『紅梅千句』解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.hokku",
+      "kind": "japanese_poetry_form",
+      "title_ja": "発句",
+      "aliases": [
+        "ほっく",
+        "hokku"
+      ],
+      "search_terms": [
+        "発句",
+        "ほっく",
+        "連歌",
+        "俳諧",
+        "季の詞",
+        "季語"
+      ],
+      "tags": [
+        "poetry",
+        "hokku",
+        "linked_verse",
+        "opening_verse"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "連歌・連句の句位",
+      "definition_ja": "発句は、連歌・俳諧の連歌の第一句で、五・七・五の長句を標準とする。近代俳句の歴史的母体だが、独立した俳句と同一ではない。",
+      "rules": [
+        {
+          "type": "position_rule",
+          "label_ja": "第一句",
+          "statement_ja": "連鎖の第一句であることと、五・七・五の長句構造を組み合わせて判定する。",
+          "scope": "連歌・俳諧の連鎖",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "convention",
+          "label_ja": "季の詞",
+          "statement_ja": "俳諧の発句では季節を示す語を詠み込む慣習がある。ただし、語の検出だけで発句への帰属を確定しない。",
+          "scope": "俳諧の発句",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "linked_verse_position",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "linked_verse",
+            "label_ja": "連歌・俳諧の発句",
+            "mora_pattern": [
+              5,
+              7,
+              5
+            ],
+            "position": 1
+          }
+        ],
+        "season_word_status": "historical_convention_in_haikai",
+        "cut_status": "not_established_in_this_record",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "連鎖内の句位置"
+        ],
+        "prohibited_inferences": [
+          "単独の五・七・五を発句と確定する",
+          "発句と近代俳句を同一視する"
+        ],
+        "human_review_when": [
+          "発句としての帰属や季の働きを評価する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.tmd.renga-renku",
+          "supports": [
+            "発句が連鎖の第一句であること、五・七・五の長句"
+          ],
+          "locator": "授業の目的・内容 第1段落"
+        },
+        {
+          "source_id": "src.iwate.haikai",
+          "supports": [
+            "俳諧の発句と季節を示す語の慣習"
+          ],
+          "locator": "『俳諧の誕生』"
+        },
+        {
+          "source_id": "src.nijl.haikai",
+          "supports": [
+            "俳諧における発句の位置"
+          ],
+          "locator": "『紅梅千句』解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.renku",
+      "kind": "japanese_poetry_form",
+      "title_ja": "連句",
+      "aliases": [
+        "俳諧の連歌",
+        "renku"
+      ],
+      "search_terms": [
+        "連句",
+        "俳諧の連歌",
+        "歌仙",
+        "三十六句",
+        "付合",
+        "式目"
+      ],
+      "tags": [
+        "poetry",
+        "renku",
+        "linked_verse",
+        "collaborative"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "連歌・連句",
+      "definition_ja": "連句は、俳諧の連歌として、五・七・五の長句と七・七の短句を複数の作者で交互に付けて連ねる形式である。三十六句で完結する形式が代表例として確認できる。",
+      "rules": [
+        {
+          "type": "structural_rule",
+          "label_ja": "長句・短句の交替",
+          "statement_ja": "五・七・五と七・七を交互に連ねる。",
+          "scope": "連句の連鎖",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "profile_rule",
+          "label_ja": "三十六句形式",
+          "statement_ja": "三十六句で一巻を完結する。使用語や句の配置に関する細則は、採用する式目に従う。",
+          "scope": "三十六句形式",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "alternating_units": [
+          [
+            5,
+            7,
+            5
+          ],
+          [
+            7,
+            7
+          ]
+        ],
+        "profiles": [
+          {
+            "id": "thirty_six_verse",
+            "label_ja": "三十六句形式",
+            "verse_count": 36
+          }
+        ],
+        "composition_mode": "collaborative_common",
+        "season_word_status": "ruleset_specific",
+        "cut_status": "not_established_in_this_record",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句位置",
+          "作者順",
+          "適用する式目"
+        ],
+        "prohibited_inferences": [
+          "全句に季語を要求する",
+          "付合の良否を音数だけで判定する"
+        ],
+        "human_review_when": [
+          "付合、意味の展開、式目解釈を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.tmd.renga-renku",
+          "supports": [
+            "三十六句、長句・短句の交替、複数作者による制作"
+          ],
+          "locator": "授業の目的・内容 第1段落"
+        },
+        {
+          "source_id": "src.ndl.authorities",
+          "supports": [
+            "連句と俳諧の連歌の典拠関係"
+          ],
+          "locator": "典拠ID 00569400"
+        },
+        {
+          "source_id": "src.nijl.haikai",
+          "supports": [
+            "俳諧連歌の歴史的位置"
+          ],
+          "locator": "『紅梅千句』解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.haiku",
+      "kind": "japanese_poetry_form",
+      "title_ja": "俳句",
+      "aliases": [
+        "haiku"
+      ],
+      "search_terms": [
+        "俳句",
+        "十七音",
+        "五七五",
+        "季語",
+        "季題",
+        "切れ",
+        "切字",
+        "無季",
+        "自由律"
+      ],
+      "tags": [
+        "poetry",
+        "haiku",
+        "fixed_and_open_forms",
+        "dogido_core"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "詩形",
+      "definition_ja": "俳句は、俳諧の発句から独立した近代以後の詩形である。有季定型の標準形は五・七・五の十七拍だが、無季俳句や自由律俳句もある。",
+      "rules": [
+        {
+          "type": "profile_rule",
+          "label_ja": "有季定型",
+          "statement_ja": "有季定型の型では五・七・五の十七拍と季語を重視する。",
+          "scope": "有季定型俳句",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "variation",
+          "label_ja": "無季・自由律",
+          "statement_ja": "俳句全体の絶対条件として十七拍・季語・切字を一律要求しない。",
+          "scope": "俳句全体",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        },
+        {
+          "type": "classification_caution",
+          "label_ja": "川柳との区別",
+          "statement_ja": "季語の有無だけで俳句と川柳を分けない。",
+          "scope": "作品の分類",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "traditional_standard",
+            "label_ja": "有季定型",
+            "mora_pattern": [
+              5,
+              7,
+              5
+            ],
+            "total_mora": 17,
+            "season_word": "strong_convention"
+          },
+          {
+            "id": "muki_fixed",
+            "label_ja": "無季定型",
+            "mora_pattern": [
+              5,
+              7,
+              5
+            ],
+            "total_mora": 17,
+            "season_word": "not_required"
+          },
+          {
+            "id": "free_rhythm",
+            "label_ja": "自由律",
+            "mora_pattern": null,
+            "total_mora": null,
+            "season_word": "not_required"
+          }
+        ],
+        "cut_status": "strong_convention_not_absolute",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "ユーザー指定または作品の典拠"
+        ],
+        "prohibited_inferences": [
+          "十七拍だけで俳句と確定する",
+          "季語なしを理由に棄却する",
+          "切字辞書の一致だけで切れを確定する"
+        ],
+        "human_review_when": [
+          "無季・自由律、季語の文脈、切れ、取り合わせを扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.ndl.haiku-reference",
+          "supports": [
+            "俳句の五・七・五、季語、切れ、無季・自由律を含む調査案内"
+          ],
+          "locator": "レファレンス協同データベース調べ方案内『俳句』"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.senryu",
+      "kind": "japanese_poetry_form",
+      "title_ja": "川柳",
+      "aliases": [
+        "senryu",
+        "せんりゅう"
+      ],
+      "search_terms": [
+        "川柳",
+        "雑俳",
+        "前句付",
+        "柄井川柳",
+        "誹風柳多留",
+        "機知",
+        "五七五"
+      ],
+      "tags": [
+        "poetry",
+        "senryu",
+        "fixed_form",
+        "dogido_core"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "詩形",
+      "definition_status": "editorial_synthesis",
+      "definition_ja": "川柳は、江戸中期の雑俳・前句付から独立した文芸で、標準形は五・七・五の十七拍である。人情・社会・人生・世相などを捉える作品が多い。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七・五の十七拍。",
+          "scope": "標準的な川柳",
+          "machine_verifiable": true,
+          "claim_status": "source_stated"
+        },
+        {
+          "type": "non_requirement",
+          "label_ja": "季語・切字",
+          "statement_ja": "季語・切字を要求しないが、含んではならないという規則ではない。",
+          "scope": "川柳全体",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        },
+        {
+          "type": "classification_caution",
+          "label_ja": "俳句との区別",
+          "statement_ja": "『季語なし＝川柳』『季語あり＝俳句』という判定をしない。",
+          "scope": "作品の分類",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard",
+            "label_ja": "標準的定型",
+            "mora_pattern": [
+              5,
+              7,
+              5
+            ],
+            "total_mora": 17
+          }
+        ],
+        "typical_subjects": [
+          "人情",
+          "社会",
+          "人生",
+          "世相"
+        ],
+        "typical_qualities": [
+          "機知"
+        ],
+        "season_word_status": "not_required_not_forbidden",
+        "cut_status": "not_required_not_forbidden",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "ユーザー指定または作品の典拠"
+        ],
+        "prohibited_inferences": [
+          "季語の不在だけで川柳と確定する",
+          "自然を詠む作品を川柳から除外する",
+          "人間を詠む作品を俳句から除外する"
+        ],
+        "human_review_when": [
+          "人間・社会を見る視点、機知、系譜を評価する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.nijl.senryu",
+          "supports": [
+            "五・七・五の形式",
+            "季語・切字を必要としないこと",
+            "人事・世態と機知",
+            "前句付から川柳への歴史、柄井川柳、『誹風柳多留』"
+          ],
+          "locator": "『誹風柳多留』分類・解説"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.poetry.japanese.kyoka",
+      "kind": "japanese_poetry_form",
+      "title_ja": "狂歌",
+      "aliases": [
+        "kyoka"
+      ],
+      "search_terms": [
+        "狂歌",
+        "和歌",
+        "パロディー",
+        "天明狂歌",
+        "江戸狂歌",
+        "滑稽",
+        "五七五七七"
+      ],
+      "tags": [
+        "poetry",
+        "kyoka",
+        "waka",
+        "parody"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "歌体",
+      "definition_status": "editorial_synthesis",
+      "definition_ja": "狂歌は、短歌と同じ五・七・五・七・七を標準形とし、和歌の歌語・修辞・題材などをもじり、滑稽・風刺・諧謔を表す歌である。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的定型",
+          "statement_ja": "五・七・五・七・七の三十一拍。",
+          "scope": "標準的な狂歌",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "semantic_identity",
+          "label_ja": "諧謔・参照関係",
+          "statement_ja": "面白い短歌を全て狂歌とせず、元歌・歌語への参照、滑稽・風刺の働きを確認する。",
+          "scope": "狂歌の同定",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard",
+            "label_ja": "標準的定型",
+            "mora_pattern": [
+              5,
+              7,
+              5,
+              7,
+              7
+            ],
+            "total_mora": 31
+          }
+        ],
+        "defining_semantic_features": [
+          "和歌のパロディー",
+          "諧謔・滑稽・風刺"
+        ],
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "元歌・歌語への参照",
+          "作者・時代の情報"
+        ],
+        "prohibited_inferences": [
+          "面白い短歌を全て狂歌とする"
+        ],
+        "human_review_when": [
+          "パロディー性・風刺・元歌を同定する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.nijl.kyoka",
+          "supports": [
+            "狂歌による和歌のもじり、諧謔性、江戸期の展開"
+          ],
+          "locator": "『百千鳥狂歌合』解説"
+        },
+        {
+          "source_id": "src.ndl.authorities",
+          "supports": [
+            "狂歌の典拠"
+          ],
+          "locator": "典拠ID 00567199"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.poetry.japanese.dodoitsu",
+      "kind": "japanese_poetry_form",
+      "title_ja": "都々逸",
+      "aliases": [
+        "都々一",
+        "どどいつ",
+        "dodoitsu"
+      ],
+      "search_terms": [
+        "都々逸",
+        "都々一",
+        "どどいつ",
+        "七七七五",
+        "二十六音",
+        "俗謡",
+        "三味線"
+      ],
+      "tags": [
+        "poetry",
+        "song",
+        "dodoitsu",
+        "oral_tradition"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_form",
+      "category_ja": "俗謡の詞形",
+      "definition_ja": "都々逸は、江戸末期に三味線の流行とともに広まった俗謡で、標準的な詞形は七・七・七・五の四句、計二十六拍である。",
+      "rules": [
+        {
+          "type": "standard_form",
+          "label_ja": "標準的な詞形",
+          "statement_ja": "七・七・七・五。",
+          "scope": "標準的な都々逸",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "performance_caution",
+          "label_ja": "歌唱上の伸縮",
+          "statement_ja": "三味線伴奏や歌唱時の伸ばし・詰めを通常朗読の拍数だけで再現済みとみなさない。",
+          "scope": "歌唱・上演",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "song_form",
+        "prosodic_unit": "mora",
+        "profiles": [
+          {
+            "id": "standard",
+            "label_ja": "標準的な詞形",
+            "mora_pattern": [
+              7,
+              7,
+              7,
+              5
+            ],
+            "total_mora": 26
+          }
+        ],
+        "musical_relation": "三味線伴奏の俗謡",
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "確定した読み",
+          "句境界"
+        ],
+        "prohibited_inferences": [
+          "朗読できれば歌唱を再現したとみなす",
+          "未知の方言読みを推測する"
+        ],
+        "human_review_when": [
+          "歌唱時の音価、方言、旋律適合を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.nijl.dodoitsu",
+          "supports": [
+            "七・七・七・五の詞形と二十六音",
+            "都々逸・都々一の歴史的位置と俗謡としての性格"
+          ],
+          "locator": "『其所縁源氏都々一』展示解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.poetry.japanese.ryuka",
+      "kind": "japanese_poetry_tradition",
+      "title_ja": "琉歌",
+      "aliases": [
+        "りゅうか",
+        "ryuka"
+      ],
+      "search_terms": [
+        "琉歌",
+        "八八八六",
+        "短詞形歌謡",
+        "仲風",
+        "口説",
+        "つらね",
+        "三線"
+      ],
+      "tags": [
+        "poetry",
+        "song",
+        "ryuka",
+        "ryukyuan_tradition"
+      ],
+      "regions": [
+        "JP",
+        "RYUKYU"
+      ],
+      "languages": [
+        "ja",
+        "ryukyuan_languages"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "poetry_tradition",
+      "category_ja": "歌謡の伝統",
+      "definition_ja": "琉歌は、沖縄・奄美で歌われる歌謡の伝統である。狭義の短琉歌は八・八・八・六の四句、計三十拍を標準とするが、広義には長歌、口説、つらね、木遣り、仲風なども含む。",
+      "rules": [
+        {
+          "type": "profile_rule",
+          "label_ja": "短琉歌の標準形",
+          "statement_ja": "狭義の短琉歌は八・八・八・六。",
+          "scope": "短琉歌",
+          "machine_verifiable": true,
+          "claim_status": "editorial_synthesis"
+        },
+        {
+          "type": "family_scope",
+          "label_ja": "広義の琉歌",
+          "statement_ja": "琉歌全体には単一音数を要求せず、歌謡種を確認する。",
+          "scope": "広義の琉歌",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        },
+        {
+          "type": "language_caution",
+          "label_ja": "地域語の読み",
+          "statement_ja": "標準日本語のかな化辞書から地域語の読みを推測しない。",
+          "scope": "音数判定",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "entity_kind": "tradition_family",
+        "prosodic_unit": "mora_with_regional_reading",
+        "profiles": [
+          {
+            "id": "short_ryuka_standard",
+            "label_ja": "短琉歌の標準形",
+            "mora_pattern": [
+              8,
+              8,
+              8,
+              6
+            ],
+            "total_mora": 30
+          },
+          {
+            "id": "broad_tradition",
+            "label_ja": "広義の琉歌",
+            "mora_pattern": null,
+            "total_mora": null
+          }
+        ],
+        "other_forms": [
+          "長歌",
+          "口説",
+          "つらね",
+          "木遣り",
+          "仲風"
+        ],
+        "musical_relation": "三線歌謡",
+        "season_word_status": "not_required",
+        "cut_status": "not_required",
+        "rhyme_status": "not_defining"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "典拠のある地域語読み",
+          "歌謡種"
+        ],
+        "prohibited_inferences": [
+          "標準日本語の読みに置換する",
+          "八・八・八・六を琉歌全体へ強制する"
+        ],
+        "human_review_when": [
+          "地域発音、歴史的表記、歌唱時の音価、広義・狭義を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.uryukyu.ryuka",
+          "supports": [
+            "琉歌の広義・狭義、短琉歌の形式、三線歌謡としての継承"
+          ],
+          "locator": "琉球大学附属図書館『琉歌集』解説"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    }
+  ]
+}

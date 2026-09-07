@@ -1,0 +1,508 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dogido/reference/language-education-and-poetry.schema.json",
+  "title": "ドギド 国語知識・詩形データベース",
+  "description": "出典台帳、国語知識、日本・世界の詩形分類、生成索引を検証するスキーマ。",
+  "$defs": {
+    "stableId": {"type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"},
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringArray": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "stableIdArray": {"type": "array", "items": {"$ref": "#/$defs/stableId"}, "uniqueItems": true},
+    "sourceRef": {
+      "type": "object",
+      "required": ["source_id", "supports", "locator"],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/stableId"},
+        "supports": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/nonEmptyString"}, "uniqueItems": true},
+        "locator": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    },
+    "commonRecord": {
+      "type": "object",
+      "required": ["id", "kind", "title_ja", "aliases", "search_terms", "tags", "regions", "languages", "last_verified_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "kind": {"$ref": "#/$defs/nonEmptyString"},
+        "title_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "title_original": {"type": "string"},
+        "aliases": {"$ref": "#/$defs/stringArray"},
+        "search_terms": {"$ref": "#/$defs/stringArray"},
+        "tags": {"$ref": "#/$defs/stringArray"},
+        "regions": {"$ref": "#/$defs/stringArray"},
+        "languages": {"$ref": "#/$defs/stringArray"},
+        "last_verified_at": {"type": "string", "format": "date"}
+      }
+    },
+    "organizationRecord": {
+      "type": "object",
+      "required": ["id", "name_ja", "type", "jurisdiction", "official_domains", "verification_url"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "name_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "type": {"$ref": "#/$defs/nonEmptyString"},
+        "jurisdiction": {"$ref": "#/$defs/nonEmptyString"},
+        "official_domains": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[a-z0-9.-]+$"}, "uniqueItems": true},
+        "verification_url": {"type": "string", "format": "uri"}
+      },
+      "additionalProperties": false
+    },
+    "sourceRecord": {
+      "allOf": [
+        {"$ref": "#/$defs/commonRecord"},
+        {
+          "type": "object",
+          "required": ["organization_id", "canonical_url", "publication_role", "formats", "rights"],
+          "properties": {
+            "kind": {"const": "source"},
+            "organization_id": {"$ref": "#/$defs/stableId"},
+            "canonical_url": {"type": "string", "format": "uri"},
+            "creators": {"$ref": "#/$defs/stringArray"},
+            "doi": {"$ref": "#/$defs/nonEmptyString"},
+            "publication_role": {"enum": ["organization_authored_or_issued", "institution_published_scholarly_work", "public_institution_content_on_official_platform", "repository_host_only", "bibliographic_or_authority_record"]},
+            "formats": {"$ref": "#/$defs/stringArray"},
+            "rights": {
+              "type": "object",
+              "required": ["status", "terms_url", "attribution", "stored_content_scope", "checked_at"],
+              "properties": {
+                "status": {"$ref": "#/$defs/nonEmptyString"},
+                "terms_url": {"type": "string", "format": "uri"},
+                "attribution": {"$ref": "#/$defs/nonEmptyString"},
+                "stored_content_scope": {"enum": ["metadata_and_links_only", "metadata_links_and_factual_summary", "official_data_and_normalized_extract", "licensed_dataset_and_normalized_copy"]},
+                "checked_at": {"type": "string", "format": "date"}
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "japaneseResource": {
+      "allOf": [
+        {"$ref": "#/$defs/commonRecord"},
+        {
+          "type": "object",
+          "required": ["provider", "education_stages", "subject_areas", "formats", "machine_readable", "acquisition_mode", "stored_content", "local_runtime_allowed", "external_runtime_fetch_allowed", "policy_role", "dogido_use_cases", "guardrails", "source_refs"],
+          "properties": {
+            "provider": {"$ref": "#/$defs/nonEmptyString"},
+            "education_stages": {"$ref": "#/$defs/stringArray"},
+            "subject_areas": {"$ref": "#/$defs/stringArray"},
+            "formats": {"$ref": "#/$defs/stringArray"},
+            "machine_readable": {"type": ["boolean", "string"]},
+            "acquisition_mode": {"enum": ["official_download", "official_api", "official_link", "item_rights_check", "manual_research_only"]},
+            "stored_content": {"$ref": "#/$defs/nonEmptyString"},
+            "local_runtime_allowed": {"type": "boolean"},
+            "external_runtime_fetch_allowed": {"const": false},
+            "policy_role": {"const": "advisory_only"},
+            "version_policy": {"$ref": "#/$defs/nonEmptyString"},
+            "access_notes": {"$ref": "#/$defs/nonEmptyString"},
+            "dogido_use_cases": {"$ref": "#/$defs/stringArray"},
+            "guardrails": {"$ref": "#/$defs/stringArray"},
+            "source_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sourceRef"}}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "knowledgeRule": {
+      "type": "object",
+      "required": ["type", "label_ja", "statement_ja", "scope", "machine_verifiable", "claim_status"],
+      "properties": {
+        "type": {"$ref": "#/$defs/stableId"},
+        "label_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "statement_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "scope": {"$ref": "#/$defs/nonEmptyString"},
+        "machine_verifiable": {"type": "boolean"},
+        "claim_status": {"enum": ["source_stated", "editorial_synthesis", "editorial_guardrail"]}
+      },
+      "additionalProperties": false
+    },
+    "machineUse": {
+      "type": "object",
+      "required": ["judgement_level", "candidate_only", "required_inputs", "prohibited_inferences", "human_review_when"],
+      "properties": {
+        "judgement_level": {"enum": ["exact", "partial", "lookup_only", "human_review"]},
+        "candidate_only": {"type": "boolean"},
+        "required_inputs": {"$ref": "#/$defs/stringArray"},
+        "prohibited_inferences": {"$ref": "#/$defs/stringArray"},
+        "human_review_when": {"$ref": "#/$defs/stringArray"}
+      },
+      "additionalProperties": false
+    },
+    "knowledgeRecord": {
+      "allOf": [
+        {"$ref": "#/$defs/commonRecord"},
+        {
+          "type": "object",
+          "required": ["category", "category_ja", "definition_ja", "definition_status", "rules", "structured_data", "machine_use", "source_refs"],
+          "properties": {
+            "kind": {"enum": ["grammar_rule", "orthography_rule", "script_knowledge", "rhetorical_device", "prosody_rule", "japanese_poetry_form", "japanese_poetry_tradition"]},
+            "category": {"enum": ["grammar", "orthography", "script", "rhetoric", "prosody", "poetry_form", "poetry_tradition"]},
+            "category_ja": {"$ref": "#/$defs/nonEmptyString"},
+            "definition_ja": {"$ref": "#/$defs/nonEmptyString"},
+            "dialogue_text_ja": {"$ref": "#/$defs/nonEmptyString"},
+            "definition_status": {"enum": ["source_stated", "editorial_synthesis"]},
+            "rules": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/knowledgeRule"}},
+            "structured_data": {"type": "object"},
+            "machine_use": {"$ref": "#/$defs/machineUse"},
+            "source_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sourceRef"}}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "relation": {
+      "type": "object",
+      "required": ["type", "target_id"],
+      "properties": {
+        "type": {"enum": ["has_subtype", "is_subtype_of", "derived_from", "adaptation_of", "adapted_as", "historically_related_to"]},
+        "target_id": {"$ref": "#/$defs/stableId"},
+        "note_ja": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    },
+    "positiveIntegerArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "constraintProfile": {
+      "type": "object",
+      "required": ["id", "label_ja", "formal_constraints"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "label_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "languages": {"$ref": "#/$defs/stringArray"},
+        "formal_constraints": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["fixed", "regulated", "template_based", "open", "form_independent", "hybrid"]}
+        },
+        "prosodic_unit": {"enum": ["mora", "syllable", "character_count", "tone", "stress", "quantity", "beat", "mixed", "none"]},
+        "pattern": {"$ref": "#/$defs/positiveIntegerArray"},
+        "verification": {"enum": ["human_review", "language_specific"]}
+      },
+      "additionalProperties": false
+    },
+    "poetryStructure": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "alternating_units": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/positiveIntegerArray"}},
+        "bayt_semantic_independence": {"type": "boolean"},
+        "bayts": {"type": "integer", "minimum": 1},
+        "characters_per_line": {"$ref": "#/$defs/positiveIntegerArray"},
+        "closure": {"$ref": "#/$defs/nonEmptyString"},
+        "common_line_count": {"type": "integer", "minimum": 1},
+        "common_pattern": {"$ref": "#/$defs/nonEmptyString"},
+        "common_rhyme": {"$ref": "#/$defs/nonEmptyString"},
+        "components": {"$ref": "#/$defs/stringArray"},
+        "constraint_profiles": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/constraintProfile"}},
+        "defining_feature_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "defining_features_ja": {"$ref": "#/$defs/stringArray"},
+        "english_profile": {
+          "oneOf": [
+            {"$ref": "#/$defs/nonEmptyString"},
+            {
+              "type": "object",
+              "required": ["stanza_lines", "stress_pattern", "typical_rhyme"],
+              "properties": {
+                "stanza_lines": {"type": "integer", "minimum": 1},
+                "stress_pattern": {"$ref": "#/$defs/positiveIntegerArray"},
+                "typical_rhyme": {"$ref": "#/$defs/nonEmptyString"}
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "envoi_lines": {"type": "integer", "minimum": 1},
+        "fixed_order": {"type": "boolean"},
+        "fixed_structure": {"type": ["boolean", "string"]},
+        "hemistichs": {"type": "integer", "minimum": 1},
+        "historical_note_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "japanese_traditional_pattern": {"$ref": "#/$defs/positiveIntegerArray"},
+        "layout": {"$ref": "#/$defs/nonEmptyString"},
+        "length": {"$ref": "#/$defs/nonEmptyString"},
+        "line_count": {"type": ["integer", "string"]},
+        "line_lengths": {"$ref": "#/$defs/nonEmptyString"},
+        "lineation": {"$ref": "#/$defs/nonEmptyString"},
+        "lines_per_main_stanza": {"type": "integer", "minimum": 1},
+        "main_stanzas": {"type": "integer", "minimum": 1},
+        "meter": {"$ref": "#/$defs/nonEmptyString"},
+        "modern_lineation": {"$ref": "#/$defs/positiveIntegerArray"},
+        "musical_relation": {"type": "boolean"},
+        "note_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "opening_bayt": {"$ref": "#/$defs/nonEmptyString"},
+        "padas": {"type": "integer", "minimum": 1},
+        "parallel_couplets": {"$ref": "#/$defs/positiveIntegerArray"},
+        "pattern": {"$ref": "#/$defs/positiveIntegerArray"},
+        "pattern_status": {"$ref": "#/$defs/nonEmptyString"},
+        "profiles": {"$ref": "#/$defs/stringArray"},
+        "prosodic_unit": {"enum": ["mora", "syllable", "character_count", "tone", "stress", "quantity", "beat", "mixed", "none"]},
+        "quantity_pattern": {"$ref": "#/$defs/nonEmptyString"},
+        "refrains": {"type": "integer", "minimum": 1},
+        "repetition_rule": {"$ref": "#/$defs/nonEmptyString"},
+        "representative_sequences": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"not": {"enum": ["audio_transcript", "corpus_text", "full_text", "lyrics", "poem_text", "question_text"]}},
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        },
+        "rhyme": {"$ref": "#/$defs/nonEmptyString"},
+        "rhyme_count": {"type": "integer", "minimum": 1},
+        "rhyme_scheme": {"$ref": "#/$defs/nonEmptyString"},
+        "rhyme_sequence": {"$ref": "#/$defs/nonEmptyString"},
+        "rotating_end_words": {"type": "integer", "minimum": 1},
+        "scope": {"$ref": "#/$defs/nonEmptyString"},
+        "semantic_parts": {"$ref": "#/$defs/stringArray"},
+        "soft_conventions": {"$ref": "#/$defs/stringArray"},
+        "stanza_lines": {"type": "integer", "minimum": 1},
+        "stanzas": {"$ref": "#/$defs/positiveIntegerArray"},
+        "subsequent_bayts": {"$ref": "#/$defs/nonEmptyString"},
+        "subtypes": {"$ref": "#/$defs/stringArray"},
+        "syllables_per_line": {"type": "integer", "minimum": 1},
+        "syllables_per_pada": {"type": "integer", "minimum": 1},
+        "template_name": {"$ref": "#/$defs/nonEmptyString"},
+        "template_required": {"type": "boolean"},
+        "thematic_sections": {"$ref": "#/$defs/nonEmptyString"},
+        "tone_pattern": {"$ref": "#/$defs/nonEmptyString"},
+        "total": {"type": "integer", "minimum": 1},
+        "total_syllables": {"type": "integer", "minimum": 1},
+        "traditional_sections": {"type": "integer", "minimum": 1},
+        "turn": {"$ref": "#/$defs/nonEmptyString"},
+        "typical_pattern": {"$ref": "#/$defs/positiveIntegerArray"},
+        "typical_rhyme": {"$ref": "#/$defs/stringArray"},
+        "typical_total_syllables": {"$ref": "#/$defs/positiveIntegerArray"},
+        "unit": {"$ref": "#/$defs/nonEmptyString"},
+        "unit_components": {"$ref": "#/$defs/nonEmptyString"},
+        "unlisted_subtypes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["title_ja", "status"],
+            "properties": {
+              "title_ja": {"$ref": "#/$defs/nonEmptyString"},
+              "status": {"const": "not_catalogued"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "written_line_count": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    },
+    "worldPoetryRecord": {
+      "allOf": [
+        {"$ref": "#/$defs/commonRecord"},
+        {
+          "type": "object",
+          "required": ["entity_kind", "summary_ja", "classification", "structure", "classification_status", "related_ids", "dogido_relevance", "dogido_guardrails", "source_refs"],
+          "properties": {
+            "kind": {"enum": ["poetry_genre", "poetry_form", "poetry_tradition", "poetry_hybrid"]},
+            "entity_kind": {"enum": ["genre", "form", "tradition_family", "hybrid"]},
+            "summary_ja": {"$ref": "#/$defs/nonEmptyString"},
+            "classification": {
+              "type": "object",
+              "required": ["expression_modes", "formal_constraints", "prosodic_bases", "transmission_modes", "composition_modes"],
+              "properties": {
+                "expression_modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["lyric", "narrative", "dramatic", "didactic", "devotional", "praise", "elegiac", "satirical", "occasional"]}},
+                "formal_constraints": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["fixed", "regulated", "template_based", "open", "form_independent", "hybrid"]}},
+                "prosodic_bases": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["mora", "syllable", "character_count", "tone", "stress", "quantity", "beat", "mixed", "none"]}},
+                "transmission_modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["oral", "written", "sung", "chanted", "visual", "digital"]}},
+                "composition_modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["solo", "collaborative", "improvised", "competitive"]}}
+              },
+              "additionalProperties": false
+            },
+            "structure": {"$ref": "#/$defs/poetryStructure"},
+            "classification_status": {"enum": ["source_stated", "editorial_synthesis"]},
+            "related_ids": {"$ref": "#/$defs/stableIdArray"},
+            "relations": {"type": "array", "items": {"$ref": "#/$defs/relation"}},
+            "dogido_relevance": {"$ref": "#/$defs/stringArray"},
+            "dogido_guardrails": {"$ref": "#/$defs/stringArray"},
+            "cultural_protocols": {
+              "type": "object",
+              "required": ["text_ingestion_allowed", "note_ja"],
+              "properties": {
+                "text_ingestion_allowed": {"const": false},
+                "community_attribution_required": {"type": "boolean"},
+                "note_ja": {"$ref": "#/$defs/nonEmptyString"}
+              },
+              "additionalProperties": false
+            },
+            "source_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sourceRef"}}
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "axisOption": {
+      "type": "object",
+      "required": ["id", "label_ja"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "label_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "definition_ja": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    },
+    "excludedRecord": {
+      "type": "object",
+      "required": ["id", "title_ja", "decision", "reason", "checked_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "title_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "decision": {"const": "excluded"},
+        "reason": {"$ref": "#/$defs/nonEmptyString"},
+        "official_explanation_url": {"type": "string", "format": "uri"},
+        "checked_at": {"type": "string", "format": "date"}
+      },
+      "additionalProperties": false
+    },
+    "indexEntry": {
+      "type": "object",
+      "required": ["id", "dataset_id", "dataset_path", "record_key", "record_index", "kind", "title_ja", "title_original", "aliases", "search_terms", "explicit_terms", "tags", "regions", "languages", "source_ids"],
+      "properties": {
+        "id": {"$ref": "#/$defs/stableId"},
+        "dataset_id": {"$ref": "#/$defs/stableId"},
+        "dataset_path": {"type": "string", "pattern": "^[^/].*\\.json$"},
+        "record_key": {"enum": ["sources", "resources", "entries"]},
+        "record_index": {"type": "integer", "minimum": 0},
+        "kind": {"$ref": "#/$defs/nonEmptyString"},
+        "title_ja": {"$ref": "#/$defs/nonEmptyString"},
+        "title_original": {"type": "string"},
+        "aliases": {"$ref": "#/$defs/stringArray"},
+        "search_terms": {"$ref": "#/$defs/stringArray"},
+        "explicit_terms": {"$ref": "#/$defs/stringArray"},
+        "tags": {"$ref": "#/$defs/stringArray"},
+        "regions": {"$ref": "#/$defs/stringArray"},
+        "languages": {"$ref": "#/$defs/stringArray"},
+        "source_ids": {"$ref": "#/$defs/stableIdArray"}
+      },
+      "additionalProperties": false
+    },
+    "facet": {"type": "object", "additionalProperties": {"$ref": "#/$defs/stableIdArray"}}
+  },
+  "oneOf": [
+    {
+      "title": "出典台帳",
+      "type": "object",
+      "required": ["schema_version", "snapshot_date", "scope_note", "organizations", "sources"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "snapshot_date": {"type": "string", "format": "date"},
+        "scope_note": {"$ref": "#/$defs/nonEmptyString"},
+        "organizations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/organizationRecord"}},
+        "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sourceRecord"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "日本の国語教育資源",
+      "type": "object",
+      "required": ["schema_version", "snapshot_date", "source_policy", "scope_note", "policy_notes", "resources", "excluded"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "snapshot_date": {"type": "string", "format": "date"},
+        "source_policy": {"const": "official_and_public_institutions_only"},
+        "scope_note": {"$ref": "#/$defs/nonEmptyString"},
+        "policy_notes": {"$ref": "#/$defs/stringArray"},
+        "resources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/japaneseResource"}},
+        "excluded": {"type": "array", "items": {"$ref": "#/$defs/excludedRecord"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "世界詩の多軸分類",
+      "type": "object",
+      "required": ["schema_version", "snapshot_date", "scope", "scope_note", "japanese_label_policy", "classification_axes", "relation_types", "entries"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "snapshot_date": {"type": "string", "format": "date"},
+        "scope": {"const": "representative_seed"},
+        "scope_note": {"$ref": "#/$defs/nonEmptyString"},
+        "japanese_label_policy": {"$ref": "#/$defs/nonEmptyString"},
+        "classification_axes": {
+          "type": "object",
+          "required": ["entity_kinds", "expression_modes", "formal_constraints", "prosodic_bases", "transmission_modes", "composition_modes"],
+          "properties": {
+            "entity_kinds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}},
+            "expression_modes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}},
+            "formal_constraints": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}},
+            "prosodic_bases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}},
+            "transmission_modes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}},
+            "composition_modes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}}
+          },
+          "additionalProperties": false
+        },
+        "relation_types": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/axisOption"}},
+        "entries": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/worldPoetryRecord"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "日本語・日本詩歌の知識データ",
+      "type": "object",
+      "required": ["schema_version", "snapshot_date", "source_policy", "scope_note", "rights_policy", "entries"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "snapshot_date": {"type": "string", "format": "date"},
+        "source_policy": {"const": "official_and_public_institutions_only"},
+        "scope_note": {"$ref": "#/$defs/nonEmptyString"},
+        "rights_policy": {"$ref": "#/$defs/nonEmptyString"},
+        "entries": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/knowledgeRecord"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "生成済み検索索引",
+      "type": "object",
+      "required": ["schema_version", "snapshot_date", "generator", "search_policy", "datasets", "entries", "by_term", "by_term_ngram", "by_dataset", "by_kind", "by_tag", "by_region", "by_language", "by_source", "by_entity_kind", "by_expression_mode", "by_formal_constraint", "by_prosodic_basis", "by_transmission_mode", "by_composition_mode", "by_education_stage", "by_subject_area", "by_acquisition_mode", "by_machine_readable", "by_local_runtime_allowed", "by_provider"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "snapshot_date": {"type": "string", "format": "date"},
+        "generator": {"const": "scripts/build_reference_index.py"},
+        "search_policy": {"const": "explicit_terms_and_structured_facets_only"},
+        "datasets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "path", "record_count", "sha256"],
+            "properties": {
+              "id": {"$ref": "#/$defs/stableId"},
+              "path": {"type": "string", "pattern": "^[^/].*\\.json$"},
+              "record_count": {"type": "integer", "minimum": 0},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "entries": {"type": "object", "additionalProperties": {"$ref": "#/$defs/indexEntry"}},
+        "by_term": {"$ref": "#/$defs/facet"},
+        "by_term_ngram": {"$ref": "#/$defs/facet"},
+        "by_dataset": {"$ref": "#/$defs/facet"},
+        "by_kind": {"$ref": "#/$defs/facet"},
+        "by_tag": {"$ref": "#/$defs/facet"},
+        "by_region": {"$ref": "#/$defs/facet"},
+        "by_language": {"$ref": "#/$defs/facet"},
+        "by_source": {"$ref": "#/$defs/facet"},
+        "by_entity_kind": {"$ref": "#/$defs/facet"},
+        "by_expression_mode": {"$ref": "#/$defs/facet"},
+        "by_formal_constraint": {"$ref": "#/$defs/facet"},
+        "by_prosodic_basis": {"$ref": "#/$defs/facet"},
+        "by_transmission_mode": {"$ref": "#/$defs/facet"},
+        "by_composition_mode": {"$ref": "#/$defs/facet"},
+        "by_education_stage": {"$ref": "#/$defs/facet"},
+        "by_subject_area": {"$ref": "#/$defs/facet"},
+        "by_acquisition_mode": {"$ref": "#/$defs/facet"},
+        "by_machine_readable": {"$ref": "#/$defs/facet"},
+        "by_local_runtime_allowed": {"$ref": "#/$defs/facet"},
+        "by_provider": {"$ref": "#/$defs/facet"}
+      },
+      "additionalProperties": false
+    }
+  ]
+}

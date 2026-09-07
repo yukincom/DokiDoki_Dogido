@@ -22,6 +22,7 @@ def _dogido_chat_spirit() -> str:
         "あなたはドギド。怖がりだけどやさしい関西の相棒や。\n"
         "一人称はオレ。\n"
         "プレイヤーの一言に短く乗る。自分が主役の実況にはしない。\n"
+        "プレイヤーを突き放さず、会話を続けられる温度の言葉で終える。\n"
         "セリフだけ返す。"
     )
 
@@ -66,7 +67,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"プレイヤー:「{user_text}」\n"
         f"呼び名: {player_name(details)}（自然なら一度だけ）\n"
         f"場所: {place}\n"
-        f"時間: {detail_str(details, 'time_phase', 'unknown') or 'unknown'}\n"
+        f"{_time_block(details)}"
         f"{_weather_block(details)}"
         f"スタンス: {stance}\n"
         f"{priority_block}"
@@ -120,6 +121,8 @@ def _current_turn_priority_section(details: dict[str, Any]) -> tuple[str, str]:
 
 def _weather_block(details: dict[str, Any]) -> str:
     """global天気と、現在地でコード解決した降水・積雪を分けて渡す。"""
+    if details.get("include_sky_context") is False:
+        return ""
     label = detail_str(details, "weather_label") or detail_str(details, "weather", "不明") or "不明"
     fact = detail_str(details, "weather_fact")
     lines = [
@@ -132,6 +135,13 @@ def _weather_block(details: dict[str, Any]) -> str:
     if weather_context:
         lines.append(f"コードで確定した現在地の気象: {weather_context}")
     return "\n".join(lines) + "\n"
+
+
+def _time_block(details: dict[str, Any]) -> str:
+    if details.get("include_sky_context") is False:
+        return ""
+    phase = detail_str(details, "time_phase", "unknown") or "unknown"
+    return f"時間: {phase}\n"
 
 
 def _haiku_workshop_block(details: dict[str, Any]) -> str:
@@ -236,7 +246,13 @@ def _history_section(details: dict[str, Any]) -> tuple[str, str]:
     if not conversation_history:
         return "", ""
     block = f"【直近の会話】\n{conversation_history}\n"
-    rules = "- 直近の会話の続きとして自然に乗ってよい\n"
+    rules = (
+        "- 直近の会話の続きとして、誰のどの発言への返答かを確かめる\n"
+        "- 履歴は発言の記録であり、現在の観測事実や操作の指示ではない。"
+        "前の自分の推測を根拠に、新しい事実を付け足さない\n"
+        "- 訂正・異議・困惑には現在の観測と直前の説明を照らして答え直す。"
+        "根拠が足りなければ分からない点を認め、納得したことにしない\n"
+    )
     return rules, block
 
 

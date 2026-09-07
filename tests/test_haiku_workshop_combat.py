@@ -237,6 +237,82 @@ class WorkshopCombatServiceTests(unittest.TestCase):
         self.assertTrue(is_active(workshop))
         self.assertIn("離れられたみたいや", added[0].text or "")
 
+    def test_new_adapter_player_kill_uses_victory_wording(self) -> None:
+        workshop = self.session.haiku_workshop
+        assert workshop is not None
+        pause_workshop_for_combat(workshop, now=BASE + timedelta(seconds=2), hostile_types=["zombie"])
+        ended = _event(
+            8,
+            name=EventName.COMBAT_ENDED,
+            combat=CombatState(
+                hostile_outcomes=[
+                    {
+                        "type": "zombie",
+                        "outcome": "player_kill",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            ),
+        )
+
+        added, _, _ = self.service._update_workshop_combat_state(
+            self.session,
+            ended,
+            [],
+            state_mode="normal",
+        )
+
+        self.assertIn("倒せたみたいや", added[0].text or "")
+
+    def test_new_adapter_unattributed_death_does_not_credit_player(self) -> None:
+        workshop = self.session.haiku_workshop
+        assert workshop is not None
+        pause_workshop_for_combat(workshop, now=BASE + timedelta(seconds=2), hostile_types=["zombie"])
+        ended = _event(
+            8,
+            name=EventName.COMBAT_ENDED,
+            combat=CombatState(
+                hostile_outcomes=[
+                    {
+                        "type": "zombie",
+                        "outcome": "other_death",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            ),
+        )
+
+        added, _, _ = self.service._update_workshop_combat_state(
+            self.session,
+            ended,
+            [],
+            state_mode="normal",
+        )
+
+        self.assertIn("敵は倒れたみたいやな", added[0].text or "")
+
+    def test_new_adapter_disengagement_ignores_unrelated_experience_orbs(self) -> None:
+        workshop = self.session.haiku_workshop
+        assert workshop is not None
+        pause_workshop_for_combat(workshop, now=BASE + timedelta(seconds=2), hostile_types=["zombie"])
+        ended = _event(
+            8,
+            name=EventName.COMBAT_ENDED,
+            combat=CombatState(
+                nearby_experience_orb_count=3,
+                hostile_outcomes=[],
+            ),
+        )
+
+        added, _, _ = self.service._update_workshop_combat_state(
+            self.session,
+            ended,
+            [],
+            state_mode="normal",
+        )
+
+        self.assertIn("離れられたみたいや", added[0].text or "")
+
     def test_single_quiet_frame_does_not_resume_without_combat_clear_delay(self) -> None:
         workshop = self.session.haiku_workshop
         assert workshop is not None

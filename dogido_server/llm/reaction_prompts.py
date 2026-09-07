@@ -10,9 +10,10 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
     details = request.details
     hostiles = "、".join(details.get("hostiles", [])) or "敵"
     clear_confirmed = bool(details.get("hostile_clear_confirmed"))
+    combat_outcome = str(details.get("combat_outcome") or "disengaged")
     clear_fact = (
         "コード側で現在の視認敵・敵音・周辺敵数がすべて空と確認済み。"
-        "戦闘は終了し、残っている敵は0体。敵の排除完了として話す。\n"
+        "戦闘は終了し、現在の観測範囲に残っている敵は0体。\n"
         if clear_confirmed
         else "戦闘は一段落したが、残敵なしの確認までは取れていない。\n"
     )
@@ -21,6 +22,46 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
         if clear_confirmed
         else "残敵を断定しない。"
     )
+    if combat_outcome == "player_kill":
+        outcome_fact = (
+            "追跡していた敵の死亡と、プレイヤーによる撃破根拠を確認済み。"
+            "プレイヤーが敵を倒したこととして、短く喜んでよい。\n"
+        )
+        outcome_guard = "『倒した』『倒せた』と言ってよい。"
+    elif combat_outcome == "charged_creeper_detonated":
+        outcome_fact = (
+            "追跡していた帯電クリーパーが実際に爆発して消えたことを確認済み。"
+            "強い爆発への驚きや慌てた気持ちを短く出してよい。\n"
+        )
+        outcome_guard = "プレイヤーが倒したとは言わない。"
+    elif combat_outcome == "creeper_detonated":
+        outcome_fact = (
+            "追跡していたクリーパーが実際に爆発して消えたことを確認済み。"
+            "爆発への驚きや慌てた気持ちを短く出してよい。\n"
+        )
+        outcome_guard = "プレイヤーが倒したとは言わない。"
+    elif combat_outcome == "explosion_death":
+        outcome_fact = (
+            "追跡していた敵が爆発による致死ダメージで死亡したことを確認済み。\n"
+        )
+        outcome_guard = (
+            "『爆発で敵が倒れた』とは言ってよいが、プレイヤーが倒したとは断定しない。"
+        )
+    elif combat_outcome == "hostile_defeated":
+        outcome_fact = (
+            "追跡していた敵の死亡は確認済み。ただし、誰が倒したかは確認できていない。\n"
+        )
+        outcome_guard = (
+            "『敵が倒れた』とは言ってよいが、プレイヤーが倒したとは断定しない。"
+        )
+    else:
+        outcome_fact = (
+            "敵の死亡は確認していない。現在は敵の気配が観測範囲から遠のいただけ。\n"
+        )
+        outcome_guard = (
+            "『倒した』『倒せた』『退治した』『敵を排除した』とは言わない。"
+            "距離が取れた、気配が遠のいた、一段落した、の範囲で話す。"
+        )
     user_prompt = (
         "参考傾向:\n"
         "- 戦闘直後の余韻。怖かった気持ちから力が抜ける\n"
@@ -33,11 +74,14 @@ def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, 
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけその呼び名を入れてよい。\n"
         f"直前の敵は{hostiles}。\n"
+        "この敵名一覧は今回の戦闘だけの情報。過去の敵を足さず、敵名を列挙する必要もない。\n"
         f"{clear_fact}"
+        f"{outcome_fact}"
         f"プレイヤーの消耗具合は{details.get('health_state', '不明')}。\n"
         "見えていたことや確実に分かることだけを話す。"
         "未確認の爆発音や攻撃描写を勝手に足さない。"
         f"{clear_guard}"
+        f"{outcome_guard}"
         "体力の数値やHPを言わない。"
         "『次は逃げよう』『油断するな』『回復しよう』のような助言や指示を言わない。"
         "例文の言い回しをそのまま使わず、会話っぽく24〜34文字くらいで一言だけ返す。"

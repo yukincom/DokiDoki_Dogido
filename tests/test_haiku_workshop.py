@@ -49,6 +49,7 @@ from dogido_server.haiku.workshop import (
     workshop_open_intent,
     wants_show_workshop_verse,
 )
+from dogido_server.haiku.source_atoms import HaikuSourceAtom
 from dogido_server.memory import MemoryStore
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import (
@@ -1106,41 +1107,12 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertIn("平原", cands)
         self.assertIn("錆びた銅のランタン", cands)
 
-        # LLM 経路: pick + 柔軟な言い回し
-        plains_idx = cands.index("平原")
-        reply, path = finalize_ask_meaning_reply(
-            ws,
-            "晴れのバラ?",
-            {"pick_index": plains_idx, "reply": "平原のことやで。"},
-        )
-        self.assertEqual(path, "llm")
-        self.assertEqual(reply, "平原のことやで。")
-        self.assertNotIn("biome", reply)
-
-        # 言い回しが空でも pick があればテンプレ
-        reply_t, path_t = finalize_ask_meaning_reply(
-            ws,
-            "バラとは何でしょうか",
-            {"pick_index": plains_idx, "reply": ""},
-        )
-        self.assertEqual(path_t, "template")
-        self.assertEqual(reply_t, "それは、平原やで。")
-
-        # meta 漏れは落とす
-        reply_bad, path_bad = finalize_ask_meaning_reply(
-            ws,
-            "晴れのバラ?",
-            {"pick_index": plains_idx, "reply": "biome: plains やで"},
-        )
-        self.assertEqual(path_bad, "template")
-        self.assertEqual(reply_bad, "それは、平原やで。")
-
         # 部分一致フォールバック（LLM なし）: 「平原」が fragment に含まれる場合のみ
         self.assertEqual(pick_material_for_fragment("平原", ws), "平原")
         # 詩的対応はコードでは当てない
         self.assertIsNone(pick_material_for_fragment("はれのばら", ws))
 
-        soft, soft_path = finalize_ask_meaning_reply(ws, "はれのばらって何", None)
+        soft, soft_path = finalize_ask_meaning_reply(ws, "はれのばらって何")
         self.assertEqual(soft_path, "soft_fail")
         self.assertIn("はれのばら", soft)
 
@@ -2323,7 +2295,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             actions = service._haiku_workshop_actions(sess, event)
             self.assertEqual(1, len(actions))
             # 句に無い語・出典なしの問いには、別材料を推測で割り当てない。
-            self.assertIn("分からん", actions[0].text or "")
+            self.assertIn("説明できへん", actions[0].text or "")
             self.assertNotIn("biome", actions[0].text or "")
             # critique was written via service.memory
             self.assertTrue((Path(tmp) / "mem" / "long_term" / "haiku_critiques.jsonl").exists())
@@ -2640,20 +2612,52 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.kinds: list[str] = []
                 self.structured_kinds: list[str] = []
+                self.leaf_details = None
 
             def preload(self) -> bool:
                 return False
 
             def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
                 self.kinds.append(request.kind)
+                self.leaf_details = request.details
+                if request.kind == "haiku_workshop_reply":
+                    return "その言葉、オレにも意味が分からんわ、表現が崩れてしもたな。"
                 return "LLMが雑談で答えた文"
 
             def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
                 self.structured_kinds.append(request.kind)
-                # workshop intent 等の限定抽出だけ。材料pickは呼ばれない。
+                # 現行workshop intent契約。旧材料pickは呼ばれない。
                 return {
-                    "pick_index": None,
-                    "reply": "「ひらべった」の読みやね。ちょっと分かりにくかったかも。",
+                    "intent": "ask_meaning",
+                    "confidence": 0.99,
+                    "repair_requested": False,
+                    "findings": [],
+                    "evaluation": {
+                        "found": False,
+                        "sentiment": "unknown",
+                        "scope": "unknown",
+                        "evidence": "",
+                        "confidence": 0.0,
+                    },
+                    "close_request": {
+                        "found": False,
+                        "scope": "unknown",
+                        "evidence": "",
+                        "confidence": 0.0,
+                    },
+                    "line_reference": {
+                        "found": False,
+                        "concept_id": "unknown",
+                        "evidence": "",
+                        "confidence": 0.0,
+                    },
+                    "line_proposal": {
+                        "found": False,
+                        "target_fragment": "",
+                        "replacement_text": "",
+                        "evidence": "",
+                        "confidence": 0.0,
+                    },
                 }
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -2714,10 +2718,12 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             self.assertNotIn("LLMが雑談で答えた文", speeches[0])
             self.assertIn("分からん", speeches[0])
             self.assertNotIn("player_chat", llm.kinds)
+            self.assertEqual(llm.kinds, ["haiku_workshop_reply"])
+            self.assertEqual(llm.leaf_details["reply_goal"], "explain_meaning")
             self.assertNotIn("haiku_workshop_material_pick", llm.structured_kinds)
 
-    def test_ask_meaning_does_not_guess_from_unrelated_material_candidates(self) -> None:
-        """ask_meaning は全材料候補から関係のない由来を推測しない。"""
+    def test_ask_meaning_failure_does_not_guess_from_unrelated_material_candidates(self) -> None:
+        """説明の生成失敗時も、関係のない材料名を固定回答にしない。"""
 
         class PickLLM:
             def __init__(self) -> None:
@@ -2727,7 +2733,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
                 return False
 
             def generate_leaf_text(self, request) -> str:  # type: ignore[no-untyped-def]
-                raise AssertionError("leaf should not run")
+                raise RuntimeError("meaning generation unavailable")
 
             def generate_structured_json(self, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
                 self.structured_kinds.append(request.kind)
@@ -2798,7 +2804,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             )
             result = service.process_event(event, session_id=sid)
             speeches = [a.text for a in result.actions if a.layer == "speech" and a.text]
-            self.assertEqual(speeches, ["すまん。オレにももう分からんわ。"])
+            self.assertEqual(speeches, ["すまんな。その言葉の意味、今うまく説明できへんわ。"])
             self.assertNotIn("haiku_workshop_material_pick", llm.structured_kinds)
 
     def test_ask_meaning_uses_the_matched_line_provenance(self) -> None:
@@ -2846,6 +2852,147 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(
             grounded_material_for_question(workshop, "丸い子い主とは何？"),
             "丸石",
+        )
+
+    def test_ask_meaning_matches_a_short_word_in_saved_line_provenance(self) -> None:
+        """短い「窓」の出典も説明用モデルへ渡し、自然な説明を返す。"""
+
+        class MeaningLLM:
+            request = None
+
+            def generate_leaf_text(self, request):
+                self.request = request
+                return "せやで、近くに窓があったから、詠んだんやで。"
+
+        emission = HaikuEmission(
+            created_at=datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc),
+            text="まどぎわの\nほのぼのくさ\nひるのそら",
+            preface="ここで一句。",
+            interpretation="窓辺の昼の草地",
+            biome="meadow",
+            structure=None,
+            time_phase="day",
+            dimension="minecraft:overworld",
+            event_sequence=31,
+            materials={
+                "line_sources": [
+                    {
+                        "line_index": 0,
+                        "text": "まどぎわの",
+                        "atom_ids": ["observation:observed:nearby_window"],
+                        "sources": [
+                            {
+                                "atom_id": "observation:observed:nearby_window",
+                                "kind": "observation",
+                                "text": "近くに窓がある",
+                            }
+                        ],
+                    },
+                    {"line_index": 1, "text": "ほのぼのくさ", "atom_ids": [], "sources": []},
+                    {"line_index": 2, "text": "ひるのそら", "atom_ids": [], "sources": []},
+                ]
+            },
+        )
+        workshop = open_from_emission(emission)
+
+        self.assertEqual(
+            grounded_material_for_question(workshop, "窓は見えますか？"),
+            "近くに窓がある",
+        )
+        self.assertEqual(
+            grounded_material_for_question(workshop, "まどが見えてたの？"),
+            "近くに窓がある",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(
+                    llm_enabled=False,
+                    audio_enabled=False,
+                    memory_enabled=False,
+                    memory_dir=Path(tmp) / "mem",
+                )
+            )
+            llm = MeaningLLM()
+            service.llm = llm
+            reply, path = service._ask_meaning_workshop_reply(  # noqa: SLF001
+                workshop,
+                "窓は見えますか？",
+            )
+        self.assertEqual(path, "collaborator_llm")
+        self.assertEqual(reply, "せやで、近くに窓があったから、詠んだんやで。")
+        self.assertEqual(llm.request.kind, "haiku_workshop_reply")
+        self.assertEqual(llm.request.details["reply_goal"], "explain_meaning")
+        self.assertEqual(
+            llm.request.details["workshop_context"]["saved_line_sources"][0]["sources"][0]["text"],
+            "近くに窓がある",
+        )
+
+    def test_ask_meaning_uses_named_primary_material_behind_poetic_interpretation(self) -> None:
+        cobblestone = HaikuSourceAtom(
+            atom_id="item:cobblestone:japanese",
+            text="丸石",
+            source_ref="item:cobblestone",
+            field_path="japanese",
+            observation_role="selected_item",
+            kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
+        )
+        coal = HaikuSourceAtom(
+            atom_id="block:coal_ore:japanese",
+            text="石炭鉱石",
+            source_ref="block:coal_ore",
+            field_path="japanese",
+            observation_role="nearby_block",
+            kind="catalog_label",
+            claim_class="factual",
+            claim_scopes=("identity_only",),
+        )
+        interpretation = HaikuSourceAtom(
+            atom_id="preface:spoken:interpretation",
+            text="丸石を握る手元で、黒い石炭の鉱石が顔を出しとるな",
+            source_ref="preface:spoken",
+            field_path="interpretation",
+            observation_role="poetic_interpretation",
+            kind="poetic_interpretation",
+            claim_class="interpretive",
+            claim_scopes=("poetic_interpretation",),
+            basis_atom_ids=(cobblestone.atom_id, coal.atom_id),
+        )
+        emission = HaikuEmission(
+            created_at=datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc),
+            text="くさちの\nひるのそらは\nくろいいし",
+            preface="ここで一句。",
+            interpretation=interpretation.text,
+            biome="meadow",
+            structure=None,
+            time_phase="day",
+            dimension="minecraft:overworld",
+            event_sequence=32,
+            materials={
+                "source_atoms": [
+                    cobblestone.to_prompt_dict(),
+                    coal.to_prompt_dict(),
+                    interpretation.to_prompt_dict(),
+                ],
+                "line_sources": [
+                    {
+                        "line_index": 2,
+                        "text": "くろいいし",
+                        "atom_ids": [interpretation.atom_id],
+                        "sources": [interpretation.to_prompt_dict()],
+                    }
+                ],
+            },
+        )
+        workshop = open_from_emission(emission)
+
+        self.assertEqual(
+            grounded_material_for_question(
+                workshop,
+                "くろいいしっていうのは石炭鉱石のこと？",
+            ),
+            "石炭鉱石",
         )
 
     def test_meaning_ack_moves_to_close_confirmation_without_new_critique(self) -> None:

@@ -5,14 +5,16 @@ from dataclasses import dataclass
 import logging
 from datetime import datetime
 from math import inf
+import re
 
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry, mob_poetic_line, mob_poetic_tags
+from dogido_server.environment_context import project_environment
 from dogido_server.haiku.generation import generate_grounded_haiku
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
-from dogido_server.haiku.preface import validate_preface_clauses
 from dogido_server.haiku.source_atoms import (
     CatalogSourceSnapshot,
     HaikuSourceAtom,
+    atom_from_poetic_interpretation,
     atoms_from_catalog_sources,
     atoms_from_observations,
     atoms_from_preface_clauses,
@@ -204,16 +206,18 @@ class HaikuMixin:
         return line
 
     def _begin_prefaced_haiku(self, event: GameEvent, now: datetime) -> str:
-        """見どころ + ここで一句。irony/scene はここで回し、本句は次フレーム。"""
+        """取り合わせ文を先に返し、scene整理と本句生成は次フレームへ送る。"""
         context = self._haiku_context(event)
         irony, _ = self._detect_haiku_irony(context)
-        scene, _ = self._detect_haiku_scene(context, irony)
-        self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
-        spoken = self._compose_haiku_preface_speech(scene)
-        source_atoms = merge_source_atoms(
-            context.source_atoms,
-            atoms_from_preface_clauses(scene.clauses),
+        scene = SceneContext()
+        self._pending_haiku_interpretation = (
+            irony.description.strip() if irony.found and irony.description.strip() else None
         )
+        spoken = self._compose_haiku_preface_speech(irony)
+        source_atoms = context.source_atoms
+        self._pending_haiku_context = context
+        self._pending_haiku_irony = irony
+        self._pending_haiku_origin_event = event.model_copy(deep=True)
         self._stash_haiku_materials_seed(
             event,
             context,
@@ -234,11 +238,7 @@ class HaikuMixin:
             # workshop修正でも、発句時の道具・読みhard制約を同じまま検査する。
             # 現在値で再計算せず、句と一緒にsnapshotする。
             self._pending_haiku_materials["haiku_constraints"] = constraints
-        if skip_reason is None:
-            prompt_details = context.prompt_details(irony, scene)
-            prompt_details["haiku_constraints"] = constraints
-            self._pending_haiku_prompt_details = prompt_details
-        else:
+        if skip_reason is not None:
             # 固定カタログ句は LLM 自体が無い場合だけ使う。scene の契約不合格や
             # 材料の薄さは、下流の source-atom 品質ゲートで fail-closed にする。
             LOGGER.warning(
@@ -257,12 +257,16 @@ class HaikuMixin:
         self.state.pending_haiku_after_preface = False
         self.state.pending_haiku_started_at = None
         self.state.last_haiku_emitted_at = now
+        self._prepare_pending_haiku_generation(event)
         details = self._pending_haiku_prompt_details
         source_atoms = self._pending_haiku_source_atoms
         fixed = self._pending_haiku_fixed_line
         self._pending_haiku_prompt_details = None
         self._pending_haiku_source_atoms = ()
         self._pending_haiku_fixed_line = None
+        self._pending_haiku_context = None
+        self._pending_haiku_irony = None
+        self._pending_haiku_origin_event = None
         llm_failed_text = self._llm_failed_haiku_line()
         if details is not None:
             generated = generate_grounded_haiku(
@@ -309,12 +313,165 @@ class HaikuMixin:
         )
         return line
 
+    def _prepare_pending_haiku_generation(self, event: GameEvent) -> None:
+        """先行発話後に scene の根拠と本句用 snapshot を完成させる。"""
+
+        context = self._pending_haiku_context
+        irony = self._pending_haiku_irony
+        if context is None or irony is None or self._pending_haiku_fixed_line is not None:
+            return
+        origin_event = self._pending_haiku_origin_event or event
+        scene, _ = self._detect_haiku_scene(context, irony)
+        scene = self._scene_for_spoken_irony(
+            irony,
+            scene,
+            source_atoms=context.source_atoms,
+        )
+        interpretation_atom = atom_from_poetic_interpretation(scene.clauses)
+        source_atoms = merge_source_atoms(
+            context.source_atoms,
+            atoms_from_preface_clauses(scene.clauses),
+            (interpretation_atom,) if interpretation_atom is not None else (),
+        )
+        self._pending_haiku_source_atoms = source_atoms
+        preface_spoken = str(
+            (self._pending_haiku_materials or {}).get("preface_spoken") or ""
+        ).strip()
+        self._stash_haiku_materials_seed(
+            origin_event,
+            context,
+            irony,
+            scene,
+            source_atoms=source_atoms,
+            preface_spoken=preface_spoken or None,
+        )
+        constraints = self._haiku_constraint_details(origin_event, scene)
+        if constraints and self._pending_haiku_materials is not None:
+            self._pending_haiku_materials["haiku_constraints"] = constraints
+        prompt_details = context.prompt_details(irony, scene)
+        prompt_details["haiku_constraints"] = constraints
+        self._pending_haiku_prompt_details = prompt_details
+
+    def _scene_for_spoken_irony(
+        self,
+        irony: IronyContext,
+        scene: SceneContext,
+        *,
+        source_atoms: tuple[HaikuSourceAtom, ...],
+    ) -> SceneContext:
+        """実際に話した見どころを、その意味に合う一次材料へ結び直す。"""
+
+        spoken_core = irony.description.strip() if irony.found else ""
+        if not spoken_core:
+            return scene
+        # scene の一節化に失敗しても、irony が明示した要素を一次atomへ戻せる。
+        # 「黒い石」のような表現を、同じ一字を含むだけの丸石へ寄せないため、
+        # 二文字以上の連続した内容一致だけを使う。
+        matched_ids = self._irony_basis_atom_ids(irony, source_atoms)
+        scene_ids = (
+            atom_id
+            for clause in scene.clauses
+            for atom_id in clause.basis_atom_ids
+            if atom_id
+        ) if scene.found else ()
+        basis_atom_ids = tuple(
+            list(dict.fromkeys((*matched_ids, *scene_ids)))[:4]
+        )
+        if not basis_atom_ids:
+            return scene
+        from dogido_server.haiku.source_atoms import PrefaceClause
+
+        spoken_clause = PrefaceClause(
+            text=spoken_core,
+            basis_atom_ids=basis_atom_ids,
+            claim_class="interpretive",
+            claim_scopes=("poetic_interpretation",),
+        )
+        return SceneContext(
+            found=True,
+            clauses=(spoken_clause,),
+            motifs=scene.motifs or irony.elements,
+            focus=scene.focus or irony.focus,
+            confidence=max(scene.confidence, irony.confidence),
+        )
+
+    def _irony_basis_atom_ids(
+        self,
+        irony: IronyContext,
+        source_atoms: tuple[HaikuSourceAtom, ...],
+    ) -> tuple[str, ...]:
+        """irony の明示要素を、一般語の一字一致に頼らず一次atomへ戻す。"""
+
+        primary = tuple(
+            atom
+            for atom in source_atoms
+            if not atom.basis_atom_ids and atom.kind in {"catalog_label", "observation"}
+        )
+        selected: list[str] = []
+        cues = tuple(dict.fromkeys((*irony.elements, *irony.focus)))
+        for cue in cues:
+            scored = [
+                (self._haiku_material_match_score(atom.text, cue), atom.atom_id)
+                for atom in primary
+            ]
+            best = max((score for score, _atom_id in scored), default=0)
+            best_ids = [atom_id for score, atom_id in scored if score == best and score > 0]
+            if len(best_ids) == 1 and best_ids[0] not in selected:
+                selected.append(best_ids[0])
+            if len(selected) >= 4:
+                return tuple(selected)
+
+        # elements が短くても、発話本文にラベルの特徴的な二文字以上が残ることがある。
+        description_matches = sorted(
+            (
+                self._haiku_material_match_score(atom.text, irony.description),
+                atom.atom_id,
+            )
+            for atom in primary
+            if atom.atom_id not in selected
+        )
+        for score, atom_id in reversed(description_matches):
+            if score <= 0:
+                break
+            selected.append(atom_id)
+            if len(selected) >= 4:
+                break
+        return tuple(selected)
+
+    @staticmethod
+    def _haiku_material_match_score(label: str, text: str) -> int:
+        """短い日本語ラベルと説明の、十分に特徴的な連続一致だけを採点する。"""
+
+        def compact(value: str) -> str:
+            return re.sub(r"[\s\u3000、。，．・…「」『』（）()！？!?]", "", value)
+
+        needle = compact(label)
+        haystack = compact(text)
+        if len(needle) < 2 or len(haystack) < 2:
+            return 0
+        if needle == haystack:
+            return 400 + len(needle)
+        if needle in haystack or haystack in needle:
+            return 300 + min(len(needle), len(haystack))
+        longest = 0
+        for left in range(len(needle)):
+            for right in range(left + 2, len(needle) + 1):
+                fragment = needle[left:right]
+                if fragment in haystack:
+                    longest = max(longest, len(fragment))
+        if longest < 2 or longest * 2 < min(len(needle), len(haystack)):
+            return 0
+        return 100 + longest
+
     def _clear_pending_haiku_prep(self) -> None:
         self.state.pending_haiku_after_preface = False
         self.state.pending_haiku_started_at = None
         self._pending_haiku_prompt_details = None
         self._pending_haiku_source_atoms = ()
         self._pending_haiku_fixed_line = None
+        self._pending_haiku_context = None
+        self._pending_haiku_irony = None
+        self._pending_haiku_origin_event = None
         # interpretation / materials は emission 後に残す必要はないが、キャンセル時は捨てる
         self._pending_haiku_interpretation = None
         self._pending_haiku_materials = None
@@ -338,36 +495,44 @@ class HaikuMixin:
         self._clear_pending_haiku_prep()
         return True
 
-    def _compose_haiku_preface_speech(self, scene: SceneContext) -> str:
-        """見どころを口にする。「ここで一句。」は本句側に任せる。"""
-        inspiration = self._haiku_inspiration_spoken_line(scene)
+    def _compose_haiku_preface_speech(self, irony: IronyContext) -> str:
+        """取り合わせの description を待ち時間の先行発話にする。"""
+        inspiration = irony.description.strip() if irony.found else ""
         if inspiration:
-            return inspiration if inspiration.endswith(("。", "わ", "や", "で", "ね")) else f"{inspiration}。"
+            if any(marker in inspiration for marker in ("浮か", "おもいつ", "思いつ")):
+                return (
+                    inspiration
+                    if inspiration.endswith(("。", "！", "？", "!", "?"))
+                    else f"{inspiration}。"
+                )
+            body = inspiration.rstrip("。！？!?")
+            return f"{body}、なんか浮かんできたわ。"
         # 見どころが無いときも二重に「ここで一句」と言わない
         return "なんか浮かんできたわ。"
-
-    def _haiku_inspiration_spoken_line(
-        self,
-        scene: SceneContext,
-    ) -> str | None:
-        """検証済み節だけを順に話し、発話後の再分割・切り詰めをしない。"""
-
-        if not scene.found or not scene.clauses:
-            return None
-        body = scene.spoken_text.strip()
-        if not body:
-            return None
-        # すでに「浮かんだ」系なら重ねない
-        if any(marker in body for marker in ("浮か", "おもいつ", "思いつ")):
-            return body if body.endswith(("。", "わ", "や", "で", "ね")) else f"{body}。"
-        return f"{body}、なんか浮かんできたわ"
 
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)
         irony, _ = self._detect_haiku_irony(context)
         scene, _ = self._detect_haiku_scene(context, irony)
+        scene = self._scene_for_spoken_irony(
+            irony,
+            scene,
+            source_atoms=context.source_atoms,
+        )
         self._pending_haiku_interpretation = self._haiku_interpretation_text(irony, scene)
-        self._stash_haiku_materials_seed(event, context, irony, scene)
+        interpretation_atom = atom_from_poetic_interpretation(scene.clauses)
+        source_atoms = merge_source_atoms(
+            context.source_atoms,
+            atoms_from_preface_clauses(scene.clauses),
+            (interpretation_atom,) if interpretation_atom is not None else (),
+        )
+        self._stash_haiku_materials_seed(
+            event,
+            context,
+            irony,
+            scene,
+            source_atoms=source_atoms,
+        )
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
         skip_reason = self._haiku_generation_skip_reason()
@@ -386,7 +551,7 @@ class HaikuMixin:
         generated = generate_grounded_haiku(
             self.llm,
             details=prompt_details,
-            source_atoms=context.source_atoms,
+            source_atoms=source_atoms,
             fallback_text=llm_failed_text,
             max_tokens=self.settings.haiku_structured_max_tokens,
             generation_strategy=self.settings.haiku_generation_strategy,
@@ -406,10 +571,12 @@ class HaikuMixin:
         return line
 
     def _haiku_interpretation_text(self, irony: IronyContext, scene: SceneContext) -> str | None:
-        if irony.found and irony.description.strip():
-            return irony.description.strip()
+        # 保存・推敲で参照する正本も、内部の分析文ではなく実際に話した
+        # 検証済みの関西弁の見どころへそろえる。
         if scene.found and scene.spoken_text.strip():
             return scene.spoken_text.strip()
+        if irony.found and irony.description.strip():
+            return irony.description.strip()
         return None
 
     def _stash_haiku_materials_seed(
@@ -435,19 +602,29 @@ class HaikuMixin:
         held = context.held_item if context.held_item and context.held_item != "なし" else None
         self._pending_haiku_materials = build_workshop_materials_seed(
             interpretation=self._pending_haiku_interpretation or self._haiku_interpretation_text(irony, scene),
-            biome=normalize_minecraft_id(event.world.biome) or context.biome_id,
+            biome=(normalize_minecraft_id(event.world.biome) or context.biome_id)
+            if context.include_biome_context
+            else None,
             structure=normalize_minecraft_id(event.world.structure) or context.structure_id or None,
-            time_phase=str(context.time_phase) if context.time_phase else None,
+            time_phase=str(context.time_phase)
+            if context.include_sky_context and context.time_phase
+            else None,
             motifs=motifs,
             focus=focus,
             elements=elements,
             held_item=held,
+            inventory_items=list(context.inventory_items),
             nearby_blocks=list(context.nearby_blocks),
+            dropped_items=list(context.dropped_items),
             passive_mobs=list(context.passive_mobs),
         )
         # カタログ日本語ラベルが context にあれば優先（seed の lookup より確実）
         mats = self._pending_haiku_materials
-        if context.biome_label and not mats.get("biome_ja"):
+        mats["material_visibility"] = {
+            "biome": context.include_biome_context,
+            "sky": context.include_sky_context,
+        }
+        if context.include_biome_context and context.biome_label and not mats.get("biome_ja"):
             mats["biome_ja"] = context.biome_label
         if context.structure_label and not mats.get("structure_ja"):
             mats["structure_ja"] = context.structure_label
@@ -482,14 +659,24 @@ class HaikuMixin:
                 context = self._haiku_context(event)
                 materials = build_workshop_materials_seed(
                     interpretation=self._pending_haiku_interpretation,
-                    biome=biome or context.biome_id,
+                    biome=(biome or context.biome_id)
+                    if context.include_biome_context
+                    else None,
                     structure=structure or context.structure_id or None,
-                    time_phase=phase or (str(context.time_phase) if context.time_phase else None),
+                    time_phase=(phase or (str(context.time_phase) if context.time_phase else None))
+                    if context.include_sky_context
+                    else None,
                     held_item=context.held_item if context.held_item != "なし" else None,
+                    inventory_items=list(context.inventory_items),
                     nearby_blocks=list(context.nearby_blocks),
+                    dropped_items=list(context.dropped_items),
                     passive_mobs=list(context.passive_mobs),
                 )
-                if context.biome_label:
+                materials["material_visibility"] = {
+                    "biome": context.include_biome_context,
+                    "sky": context.include_sky_context,
+                }
+                if context.include_biome_context and context.biome_label:
                     materials["biome_ja"] = context.biome_label
                 if context.structure_label:
                     materials["structure_ja"] = context.structure_label
@@ -543,10 +730,24 @@ class HaikuMixin:
         return f"ここで一句。{separator}{stripped}"
 
     def _fallback_haiku_line(self, event: GameEvent) -> str:
+        include_sky_context = event.world.sky_visible is True
+        include_biome_context = include_sky_context or self._is_cave_biome(
+            event.world.biome
+        )
         context = HaikuFallbackContext(
-            biome=self._normalized_biome(event.world.biome),
-            time_phase=getattr(event.world.time_phase, "value", event.world.time_phase),
-            weather=self._weather_value(event.world.weather),
+            biome=(self._normalized_biome(event.world.biome) or "unknown")
+            if include_biome_context
+            else "unknown",
+            time_phase=(
+                getattr(event.world.time_phase, "value", event.world.time_phase)
+                if include_sky_context
+                else None
+            ),
+            weather=(
+                self._weather_value(event.world.weather)
+                if include_sky_context
+                else None
+            ),
             player_y=event.player.position.y,
             danger_darkness_score=event.world.danger_darkness_score,
             visual_threat_types=frozenset(threat.type for threat in event.visual_threats if threat.type),
@@ -627,20 +828,17 @@ class HaikuMixin:
                 )
                 return scene, "invalid_payload"
             return scene, status
-        if not validate_preface_clauses(
-            self.llm,
-            clauses=scene.clauses,
-            source_atoms=context.source_atoms,
-            max_tokens=self.settings.haiku_structured_max_tokens,
-        ):
-            LOGGER.warning("haiku_preface_grounding result=rejected")
-            return SceneContext(), "preface_rejected"
         return scene, status
 
     def _haiku_context(self, event: GameEvent) -> HaikuContext:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
         biome = event.world.biome
+        # 地下でもゲーム上の地表バイオームや空の天候値は届く。プレイヤーから
+        # 見えない背景情報を句へ混ぜず、洞窟固有バイオームだけは地下の場所として残す。
+        environment = project_environment(event)
+        include_sky_context = environment.include_sky_context
+        include_biome_context = environment.include_biome_context
         # 実際の手持ち（道具 hard 制約・対比テンション用）
         real_held_label = self._item_label(event.player.held_item)
         # 句の主役: 作業道具を持っているときは所持の非道具を重み付きで1つ
@@ -650,6 +848,7 @@ class HaikuMixin:
             held_item_id=event.player.held_item,
         )
         nearby_blocks = tuple(self._haiku_nearby_block_values(event.nearby_resources))
+        dropped_items = tuple(self._haiku_dropped_item_values(event))
         passive_mobs = tuple(self._haiku_passive_mob_values(event))
         precipitation_context = self._precipitation_context(event)
         LOGGER.warning(
@@ -670,8 +869,11 @@ class HaikuMixin:
                 poem_item_source=poem_source,
                 inventory_items=inventory_items,
                 nearby_blocks=nearby_blocks,
+                dropped_items=dropped_items,
                 passive_mobs=passive_mobs,
                 precipitation_context=precipitation_context,
+                include_biome_context=include_biome_context,
+                include_sky_context=include_sky_context,
             )
         )
         poetic_lines, poetic_mob_keys = self._haiku_poetic_lines(event)
@@ -682,6 +884,8 @@ class HaikuMixin:
                 event,
                 poem_item_id=poem_item_id,
                 poem_item_label=poem_held,
+                inventory_items=inventory_items,
+                include_biome_context=include_biome_context,
             )
         )
         # カタログ由来を先に置き、同じラベルの観測atomは二重に作らない。
@@ -711,6 +915,7 @@ class HaikuMixin:
             inventory_close_pair=inventory_close_pair,
             inventory_far_item=inventory_far_item,
             nearby_blocks=nearby_blocks,
+            dropped_items=dropped_items,
             passive_mobs=passive_mobs,
             haiku_tags=tuple(
                 self._haiku_tags(
@@ -727,6 +932,8 @@ class HaikuMixin:
                     real_held_label or poem_held,
                     passive_mobs,
                     nearby_blocks,
+                    include_biome_context=include_biome_context,
+                    include_sky_context=include_sky_context,
                 )
             ),
             catalog_notes=catalog_notes_projection(catalog_sources),
@@ -736,6 +943,8 @@ class HaikuMixin:
             structure_id=structure_id,
             structure_label=structure_label,
             climate_hint=climate_hint,
+            include_biome_context=include_biome_context,
+            include_sky_context=include_sky_context,
         )
 
     def _is_haiku_work_tool_item(self, item_id: str | None) -> bool:
@@ -925,8 +1134,11 @@ class HaikuMixin:
         poem_item_source: str = "hand",
         inventory_items: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
+        dropped_items: tuple[str, ...],
         passive_mobs: tuple[str, ...],
         precipitation_context: PrecipitationContext,
+        include_biome_context: bool,
+        include_sky_context: bool,
     ) -> list[HaikuFeature]:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
@@ -945,44 +1157,26 @@ class HaikuMixin:
                 "ポータル", "portal", portal_labels.get(portal_type, portal_type),
                 tags=frozenset({"異世界", "ワープ", "光", "不思議"}),
             ))
-        # structure あり: 場所の主役は構造物。バイオーム名は候補に載せない（名称に気候が含まれることが多い）。
-        # 気候は参考程度だけ。
-        if has_structure:
-            candidates.append(HaikuFeature("構造物", "structure", structure_label))
-            if climate_hint:
-                candidates.append(HaikuFeature("気候", "climate", climate_hint))
-        else:
-            candidates.extend([
-                HaikuFeature("バイオーム", "biome", self._biome_label_with_reading(event.world.biome)),
-                HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
-            ])
-            candidates.extend(
-                HaikuFeature("地形", f"trait_{index}", trait)
-                for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
-            )
-        if precipitation_context.precipitation_kind == "snow":
-            candidates.append(HaikuFeature("降雪", "local_precipitation", "現在は雪"))
-        candidates.extend([
-            HaikuFeature(
-                "天気",
-                "weather",
-                "雪" if precipitation_context.precipitation_kind == "snow" else WEATHER_LABELS.get(weather, "不明"),
-            ),
-            HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
-        ])
-        vehicle_fact = player_vehicle_fact(event.player.vehicle)
-        if vehicle_fact:
-            # 主語を省くとドギド自身の乗車と誤解しうるため、一文を崩さず材料化する。
-            candidates.append(HaikuFeature("乗車", "vehicle_activity", vehicle_fact))
+        # 具体的な実測物を、背景の地帯・天候より先に並べる。
+        candidates.extend(
+            HaikuFeature("周辺", f"nearby_{index}", label)
+            for index, label in enumerate(nearby_blocks[:6], start=1)
+        )
+        candidates.extend(
+            HaikuFeature("落下物", f"dropped_{index}", label)
+            for index, label in enumerate(dropped_items[:4], start=1)
+        )
         if held_item:
             if poem_item_source == "pocket":
                 candidates.append(HaikuFeature("持ち物", "pocket_item", held_item))
             else:
                 candidates.append(HaikuFeature("手持ち", "held_item", held_item))
-        candidates.extend(
-            HaikuFeature("周辺", f"nearby_{index}", label)
-            for index, label in enumerate(nearby_blocks[:4], start=1)
-        )
+        seen_inventory = {held_item} if held_item else set()
+        for index, label in enumerate(inventory_items, start=1):
+            if not label or label in seen_inventory:
+                continue
+            seen_inventory.add(label)
+            candidates.append(HaikuFeature("持ち物", f"inventory_{index}", label))
         for index, mob_label in enumerate(passive_mobs[:3], start=1):
             candidates.append(
                 HaikuFeature(
@@ -992,6 +1186,56 @@ class HaikuMixin:
                     tags=mob_poetic_tags(self._passive_mob_type_for_label(event, mob_label)),
                 )
             )
+        vehicle_fact = player_vehicle_fact(event.player.vehicle)
+        if vehicle_fact:
+            # 主語を省くとドギド自身の乗車と誤解しうるため、一文を崩さず材料化する。
+            candidates.append(HaikuFeature("乗車", "vehicle_activity", vehicle_fact))
+        if event.world.nearby_window_present is True:
+            candidates.append(
+                HaikuFeature(
+                    "空間",
+                    "nearby_window",
+                    "近くに窓がある",
+                    tags=("屋内", "窓", "外", "眺め"),
+                )
+            )
+
+        environment = project_environment(event)
+        if environment.mining_label:
+            candidates.append(
+                HaikuFeature(
+                    "行動" if environment.mining_state == "active" else "空間",
+                    "mining_context",
+                    environment.mining_label,
+                    tags=("地下", "採掘", "石", "土"),
+                )
+            )
+
+        # structure あり: 場所の主役は構造物。バイオーム名は候補に載せない。
+        if has_structure:
+            candidates.append(HaikuFeature("構造物", "structure", structure_label))
+            if climate_hint and include_biome_context:
+                candidates.append(HaikuFeature("気候", "climate", climate_hint))
+        elif include_biome_context:
+            candidates.extend([
+                HaikuFeature("バイオーム", "biome", self._biome_label_with_reading(event.world.biome)),
+                HaikuFeature("地帯", "biome_group", self._biome_group_label(event.world.biome) or "不明"),
+            ])
+            candidates.extend(
+                HaikuFeature("地形", f"trait_{index}", trait)
+                for index, trait in enumerate(self._haiku_biome_traits(event.world.biome)[:4], start=1)
+            )
+        if include_sky_context:
+            if precipitation_context.precipitation_kind == "snow":
+                candidates.append(HaikuFeature("降雪", "local_precipitation", "現在は雪"))
+            candidates.extend([
+                HaikuFeature(
+                    "天気",
+                    "weather",
+                    "雪" if precipitation_context.precipitation_kind == "snow" else WEATHER_LABELS.get(weather, "不明"),
+                ),
+                HaikuFeature("時間", "time_phase", TIME_PHASE_LABELS.get(time_phase, "不明")),
+            ])
         return candidates[:14]
 
     def _haiku_structure_fields(self, event: GameEvent) -> tuple[str, str]:
@@ -1133,7 +1377,12 @@ class HaikuMixin:
         natural_values: list[str] = []
         other_values: list[str] = []
         seen: set[str] = set()
-        for resource in sorted(resources, key=lambda candidate: candidate.distance or inf):
+        for resource in sorted(
+            resources,
+            key=lambda candidate: candidate.distance
+            if candidate.distance is not None
+            else inf,
+        ):
             label = self._block_label(resource.name)
             if not label or label in seen:
                 continue
@@ -1145,12 +1394,32 @@ class HaikuMixin:
                 break
         return natural_values + other_values
 
+    def _haiku_dropped_item_values(self, event: GameEvent) -> list[str]:
+        values: list[str] = []
+        seen: set[str] = set()
+        for dropped in sorted(
+            event.dropped_items,
+            key=lambda candidate: candidate.distance
+            if candidate.distance is not None
+            else inf,
+        ):
+            label = self._item_label(dropped.name)
+            if not label or label in seen:
+                continue
+            seen.add(label)
+            values.append(f"地面に{label}が落ちている")
+            if len(values) >= 4:
+                break
+        return values
+
     def _haiku_catalog_sources(
         self,
         event: GameEvent,
         *,
         poem_item_id: str,
         poem_item_label: str,
+        inventory_items: tuple[str, ...],
+        include_biome_context: bool,
     ) -> list[CatalogSourceSnapshot]:
         """実際に選んだ ID だけから、川柳用の読み取りsnapshotを作る。
 
@@ -1166,16 +1435,39 @@ class HaikuMixin:
             seen.add(source.source_ref)
             sources.append(source)
 
-        # 場所の主役 → 選択した手元 → 距離順の周辺 → biome → mob の順。
+        # 距離順の周辺と、全インベントリから選んだ持ち物を背景情報より先に置く。
         structure_id, structure_label = self._haiku_structure_fields(event)
-        if structure_id:
+        for resource in sorted(
+            event.nearby_resources,
+            key=lambda candidate: candidate.distance
+            if candidate.distance is not None
+            else inf,
+        )[:6]:
+            resource_id = normalize_minecraft_id(resource.name) or ""
             append(
                 catalog_source_snapshot(
-                    catalog_type="structure",
-                    catalog_id=structure_id,
-                    entry=self._structure_entry(structure_id),
-                    observation_role="current_structure",
-                    fallback_label=structure_label,
+                    catalog_type="block",
+                    catalog_id=resource_id,
+                    entry=block_entry(resource.name),
+                    observation_role="nearby_block",
+                    fallback_label=self._block_label(resource.name),
+                )
+            )
+
+        for dropped in sorted(
+            event.dropped_items,
+            key=lambda candidate: candidate.distance
+            if candidate.distance is not None
+            else inf,
+        )[:4]:
+            dropped_id = normalize_minecraft_id(dropped.name) or ""
+            append(
+                catalog_source_snapshot(
+                    catalog_type="item",
+                    catalog_id=dropped_id,
+                    entry=item_entry(dropped.name),
+                    observation_role="dropped_item",
+                    fallback_label=self._item_label(dropped.name),
                 )
             )
 
@@ -1190,28 +1482,43 @@ class HaikuMixin:
                 )
             )
 
-        for resource in sorted(event.nearby_resources, key=lambda candidate: candidate.distance or inf)[:3]:
-            resource_id = normalize_minecraft_id(resource.name) or ""
+        wanted_inventory_labels = set(inventory_items)
+        for item_id, count in sorted(event.inventory.items(), key=lambda row: (-row[1], row[0])):
+            label = self._item_label(item_id)
+            if count <= 0 or not label or label not in wanted_inventory_labels:
+                continue
             append(
                 catalog_source_snapshot(
-                    catalog_type="block",
-                    catalog_id=resource_id,
-                    entry=block_entry(resource.name),
-                    observation_role="nearby_block",
-                    fallback_label=self._block_label(resource.name),
+                    catalog_type="item",
+                    catalog_id=normalize_minecraft_id(item_id) or item_id,
+                    entry=item_entry(item_id),
+                    observation_role="inventory_item",
+                    fallback_label=label,
                 )
             )
 
-        biome_id = self._normalized_biome(event.world.biome) or ""
-        append(
-            catalog_source_snapshot(
-                catalog_type="biome",
-                catalog_id=biome_id,
-                entry=self._biome_entry(event.world.biome),
-                observation_role="current_biome",
-                fallback_label=self._biome_label_with_reading(event.world.biome),
+        if structure_id:
+            append(
+                catalog_source_snapshot(
+                    catalog_type="structure",
+                    catalog_id=structure_id,
+                    entry=self._structure_entry(structure_id),
+                    observation_role="current_structure",
+                    fallback_label=structure_label,
+                )
             )
-        )
+
+        if include_biome_context:
+            biome_id = self._normalized_biome(event.world.biome) or ""
+            append(
+                catalog_source_snapshot(
+                    catalog_type="biome",
+                    catalog_id=biome_id,
+                    entry=self._biome_entry(event.world.biome),
+                    observation_role="current_biome",
+                    fallback_label=self._biome_label_with_reading(event.world.biome),
+                )
+            )
 
         for passive in event.passive_mobs[:3]:
             mob_id = normalize_minecraft_id(passive.type) or ""
@@ -1302,6 +1609,9 @@ class HaikuMixin:
         held_item: str,
         passive_mobs: tuple[str, ...],
         nearby_blocks: tuple[str, ...],
+        *,
+        include_biome_context: bool,
+        include_sky_context: bool,
     ) -> list[str]:
         tensions: list[str] = []
         biome = self._normalized_biome(event.world.biome) or "unknown"
@@ -1311,25 +1621,25 @@ class HaikuMixin:
         time_phase = getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown"
         weather = self._weather_value(event.world.weather) or "unknown"
 
-        if biome_group_id == "dry" and weather in {"rain", "thunder"}:
+        if include_biome_context and include_sky_context and biome_group_id == "dry" and weather in {"rain", "thunder"}:
             tensions.append("乾いた土地やのに空だけ荒れとる")
-        if biome_group_id == "dry" and any(label in {"熱帯魚", "イカ", "フグ", "サケ", "タラ"} for label in passive_mobs):
+        if include_biome_context and biome_group_id == "dry" and any(label in {"熱帯魚", "イカ", "フグ", "サケ", "タラ"} for label in passive_mobs):
             tensions.append(f"{biome_label}なのに水のいきものがおる")
-        if any(label == "熱帯魚" for label in passive_mobs) and "ocean" not in biome:
+        if include_biome_context and any(label == "熱帯魚" for label in passive_mobs) and "ocean" not in biome:
             tensions.append("海やないのに熱帯魚がおる")
-        if any(label == "ヒツジ" for label in passive_mobs) and biome not in {"plains", "savanna", "meadow"}:
+        if include_biome_context and any(label == "ヒツジ" for label in passive_mobs) and biome not in {"plains", "savanna", "meadow"}:
             tensions.append(f"{biome_label}やのにヒツジがのんびりしとる")
-        if "シラカバの葉" in nearby_blocks and not biome.startswith("birch_") and biome != "old_growth_birch_forest":
+        if include_biome_context and "シラカバの葉" in nearby_blocks and not biome.startswith("birch_") and biome != "old_growth_birch_forest":
             tensions.append(f"{biome_label}やのにシラカバの気配がある")
         if event.player.position.y is not None and event.player.position.y <= 16:
             tensions.append("深い地下でダイヤを夢みとる")
             if held_item:
                 tensions.append(f"深い地下なのに手には{held_item}がある")
-        if biome == "mushroom_fields":
+        if include_biome_context and biome == "mushroom_fields":
             tensions.append("安全すぎて逆に妙や")
-        if time_phase == "night" and passive_mobs:
+        if include_sky_context and time_phase == "night" and passive_mobs:
             tensions.append("夜やのにのどかな気配が残っとる")
-        if time_phase == "day" and event.player.position.y is not None and event.player.position.y <= 16:
+        if include_sky_context and time_phase == "day" and event.player.position.y is not None and event.player.position.y <= 16:
             tensions.append("昼やのに地の底みたいや")
         seen: set[str] = set()
         result: list[str] = []
@@ -1351,7 +1661,7 @@ class HaikuMixin:
     def _haiku_generation_skip_reason(self) -> str | None:
         """固定カタログへ切り替える理由を返す。
 
-        scene は見どころ発話の品質にだけ使う。本句は一次 source atom を正として
+        scene は先行発話を一次atomへ結び直す。本句は一次 source atom を正として
         共通生成器が材料数・出典・音数を検査するため、scene の弱さを理由に
         生成前から固定句へ置き換えない。
         """
@@ -1385,11 +1695,16 @@ class HaikuMixin:
                     seen_forbidden.add(term)
                     forbidden_terms.append(term)
 
-        biome_label = self._biome_label(event.world.biome)
-        catalog_reading = biome_reading(event.world.biome)
+        include_biome_context = (
+            event.world.sky_visible is True or self._is_cave_biome(event.world.biome)
+        )
+        biome_label = self._biome_label(event.world.biome) if include_biome_context else ""
+        catalog_reading = biome_reading(event.world.biome) if include_biome_context else None
         reading_allowed, reading_forbidden = haiku_reading_terms(
-            [biome_label],
-            catalog_readings={biome_label: catalog_reading} if catalog_reading else None,
+            [biome_label] if biome_label else [],
+            catalog_readings={biome_label: catalog_reading}
+            if biome_label and catalog_reading
+            else None,
         )
         for term in reading_allowed:
             if term and term not in seen_allowed:

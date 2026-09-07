@@ -166,6 +166,29 @@ class PlatformAIRouterTests(unittest.TestCase):
         self.assertEqual(provider.calls, 1)
         self.assertEqual(fallback.calls, 1)
 
+    def test_provider_schema_error_falls_back_instead_of_being_marked_accepted(self) -> None:
+        class _LegacyProvider(_Provider):
+            def generate(self, request: StructuredGenerationRequest) -> dict[str, object]:
+                self.calls += 1
+                return {"action": "resume_workshop"}
+
+        router = PlatformStructuredAIRouter(
+            Settings(
+                platform_ai_provider="apple",
+                platform_ai_refresh_sec=300,
+                platform_ai_failure_cooldown_sec=60,
+            )
+        )
+        provider = _LegacyProvider()
+        router._providers["apple"] = provider  # type: ignore[assignment]
+        fallback = _Fallback()
+
+        payload = router.generate_structured_json(_request(), fallback=fallback)
+
+        self.assertEqual(payload["action"], "uncertain")
+        self.assertEqual(payload[PLATFORM_AI_PROVIDER_KEY], "chat_fallback")
+        self.assertEqual((provider.calls, fallback.calls), (1, 1))
+
     def test_chat_configuration_skips_platform_probe(self) -> None:
         router = PlatformStructuredAIRouter(Settings(platform_ai_provider="chat"))
         provider = _Provider()

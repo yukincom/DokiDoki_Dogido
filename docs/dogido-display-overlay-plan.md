@@ -1,7 +1,7 @@
 # ドギド表示オーバーレイ（Minecraft 内 UI）計画
 
 **日付:** 2026-07-31  
-**状態:** 計画メモ（未実装）  
+**状態:** Minecraft内HUDは計画メモ（未実装）。ゲーム外の発言履歴は別機能として実装済み。
 **きっかけ:** [issue #28](https://github.com/yukincom/DokiDoki_Dogido/issues/28) — 川柳 preface を材料どおり長くしたい一方、TTS だけでは長い説明が鬱陶しい。workshop 中にセリフを画面に残したい。
 
 関連:
@@ -10,6 +10,7 @@
 - [adapter-api.md](adapter-api.md)（観測はadapter→server。支援commandだけgame-event応答に逆向きで載る）
 - [integration-architecture.md](integration-architecture.md)
 - [companion-maturity.md](companion-maturity.md)
+- [dogido-utterance-display.md](dogido-utterance-display.md)（実装済みのゲーム外画面）
 - Fabric: [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md)
 
 ---
@@ -26,6 +27,10 @@
 
 音声はこれまでどおり **dogido-server が TTS**。  
 UI は **表示の複製・保持**であり、判断の主は状態機械のまま。
+
+なお、聞き逃した本文の閲覧・コピーと参考資料一覧は、Minecraft内HUDを待たず、
+同一サーバーの `/dogido` にゲーム外の読み取り専用画面として実装した。本計画は
+引き続き、プレイ中にMinecraft画面へ薄く残すHUDだけを対象とする。
 
 ---
 

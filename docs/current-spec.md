@@ -170,6 +170,7 @@ Minecraft Java Edition
 - `biome`
 - `local_light`
 - `sky_visible`
+- `nearby_window_present`（周囲のガラス・格子・柵などの配置から検出した窓）
 - `ceiling_height`
 - `enclosure_score`
 
@@ -207,6 +208,7 @@ Minecraft Java Edition
 
 ### 方向粒度
 
+- 視認敵への現在位置質問: 北・北東・東・南東・南・南西・西・北西 + 概算ブロック距離
 - 前
 - 後ろ
 - 左

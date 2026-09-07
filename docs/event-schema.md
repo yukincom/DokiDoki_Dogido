@@ -46,6 +46,8 @@
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
+  "dropped_items": [],
+  "recent_block_breaks": [],
   "look_target": null,
   "combat": {},
   "meta": {},
@@ -78,6 +80,8 @@
 
 - `passive_mobs`
 - `nearby_resources`
+- `dropped_items` … 周囲8ブロック以内の落下アイテム。同種は集約する
+- `recent_block_breaks` … ローカルプレイヤーが直近10秒に実際に壊したブロック
 - `look_target` … クロスヘア（＋）が刺さっているブロック/エンティティ。MISS 時は省略可
 - `meta`
 - `command_results` … adapterで未ackの型付きcommand実行結果。通常は空配列
@@ -115,6 +119,17 @@
 - `left`
 - `front_left`
 
+### `cardinal_direction`
+
+- `north`
+- `northeast`
+- `east`
+- `southeast`
+- `south`
+- `southwest`
+- `west`
+- `northwest`
+
 ### `vertical_relation`
 
 - `above`
@@ -136,9 +151,12 @@
 ```json
 {
   "horizontal": "back",
+  "cardinal": "northwest",
   "vertical": "same"
 }
 ```
+
+`horizontal` はプレイヤーの向きに対する相対方向、`cardinal` はMinecraft座標を基準にした絶対方位。
 
 ### `position`
 
@@ -175,6 +193,8 @@
 - `ambient_mob_detected`
 - `player_died`
 - `time_phase_changed`
+- `hostile_defeated`
+- `creeper_detonated`
 - `combat_ended`
 - `status_snapshot`
 
@@ -187,6 +207,8 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `hostile_audio_detected`
 - `ambient_mob_detected`
 - `player_died`
+- `hostile_defeated`
+- `creeper_detonated`
 - `combat_ended`
 
 #### レガシー / テスト用（専用イベントを主経路にしない）
@@ -208,6 +230,7 @@ Fabric adapter が実際に送る中心は次のとおり。
   "hunger": 18,
   "dimension": "minecraft:overworld",
   "held_item": "minecraft:stone_sword",
+  "block_breaking_active": false,
   "hotbar": {
     "selected_slot": 2,
     "slots": [
@@ -242,6 +265,7 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `hunger`
 - `dimension`
 - `held_item`
+- `block_breaking_active`（クライアント上で現在ブロック破壊を継続中か）
 - `hotbar`（Fabric adapterは0〜8の全枠を送る）
   - `selected_slot`: 現在選択中の0〜8
   - `slots[].slot`: 安定した0〜8のslot番号
@@ -272,7 +296,10 @@ Fabric adapter が実際に送る中心は次のとおり。
   "biome": "plains",
   "local_light": 7,
   "sky_visible": false,
+  "surface_y": 72,
+  "depth_below_surface": 48,
   "ceiling_height": 3,
+  "overhead_cover_type": "stone",
   "enclosure_score": 0.68,
   "connected_dark_volume": 42,
   "nearest_dark_spawn_distance": 5.5,
@@ -290,7 +317,11 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `biome`
 - `local_light`
 - `sky_visible`
+- `surface_y`（現在X/Zの地表高。地表高を意味づけられないdimensionでは省略）
+- `depth_below_surface`（`surface_y` と現在Yの差。絶対Yより地下判定を安定させる）
+- `nearby_window_present`（周囲8ブロック以内に、両側へ視界が通るガラス・格子・柵などの窓があるか。水に接するガラスは水槽等と区別して除外）
 - `ceiling_height`
+- `overhead_cover_type`（`stone | earth | ore | wood | foliage | fluid | solid | none`）
 - `enclosure_score`
 - `connected_dark_volume`
 - `nearest_dark_spawn_distance`
@@ -310,8 +341,9 @@ Fabric adapter が実際に送る中心は次のとおり。
   {
     "type": "creeper",
     "distance": 5.8,
-    "direction": { "horizontal": "back", "vertical": "same" },
+    "direction": { "horizontal": "back", "cardinal": "southeast", "vertical": "same" },
     "approaching": true,
+    "fuse_active": true,
     "certainty": "high"
   }
 ]
@@ -323,12 +355,15 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `distance`
 - `direction`
 - `approaching`
+- `fuse_active`（クリーパー／帯電クリーパーが膨らみ始め、導火中なら `true`）
 - `certainty`
 
 ### 方針
 
 - 視認済みなので具体名を送ってよい
 - プレイヤーへの発話でも具体名を使ってよい
+- 通常敵の索敵半径は16ブロック。見通しの通る敵だけを `visual_threats` に載せる
+- `どっち？` などの現在位置質問には `direction.cardinal` と `distance` をコードで答える
 
 ## 12. `auditory_threats`
 
@@ -499,6 +534,36 @@ serverから受けた型付き支援commandの実行結果。adapterはackされ
 「積もっている」と推測せず、この実ブロック観測を川柳・雑談の共通根拠にする。
 **指差しの花・感圧板等は `look_target` を使う**（[look-target-observation-plan.md](look-target-observation-plan.md)）。
 
+## 15a. `dropped_items` / `recent_block_breaks`
+
+`dropped_items` はクライアントに読み込まれている周囲8ブロック以内の落下物を、
+item IDごとに集約した観測。`age_ms` は同種のうち最も新しい個体を表す。
+
+```json
+{
+  "dropped_items": [
+    {
+      "name": "cobblestone",
+      "count": 3,
+      "entity_count": 2,
+      "distance": 1.4,
+      "age_ms": 850,
+      "block_item": true,
+      "mining_related": true
+    }
+  ],
+  "recent_block_breaks": [
+    { "name": "stone", "material": "stone", "age_ms": 900 }
+  ]
+}
+```
+
+- `dropped_items` だけで採掘中とは断定しない。投棄・爆発・別原因の可能性がある
+- `recent_block_breaks.material` は `stone | earth | ore | other`
+- serverは、空が見えないこと、採掘道具、直近の破壊実績を主根拠に「採掘中」を確定する
+- 石・土系の天井、地表からの深さ、屋内設備の不在だけなら「坑道らしい場所」に留める
+- 時刻・天候と非洞窟バイオームは、空が見えない場面の対話・川柳材料へ投影しない
+
 ## 15b. `look_target`
 
 画面中央クロスヘア（＋）が刺さっている対象。プレイヤーの「これ何？」の共有注意。
@@ -530,6 +595,16 @@ MISS・空気のときは **フィールド自体を省略**する。
   "recent_hostile_audio_ms": 900,
   "hostiles_within_7": 1,
   "hostiles_within_10": 2,
+  "hostile_scan_distance": 16,
+  "hostiles_within_scan_ground": 2,
+  "hostile_outcomes": [
+    {
+      "entity_id": "0f6c…",
+      "type": "zombie",
+      "outcome": "player_kill",
+      "evidence": "server_death_event"
+    }
+  ],
   "combat_active_hint": true
 }
 ```
@@ -537,6 +612,16 @@ MISS・空気のときは **フィールド自体を省略**する。
 ### 方針
 
 - 生データだけでなく、状態機械がすぐ使える集約値も持たせてよい
+- `hostile_scan_distance` は通常敵の索敵半径、`hostiles_within_scan_ground` はその範囲内の地上系敵数
+- `hostile_outcomes` は、追跡中の個体について実際の死亡またはクリーパー爆発を観測した結果。一覧要素は `entity_id / type / outcome / evidence`
+- `entity_id` は同じ結果を即時発話と戦闘終了で二重に話さないための個体ID。旧adapterでは省略可
+- `outcome` は `player_kill / explosion_death / other_death / creeper_detonation`
+- `evidence` は `server_death_event / client_death_state / explosion_packet`
+- `player_kill` は論理サーバーの死亡イベントで `DamageSource` の攻撃者が当該プレイヤーだった場合だけ。攻撃履歴、経験値、敵数0、観測範囲からの消失だけでは付けない
+- リモートサーバーでクライアント死亡状態しか取れない場合は `other_death` とし、プレイヤー撃破へ推測しない
+- `creeper_detonation` は実際の爆発パケットと、直前まで追跡したクリーパー個体の消失が位置・時刻とも対応した場合だけ
+- 通常／帯電クリーパーの導火開始は `visual_threats[].fuse_active`、実爆発は一回限りの `creeper_detonated` で通知する。死亡音はどの結果の根拠にも使わない
+- 新adapterは結果なしを空配列で送る。項目自体が無い場合は旧adapterとして扱う
 
 ## 17. `meta`
 
@@ -632,6 +717,25 @@ MISS・空気のときは **フィールド自体を省略**する。
 - `player`
 - `world`
 - `combat`
+
+### `creeper_detonated`
+
+- `player`
+- `world`
+- `combat.hostile_outcomes`（この通知で新たに確認した爆散だけ）
+
+このイベントは驚き・慌てる即時反応用で、一つの爆散を一度だけ送る。送信済みの
+個体は後続 `combat_ended` の敵名一覧へ持ち越さない。
+
+### `hostile_defeated`
+
+- `player`
+- `world`
+- `combat.hostile_outcomes`（この通知で新たに確認した死亡だけ）
+
+実死亡を観測した時点の即時反応用。`player_kill` ならプレイヤーを褒め、
+`explosion_death` なら爆発への驚き、`other_death` なら帰属を断定しない反応にする。
+同じ `entity_id` は後続 `combat_ended` で再び話題にしない。
 
 ## 20. サンプル 1: 視認クリーパー接近
 

@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import json
 
+from dogido_server.haiku.workshop_context import workshop_context_block
+
 
 def _item_hint(details: dict[str, object]) -> str:
     held_item = str(details.get("held_item") or "").strip()
     source = str(details.get("poem_item_source") or "hand").strip().lower()
-    close_pair = [str(item) for item in details.get("inventory_close_pair", []) if item]
-    far_item = str(details.get("inventory_far_item") or "").strip()
+    inventory_items = [
+        str(item).strip()
+        for item in details.get("inventory_items", [])
+        if str(item).strip()
+    ]
     parts: list[str] = []
     if held_item and held_item != "なし":
         # 道具手持ち時は所持から選んだ1つを主役に（つるはし連発を避ける）
@@ -22,10 +27,9 @@ def _item_hint(details: dict[str, object]) -> str:
             parts.append(f"持ち物のひとつは{held_item}")
         else:
             parts.append(f"手には{held_item}")
-    if far_item and far_item != held_item:
-        parts.append(f"目立つ別口は{far_item}")
-    elif close_pair and not (held_item and held_item != "なし"):
-        parts.append("同系統の持ち物が少しある")
+    others = list(dict.fromkeys(item for item in inventory_items if item != held_item))
+    if others:
+        parts.append(f"ほかの持ち物は{'、'.join(others[:4])}")
     return "。".join(parts) if parts else "なし"
 
 
@@ -108,11 +112,13 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
     weather_context = str(details.get("weather_context") or "").strip()
 
     chunks: list[str] = []
+    biome_visible = details.get("biome_context_visible") is not False
+    sky_visible = details.get("sky_context_visible") is not False
     if _has_structure_focus(details) and structure_label:
         chunks.append(f"いまいる場所: {structure_label}")
-        if climate_hint:
+        if climate_hint and biome_visible:
             chunks.append(f"空気・温度の気配: {climate_hint}")
-    else:
+    elif biome_visible:
         biome = details.get("biome", "不明")
         group = details.get("biome_group", "")
         traits = "、".join(str(t) for t in details.get("biome_traits", []) if t)
@@ -123,12 +129,13 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
         if traits:
             chunks.append(f"土地の感触: {traits}")
 
-    chunks.append(f"空と時間: {weather} / {time_label}")
-    if weather_context:
-        chunks.append(f"コードで確定した現在地の気象: {weather_context}")
     chunks.append(f"そばにあるもの: {nearby}")
-    chunks.append(f"穏やかないきもの: {mobs}")
     chunks.append(f"手もと: {item_hint}")
+    chunks.append(f"穏やかないきもの: {mobs}")
+    if sky_visible:
+        chunks.append(f"空と時間: {weather} / {time_label}")
+        if weather_context:
+            chunks.append(f"コードで確定した現在地の気象: {weather_context}")
 
     tags = _haiku_tags_hint(details)
     if tags != "なし":
@@ -160,7 +167,11 @@ def _form_card() -> str:
     )
 
 
-def _dogido_haiku_spirit(*, has_structure: bool) -> str:
+def _dogido_haiku_spirit(
+    *,
+    has_structure: bool,
+    has_poetic_interpretation: bool,
+) -> str:
     if has_structure:
         place = (
             "いまは特別な場所にいる。"
@@ -172,12 +183,21 @@ def _dogido_haiku_spirit(*, has_structure: bool) -> str:
             "穏やかないきものや、そばの自然が寄り添ってくれる。"
             "空や土地は味付け。手のものは最後の一滴。"
         )
+    grounding = (
+        "発話済みの『検証済みの詩的解釈』があれば、それを一句全体の意味の枠にする。"
+        "各行が材料名を逐語的に写す必要はない。解釈に反せず、そこから自然に浮かぶ"
+        "比喩・余情・印象ならよい。"
+        if has_poetic_interpretation
+        else (
+            "各行は、示された材料のどれか一つ以上を意味の根にする。"
+            "説明文の写経でなくてよいが、元の意味を別物に変えない。"
+        )
+    )
     return (
         "あなたはドギド。怖がりだけど、プレイヤーと並んで景色を見て、"
         "ふっと一句詠む関西の相棒や。\n"
         f"{place}\n"
-        "各行は、示された材料のどれか一つ以上を意味の根にする。"
-        "説明文の写経でなくてよいが、元の意味を別物に変えない。"
+        f"{grounding}"
         "造語や崩れた文を避け、耳で一度聞いて意味の通る現代の日本語で。"
     )
 
@@ -203,7 +223,11 @@ def _source_atoms_block(details: dict[str, object]) -> str:
             basis = ",".join(
                 str(value) for value in raw_basis if isinstance(value, str) and value
             ) if isinstance(raw_basis, list) else ""
-            origin = " / 発話済みの見どころ" if kind == "preface_clause" else ""
+            origin = (
+                " / 発話済みの見どころ"
+                if kind in {"preface_clause", "poetic_interpretation"}
+                else ""
+            )
             basis_note = f" / basis={basis}" if basis else ""
             lines.append(
                 f"- [{atom_id}] {text}"
@@ -214,7 +238,8 @@ def _source_atoms_block(details: dict[str, object]) -> str:
         return "なし"
     guide = (
         "scope: identity_only=名称そのものだけ / source_meaning=原文の意味の言い換えまで / "
-        "observed_state=現在の実測状態まで / poetic_interpretation=印象・取り合わせだけ"
+        "observed_state=現在の実測状態まで / poetic_interpretation=印象・取り合わせだけ。"
+        "kind=poetic_interpretation は、一次材料へ照合済みで実際に発話する一句全体の意味の枠"
     )
     return f"{guide}\n" + "\n".join(lines)
 
@@ -250,6 +275,10 @@ def build_haiku_draft_messages(details: dict[str, object]) -> list[dict[str, str
     constraint_block = _constraint_block(details)
     source_atoms = _source_atoms_block(details)
     generation_strategy = _generation_strategy_block(details)
+    has_poetic_interpretation = any(
+        isinstance(atom, dict) and atom.get("kind") == "poetic_interpretation"
+        for atom in details.get("source_atoms", [])
+    ) if isinstance(details.get("source_atoms"), list) else False
 
     irony = details.get("irony")
     irony_block = "なし"
@@ -262,7 +291,7 @@ def build_haiku_draft_messages(details: dict[str, object]) -> list[dict[str, str
         constraint_section = f"\n読みのメモ:\n{constraint_block}\n"
 
     user_prompt = (
-        f"{_dogido_haiku_spirit(has_structure=has_structure)}\n"
+        f"{_dogido_haiku_spirit(has_structure=has_structure, has_poetic_interpretation=has_poetic_interpretation)}\n"
         "\n"
         "【いまの材料】\n"
         f"{materials}\n"
@@ -338,10 +367,21 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         "class=interpretive は印象・取り合わせとしてだけ使い、新しい事実の根拠にしない。\n"
         "preface_clause は basis の一次atomから派生した発話であり、"
         "basisにない状態・感覚・因果を足してはならない。\n"
-        "natural_japanese は、単独で聞いて自然な現代日本語の場合だけ true。\n"
+        "kind=poetic_interpretation は、一次atomへ照合済みの見どころ全体である。"
+        "このatomでは語句の逐語的な再現を求めない。行がその情景に反せず、"
+        "そこから自然に浮かぶ比喩・余情・印象なら meaning_retained=true としてよい。"
+        "同じ poetic_interpretation を複数行が共有してよい。\n"
+        "natural_japanese は、単独で聞いて意味の通る自然な現代日本語の場合だけ true。"
+        "音数合わせで接尾語や助動詞を機械的につないだ語、修飾関係が分からない語、"
+        "一般の語として意味を説明できない造語は false にする。\n"
         "atom_ids には、実際に意味が残ったIDだけを入れる。候補外IDは禁止。\n\n"
+        "似た材料が複数あるときは、行の修飾語と【発話済みの見どころ】まで比べ、"
+        "最も具体的に意味が合う出典を選ぶ。たとえば色や状態を持つ対象を、"
+        "単に同じ種類の一般的な物へ寄せない。逐語一致より意味の対応を優先する。\n"
         f"【判定する行】\n{line_block}\n\n"
         f"【原文材料】\n{atoms}\n\n"
+        f"【発話済みの見どころ】\n{_grounding_scene_text(details)}\n"
+        f"{workshop_context_block(details)}"
         + _structured_json_tail(json.dumps(example, ensure_ascii=False))
     )
     return [
@@ -351,6 +391,20 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         },
         {"role": "user", "content": user_prompt},
     ]
+
+
+def _grounding_scene_text(details: dict[str, object]) -> str:
+    """生成と保存snapshotの双方から、見どころ本文を照合側へ渡す。"""
+    scene = details.get("scene")
+    irony = details.get("irony")
+    for value in (
+        scene.get("spoken_text") if isinstance(scene, dict) else None,
+        details.get("interpretation"),
+        irony.get("description") if isinstance(irony, dict) else None,
+    ):
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:1200]
+    return "なし"
 
 
 def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[dict[str, str]]:
@@ -381,6 +435,8 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
         f"【現在の三行】\n{current}\n"
         f"【再生成するline_index】 {targets}\n"
         f"【残っている原文材料】\n{atoms}\n"
+        f"【見どころの詩的解釈】\n{_grounding_scene_text(details)}\n"
+        f"{workshop_context_block(details)}"
         f"{constraints}\n"
         "再生成行の現在音数はコードで計測済み。目標音数を優先し、少なくとも許容範囲へ収める。\n"
         "音数目標は line_index 0=五音、1=七音、2=五音（各±1音）。かなだけ。\n"
@@ -395,52 +451,6 @@ def build_haiku_line_regeneration_messages(details: dict[str, object]) -> list[d
                 "あなたは Minecraft の相棒『ドギド』。"
                 "出典を守り、指定された川柳の行だけを直す。返答は JSON のみ。"
             ),
-        },
-        {"role": "user", "content": user_prompt},
-    ]
-
-
-def build_haiku_preface_grounding_messages(details: dict[str, object]) -> list[dict[str, str]]:
-    """発話前の各節を、自己申告とは別に一次atomへ照合する。"""
-
-    raw_clauses = details.get("preface_clauses")
-    clauses = [row for row in raw_clauses if isinstance(row, dict)] if isinstance(raw_clauses, list) else []
-    clause_block = "\n".join(
-        f"- {index}: {row.get('text')} / basis={row.get('basis_atom_ids')} / "
-        f"class={row.get('claim_class')} / scopes={row.get('claim_scopes')}"
-        for index, row in enumerate(clauses)
-    ) or "なし"
-    example = {
-        "assessments": [
-            {
-                "clause_index": index,
-                "basis_atom_ids": row.get("basis_atom_ids") or [],
-                "claim_class": row.get("claim_class") or "interpretive",
-                "meaning_retained": True,
-                "class_correct": True,
-                "within_claim_scope": True,
-                "natural_japanese": True,
-            }
-            for index, row in enumerate(clauses)
-        ]
-    }
-    user_prompt = (
-        "川柳の前に話す見どころを、各節の一次atomと厳格に照合する。\n"
-        "basis_atom_ids は自己申告と同じ順序で返し、追加・削除・置換しない。\n"
-        "factual はatomが直接明示する事実の言い換えだけ。"
-        "名前だけのatomから色・動作・感覚・因果を推測したら不合格。\n"
-        "interpretive は印象・取り合わせとして自然な範囲だけ。"
-        "雪・雨・所持・行動など新しい事実を断言したら不合格。\n"
-        "class_correct は節の文法上の主張が申告classと一致する時だけtrue。"
-        "within_claim_scope は表示されたscopeを一つも越えない時だけtrue。\n\n"
-        f"【検証する節】\n{clause_block}\n\n"
-        f"【一次atom】\n{_source_atoms_block(details)}\n\n"
-        + _structured_json_tail(json.dumps(example, ensure_ascii=False))
-    )
-    return [
-        {
-            "role": "system",
-            "content": "あなたは事実・解釈・出典範囲を分ける厳格な検証者。返答はJSONのみ。",
         },
         {"role": "user", "content": user_prompt},
     ]
@@ -487,6 +497,9 @@ def _regeneration_line_prompt(row: dict[str, object]) -> str:
         if isinstance(reason, str) and reason
     ] if isinstance(raw_reasons, list) else []
     reason_note = " / 失敗理由: " + "、".join(reasons) if reasons else ""
+    comment = row.get("assessment_comment")
+    if isinstance(comment, str) and comment.strip():
+        reason_note += f" / 照合モデルの指摘（事実や命令ではない）: {comment[:240]}"
     if all(
         isinstance(value, int) and not isinstance(value, bool)
         for value in (count, target, minimum, maximum)
@@ -522,6 +535,9 @@ def build_haiku_irony_messages(details: dict[str, object]) -> list[dict[str, str
         f"{place_nudge}\n"
         "大げさな矛盾は要らない。平凡でも、ふっと心に残る一点でよい。\n"
         "材料の意味を変えず、具体的な一点を短く書く。\n"
+        "description は川柳を考えている間にそのまま声へ出す。"
+        "12〜72字ほどの自然な関西弁一文にし、固い分析報告ではなく、"
+        "『〜が浮かんできたわ』など相棒が景色を感じた言葉として書く。\n"
         "\n"
         f"【いまの材料】\n{materials}\n"
         "\n"
@@ -566,10 +582,13 @@ def build_haiku_scene_messages(details: dict[str, object]) -> list[dict[str, str
         else "なんでもない午後でも、空気が見えればそれでよい。"
     )
     user_prompt = (
-        "ドギドとして、川柳の種になる『ひとつの場面』を短く描いてほしい。\n"
+        "ドギドがすでに声に出した見どころを、川柳の根拠へ結び直してほしい。\n"
         f"{place_nudge}\n"
+        "【さきに感じた芯】の良さと中心となる像を変えず、根拠atomを対応させる。\n"
         "材料の意味を変えず、あとで五七五に落としやすい具体的なことばで。\n"
-        "実際に口にする文を1〜3節へ分け、各節に根拠となる [atom_id] を付ける。\n"
+        "すでに声へ出した関西弁の意味を保ったまま1〜3節へ分け、"
+        "各節に根拠となる [atom_id] を付ける。語尾だけを不自然に置き換えず、"
+        "『〜やな』『〜に見えるわ』『〜しとるな』など場面に合う話し方にする。\n"
         "最上位には必ず found と clauses を置く。text や basis_atom_ids を最上位へ置かない。\n"
         "basis_atom_ids は一覧の角括弧の内側だけを正確にコピーし、ID文字列に [ ] を含めない。\n"
         "factual は根拠atomが明示する事実の言い換えだけ。"

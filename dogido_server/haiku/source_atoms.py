@@ -362,6 +362,45 @@ def atoms_from_preface_clauses(
     )
 
 
+def atom_from_poetic_interpretation(
+    clauses: Iterable[PrefaceClause],
+) -> HaikuSourceAtom | None:
+    """検証済みの見どころ全体を、句全体で共有できる詩的解釈にする。
+
+    個々の ``preface_clause`` は一次材料の重複排除に使う。一方、発話済みの
+    見どころ全体は三行をまたぐ一つの場面なので、別の正本 atom に束ねる。
+    派生元は各節の一次 atom ID の和集合として残し、自由な要約を混ぜない。
+    """
+
+    rows = tuple(clauses)
+    if not rows:
+        return None
+    text = "。".join(clause.text for clause in rows if clause.text.strip()).strip()
+    if not text:
+        return None
+    basis_atom_ids = tuple(
+        dict.fromkeys(
+            atom_id
+            for clause in rows
+            for atom_id in clause.basis_atom_ids
+            if atom_id
+        )
+    )
+    if not basis_atom_ids:
+        return None
+    return HaikuSourceAtom(
+        atom_id="preface:spoken:interpretation",
+        text=text,
+        source_ref="preface:spoken",
+        field_path="interpretation",
+        observation_role="poetic_interpretation",
+        kind="poetic_interpretation",
+        claim_class="interpretive",
+        claim_scopes=("poetic_interpretation",),
+        basis_atom_ids=basis_atom_ids,
+    )
+
+
 def merge_source_atoms(*groups: Iterable[HaikuSourceAtom]) -> tuple[HaikuSourceAtom, ...]:
     """同じ ID と同じ表示材料を一度だけ残す。順序は観測優先順を維持する。"""
 
@@ -457,7 +496,7 @@ def source_atoms_from_materials(materials: dict[str, Any] | None) -> tuple[Haiku
     atom_by_id = {atom.atom_id: atom for atom in atoms}
     valid: list[HaikuSourceAtom] = []
     for atom in atoms:
-        if atom.kind == "preface_clause":
+        if atom.kind in {"preface_clause", "poetic_interpretation"}:
             bases = tuple(atom_by_id.get(atom_id) for atom_id in atom.basis_atom_ids)
             expected_scopes = (
                 tuple(
@@ -475,9 +514,19 @@ def source_atoms_from_materials(materials: dict[str, Any] | None) -> tuple[Haiku
                 not bases
                 or any(
                     base is None
-                    or base.kind == "preface_clause"
+                    or base.basis_atom_ids
                     or not _primary_claim_contract_valid(base)
                     for base in bases
+                )
+                or (
+                    atom.kind == "poetic_interpretation"
+                    and (
+                        atom.atom_id != "preface:spoken:interpretation"
+                        or atom.claim_class != "interpretive"
+                        or atom.source_ref != "preface:spoken"
+                        or atom.field_path != "interpretation"
+                        or atom.observation_role != "poetic_interpretation"
+                    )
                 )
                 or (
                     atom.claim_class == "factual"
@@ -528,6 +577,11 @@ def line_source_ids_from_materials(
     rows = materials.get("line_sources") if isinstance(materials, dict) else None
     if not isinstance(rows, list):
         return {}
+    repeatable_atom_ids = {
+        atom.atom_id
+        for atom in source_atoms_from_materials(materials)
+        if atom.kind == "poetic_interpretation"
+    }
     result: dict[int, tuple[str, ...]] = {}
     used: set[str] = set()
     for row in rows:
@@ -547,12 +601,13 @@ def line_source_ids_from_materials(
         ):
             continue
         atom_ids = tuple(str(value).strip() for value in raw_ids)
+        reserved_atom_ids = set(atom_ids) - repeatable_atom_ids
         if (
             any(not atom_id or atom_id not in allowed_atom_ids for atom_id in atom_ids)
             or len(set(atom_ids)) != len(atom_ids)
-            or used.intersection(atom_ids)
+            or used.intersection(reserved_atom_ids)
         ):
             continue
         result[index] = atom_ids
-        used.update(atom_ids)
+        used.update(reserved_atom_ids)
     return result

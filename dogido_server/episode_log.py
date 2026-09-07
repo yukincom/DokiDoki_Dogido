@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger("uvicorn.error")
 
-EPISODE_SCHEMA_VERSION = 2
+EPISODE_SCHEMA_VERSION = 3
 EPISODE_RELATIVE_PATH = Path("eval") / "episodes.jsonl"
 
 
@@ -32,6 +32,7 @@ def _enum_value(value: object) -> object:
 def _direction_payload(direction: object) -> dict[str, object]:
     return {
         "horizontal": _enum_value(getattr(direction, "horizontal", None)),
+        "cardinal": _enum_value(getattr(direction, "cardinal", None)),
         "vertical": _enum_value(getattr(direction, "vertical", None)),
     }
 
@@ -43,6 +44,7 @@ def _visual_threat_payload(threat: object) -> dict[str, object]:
         "distance": getattr(threat, "distance", None),
         "direction": _direction_payload(getattr(threat, "direction", None)),
         "approaching": getattr(threat, "approaching", False),
+        "fuse_active": getattr(threat, "fuse_active", None),
         "on_fire": getattr(threat, "on_fire", False),
         "in_water": getattr(threat, "in_water", False),
         "certainty": _enum_value(getattr(threat, "certainty", None)),
@@ -85,6 +87,7 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
             "health": player.health,
             "hunger": player.hunger,
             "held_item": player.held_item,
+            "block_breaking_active": player.block_breaking_active,
             "yaw": player.yaw,
             "pitch": player.pitch,
             "hotbar": (
@@ -107,6 +110,8 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
             "weather": _enum_value(world.weather),
             "local_light": world.local_light,
             "sky_visible": world.sky_visible,
+            "surface_y": world.surface_y,
+            "depth_below_surface": world.depth_below_surface,
             "ceiling_height": world.ceiling_height,
             "overhead_cover_type": world.overhead_cover_type,
             "is_submerged": world.is_submerged,
@@ -123,6 +128,7 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
             "nearest_light_source_distance": world.nearest_light_source_distance,
             "nearby_door_count": world.nearby_door_count,
             "open_door_count": world.open_door_count,
+            "nearby_window_present": world.nearby_window_present,
             "nearby_bed_count": world.nearby_bed_count,
             "nearby_sleeping_people_count": world.nearby_sleeping_people_count,
             "safe_zone_with_door": world.safe_zone_with_door,
@@ -186,6 +192,12 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
             }
             for resource in event.nearby_resources
         ],
+        "dropped_items": [
+            item.model_dump(mode="json") for item in event.dropped_items
+        ],
+        "recent_block_breaks": [
+            broken.model_dump(mode="json") for broken in event.recent_block_breaks
+        ],
         "look_target": (
             {
                 "kind": event.look_target.kind,
@@ -202,7 +214,14 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
             "recent_hostile_audio_ms": combat.recent_hostile_audio_ms,
             "hostiles_within_7": combat.hostiles_within_7,
             "hostiles_within_10": combat.hostiles_within_10,
+            "hostile_scan_distance": combat.hostile_scan_distance,
+            "hostiles_within_scan_ground": combat.hostiles_within_scan_ground,
             "hostiles_within_30_ground": combat.hostiles_within_30_ground,
+            "hostile_outcomes": [
+                outcome.model_dump(mode="json") for outcome in (combat.hostile_outcomes or [])
+            ]
+            if combat.hostile_outcomes is not None
+            else None,
         },
     }
 
@@ -218,6 +237,21 @@ def _action_payload(action: AudioAction) -> dict[str, object]:
         "protect_ms": action.protect_ms,
         "speech_profile": action.speech_profile,
         "speed_scale": action.speed_scale,
+        "speech_segments": list(action.speech_segments),
+        "speech_segment_pause_ms": action.speech_segment_pause_ms,
+        "queue_priority": action.queue_priority,
+        "queue_replace_key": action.queue_replace_key,
+        "references": [
+            {
+                "source_id": reference.source_id,
+                "title_ja": reference.title_ja,
+                "citation_label_ja": reference.citation_label_ja,
+                "locator": reference.locator,
+                "url": reference.url,
+                "source_kind": reference.source_kind,
+            }
+            for reference in action.references
+        ],
     }
 
 

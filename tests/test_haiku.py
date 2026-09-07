@@ -7,6 +7,7 @@ from dogido_server.config import Settings
 from dogido_server.llm import LeafGenerationRequest, StructuredGenerationRequest
 from dogido_server.models import (
     Certainty,
+    DroppedItem,
     EventDescriptor,
     EventName,
     GameEvent,
@@ -16,6 +17,7 @@ from dogido_server.models import (
     PlayerState,
     Position,
     PriorityHint,
+    RecentBlockBreak,
     SourceKind,
     VehicleState,
     Weather,
@@ -29,7 +31,7 @@ from dogido_server.llm.haiku_prompts import (
 )
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.haiku.source_atoms import PrefaceClause
-from dogido_server.state_machine.haiku_context import SceneContext
+from dogido_server.state_machine.haiku_context import IronyContext, SceneContext
 
 
 def grounded_haiku_payload(
@@ -38,21 +40,6 @@ def grounded_haiku_payload(
 ) -> dict[str, object] | None:
     """state machine テスト用。最終句の新しい厳格JSON契約だけを返す。"""
 
-    if request.kind == "haiku_preface_grounding":
-        return {
-            "assessments": [
-                {
-                    "clause_index": index,
-                    "basis_atom_ids": clause["basis_atom_ids"],
-                    "claim_class": clause["claim_class"],
-                    "meaning_retained": True,
-                    "class_correct": True,
-                    "within_claim_scope": True,
-                    "natural_japanese": True,
-                }
-                for index, clause in enumerate(request.details.get("preface_clauses", []))
-            ]
-        }
     if request.kind == "haiku_draft":
         return {"lines": list(lines)}
     if request.kind != "haiku_line_grounding":
@@ -114,6 +101,8 @@ def make_snapshot(
     biome: str = "desert",
     time_phase: str = "day",
     time_of_day: int = 6000,
+    weather: Weather = Weather.CLEAR,
+    sky_visible: bool | None = True,
     user_text: str | None = None,
     passive_mobs: list[PassiveMob] | None = None,
     nearby_resources: list[NearbyResource] | None = None,
@@ -145,11 +134,11 @@ def make_snapshot(
         world=WorldState(
             time_of_day=time_of_day,
             time_phase=time_phase,
-            weather=Weather.CLEAR,
+            weather=weather,
             biome=biome,
             structure=structure,
             local_light=15,
-            sky_visible=True,
+            sky_visible=sky_visible,
             danger_darkness_score=danger_darkness_score,
             nearby_portal_type=nearby_portal_type,
             nearby_portal_distance=3.0 if nearby_portal_type else None,
@@ -409,6 +398,34 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(vehicle_atom.text, fact)
         self.assertIn(fact, build_haiku_draft_messages(context.prompt_details())[1]["content"])
 
+    def test_observed_nearby_window_becomes_a_groundable_haiku_material(self) -> None:
+        event = make_snapshot(self.base_time, biome="meadow")
+        event = event.model_copy(
+            update={
+                "world": event.world.model_copy(
+                    update={
+                        "sky_visible": False,
+                        "nearby_window_present": True,
+                    }
+                )
+            }
+        )
+
+        context = self.machine._haiku_context(event)
+
+        self.assertIn("空間 近くに窓がある", context.feature_candidate_labels())
+        window_atom = next(
+            atom
+            for atom in context.source_atoms
+            if atom.observation_role == "nearby_window"
+        )
+        self.assertEqual("近くに窓がある", window_atom.text)
+        self.assertEqual(("observed_state",), window_atom.claim_scopes)
+        self.assertIn(
+            "近くに窓がある",
+            build_haiku_draft_messages(context.prompt_details())[1]["content"],
+        )
+
     def test_haiku_uses_observed_snow_or_active_snowfall_only(self) -> None:
         observed = make_snapshot(
             self.base_time,
@@ -524,7 +541,7 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].text, "ここで一句。\nすなあつめ\nくりーぱーくる\nこわいわあ")
-        self.assertEqual(len(fake_llm.structured_requests), 5)
+        self.assertEqual(len(fake_llm.structured_requests), 4)
         self.assertEqual(fake_llm.structured_requests[0].route, "chat")
         self.assertEqual(fake_llm.structured_requests[0].kind, "haiku_irony")
         self.assertEqual(fake_llm.structured_requests[0].max_tokens, self.settings.haiku_structured_max_tokens)
@@ -532,10 +549,8 @@ class HaikuStateMachineTest(unittest.TestCase):
         self.assertEqual(fake_llm.structured_requests[1].kind, "haiku_scene")
         self.assertEqual(fake_llm.structured_requests[1].max_tokens, self.settings.haiku_structured_max_tokens)
         self.assertFalse(any(request.kind == "haiku" for request in fake_llm.leaf_requests))
-        preface_grounding = fake_llm.structured_requests[2]
-        draft = fake_llm.structured_requests[3]
-        grounding = fake_llm.structured_requests[4]
-        self.assertEqual((preface_grounding.kind, preface_grounding.route), ("haiku_preface_grounding", "chat"))
+        draft = fake_llm.structured_requests[2]
+        grounding = fake_llm.structured_requests[3]
         self.assertEqual((draft.kind, draft.route, draft.temperature), ("haiku_draft", "haiku", 0.60))
         self.assertEqual(draft.details["generation_strategy"], "three_slot")
         self.assertEqual(draft.details["generation_slot_groups"], [[0], [1], [2]])
@@ -618,15 +633,100 @@ class HaikuStateMachineTest(unittest.TestCase):
         preface_text = preface[0].text if preface else ""
         # 見どころだけ。「ここで一句。」は本句側のみ
         self.assertNotIn("ここで一句", preface_text)
+        self.assertIn("深い地下なのにのどか", preface_text)
         self.assertIn("浮かんできた", preface_text)
         self.assertEqual([action.text for action in final_line], ["すなあつめ\nくりーぱーくる\nこわいわあ"])
         assert machine.emitted_haiku is not None
         saved_atoms = machine.emitted_haiku.materials["source_atoms"]
         preface_atoms = [atom for atom in saved_atoms if atom["kind"] == "preface_clause"]
+        interpretation_atoms = [
+            atom for atom in saved_atoms if atom["kind"] == "poetic_interpretation"
+        ]
         self.assertTrue(preface_atoms)
+        self.assertEqual(1, len(interpretation_atoms))
         self.assertTrue(all(atom["basis_atom_ids"] for atom in preface_atoms))
         self.assertTrue(all(atom["claim_class"] in {"factual", "interpretive"} for atom in preface_atoms))
+        self.assertEqual(
+            interpretation_atoms[0]["text"],
+            "深い地下なのにのどか",
+        )
+        self.assertEqual(
+            machine.emitted_haiku.interpretation,
+            "深い地下なのにのどか",
+        )
         self.assertEqual(machine.emitted_haiku.materials["preface_spoken"], preface_text)
+
+    def test_irony_description_is_spoken_before_scene_generation(self) -> None:
+        class FakeLLM:
+            def __init__(self) -> None:
+                self.structured_kinds: list[str] = []
+
+            def preload(self) -> bool:
+                return False
+
+            def generate_structured_json(
+                self,
+                request: StructuredGenerationRequest,
+            ) -> dict[str, object]:
+                self.structured_kinds.append(request.kind)
+                if request.kind == "haiku_scene":
+                    return scene_payload(
+                        request,
+                        "窓辺の夕暮れ、穏やかな草地が見えるわ",
+                        motifs=("窓辺", "夕暮れ", "草地"),
+                        focus=("窓辺",),
+                    )
+                return {
+                    "found": True,
+                    "kind": "scene",
+                    "description": "窓から見える夕暮れの草地",
+                    "elements": ["窓", "夕暮れ", "草地"],
+                    "focus": ["窓辺"],
+                    "confidence": 0.8,
+                }
+
+        settings = Settings(
+            llm_enabled=True,
+            decision_policy="py_trees",
+            haiku_interval_ms=300000,
+            haiku_quiet_time_ms=300000,
+        )
+        fake_llm = FakeLLM()
+        machine = DogidoStateMachine(settings, llm=fake_llm)
+        event = make_snapshot(
+            self.base_time,
+            biome="meadow",
+            time_phase="evening",
+        )
+        event = event.model_copy(
+            update={
+                "world": event.world.model_copy(
+                    update={"sky_visible": False, "nearby_window_present": True}
+                )
+            }
+        )
+        machine.process(event)
+
+        preface = machine.process(
+            event.model_copy(
+                update={"observed_at": self.base_time + timedelta(seconds=301)}
+            )
+        ).actions
+
+        self.assertEqual(len(preface), 1)
+        self.assertEqual(
+            preface[0].text,
+            "窓から見える夕暮れの草地、なんか浮かんできたわ。",
+        )
+        self.assertEqual(preface[0].speech_profile, "haiku")
+        assert machine._pending_haiku_materials is not None
+        self.assertEqual(
+            machine._pending_haiku_materials["preface_spoken"],
+            preface[0].text,
+        )
+        self.assertIsNone(machine._pending_haiku_prompt_details)
+        self.assertIsNotNone(machine._pending_haiku_context)
+        self.assertEqual(fake_llm.structured_kinds, ["haiku_irony"])
 
     def test_haiku_zone_ignores_player_chat_until_verse(self) -> None:
         """自分の世界: preface 中は話しかけより本句完了を優先する。"""
@@ -945,11 +1045,6 @@ class HaikuStateMachineTest(unittest.TestCase):
                 return False
 
             def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, object]:
-                if request.kind == "haiku_preface_grounding":
-                    return grounded_haiku_payload(
-                        request,
-                        ("はるのかぜ", "ひつじがあるく", "よるのつき"),
-                    ) or {"assessments": []}
                 if request.kind == "haiku_irony":
                     return {"found": False}
                 if request.kind == "haiku_scene":
@@ -1146,7 +1241,7 @@ class HaikuStateMachineTest(unittest.TestCase):
             ("青くなったジャガイモ", "怪しげなシチュー", "きらめくスイカの薄切り"),
         )
 
-    def test_feature_candidates_do_not_fill_up_with_inventory_items(self) -> None:
+    def test_feature_candidates_include_selected_full_inventory_items(self) -> None:
         event = make_snapshot(
             self.base_time,
             biome="meadow",
@@ -1163,7 +1258,168 @@ class HaikuStateMachineTest(unittest.TestCase):
 
         # 火打石は作業道具扱いにしない → 手持ちのまま
         self.assertIn("手持ち 火打石と打ち金", candidates)
-        self.assertFalse(any(candidate.startswith("持ち物 ") for candidate in candidates))
+        self.assertIn("持ち物 青くなったジャガイモ", candidates)
+        self.assertIn("持ち物 怪しげなシチュー", candidates)
+        self.assertIn("持ち物 きらめくスイカの薄切り", candidates)
+        self.assertLess(
+            candidates.index("持ち物 青くなったジャガイモ"),
+            next(index for index, value in enumerate(candidates) if value.startswith("バイオーム ")),
+        )
+
+    def test_hidden_sky_omits_surface_biome_weather_and_time_from_haiku_materials(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="meadow",
+            weather=Weather.RAIN,
+            sky_visible=False,
+            held_item="minecraft:cobblestone",
+            inventory={"minecraft:cobblestone": 1, "minecraft:apple": 2},
+            nearby_resources=[
+                NearbyResource(type="block", name="minecraft:coal_ore", distance=1.0),
+            ],
+        )
+
+        context = self.machine._haiku_context(event)
+        details = context.prompt_details()
+        labels = context.feature_candidate_labels()
+
+        self.assertFalse(context.include_sky_context)
+        self.assertFalse(context.include_biome_context)
+        self.assertNotIn("weather", details)
+        self.assertNotIn("time_phase", details)
+        self.assertNotIn("biome", details)
+        self.assertFalse(any(value.startswith(("天気 ", "時間 ", "バイオーム ", "地帯 ")) for value in labels))
+        self.assertIn("周辺 石炭鉱石", labels)
+        self.assertIn("持ち物 リンゴ", labels)
+        roles = {atom.observation_role for atom in context.source_atoms}
+        self.assertNotIn("current_biome", roles)
+        self.assertNotIn("weather", roles)
+        self.assertNotIn("time_phase", roles)
+
+        prompt = build_haiku_draft_messages(details)[1]["content"]
+        self.assertNotIn("空と時間", prompt)
+        self.assertNotIn("いまの景色: 草地", prompt)
+        self.assertIn("石炭鉱石", prompt)
+        self.assertIn("リンゴ", prompt)
+
+    def test_hidden_sky_keeps_actual_cave_biome_but_not_weather_or_time(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="lush_caves",
+            weather=Weather.RAIN,
+            sky_visible=False,
+        )
+
+        context = self.machine._haiku_context(event)
+        details = context.prompt_details()
+
+        self.assertTrue(context.include_biome_context)
+        self.assertFalse(context.include_sky_context)
+        self.assertIn("biome", details)
+        self.assertNotIn("weather", details)
+        self.assertNotIn("time_phase", details)
+
+    def test_dropped_item_and_active_mining_become_groundable_materials(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="plains",
+            sky_visible=False,
+            player_y=24,
+            held_item="minecraft:stone_pickaxe",
+        )
+        event = event.model_copy(
+            update={
+                "player": event.player.model_copy(
+                    update={"block_breaking_active": True}
+                ),
+                "world": event.world.model_copy(
+                    update={
+                        "overhead_cover_type": "stone",
+                        "depth_below_surface": 18,
+                    }
+                ),
+                "dropped_items": [
+                    DroppedItem(
+                        name="minecraft:cobblestone",
+                        count=3,
+                        distance=1.5,
+                        age_ms=800,
+                        block_item=True,
+                        mining_related=True,
+                    )
+                ],
+                "recent_block_breaks": [
+                    RecentBlockBreak(
+                        name="minecraft:stone",
+                        material="stone",
+                        age_ms=900,
+                    )
+                ],
+            }
+        )
+
+        context = self.machine._haiku_context(event)
+        labels = context.feature_candidate_labels()
+
+        self.assertIn("落下物 地面に丸石が落ちている", labels)
+        self.assertIn("行動 プレイヤーは地下で採掘している", labels)
+        roles = {atom.observation_role for atom in context.source_atoms}
+        self.assertIn("dropped_1", roles)
+        self.assertIn("mining_context", roles)
+        self.assertNotIn("weather", context.prompt_details())
+        self.assertNotIn("biome", context.prompt_details())
+
+    def test_spoken_black_coal_image_is_linked_to_coal_not_by_one_character_to_cobblestone(self) -> None:
+        event = make_snapshot(
+            self.base_time,
+            biome="meadow",
+            held_item="minecraft:cobblestone",
+            inventory={"minecraft:cobblestone": 1},
+            nearby_resources=[
+                NearbyResource(type="block", name="minecraft:coal_ore", distance=1.0),
+            ],
+        )
+        context = self.machine._haiku_context(event)
+        irony = IronyContext(
+            found=True,
+            kind="juxtaposition",
+            description=(
+                "青空の下、穏やかな草地で丸石を握りしめてたら、"
+                "足元から黒い石炭の鉱石が顔を出してて、頼もしげやな。"
+            ),
+            elements=("丸石", "石炭鉱石", "草地", "晴れ"),
+            focus=("黒い石炭の鉱石",),
+            confidence=0.9,
+        )
+
+        scene = self.machine._scene_for_spoken_irony(
+            irony,
+            SceneContext(),
+            source_atoms=context.source_atoms,
+        )
+
+        self.assertTrue(scene.found)
+        basis = scene.clauses[0].basis_atom_ids
+        self.assertIn("block:coal_ore:japanese", basis)
+        self.assertIn("item:cobblestone:japanese", basis)
+        self.assertNotEqual(
+            self.machine._haiku_material_match_score("丸石", "黒い石"),
+            self.machine._haiku_material_match_score("石炭鉱石", "黒い石炭の鉱石"),
+        )
+
+        flat_scene = SceneContext.from_mapping(
+            {
+                "text": "黒い石炭の鉱石が顔を出しとるな",
+                "basis_atom_ids": ["block:coal_ore:japanese"],
+                "claim_class": "interpretive",
+            },
+            source_atoms=context.source_atoms,
+        )
+        self.assertTrue(flat_scene.found)
+        self.assertEqual(
+            flat_scene.clauses[0].basis_atom_ids,
+            ("block:coal_ore:japanese",),
+        )
 
     def test_work_tool_held_prefers_weighted_pocket_motif(self) -> None:
         """つるはし手持ち時は所持の非道具を句の主役に（dirt より花を優先）。"""

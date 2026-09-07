@@ -6,6 +6,7 @@ from datetime import datetime
 
 from dogido_server.dialogue.player_plan import extract_player_turn_plan
 from dogido_server.entry_catalog import mob_entry, mob_poetic_tags, resolve_mob_catalog_entry
+from dogido_server.environment_context import project_environment
 from dogido_server.models import GameEvent, PassiveMob
 from dogido_server.player_activity import player_vehicle_fact
 from dogido_server.state_machine.ambient_mob_catalog import (
@@ -317,17 +318,12 @@ class NarrationMixin:
         )
 
     def _aftermath_hostile_labels(self, event: GameEvent) -> list[str]:
-        """戦闘終了時に、直前まで根拠のあった敵名だけを日本語名で返す。"""
-        now = event.observed_at
-        visual_retention_ms = int(
-            getattr(self.settings, "player_chat_visual_retention_ms", 12000)
-        )
-        hearing_retention_ms = int(
-            getattr(self.settings, "player_chat_hearing_retention_ms", 12000)
-        )
-        kill_retention_ms = int(
-            getattr(self.settings, "player_chat_name_correction_retention_ms", 10000)
-        )
+        """今回の戦闘で最後に追っていた敵名だけを返す。
+
+        会話用の直近視認・聴取メモは混ぜない。そこを混ぜると、前に死亡した敵が
+        別の敵の離脱時にも「一緒にいなくなった」と再登場してしまう。
+        """
+        del event
         labels: list[str] = []
         seen: set[str] = set()
 
@@ -340,21 +336,6 @@ class NarrationMixin:
 
         for hostile in self.state.last_confirmed_hostiles:
             _add(self._hostile_label(hostile))
-        for mob_type, killed_at in self.state.recent_kill_seen_at_by_type.items():
-            age = self._recent_ms(now, killed_at)
-            if age is not None and age <= kill_retention_ms:
-                _add(self._hostile_label(mob_type))
-        for memo in self.state.recent_visual_memos:
-            age = self._recent_ms(now, memo.seen_at)
-            if age is not None and age <= visual_retention_ms:
-                _add(memo.label_ja or self._hostile_label(memo.mob_type))
-        for memo in self.state.recent_hearing_memos:
-            age = self._recent_ms(now, memo.heard_at)
-            if memo.kind == "hostile" and age is not None and age <= hearing_retention_ms:
-                _add(
-                    memo.label_ja
-                    or (self._hostile_label(memo.mob_type) if memo.mob_type else None)
-                )
         return labels[:4]
 
     def _render_aftermath_line(self, event: GameEvent) -> str:
@@ -362,7 +343,36 @@ class NarrationMixin:
             return response_text("boss", "warden", "defeated")
         if any(hostile == "ender_dragon" for hostile in self.state.last_confirmed_hostiles):
             return response_text("boss", "ender_dragon", "defeated")
-        fallback = fallback_text("aftermath", "line")
+        hostile_outcomes = [
+            outcome
+            for outcome in (event.combat.hostile_outcomes or [])
+            if self._hostile_outcome_key(outcome)
+            not in self.state.announced_hostile_outcome_ids
+        ]
+        resolved_hostiles = [
+            self._hostile_label(outcome.type)
+            for outcome in hostile_outcomes
+            if str(outcome.type or "").strip()
+        ]
+        outcome_kinds = {outcome.outcome for outcome in hostile_outcomes}
+        detonated_types = {
+            outcome.type.removeprefix("minecraft:").strip().lower()
+            for outcome in hostile_outcomes
+            if outcome.outcome == "creeper_detonation"
+        }
+        if "charged_creeper" in detonated_types:
+            combat_outcome = "charged_creeper_detonated"
+        elif detonated_types:
+            combat_outcome = "creeper_detonated"
+        elif "player_kill" in outcome_kinds:
+            combat_outcome = "player_kill"
+        elif "explosion_death" in outcome_kinds:
+            combat_outcome = "explosion_death"
+        elif hostile_outcomes:
+            combat_outcome = "hostile_defeated"
+        else:
+            combat_outcome = "disengaged"
+        fallback = fallback_text("aftermath", combat_outcome)
         health = event.player.health
         if health is None:
             health_state = "不明"
@@ -373,17 +383,114 @@ class NarrationMixin:
         else:
             health_state = "まだ余力はある"
         clear_confirmed = self._combat_end_clear_confirmed(event)
-        return self._generate_leaf_text(
+        line = self._generate_leaf_text(
             kind="aftermath",
             fallback_text=fallback,
             details={
                 "player_name": self._player_call_name(event),
-                "hostiles": self._aftermath_hostile_labels(event),
+                "hostiles": resolved_hostiles or self._aftermath_hostile_labels(event),
                 "health_state": health_state,
                 "hostile_clear_confirmed": clear_confirmed,
                 "remaining_hostiles": 0 if clear_confirmed else None,
+                "combat_outcome": combat_outcome,
             },
         )
+        if self._aftermath_claim_conflicts(combat_outcome, line):
+            LOGGER.warning("aftermath_claim_rejected outcome=%s", combat_outcome)
+            return fallback
+        return line
+
+    def _render_hostile_defeated_line(self, event: GameEvent) -> str | None:
+        del event
+        outcomes = [
+            outcome
+            for outcome in self._fresh_immediate_hostile_outcomes
+            if outcome.outcome != "creeper_detonation"
+        ]
+        if not outcomes:
+            return None
+        player_kills = [
+            self._hostile_label(outcome.type)
+            for outcome in outcomes
+            if outcome.outcome == "player_kill"
+        ]
+        explosion_deaths = [
+            self._hostile_label(outcome.type)
+            for outcome in outcomes
+            if outcome.outcome == "explosion_death"
+        ]
+        other_deaths = [
+            self._hostile_label(outcome.type)
+            for outcome in outcomes
+            if outcome.outcome == "other_death"
+        ]
+
+        def joined(labels: list[str]) -> str:
+            return "と".join(dict.fromkeys(labels)) or "敵"
+
+        if player_kills:
+            return f"よっしゃ！ {joined(player_kills)}倒したで！ ようやったぁ！"
+        if explosion_deaths:
+            return f"うわっ！ 爆発で{joined(explosion_deaths)}倒れたで！ びっくりしたぁ！"
+        return f"あっ、{joined(other_deaths)}倒れたで。ひとまず一体減ったな。"
+
+    def _render_creeper_detonation_line(self, event: GameEvent) -> str | None:
+        del event
+        detonations = [
+            outcome
+            for outcome in self._fresh_immediate_hostile_outcomes
+            if outcome.outcome == "creeper_detonation"
+        ]
+        if not detonations:
+            return None
+        charged_count = sum(
+            outcome.type.removeprefix("minecraft:").strip().lower()
+            == "charged_creeper"
+            for outcome in detonations
+        )
+        normal_count = len(detonations) - charged_count
+        if charged_count:
+            count = f"が{charged_count}体も" if charged_count > 1 else ""
+            return f"うわああっ！ 帯電クリーパー{count}爆発したでぇ！！"
+        if normal_count > 1:
+            return f"うわっ！ クリーパーが{normal_count}体も爆発したぁ！"
+        return "うわっ！ クリーパー爆発したぁ！ びっくりしたやん！"
+
+    @staticmethod
+    def _aftermath_claim_conflicts(combat_outcome: str, line: str) -> bool:
+        """コードが確定した戦闘結果より強い主張をしていないか検査する。"""
+
+        normalized = "".join(str(line or "").split())
+        player_kill_claims = (
+            "倒した",
+            "倒せた",
+            "やっつけた",
+            "仕留めた",
+            "討ち取った",
+            "退治した",
+            "撃破した",
+            "片づけた",
+            "片付けた",
+        )
+        if combat_outcome in {
+            "hostile_defeated",
+            "explosion_death",
+            "creeper_detonated",
+            "charged_creeper_detonated",
+        }:
+            return any(claim in normalized for claim in player_kill_claims)
+        if combat_outcome != "disengaged":
+            return False
+        death_claims = player_kill_claims + (
+            "倒れた",
+            "死んだ",
+            "くたばった",
+            "撃破できた",
+            "退治できた",
+            "爆発した",
+            "爆散した",
+        )
+        return any(claim in normalized for claim in death_claims)
 
     def _render_darkness_escape_line(self, event: GameEvent) -> str | None:
         if self._is_safe_zone_with_door_event(event):
@@ -608,6 +715,9 @@ class NarrationMixin:
     def _render_player_chat_reply(self, event: GameEvent) -> str:
         from dogido_server.llm.prompts import resolve_character_mode_from_state
 
+        if self.player_input.knowledge_query is not None:
+            return self._render_knowledge_reply()
+
         fallback = fallback_text("general", "chat", "reply")
         combat_active = bool(getattr(event.combat, "combat_active_hint", False)) or self.state.mode in {
             "panic",
@@ -677,6 +787,7 @@ class NarrationMixin:
             hearing_summary=hearing_summary,
         )
         place_ctx = self._player_chat_place_context(event)
+        environment = project_environment(event)
         precipitation_context = self._precipitation_context(event)
         LOGGER.warning(
             "player_chat_precipitation y=%s temp=%s snow_start_y=%s snowfall_zone=%s "
@@ -835,7 +946,11 @@ class NarrationMixin:
         details = {
             "player_name": self._player_call_name(event),
             "user_text": user_text[:160],
-            "biome": self._biome_label(event.world.biome),
+            "biome": (
+                self._biome_label(event.world.biome)
+                if environment.include_biome_context
+                else ""
+            ),
             "structure_label": (
                 self._structure_label(self.state.current_structure)
                 if self.state.current_structure
@@ -844,17 +959,39 @@ class NarrationMixin:
             "place_context": place_ctx["place_line"],
             "space_kind": place_ctx["space_kind"],
             "sky_visible": place_ctx["sky_visible"],
-            "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
+            "include_biome_context": environment.include_biome_context,
+            "include_sky_context": environment.include_sky_context,
+            "time_phase": (
+                getattr(event.world.time_phase, "value", event.world.time_phase)
+                if environment.include_sky_context
+                else ""
+            ) or "",
             "safety_priority": safety_priority,
             "player_turn_plan": player_turn_plan.action,
             "player_turn_plan_evidence": player_turn_plan.evidence,
             "home_progress": home_progress,
             # raw weather は world 状態、weather_label は現在Y・気温で雨/雪を解決済み。
             # hearing / 雨音 packet とは混ぜない。
-            "weather": self._weather_value(event.world.weather) or "unknown",
-            "weather_label": self._player_chat_weather_label(event),
-            "weather_fact": self._player_chat_weather_fact(event),
-            **precipitation_context.to_prompt_details(),
+            "weather": (
+                self._weather_value(event.world.weather)
+                if environment.include_sky_context
+                else ""
+            ) or "",
+            "weather_label": (
+                self._player_chat_weather_label(event)
+                if environment.include_sky_context
+                else ""
+            ),
+            "weather_fact": (
+                self._player_chat_weather_fact(event)
+                if environment.include_sky_context
+                else ""
+            ),
+            **(
+                precipitation_context.to_prompt_details()
+                if environment.include_sky_context
+                else {}
+            ),
             "mode": self.state.mode,
             "character_mode": character_mode,
             "combat_active": combat_active,
@@ -968,6 +1105,88 @@ class NarrationMixin:
             return preferred_fallback
         return text
 
+    def _render_knowledge_reply(self) -> str:
+        """明示質問を一度だけ検索し、コード固定の事実本文を返す。"""
+
+        from dogido_server.knowledge_query import (
+            KnowledgeLookupResult,
+            attest_knowledge_lookup_result,
+            render_knowledge_reply_plan,
+            validate_knowledge_lookup_result,
+        )
+        from dogido_server.state_machine.types import SpeechReference
+
+        query = self.player_input.knowledge_query
+        if query is None:
+            return ""
+        provider = getattr(self, "knowledge_provider", None)
+        if provider is None:
+            result = KnowledgeLookupResult(
+                query=query,
+                status="unavailable",
+                error_code="provider_missing",
+            )
+        else:
+            try:
+                provided = provider.lookup(query, limit=3)
+                authority = self._knowledge_authority
+                if provider is authority:
+                    result = validate_knowledge_lookup_result(
+                        provided,
+                        expected_query=query,
+                        limit=3,
+                    )
+                else:
+                    result = attest_knowledge_lookup_result(
+                        provided,
+                        expected_query=query,
+                        authoritative_provider=authority,
+                        limit=3,
+                    )
+            except Exception as exc:  # noqa: BLE001 - 注入providerもfail-closed
+                LOGGER.warning(
+                    "knowledge_provider_failed domain=%s intent=%s subject=%s detail=%s",
+                    query.domain,
+                    query.intent,
+                    query.subject[:80],
+                    exc,
+                )
+                result = KnowledgeLookupResult(
+                    query=query,
+                    status="unavailable",
+                    error_code=type(exc).__name__,
+                )
+        LOGGER.warning(
+            "knowledge_answer domain=%s intent=%s subject=%s status=%s records=%s sources=%s",
+            query.domain,
+            query.intent,
+            query.subject[:80],
+            result.status,
+            ",".join(fact.record_id for fact in result.facts) or "-",
+            ",".join(
+                dict.fromkeys(
+                    source.source_id
+                    for fact in result.facts
+                    for source in fact.sources
+                )
+            )
+            or "-",
+        )
+        plan = render_knowledge_reply_plan(result)
+        self.knowledge_reply_references = tuple(
+            SpeechReference(
+                source_id=source.source_id,
+                title_ja=source.title_ja,
+                citation_label_ja=source.citation_label_ja,
+                locator=source.locator,
+                url=source.url,
+                source_kind=source.source_kind,
+            )
+            for source in plan.references
+        )
+        self.knowledge_query_handled = True
+        return plan.text
+
     def _player_chat_weather_label(self, event: GameEvent) -> str:
         """雑談用。globalな雨を、現在地の気温・標高で雪へ解決する。"""
         from dogido_server.state_machine.constants import WEATHER_LABELS
@@ -997,7 +1216,12 @@ class NarrationMixin:
 
         biome id が白樺の森のままでも、sky_visible / 天井 / 囲まれ度で洞窟っぽさを伝える。
         """
-        biome_label = self._biome_label(event.world.biome)
+        environment = project_environment(event)
+        biome_label = (
+            self._biome_label(event.world.biome)
+            if environment.include_biome_context
+            else ""
+        )
         sky_raw = event.world.sky_visible
         sky_visible = bool(sky_raw) if sky_raw is not None else None
         y = event.player.position.y
@@ -1011,7 +1235,7 @@ class NarrationMixin:
             else ""
         )
 
-        cave_biome = self._is_cave_biome(event.world.biome)
+        cave_biome = environment.cave_biome
         submerged = bool(event.world.is_submerged)
         occluded = self._is_occluded_environment(event)
         foliage = self._is_foliage_shade_context(event)
@@ -1022,9 +1246,15 @@ class NarrationMixin:
         if submerged:
             space_kind = "underwater"
             space_ja = "水中"
+        elif environment.mining_state == "active":
+            space_kind = "active_mining"
+            space_ja = "地下で採掘中"
         elif cave_biome:
             space_kind = "cave_biome"
             space_ja = "洞窟バイオームの中"
+        elif environment.mining_state == "likely_place":
+            space_kind = "mine_like"
+            space_ja = "坑道らしい地下空間"
         elif sky_visible is False and (low_ceiling or enclosed or deep_y or occluded):
             space_kind = "underground_or_roofed"
             space_ja = "地下っぽい／屋根のある空間（空は見えない）"
@@ -1046,11 +1276,10 @@ class NarrationMixin:
             False: "空は見えない",
             None: "空の見え方は不明",
         }[sky_visible]
-        bits = [
-            f"地表バイオーム: {biome_label}",
-            f"空間: {space_ja}",
-            sky_ja,
-        ]
+        bits = [f"空間: {space_ja}", sky_ja]
+        if biome_label:
+            prefix = "洞窟バイオーム" if cave_biome and not environment.include_sky_context else "地表バイオーム"
+            bits.insert(0, f"{prefix}: {biome_label}")
         if y is not None:
             bits.append(f"高さY{int(round(y))}")
         if ceiling is not None:
@@ -1427,7 +1656,11 @@ class NarrationMixin:
                 continue
             direction = self._direction_label(threat)
             label_ja = self._hostile_label(mob_type)
-            key = f"visual:{mob_type}:{direction}"
+            key = (
+                f"visual:{threat.entity_id}"
+                if threat.entity_id
+                else f"visual:{mob_type}:{direction}"
+            )
             by_key[key] = RecentVisualMemo(
                 mob_type=mob_type,
                 label_ja=label_ja,
@@ -1578,7 +1811,11 @@ class NarrationMixin:
             direction, band = _dir_band(audio)
             mob_type = self._resolve_hearing_mob_type(audio.label, getattr(audio, "sound_event", None))
             label_ja = self._resolve_hearing_mob_label(audio.label, getattr(audio, "sound_event", None))
-            key = f"hostile:{mob_type or audio.label}:{direction}:{band}"
+            key = (
+                f"hostile:{audio.source_id}"
+                if audio.source_id
+                else f"hostile:{mob_type or audio.label}:{direction}:{band}"
+            )
             by_key[key] = RecentHearingMemo(
                 kind="hostile",
                 mob_type=mob_type,

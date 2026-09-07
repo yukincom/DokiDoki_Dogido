@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import lru_cache
 
 from dogido_server.entry_catalog import neutral_mob_entries
-from dogido_server.models import EventName, GameEvent, HorizontalDirection, VisualThreat
+from dogido_server.models import CardinalDirection, EventName, GameEvent, HorizontalDirection, VisualThreat
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.response_catalog import (
     response_lines,
@@ -22,6 +22,20 @@ def _neutral_mob_type_set() -> frozenset[str]:
 
 
 class CommonMixin:
+    @staticmethod
+    def _hostile_outcome_key(outcome: object) -> str:
+        entity_id = str(getattr(outcome, "entity_id", "") or "").strip()
+        if entity_id:
+            return entity_id
+        return ":".join(
+            (
+                "legacy",
+                str(getattr(outcome, "type", "") or ""),
+                str(getattr(outcome, "outcome", "") or ""),
+                str(getattr(outcome, "evidence", "") or ""),
+            )
+        )
+
     def _co(
         self,
         value: str | CalloutPayload | None,
@@ -145,6 +159,7 @@ class CommonMixin:
         counts = (
             event.combat.hostiles_within_7,
             event.combat.hostiles_within_10,
+            event.combat.hostiles_within_scan_ground,
             event.combat.hostiles_within_30_ground,
         )
         return all(count is None or count <= 0 for count in counts)
@@ -160,6 +175,10 @@ class CommonMixin:
         if (
             not self._is_warden_combat_context_active(event, now)
             or self.player_input.asks_hostile_count
+            or (
+                self.player_input.asks_hostile_direction
+                and bool(event.visual_threats)
+            )
             or self._has_new_warden_visual_reveal(event)
         ):
             return None
@@ -234,7 +253,14 @@ class CommonMixin:
     def _next_dragon_special_callout(self, event: GameEvent, now: datetime) -> str | None:
         if not self._is_dragon_combat_context_active(event, now):
             return None
-        if self.player_input.asks_hostile_count or self.player_input.asks_dragon_direction:
+        if (
+            self.player_input.asks_hostile_count
+            or self.player_input.asks_dragon_direction
+            or (
+                self.player_input.asks_hostile_direction
+                and bool(event.visual_threats)
+            )
+        ):
             return None
         if self._has_new_dragon_visual_reveal(event):
             # 初視認の「くるで！」を先に言わせる
@@ -627,6 +653,17 @@ class CommonMixin:
         """キーワード応答に拾われなかった「話しかけ」が今のイベントに載っているか。"""
         if not self.player_input.breaks_silence:
             return False
+        # 出典DBは警戒・戦闘の発話経路から読まない。py-tree 以外から
+        # _environmental_actions() が呼ばれた場合にも同じ境界を守る。
+        # 入力本文の保留はserviceが担当する。
+        if self.player_input.knowledge_query is not None and (
+            self.state.mode in {"alert", "panic", "suppressed_panic"}
+            or bool(event.combat.combat_active_hint)
+            or bool(event.visual_threats)
+            or bool(event.auditory_threats)
+            or self._detect_warden_sonic_boom(event)
+        ):
+            return False
         if self.player_input.wants_quiet:
             return False
         if self.player_input.asks_hostile_count or self.player_input.asks_dragon_direction:
@@ -669,6 +706,10 @@ class CommonMixin:
         """pin が open で、今の発話が workshop 向けなら True。"""
         if not self._haiku_workshop_is_open():
             return False
+        # 一般知識質問も、open中はservice側の専用枝で一度だけ返す。
+        # 句の状態変更には流さず、通常player_chatとの二重発話を防ぐ。
+        if self.player_input.knowledge_query is not None:
+            return True
         from dogido_server.haiku.workshop import is_active, should_handle_as_workshop
 
         provider = getattr(self, "haiku_workshop_provider", None)
@@ -866,7 +907,9 @@ class CommonMixin:
         ]
 
     def _ground_hostile_count_within_query_range(self, event: GameEvent) -> int:
-        counted = event.combat.hostiles_within_30_ground
+        counted = event.combat.hostiles_within_scan_ground
+        if counted is None:
+            counted = event.combat.hostiles_within_30_ground
         if counted is not None:
             return counted
         return len(self._visible_ground_hostiles_within_query_range(event))
@@ -899,11 +942,66 @@ class CommonMixin:
         )
 
     def _render_hostile_query_line(self, event: GameEvent, count: int) -> str:
+        if event.combat.hostile_scan_distance is not None:
+            query_distance = int(event.combat.hostile_scan_distance)
+        elif (
+            event.combat.hostiles_within_scan_ground is None
+            and event.combat.hostiles_within_30_ground is not None
+        ):
+            query_distance = 30
+        else:
+            query_distance = int(self.settings.hostile_query_distance)
         if count <= 0:
-            return "30マス以内には今はおらんかな。"
+            return f"{query_distance}ブロック以内には今はおらんかな。"
         if count == 1:
-            return "30マス以内には今は1体おるで。"
-        return f"30マス以内には今は{count}体おるで。"
+            return f"{query_distance}ブロック以内には今は1体おるで。"
+        return f"{query_distance}ブロック以内には今は{count}体おるで。"
+
+    def _current_hostile_direction_target(self, event: GameEvent) -> VisualThreat | None:
+        candidates = [threat for threat in event.visual_threats if threat.distance is not None]
+        if not candidates:
+            return None
+        last_spoken_type = self.state.last_single_visual_type
+        last_spoken_age = self._recent_ms(event.observed_at, self.state.last_single_visual_at)
+        if last_spoken_type and last_spoken_age is not None and last_spoken_age <= 15000:
+            matching = [threat for threat in candidates if threat.type == last_spoken_type]
+            if matching:
+                return min(matching, key=lambda threat: float(threat.distance or 0.0))
+        return min(candidates, key=lambda threat: float(threat.distance or 0.0))
+
+    def _absolute_direction_label(self, event: GameEvent, threat: VisualThreat) -> str | None:
+        cardinal = threat.direction.cardinal
+        if cardinal is not None:
+            return CARDINAL_DIRECTION_LABELS.get(cardinal)  # noqa: F405
+
+        horizontal = threat.direction.horizontal
+        yaw = event.player.yaw
+        if horizontal is None or yaw is None:
+            return None
+        relative_yaw_offsets = {
+            HorizontalDirection.FRONT: 0.0,
+            HorizontalDirection.FRONT_RIGHT: 45.0,
+            HorizontalDirection.RIGHT: 90.0,
+            HorizontalDirection.BACK_RIGHT: 135.0,
+            HorizontalDirection.BACK: 180.0,
+            HorizontalDirection.BACK_LEFT: -135.0,
+            HorizontalDirection.LEFT: -90.0,
+            HorizontalDirection.FRONT_LEFT: -45.0,
+        }
+        # Minecraftのyawは 0=南、90=西、180=北、270=東。
+        target_yaw = (float(yaw) + relative_yaw_offsets[horizontal]) % 360.0
+        labels_by_yaw = ("南", "南西", "西", "北西", "北", "北東", "東", "南東")
+        return labels_by_yaw[int((target_yaw + 22.5) // 45.0) % 8]
+
+    def _render_hostile_direction_answer(self, event: GameEvent) -> str:
+        target = self._current_hostile_direction_target(event)
+        if target is None or target.distance is None:
+            return "今は方位と距離を確かめられへんわ。"
+        direction = self._absolute_direction_label(event, target)
+        if direction is None:
+            return "今は方位までは分からんわ。"
+        distance = max(1, int(float(target.distance) + 0.5))
+        return f"えーと……{direction}や。だいたい{distance}ブロック先くらいやな。"
 
     def _emit_pending_overworld_return_line(self, now: datetime) -> str | None:
         if not self.state.pending_overworld_return_line:

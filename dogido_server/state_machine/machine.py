@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from dogido_server.config import Settings
 from dogido_server.haiku.source_atoms import HaikuSourceAtom
+from dogido_server.knowledge_query import LocalKnowledgeProvider
 from dogido_server.llm import LLMFrontend
 from dogido_server.memory_types import HaikuEmission
-from dogido_server.models import EventName, GameEvent
+from dogido_server.models import EventName, GameEvent, HostileOutcome
 from dogido_server.player_input import PlayerInputContext, route_player_input
 from dogido_server.py_tree_policy import PyTreeActionPolicy
+from dogido_server.state_machine.haiku_context import HaikuContext, IronyContext
 from dogido_server.state_machine.mixins.action_builder import ActionBuilderMixin
 from dogido_server.state_machine.mixins.auditory import AuditoryMixin
 from dogido_server.state_machine.mixins.common import CommonMixin
@@ -21,7 +23,7 @@ from dogido_server.state_machine.mixins.threat_interrupts import ThreatInterrupt
 from dogido_server.state_machine.mixins.visual_reports import VisualReportsMixin
 from dogido_server.state_machine.mixins.visual_targets import VisualTargetsMixin
 from dogido_server.state_machine.mixins.world_analysis import WorldAnalysisMixin
-from dogido_server.state_machine.types import RuntimeState, StateMachineResult
+from dogido_server.state_machine.types import RuntimeState, SpeechReference, StateMachineResult
 
 
 class DogidoStateMachine(
@@ -39,7 +41,13 @@ class DogidoStateMachine(
     WorldAnalysisMixin,
     InventoryMixin,
 ):
-    def __init__(self, settings: Settings, llm: LLMFrontend | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        llm: LLMFrontend | None = None,
+        *,
+        knowledge_authority: LocalKnowledgeProvider | None = None,
+    ) -> None:
         self.settings = settings
         self.state = RuntimeState()
         self.llm = llm
@@ -47,7 +55,7 @@ class DogidoStateMachine(
         self.policy_tree = PyTreeActionPolicy() if settings.decision_policy == "py_trees" else None
         self.emitted_haiku: HaikuEmission | None = None
         self._pending_haiku_interpretation: str | None = None
-        # preface フレームで作った構造化発句用 details（次フレームの本句まで保持）
+        # 先行発話後に scene 根拠を整理して作る、本句用 details。
         self._pending_haiku_prompt_details: dict[str, object] | None = None
         # details の JSON 表現とは別に、検証器へ渡す不変 source atom を保持する。
         self._pending_haiku_source_atoms: tuple[HaikuSourceAtom, ...] = ()
@@ -55,12 +63,28 @@ class DogidoStateMachine(
         self._pending_haiku_fixed_line: str | None = None
         # workshop materials シード（motifs/held/nearby。本句で fragment_links を付与）
         self._pending_haiku_materials: dict[str, object] | None = None
+        # 見どころ文を先に返し、その音声再生中に次フレームで scene の根拠整理と
+        # 本句生成を進めるための発句時 snapshot。
+        self._pending_haiku_context: HaikuContext | None = None
+        self._pending_haiku_irony: IronyContext | None = None
+        self._pending_haiku_origin_event: GameEvent | None = None
         # service が session.dialogue / haiku_workshop / lessons を返す callable を差し込む
         self.dialogue_context_provider = None
         self.haiku_workshop_provider = None
         self.haiku_lessons_provider = None
+        # 正本providerは通常の検索にも使い、差替えproviderの候補だけを
+        # 同じ正本から再構成して照合する。通常経路では二重検索しない。
+        self._knowledge_authority = knowledge_authority or LocalKnowledgeProvider()
+        self.knowledge_provider = self._knowledge_authority
+        # serviceが、高優先発話に先送りされた質問だけを再キューするための
+        # 現在tick限定フラグ。DB回答と現在句の質問処理でだけTrueにする。
+        self.knowledge_query_handled = False
+        # 現在tickの知識回答に対応する参考資料。本文とは別にAudioActionへ載せる。
+        self.knowledge_reply_references: tuple[SpeechReference, ...] = ()
         # service が pending_player_text 待ちのとき True（ambient 抑止用）
         self.player_input_queued = False
+        # 今tickで初めて届いた即時戦闘結果。同じentity_idの再配送では空にする。
+        self._fresh_immediate_hostile_outcomes: tuple[HostileOutcome, ...] = ()
 
     def process(
         self,
@@ -70,6 +94,8 @@ class DogidoStateMachine(
         player_input_context: PlayerInputContext | None = None,
     ) -> StateMachineResult:
         now = event.observed_at
+        self.knowledge_query_handled = False
+        self.knowledge_reply_references = ()
         previous_mode = self.state.mode
         self.emitted_haiku = None
         # preface 待ち中は見どころ・prompt・materials を消さない（次フレームの本句で使う）
@@ -79,10 +105,24 @@ class DogidoStateMachine(
             self._pending_haiku_source_atoms = ()
             self._pending_haiku_fixed_line = None
             self._pending_haiku_materials = None
+            self._pending_haiku_context = None
+            self._pending_haiku_irony = None
+            self._pending_haiku_origin_event = None
         self.player_input = player_input_context or route_player_input(
             event.meta.user_text,
             interpreted_text=interpreted_user_text,
         )
+        self._fresh_immediate_hostile_outcomes = ()
+        if event.event.name in {
+            EventName.HOSTILE_DEFEATED,
+            EventName.CREEPER_DETONATED,
+        }:
+            self._fresh_immediate_hostile_outcomes = tuple(
+                outcome
+                for outcome in (event.combat.hostile_outcomes or [])
+                if self._hostile_outcome_key(outcome)
+                not in self.state.announced_hostile_outcome_ids
+            )
         dimension_changed = self._did_change_dimension(event)
         self._handle_dimension_change(event)
         newly_burning_visual = self._find_newly_burning_visual(event)
@@ -131,6 +171,62 @@ class DogidoStateMachine(
             self.state.seen_visual_keys[visual_key] = now
             if self._is_boss_type(threat.type):
                 self.state.seen_boss_visual_keys.add(visual_key)
+        self.state.active_creeper_fuse_keys = {
+            self._visual_identity_key(threat)
+            for threat in event.visual_threats
+            if threat.type in {"creeper", "charged_creeper"} and threat.fuse_active
+        }
+        if event.event.name in {
+            EventName.HOSTILE_DEFEATED,
+            EventName.CREEPER_DETONATED,
+        }:
+            consumed_entity_ids = {
+                str(outcome.entity_id).strip()
+                for outcome in (event.combat.hostile_outcomes or [])
+                if outcome.entity_id
+            }
+            consumed_types = {
+                outcome.type.removeprefix("minecraft:").strip().lower()
+                for outcome in (event.combat.hostile_outcomes or [])
+            }
+            self.state.last_confirmed_hostiles = [
+                hostile
+                for hostile in self.state.last_confirmed_hostiles
+                if hostile.removeprefix("minecraft:").strip().lower()
+                not in consumed_types
+            ]
+            self.state.recent_visual_memos = [
+                memo
+                for memo in self.state.recent_visual_memos
+                if (
+                    memo.dedupe_key.removeprefix("visual:")
+                    not in consumed_entity_ids
+                    and not (
+                        not consumed_entity_ids and memo.mob_type in consumed_types
+                    )
+                )
+            ]
+            self.state.recent_hearing_memos = [
+                memo
+                for memo in self.state.recent_hearing_memos
+                if (
+                    memo.dedupe_key.removeprefix("hostile:")
+                    not in consumed_entity_ids
+                    and not (
+                        not consumed_entity_ids and memo.mob_type in consumed_types
+                    )
+                )
+            ]
+        if (
+            event.event.name == EventName.COMBAT_ENDED
+            and self._combat_end_clear_confirmed(event)
+        ):
+            # 余韻文で使った敵名は次の戦闘へ持ち越さない。
+            self.state.last_confirmed_hostiles = []
+            self.state.last_known_hostile_directions = []
+            self.state.announced_hostile_outcome_ids.clear()
+        elif event.event.name == EventName.PLAYER_DIED:
+            self.state.announced_hostile_outcome_ids.clear()
         self.state.last_foliage_shade_context = self._is_foliage_shade_context(event)
 
         combat_active = next_mode in {"panic", "suppressed_panic"} or signals.combat_active_hint

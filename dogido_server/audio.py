@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 import hashlib
 import logging
 import shutil
@@ -47,6 +48,17 @@ class SpeechBackend:
     """
     def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
         raise NotImplementedError
+
+    def prepare(self, text: str, *, speed_scale: float | None = None) -> object:
+        """再生前の準備。既定backendは即時なので、引数だけを保持する。"""
+
+        return (text, speed_scale)
+
+    def start_prepared(self, prepared: object) -> RunningAudio:
+        """prepare済みの値から再生を始める。"""
+
+        text, speed_scale = prepared  # type: ignore[misc]
+        return self.start(str(text), speed_scale=speed_scale)
 
     def prewarm_texts(self, texts: list[str]) -> None:
         # サブクラスで上書きする。起動時に定型文を事前合成してキャッシュしておくためのフック
@@ -110,8 +122,14 @@ class VoicevoxSpeechBackend(SpeechBackend):
         self._prune_cache()
 
     def start(self, text: str, *, speed_scale: float | None = None) -> RunningAudio:
+        return self.start_prepared(self.prepare(text, speed_scale=speed_scale))
+
+    def prepare(self, text: str, *, speed_scale: float | None = None) -> object:
         spoken = prepare_text_for_tts(text, engine=self.settings.tts_reading_engine)
-        cached = self._ensure_cached(spoken, speed_scale=speed_scale)
+        return self._ensure_cached(spoken, speed_scale=speed_scale)
+
+    def start_prepared(self, prepared: object) -> RunningAudio:
+        cached = Path(prepared)  # type: ignore[arg-type]
         # cleanup_path=None: キャッシュファイルは再生後も残す
         return RunningAudio(process=subprocess.Popen(["afplay", str(cached)]), cleanup_path=None)
 
@@ -436,6 +454,14 @@ class AudioDispatcher:
         self._current_protected_until: float = 0.0  # monotonic 時刻。これを超えるまで通常割り込みをブロック
         self._pending: deque[tuple[int, list[AudioAction]]] = deque()
         self._epoch = 0  # 割り込み発生時にインクリメント。古いエポックのアクションはワーカーがスキップ
+        self._closed = False
+        # VOICEVOXのHTTP合成をdispatcher lockと再生workerから切り離す。
+        # slotも同数に制限し、割り込みが続いても準備taskを無制限にためない。
+        self._speech_prepare_executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="dogido-tts-prepare",
+        )
+        self._speech_prepare_slots = threading.BoundedSemaphore(2)
 
         # ---- TTS バックエンドの選択 ----
         if settings.tts_backend == "voicevox":
@@ -471,6 +497,19 @@ class AudioDispatcher:
         """起動時に定型文を事前合成してキャッシュする（VoiceVox 用）。"""
         self.speech_backend.prewarm_texts(texts)
 
+    def close(self) -> None:
+        """再生・未再生バッチを失効し、音声準備workerを終了する。"""
+
+        with self._condition:
+            if self._closed:
+                return
+            self._closed = True
+            self._epoch += 1
+            self._pending.clear()
+            self._stop_current_locked()
+            self._condition.notify_all()
+        self._speech_prepare_executor.shutdown(wait=False, cancel_futures=True)
+
     def play_actions(self, actions: list[AudioAction]) -> None:
         """アクションリストをキューに積む。割り込みフラグがあれば現在再生を止める。
 
@@ -480,23 +519,119 @@ class AudioDispatcher:
         if not actions:
             return
         with self._condition:
+            if self._closed:
+                return
             if any(action.interrupt for action in actions):
-                if self._is_current_protected_locked() and not self._has_hard_interrupt(actions):
+                hard_interrupt = self._has_hard_interrupt(actions)
+                if self._is_current_protected_locked() and not hard_interrupt:
                     # 保護中かつハード割り込みでない -> キュー先頭に差し戻してあとで再試行
-                    self._pending.appendleft((self._epoch, list(actions)))
-                    self._condition.notify()
+                    if self._enqueue_pending_locked(actions, front=True):
+                        self._condition.notify_all()
                     return
                 # 割り込み確定: エポックを進めて古いキューを全破棄し、現在の再生を停止
                 self._epoch += 1
                 self._pending.clear()
-                actions = self._prepare_interrupt_actions_locked(actions)
+                actions = self._prepare_interrupt_actions_locked(
+                    actions,
+                    hard_interrupt=hard_interrupt,
+                )
                 self._stop_current_locked()
+                self._condition.notify_all()
                 if not actions:
                     return
-            self._pending.append((self._epoch, list(actions)))
-            self._condition.notify()
+            if self._enqueue_pending_locked(actions):
+                self._condition.notify_all()
 
-    def _prepare_interrupt_actions_locked(self, actions: list[AudioAction]) -> list[AudioAction]:
+    @staticmethod
+    def _batch_priority(actions: list[AudioAction]) -> int:
+        values = {"background": 0, "normal": 1, "foreground": 2}
+        priority = max(
+            (values.get(action.queue_priority, 1) for action in actions),
+            default=1,
+        )
+        if any(
+            action.layer in {"panic_cue", "callout", "flush"} and action.interrupt
+            for action in actions
+        ):
+            return 3
+        if any(action.interrupt for action in actions):
+            return max(priority, 2)
+        return priority
+
+    @staticmethod
+    def _batch_replace_key(actions: list[AudioAction]) -> str | None:
+        return next(
+            (action.queue_replace_key for action in actions if action.queue_replace_key),
+            None,
+        )
+
+    def _enqueue_pending_locked(
+        self,
+        actions: list[AudioAction],
+        *,
+        front: bool = False,
+    ) -> bool:
+        """上限付きで1論理batchを積む。暗黙のdeque破棄は行わない。"""
+
+        batch = (self._epoch, list(actions))
+        max_batches = int(self.settings.audio_max_pending_batches)
+        if len(self._pending) >= max_batches:
+            incoming_key = self._batch_replace_key(actions)
+            if incoming_key:
+                pending = list(self._pending)
+                for index, (_, queued_actions) in enumerate(pending):
+                    if self._batch_replace_key(queued_actions) == incoming_key:
+                        pending[index] = batch
+                        self._pending = deque(pending)
+                        LOGGER.warning(
+                            "audio_queue_replaced key=%s pending=%s max=%s",
+                            incoming_key,
+                            len(self._pending),
+                            max_batches,
+                        )
+                        return True
+
+            incoming_priority = self._batch_priority(actions)
+            pending = list(self._pending)
+            queued_priorities = [
+                self._batch_priority(queued_actions)
+                for _, queued_actions in pending
+            ]
+            lowest = min(queued_priorities, default=incoming_priority)
+            if lowest < incoming_priority:
+                evict_index = queued_priorities.index(lowest)
+                _, evicted_actions = pending.pop(evict_index)
+                self._pending = deque(pending)
+                LOGGER.warning(
+                    "audio_queue_evicted incoming_priority=%s evicted_priority=%s evicted_text=%s pending=%s max=%s",
+                    incoming_priority,
+                    lowest,
+                    (evicted_actions[0].text or "")[:80] if evicted_actions else "",
+                    len(self._pending),
+                    max_batches,
+                )
+            else:
+                LOGGER.warning(
+                    "audio_queue_dropped priority=%s text=%s pending=%s max=%s",
+                    incoming_priority,
+                    (actions[0].text or "")[:80] if actions else "",
+                    len(self._pending),
+                    max_batches,
+                )
+                return False
+
+        if front:
+            self._pending.appendleft(batch)
+        else:
+            self._pending.append(batch)
+        return True
+
+    def _prepare_interrupt_actions_locked(
+        self,
+        actions: list[AudioAction],
+        *,
+        hard_interrupt: bool,
+    ) -> list[AudioAction]:
         """割り込み発生時に、先頭が control レイヤーなら取り除き、息遣いフェードアウトを挿入する。
 
         suppressed_breath 再生中に割り込みが入ると、いきなり止まるより
@@ -510,6 +645,8 @@ class AudioDispatcher:
         if first.layer != "control":
             return actions
         remaining = list(actions[1:])
+        if hard_interrupt:
+            return remaining
         # 息遣い中に割り込まれたらフェードアウト版に差し替えてから次の音声を流す
         if self._current is not None and self._current.cue_id == "suppressed_breath":
             remaining.insert(0, AudioAction(layer="panic_cue", interrupt=False, cue_id="suppressed_breath_fadeout"))
@@ -519,8 +656,10 @@ class AudioDispatcher:
         """protect_ms を無視して強制割り込みすべき悲鳴系アクションかどうかを判定する。"""
         return any(
             action.layer == "flush"
-            or action.cue_id in {"panic_scream_start", "front_spawn_scream", "ushiro_scream"}
-            or (action.layer == "speech" and action.interrupt)
+            or (
+                action.interrupt
+                and action.layer in {"panic_cue", "callout", "speech"}
+            )
             for action in actions
         )
 
@@ -535,19 +674,87 @@ class AudioDispatcher:
         """
         while True:
             with self._condition:
-                while not self._pending:
+                while not self._pending and not self._closed:
                     self._condition.wait()
+                if self._closed:
+                    return
                 epoch, actions = self._pending.popleft()
 
             for action in actions:
-                handle, stale = self._start_action(action, expected_epoch=epoch)
-                if stale:
-                    # 割り込みで無効になったバッチはスキップ
-                    break
-                if handle is None:
-                    continue
-                # 再生が終わるまでここでブロック
-                self._wait_for(handle)
+                try:
+                    if action.speech_segments:
+                        if self._play_segmented_speech(action, expected_epoch=epoch):
+                            break
+                        continue
+                    handle, stale = self._start_action(action, expected_epoch=epoch)
+                    if stale:
+                        # 割り込みで無効になったバッチはスキップ
+                        break
+                    if handle is None:
+                        continue
+                    # 再生が終わるまでここでブロック
+                    self._wait_for(handle)
+                except Exception:  # noqa: BLE001 - 音声失敗でworker自体を失わない
+                    LOGGER.exception(
+                        "audio_action_failed layer=%s text=%s",
+                        action.layer,
+                        (action.text or "")[:80],
+                    )
+
+    def _play_segmented_speech(
+        self,
+        action: AudioAction,
+        *,
+        expected_epoch: int,
+    ) -> bool:
+        """一つの論理action内で文を順に合成・再生する。Trueなら失効済み。"""
+
+        segments = tuple(segment for segment in action.speech_segments if segment)
+        if not segments or (action.text is not None and "".join(segments) != action.text):
+            segments = (action.text,) if action.text else ()
+        for index, segment in enumerate(segments):
+            handle, stale = self._start_speech_text(
+                action,
+                segment,
+                expected_epoch=expected_epoch,
+                interrupt=bool(action.interrupt and index == 0),
+            )
+            if stale:
+                return True
+            if handle is None:
+                # 一文だけ抜けて意味が変わるのを避け、残りも読まない。
+                LOGGER.warning(
+                    "segmented_speech_aborted index=%s segments=%s text=%s",
+                    index,
+                    len(segments),
+                    (action.text or "")[:80],
+                )
+                return False
+            self._wait_for(handle)
+            with self._condition:
+                if self._closed or expected_epoch != self._epoch:
+                    return True
+            if index + 1 < len(segments) and self._wait_segment_pause(
+                expected_epoch,
+                action.speech_segment_pause_ms,
+            ):
+                return True
+        return False
+
+    def _wait_segment_pause(self, expected_epoch: int, pause_ms: int) -> bool:
+        """文間の待ち。割り込み通知で直ちに解除し、古い続きを再生しない。"""
+
+        if pause_ms <= 0:
+            with self._condition:
+                return self._closed or expected_epoch != self._epoch
+        deadline = time.monotonic() + (pause_ms / 1000.0)
+        with self._condition:
+            while not self._closed and expected_epoch == self._epoch:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._condition.wait(timeout=remaining)
+            return True
 
     def _start_action(
         self,
@@ -562,6 +769,21 @@ class AudioDispatcher:
         protect_ms が設定されていれば保護タイマーをセットする。
         expected_epoch が指定されていれば、再生開始直前に現在の epoch と照合する。
         """
+        # speechはVOICEVOX準備を別workerで行う。dispatcher lock内でHTTPを待たない。
+        direct_speech = bool(
+            action.text
+            and not action.cue_sequence
+            and (action.layer == "speech" or not action.cue_id)
+        )
+        if direct_speech:
+            return self._start_speech_text(
+                action,
+                action.text or "",
+                expected_epoch=expected_epoch,
+                interrupt=action.interrupt,
+            )
+
+        fallback_to_speech = False
         with self._lock:
             if expected_epoch is not None and expected_epoch != self._epoch:
                 return None, True
@@ -569,7 +791,6 @@ class AudioDispatcher:
                 self._stop_current_locked()
 
             try:
-                tts_speed = self._resolve_tts_speed(action)
                 if action.cue_sequence:
                     handle = self._start_cue_sequence_locked(
                         action.cue_sequence,
@@ -578,31 +799,143 @@ class AudioDispatcher:
                     if handle is None:
                         # 断片が欠けた・失敗 → 文言 TTS へ
                         if action.text:
-                            handle = self.speech_backend.start(action.text, speed_scale=tts_speed)
+                            fallback_to_speech = True
                         else:
                             return None, False
-                elif action.layer == "speech" and action.text:
-                    handle = self.speech_backend.start(action.text, speed_scale=tts_speed)
                 elif action.cue_id:
                     handle = self.cue_backend.start(action.cue_id)
                     if handle is not None:
                         self._current = handle
                         self._set_protect_locked(action.protect_ms)
                         return handle, False
-                elif action.text:
-                    handle = self.speech_backend.start(action.text, speed_scale=tts_speed)
                 else:
                     # cue も text もない場合は何もしない
                     return None, False
             except Exception:
-                if not action.text:
+                if action.text:
+                    fallback_to_speech = True
+                else:
                     raise
-                # TTS 失敗時は say にフォールバック
-                handle = self.fallback_speech_backend.start(
-                    action.text,
-                    speed_scale=self._resolve_tts_speed(action),
-                )
 
+            if not fallback_to_speech:
+                self._current = handle
+                self._set_protect_locked(action.protect_ms)
+                return handle, False
+
+        return self._start_speech_text(
+            action,
+            action.text or "",
+            expected_epoch=expected_epoch,
+            interrupt=False,
+        )
+
+    def _prepare_speech_with_fallback(
+        self,
+        text: str,
+        speed_scale: float,
+    ) -> tuple[SpeechBackend, object]:
+        try:
+            return (
+                self.speech_backend,
+                self.speech_backend.prepare(text, speed_scale=speed_scale),
+            )
+        except Exception as exc:  # noqa: BLE001 - say/noopへ限定fallback
+            LOGGER.warning(
+                "tts_prepare_failed backend=%s detail=%s",
+                type(self.speech_backend).__name__,
+                exc,
+            )
+            return (
+                self.fallback_speech_backend,
+                self.fallback_speech_backend.prepare(text, speed_scale=speed_scale),
+            )
+
+    def _start_speech_text(
+        self,
+        action: AudioAction,
+        text: str,
+        *,
+        expected_epoch: int | None,
+        interrupt: bool,
+    ) -> tuple[RunningAudio | None, bool]:
+        """TTS準備を上限付きworkerへ出し、epoch変更なら再生前に捨てる。"""
+
+        with self._condition:
+            if self._closed or (
+                expected_epoch is not None and expected_epoch != self._epoch
+            ):
+                return None, True
+            if interrupt:
+                self._stop_current_locked()
+
+        speed_scale = self._resolve_tts_speed(action)
+        acquired = self._speech_prepare_slots.acquire(blocking=False)
+        future: Future[tuple[SpeechBackend, object]] | None = None
+        if acquired:
+            try:
+                future = self._speech_prepare_executor.submit(
+                    self._prepare_speech_with_fallback,
+                    text,
+                    speed_scale,
+                )
+            except Exception:
+                self._speech_prepare_slots.release()
+                raise
+
+            def notify_prepared(_future: Future[tuple[SpeechBackend, object]]) -> None:
+                self._speech_prepare_slots.release()
+                with self._condition:
+                    self._condition.notify_all()
+
+            future.add_done_callback(notify_prepared)
+
+            with self._condition:
+                while not future.done():
+                    if self._closed or (
+                        expected_epoch is not None and expected_epoch != self._epoch
+                    ):
+                        future.cancel()
+                        return None, True
+                    self._condition.wait(timeout=0.1)
+            try:
+                backend, prepared = future.result()
+            except Exception as exc:  # noqa: BLE001 - 音声だけをfail-closed
+                LOGGER.warning("tts_prepare_and_fallback_failed detail=%s", exc)
+                return None, False
+        else:
+            # 失効したVOICEVOX準備がまだ終わっている途中でも、taskを増殖させない。
+            # 音声が必要なら軽量なsay/noop fallbackだけを同期準備する。
+            LOGGER.warning("tts_prepare_saturated fallback=%s", type(self.fallback_speech_backend).__name__)
+            try:
+                backend = self.fallback_speech_backend
+                prepared = backend.prepare(text, speed_scale=speed_scale)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("tts_saturated_fallback_failed detail=%s", exc)
+                return None, False
+
+        with self._lock:
+            if self._closed or (
+                expected_epoch is not None and expected_epoch != self._epoch
+            ):
+                return None, True
+            try:
+                handle = backend.start_prepared(prepared)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning(
+                    "tts_playback_start_failed backend=%s detail=%s",
+                    type(backend).__name__,
+                    exc,
+                )
+                if backend is self.fallback_speech_backend:
+                    return None, False
+                try:
+                    handle = self.fallback_speech_backend.start(
+                        text,
+                        speed_scale=speed_scale,
+                    )
+                except Exception as fallback_exc:  # noqa: BLE001
+                    LOGGER.warning("tts_playback_fallback_failed detail=%s", fallback_exc)
+                    return None, False
             self._current = handle
             self._set_protect_locked(action.protect_ms)
             return handle, False

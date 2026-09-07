@@ -13,6 +13,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from dogido_server.language_dialogue.prompts import (
+    build_grounded_reply_messages,
+    build_interpretation_messages,
+)
+
 from .assist_prompts import build_select_sword_intent_messages
 from .character_mode import (
     BASE_IDENTITY_PROMPT,
@@ -31,9 +36,7 @@ from .haiku_prompts import (
     build_haiku_irony_messages,
     build_haiku_line_grounding_messages,
     build_haiku_line_regeneration_messages,
-    build_haiku_preface_grounding_messages,
     build_haiku_scene_messages,
-    build_haiku_workshop_material_pick_messages,
 )
 from .player_chat_prompts import build_player_chat_messages
 from .prompt_common import dialog_messages, leaf_dialog
@@ -66,6 +69,10 @@ from .reaction_prompts import (
     _build_structure_entry_messages,
     _build_weather_transition_messages,
 )
+from .structured_contracts import (
+    STRUCTURED_CONTRACT_RETRY_KEY,
+    structured_contract_retry_instruction,
+)
 
 # 後方互換: 旧コードが _dialog_messages / _leaf_dialog を参照しても動くように
 _dialog_messages = dialog_messages
@@ -74,13 +81,13 @@ _leaf_dialog = leaf_dialog
 
 def build_messages(request: Any) -> list[dict[str, str]]:
     builders = {
+        "language_dialogue_interpretation": build_interpretation_messages,
+        "language_dialogue_reply": build_grounded_reply_messages,
         "haiku_draft": _build_haiku_draft_messages,
         "haiku_line_grounding": _build_haiku_line_grounding_messages,
         "haiku_line_regeneration": _build_haiku_line_regeneration_messages,
-        "haiku_preface_grounding": _build_haiku_preface_grounding_messages,
         "haiku_irony": _build_haiku_irony_messages,
         "haiku_scene": _build_haiku_scene_messages,
-        "haiku_workshop_material_pick": _build_haiku_workshop_material_pick_messages,
         "haiku_workshop_combat_input": _build_haiku_workshop_combat_input_messages,
         "haiku_workshop_evaluation": _build_haiku_workshop_evaluation_messages,
         "haiku_workshop_intent": _build_haiku_workshop_intent_messages,
@@ -112,7 +119,33 @@ def build_messages(request: Any) -> list[dict[str, str]]:
     builder = builders.get(request.kind)
     if builder is None:
         return []
-    return builder(request)
+    messages = builder(request)
+    retry = request.details.get(STRUCTURED_CONTRACT_RETRY_KEY)
+    if isinstance(retry, dict):
+        errors = retry.get("errors")
+        error_text = "、".join(
+            str(value) for value in errors if value
+        ) if isinstance(errors, list) else "現行JSON契約との不一致"
+        previous = str(retry.get("previous_payload") or "")[:2400]
+        contract_instruction = structured_contract_retry_instruction(
+            request.kind,
+            details=request.details,
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "前回の返答は、内容の採否以前に現行JSON契約へ一致しなかった。\n"
+                    f"契約不一致: {error_text}\n"
+                    f"前回のJSON: {previous}\n"
+                    f"{contract_instruction}\n"
+                    "最初に示した同じ入力をもう一度判定し、プロンプトに記載された現行の形で、"
+                    "JSONオブジェクトを1つだけ返す。旧形式、説明文、コードフェンスは禁止。"
+                    "候補にないIDや値を補作しない。"
+                ),
+            }
+        )
+    return messages
 
 
 def _build_haiku_draft_messages(request: Any) -> list[dict[str, str]]:
@@ -131,20 +164,12 @@ def _build_haiku_line_regeneration_messages(request: Any) -> list[dict[str, str]
     return build_haiku_line_regeneration_messages(request.details)
 
 
-def _build_haiku_preface_grounding_messages(request: Any) -> list[dict[str, str]]:
-    return build_haiku_preface_grounding_messages(request.details)
-
-
 def _build_haiku_irony_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_irony_messages(request.details)
 
 
 def _build_haiku_scene_messages(request: Any) -> list[dict[str, str]]:
     return build_haiku_scene_messages(request.details)
-
-
-def _build_haiku_workshop_material_pick_messages(request: Any) -> list[dict[str, str]]:
-    return build_haiku_workshop_material_pick_messages(request.details)
 
 
 def _build_haiku_workshop_intent_messages(request: Any) -> list[dict[str, str]]:

@@ -16,6 +16,7 @@ from dogido_server.models import (
     EventName,
     GameEvent,
     HorizontalDirection,
+    LookTarget,
     MetaState,
     NearbyResource,
     PassiveMob,
@@ -201,6 +202,32 @@ class InventoryOnDemandTests(unittest.TestCase):
         self.assertTrue(ctx.asks_inventory)
         ctx2 = route_player_input("今日もよろしく")
         self.assertFalse(ctx2.asks_inventory)
+
+    def test_inventory_shorthand_requires_availability_or_quantity(self) -> None:
+        for text in (
+            "石炭ある？", "石炭ない？", "石炭はもうないの？",
+            "石炭ってまだあるんやっけ？", "石炭が何個ある？", "剣何本？",
+            "松明は何本あるかな？", "食料はどれくらい？", "木材いくつある？",
+            "せきたんある？", "セキタンはある？", "ベッドはありませんか？",
+            "剣は持ってる？", "インベントリ見せて", "何を持ってる？",
+            "石炭あるかな", "松明あるやろか", "石炭もう少しある？", "何あるかな", "なにかあるかな",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(asks_inventory(text))
+                self.assertTrue(route_player_input(text).asks_inventory)
+
+    def test_inventory_does_not_capture_identity_or_meaning_questions(self) -> None:
+        for text in (
+            "黒い石は石炭じゃない？どういう意味？", "これは石炭ではない",
+            "石炭の意味が分からない", "石炭って何？", "剣って何？",
+            "これは剣じゃない", "石炭が黒いのはなぜ？", "石炭にはどんな意味がある？",
+            "石炭あるいは丸石という意味？", "石炭は何のこと？", "木材は何色？",
+            "その剣の言い方はよくない", "石炭にはどんな意味があるかな？",
+            "剣の表現には意味があるやろか？",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(asks_inventory(text))
+                self.assertFalse(route_player_input(text).asks_inventory)
 
     def test_player_chat_prompt_includes_inventory_only_when_asked(self) -> None:
         with_inventory = build_messages(
@@ -730,19 +757,36 @@ class PlayerInputEndpointTests(unittest.TestCase):
             self.assertFalse(result["accepted"])
             self.assertEqual("no_active_session", result["reason"])
 
-    def test_short_voice_noise_is_rejected_without_queueing(self) -> None:
+    def test_short_voice_utterances_are_accepted_without_an_allowlist(self) -> None:
         with TemporaryDirectory() as tmp:
             service = self.make_service(tmp)
             service.process_event(make_event(sequence=1, at_sec=0.0))
 
-            for text in ("はい", "はい。", "おい", "なあ"):
+            for text in ("石炭だ", "はい", "牛だ", "雨だ"):
                 with self.subTest(text=text):
                     result = service.push_player_input(text, source="voice")
-                    self.assertFalse(result["accepted"])
-                    self.assertEqual("too_short", result["reason"])
+                    self.assertTrue(result["accepted"])
 
             session = next(iter(service.sessions.values()))
-            self.assertIsNone(session.pending_player_text)
+            self.assertEqual("雨だ", session.pending_player_text)
+
+    def test_short_voice_utterance_reaches_reply_with_current_look_target(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = self.make_service(tmp)
+            service.process_event(make_event(sequence=1, at_sec=0.0))
+
+            result = service.push_player_input("石炭だ", source="voice")
+            self.assertTrue(result["accepted"])
+
+            event = make_event(sequence=2, at_sec=1.0)
+            event.look_target = LookTarget(
+                kind="block",
+                name="coal_ore",
+                distance=2.0,
+            )
+            processed = service.process_event(event)
+            texts = [action.text for action in processed.actions if action.text]
+            self.assertEqual([CHAT_REPLY], texts)
 
     def test_known_stt_noise_is_rejected_without_queueing(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -758,7 +802,7 @@ class PlayerInputEndpointTests(unittest.TestCase):
             session = next(iter(service.sessions.values()))
             self.assertIsNone(session.pending_player_text)
 
-    def test_short_voice_allowlist_is_still_accepted(self) -> None:
+    def test_short_conversational_voice_replies_are_accepted(self) -> None:
         with TemporaryDirectory() as tmp:
             service = self.make_service(tmp)
             service.process_event(make_event(sequence=1, at_sec=0.0))

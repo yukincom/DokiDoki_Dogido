@@ -38,13 +38,14 @@ BASE = datetime(2026, 8, 14, 7, 0, tzinfo=timezone.utc)
 
 
 class CaptureLLM(DogidoLLM):
-    def __init__(self) -> None:
+    def __init__(self, response: str = "あー怖かったぁ。もう安心やな、お疲れさん。") -> None:
         super().__init__(Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop"))
         self.requests: list[LeafGenerationRequest] = []
+        self.response = response
 
     def generate_leaf_text(self, request):  # type: ignore[override]
         self.requests.append(request)
-        return "あー怖かったぁ。もう安心やな、お疲れさん。"
+        return self.response
 
 
 def make_event(
@@ -58,6 +59,7 @@ def make_event(
     hostiles_within_10: int = 0,
     hostiles_within_30_ground: int = 0,
     combat_active_hint: bool = False,
+    hostile_outcomes: list[dict[str, str]] | None = None,
     user_text: str | None = None,
 ) -> GameEvent:
     source_kind = (
@@ -101,6 +103,7 @@ def make_event(
             hostiles_within_10=hostiles_within_10,
             hostiles_within_30_ground=hostiles_within_30_ground,
             combat_active_hint=combat_active_hint,
+            hostile_outcomes=hostile_outcomes,
         ),
         meta=MetaState(user_text=user_text),
     )
@@ -130,6 +133,231 @@ def spider_audio() -> AuditoryThreat:
 
 
 class CombatAftermathStateMachineTests(unittest.TestCase):
+    def test_creeper_fuse_start_is_called_out_once_until_rearmed(self) -> None:
+        for policy in ("py_trees", "legacy"):
+            with self.subTest(policy=policy):
+                machine = DogidoStateMachine(
+                    Settings(
+                        audio_enabled=False,
+                        llm_enabled=False,
+                        decision_policy=policy,
+                    )
+                )
+
+                def creeper(*, fuse_active: bool) -> VisualThreat:
+                    return VisualThreat(
+                        type="creeper",
+                        entity_id="creeper-1",
+                        distance=3.5,
+                        direction=Direction(horizontal=HorizontalDirection.FRONT),
+                        approaching=True,
+                        fuse_active=fuse_active,
+                        certainty=Certainty.HIGH,
+                    )
+
+                machine.process(
+                    make_event(
+                        sequence=1,
+                        at_sec=0,
+                        event_name=EventName.THREAT_APPROACHING,
+                        visual_threats=[creeper(fuse_active=False)],
+                        combat_active_hint=True,
+                    )
+                )
+                started = machine.process(
+                    make_event(
+                        sequence=2,
+                        at_sec=0.5,
+                        event_name=EventName.THREAT_APPROACHING,
+                        visual_threats=[creeper(fuse_active=True)],
+                        combat_active_hint=True,
+                    )
+                )
+                held = machine.process(
+                    make_event(
+                        sequence=3,
+                        at_sec=1.0,
+                        event_name=EventName.THREAT_APPROACHING,
+                        visual_threats=[creeper(fuse_active=True)],
+                        combat_active_hint=True,
+                    )
+                )
+                machine.process(
+                    make_event(
+                        sequence=4,
+                        at_sec=1.5,
+                        event_name=EventName.THREAT_APPROACHING,
+                        visual_threats=[creeper(fuse_active=False)],
+                        combat_active_hint=True,
+                    )
+                )
+                restarted = machine.process(
+                    make_event(
+                        sequence=5,
+                        at_sec=2.0,
+                        event_name=EventName.THREAT_APPROACHING,
+                        visual_threats=[creeper(fuse_active=True)],
+                        combat_active_hint=True,
+                    )
+                )
+
+                self.assertTrue(
+                    any("膨らんどる" in (action.text or "") for action in started.actions)
+                )
+                self.assertFalse(
+                    any("膨らんどる" in (action.text or "") for action in held.actions)
+                )
+                self.assertTrue(
+                    any("膨らんどる" in (action.text or "") for action in restarted.actions)
+                )
+
+    def test_charged_creeper_count_keeps_its_distinct_name(self) -> None:
+        threats = [
+            VisualThreat(
+                type="charged_creeper",
+                entity_id=f"charged-creeper-{index}",
+                distance=6.0 + index,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+                certainty=Certainty.HIGH,
+            )
+            for index in range(2)
+        ]
+        machine = DogidoStateMachine(Settings(audio_enabled=False, llm_enabled=False))
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=0,
+                event_name=EventName.THREAT_APPROACHING,
+                visual_threats=threats,
+                hostiles_within_7=2,
+                hostiles_within_10=2,
+                combat_active_hint=True,
+            )
+        )
+
+        self.assertTrue(
+            any("帯電クリーパー2体" in (action.text or "") for action in result.actions)
+        )
+
+    def test_creeper_detonation_event_gets_an_immediate_distinct_reaction(self) -> None:
+        for policy in ("py_trees", "legacy"):
+            with self.subTest(policy=policy):
+                machine = DogidoStateMachine(
+                    Settings(
+                        audio_enabled=False,
+                        llm_enabled=False,
+                        decision_policy=policy,
+                    )
+                )
+                result = machine.process(
+                    make_event(
+                        sequence=1,
+                        at_sec=0,
+                        event_name=EventName.CREEPER_DETONATED,
+                        hostile_outcomes=[
+                            {
+                                "type": "charged_creeper",
+                                "outcome": "creeper_detonation",
+                                "evidence": "explosion_packet",
+                            }
+                        ],
+                    )
+                )
+
+                self.assertEqual(len(result.actions), 1)
+                self.assertEqual(
+                    result.actions[0].cue_id,
+                    "creeper_detonation_reaction",
+                )
+                self.assertTrue(result.actions[0].interrupt)
+                self.assertIn("帯電クリーパー", result.actions[0].text or "")
+                self.assertIn("爆発した", result.actions[0].text or "")
+
+    def test_hostile_defeat_event_reacts_now_and_is_not_repeated_at_combat_end(self) -> None:
+        for policy in ("py_trees", "legacy"):
+            with self.subTest(policy=policy):
+                llm = CaptureLLM()
+                machine = DogidoStateMachine(
+                    Settings(audio_enabled=False, decision_policy=policy),
+                    llm=llm,
+                )
+                machine.process(
+                    make_event(
+                        sequence=1,
+                        at_sec=0,
+                        event_name=EventName.THREAT_APPROACHING,
+                        visual_threats=[spider_threat()],
+                        combat_active_hint=True,
+                    )
+                )
+                outcome = {
+                    "entity_id": "spider-1",
+                    "type": "spider",
+                    "outcome": "player_kill",
+                    "evidence": "server_death_event",
+                }
+                defeated = machine.process(
+                    make_event(
+                        sequence=2,
+                        at_sec=0.5,
+                        event_name=EventName.HOSTILE_DEFEATED,
+                        combat_active_hint=True,
+                        hostile_outcomes=[outcome],
+                    )
+                )
+                duplicate = machine.process(
+                    make_event(
+                        sequence=3,
+                        at_sec=1,
+                        event_name=EventName.HOSTILE_DEFEATED,
+                        combat_active_hint=True,
+                        hostile_outcomes=[outcome],
+                    )
+                )
+                machine.process(
+                    make_event(
+                        sequence=4,
+                        at_sec=6,
+                        event_name=EventName.COMBAT_ENDED,
+                        hostile_outcomes=[outcome],
+                    )
+                )
+
+                self.assertEqual(len(defeated.actions), 1)
+                self.assertEqual(
+                    defeated.actions[0].cue_id,
+                    "hostile_defeated_reaction",
+                )
+                self.assertIn("スパイダー倒したで", defeated.actions[0].text or "")
+                self.assertEqual(duplicate.actions, [])
+                aftermath = next(
+                    request for request in llm.requests if request.kind == "aftermath"
+                )
+                self.assertEqual(aftermath.details["combat_outcome"], "disengaged")
+                self.assertEqual(aftermath.details["hostiles"], [])
+
+    def test_explosion_death_event_does_not_credit_the_player(self) -> None:
+        machine = DogidoStateMachine(Settings(audio_enabled=False, llm_enabled=False))
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=0,
+                event_name=EventName.HOSTILE_DEFEATED,
+                hostile_outcomes=[
+                    {
+                        "entity_id": "zombie-1",
+                        "type": "zombie",
+                        "outcome": "explosion_death",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            )
+        )
+
+        self.assertEqual(result.actions[0].cue_id, "hostile_defeated_reaction")
+        self.assertIn("爆発でゾンビ倒れた", result.actions[0].text or "")
+        self.assertNotIn("ようやった", result.actions[0].text or "")
+
     def test_confirmed_combat_end_interrupts_stale_audio_and_enters_aftermath(self) -> None:
         for policy in ("py_trees", "legacy"):
             with self.subTest(policy=policy):
@@ -233,6 +461,295 @@ class CombatAftermathStateMachineTests(unittest.TestCase):
         self.assertTrue(request.details["hostile_clear_confirmed"])
         self.assertEqual(request.details["remaining_hostiles"], 0)
 
+    def test_new_adapter_disengagement_does_not_become_a_kill(self) -> None:
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+        machine.process(
+            make_event(
+                sequence=1,
+                at_sec=0,
+                event_name=EventName.THREAT_APPROACHING,
+                visual_threats=[spider_threat()],
+                combat_active_hint=True,
+            )
+        )
+
+        machine.process(
+            make_event(
+                sequence=2,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[],
+            )
+        )
+
+        request = next(request for request in llm.requests if request.kind == "aftermath")
+        self.assertEqual(request.details["combat_outcome"], "disengaged")
+        self.assertEqual(machine.state.pending_dialogue_notes, ["スパイダーと交戦した"])
+
+    def test_previous_dead_hostile_is_not_reused_for_a_later_disengagement(self) -> None:
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+        creeper = VisualThreat(
+            type="creeper",
+            entity_id="creeper-1",
+            distance=4.0,
+            direction=Direction(horizontal=HorizontalDirection.FRONT),
+            certainty=Certainty.HIGH,
+        )
+        enderman = VisualThreat(
+            type="enderman",
+            entity_id="enderman-1",
+            distance=7.0,
+            direction=Direction(horizontal=HorizontalDirection.FRONT),
+            certainty=Certainty.HIGH,
+        )
+
+        machine.process(
+            make_event(
+                sequence=1,
+                at_sec=0,
+                event_name=EventName.THREAT_APPROACHING,
+                visual_threats=[creeper],
+                combat_active_hint=True,
+            )
+        )
+        outcome = {
+            "entity_id": "creeper-1",
+            "type": "creeper",
+            "outcome": "other_death",
+            "evidence": "server_death_event",
+        }
+        defeated = machine.process(
+            make_event(
+                sequence=2,
+                at_sec=0.5,
+                event_name=EventName.HOSTILE_DEFEATED,
+                combat_active_hint=True,
+                hostile_outcomes=[outcome],
+            )
+        )
+        self.assertFalse(
+            any(memo.mob_type == "creeper" for memo in machine.state.recent_visual_memos)
+        )
+        machine.process(
+            make_event(
+                sequence=3,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[outcome],
+            )
+        )
+        machine.process(
+            make_event(
+                sequence=4,
+                at_sec=7,
+                event_name=EventName.THREAT_APPROACHING,
+                visual_threats=[enderman],
+                combat_active_hint=True,
+            )
+        )
+        machine.process(
+            make_event(
+                sequence=5,
+                at_sec=13,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[],
+            )
+        )
+
+        aftermath_requests = [
+            request for request in llm.requests if request.kind == "aftermath"
+        ]
+        self.assertIn("クリーパー倒れた", defeated.actions[0].text or "")
+        self.assertEqual(aftermath_requests[0].details["hostiles"], [])
+        self.assertEqual(aftermath_requests[1].details["hostiles"], ["エンダーマン"])
+        self.assertNotIn("クリーパー", aftermath_requests[1].details["hostiles"])
+
+    def test_confirmed_player_kill_gets_a_distinct_outcome(self) -> None:
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+        machine.process(
+            make_event(
+                sequence=1,
+                at_sec=0,
+                event_name=EventName.THREAT_APPROACHING,
+                visual_threats=[spider_threat()],
+                combat_active_hint=True,
+            )
+        )
+
+        machine.process(
+            make_event(
+                sequence=2,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[
+                    {
+                        "type": "spider",
+                        "outcome": "player_kill",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            )
+        )
+
+        request = next(request for request in llm.requests if request.kind == "aftermath")
+        self.assertEqual(request.details["combat_outcome"], "player_kill")
+        self.assertEqual(request.details["hostiles"], ["スパイダー"])
+        self.assertEqual(machine.state.pending_dialogue_notes, ["スパイダーを倒した"])
+
+    def test_observed_death_without_player_credit_is_not_called_a_player_kill(self) -> None:
+        llm = CaptureLLM()
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+        machine.process(
+            make_event(
+                sequence=1,
+                at_sec=0,
+                event_name=EventName.THREAT_APPROACHING,
+                visual_threats=[spider_threat()],
+                combat_active_hint=True,
+            )
+        )
+
+        machine.process(
+            make_event(
+                sequence=2,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[
+                    {
+                        "type": "spider",
+                        "outcome": "other_death",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            )
+        )
+
+        request = next(request for request in llm.requests if request.kind == "aftermath")
+        self.assertEqual(request.details["combat_outcome"], "hostile_defeated")
+        self.assertEqual(machine.state.pending_dialogue_notes, ["スパイダーが倒れた"])
+
+    def test_disengagement_rejects_an_llm_kill_claim(self) -> None:
+        llm = CaptureLLM("スパイダー、ちゃんと倒せたね。お疲れさんやで。")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[],
+            )
+        )
+
+        relief = next(action for action in result.actions if action.cue_id == "aftermath_relief")
+        self.assertEqual(
+            relief.text,
+            "あー……怖かったぁ。ひとまず気配は遠のいたみたいやな。",
+        )
+
+    def test_unattributed_death_rejects_player_credit_from_llm(self) -> None:
+        llm = CaptureLLM("よう倒したな！ほんまお疲れさんやで。")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[
+                    {
+                        "type": "spider",
+                        "outcome": "other_death",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            )
+        )
+
+        relief = next(action for action in result.actions if action.cue_id == "aftermath_relief")
+        self.assertEqual(relief.text, "敵は倒れたみたいやな。あー……怖かったわ。")
+
+    def test_confirmed_player_kill_keeps_matching_llm_line(self) -> None:
+        line = "よっしゃ、スパイダー倒せたな！お疲れさんやで。"
+        llm = CaptureLLM(line)
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[
+                    {
+                        "type": "spider",
+                        "outcome": "player_kill",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            )
+        )
+
+        relief = next(action for action in result.actions if action.cue_id == "aftermath_relief")
+        self.assertEqual(relief.text, line)
+
+    def test_charged_creeper_detonation_gets_a_distinct_outcome(self) -> None:
+        llm = CaptureLLM("うわあっ、帯電クリーパー爆発したで！びっくりしたぁ。")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[
+                    {
+                        "type": "charged_creeper",
+                        "outcome": "creeper_detonation",
+                        "evidence": "explosion_packet",
+                    }
+                ],
+            )
+        )
+
+        request = next(request for request in llm.requests if request.kind == "aftermath")
+        self.assertEqual(request.details["combat_outcome"], "charged_creeper_detonated")
+        self.assertEqual(
+            machine.state.pending_dialogue_notes,
+            ["帯電クリーパーが爆発した"],
+        )
+        relief = next(action for action in result.actions if action.cue_id == "aftermath_relief")
+        self.assertEqual(relief.text, llm.response)
+
+    def test_explosion_death_does_not_become_a_player_kill(self) -> None:
+        llm = CaptureLLM("よう倒したな！ほんまお疲れさんやで。")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+
+        result = machine.process(
+            make_event(
+                sequence=1,
+                at_sec=6,
+                event_name=EventName.COMBAT_ENDED,
+                hostile_outcomes=[
+                    {
+                        "type": "zombie",
+                        "outcome": "explosion_death",
+                        "evidence": "server_death_event",
+                    }
+                ],
+            )
+        )
+
+        request = next(request for request in llm.requests if request.kind == "aftermath")
+        self.assertEqual(request.details["combat_outcome"], "explosion_death")
+        relief = next(action for action in result.actions if action.cue_id == "aftermath_relief")
+        self.assertEqual(
+            relief.text,
+            "うわっ、爆発で敵が倒れたみたいやな。びっくりしたぁ。",
+        )
+
     def test_prompt_for_confirmed_clear_forbids_residual_enemy_hedging(self) -> None:
         messages = build_messages(
             LeafGenerationRequest(
@@ -244,15 +761,38 @@ class CombatAftermathStateMachineTests(unittest.TestCase):
                     "health_state": "少し減ってる",
                     "hostile_clear_confirmed": True,
                     "remaining_hostiles": 0,
+                    "combat_outcome": "disengaged",
                 },
             )
         )
         prompt = messages[-1]["content"]
 
         self.assertIn("残っている敵は0体", prompt)
-        self.assertIn("敵の排除完了", prompt)
+        self.assertNotIn("敵の排除完了", prompt)
         self.assertIn("残敵を疑わない", prompt)
+        self.assertIn("敵の死亡は確認していない", prompt)
+        self.assertIn("『倒した』『倒せた』『退治した』『敵を排除した』とは言わない", prompt)
         self.assertIn("プレイヤーを労う", prompt)
+
+    def test_prompt_allows_kill_wording_only_with_player_kill_outcome(self) -> None:
+        messages = build_messages(
+            LeafGenerationRequest(
+                kind="aftermath",
+                fallback_text="fallback",
+                details={
+                    "player_name": "プレイヤー",
+                    "hostiles": ["スパイダー"],
+                    "health_state": "少し減ってる",
+                    "hostile_clear_confirmed": True,
+                    "remaining_hostiles": 0,
+                    "combat_outcome": "player_kill",
+                },
+            )
+        )
+        prompt = messages[-1]["content"]
+
+        self.assertIn("プレイヤーによる撃破根拠を確認済み", prompt)
+        self.assertIn("『倒した』『倒せた』と言ってよい", prompt)
 
 
 class _FakeProcess:

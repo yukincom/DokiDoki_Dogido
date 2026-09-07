@@ -10,7 +10,7 @@ from dogido_server.entry_catalog import (
     structure_labels,
 )
 from dogido_server.entity_voice_catalog import MOB_VOICE_LABELS, RUNTIME_HOSTILE_LABELS
-from dogido_server.models import HorizontalDirection
+from dogido_server.models import CardinalDirection, HorizontalDirection
 from dogido_server.state_machine.response_catalog import classic_ushiro_call_text, response_text
 
 DAYLIGHT_BURN_HOSTILES = {"skeleton", "zombie", "drowned", "zombie_villager", "zombified_piglin", "phantom"}
@@ -177,4 +177,15 @@ DIRECTION_LABELS = {
     HorizontalDirection.LEFT: "左",
     HorizontalDirection.FRONT_LEFT: "左前",
     None: "近く",
+}
+
+CARDINAL_DIRECTION_LABELS = {
+    CardinalDirection.NORTH: "北",
+    CardinalDirection.NORTHEAST: "北東",
+    CardinalDirection.EAST: "東",
+    CardinalDirection.SOUTHEAST: "南東",
+    CardinalDirection.SOUTH: "南",
+    CardinalDirection.SOUTHWEST: "南西",
+    CardinalDirection.WEST: "西",
+    CardinalDirection.NORTHWEST: "北西",
 }

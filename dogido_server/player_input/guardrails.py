@@ -8,6 +8,13 @@ HOSTILE_QUERY_KEYWORDS = ("敵", "モンスター", "モブ", "敵対モブ")
 HOSTILE_COUNT_QUERY_KEYWORDS = ("何体", "なんたい", "何匹", "残り", "何人", "何個体")
 DRAGON_KEYWORDS = ("ドラゴン", "どらごん")
 DIRECTION_QUERY_KEYWORDS = ("どこ", "どっち", "方向", "方角", "どのへん", "どの辺")
+HOSTILE_DIRECTION_REFERENTS = (
+    *HOSTILE_QUERY_KEYWORDS,
+    "あいつ",
+    "そいつ",
+    "あの敵",
+    "その敵",
+)
 HAIKU_SAVE_PREFIXES = ("川柳保存:", "川柳保存：", "川柳:", "川柳：")
 HAIKU_REVISE_PREFIXES = ("直し:", "直し：", "川柳直し:", "川柳直し：", "句直し:", "句直し：")
 SAVE_LAST_HAIKU_KEYWORDS = (
@@ -108,8 +115,6 @@ POSSESSION_HINT_KEYWORDS = (
     "持ってる",
     "もってる",
     "持っておる",
-    "あるかな",
-    "あるやろ",
     "残って",
     "のこって",
 )
@@ -122,6 +127,24 @@ def _fold_kana(text: str) -> str:
         chr(ord(ch) - 0x60) if "ァ" <= ch <= "ヶ" else ch
         for ch in text
     )
+
+
+# 所持を省略した短い問いは、既存のアイテム語に有無・数量の述語が続く形だけ。
+# 文中の「ない」「何」だけでは、同定の否定や言葉の意味まで所持品扱いになる。
+_SHORT_INVENTORY_QUERY = re.compile(
+    r"(?:何か|なにか|何|なに|" + "|".join(
+        re.escape(word)
+        for word in sorted({_fold_kana(word) for word in INVENTORY_ITEM_HINT_KEYWORDS}, key=len, reverse=True)
+    ) + r")\s*(?:は|が|も|って|とか)?\s*"
+    r"(?:(?:まだ|もう|今|いま|あと|少し|すこし|ちょっと|たくさん)\s*)*"
+    r"(?:"
+    r"(?:ある|ない|あった|なかった|あります|ありません)"
+    r"|(?:何(?:個|本|枚|種類|すたっく)|いくつ|どれくらい|どのくらい)"
+    r"(?:\s*(?:ある|あった|あります))?"
+    r")"
+    r"(?:ん|の|だ|や|か|な|ね|よ|っけ|やろ|でしょう|です)*"
+    r"\s*(?=$|[?？!！。、,])"
+)
 
 
 def wants_quiet(normalized_text: str) -> bool:
@@ -153,6 +176,21 @@ def asks_dragon_direction(normalized_text: str) -> bool:
     return any(keyword in normalized_text for keyword in DIRECTION_QUERY_KEYWORDS)
 
 
+def asks_hostile_direction(normalized_text: str) -> bool:
+    """敵の方向質問。裸の「どっち？」は視認敵がいる時だけ状態機械が採用する。"""
+    normalized_text = _fold_kana(normalized_text)
+    if not normalized_text:
+        return False
+    if any(_fold_kana(keyword) in normalized_text for keyword in DRAGON_KEYWORDS):
+        return False
+    if not any(keyword in normalized_text for keyword in DIRECTION_QUERY_KEYWORDS):
+        return False
+    if any(keyword in normalized_text for keyword in HOSTILE_DIRECTION_REFERENTS):
+        return True
+    compact = re.sub(r"[\s?？!！。、…・]+", "", normalized_text)
+    return compact in {"どっち", "どこ", "どのへん", "どの辺", "方向", "方角"}
+
+
 def asks_save_last_haiku(normalized_text: str) -> bool:
     normalized_text = _fold_kana(normalized_text)
     if not normalized_text:
@@ -179,8 +217,8 @@ def asks_inventory(normalized_text: str) -> bool:
     has_possession = any(keyword in normalized_text for keyword in POSSESSION_HINT_KEYWORDS)
     if has_item_hint and has_possession:
         return True
-    # 「松明ある？」「明かりある？」のように所持を省略した短い問い
-    if has_item_hint and ("ある" in normalized_text or "ない" in normalized_text or "何" in normalized_text or "なに" in normalized_text):
+    # 「松明ある？」「剣は何本？」。意味質問や「石炭じゃない？」は含めない。
+    if _SHORT_INVENTORY_QUERY.search(normalized_text):
         return True
     # 「何持ってる」「持ち物は？」系
     if has_possession and ("何" in normalized_text or "なに" in normalized_text or "どんな" in normalized_text):

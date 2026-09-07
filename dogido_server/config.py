@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     default_call_name: str = "プレイヤー"
 
     audio_enabled: bool = True
+    # 無制限に古い発話をためない。上限到達時はAudioDispatcherが優先度を見て
+    # 明示的に置換・破棄し、必ずログへ残す。
+    audio_max_pending_batches: int = Field(default=8, ge=1, le=128)
+    # 別画面へ残す発言数。プロセス内だけの上限付き履歴で、入力やゲーム状態は保存しない。
+    display_history_max_entries: int = Field(default=200, ge=20, le=2000)
+    # ゲーム外の診断欄へ残す非アクセスログ。永続化せず、再起動で消去する。
+    diagnostic_history_max_entries: int = Field(default=1000, ge=100, le=10000)
     decision_policy: Literal["py_trees", "legacy"] = "py_trees"
     llm_enabled: bool = True
     llm_backend: LLM_BACKEND = "mlx"
@@ -113,13 +120,26 @@ class Settings(BaseSettings):
     # whisper のパスは未設定なら ~/AI_assistant/whisper.cpp/ などから自動検出する
     voice_whisper_cli: Path | None = None
     voice_whisper_model: Path | None = None
+    # 軽量Silero VADは雨音などをWhisperへ渡す前のspeech gateにだけ使う。
+    # 検出区間でPCMを切り詰めると日本語短文を落とす実測があったため、
+    # 認識本体には元の発話区間を渡す。
+    voice_vad_enabled: bool = True
+    voice_vad_cli: Path | None = None
+    voice_vad_model: Path | None = None
+    voice_vad_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    # STT処理中に保持する次発話は1件だけ。古い会話を後から再生しない。
+    voice_stt_max_pending_segments: int = Field(default=1, ge=1, le=4)
+    voice_stt_max_segment_age_sec: float = Field(default=8.0, ge=1.0, le=60.0)
     voice_input_device: str = ":0"  # ffmpeg avfoundation のオーディオ入力（":0"=最初のマイク）
     voice_rms_threshold: int = 700  # 発話開始とみなす音量（環境ノイズが多ければ上げる）
-    voice_silence_ms: int = 800  # この長さ無音が続いたら発話終了
+    voice_silence_ms: int = 1200  # 800msより間を許し、雨音下でも区間を長くしすぎない
     voice_min_speech_ms: int = 350  # これより短い音は無視（物音対策）
-    voice_max_speech_sec: float = 12.0
+    voice_max_speech_sec: float = 30.0
     voice_wake_word: str = ""  # 設定すると、この語を含む発話だけ届ける（例: "ドギド"）
     voice_no_speech_thold: float = 0.6
+    # Sileroが声ありとした区間を0.6で空判定した場合だけ、一度再試行する。
+    # whisper.cppは値が高いほど無音棄却が緩くなるため、1.0で実質無効化する。
+    voice_no_speech_retry_thold: float | None = Field(default=1.0, ge=0.0, le=1.0)
 
     mlx_model_id: str | None = None
     llm_base_url: str | None = None
@@ -170,7 +190,7 @@ class Settings(BaseSettings):
     rear_warning_distance: float = 3.0
     panic_distance: float = 7.0
     multi_hostile_distance: float = 10.0
-    hostile_query_distance: float = 30.0
+    hostile_query_distance: float = 16.0
     hostile_mass_callout_threshold: int = 4
     # 「ぎょうさん」一括コールアウトはディメンション移動直後の群れ限定
     mass_callout_warp_window_ms: int = 90000

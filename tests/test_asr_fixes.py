@@ -26,6 +26,15 @@ class AsrFixTableTests(unittest.TestCase):
             self.assertNotIn("関圧番", fixed)
             self.assertNotIn("管轄版", fixed)
 
+    def test_w_row_i_grade_garbage_reaches_the_knowledge_subject(self) -> None:
+        for raw in ("和行為為団って何？", "和業・イダンって何？"):
+            with self.subTest(raw=raw):
+                context = route_player_input(raw)
+                self.assertEqual("ワ行イ段って何？", context.raw_text)
+                self.assertIsNotNone(context.knowledge_query)
+                assert context.knowledge_query is not None
+                self.assertEqual("ワ行イ段", context.knowledge_query.subject)
+
     def test_unrelated_text_unchanged(self) -> None:
         for raw in ("こんにちは", "うん", "松明ある？", "感圧板だよ"):
             fixed, applied = apply_asr_fixes(raw)

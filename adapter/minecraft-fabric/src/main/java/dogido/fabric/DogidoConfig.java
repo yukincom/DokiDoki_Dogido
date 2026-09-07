@@ -81,6 +81,12 @@ final class DogidoConfig {
             writeDefaults(configPath, defaults);
         }
 
+        String maxThreatDistanceText = properties.getProperty("max_threat_distance", "16.0");
+        double maxThreatDistance = Double.parseDouble(maxThreatDistanceText);
+        double visibleThreatDistance = Double.parseDouble(
+            properties.getProperty("visible_threat_distance", maxThreatDistanceText)
+        );
+
         return new DogidoConfig(
             Boolean.parseBoolean(properties.getProperty("enabled", "true")),
             properties.getProperty("server_base_url", "http://127.0.0.1:5055"),
@@ -90,8 +96,8 @@ final class DogidoConfig {
             Integer.parseInt(properties.getProperty("audio_scan_interval_ticks", "8")),
             Integer.parseInt(properties.getProperty("ambient_mob_interval_ticks", "60")),
             Integer.parseInt(properties.getProperty("combat_ended_quiet_ticks", "100")),
-            Double.parseDouble(properties.getProperty("max_threat_distance", "30.0")),
-            Double.parseDouble(properties.getProperty("visible_threat_distance", "30.0")),
+            maxThreatDistance,
+            visibleThreatDistance,
             Double.parseDouble(properties.getProperty("audio_threat_distance", "12.0")),
             Double.parseDouble(properties.getProperty("panic_distance", "7.0")),
             Double.parseDouble(properties.getProperty("rear_warning_distance", "3.0")),
@@ -123,8 +129,8 @@ final class DogidoConfig {
         properties.setProperty("audio_scan_interval_ticks", "8");
         properties.setProperty("ambient_mob_interval_ticks", "60");
         properties.setProperty("combat_ended_quiet_ticks", "100");
-        properties.setProperty("max_threat_distance", "30.0");
-        properties.setProperty("visible_threat_distance", "30.0");
+        properties.setProperty("max_threat_distance", "16.0");
+        properties.setProperty("visible_threat_distance", "16.0");
         properties.setProperty("audio_threat_distance", "12.0");
         properties.setProperty("panic_distance", "7.0");
         properties.setProperty("rear_warning_distance", "3.0");

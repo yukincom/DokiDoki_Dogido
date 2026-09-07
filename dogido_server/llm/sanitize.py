@@ -5,6 +5,20 @@ import re
 from typing import Any
 
 
+_DISMISSIVE_PLAYER_CHAT_ENDINGS = (
+    re.compile(
+        r"(?:^|[、。！？!?])(?:もう)?(?:ほっとけ|放っとけ|ほっといて|放っといて)"
+        r"(?:や|よ|くれ)?[。！？!?]*$"
+    ),
+    re.compile(
+        r"(?:^|[、。！？!?])(?:あっち|向こう)(?:へ|に)?(?:行け|行って)"
+        r"(?:や|よ)?[。！？!?]*$"
+    ),
+    re.compile(r"(?:^|[、。！？!?])(?:うるさい|うるさいわ|黙れ)[。！？!?]*$"),
+    re.compile(r"(?:話しかけ|構わ)(?:んといて|ないで)[。！？!?]*$"),
+)
+
+
 def clean_output(text: str | None) -> str:
     if not text:
         return ""
@@ -107,6 +121,8 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
     if kind == "player_chat":
         from dogido_server.dialogue.player_plan import conflicts_with_player_travel_guidance
 
+        if contains_dismissive_player_chat_tone(text):
+            return False
         if conflicts_with_player_travel_guidance(
             text,
             player_turn_plan=str(details.get("player_turn_plan") or "none"),
@@ -216,6 +232,13 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
     if has_suffix_chain_noise(text):
         return False
     return True
+
+
+def contains_dismissive_player_chat_tone(text: str) -> bool:
+    """相棒がプレイヤーを追い払うように会話を閉じる出力か。"""
+
+    compact = re.sub(r"\s+", "", text or "")
+    return any(pattern.search(compact) for pattern in _DISMISSIVE_PLAYER_CHAT_ENDINGS)
 
 
 # 敵対中は原則 NG（寄ってくる／狙われるので静止は危険）。

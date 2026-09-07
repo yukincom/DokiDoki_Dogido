@@ -4,10 +4,12 @@ from __future__ import annotations
 import logging
 
 from dogido_server.assist.select_sword import is_explicit_select_sword_request
+from dogido_server.knowledge_query import extract_explicit_knowledge_query
 from dogido_server.player_input.asr_fixes import apply_asr_fixes
 from dogido_server.player_input.guardrails import (
     asks_about_sound,
     asks_dragon_direction,
+    asks_hostile_direction,
     asks_haiku_recall,
     asks_hostile_count,
     asks_inventory,
@@ -57,6 +59,11 @@ def route_player_input(
         )
     blocks_ambient = should_block_ambient(normalized_text)
     explicit_sword_request = is_explicit_select_sword_request(normalized_text)
+    knowledge_query = (
+        None
+        if explicit_sword_request
+        else extract_explicit_knowledge_query(normalized_interpreted or spoken)
+    )
     player_haiku_text = extract_player_haiku(raw_text)
     revised_haiku_text = extract_revised_haiku(raw_text)
     reading_tuple = extract_reading_correction(raw_text)
@@ -98,6 +105,7 @@ def route_player_input(
         wants_quiet=wants_quiet(normalized_text),
         should_block_ambient=blocks_ambient,
         asks_hostile_count=asks_hostile_count(normalized_text),
+        asks_hostile_direction=asks_hostile_direction(normalized_text),
         asks_dragon_direction=asks_dragon_direction(normalized_text),
         asks_save_last_haiku=asks_save_last_haiku(normalized_text),
         asks_inventory=asks_inventory(normalized_text),
@@ -106,6 +114,7 @@ def route_player_input(
         assist_intent_evidence=normalized_text if explicit_sword_request else "",
         assist_intent_confidence=1.0 if explicit_sword_request else 0.0,
         asks_about_sound=asks_about_sound(normalized_text),
+        knowledge_query=knowledge_query,
         player_haiku_text=player_haiku_text,
         revised_haiku_text=revised_haiku_text,
         reading_correction=reading_correction,

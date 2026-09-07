@@ -1,0 +1,2292 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-09-01",
+  "source_policy": "official_and_public_institutions_only",
+  "scope_note": "学習指導要領解説で明示された学校文法の学習事項と、文化庁の現代仮名遣い・送り仮名・公用文表記の原則を、説明・例外・機械判定限界に分けた知識レコード。文節・自立語・付属語・個別品詞の辞書的定義は、直接根拠を確認できていないため収録しない。",
+  "rights_policy": "文部科学省・文化庁の公式資料を根拠にした事実の要約。学習指導要領に引用された教材作品や資料本文は転載しない。",
+  "entries": [
+    {
+      "id": "knowledge.grammar.subject-predicate",
+      "kind": "grammar_rule",
+      "title_ja": "主語と述語との関係",
+      "aliases": [
+        "主述の関係"
+      ],
+      "search_terms": [
+        "主語",
+        "述語",
+        "主述の関係",
+        "主語と述語"
+      ],
+      "tags": [
+        "grammar",
+        "sentence_structure",
+        "elementary"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "文の組立て",
+      "definition_ja": "文の中で、『何が』『誰が』に当たる部分と、その動作・状態・性質を述べる部分との関係を捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "context_rule",
+          "label_ja": "省略と文脈",
+          "statement_ja": "主語が表面に現れない文や文脈から補われる文があるため、語形だけで主語を確定しない。",
+          "scope": "現代日本語の文",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "relation": "subject_predicate",
+        "surface_subject_required": false
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "前後の文脈"
+        ],
+        "prohibited_inferences": [
+          "省略主語を一意に補う",
+          "倒置や会話文を誤文と断定する"
+        ],
+        "human_review_when": [
+          "省略・倒置・引用を含む場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.elementary-japanese-guide",
+          "supports": [
+            "主語と述語との関係を学習事項とすること"
+          ],
+          "locator": "第1学年及び第2学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.modifier-modified",
+      "kind": "grammar_rule",
+      "title_ja": "修飾語と被修飾語との関係",
+      "aliases": [
+        "修飾と被修飾との関係",
+        "修飾関係"
+      ],
+      "search_terms": [
+        "修飾語",
+        "被修飾語",
+        "修飾関係",
+        "係り受け"
+      ],
+      "tags": [
+        "grammar",
+        "dependency",
+        "elementary"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "文の組立て",
+      "definition_ja": "ある語句が、別の語句の意味を詳しく限定する関係を捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "ambiguity",
+          "label_ja": "修飾先の曖昧さ",
+          "statement_ja": "修飾先が離れている文や複数の語句に係り得る文では、文脈を用いて解釈する。",
+          "scope": "現代日本語の文",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "relation": "modifier_modified"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "意味上の文脈"
+        ],
+        "prohibited_inferences": [
+          "形態素間の距離だけで修飾先を確定する"
+        ],
+        "human_review_when": [
+          "複数の係り先候補がある場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.elementary-japanese-guide",
+          "supports": [
+            "修飾と被修飾との関係を学習事項とすること"
+          ],
+          "locator": "第3学年及び第4学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.demonstratives",
+      "kind": "grammar_rule",
+      "title_ja": "指示する語句の役割",
+      "aliases": [
+        "指示語",
+        "こそあど"
+      ],
+      "search_terms": [
+        "指示語",
+        "こそあど",
+        "これ",
+        "それ",
+        "指示する語句",
+        "指示対象"
+      ],
+      "tags": [
+        "grammar",
+        "demonstrative",
+        "discourse"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "語句の働き",
+      "definition_ja": "指示する語句は、文章中の語句・内容や、発話場面の事物を指し示す。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "context_rule",
+          "label_ja": "指示対象",
+          "statement_ja": "何を指すかは前後の文章または発話場面に依存する。",
+          "scope": "文章・会話",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "possible_reference_domains": [
+          "文章内",
+          "発話場面"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "前後の文章",
+          "発話場面の観測"
+        ],
+        "prohibited_inferences": [
+          "テキストにない現場の対象を推測する"
+        ],
+        "human_review_when": [
+          "複数の指示対象候補がある場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.elementary-japanese-guide",
+          "supports": [
+            "指示する語句の役割を学習事項とすること"
+          ],
+          "locator": "第3学年及び第4学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.connective-expressions",
+      "kind": "grammar_rule",
+      "title_ja": "接続する語句の役割",
+      "aliases": [
+        "接続語",
+        "接続詞"
+      ],
+      "search_terms": [
+        "接続語",
+        "接続詞",
+        "文の接続",
+        "段落の接続",
+        "文章の展開"
+      ],
+      "tags": [
+        "grammar",
+        "connective",
+        "discourse"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "語句の働き",
+      "definition_ja": "接続する語句は、語句・文・段落の関係を示し、文章の展開を明らかにする。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "context_rule",
+          "label_ja": "接続関係",
+          "statement_ja": "同じ接続表現でも、前後の内容により働きの解釈が異なる場合がある。",
+          "scope": "文章・談話",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "connects": [
+          "語句",
+          "文",
+          "段落"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "前後の文・段落"
+        ],
+        "prohibited_inferences": [
+          "語の検出だけで談話関係を確定する"
+        ],
+        "human_review_when": [
+          "複数の接続関係が成り立つ場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.elementary-japanese-guide",
+          "supports": [
+            "接続する語句の役割を学習事項とすること"
+          ],
+          "locator": "第3学年及び第4学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.word-order-and-dependency",
+      "kind": "grammar_rule",
+      "title_ja": "語句の係り方と語順",
+      "aliases": [
+        "語順",
+        "係り方"
+      ],
+      "search_terms": [
+        "語順",
+        "係り方",
+        "係り受け",
+        "文の組立て",
+        "修飾範囲"
+      ],
+      "tags": [
+        "grammar",
+        "word_order",
+        "dependency"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "文の組立て",
+      "definition_ja": "文中の語句の係り方と語順は、意味の伝わり方や解釈に関係する。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "variation",
+          "label_ja": "語順の変化",
+          "statement_ja": "語順を入れ替えられる場合でも、焦点や修飾範囲が変わり得るため、文法性と自然さを分けて判断する。",
+          "scope": "現代日本語の文",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "analysis_axes": [
+          "係り方",
+          "語順",
+          "意味の伝わり方"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "発話の焦点"
+        ],
+        "prohibited_inferences": [
+          "標準語順と異なる文を直ちに誤文とする"
+        ],
+        "human_review_when": [
+          "焦点・文学的倒置・会話上の語順を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.elementary-japanese-guide",
+          "supports": [
+            "文中の語句の係り方や語順を学習事項とすること"
+          ],
+          "locator": "第5学年及び第6学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.word-classification",
+      "kind": "grammar_rule",
+      "title_ja": "単語の類別",
+      "aliases": [
+        "語の分類",
+        "品詞分類"
+      ],
+      "search_terms": [
+        "単語",
+        "単語の類別",
+        "語の分類",
+        "品詞"
+      ],
+      "tags": [
+        "grammar",
+        "word_class",
+        "junior_high"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "単語の働き",
+      "definition_ja": "単語を、文中での働きや形の特徴に基づいて類別して捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "context_rule",
+          "label_ja": "用法による分類",
+          "statement_ja": "同じ表記の語でも用法によって分類が変わり得るため、語だけを切り出して一意に決めない。",
+          "scope": "学校文法の単語類別",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "classification_basis": [
+          "文中での働き",
+          "形の特徴"
+        ],
+        "individual_word_classes_included": false
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文中の用法",
+          "形態素解析"
+        ],
+        "prohibited_inferences": [
+          "文脈なしの同形語を一意に分類する"
+        ],
+        "human_review_when": [
+          "複合表現・同形異品詞を扱う場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.junior-high-japanese-guide",
+          "supports": [
+            "単語の類別を学習事項とすること"
+          ],
+          "locator": "第1学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.word-inflection",
+      "kind": "grammar_rule",
+      "title_ja": "単語の活用",
+      "aliases": [
+        "活用",
+        "語形変化"
+      ],
+      "search_terms": [
+        "活用",
+        "活用形",
+        "語形変化",
+        "活用語"
+      ],
+      "tags": [
+        "grammar",
+        "inflection",
+        "junior_high"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "単語の働き",
+      "definition_ja": "単語の中には、文中での用法に応じて語形が変化するものがあり、その仕組みを活用として捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "context_rule",
+          "label_ja": "活用形の認定",
+          "statement_ja": "活用形は後続語や文中の働きと合わせて判断し、表面形だけで確定しない。",
+          "scope": "学校文法の活用",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "analysis_requires": [
+          "語形",
+          "後続語",
+          "文中の働き"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "活用辞書"
+        ],
+        "prohibited_inferences": [
+          "表面形だけで活用形を確定する"
+        ],
+        "human_review_when": [
+          "複数の解析候補がある場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.junior-high-japanese-guide",
+          "supports": [
+            "単語の活用を学習事項とすること"
+          ],
+          "locator": "第2学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.particle-function",
+      "kind": "grammar_rule",
+      "title_ja": "助詞の働き",
+      "aliases": [
+        "助詞"
+      ],
+      "search_terms": [
+        "助詞",
+        "格助詞",
+        "係助詞",
+        "接続助詞",
+        "終助詞",
+        "助詞の働き"
+      ],
+      "tags": [
+        "grammar",
+        "particle",
+        "junior_high"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "単語の働き",
+      "definition_ja": "助詞が語句に付き、語句相互の関係や取り立て、話し手の態度などを表す働きを捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "polyfunctionality",
+          "label_ja": "複数の働き",
+          "statement_ja": "同じ形の助詞が複数の働きを持つため、前後の語句と文脈を用いて候補を絞る。",
+          "scope": "現代日本語の助詞",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "individual_class_definition_status": "not_catalogued"
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "形態素解析"
+        ],
+        "prohibited_inferences": [
+          "形の一致だけで助詞の用法を確定する"
+        ],
+        "human_review_when": [
+          "引用・終助詞・係助詞など複数候補がある場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.junior-high-japanese-guide",
+          "supports": [
+            "助詞の働きを学習事項とすること"
+          ],
+          "locator": "第2学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.auxiliary-function",
+      "kind": "grammar_rule",
+      "title_ja": "助動詞の働き",
+      "aliases": [
+        "助動詞"
+      ],
+      "search_terms": [
+        "助動詞",
+        "受身",
+        "使役",
+        "推量",
+        "否定",
+        "助動詞の働き"
+      ],
+      "tags": [
+        "grammar",
+        "auxiliary",
+        "junior_high"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "単語の働き",
+      "definition_ja": "助動詞が用言などに付き、文法的な意味を添える働きを捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "context_rule",
+          "label_ja": "意味の候補",
+          "statement_ja": "同じ形が複数の意味を持つ場合があるため、前後関係と話者の意図を用いて判断する。",
+          "scope": "現代日本語の助動詞",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "example_semantic_domains": [
+          "受身",
+          "使役",
+          "推量",
+          "否定"
+        ],
+        "individual_auxiliary_definitions_included": false
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "形態素解析",
+          "発話意図"
+        ],
+        "prohibited_inferences": [
+          "表面形だけで助動詞の意味を確定する"
+        ],
+        "human_review_when": [
+          "意味候補が複数ある場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.junior-high-japanese-guide",
+          "supports": [
+            "助動詞の働きを学習事項とすること"
+          ],
+          "locator": "第2学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.grammar.sentence-components",
+      "kind": "grammar_rule",
+      "title_ja": "文の成分の順序と照応",
+      "aliases": [
+        "文の成分",
+        "照応"
+      ],
+      "search_terms": [
+        "文の成分",
+        "照応",
+        "文の構成",
+        "成分の順序",
+        "主語と述語の照応"
+      ],
+      "tags": [
+        "grammar",
+        "sentence_components",
+        "agreement"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "grammar",
+      "category_ja": "文の組立て",
+      "definition_ja": "文の成分の順序や、主語と述語などの照応を、意味を明確にする文の構成として捉える。",
+      "definition_status": "editorial_synthesis",
+      "rules": [
+        {
+          "type": "variation",
+          "label_ja": "倒置・省略",
+          "statement_ja": "倒置、省略、長い修飾部を含む文は標準的な順序と異なっても成立し得る。",
+          "scope": "現代日本語の文",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "source_scope": "curriculum_statement",
+        "analysis_axes": [
+          "成分の順序",
+          "照応",
+          "文の構成"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文全体",
+          "前後の文脈"
+        ],
+        "prohibited_inferences": [
+          "文学的倒置や会話上の省略を誤りと断定する"
+        ],
+        "human_review_when": [
+          "倒置・省略・長い修飾部を含む場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.mext.junior-high-japanese-guide",
+          "supports": [
+            "文の成分の順序や照応を学習事項とすること"
+          ],
+          "locator": "第2学年〔知識及び技能〕(1)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge.orthography.kana.verb-iu",
+      "kind": "orthography_rule",
+      "title_ja": "動詞『言う』の仮名遣い",
+      "aliases": [
+        "いうとゆう"
+      ],
+      "search_terms": [
+        "言う",
+        "いう",
+        "ゆう",
+        "動詞いう",
+        "現代仮名遣い"
+      ],
+      "tags": [
+        "orthography",
+        "modern_kana",
+        "verb"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "現代仮名遣い",
+      "definition_ja": "動詞『言う』は、現代仮名遣いでは『いう』と書く。",
+      "rules": [
+        {
+          "type": "official_spelling",
+          "label_ja": "動詞の表記",
+          "statement_ja": "動詞『言う』の読みを仮名で表す場合は『いう』とし、発音に引かれて一律に『ゆう』としない。",
+          "scope": "動詞『言う』",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "lexeme": "言う",
+        "official_kana": "いう",
+        "speech_form_candidate": "ゆう",
+        "scope_excludes": [
+          "人名・固有名詞などの別語"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": false,
+        "required_inputs": [
+          "語彙・品詞の同定"
+        ],
+        "prohibited_inferences": [
+          "固有名詞などの『ゆう』を動詞『言う』へ直す"
+        ],
+        "human_review_when": [
+          "語の同定ができない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.modern-kana",
+          "supports": [
+            "動詞『いう』の仮名遣い"
+          ],
+          "locator": "本文 動詞『いう』の特例"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.scope",
+      "kind": "orthography_rule",
+      "title_ja": "『送り仮名の付け方』の適用範囲",
+      "aliases": [
+        "送り仮名の適用範囲"
+      ],
+      "search_terms": [
+        "送り仮名",
+        "適用範囲",
+        "よりどころ",
+        "常用漢字表",
+        "固有名詞"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "scope"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "『送り仮名の付け方』は、常用漢字表の音訓によって現代の国語を書き表す場合のよりどころである。",
+      "rules": [
+        {
+          "type": "scope",
+          "label_ja": "適用外を含む範囲",
+          "statement_ja": "専門分野、個人の表記、固有名詞、漢字を記号的に用いる場合まで一律に及ぼさない。",
+          "scope": "常用漢字表の音訓による現代国語の表記",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "basis": "常用漢字表の音訓",
+        "excluded_or_discretionary_domains": [
+          "専門分野",
+          "個人の表記",
+          "固有名詞",
+          "漢字の記号的使用"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "文書の分野",
+          "固有名詞かどうか"
+        ],
+        "prohibited_inferences": [
+          "適用外の表記を誤りと断定する"
+        ],
+        "human_review_when": [
+          "適用分野が不明な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "適用範囲"
+          ],
+          "locator": "前書き 一〜三"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.inflecting-word",
+      "kind": "orthography_rule",
+      "title_ja": "活用のある語の送り仮名",
+      "aliases": [
+        "送り仮名通則1"
+      ],
+      "search_terms": [
+        "活用語尾",
+        "送り仮名通則1",
+        "動詞の送り仮名",
+        "形容詞の送り仮名"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "inflection"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "活用のある語は、原則として活用語尾を送る。",
+      "rules": [
+        {
+          "type": "basic_rule",
+          "label_ja": "通則1の本則",
+          "statement_ja": "活用語尾を送り仮名とする。ただし告示に掲げる例外・許容を別に照合する。",
+          "scope": "単独の活用語",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 1,
+        "requires_inflection_analysis": true,
+        "status_groups": [
+          {
+            "status": "本則",
+            "rule_ja": "通則2を適用する語を除き、活用語尾を送る。",
+            "examples": [
+              "書く",
+              "実る",
+              "催す",
+              "生きる",
+              "考える",
+              "助ける",
+              "荒い",
+              "潔い",
+              "賢い",
+              "濃い",
+              "主だ"
+            ]
+          },
+          {
+            "status": "例外",
+            "patterns": [
+              {
+                "condition_ja": "語幹が『し』で終わる形容詞は、『し』から送る。",
+                "examples": [
+                  "著しい",
+                  "惜しい",
+                  "悔しい",
+                  "恋しい",
+                  "珍しい"
+                ]
+              },
+              {
+                "condition_ja": "活用語尾の前に『か』『やか』『らか』を含む形容動詞は、その音節から送る。",
+                "examples": [
+                  "暖かだ",
+                  "静かだ",
+                  "穏やかだ",
+                  "健やかだ",
+                  "明らかだ",
+                  "滑らかだ"
+                ]
+              },
+              {
+                "condition_ja": "告示で送り方が個別に示される語。",
+                "examples": [
+                  "味わう",
+                  "関わる",
+                  "異なる",
+                  "捕まる",
+                  "大きい",
+                  "少ない",
+                  "同じだ",
+                  "幸せだ"
+                ]
+              }
+            ]
+          },
+          {
+            "status": "許容",
+            "form_pairs": [
+              {
+                "basic": "表す",
+                "permitted": [
+                  "表わす"
+                ]
+              },
+              {
+                "basic": "著す",
+                "permitted": [
+                  "著わす"
+                ]
+              },
+              {
+                "basic": "現れる",
+                "permitted": [
+                  "現われる"
+                ]
+              },
+              {
+                "basic": "行う",
+                "permitted": [
+                  "行なう"
+                ]
+              },
+              {
+                "basic": "断る",
+                "permitted": [
+                  "断わる"
+                ]
+              },
+              {
+                "basic": "賜る",
+                "permitted": [
+                  "賜わる"
+                ]
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "label_ja": "注意",
+            "statement_ja": "語幹と活用語尾との区別が付かない動詞は、語全体の読みを送る。",
+            "examples": [
+              "着る",
+              "寝る",
+              "来る"
+            ]
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "形態素解析",
+          "活用形",
+          "告示の例外・許容"
+        ],
+        "prohibited_inferences": [
+          "活用語尾だけで全語を処理する"
+        ],
+        "human_review_when": [
+          "例外・許容・語幹交替が関係する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則1の本則",
+            "通則1の例外",
+            "通則1の許容",
+            "通則1の注意"
+          ],
+          "locator": "本文 単独の語―1 活用のある語―通則1"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.derivation",
+      "kind": "orthography_rule",
+      "title_ja": "派生・対応関係を考慮する送り仮名",
+      "aliases": [
+        "送り仮名通則2"
+      ],
+      "search_terms": [
+        "送り仮名通則2",
+        "派生語",
+        "対応する語",
+        "送り始め"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "derivation"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "活用語には、派生語や対応する語との関係から、活用語尾より前の部分から送るものがある。",
+      "rules": [
+        {
+          "type": "conditional_rule",
+          "label_ja": "通則2",
+          "statement_ja": "一律の文字数ではなく、派生・対応関係と通則2の本則・許容・注意を確認する。",
+          "scope": "派生・対応関係のある活用語",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 2,
+        "analysis_basis": [
+          "派生関係",
+          "対応関係",
+          "個別語例"
+        ],
+        "status_groups": [
+          {
+            "status": "本則",
+            "rule_ja": "活用語尾以外の部分に他の語を含む語は、含まれている語の送り仮名の付け方によって送る。",
+            "examples": [
+              {
+                "written": "動かす",
+                "included_word": "動く"
+              },
+              {
+                "written": "語らう",
+                "included_word": "語る"
+              },
+              {
+                "written": "生まれる",
+                "included_word": "生む"
+              },
+              {
+                "written": "晴れやかだ",
+                "included_word": "晴れる"
+              },
+              {
+                "written": "起こる",
+                "included_word": "起きる"
+              },
+              {
+                "written": "混ざる",
+                "included_word": "混ぜる"
+              },
+              {
+                "written": "重んずる",
+                "included_word": "重い"
+              },
+              {
+                "written": "悲しむ",
+                "included_word": "悲しい"
+              },
+              {
+                "written": "確かめる",
+                "included_word": "確かだ"
+              },
+              {
+                "written": "汗ばむ",
+                "included_word": "汗"
+              },
+              {
+                "written": "春めく",
+                "included_word": "春"
+              },
+              {
+                "written": "男らしい",
+                "included_word": "男"
+              }
+            ]
+          },
+          {
+            "status": "許容",
+            "condition_ja": "読み間違えるおそれのない場合は、活用語尾以外の部分の送り仮名を省くことができる。",
+            "form_pairs": [
+              {
+                "basic": "浮かぶ",
+                "permitted": [
+                  "浮ぶ"
+                ]
+              },
+              {
+                "basic": "生まれる",
+                "permitted": [
+                  "生れる"
+                ]
+              },
+              {
+                "basic": "押さえる",
+                "permitted": [
+                  "押える"
+                ]
+              },
+              {
+                "basic": "捕らえる",
+                "permitted": [
+                  "捕える"
+                ]
+              },
+              {
+                "basic": "晴れやかだ",
+                "permitted": [
+                  "晴やかだ"
+                ]
+              },
+              {
+                "basic": "聞こえる",
+                "permitted": [
+                  "聞える"
+                ]
+              },
+              {
+                "basic": "終わる",
+                "permitted": [
+                  "終る"
+                ]
+              },
+              {
+                "basic": "変わる",
+                "permitted": [
+                  "変る"
+                ]
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "label_ja": "注意",
+            "statement_ja": "次の語は括弧内の語を含むものとは考えず、通則1による。",
+            "examples": [
+              {
+                "written": "明るい",
+                "not_included_word": "明ける"
+              },
+              {
+                "written": "荒い",
+                "not_included_word": "荒れる"
+              },
+              {
+                "written": "悔しい",
+                "not_included_word": "悔いる"
+              },
+              {
+                "written": "恋しい",
+                "not_included_word": "恋う"
+              }
+            ]
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語族・派生関係の辞書",
+          "告示の語例"
+        ],
+        "prohibited_inferences": [
+          "送り始めを文字数だけで決める"
+        ],
+        "human_review_when": [
+          "派生関係が不明な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則2の本則",
+            "通則2の許容",
+            "通則2の注意"
+          ],
+          "locator": "本文 単独の語―1 活用のある語―通則2"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.noninflecting-noun",
+      "kind": "orthography_rule",
+      "title_ja": "活用のない名詞の送り仮名",
+      "aliases": [
+        "送り仮名通則3"
+      ],
+      "search_terms": [
+        "送り仮名通則3",
+        "名詞の送り仮名",
+        "活用のない語"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "noun"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "活用のない単独の名詞は、原則として送り仮名を付けない。",
+      "rules": [
+        {
+          "type": "basic_rule",
+          "label_ja": "通則3",
+          "statement_ja": "通則4を適用する語を除き、単独の名詞には原則として送り仮名を付けない。告示に掲げる例外を別に照合する。",
+          "scope": "活用のない単独の名詞",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 3,
+        "default": "no_okurigana",
+        "status_groups": [
+          {
+            "status": "本則",
+            "rule_ja": "通則4を適用する語を除き、名詞は送り仮名を付けない。",
+            "examples": [
+              "月",
+              "鳥",
+              "花",
+              "山",
+              "男",
+              "女",
+              "彼",
+              "何"
+            ]
+          },
+          {
+            "status": "例外",
+            "patterns": [
+              {
+                "condition_ja": "告示に掲げる語は、最後の音節を送る。",
+                "examples": [
+                  "辺り",
+                  "勢い",
+                  "後ろ",
+                  "傍ら",
+                  "幸せ",
+                  "全て",
+                  "互い",
+                  "便り",
+                  "半ば",
+                  "災い"
+                ]
+              },
+              {
+                "condition_ja": "数を数える『つ』を含む名詞は、その『つ』を送る。",
+                "examples": [
+                  "一つ",
+                  "二つ",
+                  "三つ",
+                  "幾つ"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "品詞・語形成の判定",
+          "告示の語例"
+        ],
+        "prohibited_inferences": [
+          "全ての名詞から送り仮名を除く"
+        ],
+        "human_review_when": [
+          "転成名詞・慣用語との区別が必要な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則3の本則",
+            "通則3の例外"
+          ],
+          "locator": "本文 単独の語―2 活用のない語―通則3"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.deverbal-noun",
+      "kind": "orthography_rule",
+      "title_ja": "活用語から転じた名詞の送り仮名",
+      "aliases": [
+        "送り仮名通則4",
+        "転成名詞"
+      ],
+      "search_terms": [
+        "送り仮名通則4",
+        "転成名詞",
+        "動詞からできた名詞"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "deverbal_noun"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "活用のある語から転じた名詞は、原則として元の語の送り仮名の付け方による。",
+      "rules": [
+        {
+          "type": "basic_rule",
+          "label_ja": "通則4",
+          "statement_ja": "元の活用語との関係を確認し、告示に掲げる例外語・慣用上送らない語を別に照合する。",
+          "scope": "活用語から転じた名詞",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 4,
+        "basis": "source_inflecting_word",
+        "status_groups": [
+          {
+            "status": "本則",
+            "rule_ja": "活用のある語から転じた名詞と、活用のある語に『さ』『み』『げ』などの接尾語が付いた名詞は、元の語の送り仮名の付け方によって送る。",
+            "examples": [
+              "動き",
+              "恐れ",
+              "曇り",
+              "調べ",
+              "届け",
+              "願い",
+              "晴れ",
+              "当たり",
+              "代わり",
+              "問い",
+              "祭り",
+              "初め",
+              "暑さ",
+              "大きさ",
+              "正しさ",
+              "明るみ",
+              "重み",
+              "憎しみ",
+              "惜しげ"
+            ]
+          },
+          {
+            "status": "例外",
+            "rule_ja": "告示に掲げる語は送り仮名を付けない。",
+            "examples": [
+              "謡",
+              "氷",
+              "印",
+              "頂",
+              "帯",
+              "畳",
+              "恋",
+              "志",
+              "隣",
+              "話",
+              "光",
+              "舞",
+              "折",
+              "係",
+              "組",
+              "巻",
+              "割"
+            ]
+          },
+          {
+            "status": "許容",
+            "condition_ja": "読み間違えるおそれのない場合は、告示に示す形で送り仮名を省くことができる。",
+            "form_pairs": [
+              {
+                "basic": "曇り",
+                "permitted": [
+                  "曇"
+                ]
+              },
+              {
+                "basic": "届け",
+                "permitted": [
+                  "届"
+                ]
+              },
+              {
+                "basic": "願い",
+                "permitted": [
+                  "願"
+                ]
+              },
+              {
+                "basic": "晴れ",
+                "permitted": [
+                  "晴"
+                ]
+              },
+              {
+                "basic": "当たり",
+                "permitted": [
+                  "当り"
+                ]
+              },
+              {
+                "basic": "代わり",
+                "permitted": [
+                  "代り"
+                ]
+              },
+              {
+                "basic": "答え",
+                "permitted": [
+                  "答"
+                ]
+              },
+              {
+                "basic": "祭り",
+                "permitted": [
+                  "祭"
+                ]
+              },
+              {
+                "basic": "群れ",
+                "permitted": [
+                  "群"
+                ]
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "label_ja": "注意",
+            "statement_ja": "例外語でも、動詞の意識が残る用法では本則を適用する。",
+            "examples": [
+              {
+                "exception_use": "花の組",
+                "basic_rule_use": "活字の組みが緩む"
+              }
+            ]
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "元の活用語",
+          "語形成情報",
+          "告示の例外"
+        ],
+        "prohibited_inferences": [
+          "同形の一般名詞を転成名詞と断定する"
+        ],
+        "human_review_when": [
+          "元の語との関係が不明な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則4の本則",
+            "通則4の例外",
+            "通則4の許容",
+            "通則4の注意"
+          ],
+          "locator": "本文 単独の語―2 活用のない語―通則4"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.function-words",
+      "kind": "orthography_rule",
+      "title_ja": "副詞・連体詞・接続詞の送り仮名",
+      "aliases": [
+        "送り仮名通則5"
+      ],
+      "search_terms": [
+        "送り仮名通則5",
+        "副詞",
+        "連体詞",
+        "接続詞"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "function_words"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "副詞・連体詞・接続詞の送り仮名は、通則5の本則と例外に従う。",
+      "rules": [
+        {
+          "type": "lexical_rule",
+          "label_ja": "通則5",
+          "statement_ja": "品詞名だけで送り位置を決めず、通則5の本則と語ごとの例外を照合する。",
+          "scope": "副詞・連体詞・接続詞",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 5,
+        "parts_of_speech": [
+          "副詞",
+          "連体詞",
+          "接続詞"
+        ],
+        "status_groups": [
+          {
+            "status": "本則",
+            "rule_ja": "副詞・連体詞・接続詞は、最後の音節を送る。",
+            "examples": [
+              "必ず",
+              "更に",
+              "少し",
+              "既に",
+              "再び",
+              "全く",
+              "最も",
+              "来る",
+              "去る",
+              "及び",
+              "且つ",
+              "但し"
+            ]
+          },
+          {
+            "status": "例外",
+            "patterns": [
+              {
+                "condition_ja": "告示に個別の送り方が示される語。",
+                "examples": [
+                  "明くる",
+                  "大いに",
+                  "直ちに",
+                  "並びに",
+                  "若しくは"
+                ]
+              },
+              {
+                "condition_ja": "送り仮名を付けない語。",
+                "examples": [
+                  "又"
+                ]
+              },
+              {
+                "condition_ja": "他の語を含む語は、含まれている語の送り仮名の付け方によって送る。",
+                "examples": [
+                  {
+                    "written": "併せて",
+                    "included_word": "併せる"
+                  },
+                  {
+                    "written": "恐らく",
+                    "included_word": "恐れる"
+                  },
+                  {
+                    "written": "従って",
+                    "included_word": "従う"
+                  },
+                  {
+                    "written": "絶えず",
+                    "included_word": "絶える"
+                  },
+                  {
+                    "written": "例えば",
+                    "included_word": "例える"
+                  },
+                  {
+                    "written": "少なくとも",
+                    "included_word": "少ない"
+                  },
+                  {
+                    "written": "互いに",
+                    "included_word": "互い"
+                  },
+                  {
+                    "written": "必ずしも",
+                    "included_word": "必ず"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "品詞判定",
+          "告示の語例"
+        ],
+        "prohibited_inferences": [
+          "品詞だけで送り位置を確定する"
+        ],
+        "human_review_when": [
+          "品詞・例外語の判定が一意でない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則5の本則",
+            "通則5の例外"
+          ],
+          "locator": "本文 単独の語―2 活用のない語―通則5"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.compound-basic",
+      "kind": "orthography_rule",
+      "title_ja": "複合語の送り仮名",
+      "aliases": [
+        "送り仮名通則6"
+      ],
+      "search_terms": [
+        "送り仮名通則6",
+        "複合語",
+        "複合語の送り仮名",
+        "構成部分"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "compound"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "複合語の送り仮名は、原則として各構成部分を単独の語として書く場合の送り仮名による。",
+      "rules": [
+        {
+          "type": "compositional_rule",
+          "label_ja": "通則6",
+          "statement_ja": "構成部分ごとの送り仮名を本則とし、読み間違えるおそれのない場合の許容形と、通則7の慣用語を別に照合する。",
+          "scope": "複合語",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 6,
+        "basis": "component_words",
+        "related_rule": 7,
+        "status_groups": [
+          {
+            "status": "本則",
+            "rule_ja": "通則7を適用する語を除き、複合語を表す各漢字の音訓を単独の語に用いた場合の送り仮名の付け方による。",
+            "examples": [
+              "書き抜く",
+              "流れ込む",
+              "申し込む",
+              "打ち合わせる",
+              "長引く",
+              "旅立つ",
+              "聞き苦しい",
+              "薄暗い",
+              "若々しい",
+              "気軽だ",
+              "石橋",
+              "後ろ姿",
+              "花便り",
+              "田植え",
+              "封切り",
+              "雨上がり",
+              "生き物",
+              "預かり金",
+              "売り上げ",
+              "取り扱い",
+              "申し込み",
+              "長生き",
+              "有り難み"
+            ]
+          },
+          {
+            "status": "許容",
+            "condition_ja": "読み間違えるおそれのない場合は、告示に示す形で送り仮名を省くことができる。",
+            "form_pairs": [
+              {
+                "basic": "書き抜く",
+                "permitted": [
+                  "書抜く"
+                ]
+              },
+              {
+                "basic": "申し込む",
+                "permitted": [
+                  "申込む"
+                ]
+              },
+              {
+                "basic": "打ち合わせる",
+                "permitted": [
+                  "打ち合せる",
+                  "打合せる"
+                ]
+              },
+              {
+                "basic": "田植え",
+                "permitted": [
+                  "田植"
+                ]
+              },
+              {
+                "basic": "雨上がり",
+                "permitted": [
+                  "雨上り"
+                ]
+              },
+              {
+                "basic": "売り上げ",
+                "permitted": [
+                  "売上げ",
+                  "売上"
+                ]
+              },
+              {
+                "basic": "取り扱い",
+                "permitted": [
+                  "取扱い",
+                  "取扱"
+                ]
+              },
+              {
+                "basic": "乗り換え",
+                "permitted": [
+                  "乗換え",
+                  "乗換"
+                ]
+              },
+              {
+                "basic": "立ち居振る舞い",
+                "permitted": [
+                  "立ち居振舞い",
+                  "立ち居振舞",
+                  "立居振舞"
+                ]
+              },
+              {
+                "basic": "呼び出し電話",
+                "permitted": [
+                  "呼出し電話",
+                  "呼出電話"
+                ]
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "label_ja": "注意",
+            "statement_ja": "複合語の一部を仮名で書く場合も、他の部分は単独の語の送り仮名の付け方による。",
+            "examples": [
+              "こけら落とし",
+              "さび止め",
+              "洗いざらし",
+              "打ちひも"
+            ]
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "語の構成境界",
+          "各構成語の表記",
+          "慣用語一覧"
+        ],
+        "prohibited_inferences": [
+          "文字列の任意位置を構成境界とみなす"
+        ],
+        "human_review_when": [
+          "語構成・慣用が不明な場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則6の本則",
+            "通則6の許容",
+            "通則6の注意"
+          ],
+          "locator": "本文 複合の語―通則6"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.compound-customary",
+      "kind": "orthography_rule",
+      "title_ja": "慣用によって送り仮名を付けない複合語",
+      "aliases": [
+        "送り仮名通則7"
+      ],
+      "search_terms": [
+        "送り仮名通則7",
+        "慣用",
+        "送り仮名を付けない複合語"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "compound",
+        "conventional_spelling"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "複合語のうち、慣用が固定しているものには送り仮名を付けないものがある。",
+      "rules": [
+        {
+          "type": "customary_analogy",
+          "label_ja": "通則7",
+          "statement_ja": "慣用が固定している複合名詞は送り仮名を付けない。掲出語は網羅的な閉集合ではなく、慣用が固定していると認められる同類語にも類推できる。判断しにくい場合は通則6を適用する。",
+          "scope": "慣用が固定した複合名詞",
+          "machine_verifiable": false,
+          "claim_status": "editorial_synthesis"
+        }
+      ],
+      "structured_data": {
+        "rule_number": 7,
+        "application_mode": "customary_examples_and_analogous_terms",
+        "listed_examples_are_exhaustive": false,
+        "analogy_allowed_when": "慣用が固定していると認められる場合",
+        "fallback_when_uncertain": {
+          "rule_number": 6,
+          "requires_human_review": true
+        },
+        "status_groups": [
+          {
+            "status": "通則6の適用対象外",
+            "status_basis": "editorial_synthesis",
+            "relative_to_rule": 6,
+            "rule_ja": "慣用が固定している複合名詞は送り仮名を付けない。",
+            "example_groups": [
+              {
+                "category_ja": "地位・身分・役職等の名",
+                "examples": [
+                  "関取",
+                  "頭取",
+                  "取締役",
+                  "事務取扱"
+                ]
+              },
+              {
+                "category_ja": "工芸品の名に用いる『織』『染』『塗』等",
+                "examples": [
+                  "博多織",
+                  "型絵染",
+                  "春慶塗",
+                  "鎌倉彫",
+                  "備前焼"
+                ]
+              },
+              {
+                "category_ja": "特定の領域で慣用が固定したその他の語",
+                "examples": [
+                  "書留",
+                  "気付",
+                  "切手",
+                  "消印",
+                  "小包",
+                  "振替",
+                  "踏切",
+                  "請負",
+                  "売値",
+                  "両替",
+                  "割引",
+                  "組合",
+                  "手当",
+                  "作付面積",
+                  "売上高",
+                  "貸付金",
+                  "申込書"
+                ]
+              },
+              {
+                "category_ja": "一般に慣用が固定した語",
+                "examples": [
+                  "奥書",
+                  "木立",
+                  "子守",
+                  "献立",
+                  "試合",
+                  "場合",
+                  "番組",
+                  "日付",
+                  "物置",
+                  "物語",
+                  "役割",
+                  "夕立",
+                  "割合",
+                  "合図",
+                  "植木",
+                  "置物",
+                  "織物",
+                  "立場",
+                  "建物",
+                  "受付",
+                  "受取",
+                  "浮世絵"
+                ]
+              }
+            ]
+          }
+        ],
+        "notes": [
+          {
+            "label_ja": "類推",
+            "statement_ja": "『博多織』『売上高』などの例で示される可変部分を他の漢字に置き換えた同類語にも適用できる。"
+          }
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "告示の語例",
+          "確認済みの慣用表記",
+          "語の使用領域"
+        ],
+        "prohibited_inferences": [
+          "慣用が固定している根拠なしに任意の複合語へ適用する",
+          "掲出語にないことだけを理由に通則7の対象外と断定する"
+        ],
+        "human_review_when": [
+          "同類語への類推が妥当か判断しにくい場合",
+          "慣用が固定しているか不明な場合。その場合は通則6を適用する"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "通則6の適用対象から通則7を適用する語を除くこと",
+            "通則7の慣用語例",
+            "掲出語が網羅的でないこと",
+            "同類語への類推",
+            "判断困難時の通則6適用"
+          ],
+          "locator": "本文 複合の語―通則7、注意(1)・(2)"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.okurigana.basic-exception-permitted",
+      "kind": "orthography_rule",
+      "title_ja": "送り仮名の本則・例外・許容",
+      "aliases": [
+        "本則・例外・許容"
+      ],
+      "search_terms": [
+        "本則",
+        "例外",
+        "許容",
+        "送り仮名の見方",
+        "複数の正しい表記"
+      ],
+      "tags": [
+        "orthography",
+        "okurigana",
+        "rule_status"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "送り仮名",
+      "definition_ja": "『送り仮名の付け方』の通則には、本則に加えて必要に応じて例外と許容が設けられている。",
+      "rules": [
+        {
+          "type": "rule_precedence",
+          "label_ja": "本則・例外・許容の保持",
+          "statement_ja": "許容形を誤りとして排除せず、判断しにくい場合は本則による。",
+          "scope": "『送り仮名の付け方』全体",
+          "machine_verifiable": true,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "statuses": [
+          {
+            "id": "basic",
+            "label_ja": "本則"
+          },
+          {
+            "id": "exception",
+            "label_ja": "例外"
+          },
+          {
+            "id": "permitted",
+            "label_ja": "許容"
+          }
+        ],
+        "fallback": "本則"
+      },
+      "machine_use": {
+        "judgement_level": "exact",
+        "candidate_only": false,
+        "required_inputs": [
+          "該当する通則",
+          "語例の状態"
+        ],
+        "prohibited_inferences": [
+          "許容形を誤りと判定する",
+          "本則・例外・許容を一つの正誤値へ潰す"
+        ],
+        "human_review_when": [
+          "該当する通則・語例が一意でない場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.okurigana",
+          "supports": [
+            "本則・例外・許容の見方"
+          ],
+          "locator": "『本文』の見方及び使い方 二・五"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kanji.government-writing-standard",
+      "kind": "orthography_rule",
+      "title_ja": "公用文における常用漢字表の使用",
+      "aliases": [
+        "公用文の漢字使用"
+      ],
+      "search_terms": [
+        "常用漢字表",
+        "公用文",
+        "漢字使用",
+        "漢字の使い方"
+      ],
+      "tags": [
+        "orthography",
+        "official_writing",
+        "kanji"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "公用文の表記",
+      "definition_ja": "公用文では、漢字の使用を常用漢字表に基づくことを原則とする。",
+      "rules": [
+        {
+          "type": "scope",
+          "label_ja": "公用文の原則",
+          "statement_ja": "文学作品・固有名詞・専門分野の漢字使用へ、公用文の原則を一律に強制しない。",
+          "scope": "公用文",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "document_domain": "公用文",
+        "basis": "常用漢字表",
+        "universal_prohibition": false
+      },
+      "machine_use": {
+        "judgement_level": "partial",
+        "candidate_only": true,
+        "required_inputs": [
+          "文書の目的・分野",
+          "常用漢字表"
+        ],
+        "prohibited_inferences": [
+          "表外字を創作・固有名詞・専門文書から一律排除する"
+        ],
+        "human_review_when": [
+          "公用文以外へ適用する場合"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.public-writing",
+          "supports": [
+            "公用文の漢字使用の原則"
+          ],
+          "locator": "I 表記の原則 1 漢字の使い方"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    },
+    {
+      "id": "knowledge.orthography.kanji.readability-kana-ruby",
+      "kind": "orthography_rule",
+      "title_ja": "読み手に配慮した仮名書き・振り仮名",
+      "aliases": [
+        "読みやすさのための振り仮名"
+      ],
+      "search_terms": [
+        "振り仮名",
+        "仮名書き",
+        "読み手への配慮",
+        "広報文",
+        "難読語"
+      ],
+      "tags": [
+        "orthography",
+        "readability",
+        "ruby",
+        "official_writing"
+      ],
+      "regions": [
+        "JP"
+      ],
+      "languages": [
+        "ja"
+      ],
+      "last_verified_at": "2026-09-01",
+      "category": "orthography",
+      "category_ja": "読みやすい表記",
+      "definition_ja": "広く一般に向けた解説・広報では、読み手に配慮して仮名書きや振り仮名を用いることができる。",
+      "rules": [
+        {
+          "type": "reader_accommodation",
+          "label_ja": "読み手への配慮",
+          "statement_ja": "常用漢字表に形式的に合うことだけを理由に、仮名書きや振り仮名を誤りとしない。",
+          "scope": "広く一般に向けた解説・広報",
+          "machine_verifiable": false,
+          "claim_status": "editorial_guardrail"
+        }
+      ],
+      "structured_data": {
+        "options": [
+          "仮名書き",
+          "振り仮名"
+        ],
+        "decision_factors": [
+          "対象読者",
+          "読みやすさ",
+          "文書目的"
+        ]
+      },
+      "machine_use": {
+        "judgement_level": "human_review",
+        "candidate_only": true,
+        "required_inputs": [
+          "対象読者",
+          "文書目的",
+          "確定した読み"
+        ],
+        "prohibited_inferences": [
+          "仮名書き・振り仮名を誤りと判定する",
+          "未知語の読みを推測する"
+        ],
+        "human_review_when": [
+          "全件。読みやすさは対象読者に依存する"
+        ]
+      },
+      "source_refs": [
+        {
+          "source_id": "src.bunka.public-writing",
+          "supports": [
+            "読み手に配慮した仮名書き・振り仮名"
+          ],
+          "locator": "I-1 ただし書"
+        }
+      ],
+      "definition_status": "editorial_synthesis"
+    }
+  ]
+}

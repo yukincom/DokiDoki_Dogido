@@ -136,6 +136,23 @@ class AllowedSpeechLabelsTests(unittest.TestCase):
         # enforce キーが無い旧経路は白リスト未適用
         self.assertTrue(is_style_acceptable("player_chat", "ゾンビがおるで！", {}))
 
+    def test_style_rejects_dismissive_companion_endings(self) -> None:
+        self.assertFalse(
+            is_style_acceptable(
+                "player_chat",
+                "暗いところで一人やないやろ？オレ、隣にいてるで。ほっとけや",
+                {},
+            )
+        )
+        self.assertFalse(is_style_acceptable("player_chat", "もう、あっち行ってや", {}))
+        self.assertTrue(
+            is_style_acceptable(
+                "player_chat",
+                "そんな石はいまはほっといて、いっしょに先へ行こか",
+                {},
+            )
+        )
+
     def test_passive_observation_allows_any_observed_types(self) -> None:
         """特定種専用ではなく、渡した type id をすべて label 化する。"""
         labels = build_allowed_speech_labels(
@@ -339,6 +356,7 @@ class PlayerChatPromptStanceTests(unittest.TestCase):
         content = messages[1]["content"]
         self.assertIn("スタンス: none", content)
         self.assertIn("いまの答え方:", content)
+        self.assertIn("プレイヤーを突き放さず", content)
         self.assertNotIn("カタログからの話題ヒント", content)
         # 規則 bullet はスタンス中心で少なめ
         rule_lines = [line for line in content.splitlines() if line.startswith("- ")]

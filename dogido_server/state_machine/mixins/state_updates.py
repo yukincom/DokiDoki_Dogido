@@ -93,6 +93,18 @@ class StateUpdatesMixin:
         if unseen_auditory_threats:
             self.state.last_non_silent_at = now
             self.state.last_audio_threat_at = now
+            if not event.visual_threats:
+                heard_hostiles: list[str] = []
+                for threat in unseen_auditory_threats:
+                    resolved = self._resolve_hearing_mob_type(
+                        threat.label,
+                        getattr(threat, "sound_event", None),
+                    )
+                    if resolved and resolved not in heard_hostiles:
+                        heard_hostiles.append(resolved)
+                if heard_hostiles:
+                    # 直近メモを寄せ集めず、この戦闘で今聞こえた対象へ置き換える。
+                    self.state.last_confirmed_hostiles = heard_hostiles
             for threat in unseen_auditory_threats:
                 key = self._auditory_comment_key(threat)
                 state = self.state.auditory_presence_states.get(key)
@@ -319,8 +331,11 @@ class StateUpdatesMixin:
         # 移動前の敵を、新ディメンションで「視界から消えた＝討伐」と数えない。
         self.state.tracked_hostile_entities.clear()
         self.state.recent_kill_seen_at_by_type.clear()
+        self.state.recent_hostile_outcome_notes.clear()
+        self.state.announced_hostile_outcome_ids.clear()
         self.state.announced_hostile_counts.clear()
         self.state.burning_visual_keys.clear()
+        self.state.active_creeper_fuse_keys.clear()
         self.state.daylight_water_comment_keys.clear()
         self.state.screamed_visual_keys.clear()
         self.state.seen_visual_keys.clear()
@@ -596,7 +611,7 @@ class StateUpdatesMixin:
             self.state.suppression_until = None
 
     def _update_dialogue_kill_tracking(self, event: GameEvent, now: datetime) -> None:
-        """視界から消えた敵対を粗い撃破候補として数える（完全正確ではない）。"""
+        """新adapterの死亡観測を優先し、旧adapterだけ消失推定へ戻す。"""
         retention_ms = int(
             getattr(self.settings, "player_chat_name_correction_retention_ms", 10000)
         )
@@ -618,7 +633,73 @@ class StateUpdatesMixin:
                 and event.combat.recent_damage_ms <= self.settings.recent_damage_window_ms
             )
         )
-        if combatish:
+        explicit_outcomes = event.combat.hostile_outcomes
+        if explicit_outcomes is not None:
+            if event.event.name in {
+                EventName.HOSTILE_DEFEATED,
+                EventName.CREEPER_DETONATED,
+            }:
+                fresh_outcomes = list(self._fresh_immediate_hostile_outcomes)
+                if fresh_outcomes:
+                    notes: list[str] = []
+                    for outcome in fresh_outcomes:
+                        normalized = outcome.type.removeprefix("minecraft:").strip().lower()
+                        if not normalized:
+                            continue
+                        self.state.recent_kill_seen_at_by_type[normalized] = now
+                        label = (
+                            self._hostile_label(normalized)
+                            if hasattr(self, "_hostile_label")
+                            else normalized
+                        )
+                        if outcome.outcome == "player_kill":
+                            notes.append(f"{label}を倒した")
+                        elif outcome.outcome == "creeper_detonation":
+                            notes.append(f"{label}が爆発した")
+                        elif outcome.outcome == "explosion_death":
+                            notes.append(f"{label}が爆発で倒れた")
+                        else:
+                            notes.append(f"{label}が倒れた")
+                    if notes:
+                        self.state.pending_dialogue_notes.append(
+                            "、".join(dict.fromkeys(notes))
+                        )
+                self.state.announced_hostile_outcome_ids.update(
+                    self._hostile_outcome_key(outcome)
+                    for outcome in fresh_outcomes
+                )
+            elif event.event.name == EventName.COMBAT_ENDED:
+                # 即時イベントで話した個体は除き、未配送の結果だけを余韻へ渡す。
+                for outcome in explicit_outcomes:
+                    if (
+                        self._hostile_outcome_key(outcome)
+                        in self.state.announced_hostile_outcome_ids
+                    ):
+                        continue
+                    normalized = outcome.type.removeprefix("minecraft:").strip().lower()
+                    if not normalized:
+                        continue
+                    self.state.recent_kill_seen_at_by_type[normalized] = now
+                    label = (
+                        self._hostile_label(normalized)
+                        if hasattr(self, "_hostile_label")
+                        else normalized
+                    )
+                    if outcome.outcome == "player_kill":
+                        self.state.recent_kill_counts[normalized] = (
+                            self.state.recent_kill_counts.get(normalized, 0) + 1
+                        )
+                    elif outcome.outcome == "creeper_detonation":
+                        self.state.recent_hostile_outcome_notes.append(f"{label}が爆発した")
+                    elif outcome.outcome == "explosion_death":
+                        self.state.recent_hostile_outcome_notes.append(
+                            f"{label}が爆発で倒れた"
+                        )
+                    else:
+                        self.state.recent_hostile_outcome_notes.append(f"{label}が倒れた")
+        elif combatish:
+            # 旧adapterには死亡観測欄がない。互換のため消失推定を残すが、
+            # 新adapterの発言判定ではこの推定を撃破根拠に使わない。
             for entity_id, entity_type in self.state.tracked_hostile_entities.items():
                 if entity_id not in current:
                     key = entity_type or "敵"
@@ -671,6 +752,7 @@ class StateUpdatesMixin:
 
     def _flush_combat_dialogue_notes_from_mode(self, now: datetime | None) -> None:
         del now
+        explicit_note_added = False
         if self.state.recent_kill_counts:
             parts: list[str] = []
             for entity_type, count in sorted(self.state.recent_kill_counts.items(), key=lambda row: (-row[1], row[0])):
@@ -681,14 +763,20 @@ class StateUpdatesMixin:
                     parts.append(f"{label}を{count}体倒した")
             self.state.pending_dialogue_notes.append("、".join(parts[:4]))
             self.state.recent_kill_counts.clear()
-        elif self.state.last_confirmed_hostiles:
+            explicit_note_added = True
+        if self.state.recent_hostile_outcome_notes:
+            notes = list(dict.fromkeys(self.state.recent_hostile_outcome_notes))
+            self.state.pending_dialogue_notes.append("、".join(notes[:4]))
+            self.state.recent_hostile_outcome_notes.clear()
+            explicit_note_added = True
+        if not explicit_note_added and self.state.last_confirmed_hostiles:
             # 撃破が取れなくても交戦相手のメモは残す
             labels: list[str] = []
             for hostile in self.state.last_confirmed_hostiles[:3]:
                 labels.append(self._hostile_label(hostile) if hasattr(self, "_hostile_label") else hostile)
             if labels:
                 self.state.pending_dialogue_notes.append("、".join(labels) + "と交戦した")
-        else:
+        elif not explicit_note_added:
             self.state.pending_dialogue_notes.append("戦闘から抜けた")
         self.state.tracked_hostile_entities.clear()
 

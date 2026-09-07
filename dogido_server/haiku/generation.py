@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 import logging
 from typing import Any
 import unicodedata
@@ -83,6 +84,7 @@ class WorkshopRevisionResult:
     base_text: str | None = None
     edits: tuple[WorkshopLineEdit, ...] = ()
     edit_contract: str | None = None
+    retry_feedback: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +93,7 @@ class _LineAssessment:
     atom_ids: tuple[str, ...]
     meaning_retained: bool
     natural_japanese: bool
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,6 +287,11 @@ def generate_grounded_haiku(
             failure_reasons=expanded_failures,
             remaining_atoms=remaining_atoms,
             max_tokens=max_tokens,
+            assessment_comments={
+                index: assessment.reason
+                for index, assessment in assessments.items()
+                if index in failed_indices and assessment.reason
+            },
         )
         forced_failures = {}
         # 合格行には一切触れない。不足・既出候補も一試行として数えるが、
@@ -491,6 +499,11 @@ def generate_workshop_revision(
                 line_failures=last_failures,
                 global_failures=last_global_failures,
                 rejected_replacements=rejected_replacements,
+                assessment_comments={
+                    index: assessment.reason
+                    for index, assessment in assessments.items()
+                    if index in last_failures and assessment.reason
+                },
             )
             LOGGER.warning(
                 "haiku_workshop_revision result=retry attempt=%s stage=grounding lines=%s",
@@ -533,13 +546,17 @@ def generate_workshop_revision(
             base_text="\n".join(lines),
             edits=verified_edits,
             edit_contract=LINE_EDIT_CONTRACT_VERSION,
+            retry_feedback=deepcopy(request_details.get("edit_retry_feedback")),
         )
     LOGGER.warning(
         "haiku_workshop_revision result=fallback reason=max_attempts global=%s lines=%s",
         list(last_global_failures),
         {index: list(reasons) for index, reasons in sorted(last_failures.items())},
     )
-    return WorkshopRevisionResult(None, False, failure_reason="invalid_revision")
+    return WorkshopRevisionResult(
+        None, False, failure_reason="invalid_revision",
+        retry_feedback=deepcopy(request_details.get("edit_retry_feedback")),
+    )
 
 
 def _validate_workshop_lines(
@@ -665,20 +682,26 @@ def _set_workshop_retry_feedback(
     line_failures: dict[int, tuple[str, ...]],
     global_failures: tuple[str, ...],
     rejected_replacements: list[dict[str, object]],
+    assessment_comments: dict[int, str] | None = None,
 ) -> None:
-    """次の editor 呼び出しへ、コードで確定した失敗だけを閉じた型で渡す。"""
+    """失敗コードと照合モデルのコメントを区別し、次の editor へ返す。"""
 
     details["edit_retry_feedback"] = {
         "attempt": attempt,
         "global_failure_reasons": list(global_failures),
         "line_failures": [
-            {"line_index": index, "failure_reasons": list(reasons)}
+            {
+                "line_index": index,
+                "failure_reasons": list(reasons),
+                "assessment_comment": (assessment_comments or {}).get(index, ""),
+            }
             for index, reasons in sorted(line_failures.items())
         ],
     }
     # 直前の不合格案を再び「新案」として返させない。最大試行数が小さいため
     # 全履歴を保持しても prompt は肥大しない。
     details["rejected_replacements"] = list(rejected_replacements)
+    details["edit_retry_feedback"]["rejected_replacements"] = deepcopy(rejected_replacements)
 
 
 def _draft_lines(payload: dict[str, Any] | None) -> list[str] | None:
@@ -754,8 +777,13 @@ def _request_line_assessments(
         return {}, set()
     raw_assessments = payload.get("assessments") if isinstance(payload, dict) else None
     if not isinstance(raw_assessments, list):
-        # 単一行objectだった旧契約は受けない。新契約の配列が無ければ欠落扱い。
-        raw_assessments = []
+        # 一行だけの照合結果を最上位へ返すモデルもある。consumer が対象行と
+        # atom ID を同じ規則で検査できるので、一件の応答として扱う。
+        raw_assessments = (
+            [payload]
+            if isinstance(payload, dict) and isinstance(payload.get("line_index"), int)
+            else []
+        )
 
     eligible_ids = {atom.atom_id for atom in eligible_atoms}
     assessments: dict[int, _LineAssessment] = {}
@@ -783,6 +811,7 @@ def _request_line_assessments(
             atom_ids=atom_ids,
             meaning_retained=raw.get("meaning_retained") is True,
             natural_japanese=raw.get("natural_japanese") is True,
+            reason=raw["reason"].strip()[:240] if isinstance(raw.get("reason"), str) else "",
         )
     return assessments, reported_indices
 
@@ -873,6 +902,7 @@ def _regenerate_failed_lines(
     failure_reasons: dict[int, tuple[str, ...]],
     remaining_atoms: tuple[HaikuSourceAtom, ...],
     max_tokens: int | None,
+    assessment_comments: dict[int, str] | None = None,
 ) -> dict[int, str]:
     request_details = dict(details)
     current_lines: list[dict[str, object]] = []
@@ -900,6 +930,7 @@ def _regenerate_failed_lines(
                         else "within_range"
                     ),
                     "failure_reasons": list(failure_reasons.get(index, ())),
+                    "assessment_comment": (assessment_comments or {}).get(index, ""),
                 }
             )
         current_lines.append(row)
@@ -992,6 +1023,11 @@ def _duplicate_line_failures(lines: list[str]) -> dict[int, tuple[str, ...]]:
 
 
 def _atom_reservation_ids(atom: HaikuSourceAtom) -> set[str]:
+    if atom.kind == "poetic_interpretation":
+        # 検証済みの見どころは、一句全体で共有する意味の枠である。
+        # 一行が使った時点で場面全体を予約すると、残り二行が同じ情景から
+        # 詩的に展開できなくなる。一次材料そのものの重複排除は従来どおり行う。
+        return set()
     return set(atom.basis_atom_ids or (atom.atom_id,))
 
 

@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dogido.local/schema/minecraft-technical-record-v1.json",
+  "title": "ドギド Minecraft Java 公式技術データレコード",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "record_type",
+    "classification_ja",
+    "minecraft_version",
+    "snapshot_id",
+    "title_ja",
+    "search_terms",
+    "sources"
+  ],
+  "properties": {
+    "schema_version": {"const": "dogido.minecraft-java.v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"},
+    "record_type": {
+      "enum": [
+        "distribution_version",
+        "official_change",
+        "registry_entry",
+        "datapack_entry",
+        "tag_definition"
+      ]
+    },
+    "classification_ja": {
+      "enum": [
+        "配布版情報",
+        "公式変更事項",
+        "レジストリ項目",
+        "データパック項目",
+        "タグ定義"
+      ]
+    },
+    "minecraft_version": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "pattern": "^mcjava-[a-z0-9.-]+$"},
+    "title_ja": {"type": "string", "minLength": 1},
+    "search_terms": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/source"}
+    }
+  },
+  "oneOf": [
+    {
+      "title": "配布版情報",
+      "required": [
+        "distribution_type",
+        "metadata_time",
+        "release_time",
+        "runtime_versions",
+        "java_major_version",
+        "locale",
+        "locale_key_count",
+        "official_artifacts",
+        "release_notes"
+      ],
+      "properties": {
+        "record_type": {"const": "distribution_version"},
+        "classification_ja": {"const": "配布版情報"},
+        "distribution_type": {"enum": ["release", "snapshot", "old_beta", "old_alpha"]},
+        "metadata_time": {"type": "string", "format": "date-time"},
+        "release_time": {"type": "string", "format": "date-time"},
+        "runtime_versions": {
+          "type": "object",
+          "required": ["world_version", "protocol_version", "data_pack_version", "resource_pack_version", "stable"],
+          "properties": {
+            "world_version": {"type": "integer", "minimum": 0},
+            "protocol_version": {"type": "integer", "minimum": 0},
+            "data_pack_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+            "resource_pack_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+            "stable": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "java_major_version": {"type": "integer", "minimum": 1},
+        "locale": {"const": "ja_jp"},
+        "locale_key_count": {"type": "integer", "minimum": 1},
+        "official_artifacts": {"type": "object", "minProperties": 1},
+        "release_notes": {"type": "string", "pattern": "^https://www\\.minecraft\\.net/"}
+      }
+    },
+    {
+      "title": "公式変更事項",
+      "required": [
+        "technical_area_ja",
+        "change_type_ja",
+        "summary_ja",
+        "related_identifiers",
+        "summary_language",
+        "summary_method",
+        "experimental",
+        "coverage",
+        "coverage_note_ja"
+      ],
+      "properties": {
+        "record_type": {"const": "official_change"},
+        "classification_ja": {"const": "公式変更事項"},
+        "technical_area_ja": {
+          "enum": [
+            "データパック",
+            "リソースパック",
+            "サーバー管理プロトコル",
+            "性能計測",
+            "ネットワーク通信",
+            "コマンド",
+            "ゲームルール",
+            "ルートテーブル",
+            "データコンポーネント"
+          ]
+        },
+        "change_type_ja": {"enum": ["追加", "変更", "廃止", "版番号更新"]},
+        "summary_ja": {"type": "string", "minLength": 1},
+        "related_identifiers": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "summary_language": {"const": "ja"},
+        "summary_method": {"const": "editorial_paraphrase"},
+        "experimental": {"type": "boolean"},
+        "coverage": {"const": "representative_selection"},
+        "coverage_note_ja": {"type": "string", "minLength": 1},
+        "migration_note_ja": {"type": "string", "minLength": 1},
+        "identifier_mapping_scope": {"const": "representative_selection"},
+        "identifier_mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "value_inverted"],
+            "properties": {
+              "from": {"type": "string", "minLength": 1},
+              "to": {"type": "string", "minLength": 1},
+              "value_inverted": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "dependentRequired": {
+        "identifier_mapping_scope": ["identifier_mappings"],
+        "identifier_mappings": ["identifier_mapping_scope"]
+      }
+    },
+    {
+      "title": "レジストリ項目",
+      "required": [
+        "registry_id",
+        "entry_id",
+        "protocol_id",
+        "registry_protocol_id",
+        "translation_key",
+        "title_ja_status"
+      ],
+      "properties": {
+        "record_type": {"const": "registry_entry"},
+        "classification_ja": {"const": "レジストリ項目"},
+        "registry_id": {"$ref": "#/$defs/resource_id"},
+        "entry_id": {"$ref": "#/$defs/resource_id"},
+        "protocol_id": {"type": ["integer", "null"], "minimum": 0},
+        "registry_protocol_id": {"type": ["integer", "null"], "minimum": 0},
+        "translation_key": {"type": ["string", "null"]},
+        "title_ja_status": {"enum": ["official_translation", "identifier_fallback"]},
+        "block_summary": {
+          "type": "object",
+          "required": ["properties", "state_count", "default_state_id"],
+          "properties": {
+            "properties": {"type": "object"},
+            "state_count": {"type": "integer", "minimum": 0},
+            "default_state_id": {"type": ["integer", "null"], "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "item_summary": {
+          "type": "object",
+          "required": ["max_stack_size", "max_damage", "rarity", "item_model"],
+          "properties": {
+            "max_stack_size": {"type": ["integer", "null"], "minimum": 1},
+            "max_damage": {"type": ["integer", "null"], "minimum": 1},
+            "rarity": {"type": ["string", "null"]},
+            "item_model": {"type": ["string", "object", "null"]}
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "title": "データパック項目",
+      "required": [
+        "registry_id",
+        "entry_id",
+        "pack_scope",
+        "translation_key",
+        "title_ja_status",
+        "content_sha256",
+        "document_summary"
+      ],
+      "properties": {
+        "record_type": {"const": "datapack_entry"},
+        "classification_ja": {"const": "データパック項目"},
+        "registry_id": {"$ref": "#/$defs/resource_id"},
+        "entry_id": {"$ref": "#/$defs/resource_id"},
+        "pack_scope": {"const": "vanilla_base"},
+        "translation_key": {"type": ["string", "null"]},
+        "title_ja_status": {"enum": ["official_translation", "identifier_fallback"]},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "document_summary": {"$ref": "#/$defs/document_summary"},
+        "biome_summary": {
+          "type": "object",
+          "required": ["has_precipitation", "temperature", "downfall"],
+          "properties": {
+            "has_precipitation": {"type": "boolean"},
+            "temperature": {"type": "number"},
+            "downfall": {"type": "number"}
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "title": "タグ定義",
+      "required": ["registry_id", "tag_id", "pack_scope", "replace", "members", "expanded_entry_ids"],
+      "properties": {
+        "record_type": {"const": "tag_definition"},
+        "classification_ja": {"const": "タグ定義"},
+        "registry_id": {"$ref": "#/$defs/resource_id"},
+        "tag_id": {"$ref": "#/$defs/resource_id"},
+        "pack_scope": {"const": "vanilla_base"},
+        "replace": {"type": "boolean"},
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["reference_type", "id", "required"],
+            "properties": {
+              "reference_type": {"enum": ["entry", "tag"]},
+              "id": {"$ref": "#/$defs/resource_id"},
+              "required": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "expanded_entry_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/resource_id"},
+          "uniqueItems": true
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "resource_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["source_kind", "role", "artifact_sha1", "relative_path", "json_pointer"],
+          "properties": {
+            "source_kind": {"const": "official_artifact"},
+            "role": {
+              "enum": [
+                "registration",
+                "block_definition",
+                "item_definition",
+                "japanese_title",
+                "definition",
+                "distribution_metadata",
+                "runtime_versions",
+                "locale_key_count"
+              ]
+            },
+            "artifact_sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "relative_path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+            },
+            "json_pointer": {"type": "string", "pattern": "^(?:|/.*)$"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["source_kind", "role", "url", "section", "checked_at"],
+          "properties": {
+            "source_kind": {"const": "official_web_page"},
+            "role": {"enum": ["release_notes", "change_statement"]},
+            "url": {"type": "string", "pattern": "^https://www\\.minecraft\\.net/"},
+            "section": {"type": "string", "minLength": 1},
+            "checked_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "document_summary": {
+      "type": "object",
+      "required": ["top_level_fields", "declared_type", "top_level_collection_sizes", "referenced_resource_ids"],
+      "properties": {
+        "top_level_fields": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "declared_type": {
+          "oneOf": [
+            {"$ref": "#/$defs/resource_id"},
+            {"type": "null"}
+          ]
+        },
+        "top_level_collection_sizes": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "referenced_resource_ids": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^#?[a-z0-9_.-]+:[a-z0-9_./-]+$"},
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

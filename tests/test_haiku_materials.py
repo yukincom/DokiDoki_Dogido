@@ -145,6 +145,21 @@ class SpeechLinePreferenceTests(unittest.TestCase):
         self.assertNotEqual(speech, "静寂")
         self.assertIn(speech, {"ネザライトの斧", "オークの原木", "木漏れ日"})
 
+    def test_hidden_background_is_not_restored_when_workshop_opens(self) -> None:
+        mats = build_workshop_materials_seed(
+            held_item="丸石",
+            inventory_items=["リンゴ"],
+            nearby_blocks=["石炭鉱石"],
+        )
+        mats["material_visibility"] = {"biome": False, "sky": False}
+
+        ws = open_from_emission(_emission_with_materials("くさのかげ\nりんごをしまう\nくろいいし", mats))
+
+        self.assertNotIn("biome", ws.materials)
+        self.assertNotIn("time_phase", ws.materials)
+        self.assertIn("リンゴ", material_candidates_for_speech(ws))
+        self.assertIn("石炭鉱石", material_candidates_for_speech(ws))
+
 
 class AskMeaningMaterialsTests(unittest.TestCase):
     def test_candidates_and_links_on_workshop(self) -> None:
@@ -172,7 +187,7 @@ class AskMeaningMaterialsTests(unittest.TestCase):
         self.assertIn("ランタン", cands)
 
         self.assertEqual(pick_material_for_fragment("はれのばら", ws, player_text="晴れのバラ?"), "平原")
-        reply, path = finalize_ask_meaning_reply(ws, "晴れのバラ?", None)
+        reply, path = finalize_ask_meaning_reply(ws, "晴れのバラ?")
         self.assertEqual(path, "template")
         self.assertEqual(reply, "それは、平原やで。")
 
@@ -189,7 +204,7 @@ class AskMeaningMaterialsTests(unittest.TestCase):
         self.assertEqual(ws.materials.get("held_item"), "シャベル")
         self.assertIn("きのこ", ws.materials.get("motifs") or [])
         self.assertTrue(ws.materials.get("fragment_links"))
-        reply, path = finalize_ask_meaning_reply(ws, "きのこって何", None)
+        reply, path = finalize_ask_meaning_reply(ws, "きのこって何")
         self.assertEqual(path, "template")
         self.assertIn("きのこ", reply)
 

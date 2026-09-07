@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "catalogs": [
+    {
+      "id": "language_education_and_poetry",
+      "title_ja": "国語知識・詩形データベース",
+      "path": "language_education_and_poetry",
+      "readme": "language_education_and_poetry/README.md",
+      "index": "language_education_and_poetry/index.json",
+      "bulk_index": "language_education_and_poetry/data/normalized/index.json",
+      "search_module": "dogido_server.language_knowledge",
+      "classification_search_module": "dogido_server.reference_catalog",
+      "storage_scope": "tracked_reference_data"
+    },
+    {
+      "id": "minecraft_technical",
+      "title_ja": "Minecraft Java 公式技術データベース",
+      "path": "minecraft_technical",
+      "readme": "minecraft_technical/README.md",
+      "source_lock": "minecraft_technical/source_lock.json",
+      "local_current": ".dogido_reference/minecraft_technical/current.json",
+      "search_module": "dogido_server.minecraft_knowledge",
+      "storage_scope": "tracked_definition_and_gitignored_local_data"
+    }
+  ]
+}

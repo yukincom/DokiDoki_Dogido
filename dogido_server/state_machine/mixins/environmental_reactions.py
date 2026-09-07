@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from dogido_server.knowledge_query import split_knowledge_speech
 from dogido_server.models import EventName, GameEvent
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.fallback_catalog import fallback_text
 from dogido_server.state_machine.response_catalog import response_text
-from dogido_server.state_machine.types import AudioAction, DerivedSignals
+from dogido_server.state_machine.types import AudioAction, DerivedSignals, SpeechReference
 
 
 class EnvironmentalReactionsMixin:
@@ -18,6 +19,11 @@ class EnvironmentalReactionsMixin:
         protect_ms: int = 0,
         speech_profile: str = "peace",
         interrupt: bool = False,
+        speech_segments: tuple[str, ...] = (),
+        speech_segment_pause_ms: int = 0,
+        queue_priority: str = "normal",
+        queue_replace_key: str | None = None,
+        references: tuple[SpeechReference, ...] = (),
     ) -> AudioAction:
         return AudioAction(
             layer="speech",
@@ -25,6 +31,11 @@ class EnvironmentalReactionsMixin:
             text=text,
             protect_ms=protect_ms,
             speech_profile=speech_profile,
+            speech_segments=speech_segments,
+            speech_segment_pause_ms=speech_segment_pause_ms,
+            queue_priority=queue_priority,  # type: ignore[arg-type]
+            queue_replace_key=queue_replace_key,
+            references=references,
         )
 
     def _control_interrupt_action(self) -> AudioAction:
@@ -46,6 +57,23 @@ class EnvironmentalReactionsMixin:
                 protect_ms=protect_ms,
                 speech_profile=speech_profile,
                 interrupt=interrupt,
+            )
+        ]
+
+    def _knowledge_speech_actions(self, text: str | None) -> list[AudioAction]:
+        """知識回答を一つの論理発話のまま、文単位で順次合成・再生する。"""
+
+        if not text:
+            return []
+        segments = split_knowledge_speech(text)
+        return [
+            self._speech_action(
+                text,
+                speech_segments=segments if len(segments) > 1 else (),
+                speech_segment_pause_ms=650 if len(segments) > 1 else 0,
+                queue_priority="foreground",
+                queue_replace_key="knowledge_reply",
+                references=self.knowledge_reply_references,
             )
         ]
 
@@ -241,6 +269,10 @@ class EnvironmentalReactionsMixin:
         # 実際に返答できた場合は、下の player 向け分岐で以後3分も抑える。
         player_reply_pending = (
             self.player_input.asks_hostile_count
+            or (
+                self.player_input.asks_hostile_direction
+                and bool(event.visual_threats)
+            )
             or self.player_input.asks_dragon_direction
             or self._has_pending_player_chat(event)
         )
@@ -276,6 +308,10 @@ class EnvironmentalReactionsMixin:
             )
             self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
+        if self.player_input.asks_hostile_direction and event.visual_threats:
+            actions = self._speech_actions(self._render_hostile_direction_answer(event))
+            self._suppress_thunder_after_player_reply(event, now, actions)
+            return actions
         if self.player_input.asks_dragon_direction:
             actions = self._speech_actions(self._render_dragon_direction_answer(event))
             self._suppress_thunder_after_player_reply(event, now, actions)
@@ -284,7 +320,12 @@ class EnvironmentalReactionsMixin:
         if self.player_input.requests_sword:
             return []
         if self._has_pending_player_chat(event):
-            actions = self._speech_actions(self._render_player_chat_reply(event))
+            reply = self._render_player_chat_reply(event)
+            actions = (
+                self._knowledge_speech_actions(reply)
+                if self.knowledge_query_handled
+                else self._speech_actions(reply)
+            )
             self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
 
@@ -419,16 +460,25 @@ class EnvironmentalReactionsMixin:
 
     def _night_warning_should_preempt_player_chat(self, event: GameEvent, now: datetime) -> bool:
         """地表の夕方警告を player_chat より先に出すべきか（副作用なし）。"""
-        if self._haiku_workshop_is_open():
+        # workshopの編集入力は従来どおり集中を優先する。ただし一般知識への
+        # 脇道質問で、時限性のある夕方警告まで消さない。
+        if (
+            self._haiku_workshop_is_open()
+            and self.player_input.knowledge_query is None
+        ):
             return False
         if not self._should_consider_night_warning(event):
             return False
         return self._is_surface_evening_warning_context(event)
 
     def _night_warning_actions(self, event: GameEvent, now: datetime) -> list[AudioAction]:
-        # 川柳 workshop 中は出さない（pending は残し、pin が閉じたあとで出す）
+        # 川柳 workshop 中の編集入力では出さない（pending は残す）。一般知識への
+        # 脇道質問だけは、pinを閉じずに警告を先に出す。
         # 脅威・ターゲティングは panic/alert 枝が別途担当
-        if self._haiku_workshop_is_open():
+        if (
+            self._haiku_workshop_is_open()
+            and self.player_input.knowledge_query is None
+        ):
             return []
         # 旧2段（注意→あと1分本文）は廃止。1本だけ。
         self.state.pending_night_warning_detail = False

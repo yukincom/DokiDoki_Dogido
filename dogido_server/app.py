@@ -5,14 +5,16 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from functools import partial
+from importlib.resources import files
 from typing import Annotated, Any, Callable, TypeVar
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from dogido_server.config import Settings, get_settings
+from dogido_server.diagnostics import DiagnosticLogCapture
 from dogido_server.models import (
     AcceptedEventResponse,
     AdapterSessionCreateRequest,
@@ -26,6 +28,7 @@ from dogido_server.models import (
     HeartbeatResponse,
     PlayerInputRequest,
     VoiceInputContextResponse,
+    VoiceInputDiagnosticRequest,
 )
 from dogido_server.service import DogidoService
 
@@ -33,10 +36,20 @@ from dogido_server.service import DogidoService
 _T = TypeVar("_T")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    capture_diagnostics: bool | None = None,
+) -> FastAPI:
     # settings を外から注入できるようにしている（テスト時にモック設定を渡すため）
     resolved_settings = settings or get_settings()
     service = DogidoService(resolved_settings)
+    should_capture_diagnostics = (
+        settings is None if capture_diagnostics is None else capture_diagnostics
+    )
+    diagnostic_capture = DiagnosticLogCapture(service.diagnostics)
+    if should_capture_diagnostics:
+        diagnostic_capture.install()
     # service はセッション状態を持つため、専用の単一workerへ全操作を積む。
     # handlerが接続断で何度cancelされても、実行中threadと次操作は並行しない。
     service_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dogido-service")
@@ -58,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             await run_serialized(service.shutdown)
+            diagnostic_capture.uninstall()
             service_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(
@@ -68,6 +82,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # app.state にサービスを格納しておくと、テストや将来のミドルウェアから参照できる
     app.state.settings = resolved_settings
     app.state.service = service
+    app.state.diagnostic_capture = diagnostic_capture
+
+    try:
+        display_html = (
+            files("dogido_server")
+            .joinpath("static", "dogido.html")
+            .read_text(encoding="utf-8")
+        )
+    except (FileNotFoundError, OSError):
+        display_html = "<h1>ドギド発言履歴</h1><p>表示画面を読み込めませんでした。</p>"
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_error_handler(_, exc: RequestValidationError) -> JSONResponse:
@@ -88,6 +112,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ok=True,
             service=resolved_settings.service_name,
             version=resolved_settings.service_version,
+        )
+
+    @app.get("/dogido", response_class=HTMLResponse)
+    async def dogido_display() -> HTMLResponse:
+        """Minecraftとは別に開く、発言履歴と参考資料の読み取り専用画面。"""
+
+        return HTMLResponse(
+            display_html,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": (
+                    "default-src 'self'; script-src 'unsafe-inline'; "
+                    "style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; "
+                    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+                ),
+            },
+        )
+
+    @app.get("/api/v1/display/snapshot")
+    async def get_display_snapshot(
+        session_id: str | None = None,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> JSONResponse:
+        _ensure_authorized(resolved_settings, authorization)
+        # 短い専用lockのsnapshotなので、LLM処理を載せたservice_executorへ積まない。
+        return JSONResponse(
+            service.display_snapshot(session_id=session_id),
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     @app.post("/api/v1/adapter-sessions", response_model=AdapterSessionCreateResponse, status_code=201)
@@ -124,7 +180,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             # 順序を崩さないため、dispatchまで同じ直列worker内で完了させる。
             if result.actions:
-                service.dispatch_actions(result.actions)
+                service.dispatch_actions(
+                    result.actions,
+                    session_id=x_dogido_session_id,
+                )
             return result
 
         result = await run_serialized(process_and_dispatch)
@@ -165,7 +224,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 session_id=x_dogido_session_id,
             )
             if actions:
-                service.dispatch_actions(actions)
+                service.dispatch_actions(
+                    actions,
+                    session_id=x_dogido_session_id,
+                )
             return result
 
         result = await run_serialized(process_and_dispatch)
@@ -221,6 +283,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _ensure_authorized(resolved_settings, authorization)
         return await run_serialized(service.voice_input_context)
 
+    @app.post("/api/v1/voice-input/diagnostics")
+    async def post_voice_input_diagnostic(
+        payload: VoiceInputDiagnosticRequest,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> dict[str, object]:
+        # voice_input は別プロセスなので、波形を送らず段階・文字列・理由だけを共有する。
+        _ensure_authorized(resolved_settings, authorization)
+        return await run_serialized(service.record_voice_input_diagnostic, payload)
+
     @app.get("/api/v1/memory/haiku")
     async def get_haiku_memory(
         authorization: Annotated[str | None, Header()] = None,
@@ -269,4 +340,4 @@ def main() -> None:
 
 # `uvicorn dogido_server.app:app` で直接起動するときのモジュールレベルインスタンス
 # テスト・開発時は create_app() を呼んで設定を注入するほうが推奨
-app = create_app()
+app = create_app(capture_diagnostics=False)

@@ -17,13 +17,13 @@ from dogido_server.assist.select_sword import (
 )
 from dogido_server.config import Settings
 from dogido_server.llm.assist_prompts import build_select_sword_intent_messages
+from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import (
     AdapterCommandResult,
     AdapterSessionCreateRequest,
     GameEvent,
     HotbarSlot,
 )
-from dogido_server.player_input.normalize import is_too_short_voice_text
 from dogido_server.player_input.routing import route_player_input
 from dogido_server.service import DogidoService
 
@@ -148,7 +148,16 @@ def create_session(service: DogidoService, *, executable: bool = True) -> str:
 
 class SelectSwordRulesTest(unittest.TestCase):
     def test_explicit_fast_path_is_narrow(self) -> None:
-        for text in ("剣", "剣に持ち替えて", "けん装備して", "ソードにして"):
+        for text in (
+            "剣",
+            "剣に持ち替えて",
+            "けん装備して",
+            "ソードにして",
+            "剣を装備して欲しい",
+            "剣に持ち替えてくれない？",
+            "剣に持ち替えてもらうことはできますか？",
+            "斧から剣に持ち替えて",
+        ):
             with self.subTest(text=text):
                 self.assertTrue(is_explicit_select_sword_request(text))
                 self.assertTrue(route_player_input(text).requests_sword)
@@ -161,14 +170,27 @@ class SelectSwordRulesTest(unittest.TestCase):
             "剣を持ってる？",
             "剣に持ち替えないで",
             "剣に切り替えなくていい",
+            "『剣に持ち替えて』は命令文？",
+            "剣に持ち替えて、と書いてある",
+            "誰かが剣に持ち替えてと言った",
+            "剣に持ち替えてって言われた",
+            "剣に持ち替えることはできますか？",
+            "剣に持ち替えたらどうなる？",
+            "剣より斧に持ち替えて",
+            "剣からつるはしに持ち替えて",
+            "剣じゃなくてつるはしに持ち替えて",
+            "命令例: 剣に持ち替えて",
+            "テスト入力は剣に持ち替えて",
+            "例えば剣に持ち替えて",
+            "必要なら剣に持ち替えて",
+            "敵が来たときは剣に持ち替えて",
+            "あとで剣に持ち替えて",
+            "次の戦闘で剣に持ち替えて",
         ):
             with self.subTest(text=text):
                 self.assertFalse(is_explicit_select_sword_request(text))
+                self.assertFalse(route_player_input(text).requests_sword)
         self.assertFalse(route_player_input("/say 剣").requests_sword)
-
-    def test_bare_kana_sword_is_rejected_as_short_voice_noise(self) -> None:
-        self.assertFalse(is_too_short_voice_text("剣"))
-        self.assertTrue(is_too_short_voice_text("けん"))
 
     def test_voice_sword_homophone_repair_requires_adjacent_action_and_stays_narrow(self) -> None:
         examples = {
@@ -178,6 +200,7 @@ class SelectSwordRulesTest(unittest.TestCase):
             "県にハインコをしてください": "剣に変更をしてください",
             "チェンに変更してください": "剣に変更してください",
             "ケンに装備して": "剣に装備して",
+            "時と県に変えて": "時と剣に変えて",
         }
         for raw, expected in examples.items():
             with self.subTest(raw=raw):
@@ -189,6 +212,7 @@ class SelectSwordRulesTest(unittest.TestCase):
             "県の話をしよう",
             "県に持ち替えないで",
             "大阪府から他の県に行きたい",
+            "例えば県に持ち替えて",
         ):
             with self.subTest(text=text):
                 self.assertIsNone(interpret_voice_select_sword_request(text))
@@ -389,6 +413,97 @@ class SelectSwordServiceTest(unittest.TestCase):
 
         self.assertFalse(ambiguous.requests_sword)
         self.assertTrue(explicit.requests_sword)
+        for edit_text in (
+            "上五の剣を変えて",
+            "この川柳の剣を変えて",
+            "中七を剣に変えて",
+            "句の剣を変更して",
+            "剣をつるぎに変えて",
+            "剣をソードに変えて",
+            "1行目を剣に切り替えて",
+            "最初の行を剣に切り替えて",
+            "前の行を剣に切り替えて",
+            "中央の行を剣に切り替えて",
+            "最後の行を剣に切り替えて",
+            "後ろの行を剣に切り替えて",
+            "真ん中を剣に切り替えて",
+            "一番上の行を剣に切り替えて",
+            "上の行を剣に切り替えて",
+            "二つ目を剣に切り替えて",
+            "一番下を剣に切り替えて",
+            "中央を剣に切り替えて",
+            "中ほどを剣に切り替えて",
+        ):
+            with self.subTest(edit_text=edit_text):
+                routed = service._route_assist_player_input(  # noqa: SLF001
+                    session,
+                    edit_text,
+                    interpreted_player_text=None,
+                )
+                self.assertFalse(routed.requests_sword)
+
+        voice_edit = service._route_assist_player_input(  # noqa: SLF001
+            session,
+            "中七の県を変えて",
+            interpreted_player_text="中七の剣を変えて",
+            input_source="voice",
+        )
+        voice_world_command = service._route_assist_player_input(  # noqa: SLF001
+            session,
+            "県を変えて",
+            interpreted_player_text="剣を変えて",
+            input_source="voice",
+        )
+        self.assertFalse(voice_edit.requests_sword)
+        self.assertTrue(voice_world_command.requests_sword)
+        for raw, interpreted in (
+            ("真ん中の県を変えて", "真ん中の剣を変えて"),
+            ("この言葉の県を変えて", "この言葉の剣を変えて"),
+            ("その単語を県に変えて", "その単語を剣に変えて"),
+            ("表現を県に変更して", "表現を剣に変更して"),
+        ):
+            with self.subTest(raw=raw):
+                routed = service._route_assist_player_input(  # noqa: SLF001
+                    session,
+                    raw,
+                    interpreted_player_text=interpreted,
+                    input_source="voice",
+                )
+                self.assertFalse(routed.requests_sword)
+
+    def test_real_workshop_explicit_equip_executes_once_without_requeue(self) -> None:
+        service = DogidoService(
+            Settings(audio_enabled=False, llm_enabled=False, memory_enabled=False)
+        )
+        session_id = create_session(service)
+        session = service.sessions[session_id]
+        service._open_haiku_workshop(  # noqa: SLF001
+            session,
+            HaikuEmission(
+                created_at=OBSERVED_AT,
+                text="ひらべった てのきのき ひるのひ",
+                preface="ここで一句。",
+                interpretation="平原の昼",
+                biome="plains",
+                structure=None,
+                time_phase="day",
+                dimension="minecraft:overworld",
+                event_sequence=0,
+                route="haiku",
+            ),
+            entry_id=None,
+            now=OBSERVED_AT,
+        )
+
+        result = service.process_event(
+            make_event(sequence=1, user_text="剣に持ち替えて"),
+            session_id,
+        )
+
+        self.assertEqual(1, len(result.response.commands))
+        self.assertIsNone(session.pending_player_text)
+        self.assertEqual([], list(session.deferred_player_inputs))
+        self.assertIsNotNone(session.haiku_workshop)
 
     def test_success_cooldown_suppresses_immediate_repeated_execution(self) -> None:
         service = DogidoService(Settings(audio_enabled=False, llm_enabled=False, memory_enabled=False))
@@ -463,6 +578,42 @@ class SelectSwordServiceTest(unittest.TestCase):
                 row["trigger"]["player_input"]["interpreted"],
                 "ドギドを剣に持ち替えてください",
             )
+
+    def test_qwen_payload_cannot_hide_full_text_negation_or_past_tense(self) -> None:
+        cases = (
+            ("剣に持ち替えてほしいわけではない", "剣に持ち替えて"),
+            ("剣に持ち替えないで", "剣に持ち替え"),
+            ("剣に持ち替えた", "剣に持ち替えた"),
+            ("剣の方がよくないわけではない", "剣の方がよくない"),
+            ("「剣に持ち替えて」は命令文？", "剣に持ち替えて"),
+            ("「剣に持ち替えて」という表現は自然？", "剣に持ち替えて"),
+            ("剣に持ち替えて、と書いてある", "剣に持ち替えて"),
+            ("誰かが剣に持ち替えてと言った", "剣に持ち替えて"),
+            ("剣に持ち替えてって言われた", "剣に持ち替えて"),
+            ("剣より斧に持ち替えて", "剣より斧に持ち替えて"),
+            ("剣からつるはしに持ち替えて", "剣からつるはしに持ち替えて"),
+            ("剣じゃなくてつるはしに持ち替えて", "剣じゃなくてつるはしに持ち替えて"),
+            ("剣に持ち替えることはできますか？", "剣に持ち替えることはできますか"),
+            ("剣の方がいいって話", "剣の方がいい"),
+            ("剣の方がいいと思う", "剣の方がいい"),
+            ("剣の方がいいかどうか迷う", "剣の方がいい"),
+            ("一般には剣の方がいい", "剣の方がいい"),
+            ("剣の方がいいらしい", "剣の方がいい"),
+            ("剣の方がいいって聞いた", "剣の方がいい"),
+        )
+        for player_text, evidence in cases:
+            with self.subTest(player_text=player_text):
+                result = finalize_select_sword_intent_payload(
+                    {
+                        "intent": "select_weapon",
+                        "weapon_kind": "sword",
+                        "is_request": True,
+                        "evidence": evidence,
+                        "confidence": 0.99,
+                    },
+                    player_text=player_text,
+                )
+                self.assertFalse(result.requested)
 
     def test_typed_or_non_command_prefecture_text_never_executes(self) -> None:
         typed = DogidoService(Settings(audio_enabled=False, llm_enabled=False, memory_enabled=False))
@@ -616,6 +767,72 @@ class SelectSwordServiceTest(unittest.TestCase):
             session_id,
         )
         self.assertEqual(len(result.response.commands), 1)
+
+    def test_sword_questions_and_non_requests_cannot_issue_commands(self) -> None:
+        class AdversarialQwen:
+            def route_enabled(self, route: str) -> bool:
+                return route == "chat"
+
+            def generate_structured_json(self, request: object) -> dict[str, object]:
+                player_text = str(getattr(request, "details", {}).get("player_text") or "")
+                evidence = {
+                    "剣に持ち替えてほしいわけではない": "剣に持ち替えて",
+                    "剣に持ち替えないで": "剣に持ち替え",
+                    "「剣に持ち替えて」は命令文？": "剣に持ち替えて",
+                    "「剣に持ち替えて」という表現は自然？": "剣に持ち替えて",
+                    "剣に持ち替えて、と書いてある": "剣に持ち替えて",
+                    "誰かが剣に持ち替えてと言った": "剣に持ち替えて",
+                    "剣に持ち替えてって言われた": "剣に持ち替えて",
+                }.get(player_text, player_text)
+                return {
+                    "intent": "select_weapon",
+                    "weapon_kind": "sword",
+                    "is_request": True,
+                    "evidence": evidence,
+                    "confidence": 0.99,
+                }
+
+            def generate_leaf_text(self, _request: object) -> str:
+                return "雑談として受け取ったで。"
+
+        for text in (
+            "剣って何？",
+            "剣の耐久値は？",
+            "剣はどんなもの？",
+            "この剣のIDは？",
+            "剣ある？",
+            "剣の話をしよう",
+            "その剣かっこいい",
+            "剣に持ち替えてほしいわけではない",
+            "剣に持ち替えないで",
+            "剣に持ち替えた",
+            "「剣に持ち替えて」は命令文？",
+            "「剣に持ち替えて」という表現は自然？",
+            "剣に持ち替えて、と書いてある",
+            "誰かが剣に持ち替えてと言った",
+            "剣に持ち替えてって言われた",
+            "剣に持ち替えることはできますか？",
+            "剣より斧に持ち替えて",
+            "剣からつるはしに持ち替えて",
+            "剣じゃなくてつるはしに持ち替えて",
+            "剣の方がいいって話",
+            "剣の方がいいと思う",
+            "剣の方がいいかどうか迷う",
+            "一般には剣の方がいい",
+            "剣の方がいいらしい",
+            "剣の方がいいって聞いた",
+        ):
+            with self.subTest(text=text):
+                service = DogidoService(
+                    Settings(audio_enabled=False, llm_enabled=False, memory_enabled=False)
+                )
+                service.llm = AdversarialQwen()  # type: ignore[assignment]
+                session_id = create_session(service)
+                result = service.process_event(
+                    make_event(sequence=1, user_text=text),
+                    session_id,
+                )
+                self.assertEqual([], result.response.commands)
 
     def test_episode_correlates_command_issue_and_real_adapter_result(self) -> None:
         with TemporaryDirectory() as tmp:

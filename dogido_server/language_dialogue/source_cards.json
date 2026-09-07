@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-09-06",
+  "rights_note": "公的機関の公開資料にある事実と、Minecraft公式の言語用例を独自に短く要約。資料本文や画像は転載しない。サイト全体や原典辞書の再利用許諾を主張するものではない。",
+  "records": [
+    {
+      "id": "language.usage.waku", "title_ja": "沸くと湧くの使い分け",
+      "search_terms": ["わく", "沸く", "湧く", "異字同訓"],
+      "text_ja": "水の加熱や沸騰には『沸く』、噴出や物事の発生には『湧く』を使う例が示されている。",
+      "claim_status": "editorial_summary", "scope": "一般的な用字の参考例。Minecraftの表記を定めた規則ではなく、他の使い分けを一律否定しない。",
+      "sources": [{"title_ja": "文化審議会『異字同訓』の漢字の使い分け例", "url": "https://www.bunka.go.jp/seisaku/bunkashingikai/kokugo/hokoku/pdf/ijidokun_140221.pdf", "locator": "本文27頁、131『わく』。前書き2頁"}]
+    },
+    {
+      "id": "language.writing.manuscript-alphabet", "title_ja": "原稿用紙のアルファベット",
+      "search_terms": ["原稿用紙", "アルファベット", "大文字", "小文字"],
+      "text_ja": "JICAのエッセイ応募案内では、原則として英字の大文字を一マスに一字、小文字を一マスに二字で書く。",
+      "claim_status": "editorial_summary", "scope": "JICAの公募における指定。授業や別の応募先では、その指定を確かめる。",
+      "sources": [{"title_ja": "JICA エッセイコンテスト よくある質問", "url": "https://www.jica.go.jp/cooperation/experience/essay/collect/n_files/00_qa.pdf", "locator": "PDF1頁、アルファベットの記入"}]
+    },
+    {
+      "id": "language.reading.kanatoko", "title_ja": "金床の読み",
+      "search_terms": ["金床", "かなとこ"],
+      "text_ja": "東京国立博物館所蔵品の『金床』には『かなとこ』の読みが付されている。",
+      "claim_status": "official_catalog_fact", "scope": "道具名の表記と読み。語源はこの記録では説明されない。",
+      "sources": [{"title_ja": "文化遺産オンライン 金床（東京国立博物館）", "url": "https://online.bunka.go.jp/heritages/detail/496409", "locator": "見出しと読み"}]
+    },
+    {
+      "id": "language.usage.takumi", "title_ja": "技能を持つ人を指す匠の用例",
+      "search_terms": ["匠", "たくみ", "職人"],
+      "text_ja": "奈良国立博物館の解説は、専門技能を用いて文化財を修理する技術者を『匠（たくみ）』と呼んでいる。",
+      "claim_status": "official_usage_summary", "scope": "技能を持つ人を指す用例。辞書の全語義やクリーパーのあだ名の由来を示す資料ではない。",
+      "sources": [{"title_ja": "奈良国立博物館 文化財修理 革新続ける匠", "url": "https://edu.narahaku.go.jp/post_note/20/", "locator": "修理技術者の説明"}]
+    },
+    {
+      "id": "language.classification.onomatopoeia", "title_ja": "擬声語・擬音語・擬態語の分類",
+      "search_terms": ["擬音語", "擬声語", "擬態語", "オノマトペ", "音を表す言葉", "声を表す言葉"],
+      "text_ja": "国語研が紹介する金田一の分類では、人や動物の声を表す語が擬声語、自然の音や物音を表す語が擬音語。音ではない状態・様子を表す語はさらに別に分ける。呼称や分類体系には違いがあり、同じ語でも用法により分類が変わる。",
+      "claim_status": "editorial_summary", "scope": "金田一1978の分類を紹介した資料。ゲームの実際の音声は観測していない。",
+      "sources": [{"title_ja": "国立国語研究所 擬音語・擬態語にはどんな種類がある？", "url": "https://www2.ninjal.ac.jp/Onomatope/column/nihongo_1.html", "locator": "金田一1978の五分類"}]
+    },
+    {
+      "id": "language.etymology.taimatsu", "title_ja": "松明の表記と語源説",
+      "search_terms": ["松明", "たいまつ", "タイマツ"],
+      "text_ja": "北九州市立中央図書館の調査回答は、松による明かりという意味で『松明』と書くと説明する。『たいまつ』という音の由来については『たきまつ』や『たひまつ』などに結び付ける複数の説を紹介している。",
+      "claim_status": "public_library_reference_summary", "scope": "表記の説明と音の由来の説を区別する。一説を確定した歴史的事実とはしない。",
+      "sources": [{"title_ja": "北九州市立中央図書館 松明の表記についての調査回答", "url": "https://crd.ndl.go.jp/reference/detail?page=ref_view&id=1000371685", "locator": "回答欄。典拠：暮らしのことば語源辞典1998年399頁等"}]
+    },
+    {
+      "id": "language.usage.block-count", "title_ja": "Minecraft公式記事でのブロックの数え方",
+      "search_terms": ["個", "ブロック", "数え方", "助数詞"],
+      "text_ja": "Minecraft日本公式の記事には、ブロックの数を『個』で表す用例と『1ブロック』と表す用例がある。",
+      "claim_status": "official_usage_summary", "scope": "作品公式の言語用例。国語一般の規範や距離単位の定義ではない。",
+      "sources": [
+        {"title_ja": "Minecraft公式 盆栽バイオーム", "url": "https://www.minecraft.net/ja-jp/article/bonsaibiomes-jp", "locator": "砂のブロックを数える記述"},
+        {"title_ja": "Minecraft公式 建築カレンダー3月採用作品", "url": "https://www.minecraft.net/ja-jp/article/minecraft-calendar-2026-march-saiyou-jp", "locator": "最後の1ブロックという冒頭の記述"}
+      ]
+    },
+    {
+      "id": "language.proper-name.enderman", "title_ja": "Endermanの公式日本語表記",
+      "search_terms": ["Enderman", "エンダーマン"],
+      "text_ja": "Minecraft公式の英語記事の名前はEnderman、日本語記事の名前はエンダーマン。作品中の名前の表記対応として確認できる。",
+      "claim_status": "official_name_correspondence", "scope": "公式の記事同士を照合した表記。一般英単語の語義や直訳・語源を確定する資料ではない。",
+      "sources": [
+        {"title_ja": "Minecraft公式 Mob Menagerie: Enderman", "url": "https://www.minecraft.net/en-us/article/enderman", "locator": "記事名"},
+        {"title_ja": "Minecraft公式 大乱闘スマッシュブラザーズSPECIALに参戦", "url": "https://www.minecraft.net/ja-jp/article/minecraft-joins-super-smash-bros--ultimate-jp", "locator": "ファイター名の列挙"}
+      ]
+    }
+  ]
+}

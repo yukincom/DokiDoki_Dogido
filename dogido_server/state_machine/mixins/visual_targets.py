@@ -12,6 +12,33 @@ LOGGER = logging.getLogger("uvicorn.error")
 
 
 class VisualTargetsMixin:
+    def _new_creeper_fuse_target(self, event: GameEvent) -> VisualThreat | None:
+        """前フレームでは導火していなかった、膨らみ始めの個体を返す。"""
+
+        candidates = [
+            threat
+            for threat in event.visual_threats
+            if threat.type in {"creeper", "charged_creeper"}
+            and threat.fuse_active
+            and self._visual_identity_key(threat)
+            not in self.state.active_creeper_fuse_keys
+        ]
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda threat: (
+                0 if threat.type == "charged_creeper" else 1,
+                threat.distance if threat.distance is not None else inf,
+            ),
+        )
+
+    def _render_creeper_fuse_callout(self, threat: VisualThreat) -> str:
+        direction = self._direction_label(threat)
+        if threat.type == "charged_creeper":
+            return f"{direction}！ 帯電クリーパー膨らんどる！ 爆発するでぇ！！"
+        return f"{direction}！ クリーパー膨らんどる、爆発するでぇ！"
+
     def _render_hostile_visual_callout(self, threat: VisualThreat, mode: str) -> str:
         if threat.type == "charged_creeper":
             return CHARGED_CREEPER_CALL

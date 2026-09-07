@@ -10,6 +10,7 @@ import dogido.fabric.DogidoClientAdapter;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
+import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 
 @Mixin(ClientPlayNetworkHandler.class)
 abstract class ClientPlayNetworkHandlerMixin {
@@ -21,5 +22,10 @@ abstract class ClientPlayNetworkHandlerMixin {
     @Inject(method = "onPlaySoundFromEntity", at = @At("HEAD"))
     private void dogido$onPlaySoundFromEntity(PlaySoundFromEntityS2CPacket packet, CallbackInfo ci) {
         DogidoClientAdapter.recordEntitySoundPacket(packet);
+    }
+
+    @Inject(method = "onExplosion", at = @At("HEAD"))
+    private void dogido$onExplosion(ExplosionS2CPacket packet, CallbackInfo ci) {
+        DogidoClientAdapter.recordExplosionPacket(packet);
     }
 }

@@ -290,6 +290,81 @@ class LLMTests(unittest.TestCase):
             )
         )
 
+    def test_haiku_grounding_leaves_single_result_for_domain_consumer(self) -> None:
+        class StructuredLLM(DogidoLLM):
+            def __init__(self) -> None:
+                super().__init__(
+                    Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+                )
+                self.calls = 0
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):
+                self.calls += 1
+                if self.calls == 1:
+                    return '{"line_index":0,"atom_ids":["observation:test:0"],"meaning_retained":true,"natural_japanese":true,"reason":"一致"}'
+                return '{"assessments":[{"line_index":0,"atom_ids":["observation:test:0"],"meaning_retained":true,"natural_japanese":true,"reason":"一致"}]}'
+
+        llm = StructuredLLM()
+        payload = llm.generate_structured_json(
+            StructuredGenerationRequest(
+                kind="haiku_line_grounding",
+                fallback_value={"assessments": []},
+                details={
+                    "grounding_lines": [{"line_index": 0, "text": "はるのかぜ"}],
+                    "source_atoms": [
+                        {"atom_id": "observation:test:0", "text": "春の風"}
+                    ],
+                },
+            )
+        )
+
+        self.assertEqual(1, llm.calls)
+        self.assertEqual("accepted", payload["__dogido_status"])
+        self.assertEqual(0, payload["line_index"])
+
+    def test_haiku_scene_leaves_single_clause_for_domain_consumer(self) -> None:
+        class StructuredLLM(DogidoLLM):
+            def __init__(self) -> None:
+                super().__init__(
+                    Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+                )
+                self.calls = 0
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):
+                self.calls += 1
+                if self.calls == 1:
+                    return '{"text":"夕暮れの草地と白い骨が溶け合っとるな","basis_atom_ids":["observation:test:0"],"claim_class":"interpretive"}'
+                return '{"found":true,"clauses":[{"text":"夕暮れの草地と白い骨が溶け合っとるな","basis_atom_ids":["observation:test:0"],"claim_class":"interpretive"}],"motifs":["夕暮れ","骨"],"focus":["光と色"],"confidence":0.9}'
+
+        llm = StructuredLLM()
+        payload = llm.generate_structured_json(
+            StructuredGenerationRequest(
+                kind="haiku_scene",
+                fallback_value={"found": False},
+                details={
+                    "source_atoms": [
+                        {
+                            "atom_id": "observation:test:0",
+                            "text": "夕暮れの草地で白い骨を持っている",
+                        }
+                    ],
+                },
+            )
+        )
+
+        self.assertEqual(1, llm.calls)
+        self.assertEqual("accepted", payload["__dogido_status"])
+        self.assertEqual(
+            "夕暮れの草地と白い骨が溶け合っとるな",
+            payload["text"],
+        )
+
     def test_generate_structured_json_uses_request_max_tokens_override(self) -> None:
         llm = DogidoLLM(
             Settings(
@@ -305,7 +380,12 @@ class LLMTests(unittest.TestCase):
         request = StructuredGenerationRequest(
             kind="haiku_scene",
             fallback_value={"found": False},
-            details={"feature_candidates": ["バイオーム 草地"]},
+            details={
+                "feature_candidates": ["バイオーム 草地"],
+                "source_atoms": [
+                    {"atom_id": "observation:test:0", "text": "朝の草原"}
+                ],
+            },
             max_tokens=192,
         )
 

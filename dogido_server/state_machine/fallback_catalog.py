@@ -49,6 +49,12 @@ def fallback_prewarm_texts(call_name: str | None) -> list[str]:
     prefix = _call_name_prefix(call_name)
     texts = [
         fallback_text("aftermath", "line"),
+        fallback_text("aftermath", "player_kill"),
+        fallback_text("aftermath", "charged_creeper_detonated"),
+        fallback_text("aftermath", "creeper_detonated"),
+        fallback_text("aftermath", "explosion_death"),
+        fallback_text("aftermath", "hostile_defeated"),
+        fallback_text("aftermath", "disengaged"),
         fallback_text("death", "default"),
         fallback_text("death", "hostile"),
         fallback_text("death", "fall"),

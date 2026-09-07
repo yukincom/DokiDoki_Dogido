@@ -76,6 +76,12 @@ final class DogidoEventClient {
         capabilities.add("danger_darkness");
         capabilities.add("combat_state");
         capabilities.add("death_events");
+        capabilities.add("hostile_outcomes");
+        capabilities.add("hostile_defeated_events");
+        capabilities.add("hostile_scan_range");
+        capabilities.add("absolute_hostile_direction");
+        capabilities.add("creeper_fuse_state");
+        capabilities.add("creeper_detonation_events");
         payload.add("capabilities", capabilities);
         JsonArray executionCapabilities = new JsonArray();
         executionCapabilities.add("client.hotbar.select.v1");

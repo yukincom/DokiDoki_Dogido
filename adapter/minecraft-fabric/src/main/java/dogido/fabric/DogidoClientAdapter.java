@@ -13,8 +13,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +25,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.event.client.player.ClientPlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
@@ -36,10 +40,12 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.AttributeModifiersComponent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.boss.dragon.phase.PhaseType;
+import net.minecraft.entity.mob.CreeperEntity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.mob.Monster;
@@ -63,6 +69,7 @@ import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.passive.WolfEntity;
 import net.minecraft.entity.vehicle.AbstractBoatEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.Items;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.village.VillagerData;
@@ -70,11 +77,15 @@ import net.minecraft.village.VillagerProfession;
 import net.minecraft.village.VillagerType;
 import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
+import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.ItemTags;
+import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.state.property.Properties;
@@ -88,6 +99,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
@@ -114,6 +126,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int OCCLUDED_AUDIO_VERTICAL_BLOCKS = 5;
     private static final double AMBIENT_MOB_DISTANCE = 16.0;
     private static final double GLOBAL_SOUND_SOURCE_MATCH_RADIUS = 4.0;
+    private static final int RECENT_BLOCK_BREAK_TTL_TICKS = 200;
+    private static final double DROPPED_ITEM_SCAN_RADIUS = 8.0;
+    private static final int MAX_DROPPED_ITEM_KINDS = 16;
     // エンダーアイ投擲音: 鮮度 TTL（サーバ側 ender_eye_recent_ms=2000ms と同期）と投擲者判定の距離
     private static final int ENDER_EYE_LAUNCH_TTL_TICKS = 40;
     private static final double ENDER_EYE_LAUNCH_MATCH_RADIUS = 8.0;
@@ -182,11 +197,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private final Map<UUID, Double> lastThreatDistances = new HashMap<>();
     private final Map<UUID, Long> lastThreatSeenTicks = new HashMap<>();
     private final Map<UUID, Float> lastThreatHealths = new HashMap<>();
+    private final Map<UUID, String> lastThreatTypes = new HashMap<>();
+    private final Map<UUID, Integer> lastThreatEntityIds = new HashMap<>();
+    private final Map<UUID, Vec3d> lastThreatPositions = new HashMap<>();
+    private final Map<UUID, HostileOutcomeObservation> hostileOutcomes = new LinkedHashMap<>();
+    private final Queue<ServerDeathObservation> pendingServerDeaths = new ConcurrentLinkedQueue<>();
+    private final Deque<ExplosionObservation> recentExplosionObservations = new ArrayDeque<>();
     private final Map<UUID, Long> lineOfSightStartedTicks = new HashMap<>();
     private final Map<UUID, Long> confirmedVisibleTicks = new HashMap<>();
     private final Deque<SoundObservation> recentSoundObservations = new ArrayDeque<>();
     /** 非敵対 Mob + 実再生されたブロック・天候・環境音。戦闘判定には使わない。 */
     private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
+    private final Deque<BlockBreakObservation> recentBlockBreakObservations = new ArrayDeque<>();
 
     private long tickCounter = 0;
     private long lastSnapshotTick = -1;
@@ -209,11 +231,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private long lastStructureProbeTick = -1000;
     private long lastCombatSignalTick = -1000;
     private long lastWardenSeenTick = -1000;
-    private long lastWardenDeathSoundTick = -1000;
     private int trackedWardenEntityId = -1;
     private long lastWardenDefeatObservedTick = -1000;
     private long lastDragonSeenTick = -1000;
-    private long lastDragonDeathSoundTick = -1000;
     private int trackedDragonEntityId = -1;
     private long lastDragonDefeatObservedTick = -1000;
     // 一度でも殻を開いた（動き出した）シュルカー。閉じたままの個体は「ブロックのフリ」を尊重して黙る
@@ -246,6 +266,22 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.config = DogidoConfig.load();
         this.eventClient = new DogidoEventClient(LOGGER, this.config, this::handleSelectHotbarCommand);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
+        ClientPlayerBlockBreakEvents.AFTER.register((world, player, pos, state) -> {
+            rememberBlockBreak(state);
+        });
+        ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
+            Entity attacker = damageSource.getAttacker();
+            UUID playerAttackerUuid = attacker instanceof ServerPlayerEntity
+                ? attacker.getUuid()
+                : null;
+            this.pendingServerDeaths.add(
+                new ServerDeathObservation(
+                    entity.getUuid(),
+                    playerAttackerUuid,
+                    damageSource.isIn(DamageTypeTags.IS_EXPLOSION)
+                )
+            );
+        });
         ClientSendMessageEvents.CHAT.register(this::rememberUserText);
         ClientSendMessageEvents.COMMAND.register(command -> rememberUserText("/" + command));
         LOGGER.info(
@@ -270,6 +306,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         instance.onEntitySoundPacket(packet);
+    }
+
+    public static void recordExplosionPacket(ExplosionS2CPacket packet) {
+        DogidoClientAdapter instance = INSTANCE;
+        if (instance == null) {
+            return;
+        }
+        instance.onExplosionPacket(packet);
     }
 
     public static void recordPlayedSound(SoundInstance sound) {
@@ -398,6 +442,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.tickCounter += 1;
         this.eventClient.ensureSession(resolvePlayerName(player));
         expireSoundObservations();
+        expireBlockBreakObservations();
         observeNearbyLightning(player, world);
         probeStructureAtPlayer(client, player, world);
 
@@ -414,7 +459,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         this.lastHealth = player.getHealth();
 
+        applyServerDeathObservations(player);
+        Map<UUID, HostileOutcomeObservation> newCreeperDetonations = observeCreeperDetonations(world);
         List<ThreatObservation> threats = scanThreats(player, world);
+        List<HostileOutcomeObservation> newHostileDefeats = new ArrayList<>();
+        for (HostileOutcomeObservation outcome : this.hostileOutcomes.values()) {
+            if (
+                outcome.observedTick() == this.tickCounter
+                && !"creeper_detonation".equals(outcome.outcome())
+            ) {
+                newHostileDefeats.add(outcome);
+            }
+        }
         observeWardenSpecialSetups(player, world, threats);
         observeTrackedWardenDefeat(world);
         observeTrackedDragonDefeat(world);
@@ -454,16 +510,42 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.lastAmbientMobSignature = ambientMobSignature(ambientMobs);
         }
 
+        if (!newCreeperDetonations.isEmpty()) {
+            JsonObject detonationEvent = buildCreeperDetonated(
+                player,
+                world,
+                visibleThreats,
+                audioThreats,
+                ambientMobs,
+                newCreeperDetonations.values()
+            );
+            this.eventClient.postEvent(detonationEvent);
+        }
+
+        if (!newHostileDefeats.isEmpty()) {
+            JsonObject defeatedEvent = buildHostileDefeated(
+                player,
+                world,
+                visibleThreats,
+                audioThreats,
+                ambientMobs,
+                newHostileDefeats
+            );
+            this.eventClient.postEvent(defeatedEvent);
+        }
+
         if (deadNow && !this.wasDead) {
             JsonObject deathEvent = buildPlayerDied(player, world, visibleThreats, audioThreats, ambientMobs);
             this.eventClient.postEvent(deathEvent);
             this.combatActive = false;
+            clearCombatOutcomeObservations();
         } else if (shouldSendCombatEnded(visibleThreats, audioThreats, deadNow)) {
             // combat_ended 自体にも終了後の状態を載せる。旧順序では
             // buildCombat() が combat_active_hint=true を書いてしまっていた。
             this.combatActive = false;
             JsonObject combatEndedEvent = buildCombatEnded(player, world, ambientMobs);
             this.eventClient.postEvent(combatEndedEvent);
+            clearCombatOutcomeObservations();
         }
 
         this.wasDead = deadNow;
@@ -491,13 +573,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastStructureProbeTick = -1000;
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
-        this.lastWardenDeathSoundTick = -1000;
         this.trackedWardenEntityId = -1;
         this.lastWardenDefeatObservedTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
         this.lastDragonSeenTick = -1000;
-        this.lastDragonDeathSoundTick = -1000;
         this.trackedDragonEntityId = -1;
         this.lastDragonDefeatObservedTick = -1000;
         this.awakenedShulkerIds.clear();
@@ -522,8 +602,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lineOfSightStartedTicks.clear();
         this.confirmedVisibleTicks.clear();
         this.lastThreatHealths.clear();
+        this.lastThreatTypes.clear();
+        this.lastThreatEntityIds.clear();
+        this.lastThreatPositions.clear();
+        this.hostileOutcomes.clear();
+        this.pendingServerDeaths.clear();
+        this.recentExplosionObservations.clear();
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
+        this.recentBlockBreakObservations.clear();
     }
 
     private void resetThreatStateForDimensionChange() {
@@ -545,13 +632,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastStructureProbeTick = -1000;
         this.lastCombatSignalTick = -1000;
         this.lastWardenSeenTick = -1000;
-        this.lastWardenDeathSoundTick = -1000;
         this.trackedWardenEntityId = -1;
         this.lastWardenDefeatObservedTick = -1000;
         this.lastWardenEndCrystalObservedTick = -1000;
         this.lastWardenTntSetupObservedTick = -1000;
         this.lastDragonSeenTick = -1000;
-        this.lastDragonDeathSoundTick = -1000;
         this.trackedDragonEntityId = -1;
         this.lastDragonDefeatObservedTick = -1000;
         this.awakenedShulkerIds.clear();
@@ -568,8 +653,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lineOfSightStartedTicks.clear();
         this.confirmedVisibleTicks.clear();
         this.lastThreatHealths.clear();
+        this.lastThreatTypes.clear();
+        this.lastThreatEntityIds.clear();
+        this.lastThreatPositions.clear();
+        this.hostileOutcomes.clear();
+        this.pendingServerDeaths.clear();
+        this.recentExplosionObservations.clear();
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
+        this.recentBlockBreakObservations.clear();
     }
 
     private void resetThreatStateForPositionJump() {
@@ -595,7 +687,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         ThreatObservation nearest = threats.getFirst();
         boolean urgent = nearest.distance() <= this.config.panicDistance
             || nearest.approaching()
-            || nearest.isRearThreat();
+            || nearest.isRearThreat()
+            || threats.stream().anyMatch(ThreatObservation::fuseActive);
         String signature = threatSignature(threats);
         int minIntervalTicks = urgent
             ? Math.max(1, this.config.threatScanIntervalTicks / 2)
@@ -697,19 +790,34 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private List<ThreatObservation> scanThreats(ClientPlayerEntity player, ClientWorld world) {
-        double scanDistance = Math.max(
-            Math.max(this.config.maxThreatDistance, this.config.visibleThreatDistance),
-            30.0
-        );
+        double scanDistance = Math.max(this.config.maxThreatDistance, this.config.visibleThreatDistance);
         List<Entity> entities = world.getOtherEntities(
             player,
             player.getBoundingBox().expand(scanDistance),
-            this::isThreatCandidateEntity
+            this::isThreatScanCandidateEntity
         );
 
         List<ThreatObservation> threats = new ArrayList<>();
         for (Entity entity : entities) {
             if (!(entity instanceof LivingEntity living)) {
+                continue;
+            }
+            UUID entityUuid = entity.getUuid();
+            String trackedType = this.lastThreatTypes.get(entityUuid);
+            boolean died = living.isDead()
+                || living.getHealth() <= 0.0f
+                || living.deathTime > 0
+                || !living.isAlive();
+            if (died) {
+                if (
+                    trackedType != null
+                    && this.tickCounter - this.lastThreatSeenTicks.getOrDefault(entityUuid, -1000L) <= 100
+                ) {
+                    recordDefeatedHostile(living, trackedType);
+                }
+                continue;
+            }
+            if (!isThreatCandidateEntity(entity)) {
                 continue;
             }
             MobDisposition disposition = classifyMobDisposition(player, living);
@@ -723,6 +831,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
             Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
             String horizontal = classifyHorizontal(player, entityPosition);
+            String cardinal = classifyCardinal(player, entityPosition);
             String vertical = classifyVertical(player, entityPosition);
             boolean approaching = isApproaching(entity.getUuid(), distance);
             boolean rearThreat = distance <= Math.min(this.config.rearWarningDistance, 3.0)
@@ -731,12 +840,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             float currentHealth = living.getHealth();
             Float previousHealth = this.lastThreatHealths.get(entity.getUuid());
             boolean recentlyHurt = previousHealth != null && currentHealth + 0.25f < previousHealth;
+            boolean fuseActive = living instanceof CreeperEntity creeper
+                && (creeper.getFuseSpeed() > 0 || creeper.isIgnited());
 
             ThreatObservation observation = new ThreatObservation(
                 entity.getUuid(),
                 disposition.type(),
                 distance,
                 horizontal,
+                cardinal,
                 vertical,
                 approaching,
                 rearThreat,
@@ -747,12 +859,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 entity.getY(),
                 entity.getZ(),
                 currentHealth,
-                recentlyHurt
+                recentlyHurt,
+                fuseActive
             );
             threats.add(observation);
             this.lastThreatDistances.put(entity.getUuid(), distance);
             this.lastThreatSeenTicks.put(entity.getUuid(), this.tickCounter);
             this.lastThreatHealths.put(entity.getUuid(), currentHealth);
+            this.lastThreatTypes.put(entity.getUuid(), disposition.type());
+            this.lastThreatEntityIds.put(entity.getUuid(), entity.getId());
+            this.lastThreatPositions.put(entity.getUuid(), entityPosition);
             if ("warden".equals(disposition.type())) {
                 this.lastWardenSeenTick = this.tickCounter;
                 this.lastWardenSeenX = entity.getX();
@@ -769,6 +885,132 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         threats.sort(Comparator.comparingDouble(ThreatObservation::distance));
         return threats;
+    }
+
+    private boolean isThreatScanCandidateEntity(Entity entity) {
+        if (!(entity instanceof LivingEntity) || entity instanceof PlayerEntity) {
+            return false;
+        }
+        // 死亡アニメーション中は isAlive=false になる。直前まで追跡していた個体だけ
+        // スキャンへ残し、「視界から消えた」と「死亡を観測した」を分離する。
+        return this.lastThreatSeenTicks.containsKey(entity.getUuid())
+            || isThreatCandidateEntity(entity);
+    }
+
+    private void recordDefeatedHostile(LivingEntity hostile, String hostileType) {
+        UUID entityUuid = hostile.getUuid();
+        if (this.hostileOutcomes.containsKey(entityUuid)) {
+            return;
+        }
+        // リモートサーバーでは論理サーバーの死亡イベントを購読できない。
+        // クライアント死亡状態だけで「プレイヤーが倒した」とは推測しない。
+        recordHostileOutcome(
+            entityUuid,
+            hostileType,
+            "other_death",
+            "client_death_state"
+        );
+    }
+
+    private void applyServerDeathObservations(ClientPlayerEntity player) {
+        ServerDeathObservation observation;
+        while ((observation = this.pendingServerDeaths.poll()) != null) {
+            String trackedType = this.lastThreatTypes.get(observation.entityUuid());
+            if (trackedType == null) {
+                continue;
+            }
+            boolean playerKill = observation.playerAttackerUuid() != null
+                && observation.playerAttackerUuid().equals(player.getUuid());
+            String outcome = playerKill
+                ? "player_kill"
+                : observation.explosionDeath()
+                    ? "explosion_death"
+                    : "other_death";
+            recordHostileOutcome(
+                observation.entityUuid(),
+                trackedType,
+                outcome,
+                "server_death_event"
+            );
+        }
+    }
+
+    private Map<UUID, HostileOutcomeObservation> observeCreeperDetonations(ClientWorld world) {
+        Map<UUID, HostileOutcomeObservation> newlyObserved = new LinkedHashMap<>();
+        this.recentExplosionObservations.removeIf(
+            explosion -> this.tickCounter - explosion.observedTick() > 12
+        );
+        if (this.recentExplosionObservations.isEmpty()) {
+            return newlyObserved;
+        }
+        for (Map.Entry<UUID, String> entry : this.lastThreatTypes.entrySet()) {
+            UUID entityUuid = entry.getKey();
+            String type = entry.getValue();
+            if (
+                !("creeper".equals(type) || "charged_creeper".equals(type))
+                || this.hostileOutcomes.containsKey(entityUuid)
+            ) {
+                continue;
+            }
+            Long seenAt = this.lastThreatSeenTicks.get(entityUuid);
+            Integer entityId = this.lastThreatEntityIds.get(entityUuid);
+            Vec3d position = this.lastThreatPositions.get(entityUuid);
+            if (
+                seenAt == null
+                || entityId == null
+                || position == null
+                || this.tickCounter - seenAt > 12
+                || world.getEntityById(entityId) != null
+            ) {
+                continue;
+            }
+            for (ExplosionObservation explosion : this.recentExplosionObservations) {
+                double matchRadius = Math.max(4.0, explosion.radius() + 1.5);
+                if (position.squaredDistanceTo(explosion.center()) > matchRadius * matchRadius) {
+                    continue;
+                }
+                if (recordHostileOutcome(
+                    entityUuid,
+                    type,
+                    "creeper_detonation",
+                    "explosion_packet"
+                )) {
+                    newlyObserved.put(entityUuid, this.hostileOutcomes.get(entityUuid));
+                }
+                break;
+            }
+        }
+        return newlyObserved;
+    }
+
+    private boolean recordHostileOutcome(
+        UUID entityUuid,
+        String hostileType,
+        String outcome,
+        String evidence
+    ) {
+        if (this.hostileOutcomes.containsKey(entityUuid)) {
+            return false;
+        }
+        this.hostileOutcomes.put(
+            entityUuid,
+            new HostileOutcomeObservation(
+                entityUuid,
+                hostileType,
+                outcome,
+                evidence,
+                this.tickCounter
+            )
+        );
+        if ("warden".equals(hostileType)) {
+            this.lastWardenDefeatObservedTick = this.tickCounter;
+            this.trackedWardenEntityId = -1;
+        }
+        if ("ender_dragon".equals(hostileType)) {
+            this.lastDragonDefeatObservedTick = this.tickCounter;
+            this.trackedDragonEntityId = -1;
+        }
+        return true;
     }
 
     private List<AudioThreatObservation> scanAuditoryThreats(ClientPlayerEntity player) {
@@ -893,6 +1135,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private MobDisposition classifyMobDisposition(ClientPlayerEntity player, LivingEntity entity) {
         String type = entityTypeName(entity);
+        if (entity instanceof CreeperEntity creeper && creeper.isCharged()) {
+            type = "charged_creeper";
+        }
         if (entity instanceof ShulkerEntity shulker) {
             // 閉じたままのシュルカーは「ブロックのフリ」を尊重して気づかないフリをする。
             // 一度でも殻を開いたら（動き出したら）以後は脅威として扱う
@@ -1065,9 +1310,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.lastThreatSeenTicks.remove(uuid);
             this.lastThreatDistances.remove(uuid);
             this.lastThreatHealths.remove(uuid);
+            this.lastThreatTypes.remove(uuid);
+            this.lastThreatEntityIds.remove(uuid);
+            this.lastThreatPositions.remove(uuid);
             this.lineOfSightStartedTicks.remove(uuid);
             this.confirmedVisibleTicks.remove(uuid);
         }
+    }
+
+    private void clearCombatOutcomeObservations() {
+        this.hostileOutcomes.clear();
+        this.pendingServerDeaths.clear();
+        this.recentExplosionObservations.clear();
     }
 
     private void expireSoundObservations() {
@@ -1192,7 +1446,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("ambient_sounds", buildAmbientSounds(ambientSounds));
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
-        root.add("nearby_resources", nearbyResources);
+        attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
@@ -1215,7 +1469,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
-        root.add("nearby_resources", nearbyResources);
+        attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
@@ -1238,7 +1492,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
-        root.add("nearby_resources", nearbyResources);
+        attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(null));
@@ -1259,7 +1513,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("auditory_threats", new JsonArray());
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
-        root.add("nearby_resources", nearbyResources);
+        attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
@@ -1282,10 +1536,62 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
-        root.add("nearby_resources", nearbyResources);
+        attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, threats, audioThreats));
         root.add("meta", buildMeta(resolveDeathCause(player)));
+        return root;
+    }
+
+    private JsonObject buildCreeperDetonated(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<ThreatObservation> threats,
+        List<AudioThreatObservation> audioThreats,
+        List<AmbientMobObservation> ambientMobs,
+        java.util.Collection<HostileOutcomeObservation> detonations
+    ) {
+        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject root = baseEnvelope("creeper_detonated", "system", "urgent", "high");
+        root.addProperty("sequence", this.eventClient.nextSequence());
+        root.add("player", buildPlayer(player, world));
+        root.add("world", buildWorld(player, world));
+        root.add("visual_threats", buildVisualThreats(threats));
+        root.add("auditory_threats", buildAuditoryThreats(audioThreats));
+        attachPassiveMobs(root, ambientMobs);
+        root.add("inventory", buildInventory(player));
+        attachNearbyMaterials(root, player, world, nearbyResources);
+        attachLookTarget(root, player, world);
+        JsonObject combat = buildCombat(player, world, threats, audioThreats);
+        combat.add("hostile_outcomes", buildHostileOutcomes(detonations));
+        root.add("combat", combat);
+        root.add("meta", buildMeta(null));
+        return root;
+    }
+
+    private JsonObject buildHostileDefeated(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<ThreatObservation> threats,
+        List<AudioThreatObservation> audioThreats,
+        List<AmbientMobObservation> ambientMobs,
+        java.util.Collection<HostileOutcomeObservation> outcomes
+    ) {
+        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject root = baseEnvelope("hostile_defeated", "system", "urgent", "high");
+        root.addProperty("sequence", this.eventClient.nextSequence());
+        root.add("player", buildPlayer(player, world));
+        root.add("world", buildWorld(player, world));
+        root.add("visual_threats", buildVisualThreats(threats));
+        root.add("auditory_threats", buildAuditoryThreats(audioThreats));
+        attachPassiveMobs(root, ambientMobs);
+        root.add("inventory", buildInventory(player));
+        attachNearbyMaterials(root, player, world, nearbyResources);
+        attachLookTarget(root, player, world);
+        JsonObject combat = buildCombat(player, world, threats, audioThreats);
+        combat.add("hostile_outcomes", buildHostileOutcomes(outcomes));
+        root.add("combat", combat);
+        root.add("meta", buildMeta(null));
         return root;
     }
 
@@ -1303,11 +1609,22 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         root.add("auditory_threats", new JsonArray());
         attachPassiveMobs(root, ambientMobs);
         root.add("inventory", buildInventory(player));
-        root.add("nearby_resources", nearbyResources);
+        attachNearbyMaterials(root, player, world, nearbyResources);
         attachLookTarget(root, player, world);
         root.add("combat", buildCombat(player, world, List.of(), List.of()));
         root.add("meta", buildMeta(null));
         return root;
+    }
+
+    private void attachNearbyMaterials(
+        JsonObject root,
+        ClientPlayerEntity player,
+        ClientWorld world,
+        JsonArray nearbyResources
+    ) {
+        root.add("nearby_resources", nearbyResources);
+        root.add("dropped_items", buildDroppedItems(player, world));
+        root.add("recent_block_breaks", buildRecentBlockBreaks());
     }
 
     private JsonObject baseEnvelope(String eventName, String sourceKind, String priorityHint, String certainty) {
@@ -1346,6 +1663,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty(
             "held_item",
             held.isEmpty() ? "minecraft:air" : Registries.ITEM.getId(held.getItem()).toString()
+        );
+        MinecraftClient client = MinecraftClient.getInstance();
+        json.addProperty(
+            "block_breaking_active",
+            client.interactionManager != null && client.interactionManager.isBreakingBlock()
         );
         json.add("hotbar", buildHotbar(player));
         JsonObject vehicle = buildVehicleState(player);
@@ -1425,11 +1747,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         json.addProperty("local_light", world.getLightLevel(pos));
         json.addProperty("sky_visible", world.isSkyVisible(pos));
+        if (usesDayNightCycle(world)) {
+            int surfaceY = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
+            json.addProperty("surface_y", surfaceY);
+            json.addProperty("depth_below_surface", Math.max(0, surfaceY - pos.getY()));
+        }
         double ceilingHeight = estimateCeilingHeight(world, pos);
         String overheadCoverType = classifyOverheadCover(world, pos);
         double enclosureScore = estimateEnclosureScore(world, pos);
         int nearbyDoorCount = countNearbyDoors(world, pos);
         int openDoorCount = countOpenDoors(world, pos);
+        boolean nearbyWindowPresent = hasNearbyWindow(world, pos);
         int nearbyBedCount = countNearbyBeds(world, pos);
         int nearbySleepingPeopleCount = countNearbySleepingPeople(world, player);
         int draftyOpeningCount = countDraftyOpenings(world, pos);
@@ -1455,6 +1783,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("air_supply", player.getAir());
         json.addProperty("nearby_door_count", nearbyDoorCount);
         json.addProperty("open_door_count", openDoorCount);
+        json.addProperty("nearby_window_present", nearbyWindowPresent);
         json.addProperty("nearby_bed_count", nearbyBedCount);
         json.addProperty("nearby_sleeping_people_count", nearbySleepingPeopleCount);
         json.addProperty("drafty_opening_count", draftyOpeningCount);
@@ -1540,10 +1869,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
             JsonObject direction = new JsonObject();
             direction.addProperty("horizontal", threat.horizontalDirection());
+            direction.addProperty("cardinal", threat.cardinalDirection());
             direction.addProperty("vertical", threat.verticalRelation());
             entry.add("direction", direction);
 
             entry.addProperty("approaching", threat.approaching());
+            entry.addProperty("fuse_active", threat.fuseActive());
             entry.addProperty("on_fire", threat.onFire());
             entry.addProperty("in_water", threat.inWater());
             entry.addProperty("certainty", "high");
@@ -1822,6 +2153,192 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return array;
     }
 
+    private JsonArray buildDroppedItems(ClientPlayerEntity player, ClientWorld world) {
+        BlockPos origin = player.getBlockPos();
+        double radius = DROPPED_ITEM_SCAN_RADIUS;
+        Map<String, DroppedItemObservation> byItemId = new LinkedHashMap<>();
+        for (Entity entity : world.getOtherEntities(player, new net.minecraft.util.math.Box(
+            origin.getX() - radius,
+            origin.getY() - radius,
+            origin.getZ() - radius,
+            origin.getX() + radius + 1.0,
+            origin.getY() + radius + 1.0,
+            origin.getZ() + radius + 1.0
+        ))) {
+            if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) {
+                continue;
+            }
+            ItemStack stack = itemEntity.getStack();
+            if (stack.isEmpty()) {
+                continue;
+            }
+            String itemId = Registries.ITEM.getId(stack.getItem()).getPath();
+            double distance = Math.sqrt(player.squaredDistanceTo(itemEntity));
+            int ageTicks = Math.max(0, itemEntity.getItemAge());
+            boolean blockItem = stack.getItem() instanceof BlockItem;
+            boolean miningRelated = isMiningRelatedDroppedItem(stack, itemId);
+            DroppedItemObservation previous = byItemId.get(itemId);
+            if (previous == null) {
+                byItemId.put(
+                    itemId,
+                    new DroppedItemObservation(
+                        itemId,
+                        stack.getCount(),
+                        1,
+                        distance,
+                        ageTicks,
+                        blockItem,
+                        miningRelated
+                    )
+                );
+                continue;
+            }
+            byItemId.put(
+                itemId,
+                new DroppedItemObservation(
+                    itemId,
+                    previous.count() + stack.getCount(),
+                    previous.entityCount() + 1,
+                    Math.min(previous.distance(), distance),
+                    Math.min(previous.ageTicks(), ageTicks),
+                    previous.blockItem() || blockItem,
+                    previous.miningRelated() || miningRelated
+                )
+            );
+        }
+
+        JsonArray array = new JsonArray();
+        byItemId.values().stream()
+            .sorted(Comparator.comparingDouble(DroppedItemObservation::distance))
+            .limit(MAX_DROPPED_ITEM_KINDS)
+            .forEach(observation -> {
+                JsonObject item = new JsonObject();
+                item.addProperty("name", observation.itemId());
+                item.addProperty("count", observation.count());
+                item.addProperty("entity_count", observation.entityCount());
+                item.addProperty("distance", round(observation.distance()));
+                item.addProperty("age_ms", observation.ageTicks() * 50L);
+                item.addProperty("block_item", observation.blockItem());
+                item.addProperty("mining_related", observation.miningRelated());
+                array.add(item);
+            });
+        return array;
+    }
+
+    private boolean isMiningRelatedDroppedItem(ItemStack stack, String itemId) {
+        if (stack.getItem() instanceof BlockItem blockItem) {
+            return !"other".equals(classifyBrokenBlockMaterial(blockItem.getBlock().getDefaultState()));
+        }
+        return Set.of(
+            "coal",
+            "raw_copper",
+            "raw_gold",
+            "raw_iron",
+            "diamond",
+            "emerald",
+            "lapis_lazuli",
+            "redstone",
+            "quartz",
+            "flint"
+        ).contains(itemId);
+    }
+
+    private void rememberBlockBreak(BlockState state) {
+        if (state == null || state.isAir()) {
+            return;
+        }
+        String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        recentBlockBreakObservations.addLast(
+            new BlockBreakObservation(
+                blockId,
+                classifyBrokenBlockMaterial(state),
+                this.tickCounter
+            )
+        );
+        expireBlockBreakObservations();
+    }
+
+    private void expireBlockBreakObservations() {
+        while (!recentBlockBreakObservations.isEmpty()) {
+            BlockBreakObservation oldest = recentBlockBreakObservations.peekFirst();
+            if (this.tickCounter - oldest.observedTick() <= RECENT_BLOCK_BREAK_TTL_TICKS) {
+                break;
+            }
+            recentBlockBreakObservations.removeFirst();
+        }
+    }
+
+    private JsonArray buildRecentBlockBreaks() {
+        JsonArray array = new JsonArray();
+        var iterator = recentBlockBreakObservations.descendingIterator();
+        while (iterator.hasNext() && array.size() < 12) {
+            BlockBreakObservation observation = iterator.next();
+            JsonObject item = new JsonObject();
+            item.addProperty("name", observation.blockId());
+            item.addProperty("material", observation.material());
+            item.addProperty("age_ms", ticksSince(observation.observedTick()));
+            array.add(item);
+        }
+        return array;
+    }
+
+    private String classifyBrokenBlockMaterial(BlockState state) {
+        String naturalMaterial = classifyNaturalTerrainMaterial(state);
+        if (!"other".equals(naturalMaterial)) {
+            return naturalMaterial;
+        }
+        if (state.isIn(BlockTags.PICKAXE_MINEABLE)) {
+            return "stone";
+        }
+        if (state.isIn(BlockTags.SHOVEL_MINEABLE)) {
+            return "earth";
+        }
+        return "other";
+    }
+
+    private String classifyNaturalTerrainMaterial(BlockState state) {
+        String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        if (
+            blockId.endsWith("_ore")
+                || state.isIn(BlockTags.COAL_ORES)
+                || state.isIn(BlockTags.COPPER_ORES)
+                || state.isIn(BlockTags.DIAMOND_ORES)
+                || state.isIn(BlockTags.EMERALD_ORES)
+                || state.isIn(BlockTags.GOLD_ORES)
+                || state.isIn(BlockTags.IRON_ORES)
+                || state.isIn(BlockTags.LAPIS_ORES)
+                || state.isIn(BlockTags.REDSTONE_ORES)
+        ) {
+            return "ore";
+        }
+        if (
+            state.isIn(BlockTags.BASE_STONE_OVERWORLD)
+                || state.isIn(BlockTags.BASE_STONE_NETHER)
+                || state.isIn(BlockTags.STONE_ORE_REPLACEABLES)
+                || state.isIn(BlockTags.DEEPSLATE_ORE_REPLACEABLES)
+                || Set.of(
+                    "tuff",
+                    "calcite",
+                    "dripstone_block",
+                    "pointed_dripstone",
+                    "blackstone",
+                    "basalt",
+                    "smooth_basalt",
+                    "end_stone"
+                ).contains(blockId)
+        ) {
+            return "stone";
+        }
+        if (
+            state.isIn(BlockTags.DIRT)
+                || state.isIn(BlockTags.SAND)
+                || Set.of("gravel", "clay", "mud", "packed_mud").contains(blockId)
+        ) {
+            return "earth";
+        }
+        return "other";
+    }
+
     private String nearbyResourceNameForBlock(BlockState state) {
         String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
         // 地表の積雪は、バイオーム名や気温から推測せず実ブロックを送る。
@@ -1874,10 +2391,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("recent_hostile_audio_ms", ticksSince(this.lastAudioThreatObservedTick));
         json.addProperty("hostiles_within_7", countThreatsWithin(threats, 7.0));
         json.addProperty("hostiles_within_10", countThreatsWithin(threats, 10.0));
-        json.addProperty("hostiles_within_30_ground", countGroundThreatsWithin(threats, 30.0));
+        double scanDistance = Math.max(this.config.maxThreatDistance, this.config.visibleThreatDistance);
+        json.addProperty("hostile_scan_distance", round(scanDistance));
+        json.addProperty("hostiles_within_scan_ground", countGroundThreatsWithin(threats, scanDistance));
         json.addProperty("combat_active_hint", this.combatActive || !threats.isEmpty() || !audioThreats.isEmpty());
         int nearbyExperienceOrbCount = countNearbyExperienceOrbs(world, player);
         json.addProperty("nearby_experience_orb_count", nearbyExperienceOrbCount);
+        json.add("hostile_outcomes", buildHostileOutcomes(this.hostileOutcomes.values()));
         ThreatObservation warden = nearestThreatOfType(threats, "warden");
         if (warden != null) {
             // ウォーデン周辺とプレイヤー周辺で同じ個体を二重に数えないよう max を取る
@@ -1949,6 +2469,21 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         appendDragonCombatInfo(json, player, world);
         return json;
+    }
+
+    private JsonArray buildHostileOutcomes(
+        java.util.Collection<HostileOutcomeObservation> outcomes
+    ) {
+        JsonArray hostileOutcomeArray = new JsonArray();
+        for (HostileOutcomeObservation outcome : outcomes) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("entity_id", outcome.entityUuid().toString());
+            entry.addProperty("type", outcome.type());
+            entry.addProperty("outcome", outcome.outcome());
+            entry.addProperty("evidence", outcome.evidence());
+            hostileOutcomeArray.add(entry);
+        }
+        return hostileOutcomeArray;
     }
 
     private void observeWardenSpecialSetups(
@@ -2152,18 +2687,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return count;
     }
 
-    private void recordWardenDeathSound(String soundEventId) {
-        if (soundEventId != null && soundEventId.contains("warden") && soundEventId.contains("death")) {
-            this.lastWardenDeathSoundTick = this.tickCounter;
-        }
-    }
-
-    private void recordDragonDeathSound(String soundEventId) {
-        if (soundEventId != null && soundEventId.contains("ender_dragon") && soundEventId.contains("death")) {
-            this.lastDragonDeathSoundTick = this.tickCounter;
-        }
-    }
-
     private void observeTrackedDragonDefeat(ClientWorld world) {
         if (this.trackedDragonEntityId < 0) {
             return;
@@ -2189,8 +2712,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             && this.tickCounter - this.lastDragonDefeatObservedTick <= DRAGON_DEFEAT_WINDOW_TICKS) {
             return true;
         }
-        return this.lastDragonDeathSoundTick >= 0
-            && this.tickCounter - this.lastDragonDeathSoundTick <= DRAGON_DEFEAT_WINDOW_TICKS;
+        return false;
     }
 
     private EnderDragonEntity findNearestDragon(ClientPlayerEntity player, ClientWorld world) {
@@ -2296,22 +2818,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             && this.tickCounter - this.lastWardenDefeatObservedTick <= 400) {
             return true;
         }
-        // 死亡音はフォールバック。XPオーブはプレイヤーキル時しか落ちない。
-        if (this.lastWardenDeathSoundTick >= 0
-            && this.tickCounter - this.lastWardenDeathSoundTick <= 400) {
-            return true;
-        }
-        for (Entity entity : world.getOtherEntities(
-            null,
-            new net.minecraft.util.math.Box(
-                this.lastWardenSeenX - 20.0, this.lastWardenSeenY - 12.0, this.lastWardenSeenZ - 20.0,
-                this.lastWardenSeenX + 20.0, this.lastWardenSeenY + 12.0, this.lastWardenSeenZ + 20.0
-            )
-        )) {
-            if ("experience_orb".equals(entityTypeName(entity))) {
-                return true;
-            }
-        }
         return false;
     }
 
@@ -2354,6 +2860,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 .append(threat.horizontalDirection())
                 .append(':')
                 .append(bucketDistance(threat.distance()))
+                .append(':')
+                .append(threat.fuseActive() ? "fuse" : "idle")
                 .append('|');
         }
         return builder.toString();
@@ -2448,8 +2956,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         String soundEventId = soundEventId(packet.getSound());
-        recordWardenDeathSound(soundEventId);
-        recordDragonDeathSound(soundEventId);
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
@@ -2457,9 +2963,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String weatherSoundKind = classifyWeatherSoundKind(soundEventId);
         if (weatherSoundKind != null) {
             recordWeatherSoundObservation(weatherSoundKind);
-        }
-        if (isExplosionSound(soundEventId)) {
-            this.lastExplosionObservedTick = this.tickCounter;
         }
         if (soundEventId.contains("ender_eye.launch")) {
             // プレイヤー近傍の投擲音のみ拾う（マルチで他人の投擲を実況しない）
@@ -2600,14 +3103,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         String soundEventId = soundEventId(packet.getSound());
-        recordWardenDeathSound(soundEventId);
-        recordDragonDeathSound(soundEventId);
         String ominousKind = classifyOminousSoundKind(soundEventId);
         if (ominousKind != null) {
             recordOminousSoundObservation(ominousKind);
-        }
-        if (isExplosionSound(soundEventId)) {
-            this.lastExplosionObservedTick = this.tickCounter;
         }
         Entity entity = world.getEntityById(packet.getEntityId());
         if (packet.getCategory() != SoundCategory.HOSTILE) {
@@ -3015,8 +3513,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         if (soundEventId.contains("warden")) {
             if (soundEventId.contains("death")) {
-                // 死亡音は討伐確認に使う。presence として latch すると
-                // 討伐後しばらく不穏空気が残ってしまうので除外
+                // 死亡音は presence にも討伐確認にも使わない。
+                // 実際の死亡状態／論理サーバーの死亡イベントだけを根拠にする。
                 return null;
             }
             if (soundEventId.contains("heartbeat")) {
@@ -3040,11 +3538,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return null;
     }
 
-    private boolean isExplosionSound(String soundEventId) {
-        if (soundEventId == null || soundEventId.isBlank()) {
-            return false;
-        }
-        return soundEventId.contains("explode") || soundEventId.contains("explosion");
+    private void onExplosionPacket(ExplosionS2CPacket packet) {
+        this.lastExplosionObservedTick = this.tickCounter;
+        this.recentExplosionObservations.addLast(
+            new ExplosionObservation(packet.center(), packet.radius(), this.tickCounter)
+        );
     }
 
     private void recordOminousSoundObservation(String kind) {
@@ -3237,6 +3735,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         if (blockId.endsWith("_log") || blockId.endsWith("_wood") || blockId.contains("stem") || blockId.contains("hyphae")) {
             return "wood";
+        }
+        String naturalMaterial = classifyNaturalTerrainMaterial(state);
+        if (!"other".equals(naturalMaterial)) {
+            return naturalMaterial;
         }
         return "solid";
     }
@@ -3651,6 +4153,54 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return count;
     }
 
+    private boolean hasNearbyWindow(ClientWorld world, BlockPos origin) {
+        for (int dx = -8; dx <= 8; dx += 1) {
+            for (int dy = -2; dy <= 4; dy += 1) {
+                for (int dz = -8; dz <= 8; dz += 1) {
+                    if (dx * dx + dz * dz > 64) {
+                        continue;
+                    }
+                    BlockPos sample = origin.add(dx, dy, dz);
+                    BlockState state = world.getBlockState(sample);
+                    if (!isWindowMaterialBlock(state)) {
+                        continue;
+                    }
+                    boolean glass = isGlassBlock(state);
+                    boolean eastWestView = isWindowSideOpen(world, sample.east(), glass)
+                        && isWindowSideOpen(world, sample.west(), glass);
+                    boolean northSouthView = isWindowSideOpen(world, sample.north(), glass)
+                        && isWindowSideOpen(world, sample.south(), glass);
+                    if (eastWestView || northSouthView) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isWindowMaterialBlock(BlockState state) {
+        String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        return isGlassBlock(state)
+            || blockId.endsWith("_bars")
+            || blockId.contains("grate")
+            || blockId.contains("lattice")
+            || blockId.endsWith("_fence");
+    }
+
+    private boolean isGlassBlock(BlockState state) {
+        return Registries.BLOCK.getId(state.getBlock()).getPath().contains("glass");
+    }
+
+    private boolean isWindowSideOpen(ClientWorld world, BlockPos pos, boolean rejectFluid) {
+        BlockState state = world.getBlockState(pos);
+        if (rejectFluid && !state.getFluidState().isEmpty()) {
+            // 水槽や水中建築のガラスを、乾いた屋内の窓と断定しない。
+            return false;
+        }
+        return isVisuallyEmpty(world, pos, state);
+    }
+
     private int countNearbyBeds(ClientWorld world, BlockPos origin) {
         int count = 0;
         for (int dx = -5; dx <= 5; dx += 1) {
@@ -4030,6 +4580,39 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return "front_right";
     }
 
+    private String classifyCardinal(ClientPlayerEntity player, Vec3d targetPos) {
+        double deltaX = targetPos.x - player.getX();
+        double deltaZ = targetPos.z - player.getZ();
+        if (deltaX * deltaX + deltaZ * deltaZ < 0.0001) {
+            return "south";
+        }
+
+        // Minecraft Java: 北=-Z、南=+Z、東=+X、西=-X。
+        double angle = Math.toDegrees(Math.atan2(deltaX, -deltaZ));
+        if (angle >= -22.5 && angle < 22.5) {
+            return "north";
+        }
+        if (angle >= 22.5 && angle < 67.5) {
+            return "northeast";
+        }
+        if (angle >= 67.5 && angle < 112.5) {
+            return "east";
+        }
+        if (angle >= 112.5 && angle < 157.5) {
+            return "southeast";
+        }
+        if (angle >= 157.5 || angle < -157.5) {
+            return "south";
+        }
+        if (angle >= -157.5 && angle < -112.5) {
+            return "southwest";
+        }
+        if (angle >= -112.5 && angle < -67.5) {
+            return "west";
+        }
+        return "northwest";
+    }
+
     private String classifyVertical(ClientPlayerEntity player, Vec3d targetPos) {
         double deltaY = targetPos.y - player.getY();
         if (deltaY > 1.5) {
@@ -4095,6 +4678,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         String type,
         double distance,
         String horizontalDirection,
+        String cardinalDirection,
         String verticalRelation,
         boolean approaching,
         boolean isRearThreat,
@@ -4105,7 +4689,31 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         double y,
         double z,
         float health,
-        boolean recentlyHurt
+        boolean recentlyHurt,
+        boolean fuseActive
+    ) {
+    }
+
+    private record HostileOutcomeObservation(
+        UUID entityUuid,
+        String type,
+        String outcome,
+        String evidence,
+        long observedTick
+    ) {
+    }
+
+    private record ServerDeathObservation(
+        UUID entityUuid,
+        UUID playerAttackerUuid,
+        boolean explosionDeath
+    ) {
+    }
+
+    private record ExplosionObservation(
+        Vec3d center,
+        float radius,
+        long observedTick
     ) {
     }
 
@@ -4242,6 +4850,24 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         double sourceY,
         double sourceZ,
         boolean spokenNameAllowed
+    ) {
+    }
+
+    private record BlockBreakObservation(
+        String blockId,
+        String material,
+        long observedTick
+    ) {
+    }
+
+    private record DroppedItemObservation(
+        String itemId,
+        int count,
+        int entityCount,
+        double distance,
+        int ageTicks,
+        boolean blockItem,
+        boolean miningRelated
     ) {
     }
 }

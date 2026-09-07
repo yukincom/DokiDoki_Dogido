@@ -5,6 +5,7 @@ import unittest
 from dogido_server.config import Settings
 from dogido_server.llm import DogidoLLM, LeafGenerationRequest
 from dogido_server.models import GameEvent
+from dogido_server.player_input import route_player_input
 from dogido_server.state_machine import CHARGED_CREEPER_CALL, DogidoStateMachine, USHIRO_CALL
 from dogido_server.state_machine.response_catalog import response_lines
 
@@ -25,22 +26,6 @@ class FakeLLM(DogidoLLM):
         return f"LLM:{request.kind}"
 
     def generate_structured_json(self, request):  # type: ignore[override]
-        if request.kind == "haiku_preface_grounding":
-            return {
-                "assessments": [
-                    {
-                        "clause_index": index,
-                        "basis_atom_ids": clause["basis_atom_ids"],
-                        "claim_class": clause["claim_class"],
-                        "meaning_retained": True,
-                        "class_correct": True,
-                        "within_claim_scope": True,
-                        "natural_japanese": True,
-                    }
-                    for index, clause in enumerate(request.details.get("preface_clauses", []))
-                ],
-                "__dogido_status": "accepted",
-            }
         if request.kind == "haiku_scene":
             atoms = request.details.get("source_atoms", [])
             atom_ids = [
@@ -9030,7 +9015,114 @@ class StateMachineTests(unittest.TestCase):
 
         result = self.machine.process(event)
 
-        self.assertTrue(any(action.layer == "speech" and action.text == "30マス以内には今は3体おるで。" for action in result.actions))
+        self.assertTrue(any(action.layer == "speech" and action.text == "30ブロック以内には今は3体おるで。" for action in result.actions))
+
+    def test_player_query_answers_ground_hostile_count_with_current_scan_distance(self) -> None:
+        event = GameEvent.model_validate(
+            {
+                "schema_version": "2026-05-24",
+                "game": "minecraft-java",
+                "adapter": "dogido-fabric-client",
+                "observed_at": "2026-09-04T12:00:00+09:00",
+                "sequence": 921,
+                "event": {
+                    "name": "status_snapshot",
+                    "source_kind": "system",
+                    "priority_hint": "background",
+                    "certainty": "high",
+                },
+                "player": {"name": "main_player", "dimension": "minecraft:overworld"},
+                "world": {"time_phase": "day", "biome": "plains", "danger_darkness_score": 0.1},
+                "combat": {
+                    "hostile_scan_distance": 16.0,
+                    "hostiles_within_scan_ground": 3,
+                    "combat_active_hint": False,
+                },
+                "meta": {"user_text": "敵残り何体？"},
+            }
+        )
+
+        result = self.machine.process(event)
+
+        self.assertTrue(
+            any(
+                action.layer == "speech"
+                and action.text == "16ブロック以内には今は3体おるで。"
+                for action in result.actions
+            )
+        )
+
+    def test_bare_direction_followup_answers_last_named_hostile_cardinal_and_distance(self) -> None:
+        event = GameEvent.model_validate(
+            {
+                "schema_version": "2026-05-24",
+                "game": "minecraft-java",
+                "adapter": "dogido-fabric-client",
+                "observed_at": "2026-09-04T12:00:00+09:00",
+                "sequence": 922,
+                "event": {
+                    "name": "status_snapshot",
+                    "source_kind": "system",
+                    "priority_hint": "background",
+                    "certainty": "high",
+                },
+                "player": {
+                    "name": "main_player",
+                    "dimension": "minecraft:overworld",
+                    "yaw": 0.0,
+                },
+                "world": {"time_phase": "day", "biome": "plains", "danger_darkness_score": 0.1},
+                "visual_threats": [
+                    {
+                        "type": "zombie",
+                        "entity_id": "closer-zombie",
+                        "distance": 8.0,
+                        "direction": {
+                            "horizontal": "back",
+                            "cardinal": "north",
+                            "vertical": "same",
+                        },
+                        "certainty": "high",
+                    },
+                    {
+                        "type": "creeper",
+                        "entity_id": "creeper-southeast",
+                        "distance": 11.6,
+                        "direction": {
+                            "horizontal": "front_left",
+                            "cardinal": "southeast",
+                            "vertical": "same",
+                        },
+                        "certainty": "high",
+                    }
+                ],
+                "combat": {
+                    "recent_hostile_visual_ms": 0,
+                    "hostile_scan_distance": 16.0,
+                    "hostiles_within_scan_ground": 2,
+                    "combat_active_hint": True,
+                },
+                "meta": {"user_text": "どっち？"},
+            }
+        )
+
+        # 直前のコールアウトがクリーパーなら、より近い別種ではなく話題の個体を答える。
+        self.machine.state.last_single_visual_type = "creeper"
+        self.machine.state.last_single_visual_at = event.observed_at
+        result = self.machine.process(event)
+
+        self.assertTrue(
+            any(
+                action.text == "えーと……南東や。だいたい12ブロック先くらいやな。"
+                for action in result.actions
+            )
+        )
+
+    def test_direction_query_routing_does_not_capture_choice_question(self) -> None:
+        self.assertTrue(route_player_input("どっち？").asks_hostile_direction)
+        self.assertTrue(route_player_input("敵はどっち？").asks_hostile_direction)
+        self.assertFalse(route_player_input("ドラゴンどっち？").asks_hostile_direction)
+        self.assertFalse(route_player_input("赤と青、どっちがいい？").asks_hostile_direction)
 
     def test_audio_only_event_does_not_clear_mass_hostile_latch(self) -> None:
         first = GameEvent.model_validate_json(
@@ -9157,7 +9249,7 @@ class StateMachineTests(unittest.TestCase):
                 {
                   "type": "phantom",
                   "entity_id": "phantom-1",
-                  "distance": 20.0,
+                  "distance": 15.0,
                   "direction": {"horizontal": "front", "vertical": "above"},
                   "approaching": true,
                   "certainty": "high"

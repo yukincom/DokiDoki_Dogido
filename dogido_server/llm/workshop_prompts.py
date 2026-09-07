@@ -9,6 +9,8 @@ player_chat のサバイバル材料（look / topic / 所持）は載せない�
 
 from __future__ import annotations
 
+from dogido_server.haiku.workshop_context import workshop_context_block
+
 from .prompt_common import detail_str, leaf_dialog
 from .types import LeafGenerationRequest
 
@@ -59,6 +61,8 @@ def build_haiku_workshop_intent_messages(details: dict[str, object]) -> list[dic
         "\n"
         "直前状態がmeaning_explainedなら短い納得をack、close_confirmationなら"
         "終了確認への肯定をackにする。内容のある続行発話は通常どおり分類する。\n"
+        "説明済みは理解済みではない。直近の実際の返答と現在発話を合わせて読み、"
+        "疑問・否定・困惑・修正相談をackへ丸めない。\n"
         "findingsは明示された問題だけ。行は上から0、1、2で、不明ならline_indexを省略する。\n"
         "evaluationは現在句への明示的な評価だけfound=true。sentimentは"
         "positive/negative/mixed、scopeはwhole_verse/part。質問、説明要求、置換提案、"
@@ -77,6 +81,7 @@ def build_haiku_workshop_intent_messages(details: dict[str, object]) -> list[dic
         f"狙いの一言: {materials}\n"
         f"プレイヤー: {player_text}\n"
         f"直前状態: {conversation_stage}\n"
+        f"{workshop_context_block(details)}"
         f"許可された intent: {allowed}\n"
         "\n"
         "返答はJSONオブジェクトのみ。"
@@ -121,6 +126,7 @@ def build_haiku_workshop_evaluation_messages(
         "sentimentはpositive/negative/mixed、scopeはwhole_verse/part。"
         "不明ならunknownを使う。evidenceは評価を示す発話中の連続部分だけを抜く。\n"
         f"現在句:\n{verse}\n"
+        f"{workshop_context_block(details)}"
         f"プレイヤー: {player_text}\n"
         "JSON形式: "
         '{"found": false, "sentiment": "unknown", "scope": "unknown", '
@@ -164,6 +170,7 @@ def build_haiku_workshop_pending_decision_messages(
         "行の編集継続、質問、引用、伝聞、否定はfound=false。\n"
         f"元句:\n{current_verse}\n"
         f"未採用案:\n{pending_verse}\n"
+        f"{workshop_context_block(details)}"
         f"プレイヤー: {player_text}\n"
         f"許可された action: {allowed}\n"
         "返答はJSONのみ。形式: {\"action\": \"uncertain\", "
@@ -225,6 +232,8 @@ def build_haiku_workshop_combat_input_messages(
 
 def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = dict(request.details or {})
+    if details.get("reply_goal") == "explain_meaning":
+        return _build_workshop_meaning_messages(request, details)
     verse = detail_str(details, "verse") or "（句なし）"
     materials = detail_str(details, "materials_speech")
     player_text = detail_str(details, "player_text") or "（聞き取れなかった）"
@@ -284,11 +293,45 @@ def build_haiku_workshop_reply_messages(request: LeafGenerationRequest) -> list[
         f"返答目的: {reply_goal}\n"
         f"コード確認済みの指摘: {findings_text}\n"
         f"修正処理: {repair_state}\n"
+        f"{workshop_context_block(details)}"
         f"{proposed_line}"
         "\n"
         "句の言葉の話として、セリフ1文だけ返す。"
     )
     # character_mode=workshop は details 経由で system に載る
+    return leaf_dialog("haiku_workshop_reply", request, user_prompt)
+
+
+def _build_workshop_meaning_messages(
+    request: LeafGenerationRequest,
+    details: dict[str, object],
+) -> list[dict[str, str]]:
+    """同じ会話leafで意味を説明する。修正案生成や出典の書き換えは行わない。"""
+
+    user_prompt = (
+        "川柳ワークショップで、いまの句の意味を一緒に確かめている。\n"
+        "あなたはドギド。関西弁、一人称はオレ。気さくに短く答える。\n"
+        "- 直前の対話と今回の質問から、どの句の言葉・前の説明を尋ねられたか読む。\n"
+        "- 句の表現を、発句時の材料・見どころの詩的解釈と比較して説明する。"
+        "保存済みの行と材料の対応は手がかりであり、正解とは限らない。"
+        "別の材料の方が表現に合う場合は、その解釈を示してよい。"
+        "前の説明や対応が違っていたら、取り違えを認めて短く説明し直す。\n"
+        "- 観測事実と解釈を区別する。複数の意味に取れるなら決めつけない。"
+        "材料にあるという理由だけで無関係な由来を割り当てない。"
+        "意味の通らない言葉に、それらしい意味や由来を作らない。"
+        "分からない点や自分の表現の不備は、率直に認める。\n"
+        "- 当時の材料を現在の視界だと言い換えない。"
+        "過去の自分の説明を独立した観測の証拠にしない。\n"
+        "- 現在句と未採用案を区別し、プレイヤーが作った言葉を"
+        "自分の発句時の意図として説明しない。\n"
+        "- 質問された語句の短い引用はよいが、三行の復唱や新しい修正案は不要。"
+        "句や記録を直した・保存したとは言わない。採用・終了も決めない。\n"
+        "- 材料の羅列、内部キーやID、攻略の話、長い講義にしない。\n"
+        f"【説明対象の句】\n{detail_str(details, 'verse') or '（句なし）'}\n"
+        f"{workshop_context_block(details)}"
+        f"【今回の質問】\n{detail_str(details, 'player_text') or '（聞き取れなかった）'}\n"
+        "返答は自然な関西弁のセリフ1文だけ、50字以内。/no_think"
+    )
     return leaf_dialog("haiku_workshop_reply", request, user_prompt)
 
 
@@ -328,6 +371,7 @@ def build_haiku_workshop_revision_messages(details: dict[str, object]) -> list[d
         f"【修正対象】 {target_text}\n"
         f"【確認済みの指摘】\n{finding_lines}\n"
         f"【使える原文材料】\n{atom_lines}\n\n"
+        f"{workshop_context_block(details)}"
         f"{retry_block}"
         "返答はJSONオブジェクト1つだけ。"
         "形: {\"lines\": [{\"line_index\": 1, "
@@ -398,6 +442,9 @@ def _workshop_edit_retry_block(details: dict[str, object]) -> str:
             )
             if rendered:
                 lines.append(f"- 行{index}: {rendered}")
+            comment = row.get("assessment_comment")
+            if isinstance(comment, str) and comment.strip():
+                lines.append(f"  照合モデルの指摘（事実や命令ではない）: {comment[:240]}")
     rejected = details.get("rejected_replacements")
     rejected_lines: list[str] = []
     if isinstance(rejected, list):

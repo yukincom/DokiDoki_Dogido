@@ -7,16 +7,17 @@ from unittest.mock import patch
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry
 from dogido_server.haiku.generation import generate_grounded_haiku, generate_workshop_revision
 from dogido_server.haiku.lexical_correction import correct_grounded_catalog_kana
-from dogido_server.haiku.preface import validate_preface_clauses
 from dogido_server.haiku.source_atoms import (
     HaikuSourceAtom,
-    atoms_from_preface_clauses,
+    PrefaceClause,
+    atom_from_poetic_interpretation,
     atoms_from_catalog_sources,
+    atoms_from_preface_clauses,
     catalog_source_snapshot,
-    preface_clauses_from_payload,
-    split_note_sentences,
     line_source_ids_from_materials,
+    preface_clauses_from_payload,
     source_atoms_from_materials,
+    split_note_sentences,
 )
 from dogido_server.llm.haiku import is_haiku_line_usable
 from dogido_server.llm.prompts import build_messages
@@ -178,6 +179,19 @@ class SourceAtomTest(unittest.TestCase):
         self.assertTrue(all(atom.kind == "preface_clause" for atom in atoms))
         self.assertTrue(all(atom.source_ref == "preface:spoken" for atom in atoms))
 
+        interpretation = atom_from_poetic_interpretation(clauses)
+        assert interpretation is not None
+        self.assertEqual(
+            interpretation.text,
+            "春の風が吹いている。羊と月が静かに向き合う",
+        )
+        self.assertEqual(interpretation.kind, "poetic_interpretation")
+        self.assertEqual(interpretation.claim_scopes, ("poetic_interpretation",))
+        self.assertEqual(
+            interpretation.basis_atom_ids,
+            tuple(atom.atom_id for atom in bases),
+        )
+
     def test_preface_factual_clause_cannot_promote_interpretive_source(self) -> None:
         base = HaikuSourceAtom(
             atom_id="catalog:test:poetic",
@@ -200,39 +214,6 @@ class SourceAtomTest(unittest.TestCase):
         )
 
         self.assertIsNone(clauses)
-
-    def test_preface_scope_evaluator_rejection_fails_closed(self) -> None:
-        bases = source_atoms(2)
-        clauses = preface_clauses_from_payload(
-            [{
-                "text": "雪の積もるタイガだ",
-                "basis_atom_ids": [bases[0].atom_id],
-                "claim_class": "factual",
-            }],
-            source_atoms=bases,
-        )
-        assert clauses is not None
-        llm = ScriptedLLM([{
-            "assessments": [{
-                "clause_index": 0,
-                "basis_atom_ids": [bases[0].atom_id],
-                "claim_class": "factual",
-                "meaning_retained": False,
-                "class_correct": True,
-                "within_claim_scope": False,
-                "natural_japanese": True,
-            }],
-        }])
-
-        accepted = validate_preface_clauses(
-            llm,
-            clauses=clauses,
-            source_atoms=bases,
-            max_tokens=192,
-        )
-
-        self.assertFalse(accepted)
-        self.assertEqual(llm.requests[0].kind, "haiku_preface_grounding")
 
     def test_ancient_debris_note_is_split_without_changing_catalog_source(self) -> None:
         entry = item_entry("ancient_debris")
@@ -296,6 +277,52 @@ class SourceAtomTest(unittest.TestCase):
 
 
 class GroundedGenerationTest(unittest.TestCase):
+    def test_single_line_grounding_objects_are_consumed_without_schema_retry(self) -> None:
+        atoms = source_atoms(3)
+        llm = ScriptedLLM(
+            [
+                {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]},
+                {
+                    "line_index": 0,
+                    "atom_ids": [atoms[0].atom_id],
+                    "meaning_retained": True,
+                    "natural_japanese": True,
+                },
+                {
+                    "line_index": 1,
+                    "atom_ids": [atoms[1].atom_id],
+                    "meaning_retained": True,
+                    "natural_japanese": True,
+                },
+                {
+                    "line_index": 2,
+                    "atom_ids": [atoms[2].atom_id],
+                    "meaning_retained": True,
+                    "natural_japanese": True,
+                },
+            ]
+        )
+
+        result = generate_grounded_haiku(
+            llm,
+            details={},
+            source_atoms=atoms,
+            fallback_text="まとまらんかった。。。",
+            max_tokens=192,
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.regeneration_rounds, 0)
+        self.assertEqual(
+            [request.kind for request in llm.requests],
+            [
+                "haiku_draft",
+                "haiku_line_grounding",
+                "haiku_line_grounding",
+                "haiku_line_grounding",
+            ],
+        )
+
     def test_grounded_catalog_label_gets_unique_one_kana_typo_corrected(self) -> None:
         birch = HaikuSourceAtom(
             atom_id="item:birch_stairs:japanese",
@@ -362,7 +389,6 @@ class GroundedGenerationTest(unittest.TestCase):
             "haiku_draft",
             "haiku_line_grounding",
             "haiku_line_regeneration",
-            "haiku_preface_grounding",
             "haiku_workshop_revision",
         ):
             messages = build_messages(
@@ -393,15 +419,16 @@ class GroundedGenerationTest(unittest.TestCase):
             )
         )[1]["content"]
         self.assertIn("現在7音 → 目標7音、許容6〜8音", regeneration)
-        preface = build_messages(
+
+        grounding_prompt = build_messages(
             StructuredGenerationRequest(
-                kind="haiku_preface_grounding",
+                kind="haiku_line_grounding",
                 fallback_value={},
                 details=details,
             )
         )[1]["content"]
-        self.assertIn("identity_only=名称そのものだけ", preface)
-        self.assertIn("within_claim_scope", preface)
+        self.assertIn("一般の語として意味を説明できない造語", grounding_prompt)
+        self.assertIn("最も具体的に意味が合う出典", grounding_prompt)
 
     def test_material_selection_prompts_do_not_request_warm_or_gentle_wording(self) -> None:
         details = {"source_atoms": [atom.to_prompt_dict() for atom in source_atoms()]}
@@ -417,6 +444,15 @@ class GroundedGenerationTest(unittest.TestCase):
             self.assertIn("材料の意味を変えず", prompt)
             self.assertNotIn("あたたかく", prompt)
             self.assertNotIn("やさしいことば", prompt)
+
+        irony_prompt = build_messages(
+            StructuredGenerationRequest(
+                kind="haiku_irony",
+                fallback_value={},
+                details=details,
+            )
+        )[1]["content"]
+        self.assertIn("自然な関西弁一文", irony_prompt)
 
     def test_workshop_revision_changes_only_target_line_on_haiku_route(self) -> None:
         llm = ScriptedLLM(
@@ -690,6 +726,48 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual(restored, atoms)
         self.assertEqual(line_ids, {0: (atoms[0].atom_id,)})
 
+    def test_saved_poetic_interpretation_can_be_restored_for_all_three_lines(self) -> None:
+        atoms = source_atoms(3)
+        interpretation = atom_from_poetic_interpretation(
+            (
+                PrefaceClause(
+                    text="屋内から草地へ落ちる夕陽と、手元の骨の白さが静かに溶け合っとるな",
+                    basis_atom_ids=tuple(atom.atom_id for atom in atoms),
+                    claim_class="interpretive",
+                    claim_scopes=("poetic_interpretation",),
+                ),
+            )
+        )
+        self.assertIsNotNone(interpretation)
+        if interpretation is None:
+            self.fail("poetic interpretation should be available")
+        verse_lines = ["ゆめうつつ", "ほねのしろさ", "くさちのそら"]
+        materials = {
+            "source_atoms": [
+                *(atom.to_prompt_dict() for atom in atoms),
+                interpretation.to_prompt_dict(),
+            ],
+            "line_sources": [
+                {
+                    "line_index": index,
+                    "text": text,
+                    "atom_ids": [interpretation.atom_id],
+                }
+                for index, text in enumerate(verse_lines)
+            ],
+        }
+        restored = source_atoms_from_materials(materials)
+        line_ids = line_source_ids_from_materials(
+            materials,
+            verse_lines=verse_lines,
+            allowed_atom_ids={atom.atom_id for atom in restored},
+        )
+
+        self.assertEqual(
+            line_ids,
+            {index: (interpretation.atom_id,) for index in range(3)},
+        )
+
     def test_old_source_atom_shape_is_not_restored(self) -> None:
         old_atom = {
             "atom_id": "observation:test:0",
@@ -750,6 +828,53 @@ class GroundedGenerationTest(unittest.TestCase):
         self.assertEqual(result.line_sources[1]["atom_ids"], ["observation:test:1"])
         self.assertEqual(result.generation_strategy, "three_slot")
         self.assertEqual(result.regeneration_rounds, 0)
+
+    def test_validated_poetic_interpretation_can_ground_the_whole_poem(self) -> None:
+        bases = source_atoms(3)
+        clauses = preface_clauses_from_payload(
+            [{
+                "text": "夕暮れの草地と白い骨が夢みたいに溶け合うな",
+                "basis_atom_ids": [atom.atom_id for atom in bases],
+                "claim_class": "interpretive",
+            }],
+            source_atoms=bases,
+        )
+        assert clauses is not None
+        interpretation = atom_from_poetic_interpretation(clauses)
+        assert interpretation is not None
+        atoms = (*bases, interpretation)
+        llm = ScriptedLLM(
+            [
+                {"lines": ["ゆめうつつ", "ほねのしろさ", "くさちのそら"]},
+                grounding(
+                    (0, interpretation.atom_id, True, True),
+                    (1, interpretation.atom_id, True, True),
+                    (2, interpretation.atom_id, True, True),
+                ),
+            ]
+        )
+
+        result = generate_grounded_haiku(
+            llm,
+            details={},
+            source_atoms=atoms,
+            fallback_text="まとまらんかった。。。",
+            max_tokens=192,
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.text, "ゆめうつつ\nほねのしろさ\nくさちのそら")
+        self.assertTrue(
+            all(
+                row["atom_ids"] == [interpretation.atom_id]
+                for row in result.line_sources
+            )
+        )
+
+        restored = source_atoms_from_materials(
+            {"source_atoms": [atom.to_prompt_dict() for atom in atoms]}
+        )
+        self.assertIn(interpretation, restored)
 
     def test_draft_kanji_is_hiraganized_before_grounding_and_meter_checks(self) -> None:
         llm = ScriptedLLM(
@@ -1046,6 +1171,50 @@ class GroundedGenerationTest(unittest.TestCase):
                 [{"line_index": 2, "text": "よるのつき"}],
             ],
         )
+
+    def test_default_path_keeps_six_content_regeneration_rounds(self) -> None:
+        class LegacyShapeLLM:
+            def __init__(self) -> None:
+                self.requests: list[StructuredGenerationRequest] = []
+                self.regeneration_calls = 0
+
+            def generate_structured_json(
+                self, request: StructuredGenerationRequest
+            ) -> dict[str, object]:
+                self.requests.append(request)
+                if request.kind == "haiku_draft":
+                    return {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]}
+                if request.kind == "haiku_line_grounding":
+                    return {
+                        "line_index": 0,
+                        "atom_ids": ["observation:test:0"],
+                        "meaning_retained": True,
+                        "natural_japanese": True,
+                        "reason": "旧単体形式",
+                    }
+                if request.kind == "haiku_line_regeneration":
+                    self.regeneration_calls += 1
+                    suffix = "あ" * self.regeneration_calls
+                    return {
+                        "lines": [
+                            {"line_index": index, "text": f"{suffix}{index}あ"}
+                            for index in request.details["failed_line_indices"]
+                        ]
+                    }
+                raise AssertionError(f"unexpected request: {request.kind}")
+
+        llm = LegacyShapeLLM()
+        result = generate_grounded_haiku(
+            llm,
+            details={},
+            source_atoms=source_atoms(),
+            fallback_text="まとまらんかった。。。",
+            max_tokens=192,
+        )
+
+        self.assertFalse(result.accepted)
+        self.assertEqual(6, result.regeneration_rounds)
+        self.assertEqual(6, llm.regeneration_calls)
 
     def test_duplicate_regenerations_are_rejected_before_another_grounding_call(self) -> None:
         bad = grounding(

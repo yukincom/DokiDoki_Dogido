@@ -10,7 +10,7 @@ from dogido_server.models import EventName, GameEvent
 from dogido_server.py_tree_policy import PolicyContext
 from dogido_server.state_machine.constants import CHARGED_CREEPER_CALL, DAYLIGHT_RAIN_CALL, DAYLIGHT_WATER_CALL
 from dogido_server.state_machine.response_catalog import is_ushiro_call_text
-from dogido_server.state_machine.types import AudioAction, DerivedSignals
+from dogido_server.state_machine.types import AudioAction, DerivedSignals, SpeechReference
 
 LOGGER = logging.getLogger("uvicorn.error")
 
@@ -59,6 +59,34 @@ class ActionBuilderMixin:
                     speech_profile="battle",
                 )
             )
+            return actions
+
+        if event.event.name == EventName.CREEPER_DETONATED:
+            line = self._render_creeper_detonation_line(event)
+            if line:
+                actions.append(
+                    AudioAction(
+                        layer="speech",
+                        interrupt=True,
+                        cue_id="creeper_detonation_reaction",
+                        text=line,
+                        speech_profile="battle",
+                    )
+                )
+            return actions
+
+        if event.event.name == EventName.HOSTILE_DEFEATED:
+            line = self._render_hostile_defeated_line(event)
+            if line:
+                actions.append(
+                    AudioAction(
+                        layer="speech",
+                        interrupt=True,
+                        cue_id="hostile_defeated_reaction",
+                        text=line,
+                        speech_profile="battle",
+                    )
+                )
             return actions
 
         if next_mode == "panic":
@@ -155,6 +183,11 @@ class ActionBuilderMixin:
         protect_ms: int = 0,
         speech_profile: str | None = None,
         speed_scale: float | None = None,
+        speech_segments: tuple[str, ...] = (),
+        speech_segment_pause_ms: int = 0,
+        queue_priority: str = "normal",
+        queue_replace_key: str | None = None,
+        references: tuple[SpeechReference, ...] = (),
     ) -> AudioAction:
         return AudioAction(
             layer=layer,
@@ -165,6 +198,11 @@ class ActionBuilderMixin:
             protect_ms=protect_ms,
             speech_profile=speech_profile,
             speed_scale=speed_scale,
+            speech_segments=speech_segments,
+            speech_segment_pause_ms=speech_segment_pause_ms,
+            queue_priority=queue_priority,  # type: ignore[arg-type]
+            queue_replace_key=queue_replace_key,
+            references=references,
         )
 
     def _flush_interrupt_action(self) -> AudioAction:
@@ -207,7 +245,7 @@ class ActionBuilderMixin:
                 event.observed_at.isoformat(),
             )
             LOGGER.info(
-                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s cue_sequence=%s interrupt=%s protect_ms=%s text=%s",
+                "action_emit event=%s sequence=%s prev=%s next=%s layer=%s cue_id=%s cue_sequence=%s interrupt=%s protect_ms=%s speech_segments=%s segment_pause_ms=%s text=%s",
                 event_name,
                 event.sequence,
                 previous_mode,
@@ -217,6 +255,8 @@ class ActionBuilderMixin:
                 list(action.cue_sequence) if action.cue_sequence else None,
                 action.interrupt,
                 action.protect_ms,
+                len(action.speech_segments),
+                action.speech_segment_pause_ms,
                 summarize_for_log(action.text),
             )
 

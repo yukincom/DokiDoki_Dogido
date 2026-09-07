@@ -67,6 +67,19 @@ class HorizontalDirection(str, Enum):
     FRONT_LEFT = "front_left"
 
 
+class CardinalDirection(str, Enum):
+    """Minecraft座標を基準にした絶対方位（8方位）。"""
+
+    NORTH = "north"
+    NORTHEAST = "northeast"
+    EAST = "east"
+    SOUTHEAST = "southeast"
+    SOUTH = "south"
+    SOUTHWEST = "southwest"
+    WEST = "west"
+    NORTHWEST = "northwest"
+
+
 class VerticalRelation(str, Enum):
     """プレイヤーとの垂直位置関係。"""
     ABOVE = "above"
@@ -100,6 +113,8 @@ class EventName(str, Enum):
     AMBIENT_MOB_DETECTED = "ambient_mob_detected"
     PLAYER_DIED = "player_died"
     TIME_PHASE_CHANGED = "time_phase_changed"
+    HOSTILE_DEFEATED = "hostile_defeated"
+    CREEPER_DETONATED = "creeper_detonated"
     COMBAT_ENDED = "combat_ended"
     STATUS_SNAPSHOT = "status_snapshot"
 
@@ -128,6 +143,7 @@ class Weather(str, Enum):
 class Direction(DogidoModel):
     """方向オブジェクト。水平・垂直とも省略可能。"""
     horizontal: HorizontalDirection | None = None
+    cardinal: CardinalDirection | None = None
     vertical: VerticalRelation | None = None
 
 
@@ -208,6 +224,7 @@ class PlayerState(DogidoModel):
     hunger: int | None = None  # 最大 20
     dimension: str | None = None  # 例: "minecraft:overworld" / "minecraft:the_nether"
     held_item: str | None = None  # 手持ちアイテムの Minecraft item id
+    block_breaking_active: bool | None = None  # 現在ブロック破壊を継続中か
     hotbar: HotbarState | None = None  # 実行capabilityがあるadapterの0〜8実測
     vehicle: VehicleState | None = None  # 未乗車時は None。LLM へ空状態を渡さない
     active_status_effects: list[str] = Field(default_factory=list)  # 例: ["mining_fatigue"]
@@ -235,13 +252,16 @@ class WorldState(DogidoModel):
     structure: str | None = None  # プレイヤー座標を含む構造物 id（例: "village_plains" / "ancient_city"）。構造物外は省略
     local_light: int | None = None  # プレイヤー足元のブロック光レベル（0〜15）
     sky_visible: bool | None = None  # 空が見えているか（屋外判定の補助）
+    surface_y: int | None = None  # 現在X/Zの地表高（地表のないdimensionでは省略）
+    depth_below_surface: int | None = Field(default=None, ge=0)  # 地表高から現在Yまでの深さ
     ceiling_height: float | None = None  # 天井までの高さ（ブロック数）
-    overhead_cover_type: str | None = None  # 天井の素材ヒント（"solid" / "glass" など）
+    overhead_cover_type: str | None = None  # 天井の素材ヒント（stone / earth / wood / foliage / solid 等）
     is_submerged: bool | None = None  # 水中にいるか
     submerged_depth_blocks: int | None = None  # 水面からの深さ
     air_supply: int | None = None  # 残り空気量（水中溺死リスク判定用）
     nearby_door_count: int | None = None  # 近くのドア数
     open_door_count: int | None = None  # 開いているドア数（侵入リスク補助）
+    nearby_window_present: bool | None = None  # 周囲の壁面にガラス・格子・柵などの窓材があるか
     nearby_bed_count: int | None = None  # 近くのベッド数（睡眠促進判定用）
     nearby_sleeping_people_count: int | None = None  # 近くで寝ている人数（マルチ対応の予約）
     drafty_opening_count: int | None = None  # 外気が入る開口部の数（湧きリスク補助）
@@ -290,6 +310,7 @@ class VisualThreat(DogidoModel):
     distance: float | None = None  # プレイヤーとの距離（ブロック数）
     direction: Direction = Field(default_factory=Direction)
     approaching: bool = False  # プレイヤーに近づいているか
+    fuse_active: bool | None = None  # クリーパーが膨らみ始め、導火線が進行中か
     on_fire: bool = False
     in_water: bool = False
     certainty: Certainty = Certainty.HIGH  # 視認済みなので基本 HIGH
@@ -364,6 +385,26 @@ class NearbyResource(DogidoModel):
     direction: Direction = Field(default_factory=Direction)
 
 
+class DroppedItem(DogidoModel):
+    """周囲に読み込まれている落下アイテム。同種はadapter側で集約する。"""
+
+    name: str
+    count: int = Field(ge=1)
+    entity_count: int = Field(default=1, ge=1)
+    distance: float | None = Field(default=None, ge=0)
+    age_ms: int | None = Field(default=None, ge=0)
+    block_item: bool = False
+    mining_related: bool = False
+
+
+class RecentBlockBreak(DogidoModel):
+    """ローカルプレイヤーが直近に実際に壊したブロック。"""
+
+    name: str
+    material: Literal["stone", "earth", "ore", "other"] = "other"
+    age_ms: int = Field(default=0, ge=0)
+
+
 class LookTarget(DogidoModel):
     """画面中央クロスヘア（＋）が刺さっている対象（仕様 look_target）。
 
@@ -374,6 +415,24 @@ class LookTarget(DogidoModel):
     kind: str = "block"
     name: str
     distance: float | None = None
+
+
+class HostileOutcome(DogidoModel):
+    """追跡していた敵1体について、コードで観測できた戦闘結果。"""
+
+    type: str
+    entity_id: str | None = None
+    outcome: Literal[
+        "player_kill",
+        "explosion_death",
+        "other_death",
+        "creeper_detonation",
+    ]
+    evidence: Literal[
+        "server_death_event",
+        "client_death_state",
+        "explosion_packet",
+    ]
 
 
 class CombatState(DogidoModel):
@@ -389,8 +448,14 @@ class CombatState(DogidoModel):
     recent_hostile_audio_ms: int | None = Field(default=None, ge=0)
     hostiles_within_7: int | None = Field(default=None, ge=0)  # 7マス以内（panic 移行の閾値）
     hostiles_within_10: int | None = Field(default=None, ge=0)  # 10マス以内（複数敵警戒の閾値）
-    hostiles_within_30_ground: int | None = Field(default=None, ge=0)  # 30マス以内の地上系敵数
+    hostile_scan_distance: float | None = Field(default=None, ge=0)
+    hostiles_within_scan_ground: int | None = Field(default=None, ge=0)
+    # 旧adapter互換。新adapterは距離を名前に埋め込まない上の2項目を送る。
+    hostiles_within_30_ground: int | None = Field(default=None, ge=0)
     combat_active_hint: bool | None = None
+    # None は旧adapterで項目自体が無い状態。空配列は結果観測なし。
+    # 観測範囲から消えただけの敵は含めない。
+    hostile_outcomes: list[HostileOutcome] | None = None
     warden_recently_hurt: bool | None = None
     warden_defeat_confirmed: bool | None = None
     warden_ranged_trap_active: bool | None = None
@@ -405,7 +470,7 @@ class CombatState(DogidoModel):
     dragon_distance: float | None = None  # プレイヤーからドラゴンまでの距離（視覚脅威の30マス制限より広く追跡）
     dragon_horizontal: str | None = None  # プレイヤー視点の水平方向（HorizontalDirection 値）
     dragon_vertical: str | None = None  # 垂直関係（VerticalRelation 値）
-    dragon_defeat_confirmed: bool | None = None  # entity ID 追跡＋死亡音による討伐確認
+    dragon_defeat_confirmed: bool | None = None  # entity ID 追跡＋死亡状態による討伐確認
     end_crystal_count: int | None = Field(default=None, ge=0)  # アリーナ内の残エンドクリスタル数
 
 
@@ -466,6 +531,8 @@ class GameEvent(DogidoModel):
     passive_mobs: list[PassiveMob] = Field(default_factory=list)
     inventory: dict[str, int] = Field(default_factory=dict)
     nearby_resources: list[NearbyResource] = Field(default_factory=list)
+    dropped_items: list[DroppedItem] = Field(default_factory=list, max_length=32)
+    recent_block_breaks: list[RecentBlockBreak] = Field(default_factory=list, max_length=32)
     look_target: LookTarget | None = None
     combat: CombatState = Field(default_factory=CombatState)
     meta: MetaState = Field(default_factory=MetaState)
@@ -562,6 +629,32 @@ class VoiceInputContextResponse(DogidoModel):
 
     prompt_mode: Literal["normal", "haiku_workshop"] = "normal"
     session_id: str | None = None
+
+
+class VoiceInputDiagnosticRequest(DogidoModel):
+    """別プロセスの音声入力から受け取る、波形を含まない診断情報。"""
+
+    schema_version: Literal[1] = 1
+    event: Literal[
+        "capture",
+        "context",
+        "vad_rejected",
+        "vad_error",
+        "stt_started",
+        "stt_finished",
+        "stt_queue",
+        "stt_result",
+        "stt_rejected",
+        "stt_error",
+        "wake_word_rejected",
+        "delivery",
+    ]
+    level: Literal["info", "warning", "error"] = "info"
+    recognized_text: str | None = Field(default=None, max_length=500)
+    reason: str | None = Field(default=None, max_length=120)
+    detail: str | None = Field(default=None, max_length=800)
+    prompt_mode: Literal["normal", "haiku_workshop"] | None = None
+    duration_ms: int | None = Field(default=None, ge=0, le=60000)
 
 
 class StateResponse(DogidoModel):

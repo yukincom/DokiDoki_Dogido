@@ -14,12 +14,16 @@ from dogido_server.assist.select_sword import (
     interpret_voice_select_sword_request,
     is_bare_sword_target,
     is_explicit_select_sword_request,
+    is_explicit_voice_select_sword_request,
     is_unambiguous_select_sword_request,
+    is_unambiguous_voice_select_sword_request,
     mentions_sword_target,
     select_weapon_slot,
 )
 from dogido_server.audio import AudioDispatcher
 from dogido_server.config import Settings
+from dogido_server.diagnostics import DiagnosticHistory
+from dogido_server.display import DisplayHistory, RuntimeStatus
 from dogido_server.dialogue_context import DialogueContext
 from dogido_server.episode_log import EpisodeRecorder
 from dogido_server.haiku.combat_pause import (
@@ -30,6 +34,7 @@ from dogido_server.haiku.combat_pause import (
     finalize_combat_workshop_input_payload,
     update_workshop_combat_state,
 )
+from dogido_server.haiku.materials import material_context_visible
 from dogido_server.haiku.workshop import (
     PendingRevisionAnalysis,
     PlayerLineReplacement,
@@ -66,6 +71,7 @@ from dogido_server.haiku.workshop import (
     record_drift,
     record_workshop_activity,
     render_workshop_reply,
+    should_handle_as_workshop,
     update_marked_workshop_line,
     wants_show_workshop_verse,
     WorkshopAnalysis,
@@ -76,6 +82,7 @@ from dogido_server.haiku.workshop import (
     workshop_verse_lines,
 )
 from dogido_server.haiku.generation import generate_workshop_revision
+from dogido_server.haiku.workshop_context import workshop_context_details
 from dogido_server.haiku.edit_contract import PLAYER_LINE_EDIT_CONTRACT_VERSION
 from dogido_server.haiku.source_atoms import (
     line_source_ids_from_materials,
@@ -94,12 +101,14 @@ from dogido_server.models import (
     AdapterCommandResult,
     BatchAcceptedResponse,
     CloseSessionResponse,
+    EventName,
     GameEvent,
     HeartbeatResponse,
     OutputFlags,
     SelectHotbarCommand,
     StateResponse,
     VoiceInputContextResponse,
+    VoiceInputDiagnosticRequest,
 )
 from dogido_server.player_input import PlayerInputContext, route_player_input
 from dogido_server.platform_ai import PlatformStructuredAIRouter
@@ -150,6 +159,12 @@ class SessionInfo:
     # 音声入力など外部から届いたプレイヤー発話。次のイベントの user_text に相乗りさせる
     pending_player_text: str | None = None
     pending_player_source: str | None = None
+    pending_player_display_text: str | None = None
+    # 直接入力と保留入力が同じtickで衝突した場合の待ち列。先着順・最大8件とし、
+    # 1件用のpendingを上書きして質問を失わない。
+    deferred_player_inputs: deque[tuple[str, str, str]] = field(
+        default_factory=lambda: deque(maxlen=8)
+    )
     # panic hold ログの重複抑制（同じ文は1回だけ）
     panic_hold_logged_text: str | None = None
     # 戦闘中断中にpanicで保留している同じ発話を、毎tick OS AIへ再送しない。
@@ -210,6 +225,13 @@ class DogidoService:
         self.settings = settings
         self.sessions: dict[str, SessionInfo] = {}
         self.audio = AudioDispatcher(settings)
+        self.display = DisplayHistory(max_entries=settings.display_history_max_entries)
+        self.runtime_status = RuntimeStatus(
+            heartbeat_interval_ms=settings.heartbeat_interval_ms
+        )
+        self.diagnostics = DiagnosticHistory(
+            max_entries=settings.diagnostic_history_max_entries
+        )
         self.llm = DogidoLLMRouter(settings)
         self.platform_ai = PlatformStructuredAIRouter(settings)
         self.assist = build_assist_registry()
@@ -222,6 +244,16 @@ class DogidoService:
             configure_corrections_path(self.memory.catalog_corrections_path)
 
     def warmup(self) -> None:
+        runtime = self.runtime_status.snapshot()["runtime"]
+        LOGGER.warning(
+            "runtime_identity source=%s python_environment=%s virtual_environment=%s "
+            "pid=%s instance_id=%s",
+            runtime["source_label_ja"],
+            runtime["python_environment"],
+            runtime["virtual_environment"],
+            runtime["process_id"],
+            runtime["instance_id"],
+        )
         LOGGER.warning(
             "assist_ready action=select_sword rule_version=%s",
             SELECT_SWORD_RULE_VERSION,
@@ -234,7 +266,71 @@ class DogidoService:
     def shutdown(self) -> None:
         """端末内モデルの worker / loaded model を解放する。"""
 
+        self.audio.close()
         self.platform_ai.close()
+
+    @staticmethod
+    def _queue_player_input(
+        session: SessionInfo,
+        text: str,
+        *,
+        source: str,
+        display_text: str | None = None,
+    ) -> bool:
+        """保留入力を先着順で保持する。同じ入力は重ねず、満杯ならfail-closed。"""
+
+        value = (text or "").strip()
+        normalized_source = "voice" if source == "voice" else "text"
+        visible_text = (display_text or value).strip()
+        if not value:
+            return False
+        candidate = (value, normalized_source, visible_text)
+        if session.pending_player_text is None:
+            session.pending_player_text = value
+            session.pending_player_source = normalized_source
+            session.pending_player_display_text = visible_text
+            return True
+        # 同じ本文は入力経路がvoice/textで異なっても一発話として扱い、
+        # 最初に受けたsourceを保持する。別tickで二回答しないための境界。
+        if session.pending_player_text == value:
+            return True
+        if any(
+            queued_text == value
+            for queued_text, _source, _display_text in session.deferred_player_inputs
+        ):
+            return True
+        maxlen = session.deferred_player_inputs.maxlen
+        if maxlen is not None and len(session.deferred_player_inputs) >= maxlen:
+            LOGGER.warning(
+                "player_input_queue_full session_id=%s source=%s text=%s",
+                session.session_id,
+                normalized_source,
+                value[:80],
+            )
+            return False
+        session.deferred_player_inputs.append(candidate)
+        return True
+
+    @staticmethod
+    def _promote_deferred_player_input(session: SessionInfo) -> None:
+        if session.pending_player_text is not None or not session.deferred_player_inputs:
+            return
+        text, source, display_text = session.deferred_player_inputs.popleft()
+        session.pending_player_text = text
+        session.pending_player_source = source
+        session.pending_player_display_text = display_text
+        LOGGER.warning(
+            "player_input_promoted session_id=%s source=%s text=%s",
+            session.session_id,
+            source,
+            text[:80],
+        )
+
+    @staticmethod
+    def _session_has_queued_input(session: SessionInfo) -> bool:
+        return bool((session.pending_player_text or "").strip()) or bool(
+            session.deferred_player_inputs
+        )
 
     def create_session(self, request: AdapterSessionCreateRequest) -> AdapterSessionCreateResponse:
         now = datetime.now().astimezone()
@@ -256,6 +352,12 @@ class DogidoService:
         )
         self._bind_dialogue_provider(session)
         self.sessions[session_id] = session
+        self.runtime_status.adapter_seen(
+            session_id,
+            adapter_name=request.adapter_name,
+            adapter_version=request.adapter_version,
+            seen_at=now,
+        )
         self.audio.prewarm_speech_texts(self._fallback_speech_catalog(request.call_name or self.settings.default_call_name))
         LOGGER.info(
             "adapter_session_created session_id=%s adapter=%s version=%s schema=%s "
@@ -301,6 +403,11 @@ class DogidoService:
             )
             session.first_event_logged = True
         session.last_seen_at = event.observed_at
+        self.runtime_status.adapter_seen(
+            session.session_id,
+            adapter_name=session.adapter_name,
+            adapter_version=session.adapter_version,
+        )
         command_result_acks, observed_command_results = self._consume_command_results(
             session,
             event.command_results,
@@ -338,6 +445,33 @@ class DogidoService:
             )
             return ProcessedEvent(response=response, actions=[])
 
+        # 保留中と同じ本文をアダプタが直接再送した場合は、直接分を一度だけ
+        # 処理し、古い複製を後続tickで再回答しない。安全抑止された場合は
+        # この直接分が改めて一件だけキューへ戻る。
+        direct_player_text = (event.meta.user_text or "").strip()
+        if direct_player_text:
+            if session.pending_player_text == direct_player_text:
+                session.pending_player_text = None
+                session.pending_player_source = None
+                session.pending_player_display_text = None
+                session.combat_input_analysis_text = None
+                session.combat_input_analysis = None
+                session.combat_input_analysis_path = "none"
+            if session.deferred_player_inputs:
+                session.deferred_player_inputs = deque(
+                    (
+                        (text, source, display_text)
+                        for text, source, display_text in session.deferred_player_inputs
+                        if text != direct_player_text
+                    ),
+                    maxlen=session.deferred_player_inputs.maxlen,
+                )
+
+        # 先行入力が前tickで処理済みなら、衝突時に退避した次の入力を昇格する。
+        # アダプタが同じtickに直接本文を載せた場合は、その本文を先に扱う。
+        if not (event.meta.user_text or "").strip():
+            self._promote_deferred_player_input(session)
+
         # このフレームのservice処理が状態を変える前を、決定記録の基準点にする。
         state_before = self._episode_state_before(session)
 
@@ -349,6 +483,7 @@ class DogidoService:
             session.machine._force_clear_stuck_pending_haiku(event.observed_at)
 
         attached_player_text: str | None = None
+        attached_player_display_text: str | None = direct_player_text or None
         attached_player_source = "text"
         combat_input_analysis: CombatWorkshopInputAnalysis | None = None
         combat_input_path = "none"
@@ -356,8 +491,12 @@ class DogidoService:
         if haiku_pending_before:
             incoming = (event.meta.user_text or "").strip()
             if incoming:
-                session.pending_player_text = incoming
-                session.pending_player_source = "text"
+                self._queue_player_input(
+                    session,
+                    incoming,
+                    source="text",
+                    display_text=incoming,
+                )
                 event.meta.user_text = None
                 LOGGER.warning(
                     "player_input_held_for_haiku session_id=%s text=%s",
@@ -369,80 +508,126 @@ class DogidoService:
             # panic 中は player_chat 枝が意図的に無効（絶叫優先）。
             # ここで毎 tick attach すると speech 無し → requeue → また attach のログ嵐になる。
             # 落ち着くまで pending に置いたまま次イベントを待つ。
-            paused_workshop = (
-                session.haiku_workshop
-                if session.haiku_workshop is not None
-                and session.haiku_workshop.combat_paused
-                else None
-            )
-            if paused_workshop is not None:
-                pending_combat_text = session.pending_player_text or ""
-                if (
-                    session.combat_input_analysis_text == pending_combat_text
-                    and session.combat_input_analysis is not None
-                ):
-                    combat_input_analysis = session.combat_input_analysis
-                    combat_input_path = session.combat_input_analysis_path
-                else:
-                    combat_input_analysis, combat_input_path = (
-                        self._analyze_combat_workshop_input(
-                            paused_workshop,
-                            pending_combat_text,
-                        )
-                    )
-                    session.combat_input_analysis_text = pending_combat_text
-                    session.combat_input_analysis = combat_input_analysis
-                    session.combat_input_analysis_path = combat_input_path
-            paused_workshop_input = bool(
-                combat_input_analysis is not None
-                and combat_input_analysis.action
-                in {"resume_workshop", "workshop_input"}
-            )
-            paused_workshop_close = bool(
-                paused_workshop is not None
-                and classify_workshop_intent(
-                    session.pending_player_text or "",
-                    verse=paused_workshop.editing_line(),
+            pending_preview = route_player_input(session.pending_player_text)
+            pending_workshop_owned = bool(
+                session.haiku_workshop is not None
+                and is_active(session.haiku_workshop)
+                and not pending_preview.requests_sword
+                and should_handle_as_workshop(
+                    pending_preview.raw_text,
+                    verse=session.haiku_workshop.editing_line(),
+                    player_input=pending_preview,
                 )
-                == "close"
             )
-            pending_assist_text = session.pending_player_text or ""
-            if (session.pending_player_source or "text") == "voice":
-                pending_assist_text = (
-                    interpret_voice_select_sword_request(pending_assist_text)
-                    or pending_assist_text
+            hold_input_for_safety = bool(
+                (
+                    pending_preview.knowledge_query is not None
+                    or pending_workshop_owned
                 )
-            explicit_assist_request = is_explicit_select_sword_request(pending_assist_text)
-            if (
-                session.machine.state.mode in {"panic", "suppressed_panic"}
-                and not paused_workshop_input
-                and not paused_workshop_close
-                and not explicit_assist_request
-            ):
-                # 同じ文の hold は1回だけログ（毎 tick は出さない）
+                and (
+                    session.machine.state.mode
+                    in {"alert", "panic", "suppressed_panic"}
+                    or event.event.name
+                    in {EventName.PLAYER_DIED, EventName.COMBAT_ENDED}
+                    or bool(event.combat.combat_active_hint)
+                    or bool(event.visual_threats)
+                    or bool(event.auditory_threats)
+                    or session.machine._detect_warden_sonic_boom(event)
+                )
+            )
+            if hold_input_for_safety:
                 pending_text = session.pending_player_text or ""
                 if session.panic_hold_logged_text != pending_text:
                     session.panic_hold_logged_text = pending_text
                     LOGGER.warning(
-                        "player_input_held_for_panic session_id=%s mode=%s text=%s",
+                        "player_input_held_for_safety session_id=%s mode=%s text=%s",
                         session.session_id,
                         session.machine.state.mode,
                         pending_text[:80],
                     )
             else:
-                attached_player_text = session.pending_player_text
-                attached_player_source = session.pending_player_source or "text"
-                event.meta.user_text = attached_player_text
-                session.pending_player_text = None
-                session.pending_player_source = None
-                session.combat_input_analysis_text = None
-                session.combat_input_analysis = None
-                session.combat_input_analysis_path = "none"
-                LOGGER.warning(
-                    "player_input_attached_after_hold session_id=%s text=%s",
-                    session.session_id,
-                    attached_player_text[:80],
+                paused_workshop = (
+                    session.haiku_workshop
+                    if session.haiku_workshop is not None
+                    and session.haiku_workshop.combat_paused
+                    else None
                 )
+                if paused_workshop is not None:
+                    pending_combat_text = session.pending_player_text or ""
+                    if (
+                        session.combat_input_analysis_text == pending_combat_text
+                        and session.combat_input_analysis is not None
+                    ):
+                        combat_input_analysis = session.combat_input_analysis
+                        combat_input_path = session.combat_input_analysis_path
+                    else:
+                        combat_input_analysis, combat_input_path = (
+                            self._analyze_combat_workshop_input(
+                                paused_workshop,
+                                pending_combat_text,
+                            )
+                        )
+                        session.combat_input_analysis_text = pending_combat_text
+                        session.combat_input_analysis = combat_input_analysis
+                        session.combat_input_analysis_path = combat_input_path
+                paused_workshop_input = bool(
+                    combat_input_analysis is not None
+                    and combat_input_analysis.action
+                    in {"resume_workshop", "workshop_input"}
+                )
+                paused_workshop_close = bool(
+                    paused_workshop is not None
+                    and classify_workshop_intent(
+                        session.pending_player_text or "",
+                        verse=paused_workshop.editing_line(),
+                    )
+                    == "close"
+                )
+                pending_assist_text = session.pending_player_text or ""
+                if (session.pending_player_source or "text") == "voice":
+                    pending_assist_text = (
+                        interpret_voice_select_sword_request(pending_assist_text)
+                        or pending_assist_text
+                    )
+                explicit_assist_request = (
+                    is_explicit_voice_select_sword_request(pending_assist_text)
+                    if (session.pending_player_source or "text") == "voice"
+                    else is_explicit_select_sword_request(pending_assist_text)
+                )
+                if (
+                    session.machine.state.mode in {"panic", "suppressed_panic"}
+                    and not paused_workshop_input
+                    and not paused_workshop_close
+                    and not explicit_assist_request
+                ):
+                    # 同じ文の hold は1回だけログ（毎 tick は出さない）
+                    pending_text = session.pending_player_text or ""
+                    if session.panic_hold_logged_text != pending_text:
+                        session.panic_hold_logged_text = pending_text
+                        LOGGER.warning(
+                            "player_input_held_for_panic session_id=%s mode=%s text=%s",
+                            session.session_id,
+                            session.machine.state.mode,
+                            pending_text[:80],
+                        )
+                else:
+                    attached_player_text = session.pending_player_text
+                    attached_player_display_text = (
+                        session.pending_player_display_text or attached_player_text
+                    )
+                    attached_player_source = session.pending_player_source or "text"
+                    event.meta.user_text = attached_player_text
+                    session.pending_player_text = None
+                    session.pending_player_source = None
+                    session.pending_player_display_text = None
+                    session.combat_input_analysis_text = None
+                    session.combat_input_analysis = None
+                    session.combat_input_analysis_path = "none"
+                    LOGGER.warning(
+                        "player_input_attached_after_hold session_id=%s text=%s",
+                        session.session_id,
+                        attached_player_text[:80],
+                    )
 
         # 固定表は本文へ、現在語彙による音近傍補正は解釈面だけへ載せる。
         # adapter の typed chat は source=text のため、音近傍補正しない。
@@ -460,7 +645,7 @@ class DogidoService:
         )
 
         # ambient 抑止: まだ相乗りしていない話しかけがキューにある
-        session.machine.player_input_queued = bool((session.pending_player_text or "").strip())
+        session.machine.player_input_queued = self._session_has_queued_input(session)
 
         # 脅威が来たフレームは、古いpinをtimeoutで先に消さない。状態機械が
         # 戦況を確定した直後に、句を保持したまま戦闘中断へ移す。
@@ -515,6 +700,14 @@ class DogidoService:
                 session.pending_player_text[:80],
             )
         actions = list(machine_result.actions)
+        # このtickで戦闘pauseへ遷移すると、更新後のworkshop判定は入力を
+        # 所有しなくなる。遷移前の所有権を保存し、同時に届いた句編集・
+        # 現在句質問を安全発話の後へ必ず戻す。
+        workshop_owns_input = bool(
+            session.haiku_workshop is not None
+            and not session.machine.player_input.requests_sword
+            and session.machine._haiku_workshop_should_handle_player_input()
+        )
         combat_actions, workshop_input_consumed, replace_noncombat_speech = (
             self._update_workshop_combat_state(
                 session,
@@ -538,9 +731,47 @@ class DogidoService:
         )
         actions.extend(assist_actions)
         actions.extend(self._command_result_feedback_actions(observed_command_results, actions))
-        workshop_input_enabled = not workshop_input_consumed and not bool(
-            session.haiku_workshop is not None
-            and session.haiku_workshop.combat_paused
+        # workshopの後段返答で、安全発話・dimension flush・adapter実行結果を
+        # 一括置換しない。既存actionが優先されるtickでは入力を待ち列へ戻す。
+        workshop_input_preempted = bool(
+            workshop_owns_input
+            and (
+                event.event.name in {EventName.PLAYER_DIED, EventName.COMBAT_ENDED}
+                or machine_result.state.mode in {"alert", "panic", "suppressed_panic"}
+                or bool(event.combat.combat_active_hint)
+                or bool(event.visual_threats)
+                or bool(event.auditory_threats)
+                or session.machine._detect_warden_sonic_boom(event)
+                or any(action.interrupt for action in actions)
+                or any(
+                    action.layer == "speech" and bool(action.text)
+                    for action in actions
+                )
+            )
+        )
+        if workshop_input_preempted:
+            deferred_workshop_text = (routed_player_input.raw_text or "").strip()
+            if deferred_workshop_text:
+                self._queue_player_input(
+                    session,
+                    deferred_workshop_text,
+                    source=attached_player_source,
+                    display_text=attached_player_display_text,
+                )
+                LOGGER.warning(
+                    "workshop_input_deferred_after_preemption "
+                    "session_id=%s mode=%s text=%s",
+                    session.session_id,
+                    machine_result.state.mode,
+                    deferred_workshop_text[:80],
+                )
+        workshop_input_enabled = (
+            not workshop_input_consumed
+            and not workshop_input_preempted
+            and not bool(
+                session.haiku_workshop is not None
+                and session.haiku_workshop.combat_paused
+            )
         )
         memory_actions = self._memory_actions(
             session,
@@ -548,7 +779,13 @@ class DogidoService:
             actions,
             machine_result.haiku_emission,
             allow_player_input=(
-                workshop_input_enabled and not session.machine.player_input.requests_sword
+                workshop_input_enabled
+                and not session.machine.player_input.requests_sword
+                and not (
+                    routed_player_input.knowledge_query is not None
+                    and event.event.name
+                    in {EventName.PLAYER_DIED, EventName.COMBAT_ENDED}
+                )
             ),
         )
         # workshop 返事があるときは player_chat と二重にしない（講評を優先）
@@ -560,6 +797,27 @@ class DogidoService:
                     if not (a.layer == "speech" and a.text)
                 ]
         actions.extend(memory_actions)
+
+        # 警戒・戦闘・死亡・時限警告など、高優先発話に先送りされた質問を
+        # 失わない。DB回答済み／現在句として処理済みなら再キューしない。
+        if (
+            routed_player_input.knowledge_query is not None
+            and not session.machine.knowledge_query_handled
+        ):
+            deferred_text = (routed_player_input.raw_text or "").strip()
+            if deferred_text and self._queue_player_input(
+                session,
+                deferred_text,
+                source=attached_player_source,
+                display_text=attached_player_display_text,
+            ):
+                LOGGER.warning(
+                    "knowledge_question_deferred_after_preemption "
+                    "session_id=%s mode=%s text=%s",
+                    session.session_id,
+                    machine_result.state.mode,
+                    deferred_text[:80],
+                )
         self._update_dialogue_context(session, event, actions)
         # 句と無関係な speech が出た（通常 chat）→ drift
         self._note_workshop_after_actions(session, event, actions)
@@ -571,15 +829,19 @@ class DogidoService:
             and not session.machine.player_input.requests_sword
             and self._should_requeue_player_input(session, actions)
         ):
-            if not session.pending_player_text:
-                session.pending_player_text = attached_player_text
-                session.pending_player_source = attached_player_source
+            if self._queue_player_input(
+                session,
+                attached_player_text,
+                source=attached_player_source,
+                display_text=attached_player_display_text,
+            ):
                 LOGGER.warning(
                     "player_input_requeued session_id=%s mode=%s text=%s",
                     session.session_id,
                     machine_result.state.mode,
                     attached_player_text[:80],
                 )
+        self._promote_deferred_player_input(session)
 
         output_flags = self._output_flags(actions)
         response_time = datetime.now().astimezone()
@@ -607,6 +869,18 @@ class DogidoService:
             adapter_commands=issued_commands,
             command_results=observed_command_results,
         )
+        player_text_for_display = (
+            attached_player_display_text or routed_player_input.raw_text or ""
+        ).strip()
+        if player_text_for_display:
+            for action in actions:
+                if (
+                    action.layer == "speech"
+                    and bool(action.text)
+                    and action.cue_id != "aftermath_relief"
+                ):
+                    action.display_player_input_text = player_text_for_display
+                    break
         return ProcessedEvent(response=response, actions=actions)
 
     def _route_assist_player_input(
@@ -628,7 +902,7 @@ class DogidoService:
             input_source == "voice"
             and not routed.requests_sword
             and interpreted_player_text
-            and is_explicit_select_sword_request(routed.interpreted_text)
+            and is_explicit_voice_select_sword_request(routed.interpreted_text)
         ):
             command_text = routed.interpreted_text
             routed = replace(
@@ -638,10 +912,25 @@ class DogidoService:
                 assist_intent_evidence=command_text,
                 assist_intent_confidence=1.0,
             )
+        # 明示知識質問は会話専用で、世界操作の意図分類へ渡さない。
+        # 「ダイヤモンドの剣の耐久値は？」のような質問を、曖昧剣分類が
+        # 持ち替え要求へ昇格させる余地を閉じる。
+        if routed.knowledge_query is not None:
+            return replace(
+                routed,
+                requests_sword=False,
+                assist_intent_source="none",
+                assist_intent_evidence="",
+                assist_intent_confidence=0.0,
+            )
         workshop_owns_ambiguous_sword = bool(
             session.haiku_workshop is not None
             and session.haiku_workshop.open
             and not session.haiku_workshop.combat_paused
+            and not (
+                routed.assist_intent_source == "code_voice_asr"
+                and is_unambiguous_voice_select_sword_request(command_text)
+            )
             and not is_unambiguous_select_sword_request(command_text)
         )
         if workshop_owns_ambiguous_sword:
@@ -889,7 +1178,7 @@ class DogidoService:
         return {
             "mode": session.machine.state.mode,
             "pending_haiku_after_preface": session.machine.state.pending_haiku_after_preface,
-            "player_input_queued": bool((session.pending_player_text or "").strip()),
+            "player_input_queued": self._session_has_queued_input(session),
             "workshop": (
                 "combat_paused"
                 if workshop is not None and workshop.combat_paused
@@ -975,6 +1264,12 @@ class DogidoService:
     def heartbeat(self, session_id: str, last_sequence: int | None) -> HeartbeatResponse:
         session = self.sessions[session_id]
         session.last_seen_at = datetime.now().astimezone()
+        self.runtime_status.adapter_seen(
+            session_id,
+            adapter_name=session.adapter_name,
+            adapter_version=session.adapter_version,
+            seen_at=session.last_seen_at,
+        )
         if last_sequence is not None:
             session.last_sequence = last_sequence
         return HeartbeatResponse(
@@ -985,12 +1280,79 @@ class DogidoService:
 
     def close_session(self, session_id: str) -> CloseSessionResponse:
         self.sessions.pop(session_id, None)
+        self.runtime_status.adapter_closed(session_id)
         return CloseSessionResponse(ok=True, session_id=session_id)
 
-    def dispatch_actions(self, actions: list[AudioAction]) -> None:
-        if not self.settings.audio_enabled or not actions:
+    def dispatch_actions(
+        self,
+        actions: list[AudioAction],
+        *,
+        session_id: str | None = None,
+    ) -> None:
+        """確定済み本文を表示履歴へ残し、音声が有効なら再生を依頼する。"""
+
+        if not actions:
             return
-        self.audio.play_actions(actions)
+        self.display.record_actions(
+            actions,
+            session_id=session_id,
+            audio_requested=self.settings.audio_enabled,
+        )
+        if self.settings.audio_enabled:
+            self.audio.play_actions(actions)
+
+    def display_snapshot(self, *, session_id: str | None = None) -> dict[str, object]:
+        """ゲーム外画面へ、発言・参考資料・診断ログを一つのsnapshotで返す。"""
+
+        snapshot = self.display.snapshot(session_id=session_id)
+        diagnostic = self.diagnostics.snapshot()
+        snapshot["diagnostic_schema_version"] = diagnostic["schema_version"]
+        snapshot["diagnostic_revision"] = diagnostic["revision"]
+        snapshot["diagnostics"] = diagnostic["entries"]
+        snapshot["diagnostic_retention"] = diagnostic["retention"]
+        runtime_status = self.runtime_status.snapshot()
+        snapshot["runtime_revision"] = runtime_status["revision"]
+        snapshot["runtime"] = runtime_status["runtime"]
+        snapshot["minecraft"] = runtime_status["minecraft"]
+        return snapshot
+
+    def record_voice_input_diagnostic(
+        self,
+        payload: VoiceInputDiagnosticRequest,
+    ) -> dict[str, object]:
+        """別プロセスのSTT診断を、起動中だけの診断履歴と端末へ写す。"""
+        from dogido_server.llm.sanitize import summarize_for_log
+
+        parts = ["voice_input", f"event={payload.event}"]
+        if payload.prompt_mode is not None:
+            parts.append(f"prompt_mode={payload.prompt_mode}")
+        if payload.duration_ms is not None:
+            parts.append(f"duration_ms={payload.duration_ms}")
+        if payload.reason:
+            parts.append(f"reason={summarize_for_log(payload.reason)}")
+        if payload.recognized_text is not None:
+            parts.append(f"text={summarize_for_log(payload.recognized_text)}")
+        if payload.detail:
+            parts.append(f"detail={summarize_for_log(payload.detail)}")
+        message = " ".join(parts)
+        entry_id = self.diagnostics.record(
+            level=payload.level,
+            logger="dogido.voice_input",
+            source="voice_input",
+            event=payload.event,
+            message=message,
+        )
+        level = {
+            "info": logging.INFO,
+            "warning": logging.WARNING,
+            "error": logging.ERROR,
+        }[payload.level]
+        LOGGER.log(
+            level,
+            message,
+            extra={"dogido_diagnostic_skip": True},
+        )
+        return {"accepted": entry_id is not None, "entry_id": entry_id}
 
     def voice_input_context(self) -> VoiceInputContextResponse:
         """直近セッションが川柳workshop中かだけを音声認識へ公開する。"""
@@ -1011,7 +1373,6 @@ class DogidoService:
         """音声入力などゲーム外からのプレイヤー発話を、直近のアクティブセッションへ届ける。"""
         from dogido_server.player_input.normalize import (
             is_known_voice_noise_text,
-            is_too_short_voice_text,
             normalize_player_text,
         )
 
@@ -1030,20 +1391,46 @@ class DogidoService:
                 normalized[:80],
             )
             return {"accepted": False, "reason": "noise_text"}
-        if input_source == "voice" and is_too_short_voice_text(normalized):
-            LOGGER.warning(
-                "player_input_rejected reason=too_short text=%s",
-                normalized[:80],
-            )
-            return {"accepted": False, "reason": "too_short"}
         if not self.sessions:
             return {"accepted": False, "reason": "no_active_session"}
         session = max(
             self.sessions.values(),
             key=lambda candidate: candidate.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
         )
-        session.pending_player_text = normalized
-        session.pending_player_source = input_source
+        existing = (session.pending_player_text or "").strip()
+        existing_preview = route_player_input(existing) if existing else None
+        preserve_existing = bool(
+            existing_preview is not None
+            and (
+                existing_preview.knowledge_query is not None
+                or (
+                    is_active(session.haiku_workshop)
+                    and session.haiku_workshop is not None
+                    and should_handle_as_workshop(
+                        existing_preview.raw_text,
+                        verse=session.haiku_workshop.editing_line(),
+                        player_input=existing_preview,
+                    )
+                )
+            )
+        )
+        if preserve_existing:
+            if not self._queue_player_input(
+                session,
+                normalized,
+                source=input_source,
+                display_text=original,
+            ):
+                return {"accepted": False, "reason": "queue_full"}
+        else:
+            # 従来のvoice endpointは未処理の一般発話を最新値で置換する。
+            # 知識質問・workshop入力だけは上の分岐で先着順に保全する。
+            session.pending_player_text = normalized
+            session.pending_player_source = input_source
+            session.pending_player_display_text = original
+            session.combat_input_analysis_text = None
+            session.combat_input_analysis = None
+            session.combat_input_analysis_path = "none"
         if original != normalized:
             LOGGER.warning(
                 "player_input_pushed session_id=%s source=%s text=%s (stt_raw=%s)",
@@ -1538,11 +1925,19 @@ class DogidoService:
                 materials["time_phase"] = emission.time_phase
         else:
             # ラベル補完だけ（上書きしない）
-            if emission.biome and "biome" not in materials:
+            if (
+                emission.biome
+                and "biome" not in materials
+                and material_context_visible(materials, "biome")
+            ):
                 materials["biome"] = emission.biome
             if emission.structure and "structure" not in materials:
                 materials["structure"] = emission.structure
-            if emission.time_phase and "time_phase" not in materials:
+            if (
+                emission.time_phase
+                and "time_phase" not in materials
+                and material_context_visible(materials, "sky")
+            ):
                 materials["time_phase"] = emission.time_phase
             if emission.interpretation and "interpretation" not in materials:
                 materials["interpretation"] = emission.interpretation
@@ -1673,6 +2068,56 @@ class DogidoService:
             return []
         if (player_input.normalized_text or "").startswith("/"):
             return []
+
+        # 句中の未知語や「この川柳」ではなく、閉じた語彙で確定した一般知識
+        # 質問だけを状態変更より先に処理する。戦闘後の再開確認待ちも含め、
+        # pin・pending・lesson・close・driftを一切動かさない。
+        knowledge_query = player_input.knowledge_query
+        knowledge_subject = (
+            "".join(knowledge_query.subject.split()) if knowledge_query is not None else ""
+        )
+        whole_verse_reference = bool(
+            knowledge_subject
+            and knowledge_subject.startswith(
+                ("この", "今の", "いまの", "さっきの", "先ほどの", "今詠んだ", "いま詠んだ")
+            )
+            and any(term in knowledge_subject for term in ("句", "川柳", "俳句", "三行"))
+        )
+        knowledge_targets_current_verse = bool(
+            knowledge_query is not None
+            and (
+                whole_verse_reference
+                or mentioned_workshop_line_fragment(workshop, text) is not None
+                or grounded_material_for_question(workshop, text) is not None
+            )
+        )
+        if knowledge_targets_current_verse:
+            session.machine.knowledge_query_handled = True
+        if knowledge_query is not None and not knowledge_targets_current_verse:
+            reply = session.machine._render_knowledge_reply()
+            if not reply:
+                return []
+            return session.machine._knowledge_speech_actions(reply)
+
+        actions = self._respond_to_workshop_input(session, event)
+        replies = [action.text for action in actions if action.layer == "speech" and action.text]
+        if replies:
+            # 実際に選んだ返答だけを履歴へ。保留入力・知識質問・戦闘発話は混ぜない。
+            recorded_input = text if text == semantic_text else f"{text}（聞き取りの解釈: {semantic_text}）"
+            workshop.dialogue.add_player(recorded_input, at=event.observed_at)
+            workshop.dialogue.add_dogido("\n".join(replies), at=event.observed_at)
+        return actions
+
+    def _respond_to_workshop_input(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+    ) -> list[AudioAction]:
+        workshop = session.haiku_workshop
+        assert workshop is not None
+        player_input = session.machine.player_input
+        text = (player_input.raw_text or "").strip()
+        semantic_text = (player_input.semantic_text or text).strip()
 
         # 戦闘後は句を勝手に再開せず、一度だけプレイヤーへ戻すか確認する。
         # 新しい具体的な講評が来た場合は、その発話自体を再開の意思として
@@ -1997,6 +2442,23 @@ class DogidoService:
                         intent_path,
                         analysis.close_request.evidence[:80],
                     )
+            # 相槌という分類と、根拠つきの否定評価・具体的な修正相談が
+            # 同時に返ったら、納得として処理しない。明示の短い相槌fallbackは維持。
+            if (
+                effective_kind == "ack"
+                and not meaning_ack_fallback
+                and analysis.confidence >= 0.75
+                and (
+                    analysis.findings
+                    or analysis.line_proposal is not None
+                    or analysis.repair_requested
+                    or (
+                        analysis.evaluation is not None
+                        and analysis.evaluation.sentiment in {"negative", "mixed"}
+                    )
+                )
+            ):
+                effective_kind = "request_repair" if analysis.repair_requested else "other_haiku"
             followup_control_turn = (
                 workshop.awaiting_meaning_ack and effective_kind == "ack"
             ) or (
@@ -2601,6 +3063,13 @@ class DogidoService:
                             "evidence": "",
                             "confidence": 0.0,
                         },
+                        "line_proposal": {
+                            "found": False,
+                            "target_fragment": "",
+                            "replacement_text": "",
+                            "evidence": "",
+                            "confidence": 0.0,
+                        },
                     },
                     details=details,
                     temperature=0.0,
@@ -2649,6 +3118,7 @@ class DogidoService:
                     details={
                         "verse": workshop.editing_line(),
                         "player_text": player_text,
+                        "workshop_context": workshop_context_details(workshop),
                     },
                     temperature=0.0,
                     route="chat",
@@ -2744,12 +3214,22 @@ class DogidoService:
                 findings=tuple(finding.to_dict() for finding in analysis.findings),
                 source_atoms=atoms,
                 original_line_sources=line_sources,
-                details=dict(workshop.materials or {}),
+                details={
+                    **dict(workshop.materials or {}),
+                    "workshop_context": workshop_context_details(workshop),
+                },
                 max_tokens=self.settings.haiku_structured_max_tokens,
             )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("haiku_workshop_revision_failed detail=%s", exc)
             return "まだうまく直しきれんかったわ。元の句はそのままや。", "failed"
+        workshop.last_repair_feedback = {
+            "base_text": workshop.display_line(),
+            "validation_passed": result.accepted,
+            "failure_reason": result.failure_reason,
+            "retry_feedback": result.retry_feedback,
+            "proposed_text": result.text,
+        }
         if not result.accepted or not result.text:
             return "まだうまく直しきれんかったわ。元の句はそのままや。", result.failure_reason or "rejected"
         pending_lines = build_haiku_lines(
@@ -2786,15 +3266,14 @@ class DogidoService:
         workshop: RecentHaikuWorkshop,
         player_text: str,
     ) -> tuple[str, str]:
-        """行出典だけで意味を説明し、不明なら推測せず正直に返す。"""
+        """当時の材料・見どころ・対話を比較して説明する。句と記録は変更しない。"""
 
-        material = grounded_material_for_question(workshop, player_text)
-        if material:
-            return (
-                f"「{material}」を元にした行やで。言葉が崩れてたら、そこはオレの失敗や。",
-                "line_source",
-            )
-        return "すまん。オレにももう分からんわ。", "unknown_source"
+        return self._collaborator_workshop_reply(
+            workshop,
+            player_text,
+            kind="ask_meaning",
+            reply_goal="explain_meaning",
+        )
 
     def _collaborator_workshop_reply(
         self,
@@ -2811,6 +3290,9 @@ class DogidoService:
         template_kind = kind if kind != "soft_default" else "soft_default"
         if repair_state == "proposed":
             fallback = "こんなんどうや。"
+        elif reply_goal == "explain_meaning":
+            # 照合先自体が誤っていることがあるため、失敗時も材料名を断定しない。
+            fallback = "すまんな。その言葉の意味、今うまく説明できへんわ。"
         elif reply_goal == "ask_revision_direction":
             fallback = "どの行や言葉を、どう直したいか教えてな。"
         else:
@@ -2824,6 +3306,7 @@ class DogidoService:
         details = {
             "verse": verse,
             "materials_speech": materials,
+            "workshop_context": workshop_context_details(workshop),
             "player_text": player_text,
             "intent_kind": kind,
             "reply_goal": reply_goal,
@@ -2881,6 +3364,8 @@ class DogidoService:
         if player_input.revised_haiku_text or player_input.asks_haiku_recall:
             return
         if player_input.reading_correction is not None:
+            return
+        if player_input.knowledge_query is not None:
             return
         has_speech = any(bool(a.text) and a.layer == "speech" for a in actions)
         if not has_speech:

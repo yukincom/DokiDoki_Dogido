@@ -207,16 +207,28 @@ def _low_threat_resume_ready(
 
 
 def _has_victory_evidence(event: GameEvent) -> bool:
-    return bool(
-        (event.combat.nearby_experience_orb_count or 0) > 0
-        or event.combat.warden_defeat_confirmed
+    boss_defeat = bool(
+        event.combat.warden_defeat_confirmed
         or event.combat.dragon_defeat_confirmed
     )
+    if event.combat.hostile_outcomes is not None:
+        return boss_defeat or any(
+            outcome.outcome == "player_kill"
+            for outcome in event.combat.hostile_outcomes
+        )
+    # 旧adapterには明示欄がないため、互換経路に限って経験値を使う。
+    return boss_defeat or (event.combat.nearby_experience_orb_count or 0) > 0
 
 
 def _resume_prompt(workshop: RecentHaikuWorkshop, reason: str) -> str:
     if reason == "victory":
         lead = "やったな。倒せたみたいや。"
+    elif reason == "detonated":
+        lead = "うわぁ、クリーパー爆発したな。びっくりしたわ。"
+    elif reason == "explosion":
+        lead = "うわっ、爆発で敵が倒れたみたいやな。"
+    elif reason == "defeated":
+        lead = "敵は倒れたみたいやな。"
     elif reason == "escaped":
         lead = "ひとまず離れられたみたいやな。"
     else:
@@ -377,6 +389,18 @@ def update_workshop_combat_state(
     if workshop.combat_resume_pending_reason is None:
         if _has_victory_evidence(event):
             workshop.combat_resume_pending_reason = "victory"
+        elif any(
+            outcome.outcome == "creeper_detonation"
+            for outcome in (event.combat.hostile_outcomes or [])
+        ):
+            workshop.combat_resume_pending_reason = "detonated"
+        elif any(
+            outcome.outcome == "explosion_death"
+            for outcome in (event.combat.hostile_outcomes or [])
+        ):
+            workshop.combat_resume_pending_reason = "explosion"
+        elif event.combat.hostile_outcomes:
+            workshop.combat_resume_pending_reason = "defeated"
         elif event.event.name == EventName.COMBAT_ENDED:
             workshop.combat_resume_pending_reason = "escaped"
         else:

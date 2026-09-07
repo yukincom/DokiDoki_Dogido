@@ -4,9 +4,22 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from math import inf
+from typing import Literal
 
 from dogido_server.memory_types import HaikuEmission
 from dogido_server.models import VisualThreat
+
+
+@dataclass(frozen=True, slots=True)
+class SpeechReference:
+    """発話とは別欄に表示する、検証済み参考資料のメタデータ。"""
+
+    source_id: str
+    title_ja: str
+    citation_label_ja: str
+    locator: str = ""
+    url: str = ""
+    source_kind: str = ""
 
 
 @dataclass(slots=True)
@@ -22,6 +35,19 @@ class AudioAction:
     speech_profile: str | None = None
     # 明示 speedScale（入っていれば profile より優先）
     speed_scale: float | None = None
+    # 監査・表示用の text は全文のまま保ち、音声配送だけを文単位に分ける。
+    # 各文を独立キューへ積まず、一つの論理 action 内で順番に再生する。
+    speech_segments: tuple[str, ...] = ()
+    speech_segment_pause_ms: int = 0
+    # 待ち列が満杯のときだけ使う配送優先度。危険割り込みは別途常に最優先。
+    queue_priority: Literal["background", "normal", "foreground"] = "normal"
+    # 同じ種類の古い未再生バッチを、過負荷時に明示置換するためのキー。
+    queue_replace_key: str | None = None
+    # 音声では読まず、別画面の「参考資料」にだけ表示する。
+    references: tuple[SpeechReference, ...] = ()
+    # ゲーム外の発言画面で、この返答と一緒にコピーするプレイヤー入力。
+    # LLM・TTSへは渡さず、プロセス再起動時に消える表示専用メタデータ。
+    display_player_input_text: str = ""
 
 
 @dataclass(slots=True)
@@ -136,16 +162,21 @@ class RuntimeState:
     prior_recent_visual_ms: int | None = None
     prior_recent_audio_ms: int | None = None
     burning_visual_keys: set[str] = field(default_factory=set)
+    # 前回受信時点で導火中だったクリーパー。false/未観測 -> true の開始時だけ反応する。
+    active_creeper_fuse_keys: set[str] = field(default_factory=set)
     last_occluded_dark_zone: bool | None = None
     last_light_source_count: int = 0
     inventory_initialized: bool = False
     last_inventory_counts: dict[str, int] = field(default_factory=dict)
     # player_chat 用の粗い出来事メモ（自然文）。service が DialogueContext に吸い上げる
     pending_dialogue_notes: list[str] = field(default_factory=list)
-    # 撃破推定: 直近に見えていた敵対 entity_id -> type
+    # 旧adapter用の撃破推定と、新adapterの明示戦闘結果
     tracked_hostile_entities: dict[str, str] = field(default_factory=dict)
     recent_kill_counts: dict[str, int] = field(default_factory=dict)
     recent_kill_seen_at_by_type: dict[str, datetime] = field(default_factory=dict)
+    recent_hostile_outcome_notes: list[str] = field(default_factory=list)
+    # 即時発話済みの戦闘結果。combat_ended で同じ個体を再び話題にしない。
+    announced_hostile_outcome_ids: set[str] = field(default_factory=set)
     commented_visual_keys: dict[str, datetime] = field(default_factory=dict)
     commented_auditory_keys: dict[str, tuple[datetime, int]] = field(default_factory=dict)
     auditory_presence_states: dict[str, AuditoryPresenceState] = field(default_factory=dict)

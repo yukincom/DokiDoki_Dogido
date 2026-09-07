@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ドギド発言履歴</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #111718;
+      --panel: #192123;
+      --panel-soft: #202a2c;
+      --line: #334144;
+      --text: #f2f0e9;
+      --muted: #aab7b7;
+      --accent: #f0b45b;
+      --accent-deep: #5b4526;
+      --ok: #83c991;
+      --error: #f19a91;
+      --radius: 16px;
+      --diagnostic-font-size: 1.25rem;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(240, 180, 91, 0.10), transparent 28rem),
+        var(--page);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", sans-serif;
+      line-height: 1.7;
+    }
+
+    button, input { font: inherit; }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #263133;
+      color: var(--text);
+      padding: 0.48rem 0.9rem;
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+    }
+
+    button:hover { background: #303d40; border-color: #536669; }
+    button:active { transform: translateY(1px); }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 3px solid rgba(240, 180, 91, 0.42);
+      outline-offset: 2px;
+    }
+
+    .page {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    h1, h2, p { margin-top: 0; }
+    h1 { margin-bottom: 0.2rem; font-size: clamp(1.55rem, 3vw, 2.3rem); letter-spacing: 0.03em; }
+    h2 { margin-bottom: 0; font-size: 1.15rem; }
+
+    .lead { margin-bottom: 0; color: var(--muted); font-size: 0.93rem; }
+
+    .connection {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 0.87rem;
+    }
+
+    .status-stack {
+      display: grid;
+      justify-items: end;
+      gap: 0.3rem;
+    }
+
+    .runtime-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 1rem;
+      margin: 0 0 1rem;
+      padding: 0.7rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--muted);
+      font: 0.8rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .runtime-info strong { color: var(--text); font-weight: 600; }
+
+    .dot {
+      width: 0.68rem;
+      height: 0.68rem;
+      border-radius: 50%;
+      background: #7f898b;
+      box-shadow: 0 0 0 4px rgba(127, 137, 139, 0.12);
+    }
+    .connected .dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(131, 201, 145, 0.13); }
+    .disconnected .dot { background: var(--error); box-shadow: 0 0 0 4px rgba(241, 154, 145, 0.13); }
+
+    .auth {
+      display: none;
+      align-items: center;
+      gap: 0.55rem;
+      margin: 0 0 1rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    .auth.visible { display: flex; }
+    .auth label { color: var(--muted); }
+    .auth input {
+      min-width: 16rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f1516;
+      color: var(--text);
+      padding: 0.45rem 0.65rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.85fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(25, 33, 35, 0.96);
+      overflow: hidden;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.16);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(32, 42, 44, 0.78);
+    }
+
+    .panel-count { color: var(--muted); font-size: 0.82rem; font-weight: 400; }
+    .panel-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    .list {
+      max-height: calc(100vh - 12rem);
+      min-height: 18rem;
+      overflow: auto;
+      padding: 0.8rem;
+      scrollbar-color: #4c5b5e transparent;
+    }
+
+    .entry {
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 0.9rem;
+      background: var(--panel-soft);
+    }
+    .entry + .entry { margin-top: 0.7rem; }
+
+    .entry-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.8rem; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      background: #314044;
+      color: #d9e1df;
+      padding: 0.08rem 0.52rem;
+      font-size: 0.75rem;
+    }
+    .tag.knowledge { background: var(--accent-deep); color: #ffe0ae; }
+
+    .utterance {
+      margin: 0;
+      color: var(--text);
+      font-size: clamp(1rem, 1.5vw, 1.12rem);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .player-input {
+      margin: 0 0 0.55rem;
+      padding: 0.45rem 0.7rem;
+      border-left: 3px solid #719a92;
+      color: #c7d8d4;
+      background: rgba(113, 154, 146, 0.1);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .copy-button { flex: 0 0 auto; font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+
+    .reference-title { margin: 0; font-size: 1rem; line-height: 1.5; }
+    .reference-agency { color: #ffe0ae; font-size: 0.83rem; margin-bottom: 0.2rem; }
+    .reference-locator { color: var(--muted); font-size: 0.83rem; margin: 0.35rem 0 0; white-space: pre-wrap; }
+    .reference-link { color: #9dc8ef; text-decoration-thickness: 1px; text-underline-offset: 0.18em; overflow-wrap: anywhere; }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 15rem;
+      padding: 2rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .footnote {
+      margin: 0.8rem 0 0;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-align: right;
+    }
+
+    .diagnostic-panel { grid-column: 1 / -1; }
+    .diagnostic-list {
+      height: min(34rem, 48vh);
+      min-height: 18rem;
+      overflow: auto;
+      padding: 0.8rem;
+      background: #0b1011;
+      scrollbar-color: #4c5b5e transparent;
+    }
+    .diagnostic-entry {
+      display: grid;
+      grid-template-columns: 6.2rem 5.2rem minmax(9rem, 14rem) minmax(0, 1fr);
+      gap: 0.8rem;
+      padding: 0.42rem 0.45rem;
+      border-bottom: 1px solid rgba(51, 65, 68, 0.38);
+      font: var(--diagnostic-font-size)/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .diagnostic-time, .diagnostic-logger { color: #849394; }
+    .diagnostic-level { color: #9dc8ef; font-weight: 700; }
+    .diagnostic-level.warning { color: #f0c16f; }
+    .diagnostic-level.error, .diagnostic-level.critical { color: var(--error); }
+    .diagnostic-message { color: #d7dfdc; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+    @media (max-width: 860px) {
+      .page { padding: 1rem; }
+      header { align-items: flex-start; flex-direction: column; }
+      .status-stack { justify-items: start; }
+      .layout { grid-template-columns: 1fr; }
+      .list { max-height: none; }
+      .diagnostic-entry { grid-template-columns: 4.8rem 4.4rem minmax(0, 1fr); }
+      .diagnostic-logger { display: none; }
+      .auth { align-items: stretch; flex-direction: column; }
+      .auth input { min-width: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <h1>ドギド発言履歴</h1>
+        <p class="lead">聞き逃した会話を読み返し、引用形式でコピーできます。</p>
+      </div>
+      <div class="status-stack">
+        <div id="connection" class="connection" role="status" aria-live="polite">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="connection-text">サーバーへ接続しています</span>
+        </div>
+        <div id="minecraft-connection" class="connection" role="status" aria-live="polite">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="minecraft-connection-text">Minecraft接続を確認しています</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="runtime-info" aria-label="実行中のドギドサーバー情報">
+      <span>実行元: <strong id="runtime-source">確認中</strong></span>
+      <span>Python環境: <strong id="runtime-python">確認中</strong></span>
+      <span>PID: <strong id="runtime-pid">確認中</strong></span>
+      <span>起動識別子: <strong id="runtime-instance">確認中</strong></span>
+    </div>
+
+    <form id="auth" class="auth" autocomplete="off">
+      <label for="token">サーバー認証トークン</label>
+      <input id="token" type="password" autocomplete="off" spellcheck="false">
+      <button type="submit">接続</button>
+    </form>
+
+    <div class="layout">
+      <section class="panel" aria-labelledby="utterance-heading">
+        <div class="panel-head">
+          <h2 id="utterance-heading">発言 <span id="utterance-count" class="panel-count">0件</span></h2>
+          <div class="panel-actions">
+            <button id="copy-all" type="button">すべてコピー</button>
+          </div>
+        </div>
+        <div id="utterances" class="list" aria-live="polite"></div>
+      </section>
+
+      <section id="reference-panel" class="panel" aria-labelledby="reference-heading">
+        <div class="panel-head">
+          <h2 id="reference-heading">参考資料 <span id="reference-count" class="panel-count">0件</span></h2>
+        </div>
+        <div id="references" class="list"></div>
+      </section>
+
+      <section class="panel diagnostic-panel" aria-labelledby="diagnostic-heading">
+        <div class="panel-head">
+          <h2 id="diagnostic-heading">診断ログ <span id="diagnostic-count" class="panel-count">0件</span></h2>
+          <div class="panel-actions">
+            <button id="diagnostic-smaller" type="button" aria-label="診断ログの文字を小さくする">文字を小さく</button>
+            <button id="diagnostic-larger" type="button" aria-label="診断ログの文字を大きくする">文字を大きく</button>
+            <button id="copy-diagnostics" type="button">全ログコピー</button>
+            <button id="diagnostic-end" type="button">末尾へ</button>
+          </div>
+        </div>
+        <div id="diagnostics" class="diagnostic-list" role="log" aria-label="定常HTTPアクセスを除いた診断ログ"></div>
+      </section>
+    </div>
+
+    <p class="footnote">発言と診断ログはこのサーバーの起動中だけ保持され、再起動すると消去されます。診断ログに音声波形は保存しません。</p>
+  </main>
+
+  <script>
+    (() => {
+      const connection = document.getElementById('connection');
+      const connectionText = document.getElementById('connection-text');
+      const minecraftConnection = document.getElementById('minecraft-connection');
+      const minecraftConnectionText = document.getElementById('minecraft-connection-text');
+      const runtimeSource = document.getElementById('runtime-source');
+      const runtimePython = document.getElementById('runtime-python');
+      const runtimePid = document.getElementById('runtime-pid');
+      const runtimeInstance = document.getElementById('runtime-instance');
+      const authForm = document.getElementById('auth');
+      const tokenInput = document.getElementById('token');
+      const utteranceList = document.getElementById('utterances');
+      const referenceList = document.getElementById('references');
+      const utteranceCount = document.getElementById('utterance-count');
+      const referenceCount = document.getElementById('reference-count');
+      const copyAllButton = document.getElementById('copy-all');
+      const diagnosticList = document.getElementById('diagnostics');
+      const diagnosticCount = document.getElementById('diagnostic-count');
+      const diagnosticSmallerButton = document.getElementById('diagnostic-smaller');
+      const diagnosticLargerButton = document.getElementById('diagnostic-larger');
+      const copyDiagnosticsButton = document.getElementById('copy-diagnostics');
+      const diagnosticEndButton = document.getElementById('diagnostic-end');
+
+      const categoryLabels = {
+        knowledge: '知識回答',
+        haiku: '川柳',
+        warning: '警告',
+        speech: '発言'
+      };
+
+      let authToken = '';
+      let lastRevisionKey = '';
+      let currentUtterances = [];
+      let currentDiagnostics = [];
+      const diagnosticFontSizes = [0.875, 1, 1.125, 1.25, 1.4];
+      let diagnosticFontSizeIndex = 3;
+
+      function applyDiagnosticFontSize() {
+        document.documentElement.style.setProperty(
+          '--diagnostic-font-size',
+          `${diagnosticFontSizes[diagnosticFontSizeIndex]}rem`
+        );
+        diagnosticSmallerButton.disabled = diagnosticFontSizeIndex === 0;
+        diagnosticLargerButton.disabled = diagnosticFontSizeIndex === diagnosticFontSizes.length - 1;
+      }
+
+      function setConnection(kind, message) {
+        connection.classList.remove('connected', 'disconnected');
+        if (kind) connection.classList.add(kind);
+        connectionText.textContent = message;
+      }
+
+      function setMinecraftConnection(kind, message) {
+        minecraftConnection.classList.remove('connected', 'disconnected');
+        if (kind) minecraftConnection.classList.add(kind);
+        minecraftConnectionText.textContent = message;
+      }
+
+      function renderRuntime(data) {
+        const runtime = data.runtime || {};
+        const minecraft = data.minecraft || {};
+        runtimeSource.textContent = runtime.source_label_ja || '不明';
+        const environment = runtime.python_environment || '不明';
+        runtimePython.textContent = runtime.virtual_environment
+          ? `${environment}（仮想環境）`
+          : `${environment}（仮想環境ではありません）`;
+        runtimePid.textContent = runtime.process_id == null ? '不明' : String(runtime.process_id);
+        runtimeInstance.textContent = runtime.instance_id || '不明';
+
+        const adapters = Array.isArray(minecraft.adapters) ? minecraft.adapters : [];
+        if (minecraft.state === 'connected') {
+          const detail = adapters.length ? `: ${adapters.join(', ')}` : '';
+          setMinecraftConnection('connected', `Minecraft: 接続中${detail}`);
+        } else if (minecraft.state === 'stale') {
+          setMinecraftConnection('disconnected', 'Minecraft: 応答が途絶えています');
+        } else {
+          setMinecraftConnection('disconnected', 'Minecraft: 未接続');
+        }
+      }
+
+      function timeLabel(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return new Intl.DateTimeFormat('ja-JP', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }).format(date);
+      }
+
+      async function copyText(text, button) {
+        if (!text) return;
+        const quotedText = String(text)
+          .split('\n')
+          .map(line => line ? `> ${line}` : '>')
+          .join('\n');
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(quotedText);
+          } else {
+            const area = document.createElement('textarea');
+            area.value = quotedText;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
+          }
+          if (button) {
+            const original = button.textContent;
+            button.textContent = 'コピーしました';
+            window.setTimeout(() => { button.textContent = original; }, 1100);
+          }
+        } catch (_) {
+          if (button) button.textContent = 'コピーできませんでした';
+        }
+      }
+
+      function emptyMessage(text) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = text;
+        return empty;
+      }
+
+      function renderUtterances(items) {
+        utteranceList.replaceChildren();
+        utteranceCount.textContent = `${items.length}件`;
+        if (!items.length) {
+          utteranceList.appendChild(emptyMessage('ドギドが話すと、ここに本文が表示されます。'));
+          return;
+        }
+
+        for (const item of [...items].reverse()) {
+          const entry = document.createElement('article');
+          entry.className = 'entry';
+
+          const head = document.createElement('div');
+          head.className = 'entry-head';
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+
+          const time = document.createElement('time');
+          time.dateTime = item.created_at || '';
+          time.textContent = timeLabel(item.created_at);
+          meta.appendChild(time);
+
+          const tag = document.createElement('span');
+          tag.className = `tag ${item.category === 'knowledge' ? 'knowledge' : ''}`;
+          tag.textContent = categoryLabels[item.category] || '発言';
+          meta.appendChild(tag);
+
+          if (Array.isArray(item.reference_ids) && item.reference_ids.length) {
+            const referenceTag = document.createElement('span');
+            referenceTag.className = 'tag knowledge';
+            referenceTag.textContent = `参考資料 ${item.reference_ids.length}件`;
+            meta.appendChild(referenceTag);
+          }
+
+          const copyButton = document.createElement('button');
+          copyButton.type = 'button';
+          copyButton.className = 'copy-button';
+          copyButton.textContent = 'コピー';
+          copyButton.addEventListener('click', () => copyText(conversationCopyText(item), copyButton));
+
+          const utterance = document.createElement('p');
+          utterance.className = 'utterance';
+          utterance.textContent = item.text || '';
+
+          head.append(meta, copyButton);
+          entry.appendChild(head);
+          if (item.player_input_text) {
+            const playerInput = document.createElement('p');
+            playerInput.className = 'player-input';
+            playerInput.textContent = `私: ${item.player_input_text}`;
+            entry.appendChild(playerInput);
+          }
+          entry.appendChild(utterance);
+          utteranceList.appendChild(entry);
+        }
+      }
+
+      function conversationCopyText(item) {
+        const rows = [];
+        if (item.player_input_text) rows.push(`私: ${item.player_input_text}`);
+        if (item.text) rows.push(`ドギド: ${item.text}`);
+        return rows.join('\n');
+      }
+
+      function safeWebUrl(value) {
+        try {
+          const parsed = new URL(value);
+          return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : '';
+        } catch (_) {
+          return '';
+        }
+      }
+
+      function referenceCopyText(item) {
+        return [
+          item.citation_label_ja,
+          item.title_ja,
+          item.locator,
+          item.url
+        ].filter(Boolean).join('\n');
+      }
+
+      function renderReferences(items) {
+        referenceList.replaceChildren();
+        referenceCount.textContent = `${items.length}件`;
+        if (!items.length) {
+          referenceList.appendChild(emptyMessage('知識回答に使った公式資料が、ここに一覧表示されます。'));
+          return;
+        }
+
+        for (const item of items) {
+          const entry = document.createElement('article');
+          entry.className = 'entry';
+          const head = document.createElement('div');
+          head.className = 'entry-head';
+          const titleBlock = document.createElement('div');
+
+          const agency = document.createElement('div');
+          agency.className = 'reference-agency';
+          agency.textContent = item.citation_label_ja || '公式資料';
+          const title = document.createElement('h3');
+          title.className = 'reference-title';
+          title.textContent = item.title_ja || item.source_id || '参考資料';
+          titleBlock.append(agency, title);
+
+          const copyButton = document.createElement('button');
+          copyButton.type = 'button';
+          copyButton.className = 'copy-button';
+          copyButton.textContent = 'コピー';
+          copyButton.addEventListener('click', () => copyText(referenceCopyText(item), copyButton));
+          head.append(titleBlock, copyButton);
+          entry.appendChild(head);
+
+          if (item.locator) {
+            const locator = document.createElement('p');
+            locator.className = 'reference-locator';
+            locator.textContent = item.locator;
+            entry.appendChild(locator);
+          }
+
+          const url = safeWebUrl(item.url || '');
+          if (url) {
+            const link = document.createElement('a');
+            link.className = 'reference-link';
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = '公式資料を開く';
+            entry.appendChild(link);
+          }
+          referenceList.appendChild(entry);
+        }
+      }
+
+      function diagnosticLine(item) {
+        const level = String(item.level || 'INFO').toUpperCase();
+        const source = item.source === 'voice_input' ? 'voice/STT' : (item.logger || 'dogido');
+        return `${timeLabel(item.created_at)} [${level}] [${source}] ${item.message || ''}`;
+      }
+
+      function renderDiagnostics(items) {
+        const wasNearEnd = (
+          diagnosticList.scrollHeight - diagnosticList.scrollTop - diagnosticList.clientHeight < 80
+        );
+        diagnosticList.replaceChildren();
+        diagnosticCount.textContent = `${items.length}件`;
+        if (!items.length) {
+          diagnosticList.appendChild(emptyMessage('判断、フォールバック、LLM、STT、TTSの診断がここに表示されます。'));
+          return;
+        }
+
+        for (const item of items) {
+          const row = document.createElement('div');
+          row.className = 'diagnostic-entry';
+
+          const time = document.createElement('time');
+          time.className = 'diagnostic-time';
+          time.dateTime = item.created_at || '';
+          time.textContent = timeLabel(item.created_at);
+
+          const level = document.createElement('span');
+          const levelName = String(item.level || 'INFO').toLowerCase();
+          level.className = `diagnostic-level ${levelName}`;
+          level.textContent = levelName.toUpperCase();
+
+          const logger = document.createElement('span');
+          logger.className = 'diagnostic-logger';
+          logger.textContent = item.source === 'voice_input' ? 'voice/STT' : (item.logger || 'dogido');
+
+          const message = document.createElement('span');
+          message.className = 'diagnostic-message';
+          message.textContent = item.message || '';
+
+          row.append(time, level, logger, message);
+          diagnosticList.appendChild(row);
+        }
+        if (wasNearEnd || !diagnosticList.dataset.rendered) {
+          diagnosticList.scrollTop = diagnosticList.scrollHeight;
+        }
+        diagnosticList.dataset.rendered = 'true';
+      }
+
+      function render(data) {
+        renderRuntime(data);
+        currentUtterances = Array.isArray(data.utterances) ? data.utterances : [];
+        const references = Array.isArray(data.references) ? data.references : [];
+        currentDiagnostics = Array.isArray(data.diagnostics) ? data.diagnostics : [];
+        renderUtterances(currentUtterances);
+        renderReferences(references);
+        renderDiagnostics(currentDiagnostics);
+      }
+
+      async function poll() {
+        try {
+          const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+          const response = await fetch('/api/v1/display/snapshot', {
+            headers,
+            cache: 'no-store'
+          });
+          if (response.status === 401) {
+            authForm.classList.add('visible');
+            setConnection('disconnected', '認証が必要です');
+            setMinecraftConnection('', 'Minecraft: 認証後に確認します');
+            return;
+          }
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          authForm.classList.remove('visible');
+          setConnection('connected', 'サーバー: 接続中');
+          const revisionKey = `${data.revision || 0}:${data.diagnostic_revision || 0}:${data.runtime_revision || 0}`;
+          if (revisionKey !== lastRevisionKey) {
+            lastRevisionKey = revisionKey;
+            render(data);
+          }
+        } catch (_) {
+          setConnection('disconnected', 'サーバーに接続できません');
+          setMinecraftConnection('disconnected', 'Minecraft: 確認できません');
+        } finally {
+          window.setTimeout(poll, document.hidden ? 4000 : 800);
+        }
+      }
+
+      copyAllButton.addEventListener('click', () => {
+        const text = currentUtterances.map(conversationCopyText).filter(Boolean).join('\n\n');
+        copyText(text, copyAllButton);
+      });
+
+      copyDiagnosticsButton.addEventListener('click', () => {
+        const text = currentDiagnostics.map(diagnosticLine).filter(Boolean).join('\n');
+        copyText(text, copyDiagnosticsButton);
+      });
+
+      diagnosticEndButton.addEventListener('click', () => {
+        diagnosticList.scrollTop = diagnosticList.scrollHeight;
+      });
+
+      diagnosticSmallerButton.addEventListener('click', () => {
+        diagnosticFontSizeIndex = Math.max(0, diagnosticFontSizeIndex - 1);
+        applyDiagnosticFontSize();
+      });
+
+      diagnosticLargerButton.addEventListener('click', () => {
+        diagnosticFontSizeIndex = Math.min(
+          diagnosticFontSizes.length - 1,
+          diagnosticFontSizeIndex + 1
+        );
+        applyDiagnosticFontSize();
+      });
+
+      authForm.addEventListener('submit', event => {
+        event.preventDefault();
+        authToken = tokenInput.value;
+        lastRevisionKey = '';
+        setConnection('', '接続しています');
+      });
+
+      applyDiagnosticFontSize();
+      render({ utterances: [], references: [], diagnostics: [] });
+      poll();
+    })();
+  </script>
+</body>
+</html>

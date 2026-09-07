@@ -20,8 +20,8 @@ _VEHICLE_LABEL_FALLBACKS = {
     "spawner_minecart": "スポナー付きトロッコ",
     "tnt_minecart": "TNT付きトロッコ",
     "donkey": "ロバ",
-    "nautilus": "ノーチラス",
-    "zombie_nautilus": "ゾンビノーチラス",
+    "nautilus": "オウムガイ",
+    "zombie_nautilus": "ゾンビオウムガイ",
 }
 
 _ACTIVITY_PHRASES = {

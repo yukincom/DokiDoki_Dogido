@@ -537,7 +537,7 @@ class PlayerChatPlaceContextTests(unittest.TestCase):
         place = machine._player_chat_place_context(event)
         self.assertEqual(place["space_kind"], "underground_or_roofed")
         self.assertFalse(place["sky_visible"])
-        self.assertIn("シラカバ", place["place_line"])  # 地表バイオームは残る
+        self.assertNotIn("シラカバ", place["place_line"])
         self.assertIn("空は見えない", place["place_line"])
         self.assertIn("地下", place["place_line"])
 
@@ -551,7 +551,10 @@ class PlayerChatPlaceContextTests(unittest.TestCase):
                     "biome": place["biome_label"],
                     "place_context": place["place_line"],
                     "space_kind": place["space_kind"],
-                    "time_phase": "day",
+                    "include_sky_context": False,
+                    "include_biome_context": False,
+                    "time_phase": "",
+                    "weather": "",
                     "mode": "normal",
                     "character_mode": "peace",
                     "threat_summary": "とくになし",
@@ -563,6 +566,9 @@ class PlayerChatPlaceContextTests(unittest.TestCase):
         user = messages[1]["content"]
         self.assertIn("場所:", user)
         self.assertIn("地下", user)
+        self.assertNotIn("時間:", user)
+        self.assertNotIn("現在地の天気", user)
+        self.assertNotIn("シラカバ", user)
         # S1: 場所は place_line を正とし、長文ルールは載せない
         self.assertNotIn("バイオーム名だけ見て地上", user)
 

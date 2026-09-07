@@ -78,6 +78,21 @@ class CueReactionsMixin:
         boss_reveal_target = self._boss_reveal_target(event)
         if (self._should_suppress_panic_cues(event) and boss_reveal_target is None) or not self._can_emit_panic_cue(now):
             return None
+        fuse_target = self._new_creeper_fuse_target(event)
+        if fuse_target is not None:
+            self._log_panic_cue_decision(
+                "spot_hostile_gasp",
+                "creeper_fuse_started",
+                event,
+                threat=fuse_target,
+                interrupt=False,
+            )
+            return self._build_cue_action(
+                "spot_hostile_gasp",
+                "ひいっ！",
+                now,
+                interrupt=False,
+            )
         ushiro_target = self._consume_ushiro_ambush_target(event, now)
         if ushiro_target is not None:
             self._log_panic_cue_decision("ushiro_scream", "ushiro_ambush", event, threat=ushiro_target)
@@ -312,6 +327,8 @@ class CueReactionsMixin:
             return self._co(warden_special)
         if self.player_input.asks_dragon_direction and self._is_dragon_combat_context_active(event, now):
             return self._co(self._render_dragon_direction_answer(event))
+        if self.player_input.asks_hostile_direction and event.visual_threats:
+            return self._co(self._render_hostile_direction_answer(event))
         dragon_special = self._next_dragon_special_callout(event, now)
         if dragon_special is not None:
             return self._co(dragon_special)
@@ -377,6 +394,12 @@ class CueReactionsMixin:
         softened_visuals: bool,
         silence_new_close_ambush: bool,
     ):
+        fuse_target = self._new_creeper_fuse_target(event)
+        if fuse_target is not None:
+            self.state.commented_visual_keys[self._visual_identity_key(fuse_target)] = now
+            self._mark_visual_priority_callout(now, single_type=fuse_target.type)
+            return True, self._co(self._render_creeper_fuse_callout(fuse_target))
+
         ushiro_target = self._peek_ushiro_ambush_target(event, now)
         if ushiro_target is not None:
             if self._should_suppress_panic_cues(event) or not self._can_emit_panic_cue(now):

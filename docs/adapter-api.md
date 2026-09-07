@@ -93,7 +93,13 @@ adapter の起動時に session を作る。
     "ambient_sounds",
     "inventory",
     "hotbar_slots",
-    "danger_darkness"
+    "danger_darkness",
+    "combat_state",
+    "death_events",
+    "hostile_outcomes",
+    "hostile_defeated_events",
+    "creeper_fuse_state",
+    "creeper_detonation_events"
   ],
   "execution_capabilities": [
     "client.hotbar.select.v1"
@@ -488,12 +494,15 @@ batch 可。
 
 adapter 経路ではない。`dogido_server.voice_input`（マイク）や開発時のテキスト注入用。
 
-- 直近のアクティブセッションへ `pending_player_text` を載せる
-- `source: "voice"` のときだけ、音声認識の短い誤検出を避けるため3文字以下は原則受け付けない（`ドギド` / `おーい` / `うん` / `おう` は例外）
+- 直近のアクティブセッションへ入力を載せる。先頭の `pending_player_text` 1件に加え、直接入力との衝突時は最大8件の内部待ち列を使う（合計9件）
+- `source: "voice"` でも短さだけでは棄却しない（`石炭だ`、`雨だ`、`はい`などの短い自然な発話を通す）
 - `source: "voice"` では、環境音から生じやすい `Thank` 系の定型誤認識を受け付けない
 - `source: "voice"` では、現在のworkshop句・原文材料・時間帯などから作った候補内に限り、音の近いかな断片を会話理解用に補正する。原文は明示操作判定用に保持する
 - **次の game-event** の `meta.user_text` としてチャットと同じ経路に合流する
 - **セッションが無いと受け付けない**（`accepted: false`, `reason: no_active_session`）
+- 先頭が明示知識質問、または開いているworkshopの入力なら、後続入力を先着順に保全する。それ以外の未処理の一般入力は、従来どおり最新入力で置き換える
+- 同一本文は `voice` / `text` の経路が異なっても一発話として重複させず、先に受けた `source` を保つ
+- 保全対象の待ち列が上限のときは上書きせず拒否する（`accepted: false`, `reason: queue_full`）
 - 製品 README のプレイヤー向け手順には載せない（開発・デバッグ用）
 
 相乗り・再キューの挙動は [対話設計](dialogue-design.md) を参照。
@@ -525,6 +534,9 @@ adapter 経路ではない。`dogido_server.voice_input`（マイク）や開発
 }
 ```
 
+拒否理由は `empty_text` / `noise_text` / `no_active_session` /
+`queue_full` のいずれか。`noise_text` は `source: "voice"` のみで返る。
+
 ### 開発時の例
 
 ```bash
@@ -551,3 +563,90 @@ auth が有効なときは adapter 系と同様に `Authorization: Bearer <token
 - 句本文や材料は返さない
 - 取得に失敗した音声入力プロセスは `normal` を使い、書き起こしを止めない
 - auth が有効なときは `Authorization: Bearer <token>` が必要
+
+## 23. `POST /api/v1/voice-input/diagnostics`
+
+別プロセスの `dogido_server.voice_input` が、STTの処理段階、認識結果、棄却理由、配送結果をサーバーの診断履歴へ通知する内部API。音声波形は送らない。
+
+```json
+{
+  "schema_version": 1,
+  "event": "stt_rejected",
+  "level": "warning",
+  "recognized_text": "…",
+  "reason": "known_noise_text",
+  "detail": "…",
+  "prompt_mode": "normal",
+  "duration_ms": 740
+}
+```
+
+- `event` は `capture` / `context` / `stt_result` / `stt_rejected` / `stt_error` / `wake_word_rejected` / `delivery`
+- `recognized_text` はWhisperが返した原文。認識できなかった場合は省略する
+- `reason` は機械判定に使う短い理由、`detail` は人が調べるための補足
+- 診断履歴はプロセス内の上限付き履歴で、会話記憶や評価ログへ読み戻さない
+- auth が有効なときは `Authorization: Bearer <token>` が必要
+
+## 24. ゲーム外の発言履歴・診断ログ
+
+Minecraft画面とは別に、ブラウザで `GET /dogido` を開くと、ドギドの発言本文、知識回答の参考資料、診断ログを読める。発言・資料は個別に、発言全文と診断ログはまとめてコピーできる。
+
+画面は `GET /api/v1/display/snapshot` を同一オリジンで定期取得する。任意の `session_id` クエリを付けると、そのセッションだけに絞る。
+
+```json
+{
+  "schema_version": 1,
+  "revision": 2,
+  "utterances": [
+    {
+      "utterance_id": "utt_...",
+      "session_id": "ses_...",
+      "category": "knowledge",
+      "text": "資料を基に整理すると、枕詞は……。",
+      "created_at": "ISO-8601",
+      "reference_ids": ["ref_..."],
+      "output_mode": "audio_and_text"
+    }
+  ],
+  "references": [
+    {
+      "reference_id": "ref_...",
+      "title_ja": "資料名",
+      "citation_label_ja": "文部科学省",
+      "locator": "該当箇所",
+      "url": "https://..."
+    }
+  ],
+  "retention": {
+    "storage": "process_memory",
+    "max_utterances": 200,
+    "cleared_on_restart": true
+  },
+  "diagnostic_schema_version": 1,
+  "diagnostic_revision": 3,
+  "diagnostics": [
+    {
+      "entry_id": "log_3",
+      "created_at": "ISO-8601",
+      "level": "WARNING",
+      "logger": "dogido.voice_input",
+      "source": "voice_input",
+      "event": "stt_rejected",
+      "message": "voice_input event=stt_rejected reason=empty_transcript"
+    }
+  ],
+  "diagnostic_retention": {
+    "storage": "process_memory",
+    "max_entries": 1000,
+    "cleared_on_restart": true
+  }
+}
+```
+
+- 発言として確定した本文の表示であり、音声再生完了の証明ではない。
+- 音声が途中で中断されても、本文は画面に残る。
+- 発言と参考資料には、プレイヤー入力、Minecraftの観測値、内部プロンプトを含めない。
+- 診断ログには音声認識結果と棄却理由を含めるが、音声波形、認証情報、内部プロンプトは含めない。
+- 成功した高頻度APIのアクセスログは省略し、同じAPIの400以上の応答と、それ以外の運用ログは残す。
+- 会話記憶とは別のプロセス内履歴で、サーバー再起動時に消去する。
+- auth が有効なときはsnapshot APIに `Authorization: Bearer <token>` が必要。画面の入力欄はトークンをブラウザへ永続保存しない。

@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from dogido_server.knowledge_query import ExplicitKnowledgeQuery
+
 
 @dataclass(slots=True)
 class ReadingCorrection:
@@ -39,6 +41,7 @@ class PlayerInputContext:
     wants_quiet: bool = False
     should_block_ambient: bool = False
     asks_hostile_count: bool = False
+    asks_hostile_direction: bool = False
     asks_dragon_direction: bool = False
     asks_save_last_haiku: bool = False
     asks_inventory: bool = False
@@ -49,6 +52,9 @@ class PlayerInputContext:
     assist_intent_confidence: float = 0.0
     # 『今の音なに？』等。true のときだけ player_chat に hearing を載せる
     asks_about_sound: bool = False
+    # 現在ターンの明示知識質問。ここでは分類と発話中の検索語だけを持ち、
+    # DB検索は安全判定後の発話枝まで遅延する。
+    knowledge_query: ExplicitKnowledgeQuery | None = None
     player_haiku_text: str | None = None
     # 川柳フィードバック（長期保存・読み修正）。player_chat には回さない。
     revised_haiku_text: str | None = None

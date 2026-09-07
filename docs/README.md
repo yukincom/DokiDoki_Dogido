@@ -17,7 +17,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | **正本** | いまの仕様・方針の基準 | `event-schema` · `state-machine` · `adapter-api` · `dialogue-design` |
 | **完成度ハブ** | 「何を足すか」の優先軸 | `companion-maturity` |
 | **計画・方針** | 設計・PR 経緯・技術判断。**状態は各文書のヘッダ／表を正**（本索引では断定しない） | workshop · casual · voice · `rag` · `technical-risks` |
-| **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · `debug-checklist` |
+| **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · `debug-checklist` · 国語知識・詩形データベース · Minecraft Java 公式技術データベース |
 | **バグ / 観測メモ** | 切り分け。正本を置き換えない | `bug-player-chat-observation-gaps` |
 | **調査 (`research/`)** | 追加の作業メモ。**仕様の正本ではない**が、捨てた資料ではない | `research/haiku` · TTS 地図 · `research/mob_list` |
 
@@ -130,6 +130,9 @@ casual（原則） ──┬── sm-vs-prompt（PR 順）
 | 8 | [senryu-rag-plan.md](senryu-rag-plan.md) | カタログ直引きと RAG 方針 |
 | 9 | [rag.md](rag.md) | RAG 検討メモ（`senryu-rag-plan` と併用） |
 | 10 | [dogido-display-overlay-plan.md](dogido-display-overlay-plan.md) | ゲーム内セリフ表示 UI（計画・#28 関連） |
+| 11 | [knowledge-query-integration.md](knowledge-query-integration.md) | 国語・詩形・Minecraft公式技術DBを明示質問だけに接続する境界 |
+| 12 | [language-learning-progress-plan.md](language-learning-progress-plan.md) | 子ども向けの説明保留、脱線・再開、学習指導要領対応チェックリストの境界 |
+| 13 | [dogido-utterance-display.md](dogido-utterance-display.md) | ゲーム外の発言履歴、参考資料、STT・LLM・川柳の診断ログ、夜の実機確認手順 |
 
 **つながり:**
 
@@ -174,6 +177,7 @@ architecture（どう詠む）
 
 ### Behavior
 
+- [Minecraft Java 公式技術データベース](../reference/minecraft_technical/README.md)（1.21.11固定、公式変更事項・レジストリ・データパック・タグ、日本語検索、ローカル生成）
 - [state-machine.md](state-machine.md)
 - [behavior-spec.md](behavior-spec.md)
 - [py-trees-integration.md](py-trees-integration.md)
@@ -188,6 +192,9 @@ architecture（どう詠む）
 
 ### Conversation
 
+- [knowledge-query-integration.md](knowledge-query-integration.md)
+- [language-learning-progress-plan.md](language-learning-progress-plan.md)
+- [dogido-utterance-display.md](dogido-utterance-display.md)
 - [player-chat-casual-plan.md](player-chat-casual-plan.md)
 - [player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md)
 - [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)
@@ -199,6 +206,7 @@ architecture（どう詠む）
 
 ### Poetry and memory
 
+- [国語知識・詩形データベース](../reference/language_education_and_poetry/README.md)（公式データ、文法・歴史的仮名遣い・枕詞・詩形、利用条件、JSON索引）
 - [haiku-architecture.md](haiku-architecture.md)
 - [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)
 - [haiku-workshop-intake-patterns.md](haiku-workshop-intake-patterns.md)

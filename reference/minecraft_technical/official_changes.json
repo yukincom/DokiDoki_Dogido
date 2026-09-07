@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "minecraft_version": "1.21.11",
+  "classification_ja": "公式変更事項",
+  "coverage": "representative_selection",
+  "coverage_note_ja": "公式リリースノートの技術的変更から選んだ主要25件の抜粋。全変更を網羅する一覧ではない。",
+  "source": {
+    "url": "https://www.minecraft.net/en-us/article/minecraft-java-edition-1-21-11",
+    "checked_at": "2026-09-01",
+    "summary_policy": "公式リリースノートの技術的事実を日本語で短く要約し、原文は転載しない。"
+  },
+  "records": [
+    {
+      "key": "data-pack-version-94-1",
+      "technical_area_ja": "データパック",
+      "change_type_ja": "版番号更新",
+      "title_ja": "データパック形式の版番号を94.1へ更新",
+      "summary_ja": "データパック形式の版番号が94.1になった。",
+      "related_identifiers": ["Data Pack 94.1"],
+      "source_section": "Technical Changes"
+    },
+    {
+      "key": "resource-pack-version-75-0",
+      "technical_area_ja": "リソースパック",
+      "change_type_ja": "版番号更新",
+      "title_ja": "リソースパック形式の版番号を75.0へ更新",
+      "summary_ja": "リソースパック形式の版番号が75.0になった。",
+      "related_identifiers": ["Resource Pack 75.0"],
+      "source_section": "Technical Changes"
+    },
+    {
+      "key": "server-management-protocol-2-0-0",
+      "technical_area_ja": "サーバー管理プロトコル",
+      "change_type_ja": "版番号更新",
+      "title_ja": "Minecraft Server Management Protocolを2.0.0へ更新",
+      "summary_ja": "Minecraft Server Management Protocolの版番号が2.0.0になった。",
+      "related_identifiers": ["Minecraft Server Management Protocol 2.0.0"],
+      "source_section": "Technical Changes"
+    },
+    {
+      "key": "client-fps-jfr-event",
+      "technical_area_ja": "性能計測",
+      "change_type_ja": "追加",
+      "title_ja": "ClientFps JFRイベントを追加",
+      "summary_ja": "クライアントのフレームレートを扱うClientFps JFRイベントが追加された。",
+      "related_identifiers": ["ClientFps", "JFR"],
+      "source_section": "Technical Changes"
+    },
+    {
+      "key": "unchanged-experience-packets",
+      "technical_area_ja": "ネットワーク通信",
+      "change_type_ja": "変更",
+      "title_ja": "変化のない経験値パケットの送信を抑止",
+      "summary_ja": "経験値の進捗率とレベルが変化しない場合、サーバーは経験値パケットを送信しなくなった。",
+      "related_identifiers": ["experience packet"],
+      "source_section": "Technical Changes"
+    },
+    {
+      "key": "kqueue-on-macos",
+      "technical_area_ja": "ネットワーク通信",
+      "change_type_ja": "追加",
+      "title_ja": "macOSでKQueueに対応",
+      "summary_ja": "macOSにおけるネットワーク接続性能の向上を目的としてKQueue対応が追加された。",
+      "related_identifiers": ["KQueue", "macOS"],
+      "source_section": "Technical Changes"
+    },
+    {
+      "key": "management-protocol-server-activity",
+      "technical_area_ja": "サーバー管理プロトコル",
+      "change_type_ja": "追加",
+      "title_ja": "server/activity通知を追加",
+      "summary_ja": "サーバーへのネットワーク接続開始を示すserver/activity通知が追加され、30秒につき1回に制限される。",
+      "related_identifiers": ["server/activity"],
+      "source_section": "Minecraft Server Management Protocol Version 2.0.0"
+    },
+    {
+      "key": "management-protocol-browser-authentication",
+      "technical_area_ja": "サーバー管理プロトコル",
+      "change_type_ja": "追加",
+      "title_ja": "ウェブブラウザーからの認証に対応",
+      "summary_ja": "WebSocket接続時のSec-WebSocket-Protocolヘッダーでトークンを渡す認証方式が追加された。許可する接続元の既定値は空で、この方式は既定では実質的に無効である。",
+      "related_identifiers": ["Sec-WebSocket-Protocol", "management-server-allowed-origins"],
+      "source_section": "Minecraft Server Management Protocol Version 2.0.0"
+    },
+    {
+      "key": "management-protocol-game-rule-schema",
+      "technical_area_ja": "サーバー管理プロトコル",
+      "change_type_ja": "変更",
+      "title_ja": "ゲームルールの管理プロトコル表現を変更",
+      "summary_ja": "typed_game_ruleとuntyped_game_ruleの値は文字列ではなく真偽値または整数となり、キーにはゲームルールの名前空間付きIDを使う。",
+      "related_identifiers": ["typed_game_rule", "untyped_game_rule"],
+      "migration_note_ja": "従来の文字列値と旧形式のキーを前提とするクライアントは更新が必要である。",
+      "source_section": "Minecraft Server Management Protocol Version 2.0.0"
+    },
+    {
+      "key": "stopwatch-command",
+      "technical_area_ja": "コマンド",
+      "change_type_ja": "追加",
+      "title_ja": "stopwatchコマンドを追加",
+      "summary_ja": "実時間を計るstopwatchコマンドが追加され、create、query、restart、removeの各操作を名前空間付きIDで行える。",
+      "related_identifiers": ["stopwatch create", "stopwatch query", "stopwatch restart", "stopwatch remove"],
+      "source_section": "Commands > Added stopwatch"
+    },
+    {
+      "key": "execute-stopwatch-condition",
+      "technical_area_ja": "コマンド",
+      "change_type_ja": "追加",
+      "title_ja": "executeコマンドにstopwatch条件を追加",
+      "summary_ja": "execute ifおよびexecute unlessから、stopwatchの経過秒数を浮動小数点数の範囲と比較できるようになった。",
+      "related_identifiers": ["execute if stopwatch", "execute unless stopwatch"],
+      "source_section": "Commands > Changes to execute"
+    },
+    {
+      "key": "worldborder-time-units",
+      "technical_area_ja": "コマンド",
+      "change_type_ja": "変更",
+      "title_ja": "worldborderコマンドの時間単位を変更",
+      "summary_ja": "worldborderコマンドの時間引数は既定でゲームティックを表し、sを付ければ秒、dを付ければゲーム内日数を指定できる。",
+      "related_identifiers": ["worldborder", "tick", "second", "day"],
+      "migration_note_ja": "単位を付けない時間引数を秒として扱っていた処理は見直しが必要である。",
+      "source_section": "Commands > Changes to worldborder"
+    },
+    {
+      "key": "game-rules-registry",
+      "technical_area_ja": "ゲームルール",
+      "change_type_ja": "変更",
+      "title_ja": "ゲームルールをレジストリへ移行",
+      "summary_ja": "ゲームルールはレジストリへ移され、従来のキャメルケース名から名前空間付きのスネークケースIDへ改名された。",
+      "related_identifiers": ["minecraft:game_rule"],
+      "identifier_mapping_scope": "representative_selection",
+      "identifier_mappings": [
+        {"from": "doDaylightCycle", "to": "minecraft:advance_time", "value_inverted": false},
+        {"from": "doMobSpawning", "to": "minecraft:spawn_mobs", "value_inverted": false},
+        {"from": "doWeatherCycle", "to": "minecraft:advance_weather", "value_inverted": false},
+        {"from": "snowAccumulationHeight", "to": "minecraft:max_snow_accumulation_height", "value_inverted": false},
+        {"from": "disableElytraMovementCheck", "to": "minecraft:elytra_movement_check", "value_inverted": true},
+        {"from": "disableRaids", "to": "minecraft:raids", "value_inverted": true}
+      ],
+      "migration_note_ja": "旧名を保存・送信・比較する処理は名前空間付きIDへ更新する必要がある。",
+      "source_section": "Game Rules"
+    },
+    {
+      "key": "fire-spread-radius-game-rule",
+      "technical_area_ja": "ゲームルール",
+      "change_type_ja": "変更",
+      "title_ja": "火の延焼範囲を一つのゲームルールへ統合",
+      "summary_ja": "minecraft:fire_spread_radius_around_playerが追加され、従来のdoFireTickとallowFireTicksAwayFromPlayerは廃止された。値0は延焼停止、値-1はプレイヤーが周囲にいなくても延焼を許可する。",
+      "related_identifiers": ["minecraft:fire_spread_radius_around_player", "doFireTick", "allowFireTicksAwayFromPlayer"],
+      "migration_note_ja": "廃止された二つの旧ゲームルールを使う処理は新しいゲームルールへ移行する必要がある。",
+      "source_section": "Game Rules > Added minecraft:fire_spread_radius_around_player"
+    },
+    {
+      "key": "timelines",
+      "technical_area_ja": "データパック",
+      "change_type_ja": "追加",
+      "title_ja": "タイムラインを追加",
+      "summary_ja": "ゲーム内の絶対時刻に応じてゲームの挙動や表示を変えるタイムラインが、データパックのtimelineレジストリとして追加された。",
+      "related_identifiers": ["minecraft:timeline", "data/<namespace>/timeline/<id>.json"],
+      "source_section": "Timelines"
+    },
+    {
+      "key": "environment-attributes",
+      "technical_area_ja": "データパック",
+      "change_type_ja": "追加",
+      "title_ja": "環境属性を追加",
+      "summary_ja": "表示やゲーム挙動をデータ駆動で制御する環境属性が追加された。値の供給元にはディメンション、バイオーム、タイムライン、天候がある。",
+      "related_identifiers": ["minecraft:environment_attribute"],
+      "experimental": true,
+      "source_section": "Environment Attributes"
+    },
+    {
+      "key": "filtered-loot-function",
+      "technical_area_ja": "ルートテーブル",
+      "change_type_ja": "変更",
+      "title_ja": "filteredルート関数に条件不成立時の処理を追加",
+      "summary_ja": "filteredルート関数は、条件が成立しなかった場合にも別の変更処理を実行できるようになった。",
+      "related_identifiers": ["minecraft:filtered"],
+      "source_section": "Data Pack Versions 89.0 through 94.1"
+    },
+    {
+      "key": "discard-loot-function",
+      "technical_area_ja": "ルートテーブル",
+      "change_type_ja": "追加",
+      "title_ja": "discardルート関数を追加",
+      "summary_ja": "対象のアイテムを破棄するdiscardルート関数が追加された。",
+      "related_identifiers": ["minecraft:discard"],
+      "source_section": "Data Pack Versions 89.0 through 94.1"
+    },
+    {
+      "key": "zombie-nautilus-variant-registry",
+      "technical_area_ja": "データパック",
+      "change_type_ja": "追加",
+      "title_ja": "ゾンビオウムガイの亜種をデータ駆動化",
+      "summary_ja": "zombie_nautilus_variantレジストリへJSONを追加し、ゾンビオウムガイの亜種を定義できるようになった。",
+      "related_identifiers": ["minecraft:zombie_nautilus_variant", "data/<namespace>/zombie_nautilus_variant/<id>.json"],
+      "experimental": true,
+      "source_section": "Zombie Nautilus Variants"
+    },
+    {
+      "key": "item-texture-atlas",
+      "technical_area_ja": "リソースパック",
+      "change_type_ja": "変更",
+      "title_ja": "アイテム用テクスチャアトラスを分離",
+      "summary_ja": "アイテム用テクスチャはblocksアトラスから、ミップマップを持たないitemsアトラスへ分離された。",
+      "related_identifiers": ["minecraft:items", "minecraft:blocks"],
+      "migration_note_ja": "アイテム用テクスチャをblocksアトラスで参照するコマンドや、リソースパック内のアイテムモデル定義はitemsアトラスへ更新する必要がある。",
+      "source_section": "Resource Pack Versions 70.0 through 75.0"
+    },
+    {
+      "key": "fish-bucket-food-properties",
+      "technical_area_ja": "データコンポーネント",
+      "change_type_ja": "変更",
+      "title_ja": "魚入りバケツへ食料特性を追加",
+      "summary_ja": "タラ、サケ、フグ、熱帯魚の4種類の魚入りバケツに食料特性が追加された。",
+      "related_identifiers": ["minecraft:cod_bucket", "minecraft:salmon_bucket", "minecraft:pufferfish_bucket", "minecraft:tropical_fish_bucket"],
+      "source_section": "Data Components"
+    },
+    {
+      "key": "use-effects-component",
+      "technical_area_ja": "データコンポーネント",
+      "change_type_ja": "追加",
+      "title_ja": "minecraft:use_effectsを追加",
+      "summary_ja": "アイテム使用中のダッシュ可否、使用時のゲームイベント発生、移動速度倍率を指定するデータコンポーネントが追加された。",
+      "related_identifiers": ["minecraft:use_effects", "can_sprint", "interact_vibrations", "speed_multiplier"],
+      "source_section": "Data Components > Added minecraft:use_effects"
+    },
+    {
+      "key": "minimum-attack-charge-component",
+      "technical_area_ja": "データコンポーネント",
+      "change_type_ja": "追加",
+      "title_ja": "minecraft:minimum_attack_chargeを追加",
+      "summary_ja": "攻撃に必要な攻撃インジケーターの最低蓄積率を0.0から1.0までで指定するデータコンポーネントが追加された。",
+      "related_identifiers": ["minecraft:minimum_attack_charge"],
+      "source_section": "Data Components > Added minecraft:minimum_attack_charge"
+    },
+    {
+      "key": "damage-type-component",
+      "technical_area_ja": "データコンポーネント",
+      "change_type_ja": "追加",
+      "title_ja": "minecraft:damage_typeを追加",
+      "summary_ja": "アイテムが与えるダメージ種別を名前空間付きIDで指定するデータコンポーネントが追加された。",
+      "related_identifiers": ["minecraft:damage_type", "minecraft:spear"],
+      "source_section": "Data Components > Added minecraft:damage_type"
+    },
+    {
+      "key": "attack-range-component",
+      "technical_area_ja": "データコンポーネント",
+      "change_type_ja": "追加",
+      "title_ja": "minecraft:attack_rangeを追加",
+      "summary_ja": "アイテムの攻撃可能距離を上書きし、通常時とクリエイティブモードの最小・最大間合いを指定できるデータコンポーネントが追加された。",
+      "related_identifiers": ["minecraft:attack_range", "min_reach", "max_reach", "min_creative_reach", "max_creative_reach"],
+      "source_section": "Data Components > Added minecraft:attack_range"
+    }
+  ]
+}

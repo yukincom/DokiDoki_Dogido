@@ -5,6 +5,8 @@ import importlib
 import json
 import logging
 import threading
+import time
+from dataclasses import replace
 from typing import Any
 
 from dogido_server.config import Settings
@@ -27,10 +29,26 @@ from .sanitize import (
     strip_allowed_ascii_tokens,
     summarize_for_log,
 )
+from .structured_contracts import (
+    STRUCTURED_CONTRACT_RETRY_KEY,
+    validate_structured_payload,
+)
 from .types import LeafGenerationRequest, StructuredGenerationRequest
 
 LOGGER = logging.getLogger("uvicorn.error")
 STRUCTURED_STATUS_KEY = "__dogido_status"
+
+# 自動川柳は、各 consumer が内容・行番号・atom ID・音数を検証し、欠けた行だけ
+# 最大6回の生成経路で直す。共通schemaで外形だけを理由に再生成・打切りしない。
+_DOMAIN_VALIDATED_HAIKU_GENERATION_KINDS = frozenset(
+    {
+        "haiku_draft",
+        "haiku_irony",
+        "haiku_scene",
+        "haiku_line_grounding",
+        "haiku_line_regeneration",
+    }
+)
 
 
 class DogidoLLM:
@@ -135,25 +153,32 @@ class DogidoLLM:
             LOGGER.warning("llm_leaf kind=%s result=fallback reason=disabled", request.kind)
             return request.fallback_text
 
+        generation_started_at = time.monotonic()
         with self._lock:
             try:
                 text = self._generate_backend_text(request)
             except Exception as exc:
                 self._disabled_reason = str(exc)
+                duration_ms = round((time.monotonic() - generation_started_at) * 1000)
                 LOGGER.warning(
-                    "llm_leaf kind=%s result=fallback reason=generation_error detail=%s",
+                    "llm_leaf kind=%s result=fallback reason=generation_error "
+                    "duration_ms=%s detail=%s",
                     request.kind,
+                    duration_ms,
                     self._disabled_reason,
                 )
                 return request.fallback_text
+        duration_ms = round((time.monotonic() - generation_started_at) * 1000)
 
         # ロックはバックエンド呼び出しだけを保護する。
         # 後処理は純粋関数なのでロック外で行うが、将来ここで _model / _tokenizer に触るなら要見直し。
         cleaned = self._clean_output(text)
         if not self._is_usable_output(cleaned, request.details):
             LOGGER.warning(
-                "llm_leaf kind=%s result=fallback reason=unusable_output raw=%s cleaned=%s",
+                "llm_leaf kind=%s result=fallback reason=unusable_output "
+                "duration_ms=%s raw=%s cleaned=%s",
                 request.kind,
+                duration_ms,
                 self._summarize_for_log(text),
                 self._summarize_for_log(cleaned),
             )
@@ -179,14 +204,17 @@ class DogidoLLM:
                 )
         if not self._is_style_acceptable(request.kind, cleaned, request.details):
             LOGGER.warning(
-                "llm_leaf kind=%s result=fallback reason=style_mismatch cleaned=%s",
+                "llm_leaf kind=%s result=fallback reason=style_mismatch "
+                "duration_ms=%s cleaned=%s",
                 request.kind,
+                duration_ms,
                 self._summarize_for_log(cleaned),
             )
             return request.fallback_text
         LOGGER.warning(
-            "llm_leaf kind=%s result=accepted text=%s",
+            "llm_leaf kind=%s result=accepted duration_ms=%s text=%s",
             request.kind,
+            duration_ms,
             self._summarize_for_log(cleaned),
         )
         return cleaned or request.fallback_text
@@ -199,19 +227,19 @@ class DogidoLLM:
             payload[STRUCTURED_STATUS_KEY] = "disabled"
             return payload
 
-        with self._lock:
-            try:
+        try:
+            with self._lock:
                 text = self._generate_backend_text(request)
-            except Exception as exc:
-                self._disabled_reason = str(exc)
-                LOGGER.warning(
-                    "llm_structured kind=%s result=fallback reason=generation_error detail=%s",
-                    request.kind,
-                    self._disabled_reason,
-                )
-                payload = dict(request.fallback_value)
-                payload[STRUCTURED_STATUS_KEY] = "generation_error"
-                return payload
+        except Exception as exc:
+            self._disabled_reason = str(exc)
+            LOGGER.warning(
+                "llm_structured kind=%s result=fallback reason=generation_error detail=%s",
+                request.kind,
+                self._disabled_reason,
+            )
+            payload = dict(request.fallback_value)
+            payload[STRUCTURED_STATUS_KEY] = "generation_error"
+            return payload
 
         payload = self._extract_json_object(text)
         if payload is None:
@@ -223,12 +251,90 @@ class DogidoLLM:
             payload = dict(request.fallback_value)
             payload[STRUCTURED_STATUS_KEY] = "invalid_json"
             return payload
+        if request.kind in _DOMAIN_VALIDATED_HAIKU_GENERATION_KINDS:
+            payload[STRUCTURED_STATUS_KEY] = "accepted"
+            LOGGER.warning(
+                "llm_structured kind=%s result=accepted validation=haiku_domain payload=%s",
+                request.kind,
+                self._summarize_for_log(json.dumps(payload, ensure_ascii=False)),
+            )
+            return payload
+        contract = validate_structured_payload(
+            request.kind,
+            payload,
+            details=request.details,
+        )
+        if not contract.accepted:
+            LOGGER.warning(
+                "llm_structured kind=%s result=retry reason=schema_contract_error "
+                "errors=%s payload=%s",
+                request.kind,
+                contract.summary,
+                self._summarize_for_log(json.dumps(payload, ensure_ascii=False)),
+            )
+            retry_details = dict(request.details)
+            retry_details[STRUCTURED_CONTRACT_RETRY_KEY] = {
+                "errors": list(contract.errors),
+                "previous_payload": json.dumps(payload, ensure_ascii=False),
+            }
+            retry_request = replace(request, details=retry_details, temperature=0.0)
+            try:
+                with self._lock:
+                    retry_text = self._generate_backend_text(retry_request)
+            except Exception as exc:
+                LOGGER.warning(
+                    "llm_structured kind=%s result=fallback reason=schema_contract_error "
+                    "retry=generation_error detail=%s",
+                    request.kind,
+                    exc,
+                )
+                return self._structured_fallback(request, "schema_contract_error")
+            retry_payload = self._extract_json_object(retry_text)
+            if retry_payload is None:
+                LOGGER.warning(
+                    "llm_structured kind=%s result=fallback reason=schema_contract_error "
+                    "retry=invalid_json raw=%s",
+                    request.kind,
+                    self._summarize_for_log(retry_text),
+                )
+                return self._structured_fallback(request, "schema_contract_error")
+            retry_contract = validate_structured_payload(
+                request.kind,
+                retry_payload,
+                details=request.details,
+            )
+            if not retry_contract.accepted:
+                LOGGER.warning(
+                    "llm_structured kind=%s result=fallback reason=schema_contract_error "
+                    "retry=schema_contract_error errors=%s payload=%s",
+                    request.kind,
+                    retry_contract.summary,
+                    self._summarize_for_log(
+                        json.dumps(retry_payload, ensure_ascii=False)
+                    ),
+                )
+                return self._structured_fallback(request, "schema_contract_error")
+            payload = retry_payload
+            LOGGER.warning(
+                "llm_structured kind=%s result=contract_retry_accepted",
+                request.kind,
+            )
+
         payload[STRUCTURED_STATUS_KEY] = "accepted"
         LOGGER.warning(
             "llm_structured kind=%s result=accepted payload=%s",
             request.kind,
             self._summarize_for_log(json.dumps(payload, ensure_ascii=False)),
         )
+        return payload
+
+    def _structured_fallback(
+        self,
+        request: StructuredGenerationRequest,
+        status: str,
+    ) -> dict[str, Any]:
+        payload = dict(request.fallback_value)
+        payload[STRUCTURED_STATUS_KEY] = status
         return payload
 
     def _generate_backend_text(self, request: LeafGenerationRequest | StructuredGenerationRequest) -> str:

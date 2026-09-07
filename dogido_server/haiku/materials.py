@@ -18,7 +18,9 @@ def build_workshop_materials_seed(
     time_phase: str | None = None,
     motifs: list[str] | tuple[str, ...] | None = None,
     held_item: str | None = None,
+    inventory_items: list[str] | tuple[str, ...] | None = None,
     nearby_blocks: list[str] | tuple[str, ...] | None = None,
+    dropped_items: list[str] | tuple[str, ...] | None = None,
     passive_mobs: list[str] | tuple[str, ...] | None = None,
     focus: list[str] | tuple[str, ...] | None = None,
     elements: list[str] | tuple[str, ...] | None = None,
@@ -49,6 +51,14 @@ def build_workshop_materials_seed(
     if held and held not in {"なし", "無し"}:
         materials["held_item"] = held
 
+    inventory: list[str] = []
+    for item in inventory_items or ():
+        label = _clean_label(str(item) if item else "")
+        if label and label not in inventory and label != held:
+            inventory.append(label)
+    if inventory:
+        materials["inventory_items"] = inventory
+
     blocks: list[str] = []
     for item in nearby_blocks or ():
         t = _clean_label(str(item) if item else "")
@@ -56,6 +66,14 @@ def build_workshop_materials_seed(
             blocks.append(t)
     if blocks:
         materials["nearby_blocks"] = blocks
+
+    dropped: list[str] = []
+    for item in dropped_items or ():
+        t = _clean_label(str(item) if item else "")
+        if t and t not in dropped:
+            dropped.append(t)
+    if dropped:
+        materials["dropped_items"] = dropped
 
     mobs: list[str] = []
     for item in passive_mobs or ():
@@ -73,6 +91,22 @@ def enrich_materials_labels(materials: dict[str, Any]) -> dict[str, Any]:
     """biome_ja / structure_ja を可能な範囲で付与（破壊的に materials を更新）。"""
     _attach_ja_labels(materials)
     return materials
+
+
+def material_context_visible(
+    materials: dict[str, Any] | None,
+    context: str,
+) -> bool:
+    """発句時に非表示とした背景情報を workshop でも復活させない。
+
+    ``material_visibility`` がない古い保存句は従来どおり表示する。観測値そのものを
+    消す印ではなく、川柳へ投影したかどうかを保存する印として扱う。
+    """
+
+    visibility = materials.get("material_visibility") if isinstance(materials, dict) else None
+    if not isinstance(visibility, dict):
+        return True
+    return visibility.get(context) is not False
 
 
 def short_material_entries(materials: dict[str, Any] | None) -> list[tuple[str, str]]:
@@ -95,8 +129,12 @@ def short_material_entries(materials: dict[str, Any] | None) -> list[tuple[str, 
     for m in materials.get("motifs") or []:
         add(str(m), "motif")
     add(str(materials.get("held_item") or ""), "held_item")
+    for item in materials.get("inventory_items") or []:
+        add(str(item), "inventory_item")
     for b in materials.get("nearby_blocks") or []:
         add(str(b), "nearby_block")
+    for item in materials.get("dropped_items") or []:
+        add(str(item), "dropped_item")
     for m in materials.get("passive_mobs") or []:
         add(str(m), "passive_mob")
 

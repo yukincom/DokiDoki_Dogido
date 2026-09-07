@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import re
 from typing import Any
 
+from dogido_server.dialogue_context import DialogueContext
 from dogido_server.memory_types import HaikuEmission, HaikuLine
 from dogido_server.llm.haiku import count_japanese_sounds, haiku_line_failure_reasons
 from dogido_server.tts_reading import hiraganize_japanese_text, katakana_to_hiragana
@@ -19,6 +20,8 @@ from .edit_contract import (
     PLAYER_LINE_EDIT_CONTRACT_VERSION,
     line_edit_plan_applies,
 )
+from .source_atoms import source_atoms_from_materials
+from .workshop_context import workshop_context_details
 from .verse import (
     build_haiku_lines,
     line_source_records,
@@ -387,6 +390,11 @@ class RecentHaikuWorkshop:
     # 限定意味抽出と修正案は会話履歴とは分離。修正案はOS AIが採用意図を
     # 抽出しても、コードがpendingとCASを再検証するまで元句やmemoryを上書きしない。
     last_findings: list[dict[str, object]] = field(default_factory=list)
+    # 一句専用の短い対話。通常会話や戦闘発話によって押し出されない。
+    dialogue: DialogueContext = field(default_factory=lambda: DialogueContext(
+        max_utterances=8, max_digest_notes=0, max_text_chars=320,
+    ))
+    last_repair_feedback: dict[str, object] = field(default_factory=dict)
     pending_revision: str | None = None
     pending_revision_surface_text: str | None = None
     pending_revision_lines: tuple[HaikuLine, ...] = ()
@@ -467,11 +475,21 @@ def open_from_emission(
         mats.update(dict(materials))
     if emission.interpretation and "interpretation" not in mats:
         mats["interpretation"] = emission.interpretation
-    if emission.biome and "biome" not in mats:
+    from dogido_server.haiku.materials import material_context_visible
+
+    if (
+        emission.biome
+        and "biome" not in mats
+        and material_context_visible(mats, "biome")
+    ):
         mats["biome"] = emission.biome
     if emission.structure and "structure" not in mats:
         mats["structure"] = emission.structure
-    if emission.time_phase and "time_phase" not in mats:
+    if (
+        emission.time_phase
+        and "time_phase" not in mats
+        and material_context_visible(mats, "sky")
+    ):
         mats["time_phase"] = emission.time_phase
     current_lines = emission.lines or build_haiku_lines(
         emission.surface_text or emission.text,
@@ -713,16 +731,24 @@ def materials_speech_line(workshop: RecentHaikuWorkshop) -> str:
 
     純最短だと「静寂」「昼」が斧・原木に勝つので、source 優先で具体物を選ぶ。
     """
-    from dogido_server.haiku.materials import short_material_entries
+    from dogido_server.haiku.materials import material_context_visible, short_material_entries
 
     mats = dict(workshop.materials or {})
     if workshop.interpretation and "interpretation" not in mats:
         mats["interpretation"] = workshop.interpretation
-    if workshop.biome and "biome" not in mats:
+    if (
+        workshop.biome
+        and "biome" not in mats
+        and material_context_visible(mats, "biome")
+    ):
         mats["biome"] = workshop.biome
     if workshop.structure and "structure" not in mats:
         mats["structure"] = workshop.structure
-    if workshop.time_phase and "time_phase" not in mats:
+    if (
+        workshop.time_phase
+        and "time_phase" not in mats
+        and material_context_visible(mats, "sky")
+    ):
         mats["time_phase"] = workshop.time_phase
     entries = short_material_entries(mats)
     if not entries:
@@ -731,13 +757,14 @@ def materials_speech_line(workshop: RecentHaikuWorkshop) -> str:
     source_rank = {
         "held_item": 0,
         "nearby_block": 1,
-        "structure": 2,
-        "motif": 3,
-        "passive_mob": 4,
-        "biome": 5,
-        "place": 6,
-        "time_phase": 7,
-        "interpretation": 8,
+        "inventory_item": 2,
+        "structure": 3,
+        "motif": 4,
+        "passive_mob": 5,
+        "biome": 6,
+        "place": 7,
+        "time_phase": 8,
+        "interpretation": 9,
     }
 
     def rank(item: tuple[str, str]) -> tuple:
@@ -757,6 +784,8 @@ def materials_speech_line(workshop: RecentHaikuWorkshop) -> str:
 
 def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
     """ログ用。生 materials（メタキー込み）を短く。"""
+    from dogido_server.haiku.materials import material_context_visible
+
     materials = workshop.materials or {}
     parts: list[str] = []
     interpretation = str(
@@ -765,6 +794,10 @@ def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
     if interpretation:
         parts.append(interpretation[:80])
     for key in ("biome", "structure", "time_phase", "place", "held_item"):
+        if key == "biome" and not material_context_visible(materials, "biome"):
+            continue
+        if key == "time_phase" and not material_context_visible(materials, "sky"):
+            continue
         val = materials.get(key) or getattr(workshop, key, None)
         if val:
             parts.append(f"{key}={val}")
@@ -774,6 +807,9 @@ def materials_debug_line(workshop: RecentHaikuWorkshop) -> str:
     nearby = materials.get("nearby_blocks")
     if isinstance(nearby, (list, tuple)) and nearby:
         parts.append("nearby=" + ",".join(str(b) for b in nearby[:3] if b))
+    inventory = materials.get("inventory_items")
+    if isinstance(inventory, (list, tuple)) and inventory:
+        parts.append("inventory=" + ",".join(str(item) for item in inventory[:4] if item))
     links = materials.get("fragment_links")
     if isinstance(links, list) and links:
         parts.append(f"links={len(links)}")
@@ -786,16 +822,24 @@ def material_candidates_for_speech(workshop: RecentHaikuWorkshop) -> list[str]:
     短い具体物（motifs / held / nearby / biome_ja）を先に、長い解釈文は後。
     ドメイン固有の禁止語リストは持たない（materials.short_material_entries に委譲）。
     """
-    from dogido_server.haiku.materials import short_material_entries
+    from dogido_server.haiku.materials import material_context_visible, short_material_entries
 
     mats = dict(workshop.materials or {})
     if workshop.interpretation and "interpretation" not in mats:
         mats["interpretation"] = workshop.interpretation
-    if workshop.biome and "biome" not in mats:
+    if (
+        workshop.biome
+        and "biome" not in mats
+        and material_context_visible(mats, "biome")
+    ):
         mats["biome"] = workshop.biome
     if workshop.structure and "structure" not in mats:
         mats["structure"] = workshop.structure
-    if workshop.time_phase and "time_phase" not in mats:
+    if (
+        workshop.time_phase
+        and "time_phase" not in mats
+        and material_context_visible(mats, "sky")
+    ):
         mats["time_phase"] = workshop.time_phase
     return [label for label, _source in short_material_entries(mats)]
 
@@ -838,6 +882,40 @@ def pick_material_for_fragment(
     return min(hits, key=lambda s: (len(s), s.count("の")))
 
 
+_SOURCE_CONTENT_TERM = re.compile(r"[一-鿿々〆ヵヶ]+|[ァ-ヶー]{2,}")
+
+
+def _source_question_match_score(source_text: str, player_text: str) -> int:
+    """質問文に、行へ確定保存した出典の内容語があるか。
+
+    出典の説明文全体（例: 「近くに窓がある」）が質問と一致しなくても、
+    その文中の漢字語・カタカナ語（例: 「窓」）なら照合できる。
+    ひらがなだけの短い一般語を切り出さないことで誤対応を抑える。
+    """
+
+    source = _compact_kana(source_text)
+    question = _compact_kana(player_text)
+    if not source or not question:
+        return 0
+    if len(source) >= 2 and source in question:
+        return 200 + len(source)
+
+    question_reading = _compact_kana(
+        katakana_to_hiragana(hiraganize_japanese_text(player_text or ""))
+    )
+    best = 0
+    for term in _SOURCE_CONTENT_TERM.findall(source_text or ""):
+        compact_term = _compact_kana(term)
+        if compact_term and compact_term in question:
+            best = max(best, 100 + len(compact_term))
+        term_reading = _compact_kana(
+            katakana_to_hiragana(hiraganize_japanese_text(term))
+        )
+        if len(term_reading) >= 2 and term_reading in question_reading:
+            best = max(best, 50 + len(term_reading))
+    return best
+
+
 def grounded_material_for_question(
     workshop: RecentHaikuWorkshop,
     player_text: str,
@@ -874,6 +952,37 @@ def grounded_material_for_question(
         best_indices = {index for score, index in matched if score == best_score}
         if len(best_indices) == 1:
             line = records[next(iter(best_indices))]
+            # 詩的解釈を出典にした行では、質問に明示された一次材料まで辿る。
+            # 「黒い石は石炭？」に、派生文全体や別の石名を返さないための経路。
+            atom_by_id = {
+                atom.atom_id: atom
+                for atom in source_atoms_from_materials(workshop.materials)
+            }
+            basis_matches: list[tuple[int, int, str]] = []
+            for source in line.source_atoms:
+                raw_basis = source.get("basis_atom_ids")
+                if not isinstance(raw_basis, list):
+                    continue
+                for atom_id in raw_basis:
+                    base = atom_by_id.get(str(atom_id))
+                    if base is None:
+                        continue
+                    score = _source_question_match_score(base.text, player_text)
+                    if score:
+                        basis_matches.append(
+                            (score, 1 if base.kind == "catalog_label" else 0, base.text)
+                        )
+            if basis_matches:
+                best_key = max((score, is_label) for score, is_label, _text in basis_matches)
+                labels = list(
+                    dict.fromkeys(
+                        text
+                        for score, is_label, text in basis_matches
+                        if (score, is_label) == best_key
+                    )
+                )
+                if len(labels) == 1:
+                    return labels[0]
             labels: list[str] = []
             # identityを先にし、note断片だけを名称のように答えない。
             ordered_sources = sorted(
@@ -887,67 +996,37 @@ def grounded_material_for_question(
             if labels:
                 return "、".join(labels[:2])
 
+    # 行本文ではなく、その行に保存された出典自体を質問することもある。
+    # 全 materials からは推測せず、現在の行に確定済みの source_atoms だけを照合する。
+    source_matches: list[tuple[int, int, str]] = []
+    for line in records:
+        for source in line.source_atoms:
+            label = str(source.get("text") or "").strip()
+            score = _source_question_match_score(label, player_text)
+            if label and score:
+                source_matches.append((score, line.line_index, label))
+    if source_matches:
+        best_score = max(score for score, _index, _label in source_matches)
+        best = [match for match in source_matches if match[0] == best_score]
+        if len({index for _score, index, _label in best}) == 1:
+            labels = list(dict.fromkeys(label for _score, _index, label in best))
+            return "、".join(labels[:2])
+
     # 古い発句やテスト用emissionでは行レコードに出典がないことがある。
     # その場合も、一意な句断片リンクだけを使い、全候補からAIに選ばせない。
     fragment = _quoted_or_fragment_about_verse(player_text, workshop.editing_line())
     return pick_material_for_fragment(fragment, workshop, player_text=player_text)
 
 
-def build_ask_meaning_llm_details(
-    workshop: RecentHaikuWorkshop,
-    player_text: str,
-) -> dict[str, Any]:
-    """structured material pick 用の details（候補はコードが閉じる）。"""
-    verse = workshop.editing_line() or ""
-    verse_one = " ".join(verse.replace("\n", " ").split())
-    fragment = _quoted_or_fragment_about_verse(player_text or "", verse)
-    candidates = material_candidates_for_speech(workshop)
-    return {
-        "verse": verse_one,
-        "player_text": (player_text or "").strip(),
-        "fragment": fragment or "",
-        "candidates": candidates,
-    }
-
-
 def finalize_ask_meaning_reply(
     workshop: RecentHaikuWorkshop,
     player_text: str,
-    payload: dict[str, Any] | None,
 ) -> tuple[str, str]:
-    """LLM 出力を軽く整えて返事にする。戻り値は (reply, path)。
-
-    path: llm | template | soft_fail
-    検証は緩め（言い回しの面白さを潰さない）。schema 漏れと長文だけ切る。
-    """
+    """旧発句向けの決定的な意味説明fallback。(reply, path) を返す。"""
     verse = workshop.editing_line() or "（句なし）"
     verse_one = " ".join(verse.replace("\n", " ").split())
     said = player_text or ""
     fragment = _quoted_or_fragment_about_verse(said, verse)
-    candidates = material_candidates_for_speech(workshop)
-
-    pick: str | None = None
-    raw_reply = ""
-    if isinstance(payload, dict):
-        raw_reply = str(payload.get("reply") or "").strip()
-        idx = payload.get("pick_index")
-        if isinstance(idx, bool):
-            idx = None
-        if isinstance(idx, float) and idx == int(idx):
-            idx = int(idx)
-        if isinstance(idx, int) and 0 <= idx < len(candidates):
-            pick = candidates[idx]
-        elif isinstance(idx, str) and idx.isdigit():
-            i = int(idx)
-            if 0 <= i < len(candidates):
-                pick = candidates[i]
-
-    accepted = _soft_accept_ask_meaning_reply(raw_reply, candidates=candidates, pick=pick)
-    if accepted:
-        return accepted, "llm"
-
-    if pick:
-        return f"それは、{pick}やで。", "template"
 
     # fragment_links（句断片→材料）を優先。無ければ部分一致。
     simple = pick_material_for_fragment(fragment, workshop, player_text=said)
@@ -963,52 +1042,6 @@ def finalize_ask_meaning_reply(
         f"どの言葉？「{verse_one}」のどこが気になった？",
         "soft_fail",
     )
-
-
-def _soft_accept_ask_meaning_reply(
-    reply: str,
-    *,
-    candidates: list[str],
-    pick: str | None,
-) -> str | None:
-    """講義・メタ漏れ・過長だけ落とす。口調や言い換えは通す。"""
-    t = (reply or "").strip().strip("「」\"'")
-    if not t:
-        return None
-    # 1〜2 文想定。縛りすぎない（約 80 字）
-    if len(t) > 80:
-        return None
-    lowered = t.lower()
-    meta_needles = (
-        "biome:",
-        "structure:",
-        "minecraft:",
-        "materials",
-        "interpretation",
-        "pick_index",
-        "village_plains",
-        "biome=",
-        "structure=",
-    )
-    if any(n in lowered or n in t for n in meta_needles):
-        return None
-    # 候補外の捏造をやや抑える: pick あり / 候補語入り / 正直に読みにくい なら OK
-    if pick is not None:
-        return t
-    if any(len(c) >= 2 and c in t for c in candidates):
-        return t
-    soft_fail_marks = (
-        "分かりにく",
-        "わかりにく",
-        "読め",
-        "わから",
-        "どの言葉",
-        "ちょっと",
-        "読みや",
-    )
-    if any(m in t for m in soft_fail_marks):
-        return t
-    return None
 
 
 def _split_material_chunks(text: str) -> list[str]:
@@ -1470,6 +1503,7 @@ def build_workshop_intent_llm_details(
             concept.to_llm_dict() for concept in WORKSHOP_LINE_CONCEPTS
         ],
         "materials_speech": materials_speech_line(workshop),
+        "workshop_context": workshop_context_details(workshop),
         "player_text": (player_text or "").strip(),
         "conversation_stage": conversation_stage,
         "allowed_intents": sorted(WORKSHOP_LLM_INTENTS),
@@ -1486,6 +1520,7 @@ def build_pending_revision_llm_details(
     return {
         "current_verse": workshop.display_line(),
         "pending_verse": workshop.pending_revision or "",
+        "workshop_context": workshop_context_details(workshop),
         "player_text": (player_text or "").strip(),
         "allowed_actions": sorted(WORKSHOP_PENDING_ACTIONS),
     }
@@ -2439,7 +2474,7 @@ def render_workshop_reply(
         return "うん、そんな感じや。"
     if kind == "ask_meaning":
         # LLM なし経路: 部分一致テンプレ / soft_fail（本番は service が LLM 経由）
-        reply, _path = finalize_ask_meaning_reply(workshop, said, None)
+        reply, _path = finalize_ask_meaning_reply(workshop, said)
         return reply
     if kind == "critique_forced":
         return "せやな、詰め込みすぎた。余白を残すよう直した方がええな。"

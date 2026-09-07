@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "normalization_revision": 3,
+  "snapshot_id": "mcjava-1.21.11-0d87fe00-64bb6d76-e9eeaade-b19938a0-n3",
+  "minecraft_version": "1.21.11",
+  "edition": "Java Edition",
+  "target_selection": "adapter_minecraft_version_exact",
+  "checked_at": "2026-09-01",
+  "manifest_state": {
+    "latest_release_at_check": "26.2",
+    "latest_snapshot_at_check": "26.3-snapshot-10",
+    "target_type": "release",
+    "target_metadata_time": "2026-08-25T06:40:44+00:00",
+    "target_release_time": "2025-12-09T12:23:30+00:00"
+  },
+  "normalization_inputs": {
+    "record_schema_path": "reference/minecraft_technical/schema.json",
+    "record_schema_sha256": "5f6505e7c312b4cb01a0bd6d4e041f994827af73c0b52925a908cf2a1c140f6d",
+    "official_changes_path": "reference/minecraft_technical/official_changes.json",
+    "official_changes_sha256": "3cabda248042d579f7d3ff74cd85fc600854a64f2c19e1cfe403030dcf484cd9",
+    "generator_path": "scripts/build_minecraft_technical_data.py",
+    "generator_sha256": "8fd917f16c377417452450de375bcd76ef658f8f61ce3fe208a02faa49c5d23d"
+  },
+  "adapter_compatibility": {
+    "yarn_mappings": "1.21.11+build.4",
+    "fabric_loader": "0.18.4",
+    "fabric_api": "0.140.2+1.21.11",
+    "java_major_version": 21
+  },
+  "expected_runtime": {
+    "world_version": 4671,
+    "protocol_version": 774,
+    "data_pack_version": "94.1",
+    "resource_pack_version": "75.0",
+    "stable": true
+  },
+  "official_artifacts": {
+    "version_manifest": {
+      "url": "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+    },
+    "version_json": {
+      "url": "https://piston-meta.mojang.com/v1/packages/0d87fe006fbd25ef3f0e022d133f6efaed8a9a85/1.21.11.json",
+      "sha1": "0d87fe006fbd25ef3f0e022d133f6efaed8a9a85",
+      "size": 42184
+    },
+    "client_jar": {
+      "url": "https://piston-data.mojang.com/v1/objects/ba2df812c2d12e0219c489c4cd9a5e1f0760f5bd/client.jar",
+      "sha1": "ba2df812c2d12e0219c489c4cd9a5e1f0760f5bd",
+      "size": 31152600
+    },
+    "server_jar": {
+      "url": "https://piston-data.mojang.com/v1/objects/64bb6d763bed0a9f1d632ec347938594144943ed/server.jar",
+      "sha1": "64bb6d763bed0a9f1d632ec347938594144943ed",
+      "size": 56327581
+    },
+    "asset_index": {
+      "id": "29",
+      "url": "https://piston-meta.mojang.com/v1/packages/e9eeaade32639d73d4f7a30a007ace472c61cbd6/29.json",
+      "sha1": "e9eeaade32639d73d4f7a30a007ace472c61cbd6",
+      "size": 529966
+    },
+    "ja_jp": {
+      "asset_key": "minecraft/lang/ja_jp.json",
+      "url": "https://resources.download.minecraft.net/b1/b19938a0f571a0cb964bed0af01bf39c6a95252c",
+      "sha1": "b19938a0f571a0cb964bed0af01bf39c6a95252c",
+      "size": 675118
+    }
+  },
+  "official_documents": {
+    "release_notes": "https://www.minecraft.net/en-us/article/minecraft-java-edition-1-21-11",
+    "eula": "https://www.minecraft.net/en-us/eula",
+    "usage_guidelines": "https://www.minecraft.net/en-us/usage-guidelines",
+    "data_generator_entrypoint": "https://www.minecraft.net/en-us/article/minecraft-java-edition-1-21-4"
+  },
+  "storage_policy": {
+    "tracked_files": "版番号、公式URL、ハッシュ、サイズ、独自スキーマ、生成・検証コード、短い事実要約だけを保存する。",
+    "local_cache_only": "ゲームJAR、資産索引、言語JSON、生成レポート、タグ・データパック原JSON、および全量正規化データは.dogido_reference配下だけに生成し、Gitとwheelから除外する。",
+    "disclaimer": "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT."
+  }
+}

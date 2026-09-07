@@ -107,6 +107,18 @@ class HasPlayerChat(_Condition):
         # 絶叫系モード中は戦闘優先。それ以外は話しかけを落とさない
         if context.next_mode in {"panic", "suppressed_panic"}:
             return False
+        # 出典DBの検索はalert発話より優先させない。質問はserviceが保留し、
+        # 安全な次フレームで一度だけ検索する。
+        if (
+            context.next_mode == "alert"
+            and context.machine.player_input.knowledge_query is not None
+        ):
+            return False
+        if (
+            context.machine.player_input.knowledge_query is not None
+            and context.machine._detect_warden_sonic_boom(context.event)
+        ):
+            return False
         if context.event.event.name == EventName.PLAYER_DIED:
             return False
         # 見どころ〜本句のあいだは自分の世界（雑談に乗らない）
@@ -143,6 +155,10 @@ class NormalEnvironmentEvent(_Condition):
             return False
         return (
             context.machine.player_input.asks_hostile_count
+            or (
+                context.machine.player_input.asks_hostile_direction
+                and bool(context.event.visual_threats)
+            )
             or context.machine.player_input.asks_dragon_direction
             or context.machine._has_pending_player_chat(context.event)
             or context.machine._dragon_special_pending(context.event, context.now)
@@ -200,6 +216,42 @@ class EmitDeathActions(_Action):
         )
 
 
+class EmitCreeperDetonationActions(_Action):
+    def __init__(self) -> None:
+        super().__init__(name="EmitCreeperDetonationActions")
+
+    def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        line = context.machine._render_creeper_detonation_line(context.event)
+        if line:
+            actions.append(
+                context.machine._audio_action(
+                    layer="speech",
+                    interrupt=True,
+                    cue_id="creeper_detonation_reaction",
+                    text=line,
+                    speech_profile="battle",
+                )
+            )
+
+
+class EmitHostileDefeatedActions(_Action):
+    def __init__(self) -> None:
+        super().__init__(name="EmitHostileDefeatedActions")
+
+    def run(self, context: PolicyContext, actions: list[Any]) -> None:
+        line = context.machine._render_hostile_defeated_line(context.event)
+        if line:
+            actions.append(
+                context.machine._audio_action(
+                    layer="speech",
+                    interrupt=True,
+                    cue_id="hostile_defeated_reaction",
+                    text=line,
+                    speech_profile="battle",
+                )
+            )
+
+
 class EmitPlayerChatActions(_Action):
     def __init__(self) -> None:
         super().__init__(name="EmitPlayerChatActions")
@@ -211,21 +263,29 @@ class EmitPlayerChatActions(_Action):
                 context.event,
                 context.signals.ground_hostile_count_within_query_range,
             )
+        elif machine.player_input.asks_hostile_direction and context.event.visual_threats:
+            text = machine._render_hostile_direction_answer(context.event)
         elif machine.player_input.asks_dragon_direction:
             text = machine._render_dragon_direction_answer(context.event)
         else:
             text = machine._render_player_chat_reply(context.event)
         if text:
-            reply_action = machine._audio_action(
-                layer="speech",
-                interrupt=False,
-                text=text,
+            reply_actions = (
+                machine._knowledge_speech_actions(text)
+                if machine.knowledge_query_handled
+                else [
+                    machine._audio_action(
+                        layer="speech",
+                        interrupt=False,
+                        text=text,
+                    )
+                ]
             )
-            actions.append(reply_action)
+            actions.extend(reply_actions)
             machine._suppress_thunder_after_player_reply(
                 context.event,
                 context.now,
-                [reply_action],
+                reply_actions,
             )
 
 
@@ -407,6 +467,16 @@ class PyTreeActionPolicy:
             [
                 self._sequence("DimensionChanged", DimensionChanged(), EmitFlushInterrupt()),
                 self._sequence("Death", EventIs(EventName.PLAYER_DIED), EmitDeathActions()),
+                self._sequence(
+                    "HostileDefeated",
+                    EventIs(EventName.HOSTILE_DEFEATED),
+                    EmitHostileDefeatedActions(),
+                ),
+                self._sequence(
+                    "CreeperDetonated",
+                    EventIs(EventName.CREEPER_DETONATED),
+                    EmitCreeperDetonationActions(),
+                ),
                 self._sequence("Panic", ModeIs("panic"), EmitPanicActions()),
                 self._sequence("SuppressedPanic", ModeIs("suppressed_panic"), EmitSuppressedPanicActions()),
                 # 明示戦闘終了は古い戦闘音声を止めるため、同tickのplayer chatより先に処理する。
