@@ -7,6 +7,7 @@ __pycache__/
 .dogido_memory/
 .dogido_training/
 .dogido_reference/
+.dogido_tools/
 # ローカル実行ログとPythonのビルド生成物は保存用ブランチにも含めない
 /logs/
 /build/

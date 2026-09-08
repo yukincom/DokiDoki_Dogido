@@ -1,0 +1,327 @@
+diff --git a/src/chrome_web_mcp/google_overview.py b/src/chrome_web_mcp/google_overview.py
+index a70643a..a97e234 100644
+--- a/src/chrome_web_mcp/google_overview.py
++++ b/src/chrome_web_mcp/google_overview.py
+@@ -80,22 +80,41 @@ OVERVIEW_SNAPSHOT_JS = r"""(() => {
+ })()"""
+ 
+ 
++# One CDP evaluation, with a local DOM quiet-window check. Neither snapshot nor
++# the MutationObserver sends a Google query, navigates, or fetches a resource.
++OVERVIEW_SETTLED_SNAPSHOT_JS = r"""(async () => {
++ const snapshot = () => (""" + OVERVIEW_SNAPSHOT_JS + r""");
++ const before = snapshot();
++ const eligible = s => s.found && s.complete === true && !s.busy && !s.unavailable && s.text.trim();
++ if (!eligible(before)) return {...before, render_settled:false};
++ const root = document.querySelector('#m-x-content');
++ let changed = false;
++ const observer = new MutationObserver(() => { changed = true; });
++ observer.observe(root, {subtree:true, childList:true, characterData:true, attributes:true});
++ try {
++   await new Promise(resolve => setTimeout(resolve, 400));
++   const after = snapshot();
++   return {...after, render_settled:!changed && !!eligible(after)
++     && root.isConnected && root === document.querySelector('#m-x-content')
++     && before.url === after.url && before.text === after.text};
++ } finally { observer.disconnect(); }
++})()"""
++
++
+ async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic,
+                             sleep=asyncio.sleep, reread=False):
+-    """Poll the same page at 4, 4.5 and 5 seconds from the fetch start, then stop.
++    """Request one settled snapshot at eight seconds; a return reread is immediate.
+ 
+-    A marker alone precedes streaming: require no loading animation and equal
+-    text in two consecutive samples. No second fetch or automatic new search.
+-    The final DOM read has at most 250ms; failure has no answer/error sentence.
++    The single browser evaluation checks a 400ms quiet window locally, retaining
++    the no-partial-answer gate without repeated CDP reads or Google requests.
++    The DOM evaluation has at most 750ms; failure has no answer/error sentence.
+     """
+     started = clock() if started is None else started
+-    polls = (0.0, .5, 1.0) if reread else (4.0, 4.5, 5.0)
+-    deadline = started + polls[-1] + .25
++    read_at = 0.0 if reread else 8.0
++    deadline = started + read_at + .75
+     last = {}
+     samples = 0
+     seen = False
+-    settled_text = None
+-    settled_since = started
+ 
+     def finish(status, *, reason=""):
+         text = last.get("text", "")
+@@ -109,12 +128,10 @@ async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic
+             "page_visibility": last.get("visibility", "unknown"),
+         }
+ 
+-    for poll_at in polls:
+-        if clock() >= deadline:
+-            break
+-        await sleep(max(0.0, started + poll_at - clock()))
++    if clock() < deadline:
++        await sleep(max(0.0, started + read_at - clock()))
+         try:
+-            snapshot = await asyncio.wait_for(read_snapshot(), min(.25, max(0.0, deadline - clock())))
++            snapshot = await asyncio.wait_for(read_snapshot(), min(.75, max(0.0, deadline - clock())))
+         except asyncio.TimeoutError:
+             return finish("timeout", reason="snapshot_timeout")
+         samples += 1
+@@ -128,14 +145,8 @@ async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic
+         seen = seen or bool(snapshot.get("found"))
+         text = snapshot.get("text", "").strip()
+         eligible = snapshot.get("found") and bool(text) and not snapshot.get("busy") and not snapshot.get("unavailable")
+-        if eligible and snapshot.get("complete") is True:
+-            if text != settled_text:
+-                settled_text = text
+-                settled_since = clock()
+-            elif clock() - settled_since >= .4:
+-                return finish("complete", reason="render_settled")
+-        else:
+-            settled_text = None
++        if eligible and snapshot.get("complete") is True and snapshot.get("render_settled") is True:
++            return finish("complete", reason="render_settled")
+     if last.get("unavailable"):
+         return finish("unavailable")
+     return finish("timeout" if seen else "not_found")
+diff --git a/src/chrome_web_mcp/server.py b/src/chrome_web_mcp/server.py
+index 4f648a1..282fc04 100644
+--- a/src/chrome_web_mcp/server.py
++++ b/src/chrome_web_mcp/server.py
+@@ -1427,7 +1427,7 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+         raise ValueError("existing_tab_id requires a returned AI overview tab ID")
+     # Validate the requested URL up front (fail-closed).
+     if wait_for_ai_overview:
+-        from .google_overview import is_standard_google_search, OVERVIEW_SNAPSHOT_JS, wait_for_overview
++        from .google_overview import is_standard_google_search, OVERVIEW_SETTLED_SNAPSHOT_JS, wait_for_overview
+         if not is_standard_google_search(url):
+             raise ValueError("wait_for_ai_overview requires a normal HTTPS Google /search?q= URL without udm or tbm")
+     validated = _validate_public_url(url)
+@@ -1476,7 +1476,7 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+         overview = None
+         if wait_for_ai_overview:
+             async def read_overview():
+-                snapshot = await _evaluate(page, OVERVIEW_SNAPSHOT_JS)
++                snapshot = await _evaluate(page, OVERVIEW_SETTLED_SNAPSHOT_JS)
+                 if not isinstance(snapshot, dict):
+                     raise RuntimeError("Invalid AI overview snapshot")
+                 current_url = snapshot.get("url", "")
+@@ -1681,9 +1681,9 @@ async def list_tools() -> list[types.Tool]:
+                 "and are selected so the user can view images and the original layout. "
+                 "char_limit caps the returned text. For Google AI Overviews, pass a normal "
+                 "https://www.google.com/search?q=... URL and wait_for_ai_overview:true. "
+-                "This polls the same page at 4, 4.5 and 5 seconds from fetch start "
++                "This requests one snapshot at 8 seconds from fetch start "
+                 "and returns the ai_overview snapshot, ordinary web results, and URL metadata. "
+-                "No more than three polls; the fetch budget is 5.5 seconds including DOM reads, plus cancellation cleanup. "
++                "The browser checks 400ms of DOM stability locally; the fetch budget is 9 seconds, plus cancellation cleanup. "
+                 "If no overview completes, use web results for follow-up link reading; do not speak the status."
+             ),
+             inputSchema={
+@@ -1699,11 +1699,11 @@ async def list_tools() -> list[types.Tool]:
+                     },
+                     "wait_for_ai_overview": {
+                         "type": "boolean", "default": False,
+-                        "description": "On a normal HTTPS Google search URL, poll at 4/4.5/5 seconds for a settled AI answer. Return data.ai_overview and data.web from the same page. Without an overview, web results remain usable. Status is code-only, not dialogue text. No repeat searches. Omit udm and tbm from the URL.",
++                        "description": "On a normal HTTPS Google search URL, request one snapshot at 8 seconds, including a local 400ms DOM stability check. Return data.ai_overview and data.web from the same page. Without an overview, web results remain usable. Status is code-only, not dialogue text. No repeat searches. Omit udm and tbm from the URL.",
+                     },
+                     "existing_tab_id": {
+                         "type": "string",
+-                        "description": "Optional tab_id returned by an earlier overview fetch. With wait_for_ai_overview:true, reread that same search without navigation or activation, at 0/0.5/1 seconds. Refuse a closed tab or changed search; never reopen it.",
++                        "description": "Optional tab_id returned by an earlier overview fetch. With wait_for_ai_overview:true, request one immediate snapshot of that same search, with a local 400ms stability check, without navigation or activation. Refuse a closed tab or changed search; never reopen it.",
+                         "pattern": "^[A-Fa-f0-9]{32}$",
+                     },
+                     "char_limit": {
+@@ -1831,7 +1831,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+                     raise ValueError("existing_tab_id requires a returned AI overview tab ID")
+                 checked["existing_tab_id"] = existing_tab_id
+             fetch = _fetch_page(url.strip(), char_limit, format, **checked)
+-            budget = 1.75 if existing_tab_id else 5.5
++            budget = 1.75 if existing_tab_id else 9.0
+             data = await asyncio.wait_for(fetch, budget) if wait_for_ai else await fetch
+             ready = not wait_for_ai or data.get("ai_overview", {}).get("status") == "complete" or bool(data.get("web"))
+             payload = {"success": ready, "data": data}
+diff --git a/tests/test_google_overview.py b/tests/test_google_overview.py
+index ce95f67..4c7904b 100644
+--- a/tests/test_google_overview.py
++++ b/tests/test_google_overview.py
+@@ -7,8 +7,9 @@ from chrome_web_mcp.google_overview import is_standard_google_search, wait_for_o
+ from chrome_web_mcp import server
+ 
+ 
+-def snapshot(text="", *, found=True, complete=False, busy=False, **extra):
+-    return dict(found=found, text=text, complete=complete, busy=busy, links=[], **extra)
++def snapshot(text="", *, found=True, complete=False, busy=False, render_settled=True, **extra):
++    return dict(found=found, text=text, complete=complete, busy=busy,
++                render_settled=render_settled, links=[], **extra)
+ 
+ 
+ def wait_sequence(frames, **kwargs):
+@@ -27,60 +28,57 @@ def wait_sequence(frames, **kwargs):
+     return result, calls
+ 
+ 
+-def test_delayed_generation_returns_only_completed_snapshot():
+-    frames = [snapshot(found=False), snapshot("完成した本文", complete=True)]
+-    result, calls = wait_sequence(frames)
++def test_completed_snapshot_is_requested_once_at_eight_seconds():
++    result, calls = wait_sequence([snapshot("完成した本文", complete=True)])
+     assert result["status"] == "complete"
+     assert result["text"] == "完成した本文"
+-    assert result["samples"] == len(calls) == 3
+-    assert result["waited_ms"] == 5000
++    assert result["samples"] == len(calls) == 1
++    assert result["waited_ms"] == 8000
+     assert result["completion_signal"] == "render_settled"
+ 
+ 
+-def test_ready_answer_only_waits_for_render_to_settle():
++def test_ready_answer_does_not_trigger_early_reads():
+     result, calls = wait_sequence([snapshot("本文", complete=True)])
+     assert result["text"] == "本文"
+-    assert len(calls) == 2 and result["waited_ms"] == 4500
++    assert len(calls) == 1 and result["waited_ms"] == 8000
+ 
+ 
+-def test_reread_settles_at_half_a_second_without_initial_search_wait():
++def test_reread_requests_one_local_settled_snapshot_without_search_wait():
+     result, calls = wait_sequence([snapshot("完成した長い説明", complete=True)], reread=True)
+-    assert result["status"] == "complete" and result["waited_ms"] == 500
+-    assert len(calls) == 2
++    assert result["status"] == "complete" and result["waited_ms"] == 0
++    assert len(calls) == 1  # mock browser already supplies the quiet-window result.
+ 
+ 
+ def test_reread_does_not_accept_still_streaming_text():
+     result, calls = wait_sequence([snapshot("生成中", busy=True)], reread=True)
+     assert result["status"] == "timeout" and not result["text"]
+-    assert result["waited_ms"] == 1000 and len(calls) == 3
++    assert result["waited_ms"] == 0 and len(calls) == 1
+ 
+ 
+-def test_no_overview_keeps_search_results_after_only_three_polls():
++def test_no_overview_keeps_search_results_without_retry():
+     web = [{"title": "参考ページ", "url": "https://example.com/", "description": "紹介文"}]
+     result, calls = wait_sequence([snapshot(found=False, web=web)])
+     assert result["status"] == "not_found" and result["text"] == ""
+-    assert result["web"] == web and len(calls) == 3 and result["waited_ms"] == 5000
++    assert result["web"] == web and len(calls) == 1 and result["waited_ms"] == 8000
+ 
+ 
+-def test_late_browser_start_does_not_turn_immediate_reads_into_settled_text():
++def test_late_browser_start_does_not_bypass_local_quiet_window():
+     async def read():
+-        return snapshot("まだ途中かもしれない", complete=True)
+-    result = asyncio.run(wait_for_overview(read, started=0, clock=lambda: 4.9,
++        return snapshot("まだ途中かもしれない", complete=True, render_settled=False)
++    result = asyncio.run(wait_for_overview(read, started=0, clock=lambda: 8.5,
+                                           sleep=lambda _: asyncio.sleep(0)))
+-    assert result["status"] == "timeout" and result["samples"] == 3
++    assert result["status"] == "timeout" and result["samples"] == 1
+ 
+ 
+-def test_marker_does_not_end_stream_early_and_same_length_rewrite_resets_wait():
+-    frames = [snapshot("冒頭", complete=True), snapshot("本文", complete=True),
+-              snapshot("全文", complete=True)]
+-    result, calls = wait_sequence(frames)
+-    assert result["status"] == "timeout" and not result["text"] and len(calls) == 3
++def test_marker_without_browser_confirmed_quiet_window_is_rejected():
++    result, calls = wait_sequence([snapshot("冒頭", complete=True, render_settled=False)])
++    assert result["status"] == "timeout" and not result["text"] and len(calls) == 1
+ 
+ 
+ @pytest.mark.parametrize("status", ["unavailable", "challenge", "navigation_changed"])
+ def test_definite_failure_stops_at_first_poll(status):
+     result, calls = wait_sequence([snapshot(**{status: True})])
+-    assert result["status"] == status and result["waited_ms"] == 4000 and len(calls) == 1
++    assert result["status"] == status and result["waited_ms"] == 8000 and len(calls) == 1
+ 
+ 
+ @pytest.mark.parametrize("frame,status", [
+@@ -105,7 +103,7 @@ def test_no_partial_text_or_failure_sentence(frame, status):
+ def test_read_timeout_is_bounded():
+     async def stalled():
+         await asyncio.sleep(10)
+-    result = asyncio.run(wait_for_overview(stalled, started=-5.24, clock=lambda: 0, sleep=lambda _: asyncio.sleep(0)))
++    result = asyncio.run(wait_for_overview(stalled, started=-8.74, clock=lambda: 0, sleep=lambda _: asyncio.sleep(0)))
+     assert result["status"] == "timeout" and not result["text"]
+     assert result["completion_signal"] == "snapshot_timeout"
+ 
+@@ -208,7 +206,7 @@ def test_fetch_wait_activation_cleanup_and_no_second_extraction(monkeypatch, out
+     async def evaluate(conn, expression):
+         if expression == "location.href":
+             return "https://example.com/" if outcome == "redirect" else url
+-        assert expression == google_overview.OVERVIEW_SNAPSHOT_JS
++        assert expression == google_overview.OVERVIEW_SETTLED_SNAPSHOT_JS
+         return {"url": "https://example.com/" if outcome == "redirect" else url, "page_text": ""}
+ 
+     async def ready(conn):
+diff --git a/tests/test_google_overview_dom.py b/tests/test_google_overview_dom.py
+index 06be575..3c6c5e0 100644
+--- a/tests/test_google_overview_dom.py
++++ b/tests/test_google_overview_dom.py
+@@ -6,7 +6,7 @@ import pytest
+ import websockets
+ 
+ from chrome_web_mcp import server
+-from chrome_web_mcp.google_overview import OVERVIEW_SNAPSHOT_JS
++from chrome_web_mcp.google_overview import OVERVIEW_SNAPSHOT_JS, OVERVIEW_SETTLED_SNAPSHOT_JS
+ 
+ 
+ @pytest.fixture(scope="module")
+@@ -19,7 +19,7 @@ def browser_ws():
+         runtime.cleanup()
+ 
+ 
+-def extract(browser_ws, html):
++def extract(browser_ws, html, *, expression=OVERVIEW_SNAPSHOT_JS):
+     async def run():
+         async with websockets.connect(browser_ws, max_size=server.MAX_CDP_MESSAGE) as browser:
+             result = await server._cdp_call(browser, "Target.createTarget", {"url": "about:blank"})
+@@ -30,7 +30,7 @@ def extract(browser_ws, html):
+                 # A browser socket with a flattened target session; no navigation.
+                 rid = next(server._CDP_IDS)
+                 await browser.send(json.dumps({"id":rid,"sessionId":session,"method":"Runtime.evaluate",
+-                                               "params":{"expression":expression,"returnByValue":True}}))
++                                               "params":{"expression":expression,"returnByValue":True,"awaitPromise":True}}))
+                 while True:
+                     response=json.loads(await asyncio.wait_for(browser.recv(), 10))
+                     if response.get("id")==rid:
+@@ -38,7 +38,7 @@ def extract(browser_ws, html):
+                         return response["result"]["result"].get("value")
+             try:
+                 await evaluate("document.body.innerHTML=" + json.dumps(html))
+-                return await evaluate(OVERVIEW_SNAPSHOT_JS)
++                return await evaluate(expression)
+             finally:
+                 await server._cdp_call(browser, "Target.closeTarget", {"targetId":target})
+     return asyncio.run(run())
+@@ -101,3 +101,27 @@ def test_ordinary_results_survive_when_overview_is_absent(browser_ws):
+     result=extract(browser_ws,html)
+     assert not result["found"] and not result["text"]
+     assert result["web"] == [{"title": "参考ページ", "url": "https://example.com/article", "description": "内容の紹介"}]
++
++
++def test_single_evaluation_keeps_completed_quiet_text(browser_ws):
++    result = extract(browser_ws, region('<p>完成した本文</p>'), expression=OVERVIEW_SETTLED_SNAPSHOT_JS)
++    assert result["render_settled"] is True and result["text"] == "完成した本文"
++
++
++@pytest.mark.parametrize("change", [
++    "setTimeout(() => document.querySelector('p').textContent='後半の本文', 100);",
++    "setTimeout(() => document.querySelector('p').textContent='別文', 100);"
++    "setTimeout(() => document.querySelector('p').textContent='本文', 200);",
++    "setTimeout(() => {const root=document.querySelector('#m-x-content');root.replaceWith(root.cloneNode(true));}, 100);",
++])
++def test_local_quiet_window_rejects_streaming_same_length_rewrites_and_root_replacement(browser_ws, change):
++    expression = "(() => {" + change + "return " + OVERVIEW_SETTLED_SNAPSHOT_JS + ";})()"
++    result = extract(browser_ws, region('<p>本文</p>'), expression=expression)
++    assert result["render_settled"] is False
++
++
++def test_single_evaluation_still_rejects_completed_marker_with_animation(browser_ws):
++    html=region('<style>@keyframes reveal {from {opacity:.1} to {opacity:1}}</style>'
++                '<p style="animation:reveal 20s infinite">生成途中</p>')
++    result=extract(browser_ws,html, expression=OVERVIEW_SETTLED_SNAPSHOT_JS)
++    assert result["complete"] is True and result["busy"] and result["render_settled"] is False

@@ -2,6 +2,22 @@
 
 状態：2026-09-06、独立コンポーネントを実装。本体の会話・ワークショップ・音声経路には未接続。
 
+2026-09-08同意ゲート追加：Webを直接開かず、指定文で子どもの同意を確認→「ほな一緒にいこか！」→対応する発話IDの正常再生完了通知→Web起動の順にした。同意・生成完了・印字だけでは開かない。独立CLIは `/speech-completed` で明示的に完了を模擬し、本体音声へは未接続。関連202件＋32 subtests、Qwenの合成4会話で同意・拒否・撤回・条件つきを確認。[順序と実音声の未接続境界](research/language-overview-dialogue-2026-09-08.md#同意と案内音声の完了を待つweb起動)。
+
+2026-09-08待ち時間更新：ユーザーの指定で初回は8秒目の読み取り要求1回へ変更。1回のブラウザー内処理で0.4秒の本文安定を検査し、途中なら復帰時に同じタブだけ一度再読する。新規検索の再送はしない。Chrome側125件成功、Google実検索なし。[現在の読み取り契約](research/language-overview-dialogue-2026-09-08.md#初回に間に合わない概要)。
+
+2026-09-08追加：実検索は停止したまま `--virtual-web` と模擬Minecraft復帰を追加。初回に間に合わない概要の再読を、復帰時の「おかえり！ どうやった？」の配送後へ移した（前面イベント非対応時のみ従来の発話時fallback）。取得済み概要を一時文脈へ再生し、Qwenで4発話＋制御4件の1会話、本文引用一致2件を確認。関連168件＋30 subtests。制御・取得・生成の時間を分離し、未計測値を0秒扱いしない。**実OS前面検知・本体・音声には未接続**。実検索の完成時間の確定とは別の検証。[手順と境界](research/language-overview-dialogue-2026-09-08.md#追加仮想webとminecraft復帰の独立試験)。
+
+2026-09-08前段の記録：通常の `--web` は、子どもの問いをユーザー提案の関西弁の依頼文でGoogle通常検索へ渡す。AI概要・紹介文・取得失敗を分離し、子どもの報告や同じ話題の質問へ概要を入力する。当初は次の報告・質問時の再読を実装し、関連自動テストはドギド側144件＋30 subtests、Chrome側120件。実検索では初回の金床概要を取得し後続会話へ渡せたが、**新しい依頼文と再読を通した実概要取得は未確認**。ユーザーからロボット判定の報告があり実検索を停止した。詳細と残る問題は [今回の記録](research/language-overview-dialogue-2026-09-08.md)。以下の教材選定・裏の資料取得は旧試作で、現在は `--known-sources-only` の診断経路に残す。本体・workshop・音声への未接続は維持。
+
+2026-09-07追記：任意の `chrome-web` 接続を追加。資料不足・説明の不確実さ・明示依頼によるWeb検索、公式ページ本文の取得、子どもの報告との比較、先生への相談提案、冒険への復帰を独立経路で試せる。本体への接続は引き続き行っていない。GoogleのCAPTCHAと、既知URLからの本文取得成功を分けて記録する。[今回の試験記録](research/language-web-dialogue-evaluation-2026-09-07.md)。
+
+同日追加（当時の記録）：MCP単体では、通常Google検索のAI概要を約5秒・最大3回の確認で取得し、概要がなくても同じページの検索結果を返せるようにした。[取得方法と実測](research/chrome-web-ai-overview-2026-09-07.md)。独立対話経路への切替は上記2026-09-08更新を参照。
+
+同日・比較後の修正：検索済みレコードの `rules` と `machine_use` を定義と同じID内に保持。確定かなの音数は既存の川柳用計数関数を1回だけ使用し、一字の配当学年は検索済みの表の値から回答する。どちらも回答用のLLM再生成を挟まない。漢字の読みを推測して数えず、熟語全体の学年へも広げない。回答段階の不足は `missing_kind=evidence/context/none` に分け、本人の文脈不足は確認へ進める。旧形式の `partial + missing` だけではWebを発火しない。明示検索依頼とローカル資料ゼロの扱いは維持する。
+
+修正後も **本体・workshop・音声には未接続**。Qwenで54ターンを再確認し、数値11回答は全件正答。一方、文脈の誤分類・不要検索・意味説明の誤りは残る。[修正内容・再試験・残る問題](research/language-retrieval-comparison-2026-09-07.md#比較後の修正と再試験)。下記の84件は初回の記録であり、今回の関連自動テストは115件＋30 subtests。
+
 関連自動テスト84件が通過。実モデルで全21会話と修正後の対象3会話を確認したが、説明の付け足しなど品質上の問題が残る。[試験結果と未解決事項](research/language-dialogue-text-evaluation-2026-09-06.md)を参照。
 
 ## 何を変えたか
@@ -16,6 +32,7 @@ Minecraftの単語の有無だけで振り分けず、「その言葉につい�
 | 解釈 | 現在の発話・過去発話の引用とともに、対象・観点・解釈候補を提案 |
 | 確認 | 回答を変える曖昧さがある場合だけ一問。実際に返した確認文を次の解釈に渡す |
 | 検索 | 既存の国語DBと出典付きの短い補足資料。検索語・取得事実・欠損を記録 |
+| Web起動 | 明示同意と案内音声のID付き正常終了通知まで待つ。CLIの完了通知は手動の模擬入力 |
 | 説明 | 資料の説明と、子どもの例への適用を区別。根拠IDと未確認部分を返す |
 | 状態 | 通常／国語優先、未解決の問い、5往復までの対話。理解済みの学習記録は作らない |
 
@@ -60,12 +77,13 @@ python -m pytest tests/test_language_dialogue.py tests/test_structured_contracts
 
 ## 中断と範囲
 
-- `interrupt` は模擬的な優先割込み。生成中の返答を無効化し、保留中の問いは残す。
+- `interrupt` は模擬的な優先割込み。生成中の返答を無効化し、保留中の問いは残す。ただしWeb起動の未実行の同意・音声待ちは撤回し、古い完了通知で後から開かない。
 - 中断中の入力には `paused` を返し、モデルを呼ばない。隠れた待ち列は作らない。
 - `release` だけでは発話せず、次の本人の入力を待つ。
 - 生成処理の同時受付は `busy` として返却する。呼出元が再入力の扱いを決める。
 - 解釈・説明の生成は同期処理。割込みは結果の配送を止めるもので、GPU上の計算自体を強制停止するものではない。
 - 一時文脈は無活動5分で失効する試験用の既定値。子どもに適切な時間と検証した値ではなく、コンストラクタで変更可能。中断が長時間になった場合も無期限には保持しない。
+- Web資料を読んでいる間と報告中の文脈は、別の既定値で無活動30分保持する。読書中に通常対話の5分期限で消さないための試験値で、`research_ttl_seconds` で変更できる。理解済みの学習記録には変換しない。
 - 通常話題への変更は `handoff`。この試験コンポーネントはゲーム状態を知らないため、通常のゲーム返答や持ち替えを実行しない。
 
 本体へ接続する前に、既存の警告優先処理・入力保留・ワークショップとの入口の使い分けを確認する必要がある。本試験の模擬割込みだけで、実際の戦闘中断や音声配送が検証済みとはしない。
@@ -77,3 +95,63 @@ python -m pytest tests/test_language_dialogue.py tests/test_structured_contracts
 擬音語等の分類は [国立国語研究所が紹介する分類](https://www2.ninjal.ac.jp/Onomatope/column/nihongo_1.html)、英字の原稿用紙表記は [JICAの応募案内](https://www.jica.go.jp/cooperation/experience/essay/collect/n_files/00_qa.pdf) などに基づく。後者を全国の学校の絶対規則とはしない。
 
 教育基本語彙の選定レベルは学年ではなく、語の存在は語義の証明ではない。そのため本コンポーネントでは、それらを辞書定義として説明へ投影していない。アンデッドの一意の対義語、特定辞書のエンダー掲載有無、交易・交換・買い物の語義比較は資料不足を含む試験として残す。
+
+## Chromeで資料を読み、戻って話す（任意）
+
+`--web` がない限り、ブラウザもMCPも起動しない。ユーザーの [chrome-web-mcp-macos](https://github.com/yukincom/chrome-web-mcp-macos) を専用の仮想環境に置き、公式MCP SDKのstdio接続で使う。普段のChromeのプロフィールや本体設定、既存の汎用エージェント設定は変更しない。
+
+導入元の固定コミットと追加パッチは [chrome-web-source.json](../scripts/chrome-web-source.json)。設定を [裏で読む資料用](../scripts/chrome-web-config.json) と [子どもへの表示用](../scripts/chrome-web-child-config.json) に分ける。このチェックアウトには導入済み。他のチェックアウトで再現するときは、そのルートで通常のPython環境を有効にし、次を実行する。専用ディレクトリが既にある場合は上書きせず、導入元と版を確認する。
+
+```bash
+git clone https://github.com/yukincom/chrome-web-mcp-macos.git .dogido_tools/chrome-web-mcp-macos
+git -C .dogido_tools/chrome-web-mcp-macos checkout --detach 47d43f9d56d7c02774f73407e6b0410daaa55bc6
+git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-reviewed-url-and-ai-overview.patch
+git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-overview-reread.patch
+git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-eight-second-single-read.patch
+(cd .dogido_tools/chrome-web-mcp-macos && uv sync --frozen --python python)
+python -m pip install -e '.[web-research]'
+```
+
+Apple SiliconのMac、Google Chrome、既存のMLX会話モデルを想定する。モデルの自動取得はしない。通常の `--web` は表示用の専用ChromeにGoogle検索を開く。試験終了時に所有するMCP接続と専用Chromeを終了する。以下の非表示根拠・確認済み教材の仕組みは旧試作の診断用。
+
+追加パッチは `fetch_url` の任意引数 `expected_url`。移動先と表示直前のURLが確認済み教材と一致するか検査し、不一致ならタブを前面に出さず閉じる。表示用クライアントはこの引数を持つ版だけに接続する。子ども自身の後続クリックや表示後の自動遷移を止める仕組みではなく、ブラウザ全体の閲覧制限ではない。
+
+```bash
+python -m dogido_server.language_dialogue --web --interactive --school-grade 3 --output logs/language-dialogue/web-interactive-01
+python -m dogido_server.language_dialogue --web --cases tests/fixtures/language_dialogue/web_cases.json --output logs/language-dialogue/web-01
+```
+
+GoogleがCAPTCHAで止まっているとき、本文取得と対話だけを分けて確認するには `--known-sources-only` を併用する。この診断モードはGoogleを呼ばず、ローカル資料に記録済みの公式URLだけを読む。新しい出典を発見できたことにはならない。
+
+### 旧試作：既知資料の診断と、戻った後の会話
+
+1. 曖昧な問いには先に一問確認する。国語の言葉が出ただけでは検索しない。
+2. ローカル資料がない、資料があってもモデルが説明を部分的／不明とする、または本人がWeb検索を頼んだ場合に「ちょっと調べてみよか！」を通知する。資料で説明できたときや、単なるJSON不正を理由には外部検索しない。
+3. `google_search` で検索し、`fetch_url` で本文を取得する。検索結果の紹介文だけを読んだことにはしない。試験では `go.jp`、国立国語研究所、国立天文台のドメインに限定し、最終URLも確認する。個人塾や個人作成DBは対象外。
+4. 裏で読む根拠と、子どもに表示する教材を区別する。表示先は [個別教材一覧](../dogido_server/language_dialogue/child_resources.json) の対象学年・質問対象・観点が合う確認済みページのみ。子ども用の本文もドギドに渡す。表示できたときは先回りして解説せず報告を待つ。裏の資料しか読めなかった場合は `reference_only` とし、「一人で読みやすいページはまだ見つけられてへん」と伝える。大人向け資料を代わりに表示しない。
+5. 報告の意図を本文なしで抽出し、報告だった場合だけ本文を使って読み取りを返す。間違った説明を、本人が「分からない」と言ったことにしない。
+6. 子どもがモヤっとすると表明したら先生への相談と冒険への復帰を提案する。肯定や明示的な復帰で通常モードへ戻す。「まだ考えたい」なら続ける。相槌だけで理解済みとは記録しない。
+7. 通常モードへ戻るとWeb本文・読み取り・学習中の対話履歴を一時文脈から外す。戻り先に渡すのは `return_context.researched_topic` の直近の質問1件（最大160文字）のみ。取消・期限切れでも同じ。調べたあと別の問いへ移っても、その問いで新しい資料を取得するまでは前の調査話題を失わない。通常会話側への実接続や長期記憶への保存はまだ行わない。
+
+現時点の自動表示先は国土地理院の小学3・4年向け「方位」「地図記号」の2ページ。小学2年向けとは確認していない。東京ベーシック・ドリルと国語研のこどもパンフレットは、ユーザーの指摘を受けて子どもへの表示候補から除外し、理由だけを `excluded_records` に残す。教師が子どもの教育に使う資料と、子ども本人が疑問を調べるために読む資料を区別し、名称の「こども」や対象学年だけで選ばない。文科省のリンク集には民間教材もあるため、掲載元だけでリンク先を一括採用しない。これらの公的資料があらゆる意味で中立と保証するのではなく、運営元・対象読者・対象学年・販売誘導を別々に確認する。
+
+検索エンジンには対象語と短い検索語を送り、会話履歴・ゲーム状態・記憶一式を送らない。ただし検索語自体はローカルモデルの抽出結果であり、任意の固有名詞を完全に匿名化する機構ではない。試験入力は全て人為的な例文。
+
+### 読めた証拠と、未確認のこと
+
+- `WEB` ログは検索開始、検索失敗、ページ取得開始、本文取得を区別する。本文取得ではURL・文字数・ハッシュ・ページIDを残す。
+- `turns.jsonl` の `web.pages` に実本文、`web.context_page_ids` に保持した本文ID、報告ターンの `context_page_ids` に実際に読解へ渡した本文IDを記録する。各ページの `use` は `background_reference`／`child_resource`。`child_status` は表示成功と未発見・取得失敗を区別する。試験ログの本文は検証用に残るが、通常会話へ読み戻さない。
+- `research_reading` と `source_quotes` はモデルの読み取りと根拠引用。本文との引用一致は確認するが、意味の正しさを保証するものではない。出典は発言外の記録へ分ける。
+- GoogleがCAPTCHAになったら同じ実行中の再検索を止める。既知URLは直接読める場合があるため、`search_status` と本文取得の `status` を別々に見る。
+- PDFはこの経路では本文抽出せず、その理由を記録する。HTMLは根拠資料最大2ページと子ども用1ページ、各15,000文字まで。`coverage=extracted_text_only` とし、図・動画の内容を読めた扱いにしない。サイト全体や辞書全体を読んだわけではなく、取得した資料が問いを解決できるかは別の確認事項。
+- 独立対話経路へのGoogle AI概要の受け渡しは2026-09-08に実装。Geminiアプリとの継続対話の開始・操作は未実装。子どもが別画面で何を読んだかは推測しない。
+- 子どもが後から別のリンクへ進んだ際の追跡・読み直しも未実装。現在の「両方読める」は、この経路で取得した根拠資料と表示教材の本文を指す。
+- 4件の擬音語等の試験では、まだ適した子ども用教材が登録されていないため初回は `reference_only`。後続の報告は外で学んできたことを想定して人為的に入力しており、児童に適切な教材を選べたという試験ではない。
+- CLIの `/cancel` は対話と対話の間に読む。同期処理中に割り込む入力UIではない。処理中に終了する場合は `Ctrl+C`。呼出元からの `cancel()`／`interrupt()` は処理中でも結果を無効化し、Web待機も取消を監視して所有接続を終了する。GPU計算の強制停止とは別。
+
+関連試験：
+
+```bash
+python -m pytest tests/test_language_dialogue.py tests/test_language_web_research.py tests/test_structured_contracts.py -q
+python -m dogido_server.language_dialogue --web --known-sources-only --cases tests/fixtures/language_dialogue/web_routing_cases.json --output logs/language-dialogue/web-routing-01
+```

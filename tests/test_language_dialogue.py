@@ -82,6 +82,129 @@ def test_explicit_question_search_reply_and_raw_separated():
     assert result["references"][0]["id"] == "grade:三"
 
 
+def test_current_target_not_rejected_for_contextual_label_alone():
+    llm = ScriptedLLM(interpretation(target_status="contextual"), reply())
+    row = LanguageDialogue(llm, SearchSpy()).turn("漢字の三", turn_id="t1")
+    assert row["status"] == "answer"
+
+
+@pytest.mark.parametrize("target, grade", [("泳", 3), ("海", 2), ("3", 1), ("３", 1)])
+def test_grade_answer_reuses_one_actual_lookup_without_answer_generation(monkeypatch, target, grade):
+    from dogido_server.language_dialogue import retrieval
+
+    calls = []
+    original = retrieval.get_kanji_profile
+
+    def tracked(character, **kwargs):
+        calls.append(character)
+        return original(character, **kwargs)
+
+    monkeypatch.setattr(retrieval, "get_kanji_profile", tracked)
+    text = f"漢字の{target}は何年生？"
+    llm = ScriptedLLM(interpretation(text, target=target, search_terms=[target]))
+    dialogue = LanguageDialogue(llm)
+    row = dialogue.turn(text, turn_id="t1")
+    char = "三" if target in {"3", "３"} else target
+    assert calls == [char]
+    assert row["reply"] == f"「{char}」は小学{grade}年生で習う漢字やで。"
+    assert row["answer_origin"] == "code"
+    assert row["references"][0]["allocation"]["school_grade"] == grade
+    assert row["references"][0]["sources"]
+    assert len(llm.requests) == 1
+    assert dialogue.turn(text, turn_id="t1")["status"] == "duplicate"
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("target, count", [("きゃんぷ", 3), ("コーヒー", 4), ("きって", 3), ("あいうえお", 5)])
+def test_mora_reuses_counter_without_search_or_answer_generation(monkeypatch, target, count):
+    from dogido_server.language_dialogue import verified_answers
+
+    original = verified_answers.count_japanese_sounds
+    counted = []
+
+    def tracked(reading):
+        counted.append(reading)
+        return original(reading)
+
+    monkeypatch.setattr(verified_answers, "count_japanese_sounds", tracked)
+    text = f"『{target}』は何音？"
+    search = SearchSpy()
+    llm = ScriptedLLM(interpretation(text, target=target, facet="mora_count", search_terms=[target]))
+    row = LanguageDialogue(llm, search).turn(text, turn_id="t1")
+    assert row["reply"] == f"「{target}」は{count}音やで。"
+    assert row["answer_origin"] == "code" and row["search"]["status"] == "computed"
+    assert len(counted) == len(llm.requests) == 1
+    assert not search.calls
+
+
+@pytest.mark.parametrize("target, quoted", [
+    ("きゃんぷ", "別の言葉"), ("学校", "学校"), ("きゃ/ん/ぷ", "きゃ/ん/ぷ"),
+    ("ゃん", "ゃん"), ("ゑ", "ゑ"), ("くゝ", "くゝ"),
+])
+def test_uncertain_reading_is_confirmed_before_computing_or_searching(target, quoted):
+    search = SearchSpy()
+    text = f"『{quoted}』は何音？"
+    llm = ScriptedLLM(interpretation(text, target=target, facet="mora_count", search_terms=[target]))
+    row = LanguageDialogue(llm, search).turn(text, turn_id="t1")
+    assert row["status"] == "clarify"
+    assert not search.calls and len(llm.requests) == 1
+
+
+def test_compound_grade_is_not_replaced_by_one_character_answer():
+    from dogido_server.language_dialogue.contracts import Interpretation
+    from dogido_server.language_dialogue.verified_answers import verified_reply
+
+    facts = LocalDialogueSearch().search(["海", "水"], facet="grade", target="海水").facts
+    assert verified_reply(Interpretation.model_validate(interpretation(target="海水")), facts) is None
+
+
+def test_computed_reply_uses_existing_interruption_boundary(monkeypatch):
+    from dogido_server.language_dialogue import verified_answers
+
+    text = "『きゃんぷ』は何音？"
+    llm = ScriptedLLM(interpretation(text, facet="mora_count", target="きゃんぷ"))
+    dialogue = LanguageDialogue(llm, SearchSpy())
+    original = verified_answers.count_japanese_sounds
+
+    def interrupted(reading):
+        result = original(reading)
+        dialogue.interrupt()
+        return result
+
+    monkeypatch.setattr(verified_answers, "count_japanese_sounds", interrupted)
+    row = dialogue.turn(text, turn_id="t1")
+    assert row["status"] == "interrupted" and not row["reply"]
+    assert not any(t["role"] == "assistant" for t in dialogue.history)
+    assert len(llm.requests) == 1
+
+
+def test_core_rules_and_application_limits_reach_reply_without_extra_search(monkeypatch):
+    from dogido_server.language_dialogue import retrieval
+
+    original = retrieval.search_japanese_knowledge
+    records, calls = [], []
+
+    def tracked(term, **kwargs):
+        found = original(term, **kwargs)
+        calls.append(term)
+        records.extend(deepcopy(found))
+        return found
+
+    monkeypatch.setattr(retrieval, "search_japanese_knowledge", tracked)
+    llm = ScriptedLLM(interpretation("短歌の決まりは？", target="短歌", facet="classification", search_terms=["短歌"]), {})
+    LanguageDialogue(llm).turn("短歌の決まりは？", turn_id="t1")
+    facts = {f["id"]: f for f in llm.requests[1].details["facts"]}
+    assert calls == ["短歌"]
+    checked = 0
+    for record in records:
+        if record.get("rules") and record["id"] in facts:
+            fact = facts[record["id"]]
+            assert fact["rules"] == record["rules"]
+            assert fact["machine_use"] == record["machine_use"]
+            checked += 1
+    assert checked > 0
+
+
 def test_clarification_precedes_search_and_yes_uses_actual_question():
     first = interpretation(
         "三は",
@@ -114,7 +237,7 @@ def test_clarification_precedes_search_and_yes_uses_actual_question():
         {"evidence": []},
         {"evidence": [{"turn_id": "t1", "quote": "発話にない"}]},
         {"evidence": [{"turn_id": "future", "quote": "漢字の三"}]},
-        {"target_status": "contextual"},
+        {"target_status": "contextual", "target": "海"},
         {"__dogido_status": "schema_contract_error"},
         {"unexpected": True},
     ],

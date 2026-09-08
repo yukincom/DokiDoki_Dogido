@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "note": "検索を本人が明示しない場合の発火確認。期待値はモデルに渡さない。known-sources-onlyでは未知URLを新規検索できないため、検索発火と本文取得の成否を分ける。",
+  "cases": [
+    {"id": "web_route_known", "origin": "synthetic_child_dialogue", "turns": [
+      {"text": "漢字の『三』は何年生で習うの？", "expect_status": ["answer"], "expect_web_trigger": ""}
+    ]},
+    {"id": "web_route_ambiguous", "origin": "synthetic_child_dialogue", "turns": [
+      {"text": "三は何年生で習うの？", "expect_status": ["clarify"], "expect_web_trigger": ""}
+    ]},
+    {"id": "web_route_missing", "origin": "synthetic_child_dialogue", "turns": [
+      {"text": "火星の夕焼けは、なんで青いの？", "expect_web_trigger": "no_local_facts"}
+    ]},
+    {"id": "web_route_uncertain", "origin": "synthetic_child_dialogue", "turns": [
+      {"text": "金床がかなとこって読むのは分かったけど、その音の語源は何なの？", "expect_web_trigger": "uncertain_reply"}
+    ]}
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "consent-and-playback",
+      "origin": "合成対話。自然な同意と明示的な模擬再生完了の後に仮想Webを開く。実音声・Web・ゲームなし。",
+      "turns": [
+        {"text": "金床って、なんで『かなとこ』って読むの？ 調べてみて。", "expect_status": ["web_consent_requested"]},
+        {"text": "うん、ウェブを開いて一緒に見てみたい！", "expect_status": ["web_waiting_playback"]},
+        {"control": "speech_completed", "expect_status": ["awaiting_report"]},
+        {"control": "minecraft_away", "expect_status": ["observed"]},
+        {"control": "minecraft_active", "expect_status": ["welcome_back"], "expect_refresh_status": ["context_ready"]},
+        {"text": "かなは金属で、とこは台ってことなんやね。", "expect_status": ["research_reflection"], "expect_context": true},
+        {"text": "わかった。もう冒険に戻ろう。", "expect_status": ["handoff"], "expect_mode": "normal"}
+      ]
+    },
+    {
+      "id": "consent-declined",
+      "origin": "合成対話。拒否後に音声完了を模擬しても開かない。",
+      "turns": [
+        {"text": "金床の読み方の由来を調べてみて。", "expect_status": ["web_consent_requested"]},
+        {"text": "いや、今は開かないでおこう。", "expect_status": ["web_declined"]},
+        {"control": "speech_completed", "expect_status": ["no_speech_to_finish"]}
+      ]
+    },
+    {
+      "id": "consent-withdrawn-during-speech",
+      "origin": "合成対話。同意後でも案内の再生中に撤回したら古い完了通知は無効。",
+      "turns": [
+        {"text": "金床の読み方の由来を調べてみて。", "expect_status": ["web_consent_requested"]},
+        {"text": "ええで", "expect_status": ["web_waiting_playback"]},
+        {"text": "やっぱり、開かないで。", "expect_status": ["web_declined"]},
+        {"control": "speech_completed", "expect_status": ["stale_playback"]}
+      ]
+    },
+    {
+      "id": "conditional-is-not-consent",
+      "origin": "合成対話。条件付きの返事を無条件の起動同意へ昇格しない。",
+      "turns": [
+        {"text": "金床の読み方の由来を調べてみて。", "expect_status": ["web_consent_requested"]},
+        {"text": "安全なら開いてもいいけど。", "expect_status": ["web_consent_requested"]},
+        {"control": "speech_completed", "expect_status": ["no_speech_to_finish"]},
+        {"text": "やめとく", "expect_status": ["web_declined"]}
+      ]
+    }
+  ]
+}

@@ -21,6 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web-research = ["mcp==1.28.0"]
 # テスト・開発用（本番サーバー起動だけなら不要）
 dev = [
   "pytest>=8.0",

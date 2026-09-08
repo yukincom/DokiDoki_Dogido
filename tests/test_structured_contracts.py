@@ -80,6 +80,15 @@ class StructuredContractTests(unittest.TestCase):
                 {"status": "unsupported", "text": "資料で確かめよか。", "fact_ids": [],
                  "application": "", "missing": "読みの根拠"}, {},
             ),
+            "language_research_intent": (
+                {"intent": "uncertain", "evidence": "まだ分からない"}, {},
+            ),
+            "language_research_reading": (
+                {"perspective": "", "quotes": []}, {},
+            ),
+            "language_web_consent": (
+                {"intent": "uncertain", "evidence": "ちょっと待って", "confidence": 0.9}, {},
+            ),
             "assist_select_sword_intent": (
                 {
                     "intent": "other",

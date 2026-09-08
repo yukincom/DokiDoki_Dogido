@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "note": "人為的に作った低学年程度の会話。児童データではない。期待値と後続発話はモデルへ渡さない。4種類の取り違えを同じ分類資料で比べる開発用試験で、未知問題への正答率測定ではない。この資料は根拠専用で子どもへ表示しない。外で学んだ理解の報告を注入する配線試験で、適切な送り先の発見を証明しない。",
+  "cases": [
+    {
+      "id": "web_01_feeling_and_sound",
+      "origin": "synthetic_child_dialogue",
+      "turns": [
+        {
+          "text": "擬音語と擬態語ってどう違うの？ネットで資料を見て確かめたい。",
+          "expect_status": [
+            "web_consent_requested"
+          ]
+        },
+        {
+          "text": "ええで",
+          "expect_status": [
+            "web_waiting_playback"
+          ]
+        },
+        {
+          "control": "speech_completed",
+          "expect_status": [
+            "reference_only"
+          ],
+          "expect_web_read": true
+        },
+        {
+          "text": "わくわくは、むねがワクワクって鳴る音のことなんだね。",
+          "expect_status": [
+            "research_reflection"
+          ],
+          "expect_context": true
+        },
+        {
+          "text": "うーん、気持ちと音って言われても、まだモヤっとするな。",
+          "expect_status": [
+            "return_offered"
+          ]
+        },
+        {
+          "text": "うん、先生にも聞いてみる。そろそろ冒険に戻ろう。",
+          "expect_status": [
+            "handoff"
+          ],
+          "expect_mode": "normal"
+        }
+      ]
+    },
+    {
+      "id": "web_02_texture_and_sound",
+      "origin": "synthetic_child_dialogue",
+      "turns": [
+        {
+          "text": "擬態語って、たとえばどんな言葉？ネットで調べてみたい。",
+          "expect_status": [
+            "web_consent_requested"
+          ]
+        },
+        {
+          "text": "ええで",
+          "expect_status": [
+            "web_waiting_playback"
+          ]
+        },
+        {
+          "control": "speech_completed",
+          "expect_status": [
+            "reference_only"
+          ],
+          "expect_web_read": true
+        },
+        {
+          "text": "つるつるは、すべったときに聞こえる音をまねした言葉なんだね。",
+          "expect_status": [
+            "research_reflection"
+          ],
+          "expect_context": true
+        },
+        {
+          "text": "でも音みたいに聞こえる言葉だし、まだよく分からないや。",
+          "expect_status": [
+            "return_offered"
+          ]
+        },
+        {
+          "text": "じゃあ先生に聞いてみる。また冒険しよう。",
+          "expect_status": [
+            "handoff"
+          ],
+          "expect_mode": "normal"
+        }
+      ]
+    },
+    {
+      "id": "web_03_voice_and_sound",
+      "origin": "synthetic_child_dialogue",
+      "turns": [
+        {
+          "text": "擬声語と擬音語はどう違うの？資料をネットで読んでみたいな。",
+          "expect_status": [
+            "web_consent_requested"
+          ]
+        },
+        {
+          "text": "ええで",
+          "expect_status": [
+            "web_waiting_playback"
+          ]
+        },
+        {
+          "control": "speech_completed",
+          "expect_status": [
+            "reference_only"
+          ],
+          "expect_web_read": true
+        },
+        {
+          "text": "わんわんは犬が本当にしゃべってる言葉だから、まねした言葉には入らないんだね。",
+          "expect_status": [
+            "research_reflection"
+          ],
+          "expect_context": true
+        },
+        {
+          "text": "本物の声なのにまねっていうのが、なんかモヤっとする。",
+          "expect_status": [
+            "return_offered"
+          ]
+        },
+        {
+          "text": "まだ冒険には戻りたくない。もうちょっと自分で考えたい。",
+          "expect_status": [
+            "research_continue"
+          ],
+          "expect_mode": "language"
+        },
+        {
+          "text": "今日はここまでにしよう。木を集めに行こう。",
+          "expect_status": [
+            "handoff"
+          ],
+          "expect_mode": "normal"
+        }
+      ]
+    },
+    {
+      "id": "web_04_word_and_usage",
+      "origin": "synthetic_child_dialogue",
+      "turns": [
+        {
+          "text": "擬音語って、使い方によって種類が変わるの？ネットで資料を見たい。",
+          "expect_status": [
+            "web_consent_requested"
+          ]
+        },
+        {
+          "text": "ええで",
+          "expect_status": [
+            "web_waiting_playback"
+          ]
+        },
+        {
+          "control": "speech_completed",
+          "expect_status": [
+            "reference_only"
+          ],
+          "expect_web_read": true
+        },
+        {
+          "text": "どんどんは太鼓の音だから、勉強がどんどん進むときも音がしてるってことだね。",
+          "expect_status": [
+            "research_reflection"
+          ],
+          "expect_context": true
+        },
+        {
+          "text": "同じ言葉なのに音だったり音じゃなかったり、まだ分かったような分からないような。",
+          "expect_status": [
+            "return_offered"
+          ]
+        },
+        {
+          "text": "学校で聞いてみるね。今は冒険に戻ろう。",
+          "expect_status": [
+            "handoff"
+          ],
+          "expect_mode": "normal"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,771 @@
+diff --git a/src/chrome_web_mcp/server.py b/src/chrome_web_mcp/server.py
+index 51c78a5..e301a82 100644
+--- a/src/chrome_web_mcp/server.py
++++ b/src/chrome_web_mcp/server.py
+@@ -1408,7 +1408,8 @@ def _smart_cut(text: str, limit: int) -> tuple[str, bool]:
+     return window, True
+ 
+ 
+-async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
++async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expected_url: str | None = None,
++                      wait_for_ai_overview: bool = False) -> dict:
+     """Render a public URL in a per-call tab and return its readable content.
+ 
+     Each call gets its own tab, so concurrent fetches are parallel-safe.
+@@ -1418,14 +1419,21 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
+     proxy blocks non-public connections before sending any upstream bytes,
+     including redirects, subresources, WebSockets, and DNS rebinding.
+     """
++    fetch_started = time.monotonic()
+     # Validate the requested URL up front (fail-closed).
++    if wait_for_ai_overview:
++        from .google_overview import is_standard_google_search, OVERVIEW_SNAPSHOT_JS, wait_for_overview
++        if not is_standard_google_search(url):
++            raise ValueError("wait_for_ai_overview requires a normal HTTPS Google /search?q= URL without udm or tbm")
+     validated = _validate_public_url(url)
++    expected = _validate_public_url(expected_url).split("#", 1)[0] if expected_url else None
+     async with _ENSURE_LOCK:
+         browser_ws = await asyncio.to_thread(_RUNTIME.ensure)
+     browser = await websockets.connect(browser_ws, max_size=MAX_CDP_MESSAGE)
+     page: Any = None
+     target_id: str | None = None
+     keep_tab = False
++    activated = False
+     try:
+         created = await _cdp_call(
+             browser,
+@@ -1443,15 +1451,54 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
+         await _cdp_call(page, "Runtime.enable")
+         await _cdp_call(page, "Page.navigate", {"url": validated})
+         await _wait_ready(page)
++        overview = None
++        if wait_for_ai_overview:
++            async def read_overview():
++                snapshot = await _evaluate(page, OVERVIEW_SNAPSHOT_JS)
++                if not isinstance(snapshot, dict):
++                    raise RuntimeError("Invalid AI overview snapshot")
++                current_url = snapshot.get("url", "")
++                snapshot["challenge"] = _is_google_challenge(current_url, snapshot.pop("page_text", ""))
++                snapshot["navigation_changed"] = (
++                    not is_standard_google_search(current_url)
++                    or urllib.parse.parse_qs(urllib.parse.urlsplit(current_url).query).get("q")
++                    != urllib.parse.parse_qs(urllib.parse.urlsplit(validated).query).get("q")
++                )
++                return snapshot
++            initial_url = str(await _evaluate(page, "location.href"))
++            _validate_public_url(initial_url)
++            if expected and initial_url.split("#", 1)[0] != expected:
++                raise ValueError("reviewed_url_changed")
++            if is_standard_google_search(initial_url) and _RUNTIME.display_mode in {"native", "xephyr"}:
++                # Google may defer AI rendering while the search tab is hidden.
++                # Show this verified search before waiting, not only afterwards.
++                await _cdp_call(browser, "Target.activateTarget", {"targetId": target_id})
++                activated = True
++            overview = await wait_for_overview(read_overview, started=fetch_started)
+         # Output policy; the proxy enforces network policy before connection.
+         final_url = str(await _evaluate(page, "location.href"))
+         _validate_public_url(final_url)
++        if expected and final_url.split("#", 1)[0] != expected:
++            raise ValueError("reviewed_url_changed")
+         payload: dict = {
+             "url": final_url,  # kept for backward compatibility
+             "requested_url": validated,
+             "final_url": final_url,
+             "redirected": validated != final_url,
+         }
++        if overview is not None:
++            full_overview = overview["text"]
++            overview["text"], overview["truncated"] = _smart_cut(full_overview, char_limit)
++            overview["total_chars"] = len(full_overview)
++            payload["web"] = overview.pop("web", [])
++            payload["ai_overview"] = overview
++            # Only the captured overview is answer data. Do not extract the
++            # entire SERP again (hidden error UI and unrelated result snippets).
++            if expected:
++                payload["expected_url_verified"] = True
++            keep_tab = (_RUNTIME.display_mode in {"native", "xephyr"} and activated
++                        and overview["status"] != "navigation_changed")
++            return payload
+         if format == "text":
+             raw = await _read_page_string(page, _FETCH_TEXT_JS)
+             data = json.loads(raw or "{}")
+@@ -1515,25 +1562,40 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
+             else:  # links: plain text plus follow-up crawl targets
+                 entry["text"] = cut
+             payload.update(entry)
+-        if _RUNTIME.display_mode in {"native", "xephyr"}:
+-            await _cdp_call(browser, "Target.activateTarget", {"targetId": target_id})
++        if expected:
++            current_url = str(await _evaluate(page, "location.href"))
++            if current_url.split("#", 1)[0] != expected:
++                raise ValueError("reviewed_url_changed")
++            payload["expected_url_verified"] = True
++        if _RUNTIME.display_mode in {"native", "xephyr"} and (overview is None or overview["status"] != "navigation_changed"):
++            if not activated:
++                await _cdp_call(browser, "Target.activateTarget", {"targetId": target_id})
+             keep_tab = True
+         return payload
+     finally:
+-        if page is not None:
++        async def cleanup():
++            if page is not None:
++                try:
++                    await page.close()
++                except Exception:
++                    pass
++            if target_id is not None and not keep_tab:
++                try:
++                    await _cdp_call(browser, "Target.closeTarget", {"targetId": target_id})
++                except Exception:
++                    pass
+             try:
+-                await page.close()
++                await browser.close()
+             except Exception:
+                 pass
+-        if target_id is not None and not keep_tab:
++        if wait_for_ai_overview:
+             try:
+-                await _cdp_call(browser, "Target.closeTarget", {"targetId": target_id})
+-            except Exception:
++                await asyncio.wait_for(cleanup(), .25)
++            except asyncio.TimeoutError:
++                # The per-session owner still closes its Chrome on shutdown.
+                 pass
+-        try:
+-            await browser.close()
+-        except Exception:
+-            pass
++        else:
++            await cleanup()
+ 
+ 
+ @app.list_tools()
+@@ -1587,7 +1649,12 @@ async def list_tools() -> list[types.Tool]:
+                 "paywalled-after-consent layouts, etc.). Parallel calls are safe; "
+                 "each fetch uses its own tab. In visible mode, fetched pages stay open "
+                 "and are selected so the user can view images and the original layout. "
+-                "char_limit caps the returned text."
++                "char_limit caps the returned text. For Google AI Overviews, pass a normal "
++                "https://www.google.com/search?q=... URL and wait_for_ai_overview:true. "
++                "This polls the same page at 4, 4.5 and 5 seconds from fetch start "
++                "and returns the ai_overview snapshot, ordinary web results, and URL metadata. "
++                "No more than three polls; the fetch budget is 5.5 seconds including DOM reads, plus cancellation cleanup. "
++                "If no overview completes, use web results for follow-up link reading; do not speak the status."
+             ),
+             inputSchema={
+                 "type": "object",
+@@ -1596,6 +1663,14 @@ async def list_tools() -> list[types.Tool]:
+                         "type": "string",
+                         "description": "Public http(s) URL to fetch (no credentials, no localhost).",
+                     },
++                    "expected_url": {
++                        "type": "string",
++                        "description": "Optional exact reviewed URL. Check after navigation and again before activating the tab; close mismatches without activating.",
++                    },
++                    "wait_for_ai_overview": {
++                        "type": "boolean", "default": False,
++                        "description": "On a normal HTTPS Google search URL, poll at 4/4.5/5 seconds for a settled AI answer. Return data.ai_overview and data.web from the same page. Without an overview, web results remain usable. Status is code-only, not dialogue text. No repeat searches. Omit udm and tbm from the URL.",
++                    },
+                     "char_limit": {
+                         "type": "integer",
+                         "description": "Maximum characters of readable text to return.",
+@@ -1705,7 +1780,26 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+                 raise ValueError("char_limit must be an integer from 100 to 200000")
+             if format not in ("text", "markdown", "links"):
+                 raise ValueError("format must be one of text, markdown, links")
+-            payload = {"success": True, "data": await _fetch_page(url.strip(), char_limit, format)}
++            expected_url = arguments.get("expected_url")
++            if expected_url is not None and (not isinstance(expected_url, str) or not expected_url.strip() or len(expected_url) > 2048):
++                raise ValueError("expected_url must be a nonempty URL of at most 2048 characters")
++            checked = {"expected_url": expected_url.strip()} if expected_url is not None else {}
++            wait_for_ai = arguments.get("wait_for_ai_overview", False)
++            if not isinstance(wait_for_ai, bool):
++                raise ValueError("wait_for_ai_overview must be a boolean")
++            if wait_for_ai:
++                checked["wait_for_ai_overview"] = True
++            fetch = _fetch_page(url.strip(), char_limit, format, **checked)
++            data = await asyncio.wait_for(fetch, 5.5) if wait_for_ai else await fetch
++            ready = not wait_for_ai or data.get("ai_overview", {}).get("status") == "complete" or bool(data.get("web"))
++            payload = {"success": ready, "data": data}
++            if not ready:
++                # A code-owned failure, not an answer or an error sentence to
++                # feed to the dialogue LLM. Do not leak the SERP's error text.
++                overview = data.get("ai_overview", {"status": "missing", "text": ""})
++                payload["data"] = {"ai_overview": overview, "web": data.get("web", [])}
++                if overview.get("status") == "challenge":
++                    payload["captcha_required"] = True
+         elif name == "health_check":
+             if arguments:
+                 raise ValueError("health_check takes no arguments")
+@@ -1713,9 +1807,16 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+         else:
+             raise ValueError(f"Unknown tool: {name}")
+     except CaptchaRequired as exc:
+-        payload = {"success": False, "error": str(exc), "captcha_required": True}
++        if name == "fetch_url" and arguments.get("wait_for_ai_overview") is True:
++            payload = {"success": False, "data": {"ai_overview": {"status": "challenge", "text": "", "links": []}}, "captcha_required": True}
++        else:
++            payload = {"success": False, "error": str(exc), "captcha_required": True}
+     except Exception as exc:
+-        payload = {"success": False, "error": str(exc)}
++        if name == "fetch_url" and arguments.get("wait_for_ai_overview") is True:
++            status = "timeout" if isinstance(exc, asyncio.TimeoutError) else "fetch_error"
++            payload = {"success": False, "data": {"ai_overview": {"status": status, "text": "", "links": []}}}
++        else:
++            payload = {"success": False, "error": str(exc)}
+     return [types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))]
+ 
+ 
+diff --git a/tests/test_server.py b/tests/test_server.py
+index 7c6242d..10fdaca 100644
+--- a/tests/test_server.py
++++ b/tests/test_server.py
+@@ -231,7 +231,8 @@ def test_build_results_deduplicates_and_honors_limit():
+ 
+ @pytest.mark.parametrize("mode", ["native", "xephyr", "headless", "xvfb"])
+ @pytest.mark.parametrize("fail", [False, True])
+-def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fail):
++@pytest.mark.parametrize("reviewed", ["none", "matching", "redirect", "late_redirect"])
++def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fail, reviewed):
+     navigated = []
+     created = []
+     closed = []
+@@ -279,9 +280,13 @@ def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fa
+         return {}
+ 
+     nav_by_conn: dict = {}
++    location_reads: dict = {}
+ 
+     async def fake_evaluate(conn, expr):
+         if "location.href" in expr:
++            location_reads[id(conn)] = location_reads.get(id(conn), 0) + 1
++            if reviewed == "redirect" or (reviewed == "late_redirect" and location_reads[id(conn)] > 1):
++                return "https://unreviewed.example/"
+             return nav_by_conn.get(id(conn), "https://example.com/")
+         if "outerHTML" in expr:
+             return "<html><head><title>t</title></head><body><p>hello</p></body></html>"
+@@ -316,16 +321,19 @@ def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fa
+ 
+     async def run_two():
+         return await asyncio.gather(
+-            server._fetch_page("https://one.example/a", 500),
+-            server._fetch_page("https://two.example/b", 500),
++            server._fetch_page("https://one.example/a", 500, expected_url=None if reviewed == "none" else "https://one.example/a"),
++            server._fetch_page("https://two.example/b", 500, expected_url=None if reviewed == "none" else "https://two.example/b"),
+             return_exceptions=True,
+         )
+ 
+     first, second = asyncio.run(run_two())
+     assert len(set(created)) == 2
+-    visible_success = mode in {"native", "xephyr"} and not fail
++    visible_success = mode in {"native", "xephyr"} and not fail and reviewed in {"none", "matching"}
+     assert set(activated) == (set(created) if visible_success else set())
+     assert set(closed) == (set() if visible_success else set(created))
++    if reviewed == "redirect" or (reviewed == "late_redirect" and not fail):
++        assert isinstance(first, ValueError) and isinstance(second, ValueError)
++        return
+     if fail:
+         assert isinstance(first, RuntimeError) and isinstance(second, RuntimeError)
+         return
+@@ -333,6 +341,7 @@ def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fa
+     assert first["requested_url"] == "https://one.example/a"
+     assert first["redirected"] is False
+     assert first["total_chars"] == len("hello")
++    assert first.get("expected_url_verified", False) is (reviewed == "matching")
+     assert in_section["max"] == 2
+ 
+ 
+diff --git a/src/chrome_web_mcp/google_overview.py b/src/chrome_web_mcp/google_overview.py
+new file mode 100644
+--- /dev/null
++++ b/src/chrome_web_mcp/google_overview.py
+@@ -0,0 +1,140 @@
++"""Read a rendered Google AI Overview without treating the SERP as the answer."""
++
++import asyncio
++import time
++from urllib.parse import parse_qs, urlsplit
++
++
++def is_standard_google_search(url: str) -> bool:
++    from .server import _is_google_host
++
++    parsed = urlsplit(url)
++    query = parse_qs(parsed.query)
++    return (parsed.scheme == "https" and _is_google_host(parsed.hostname)
++            and parsed.path == "/search" and bool(query.get("q"))
++            and not query.get("udm") and not query.get("tbm"))
++
++
++# The heading, m-x-content region and data-rao completion marker were observed
++# together on Google's rendered Japanese search page. Unknown layouts are not
++# replaced with the entire search results body.
++OVERVIEW_SNAPSHOT_JS = r"""(() => {
++ const visible = e => {
++   if (!e || e.closest('[hidden]')) return false;
++   for (let p=e; p; p=p.parentElement) {
++     // Google marks the folded answer tail with ahbak, without display:none.
++     // Read that answer too, but not hidden dialogs or error placeholders.
++     if(p.getAttribute('aria-hidden')==='true' && p.getAttribute('ahbak')!=='true') return false;
++     const s=getComputedStyle(p);
++     if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse') return false;
++   }
++   return e.getClientRects().length>0 || getComputedStyle(e).display==='contents';
++ };
++ const pageText = (document.body?.innerText || '').slice(0,2500);
++ const result = {url:location.href, page_text:pageText, visibility:document.visibilityState, found:false,
++   text:'', links:[], web:[], busy:false, complete:null, unavailable:false};
++ // Preserve ordinary results from this same page for a child-led follow-up.
++ // No extra search, redirect resolution or link fetch happens here.
++ const seen=new Set();
++ for(const a of document.querySelectorAll('#rso a[href]')) {
++   if(a.closest('#m-x-content,[data-text-ad],[data-ta-slot]')) continue;
++   const h=a.querySelector('h3');
++   if(!h || !visible(h)) continue;
++   const title=h.innerText.trim(), url=a.href;
++   if(!title || !/^https?:\/\//.test(url) || seen.has(url)) continue;
++   const block=a.closest('[data-hveid]') || a.parentElement;
++   let description=(block?.innerText || '').replace(/\s+/g,' ').trim();
++   if(description.startsWith(title)) description=description.slice(title.length).trim();
++   result.web.push({title:title.slice(0,300),url,description:description.slice(0,1000)});
++   seen.add(url);
++   if(result.web.length>=5) break;
++ }
++ const root = document.querySelector('#m-x-content');
++ if(!root) return result;
++ const headings=[...root.querySelectorAll('h1,h2,h3,[role="heading"]')];
++ const heading=headings.find(e=>visible(e)&&/^(AI による概要|AI Overview)$/i.test(e.innerText.trim()));
++ if(!heading) return result;
++ result.found=true;
++ const marker=root.querySelector('[data-rao][data-complete]');
++ if(marker) result.complete=marker.getAttribute('data-complete')==='true';
++ result.busy=result.complete===false || [...root.querySelectorAll('[aria-busy="true"],[role="progressbar"]')].some(visible);
++ // data-complete is set before the streamed answer finishes revealing itself.
++ // The observed reveal/loading animations continue until that rendering ends.
++ result.busy=result.busy || root.getAnimations({subtree:true}).some(a=>
++   a.playState==='running' && visible(a.effect?.target));
++ const skip='script,style,noscript,svg,canvas,nav,footer,header,button,input,textarea,select,[role="button"],[role="dialog"],[role="toolbar"]';
++ const walk = node => {
++   if(node.nodeType===Node.TEXT_NODE) return node.textContent;
++   if(node.nodeType!==Node.ELEMENT_NODE || node===heading || node.matches(skip) || !visible(node)) return '';
++   const text=[...node.childNodes].map(walk).join('');
++   return /^(block|flex|grid|list-item|table.*)$/.test(getComputedStyle(node).display) ? '\n'+text+'\n' : text;
++ };
++ const answer=root.querySelector('[data-subtree="aimc"]') || root;
++ const text=walk(answer).split('\n').map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n');
++ result.unavailable=/この検索では AI による概要を表示できません|現在、AI による概要を生成できません|AI overview is not available|Can't generate an AI overview/i.test(text);
++ result.busy=result.busy || /^(処理しています|生成しています|Generating|Thinking|Loading)[.…。\s]*$/im.test(text);
++ result.text=result.unavailable?'':text;
++ result.links=[...root.querySelectorAll('a[href]')].filter(a=>visible(a)&&!a.closest(skip))
++   .map(a=>({title:a.innerText.trim(),url:a.href})).filter(a=>/^https?:\/\//.test(a.url)).slice(0,40);
++ return result;
++})()"""
++
++
++async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic,
++                            sleep=asyncio.sleep):
++    """Poll the same page at 4, 4.5 and 5 seconds from the fetch start, then stop.
++
++    A marker alone precedes streaming: require no loading animation and equal
++    text in two consecutive samples. No second fetch or automatic new search.
++    The final DOM read has at most 250ms; failure has no answer/error sentence.
++    """
++    started = clock() if started is None else started
++    deadline = started + 5.25
++    last = {}
++    samples = 0
++    seen = False
++    settled_text = None
++    settled_since = started
++
++    def finish(status, *, reason=""):
++        text = last.get("text", "")
++        complete = status == "complete"
++        return {
++            "status": status, "text": text if complete else "",
++            "links": last.get("links", []) if complete else [],
++            "web": last.get("web", []) if status in {"complete", "not_found", "unavailable", "timeout"} else [],
++            "waited_ms": round((clock() - started) * 1000), "samples": samples,
++            "completion_signal": reason,
++            "page_visibility": last.get("visibility", "unknown"),
++        }
++
++    for poll_at in (4.0, 4.5, 5.0):
++        if clock() >= deadline:
++            break
++        await sleep(max(0.0, started + poll_at - clock()))
++        try:
++            snapshot = await asyncio.wait_for(read_snapshot(), min(.25, max(0.0, deadline - clock())))
++        except asyncio.TimeoutError:
++            return finish("timeout", reason="snapshot_timeout")
++        samples += 1
++        last = snapshot
++        if snapshot.get("challenge"):
++            return finish("challenge")
++        if snapshot.get("navigation_changed"):
++            return finish("navigation_changed")
++        if snapshot.get("unavailable") and not snapshot.get("busy"):
++            return finish("unavailable")
++        seen = seen or bool(snapshot.get("found"))
++        text = snapshot.get("text", "").strip()
++        eligible = snapshot.get("found") and bool(text) and not snapshot.get("busy") and not snapshot.get("unavailable")
++        if eligible and snapshot.get("complete") is True:
++            if text != settled_text:
++                settled_text = text
++                settled_since = clock()
++            elif clock() - settled_since >= .4:
++                return finish("complete", reason="render_settled")
++        else:
++            settled_text = None
++    if last.get("unavailable"):
++        return finish("unavailable")
++    return finish("timeout" if seen else "not_found")
+diff --git a/tests/test_google_overview.py b/tests/test_google_overview.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_google_overview.py
+@@ -0,0 +1,235 @@
++import asyncio
++import json
++
++import pytest
++
++from chrome_web_mcp.google_overview import is_standard_google_search, wait_for_overview
++from chrome_web_mcp import server
++
++
++def snapshot(text="", *, found=True, complete=False, busy=False, **extra):
++    return dict(found=found, text=text, complete=complete, busy=busy, links=[], **extra)
++
++
++def wait_sequence(frames):
++    now = [0.0]
++    calls = []
++
++    async def read():
++        frame = frames[min(len(calls), len(frames)-1)]
++        calls.append(frame)
++        return frame
++
++    async def sleep(delay):
++        now[0] += delay
++
++    result = asyncio.run(wait_for_overview(read, clock=lambda: now[0], sleep=sleep))
++    return result, calls
++
++
++def test_delayed_generation_returns_only_completed_snapshot():
++    frames = [snapshot(found=False), snapshot("完成した本文", complete=True)]
++    result, calls = wait_sequence(frames)
++    assert result["status"] == "complete"
++    assert result["text"] == "完成した本文"
++    assert result["samples"] == len(calls) == 3
++    assert result["waited_ms"] == 5000
++    assert result["completion_signal"] == "render_settled"
++
++
++def test_ready_answer_only_waits_for_render_to_settle():
++    result, calls = wait_sequence([snapshot("本文", complete=True)])
++    assert result["text"] == "本文"
++    assert len(calls) == 2 and result["waited_ms"] == 4500
++
++
++def test_no_overview_keeps_search_results_after_only_three_polls():
++    web = [{"title": "参考ページ", "url": "https://example.com/", "description": "紹介文"}]
++    result, calls = wait_sequence([snapshot(found=False, web=web)])
++    assert result["status"] == "not_found" and result["text"] == ""
++    assert result["web"] == web and len(calls) == 3 and result["waited_ms"] == 5000
++
++
++def test_late_browser_start_does_not_turn_immediate_reads_into_settled_text():
++    async def read():
++        return snapshot("まだ途中かもしれない", complete=True)
++    result = asyncio.run(wait_for_overview(read, started=0, clock=lambda: 4.9,
++                                          sleep=lambda _: asyncio.sleep(0)))
++    assert result["status"] == "timeout" and result["samples"] == 3
++
++
++def test_marker_does_not_end_stream_early_and_same_length_rewrite_resets_wait():
++    frames = [snapshot("冒頭", complete=True), snapshot("本文", complete=True),
++              snapshot("全文", complete=True)]
++    result, calls = wait_sequence(frames)
++    assert result["status"] == "timeout" and not result["text"] and len(calls) == 3
++
++
++@pytest.mark.parametrize("status", ["unavailable", "challenge", "navigation_changed"])
++def test_definite_failure_stops_at_first_poll(status):
++    result, calls = wait_sequence([snapshot(**{status: True})])
++    assert result["status"] == status and result["waited_ms"] == 4000 and len(calls) == 1
++
++
++@pytest.mark.parametrize("frame,status", [
++    (snapshot(found=False), "not_found"),
++    (snapshot("途中の本文", busy=True), "timeout"),
++    (snapshot("同じ本文のまま", complete=False), "timeout"),
++    (snapshot("完了印がない本文", complete=None), "timeout"),
++    (snapshot("", complete=True), "timeout"),
++    (snapshot("完了印はあるが生成中", complete=True, busy=True), "timeout"),
++    (snapshot("取得できませんでした", unavailable=True), "unavailable"),
++    (snapshot("challenge body", challenge=True), "challenge"),
++    (snapshot("another page", navigation_changed=True), "navigation_changed"),
++])
++def test_no_partial_text_or_failure_sentence(frame, status):
++    result, _ = wait_sequence([frame])
++    assert result["status"] == status
++    assert result["text"] == "" and result["links"] == []
++    assert "partial_text" not in result
++    assert frame["text"] not in json.dumps(result, ensure_ascii=False) or not frame["text"]
++
++
++def test_read_timeout_is_bounded():
++    async def stalled():
++        await asyncio.sleep(10)
++    result = asyncio.run(wait_for_overview(stalled, started=-5.24, clock=lambda: 0, sleep=lambda _: asyncio.sleep(0)))
++    assert result["status"] == "timeout" and not result["text"]
++    assert result["completion_signal"] == "snapshot_timeout"
++
++
++def test_cancel_propagates():
++    async def cancelled():
++        raise asyncio.CancelledError
++    with pytest.raises(asyncio.CancelledError):
++        asyncio.run(wait_for_overview(cancelled, sleep=lambda _: asyncio.sleep(0)))
++
++
++@pytest.mark.parametrize("url,valid", [
++    ("https://www.google.com/search?q=hello&hl=ja", True),
++    ("https://www.google.co.jp/search?q=hello", False),
++    ("https://www.google.com/search?q=hello&udm=14", False),
++    ("https://www.google.com/search?q=hello&tbm=isch", False),
++    ("https://www.google.com/", False),
++    ("https://www.google.com.evil.example/search?q=hello", False),
++    ("https://example.com/search?q=hello", False),
++])
++def test_search_url_scope(url, valid):
++    assert is_standard_google_search(url) is valid
++
++
++def test_non_google_wait_is_rejected_before_browser_start(monkeypatch):
++    monkeypatch.setattr(server._RUNTIME, "ensure", lambda: pytest.fail("browser started"))
++    with pytest.raises(ValueError, match="normal HTTPS Google"):
++        asyncio.run(server._fetch_page("https://example.com/", 500, wait_for_ai_overview=True))
++
++
++@pytest.mark.parametrize("status", ["complete", "not_found", "timeout", "challenge"])
++def test_mcp_api_separates_code_status_from_answer(monkeypatch, status):
++    async def fake_fetch(url, char_limit, format, **kwargs):
++        assert kwargs == {"wait_for_ai_overview": True}
++        return {"text": "PAGE: 取得できませんでした or search results",
++                "ai_overview": {"status": status, "text": "answer" if status == "complete" else ""}}
++    monkeypatch.setattr(server, "_fetch_page", fake_fetch)
++    result = asyncio.run(server.call_tool("fetch_url", {
++        "url": "https://www.google.com/search?q=test", "wait_for_ai_overview": True}))
++    payload = json.loads(result[0].text)
++    assert payload["success"] is (status == "complete")
++    if status != "complete":
++        assert not payload["data"]["ai_overview"]["text"]
++        assert "PAGE:" not in str(payload) and "error" not in payload
++    assert bool(payload.get("captcha_required")) is (status == "challenge")
++
++
++def test_mcp_option_schema_and_invalid_flag(monkeypatch):
++    tools = asyncio.run(server.list_tools())
++    fetch = next(t for t in tools if t.name == "fetch_url")
++    assert fetch.inputSchema["properties"]["wait_for_ai_overview"]["default"] is False
++    async def forbidden(*args, **kwargs):
++        pytest.fail("called browser")
++    monkeypatch.setattr(server, "_fetch_page", forbidden)
++    result = asyncio.run(server.call_tool("fetch_url", {"url": "https://example.com/", "wait_for_ai_overview": "yes"}))
++    assert json.loads(result[0].text)["success"] is False
++
++
++@pytest.mark.parametrize("error,status", [(asyncio.TimeoutError(), "timeout"),
++                                         (RuntimeError("取得できませんでした"), "fetch_error")])
++def test_transport_failures_do_not_become_dialogue_text(monkeypatch, error, status):
++    async def fake_fetch(*args, **kwargs):
++        raise error
++    monkeypatch.setattr(server, "_fetch_page", fake_fetch)
++    result = asyncio.run(server.call_tool("fetch_url", {
++        "url": "https://www.google.com/search?q=test", "wait_for_ai_overview": True}))
++    payload = json.loads(result[0].text)
++    assert payload == {"success": False, "data": {"ai_overview": {"status": status, "text": "", "links": []}}}
++
++
++def test_mcp_no_overview_but_search_results_are_usable(monkeypatch):
++    web = [{"title": "調べる候補", "url": "https://example.com/", "description": "概要"}]
++    async def fake_fetch(*args, **kwargs):
++        return {"ai_overview": {"status": "not_found", "text": ""}, "web": web}
++    monkeypatch.setattr(server, "_fetch_page", fake_fetch)
++    result = asyncio.run(server.call_tool("fetch_url", {
++        "url": "https://www.google.com/search?q=test", "wait_for_ai_overview": True}))
++    payload = json.loads(result[0].text)
++    assert payload["success"] is True and payload["data"]["web"] == web
++    assert "error" not in payload and payload["data"]["ai_overview"]["text"] == ""
++
++
++@pytest.mark.parametrize("outcome", ["complete", "not_found", "cancel", "redirect"])
++def test_fetch_wait_activation_cleanup_and_no_second_extraction(monkeypatch, outcome):
++    from chrome_web_mcp import google_overview
++    url = "https://www.google.com/search?q=test"
++    events = []
++
++    class Connection:
++        async def close(self):
++            events.append("socket_closed")
++
++    async def connect(*args, **kwargs):
++        return Connection()
++
++    async def cdp(conn, method, params=None):
++        events.append(method)
++        return {"targetId": "owned-tab"} if method == "Target.createTarget" else {}
++
++    async def evaluate(conn, expression):
++        if expression == "location.href":
++            return "https://example.com/" if outcome == "redirect" else url
++        assert expression == google_overview.OVERVIEW_SNAPSHOT_JS
++        return {"url": "https://example.com/" if outcome == "redirect" else url, "page_text": ""}
++
++    async def ready(conn):
++        pass
++
++    async def wait(read, **kwargs):
++        assert "Target.activateTarget" in events
++        if outcome == "cancel":
++            raise asyncio.CancelledError
++        return {"status": outcome, "text": "本文" if outcome == "complete" else "", "links": []}
++
++    runtime = server.BrowserRuntime()
++    runtime.display_mode, runtime.port = "native", 1
++    monkeypatch.setattr(server, "_RUNTIME", runtime)
++    monkeypatch.setattr(runtime, "ensure", lambda: "ws://localhost/browser")
++    monkeypatch.setattr(server, "_ENSURE_LOCK", asyncio.Lock())
++    monkeypatch.setattr(server.websockets, "connect", connect)
++    monkeypatch.setattr(server, "_cdp_call", cdp)
++    monkeypatch.setattr(server, "_evaluate", evaluate)
++    monkeypatch.setattr(server, "_wait_ready", ready)
++    monkeypatch.setattr(server, "_validate_public_url", lambda u: u)
++    monkeypatch.setattr(google_overview, "wait_for_overview", wait)
++    monkeypatch.setattr(server, "_read_page_string", lambda *a: pytest.fail("extra page extraction"))
++    coroutine = server._fetch_page(url, 500, expected_url=url, wait_for_ai_overview=True)
++    if outcome in {"cancel", "redirect"}:
++        with pytest.raises(asyncio.CancelledError if outcome == "cancel" else ValueError):
++            asyncio.run(coroutine)
++        assert "Target.closeTarget" in events
++        if outcome == "redirect":
++            assert "Target.activateTarget" not in events
++    else:
++        result = asyncio.run(coroutine)
++        assert result["ai_overview"]["status"] == outcome
++        assert result["expected_url_verified"] is True
++        assert "text" not in result and "markdown" not in result
++    assert events.count("socket_closed") == 2
+diff --git a/tests/test_google_overview_dom.py b/tests/test_google_overview_dom.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_google_overview_dom.py
+@@ -0,0 +1,103 @@
++"""Run the actual extractor in owned headless Chrome on synthetic HTML only."""
++import asyncio
++import json
++
++import pytest
++import websockets
++
++from chrome_web_mcp import server
++from chrome_web_mcp.google_overview import OVERVIEW_SNAPSHOT_JS
++
++
++@pytest.fixture(scope="module")
++def browser_ws():
++    runtime = server.BrowserRuntime()
++    runtime.display_mode = "headless"
++    try:
++        yield runtime.ensure()
++    finally:
++        runtime.cleanup()
++
++
++def extract(browser_ws, html):
++    async def run():
++        async with websockets.connect(browser_ws, max_size=server.MAX_CDP_MESSAGE) as browser:
++            result = await server._cdp_call(browser, "Target.createTarget", {"url": "about:blank"})
++            target = result["targetId"]
++            attached = await server._cdp_call(browser, "Target.attachToTarget", {"targetId": target, "flatten": True})
++            session = attached["sessionId"]
++            async def evaluate(expression):
++                # A browser socket with a flattened target session; no navigation.
++                rid = next(server._CDP_IDS)
++                await browser.send(json.dumps({"id":rid,"sessionId":session,"method":"Runtime.evaluate",
++                                               "params":{"expression":expression,"returnByValue":True}}))
++                while True:
++                    response=json.loads(await asyncio.wait_for(browser.recv(), 10))
++                    if response.get("id")==rid:
++                        assert "error" not in response and "exceptionDetails" not in response.get("result", {})
++                        return response["result"]["result"].get("value")
++            try:
++                await evaluate("document.body.innerHTML=" + json.dumps(html))
++                return await evaluate(OVERVIEW_SNAPSHOT_JS)
++            finally:
++                await server._cdp_call(browser, "Target.closeTarget", {"targetId":target})
++    return asyncio.run(run())
++
++
++def region(body, marker="true"):
++    return ('<div id="m-x-content"><div data-rao data-complete="'+marker+'"></div>'
++            '<div role="heading" aria-level="2">AI による概要</div>'+body+'</div>')
++
++
++def test_actual_js_excludes_hidden_failures_and_controls(browser_ws):
++    html=region('<span style="display:none">現在、AI による概要を生成できません</span>'
++                '<p>金床の説明です。</p><ul><li>金の読み方</li><li>床の意味</li></ul>'
++                '<button>共有メニュー</button><div role="dialog">共有リンクの注意事項</div>'
++                '<a href="https://example.com/reference">出典</a>')
++    result=extract(browser_ws,html+'<h3>ウェブ検索結果</h3><p>広告や別の検索結果</p>')
++    assert result["found"] and result["complete"] and not result["unavailable"]
++    assert "金床の説明です。" in result["text"] and "床の意味" in result["text"]
++    assert all(t not in result["text"] for t in ["共有", "生成できません", "広告", "ウェブ検索結果"])
++    assert result["links"]==[{"title":"出典","url":"https://example.com/reference"}]
++
++
++def test_search_result_heading_is_not_an_overview(browser_ws):
++    result=extract(browser_ws,'<h3>AI による概要</h3><p>通常の検索結果の紹介文</p>')
++    assert not result["found"] and not result["text"]
++
++
++def test_hidden_region_is_not_read(browser_ws):
++    result=extract(browser_ws,'<div hidden>'+region('<p>非表示の本文</p>')+'</div>')
++    assert not result["found"]
++
++
++def test_generating_marker_is_not_complete(browser_ws):
++    result=extract(browser_ws,region('<p>生成途中の本文</p>', "false"))
++    assert result["busy"] and result["complete"] is False
++
++
++def test_folded_answer_tail_is_kept_but_hidden_dialogs_are_not(browser_ws):
++    result=extract(browser_ws,region('<p>冒頭</p><div aria-hidden="true" ahbak="true">後半の説明</div>'
++                                    '<div aria-hidden="true">非表示のエラー</div>'))
++    assert "後半の説明" in result["text"] and "非表示のエラー" not in result["text"]
++
++
++def test_reveal_animation_keeps_completed_marker_busy(browser_ws):
++    html=region('<style>@keyframes reveal {from {opacity:.1} to {opacity:1}}</style>'
++                '<p style="animation:reveal 20s infinite">生成途中</p>')
++    result=extract(browser_ws,html)
++    assert result["complete"] is True and result["busy"]
++
++
++def test_answer_subtree_excludes_overview_footer_and_reference_cards(browser_ws):
++    result=extract(browser_ws,region('<div data-subtree="aimc"><p>回答本文</p></div>'
++                                    '<p>AIの注意書き</p><aside>参照ページの紹介文</aside>'))
++    assert result["text"] == "回答本文"
++
++
++def test_ordinary_results_survive_when_overview_is_absent(browser_ws):
++    html='<div id="rso"><div data-hveid="1"><a href="https://example.com/article"><h3>参考ページ</h3></a><p>内容の紹介</p></div>'
++    html+='<div data-text-ad><a href="https://example.com/ad"><h3>広告</h3></a></div></div>'
++    result=extract(browser_ws,html)
++    assert not result["found"] and not result["text"]
++    assert result["web"] == [{"title": "参考ページ", "url": "https://example.com/article", "description": "内容の紹介"}]

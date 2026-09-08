@@ -1,0 +1,323 @@
+diff --git a/src/chrome_web_mcp/google_overview.py b/src/chrome_web_mcp/google_overview.py
+index 93f1ecc..a70643a 100644
+--- a/src/chrome_web_mcp/google_overview.py
++++ b/src/chrome_web_mcp/google_overview.py
+@@ -81,7 +81,7 @@ OVERVIEW_SNAPSHOT_JS = r"""(() => {
+ 
+ 
+ async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic,
+-                            sleep=asyncio.sleep):
++                            sleep=asyncio.sleep, reread=False):
+     """Poll the same page at 4, 4.5 and 5 seconds from the fetch start, then stop.
+ 
+     A marker alone precedes streaming: require no loading animation and equal
+@@ -89,7 +89,8 @@ async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic
+     The final DOM read has at most 250ms; failure has no answer/error sentence.
+     """
+     started = clock() if started is None else started
+-    deadline = started + 5.25
++    polls = (0.0, .5, 1.0) if reread else (4.0, 4.5, 5.0)
++    deadline = started + polls[-1] + .25
+     last = {}
+     samples = 0
+     seen = False
+@@ -108,7 +109,7 @@ async def wait_for_overview(read_snapshot, *, started=None, clock=time.monotonic
+             "page_visibility": last.get("visibility", "unknown"),
+         }
+ 
+-    for poll_at in (4.0, 4.5, 5.0):
++    for poll_at in polls:
+         if clock() >= deadline:
+             break
+         await sleep(max(0.0, started + poll_at - clock()))
+diff --git a/src/chrome_web_mcp/server.py b/src/chrome_web_mcp/server.py
+index e301a82..4f648a1 100644
+--- a/src/chrome_web_mcp/server.py
++++ b/src/chrome_web_mcp/server.py
+@@ -1409,7 +1409,7 @@ def _smart_cut(text: str, limit: int) -> tuple[str, bool]:
+ 
+ 
+ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expected_url: str | None = None,
+-                      wait_for_ai_overview: bool = False) -> dict:
++                      wait_for_ai_overview: bool = False, existing_tab_id: str | None = None) -> dict:
+     """Render a public URL in a per-call tab and return its readable content.
+ 
+     Each call gets its own tab, so concurrent fetches are parallel-safe.
+@@ -1420,6 +1420,11 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+     including redirects, subresources, WebSockets, and DNS rebinding.
+     """
+     fetch_started = time.monotonic()
++    if existing_tab_id is not None and (
++        not wait_for_ai_overview or not isinstance(existing_tab_id, str)
++        or not re.fullmatch(r"[A-Fa-f0-9]{32}", existing_tab_id)
++    ):
++        raise ValueError("existing_tab_id requires a returned AI overview tab ID")
+     # Validate the requested URL up front (fail-closed).
+     if wait_for_ai_overview:
+         from .google_overview import is_standard_google_search, OVERVIEW_SNAPSHOT_JS, wait_for_overview
+@@ -1428,19 +1433,35 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+     validated = _validate_public_url(url)
+     expected = _validate_public_url(expected_url).split("#", 1)[0] if expected_url else None
+     async with _ENSURE_LOCK:
+-        browser_ws = await asyncio.to_thread(_RUNTIME.ensure)
++        if existing_tab_id:
++            # A reread never launches a browser or recreates a closed tab.
++            browser_ws = _RUNTIME.browser_ws
++            if not browser_ws or _RUNTIME.port is None:
++                raise RuntimeError("overview_tab_unavailable")
++        else:
++            browser_ws = await asyncio.to_thread(_RUNTIME.ensure)
+     browser = await websockets.connect(browser_ws, max_size=MAX_CDP_MESSAGE)
+     page: Any = None
+     target_id: str | None = None
+     keep_tab = False
+     activated = False
+     try:
+-        created = await _cdp_call(
+-            browser,
+-            "Target.createTarget",
+-            {"url": "about:blank", "background": True, "newWindow": False},
+-        )
+-        target_id = created.get("targetId")
++        if existing_tab_id:
++            target_id = existing_tab_id
++            keep_tab = True  # Never close or activate a tab the child is using.
++            info = await _cdp_call(browser, "Target.getTargetInfo", {"targetId": target_id})
++            current_url = info.get("targetInfo", {}).get("url", "")
++            if (not is_standard_google_search(current_url)
++                or urllib.parse.parse_qs(urllib.parse.urlsplit(current_url).query).get("q")
++                != urllib.parse.parse_qs(urllib.parse.urlsplit(validated).query).get("q")):
++                raise ValueError("overview_tab_changed")
++        else:
++            created = await _cdp_call(
++                browser,
++                "Target.createTarget",
++                {"url": "about:blank", "background": True, "newWindow": False},
++            )
++            target_id = created.get("targetId")
+         if not target_id or _RUNTIME.port is None:
+             raise RuntimeError("Chrome did not create a fetch tab")
+         page = await websockets.connect(
+@@ -1449,8 +1470,9 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+         )
+         await _cdp_call(page, "Page.enable")
+         await _cdp_call(page, "Runtime.enable")
+-        await _cdp_call(page, "Page.navigate", {"url": validated})
+-        await _wait_ready(page)
++        if not existing_tab_id:
++            await _cdp_call(page, "Page.navigate", {"url": validated})
++            await _wait_ready(page)
+         overview = None
+         if wait_for_ai_overview:
+             async def read_overview():
+@@ -1469,15 +1491,22 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+             _validate_public_url(initial_url)
+             if expected and initial_url.split("#", 1)[0] != expected:
+                 raise ValueError("reviewed_url_changed")
+-            if is_standard_google_search(initial_url) and _RUNTIME.display_mode in {"native", "xephyr"}:
++            if not existing_tab_id and is_standard_google_search(initial_url) and _RUNTIME.display_mode in {"native", "xephyr"}:
+                 # Google may defer AI rendering while the search tab is hidden.
+                 # Show this verified search before waiting, not only afterwards.
+                 await _cdp_call(browser, "Target.activateTarget", {"targetId": target_id})
+                 activated = True
+-            overview = await wait_for_overview(read_overview, started=fetch_started)
++            reread_options = {"reread": True} if existing_tab_id else {}
++            overview = await wait_for_overview(read_overview, started=fetch_started, **reread_options)
+         # Output policy; the proxy enforces network policy before connection.
+         final_url = str(await _evaluate(page, "location.href"))
+         _validate_public_url(final_url)
++        if wait_for_ai_overview and (
++            not is_standard_google_search(final_url)
++            or urllib.parse.parse_qs(urllib.parse.urlsplit(final_url).query).get("q")
++            != urllib.parse.parse_qs(urllib.parse.urlsplit(validated).query).get("q")
++        ):
++            raise ValueError("overview_tab_changed")
+         if expected and final_url.split("#", 1)[0] != expected:
+             raise ValueError("reviewed_url_changed")
+         payload: dict = {
+@@ -1492,12 +1521,13 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expect
+             overview["total_chars"] = len(full_overview)
+             payload["web"] = overview.pop("web", [])
+             payload["ai_overview"] = overview
++            payload["tab_id"] = target_id
+             # Only the captured overview is answer data. Do not extract the
+             # entire SERP again (hidden error UI and unrelated result snippets).
+             if expected:
+                 payload["expected_url_verified"] = True
+-            keep_tab = (_RUNTIME.display_mode in {"native", "xephyr"} and activated
+-                        and overview["status"] != "navigation_changed")
++            keep_tab = bool(existing_tab_id) or (_RUNTIME.display_mode in {"native", "xephyr"} and activated
++                                               and overview["status"] != "navigation_changed")
+             return payload
+         if format == "text":
+             raw = await _read_page_string(page, _FETCH_TEXT_JS)
+@@ -1671,6 +1701,11 @@ async def list_tools() -> list[types.Tool]:
+                         "type": "boolean", "default": False,
+                         "description": "On a normal HTTPS Google search URL, poll at 4/4.5/5 seconds for a settled AI answer. Return data.ai_overview and data.web from the same page. Without an overview, web results remain usable. Status is code-only, not dialogue text. No repeat searches. Omit udm and tbm from the URL.",
+                     },
++                    "existing_tab_id": {
++                        "type": "string",
++                        "description": "Optional tab_id returned by an earlier overview fetch. With wait_for_ai_overview:true, reread that same search without navigation or activation, at 0/0.5/1 seconds. Refuse a closed tab or changed search; never reopen it.",
++                        "pattern": "^[A-Fa-f0-9]{32}$",
++                    },
+                     "char_limit": {
+                         "type": "integer",
+                         "description": "Maximum characters of readable text to return.",
+@@ -1789,8 +1824,15 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+                 raise ValueError("wait_for_ai_overview must be a boolean")
+             if wait_for_ai:
+                 checked["wait_for_ai_overview"] = True
++            existing_tab_id = arguments.get("existing_tab_id")
++            if existing_tab_id is not None:
++                if (not wait_for_ai or not isinstance(existing_tab_id, str)
++                    or not re.fullmatch(r"[A-Fa-f0-9]{32}", existing_tab_id)):
++                    raise ValueError("existing_tab_id requires a returned AI overview tab ID")
++                checked["existing_tab_id"] = existing_tab_id
+             fetch = _fetch_page(url.strip(), char_limit, format, **checked)
+-            data = await asyncio.wait_for(fetch, 5.5) if wait_for_ai else await fetch
++            budget = 1.75 if existing_tab_id else 5.5
++            data = await asyncio.wait_for(fetch, budget) if wait_for_ai else await fetch
+             ready = not wait_for_ai or data.get("ai_overview", {}).get("status") == "complete" or bool(data.get("web"))
+             payload = {"success": ready, "data": data}
+             if not ready:
+@@ -1798,6 +1840,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+                 # feed to the dialogue LLM. Do not leak the SERP's error text.
+                 overview = data.get("ai_overview", {"status": "missing", "text": ""})
+                 payload["data"] = {"ai_overview": overview, "web": data.get("web", [])}
++                if overview.get("status") in {"timeout", "not_found", "unavailable"}:
++                    # An open search tab can finish rendering after this call.
++                    # Keep only its identity/URL, never a partial answer or SERP error body.
++                    payload["data"].update({k: data[k] for k in
++                                           ("url", "requested_url", "final_url", "tab_id") if k in data})
+                 if overview.get("status") == "challenge":
+                     payload["captcha_required"] = True
+         elif name == "health_check":
+diff --git a/tests/test_google_overview.py b/tests/test_google_overview.py
+index cc839fe..ce95f67 100644
+--- a/tests/test_google_overview.py
++++ b/tests/test_google_overview.py
+@@ -11,7 +11,7 @@ def snapshot(text="", *, found=True, complete=False, busy=False, **extra):
+     return dict(found=found, text=text, complete=complete, busy=busy, links=[], **extra)
+ 
+ 
+-def wait_sequence(frames):
++def wait_sequence(frames, **kwargs):
+     now = [0.0]
+     calls = []
+ 
+@@ -23,7 +23,7 @@ def wait_sequence(frames):
+     async def sleep(delay):
+         now[0] += delay
+ 
+-    result = asyncio.run(wait_for_overview(read, clock=lambda: now[0], sleep=sleep))
++    result = asyncio.run(wait_for_overview(read, clock=lambda: now[0], sleep=sleep, **kwargs))
+     return result, calls
+ 
+ 
+@@ -43,6 +43,18 @@ def test_ready_answer_only_waits_for_render_to_settle():
+     assert len(calls) == 2 and result["waited_ms"] == 4500
+ 
+ 
++def test_reread_settles_at_half_a_second_without_initial_search_wait():
++    result, calls = wait_sequence([snapshot("完成した長い説明", complete=True)], reread=True)
++    assert result["status"] == "complete" and result["waited_ms"] == 500
++    assert len(calls) == 2
++
++
++def test_reread_does_not_accept_still_streaming_text():
++    result, calls = wait_sequence([snapshot("生成中", busy=True)], reread=True)
++    assert result["status"] == "timeout" and not result["text"]
++    assert result["waited_ms"] == 1000 and len(calls) == 3
++
++
+ def test_no_overview_keeps_search_results_after_only_three_polls():
+     web = [{"title": "参考ページ", "url": "https://example.com/", "description": "紹介文"}]
+     result, calls = wait_sequence([snapshot(found=False, web=web)])
+@@ -233,3 +245,87 @@ def test_fetch_wait_activation_cleanup_and_no_second_extraction(monkeypatch, out
+         assert result["expected_url_verified"] is True
+         assert "text" not in result and "markdown" not in result
+     assert events.count("socket_closed") == 2
++
++
++@pytest.mark.parametrize("outcome", ["complete", "changed", "changed_late", "closed", "cancel"])
++def test_existing_tab_is_read_only_never_reopened_or_activated(monkeypatch, outcome):
++    from chrome_web_mcp import google_overview
++    url = "https://www.google.com/search?q=test"
++    tab_id = "A" * 32
++    events = []
++    reads = []
++
++    class Connection:
++        async def close(self):
++            events.append("socket_closed")
++
++    async def connect(*args, **kwargs):
++        return Connection()
++
++    async def cdp(conn, method, params=None):
++        events.append(method)
++        if method == "Target.getTargetInfo":
++            assert params == {"targetId": tab_id}
++            if outcome == "closed":
++                raise RuntimeError("No such target")
++            return {"targetInfo": {"url": "https://www.google.com/search?q=other" if outcome == "changed" else url}}
++        assert method in {"Page.enable", "Runtime.enable"}
++        return {}
++
++    async def evaluate(conn, expression):
++        assert expression == "location.href"
++        reads.append(expression)
++        if outcome == "changed_late" and len(reads) > 1:
++            return "https://www.google.com/search?q=other"
++        return url
++
++    async def wait(read, **kwargs):
++        assert kwargs["reread"] is True
++        if outcome == "cancel":
++            raise asyncio.CancelledError
++        return {"status": "complete", "text": "完成した概要", "links": []}
++
++    runtime = server.BrowserRuntime()
++    runtime.display_mode, runtime.port, runtime.browser_ws = "native", 1, "ws://localhost/browser"
++    monkeypatch.setattr(server, "_RUNTIME", runtime)
++    monkeypatch.setattr(runtime, "ensure", lambda: pytest.fail("must not restart Chrome"))
++    monkeypatch.setattr(server, "_ENSURE_LOCK", asyncio.Lock())
++    monkeypatch.setattr(server.websockets, "connect", connect)
++    monkeypatch.setattr(server, "_cdp_call", cdp)
++    monkeypatch.setattr(server, "_evaluate", evaluate)
++    monkeypatch.setattr(server, "_validate_public_url", lambda u: u)
++    monkeypatch.setattr(google_overview, "wait_for_overview", wait)
++    call = server._fetch_page(url, 500, wait_for_ai_overview=True, existing_tab_id=tab_id)
++    if outcome == "complete":
++        result = asyncio.run(call)
++        assert result["tab_id"] == tab_id and result["ai_overview"]["text"] == "完成した概要"
++    else:
++        with pytest.raises({"changed": ValueError, "changed_late": ValueError, "closed": RuntimeError, "cancel": asyncio.CancelledError}[outcome]):
++            asyncio.run(call)
++    assert not ({"Target.createTarget", "Page.navigate", "Target.activateTarget", "Target.closeTarget"} & set(events))
++    assert events.count("socket_closed") == (1 if outcome in {"changed", "closed"} else 2)
++
++
++@pytest.mark.parametrize("arguments", [
++    {"existing_tab_id": "A" * 32},
++    {"existing_tab_id": "invalid", "wait_for_ai_overview": True},
++    {"existing_tab_id": True, "wait_for_ai_overview": True},
++])
++def test_existing_tab_validation_precedes_browser(monkeypatch, arguments):
++    async def forbidden(*args, **kwargs):
++        pytest.fail("browser invoked")
++    monkeypatch.setattr(server, "_fetch_page", forbidden)
++    result = asyncio.run(server.call_tool("fetch_url", {"url": "https://www.google.com/search?q=test", **arguments}))
++    assert not json.loads(result[0].text)["success"]
++
++
++def test_not_yet_readable_search_keeps_tab_identity_not_error_body(monkeypatch):
++    url, tab_id = "https://www.google.com/search?q=test", "A" * 32
++    async def fetch(*args, **kwargs):
++        return {"final_url": url, "tab_id": tab_id, "text": "生成途中の本文",
++                "ai_overview": {"status": "timeout", "text": "", "page_visibility": "visible"}, "web": []}
++    monkeypatch.setattr(server, "_fetch_page", fetch)
++    result = asyncio.run(server.call_tool("fetch_url", {"url": url, "wait_for_ai_overview": True}))
++    payload = json.loads(result[0].text)
++    assert payload["success"] is False and payload["data"]["tab_id"] == tab_id
++    assert payload["data"]["final_url"] == url and "生成途中" not in str(payload)

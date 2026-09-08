@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "note": "実測した生成待ち時間ではない。合成質問で既に取得したAI概要を、仮想Webから復帰後に受け取る配線試験。本文の事実性は未検証。",
+  "entries": [
+    {
+      "target": "金床",
+      "facets": ["reading", "etymology", "meaning"],
+      "page": {
+        "id": "overview:12b9bcbdfc4bc324",
+        "url": "https://www.google.com/search?q=%E9%87%91%E5%BA%8A+%E3%81%8B%E3%81%AA%E3%81%A8%E3%81%93+%E8%AA%9E%E6%BA%90+%E7%94%B1%E6%9D%A5+%E8%AA%9E%E6%BA%90+%E5%AD%90%E4%BE%9B%E3%81%AB%E3%82%82%E3%82%8F%E3%81%8B%E3%82%8B&hl=ja",
+        "title_ja": "GoogleのAIによる概要（取得済み記録の仮想再生）",
+        "text_ja": "金床（かなとこ）の語源は、「金属（かね）をのせる台（床＝とこ）」という意味からきています。\n子供向けに分かりやすく説明すると、次のようなお話になります。\n👦 子供向けの分かりやすい説明\n昔の道具を作る職人さん（鍛冶屋＝かじやさん）は、熱くて真っ赤になった鉄をハンマーで叩いて、刀や包丁、ハサミなどを作っていました。\nそのときに、「かたい鉄を上にのせて、叩くための頑丈な台」が必要でした。\nかな（金） ＝ 鉄や金属のこと\nとこ（床） ＝ 物をのせる台や、平らな場所のこと（※お布団を敷く「床」や、髪をきる「床屋」の床と同じ意味です）\nこの2つの言葉が合体して、「金属をのせる台」＝「かなとこ」と呼ばれるようになりました。\n漢字で書くときも、「金（かな）」の「床（とこ）」と書くので、言葉の意味がそのまま名前になっています。\nもし、さらに詳しい歴史や、なぜ「アンビル」とも呼ばれるのかなど、別のことも知りたくなったらいつでも教えてね！",
+        "sha256": "84be7bf4fddfbc7b340ceb58aea45f5c73db0def8267c7d2162865914174accd",
+        "retrieved_at": "2026-09-08T00:46:23.265089+00:00",
+        "truncated": false,
+        "use": "google_ai_overview",
+        "coverage": "ai_generated_summary",
+        "claim_status": "retrieved_ai_summary_not_verified_fact",
+        "replay_origin": "overview-child-dialogue-20260908-v1 / interactive / turn_index=3",
+        "sources": []
+      }
+    }
+  ]
+}

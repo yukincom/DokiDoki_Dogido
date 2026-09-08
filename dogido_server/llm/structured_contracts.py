@@ -14,7 +14,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from dogido_server.language_dialogue.contracts import GroundedReply, Interpretation
+from dogido_server.language_dialogue.contracts import GroundedReply, Interpretation, ResearchIntent, ResearchReading, WebConsent
 
 
 Confidence = Annotated[float | int, Field(ge=0.0, le=1.0)]
@@ -163,6 +163,9 @@ class _SelectSwordIntent(_StrictModel):
 _MODELS: dict[str, type[BaseModel]] = {
     "language_dialogue_interpretation": Interpretation,
     "language_dialogue_reply": GroundedReply,
+    "language_research_intent": ResearchIntent,
+    "language_research_reading": ResearchReading,
+    "language_web_consent": WebConsent,
     "assist_select_sword_intent": _SelectSwordIntent,
     "haiku_draft": _HaikuDraft,
     "haiku_irony": _Irony,

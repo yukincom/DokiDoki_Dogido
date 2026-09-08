@@ -10,8 +10,15 @@ import re
 from pydantic import ValidationError
 
 from dogido_server.llm.types import LLMFrontend, StructuredGenerationRequest
-from .contracts import GroundedReply, Interpretation
+from .contracts import GroundedReply, Interpretation, ResearchIntent, ResearchReading
+from .browser_visit import WELCOME_BACK
+from .web_handoff import WebHandoff, WebHandoffMixin, WEB_PERMISSION_PROMPT
 from .retrieval import LocalDialogueSearch, SearchResult
+from .verified_answers import count_explicit_kana, verified_reply
+from .web_research import (
+    RETURN_INVITATION, TEACHER_SUGGESTION,
+    ResearchContext, checked_quotes,
+)
 
 
 KANJI_GRADE_CONFIRMATION = "それって、漢字を習う学年のこと？"
@@ -31,14 +38,16 @@ class Focus:
     alternatives: list[str] = field(default_factory=list)
 
 
-class LanguageDialogue:
+class LanguageDialogue(WebHandoffMixin):
     """一つの会話用。モデル呼出し中も interrupt() で古い返答を無効化できる。"""
 
-    def __init__(self, llm: LLMFrontend, search=None, *, clock=time.monotonic, ttl_seconds=300):
+    def __init__(self, llm: LLMFrontend, search=None, *, clock=time.monotonic, ttl_seconds=300,
+                 web=None, on_event=None, research_ttl_seconds=1800):
         self.llm = llm
         self.search = search or LocalDialogueSearch()
         self.clock = clock
         self.ttl_seconds = ttl_seconds
+        self.research_ttl_seconds = research_ttl_seconds
         self.mode = "normal"
         self.focus = Focus()
         self.history = deque(maxlen=10)  # 5往復。学習記録には保存しない。
@@ -49,17 +58,129 @@ class LanguageDialogue:
         self._busy = False
         self._seen = deque(maxlen=64)
         self._kanji_scope_confirmed = False
+        self.web = web
+        self.on_event = on_event or (lambda event: None)
+        self.research = None
+        self.last_research_topic = ""
+        self._minecraft_active = None  # 発話内容から前面アプリを推定しない。
+        self._focus_events = deque(maxlen=64)
+        self._visit_number = 0
+        self._visit = None
+        self._pending_web = None
 
-    def _clear_focus(self):
+    def return_context(self):
+        """本体側へ戻す情報は調べた話題1件だけ。本文・答え・理解度は含めない。"""
+        return {"researched_topic": self.last_research_topic} if self.last_research_topic else {}
+
+    def _clear_focus(self, *, remember_research=False):
+        if remember_research and self.research:
+            self.last_research_topic = self.research.question[:160]
         self.mode = "normal"
         self.focus = Focus()
         self.history.clear()
         self._kanji_scope_confirmed = False
+        self.research = None
+        self._visit = None
+        self._pending_web = None
+
+    def _expire_research(self):
+        if self.research and self.clock() - self.last_activity >= self.research_ttl_seconds:
+            self._epoch += 1  # 実行中の旧返答から失効文脈を復活させない。
+            self._clear_focus(remember_research=True)
+            return True
+        return False
+
+    def observe_minecraft_focus(self, active: bool, *, event_id: str):
+        """実測または明示した模擬イベント。歓迎を即返し、Web/LLMは呼ばない。
+
+        呼出元は歓迎を配送した後に refresh_after_return(token) を呼ぶ。
+        中断・処理中なら次の安全なactive観測まで保留し、releaseでは自動発話しない。
+        """
+        if type(active) is not bool or not isinstance(event_id, str) or not event_id or len(event_id) > 160:
+            raise ValueError("boolのactiveと1〜160字のevent_idが必要")
+        with self._lock:
+            row = {"control": "minecraft_focus", "active": active, "event_id": event_id,
+                   "reply": "", "status": "observed"}
+            if event_id in self._focus_events:
+                return dict(row, status="duplicate")
+            self._focus_events.append(event_id)
+            self._minecraft_active = active
+            if self._expire_research():
+                return dict(row, status="context_expired")
+            visit = self._visit
+            if not visit or not self.research:
+                return dict(row, status="no_browser_visit")
+            visit.observe(active)
+            if not active or not visit.returned or visit.greeted:
+                return row
+            if self.paused or self._busy:
+                return dict(row, status="deferred")
+            visit.greeted = True
+            self.last_activity = self.clock()
+            row.update(status="welcome_back", reply=WELCOME_BACK, refresh_token=visit.token)
+            self._remember_reply(row, f"focus:{event_id}")
+            return row
+
+    def refresh_after_return(self, token: str):
+        """歓迎配送後の一度だけの再読。説明を発話せず、一時文脈だけへ補充する。"""
+        with self._lock:
+            row = {"control": "return_context_refresh", "reply": "", "status": "skipped"}
+            if self._expire_research():
+                return dict(row, status="context_expired")
+            visit, context = self._visit, self.research
+            if not visit or visit.token != token or not visit.greeted or not context:
+                return dict(row, status="stale_return")
+            if visit.refreshed:
+                return dict(row, status="already_refreshed")
+            if self.paused or self._busy or self._minecraft_active is not True:
+                return dict(row, status="deferred")
+            refresh = getattr(self.web, "refresh", None)
+            visit.refreshed = True
+            if context.pages or not refresh:
+                return dict(row, status="context_ready" if context.pages else "unavailable",
+                            context_page_ids=[p["id"] for p in context.pages])
+            self._busy = True
+            epoch = self._epoch
+
+        def cancelled():
+            with self._lock:
+                return epoch != self._epoch or self._visit is not visit
+
+        try:
+            updated = refresh(context, cancelled=cancelled, emit=self.on_event)
+            with self._lock:
+                if cancelled():
+                    return dict(row, status="interrupted")
+                if self._expire_research():
+                    return dict(row, status="context_expired")
+                if updated is not None:
+                    row["web_refresh"] = asdict(updated)
+                    if updated.pages:
+                        context.pages = updated.pages
+                        context.search_results = updated.search_results
+                return dict(row, status="context_ready" if context.pages else "unavailable",
+                            context_page_ids=[p["id"] for p in context.pages])
+        except Exception as exc:
+            return dict(row, status="unavailable", error=type(exc).__name__)
+        finally:
+            with self._lock:
+                self._busy = False
+
+    def cancel(self):
+        """検索・生成中でも明示的に打ち切れる。完了待ちの結果は配送しない。"""
+        with self._lock:
+            self._epoch += 1
+            self.paused = False
+            self._clear_focus(remember_research=True)
+            self.last_activity = self.clock()
+            return {"control": "cancel", "mode": "normal", "paused": False,
+                    "return_context": self.return_context()}
 
     def interrupt(self):
         with self._lock:
             self._epoch += 1
             self.paused = True
+            self._pending_web = None  # 中断前の同意・案内音声から後で突然開かない。
             self.last_activity = self.clock()
             return {"control": "interrupt", "mode": self.mode, "paused": True}
 
@@ -104,8 +225,9 @@ class LanguageDialogue:
                 return dict(
                     record, status="paused" if self.paused else "busy", mode_after=self.mode
                 )
-            if started - self.last_activity >= self.ttl_seconds:
-                self._clear_focus()
+            ttl = self.research_ttl_seconds if self.research else self.ttl_seconds
+            if started - self.last_activity >= ttl:
+                self._clear_focus(remember_research=True)
                 record["context_expired"] = True
             self._busy = True
             epoch = self._epoch
@@ -117,11 +239,50 @@ class LanguageDialogue:
                 "mode": self.mode,
                 "focus": asdict(self.focus),
             }
+            if self.last_research_topic:
+                details["recent_research"] = self.return_context()
+            research = self.research
+            pending_web = self._pending_web
+            if research:
+                details["research"] = research.snapshot()
             # 受信した質問は中断しても残す。まだ生成していない返事は残さない。
             self.history.append(current)
             self._seen.append(turn_id)
             self.focus = Focus(question=text)
         try:
+            if pending_web:
+                handled = self._handle_web_consent(details, record, pending_web, epoch)
+                with self._lock:
+                    if epoch != self._epoch:
+                        return dict(record, status="interrupted", reply="", references=[], mode_after=self.mode)
+                    if handled:
+                        if self._pending_web:
+                            i = self._pending_web.interpretation
+                            self.focus = Focus(i.question, i.target)
+                        self._remember_reply(record, turn_id)
+                        self.last_activity = self.clock()
+                        return dict(record, mode_after=self.mode,
+                                    duration_ms=round((self.clock() - started) * 1000))
+            if research:
+                handled = self._research_reply(details, record, research, epoch)
+                with self._lock:
+                    if epoch != self._epoch:
+                        return dict(record, status="interrupted", reply="", references=[], mode_after=self.mode)
+                    if handled:
+                        if record["status"] == "handoff":
+                            self._clear_focus(remember_research=True)
+                            record["return_context"] = self.return_context()
+                        else:
+                            self.research = handled
+                            self.mode = "language"
+                        self._remember_reply(record, turn_id)
+                        self.last_activity = self.clock()
+                        record.update(mode_after=self.mode, duration_ms=round((self.clock() - started) * 1000))
+                        return record
+                    self.last_research_topic = research.question[:160]
+                    self.research = None  # 明示された別の問いは、新しい検索の単位。
+                    self._visit = None
+                    details.pop("research", None)
             interpretation, status = self._generate(
                 StructuredGenerationRequest(
                     kind="language_dialogue_interpretation",
@@ -134,6 +295,7 @@ class LanguageDialogue:
                 Interpretation,
             )
             record["interpretation_status"] = status
+            computed_fact = None
             if interpretation:
                 record["interpretation"] = interpretation.model_dump()
                 turns = {t["turn_id"]: t["text"] for t in history + [current]}
@@ -145,9 +307,10 @@ class LanguageDialogue:
                     for e in evidence
                 )
                 if interpretation.target_status == "contextual":
-                    # 続きの対象が実際の会話にあれば、過去発話の引用省略だけで捨てない。
+                    # 対象を最新発話で言い直した場合も、過去の引用省略だけで捨てない。
                     known_target = bool(interpretation.target) and any(
-                        interpretation.target in t["text"] for t in history
+                        normalize(interpretation.target) in normalize(t["text"])
+                        for t in history + [current]
                     )
                     switching_away = (
                         interpretation.facet == "other"
@@ -183,6 +346,13 @@ class LanguageDialogue:
                             interpretation.target_status = "ambiguous"
                             interpretation.clarification = KANJI_GRADE_CONFIRMATION
                             interpretation.alternatives = ["漢字の配当学年", "漢字以外の学習"]
+                    if interpretation.facet == "mora_count" and interpretation.target_status != "ambiguous":
+                        computed_fact = count_explicit_kana(
+                            interpretation.target, [e.quote for e in evidence]
+                        )
+                        if computed_fact is None:
+                            interpretation.target_status = "ambiguous"
+                            interpretation.clarification = "数えたい言葉の読みを、ひらがなかカタカナで教えてくれる？"
                     record["effective_interpretation"] = interpretation.model_dump()
             if interpretation is None:
                 record.update(
@@ -191,7 +361,7 @@ class LanguageDialogue:
                 )
                 next_focus = None
             elif (
-                interpretation.topic not in {"language", "unclear"}
+                interpretation.topic not in ({"language", "unclear", "general"} if self.web else {"language", "unclear"})
                 or interpretation.relation == "end"
             ):
                 # 実際のMinecraft返答は本体側の担当。試験用に知識のない回答を作らない。
@@ -207,7 +377,7 @@ class LanguageDialogue:
                     interpretation.alternatives,
                 )
             else:
-                lookup = self.search.search(
+                lookup = SearchResult([], [computed_fact], "computed") if computed_fact else self.search.search(
                     interpretation.search_terms,
                     facet=interpretation.facet,
                     target=interpretation.target,
@@ -233,7 +403,13 @@ class LanguageDialogue:
                 with self._lock:
                     if epoch != self._epoch:
                         return dict(record, status="interrupted", mode_after=self.mode)
-                if not lookup.facts:
+                fixed_reply = verified_reply(interpretation, lookup.facts)
+                if self.web and interpretation.lookup_requested:
+                    reply, status = None, "lookup_requested"
+                elif fixed_reply:
+                    reply, status = fixed_reply, "accepted"
+                    record["answer_origin"] = "code"
+                elif not lookup.facts:
                     record["reply_status"] = "no_evidence"
                     reply, status = None, "no_evidence"
                 else:
@@ -278,13 +454,39 @@ class LanguageDialogue:
                             "その言葉のことは、今の資料では確かめられへんかった。教科書や辞書で一緒に見てみよか。"
                         )
                 next_focus = Focus(interpretation.question, interpretation.target)
+                needs_context = reply is not None and reply.missing_kind == "context"
+                if needs_context:
+                    question = reply.clarification.strip() or "その言葉が出てくる文や、使う場面を教えてくれる？"
+                    record.update(status="clarify", reply=question)
+                    next_focus.clarification = question
+                web_reason = (
+                    "explicit_request" if interpretation.lookup_requested
+                    else "" if needs_context
+                    else "no_local_facts" if not lookup.facts
+                    else "uncertain_reply" if (
+                        reply and reply.status in {"partial", "unsupported"}
+                        and reply.missing_kind == "evidence" and reply.missing.strip()
+                    )
+                    else ""
+                )
+                if self.web and web_reason:
+                    with self._lock:
+                        if epoch != self._epoch:
+                            return dict(record, status="interrupted", reply="", references=[], mode_after=self.mode)
+                        self._pending_web = WebHandoff(
+                            interpretation.model_copy(deep=True), web_reason,
+                            [s["url"] for f in lookup.facts for s in f.get("sources", []) if s.get("url")],
+                        )
+                        record.update(status="web_consent_requested", reply=WEB_PERMISSION_PROMPT,
+                                      references=[], web_proposal={"trigger_reason": web_reason})
             with self._lock:
                 if epoch != self._epoch:
                     return dict(
                         record, status="interrupted", reply="", references=[], mode_after=self.mode
                     )
                 if record["status"] == "handoff":
-                    self._clear_focus()
+                    self._clear_focus(remember_research=True)
+                    record["return_context"] = self.return_context()
                     self.history.append(current)
                 elif next_focus is not None:
                     self.mode = "language"
@@ -294,14 +496,7 @@ class LanguageDialogue:
                         and interpretation.facet == "grade"
                         and record["status"] != "clarify"
                     )
-                if record["reply"]:
-                    self.history.append(
-                        {
-                            "turn_id": f"{turn_id}:reply",
-                            "role": "assistant",
-                            "text": record["reply"],
-                        }
-                    )
+                self._remember_reply(record, turn_id)
                 self.last_activity = self.clock()
                 record.update(
                     mode_after=self.mode, duration_ms=round((self.clock() - started) * 1000)
@@ -310,3 +505,97 @@ class LanguageDialogue:
         finally:
             with self._lock:
                 self._busy = False
+
+    def _remember_reply(self, record, turn_id):
+        if record["reply"]:
+            self.history.append({"turn_id": f"{turn_id}:reply", "role": "assistant", "text": record["reply"]})
+
+    def _research_reply(self, details, record, context, epoch):
+        # 意図分類には本文を入れない。「取り違えた報告」を「困惑」と混同させない。
+        intent_details = {k: v for k, v in details.items() if k != "research"}
+        intent_details["research"] = {"question": context.question, "target": context.target, "phase": context.phase}
+        outcome, status = self._generate(
+            StructuredGenerationRequest(
+                kind="language_research_intent", details=intent_details, fallback_value={},
+                route="chat", temperature=0.0, max_tokens=350,
+            ), ResearchIntent,
+        )
+        record["research_reply_status"] = status
+        # 提案の根拠は今回の発話。Web本文や古い相槌を終了意思として使わない。
+        if outcome and unicodedata.normalize("NFKC", outcome.evidence) not in unicodedata.normalize("NFKC", details["current"]["text"]):
+            outcome = None
+            record["research_reply_status"] = "ungrounded_intent"
+        next_context = ResearchContext(context.question, context.target, context.pages, context.phase,
+                                       context.search_results, context.search_url)
+        if not outcome:
+            record.update(status="research_unclear", reply="ごめん、もうちょっと聞かせてくれる？")
+        elif outcome.intent == "new_question":
+            return None
+        elif outcome.intent == "return":
+            record.update(status="handoff", handoff_topic="minecraft", reply="よし、冒険にもどろか！", research_phase="none")
+        elif outcome.intent == "uncertain" and not context.search_url:
+            next_context.phase = "return_offered"
+            record.update(status="return_offered", reply=TEACHER_SUGGESTION + RETURN_INVITATION)
+        elif outcome.intent == "continue":
+            next_context.phase = "discussing"
+            record.update(status="research_continue", reply="ええで、もうちょっと考えてみよか。気になってること、聞かせてや。")
+        elif outcome.intent in {"report", "discuss", "uncertain"}:
+            with self._lock:
+                if epoch != self._epoch:
+                    return next_context
+            refresh = getattr(self.web, "refresh", None)
+            # focusを送るホストでは歓迎後に再読する。非対応ホストだけ旧発話時fallback。
+            if (refresh and not context.pages and context.search_url
+                    and self._minecraft_active is None
+                    and not (self._visit and self._visit.refreshed)):
+                updated = refresh(context, cancelled=lambda: epoch != self._epoch, emit=self.on_event)
+                if epoch != self._epoch:
+                    return next_context
+                if updated is not None:
+                    record["web_refresh"] = asdict(updated)
+                    if updated.pages:
+                        next_context.pages = updated.pages
+                        next_context.search_results = updated.search_results
+                        context = next_context
+                        details = {**details, "research": context.snapshot()}
+            record["context_page_ids"] = [p["id"] for p in context.pages]
+            reading, reading_status = self._generate(
+                StructuredGenerationRequest(
+                    kind="language_research_reading", details=details, fallback_value={},
+                    route="chat", temperature=0.0, max_tokens=750,
+                ), ResearchReading,
+            )
+            record["research_reading_status"] = reading_status
+            if reading:
+                record["research_reading"] = reading.model_dump()
+            next_context.phase = "discussing"
+            valid = reading and bool(reading.perspective.strip()) and checked_quotes(reading.quotes, context.pages)
+            record["quote_validation"] = "matched" if valid else "unsupported"
+            if valid:
+                record.update(status="research_reflection",
+                    reply=(reading.perspective if any(
+                        p["use"] == "google_ai_overview" for p in context.pages
+                    ) else f"オレにはこう読み取れたで。{reading.perspective} どう思う？"),
+                    references=[p for p in context.pages if p["id"] in {q.page_id for q in reading.quotes}],
+                    source_quotes=[q.model_dump() for q in reading.quotes])
+            else:
+                record.update(status="research_uncertain",
+                    reply="そこまでは、オレには資料から確かめられへんかった。どのあたりでそう思ったん？")
+                if context.search_url:
+                    record["reply"] = (
+                        "検索結果の紹介文までは受け取れたけど、リンク先の本文はまだ読めてへんねん。気になったところを教えてくれる？"
+                        if not context.pages and context.search_results else
+                        "今の検索ページからは、説明の本文を受け取れてへんねん。調べるのはいったんここまでにしよか。"
+                        if not context.pages else
+                        "そのところは、今の概要だけやとまだ分からへんな。気になる説明を一緒に見てみよか。"
+                    )
+        elif outcome.intent == "acknowledge" and context.phase == "discussing":
+            next_context.phase = "return_offered"
+            record.update(status="return_offered", reply=RETURN_INVITATION)
+        else:
+            record.update(status="awaiting_report", reply="どうやった？ 分かったこと、オレにも教えてや。")
+        if outcome:
+            record["research_interpretation"] = outcome.model_dump()
+        if record["status"] != "handoff":
+            record["research_phase"] = next_context.phase
+        return next_context

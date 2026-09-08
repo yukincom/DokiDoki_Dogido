@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/yukincom/chrome-web-mcp-macos.git",
+  "commit": "47d43f9d56d7c02774f73407e6b0410daaa55bc6",
+  "install_directory": ".dogido_tools/chrome-web-mcp-macos",
+  "client_dependency": "mcp==1.28.0",
+  "patches": [
+    "scripts/patches/chrome-web-reviewed-url-and-ai-overview.patch",
+    "scripts/patches/chrome-web-overview-reread.patch",
+    "scripts/patches/chrome-web-eight-second-single-read.patch"
+  ]
+}

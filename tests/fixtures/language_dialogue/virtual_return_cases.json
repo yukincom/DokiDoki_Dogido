@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "virtual-return-anvil",
+      "origin": "合成対話。取得済みAI概要415文字を再生し、Minecraft復帰を模擬する。実Web・実前面・音声は対象外。",
+      "turns": [
+        {
+          "control": "minecraft_active",
+          "expect_status": [
+            "no_browser_visit"
+          ]
+        },
+        {
+          "text": "金床って、なんで『かなとこ』って読むの？ 調べてみて。",
+          "expect_status": [
+            "web_consent_requested"
+          ]
+        },
+        {
+          "text": "ええで",
+          "expect_status": [
+            "web_waiting_playback"
+          ]
+        },
+        {
+          "control": "speech_completed",
+          "expect_status": [
+            "awaiting_report"
+          ]
+        },
+        {
+          "control": "minecraft_away",
+          "expect_status": [
+            "observed"
+          ]
+        },
+        {
+          "control": "minecraft_active",
+          "expect_status": [
+            "welcome_back"
+          ],
+          "expect_refresh_status": [
+            "context_ready"
+          ]
+        },
+        {
+          "control": "minecraft_active",
+          "expect_status": [
+            "observed"
+          ]
+        },
+        {
+          "text": "かなは金属で、とこは台ってことなんやね。",
+          "expect_status": [
+            "research_reflection"
+          ],
+          "expect_context": true
+        },
+        {
+          "text": "じゃあ『かな』は金色って意味じゃないんや？",
+          "expect_status": [
+            "research_reflection"
+          ],
+          "expect_context": true
+        },
+        {
+          "text": "わかった。もう冒険に戻ろう。",
+          "expect_status": [
+            "handoff"
+          ],
+          "expect_mode": "normal"
+        }
+      ]
+    }
+  ]
+}

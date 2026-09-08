@@ -1,0 +1,123 @@
+diff --git a/src/chrome_web_mcp/server.py b/src/chrome_web_mcp/server.py
+index 51c78a5..82e9e5f 100644
+--- a/src/chrome_web_mcp/server.py
++++ b/src/chrome_web_mcp/server.py
+@@ -1408,7 +1408,7 @@ def _smart_cut(text: str, limit: int) -> tuple[str, bool]:
+     return window, True
+ 
+ 
+-async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
++async def _fetch_page(url: str, char_limit: int, format: str = "text", *, expected_url: str | None = None) -> dict:
+     """Render a public URL in a per-call tab and return its readable content.
+ 
+     Each call gets its own tab, so concurrent fetches are parallel-safe.
+@@ -1420,6 +1420,7 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
+     """
+     # Validate the requested URL up front (fail-closed).
+     validated = _validate_public_url(url)
++    expected = _validate_public_url(expected_url).split("#", 1)[0] if expected_url else None
+     async with _ENSURE_LOCK:
+         browser_ws = await asyncio.to_thread(_RUNTIME.ensure)
+     browser = await websockets.connect(browser_ws, max_size=MAX_CDP_MESSAGE)
+@@ -1446,6 +1447,8 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
+         # Output policy; the proxy enforces network policy before connection.
+         final_url = str(await _evaluate(page, "location.href"))
+         _validate_public_url(final_url)
++        if expected and final_url.split("#", 1)[0] != expected:
++            raise ValueError("reviewed_url_changed")
+         payload: dict = {
+             "url": final_url,  # kept for backward compatibility
+             "requested_url": validated,
+@@ -1515,6 +1518,11 @@ async def _fetch_page(url: str, char_limit: int, format: str = "text") -> dict:
+             else:  # links: plain text plus follow-up crawl targets
+                 entry["text"] = cut
+             payload.update(entry)
++        if expected:
++            current_url = str(await _evaluate(page, "location.href"))
++            if current_url.split("#", 1)[0] != expected:
++                raise ValueError("reviewed_url_changed")
++            payload["expected_url_verified"] = True
+         if _RUNTIME.display_mode in {"native", "xephyr"}:
+             await _cdp_call(browser, "Target.activateTarget", {"targetId": target_id})
+             keep_tab = True
+@@ -1596,6 +1604,10 @@ async def list_tools() -> list[types.Tool]:
+                         "type": "string",
+                         "description": "Public http(s) URL to fetch (no credentials, no localhost).",
+                     },
++                    "expected_url": {
++                        "type": "string",
++                        "description": "Optional exact reviewed URL. Check after navigation and again before activating the tab; close mismatches without activating.",
++                    },
+                     "char_limit": {
+                         "type": "integer",
+                         "description": "Maximum characters of readable text to return.",
+@@ -1705,7 +1717,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+                 raise ValueError("char_limit must be an integer from 100 to 200000")
+             if format not in ("text", "markdown", "links"):
+                 raise ValueError("format must be one of text, markdown, links")
+-            payload = {"success": True, "data": await _fetch_page(url.strip(), char_limit, format)}
++            expected_url = arguments.get("expected_url")
++            if expected_url is not None and (not isinstance(expected_url, str) or not expected_url.strip() or len(expected_url) > 2048):
++                raise ValueError("expected_url must be a nonempty URL of at most 2048 characters")
++            checked = {"expected_url": expected_url.strip()} if expected_url is not None else {}
++            payload = {"success": True, "data": await _fetch_page(url.strip(), char_limit, format, **checked)}
+         elif name == "health_check":
+             if arguments:
+                 raise ValueError("health_check takes no arguments")
+diff --git a/tests/test_server.py b/tests/test_server.py
+index 7c6242d..10fdaca 100644
+--- a/tests/test_server.py
++++ b/tests/test_server.py
+@@ -231,7 +231,8 @@ def test_build_results_deduplicates_and_honors_limit():
+ 
+ @pytest.mark.parametrize("mode", ["native", "xephyr", "headless", "xvfb"])
+ @pytest.mark.parametrize("fail", [False, True])
+-def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fail):
++@pytest.mark.parametrize("reviewed", ["none", "matching", "redirect", "late_redirect"])
++def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fail, reviewed):
+     navigated = []
+     created = []
+     closed = []
+@@ -279,9 +280,13 @@ def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fa
+         return {}
+ 
+     nav_by_conn: dict = {}
++    location_reads: dict = {}
+ 
+     async def fake_evaluate(conn, expr):
+         if "location.href" in expr:
++            location_reads[id(conn)] = location_reads.get(id(conn), 0) + 1
++            if reviewed == "redirect" or (reviewed == "late_redirect" and location_reads[id(conn)] > 1):
++                return "https://unreviewed.example/"
+             return nav_by_conn.get(id(conn), "https://example.com/")
+         if "outerHTML" in expr:
+             return "<html><head><title>t</title></head><body><p>hello</p></body></html>"
+@@ -316,16 +321,19 @@ def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fa
+ 
+     async def run_two():
+         return await asyncio.gather(
+-            server._fetch_page("https://one.example/a", 500),
+-            server._fetch_page("https://two.example/b", 500),
++            server._fetch_page("https://one.example/a", 500, expected_url=None if reviewed == "none" else "https://one.example/a"),
++            server._fetch_page("https://two.example/b", 500, expected_url=None if reviewed == "none" else "https://two.example/b"),
+             return_exceptions=True,
+         )
+ 
+     first, second = asyncio.run(run_two())
+     assert len(set(created)) == 2
+-    visible_success = mode in {"native", "xephyr"} and not fail
++    visible_success = mode in {"native", "xephyr"} and not fail and reviewed in {"none", "matching"}
+     assert set(activated) == (set(created) if visible_success else set())
+     assert set(closed) == (set() if visible_success else set(created))
++    if reviewed == "redirect" or (reviewed == "late_redirect" and not fail):
++        assert isinstance(first, ValueError) and isinstance(second, ValueError)
++        return
+     if fail:
+         assert isinstance(first, RuntimeError) and isinstance(second, RuntimeError)
+         return
+@@ -333,4 +341,5 @@ def test_fetch_page_runs_concurrent_calls_on_separate_tabs(monkeypatch, mode, fa
+     assert first["requested_url"] == "https://one.example/a"
+     assert first["redirected"] is False
+     assert first["total_chars"] == len("hello")
++    assert first.get("expected_url_verified", False) is (reviewed == "matching")
+     assert in_section["max"] == 2

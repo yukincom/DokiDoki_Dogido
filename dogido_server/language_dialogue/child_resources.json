@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "policy_ja": "公的な運営元と、子ども本人が疑問を調べるために読める内容かを分けて確認する。子どもの教育に使う資料でも、教師向けの指導資料・解答資料・教育研究資料は表示候補にしない。名称の『こども』や対象学年、ポータル掲載だけでは採用しない。auto_openは個別に確認した直接教材のみ。excluded_recordsは再選定を避けるための除外記録で、表示候補には読み込まない。公的運営を内容の完全な中立性・正確性の保証とはしない。",
+  "records": [
+    {
+      "id": "gsi.direction.grade3_4",
+      "title_ja": "小学３年・４年のページ：方位（方向）",
+      "operator_ja": "国土交通省 国土地理院",
+      "operator_type_ja": "国の機関",
+      "url": "https://www.gsi.go.jp/KIDS/KIDS03.html",
+      "school_grades": [3, 4],
+      "lookup_terms": ["方位", "方向", "東西南北", "方角"],
+      "facets": ["meaning", "other", "comparison"],
+      "auto_open": true,
+      "reviewed_at": "2026-09-07",
+      "reading_support_ja": "公式に小学3・4年向けと表示。短い本文、括弧内の読み、方位の図がある。",
+      "commercial_links_ja": "確認した学習本文に入塾・商品購入の誘導なし。リンク先全部の保証ではない。",
+      "limitations_ja": "ドギドは抽出できた文字を読む。図の中の文字・配置は読み取った扱いにしない。小学2年生向けとは確認していない。",
+      "evidence_urls": ["https://www.gsi.go.jp/KIDS/", "https://www.gsi.go.jp/KIDS/KIDS03.html"]
+    },
+    {
+      "id": "gsi.map_symbols.grade3_4",
+      "title_ja": "小学３年・４年のページ：地図記号",
+      "operator_ja": "国土交通省 国土地理院",
+      "operator_type_ja": "国の機関",
+      "url": "https://www.gsi.go.jp/KIDS/KIDS05.html",
+      "school_grades": [3, 4],
+      "lookup_terms": ["地図記号"],
+      "facets": ["meaning", "other", "comparison"],
+      "auto_open": true,
+      "reviewed_at": "2026-09-07",
+      "reading_support_ja": "公式に小学3・4年向けと表示。読み付きの本文、地図記号の図がある。",
+      "commercial_links_ja": "学習本文に入塾・教材販売の誘導なし。末尾にPDF閲覧ソフトの外部リンクあり。",
+      "limitations_ja": "画像中心の箇所は文字抽出だけでは確認できない。リンク先やPDFを自動追跡しない。",
+      "evidence_urls": ["https://www.gsi.go.jp/KIDS/", "https://www.gsi.go.jp/KIDS/KIDS05.html"]
+    },
+    {
+      "id": "mext.learning_portal",
+      "title_ja": "たのしくまなび隊",
+      "operator_ja": "文部科学省",
+      "operator_type_ja": "国の機関が運営するリンク集",
+      "url": "https://tanoshikumanabitai.mext.go.jp/",
+      "school_grades": [1, 2, 3, 4, 5, 6],
+      "lookup_terms": [],
+      "auto_open": false,
+      "reviewed_at": "2026-09-07",
+      "reading_support_ja": "学年別の検索がある。紹介先の教材は個別確認が必要。",
+      "commercial_links_ja": "民間企業のコンテンツも掲載。公的ページからのリンクを一括許可する用途には使わない。",
+      "limitations_ja": "候補調査の入口のみ。子どもの検索結果にそのまま採用しない。",
+      "evidence_urls": ["https://www.mext.go.jp/b_menu/houdou/mext_01362.html", "https://tanoshikumanabitai.mext.go.jp/"]
+    },
+    {
+      "id": "jac.kids",
+      "title_ja": "国立劇場こどもサイト",
+      "operator_ja": "独立行政法人 日本芸術文化振興会",
+      "operator_type_ja": "独立行政法人",
+      "url": "https://www.ntj.jac.go.jp/kids/",
+      "school_grades": [],
+      "lookup_terms": ["歌舞伎", "文楽", "能楽", "演芸"],
+      "auto_open": false,
+      "reviewed_at": "2026-09-07",
+      "reading_support_ja": "見出しと本文に読みが付き、伝統芸能を子どもに紹介する。特定学年は未確認。",
+      "commercial_links_ja": "公演を探す導線がある。私塾の販売ページではないが、無条件で広告的導線なしとはしない。",
+      "limitations_ja": "候補。各解説ページの難易度を確認してから採用する。",
+      "evidence_urls": ["https://www.mext.go.jp/kids/learn/link/index.html", "https://www.ntj.jac.go.jp/kids/"]
+    }
+  ],
+  "excluded_records": [
+    {
+      "id": "tokyo.basic_drill",
+      "title_ja": "東京ベーシック・ドリル",
+      "url": "https://www.kyoiku.metro.tokyo.lg.jp/school/study_material/improvement/tokyo_basic_drill/about",
+      "decision_basis_ja": "ユーザーからの表示禁止の指示",
+      "reason_ja": "教師が使うあんちょことの指摘。子ども本人が疑問を調べるための送り先にはしない。確認待ちの候補ではなく除外。"
+    },
+    {
+      "id": "ninjal.child_pamphlet",
+      "title_ja": "こくごけん・こどもパンフレット",
+      "url": "https://repository.ninjal.ac.jp/records/3105",
+      "decision_basis_ja": "ユーザーによる対象読者の評価",
+      "reason_ja": "意欲のある教師・教育研究者が読む資料ではないかとの指摘。名称だけで子ども本人向けと判断した候補選定を撤回。公式に教師専用と確認した意味ではない。"
+    }
+  ]
+}

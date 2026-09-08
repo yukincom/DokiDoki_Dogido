@@ -1,6 +1,7 @@
 """公式資料の検索。語彙選定レベルを学年として投影しない。外部通信なし。"""
 
 from dataclasses import asdict, dataclass
+from copy import deepcopy
 import json
 from pathlib import Path
 import unicodedata
@@ -26,6 +27,11 @@ def compact(text: str) -> str:
     return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in value if not c.isspace())
 
 
+def grade_character(text: str) -> str:
+    """漢字の配当を尋ねていると確認した後だけ使う数字表記の変換。"""
+    return unicodedata.normalize("NFKC", text).translate(str.maketrans("0123456789", "零一二三四五六七八九"))
+
+
 class LocalDialogueSearch:
     def __init__(self, *, reference_dir: Path | None = None, cards_path: Path | None = None):
         self.reference_dir = reference_dir
@@ -49,8 +55,7 @@ class LocalDialogueSearch:
                     candidates.extend(target)
                 if facet == "grade":
                     # 数字の「漢字」が明示され、意図確認を通過した問いだけの表記変換。
-                    digits = dict(zip("0123456789", "零一二三四五六七八九"))
-                    candidates = [digits.get(c, c) for c in candidates]
+                    candidates = [grade_character(c) for c in candidates]
                 characters = list(dict.fromkeys(c for c in candidates if "一" <= c <= "鿿"))[:8]
                 for char in characters:
                     profile = get_kanji_profile(char, reference_dir=self.reference_dir)
@@ -66,6 +71,11 @@ class LocalDialogueSearch:
                             readings = "、".join(r["reading"] for r in record["readings"])
                             text = f"常用漢字表の『{char}』の音訓: {readings}。熟語の語源を示す情報ではない。"
                         facts[record["id"]] = self._fact(record, text, "official_table")
+                        if key == "grade_level_kanji_allocation":
+                            facts[record["id"]]["allocation"] = {
+                                "character": char, "school_grade": record["school_grade"],
+                                "scope": "character_only",
+                            }
                     if facet == "grade" and not profile["grade_level_kanji_allocation"]:
                         record = profile["joyo_kanji"]
                         facts[f"allocation-absence:{char}"] = {
@@ -95,7 +105,7 @@ class LocalDialogueSearch:
             return SearchResult(terms, list(facts.values())[:10], "unavailable", type(exc).__name__)
 
     def _fact(self, record, text, status):
-        return {
+        fact = {
             "id": record["id"],
             "title_ja": record["title_ja"],
             "text_ja": text,
@@ -105,3 +115,9 @@ class LocalDialogueSearch:
                 asdict(s) for s in _language_sources(record, reference_dir=self.reference_dir)
             ],
         }
+        # 一度検索したレコードの規則を同じIDの中に保つ。規則ごとに同じIDの
+        # factを作ると上書きされる。別検索器・出典解決・全DB注入は増やさない。
+        for key in ("rules", "machine_use"):
+            if record.get(key):
+                fact[key] = deepcopy(record[key])
+        return fact
