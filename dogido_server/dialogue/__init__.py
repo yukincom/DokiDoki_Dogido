@@ -26,12 +26,28 @@ from dogido_server.dialogue.player_plan import (
     conflicts_with_player_travel_guidance,
     extract_player_turn_plan,
 )
+from dogido_server.dialogue.foreground import (
+    CASUAL_HAIKU_PREFACE,
+    COMBAT_CHAT_ACK,
+    COMBAT_CHAT_AFTERMATH,
+    COMBAT_FOCUSED_AFTERMATH,
+    ForegroundDialogue,
+    ForegroundRoute,
+    SuspendedTopic,
+)
 
 __all__ = [
     "GENERIC_TOPIC_TERMS",
     "ReplyStance",
     "PlayerTurnPlan",
     "PlayerTurnPlanKind",
+    "CASUAL_HAIKU_PREFACE",
+    "COMBAT_CHAT_ACK",
+    "COMBAT_CHAT_AFTERMATH",
+    "COMBAT_FOCUSED_AFTERMATH",
+    "ForegroundDialogue",
+    "ForegroundRoute",
+    "SuspendedTopic",
     "build_allowed_speech_labels",
     "build_identify_skeleton",
     "build_observed_speech_name_corrections",

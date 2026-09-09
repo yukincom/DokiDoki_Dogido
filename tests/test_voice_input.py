@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import httpx
 
 from dogido_server.config import Settings
+from dogido_server.player_input.voice_vocalization import is_pure_voice_vocalization
 from dogido_server.voice_input import (
     CapturedSpeech,
     HAIKU_WORKSHOP_STT_PROMPT,
@@ -22,10 +23,23 @@ from dogido_server.voice_input import (
     stt_prompt,
     transcribe,
     transcribe_with_empty_retry,
+    NOISE_PATTERNS,
 )
 
 
 class VoiceInputPromptTests(unittest.TestCase):
+    def test_pure_vocalization_is_separate_from_noise_and_meaningful_voice(self) -> None:
+        for text in ("うおおお", "うわあああ！", "ぎゃあああ", "ああああ"):
+            self.assertTrue(is_pure_voice_vocalization(text), text)
+        for text in (
+            "ああ、そうか",
+            "『うおおお』って言った",
+            "うおおお、剣に持ち替えて",
+            "石炭だ",
+        ):
+            self.assertFalse(is_pure_voice_vocalization(text), text)
+        self.assertNotIn("うおおお", NOISE_PATTERNS)
+
     def test_default_capture_window_allows_a_thoughtful_pause(self) -> None:
         settings = Settings()
 

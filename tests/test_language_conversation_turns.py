@@ -135,6 +135,30 @@ def test_cancelled_selected_reply_is_kept_for_diagnostics_but_not_prompt_history
     assert ledger.prompt_history() == ''
 
 
+def test_generation_cancel_does_not_override_dispatched_playback_truth():
+    ledger = TurnLedger(clock=lambda: 0)
+    ledger.begin('t1', epoch=1, raw_text='続き', semantic_text='続き')
+    ledger.routed('t1', route='player_chat', status='player_chat')
+    ledger.select_reply('t1', reply='最後まで言えたで。', utterance_id='u1')
+    ledger.dispatched('u1')
+
+    assert ledger.cancel_pending(resolution='combat') == []
+    resolved = ledger.resolve('u1', 'completed')
+
+    assert resolved is not None
+    assert resolved['playback_status'] == 'completed'
+    assert ledger.prompt_history() == 'プレイヤー: 続き\nドギド: 最後まで言えたで。'
+
+
+def test_worker_busy_turn_never_enters_prompt_before_requeue():
+    ledger = TurnLedger(clock=lambda: 0)
+    ledger.begin('busy', epoch=0, raw_text='聞き直す', semantic_text='聞き直す')
+    ledger.routed('busy', route='learning', status='worker_busy')
+    ledger.finish_without_reply('busy', resolution='worker_busy')
+
+    assert ledger.prompt_turns() == []
+
+
 def test_player_chat_uses_only_previous_playback_completed_exchange():
     llm = CasualLLM('ええやん、絶好調やな。', 'その調子でいこか。')
     dialogue = LanguageDialogue(llm)

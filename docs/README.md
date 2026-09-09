@@ -87,9 +87,10 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 | 4 | [dialogue-design.md](dialogue-design.md) | 対話モード（peace / battle 等） |
 | 5 | [voice-delivery-plan.md](voice-delivery-plan.md) | ボイス速度・間・川柳の呼吸（#13） |
 | 6 | [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) | TTS 誤読補正・UniDic 方針 |
-| 7 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
-| 8 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
-| 9 | [mob_list.md](mob_list.md) | モブ日英・反応メモ（人間向け。runtime は catalogs） |
+| 7 | [main-dialogue-integration.md](main-dialogue-integration.md) | 本体の会話所有権・戦闘／雷／川柳中断・再生確定 |
+| 8 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
+| 9 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
+| 10 | [mob_list.md](mob_list.md) | モブ日英・反応メモ（人間向け。runtime は catalogs） |
 
 **つながり:** SM = 優先制御 · dialogue = どう喋るか · behavior = 場面例。
 
@@ -194,6 +195,7 @@ architecture（どう詠む）
 
 ### Conversation
 
+- [main-dialogue-integration.md](main-dialogue-integration.md)
 - [knowledge-query-integration.md](knowledge-query-integration.md)
 - [language-learning-progress-plan.md](language-learning-progress-plan.md)
 - [dogido-utterance-display.md](dogido-utterance-display.md)

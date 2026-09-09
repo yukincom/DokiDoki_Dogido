@@ -68,8 +68,10 @@ class DogidoStateMachine(
         self._pending_haiku_context: HaikuContext | None = None
         self._pending_haiku_irony: IronyContext | None = None
         self._pending_haiku_origin_event: GameEvent | None = None
+        self._pending_conversation_haiku_material: dict[str, object] | None = None
         # service が session.dialogue / haiku_workshop / lessons を返す callable を差し込む
         self.dialogue_context_provider = None
+        self.foreground_dialogue_provider = None
         self.haiku_workshop_provider = None
         self.haiku_lessons_provider = None
         # 正本providerは通常の検索にも使い、差替えproviderの候補だけを
@@ -108,6 +110,7 @@ class DogidoStateMachine(
             self._pending_haiku_context = None
             self._pending_haiku_irony = None
             self._pending_haiku_origin_event = None
+            self._pending_conversation_haiku_material = None
         self.player_input = player_input_context or route_player_input(
             event.meta.user_text,
             interpreted_text=interpreted_user_text,
@@ -136,6 +139,7 @@ class DogidoStateMachine(
         entered_mining_fatigue = False if dimension_changed else self._entered_status_effect(event, "mining_fatigue")
         light_source_crafted = self._light_source_crafted(event)
 
+        self._sync_haiku_interval_pause(now)
         self._update_memory(event, now)
         signals = self._derive_signals(event, now)
         signals.dimension_changed = dimension_changed

@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import logging
+import threading
 from typing import Iterable
 from uuid import uuid4
 
@@ -25,6 +26,8 @@ from dogido_server.config import Settings
 from dogido_server.diagnostics import DiagnosticHistory
 from dogido_server.display import DisplayHistory, RuntimeStatus
 from dogido_server.dialogue_context import DialogueContext
+from dogido_server.dialogue.foreground import ForegroundDialogue
+from dogido_server.dialogue.main_runtime import MainLanguageRuntime
 from dogido_server.episode_log import EpisodeRecorder
 from dogido_server.haiku.combat_pause import (
     CombatWorkshopInputAnalysis,
@@ -93,6 +96,7 @@ from dogido_server.haiku.verse import (
     verse_reading_text,
 )
 from dogido_server.llm import DogidoLLMRouter, LeafGenerationRequest, StructuredGenerationRequest
+from dogido_server.language_dialogue.conversation_turns import TurnLedger
 from dogido_server.memory import MemoryStore
 from dogido_server.models import (
     AcceptedEventResponse,
@@ -120,6 +124,7 @@ from dogido_server.state_machine import (
 )
 from dogido_server.state_machine.fallback_catalog import fallback_prewarm_texts
 from dogido_server.state_machine.response_catalog import response_prewarm_texts
+from dogido_server.state_machine.types import SpeechReference
 
 LOGGER = logging.getLogger("uvicorn.error")
 
@@ -160,11 +165,15 @@ class SessionInfo:
     pending_player_text: str | None = None
     pending_player_source: str | None = None
     pending_player_display_text: str | None = None
+    pending_player_turn_id: str | None = None
+    pending_player_force_main_chat: bool = False
+    pending_player_foreground_route: str | None = None
     # 直接入力と保留入力が同じtickで衝突した場合の待ち列。先着順・最大8件とし、
     # 1件用のpendingを上書きして質問を失わない。
-    deferred_player_inputs: deque[tuple[str, str, str]] = field(
+    deferred_player_inputs: deque[tuple[str, str, str, str, bool, str]] = field(
         default_factory=lambda: deque(maxlen=8)
     )
+    pending_voice_vocalization_at: datetime | None = None
     # panic hold ログの重複抑制（同じ文は1回だけ）
     panic_hold_logged_text: str | None = None
     # 戦闘中断中にpanicで保留している同じ発話を、毎tick OS AIへ再送しない。
@@ -173,6 +182,23 @@ class SessionInfo:
     combat_input_analysis_path: str = "none"
     # player_chat 用: 直近5往復 + 粗い出来事メモ
     dialogue: DialogueContext = field(default_factory=DialogueContext)
+    # 本文履歴とは別の、foreground所有権と再生完了台帳。
+    foreground_dialogue: ForegroundDialogue = field(default_factory=ForegroundDialogue)
+    dialogue_turns: TurnLedger = field(default_factory=TurnLedger)
+    language_runtime: MainLanguageRuntime | None = None
+    pending_language_results: deque[dict[str, object]] = field(
+        default_factory=lambda: deque(maxlen=4)
+    )
+    playback_events: deque[dict[str, str]] = field(
+        default_factory=lambda: deque(maxlen=128)
+    )
+    completed_playback_ids: deque[str] = field(
+        default_factory=lambda: deque(maxlen=256)
+    )
+    playback_events_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        repr=False,
+    )
 
     def is_stale_sequence(self, sequence: int) -> bool:
         return (
@@ -224,7 +250,10 @@ class DogidoService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.sessions: dict[str, SessionInfo] = {}
-        self.audio = AudioDispatcher(settings)
+        self.audio = AudioDispatcher(
+            settings,
+            on_playback_event=self._on_audio_playback_event,
+        )
         self.display = DisplayHistory(max_entries=settings.display_history_max_entries)
         self.runtime_status = RuntimeStatus(
             heartbeat_interval_ms=settings.heartbeat_interval_ms
@@ -266,6 +295,9 @@ class DogidoService:
     def shutdown(self) -> None:
         """端末内モデルの worker / loaded model を解放する。"""
 
+        for session in tuple(self.sessions.values()):
+            if session.language_runtime is not None:
+                session.language_runtime.close()
         self.audio.close()
         self.platform_ai.close()
 
@@ -276,6 +308,9 @@ class DogidoService:
         *,
         source: str,
         display_text: str | None = None,
+        turn_id: str = "",
+        force_main_chat: bool = False,
+        foreground_route: str = "",
     ) -> bool:
         """保留入力を先着順で保持する。同じ入力は重ねず、満杯ならfail-closed。"""
 
@@ -284,20 +319,47 @@ class DogidoService:
         visible_text = (display_text or value).strip()
         if not value:
             return False
-        candidate = (value, normalized_source, visible_text)
+        candidate = (
+            value,
+            normalized_source,
+            visible_text,
+            str(turn_id or "")[:180],
+            bool(force_main_chat),
+            str(foreground_route or "")[:40],
+        )
         if session.pending_player_text is None:
             session.pending_player_text = value
             session.pending_player_source = normalized_source
             session.pending_player_display_text = visible_text
+            session.pending_player_turn_id = str(turn_id or "")[:180] or None
+            session.pending_player_force_main_chat = bool(force_main_chat)
+            session.pending_player_foreground_route = (
+                str(foreground_route or "")[:40] or None
+            )
             return True
         # 同じ本文は入力経路がvoice/textで異なっても一発話として扱い、
         # 最初に受けたsourceを保持する。別tickで二回答しないための境界。
         if session.pending_player_text == value:
+            if force_main_chat:
+                session.pending_player_turn_id = str(turn_id or "")[:180] or None
+                session.pending_player_force_main_chat = True
+                session.pending_player_foreground_route = (
+                    str(foreground_route or "")[:40] or "casual"
+                )
             return True
-        if any(
-            queued_text == value
-            for queued_text, _source, _display_text in session.deferred_player_inputs
-        ):
+        for index, queued in enumerate(session.deferred_player_inputs):
+            queued_text, queued_source, queued_display, *_rest = queued
+            if queued_text != value:
+                continue
+            if force_main_chat:
+                session.deferred_player_inputs[index] = (
+                    queued_text,
+                    queued_source,
+                    queued_display,
+                    str(turn_id or "")[:180],
+                    True,
+                    str(foreground_route or "")[:40] or "casual",
+                )
             return True
         maxlen = session.deferred_player_inputs.maxlen
         if maxlen is not None and len(session.deferred_player_inputs) >= maxlen:
@@ -315,10 +377,20 @@ class DogidoService:
     def _promote_deferred_player_input(session: SessionInfo) -> None:
         if session.pending_player_text is not None or not session.deferred_player_inputs:
             return
-        text, source, display_text = session.deferred_player_inputs.popleft()
+        (
+            text,
+            source,
+            display_text,
+            turn_id,
+            force_main_chat,
+            foreground_route,
+        ) = session.deferred_player_inputs.popleft()
         session.pending_player_text = text
         session.pending_player_source = source
         session.pending_player_display_text = display_text
+        session.pending_player_turn_id = turn_id or None
+        session.pending_player_force_main_chat = force_main_chat
+        session.pending_player_foreground_route = foreground_route or None
         LOGGER.warning(
             "player_input_promoted session_id=%s source=%s text=%s",
             session.session_id,
@@ -386,6 +458,7 @@ class DogidoService:
         idempotency_key: str | None = None,
     ) -> ProcessedEvent:
         session = self._ensure_session(event, session_id)
+        self._drain_playback_events(session, observed_at=event.observed_at)
         if not getattr(event.meta, "call_name", None) and session.call_name:
             event = event.model_copy(
                 update={
@@ -454,14 +527,24 @@ class DogidoService:
                 session.pending_player_text = None
                 session.pending_player_source = None
                 session.pending_player_display_text = None
+                session.pending_player_turn_id = None
+                session.pending_player_force_main_chat = False
+                session.pending_player_foreground_route = None
                 session.combat_input_analysis_text = None
                 session.combat_input_analysis = None
                 session.combat_input_analysis_path = "none"
             if session.deferred_player_inputs:
                 session.deferred_player_inputs = deque(
                     (
-                        (text, source, display_text)
-                        for text, source, display_text in session.deferred_player_inputs
+                        (text, source, display_text, turn_id, force_main, route)
+                        for (
+                            text,
+                            source,
+                            display_text,
+                            turn_id,
+                            force_main,
+                            route,
+                        ) in session.deferred_player_inputs
                         if text != direct_player_text
                     ),
                     maxlen=session.deferred_player_inputs.maxlen,
@@ -485,6 +568,9 @@ class DogidoService:
         attached_player_text: str | None = None
         attached_player_display_text: str | None = direct_player_text or None
         attached_player_source = "text"
+        attached_player_turn_id = ""
+        attached_player_force_main_chat = False
+        attached_player_foreground_route = ""
         combat_input_analysis: CombatWorkshopInputAnalysis | None = None
         combat_input_path = "none"
         haiku_pending_before = bool(session.machine.state.pending_haiku_after_preface)
@@ -616,10 +702,18 @@ class DogidoService:
                         session.pending_player_display_text or attached_player_text
                     )
                     attached_player_source = session.pending_player_source or "text"
+                    attached_player_turn_id = session.pending_player_turn_id or ""
+                    attached_player_force_main_chat = session.pending_player_force_main_chat
+                    attached_player_foreground_route = (
+                        session.pending_player_foreground_route or ""
+                    )
                     event.meta.user_text = attached_player_text
                     session.pending_player_text = None
                     session.pending_player_source = None
                     session.pending_player_display_text = None
+                    session.pending_player_turn_id = None
+                    session.pending_player_force_main_chat = False
+                    session.pending_player_foreground_route = None
                     session.combat_input_analysis_text = None
                     session.combat_input_analysis = None
                     session.combat_input_analysis_path = "none"
@@ -643,6 +737,149 @@ class DogidoService:
             interpreted_player_text=interpreted_player_text,
             input_source=attached_player_source,
         )
+        if direct_player_text and self.settings.audio_enabled:
+            # adapter chatも、すでに受理済みの本人発話なら再生中の返答へ
+            # barge-inできる。requeueされた保留入力では二度止めない。
+            self.audio.interrupt_for_player_input()
+
+        # player主体の会話所有権を、状態機械の安全判断とは別に同期する。
+        # 国語・一般知識の限定対話だけは非同期workerへ渡し、game-event直列処理を塞がない。
+        conversation_now = event.observed_at
+        foreground = session.foreground_dialogue
+        foreground.expire_if_idle(
+            conversation_now,
+            ttl_ms=self.settings.conversation_active_ttl_ms,
+        )
+        if (
+            foreground.route == "haiku_workshop"
+            and not is_active(session.haiku_workshop)
+            and not session.machine.state.pending_haiku_after_preface
+        ):
+            foreground.clear()
+        conversation_danger = self._conversation_danger_active(session, event)
+        if session.pending_voice_vocalization_at is not None:
+            vocalized_at = session.pending_voice_vocalization_at
+            session.pending_voice_vocalization_at = None
+            close_in_time = abs((conversation_now - vocalized_at).total_seconds()) <= 5.0
+            session.dialogue.add_digest(
+                "situation",
+                self._observed_situation_note(event) if close_in_time else "状況：驚いた声を検出。原因は不明。",
+                at=conversation_now,
+            )
+            if not conversation_danger:
+                session.dialogue.end_danger_retention(
+                    player_turns=self.settings.conversation_post_danger_player_turns,
+                )
+        if conversation_danger and not foreground.combat_active:
+            session.dialogue.begin_danger_retention()
+            foreground.suspend_for_combat(
+                hold_player_turns=self.settings.conversation_suspended_player_turns,
+            )
+            if session.language_runtime is not None:
+                session.language_runtime.interrupt_for_combat()
+            # worker内だけでなく、すでにservice待ち列へ到着した旧返答も捨てる。
+            if session.language_runtime is not None:
+                for pending_result in session.pending_language_results:
+                    session.language_runtime.discard_undelivered_result(
+                        pending_result,
+                        resolution="combat",
+                    )
+            session.pending_language_results.clear()
+
+        combat_chat_ack = ""
+        delegated_language_turn = False
+        runtime_attention_result: dict[str, object] | None = None
+        if session.language_runtime is not None:
+            session.language_runtime.expire_pending_address(conversation_now)
+        if (
+            session.language_runtime is not None
+            and not attached_player_force_main_chat
+            and self._is_general_conversation_input(session, routed_player_input)
+        ):
+            runtime_attention_result = (
+                session.language_runtime.handle_pending_address_input(
+                    routed_player_input.semantic_text,
+                    source=attached_player_source,
+                    observed_at=conversation_now,
+                )
+            )
+            if runtime_attention_result is not None and runtime_attention_result.get(
+                "consumed"
+            ):
+                if runtime_attention_result.get("reply"):
+                    self._enqueue_main_language_result(
+                        session,
+                        runtime_attention_result,
+                    )
+                host_request = runtime_attention_result.get("host_chat_request")
+                if isinstance(host_request, dict):
+                    if not self._queue_host_chat_request(session, host_request):
+                        session.language_runtime.reject_host_chat_request(
+                            str(host_request.get("turn_id") or ""),
+                            resolution="host_chat_queue_full",
+                        )
+                delegated_language_turn = True
+                event = event.model_copy(
+                    update={"meta": event.meta.model_copy(update={"user_text": None})}
+                )
+                routed_player_input = route_player_input(None)
+        current_general_input = self._is_general_conversation_input(
+            session,
+            routed_player_input,
+        )
+        if conversation_danger and current_general_input:
+            combat_chat_ack = foreground.note_combat_chat_attempt(
+                conversation_now,
+                cooldown_ms=self.settings.combat_chat_ack_cooldown_ms,
+            )
+            event = event.model_copy(
+                update={"meta": event.meta.model_copy(update={"user_text": None})}
+            )
+            routed_player_input = route_player_input(None)
+        elif (
+            not delegated_language_turn
+            and not attached_player_force_main_chat
+            and self._main_language_should_handle(session, routed_player_input)
+        ):
+            runtime = session.language_runtime
+            if runtime is not None:
+                accepted, _turn_id = runtime.submit_turn(
+                    routed_player_input.semantic_text,
+                    source=attached_player_source,
+                    observed_at=conversation_now,
+                    raw_text=attached_player_display_text or routed_player_input.raw_text,
+                )
+                if accepted:
+                    if foreground.suspended is not None:
+                        foreground.consume_suspended_player_turn(
+                            resumes=(
+                                foreground.suspended.route == "learning"
+                                and self._explicit_topic_resume(
+                                    routed_player_input.semantic_text
+                                )
+                            ),
+                            now=conversation_now,
+                        )
+                    delegated_language_turn = True
+                    event = event.model_copy(
+                        update={"meta": event.meta.model_copy(update={"user_text": None})}
+                    )
+                    routed_player_input = route_player_input(None)
+                else:
+                    # busy中の知識質問を雑談へ誤配送しない。現在入力は一度だけ
+                    # 待ち列へ戻し、workerが空いた次tickで再判定する。
+                    self._queue_player_input(
+                        session,
+                        routed_player_input.raw_text,
+                        source=attached_player_source,
+                        display_text=attached_player_display_text,
+                    )
+                    event = event.model_copy(
+                        update={"meta": event.meta.model_copy(update={"user_text": None})}
+                    )
+                    routed_player_input = route_player_input(None)
+        # casualの所有権・保留turn消費は、状態機械が実際の返答を選べた後に
+        # 確定する。雷・夕方で同じ入力を再queueした時に二重計上しない。
 
         # ambient 抑止: まだ相乗りしていない話しかけがキューにある
         session.machine.player_input_queued = self._session_has_queued_input(session)
@@ -666,11 +903,18 @@ class DogidoService:
             )
             session.haiku_workshop = None
 
-        machine_result = session.machine.process(
-            event,
-            interpreted_user_text=interpreted_player_text,
-            player_input_context=routed_player_input,
+        suspended_overlay = session.foreground_dialogue.suspended_prompt(
+            routed_player_input.semantic_text
         )
+        session.dialogue.set_prompt_overlay(suspended_overlay)
+        try:
+            machine_result = session.machine.process(
+                event,
+                interpreted_user_text=interpreted_player_text,
+                player_input_context=routed_player_input,
+            )
+        finally:
+            session.dialogue.clear_prompt_overlay()
         if machine_result.haiku_emission is not None:
             session.last_haiku_emission = machine_result.haiku_emission
             # memory の有無に関わらず pin を立てる（entry_id は memory 側で埋める）
@@ -700,6 +944,17 @@ class DogidoService:
                 session.pending_player_text[:80],
             )
         actions = list(machine_result.actions)
+        if combat_chat_ack:
+            actions.append(
+                AudioAction(
+                    layer="speech",
+                    interrupt=False,
+                    text=combat_chat_ack,
+                    speech_profile="battle",
+                    queue_priority="foreground",
+                    route_owner="combat_chat_ack",
+                )
+            )
         # このtickで戦闘pauseへ遷移すると、更新後のworkshop判定は入力を
         # 所有しなくなる。遷移前の所有権を保存し、同時に届いた句編集・
         # 現在句質問を安全発話の後へ必ず戻す。
@@ -798,6 +1053,119 @@ class DogidoService:
                 ]
         actions.extend(memory_actions)
 
+        # 完了済みの国語対話結果は安全発話を追い越さない。危険中・割り込みtickは
+        # 小さなsession内待ち列へ戻し、epoch不一致の結果はruntime側で破棄する。
+        actions.extend(
+            self._collect_main_language_actions(
+                session,
+                event,
+                existing_actions=actions,
+                conversation_danger=conversation_danger,
+            )
+        )
+
+        casual_reply_registered = self._register_main_player_reply(
+            session,
+            routed_player_input,
+            actions,
+            now=conversation_now,
+            source=attached_player_source,
+            turn_id=attached_player_turn_id,
+            route_override=attached_player_foreground_route,
+        )
+        if (
+            casual_reply_registered
+            and not is_active(session.haiku_workshop)
+            and session.machine._casual_haiku_due_at_player_boundary(
+                event,
+                conversation_now,
+            )
+        ):
+            # 絶え間ない雑談でも、現在の返答を選び終えた境界で発句を続ける。
+            # 同じbatchの後ろへ置くため、マイク途中や現在再生中の文は切らない。
+            preface = session.machine._begin_prefaced_haiku(event, conversation_now)
+            preface_actions = session.machine._speech_actions(
+                preface,
+                protect_ms=6000,
+                speech_profile="haiku",
+            )
+            for action in preface_actions:
+                action.route_owner = "auto_haiku_preface"
+            actions.extend(preface_actions)
+
+        if (
+            session.machine.state.pending_haiku_after_preface
+            and session.foreground_dialogue.route == "casual"
+        ):
+            session.foreground_dialogue.suspend(
+                "auto_haiku",
+                hold_player_turns=self.settings.conversation_suspended_player_turns,
+            )
+            session.foreground_dialogue.activate(
+                "haiku_workshop",
+                now=conversation_now,
+            )
+        elif is_active(session.haiku_workshop):
+            if session.foreground_dialogue.route in {"casual", "learning"}:
+                session.foreground_dialogue.suspend(
+                    "haiku_workshop",
+                    hold_player_turns=self.settings.conversation_suspended_player_turns,
+                )
+            session.foreground_dialogue.activate("haiku_workshop", now=conversation_now)
+
+        if (
+            session.foreground_dialogue.combat_active
+            and not machine_result.combat_active
+            and event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}
+        ):
+            post_combat = session.foreground_dialogue.finish_combat()
+            session.dialogue.end_danger_retention(
+                player_turns=self.settings.conversation_post_danger_player_turns,
+            )
+            if session.language_runtime is not None:
+                session.language_runtime.release_after_combat()
+            if post_combat and event.event.name == EventName.COMBAT_ENDED:
+                relief = next(
+                    (
+                        action
+                        for action in actions
+                        if action.layer == "speech"
+                        and action.cue_id == "aftermath_relief"
+                    ),
+                    None,
+                )
+                if relief is not None:
+                    relief.text = " ".join(
+                        value for value in (relief.text or "", post_combat) if value
+                    )
+                    relief.route_owner = "combat_chat_aftermath"
+                else:
+                    actions.append(
+                        AudioAction(
+                            layer="speech",
+                            interrupt=False,
+                            text=post_combat,
+                            speech_profile="peace",
+                            queue_priority="foreground",
+                            route_owner="combat_chat_aftermath",
+                        )
+                    )
+
+        if any(action.defer_player_input for action in actions):
+            session.foreground_dialogue.note_interrupt(
+                "thunder"
+                if (
+                    session.machine._has_recent_nearby_lightning(event)
+                    or session.machine._has_recent_thunder_sound(event)
+                )
+                else "dusk"
+            )
+
+        # 状態機械process後に確定した正本DBのlearning開始や、worker結果による
+        # route変更も、このevent時刻から発句時計へ反映する。
+        session.machine._sync_haiku_interval_pause(conversation_now)
+        self._assign_playback_identity(session, actions)
+
         # 警戒・戦闘・死亡・時限警告など、高優先発話に先送りされた質問を
         # 失わない。DB回答済み／現在句として処理済みなら再キューしない。
         if (
@@ -825,21 +1193,30 @@ class DogidoService:
         # 話しかけをイベントに載せたが speech が出なかった場合は捨てずに再キュー
         # （ambient_mob 枝や panic 枝に食われたケースの取りこぼし防止）
         if (
-            attached_player_text
+            (attached_player_text or direct_player_text)
+            and not delegated_language_turn
             and not session.machine.player_input.requests_sword
             and self._should_requeue_player_input(session, actions)
         ):
+            requeue_text = (
+                attached_player_text
+                or direct_player_text
+                or routed_player_input.raw_text
+            )
             if self._queue_player_input(
                 session,
-                attached_player_text,
+                requeue_text,
                 source=attached_player_source,
                 display_text=attached_player_display_text,
+                turn_id=attached_player_turn_id,
+                force_main_chat=attached_player_force_main_chat,
+                foreground_route=attached_player_foreground_route,
             ):
                 LOGGER.warning(
                     "player_input_requeued session_id=%s mode=%s text=%s",
                     session.session_id,
                     machine_result.state.mode,
-                    attached_player_text[:80],
+                    requeue_text[:80],
                 )
         self._promote_deferred_player_input(session)
 
@@ -878,6 +1255,7 @@ class DogidoService:
                     action.layer == "speech"
                     and bool(action.text)
                     and action.cue_id != "aftermath_relief"
+                    and not action.defer_player_input
                 ):
                     action.display_player_input_text = player_text_for_display
                     break
@@ -1279,7 +1657,9 @@ class DogidoService:
         )
 
     def close_session(self, session_id: str) -> CloseSessionResponse:
-        self.sessions.pop(session_id, None)
+        session = self.sessions.pop(session_id, None)
+        if session is not None and session.language_runtime is not None:
+            session.language_runtime.close()
         self.runtime_status.adapter_closed(session_id)
         return CloseSessionResponse(ok=True, session_id=session_id)
 
@@ -1293,12 +1673,37 @@ class DogidoService:
 
         if not actions:
             return
+        resolved_session_id = session_id
+        if not resolved_session_id:
+            action_sessions = {
+                action.playback_session_id
+                for action in actions
+                if action.playback_session_id
+            }
+            if len(action_sessions) == 1:
+                resolved_session_id = next(iter(action_sessions))
+        if resolved_session_id:
+            for action in actions:
+                if action.layer == "speech" and action.text and not action.utterance_id:
+                    action.utterance_id = "service-speech:" + uuid4().hex
+                if action.utterance_id and not action.playback_session_id:
+                    action.playback_session_id = resolved_session_id
         self.display.record_actions(
             actions,
-            session_id=session_id,
+            session_id=resolved_session_id,
             audio_requested=self.settings.audio_enabled,
         )
         if self.settings.audio_enabled:
+            if resolved_session_id and resolved_session_id in self.sessions:
+                session = self.sessions[resolved_session_id]
+                runtime = session.language_runtime
+                for action in actions:
+                    if not action.utterance_id or not action.conversation_turn_id:
+                        continue
+                    if runtime is not None:
+                        runtime.mark_dispatched(action.utterance_id)
+                    else:
+                        session.dialogue_turns.dispatched(action.utterance_id)
             self.audio.play_actions(actions)
 
     def display_snapshot(self, *, session_id: str | None = None) -> dict[str, object]:
@@ -1375,6 +1780,9 @@ class DogidoService:
             is_known_voice_noise_text,
             normalize_player_text,
         )
+        from dogido_server.player_input.voice_vocalization import (
+            is_pure_voice_vocalization,
+        )
 
         original = (text or "").strip()
         if not original:
@@ -1397,6 +1805,25 @@ class DogidoService:
             self.sessions.values(),
             key=lambda candidate: candidate.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
         )
+        if input_source == "voice" and is_pure_voice_vocalization(normalized):
+            observed_at = datetime.now().astimezone()
+            session.pending_voice_vocalization_at = observed_at
+            session.dialogue.begin_danger_retention()
+            self.diagnostics.record(
+                level="INFO",
+                logger="dogido.voice_input",
+                source="voice_input",
+                event="player_vocalization",
+                message=f"voice_vocalization text={original}",
+                created_at=observed_at,
+            )
+            if self.settings.audio_enabled:
+                self.audio.interrupt_for_player_input()
+            return {
+                "accepted": True,
+                "session_id": session.session_id,
+                "reason": "situation_vocalization",
+            }
         existing = (session.pending_player_text or "").strip()
         existing_preview = route_player_input(existing) if existing else None
         preserve_existing = bool(
@@ -1428,6 +1855,9 @@ class DogidoService:
             session.pending_player_text = normalized
             session.pending_player_source = input_source
             session.pending_player_display_text = original
+            session.pending_player_turn_id = None
+            session.pending_player_force_main_chat = False
+            session.pending_player_foreground_route = None
             session.combat_input_analysis_text = None
             session.combat_input_analysis = None
             session.combat_input_analysis_path = "none"
@@ -1446,7 +1876,493 @@ class DogidoService:
                 input_source,
                 normalized[:80],
             )
+        if self.settings.audio_enabled:
+            self.audio.interrupt_for_player_input()
         return {"accepted": True, "session_id": session.session_id}
+
+    def _conversation_danger_active(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+    ) -> bool:
+        if event.event.name == EventName.COMBAT_ENDED:
+            return False
+        return bool(
+            session.foreground_dialogue.combat_active
+            or session.machine.state.mode in {"alert", "panic", "suppressed_panic"}
+            or self._event_interrupts_workshop(event)
+        )
+
+    @staticmethod
+    def _observed_situation_note(event: GameEvent) -> str:
+        """叫び声の字面を使わず、同時点のコード観測だけを短く投影する。"""
+
+        outcomes = tuple(event.combat.hostile_outcomes or ())
+        if event.event.name == EventName.CREEPER_DETONATED or any(
+            outcome.outcome == "creeper_detonation"
+            and outcome.evidence == "explosion_packet"
+            for outcome in outcomes
+        ):
+            return "状況：クリーパーの爆発をコードで観測。"
+        if event.event.name == EventName.PLAYER_DIED:
+            return "状況：プレイヤーの死亡をコードで観測。原因の詳細は未確定。"
+        if event.visual_threats:
+            return "状況：近くの敵対モブを視認。"
+        if event.auditory_threats:
+            return "状況：敵らしい音を観測。具体名は未確定。"
+        return "状況：驚いた声を検出。原因は不明。"
+
+    @staticmethod
+    def _explicit_topic_resume(text: str) -> bool:
+        normalized = " ".join((text or "").replace("\n", " ").split())
+        return any(
+            marker in normalized
+            for marker in (
+                "さっきの話",
+                "前の話",
+                "話の続き",
+                "続き話",
+                "続きやけど",
+                "続きを",
+                "戻るけど",
+                "戻ろ",
+            )
+        )
+
+    def _is_general_conversation_input(
+        self,
+        session: SessionInfo,
+        player_input: PlayerInputContext,
+    ) -> bool:
+        text = (player_input.semantic_text or "").strip()
+        if not text or (player_input.normalized_text or "").startswith("/"):
+            return False
+        if (
+            player_input.wants_quiet
+            or player_input.asks_hostile_count
+            or player_input.asks_hostile_direction
+            or player_input.asks_dragon_direction
+            or player_input.asks_save_last_haiku
+            or player_input.asks_inventory
+            or player_input.requests_sword
+            or player_input.knowledge_query is not None
+            or player_input.player_haiku_text is not None
+            or player_input.revised_haiku_text is not None
+            or player_input.reading_correction is not None
+            or player_input.asks_haiku_recall
+        ):
+            return False
+        workshop = session.haiku_workshop
+        if (
+            is_active(workshop)
+            and workshop is not None
+            and should_handle_as_workshop(
+                player_input.raw_text,
+                verse=workshop.editing_line(),
+                player_input=player_input,
+            )
+        ):
+            return False
+        return True
+
+    def _main_language_should_handle(
+        self,
+        session: SessionInfo,
+        player_input: PlayerInputContext,
+    ) -> bool:
+        if session.language_runtime is None:
+            return False
+        if not self._is_general_conversation_input(session, player_input):
+            return False
+        foreground = session.foreground_dialogue
+        if foreground.route in {"learning", "web"}:
+            return True
+        if foreground.suspended is not None and foreground.suspended.route == "learning":
+            return bool(
+                self._explicit_topic_resume(player_input.semantic_text)
+                or self._looks_like_main_language_request(player_input.semantic_text)
+            )
+        return self._looks_like_main_language_request(player_input.semantic_text)
+
+    @staticmethod
+    def _looks_like_main_language_request(text: str) -> bool:
+        """既存Minecraft雑談を奪わない、国語・語句質問の狭い入口。"""
+
+        normalized = " ".join((text or "").replace("\n", " ").split())
+        if not normalized:
+            return False
+        explicit_patterns = (
+            "ってどういう意味",
+            "って何て読む",
+            "ってなんて読む",
+            "の読み方",
+            "言葉の意味",
+            "ことばの意味",
+            "何年生で習",
+            "何年生の漢字",
+        )
+        if any(pattern in normalized for pattern in explicit_patterns):
+            return True
+        language_topics = (
+            "漢字",
+            "短歌",
+            "俳句",
+            "川柳",
+            "音数",
+            "文法",
+            "熟語",
+            "ことわざ",
+            "枕詞",
+            "語句",
+        )
+        if not any(topic in normalized for topic in language_topics):
+            return False
+        return any(
+            marker in normalized
+            for marker in (
+                "?",
+                "？",
+                "教えて",
+                "知りたい",
+                "調べて",
+                "勉強",
+                "習う",
+                "習った",
+                "話をしよう",
+                "話しよう",
+                "話そう",
+            )
+        )
+
+    def _advance_or_begin_casual_topic(
+        self,
+        session: SessionInfo,
+        text: str,
+        *,
+        now: datetime,
+    ) -> None:
+        foreground = session.foreground_dialogue
+        if foreground.suspended is not None:
+            foreground.consume_suspended_player_turn(
+                resumes=(
+                    foreground.suspended.route == "casual"
+                    and self._explicit_topic_resume(text)
+                ),
+                now=now,
+            )
+        foreground.activate("casual", now=now, player_text=text)
+
+    def _collect_main_language_actions(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        *,
+        existing_actions: list[AudioAction],
+        conversation_danger: bool,
+    ) -> list[AudioAction]:
+        runtime = session.language_runtime
+        if runtime is None:
+            return []
+        for envelope in runtime.poll():
+            if envelope.get("work_kind") == "turn":
+                result = runtime.accept_turn_result(envelope, observed_at=event.observed_at)
+                host_request = result.get("host_chat_request")
+                if isinstance(host_request, dict):
+                    if not self._queue_host_chat_request(session, host_request):
+                        runtime.reject_host_chat_request(
+                            str(host_request.get("turn_id") or ""),
+                            resolution="host_chat_queue_full",
+                        )
+                if result.get("reply"):
+                    self._enqueue_main_language_result(session, result)
+            elif envelope.get("work_kind") == "playback_control":
+                # Web制御結果は発話本文ではない。状態更新はLanguageDialogue内で完了。
+                result = dict(envelope.get("result") or {})
+                if result.get("reply"):
+                    self._enqueue_main_language_result(session, result)
+
+        unsafe = bool(
+            conversation_danger
+            or event.visual_threats
+            or event.auditory_threats
+            or session.machine.state.mode in {"alert", "panic", "suppressed_panic"}
+            or any(action.interrupt for action in existing_actions)
+            or any(action.layer == "speech" and action.text for action in existing_actions)
+            or session.foreground_dialogue.route == "haiku_workshop"
+        )
+        if unsafe or not session.pending_language_results:
+            return []
+        row = session.pending_language_results.popleft()
+        turn_id = str(row.get("turn_id") or "")
+        semantic_text = str(row.get("semantic_text") or row.get("raw_text") or "")
+        if (
+            turn_id
+            and semantic_text
+            and str(row.get("status") or "") != "address_confirmation_requested"
+        ):
+            session.dialogue.add_player(
+                semantic_text,
+                at=event.observed_at,
+                turn_id=turn_id,
+            )
+        references: list[SpeechReference] = []
+        for fact in row.get("references", []) if isinstance(row.get("references"), list) else []:
+            if not isinstance(fact, dict):
+                continue
+            sources = fact.get("sources") if isinstance(fact.get("sources"), list) else []
+            first = next((source for source in sources if isinstance(source, dict)), {})
+            references.append(
+                SpeechReference(
+                    source_id=str(fact.get("id") or "language-dialogue")[:160],
+                    title_ja=str(first.get("title_ja") or fact.get("title_ja") or "参考資料")[:160],
+                    citation_label_ja=str(fact.get("title_ja") or "参考資料")[:160],
+                    locator=str(first.get("locator") or "")[:200],
+                    url=str(first.get("url") or "")[:1000],
+                    source_kind="language_dialogue",
+                )
+            )
+        return [
+            AudioAction(
+                layer="speech",
+                interrupt=False,
+                text=str(row.get("reply") or ""),
+                speech_profile="peace",
+                queue_priority="foreground",
+                queue_replace_key="main_language_reply",
+                references=tuple(references),
+                display_player_input_text=str(row.get("raw_text") or ""),
+                utterance_id=str(row.get("utterance_id") or ""),
+                conversation_turn_id=str(row.get("turn_id") or ""),
+                route_owner="main_language_dialogue",
+            )
+        ]
+
+    def _queue_host_chat_request(
+        self,
+        session: SessionInfo,
+        request: dict[str, object],
+    ) -> bool:
+        """国語workerが返した同じ入力を、IDを保ったまま本体chatへ一度だけ戻す。"""
+
+        text = str(request.get("text") or "").strip()
+        turn_id = str(request.get("turn_id") or "").strip()
+        if not text or not turn_id:
+            return False
+        return self._queue_player_input(
+            session,
+            text,
+            source=str(request.get("source") or "text"),
+            display_text=str(request.get("raw_text") or text),
+            turn_id=turn_id,
+            force_main_chat=True,
+            foreground_route=str(request.get("foreground_route") or "casual"),
+        )
+
+    def _enqueue_main_language_result(
+        self,
+        session: SessionInfo,
+        result: dict[str, object],
+    ) -> None:
+        pending = session.pending_language_results
+        maxlen = pending.maxlen
+        if maxlen is not None and len(pending) >= maxlen:
+            evicted = pending.popleft()
+            if session.language_runtime is not None:
+                session.language_runtime.discard_undelivered_result(
+                    evicted,
+                    resolution="result_queue_replaced",
+                )
+            LOGGER.warning(
+                "main_language_result_replaced session_id=%s turn_id=%s",
+                session.session_id,
+                str(evicted.get("turn_id") or "")[:160],
+            )
+        pending.append(result)
+
+    def _register_main_player_reply(
+        self,
+        session: SessionInfo,
+        player_input: PlayerInputContext,
+        actions: list[AudioAction],
+        *,
+        now: datetime,
+        source: str,
+        turn_id: str = "",
+        route_override: str = "",
+    ) -> bool:
+        route = route_override if route_override in {"casual", "learning"} else ""
+        if not route and self._is_general_conversation_input(session, player_input):
+            route = "casual"
+        elif (
+            player_input.knowledge_query is not None
+            and session.machine.knowledge_query_handled
+        ):
+            # 正本DBの即答は従来どおり状態機械が所有するが、会話上は
+            # learningとして扱い、follow-up中の自動川柳を止める。
+            route = "learning"
+        if not route:
+            return False
+        reply = next(
+            (
+                action
+                for action in actions
+                if action.layer == "speech"
+                and bool(action.text)
+                and not action.defer_player_input
+                and action.route_owner != "main_language_dialogue"
+                and action.cue_id != "aftermath_relief"
+            ),
+            None,
+        )
+        if reply is None:
+            return False
+        if route == "casual":
+            self._advance_or_begin_casual_topic(
+                session,
+                player_input.semantic_text,
+                now=now,
+            )
+        else:
+            foreground = session.foreground_dialogue
+            if foreground.suspended is not None:
+                foreground.consume_suspended_player_turn(
+                    resumes=(
+                        foreground.suspended.route == "learning"
+                        and self._explicit_topic_resume(player_input.semantic_text)
+                    ),
+                    now=now,
+                )
+            foreground.activate("learning", now=now, player_text=player_input.semantic_text)
+        turn_id = turn_id or ("main-chat:" + uuid4().hex)
+        epoch = session.language_runtime.epoch if session.language_runtime is not None else 0
+        session.dialogue_turns.begin(
+            turn_id,
+            epoch=epoch,
+            raw_text=player_input.raw_text,
+            semantic_text=player_input.semantic_text,
+            source=source,
+        )
+        session.dialogue_turns.routed(
+            turn_id,
+            route=route,
+            status="player_chat" if route == "casual" else "knowledge_db",
+        )
+        if route == "learning" and session.language_runtime is not None:
+            # controller内部履歴は独立試験との互換用。本体解釈の正は同じ台帳投影。
+            session.language_runtime.observe_external_user_turn(
+                turn_id,
+                player_input.semantic_text,
+                source=source,
+            )
+        session.dialogue.add_player(
+            player_input.semantic_text,
+            at=now,
+            turn_id=turn_id,
+        )
+        utterance_id = reply.utterance_id or ("main-chat-reply:" + uuid4().hex)
+        reply.utterance_id = utterance_id
+        reply.conversation_turn_id = turn_id
+        reply.route_owner = "player_chat" if route == "casual" else "knowledge_dialogue"
+        session.dialogue_turns.select_reply(
+            turn_id,
+            reply=reply.text or "",
+            utterance_id=utterance_id,
+        )
+        return route == "casual"
+
+    @staticmethod
+    def _assign_playback_identity(
+        session: SessionInfo,
+        actions: list[AudioAction],
+    ) -> None:
+        """process結果の時点で発話とsessionを結び、暗黙sessionでも失わない。"""
+
+        for action in actions:
+            if action.layer == "speech" and action.text and not action.utterance_id:
+                action.utterance_id = "service-speech:" + uuid4().hex
+            if action.utterance_id and not action.playback_session_id:
+                action.playback_session_id = session.session_id
+
+    def _on_audio_playback_event(self, event: dict[str, str]) -> None:
+        session_id = event.get("session_id", "")
+        session = self.sessions.get(session_id)
+        if session is None:
+            return
+        # audio workerでは状態正本を変更せず、次の直列game-eventで消費する。
+        # 非終端のqueued/startedは、満杯時にcompleted等を押し出さない。
+        with session.playback_events_lock:
+            maxlen = session.playback_events.maxlen
+            if maxlen is not None and len(session.playback_events) >= maxlen:
+                if event.get("status") not in {"completed", "failed", "cancelled"}:
+                    LOGGER.warning(
+                        "playback_event_queue_dropped session_id=%s status=%s",
+                        session_id,
+                        event.get("status", ""),
+                    )
+                    return
+                evict_index = next(
+                    (
+                        index
+                        for index, queued in enumerate(session.playback_events)
+                        if queued.get("status") not in {"completed", "failed", "cancelled"}
+                    ),
+                    0,
+                )
+                del session.playback_events[evict_index]
+                LOGGER.warning(
+                    "playback_event_queue_replaced session_id=%s incoming_status=%s",
+                    session_id,
+                    event.get("status", ""),
+                )
+            session.playback_events.append(dict(event))
+
+    def _drain_playback_events(self, session: SessionInfo, *, observed_at: datetime) -> None:
+        with session.playback_events_lock:
+            events = list(session.playback_events)
+            session.playback_events.clear()
+        for event in events:
+            resolved = None
+            if session.language_runtime is not None:
+                resolved = session.language_runtime.playback_event(
+                    event,
+                    observed_at=observed_at,
+                )
+            else:
+                status = event.get("status", "")
+                utterance_id = event.get("utterance_id", "")
+                if status == "queued":
+                    session.dialogue_turns.queued(utterance_id)
+                elif status == "started":
+                    session.dialogue_turns.started(utterance_id)
+                elif status in {"completed", "failed", "cancelled"}:
+                    resolved = session.dialogue_turns.resolve(
+                        utterance_id,
+                        status,
+                        resolution=event.get("resolution", ""),
+                    )
+                if status == "completed" and resolved is not None:
+                    session.foreground_dialogue.note_completed_turn(
+                        str(resolved.get("turn_id") or ""),
+                        str(resolved.get("semantic_text") or ""),
+                        str(resolved.get("selected_reply") or ""),
+                        route=str(resolved.get("route") or "casual"),
+                        at=observed_at,
+                    )
+            utterance_id = str(event.get("utterance_id") or "")
+            if (
+                event.get("status") == "completed"
+                and event.get("text")
+                and utterance_id
+                and utterance_id not in session.completed_playback_ids
+                and resolved is not None
+                and str(resolved.get("route") or "") in {"casual", "learning"}
+            ):
+                session.completed_playback_ids.append(utterance_id)
+                session.dialogue.add_dogido(
+                    str(resolved.get("selected_reply") or event["text"]),
+                    at=observed_at,
+                    turn_id=str(resolved.get("turn_id") or ""),
+                )
 
     def _apply_contextual_asr_to_event(
         self,
@@ -1539,6 +2455,8 @@ class DogidoService:
             or player_input.asks_haiku_recall
         ):
             return False
+        if any(action.defer_player_input for action in actions):
+            return True
         # 戦闘終了の安堵はプレイヤー発話への返事ではない。同じイベントに
         # 音声入力が相乗りした場合は、次イベントへ戻して会話も取りこぼさない。
         has_player_reply = any(
@@ -1699,19 +2617,9 @@ class DogidoService:
             session.dialogue.extend_digest(notes, kind="event", at=now)
             session.machine.state.pending_dialogue_notes.clear()
 
-        player_input = session.machine.player_input
-        if (
-            player_input.breaks_silence
-            and player_input.raw_text
-            and not player_input.wants_quiet
-            and not (player_input.normalized_text or "").startswith("/")
-        ):
-            session.dialogue.add_player(player_input.semantic_text, at=now)
-
-        for action in actions:
-            if action.layer != "speech" or not action.text:
-                continue
-            session.dialogue.add_dogido(action.text, at=now)
+        # 通常会話のplayer側は、実際に返答を所有したturn IDが確定した時だけ
+        # 登録する。警告中の叫び・requeue・workshop入力を通常履歴へ混ぜない。
+        # assistant側は実playback completed後だけ登録する。
 
     def list_haiku_memory(self) -> list[dict[str, object]]:
         if self.memory is None:
@@ -3557,6 +4465,23 @@ class DogidoService:
 
     def _bind_dialogue_provider(self, session: SessionInfo) -> None:
         session.machine.dialogue_context_provider = lambda: session.dialogue
+        session.machine.foreground_dialogue_provider = (
+            lambda: session.foreground_dialogue.snapshot()
+        )
+        if (
+            self.settings.main_language_dialogue_enabled
+            and self.settings.llm_enabled
+            and session.language_runtime is None
+        ):
+            session.language_runtime = MainLanguageRuntime(
+                self.llm,
+                ledger=session.dialogue_turns,
+                foreground=session.foreground_dialogue,
+                history_provider=session.dialogue.prompt_turns,
+                situation_provider=session.dialogue.situation_lines,
+                topic_fresh_ms=self.settings.conversation_topic_fresh_ms,
+                pending_address_ttl_ms=self.settings.conversation_pending_address_ttl_ms,
+            )
         # open 中の句 pin を player_chat details へ（履歴に依存しない）
         session.machine.haiku_workshop_provider = lambda: session.haiku_workshop
         # 次回発句用の薄い lessons

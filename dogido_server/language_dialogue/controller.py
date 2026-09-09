@@ -219,10 +219,13 @@ class LanguageDialogue(WebHandoffMixin):
             return {"control": "cancel", "mode": "normal", "paused": False,
                     "return_context": self.return_context()}
 
-    def interrupt(self):
+    def interrupt(self, *, preserve_deferred_replies: bool = False):
         with self._lock:
             self._epoch += 1
-            self._deferred_reply_turn_ids.clear()
+            if not preserve_deferred_replies:
+                self._deferred_reply_turn_ids.clear()
+            # 本体hostでdispatcherへ渡った通常返答だけは、生成epochで
+            # なく実terminalで確定する。未配送結果はhostが個別に破棄する。
             self.paused = True
             self._pending_web = None  # 中断前の同意・案内音声から後で突然開かない。
             self.last_activity = self.clock()
@@ -287,6 +290,46 @@ class LanguageDialogue(WebHandoffMixin):
             })
             return True
 
+    def observe_external_user_turn(
+        self,
+        turn_id: str,
+        text: str,
+        *,
+        source: str = "text",
+    ) -> bool:
+        """本体コードが受理した学習turnを、返答未確定の状態で共有する。
+
+        正本DBの即答はこのcontrollerを通らないため、player側だけを受理時に
+        登録する。assistant側は同じturn IDの実再生 ``completed`` が届いた時に
+        ``confirm_delivered_reply`` が追加する。
+        """
+
+        if (
+            not isinstance(turn_id, str)
+            or not turn_id
+            or len(turn_id) > 180
+            or not isinstance(text, str)
+            or not text.strip()
+            or len(text) > 1000
+            or source not in {"text", "voice"}
+        ):
+            raise ValueError("turn_id、1〜1000字の発話、text/voiceが必要")
+        with self._lock:
+            if turn_id in self._seen:
+                return False
+            self.history.append(
+                {
+                    "turn_id": turn_id,
+                    "role": "user",
+                    "text": text,
+                    "source": source,
+                }
+            )
+            self._seen.append(turn_id)
+            self._deferred_reply_turn_ids.add(turn_id)
+            self.last_activity = self.clock()
+            return True
+
     def discard_deferred_reply(self, turn_id: str):
         with self._lock:
             existed = turn_id in self._deferred_reply_turn_ids
@@ -301,7 +344,10 @@ class LanguageDialogue(WebHandoffMixin):
         source: str = "text",
         cancelled=None,
         conversation_history: str | None = None,
+        conversation_turns: list[dict[str, str]] | None = None,
+        situation_context: str = "",
         defer_reply_history: bool = False,
+        host_mode: bool = False,
     ) -> dict:
         if not turn_id or not text.strip() or len(text) > 1000 or source not in {"text", "voice"}:
             raise ValueError("turn_id、1〜1000字の発話、text/voiceが必要")
@@ -309,6 +355,21 @@ class LanguageDialogue(WebHandoffMixin):
             not isinstance(conversation_history, str) or len(conversation_history) > 4000
         ):
             raise ValueError("conversation_historyは4000字以内の文字列が必要")
+        if conversation_turns is not None:
+            if not isinstance(conversation_turns, list) or len(conversation_turns) > 40:
+                raise ValueError("conversation_turnsは40発話以内の配列が必要")
+            for item in conversation_turns:
+                if (
+                    not isinstance(item, dict)
+                    or item.get("role") not in {"user", "assistant"}
+                    or not isinstance(item.get("turn_id"), str)
+                    or not item.get("turn_id")
+                    or not isinstance(item.get("text"), str)
+                    or not item.get("text")
+                ):
+                    raise ValueError("conversation_turnsのID・role・textが不正")
+        if not isinstance(situation_context, str) or len(situation_context) > 640:
+            raise ValueError("situation_contextは640字以内の文字列が必要")
         started = self.clock()
         with self._lock:
             record = {
@@ -348,16 +409,30 @@ class LanguageDialogue(WebHandoffMixin):
                 current = {"turn_id": turn_id, "role": "user", "text": text, "source": source}
                 self.history.append(current)
                 self._seen.append(turn_id)
-                record.update(status="casual", reply=casual_reply, dialogue_act="casual",
-                              route_owner="host_code",
-                              mode_after=self.mode,
-                              duration_ms=round((self.clock() - started) * 1000))
+                if host_mode:
+                    record.update(
+                        status="player_chat",
+                        host_chat_requested=True,
+                        dialogue_act="casual",
+                        route_owner="host_player_chat",
+                        mode_after=self.mode,
+                        duration_ms=round((self.clock() - started) * 1000),
+                    )
+                else:
+                    record.update(status="casual", reply=casual_reply, dialogue_act="casual",
+                                  route_owner="host_code",
+                                  mode_after=self.mode,
+                                  duration_ms=round((self.clock() - started) * 1000))
                 self._remember_reply(record, turn_id)
                 self.last_activity = self.clock()
                 return record
             self._busy = True
             epoch = self._epoch
-            history = list(self.history)
+            history = (
+                [dict(item) for item in conversation_turns]
+                if conversation_turns is not None
+                else list(self.history)
+            )
             current = {"turn_id": turn_id, "role": "user", "text": text, "source": source}
             details = {
                 "current": current,
@@ -365,6 +440,8 @@ class LanguageDialogue(WebHandoffMixin):
                 "mode": self.mode,
                 "focus": asdict(self.focus),
             }
+            if situation_context.strip():
+                details["situation_history"] = situation_context.strip()
             if self.last_research_topic:
                 details["recent_research"] = self.return_context()
             research = self.research
@@ -516,7 +593,7 @@ class LanguageDialogue(WebHandoffMixin):
                     player_chat_history = conversation_history
                 record.update(
                     status="player_chat",
-                    reply=self._player_chat_reply(text, player_chat_history),
+                    reply=("" if host_mode else self._player_chat_reply(text, player_chat_history)),
                     dialogue_act=(
                         interpretation.dialogue_act
                         if interpretation is not None
@@ -524,7 +601,8 @@ class LanguageDialogue(WebHandoffMixin):
                         if invalid_interpretation is not None
                         else "fallback"
                     ),
-                    route_owner="player_chat",
+                    route_owner="host_player_chat" if host_mode else "player_chat",
+                    host_chat_requested=host_mode,
                 )
                 next_focus = Focus()
             elif interpretation is None:
@@ -544,7 +622,8 @@ class LanguageDialogue(WebHandoffMixin):
                 record.update(
                     status="handoff",
                     handoff_topic=interpretation.topic,
-                    route_owner="handoff",
+                    route_owner="host_player_chat" if host_mode else "handoff",
+                    host_chat_requested=host_mode,
                 )
                 next_focus = Focus()
             elif interpretation.target_status == "ambiguous" or interpretation.topic == "unclear":
@@ -667,10 +746,14 @@ class LanguageDialogue(WebHandoffMixin):
                 if record["status"] == "handoff":
                     self._clear_focus(remember_research=True)
                     record["return_context"] = self.return_context()
+                    # _clear_focus() が直前の履歴も空にするため、handoffした
+                    # 現在入力だけは診断・独立試験の短期履歴へ一度戻す。
                     self.history.append(current)
                 elif next_focus is not None:
                     self.mode = (
-                        "normal" if record.get("route_owner") == "player_chat" else "language"
+                        "normal"
+                        if record.get("route_owner") in {"player_chat", "host_player_chat"}
+                        else "language"
                     )
                     self.focus = next_focus
                     self._kanji_scope_confirmed = (

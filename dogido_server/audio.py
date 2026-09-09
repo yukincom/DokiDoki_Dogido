@@ -12,6 +12,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 import time
+from typing import Callable
 
 import httpx
 
@@ -36,6 +37,7 @@ class RunningAudio:
     process: subprocess.Popen[bytes]
     cleanup_path: Path | None = None
     cue_id: str | None = None
+    stop_requested: bool = False
 
 
 # ---- バックエンド基底クラス ----
@@ -446,7 +448,12 @@ class AudioDispatcher:
     優先順位そのものは主に上流の状態機械が決めており、
     このクラスは割り込みと protect_ms の制御を担当する。
     """
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        on_playback_event: Callable[[dict[str, str]], None] | None = None,
+    ) -> None:
         self.settings = settings
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
@@ -455,6 +462,7 @@ class AudioDispatcher:
         self._pending: deque[tuple[int, list[AudioAction]]] = deque()
         self._epoch = 0  # 割り込み発生時にインクリメント。古いエポックのアクションはワーカーがスキップ
         self._closed = False
+        self._on_playback_event = on_playback_event
         # VOICEVOXのHTTP合成をdispatcher lockと再生workerから切り離す。
         # slotも同数に制限し、割り込みが続いても準備taskを無制限にためない。
         self._speech_prepare_executor = ThreadPoolExecutor(
@@ -497,18 +505,44 @@ class AudioDispatcher:
         """起動時に定型文を事前合成してキャッシュする（VoiceVox 用）。"""
         self.speech_backend.prewarm_texts(texts)
 
+    def set_playback_event_callback(
+        self,
+        callback: Callable[[dict[str, str]], None] | None,
+    ) -> None:
+        with self._lock:
+            self._on_playback_event = callback
+
     def close(self) -> None:
         """再生・未再生バッチを失効し、音声準備workerを終了する。"""
 
+        cancelled: list[AudioAction] = []
         with self._condition:
             if self._closed:
                 return
             self._closed = True
             self._epoch += 1
+            cancelled = [action for _, actions in self._pending for action in actions]
             self._pending.clear()
             self._stop_current_locked()
             self._condition.notify_all()
+        for action in cancelled:
+            self._notify_playback(action, "cancelled", "dispatcher_closed")
         self._speech_prepare_executor.shutdown(wait=False, cancel_futures=True)
+
+    def interrupt_for_player_input(self) -> None:
+        """本人の受理済みbarge-inで、現在音声と残りキューを明示取消する。"""
+
+        cancelled: list[AudioAction] = []
+        with self._condition:
+            if self._closed:
+                return
+            self._epoch += 1
+            cancelled = [action for _, actions in self._pending for action in actions]
+            self._pending.clear()
+            self._stop_current_locked()
+            self._condition.notify_all()
+        for action in cancelled:
+            self._notify_playback(action, "cancelled", "player_barge_in")
 
     def play_actions(self, actions: list[AudioAction]) -> None:
         """アクションリストをキューに積む。割り込みフラグがあれば現在再生を止める。
@@ -518,29 +552,57 @@ class AudioDispatcher:
         """
         if not actions:
             return
+        queued: list[AudioAction] = []
+        cancelled: list[tuple[AudioAction, str]] = []
         with self._condition:
             if self._closed:
-                return
-            if any(action.interrupt for action in actions):
+                cancelled.extend((action, "dispatcher_closed") for action in actions)
+            elif any(action.interrupt for action in actions):
                 hard_interrupt = self._has_hard_interrupt(actions)
                 if self._is_current_protected_locked() and not hard_interrupt:
                     # 保護中かつハード割り込みでない -> キュー先頭に差し戻してあとで再試行
-                    if self._enqueue_pending_locked(actions, front=True):
+                    accepted, evicted = self._enqueue_pending_locked(actions, front=True)
+                    cancelled.extend((action, "queue_replaced") for action in evicted)
+                    if accepted:
+                        queued.extend(actions)
                         self._condition.notify_all()
-                    return
-                # 割り込み確定: エポックを進めて古いキューを全破棄し、現在の再生を停止
-                self._epoch += 1
-                self._pending.clear()
-                actions = self._prepare_interrupt_actions_locked(
-                    actions,
-                    hard_interrupt=hard_interrupt,
-                )
-                self._stop_current_locked()
-                self._condition.notify_all()
-                if not actions:
-                    return
-            if self._enqueue_pending_locked(actions):
-                self._condition.notify_all()
+                    else:
+                        cancelled.extend((action, "queue_full") for action in actions)
+                else:
+                    # 割り込み確定: エポックを進めて古いキューを全破棄し、現在の再生を停止
+                    self._epoch += 1
+                    cancelled.extend(
+                        (action, "interrupted")
+                        for _, pending_actions in self._pending
+                        for action in pending_actions
+                    )
+                    self._pending.clear()
+                    actions = self._prepare_interrupt_actions_locked(
+                        actions,
+                        hard_interrupt=hard_interrupt,
+                    )
+                    self._stop_current_locked()
+                    self._condition.notify_all()
+                    if actions:
+                        accepted, evicted = self._enqueue_pending_locked(actions)
+                        cancelled.extend((action, "queue_replaced") for action in evicted)
+                        if accepted:
+                            queued.extend(actions)
+                            self._condition.notify_all()
+                        else:
+                            cancelled.extend((action, "queue_full") for action in actions)
+            else:
+                accepted, evicted = self._enqueue_pending_locked(actions)
+                cancelled.extend((action, "queue_replaced") for action in evicted)
+                if accepted:
+                    queued.extend(actions)
+                    self._condition.notify_all()
+                else:
+                    cancelled.extend((action, "queue_full") for action in actions)
+        for action in queued:
+            self._notify_playback(action, "queued")
+        for action, resolution in cancelled:
+            self._notify_playback(action, "cancelled", resolution)
 
     @staticmethod
     def _batch_priority(actions: list[AudioAction]) -> int:
@@ -570,10 +632,11 @@ class AudioDispatcher:
         actions: list[AudioAction],
         *,
         front: bool = False,
-    ) -> bool:
+    ) -> tuple[bool, list[AudioAction]]:
         """上限付きで1論理batchを積む。暗黙のdeque破棄は行わない。"""
 
         batch = (self._epoch, list(actions))
+        evicted_actions: list[AudioAction] = []
         max_batches = int(self.settings.audio_max_pending_batches)
         if len(self._pending) >= max_batches:
             incoming_key = self._batch_replace_key(actions)
@@ -589,7 +652,7 @@ class AudioDispatcher:
                             len(self._pending),
                             max_batches,
                         )
-                        return True
+                        return True, list(queued_actions)
 
             incoming_priority = self._batch_priority(actions)
             pending = list(self._pending)
@@ -618,13 +681,13 @@ class AudioDispatcher:
                     len(self._pending),
                     max_batches,
                 )
-                return False
+                return False, []
 
         if front:
             self._pending.appendleft(batch)
         else:
             self._pending.append(batch)
-        return True
+        return True, list(evicted_actions)
 
     def _prepare_interrupt_actions_locked(
         self,
@@ -680,26 +743,47 @@ class AudioDispatcher:
                     return
                 epoch, actions = self._pending.popleft()
 
-            for action in actions:
+            for index, action in enumerate(actions):
+                abandon_tail = False
                 try:
                     if action.speech_segments:
                         if self._play_segmented_speech(action, expected_epoch=epoch):
+                            abandon_tail = True
                             break
                         continue
                     handle, stale = self._start_action(action, expected_epoch=epoch)
                     if stale:
                         # 割り込みで無効になったバッチはスキップ
+                        self._notify_playback(action, "cancelled", "interrupted")
+                        abandon_tail = True
                         break
                     if handle is None:
+                        self._notify_playback(action, "failed", "playback_unavailable")
                         continue
                     # 再生が終わるまでここでブロック
+                    self._notify_playback(action, "started")
                     self._wait_for(handle)
+                    if handle.stop_requested:
+                        self._notify_playback(action, "cancelled", "interrupted")
+                    elif getattr(handle.process, "returncode", None) in {None, 0}:
+                        self._notify_playback(action, "completed")
+                    else:
+                        self._notify_playback(action, "failed", "process_exit")
                 except Exception:  # noqa: BLE001 - 音声失敗でworker自体を失わない
+                    self._notify_playback(action, "failed", "exception")
                     LOGGER.exception(
                         "audio_action_failed layer=%s text=%s",
                         action.layer,
                         (action.text or "")[:80],
                     )
+                finally:
+                    if abandon_tail:
+                        for remaining in actions[index + 1 :]:
+                            self._notify_playback(
+                                remaining,
+                                "cancelled",
+                                "interrupted",
+                            )
 
     def _play_segmented_speech(
         self,
@@ -712,6 +796,7 @@ class AudioDispatcher:
         segments = tuple(segment for segment in action.speech_segments if segment)
         if not segments or (action.text is not None and "".join(segments) != action.text):
             segments = (action.text,) if action.text else ()
+        started = False
         for index, segment in enumerate(segments):
             handle, stale = self._start_speech_text(
                 action,
@@ -720,6 +805,7 @@ class AudioDispatcher:
                 interrupt=bool(action.interrupt and index == 0),
             )
             if stale:
+                self._notify_playback(action, "cancelled", "interrupted")
                 return True
             if handle is None:
                 # 一文だけ抜けて意味が変わるのを避け、残りも読まない。
@@ -729,17 +815,56 @@ class AudioDispatcher:
                     len(segments),
                     (action.text or "")[:80],
                 )
+                self._notify_playback(action, "failed", "playback_unavailable")
                 return False
+            if not started:
+                self._notify_playback(action, "started")
+                started = True
             self._wait_for(handle)
-            with self._condition:
-                if self._closed or expected_epoch != self._epoch:
-                    return True
-            if index + 1 < len(segments) and self._wait_segment_pause(
-                expected_epoch,
-                action.speech_segment_pause_ms,
-            ):
+            if handle.stop_requested:
+                self._notify_playback(action, "cancelled", "interrupted")
                 return True
+            if getattr(handle.process, "returncode", None) not in {None, 0}:
+                self._notify_playback(action, "failed", "process_exit")
+                return False
+            if index + 1 < len(segments):
+                with self._condition:
+                    interrupted = self._closed or expected_epoch != self._epoch
+                if interrupted or self._wait_segment_pause(
+                    expected_epoch,
+                    action.speech_segment_pause_ms,
+                ):
+                    self._notify_playback(action, "cancelled", "interrupted")
+                    return True
+        if started:
+            self._notify_playback(action, "completed")
         return False
+
+    def _notify_playback(
+        self,
+        action: AudioAction,
+        status: str,
+        resolution: str = "",
+    ) -> None:
+        if not action.utterance_id:
+            return
+        callback = self._on_playback_event
+        if callback is None:
+            return
+        try:
+            callback(
+                {
+                    "utterance_id": action.utterance_id,
+                    "turn_id": action.conversation_turn_id,
+                    "route_owner": action.route_owner,
+                    "session_id": action.playback_session_id,
+                    "status": status,
+                    "resolution": resolution,
+                    "text": action.text or "",
+                }
+            )
+        except Exception:  # noqa: BLE001 - 観測callbackで再生workerを落とさない
+            LOGGER.exception("playback_event_callback_failed status=%s", status)
 
     def _wait_segment_pause(self, expected_epoch: int, pause_ms: int) -> bool:
         """文間の待ち。割り込み通知で直ちに解除し、古い続きを再生しない。"""
@@ -1140,6 +1265,7 @@ class AudioDispatcher:
             return
         process = self._current.process
         if process.poll() is None:
+            self._current.stop_requested = True
             process.terminate()
             try:
                 process.wait(timeout=1.0)

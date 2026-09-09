@@ -11,7 +11,14 @@ from typing import Callable
 
 
 FINAL_PLAYBACK_STATUSES = {"completed", "failed", "cancelled"}
-PENDING_PLAYBACK_STATUSES = {"selected", "queued", "started"}
+PENDING_PLAYBACK_STATUSES = {
+    "not_selected",
+    "selected",
+    "dispatched",
+    "queued",
+    "started",
+}
+GENERATION_PLAYBACK_STATUSES = {"not_selected", "selected"}
 
 
 @dataclass(slots=True)
@@ -20,6 +27,7 @@ class ConversationTurn:
     epoch: int
     raw_text: str
     semantic_text: str
+    source: str = "text"
     route: str = "pending"
     routing_status: str = "pending"
     selected_reply: str = ""
@@ -59,7 +67,15 @@ class TurnLedger:
         self._by_utterance: dict[str, ConversationTurn] = {}
         self._lock = threading.RLock()
 
-    def begin(self, turn_id: str, *, epoch: int, raw_text: str, semantic_text: str) -> dict:
+    def begin(
+        self,
+        turn_id: str,
+        *,
+        epoch: int,
+        raw_text: str,
+        semantic_text: str,
+        source: str = "text",
+    ) -> dict:
         with self._lock:
             if turn_id in self._by_turn:
                 return self._by_turn[turn_id].snapshot()
@@ -68,6 +84,7 @@ class TurnLedger:
                 epoch=epoch,
                 raw_text=raw_text[:1000],
                 semantic_text=semantic_text[:1000],
+                source="voice" if source == "voice" else "text",
                 accepted_at=self.clock(),
             )
             self._turns.append(turn)
@@ -102,6 +119,11 @@ class TurnLedger:
     def started(self, utterance_id: str) -> dict | None:
         return self._playback_transition(utterance_id, "started")
 
+    def dispatched(self, utterance_id: str) -> dict | None:
+        """dispatcherへ所有権を渡した事実を、callbackより先に記録する。"""
+
+        return self._playback_transition(utterance_id, "dispatched")
+
     def resolve(self, utterance_id: str, status: str, *, resolution: str = "") -> dict | None:
         if status not in FINAL_PLAYBACK_STATUSES:
             raise ValueError("再生結果は completed/failed/cancelled のいずれか")
@@ -125,10 +147,16 @@ class TurnLedger:
             return turn.snapshot()
 
     def cancel_pending(self, *, resolution: str) -> list[dict]:
+        """未生成・未配送のturnだけを失効する。
+
+        ``dispatched`` 以降は実際のdispatcher terminalを正とする。生成epochの
+        変更だけで、再生中の発話を先回りしてcancelledにしない。
+        """
+
         changed: list[dict] = []
         with self._lock:
             for turn in self._turns:
-                if turn.playback_status not in PENDING_PLAYBACK_STATUSES:
+                if turn.playback_status not in GENERATION_PLAYBACK_STATUSES:
                     continue
                 turn.playback_status = "cancelled"
                 turn.completed_at = self.clock()
@@ -136,7 +164,26 @@ class TurnLedger:
                 changed.append(turn.snapshot())
         return changed
 
-    def prompt_history(self, *, now: float | None = None) -> str:
+    def cancel_turn(self, turn_id: str, *, resolution: str) -> dict | None:
+        """hostがまだdispatcherへ渡していない1件だけを明示終了する。"""
+
+        with self._lock:
+            turn = self._by_turn.get(turn_id)
+            if turn is None or turn.playback_status not in GENERATION_PLAYBACK_STATUSES:
+                return None
+            turn.playback_status = "cancelled"
+            turn.completed_at = self.clock()
+            turn.resolution = resolution[:120]
+            return turn.snapshot()
+
+    def get(self, turn_id: str) -> dict | None:
+        with self._lock:
+            turn = self._by_turn.get(turn_id)
+            return turn.snapshot() if turn is not None else None
+
+    def prompt_turns(self, *, now: float | None = None) -> list[dict[str, str]]:
+        """解釈器と本文生成が共有する、ID付きの短期履歴を返す。"""
+
         with self._lock:
             cutoff_now = self.clock() if now is None else now
             eligible = [
@@ -145,20 +192,52 @@ class TurnLedger:
                 if turn.completed_at is not None
                 and turn.playback_status in FINAL_PLAYBACK_STATUSES | {"not_applicable"}
                 and cutoff_now - turn.completed_at < self.ttl_seconds
-                and not (
-                    turn.playback_status == "cancelled"
-                    and turn.resolution in {"cancel", "interrupt", "listen", "quit"}
-                )
+                and turn.routing_status not in {"awaiting_address", "expired"}
+                and turn.route not in {"address_repair", "address_confirmation"}
+                and turn.resolution
+                not in {
+                    "cancel",
+                    "interrupt",
+                    "listen",
+                    "quit",
+                    "combat",
+                    "expired_unaddressed",
+                    "replaced_unaddressed",
+                    "declined_unaddressed",
+                    "attention_interrupted",
+                    "host_chat_queue_full",
+                    "worker_busy",
+                }
             ][-self.max_exchanges :]
-            lines: list[str] = []
+            rows: list[dict[str, str]] = []
             for turn in eligible:
                 user = self._clip(turn.semantic_text)
                 assistant = self._clip(turn.selected_reply)
                 if user:
-                    lines.append(f"プレイヤー: {user}")
+                    rows.append(
+                        {
+                            "turn_id": turn.turn_id,
+                            "role": "user",
+                            "text": user,
+                            "source": turn.source,
+                        }
+                    )
                 if turn.playback_status == "completed" and assistant:
-                    lines.append(f"ドギド: {assistant}")
-            return "\n".join(lines)
+                    rows.append(
+                        {
+                            "turn_id": f"{turn.turn_id}:reply",
+                            "role": "assistant",
+                            "text": assistant,
+                        }
+                    )
+            return rows
+
+    def prompt_history(self, *, now: float | None = None) -> str:
+        lines: list[str] = []
+        for row in self.prompt_turns(now=now):
+            speaker = "プレイヤー" if row["role"] == "user" else "ドギド"
+            lines.append(f"{speaker}: {row['text']}")
+        return "\n".join(lines)
 
     def snapshot(self) -> list[dict]:
         with self._lock:
@@ -169,6 +248,9 @@ class TurnLedger:
             turn = self._by_utterance.get(utterance_id)
             if turn is None or turn.playback_status in FINAL_PLAYBACK_STATUSES:
                 return None
+            order = {"selected": 0, "dispatched": 1, "queued": 2, "started": 3}
+            if order.get(status, -1) <= order.get(turn.playback_status, -1):
+                return turn.snapshot()
             turn.playback_status = status
             return turn.snapshot()
 
@@ -196,7 +278,7 @@ class _WorkItem:
 
 
 class DialogueWorker:
-    """独立試験専用の有界・直列worker。完了結果だけをhost inboxへ戻す。"""
+    """独立試験と本体で共有する有界・直列worker。完了結果だけをhostへ戻す。"""
 
     def __init__(self, emit: Callable[[dict], None], *, max_pending: int = 1):
         self.emit = emit

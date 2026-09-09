@@ -110,6 +110,7 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
     weather = details.get("weather_label", details.get("weather", "不明"))
     time_label = details.get("time_label", details.get("time_phase", "不明"))
     weather_context = str(details.get("weather_context") or "").strip()
+    dialogue_material = details.get("player_dialogue_material")
 
     chunks: list[str] = []
     biome_visible = details.get("biome_context_visible") is not False
@@ -136,6 +137,14 @@ def _materials_for_dogido(details: dict[str, object]) -> str:
         chunks.append(f"空と時間: {weather} / {time_label}")
         if weather_context:
             chunks.append(f"コードで確定した現在地の気象: {weather_context}")
+
+    if isinstance(dialogue_material, dict):
+        summary = str(dialogue_material.get("summary") or "").strip()[:80]
+        motifs = [str(value).strip()[:16] for value in dialogue_material.get("motifs", [])[:3] if value]
+        if summary:
+            chunks.append(f"プレイヤーとの直前の雑談（世界の事実ではない、軽い材料）: {summary}")
+        if motifs:
+            chunks.append(f"雑談のことば: {'、'.join(motifs)}")
 
     tags = _haiku_tags_hint(details)
     if tags != "なし":
@@ -238,7 +247,9 @@ def _source_atoms_block(details: dict[str, object]) -> str:
         return "なし"
     guide = (
         "scope: identity_only=名称そのものだけ / source_meaning=原文の意味の言い換えまで / "
-        "observed_state=現在の実測状態まで / poetic_interpretation=印象・取り合わせだけ。"
+        "observed_state=現在の実測状態まで / "
+        "player_reported_context=プレイヤーが話した内容まで（世界の実測ではない） / "
+        "poetic_interpretation=印象・取り合わせだけ。"
         "kind=poetic_interpretation は、一次材料へ照合済みで実際に発話する一句全体の意味の枠"
     )
     return f"{guide}\n" + "\n".join(lines)

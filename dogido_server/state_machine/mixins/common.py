@@ -817,6 +817,11 @@ class CommonMixin:
     def _should_emit_ambient_mob_comment(self, event: GameEvent, now: datetime) -> bool:
         if not event.passive_mobs:
             return False
+        # 一時的なplayer input muteではなく、プレイヤー主体の雑談・学習・Web・
+        # workshopが所有している間は非敵対mobの独り言を止める。
+        foreground = self._foreground_dialogue_snapshot()
+        if foreground.get("blocks_ambient"):
+            return False
         # 地表の雷雨中は低優先の友好・中立モブ雑談を積まない。
         # 洞窟バイオームでは地上天候を材料にしないため従来どおり反応する。
         if (

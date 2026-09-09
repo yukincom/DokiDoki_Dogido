@@ -126,6 +126,12 @@ class HasPlayerChat(_Condition):
             return False
         if context.machine.player_input.requests_sword:
             return False
+        # 雷の実音は会話より先。入力はdefer_player_inputで次tickへ戻す。
+        if (
+            context.machine._has_recent_nearby_lightning(context.event)
+            or context.machine._has_recent_thunder_sound(context.event)
+        ):
+            return False
         # 夕方・夜警告は時限性が高いので player_chat より先（workshop 中は抑止）
         if context.machine._night_warning_should_preempt_player_chat(
             context.event, context.now
@@ -282,11 +288,6 @@ class EmitPlayerChatActions(_Action):
                 ]
             )
             actions.extend(reply_actions)
-            machine._suppress_thunder_after_player_reply(
-                context.event,
-                context.now,
-                reply_actions,
-            )
 
 
 class EmitFlushInterrupt(_Action):

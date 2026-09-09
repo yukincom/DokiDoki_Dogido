@@ -238,7 +238,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 | identify 誤骨子がプレイヤーに出なかった場合 | 同上 |
 | cue 擬音（既存） | 維持 |
 
-**実装確認:** `service._update_dialogue_context` が **実際に emit された action.text だけ**を `add_dogido` しているか。emit 前に fallback 置換されていれば OK。
+**実装確認:** player発話は受理時に追加するが、Dogido本文は選択・表示時点では追加しない。`AudioDispatcher` が発話IDつき `completed` を返し、次の直列game eventで回収した本文だけを `add_dogido` する。`failed / cancelled / queue replaced` は履歴と会話由来の川柳材料へ入れない。
 
 ---
 
@@ -259,8 +259,21 @@ user_text
   → usable sanitize
   → 直近観測に基づく一意な危険一般名の修正
   → style / allowed_speech_labels sanitize
-  → emit された文だけ履歴5往復へ
+  → player入力を受理
+  → 発話IDつき本文を選択・音声queueへ
+  → completed された文だけ履歴5往復へ
 ```
+
+## foreground会話と自動川柳（2026-09-09）
+
+- `casual` が所有している間は友好・中立Mobのambientを止める。敵対警告・雷・夕方注意は止めない
+- hostile時は一件だけ話題を保留し、明示再開されなければ戦闘後の受理済みplayer turn 10件で破棄する
+- 雑談が無期限に続いても自動川柳は通常10分周期で保留せず、現在のplayer replyの後ろ、または次の安全なqueue境界で割り込む
+- 導入は「あっ……ちょっと待って。なんか、浮かんできたかもしれん……。」に固定する
+- 再生完了済み直近3 turnを、最大80字・最大3 motif・元turn IDつきの `player_reported_context` soft材料にする。プレイヤー発話由来であり世界の実測事実ではない
+- `learning / web` 中は発句周期そのものを凍結する
+
+詳細は [本体の会話所有権・中断・再生確定](main-dialogue-integration.md)。
 
 ## 現在ターンの予定と安全方針（2026-08-15）
 
