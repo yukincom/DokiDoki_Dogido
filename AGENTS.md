@@ -34,6 +34,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/haiku/edit_contract.py` | workshop 行差分の compare-and-swap 検証（生成・採用・保存で共有） |
 | `dogido_server/haiku/verse.py` | 一行の表示・確定ひらがな読み・行概念・出典を同じ正本オブジェクトへ束ねる |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
+| `dogido_server/dialogue/foreground.py` | 本体sessionの会話所有権、戦闘保留、再生完了済み会話から作るsoft川柳材料 |
+| `dogido_server/dialogue/main_runtime.py` | 本体の限定国語対話をgame-event worker外で処理し、発話IDの実再生結果へ結ぶ |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
 | `dogido_server/llm/structured_contracts.py` | workshop・assist等の現行JSON外形。自動川柳6種は8月完成版のドメイン検査と最大6回再生成を維持 |
 | `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
@@ -63,6 +65,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する。剣支援の実測誤変換 `県に持ち替え/変えて/ハインコ（変更）/チェンに変更` は voice-only・操作語直結の閉じた規則で解釈面だけ補正し、typed・単独の候補語・その語の会話は対象外
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
+- 本体の一般雑談は既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界workerへ渡す。正本DBの明示知識回答、戦況、assist、workshopは状態機械側に残す。foreground中は非敵対ambientを止めるが、敵対警告・雷・夕方を止めない。assistant履歴と会話由来の川柳材料は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いepochを混ぜない
+- 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。学習・Web中は発句時計そのものを凍結する
 - 世界操作はLLMへtools一覧として渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。実行capability・現在snapshot・slot・期限・期待item・重複はコード検証する
 - `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。通常Qwenの限定抽出を使い、OS AIの用途を広げない
 
@@ -224,6 +228,8 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
+- 2026-09-09本体会話第一段階: `none / casual / learning / web / haiku_workshop` のforeground所有権、一件だけの戦闘保留、10 accepted player turnの失効、戦闘中会話試行のcooldown応答、試行あり／集中時の終了文、雷・夕方の入力再queue、foreground中の非敵対ambient抑止を追加。国語・語句の明示質問と学習中の続きだけは有界workerで処理し、正本DB回答は状態機械に残したまま完了履歴を共有する。assistant履歴は発話IDの実再生 `completed` 後に確定する。雑談中の自動川柳は10分周期を維持し、完了済み直近3 turnの最大80字・3 motif・source IDを `player_reported_context` soft材料にして固定の会話中導入から始める。学習・Web中は周期を凍結。全体1254件＋1496 subtests成功、1件skip。**実Minecraft・実モデル・実TTSは未確認。本体Webとゲームpauseは共有contract未合意のため未接続、Fabric変更なし。** [詳細](docs/main-dialogue-integration.md)。
+
 - 2026-09-09対話・参加予測: 独立音声試験は、起動／明示リセット後の最初の入力を必ず受理し、受理後に常駐chatモデルで次の意味上の発話型を5件だけ予測する。明示名指し・話題転換語・質問・Minecraft話題はコードで必ず通す。それ以外も、予測不一致の大きな話題断絶を発話内根拠つき・信頼度0.85以上で `possibly_not_addressed` と抽出できた場合だけ通常履歴外へ保留し、失敗・低信頼・迷いは受理側へ倒す。保留は上限5件をログに残し、「待たせたね」等は `side_conversation_resolved` として「ええんやで。」、明示訂正は直近1件だけ再処理する。`handoff` は静音契機にせず、5分無活動後の `QUIET` と `/listen` の `MIC_OFF` は分離する。StackChanの未検証scene分類器は移植していない。解釈契約は情報要求・雑談・その他を分離し、一般雑談を本体既存 `player_chat` leafへ渡す。参加予測は返答を生成しない。独立音声hostは `turn_id` と発話IDを結ぶ5往復・5分の台帳を持ち、assistant発話を実再生 `completed` 後だけ履歴へ確定する。生成・参加分類・Google処理は有界直列workerで行い、完了時にepochを再検証する。次の音声は生成・再生中に直近1件だけ保留し、自動barge-inはせず `/interrupt` を明示手段とする。実Google概要は15秒後の1回だけ読み、自動再取得なし。研究中の別質問推定は確認を挟む。ドギド関連380件＋87 subtests成功、Chromeモック50件は直前の15秒化で成功。**通常会話・完了履歴・worker・予測保留の変更後は、実モデル・実家庭音声で未確認**。
 
 - 2026-09-09閲覧集中: 16:34のユーザー実試験で通常会話→Web同意→15秒後の単発取得→取得内容を使う後続対話まで通った。検索完了直後の追加TTSは読む集中を妨げたため削除し、`awaiting_report`・取得内容・Web診断はログへ残したまま可視ページを静かに読めるようにした。無音化後の実音声再確認は未実施。
@@ -262,7 +268,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - 発句間隔は通常の10分（600000ms）へ復帰済み。短期比較ではローカル環境変数だけを一時変更し、終了後は10分へ戻す
 - 降雪・積雪材料: 現在Y×バイオーム気温/降雪高度をコード判定。Y/Z・気温・閾値・downfallはLLMへ出さず、閉じた降水/雷/降雪環境と実測地表雪だけを共有 **済**
 - 乗り物材料: 乗車中のみ種別・操縦・実移動を観測し、主語付き事実として川柳・雑談で共有 **済**（エリトラは別課題）
-- ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）+ 地表雷雨中の友好・中立 Mob 抑止（洞窟は維持）**済**
+- ambient: プレイヤー入力優先（priority mute 共通 + pending キュー中禁止）+ player主体foreground中の友好・中立 Mob 抑止 + 地表雷雨中の抑止（洞窟は維持）**済**
 - 通常敵の視認索敵: 見通しあり16ブロック以内。現在視認中に「どっち？」と聞かれたら絶対8方位＋概算距離をコード固定で返す **済**
 - エピソード決定記録 A: 非重複イベントごとに発話あり／なしを `eval/episodes.jsonl` へbest-effort追記 **済**（記憶へは混ぜない）
 - 支援 B/C `select_sword`: hotbar 0〜8実測 + 実行capability分離 + game-event応答のtyped command + Fabricメインスレッド再検証 + result/ack + episode相関まで **コード・自動テスト・Minecraft実機確認済み**（2026-08-16。自動持ち替え・救助・馬は未）

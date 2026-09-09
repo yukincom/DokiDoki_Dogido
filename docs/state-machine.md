@@ -335,8 +335,20 @@
 - 敵接近
 - 被弾
 - 複数敵
+- 実雷鳴・近距離落雷
+- 地表夕方の一度だけの注意
 - 暗所危険
-- 通常会話
+- プレイヤー主体の会話
+- 非敵対ambient
+
+### プレイヤー主体の会話所有権
+
+- `none / casual / learning / web / haiku_workshop` の一つだけをsession内foregroundとして扱う
+- `casual / learning / web / haiku_workshop` 中は、友好・中立Mobのambient発話を止める。敵対警告は止めない
+- hostileで `casual / learning` を一件だけ保留し、戦闘後10件の受理済みplayer turn以内に明示再開されなければ破棄する。game tickと自動calloutは数えない
+- 国語・語句の明示質問と学習中の続きは有界workerへ渡し、完了結果を次の安全なgame eventで回収する。正本DBの明示知識回答、戦況・assist・workshopは状態機械側に残す
+- assistant本文は選択時でなく、発話IDに対応する実再生 `completed` を回収した後だけ5往復履歴へ入れる
+- 詳細と未接続のWeb pause境界は [main-dialogue-integration.md](main-dialogue-integration.md)
 
 ### 暗所助言フロー
 
@@ -362,11 +374,12 @@
 - 「家へ帰る」は現在の発話に明示されたターンだけ `player_turn_plan=return_home` とし、短期目標メモリにはしない
 - `respawn_point_set` と直近の `respawn_distance` 複数サンプルは接近傾向の補助にだけ使い、単発差分や道具使用からプレイヤー目標を推測しない
 
-### 雷鳴反応の抑制
+### 雷鳴反応
 
 - 実雷鳴・近距離落雷の悲鳴 cue は共通タイマーで10分抑制し、雷への短い一言は別タイマーで3分抑制する
 - 一言は LLM leaf で「鳴り続ける雷への小さな独り言」に調整し、LLM 利用不可時は固定 fallback を使う
-- 雷雨中に player_chat 等の返答を実際に出した場合、自発的な雷鳴反応は返答時点から3分抑える
+- 最初の実雷鳴／近距離落雷はplayer replyより先に割り込み、同じ入力を次tickへ戻す。会話所有権と履歴は消さない
+- 以後cooldown後の一言は非割り込みで小さく心配する。player_chatを返したことを理由に雷自体を3分無視しない
 - 天候が雷の間、地表では友好・中立 Mob の ambient 発話を止める。洞窟バイオームでは天候値を無視して Mob 反応を維持する
 - 敵対 Mob の警告・戦闘 cue はこの雷専用タイマーの対象外
 

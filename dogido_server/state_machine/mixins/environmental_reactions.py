@@ -265,24 +265,13 @@ class EnvironmentalReactionsMixin:
         if sonic_boom_cue is not None:
             return [sonic_boom_cue]
 
-        # プレイヤーへ返す入力がある tick は雷の自発反応を差し込まない。
-        # 実際に返答できた場合は、下の player 向け分岐で以後3分も抑える。
-        player_reply_pending = (
-            self.player_input.asks_hostile_count
-            or (
-                self.player_input.asks_hostile_direction
-                and bool(event.visual_threats)
-            )
-            or self.player_input.asks_dragon_direction
-            or self._has_pending_player_chat(event)
-        )
-        if not player_reply_pending:
-            lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
-            if lightning_actions:
-                return lightning_actions
-            thunder_actions = self._emit_thunder_sound_actions(event, now)
-            if thunder_actions:
-                return thunder_actions
+        # 雷の実音は会話より先。返答本文はserviceが次tickへ戻し、会話文脈は保持する。
+        lightning_actions = self._emit_nearby_lightning_strike_actions(event, now)
+        if lightning_actions:
+            return lightning_actions
+        thunder_actions = self._emit_thunder_sound_actions(event, now)
+        if thunder_actions:
+            return thunder_actions
 
         # 3) 川柳本句完了
         if self.state.pending_haiku_after_preface:
@@ -306,15 +295,12 @@ class EnvironmentalReactionsMixin:
             actions = self._speech_actions(
                 self._render_hostile_query_line(event, signals.ground_hostile_count_within_query_range)
             )
-            self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
         if self.player_input.asks_hostile_direction and event.visual_threats:
             actions = self._speech_actions(self._render_hostile_direction_answer(event))
-            self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
         if self.player_input.asks_dragon_direction:
             actions = self._speech_actions(self._render_dragon_direction_answer(event))
-            self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
         # 型付きassistはserviceが処理する。通常player_chatを生成して二重返答しない。
         if self.player_input.requests_sword:
@@ -326,7 +312,6 @@ class EnvironmentalReactionsMixin:
                 if self.knowledge_query_handled
                 else self._speech_actions(reply)
             )
-            self._suppress_thunder_after_player_reply(event, now, actions)
             return actions
 
         stop_dark_push = self._should_stop_dark_push_audio(event, signals)
@@ -503,6 +488,7 @@ class EnvironmentalReactionsMixin:
                     interrupt=True,
                     text=line,
                     speech_profile="battle",
+                    defer_player_input=True,
                 )
             ]
         return self._speech_actions(line)
@@ -686,10 +672,6 @@ class EnvironmentalReactionsMixin:
         # 実音を根拠に扱った時点で、同じ雷を天候遷移として重ねて説明しない。
         self.state.pending_weather_transition_from = None
         self.state.pending_weather_transition_to = None
-        suppressed_until = self.state.thunder_reaction_suppressed_until
-        if suppressed_until is not None and now < suppressed_until:
-            return []
-
         message_recent_ms = self._recent_ms(
             now,
             self.state.last_thunder_reaction_message_at,
@@ -707,8 +689,13 @@ class EnvironmentalReactionsMixin:
             return []
 
         actions: list[AudioAction] = []
+        # 最初の雷鳴と近距離落雷は即時割り込み。以後のクールダウン後の
+        # 一言は、会話を保持したまま穏やかな継続懸念としてキューへ置く。
+        immediate = scene == "nearby_lightning_strike" or message_recent_ms is None
         if cue_ready:
-            actions.append(self._build_cue_action(cue_id, cue_text, now, interrupt=False))
+            cue = self._build_cue_action(cue_id, cue_text, now, interrupt=immediate)
+            cue.defer_player_input = True
+            actions.append(cue)
             self.state.last_thunder_panic_cue_at = now
         if message_ready:
             line = self._render_thunder_reaction_line(
@@ -716,7 +703,13 @@ class EnvironmentalReactionsMixin:
                 scene=scene,
                 fallback=fallback,
             )
-            actions.append(self._speech_action(line))
+            actions.append(
+                self._speech_action(
+                    line,
+                    interrupt=immediate and not actions,
+                )
+            )
+            actions[-1].defer_player_input = True
             self.state.last_thunder_reaction_message_at = now
         return actions
 
@@ -749,27 +742,6 @@ class EnvironmentalReactionsMixin:
             },
             temperature=0.72,
         )
-
-    def _suppress_thunder_after_player_reply(
-        self,
-        event: GameEvent,
-        now: datetime,
-        actions: list[AudioAction],
-    ) -> None:
-        """雷雨中にプレイヤーへ返答できたら、自発的な雷反応を3分休ませる。"""
-
-        if self._weather_value(event.world.weather) != "thunder":
-            return
-        if not any(action.layer == "speech" and action.text for action in actions):
-            return
-        suppressed_until = now + timedelta(
-            milliseconds=self.settings.thunder_reaction_message_cooldown_ms
-        )
-        current_until = self.state.thunder_reaction_suppressed_until
-        if current_until is None or suppressed_until > current_until:
-            self.state.thunder_reaction_suppressed_until = suppressed_until
-        self.state.pending_weather_transition_from = None
-        self.state.pending_weather_transition_to = None
 
     def _emit_damaging_light_warning(self, event: GameEvent, now: datetime) -> str | None:
         if not self._should_consider_damaging_light_warning(event, now):

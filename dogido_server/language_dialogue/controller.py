@@ -287,6 +287,46 @@ class LanguageDialogue(WebHandoffMixin):
             })
             return True
 
+    def observe_external_user_turn(
+        self,
+        turn_id: str,
+        text: str,
+        *,
+        source: str = "text",
+    ) -> bool:
+        """本体コードが受理した学習turnを、返答未確定の状態で共有する。
+
+        正本DBの即答はこのcontrollerを通らないため、player側だけを受理時に
+        登録する。assistant側は同じturn IDの実再生 ``completed`` が届いた時に
+        ``confirm_delivered_reply`` が追加する。
+        """
+
+        if (
+            not isinstance(turn_id, str)
+            or not turn_id
+            or len(turn_id) > 180
+            or not isinstance(text, str)
+            or not text.strip()
+            or len(text) > 1000
+            or source not in {"text", "voice"}
+        ):
+            raise ValueError("turn_id、1〜1000字の発話、text/voiceが必要")
+        with self._lock:
+            if turn_id in self._seen:
+                return False
+            self.history.append(
+                {
+                    "turn_id": turn_id,
+                    "role": "user",
+                    "text": text,
+                    "source": source,
+                }
+            )
+            self._seen.append(turn_id)
+            self._deferred_reply_turn_ids.add(turn_id)
+            self.last_activity = self.clock()
+            return True
+
     def discard_deferred_reply(self, turn_id: str):
         with self._lock:
             existed = turn_id in self._deferred_reply_turn_ids

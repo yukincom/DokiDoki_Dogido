@@ -5,9 +5,11 @@ from dataclasses import dataclass
 import logging
 from datetime import datetime
 from math import inf
+import hashlib
 import re
 
 from dogido_server.entry_catalog import block_entry, item_entry, mob_entry, mob_poetic_line, mob_poetic_tags
+from dogido_server.dialogue.foreground import CASUAL_HAIKU_PREFACE
 from dogido_server.environment_context import project_environment
 from dogido_server.haiku.generation import generate_grounded_haiku
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
@@ -98,7 +100,36 @@ _HAIKU_NOUN_FAMILIES: tuple[_HaikuNounFamily, ...] = (
 
 class HaikuMixin:
     def _uses_prefaced_haiku_generation(self) -> bool:
-        return self.settings.llm_enabled and self.llm is not None
+        # 雑談中はLLM不在でも、会話専用の固定導入→カタログ句という
+        # 同じ二段境界を守る。
+        return (
+            self._foreground_dialogue_snapshot().get("route") == "casual"
+            or (self.settings.llm_enabled and self.llm is not None)
+        )
+
+    def _foreground_dialogue_snapshot(self) -> dict[str, object]:
+        provider = getattr(self, "foreground_dialogue_provider", None)
+        if provider is None:
+            return {}
+        try:
+            value = provider()
+        except Exception:
+            return {}
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _sync_haiku_interval_pause(self, now: datetime) -> None:
+        blocked = bool(self._foreground_dialogue_snapshot().get("blocks_new_haiku"))
+        started = self.state.haiku_interval_pause_started_at
+        if blocked:
+            if started is None:
+                self.state.haiku_interval_pause_started_at = now
+            return
+        if started is None:
+            return
+        paused_for = now - started
+        if self.state.last_haiku_emitted_at is not None and paused_for.total_seconds() > 0:
+            self.state.last_haiku_emitted_at += paused_for
+        self.state.haiku_interval_pause_started_at = None
 
     def _should_emit_haiku(self, event: GameEvent, now: datetime) -> bool:
         if event.event.name != EventName.STATUS_SNAPSHOT:
@@ -107,15 +138,48 @@ class HaikuMixin:
             return False
         if event.visual_threats or event.auditory_threats or self.player_input.should_block_ambient:
             return False
+        dialogue = self._foreground_dialogue_snapshot()
+        if dialogue.get("combat_active"):
+            return False
+        if dialogue.get("blocks_new_haiku"):
+            return False
         if self.state.pending_special_biome_line is not None:
             return False
         interval_ms = self._recent_ms(now, self.state.last_haiku_emitted_at)
         if interval_ms is None or interval_ms < self.settings.haiku_interval_ms:
             return False
+        # 雑談が長く続いても自動川柳を永久に止めない。現在入力の返答は上で
+        # 優先し、次のstatus/audioキュー境界で発句する。
+        if dialogue.get("route") == "casual":
+            return True
         quiet_ms = self._recent_ms(now, self.state.last_non_silent_at)
         if quiet_ms is None:
             return False
         return quiet_ms >= self.settings.haiku_quiet_time_ms
+
+    def _casual_haiku_due_at_player_boundary(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> bool:
+        """雑談の一発話が閉じた境界で、返答の後に発句すべきか。"""
+
+        dialogue = self._foreground_dialogue_snapshot()
+        if dialogue.get("route") != "casual" or dialogue.get("combat_active"):
+            return False
+        if event.event.name != EventName.STATUS_SNAPSHOT or self.state.mode != "normal":
+            return False
+        if event.visual_threats or event.auditory_threats:
+            return False
+        if self.state.pending_haiku_after_preface:
+            return False
+        if dialogue.get("blocks_new_haiku") or self.state.pending_special_biome_line is not None:
+            return False
+        interval_ms = self._recent_ms(now, self.state.last_haiku_emitted_at)
+        return bool(
+            interval_ms is not None
+            and interval_ms >= self.settings.haiku_interval_ms
+        )
 
     def _haiku_block_reason(self, event: GameEvent, now: datetime) -> str | None:
         if self.state.mode != "normal":
@@ -126,10 +190,17 @@ class HaikuMixin:
             return "auditory_threats"
         if self.player_input.should_block_ambient:
             return "player_input"
+        dialogue = self._foreground_dialogue_snapshot()
+        if dialogue.get("combat_active"):
+            return "foreground_combat"
+        if dialogue.get("blocks_new_haiku"):
+            return f"foreground_{dialogue.get('route', 'dialogue')}"
         if self._player_input_priority_active(now):
             return "player_input_priority"
         if self.state.pending_special_biome_line is not None:
             return "pending_biome_line"
+        if dialogue.get("route") == "casual":
+            return None
         quiet_ms = self._recent_ms(now, self.state.last_non_silent_at)
         if quiet_ms is not None and quiet_ms < self.settings.haiku_quiet_time_ms:
             return "quiet_not_reached"
@@ -173,6 +244,8 @@ class HaikuMixin:
         # 脅威は state_updates で prep を消す。雑談では自分の世界を中断しない。
         if event.visual_threats or event.auditory_threats:
             return False
+        if self._foreground_dialogue_snapshot().get("combat_active"):
+            return False
         # pending_special_biome_line 等の ambient 待ちで本句を止めない。
         # 止めると pending_haiku が張り付き、player 入力が永久 hold される。
         # environmental 側は本句を biome 入場コメントより先に出す。
@@ -213,8 +286,23 @@ class HaikuMixin:
         self._pending_haiku_interpretation = (
             irony.description.strip() if irony.found and irony.description.strip() else None
         )
-        spoken = self._compose_haiku_preface_speech(irony)
-        source_atoms = context.source_atoms
+        dialogue = self._foreground_dialogue_snapshot()
+        casual_active = dialogue.get("route") == "casual"
+        casual_material = (
+            dict(dialogue.get("casual_haiku_material") or {})
+            if casual_active
+            else {}
+        )
+        self._pending_conversation_haiku_material = casual_material or None
+        spoken = (
+            CASUAL_HAIKU_PREFACE
+            if casual_active
+            else self._compose_haiku_preface_speech(irony)
+        )
+        source_atoms = merge_source_atoms(
+            context.source_atoms,
+            self._conversation_haiku_source_atoms(casual_material),
+        )
         self._pending_haiku_context = context
         self._pending_haiku_irony = irony
         self._pending_haiku_origin_event = event.model_copy(deep=True)
@@ -226,6 +314,7 @@ class HaikuMixin:
             source_atoms=source_atoms,
             preface_spoken=spoken,
         )
+        self._attach_pending_conversation_haiku_materials()
         fallback_text = self._fallback_haiku_line(event)
         llm_failed_text = self._llm_failed_haiku_line()
         skip_reason = self._haiku_generation_skip_reason()
@@ -332,6 +421,9 @@ class HaikuMixin:
             context.source_atoms,
             atoms_from_preface_clauses(scene.clauses),
             (interpretation_atom,) if interpretation_atom is not None else (),
+            self._conversation_haiku_source_atoms(
+                self._pending_conversation_haiku_material or {}
+            ),
         )
         self._pending_haiku_source_atoms = source_atoms
         preface_spoken = str(
@@ -345,12 +437,64 @@ class HaikuMixin:
             source_atoms=source_atoms,
             preface_spoken=preface_spoken or None,
         )
+        self._attach_pending_conversation_haiku_materials()
         constraints = self._haiku_constraint_details(origin_event, scene)
         if constraints and self._pending_haiku_materials is not None:
             self._pending_haiku_materials["haiku_constraints"] = constraints
         prompt_details = context.prompt_details(irony, scene)
+        if self._pending_conversation_haiku_material:
+            prompt_details["player_dialogue_material"] = dict(
+                self._pending_conversation_haiku_material
+            )
         prompt_details["haiku_constraints"] = constraints
         self._pending_haiku_prompt_details = prompt_details
+
+    def _attach_pending_conversation_haiku_materials(self) -> None:
+        material = self._pending_conversation_haiku_material
+        mats = self._pending_haiku_materials
+        if not material or mats is None:
+            return
+        mats["player_dialogue_material"] = {
+            "summary": str(material.get("summary") or "")[:80],
+            "motifs": [str(value)[:16] for value in (material.get("motifs") or [])[:3]],
+            "source_turn_ids": [
+                str(value)[:160] for value in (material.get("source_turn_ids") or [])[-5:]
+            ],
+            "attribution": "player_dialogue_soft_material",
+            "constraint": "soft",
+        }
+
+    @staticmethod
+    def _conversation_haiku_source_atoms(
+        material: dict[str, object],
+    ) -> tuple[HaikuSourceAtom, ...]:
+        summary = str(material.get("summary") or "").strip()[:80]
+        motifs = [
+            str(value).strip()[:16]
+            for value in (material.get("motifs") or [])[:3]
+            if str(value).strip()
+        ]
+        if not summary:
+            return ()
+        turn_ids = [str(value)[:160] for value in (material.get("source_turn_ids") or [])[-5:]]
+        source_ref = "dialogue:" + ",".join(turn_ids)
+        rows = [("summary", summary), *[(f"motifs[{index}]", value) for index, value in enumerate(motifs)]]
+        atoms: list[HaikuSourceAtom] = []
+        for field_path, text in rows:
+            digest = hashlib.sha256(f"{source_ref}|{field_path}|{text}".encode("utf-8")).hexdigest()[:12]
+            atoms.append(
+                HaikuSourceAtom(
+                    atom_id=f"dialogue:{digest}",
+                    text=text,
+                    source_ref=source_ref,
+                    field_path=field_path,
+                    observation_role="player_dialogue_attributed",
+                    kind="dialogue_material",
+                    claim_class="factual",
+                    claim_scopes=("player_reported_context",),
+                )
+            )
+        return tuple(atoms)
 
     def _scene_for_spoken_irony(
         self,
@@ -472,6 +616,7 @@ class HaikuMixin:
         self._pending_haiku_context = None
         self._pending_haiku_irony = None
         self._pending_haiku_origin_event = None
+        self._pending_conversation_haiku_material = None
         # interpretation / materials は emission 後に残す必要はないが、キャンセル時は捨てる
         self._pending_haiku_interpretation = None
         self._pending_haiku_materials = None

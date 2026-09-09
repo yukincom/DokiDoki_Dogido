@@ -146,7 +146,7 @@ class DialogueContextUnitTests(unittest.TestCase):
 
 
 class DialogueContextServiceTests(unittest.TestCase):
-    def test_service_accumulates_chat_history(self) -> None:
+    def test_service_accumulates_only_playback_completed_assistant_history(self) -> None:
         with TemporaryDirectory() as tmp:
             service = DogidoService(
                 Settings(
@@ -156,17 +156,43 @@ class DialogueContextServiceTests(unittest.TestCase):
                     memory_dir=Path(tmp) / "memory",
                 )
             )
-            service.process_event(make_event(sequence=1, at_sec=0.0))
-            service.push_player_input("おはようさん")
-            service.process_event(make_event(sequence=2, at_sec=1.0))
-            service.push_player_input("元気？")
-            service.process_event(make_event(sequence=3, at_sec=2.0))
+            try:
+                service.process_event(make_event(sequence=1, at_sec=0.0))
+                service.push_player_input("おはようさん")
+                first = service.process_event(make_event(sequence=2, at_sec=1.0))
+                session = next(iter(service.sessions.values()))
+                reply = next(action for action in first.actions if action.text)
 
-            session = next(iter(service.sessions.values()))
-            lines = session.dialogue.conversation_lines()
-            self.assertGreaterEqual(len(lines), 2)
-            self.assertTrue(any("おはようさん" in line for line in lines))
-            self.assertTrue(any(line.startswith("ドギド:") for line in lines))
+                # 選んだだけの返答は履歴へ入れない。実再生完了を模擬してから
+                # 次の直列eventで確定する。
+                self.assertFalse(
+                    any(
+                        line.startswith("ドギド:")
+                        for line in session.dialogue.conversation_lines()
+                    )
+                )
+                service.dispatch_actions(first.actions, session_id=session.session_id)
+                service._on_audio_playback_event(  # noqa: SLF001
+                    {
+                        "session_id": session.session_id,
+                        "utterance_id": reply.utterance_id,
+                        "turn_id": reply.conversation_turn_id,
+                        "route_owner": reply.route_owner,
+                        "status": "completed",
+                        "resolution": "",
+                        "text": reply.text or "",
+                    }
+                )
+
+                service.push_player_input("元気？")
+                service.process_event(make_event(sequence=3, at_sec=2.0))
+
+                lines = session.dialogue.conversation_lines()
+                self.assertGreaterEqual(len(lines), 3)
+                self.assertTrue(any("おはようさん" in line for line in lines))
+                self.assertTrue(any(line.startswith("ドギド:") for line in lines))
+            finally:
+                service.shutdown()
 
     def test_inventory_gain_and_ambient_become_digest(self) -> None:
         with TemporaryDirectory() as tmp:

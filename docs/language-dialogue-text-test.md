@@ -5,7 +5,9 @@
 **文字だけを手動で試す場合:** [入力台本と実Chrome用ランチャー](language-dialogue-manual-test.md)（2026-09-09）。
 `zsh scripts/start_language_web_test.command` で対話待ちへ入り、台本は1行ずつ入力する。会話の自動実行はしない。
 
-状態：2026-09-06、独立コンポーネントを実装。本体service・ワークショップ・音声経路には未接続。
+状態：独立コンポーネントを維持しつつ、2026-09-09に本体serviceへ国語・語句の限定対話、非同期worker、再生完了台帳を第一段階として接続。Web／Minecraft pause、実音声、workshopへの統合は未接続。
+
+2026-09-09本体第一段階：一般雑談はMinecraft観測を持つ既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界な `MainLanguageRuntime` へ分けた。戦況・assist・正本DBの明示知識回答・workshopは従来の状態機械が所有する。正本DB回答はplayer入力を受理時、assistant本文を実再生 `completed` 後に同じ5往復履歴へ共有する。worker結果も次の安全なgame eventで回収し、assistant本文は同じ再生完了境界で確定する。戦闘中は旧結果をepochで捨て、一件の話題を10 player turnだけ保留する。**本体Web providerはまだ渡しておらず、pause成功ack前にブラウザーを開く経路もない。** 詳細は [本体会話統合](main-dialogue-integration.md)。
 
 2026-09-09更新：解釈契約に `information_request / casual / other` を追加し、挨拶・感謝・質問を求めない雑談を資料不足の質問としてWebへ送らない。代表的な挨拶はコード固定で短く返す。一般的な雑談は本体ですでに使っている `player_chat` leafへ渡し、国語解釈に失敗した普通の陳述も質問用の聞き返しへ固定しない。この独立経路には現在のMinecraft観測を渡さず、見ていない世界状態を事実として足さないよう明示する。実Google概要は15秒後の1回だけ読み、未完成でも同じタブを再取得しない。研究中に別質問と推定しただけでは文脈を捨てず、「今の続き／別の質問」を確認する。これはSTT誤変換そのものの修正ではない。
 

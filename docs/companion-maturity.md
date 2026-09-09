@@ -173,6 +173,8 @@ soft workshop 方針は後半をすでに押さえている。
 
 ## 6. 現状スナップショット（2026-09-01）
 
+2026-09-09本体会話第一段階: session内に `none / casual / learning / web / haiku_workshop` のforeground所有権と、一件だけの中断話題を追加した。一般雑談はMinecraft観測を持つ既存 `player_chat`、国語・語句の明示質問と学習中の続きだけは有界workerへ渡し、ゲームイベント直列処理をLLM待ちで塞がない。正本DBの明示知識回答は状態機械に残し、完了履歴だけを限定対話へ共有する。hostileは話題を保留し、戦闘中の会話試行へcooldown付きで短く反応、終了文を試行あり／集中していた場合で分ける。話題はgame tickでなく戦闘後の受理済みplayer turn 10件で失効する。雷と夕方は入力を次tickへ戻して会話を保持する。非敵対ambientはforeground中抑止する。雑談中の自動川柳は10分周期を維持し、再生完了済み直近3 turnの最大80字・3 motif・元turn IDを `player_reported_context` のsoft材料にして、現在返答の後ろまたは次の安全なqueue境界から固定導入で始める。学習・Web中は発句時計を凍結する。assistant履歴は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いworker結果は入れない。全体1254件＋1496 subtests成功、1件skip。**実Minecraft・実モデル・実TTSは未確認。本体Webはpause contract未合意のため未接続で、Fabric変更もない。** [境界と残件](main-dialogue-integration.md)。
+
 2026-09-09対話・参加予測: 独立音声試験は、起動／明示リセット後の最初の入力を必ず受理し、受理後に常駐chatモデルで次の意味上の発話型を5件だけ予測する。明示名指し・話題転換語・質問・Minecraft話題はコードで必ず通す。それ以外も、予測不一致の大きな話題断絶を発話内根拠つき・信頼度0.85以上で `possibly_not_addressed` と抽出できた場合だけ通常履歴外へ保留し、失敗・低信頼・迷いは受理側へ倒す。保留は上限5件をログに残し、「待たせたね」等は `side_conversation_resolved` として「ええんやで。」、明示訂正は直近1件だけ再処理する。`handoff` は静音契機にせず、5分無活動後の `QUIET` と `/listen` の `MIC_OFF` は分離する。StackChanの未検証scene分類器は移植していない。解釈契約は情報要求・雑談・その他を分離し、一般雑談を本体既存 `player_chat` leafへ渡す。参加予測は返答を生成しない。独立音声hostは `turn_id` と発話IDを結ぶ5往復・5分の台帳を持ち、assistant発話を実再生 `completed` 後だけ履歴へ確定する。生成・参加分類・Google処理は有界直列workerで行い、完了時にepochを再検証する。次の音声は生成・再生中に直近1件だけ保留し、自動barge-inはせず `/interrupt` を明示手段とする。実Google概要は15秒後の1回だけ読み、自動再取得なし。研究中の別質問推定は確認を挟む。ドギド関連380件＋87 subtests成功、Chromeモック50件は直前の15秒化で成功。**通常会話・完了履歴・worker・予測保留の変更後は、実モデル・実家庭音声で未確認**。
 
 2026-09-09閲覧集中: 16:34のユーザー実試験で通常会話→Web同意→15秒後の単発取得→取得内容を使う後続対話まで通った。検索完了直後の追加TTSは読む集中を妨げたため削除し、`awaiting_report`・取得内容・Web診断はログへ残したまま可視ページを静かに読めるようにした。無音化後の実音声再確認は未実施。
@@ -201,6 +203,7 @@ soft workshop 方針は後半をすでに押さえている。
 
 | 領域 | 状態 |
 |---|---|
+| 本体foreground会話 | 第一段階コード・自動テスト済み（既存雑談／限定国語worker／再生完了台帳／ambient抑止／戦闘保留10 player turn／雷・夕方入力保全／雑談由来自動川柳soft材料）。本体WebとMinecraft pauseは共有contract未合意のため未接続、実機未確認 |
 | workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・常駐会話モデルの限定 intent/findings／句評価の極性・範囲・根拠／行呼称→`line_1/2/3`／一行置換／pending採否／自然な終了意図。OS AI優先＋chat fallbackは戦闘中断中の再開・終了意思抽出のみ。全体肯定評価は終了確認、否定・mixedは改善方向の質問へ。実行・保存・close・敵の安全判定はコード。praise は critique 保存のみ。戦闘中は句とpendingを保持してpauseし、通常敵も死亡観測＋プレイヤー帰属／死亡のみ／離脱を分けて再開） |
 | H6 固定語 materials 突合 | **撤回** |
 | 発句 source atom 品質ゲート | 済（原文snapshot・自然な関西弁で話す検証済みの詩的解釈・節単位preface provenance/主張範囲・詩的解釈を句全体で共有する行別出典・見どころ明示要素から一次atomへの再結合・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |

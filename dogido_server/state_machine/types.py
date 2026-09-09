@@ -48,6 +48,13 @@ class AudioAction:
     # ゲーム外の発言画面で、この返答と一緒にコピーするプレイヤー入力。
     # LLM・TTSへは渡さず、プロセス再起動時に消える表示専用メタデータ。
     display_player_input_text: str = ""
+    # 会話ターンと実再生結果を結ぶ短期ID。永続的な話者識別子ではない。
+    utterance_id: str = ""
+    conversation_turn_id: str = ""
+    route_owner: str = ""
+    playback_session_id: str = ""
+    # 雷・夕方などが同tickの入力より先に発話した場合、入力を次tickへ戻す。
+    defer_player_input: bool = False
 
 
 @dataclass(slots=True)
@@ -104,6 +111,8 @@ class RuntimeState:
     last_non_silent_at: datetime | None = None
     last_player_input_at: datetime | None = None
     last_haiku_emitted_at: datetime | None = None
+    # 学習・Web中は発句周期そのものを凍結する。解除時に停止時間を基準へ加算。
+    haiku_interval_pause_started_at: datetime | None = None
     pending_haiku_after_preface: bool = False
     # preface 開始時刻。本句がブロックされたまま張り付いたときの強制解除用
     pending_haiku_started_at: datetime | None = None

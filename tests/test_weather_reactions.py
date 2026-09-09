@@ -286,7 +286,7 @@ class WeatherReactionTests(unittest.TestCase):
         self.assertIn("近くへ落雷したとは断定しない", prompt)
         self.assertIn("ぶつぶつ漏れる", prompt)
 
-    def test_player_reply_during_thunder_suppresses_autonomous_reaction_for_three_minutes(
+    def test_thunder_preempts_player_reply_then_uses_existing_cooldowns(
         self,
     ) -> None:
         machine = self.make_machine()
@@ -315,10 +315,14 @@ class WeatherReactionTests(unittest.TestCase):
         resumed_result = machine.process(after_three_minutes)
 
         self.assertTrue(any(action.layer == "speech" for action in chat_result.actions))
-        self.assertFalse(any(action.layer == "panic_cue" for action in chat_result.actions))
+        self.assertTrue(any(action.layer == "panic_cue" for action in chat_result.actions))
+        self.assertTrue(any(action.interrupt for action in chat_result.actions))
+        self.assertTrue(all(action.defer_player_input for action in chat_result.actions))
         self.assertEqual([], [action.text for action in muted_result.actions if action.text])
-        self.assertTrue(any(action.layer == "panic_cue" for action in resumed_result.actions))
+        self.assertFalse(any(action.layer == "panic_cue" for action in resumed_result.actions))
         self.assertTrue(any(action.layer == "speech" for action in resumed_result.actions))
+        self.assertFalse(any(action.interrupt for action in resumed_result.actions))
+        self.assertTrue(all(action.defer_player_input for action in resumed_result.actions))
 
     def test_surface_thunder_suppresses_passive_mob_comment_but_cave_keeps_it(self) -> None:
         machine = self.make_machine()

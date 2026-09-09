@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     display_history_max_entries: int = Field(default=200, ge=20, le=2000)
     # ゲーム外の診断欄へ残す非アクセスログ。永続化せず、再起動で消去する。
     diagnostic_history_max_entries: int = Field(default=1000, ge=100, le=10000)
+    # 本体の国語・語句質問を、ゲームイベントworker外の限定対話へ渡す。
+    # 世界操作・戦況・川柳workshopは従来どおり状態機械が所有する。
+    main_language_dialogue_enabled: bool = True
+    conversation_active_ttl_ms: int = Field(default=300000, ge=30000, le=3600000)
+    conversation_suspended_player_turns: int = Field(default=10, ge=1, le=50)
+    combat_chat_ack_cooldown_ms: int = Field(default=30000, ge=1000, le=300000)
     decision_policy: Literal["py_trees", "legacy"] = "py_trees"
     llm_enabled: bool = True
     llm_backend: LLM_BACKEND = "mlx"

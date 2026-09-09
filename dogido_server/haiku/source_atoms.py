@@ -17,6 +17,7 @@ CLAIM_SCOPES = frozenset(
         "identity_only",
         "source_meaning",
         "observed_state",
+        "player_reported_context",
         "poetic_interpretation",
     }
 )
@@ -323,7 +324,12 @@ def preface_clauses_from_payload(
                 return None
             claim_scopes = tuple(
                 scope
-                for scope in ("identity_only", "source_meaning", "observed_state")
+                for scope in (
+                    "identity_only",
+                    "source_meaning",
+                    "observed_state",
+                    "player_reported_context",
+                )
                 if any(scope in atom.claim_scopes for atom in bases)
             )
         else:
@@ -501,7 +507,12 @@ def source_atoms_from_materials(materials: dict[str, Any] | None) -> tuple[Haiku
             expected_scopes = (
                 tuple(
                     scope
-                    for scope in ("identity_only", "source_meaning", "observed_state")
+                    for scope in (
+                        "identity_only",
+                        "source_meaning",
+                        "observed_state",
+                        "player_reported_context",
+                    )
                     if any(
                         base is not None and scope in base.claim_scopes
                         for base in bases
@@ -562,6 +573,7 @@ def _primary_claim_contract_valid(atom: HaikuSourceAtom) -> bool:
         "catalog_fact": ("factual", ("source_meaning",)),
         "catalog_field": ("interpretive", ("source_meaning",)),
         "observation": ("factual", ("observed_state",)),
+        "dialogue_material": ("factual", ("player_reported_context",)),
     }.get(atom.kind)
     return expected == (atom.claim_class, atom.claim_scopes)
 

@@ -11,7 +11,7 @@ from typing import Callable
 
 
 FINAL_PLAYBACK_STATUSES = {"completed", "failed", "cancelled"}
-PENDING_PLAYBACK_STATUSES = {"selected", "queued", "started"}
+PENDING_PLAYBACK_STATUSES = {"not_selected", "selected", "queued", "started"}
 
 
 @dataclass(slots=True)
@@ -169,6 +169,9 @@ class TurnLedger:
             turn = self._by_utterance.get(utterance_id)
             if turn is None or turn.playback_status in FINAL_PLAYBACK_STATUSES:
                 return None
+            order = {"selected": 0, "queued": 1, "started": 2}
+            if order.get(status, -1) <= order.get(turn.playback_status, -1):
+                return turn.snapshot()
             turn.playback_status = status
             return turn.snapshot()
 
@@ -196,7 +199,7 @@ class _WorkItem:
 
 
 class DialogueWorker:
-    """独立試験専用の有界・直列worker。完了結果だけをhost inboxへ戻す。"""
+    """独立試験と本体で共有する有界・直列worker。完了結果だけをhostへ戻す。"""
 
     def __init__(self, emit: Callable[[dict], None], *, max_pending: int = 1):
         self.emit = emit

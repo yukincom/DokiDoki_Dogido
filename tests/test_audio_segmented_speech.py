@@ -68,7 +68,7 @@ class _SlowPrepareBackend(_RecordingSpeechBackend):
         return text
 
 
-def _dispatcher(*, max_pending: int = 8) -> AudioDispatcher:
+def _dispatcher(*, max_pending: int = 8, on_playback_event=None) -> AudioDispatcher:
     with patch("dogido_server.audio.threading.Thread.start"):
         return AudioDispatcher(
             Settings(
@@ -76,7 +76,8 @@ def _dispatcher(*, max_pending: int = 8) -> AudioDispatcher:
                 tts_backend="noop",
                 cue_backend="noop",
                 audio_max_pending_batches=max_pending,
-            )
+            ),
+            on_playback_event=on_playback_event,
         )
 
 
@@ -248,6 +249,77 @@ class SegmentedSpeechTests(unittest.TestCase):
         self.assertNotIn(
             "suppressed_breath_fadeout",
             [action.cue_id for action in queued],
+        )
+
+    def test_playback_callback_reports_queued_started_completed_in_order(self) -> None:
+        events: list[dict[str, str]] = []
+        dispatcher = AudioDispatcher(
+            Settings(audio_enabled=False, tts_backend="noop", cue_backend="noop"),
+            on_playback_event=lambda event: events.append(dict(event)),
+        )
+        self.addCleanup(dispatcher.close)
+        backend = _RecordingSpeechBackend()
+        dispatcher.speech_backend = backend
+        dispatcher.fallback_speech_backend = backend
+        action = AudioAction(
+            layer="speech",
+            interrupt=False,
+            text="最後まで読めた返事。",
+            utterance_id="utt-complete",
+            conversation_turn_id="turn-complete",
+            route_owner="player_chat",
+            playback_session_id="session-1",
+        )
+
+        dispatcher.play_actions([action])
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline and not any(
+            event["status"] == "completed" for event in events
+        ):
+            time.sleep(0.005)
+
+        self.assertEqual(
+            ["queued", "started", "completed"],
+            [event["status"] for event in events],
+        )
+        self.assertTrue(all(event["utterance_id"] == "utt-complete" for event in events))
+        self.assertTrue(all(event["session_id"] == "session-1" for event in events))
+
+    def test_replaced_and_closed_pending_speech_are_reported_cancelled(self) -> None:
+        events: list[dict[str, str]] = []
+        dispatcher = _dispatcher(max_pending=1, on_playback_event=events.append)
+        old = AudioAction(
+            layer="speech",
+            interrupt=False,
+            text="古い返事",
+            utterance_id="old",
+            queue_replace_key="main_language_reply",
+        )
+        replacement = AudioAction(
+            layer="speech",
+            interrupt=False,
+            text="新しい返事",
+            utterance_id="replacement",
+            queue_replace_key="main_language_reply",
+        )
+
+        dispatcher.play_actions([old])
+        dispatcher.play_actions([replacement])
+        dispatcher.close()
+
+        self.assertIn(
+            ("old", "cancelled", "queue_replaced"),
+            [
+                (event["utterance_id"], event["status"], event["resolution"])
+                for event in events
+            ],
+        )
+        self.assertIn(
+            ("replacement", "cancelled", "dispatcher_closed"),
+            [
+                (event["utterance_id"], event["status"], event["resolution"])
+                for event in events
+            ],
         )
 
 
