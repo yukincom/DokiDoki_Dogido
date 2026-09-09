@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 import unittest
+import subprocess
 from unittest.mock import patch
 
 from dogido_server.audio import AudioDispatcher, RunningAudio, SpeechBackend
@@ -68,6 +69,49 @@ class _SlowPrepareBackend(_RecordingSpeechBackend):
         return text
 
 
+class _ControlledProcess:
+    def __init__(self) -> None:
+        self.done = threading.Event()
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        if not self.done.wait(timeout):
+            raise subprocess.TimeoutExpired("fake-audio", timeout)
+        assert self.returncode is not None
+        return self.returncode
+
+    def complete(self) -> None:
+        self.returncode = 0
+        self.done.set()
+
+    def terminate(self) -> None:
+        self.returncode = -15
+        self.done.set()
+
+    def kill(self) -> None:
+        self.terminate()
+
+
+class _ControlledPlaybackBackend(SpeechBackend):
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.processes: list[_ControlledProcess] = []
+
+    def prepare(self, text: str, *, speed_scale: float | None = None) -> object:
+        del speed_scale
+        return text
+
+    def start_prepared(self, prepared: object) -> RunningAudio:
+        del prepared
+        process = _ControlledProcess()
+        self.processes.append(process)
+        self.started.set()
+        return RunningAudio(process=process)  # type: ignore[arg-type]
+
+
 def _dispatcher(*, max_pending: int = 8, on_playback_event=None) -> AudioDispatcher:
     with patch("dogido_server.audio.threading.Thread.start"):
         return AudioDispatcher(
@@ -82,6 +126,23 @@ def _dispatcher(*, max_pending: int = 8, on_playback_event=None) -> AudioDispatc
 
 
 class SegmentedSpeechTests(unittest.TestCase):
+    @staticmethod
+    def _wait_for_terminals(
+        events: list[dict[str, str]],
+        utterance_ids: set[str],
+    ) -> None:
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            terminals = {
+                row["utterance_id"]
+                for row in events
+                if row["status"] in {"completed", "failed", "cancelled"}
+            }
+            if terminals == utterance_ids:
+                return
+            time.sleep(0.005)
+        raise AssertionError(f"terminal callbacks missing: {events!r}")
+
     def test_haiku_preface_is_prepared_and_played_without_truncation(self) -> None:
         dispatcher = _dispatcher()
         self.addCleanup(dispatcher.close)
@@ -321,6 +382,76 @@ class SegmentedSpeechTests(unittest.TestCase):
                 for event in events
             ],
         )
+
+    def test_player_barge_in_terminalizes_current_and_acquired_batch_tail_once(self) -> None:
+        events: list[dict[str, str]] = []
+        dispatcher = AudioDispatcher(
+            Settings(audio_enabled=False, tts_backend="noop", cue_backend="noop"),
+            on_playback_event=lambda event: events.append(dict(event)),
+        )
+        self.addCleanup(dispatcher.close)
+        backend = _ControlledPlaybackBackend()
+        dispatcher.speech_backend = backend
+        dispatcher.fallback_speech_backend = backend
+        actions = [
+            AudioAction(
+                layer="speech",
+                interrupt=False,
+                text=value,
+                utterance_id=value,
+                conversation_turn_id=f"turn-{value}",
+            )
+            for value in ("A", "B", "C")
+        ]
+
+        dispatcher.play_actions(actions)
+        self.assertTrue(backend.started.wait(timeout=1.0))
+        dispatcher.interrupt_for_player_input()
+        self._wait_for_terminals(events, {"A", "B", "C"})
+
+        terminal_rows = [
+            row
+            for row in events
+            if row["status"] in {"completed", "failed", "cancelled"}
+        ]
+        self.assertEqual({"A", "B", "C"}, {row["utterance_id"] for row in terminal_rows})
+        self.assertTrue(all(row["status"] == "cancelled" for row in terminal_rows))
+        self.assertEqual(3, len(terminal_rows))
+        self.assertEqual(1, len(backend.processes))
+
+    def test_natural_completion_at_barge_in_boundary_keeps_current_truth(self) -> None:
+        events: list[dict[str, str]] = []
+        dispatcher = AudioDispatcher(
+            Settings(audio_enabled=False, tts_backend="noop", cue_backend="noop"),
+            on_playback_event=lambda event: events.append(dict(event)),
+        )
+        self.addCleanup(dispatcher.close)
+        backend = _ControlledPlaybackBackend()
+        dispatcher.speech_backend = backend
+        dispatcher.fallback_speech_backend = backend
+        actions = [
+            AudioAction(
+                layer="speech",
+                interrupt=False,
+                text=value,
+                utterance_id=value,
+                conversation_turn_id=f"turn-{value}",
+            )
+            for value in ("current", "tail")
+        ]
+
+        dispatcher.play_actions(actions)
+        self.assertTrue(backend.started.wait(timeout=1.0))
+        backend.processes[0].complete()
+        dispatcher.interrupt_for_player_input()
+        self._wait_for_terminals(events, {"current", "tail"})
+
+        terminal = {
+            row["utterance_id"]: row["status"]
+            for row in events
+            if row["status"] in {"completed", "failed", "cancelled"}
+        }
+        self.assertEqual({"current": "completed", "tail": "cancelled"}, terminal)
 
 
 if __name__ == "__main__":

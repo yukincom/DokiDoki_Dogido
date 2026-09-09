@@ -37,6 +37,7 @@ class RunningAudio:
     process: subprocess.Popen[bytes]
     cleanup_path: Path | None = None
     cue_id: str | None = None
+    stop_requested: bool = False
 
 
 # ---- バックエンド基底クラス ----
@@ -528,6 +529,21 @@ class AudioDispatcher:
             self._notify_playback(action, "cancelled", "dispatcher_closed")
         self._speech_prepare_executor.shutdown(wait=False, cancel_futures=True)
 
+    def interrupt_for_player_input(self) -> None:
+        """本人の受理済みbarge-inで、現在音声と残りキューを明示取消する。"""
+
+        cancelled: list[AudioAction] = []
+        with self._condition:
+            if self._closed:
+                return
+            self._epoch += 1
+            cancelled = [action for _, actions in self._pending for action in actions]
+            self._pending.clear()
+            self._stop_current_locked()
+            self._condition.notify_all()
+        for action in cancelled:
+            self._notify_playback(action, "cancelled", "player_barge_in")
+
     def play_actions(self, actions: list[AudioAction]) -> None:
         """アクションリストをキューに積む。割り込みフラグがあれば現在再生を止める。
 
@@ -727,16 +743,19 @@ class AudioDispatcher:
                     return
                 epoch, actions = self._pending.popleft()
 
-            for action in actions:
+            for index, action in enumerate(actions):
+                abandon_tail = False
                 try:
                     if action.speech_segments:
                         if self._play_segmented_speech(action, expected_epoch=epoch):
+                            abandon_tail = True
                             break
                         continue
                     handle, stale = self._start_action(action, expected_epoch=epoch)
                     if stale:
                         # 割り込みで無効になったバッチはスキップ
                         self._notify_playback(action, "cancelled", "interrupted")
+                        abandon_tail = True
                         break
                     if handle is None:
                         self._notify_playback(action, "failed", "playback_unavailable")
@@ -744,9 +763,7 @@ class AudioDispatcher:
                     # 再生が終わるまでここでブロック
                     self._notify_playback(action, "started")
                     self._wait_for(handle)
-                    with self._condition:
-                        interrupted = self._closed or epoch != self._epoch
-                    if interrupted:
+                    if handle.stop_requested:
                         self._notify_playback(action, "cancelled", "interrupted")
                     elif getattr(handle.process, "returncode", None) in {None, 0}:
                         self._notify_playback(action, "completed")
@@ -759,6 +776,14 @@ class AudioDispatcher:
                         action.layer,
                         (action.text or "")[:80],
                     )
+                finally:
+                    if abandon_tail:
+                        for remaining in actions[index + 1 :]:
+                            self._notify_playback(
+                                remaining,
+                                "cancelled",
+                                "interrupted",
+                            )
 
     def _play_segmented_speech(
         self,
@@ -796,19 +821,21 @@ class AudioDispatcher:
                 self._notify_playback(action, "started")
                 started = True
             self._wait_for(handle)
-            with self._condition:
-                if self._closed or expected_epoch != self._epoch:
-                    self._notify_playback(action, "cancelled", "interrupted")
-                    return True
+            if handle.stop_requested:
+                self._notify_playback(action, "cancelled", "interrupted")
+                return True
             if getattr(handle.process, "returncode", None) not in {None, 0}:
                 self._notify_playback(action, "failed", "process_exit")
                 return False
-            if index + 1 < len(segments) and self._wait_segment_pause(
-                expected_epoch,
-                action.speech_segment_pause_ms,
-            ):
-                self._notify_playback(action, "cancelled", "interrupted")
-                return True
+            if index + 1 < len(segments):
+                with self._condition:
+                    interrupted = self._closed or expected_epoch != self._epoch
+                if interrupted or self._wait_segment_pause(
+                    expected_epoch,
+                    action.speech_segment_pause_ms,
+                ):
+                    self._notify_playback(action, "cancelled", "interrupted")
+                    return True
         if started:
             self._notify_playback(action, "completed")
         return False
@@ -1238,6 +1265,7 @@ class AudioDispatcher:
             return
         process = self._current.process
         if process.poll() is None:
+            self._current.stop_requested = True
             process.terminate()
             try:
                 process.wait(timeout=1.0)

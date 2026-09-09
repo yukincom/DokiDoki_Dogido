@@ -46,7 +46,7 @@ FRAME_BYTES = FRAME_SAMPLES * 2  # s16le mono
 PRE_ROLL_FRAMES = 10  # 発話開始前 300ms を含める
 
 # 参考: yuno-chan-api の誤認識ノイズパターン
-NOISE_PATTERNS = ("ごおおお", "ごーーー", "ざーーー", "うおおお")
+NOISE_PATTERNS = ("ごおおお", "ごーーー", "ざーーー")
 
 VoicePromptMode = Literal["normal", "haiku_workshop"]
 VoiceDiagnosticCallback = Callable[..., None]

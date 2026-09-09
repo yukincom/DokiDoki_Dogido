@@ -123,6 +123,17 @@ class DialogueContextUnitTests(unittest.TestCase):
         self.assertTrue(lines[0].startswith("プレイヤー: p1"))
         self.assertTrue(lines[-1].startswith("ドギド: d5"))
 
+    def test_legacy_repeated_text_is_not_collapsed_by_danger_overlay(self) -> None:
+        ctx = DialogueContext()
+        ctx.add_player("うん")
+        ctx.add_player("うん")
+        ctx.begin_danger_retention()
+
+        self.assertEqual(
+            ["プレイヤー: うん", "プレイヤー: うん"],
+            ctx.conversation_lines(),
+        )
+
     def test_prompt_includes_history_and_digest(self) -> None:
         messages = build_messages(
             LeafGenerationRequest(
@@ -144,8 +155,100 @@ class DialogueContextUnitTests(unittest.TestCase):
         self.assertIn("【直近の出来事メモ】", content)
         self.assertIn("ゾンビを2体倒した", content)
 
+    def test_danger_retains_five_exchanges_through_three_new_player_turns(self) -> None:
+        ctx = DialogueContext()
+        for index in range(5):
+            ctx.add_player(f"危険前{index}", turn_id=f"old-{index}")
+            ctx.add_dogido(f"返事{index}", turn_id=f"old-{index}")
+        ctx.begin_danger_retention()
+        for index in range(12):
+            ctx.add_digest("combat", f"戦況{index}")
+        ctx.add_digest("situation", "状況：近くの敵対モブを視認。")
+        ctx.end_danger_retention(player_turns=3)
+
+        for index in range(3):
+            self.assertIn("プレイヤー: 危険前0", ctx.conversation_lines())
+            self.assertEqual(
+                ["状況：近くの敵対モブを視認。"],
+                ctx.situation_lines(),
+            )
+            turn_id = f"new-{index}"
+            self.assertTrue(ctx.add_player(f"危険後{index}", turn_id=turn_id))
+            self.assertFalse(ctx.add_player(f"危険後{index}", turn_id=turn_id))
+            ctx.add_dogido(f"新しい返事{index}", turn_id=turn_id)
+
+        self.assertNotIn("プレイヤー: 危険前0", ctx.conversation_lines())
+        self.assertIn("プレイヤー: 危険前4", ctx.conversation_lines())
+        self.assertEqual([], ctx.situation_lines())
+
+        ctx.begin_danger_retention()
+        self.assertEqual([], ctx.situation_lines())
+
 
 class DialogueContextServiceTests(unittest.TestCase):
+    def test_only_accepted_voice_input_triggers_audio_barge_in(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(
+                    audio_enabled=False,
+                    llm_enabled=False,
+                    decision_policy="py_trees",
+                    memory_dir=Path(tmp) / "memory",
+                )
+            )
+            calls: list[str] = []
+            service.settings.audio_enabled = True
+            service.audio.interrupt_for_player_input = lambda: calls.append("interrupt")
+            try:
+                service.process_event(make_event(sequence=1))
+
+                rejected = service.push_player_input("thank", source="voice")
+                accepted = service.push_player_input("えーと、そうじゃない！", source="voice")
+
+                self.assertFalse(rejected["accepted"])
+                self.assertTrue(accepted["accepted"])
+                self.assertEqual(["interrupt"], calls)
+                processed = service.process_event(make_event(sequence=2))
+                self.assertTrue(any(action.route_owner == "player_chat" for action in processed.actions))
+                self.assertEqual(["interrupt"], calls)
+            finally:
+                service.shutdown()
+
+    def test_voice_scream_stays_out_of_dialogue_and_uses_observed_situation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            service = DogidoService(
+                Settings(
+                    audio_enabled=False,
+                    llm_enabled=False,
+                    decision_policy="py_trees",
+                    memory_dir=Path(tmp) / "memory",
+                )
+            )
+            try:
+                first = make_event(sequence=1)
+                service.process_event(first)
+                session = next(iter(service.sessions.values()))
+                pushed = service.push_player_input("うおおお", source="voice")
+                self.assertEqual("situation_vocalization", pushed["reason"])
+                self.assertIsNone(session.pending_player_text)
+
+                danger = make_event(
+                    sequence=2,
+                    visual_threats=[
+                        VisualThreat(type="zombie", entity_id="z1", distance=4.0)
+                    ],
+                )
+                session.pending_voice_vocalization_at = danger.observed_at
+                service.process_event(danger, session_id=session.session_id)
+
+                self.assertNotIn("うおおお", "\n".join(session.dialogue.conversation_lines()))
+                self.assertIn("敵対モブを視認", "\n".join(session.dialogue.digest_lines()))
+                diagnostic = service.diagnostics.snapshot()["entries"][-1]
+                self.assertEqual("player_vocalization", diagnostic["event"])
+                self.assertIn("うおおお", diagnostic["message"])
+            finally:
+                service.shutdown()
+
     def test_service_accumulates_only_playback_completed_assistant_history(self) -> None:
         with TemporaryDirectory() as tmp:
             service = DogidoService(

@@ -173,7 +173,7 @@ soft workshop 方針は後半をすでに押さえている。
 
 ## 6. 現状スナップショット（2026-09-01）
 
-2026-09-09本体会話第一段階: session内に `none / casual / learning / web / haiku_workshop` のforeground所有権と、一件だけの中断話題を追加した。一般雑談はMinecraft観測を持つ既存 `player_chat`、国語・語句の明示質問と学習中の続きだけは有界workerへ渡し、ゲームイベント直列処理をLLM待ちで塞がない。正本DBの明示知識回答は状態機械に残し、完了履歴だけを限定対話へ共有する。hostileは話題を保留し、戦闘中の会話試行へcooldown付きで短く反応、終了文を試行あり／集中していた場合で分ける。話題はgame tickでなく戦闘後の受理済みplayer turn 10件で失効する。雷と夕方は入力を次tickへ戻して会話を保持する。非敵対ambientはforeground中抑止する。雑談中の自動川柳は10分周期を維持し、再生完了済み直近3 turnの最大80字・3 motif・元turn IDを `player_reported_context` のsoft材料にして、現在返答の後ろまたは次の安全なqueue境界から固定導入で始める。学習・Web中は発句時計を凍結する。assistant履歴は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いworker結果は入れない。全体1254件＋1496 subtests成功、1件skip。**実Minecraft・実モデル・実TTSは未確認。本体Webはpause contract未合意のため未接続で、Fabric変更もない。** [境界と残件](main-dialogue-integration.md)。
+2026-09-09本体会話更新: session内の `none / casual / learning / web / haiku_workshop` foreground所有権を維持しつつ、通常雑談・正本DB回答・限定国語workerが同じID付き完了履歴を使うようにした。workerが一般話題を判定した場合は独立試験の仮想Minecraft文脈で答えず、元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は、直前会話から2分以上または明示名指し／転換なら即時移管し、2分未満の宛先不明入力は無言で一件保留する。後の呼び直しでは固定の驚き・謝罪と元話題を確認し、その音声が実再生完了してから肯定で元turnを一度だけ移管する。保留は5分で `expired_unaddressed`。本人の有効入力は本体TTSへbarge-inし、取得済みbatch末尾も各一度terminal化する一方、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文は非永続診断、LLM側は同時点のコード観測による状況メモだけを使う。危険前の通常5往復は危険中と危険後3通常turn目まで一時保護し、戦況発話では押し出さない。`player_died` は `combat_ended` なしでforeground戦闘を解放する。従来の戦闘話題bookmark 10 player turn、雷・夕方の入力保全、ambient抑止、雑談中の10分周期川柳、学習・Web中の周期凍結は維持。固定の雑談中川柳導入では、裏で生成した未発話の取り合わせを `preface:spoken` にしない。**実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webはpause contract未合意のため未接続で、Fabric変更もない。** [境界と残件](main-dialogue-integration.md)。
 
 2026-09-09対話・参加予測: 独立音声試験は、起動／明示リセット後の最初の入力を必ず受理し、受理後に常駐chatモデルで次の意味上の発話型を5件だけ予測する。明示名指し・話題転換語・質問・Minecraft話題はコードで必ず通す。それ以外も、予測不一致の大きな話題断絶を発話内根拠つき・信頼度0.85以上で `possibly_not_addressed` と抽出できた場合だけ通常履歴外へ保留し、失敗・低信頼・迷いは受理側へ倒す。保留は上限5件をログに残し、「待たせたね」等は `side_conversation_resolved` として「ええんやで。」、明示訂正は直近1件だけ再処理する。`handoff` は静音契機にせず、5分無活動後の `QUIET` と `/listen` の `MIC_OFF` は分離する。StackChanの未検証scene分類器は移植していない。解釈契約は情報要求・雑談・その他を分離し、一般雑談を本体既存 `player_chat` leafへ渡す。参加予測は返答を生成しない。独立音声hostは `turn_id` と発話IDを結ぶ5往復・5分の台帳を持ち、assistant発話を実再生 `completed` 後だけ履歴へ確定する。生成・参加分類・Google処理は有界直列workerで行い、完了時にepochを再検証する。次の音声は生成・再生中に直近1件だけ保留し、自動barge-inはせず `/interrupt` を明示手段とする。実Google概要は15秒後の1回だけ読み、自動再取得なし。研究中の別質問推定は確認を挟む。ドギド関連380件＋87 subtests成功、Chromeモック50件は直前の15秒化で成功。**通常会話・完了履歴・worker・予測保留の変更後は、実モデル・実家庭音声で未確認**。
 
@@ -203,10 +203,10 @@ soft workshop 方針は後半をすでに押さえている。
 
 | 領域 | 状態 |
 |---|---|
-| 本体foreground会話 | 第一段階コード・自動テスト済み（既存雑談／限定国語worker／再生完了台帳／ambient抑止／戦闘保留10 player turn／雷・夕方入力保全／雑談由来自動川柳soft材料）。本体WebとMinecraft pauseは共有contract未合意のため未接続、実機未確認 |
+| 本体foreground会話 | コード・自動テスト済み（既存雑談／限定国語worker／共有ID履歴／突然の話題の2分判定＋5分宛先保留／本人barge-in／実再生terminal／危険前5往復＋危険後3turn保護／純粋な音声叫声の診断・状況分離／戦闘話題bookmark 10 player turn／雷・夕方入力保全／ambient抑止／雑談由来自動川柳soft材料）。本体WebとMinecraft pauseは共有contract未合意のため未接続、実機未確認 |
 | workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・常駐会話モデルの限定 intent/findings／句評価の極性・範囲・根拠／行呼称→`line_1/2/3`／一行置換／pending採否／自然な終了意図。OS AI優先＋chat fallbackは戦闘中断中の再開・終了意思抽出のみ。全体肯定評価は終了確認、否定・mixedは改善方向の質問へ。実行・保存・close・敵の安全判定はコード。praise は critique 保存のみ。戦闘中は句とpendingを保持してpauseし、通常敵も死亡観測＋プレイヤー帰属／死亡のみ／離脱を分けて再開） |
 | H6 固定語 materials 突合 | **撤回** |
-| 発句 source atom 品質ゲート | 済（原文snapshot・自然な関西弁で話す検証済みの詩的解釈・節単位preface provenance/主張範囲・詩的解釈を句全体で共有する行別出典・見どころ明示要素から一次atomへの再結合・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
+| 発句 source atom 品質ゲート | 済（原文snapshot・実際に話した自然な関西弁の検証済み詩的解釈・節単位preface provenance/主張範囲・詩的解釈を句全体で共有する行別出典・見どころ明示要素から一次atomへの再結合・固定導入時の未発話解釈を `generated_unspoken` としてspoken provenanceから除外・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P5 + 現在ターン予定／安全方針 | 済（帰宅予定は発話ターンのみ、地表夕方／雷雨は導出型、洞窟オフ） |
 | 出典付き知識質問 | コード・自動テスト済み（国語・日本／世界詩形・Minecraft 1.21.11公式技術資料。手整備DBの正式名・別名と文型800正式名の完全一致質問だけを遅延検索。枕詞では正式な定義と短い関西弁の対話本文を分離し、教科書・資料集へ誘導する。差替えproviderは正本DBと照合し、alert・panic・戦闘・死亡・assist・保存・workshop状態変更から分離。高優先発話時は有界の待ち列へ保留。2026-09-02にMinecraft接続下で枕詞回答の4文配送計画、ゲーム外画面、参考資料分離、本文コピーを確認。ほかの項目の対話本文・再生完了通知・通常wheel配置は未対応） |
 | ゲーム外の運用診断 | コード・自動テスト済み（発言・参考資料に加え、LLM／川柳／STT／TTSの上限付きプロセス内ログを表示。音声認識原文、棄却理由、配送結果を区別し、全ログをコピーできる。成功した高頻度APIアクセスは端末と画面で省略し、400以上は残す。音声波形、認証情報、内部プロンプトは保存しない） |

@@ -165,11 +165,15 @@ class SessionInfo:
     pending_player_text: str | None = None
     pending_player_source: str | None = None
     pending_player_display_text: str | None = None
+    pending_player_turn_id: str | None = None
+    pending_player_force_main_chat: bool = False
+    pending_player_foreground_route: str | None = None
     # 直接入力と保留入力が同じtickで衝突した場合の待ち列。先着順・最大8件とし、
     # 1件用のpendingを上書きして質問を失わない。
-    deferred_player_inputs: deque[tuple[str, str, str]] = field(
+    deferred_player_inputs: deque[tuple[str, str, str, str, bool, str]] = field(
         default_factory=lambda: deque(maxlen=8)
     )
+    pending_voice_vocalization_at: datetime | None = None
     # panic hold ログの重複抑制（同じ文は1回だけ）
     panic_hold_logged_text: str | None = None
     # 戦闘中断中にpanicで保留している同じ発話を、毎tick OS AIへ再送しない。
@@ -304,6 +308,9 @@ class DogidoService:
         *,
         source: str,
         display_text: str | None = None,
+        turn_id: str = "",
+        force_main_chat: bool = False,
+        foreground_route: str = "",
     ) -> bool:
         """保留入力を先着順で保持する。同じ入力は重ねず、満杯ならfail-closed。"""
 
@@ -312,20 +319,47 @@ class DogidoService:
         visible_text = (display_text or value).strip()
         if not value:
             return False
-        candidate = (value, normalized_source, visible_text)
+        candidate = (
+            value,
+            normalized_source,
+            visible_text,
+            str(turn_id or "")[:180],
+            bool(force_main_chat),
+            str(foreground_route or "")[:40],
+        )
         if session.pending_player_text is None:
             session.pending_player_text = value
             session.pending_player_source = normalized_source
             session.pending_player_display_text = visible_text
+            session.pending_player_turn_id = str(turn_id or "")[:180] or None
+            session.pending_player_force_main_chat = bool(force_main_chat)
+            session.pending_player_foreground_route = (
+                str(foreground_route or "")[:40] or None
+            )
             return True
         # 同じ本文は入力経路がvoice/textで異なっても一発話として扱い、
         # 最初に受けたsourceを保持する。別tickで二回答しないための境界。
         if session.pending_player_text == value:
+            if force_main_chat:
+                session.pending_player_turn_id = str(turn_id or "")[:180] or None
+                session.pending_player_force_main_chat = True
+                session.pending_player_foreground_route = (
+                    str(foreground_route or "")[:40] or "casual"
+                )
             return True
-        if any(
-            queued_text == value
-            for queued_text, _source, _display_text in session.deferred_player_inputs
-        ):
+        for index, queued in enumerate(session.deferred_player_inputs):
+            queued_text, queued_source, queued_display, *_rest = queued
+            if queued_text != value:
+                continue
+            if force_main_chat:
+                session.deferred_player_inputs[index] = (
+                    queued_text,
+                    queued_source,
+                    queued_display,
+                    str(turn_id or "")[:180],
+                    True,
+                    str(foreground_route or "")[:40] or "casual",
+                )
             return True
         maxlen = session.deferred_player_inputs.maxlen
         if maxlen is not None and len(session.deferred_player_inputs) >= maxlen:
@@ -343,10 +377,20 @@ class DogidoService:
     def _promote_deferred_player_input(session: SessionInfo) -> None:
         if session.pending_player_text is not None or not session.deferred_player_inputs:
             return
-        text, source, display_text = session.deferred_player_inputs.popleft()
+        (
+            text,
+            source,
+            display_text,
+            turn_id,
+            force_main_chat,
+            foreground_route,
+        ) = session.deferred_player_inputs.popleft()
         session.pending_player_text = text
         session.pending_player_source = source
         session.pending_player_display_text = display_text
+        session.pending_player_turn_id = turn_id or None
+        session.pending_player_force_main_chat = force_main_chat
+        session.pending_player_foreground_route = foreground_route or None
         LOGGER.warning(
             "player_input_promoted session_id=%s source=%s text=%s",
             session.session_id,
@@ -483,14 +527,24 @@ class DogidoService:
                 session.pending_player_text = None
                 session.pending_player_source = None
                 session.pending_player_display_text = None
+                session.pending_player_turn_id = None
+                session.pending_player_force_main_chat = False
+                session.pending_player_foreground_route = None
                 session.combat_input_analysis_text = None
                 session.combat_input_analysis = None
                 session.combat_input_analysis_path = "none"
             if session.deferred_player_inputs:
                 session.deferred_player_inputs = deque(
                     (
-                        (text, source, display_text)
-                        for text, source, display_text in session.deferred_player_inputs
+                        (text, source, display_text, turn_id, force_main, route)
+                        for (
+                            text,
+                            source,
+                            display_text,
+                            turn_id,
+                            force_main,
+                            route,
+                        ) in session.deferred_player_inputs
                         if text != direct_player_text
                     ),
                     maxlen=session.deferred_player_inputs.maxlen,
@@ -514,6 +568,9 @@ class DogidoService:
         attached_player_text: str | None = None
         attached_player_display_text: str | None = direct_player_text or None
         attached_player_source = "text"
+        attached_player_turn_id = ""
+        attached_player_force_main_chat = False
+        attached_player_foreground_route = ""
         combat_input_analysis: CombatWorkshopInputAnalysis | None = None
         combat_input_path = "none"
         haiku_pending_before = bool(session.machine.state.pending_haiku_after_preface)
@@ -645,10 +702,18 @@ class DogidoService:
                         session.pending_player_display_text or attached_player_text
                     )
                     attached_player_source = session.pending_player_source or "text"
+                    attached_player_turn_id = session.pending_player_turn_id or ""
+                    attached_player_force_main_chat = session.pending_player_force_main_chat
+                    attached_player_foreground_route = (
+                        session.pending_player_foreground_route or ""
+                    )
                     event.meta.user_text = attached_player_text
                     session.pending_player_text = None
                     session.pending_player_source = None
                     session.pending_player_display_text = None
+                    session.pending_player_turn_id = None
+                    session.pending_player_force_main_chat = False
+                    session.pending_player_foreground_route = None
                     session.combat_input_analysis_text = None
                     session.combat_input_analysis = None
                     session.combat_input_analysis_path = "none"
@@ -672,6 +737,10 @@ class DogidoService:
             interpreted_player_text=interpreted_player_text,
             input_source=attached_player_source,
         )
+        if direct_player_text and self.settings.audio_enabled:
+            # adapter chatも、すでに受理済みの本人発話なら再生中の返答へ
+            # barge-inできる。requeueされた保留入力では二度止めない。
+            self.audio.interrupt_for_player_input()
 
         # player主体の会話所有権を、状態機械の安全判断とは別に同期する。
         # 国語・一般知識の限定対話だけは非同期workerへ渡し、game-event直列処理を塞がない。
@@ -688,17 +757,72 @@ class DogidoService:
         ):
             foreground.clear()
         conversation_danger = self._conversation_danger_active(session, event)
+        if session.pending_voice_vocalization_at is not None:
+            vocalized_at = session.pending_voice_vocalization_at
+            session.pending_voice_vocalization_at = None
+            close_in_time = abs((conversation_now - vocalized_at).total_seconds()) <= 5.0
+            session.dialogue.add_digest(
+                "situation",
+                self._observed_situation_note(event) if close_in_time else "状況：驚いた声を検出。原因は不明。",
+                at=conversation_now,
+            )
+            if not conversation_danger:
+                session.dialogue.end_danger_retention(
+                    player_turns=self.settings.conversation_post_danger_player_turns,
+                )
         if conversation_danger and not foreground.combat_active:
+            session.dialogue.begin_danger_retention()
             foreground.suspend_for_combat(
                 hold_player_turns=self.settings.conversation_suspended_player_turns,
             )
             if session.language_runtime is not None:
                 session.language_runtime.interrupt_for_combat()
             # worker内だけでなく、すでにservice待ち列へ到着した旧返答も捨てる。
+            if session.language_runtime is not None:
+                for pending_result in session.pending_language_results:
+                    session.language_runtime.discard_undelivered_result(
+                        pending_result,
+                        resolution="combat",
+                    )
             session.pending_language_results.clear()
 
         combat_chat_ack = ""
         delegated_language_turn = False
+        runtime_attention_result: dict[str, object] | None = None
+        if session.language_runtime is not None:
+            session.language_runtime.expire_pending_address(conversation_now)
+        if (
+            session.language_runtime is not None
+            and not attached_player_force_main_chat
+            and self._is_general_conversation_input(session, routed_player_input)
+        ):
+            runtime_attention_result = (
+                session.language_runtime.handle_pending_address_input(
+                    routed_player_input.semantic_text,
+                    source=attached_player_source,
+                    observed_at=conversation_now,
+                )
+            )
+            if runtime_attention_result is not None and runtime_attention_result.get(
+                "consumed"
+            ):
+                if runtime_attention_result.get("reply"):
+                    self._enqueue_main_language_result(
+                        session,
+                        runtime_attention_result,
+                    )
+                host_request = runtime_attention_result.get("host_chat_request")
+                if isinstance(host_request, dict):
+                    if not self._queue_host_chat_request(session, host_request):
+                        session.language_runtime.reject_host_chat_request(
+                            str(host_request.get("turn_id") or ""),
+                            resolution="host_chat_queue_full",
+                        )
+                delegated_language_turn = True
+                event = event.model_copy(
+                    update={"meta": event.meta.model_copy(update={"user_text": None})}
+                )
+                routed_player_input = route_player_input(None)
         current_general_input = self._is_general_conversation_input(
             session,
             routed_player_input,
@@ -712,13 +836,18 @@ class DogidoService:
                 update={"meta": event.meta.model_copy(update={"user_text": None})}
             )
             routed_player_input = route_player_input(None)
-        elif self._main_language_should_handle(session, routed_player_input):
+        elif (
+            not delegated_language_turn
+            and not attached_player_force_main_chat
+            and self._main_language_should_handle(session, routed_player_input)
+        ):
             runtime = session.language_runtime
             if runtime is not None:
                 accepted, _turn_id = runtime.submit_turn(
                     routed_player_input.semantic_text,
                     source=attached_player_source,
                     observed_at=conversation_now,
+                    raw_text=attached_player_display_text or routed_player_input.raw_text,
                 )
                 if accepted:
                     if foreground.suspended is not None:
@@ -732,10 +861,6 @@ class DogidoService:
                             now=conversation_now,
                         )
                     delegated_language_turn = True
-                    session.dialogue.add_player(
-                        routed_player_input.semantic_text,
-                        at=conversation_now,
-                    )
                     event = event.model_copy(
                         update={"meta": event.meta.model_copy(update={"user_text": None})}
                     )
@@ -778,11 +903,18 @@ class DogidoService:
             )
             session.haiku_workshop = None
 
-        machine_result = session.machine.process(
-            event,
-            interpreted_user_text=interpreted_player_text,
-            player_input_context=routed_player_input,
+        suspended_overlay = session.foreground_dialogue.suspended_prompt(
+            routed_player_input.semantic_text
         )
+        session.dialogue.set_prompt_overlay(suspended_overlay)
+        try:
+            machine_result = session.machine.process(
+                event,
+                interpreted_user_text=interpreted_player_text,
+                player_input_context=routed_player_input,
+            )
+        finally:
+            session.dialogue.clear_prompt_overlay()
         if machine_result.haiku_emission is not None:
             session.last_haiku_emission = machine_result.haiku_emission
             # memory の有無に関わらず pin を立てる（entry_id は memory 側で埋める）
@@ -938,6 +1070,8 @@ class DogidoService:
             actions,
             now=conversation_now,
             source=attached_player_source,
+            turn_id=attached_player_turn_id,
+            route_override=attached_player_foreground_route,
         )
         if (
             casual_reply_registered
@@ -982,12 +1116,15 @@ class DogidoService:
         if (
             session.foreground_dialogue.combat_active
             and not machine_result.combat_active
-            and event.event.name == EventName.COMBAT_ENDED
+            and event.event.name in {EventName.COMBAT_ENDED, EventName.PLAYER_DIED}
         ):
             post_combat = session.foreground_dialogue.finish_combat()
+            session.dialogue.end_danger_retention(
+                player_turns=self.settings.conversation_post_danger_player_turns,
+            )
             if session.language_runtime is not None:
                 session.language_runtime.release_after_combat()
-            if post_combat:
+            if post_combat and event.event.name == EventName.COMBAT_ENDED:
                 relief = next(
                     (
                         action
@@ -1071,6 +1208,9 @@ class DogidoService:
                 requeue_text,
                 source=attached_player_source,
                 display_text=attached_player_display_text,
+                turn_id=attached_player_turn_id,
+                force_main_chat=attached_player_force_main_chat,
+                foreground_route=attached_player_foreground_route,
             ):
                 LOGGER.warning(
                     "player_input_requeued session_id=%s mode=%s text=%s",
@@ -1554,6 +1694,16 @@ class DogidoService:
             audio_requested=self.settings.audio_enabled,
         )
         if self.settings.audio_enabled:
+            if resolved_session_id and resolved_session_id in self.sessions:
+                session = self.sessions[resolved_session_id]
+                runtime = session.language_runtime
+                for action in actions:
+                    if not action.utterance_id or not action.conversation_turn_id:
+                        continue
+                    if runtime is not None:
+                        runtime.mark_dispatched(action.utterance_id)
+                    else:
+                        session.dialogue_turns.dispatched(action.utterance_id)
             self.audio.play_actions(actions)
 
     def display_snapshot(self, *, session_id: str | None = None) -> dict[str, object]:
@@ -1630,6 +1780,9 @@ class DogidoService:
             is_known_voice_noise_text,
             normalize_player_text,
         )
+        from dogido_server.player_input.voice_vocalization import (
+            is_pure_voice_vocalization,
+        )
 
         original = (text or "").strip()
         if not original:
@@ -1652,6 +1805,25 @@ class DogidoService:
             self.sessions.values(),
             key=lambda candidate: candidate.last_seen_at or datetime.min.replace(tzinfo=timezone.utc),
         )
+        if input_source == "voice" and is_pure_voice_vocalization(normalized):
+            observed_at = datetime.now().astimezone()
+            session.pending_voice_vocalization_at = observed_at
+            session.dialogue.begin_danger_retention()
+            self.diagnostics.record(
+                level="INFO",
+                logger="dogido.voice_input",
+                source="voice_input",
+                event="player_vocalization",
+                message=f"voice_vocalization text={original}",
+                created_at=observed_at,
+            )
+            if self.settings.audio_enabled:
+                self.audio.interrupt_for_player_input()
+            return {
+                "accepted": True,
+                "session_id": session.session_id,
+                "reason": "situation_vocalization",
+            }
         existing = (session.pending_player_text or "").strip()
         existing_preview = route_player_input(existing) if existing else None
         preserve_existing = bool(
@@ -1683,6 +1855,9 @@ class DogidoService:
             session.pending_player_text = normalized
             session.pending_player_source = input_source
             session.pending_player_display_text = original
+            session.pending_player_turn_id = None
+            session.pending_player_force_main_chat = False
+            session.pending_player_foreground_route = None
             session.combat_input_analysis_text = None
             session.combat_input_analysis = None
             session.combat_input_analysis_path = "none"
@@ -1701,6 +1876,8 @@ class DogidoService:
                 input_source,
                 normalized[:80],
             )
+        if self.settings.audio_enabled:
+            self.audio.interrupt_for_player_input()
         return {"accepted": True, "session_id": session.session_id}
 
     def _conversation_danger_active(
@@ -1715,6 +1892,25 @@ class DogidoService:
             or session.machine.state.mode in {"alert", "panic", "suppressed_panic"}
             or self._event_interrupts_workshop(event)
         )
+
+    @staticmethod
+    def _observed_situation_note(event: GameEvent) -> str:
+        """叫び声の字面を使わず、同時点のコード観測だけを短く投影する。"""
+
+        outcomes = tuple(event.combat.hostile_outcomes or ())
+        if event.event.name == EventName.CREEPER_DETONATED or any(
+            outcome.outcome == "creeper_detonation"
+            and outcome.evidence == "explosion_packet"
+            for outcome in outcomes
+        ):
+            return "状況：クリーパーの爆発をコードで観測。"
+        if event.event.name == EventName.PLAYER_DIED:
+            return "状況：プレイヤーの死亡をコードで観測。原因の詳細は未確定。"
+        if event.visual_threats:
+            return "状況：近くの敵対モブを視認。"
+        if event.auditory_threats:
+            return "状況：敵らしい音を観測。具体名は未確定。"
+        return "状況：驚いた声を検出。原因は不明。"
 
     @staticmethod
     def _explicit_topic_resume(text: str) -> bool:
@@ -1870,6 +2066,13 @@ class DogidoService:
         for envelope in runtime.poll():
             if envelope.get("work_kind") == "turn":
                 result = runtime.accept_turn_result(envelope, observed_at=event.observed_at)
+                host_request = result.get("host_chat_request")
+                if isinstance(host_request, dict):
+                    if not self._queue_host_chat_request(session, host_request):
+                        runtime.reject_host_chat_request(
+                            str(host_request.get("turn_id") or ""),
+                            resolution="host_chat_queue_full",
+                        )
                 if result.get("reply"):
                     self._enqueue_main_language_result(session, result)
             elif envelope.get("work_kind") == "playback_control":
@@ -1890,6 +2093,18 @@ class DogidoService:
         if unsafe or not session.pending_language_results:
             return []
         row = session.pending_language_results.popleft()
+        turn_id = str(row.get("turn_id") or "")
+        semantic_text = str(row.get("semantic_text") or row.get("raw_text") or "")
+        if (
+            turn_id
+            and semantic_text
+            and str(row.get("status") or "") != "address_confirmation_requested"
+        ):
+            session.dialogue.add_player(
+                semantic_text,
+                at=event.observed_at,
+                turn_id=turn_id,
+            )
         references: list[SpeechReference] = []
         for fact in row.get("references", []) if isinstance(row.get("references"), list) else []:
             if not isinstance(fact, dict):
@@ -1922,6 +2137,27 @@ class DogidoService:
             )
         ]
 
+    def _queue_host_chat_request(
+        self,
+        session: SessionInfo,
+        request: dict[str, object],
+    ) -> bool:
+        """国語workerが返した同じ入力を、IDを保ったまま本体chatへ一度だけ戻す。"""
+
+        text = str(request.get("text") or "").strip()
+        turn_id = str(request.get("turn_id") or "").strip()
+        if not text or not turn_id:
+            return False
+        return self._queue_player_input(
+            session,
+            text,
+            source=str(request.get("source") or "text"),
+            display_text=str(request.get("raw_text") or text),
+            turn_id=turn_id,
+            force_main_chat=True,
+            foreground_route=str(request.get("foreground_route") or "casual"),
+        )
+
     def _enqueue_main_language_result(
         self,
         session: SessionInfo,
@@ -1951,9 +2187,11 @@ class DogidoService:
         *,
         now: datetime,
         source: str,
+        turn_id: str = "",
+        route_override: str = "",
     ) -> bool:
-        route = ""
-        if self._is_general_conversation_input(session, player_input):
+        route = route_override if route_override in {"casual", "learning"} else ""
+        if not route and self._is_general_conversation_input(session, player_input):
             route = "casual"
         elif (
             player_input.knowledge_query is not None
@@ -1995,13 +2233,14 @@ class DogidoService:
                     now=now,
                 )
             foreground.activate("learning", now=now, player_text=player_input.semantic_text)
-        turn_id = "main-chat:" + uuid4().hex
+        turn_id = turn_id or ("main-chat:" + uuid4().hex)
         epoch = session.language_runtime.epoch if session.language_runtime is not None else 0
         session.dialogue_turns.begin(
             turn_id,
             epoch=epoch,
             raw_text=player_input.raw_text,
             semantic_text=player_input.semantic_text,
+            source=source,
         )
         session.dialogue_turns.routed(
             turn_id,
@@ -2009,11 +2248,17 @@ class DogidoService:
             status="player_chat" if route == "casual" else "knowledge_db",
         )
         if route == "learning" and session.language_runtime is not None:
+            # controller内部履歴は独立試験との互換用。本体解釈の正は同じ台帳投影。
             session.language_runtime.observe_external_user_turn(
                 turn_id,
                 player_input.semantic_text,
                 source=source,
             )
+        session.dialogue.add_player(
+            player_input.semantic_text,
+            at=now,
+            turn_id=turn_id,
+        )
         utterance_id = reply.utterance_id or ("main-chat-reply:" + uuid4().hex)
         reply.utterance_id = utterance_id
         reply.conversation_turn_id = turn_id
@@ -2076,12 +2321,15 @@ class DogidoService:
             events = list(session.playback_events)
             session.playback_events.clear()
         for event in events:
+            resolved = None
             if session.language_runtime is not None:
-                session.language_runtime.playback_event(event, observed_at=observed_at)
+                resolved = session.language_runtime.playback_event(
+                    event,
+                    observed_at=observed_at,
+                )
             else:
                 status = event.get("status", "")
                 utterance_id = event.get("utterance_id", "")
-                resolved = None
                 if status == "queued":
                     session.dialogue_turns.queued(utterance_id)
                 elif status == "started":
@@ -2098,6 +2346,7 @@ class DogidoService:
                         str(resolved.get("semantic_text") or ""),
                         str(resolved.get("selected_reply") or ""),
                         route=str(resolved.get("route") or "casual"),
+                        at=observed_at,
                     )
             utterance_id = str(event.get("utterance_id") or "")
             if (
@@ -2105,9 +2354,15 @@ class DogidoService:
                 and event.get("text")
                 and utterance_id
                 and utterance_id not in session.completed_playback_ids
+                and resolved is not None
+                and str(resolved.get("route") or "") in {"casual", "learning"}
             ):
                 session.completed_playback_ids.append(utterance_id)
-                session.dialogue.add_dogido(event["text"], at=observed_at)
+                session.dialogue.add_dogido(
+                    str(resolved.get("selected_reply") or event["text"]),
+                    at=observed_at,
+                    turn_id=str(resolved.get("turn_id") or ""),
+                )
 
     def _apply_contextual_asr_to_event(
         self,
@@ -2362,18 +2617,9 @@ class DogidoService:
             session.dialogue.extend_digest(notes, kind="event", at=now)
             session.machine.state.pending_dialogue_notes.clear()
 
-        player_input = session.machine.player_input
-        if (
-            player_input.breaks_silence
-            and player_input.raw_text
-            and not player_input.wants_quiet
-            and not (player_input.normalized_text or "").startswith("/")
-            and not any(action.defer_player_input for action in actions)
-        ):
-            session.dialogue.add_player(player_input.semantic_text, at=now)
-
-        # assistant発話は選択時点で確定しない。AudioDispatcherの実プロセスが
-        # completedを返した後、次の直列event冒頭でだけadd_dogidoする。
+        # 通常会話のplayer側は、実際に返答を所有したturn IDが確定した時だけ
+        # 登録する。警告中の叫び・requeue・workshop入力を通常履歴へ混ぜない。
+        # assistant側は実playback completed後だけ登録する。
 
     def list_haiku_memory(self) -> list[dict[str, object]]:
         if self.memory is None:
@@ -4231,6 +4477,10 @@ class DogidoService:
                 self.llm,
                 ledger=session.dialogue_turns,
                 foreground=session.foreground_dialogue,
+                history_provider=session.dialogue.prompt_turns,
+                situation_provider=session.dialogue.situation_lines,
+                topic_fresh_ms=self.settings.conversation_topic_fresh_ms,
+                pending_address_ttl_ms=self.settings.conversation_pending_address_ttl_ms,
             )
         # open 中の句 pin を player_chat details へ（履歴に依存しない）
         session.machine.haiku_workshop_provider = lambda: session.haiku_workshop

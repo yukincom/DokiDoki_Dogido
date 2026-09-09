@@ -411,24 +411,32 @@ class HaikuMixin:
             return
         origin_event = self._pending_haiku_origin_event or event
         scene, _ = self._detect_haiku_scene(context, irony)
-        scene = self._scene_for_spoken_irony(
-            irony,
-            scene,
-            source_atoms=context.source_atoms,
+        preface_spoken = str(
+            (self._pending_haiku_materials or {}).get("preface_spoken") or ""
+        ).strip()
+        irony_was_spoken = bool(
+            irony.found
+            and irony.description.strip()
+            and irony.description.strip().rstrip("。！？!?")
+            in preface_spoken.rstrip("。！？!?")
         )
-        interpretation_atom = atom_from_poetic_interpretation(scene.clauses)
+        if irony_was_spoken:
+            scene = self._scene_for_spoken_irony(
+                irony,
+                scene,
+                source_atoms=context.source_atoms,
+            )
+        spoken_clauses = scene.clauses if irony_was_spoken else ()
+        interpretation_atom = atom_from_poetic_interpretation(spoken_clauses)
         source_atoms = merge_source_atoms(
             context.source_atoms,
-            atoms_from_preface_clauses(scene.clauses),
+            atoms_from_preface_clauses(spoken_clauses),
             (interpretation_atom,) if interpretation_atom is not None else (),
             self._conversation_haiku_source_atoms(
                 self._pending_conversation_haiku_material or {}
             ),
         )
         self._pending_haiku_source_atoms = source_atoms
-        preface_spoken = str(
-            (self._pending_haiku_materials or {}).get("preface_spoken") or ""
-        ).strip()
         self._stash_haiku_materials_seed(
             origin_event,
             context,
@@ -437,6 +445,10 @@ class HaikuMixin:
             source_atoms=source_atoms,
             preface_spoken=preface_spoken or None,
         )
+        if self._pending_haiku_materials is not None:
+            self._pending_haiku_materials["interpretation_origin"] = (
+                "spoken_preface" if irony_was_spoken else "generated_unspoken"
+            )
         self._attach_pending_conversation_haiku_materials()
         constraints = self._haiku_constraint_details(origin_event, scene)
         if constraints and self._pending_haiku_materials is not None:

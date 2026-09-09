@@ -347,6 +347,7 @@ def test_topic_switch_clears_focus_no_world_action():
     assert not dialogue.focus.question
     assert not result["reply"]
     assert len(llm.requests) == 3
+    assert sum(row["turn_id"] == "t2" for row in dialogue.history) == 1
 
 
 def test_duplicate_input_does_not_regenerate():
@@ -366,6 +367,20 @@ def test_interruption_holds_focus_and_release_does_not_speak():
     assert dialogue.focus.target == "三"
     assert dialogue.release() == {"control": "release", "mode": "language", "paused": False}
     assert len(llm.requests) == 2
+
+
+def test_standalone_interrupt_discards_deferred_reply_ownership():
+    llm = ScriptedLLM(interpretation(), reply())
+    dialogue = LanguageDialogue(llm, SearchSpy())
+    row = dialogue.turn(
+        "漢字の三",
+        turn_id="t1",
+        defer_reply_history=True,
+    )
+
+    dialogue.interrupt()
+
+    assert not dialogue.confirm_delivered_reply("t1", row["reply"])
 
 
 @pytest.mark.parametrize("interrupt_at", [1, 2])

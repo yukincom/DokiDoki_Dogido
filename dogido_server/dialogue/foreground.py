@@ -50,6 +50,7 @@ class ForegroundDialogue:
     route: ForegroundRoute = "none"
     started_at: datetime | None = None
     last_player_at: datetime | None = None
+    last_conversation_at: datetime | None = None
     completed_turns: list[CompletedDialogueTurn] = field(default_factory=list)
     suspended: SuspendedTopic | None = None
     combat_active: bool = False
@@ -73,6 +74,7 @@ class ForegroundDialogue:
                 self.completed_turns.clear()
         if player_text.strip():
             self.last_player_at = now
+            self.last_conversation_at = now
 
     def clear(self) -> None:
         self.route = "none"
@@ -95,6 +97,7 @@ class ForegroundDialogue:
         dogido_text: str,
         *,
         route: ForegroundRoute,
+        at: datetime | None = None,
     ) -> None:
         turn_id = _clean(turn_id, 160)
         player_text = _clean(player_text, 160)
@@ -111,6 +114,8 @@ class ForegroundDialogue:
             CompletedDialogueTurn(turn_id, player_text, dogido_text, route)
         )
         self.completed_turns = self.completed_turns[-5:]
+        if at is not None:
+            self.last_conversation_at = at
 
     def suspend(self, reason: str, *, hold_player_turns: int = 10) -> bool:
         self.last_interrupt_reason = _clean(reason, 40)
@@ -173,6 +178,14 @@ class ForegroundDialogue:
         if topic.remaining_player_turns <= 0:
             self.suspended = None
         return False
+
+    def suspended_prompt(self, text: str) -> str:
+        """明示再開の生成前だけ返す、10turn保留話題の短いコード由来メモ。"""
+
+        topic = self.suspended
+        if topic is None or not topic.summary or not _looks_like_resume(text):
+            return ""
+        return f"プレイヤーが明示的に再開した保留話題: {topic.summary}"
 
     def note_interrupt(self, reason: str) -> None:
         self.last_interrupt_reason = _clean(reason, 40)
@@ -237,6 +250,11 @@ class ForegroundDialogue:
             "combat_active": self.combat_active,
             "combat_chat_attempted": self.combat_chat_attempted,
             "last_interrupt_reason": self.last_interrupt_reason,
+            "last_conversation_at": (
+                self.last_conversation_at.isoformat()
+                if self.last_conversation_at is not None
+                else None
+            ),
             "suspended": self.suspended.snapshot() if self.suspended else None,
         }
 
@@ -256,3 +274,20 @@ def _motif_candidates(text: str) -> list[str]:
         if len(cleaned) >= 2:
             result.append(cleaned)
     return result or [_clean(text, 16)]
+
+
+def _looks_like_resume(text: str) -> bool:
+    normalized = " ".join((text or "").replace("\n", " ").split())
+    return any(
+        marker in normalized
+        for marker in (
+            "さっきの話",
+            "前の話",
+            "話の続き",
+            "続き話",
+            "続きやけど",
+            "続きを",
+            "戻るけど",
+            "戻ろ",
+        )
+    )

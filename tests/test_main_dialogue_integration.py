@@ -164,6 +164,40 @@ class BlockingLanguageLLM(LanguageLLM):
         return super().generate_structured_json(request)
 
 
+class FixedIronyLLM(LanguageLLM):
+    def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+        self.requests.append(deepcopy(request))
+        if request.kind == "haiku_irony":
+            return {
+                "found": True,
+                "kind": "contrast",
+                "description": "平原の静けさと採掘帰りの対比",
+                "elements": ["平原", "採掘"],
+                "focus": ["平原"],
+                "confidence": 0.8,
+            }
+        if request.kind == "haiku_scene":
+            atom_ids = [
+                atom["atom_id"]
+                for atom in request.details.get("source_atoms", [])
+                if isinstance(atom, dict) and atom.get("atom_id")
+            ]
+            return {
+                "found": True,
+                "clauses": [
+                    {
+                        "text": "平原の静けさと採掘帰りの対比",
+                        "basis_atom_ids": atom_ids[:2],
+                        "claim_class": "interpretive",
+                    }
+                ],
+                "motifs": ["平原", "採掘"],
+                "focus": ["平原"],
+                "confidence": 0.8,
+            }
+        return request.fallback_value
+
+
 def wait_for_turn(runtime: MainLanguageRuntime) -> dict:
     deadline = time.monotonic() + 1.0
     while time.monotonic() < deadline:
@@ -172,6 +206,13 @@ def wait_for_turn(runtime: MainLanguageRuntime) -> dict:
             return rows[0]
         time.sleep(0.005)
     raise AssertionError("dialogue worker did not finish")
+
+
+def wait_for_worker_idle(runtime: MainLanguageRuntime) -> None:
+    deadline = time.monotonic() + 1.0
+    while runtime.worker.items.unfinished_tasks and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert not runtime.worker.items.unfinished_tasks
 
 
 def make_service(*, llm_enabled: bool = False) -> tuple[DogidoService, str]:
@@ -432,6 +473,37 @@ def test_conversation_haiku_preface_and_sources_are_attributed_soft_material() -
     assert all(atom.claim_scopes == ("player_reported_context",) for atom in dialogue_atoms)
 
 
+def test_casual_fixed_preface_never_marks_unspoken_interpretation_as_spoken() -> None:
+    foreground = ForegroundDialogue()
+    foreground.activate("casual", now=BASE, player_text="採掘から帰ったで")
+    foreground.note_completed_turn(
+        "t1",
+        "採掘から帰ったで",
+        "おかえり。",
+        route="casual",
+    )
+    machine = DogidoStateMachine(
+        Settings(llm_enabled=True, audio_enabled=False),
+        llm=FixedIronyLLM(),
+    )
+    machine.foreground_dialogue_provider = foreground.snapshot
+
+    spoken = machine._begin_prefaced_haiku(event(1), BASE)  # noqa: SLF001
+    machine._prepare_pending_haiku_generation(event(1))  # noqa: SLF001
+
+    assert spoken == CASUAL_HAIKU_PREFACE
+    assert machine._pending_haiku_materials is not None  # noqa: SLF001
+    assert (  # noqa: SLF001
+        machine._pending_haiku_materials["interpretation_origin"]
+        == "generated_unspoken"
+    )
+    assert not [  # noqa: SLF001
+        atom
+        for atom in machine._pending_haiku_source_atoms
+        if atom.source_ref == "preface:spoken"
+    ]
+
+
 def test_casual_haiku_uses_conversation_preface_even_before_first_reply_completed() -> None:
     foreground = ForegroundDialogue()
     foreground.activate("casual", now=BASE, player_text="まだ最初の返事待ち")
@@ -456,9 +528,12 @@ def test_main_runtime_adds_assistant_history_only_after_completed_playback() -> 
             "漢字の三は何年生？",
             source="voice",
             observed_at=BASE,
+            raw_text="漢字の3は何年生？",
         )
         assert accepted
         row = runtime.accept_turn_result(wait_for_turn(runtime), observed_at=BASE)
+        assert row["raw_text"] == "漢字の3は何年生？"
+        assert row["semantic_text"] == "漢字の三は何年生？"
         utterance_id = row["utterance_id"]
         runtime.playback_event(
             {"utterance_id": utterance_id, "status": "queued"},
@@ -481,6 +556,111 @@ def test_main_runtime_adds_assistant_history_only_after_completed_playback() -> 
         assert ledger.snapshot()[-1]["playback_status"] == "completed"
     finally:
         runtime.close()
+
+
+def test_main_runtime_receives_danger_retained_history_before_third_new_turn() -> None:
+    from dogido_server.dialogue_context import DialogueContext
+
+    context = DialogueContext()
+    for index in range(5):
+        context.add_player(f"危険前の話{index}", turn_id=f"old-{index}")
+        context.add_dogido(f"危険前の返事{index}", turn_id=f"old-{index}")
+    context.begin_danger_retention()
+    context.end_danger_retention(player_turns=3)
+    for index in range(2):
+        context.add_player(f"危険後の話{index}", turn_id=f"new-{index}")
+        context.add_dogido(f"危険後の返事{index}", turn_id=f"new-{index}")
+
+    llm = LanguageLLM()
+    foreground = ForegroundDialogue()
+    runtime = MainLanguageRuntime(
+        llm,
+        ledger=TurnLedger(),
+        foreground=foreground,
+        history_provider=context.prompt_turns,
+    )
+    try:
+        accepted, _turn_id = runtime.submit_turn(
+            "漢字の三は何年生？",
+            source="voice",
+            observed_at=BASE,
+        )
+        assert accepted
+        wait_for_turn(runtime)
+        request = next(
+            row for row in llm.requests if row.kind == "language_dialogue_interpretation"
+        )
+        assert any(
+            row["turn_id"] == "old-0" and row["text"] == "危険前の話0"
+            for row in request.details["history"]
+        )
+    finally:
+        runtime.close()
+
+
+def test_main_runtime_does_not_reintroduce_expired_dialogue_context() -> None:
+    from dogido_server.dialogue_context import DialogueContext
+
+    context = DialogueContext()
+    context.add_player("古い話", at=BASE, turn_id="old")
+    context.add_dogido("古い返事", at=BASE, turn_id="old")
+    llm = LanguageLLM()
+    runtime = MainLanguageRuntime(
+        llm,
+        ledger=TurnLedger(),
+        foreground=ForegroundDialogue(),
+        history_provider=context.prompt_turns,
+    )
+    try:
+        accepted, _turn_id = runtime.submit_turn(
+            "漢字の三は何年生？",
+            source="voice",
+            observed_at=BASE + timedelta(seconds=300),
+        )
+        assert accepted
+        wait_for_turn(runtime)
+        request = next(
+            row for row in llm.requests if row.kind == "language_dialogue_interpretation"
+        )
+        assert request.details["history"] == []
+    finally:
+        runtime.close()
+
+
+def test_voice_scream_reaches_learning_only_as_code_observed_situation() -> None:
+    service, session_id = make_service(llm_enabled=True)
+    try:
+        session = service.sessions[session_id]
+        pushed = service.push_player_input("うおおお", source="voice")
+        assert pushed["reason"] == "situation_vocalization"
+
+        danger = event(1, threats=True)
+        session.pending_voice_vocalization_at = danger.observed_at
+        service.process_event(danger, session_id=session_id)
+        service.process_event(
+            event(2, event_name=EventName.COMBAT_ENDED),
+            session_id=session_id,
+        )
+        service.process_event(
+            event(3, user_text="漢字の三は何年生？"),
+            session_id=session_id,
+        )
+
+        assert session.language_runtime is not None
+        wait_for_worker_idle(session.language_runtime)
+        request = next(
+            row
+            for row in service.llm.requests
+            if row.kind == "language_dialogue_interpretation"
+        )
+        assert "近くの敵対モブを視認" in request.details["situation_history"]
+        assert "うおおお" not in repr(request.details)
+        assert all(
+            row.get("text") != "うおおお"
+            for row in request.details["history"]
+        )
+    finally:
+        service.shutdown()
 
 
 def test_main_runtime_failed_playback_never_becomes_dialogue_material() -> None:
@@ -507,6 +687,34 @@ def test_main_runtime_failed_playback_never_becomes_dialogue_material() -> None:
         assert not foreground.completed_turns
         assert not any(item.get("role") == "assistant" for item in runtime.dialogue.history)
         assert ledger.snapshot()[-1]["playback_status"] == "failed"
+    finally:
+        runtime.close()
+
+
+def test_main_runtime_keeps_real_dispatched_completion_across_combat_epoch() -> None:
+    foreground = ForegroundDialogue()
+    ledger = TurnLedger()
+    runtime = MainLanguageRuntime(LanguageLLM(), ledger=ledger, foreground=foreground)
+    try:
+        accepted, turn_id = runtime.submit_turn(
+            "漢字の三は何年生？",
+            source="voice",
+            observed_at=BASE,
+        )
+        assert accepted
+        row = runtime.accept_turn_result(wait_for_turn(runtime), observed_at=BASE)
+        runtime.mark_dispatched(row["utterance_id"])
+
+        runtime.interrupt_for_combat()
+        resolved = runtime.playback_event(
+            {"utterance_id": row["utterance_id"], "status": "completed"},
+            observed_at=BASE + timedelta(seconds=1),
+        )
+
+        assert resolved is not None
+        assert resolved["playback_status"] == "completed"
+        assert foreground.completed_turns[-1].turn_id == turn_id
+        assert runtime.dialogue.history[-1]["turn_id"] == f"{turn_id}:reply"
     finally:
         runtime.close()
 
@@ -678,6 +886,7 @@ def test_suspended_learning_does_not_steal_unrelated_casual_turns_and_expires_at
     service, session_id = make_service(llm_enabled=True)
     try:
         session = service.sessions[session_id]
+        leaf_requests = []
         session.foreground_dialogue.activate(
             "learning",
             now=BASE,
@@ -907,6 +1116,56 @@ def test_completed_local_knowledge_exchange_grounds_async_learning_followup() ->
         service.shutdown()
 
 
+def test_completed_casual_exchange_reaches_async_language_interpretation() -> None:
+    service, session_id = make_service(llm_enabled=True)
+    try:
+        first = service.process_event(
+            event(1, user_text="昨日は金床という道具を見つけたんよ"),
+            session_id=session_id,
+        )
+        session = service.sessions[session_id]
+        reply = next(
+            action
+            for action in first.actions
+            if action.layer == "speech" and action.route_owner == "player_chat"
+        )
+        service._on_audio_playback_event(  # noqa: SLF001
+            {
+                "session_id": session_id,
+                "utterance_id": reply.utterance_id,
+                "status": "completed",
+                "text": reply.text or "",
+            }
+        )
+        service.process_event(event(2), session_id=session_id)
+
+        service.process_event(
+            event(3, user_text="その言葉の意味を教えて"),
+            session_id=session_id,
+        )
+        assert session.language_runtime is not None
+        wait_for_worker_idle(session.language_runtime)
+        request = next(
+            row
+            for row in service.llm.requests
+            if row.kind == "language_dialogue_interpretation"
+        )
+
+        assert any(
+            row.get("turn_id") == reply.conversation_turn_id
+            and row.get("role") == "user"
+            and "金床" in row.get("text", "")
+            for row in request.details["history"]
+        )
+        assert any(
+            row.get("turn_id") == f"{reply.conversation_turn_id}:reply"
+            and row.get("role") == "assistant"
+            for row in request.details["history"]
+        )
+    finally:
+        service.shutdown()
+
+
 def test_implicit_session_actions_keep_playback_and_display_session_identity() -> None:
     service = DogidoService(
         Settings(
@@ -980,6 +1239,22 @@ def test_full_playback_event_queue_keeps_incoming_terminal_result() -> None:
     service, session_id = make_service()
     try:
         session = service.sessions[session_id]
+        session.dialogue_turns.begin(
+            "terminal-turn",
+            epoch=0,
+            raw_text="最後まで聞こえた？",
+            semantic_text="最後まで聞こえた？",
+        )
+        session.dialogue_turns.routed(
+            "terminal-turn",
+            route="casual",
+            status="player_chat",
+        )
+        session.dialogue_turns.select_reply(
+            "terminal-turn",
+            reply="最後まで話したで。",
+            utterance_id="terminal",
+        )
         for index in range(session.playback_events.maxlen or 0):
             service._on_audio_playback_event(  # noqa: SLF001
                 {
@@ -1013,6 +1288,229 @@ def test_full_playback_event_queue_keeps_incoming_terminal_result() -> None:
             "最後まで話したで。" in line
             for line in session.dialogue.conversation_lines()
         ) == 1
+    finally:
+        service.shutdown()
+
+
+def _minecraft_switch_payload(request, *, dialogue_act: str = "information_request") -> dict:
+    current = request.details["current"]
+    return {
+        "dialogue_act": dialogue_act,
+        "topic": "minecraft",
+        "relation": "switch",
+        "question": current["text"],
+        "target": "家",
+        "facet": "other",
+        "target_status": "explicit",
+        "alternatives": [],
+        "evidence": [{"turn_id": current["turn_id"], "quote": current["text"]}],
+        "search_terms": [],
+        "clarification": "",
+    }
+
+
+def test_abrupt_learning_handoff_waits_for_address_then_replays_original_once() -> None:
+    service, session_id = make_service(llm_enabled=True)
+    try:
+        session = service.sessions[session_id]
+        leaf_requests = []
+
+        def generate(request):  # type: ignore[no-untyped-def]
+            if request.kind == "language_dialogue_interpretation":
+                return _minecraft_switch_payload(request)
+            return request.fallback_value
+
+        service.llm.generate_structured_json = generate  # type: ignore[method-assign]
+        original_leaf = service.llm.generate_leaf_text
+
+        def leaf(request):  # type: ignore[no-untyped-def]
+            leaf_requests.append(deepcopy(request))
+            return original_leaf(request)
+
+        service.llm.generate_leaf_text = leaf  # type: ignore[method-assign]
+        service.process_event(event(1, user_text="枕詞って何？"), session_id=session_id)
+
+        original = "今から家を建てたいけどどこがよさそう？"
+        service.process_event(event(2, user_text=original), session_id=session_id)
+        assert session.language_runtime is not None
+        wait_for_worker_idle(session.language_runtime)
+        held = service.process_event(event(3), session_id=session_id)
+        original_row = session.dialogue_turns.snapshot()[-1]
+        original_turn_id = original_row["turn_id"]
+        assert held.actions == []
+        assert original_row["routing_status"] == "awaiting_address"
+        assert original_row["playback_status"] == "not_selected"
+
+        repair = service.process_event(event(4, user_text="ドギド"), session_id=session_id)
+        repair_action = next(
+            action
+            for action in repair.actions
+            if action.route_owner == "main_language_dialogue"
+        )
+        assert "家を建てたい" in (repair_action.text or "")
+        service._on_audio_playback_event(  # noqa: SLF001
+            {
+                "session_id": session_id,
+                "utterance_id": repair_action.utterance_id,
+                "status": "completed",
+                "text": repair_action.text or "",
+            }
+        )
+        service.process_event(event(5), session_id=session_id)
+
+        confirmed = service.process_event(event(6, user_text="うん"), session_id=session_id)
+        assert confirmed.actions == []
+        answered = service.process_event(event(7), session_id=session_id)
+        reply = next(action for action in answered.actions if action.route_owner == "player_chat")
+        assert reply.conversation_turn_id == original_turn_id
+        assert reply.display_player_input_text == original
+        rows = [
+            row
+            for row in session.dialogue_turns.snapshot()
+            if row["turn_id"] == original_turn_id
+        ]
+        assert len(rows) == 1
+        assert rows[0]["selected_reply"] == reply.text
+    finally:
+        service.shutdown()
+
+
+def test_address_confirmation_before_repair_playback_cannot_release_original() -> None:
+    service, session_id = make_service(llm_enabled=True)
+    try:
+        session = service.sessions[session_id]
+
+        def generate(request):  # type: ignore[no-untyped-def]
+            if request.kind == "language_dialogue_interpretation":
+                return _minecraft_switch_payload(request)
+            return request.fallback_value
+
+        service.llm.generate_structured_json = generate  # type: ignore[method-assign]
+        service.process_event(event(1, user_text="枕詞って何？"), session_id=session_id)
+        original = "今から家を建てたいけどどこがよさそう？"
+        service.process_event(event(2, user_text=original), session_id=session_id)
+        assert session.language_runtime is not None
+        wait_for_worker_idle(session.language_runtime)
+        service.process_event(event(3), session_id=session_id)
+        original_turn_id = session.dialogue_turns.snapshot()[-1]["turn_id"]
+
+        repair = service.process_event(event(4, user_text="ドギド"), session_id=session_id)
+        repair_action = next(
+            action
+            for action in repair.actions
+            if action.route_owner == "main_language_dialogue"
+        )
+        early = service.process_event(event(5, user_text="うん"), session_id=session_id)
+
+        assert early.actions == []
+        assert session.pending_player_text is None
+        early_confirmation = session.dialogue_turns.snapshot()[-1]
+        assert early_confirmation["resolution"] == "confirmation_before_repair_completed"
+        assert session.dialogue_turns.get(original_turn_id)["playback_status"] == "not_selected"
+
+        service._on_audio_playback_event(  # noqa: SLF001
+            {
+                "session_id": session_id,
+                "utterance_id": repair_action.utterance_id,
+                "status": "completed",
+                "text": repair_action.text or "",
+            }
+        )
+        service.process_event(event(6), session_id=session_id)
+        service.process_event(event(7, user_text="うん"), session_id=session_id)
+        answered = service.process_event(event(8), session_id=session_id)
+        reply = next(
+            action for action in answered.actions if action.route_owner == "player_chat"
+        )
+        assert reply.conversation_turn_id == original_turn_id
+    finally:
+        service.shutdown()
+
+
+def test_learning_handoff_after_two_minutes_goes_directly_to_main_chat() -> None:
+    service, session_id = make_service(llm_enabled=True)
+    try:
+        session = service.sessions[session_id]
+        leaf_requests = []
+
+        def generate(request):  # type: ignore[no-untyped-def]
+            if request.kind == "language_dialogue_interpretation":
+                return _minecraft_switch_payload(request, dialogue_act="casual")
+            return request.fallback_value
+
+        service.llm.generate_structured_json = generate  # type: ignore[method-assign]
+        original_leaf = service.llm.generate_leaf_text
+
+        def leaf(request):  # type: ignore[no-untyped-def]
+            leaf_requests.append(deepcopy(request))
+            return original_leaf(request)
+
+        service.llm.generate_leaf_text = leaf  # type: ignore[method-assign]
+        service.process_event(event(1, user_text="枕詞って何？"), session_id=session_id)
+        service.process_event(
+            event(121, user_text="この洞窟、暗くて怖いね"),
+            session_id=session_id,
+        )
+        assert session.language_runtime is not None
+        wait_for_worker_idle(session.language_runtime)
+        collected = service.process_event(event(122), session_id=session_id)
+        assert collected.actions == []
+        answered = service.process_event(event(123), session_id=session_id)
+        request = next(request for request in reversed(leaf_requests) if request.kind == "player_chat")
+        assert any(action.route_owner == "player_chat" for action in answered.actions)
+        assert session.language_runtime.dialogue.mode == "normal"
+        assert not request.details.get("independent_voice_test")
+        assert request.details.get("world_observation_available") is not False
+    finally:
+        service.shutdown()
+
+
+def test_unaddressed_handoff_expires_from_prompt_history_at_five_minutes() -> None:
+    service, session_id = make_service(llm_enabled=True)
+    try:
+        session = service.sessions[session_id]
+
+        def generate(request):  # type: ignore[no-untyped-def]
+            if request.kind == "language_dialogue_interpretation":
+                return _minecraft_switch_payload(request)
+            return request.fallback_value
+
+        service.llm.generate_structured_json = generate  # type: ignore[method-assign]
+        service.process_event(event(1, user_text="枕詞って何？"), session_id=session_id)
+        service.process_event(
+            event(2, user_text="今から家を建てたいけどどこがよさそう？"),
+            session_id=session_id,
+        )
+        assert session.language_runtime is not None
+        wait_for_worker_idle(session.language_runtime)
+        service.process_event(event(3), session_id=session_id)
+        service.process_event(event(302), session_id=session_id)
+
+        row = session.dialogue_turns.snapshot()[-1]
+        assert row["routing_status"] == "expired"
+        assert row["resolution"] == "expired_unaddressed"
+        assert "家を建てたい" not in session.dialogue_turns.prompt_history()
+    finally:
+        service.shutdown()
+
+
+def test_player_death_releases_foreground_combat_without_combat_end() -> None:
+    service, session_id = make_service()
+    try:
+        service.process_event(event(1, user_text="秘密基地の屋根は青にしたい"), session_id=session_id)
+        service.process_event(event(2, threats=True), session_id=session_id)
+        died = event(3, event_name=EventName.PLAYER_DIED)
+        died = died.model_copy(
+            update={"player": died.player.model_copy(update={"health": 0})}
+        )
+        service.process_event(died, session_id=session_id)
+
+        assert not service.sessions[session_id].foreground_dialogue.combat_active
+        resumed = service.process_event(
+            event(4, user_text="家づくりの続きをしよう"),
+            session_id=session_id,
+        )
+        assert any(action.route_owner == "player_chat" for action in resumed.actions)
     finally:
         service.shutdown()
 
