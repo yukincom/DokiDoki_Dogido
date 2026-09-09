@@ -10,7 +10,6 @@ from .child_resources import ChildResources
 
 
 SEARCH_NOTICE = "ちょっと調べてみよか！"
-READING_INVITATION = "ページを開いたで。読んで分かったこと、オレにも教えてな！"
 REFERENCE_ONLY_NOTICE = "オレが確かめる資料は読めたけど、一人で読みやすいページはまだ見つけられてへんねん。教科書や先生にも聞いてみよか。"
 RETURN_INVITATION = "勉強も楽しいけど、そろそろ冒険にもどろか！"
 TEACHER_SUGGESTION = "うーん、そこは学校で先生に聞いてみるといいかもしれんなー。"

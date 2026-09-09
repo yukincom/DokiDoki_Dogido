@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleIdentifier</key><string>local.dogido.echo-capture</string>
+    <key>CFBundleName</key><string>Dogido Echo Capture</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>NSMicrophoneUsageDescription</key><string>ドギドへの音声入力から再生音の回り込みを除去するため、マイクを使用します。</string>
+    <key>NSAudioCaptureUsageDescription</key><string>ドギドとMinecraftを含むMacの再生音を、マイクのエコー除去の参照にのみ使用します。参照音を保存・外部送信しません。</string>
+</dict></plist>

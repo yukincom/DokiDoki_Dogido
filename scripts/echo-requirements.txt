@@ -1,0 +1,2 @@
+numpy==2.2.6
+pywebrtc-audio==0.2.0

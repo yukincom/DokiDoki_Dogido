@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictRecord(BaseModel):
@@ -15,6 +15,7 @@ class TurnEvidence(StrictRecord):
 
 
 class Interpretation(StrictRecord):
+    dialogue_act: Literal["information_request", "casual", "other"]
     question: Annotated[str, Field(max_length=500)]
     target: Annotated[str, Field(max_length=100)]
     facet: Literal[
@@ -69,5 +70,34 @@ class ResearchReading(StrictRecord):
 
 class WebConsent(StrictRecord):
     intent: Literal["accept", "decline", "uncertain", "new_question"]
+    evidence: Annotated[str, Field(min_length=1, max_length=500)]
+    confidence: Annotated[float | int, Field(ge=0, le=1)]
+
+
+class ExpectedContinuation(StrictRecord):
+    pattern_id: Annotated[str, Field(pattern=r"^p[1-5]$")]
+    description: Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class ParticipationForecast(StrictRecord):
+    reaction: Annotated[str, Field(max_length=120)] = ""
+    patterns: Annotated[list[ExpectedContinuation], Field(min_length=5, max_length=5)]
+
+    @model_validator(mode="after")
+    def _pattern_ids_are_unique(self):
+        ids = [pattern.pattern_id for pattern in self.patterns]
+        if len(ids) != len(set(ids)):
+            raise ValueError("pattern_id must be unique")
+        if set(ids) != {"p1", "p2", "p3", "p4", "p5"}:
+            raise ValueError("pattern_id must contain p1 through p5")
+        return self
+
+
+class ParticipationAssessment(StrictRecord):
+    relation: Literal["expected", "topic_shift", "possibly_not_addressed", "uncertain"]
+    matched_pattern_ids: Annotated[list[str], Field(max_length=5)]
+    topic_changed: bool
+    clear_question: bool
+    minecraft_topic: bool
     evidence: Annotated[str, Field(min_length=1, max_length=500)]
     confidence: Annotated[float | int, Field(ge=0, le=1)]

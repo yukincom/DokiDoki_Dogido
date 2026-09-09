@@ -48,6 +48,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     history_rules, history_block = _history_section(details)
     digest_rules, digest_block = _digest_section(details)
     combat_safety_rules = _combat_safety_rules(details, character_mode)
+    world_observation_rules = _world_observation_rules(details)
     priority_rules, priority_block = _current_turn_priority_section(details)
 
     user_prompt = (
@@ -58,6 +59,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"{history_rules}"
         f"{digest_rules}"
         f"{combat_safety_rules}"
+        f"{world_observation_rules}"
         f"{priority_rules}"
         "\n"
         "/no_think\n"
@@ -81,6 +83,15 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "プレイヤーの言葉に噛み合った一言だけ（12〜42字くらい）。"
     )
     return leaf_dialog("player_chat", request, user_prompt)
+
+
+def _world_observation_rules(details: dict[str, Any]) -> str:
+    if details.get("world_observation_available") is not False:
+        return ""
+    return (
+        "- この独立試験には現在のMinecraft観測がない。敵・場所・天気・所持品・"
+        "プレイヤーの行動を見たふりせず、本人の発話だけに短く返す\n"
+    )
 
 
 def _current_turn_priority_section(details: dict[str, Any]) -> tuple[str, str]:

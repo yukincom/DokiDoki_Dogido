@@ -279,11 +279,10 @@ def test_overview_call_timing_is_separate_from_dialogue_and_context():
     assert "timing" not in asdict(result)["pages"][0]
 
 
-@pytest.mark.parametrize("completed", [True, False])
-def test_focus_return_rereads_original_search_tab_once_without_waiting_to_greet(completed):
+def test_focus_return_never_rereads_real_google_overview():
     class Delayed(OverviewClient):
         def call(self, *args, **kwargs):
-            self.status = "complete" if self.calls and completed else "timeout"
+            self.status = "timeout"
             payload = super().call(*args, **kwargs)
             payload["data"]["tab_id"] = "B" * 32
             return payload
@@ -294,10 +293,5 @@ def test_focus_return_rereads_original_search_tab_once_without_waiting_to_greet(
     assert turn_with_web_permission(dialogue, QUESTION, turn_id="t1")["status"] == "awaiting_report"
     welcome = come_back(dialogue)
     assert welcome["reply"] == WELCOME_BACK and len(client.calls) == 1
-    row = dialogue.refresh_after_return(welcome["refresh_token"])
-    assert row["status"] == ("context_ready" if completed else "unavailable")
-    assert client.calls[1][1]["url"] == client.calls[0][1]["url"]
-    assert client.calls[1][1]["existing_tab_id"] == "B" * 32
-    assert row["reply"] == "" and len(llm.requests) == 1
-    dialogue.refresh_after_return(welcome["refresh_token"])
-    assert len(client.calls) == 2
+    assert "refresh_token" not in welcome and len(llm.requests) == 1
+    assert len(client.calls) == 1 and "existing_tab_id" not in client.calls[0][1]

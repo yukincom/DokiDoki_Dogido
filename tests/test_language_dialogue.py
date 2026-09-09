@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import threading
+from unittest.mock import Mock
 
 import pytest
 
@@ -14,6 +15,7 @@ from dogido_server.language_dialogue.retrieval import LocalDialogueSearch, Searc
 
 def interpretation(text="漢字の三", **changes):
     return {
+        "dialogue_act": "information_request",
         "topic": "language",
         "relation": "new",
         "question": "漢字の三の学年は？",
@@ -40,9 +42,11 @@ def reply(**changes):
 
 
 class ScriptedLLM:
-    def __init__(self, *values):
+    def __init__(self, *values, leaf_values=()):
         self.values = list(values)
         self.requests = []
+        self.leaf_values = list(leaf_values)
+        self.leaf_requests = []
 
     def generate_structured_json(self, request):
         self.requests.append(deepcopy(request))
@@ -50,6 +54,10 @@ class ScriptedLLM:
         if isinstance(value, Exception):
             raise value
         return value
+
+    def generate_leaf_text(self, request):
+        self.leaf_requests.append(deepcopy(request))
+        return self.leaf_values.pop(0) if self.leaf_values else request.fallback_text
 
 
 class SearchSpy:
@@ -80,6 +88,33 @@ def test_explicit_question_search_reply_and_raw_separated():
     assert result["mode_after"] == "language"
     assert search.calls == [(["三"], {"facet": "grade", "target": "三"})]
     assert result["references"][0]["id"] == "grade:三"
+
+
+@pytest.mark.parametrize("text", ["おはようございます", "おはよう！", "ありがとう。"])
+def test_representative_casual_turn_never_calls_model_search_or_web(text):
+    llm, search, web = ScriptedLLM(), SearchSpy(), Mock()
+    row = LanguageDialogue(llm, search, web=web).turn(text, turn_id="casual")
+    assert row["status"] == "casual" and row["reply"]
+    assert row["dialogue_act"] == "casual" and row["mode_after"] == "normal"
+    assert not llm.requests and not search.calls
+    web.search.assert_not_called()
+
+
+def test_model_classified_casual_or_general_meta_turn_uses_existing_player_chat_leaf():
+    for text, act in [("今日は楽しかった", "casual"), ("別の質問でもいい？", "other")]:
+        value = interpretation(
+            text, dialogue_act=act, topic="general", facet="other", target="",
+            question=text, search_terms=[], evidence=[{"turn_id": "t1", "quote": text}],
+        )
+        llm, search, web = ScriptedLLM(value, leaf_values=("ええやん。続き聞かせてや。",)), SearchSpy(), Mock()
+        row = LanguageDialogue(llm, search, web=web).turn(text, turn_id="t1")
+        assert row["status"] == "player_chat" and "web_proposal" not in row
+        assert row["reply"] == "ええやん。続き聞かせてや。"
+        assert row["route_owner"] == "player_chat"
+        assert llm.leaf_requests[0].kind == "player_chat"
+        assert llm.leaf_requests[0].details["world_observation_available"] is False
+        assert not search.calls
+        web.search.assert_not_called()
 
 
 def test_current_target_not_rejected_for_contextual_label_alone():

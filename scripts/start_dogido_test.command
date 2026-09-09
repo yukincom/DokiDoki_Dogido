@@ -36,6 +36,12 @@ case "${mode}" in
     module="dogido_server.voice_input"
     label="Dogido Voice Input"
     ;;
+  voice-aec)
+    export DOGIDO_VOICE_ECHO_CANCELLATION=webrtc
+    module="dogido_server.voice_input"
+    label="Dogido Voice Input (WebRTC AEC3)"
+    print -- "Macの再生音全体をAEC参照として一時取得します（参照音の保存・送信なし）。"
+    ;;
   --dry-run)
     print -- "実行元: ${PROJECT_ROOT}"
     print -- "Python: ${PYTHON_BIN}"
@@ -43,7 +49,7 @@ case "${mode}" in
     exit 0
     ;;
   *)
-    print -u2 -- "使い方: ${0:t} server|voice|--dry-run"
+    print -u2 -- "使い方: ${0:t} server|voice|voice-aec|--dry-run"
     exit 2
     ;;
 esac

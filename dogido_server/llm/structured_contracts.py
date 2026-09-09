@@ -14,7 +14,15 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from dogido_server.language_dialogue.contracts import GroundedReply, Interpretation, ResearchIntent, ResearchReading, WebConsent
+from dogido_server.language_dialogue.contracts import (
+    GroundedReply,
+    Interpretation,
+    ParticipationAssessment,
+    ParticipationForecast,
+    ResearchIntent,
+    ResearchReading,
+    WebConsent,
+)
 
 
 Confidence = Annotated[float | int, Field(ge=0.0, le=1.0)]
@@ -163,6 +171,8 @@ class _SelectSwordIntent(_StrictModel):
 _MODELS: dict[str, type[BaseModel]] = {
     "language_dialogue_interpretation": Interpretation,
     "language_dialogue_reply": GroundedReply,
+    "language_participation_forecast": ParticipationForecast,
+    "language_participation_assessment": ParticipationAssessment,
     "language_research_intent": ResearchIntent,
     "language_research_reading": ResearchReading,
     "language_web_consent": WebConsent,
@@ -225,7 +235,12 @@ def structured_contract_retry_instruction(
         return f"未登録のstructured kind: {kind}"
     request_details = details or {}
     constraints: list[str] = []
-    if kind == "haiku_line_grounding":
+    if kind == "language_participation_assessment":
+        constraints.append(
+            "matched_pattern_idsは次の文字列だけを重複なく使う: "
+            + json.dumps(sorted(_participation_pattern_ids(request_details)))
+        )
+    elif kind == "haiku_line_grounding":
         constraints.append(
             "assessments.line_indexをこの順で一件ずつ返す: "
             + json.dumps(
@@ -279,7 +294,15 @@ def _validate_dynamic_contract(
     assert isinstance(payload, dict)
     errors: list[str] = []
 
-    if kind == "haiku_scene":
+    if kind == "language_participation_assessment":
+        _check_unique_known_ids(
+            payload["matched_pattern_ids"],
+            _participation_pattern_ids(details),
+            "matched_pattern_ids",
+            errors,
+        )
+
+    elif kind == "haiku_scene":
         allowed_ids = _source_atom_ids(details)
         for index, clause in enumerate(payload["clauses"]):
             _check_unique_known_ids(
@@ -351,6 +374,16 @@ def _source_atom_ids(details: dict[str, Any]) -> set[str]:
         str(row["atom_id"])
         for row in details.get("source_atoms", [])
         if isinstance(row, dict) and isinstance(row.get("atom_id"), str) and row["atom_id"]
+    }
+
+
+def _participation_pattern_ids(details: dict[str, Any]) -> set[str]:
+    return {
+        str(row["pattern_id"])
+        for row in details.get("expected_continuations", [])
+        if isinstance(row, dict)
+        and isinstance(row.get("pattern_id"), str)
+        and row["pattern_id"]
     }
 
 

@@ -142,7 +142,7 @@ def test_exact_summary_reaches_followup_without_forced_quiz_or_return(intent):
     dialogue = LanguageDialogue(llm, Search(), web=GoogleOverviewResearch(client))
     row = turn_with_web_permission(dialogue, "金床を調べて", turn_id="t1")
     assert row["status"] == "awaiting_report" and len(llm.requests) == 1
-    assert "検索ページを開いた" in row["reply"]
+    assert row["reply"] == ""  # 読み始めた本人へ追加音声を重ねない。
     row = dialogue.turn("鉄をたたく台ってこと？", turn_id="t2")
     assert row["status"] == "research_reflection" and row["quote_validation"] == "matched"
     assert "どう思う" not in row["reply"] and "先生" not in row["reply"]
@@ -157,6 +157,36 @@ def test_exact_summary_reaches_followup_without_forced_quiz_or_return(intent):
     assert row["status"] == "handoff" and dialogue.research is None
     assert SUMMARY not in str(dialogue.history) and SNIPPET not in str(dialogue.history)
     assert len(client.calls) == 1
+
+
+def test_research_topic_switch_requires_confirmation_and_never_researches_twice():
+    llm = LLM(
+        interpretation(),
+        research_turn("new_question", "大のことを、とこっていうの？"),
+    )
+    client = OverviewClient()
+    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(client))
+    turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")
+    row = dialogue.turn("大のことを、とこっていうの？", turn_id="t2")
+    assert row["status"] == "research_topic_confirmation"
+    assert row["research_interpretation"]["intent"] == "new_question"
+    assert dialogue.research.phase == "confirming_topic_change"
+    assert len(client.calls) == 1
+    row = dialogue.turn("今の続き", turn_id="t3")
+    assert row["status"] == "research_continue" and dialogue.research is not None
+    assert len(client.calls) == 1
+
+
+def test_research_web_close_is_truthful_and_does_not_call_intent_or_web():
+    llm = LLM(interpretation())
+    client = OverviewClient()
+    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(client))
+    turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")
+    used = len(llm.requests)
+    row = dialogue.turn("ウェブはもう閉じていいよ、分かったよ", turn_id="t2")
+    assert row["status"] == "handoff" and "開いてへん" not in row["reply"]
+    assert "閉じた" not in row["reply"] and dialogue.research is None
+    assert len(llm.requests) == used and len(client.calls) == 1
 
 
 def test_results_only_not_promoted_to_page_evidence():
@@ -189,20 +219,17 @@ def test_local_answer_stays_local_but_needed_explanation_hands_off():
         assert ("web" in row) is expected
 
 
-@pytest.mark.parametrize("complete_on_return", [True, False])
 @pytest.mark.parametrize("results", [True, False])
-def test_child_return_rereads_same_tab_once_and_passes_only_completed_body(complete_on_return, results):
+def test_incomplete_initial_overview_is_never_fetched_again_on_followup(results):
     class Delayed(OverviewClient):
         def call(self, *args, **kwargs):
-            self.status = "complete" if self.calls and complete_on_return else "timeout"
+            self.status = "timeout"
             payload = super().call(*args, **kwargs)
             payload["data"]["tab_id"] = "A" * 32
-            payload["success"] = bool(self.results) or self.status == "complete"
+            payload["success"] = bool(self.results)
             return payload
 
     def respond(request):
-        if complete_on_return:
-            return reading(request)
         assert not request.details["research"]["pages"]
         return {"perspective": "", "quotes": []}
 
@@ -212,13 +239,10 @@ def test_child_return_rereads_same_tab_once_and_passes_only_completed_body(compl
     dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(client))
     assert turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")["status"] == "awaiting_report"
     row = dialogue.turn("どういう台なの？", turn_id="t2")
-    assert row["web_refresh"]["status"] == ("read" if complete_on_return else "results_only" if results else "page_opened")
-    assert row["status"] == ("research_reflection" if complete_on_return else "research_uncertain")
-    if not complete_on_return and not results:
+    assert "web_refresh" not in row and row["status"] == "research_uncertain"
+    if not results:
         assert "紹介文までは受け取れた" not in row["reply"]
-    assert client.calls[1][1]["url"] == client.calls[0][1]["url"]
     assert "existing_tab_id" not in client.calls[0][1]
-    assert client.calls[1][1]["existing_tab_id"] == "A" * 32
     dialogue.turn("まだ気になる", turn_id="t3")
-    assert len(client.calls) == 2
+    assert len(client.calls) == 1
     assert "エラー本文" not in str(llm.requests)

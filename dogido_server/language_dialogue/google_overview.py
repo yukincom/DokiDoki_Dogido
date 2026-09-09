@@ -1,4 +1,4 @@
-"""同じ可視検索タブのAI概要を受け取る。本文の先読み・再検索はしない。"""
+"""可視検索タブからAI概要を一度だけ受け取る。本文の先読み・再取得はしない。"""
 
 import hashlib
 import ipaddress
@@ -51,16 +51,6 @@ class GoogleOverviewResearch:
     def __init__(self, client):
         self.client = client
         self._captcha = False
-        self._pending_tabs = {}
-
-    def refresh(self, context, *, cancelled=lambda: False, emit=lambda event: None):
-        """Minecraft復帰後（非対応ホストは次の発話時）に一度だけ同じタブを再読。"""
-        tab = self._pending_tabs.pop(context.search_url, None)
-        if context.pages or not tab:
-            return None
-        query, tab_id = tab
-        return self._read(query, context.search_url, cancelled=cancelled, emit=emit,
-                          existing_tab_id=tab_id)
 
     def search(self, target, terms, facet, *, known_urls=(), web_query="",
                cancelled=lambda: False, emit=lambda event: None):
@@ -80,7 +70,7 @@ class GoogleOverviewResearch:
         url = "https://www.google.com/search?" + urlencode({"q": query, "hl": "ja"})
         return self._read(query, url, cancelled=cancelled, emit=emit)
 
-    def _read(self, query, url, *, cancelled, emit, existing_tab_id=None):
+    def _read(self, query, url, *, cancelled, emit):
         result = WebResult(query=query, search_url=url)
 
         def event(kind, **values):
@@ -96,15 +86,10 @@ class GoogleOverviewResearch:
             event("web_search_skipped", reason="captcha")
             return result
         try:
-            if existing_tab_id:
-                event("web_overview_reread_started", url=url)
-            else:
-                event("web_search_started", query=query, text=SEARCH_NOTICE)
+            event("web_search_started", query=query, text=SEARCH_NOTICE)
             arguments = {
                 "url": url, "wait_for_ai_overview": True, "char_limit": 15000,
             }
-            if existing_tab_id:
-                arguments["existing_tab_id"] = existing_tab_id
             started = time.monotonic()
             try:
                 payload = self.client.call("fetch_url", arguments, cancelled=cancelled)
@@ -161,10 +146,6 @@ class GoogleOverviewResearch:
                 event("web_overview_read", page_id=page["id"], chars=len(body), sha256=digest)
             result.status = ("read" if result.pages else "results_only" if result.search_results
                              else "page_opened" if open_pending else "unavailable")
-            if not existing_tab_id and result.status in {"results_only", "page_opened"} and valid_tab:
-                self._pending_tabs[url] = (query, tab_id)
-                while len(self._pending_tabs) > 8:
-                    self._pending_tabs.pop(next(iter(self._pending_tabs)))
             event("web_search_finished", status=result.status, result_count=len(result.search_results),
                   child_status=result.child_status)
         except Exception as exc:

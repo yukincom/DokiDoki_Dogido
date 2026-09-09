@@ -9,7 +9,7 @@ import re
 
 from pydantic import ValidationError
 
-from dogido_server.llm.types import LLMFrontend, StructuredGenerationRequest
+from dogido_server.llm.types import LeafGenerationRequest, LLMFrontend, StructuredGenerationRequest
 from .contracts import GroundedReply, Interpretation, ResearchIntent, ResearchReading
 from .browser_visit import WELCOME_BACK
 from .web_handoff import WebHandoff, WebHandoffMixin, WEB_PERMISSION_PROMPT
@@ -24,10 +24,44 @@ from .web_research import (
 KANJI_GRADE_CONFIRMATION = "それって、漢字を習う学年のこと？"
 
 
+_CASUAL_REPLIES = {
+    "おはよう": "おはよう！ 今日も一緒にいこか。",
+    "おはようございます": "おはよう！ 今日も一緒にいこか。",
+    "こんにちは": "こんにちは！ 今日も会えてうれしいで。",
+    "こんにちわ": "こんにちは！ 今日も会えてうれしいで。",
+    "こんばんは": "こんばんは！ 今日はどんな一日やった？",
+    "ありがとう": "ええんやで。オレもうれしいわ。",
+}
+
+
+def representative_casual_reply(text):
+    word = unicodedata.normalize("NFKC", text).strip().rstrip("。.!！?？")
+    return _CASUAL_REPLIES.get(word)
+
+
+def representative_research_close(text):
+    word = unicodedata.normalize("NFKC", text)
+    subject = any(token in word for token in ("ウェブ", "Web", "web", "検索", "調べもの", "ページ"))
+    ending = any(token in word for token in ("閉じて", "閉じても", "終わり", "やめて", "やめよ", "ここまで"))
+    return subject and ending
+
+
 def mentions_writing(text):
     return any(word in text for word in ("漢字", "文字", "かんじ")) or bool(
         re.search(r"(?<!数)字", text)
     )
+
+
+def looks_like_information_request(text):
+    """解釈器が壊れた場合だけ使う狭いfallback。意味判断の正にはしない。"""
+    word = unicodedata.normalize("NFKC", text)
+    if any(mark in word for mark in ("?", "？")):
+        return True
+    return any(token in word for token in (
+        "何", "なに", "いつ", "どこ", "誰", "だれ", "なぜ", "なんで",
+        "どういう", "教えて", "ってどんな", "ってどう", "って何",
+        "漢字", "短歌", "俳句", "川柳", "音数", "学年", "読み", "意味",
+    ))
 
 
 @dataclass
@@ -67,6 +101,7 @@ class LanguageDialogue(WebHandoffMixin):
         self._visit_number = 0
         self._visit = None
         self._pending_web = None
+        self._deferred_reply_turn_ids = set()
 
     def return_context(self):
         """本体側へ戻す情報は調べた話題1件だけ。本文・答え・理解度は含めない。"""
@@ -117,14 +152,18 @@ class LanguageDialogue(WebHandoffMixin):
                 return dict(row, status="deferred")
             visit.greeted = True
             self.last_activity = self.clock()
-            row.update(status="welcome_back", reply=WELCOME_BACK, refresh_token=visit.token)
+            row.update(status="welcome_back", reply=WELCOME_BACK)
+            if not self.research.pages and callable(getattr(self.web, "refresh", None)):
+                row["refresh_token"] = visit.token
             self._remember_reply(row, f"focus:{event_id}")
             return row
 
-    def refresh_after_return(self, token: str):
+    def refresh_after_return(self, token: str, *, host_cancelled=None):
         """歓迎配送後の一度だけの再読。説明を発話せず、一時文脈だけへ補充する。"""
         with self._lock:
             row = {"control": "return_context_refresh", "reply": "", "status": "skipped"}
+            if host_cancelled is not None and host_cancelled():
+                return dict(row, status="interrupted")
             if self._expire_research():
                 return dict(row, status="context_expired")
             visit, context = self._visit, self.research
@@ -144,9 +183,12 @@ class LanguageDialogue(WebHandoffMixin):
 
         def cancelled():
             with self._lock:
-                return epoch != self._epoch or self._visit is not visit
+                return (epoch != self._epoch or self._visit is not visit
+                        or (host_cancelled is not None and host_cancelled()))
 
         try:
+            if cancelled():
+                return dict(row, status="interrupted")
             updated = refresh(context, cancelled=cancelled, emit=self.on_event)
             with self._lock:
                 if cancelled():
@@ -170,6 +212,7 @@ class LanguageDialogue(WebHandoffMixin):
         """検索・生成中でも明示的に打ち切れる。完了待ちの結果は配送しない。"""
         with self._lock:
             self._epoch += 1
+            self._deferred_reply_turn_ids.clear()
             self.paused = False
             self._clear_focus(remember_research=True)
             self.last_activity = self.clock()
@@ -179,6 +222,7 @@ class LanguageDialogue(WebHandoffMixin):
     def interrupt(self):
         with self._lock:
             self._epoch += 1
+            self._deferred_reply_turn_ids.clear()
             self.paused = True
             self._pending_web = None  # 中断前の同意・案内音声から後で突然開かない。
             self.last_activity = self.clock()
@@ -203,9 +247,68 @@ class LanguageDialogue(WebHandoffMixin):
         except Exception as exc:
             return None, f"generation_error:{type(exc).__name__}"
 
-    def turn(self, text: str, *, turn_id: str, source: str = "text") -> dict:
+    def _player_chat_reply(self, text, conversation_history):
+        fallback = "そっか。もうちょい聞かせてや。"
+        request = LeafGenerationRequest(
+            kind="player_chat",
+            fallback_text=fallback,
+            details={
+                "user_text": text,
+                "conversation_history": conversation_history,
+                "reply_stance": "none",
+                "include_sky_context": False,
+                "world_observation_available": False,
+                "place_context": "独立音声試験。Minecraftの現在状況は未接続",
+                "independent_voice_test": True,
+            },
+            route="chat",
+            temperature=0.2,
+            max_tokens=160,
+        )
+        try:
+            reply = self.llm.generate_leaf_text(request)
+        except Exception:
+            reply = fallback
+        reply = reply.strip() if isinstance(reply, str) else ""
+        return reply or fallback
+
+    def confirm_delivered_reply(self, turn_id: str, reply: str):
+        """独立音声hostがcompletedを観測した時だけ、経路内履歴へ返答を確定する。"""
+        with self._lock:
+            if turn_id not in self._deferred_reply_turn_ids:
+                return False
+            self._deferred_reply_turn_ids.discard(turn_id)
+            if not isinstance(reply, str) or not reply.strip():
+                return False
+            self.history.append({
+                "turn_id": f"{turn_id}:reply",
+                "role": "assistant",
+                "text": reply,
+            })
+            return True
+
+    def discard_deferred_reply(self, turn_id: str):
+        with self._lock:
+            existed = turn_id in self._deferred_reply_turn_ids
+            self._deferred_reply_turn_ids.discard(turn_id)
+            return existed
+
+    def turn(
+        self,
+        text: str,
+        *,
+        turn_id: str,
+        source: str = "text",
+        cancelled=None,
+        conversation_history: str | None = None,
+        defer_reply_history: bool = False,
+    ) -> dict:
         if not turn_id or not text.strip() or len(text) > 1000 or source not in {"text", "voice"}:
             raise ValueError("turn_id、1〜1000字の発話、text/voiceが必要")
+        if conversation_history is not None and (
+            not isinstance(conversation_history, str) or len(conversation_history) > 4000
+        ):
+            raise ValueError("conversation_historyは4000字以内の文字列が必要")
         started = self.clock()
         with self._lock:
             record = {
@@ -218,17 +321,40 @@ class LanguageDialogue(WebHandoffMixin):
                 "reply": "",
                 "references": [],
                 "status": "",
+                "route_owner": "language_dialogue",
             }
+            # 独立音声ホストの待ち列取消。開始直前の取消で古い会話を復活させない。
+            # callbackは状態読取だけ。別ロックや外部I/Oを呼ばない。
+            if cancelled is not None and cancelled():
+                return dict(record, status="interrupted", mode_after=self.mode)
             if turn_id in self._seen:
                 return dict(record, status="duplicate", mode_after=self.mode)
             if self.paused or self._busy:
                 return dict(
                     record, status="paused" if self.paused else "busy", mode_after=self.mode
                 )
+            if defer_reply_history:
+                self._deferred_reply_turn_ids.add(turn_id)
             ttl = self.research_ttl_seconds if self.research else self.ttl_seconds
             if started - self.last_activity >= ttl:
                 self._clear_focus(remember_research=True)
                 record["context_expired"] = True
+            casual_reply = (
+                representative_casual_reply(text)
+                if self.mode == "normal" and self.research is None and self._pending_web is None
+                else None
+            )
+            if casual_reply:
+                current = {"turn_id": turn_id, "role": "user", "text": text, "source": source}
+                self.history.append(current)
+                self._seen.append(turn_id)
+                record.update(status="casual", reply=casual_reply, dialogue_act="casual",
+                              route_owner="host_code",
+                              mode_after=self.mode,
+                              duration_ms=round((self.clock() - started) * 1000))
+                self._remember_reply(record, turn_id)
+                self.last_activity = self.clock()
+                return record
             self._busy = True
             epoch = self._epoch
             history = list(self.history)
@@ -296,6 +422,7 @@ class LanguageDialogue(WebHandoffMixin):
             )
             record["interpretation_status"] = status
             computed_fact = None
+            invalid_interpretation = None
             if interpretation:
                 record["interpretation"] = interpretation.model_dump()
                 turns = {t["turn_id"]: t["text"] for t in history + [current]}
@@ -306,7 +433,10 @@ class LanguageDialogue(WebHandoffMixin):
                     e.turn_id in turns and normalize(e.quote) in normalize(turns[e.turn_id])
                     for e in evidence
                 )
-                if interpretation.target_status == "contextual":
+                if (
+                    interpretation.dialogue_act == "information_request"
+                    and interpretation.target_status == "contextual"
+                ):
                     # 対象を最新発話で言い直した場合も、過去の引用省略だけで捨てない。
                     known_target = bool(interpretation.target) and any(
                         normalize(interpretation.target) in normalize(t["text"])
@@ -323,6 +453,7 @@ class LanguageDialogue(WebHandoffMixin):
                     )
                 if not valid:
                     record["interpretation_status"] = "ungrounded_interpretation"
+                    invalid_interpretation = interpretation
                     interpretation = None
                 else:
                     # 題材と質問の観点は別。国語の観点を抽出済みなら題材名で外さない。
@@ -354,18 +485,67 @@ class LanguageDialogue(WebHandoffMixin):
                             interpretation.target_status = "ambiguous"
                             interpretation.clarification = "数えたい言葉の読みを、ひらがなかカタカナで教えてくれる？"
                     record["effective_interpretation"] = interpretation.model_dump()
-            if interpretation is None:
+            normal_chat = (
+                interpretation is not None
+                and interpretation.relation != "end"
+                and (
+                    interpretation.dialogue_act == "casual"
+                    or (
+                        interpretation.dialogue_act == "other"
+                        and interpretation.topic in {"general", "unclear"}
+                    )
+                )
+            )
+            invalid_normal_chat = (
+                invalid_interpretation is not None
+                and invalid_interpretation.dialogue_act in {"casual", "other"}
+            )
+            unavailable_statement = (
+                interpretation is None
+                and invalid_interpretation is None
+                and not looks_like_information_request(text)
+            )
+            if normal_chat or invalid_normal_chat or unavailable_statement:
+                if conversation_history is None:
+                    lines = []
+                    for item in history:
+                        speaker = "プレイヤー" if item["role"] == "user" else "ドギド"
+                        lines.append(f"{speaker}: {item['text']}")
+                    player_chat_history = "\n".join(lines)
+                else:
+                    player_chat_history = conversation_history
+                record.update(
+                    status="player_chat",
+                    reply=self._player_chat_reply(text, player_chat_history),
+                    dialogue_act=(
+                        interpretation.dialogue_act
+                        if interpretation is not None
+                        else invalid_interpretation.dialogue_act
+                        if invalid_interpretation is not None
+                        else "fallback"
+                    ),
+                    route_owner="player_chat",
+                )
+                next_focus = Focus()
+            elif interpretation is None:
                 record.update(
                     status="clarify",
                     reply="ごめん、何のことを聞きたいか、もうちょっと教えてくれる？",
                 )
                 next_focus = None
             elif (
-                interpretation.topic not in ({"language", "unclear", "general"} if self.web else {"language", "unclear"})
+                interpretation.dialogue_act != "information_request"
+                or interpretation.topic not in (
+                    {"language", "unclear", "general"} if self.web else {"language", "unclear"}
+                )
                 or interpretation.relation == "end"
             ):
                 # 実際のMinecraft返答は本体側の担当。試験用に知識のない回答を作らない。
-                record.update(status="handoff", handoff_topic=interpretation.topic)
+                record.update(
+                    status="handoff",
+                    handoff_topic=interpretation.topic,
+                    route_owner="handoff",
+                )
                 next_focus = Focus()
             elif interpretation.target_status == "ambiguous" or interpretation.topic == "unclear":
                 question = interpretation.clarification or "どの言葉の、どんなことが知りたいん？"
@@ -469,7 +649,7 @@ class LanguageDialogue(WebHandoffMixin):
                     )
                     else ""
                 )
-                if self.web and web_reason:
+                if self.web and web_reason and interpretation.dialogue_act == "information_request":
                     with self._lock:
                         if epoch != self._epoch:
                             return dict(record, status="interrupted", reply="", references=[], mode_after=self.mode)
@@ -489,7 +669,9 @@ class LanguageDialogue(WebHandoffMixin):
                     record["return_context"] = self.return_context()
                     self.history.append(current)
                 elif next_focus is not None:
-                    self.mode = "language"
+                    self.mode = (
+                        "normal" if record.get("route_owner") == "player_chat" else "language"
+                    )
                     self.focus = next_focus
                     self._kanji_scope_confirmed = (
                         interpretation is not None
@@ -507,10 +689,39 @@ class LanguageDialogue(WebHandoffMixin):
                 self._busy = False
 
     def _remember_reply(self, record, turn_id):
-        if record["reply"]:
+        if record["reply"] and turn_id not in self._deferred_reply_turn_ids:
             self.history.append({"turn_id": f"{turn_id}:reply", "role": "assistant", "text": record["reply"]})
 
     def _research_reply(self, details, record, context, epoch):
+        current_text = details["current"]["text"]
+        next_context = ResearchContext(context.question, context.target, context.pages, context.phase,
+                                       context.search_results, context.search_url)
+        if representative_research_close(current_text):
+            record.update(status="handoff", handoff_topic="research",
+                          reply="わかった。調べものはいったんここまでにしよか。",
+                          research_phase="none")
+            return next_context
+        if context.phase == "confirming_topic_change":
+            word = unicodedata.normalize("NFKC", current_text).strip().rstrip("。.!！?？")
+            if word in {"続き", "今の続き", "同じ話", "同じ質問"} or "続きや" in word:
+                next_context.phase = "discussing"
+                record.update(status="research_continue", reply="わかった、今の続きやな。気になるところ、聞かせてや。",
+                              research_phase=next_context.phase)
+                return next_context
+            if word in {"別の質問", "別の話", "違う質問", "新しい質問"}:
+                record.update(status="handoff", handoff_topic="new_question",
+                              reply="わかった。新しく聞きたいことを、もう一度聞かせてな。",
+                              research_phase="none")
+                return next_context
+            if any(token in word for token in ("分かった", "わかった", "なるほど")):
+                next_context.phase = "return_offered"
+                record.update(status="return_offered", reply=RETURN_INVITATION,
+                              research_phase=next_context.phase)
+                return next_context
+            record.update(status="research_topic_confirmation",
+                          reply=f"いま見てる「{context.target}」の続き？ それとも別の質問？",
+                          research_phase=next_context.phase)
+            return next_context
         # 意図分類には本文を入れない。「取り違えた報告」を「困惑」と混同させない。
         intent_details = {k: v for k, v in details.items() if k != "research"}
         intent_details["research"] = {"question": context.question, "target": context.target, "phase": context.phase}
@@ -525,12 +736,14 @@ class LanguageDialogue(WebHandoffMixin):
         if outcome and unicodedata.normalize("NFKC", outcome.evidence) not in unicodedata.normalize("NFKC", details["current"]["text"]):
             outcome = None
             record["research_reply_status"] = "ungrounded_intent"
-        next_context = ResearchContext(context.question, context.target, context.pages, context.phase,
-                                       context.search_results, context.search_url)
+        if outcome:
+            record["research_interpretation"] = outcome.model_dump()
         if not outcome:
             record.update(status="research_unclear", reply="ごめん、もうちょっと聞かせてくれる？")
         elif outcome.intent == "new_question":
-            return None
+            next_context.phase = "confirming_topic_change"
+            record.update(status="research_topic_confirmation",
+                          reply=f"いま見てる「{context.target}」の続き？ それとも別の質問？")
         elif outcome.intent == "return":
             record.update(status="handoff", handoff_topic="minecraft", reply="よし、冒険にもどろか！", research_phase="none")
         elif outcome.intent == "uncertain" and not context.search_url:
@@ -543,21 +756,6 @@ class LanguageDialogue(WebHandoffMixin):
             with self._lock:
                 if epoch != self._epoch:
                     return next_context
-            refresh = getattr(self.web, "refresh", None)
-            # focusを送るホストでは歓迎後に再読する。非対応ホストだけ旧発話時fallback。
-            if (refresh and not context.pages and context.search_url
-                    and self._minecraft_active is None
-                    and not (self._visit and self._visit.refreshed)):
-                updated = refresh(context, cancelled=lambda: epoch != self._epoch, emit=self.on_event)
-                if epoch != self._epoch:
-                    return next_context
-                if updated is not None:
-                    record["web_refresh"] = asdict(updated)
-                    if updated.pages:
-                        next_context.pages = updated.pages
-                        next_context.search_results = updated.search_results
-                        context = next_context
-                        details = {**details, "research": context.snapshot()}
             record["context_page_ids"] = [p["id"] for p in context.pages]
             reading, reading_status = self._generate(
                 StructuredGenerationRequest(
@@ -594,8 +792,6 @@ class LanguageDialogue(WebHandoffMixin):
             record.update(status="return_offered", reply=RETURN_INVITATION)
         else:
             record.update(status="awaiting_report", reply="どうやった？ 分かったこと、オレにも教えてや。")
-        if outcome:
-            record["research_interpretation"] = outcome.model_dump()
         if record["status"] != "handoff":
             record["research_phase"] = next_context.phase
         return next_context

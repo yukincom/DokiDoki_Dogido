@@ -101,7 +101,8 @@ source .venv/bin/activate
 python -m dogido_server.voice_input
 ```
 
-ヘッドホン推奨。
+ヘッドホン推奨。macOSスピーカー利用時の任意[エコー除去（AEC）](docs/voice-echo-cancellation.md)も追加。
+再生音を参照してから音声認識へ渡す実機試験用経路で、導入と非録音検査・起動方法はリンク先を参照。
 
 Minecraft 用アダプタは `adapter/minecraft-fabric/`（Java 1.21.11 / Fabric）。  
 ビルドと入れ方は [adapter/minecraft-fabric/README.md](adapter/minecraft-fabric/README.md) をご確認ください。

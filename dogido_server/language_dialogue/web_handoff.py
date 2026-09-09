@@ -7,13 +7,13 @@ from uuid import uuid4
 from dogido_server.llm.types import StructuredGenerationRequest
 from .browser_visit import BrowserVisit
 from .contracts import Interpretation, WebConsent
-from .web_research import READING_INVITATION, REFERENCE_ONLY_NOTICE, ResearchContext
+from .web_research import REFERENCE_ONLY_NOTICE, ResearchContext
 
 
-WEB_PERMISSION_PROMPT = "うーん。ちょっと俺にはわからへんな。別のAIに聞いてみよか！ウェブを起動するけどええか？"
+WEB_PERMISSION_PROMPT = "うーん。ちょっと俺にはわからへんな。この質問をウェブで調べるため、新しい検索ページを開いてもええか？"
 WEB_DEPARTURE = "ほな一緒にいこか！"
-WEB_DECLINED = "わかった。ウェブは開かへんで。"
-WEB_PERMISSION_AGAIN = "まだウェブは開かへんで。開いてもええか、教えてくれる？"
+WEB_DECLINED = "わかった。この質問では新しい検索はせえへんで。"
+WEB_PERMISSION_AGAIN = "この質問で新しい検索をしてもええか、教えてくれる？"
 
 
 @dataclass
@@ -81,11 +81,11 @@ class WebHandoffMixin:
                 record.update(status="web_consent_requested", reply=WEB_PERMISSION_AGAIN)
             return True
 
-    def on_speech_playback_result(self, utterance_id: str, *, status: str, event_id: str):
+    def on_speech_playback_result(self, utterance_id: str, *, status: str, event_id: str, cancelled=None):
         """対象案内の再生プロセス正常終了だけを受ける。生成完了・推定秒数は不可。
 
         busy時はdeferredを返し未消費。ホストが安全時に同じ通知を再配送できる。
-        独立CLIはこの観測を明示的に模擬する。本体音声には未接続。
+        テキストCLIは明示模擬、独立音声試験は実再生プロセス終了。本体音声には未接続。
         """
         if status not in {"completed", "cancelled", "failed"}:
             raise ValueError("音声再生のcompleted/cancelled/failedが必要")
@@ -94,6 +94,8 @@ class WebHandoffMixin:
         with self._lock:
             row = {"control": "speech_playback_result", "utterance_id": utterance_id,
                    "event_id": event_id, "playback_status": status, "reply": "", "references": []}
+            if cancelled is not None and cancelled():
+                return dict(row, status="interrupted")
             pending = self._pending_web
             if (not pending or pending.phase != "awaiting_playback"
                     or pending.utterance_id != utterance_id):
@@ -110,9 +112,9 @@ class WebHandoffMixin:
             self._pending_web = None  # 読み取り開始前に消費。重複通知では起動しない。
             epoch = self._epoch
         try:
-            self._search_after_speech(pending, row, epoch)
+            self._search_after_speech(pending, row, epoch, host_cancelled=cancelled)
             with self._lock:
-                if epoch != self._epoch:
+                if epoch != self._epoch or (cancelled is not None and cancelled()):
                     return dict(row, status="interrupted", reply="", references=[])
                 self._remember_reply(row, event_id)
                 self.last_activity = self.clock()
@@ -123,11 +125,13 @@ class WebHandoffMixin:
             with self._lock:
                 self._busy = False
 
-    def _search_after_speech(self, pending, record, epoch):
+    def _search_after_speech(self, pending, record, epoch, *, host_cancelled=None):
         def cancelled():
             with self._lock:
-                return epoch != self._epoch
+                return epoch != self._epoch or (host_cancelled is not None and host_cancelled())
 
+        if cancelled():
+            return
         i = pending.interpretation
         result = self.web.search(i.target, i.search_terms, i.facet, web_query=i.web_query,
                                  known_urls=pending.known_urls, cancelled=cancelled, emit=self.on_event)
@@ -146,13 +150,12 @@ class WebHandoffMixin:
                     self._visit_number += 1
                     self._visit = BrowserVisit(f"{self._epoch}:{self._visit_number}",
                                                away=self._minecraft_active is False)
-                record.update(status=phase, reply=READING_INVITATION if opened else REFERENCE_ONLY_NOTICE,
+                # ページを読む本人の集中を切らない。起動・取得結果はstatus/webへ
+                # 残すが、可視ページを開けた後には追加の音声を重ねない。
+                record.update(status=phase, reply="" if opened else REFERENCE_ONLY_NOTICE,
                               references=result.pages, research_phase=phase)
-                if result.search_url:
-                    record["reply"] = (
-                        "検索ページを開いたで。読めたところや、気になったところ、オレにも教えてな。" if opened else
-                        "検索の内容は受け取れたで。気になってるところ、一緒に見てみよか。"
-                    )
+                if result.search_url and not opened:
+                    record["reply"] = "検索の内容は受け取れたで。気になってるところ、一緒に見てみよか。"
                 record["web"]["context_page_ids"] = [p["id"] for p in self.research.pages]
             else:
                 record.update(status="web_unavailable", references=[],

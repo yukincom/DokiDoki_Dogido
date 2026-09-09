@@ -1,0 +1,2 @@
+# Unified-diff context markers make otherwise blank lines end in one space.
+scripts/patches/*.patch whitespace=-blank-at-eol,-blank-at-eof

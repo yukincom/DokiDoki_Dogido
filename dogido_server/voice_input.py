@@ -1,6 +1,6 @@
 """マイク音声入力プロセス。
 
-マイク → ffmpeg(16kHz mono) → 無音区切り VAD → whisper.cpp →
+マイク → ffmpeg または Core Audio + 任意AEC (16kHz mono) → 無音区切り VAD → whisper.cpp →
 POST /api/v1/player-input で dogido_server に届ける。
 チャット入力と同じ user_text 経路に合流するので、キーワード質問も雑談返事も同じ扱いになる。
 
@@ -15,7 +15,8 @@ whisper.cpp の呼び出しとノイズ除去は yuno-chan-api の speech_servic
     DOGIDO_VOICE_RMS_THRESHOLD=700  … 反応しすぎる/しなさすぎる時に調整
     DOGIDO_VOICE_WAKE_WORD="ドギド" … 設定すると呼びかけを含む発話だけ届ける
 
-注意: スピーカー再生だとドギド自身の声を拾ってループするので、ヘッドホン推奨。
+任意AEC: DOGIDO_VOICE_ECHO_CANCELLATION=webrtc。導入・権限は docs/voice-echo-cancellation.md。
+AECを使わないスピーカー再生では自己音声を拾うため、ヘッドホン推奨。
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ import httpx
 
 from dogido_server.config import get_settings
 from dogido_server.player_input.normalize import is_known_voice_noise_text
+from dogido_server.voice_capture import spawn_capture
 
 SAMPLE_RATE = 16000
 FRAME_MS = 30
@@ -695,13 +697,17 @@ def spawn_ffmpeg(device: str) -> subprocess.Popen:
         raise SystemExit("ffmpeg が見つかりません（brew install ffmpeg）。")
 
 
-def main() -> None:
-    settings = get_settings()
+def main(*, settings=None, on_transcript=None, diagnostic_sink=None, on_ready=None, on_stopped=None) -> None:
+    """通常はHTTP配送。独立音声試験だけは明示callbackへ同じSTT結果を渡す。"""
+    settings = settings or get_settings()
     cli, model = resolve_whisper_paths(settings)
     vad_paths = resolve_vad_paths(settings, cli)
     base_url = f"http://{settings.bind_host}:{settings.bind_port}"
 
     def send_diagnostic(**fields: object) -> None:
+        if diagnostic_sink is not None:
+            diagnostic_sink(**fields)
+            return
         report_voice_diagnostic(
             base_url,
             settings.auth_token,
@@ -726,7 +732,7 @@ def main() -> None:
                 print("[VOICE] Silero VAD: 声なしとしてスキップ")
                 return
 
-        prompt_mode = fetch_voice_prompt_mode(
+        prompt_mode = "normal" if on_transcript is not None else fetch_voice_prompt_mode(
             base_url,
             settings.auth_token,
             diagnostic=diagnostic,
@@ -781,15 +787,17 @@ def main() -> None:
                 recognized_text=transcript,
             )
             return
-        deliver(
-            base_url,
-            settings.auth_token,
-            transcript,
-            diagnostic=diagnostic,
-        )
+        if on_transcript is not None:
+            on_transcript(transcript)
+        else:
+            deliver(base_url, settings.auth_token, transcript, diagnostic=diagnostic)
 
     print(f"[VOICE] whisper: {cli.name} / model: {model.name}")
-    print(f"[VOICE] mic: avfoundation \"{settings.voice_input_device}\" / server: {base_url}")
+    capture_label = (f"Core Audio + WebRTC AEC3 ({settings.voice_echo_input_uid or 'macOS既定マイク'})"
+                     if settings.voice_echo_cancellation == "webrtc" else
+                     f'avfoundation "{settings.voice_input_device}"')
+    destination = "独立試験callback（本体HTTP配送なし）" if on_transcript is not None else base_url
+    print(f"[VOICE] mic: {capture_label} / delivery: {destination}")
     print(f"[VOICE] 音量しきい値: {settings.voice_rms_threshold}（DOGIDO_VOICE_RMS_THRESHOLD で調整）")
     print(
         f"[VOICE] 発話区切り: 無音 {settings.voice_silence_ms}ms / "
@@ -801,9 +809,16 @@ def main() -> None:
         print(f"[VOICE] Silero VAD: {vad_paths[1].name}（声の有無だけ判定）")
     if wake_word:
         print(f"[VOICE] ウェイクワード: 「{wake_word}」を含む発話だけ届けます")
-    print("[VOICE] ※ドギドの声をマイクが拾うとループするので、ヘッドホン推奨やで")
+    if settings.voice_echo_cancellation == "off":
+        print("[VOICE] ※ドギドの声をマイクが拾うとループするので、ヘッドホン推奨やで")
+    else:
+        print("[VOICE] Macの再生音全体をエコー除去の参照に使います（参照音の保存・送信なし）。")
 
-    process = spawn_ffmpeg(settings.voice_input_device)
+    try:
+        process = spawn_capture(settings, raw_factory=spawn_ffmpeg, diagnostic=diagnostic)
+    except Exception as exc:
+        diagnostic.close()
+        raise SystemExit(f"音声入力を開始できません: {exc}") from exc
     assert process.stdout is not None
     stt_worker = SpeechRecognitionWorker(
         process_segment,
@@ -823,11 +838,14 @@ def main() -> None:
     recording = False
 
     print("[VOICE] 待機中…話しかけてや")
+    ready = False
     try:
         while True:
-            frame = process.stdout.read(FRAME_BYTES)
+            frame = process.read_frame(FRAME_BYTES)
             if not frame or len(frame) < FRAME_BYTES:
-                stderr_tail = (process.stderr.read() or b"").decode("utf-8", "replace")[-400:] if process.stderr else ""
+                if on_stopped is not None:
+                    on_stopped()  # STT・captureの終了待ちより先にWeb起動権限を無効化する。
+                stderr_tail = process.error_tail()
                 print("[VOICE] マイク入力が止まりました。", stderr_tail)
                 diagnostic(
                     event="capture",
@@ -835,9 +853,16 @@ def main() -> None:
                     reason="microphone_stopped",
                     detail=stderr_tail or None,
                 )
-                print("[VOICE] マイク権限（システム設定→プライバシー→マイク→ターミナル）とデバイス番号を確認してください。")
-                print('[VOICE] デバイス一覧: ffmpeg -f avfoundation -list_devices true -i ""')
+                if settings.voice_echo_cancellation == "webrtc":
+                    print("[VOICE] AECを停止しました。音声キャプチャ権限・機器・docs/voice-echo-cancellation.mdを確認してください。")
+                else:
+                    print("[VOICE] マイク権限（システム設定→プライバシー→マイク→ターミナル）とデバイス番号を確認してください。")
+                    print('[VOICE] デバイス一覧: ffmpeg -f avfoundation -list_devices true -i ""')
                 break
+            if not ready:
+                ready = True
+                if on_ready is not None:
+                    on_ready()
             loud = frame_rms(frame) >= settings.voice_rms_threshold
             if not recording:
                 pre_roll.append(frame)
@@ -891,7 +916,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\n[VOICE] 終了します")
     finally:
-        process.terminate()
+        process.close()
         stt_worker.close()
         diagnostic.close()
 

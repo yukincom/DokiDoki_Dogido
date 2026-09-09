@@ -60,6 +60,7 @@ class LLM:
 
 def interpretation(text=QUESTION, **changes):
     return dict(
+        dialogue_act="information_request",
         topic="language",
         relation="new",
         question=text,
@@ -689,6 +690,13 @@ def test_new_local_question_does_not_erase_previous_research_topic():
     turn_with_web_permission(dialogue, QUESTION, turn_id="t1")
     search.facts = Search().facts
     row = dialogue.turn("声を表す言葉を教えて", turn_id="t2")
+    assert row["status"] == "research_topic_confirmation"
+    assert row["research_interpretation"]["intent"] == "new_question"
+    assert dialogue.research is not None
+    row = dialogue.turn("別の質問", turn_id="t3")
+    assert row["status"] == "handoff" and dialogue.research is None
+    next_question["evidence"] = [{"turn_id": "t4", "quote": "声を表す言葉を教えて"}]
+    row = dialogue.turn("声を表す言葉を教えて", turn_id="t4")
     assert row["status"] == "answer"
     assert dialogue.research is None
     dialogue.cancel()

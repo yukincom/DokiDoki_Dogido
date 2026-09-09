@@ -131,6 +131,13 @@ class Settings(BaseSettings):
     voice_stt_max_pending_segments: int = Field(default=1, ge=1, le=4)
     voice_stt_max_segment_age_sec: float = Field(default=8.0, ge=1.0, le=60.0)
     voice_input_device: str = ":0"  # ffmpeg avfoundation のオーディオ入力（":0"=最初のマイク）
+    # 任意AEC。Mac再生音を参照として使い、処理後PCMを従来のRMS/Silero/STTへ渡す。
+    # 起動時に明示選択。参照・依存の失敗でoffへ自動fallbackしない。
+    voice_echo_cancellation: Literal["off", "webrtc"] = "off"
+    voice_echo_python: Path | None = None  # 未設定ならrepo内の独立echo-cancel環境
+    voice_echo_helper: Path | None = None
+    voice_echo_input_uid: str = ""  # 空ならmacOS既定マイク。ffmpegデバイス番号とは別
+    voice_echo_delay_ms: int = Field(default=0, ge=0, le=500)  # 0=既定のAEC遅延推定
     voice_rms_threshold: int = 700  # 発話開始とみなす音量（環境ノイズが多ければ上げる）
     voice_silence_ms: int = 1200  # 800msより間を許し、雨音下でも区間を長くしすぎない
     voice_min_speech_ms: int = 350  # これより短い音は無視（物音対策）

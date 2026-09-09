@@ -71,7 +71,8 @@ class StructuredContractTests(unittest.TestCase):
         }
         cases: dict[str, tuple[dict[str, object], dict[str, object]]] = {
             "language_dialogue_interpretation": (
-                {"topic": "language", "relation": "new", "question": "読みを知りたい",
+                {"dialogue_act": "information_request", "topic": "language",
+                 "relation": "new", "question": "読みを知りたい",
                  "target": "語", "facet": "reading", "target_status": "explicit",
                  "alternatives": [], "evidence": [{"turn_id": "t1", "quote": "読み"}],
                  "search_terms": ["語"], "clarification": ""}, {},
@@ -79,6 +80,31 @@ class StructuredContractTests(unittest.TestCase):
             "language_dialogue_reply": (
                 {"status": "unsupported", "text": "資料で確かめよか。", "fact_ids": [],
                  "application": "", "missing": "読みの根拠"}, {},
+            ),
+            "language_participation_forecast": (
+                {
+                    "reaction": "",
+                    "patterns": [
+                        {"pattern_id": f"p{index}", "description": f"次の発話型{index}"}
+                        for index in range(1, 6)
+                    ],
+                },
+                {},
+            ),
+            "language_participation_assessment": (
+                {
+                    "relation": "expected",
+                    "matched_pattern_ids": ["p1"],
+                    "topic_changed": False,
+                    "clear_question": False,
+                    "minecraft_topic": False,
+                    "evidence": "続き",
+                    "confidence": 0.9,
+                },
+                {"expected_continuations": [
+                    {"pattern_id": f"p{index}", "description": f"次の発話型{index}"}
+                    for index in range(1, 6)
+                ]},
             ),
             "language_research_intent": (
                 {"intent": "uncertain", "evidence": "まだ分からない"}, {},
@@ -255,6 +281,36 @@ class StructuredContractTests(unittest.TestCase):
 
         self.assertFalse(scene.accepted)
         self.assertFalse(grounding.accepted)
+
+    def test_participation_contract_rejects_duplicate_or_unknown_pattern_ids(self) -> None:
+        duplicate = validate_structured_payload(
+            "language_participation_forecast",
+            {
+                "reaction": "",
+                "patterns": [
+                    {"pattern_id": "p1", "description": f"候補{index}"}
+                    for index in range(5)
+                ],
+            },
+        )
+        unknown = validate_structured_payload(
+            "language_participation_assessment",
+            {
+                "relation": "expected",
+                "matched_pattern_ids": ["p5"],
+                "topic_changed": False,
+                "clear_question": False,
+                "minecraft_topic": False,
+                "evidence": "続き",
+                "confidence": 0.9,
+            },
+            details={"expected_continuations": [
+                {"pattern_id": f"p{index}", "description": f"候補{index}"}
+                for index in range(1, 5)
+            ]},
+        )
+        self.assertFalse(duplicate.accepted)
+        self.assertFalse(unknown.accepted)
 
 
 if __name__ == "__main__":

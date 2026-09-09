@@ -14,6 +14,8 @@ from __future__ import annotations
 from typing import Any
 
 from dogido_server.language_dialogue.prompts import (
+    build_participation_assessment_messages,
+    build_participation_forecast_messages,
     build_web_consent_messages,
     build_research_intent_messages,
     build_research_reading_messages,
@@ -86,6 +88,8 @@ def build_messages(request: Any) -> list[dict[str, str]]:
     builders = {
         "language_dialogue_interpretation": build_interpretation_messages,
         "language_dialogue_reply": build_grounded_reply_messages,
+        "language_participation_forecast": build_participation_forecast_messages,
+        "language_participation_assessment": build_participation_assessment_messages,
         "language_research_intent": build_research_intent_messages,
         "language_research_reading": build_research_reading_messages,
         "language_web_consent": build_web_consent_messages,
