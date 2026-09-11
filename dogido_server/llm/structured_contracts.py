@@ -143,6 +143,48 @@ class _WorkshopPendingDecision(_StrictModel):
     close_request: _WorkshopCloseRequest
 
 
+class _WorkshopAgentStep(_StrictModel):
+    action: Literal[
+        "respond",
+        "explain",
+        "ask",
+        "inspect",
+        "propose_revision",
+        "compare",
+        "show_current",
+        "stage_player_edit",
+        "accept_pending",
+        "reject_pending",
+        "close_workshop",
+        "unrelated",
+        "defer_to_legacy",
+    ]
+    purpose: Literal[
+        "understand_meaning",
+        "improve_wording",
+        "evaluate_verse",
+        "review_pending",
+        "adopt_pending",
+        "discard_pending",
+        "show_verse",
+        "finish_workshop",
+        "continue_discussion",
+        "other",
+    ]
+    confidence: Confidence
+    evidence: str
+    speech: str
+    checks: Annotated[
+        list[Literal["reading", "meter", "source"]],
+        Field(max_length=3),
+    ]
+    close_after_action: bool
+    close_evidence: str
+    findings: Annotated[list[_WorkshopFinding], Field(max_length=3)]
+    line_reference: _WorkshopLineReference
+    line_proposal: _WorkshopLineProposal
+
+
 class _WorkshopCombatInput(_StrictModel):
     action: str
     confidence: Confidence
@@ -229,6 +271,7 @@ _MODELS: dict[str, type[BaseModel]] = {
     "haiku_scene": _Scene,
     "haiku_workshop_combat_input": _WorkshopCombatInput,
     "haiku_workshop_evaluation": _WorkshopEvaluation,
+    "haiku_workshop_agent_step": _WorkshopAgentStep,
     "haiku_workshop_intent": _WorkshopIntent,
     "haiku_workshop_pending_decision": _WorkshopPendingDecision,
     "haiku_workshop_revision": _WorkshopRevision,
@@ -359,6 +402,41 @@ def structured_contract_retry_instruction(
             "intentは次から選ぶ: "
             + json.dumps(sorted(_string_set(request_details.get("allowed_intents"))))
         )
+    elif kind == "haiku_workshop_agent_step":
+        constraints.append(
+            "actionは次から選ぶ: "
+            + json.dumps(sorted(_string_set(request_details.get("allowed_actions"))))
+        )
+        constraints.append(
+            "purposeは次から選ぶ: "
+            + json.dumps(sorted(_string_set(request_details.get("allowed_purposes"))))
+        )
+        constraints.append(
+            "checksは次から重複なく選ぶ: "
+            + json.dumps(sorted(_string_set(request_details.get("allowed_checks"))))
+        )
+        constraints.append(
+            "evidenceはplayer_textの連続部分を正確にコピーする。"
+            "defer_to_legacy以外は空にしない"
+        )
+        constraints.append(
+            "speechはrespond/explain/ask/compareだけ非空にし、"
+            "inspect/propose_revision/show_current/stage_player_edit/"
+            "accept_pending/reject_pending/close_workshop/unrelated/"
+            "defer_to_legacyでは必ず空文字にする"
+        )
+        constraints.append(
+            "close_after_action=trueはaccept_pendingまたはreject_pendingだけ。"
+            "その場合は採否をevidence、相談終了をclose_evidenceへplayer_textから"
+            "それぞれ抜く。同じ短い連続部分に両方の意思があれば重なってもよい。"
+            "それ以外はfalseかつclose_evidenceを空にする"
+        )
+        if request_details.get("pending_verse"):
+            constraints.append(
+                "未採用案があるためclose_workshopは選ばない。採用または破棄と終了を"
+                "同時に求められた場合はaccept_pendingまたはreject_pendingを選び、"
+                "close_after_action=trueにする"
+            )
     elif kind in {"haiku_workshop_pending_decision", "haiku_workshop_combat_input"}:
         constraints.append(
             "actionは次から選ぶ: "
@@ -516,6 +594,74 @@ def _validate_dynamic_contract(
         allowed_intents = _string_set(details.get("allowed_intents"))
         if allowed_intents and payload["intent"] not in allowed_intents:
             errors.append("intent:not_allowed")
+        allowed_problems = _string_set(details.get("allowed_problem_types"))
+        for index, row in enumerate(payload["findings"]):
+            if row.get("line_index") not in (None, 0, 1, 2):
+                errors.append(f"findings.{index}.line_index:not_allowed")
+            if allowed_problems and row["problem"] not in allowed_problems:
+                errors.append(f"findings.{index}.problem:not_allowed")
+
+    elif kind == "haiku_workshop_agent_step":
+        allowed_actions = _string_set(details.get("allowed_actions"))
+        if allowed_actions and payload["action"] not in allowed_actions:
+            errors.append("action:not_allowed")
+        allowed_purposes = _string_set(details.get("allowed_purposes"))
+        if allowed_purposes and payload["purpose"] not in allowed_purposes:
+            errors.append("purpose:not_allowed")
+        required_purposes = {
+            "accept_pending": "adopt_pending",
+            "reject_pending": "discard_pending",
+            "close_workshop": "finish_workshop",
+            "stage_player_edit": "improve_wording",
+        }
+        required_purpose = required_purposes.get(payload["action"])
+        if required_purpose is not None and payload["purpose"] != required_purpose:
+            errors.append("purpose:action_mismatch")
+        checks = payload["checks"]
+        allowed_checks = _string_set(details.get("allowed_checks"))
+        if len(checks) != len(set(checks)):
+            errors.append("checks:duplicate")
+        if set(checks) - allowed_checks:
+            errors.append("checks:not_allowed")
+        if payload["action"] == "inspect" and not checks:
+            errors.append("checks:inspection_requires_check")
+        if payload["action"] != "inspect" and checks:
+            errors.append("checks:only_for_inspection")
+        direct_actions = {"respond", "explain", "ask", "compare"}
+        if payload["action"] in direct_actions and not payload["speech"].strip():
+            errors.append("speech:required")
+        if payload["action"] not in direct_actions and payload["speech"].strip():
+            errors.append("speech:not_allowed")
+        close_after_action = payload["close_after_action"]
+        close_evidence = payload["close_evidence"]
+        if close_after_action and payload["action"] not in {
+            "accept_pending",
+            "reject_pending",
+        }:
+            errors.append("close_after_action:not_allowed")
+        if not close_after_action and close_evidence.strip():
+            errors.append("close_evidence:unexpected")
+        evidence = payload["evidence"]
+        player_text = str(details.get("player_text") or "")
+        if payload["action"] != "defer_to_legacy" and (
+            len(evidence.strip()) < 2 or evidence not in player_text
+        ):
+            errors.append("evidence:not_exact")
+        if close_after_action and (
+            len(close_evidence.strip()) < 2 or close_evidence not in player_text
+        ):
+            errors.append("close_evidence:not_exact")
+        original_player_text = str(details.get("original_player_text") or player_text)
+        mutation_actions = {
+            "accept_pending",
+            "reject_pending",
+            "close_workshop",
+            "stage_player_edit",
+        }
+        if payload["action"] in mutation_actions and evidence not in original_player_text:
+            errors.append("evidence:not_in_original")
+        if close_after_action and close_evidence not in original_player_text:
+            errors.append("close_evidence:not_in_original")
         allowed_problems = _string_set(details.get("allowed_problem_types"))
         for index, row in enumerate(payload["findings"]):
             if row.get("line_index") not in (None, 0, 1, 2):

@@ -95,19 +95,19 @@
 | 言いすぎ / 被る | クールダウン・モード |
 | 無反応 | 観測 or policy |
 
-workshop の critique JSONL は、そのまま改善キューになる（プレイヤーが教師）。
+workshop のcritique JSONLに加え、共同編集agentの相談目的・`action / outcome / checks / validation code`・今回発話のevidence・音声認識原文／会話解釈・正本／pending前後を有界に残す`haiku_workshop_turns.jsonl`が、そのまま改善キューになる（プレイヤーが教師）。内部思考、agentのspeech、長期対話は保存・常時注入しない。
 
 通常の反応は、受理した非重複イベント1件につき `trigger → observation → state_before → decision → action → result` を `.dogido_memory/eval/episodes.jsonl` へ記録する。発話なしも含むため、誤反応だけでなく無反応も同じ集計面で比較できる。支援commandは発行時の `action` と、後続イベントで観測したadapter実結果をcommand IDで相関する。これは会話・川柳の記憶ではなく、runtimeへ読み戻さない評価ログ。詳細は [支援アクションの操縦席 §A](assist-action-architecture.md#a-エピソード-jsonl実装済み)。
 
 ### 3.3 川柳は「当たる率」より「外したあとの関係」
 
-H1〜H5.2 で **関係性の側はかなりできた**（pin / 講評 / soft lesson / 緩め / TTL）。
+H1〜H5.2とH9で **関係性の側はかなりできた**（pin / 検証付き共同編集 / 講評 / soft lesson / 緩め / TTL）。
 
 出典不明・材料重複・形式不合格の句は発話前に閉じる。workshop は検証を通った句の好み・表現・場面違和感を扱い、生成品質ゲートの代わりにはしない。
 
 足すなら（任意）:
 
-- AI修正案と、プレイヤー語による連続局所編集、句評価の極性／範囲／根拠抽出、行の曖昧な呼び方を `line_1/2/3` へ対応する常駐会話モデル抽出、pending採否、自然な終了意図のscope／根拠抽出は実装済み。通常workshopでOS AIは先行呼び出しせず、戦闘時の句保持pause中の小分類だけOS AI優先＋chat fallbackとする。次は実ログで評価・行呼称・対象行・読み・自然さ・終了誤判定を見る
+- 自然な句相談は、常駐chatモデルが現在句・pending・直近対話から説明／質問／検査／提案／比較の次手を選ぶ有界agentへ統合済み。必要時だけコードが読み・音数・出典を実検査し、既存editorの検証結果も一度だけ次手へ返す。AI修正案、プレイヤー語の連続局所編集、`line_1/2/3`、pending採否、自然な終了も同じstepで扱うが、CAS・保存・戦闘安全はコード。次は実ログでaction選択・行呼称・読み・自然さ・待ち時間を見る
 - 「前よりマシ？」の短い自己参照（lessons が効いた感）  
 
 **やらない方がいい:**
@@ -139,7 +139,7 @@ P1〜P5 で過適合と none 時の相槌は改善済み。2026-09-11には、�
 |---|---|
 | VLM 常時 | コスト大。イベント駆動の「あれ見て」だけで十分 |
 | Vector RAG | 直引きと被りやすい。材料が薄い問題を先に |
-| workshop 全域の LLM 制御 | 文脈別の限定 intent / findings / 句評価 / 一行置換 / pending採否 / 終了意図抽出で十分。状態・保存判断まで渡すとノイズ |
+| 状態・保存まで含む汎用workshop agent | 会話の次手と実検査だけの有界共同編集agentで十分。正本・CAS・採否・保存・戦闘判断まで渡すとノイズ |
 | 巨大パッケージ整理（Phase E） | 完成度というより開発者快適さ |
 
 ---
@@ -178,6 +178,8 @@ soft workshop 方針は後半をすでに押さえている。
 
 2026-09-11通常雑談の一回再考: 自然な「ドギド」自己言及を旧 `unusable_output` の広域禁止から外し、謝罪・「例」「本番」・表面上の方言差も単語だけで棄却しない。外形またはgrounding不合格時だけ、同じ会話へ候補と閉じた理由を返して一度言い直し、二案目にも同じ検査を適用する。再不合格は固定fallback、不合格案は履歴外。汎用ReActにはせず発話候補だけを扱う。**コード・全Python自動テスト済み。ローカルQwen独立試験では英語ラベル混入と未観測嗅覚を各一回で修正し、warm時の追加生成は約0.7秒。実Minecraft・実TTS・長時間の自然さは未確認。**
 
+2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・pending・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合した。説明／質問／検査／提案／比較等から一手を選び、読み・音数・出典またはeditor validation後は一度だけ返答を再判断する。正本・行対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード。局所編集・採否・終了は音声認識原文にも行為evidenceがある場合だけ通し、疑問・否定・条件・引用・伝聞は拒否する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談返答が成立した同じ入力だけを二回driftへ数える。初手不成立は旧分類器、実観測後はコード固定fallback。実行step・検証結果・発話根拠・原文／解釈だけを改善JSONLへ有界記録し、思考文・agent speech・長期会話は保存・常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
+
 2026-09-11照明コメント判断: inventory snapshot の照明器具増加をクラフト／設置とは断定せず、発話前の有界 `light_source_comment_plan` が無言・備え増加への相槌・実際の暗所回復後の安堵から一件だけ選ぶ。半スタック以上を持って周囲が既存の暗所警告条件外、同種コメント後5分以内、または現在も危険な暗さならコードで即時に無言とし、曖昧な場面だけをplannerへ渡す。`dark_push` の停止は現在の明るさ・危険度でコード確定し、所持数増加だけでは止めない。発話leafへ正確な本数を渡さず、入手方法や本数を補作した生成結果も棄却する。**コード・自動テスト済み。実Minecraft・実Qwen・実TTSは未確認。**
 
 2026-09-11通常雑談grounding: `player_chat`本文の前に、発話内evidence付きの閉じたstructured plannerが `continue_conversation / check_entity_presence / identify_entity / answer_observation / clarify_reference / correct_previous_reply` からread actionを一件だけ選ぶ。通常の相槌をカタログ描写タグへ流さず、対象照合時だけ候補IDをvisual・passive・hearing・現在構造物・乗車・視線先entityへコード照合する。候補順位は発話だけで先に決め、関連Mob観測で別対象へすり替えない。明示在否問いとplayerの平叙存在報告もコードrouting hintでactionを再検査する。カタログ一致、player報告、assistant履歴は観測ではない。未観測の在否は不在断定を避けた固定文、過去の誤断言は固定の謝罪・訂正へ落とす。種名白リストは全通常雑談で有効にし、現在観測・player発話・planner同定候補だけを許可する。世界操作、保存、戦況、assist、workshopはplannerへ渡していない。**コード・自動テスト済み。実Minecraft・実Qwen・実TTSは未確認。**
@@ -215,7 +217,7 @@ soft workshop 方針は後半をすでに押さえている。
 | 領域 | 状態 |
 |---|---|
 | 本体foreground会話 | コード・自動テスト済み（既存雑談／限定国語worker／共有ID履歴／突然の話題の2分判定＋5分宛先保留／本人barge-in／実再生terminal／危険前5往復＋危険後3turn保護／純粋な音声叫声の診断・状況分離／戦闘話題bookmark 10 player turn／雷・夕方入力保全／ambient抑止／雑談由来自動川柳soft材料）。本体WebとMinecraft pauseは共有contract未合意のため未接続、実機未確認 |
-| workshop H1〜H5.2・H7-lite | 済（soft lesson・明示緩め・TTL・常駐会話モデルの限定 intent/findings／句評価の極性・範囲・根拠／行呼称→`line_1/2/3`／一行置換／pending採否／自然な終了意図。OS AI優先＋chat fallbackは戦闘中断中の再開・終了意思抽出のみ。全体肯定評価は終了確認、否定・mixedは改善方向の質問へ。実行・保存・close・敵の安全判定はコード。praise は critique 保存のみ。戦闘中は句とpendingを保持してpauseし、通常敵も死亡観測＋プレイヤー帰属／死亡のみ／離脱を分けて再開） |
+| workshop H1〜H5.2・H7-lite・H9 | 済（現在句・pending・直近対話から相談目的と次手を一つ選び、必要時だけ読み／音数／出典を実検査。既存editorの検証結果を見て一度だけ返答を再判断し、実行step・検証結果・発話根拠を改善JSONLへ有界記録する。soft lesson・明示緩め・TTL・`line_1/2/3`／一行置換／pending採否／自然な終了も維持。正本・CAS・保存・close・敵の安全判定はコード。戦闘中は句とpendingを保持してpause） |
 | H6 固定語 materials 突合 | **撤回** |
 | 発句 source atom 品質ゲート | 済（原文snapshot・実際に話した自然な関西弁の検証済み詩的解釈・節単位preface provenance/主張範囲・詩的解釈を句全体で共有する行別出典・見どころ明示要素から一次atomへの再結合・固定導入時の未発話解釈を `generated_unspoken` としてspoken provenanceから除外・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |
 | 雑談 P1〜P5 + grounded planner + 現在ターン予定／安全方針 | 済（会話焦点→必要時だけ対象カタログ→現在観測ID照合、assistant履歴／player報告は観測外、未観測在否と誤断言訂正は固定文。帰宅予定は発話ターンのみ、地表夕方／雷雨は導出型、洞窟オフ。実モデル未確認） |
@@ -223,7 +225,7 @@ soft workshop 方針は後半をすでに押さえている。
 | ゲーム外の運用診断 | コード・自動テスト済み（発言・参考資料に加え、LLM／川柳／STT／TTSの上限付きプロセス内ログを表示。音声認識原文、棄却理由、配送結果を区別し、全ログをコピーできる。成功した高頻度APIアクセスは端末と画面で省略し、400以上は残す。音声波形、認証情報、内部プロンプトは保存しない） |
 | 観測ギャップ・水辺など | 乗車中の乗り物材料は済（未乗車は省略・主語付き）。周辺ブロック・落下物・手持ち・全インベントリから選んだ物を背景より優先。空が見えない場面では対話・川柳とも地表天候／非洞窟バイオームを抑止する。直近の実破壊＋採掘道具を主根拠に「採掘中」、石・土系天井＋地表からの深さ＋屋内設備なしだけなら「坑道らしい場所」と分ける。通常雑談では近い設定済みリスポーン地点＋ベッド／ドアを「家・拠点らしい場所」とし、窓は根拠にしないところまで済。水辺・旗・エリトラなどは継続課題（完成度の本丸） |
 | 支援アクション | `select_sword` の縦切り（hotbar実測→コード/Qwen限定意図→capability gate→typed command→Fabric再検証→result/ack→episode相関）はコード・自動テスト・Minecraft実機確認済み。自動持ち替え・救助・馬は未 |
-| 修正案 1 本・連続局所編集 / structured抽出実ログ評価 / Phase E | AIのLocate→Edit→Testに加え、常駐会話モデルが発話根拠つきで行の位置概念・プレイヤー置換語・pending採否・終了意図を抽出→コードで根拠衝突・ひらがな化・正確な5/7/5音・hard制約・CAS・終了scopeを検証→未保存三行へ連続編集→採用後もpin維持まで済。句本文と状態変更はコード固定。生の行呼称と正規名は将来learning版のフックとしてログに残すが、現在は呼び方を訂正しない。実ログ評価・整理は任意・未 |
+| 修正案1本・連続局所編集 / agent実ログ評価 / Phase E | 共同編集agentが会話からLocate／説明／質問／検査／提案／比較を選び、コードがEdit→Test、根拠衝突・ひらがな化・正確な5/7/5音・hard制約・CASを検証→未保存三行へ連続編集→採用後もpin維持まで済。句本文と状態変更はコード固定。action結果は改善JSONLへ残す。ローカルQwen独立stepは確認済み、実Minecraft／TTS／editor込みE2Eと整理は任意・未 |
 | VLM / Vector RAG | 将来枠 |
 
 ---
@@ -237,8 +239,8 @@ soft workshop 方針は後半をすでに押さえている。
 | 高 | 水辺・湖・川など近傍の materials 載せ | 共有解像度・「うみ」誤解の根 |
 | 高 | 実プレイログ分類 → 小さな修正 | 当たり外れの実害を減らす |
 | 中 | 既存観測ギャップ（旗・音） | chat の「見てる感」 |
-| 中 | 通常workshopの会話モデル抽出・戦闘中断用OS AI／修正案の実ログ評価 / P5 fallback | 体験の角を丸く |
+| 中 | 通常workshop agent・戦闘中断用OS AI／修正案の実ログ評価 / P5 fallback | 体験の角を丸く |
 | 低 | haiku recall の一般化・薄い連続 | B→C 寄りの続きもの感 |
-| 後 | VLM イベント駆動 / RAG / workshop 全域 LLM / 整理 PR | 飛び道具・掃除 |
+| 後 | VLMイベント駆動 / RAG / 状態保存まで含む汎用agent / 整理PR | 飛び道具・掃除 |
 
 更新したらこの節と §6 だけ直せばよい。

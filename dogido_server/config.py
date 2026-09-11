@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     combat_chat_ack_cooldown_ms: int = Field(default=30000, ge=1000, le=300000)
     decision_policy: Literal["py_trees", "legacy"] = "py_trees"
     llm_enabled: bool = True
+    # 川柳workshopの自然な相談を、検査結果を読める有界な共同編集ループへ渡す。
+    # 明示保存・採否・終了、正本CAS、戦闘中断はこの設定に関係なくコード側。
+    haiku_workshop_agent_enabled: bool = True
     llm_backend: LLM_BACKEND = "mlx"
     llm_provider: LLM_PROVIDER = "local"
     tts_backend: Literal["voicevox", "say", "noop"] = "voicevox"

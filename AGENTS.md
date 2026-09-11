@@ -14,7 +14,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 ```
 
 - **判断の主**はコード（状態機械 / py_trees / policy）
-- **LLM**は言い回し生成と、閉じた型の限定抽出（workshop intent / findings / 句評価 / 一行置換 / pending採否 / 終了意図）まで。**OS AI**は戦闘中断中の小さな5分類だけに限る。状態変更・保存判断はコード
+- **LLM**は言い回し生成、通常workshopの有界な次手選択、閉じた型の限定抽出まで。**OS AI**は戦闘中断中の小さな5分類だけに限る。状態変更・保存判断はコード
 - **記憶**は JSONL（few-shot 山盛りや Hermes 系汎用エージェントは使わない）
 
 汎用チャットボットや「なんでもできるエージェント」に改造しない。
@@ -28,7 +28,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/service.py` | セッション、player 入力、workshop / memory 配線 |
 | `dogido_server/state_machine/` | 本体判断。mixin 分割済み。**巨大ロジックを haiku mixin に足し続けない** |
 | `dogido_server/state_machine/precipitation.py` | 現在Y・気温・天気・雪ブロック実測から雨／降雪／積雪根拠を確定。LLMには数値を伏せた閉じた気象事実だけを共有 |
-| `dogido_server/haiku/workshop.py` | 句 pin（open/close）、意図分類、soft 返事、lesson 生成 |
+| `dogido_server/haiku/workshop.py` | 句 pin（open/close）、旧分類fallback、soft lesson、行概念と採否の検証 |
+| `dogido_server/haiku/workshop_agent.py` | 現在句・pending・直近対話を読む有界共同編集step、実検査、発話・根拠検証。状態変更・保存権限は持たない |
 | `dogido_server/haiku/workshop_context.py` | 一句の直近対話・見どころ・材料・照合先・修正結果の読み取り用共有文脈。採用・保存の権限は持たない |
 | `dogido_server/haiku/combat_pause.py` | 戦闘中の句保持pause、勝利／離脱後の再開、安定した単独敵の暫定継続 |
 | `dogido_server/haiku/edit_contract.py` | workshop 行差分の compare-and-swap 検証（生成・採用・保存で共有） |
@@ -43,7 +44,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
 | `dogido_server/platform_ai.py` | Apple Foundation Models / Foundry Local / chat fallback の限定 structured router |
 | `dogido_server/player_activity.py` | 乗車中だけ存在する vehicle 状態を、主語付きの雑談・川柳材料へ変換 |
-| `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons） |
+| `dogido_server/memory.py` | JSONL 長期記憶（entries / revisions / critiques / lessons / workshop action-result records） |
 | `dogido_server/episode_log.py` | 非重複イベント1件につき1行の評価用決定記録。`.dogido_memory/eval/episodes.jsonl`（会話・川柳記憶とは別） |
 | `dogido_server/assist/` | 型付きの限定世界操作。明示registry・AUTO/CONFIRM/DENY gate・現在snapshotのavailable・`select_sword`。LLM toolsではない |
 | `dogido_server/player_input/` | 正規化・`直し:`・ガード・現在語彙だけのSTT音近傍補正 |
@@ -63,6 +64,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - LLM に「今パニックすべきか」を委ねない
 - leaf 失敗時はカタログ fallback がある前提を壊さない
 - AI 出力から直接 close / lesson解除 / revision保存しない。評価極性・評価範囲・終了scope・enum・行概念ID・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
+- 通常workshopの自然な相談は、一つの有界stepが現在句・pending・直近対話から `respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / accept_pending / reject_pending / close_workshop / unrelated` の次手を選べる。読み・音数・出典はコードの実検査後だけ断言し、修正検証後の再判断は一度だけ。句正本・編集対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード所有を維持する。局所編集・採否・終了は音声認識原文にも行為を示す連続evidenceがあることを必須とし、疑問・否定・条件・引用・伝聞をコードで棄却する。同じ発話の採否＋終了は各意思をそれぞれ検証して一つのtransactionとして実行する
 - workshop・assist等の structured 出力は kind ごとに `structured_contracts.py` の現行外形を通す。自動川柳の `haiku_draft` / `haiku_irony` / `haiku_scene` / `haiku_line_grounding` / `haiku_line_regeneration` は、2026-08-16完成版のドメイン検査を正とし、欠けた行の個別再照合と最大6回の内容再生成を途中の共通schemaで打ち切らない。新kind追加時は呼出箇所・prompt例・fallback・consumer・テストを同時に揃える
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する。剣支援の実測誤変換 `県に持ち替え/変えて/ハインコ（変更）/チェンに変更` は voice-only・操作語直結の閉じた規則で解釈面だけ補正し、typed・単独の候補語・その語の会話は対象外
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
@@ -122,7 +124,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 1. 観測 materials をプレイヤー視界に近づける  
 2. 外したあとも関係を壊さない（workshop / soft）  
-3. 飛び道具（VLM 常時 / Vector RAG / workshop 全域の LLM 制御）は後回し
+3. 飛び道具（VLM 常時 / Vector RAG / 状態・保存まで含む汎用エージェント化）は後回し
 
 → [docs/companion-maturity.md](docs/companion-maturity.md)
 
@@ -130,15 +132,16 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 ## 4. よく触るドメイン詳細
 
-### 川柳 workshop（H1–H5.2 + H7-lite / 修正案1本 / 連続局所編集 / 戦闘中断）
+### 川柳 workshop（H1–H5.2 + H7-lite + H9 / 検証付き共同編集 / 連続局所編集 / 戦闘中断）
 
 - pin: `SessionInfo.haiku_workshop`（会話 5 往復とは別）
 - open: 発句後 / close: drift・timeout・praise・完成三行のformal/conversational revise・自然な終了意図・次の句。pending案の明示採用は現在句へ昇格してopen維持
-- 意図: clear_lessons / 固定規則に一致する明示praise / 完成三行revision / 明示reading と代表的なclose fallbackはコードが正。それ以外の自然文は常駐する会話モデルの閉じたschemaでintent・対象行・断片・problem・句評価・終了scopeを抽出し、コードが永続化と実行条件を決める。句全体へのpositive評価は即closeせずコード固定の終了確認、negative／mixedは共同編集者へ改善方向を一問だけ尋ねさせる。終了はscopeがworkshop全体または次の句、発話中evidenceあり、confidence 0.85以上の場合だけコードが実行する
+- 進行: clear_lessons / 固定規則に一致する明示praise / 完成三行revision / 明示reading と代表的なclose・pending採否はコードの速い経路。それ以外の自然文は常駐する会話モデルが現在句・未採用案・直近対話・当該ターンの実検査結果をまとめて読み、説明・質問・検査・提案・比較等から一手を選ぶ。構造不正・低信頼・棄権時は旧intent/evaluation/pending分類器へ戻す。close／採否／局所編集は今回発話の連続evidence、confidence 0.85以上、疑問・否定・条件・引用・伝聞でないこと、現在pending、CASをコード検証して初めて実行する。`unrelated` は同じ入力を通常雑談へ渡し、既存の二回driftへ参加させる
+- ループ: 説明だけなら一手で返す。`inspect` は読み／音数／保存済み出典をコード測定して一度だけ再計画する。`propose_revision` は既存editorの最大2回検証を使い、結果コードを見せて一度だけ返答を再計画するが、同じplayer turnでeditorを再実行しない。発話は実行済み観測にない保存・採用・修正・音数・出典を断言できない
 - 意味説明後の納得: `ask_meaning` 返答後だけ会話段階を保持し、「そうなんだ」等の意味的ackを会話モデルで抽出する。ackターンはfinding・critique・lessonへ流さずコード固定の終了確認へ進み、次の肯定でclose、続行意思ならopenへ戻す
 - `request_repair`: 会話モデルが高信頼に修正要求を抽出し、コードが検証済みfindingを確定できたときだけ、大きいhaiku routeが `expected_text` / `replacement_text` つき差分で修正。コードが元行一致・対象外不変を確認し、別structured評価で意味保持・自然さを照合、出典ID・重複・音数・発句時hard制約を検証。不合格理由と案を次の試行へ返し、同一案は評価前に棄却する。案は採用まで保存せず、採用時にも同じ元句へ適用できるか再確認する。提示文は句本文・採用案内をコード固定し、前置き一言だけ共同編集者leaf
 - プレイヤー局所編集: 三行は安定ID `line_1/2/3`、概念番号1/2/3、配列index 0/1/2、位置upper/middle/lower、正規名上五/中七/下五を持つ。各行は表示表記・確定ひらがな読み・出典・provenanceも同じオブジェクトに持ち、表記と読みを別の句にしない。自然な提案では会話モデルが「上の句」「二の句」「真ん中」「後ろのパート」等をこの概念へ対応させ、発話中の行呼称evidence・置換語・句中target fragmentを抽出する。コードが既知呼称・finding・fragmentとの衝突と一意性を検証し、従来の閉じた文字列解析は利用不可・低信頼時のfallbackに限る。finding／明示行／検証済み行概念／一意なfragmentに加え、「旧句より新句」の発話中にある現在句の一行でも対象を固定する。句フレーズ指定はSTTが漢字化しても読みへ戻し、現在の三行へ一意に一致するときだけ採用する。コードでひらがな化・正確な5/7/5音・hard制約・重複を検査し、対象行の表示と読みを同時に置換して未保存三行へ連続CASする。AIが発話にない語を補作したら捨てる。本文・現在句照会はLLMに生成させない。意味質問は保存済み出典を手がかりに、句・当時の材料・見どころ・直近対話を会話モデルが比較して説明する。対応や前の説明の取り違えは認めるが、句・出典記録を自動で書き換えず、不明な意味や由来を作らない。現在はプレイヤーの呼称を訂正せず、生の呼称・正規名・概念IDを将来learning版のフックとしてログへ残す
-- pending採否: 常駐する会話モデルの専用schemaで accept / reject / modify / show / discuss 等と終了意図を別々に意味抽出。confidence・evidence・現在pending・CASをコード検証し、`accept+close` は保存後、`reject+close` は破棄後にcloseする。採否なしのclose要求はコード固定文で確認する。利用不可時は代表的な完全一致規則へfallback。closeを伴わない採用後は句を次の基準へ昇格しpinを維持
+- pending採否: 通常は同じ共同編集stepが採用／破棄／比較／継続を選び、利用不可時だけ旧pending専用schemaへfallbackする。採否を示す原文中evidence・confidence・現在pending・CASをコード検証し、`accept+close` は保存後、`reject+close` は破棄後にcloseする。採否なしのclose要求はコード固定文で確認する。closeを伴わない採用後は句を次の基準へ昇格しpinを維持
 - 戦闘中断: visual／auditory脅威・直近被弾で句とpendingを保持したままpauseし、workshop用ASR補正・timeout・driftを止める。通常敵はadapterの論理サーバー死亡イベント／クライアント死亡状態／実爆発パケットを使い、プレイヤー撃破／爆発死／その他死亡／クリーパー爆散／離脱で復帰文を分ける。死亡音・経験値・攻撃履歴・観測範囲からの消失だけではプレイヤー撃破扱いにしない。死亡は `hostile_defeated`、爆散は `creeper_detonated` で即時に一度だけ反応し、後の `combat_ended` は安全確認の安堵へ分ける。導火開始と通常／帯電クリーパー爆散は慌て方を変え、一度話した個体IDは後の敵離脱へ持ち越さない。戦闘音声後の静かなnormalフレームで三行を再掲して継続確認する。中断中発話はOS／端末内AI優先（失敗時はchat fallback）で `resume_workshop / workshop_input / close_workshop / unrelated / uncertain` だけを根拠つき抽出し、全AIが利用不可・低信頼・不正出力のときだけ閉じた規則へfallbackする。安全判定と実際の再開／closeはコード。単独敵が8秒以上非接近・無被弾でも、再開意思を確定できたときだけ暫定再開。再接近・被弾・敵数／個体変化で即pause
 - 自然文直し: `extract_conversational_revise`
 - 明示緩め: `wants_clear_haiku_lessons`（workshop 外でも可）
@@ -234,6 +237,8 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
+- 2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・未採用案・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合。説明／質問／読み・音数・出典検査／修正提案／比較／表示／局所編集／採否／終了から一手を選び、検査・editor結果後は一度だけ返答を再判断する。同一turnのeditor再実行、未実行の成功断言、直接の正本・pending・保存変更は禁止。正本、行対象、CAS、音数、hard制約、採否、保存、戦闘中断はコード。局所編集・採否・終了は音声認識原文中の行為evidenceを必須にし、疑問・否定・条件・引用・伝聞を棄却する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談の返答が成立した同じ入力だけを二回driftへ数える。初手不成立は旧分類器、実観測後はコード固定fallbackへ戻す。相談目的・action・outcome・checks・validation code・発話evidence・原文／解釈・正本／pending前後だけを`haiku_workshop_turns.jsonl`へ残し、思考文・agent speech・長期会話は保存／常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
+
 - 2026-09-11通常雑談の一回再考: `player_chat` の旧い広域禁止語から自然な「ドギド」自己言及・謝罪・「例」「本番」と表面上の方言差を外した。無害な `ドギド:` 話者ラベルは除去して採用する。最初の候補が外形またはgrounding検査に落ちた場合だけ、同じ会話へ候補とコード由来の理由を返し、意味と人格を残した言い直しを最大1回生成する。二案目も危険助言・未観測名・現在嗅覚の補作・突き放し・移動方針衝突を再検査し、再不合格なら従来どおり固定fallback。不合格案は履歴・状態・保存へ入れず、結果をログで区別する。**コード・全Python自動テスト済み。ローカルQwenの独立テキスト試験で、英語ラベル混入と未観測嗅覚の二経路は一回再考後に採用、warm時の追加生成は各約0.7秒。実Minecraft・実TTS・長時間の採用率／自然さは未確認。**
 
 - 2026-09-11スメルバトル: Fabricが実近接源・hotbar 9slot・現在バイオーム・温度・天候を閉じた規則で競わせ、`smell_observation` の `none / present / suppressed` 一件へ解決する。同種非加算、分類tie、腐った肉によるゾンビmask、温度減衰、焚き火の実調理slot、雨上がり180秒、雨雪雷・水中抑止をコードで確定。serverは2観測安定後、同状態一度＋全体2分クールダウンの固定文だけを話す。方向・距離・個数・entity IDは渡さず、匂い単独でcombat／panic／alert／workshop pauseへ入れない。旧 `zombie_scent_clues` は移行互換。1.21.11に実IDがない硫黄ブロック・金のタンポポは保留。**コード・Python/Java自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。** [詳細](docs/smell-policy.md)。
@@ -272,7 +277,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 - 2026-09-05: 一句専用4往復＋見どころ・材料・行別照合・修正結果の共通文脈、再試行への不合格案と具体的コメントの受け渡しは **コード・自動テスト済み**。通常会話は既存5往復で訂正・困惑に答え直す方針を追加。生成回数・採用・保存・戦闘優先は維持。意味説明もユーザー承認のうえ既存の共同編集者leafへ移し、保存済み対応と材料・見どころ・対話を比較する。出典記録は自動変更せず、生成失敗時も旧材料名固定文へ戻さない。実モデルの品質・速度、音声は未確認。
 
-- workshop H1〜H5.2 + H7-lite + 修正案1本 + 連続局所編集 + 戦闘中断: **済**（soft lesson / loosen / TTL / 明示「気にせんで」/ 常駐会話モデルの限定 intent・findings・句評価・行呼称→`line_1/2/3`・一行置換・pending採否・自然な終了意図、OS AI優先は戦闘中断中の再開／終了意思抽出のみ / AIのLocate→Edit→Test / プレイヤー語のひらがなCAS / 採用後も継続 / 戦闘中は句とpendingを保持してpause→コード安全確認後に再掲・継続確認。通常敵もプレイヤー撃破／爆発死／その他死亡／クリーパー爆散／離脱を分離し、戦闘結果は一回消費）
+- workshop H1〜H5.2 + H7-lite + H9検証付き共同編集 + 連続局所編集 + 戦闘中断: **済**（現在句・pending・直近対話から相談目的と次手を一つ選び、必要時だけ読み／音数／出典を実検査、既存editor検証結果を見て一度だけ返答を再判断。実行したstepと検証結果を`haiku_workshop_turns.jsonl`へ有界記録するが思考文は保存・常時注入しない。soft lesson / loosen / TTL / 行概念→`line_1/2/3` / ひらがなCAS / 明示採用後も継続 / 状態・保存・戦闘安全はコード。戦闘中は句とpendingを保持してpauseし、通常敵の撃破／死亡／爆散／離脱も分離）
 - H1.1 materials 厚み（motifs/held/nearby + 全インベントリからの代表候補 + short candidates + fragment_links）: **済**（#28 phase 0–1）。周辺ブロック・落下物・手持ち・所持品を背景より優先し、空が見えない場面では対話・川柳とも時刻／天候と非洞窟バイオームを投影しない。直近の実破壊＋採掘道具を主根拠に「採掘中」、静止環境だけなら「坑道らしい場所」と分ける
 - H6 materials 固定語: **撤回**  
 - 雑談 P1〜P5 + 現在ターン予定／安全方針: **済**（帰宅予定は現在発話だけ、地表夕方／雷雨は毎フレーム導出、洞窟オフ）
@@ -289,6 +294,6 @@ player テキスト注入（開発用・**アクティブセッション必須**
 - エピソード決定記録 A: 非重複イベントごとに発話あり／なしを `eval/episodes.jsonl` へbest-effort追記 **済**（記憶へは混ぜない）
 - 支援 B/C `select_sword`: hotbar 0〜8実測 + 実行capability分離 + game-event応答のtyped command + Fabricメインスレッド再検証 + result/ack + episode相関まで **コード・自動テスト・Minecraft実機確認済み**（2026-08-16。自動持ち替え・救助・馬は未）
 - 完成度の次の本丸: **観測 materials の解像度**（水辺・旗など。地下での地表背景抑止・落下物・採掘文脈は済）
-- 任意: 戦闘中断用 OS AI・chat fallback、通常workshop抽出・修正案の実ログ評価、Phase E 整理、VLM、TTS 読み Phase 3 実測、5-7-5 分割読み
+- 任意: 戦闘中断用OS AI・chat fallback、通常workshop agent・修正案の実ログ評価、Phase E整理、VLM、TTS読みPhase 3実測、5-7-5分割読み
 
 更新したらこの節と `companion-maturity.md` §6 を揃える。

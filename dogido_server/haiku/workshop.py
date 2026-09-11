@@ -394,6 +394,9 @@ class RecentHaikuWorkshop:
     dialogue: DialogueContext = field(default_factory=lambda: DialogueContext(
         max_utterances=8, max_digest_notes=0, max_text_chars=320,
     ))
+    # 共同編集エージェントの観察可能な行動結果。思考文は持たず、
+    # action / outcome / validation code だけを有界に保持する。
+    agent_steps: list[dict[str, object]] = field(default_factory=list)
     last_repair_feedback: dict[str, object] = field(default_factory=dict)
     pending_revision: str | None = None
     pending_revision_surface_text: str | None = None

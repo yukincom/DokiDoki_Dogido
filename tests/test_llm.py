@@ -46,6 +46,16 @@ class LLMTests(unittest.TestCase):
             "今日は静かでええな。",
         )
 
+    def test_clean_output_preserves_leading_quote_when_sentence_continues(self) -> None:
+        self.assertEqual(
+            self.llm._clean_output("「ひつじがあるく」は、春の風の情景や。"),
+            "「ひつじがあるく」は、春の風の情景や。",
+        )
+        self.assertEqual(
+            self.llm._clean_output("「返答全体や。」"),
+            "返答全体や。",
+        )
+
     def test_short_or_meta_output_is_rejected(self) -> None:
         self.assertFalse(self.llm._is_usable_output("ドギド"))
         self.assertFalse(self.llm._is_usable_output("例1: こわい"))

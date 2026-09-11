@@ -144,6 +144,7 @@ class MemoryStore:
         self.haiku_entries_path = self.long_term_dir / "haiku_entries.jsonl"
         self.haiku_revisions_path = self.long_term_dir / "haiku_revisions.jsonl"
         self.haiku_critiques_path = self.long_term_dir / "haiku_critiques.jsonl"
+        self.haiku_workshop_turns_path = self.long_term_dir / "haiku_workshop_turns.jsonl"
         self.haiku_lessons_path = self.long_term_dir / "haiku_lessons.jsonl"
         self.catalog_corrections_path = self.long_term_dir / "catalog_corrections.jsonl"
         self.player_profile_path = self.long_term_dir / "player_profile.json"
@@ -398,6 +399,62 @@ class MemoryStore:
             "session_id": session_id,
         }
         self._append_jsonl(self.haiku_critiques_path, row)
+        return row
+
+    def save_haiku_workshop_turn(
+        self,
+        *,
+        entry_id: str | None,
+        player_text: str,
+        semantic_player_text: str | None = None,
+        base_verse: str,
+        pending_before: str | None,
+        pending_after: str | None,
+        steps: list[dict[str, Any]],
+        observed_at: datetime | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """共同編集ループの行動と検査結果を保存する（思考文は保存しない）。"""
+
+        created_at = observed_at or datetime.now().astimezone()
+        bounded_steps: list[dict[str, Any]] = []
+        allowed_fields = (
+            "phase",
+            "action",
+            "purpose",
+            "outcome",
+            "validation_codes",
+            "checks",
+            "evidence",
+            "close_after_action",
+            "close_evidence",
+        )
+        for raw in steps[-6:]:
+            if not isinstance(raw, dict):
+                continue
+            bounded_steps.append(
+                {
+                    key: raw.get(key)
+                    for key in allowed_fields
+                    if key in raw
+                }
+            )
+        row = {
+            "schema_version": "1",
+            "id": f"hwturn_{created_at.strftime('%Y%m%dT%H%M%S')}_{uuid4().hex[:8]}",
+            "created_at": datetime_json(created_at),
+            "entry_id": entry_id,
+            "player_text": (player_text or "").strip()[:240],
+            "semantic_player_text": (
+                semantic_player_text if semantic_player_text is not None else player_text
+            ).strip()[:240],
+            "base_verse": (base_verse or "").strip()[:240],
+            "pending_before": (pending_before or "").strip()[:240] or None,
+            "pending_after": (pending_after or "").strip()[:240] or None,
+            "steps": bounded_steps,
+            "session_id": session_id,
+        }
+        self._append_jsonl(self.haiku_workshop_turns_path, row)
         return row
 
     def save_haiku_lesson(

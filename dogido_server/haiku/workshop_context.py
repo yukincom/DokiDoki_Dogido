@@ -68,6 +68,8 @@ def workshop_context_details(workshop: RecentHaikuWorkshop) -> dict[str, Any]:
         ],
         "recent_dialogue": workshop.dialogue.prompt_blocks()["conversation_history"],
         "last_findings": deepcopy(workshop.last_findings[:3]),
+        # 内部思考ではなく、直近に実行・検証した一手だけを次の判断へ返す。
+        "recent_agent_steps": deepcopy(workshop.agent_steps[-6:]),
     }
     # 別の版に対する失敗を、最新版への検査結果として見せない。
     if workshop.last_repair_feedback.get("base_text") == workshop.display_line():

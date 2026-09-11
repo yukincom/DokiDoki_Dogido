@@ -86,15 +86,25 @@ def clean_output(text: str | None) -> str:
             continue
         if re.match(r"^(Role|Persona|Analyze User Input)\s*[:：]", line, flags=re.IGNORECASE):
             continue
-        candidates.append(line.strip("「」\"' "))
+        candidates.append(_strip_wrapping_quotes(line))
 
     if not candidates:
-        return lines[0].strip("「」\"' ")
+        return _strip_wrapping_quotes(lines[0])
 
     japanese_candidates = [line for line in candidates if looks_japanese_forward(line)]
     if japanese_candidates:
         return japanese_candidates[-1]
     return candidates[-1]
+
+
+def _strip_wrapping_quotes(text: str) -> str:
+    """返答全体を包む引用符だけを外し、文中引用の片側を壊さない。"""
+
+    stripped = text.strip()
+    for opening, closing in (("「", "」"), ("『", "』"), ('"', '"'), ("'", "'")):
+        if len(stripped) >= 2 and stripped.startswith(opening) and stripped.endswith(closing):
+            return stripped[len(opening) : -len(closing)].strip()
+    return stripped
 
 
 def is_usable_output(text: str, details: dict[str, Any] | None = None) -> bool:

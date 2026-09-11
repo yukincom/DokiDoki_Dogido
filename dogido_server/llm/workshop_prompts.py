@@ -9,10 +9,125 @@ player_chat のサバイバル材料（look / topic / 所持）は載せない�
 
 from __future__ import annotations
 
+import json
+
 from dogido_server.haiku.workshop_context import workshop_context_block
 
 from .prompt_common import detail_str, leaf_dialog
 from .types import LeafGenerationRequest
+
+
+def build_haiku_workshop_agent_step_messages(
+    details: dict[str, object],
+) -> list[dict[str, str]]:
+    """現在句・pending・会話・実検査結果から、共同編集の次の一手を選ぶ。"""
+
+    allowed_actions = "、".join(
+        str(value) for value in details.get("allowed_actions", []) if value
+    )
+    allowed_purposes = "、".join(
+        str(value) for value in details.get("allowed_purposes", []) if value
+    )
+    allowed_checks = "、".join(
+        str(value) for value in details.get("allowed_checks", []) if value
+    )
+    allowed_problems = "、".join(
+        str(value) for value in details.get("allowed_problem_types", []) if value
+    )
+    observation = details.get("tool_observation")
+    observation_text = (
+        json.dumps(observation, ensure_ascii=False)
+        if isinstance(observation, dict)
+        else "（まだ検査していない）"
+    )
+    turn_steps = details.get("turn_steps")
+    turn_steps_text = (
+        json.dumps(turn_steps, ensure_ascii=False)
+        if isinstance(turn_steps, list) and turn_steps
+        else "（このターンではまだ一手も実行していない）"
+    )
+    line_concepts = json.dumps(details.get("line_concepts") or [], ensure_ascii=False)
+    player_text = str(details.get("player_text") or "").strip()
+    original_player_text = str(
+        details.get("original_player_text") or player_text
+    ).strip()
+    prompt = (
+        "川柳ワークショップの共同編集者として、相談の流れを読み、次の一手を一つだけ選ぶ。"
+        "長い思考文は返さず、指定JSONだけを返す。句・pending・保存・終了を自分で変更しない。\n"
+        "現在句、未採用案、直近対話、今の発話を一緒に読み、以前の同意を今回の操作根拠にしない。"
+        "tool_observationがあれば、実際に完了した検査結果として優先し、できていないことを"
+        "できたと言わない。\n\n"
+        "action:\n"
+        "- respond: 感想や訂正を受け止め、短く返す\n"
+        "- explain: 句の意味・言葉・由来を、記録済み材料と解釈の範囲で説明する\n"
+        "- ask: 目的、対象行、好みなど一つ不足している点を尋ねる\n"
+        "- inspect: 読み、音数、出典のうち必要な事実をコードへ確認する\n"
+        "- propose_revision: 指摘箇所を特定できたとき、検証付き修正案をコードへ依頼する\n"
+        "- compare: 元句と未採用案を比較し、採否はプレイヤーに残す\n"
+        "- show_current: 現在の編集対象三行をそのまま見せる\n"
+        "- stage_player_edit: プレイヤー自身が発話内で示した一行だけを未採用案にする\n"
+        "- accept_pending / reject_pending: 未採用案への明確な採否だけ\n"
+        "- close_workshop: 相談全体を終える明確な意思だけ\n"
+        "- unrelated: 明確に句と無関係な話\n"
+        "- defer_to_legacy: どの一手も確信できない\n\n"
+        "inspectではchecksに必要な項目だけを入れ、speechは空。検査後に結果を見て次を選ぶ。"
+        "propose_revisionでは現在句に実在する断片と問題をfindingsへ入れ、speechは空。"
+        "曖昧な『直して』だけならaskを選ぶ。"
+        "stage_player_editはreplacement_textをプレイヤー発話から、target_fragmentを現在句から"
+        "そのまま抜き、line_referenceも発話根拠つきで返す。補作は禁止。"
+        "accept/reject/closeは条件付き、疑問、引用、伝聞、否定では選ばない。\n"
+        "未採用案への明確な採用または却下と、相談終了の両方が今回の発話にある場合だけ、"
+        "close_after_action=trueにし、採否をevidence、終了をclose_evidenceでそれぞれ示す。"
+        "一つの短い連続部分に両方の意思が含まれる場合は、二つのevidenceが重なってもよい。"
+        "それ以外はfalseかつclose_evidenceは空にする。\n"
+        "respond/explain/ask/compareだけspeechへ自然な関西弁の一文を書く。"
+        "speechは120字以内で、内部ID、検査していない数値、未実行の修正・採用・保存を言わない。"
+        "confidenceは例の値を写さず、今回の判断への実際の確信度を返す。"
+        "会話の一手は0.72以上、採否・終了・局所編集は0.85以上のときだけ選び、"
+        "そこまで確信できなければdefer_to_legacyにする。"
+        "after_validationでrevision_validationがrejectedなら、既に分かっている対象を聞き直さず、"
+        "validation_codesが示す実理由を踏まえて、次に必要な好みだけを尋ねるか元句維持を伝える。"
+        "それ以外のactionではspeechを空にする。evidenceは今回のプレイヤー発話の連続部分を"
+        "一字も補わずコピーする。局所編集・採用・破棄・終了では、音声解釈で補われた語を"
+        "操作根拠にせず、音声認識原文にも存在する連続部分だけをevidenceにする。"
+        "findingsがなければ空配列にする。\n\n"
+        f"段階: {details.get('phase') or 'decide'}\n"
+        f"会話状態: {details.get('conversation_stage') or 'discussion'}\n"
+        f"確定済みの元句:\n{details.get('canonical_verse') or '（句なし）'}\n"
+        f"現在の編集対象:\n{details.get('working_verse') or '（句なし）'}\n"
+        f"未採用案:\n{details.get('pending_verse') or '（なし）'}\n"
+        f"今回のプレイヤー発話（会話理解用）: {player_text or '（聞き取れなかった）'}\n"
+        f"音声認識原文（状態変更の根拠）: {original_player_text or '（聞き取れなかった）'}\n"
+        f"このターンの実行済み一手: {turn_steps_text}\n"
+        f"コードから返った実検査結果: {observation_text}\n"
+        f"行概念: {line_concepts}\n"
+        f"{workshop_context_block(details)}"
+        f"許可action: {allowed_actions}\n"
+        f"許可purpose: {allowed_purposes}\n"
+        f"許可checks: {allowed_checks}\n"
+        f"許可problem: {allowed_problems}\n\n"
+        "JSON形式: {"
+        '"action":"ask","purpose":"improve_wording","confidence":0.90,'
+        '"evidence":"発話の連続部分","speech":"短い一文","checks":[],'
+        '"close_after_action":false,"close_evidence":"",'
+        '"findings":[{"line_index":1,"fragment":"現在句の断片",'
+        '"problem":"unnatural_japanese","note":"短い指摘","confidence":0.90}],'
+        '"line_reference":{"found":false,"concept_id":"unknown",'
+        '"evidence":"","confidence":0.0},'
+        '"line_proposal":{"found":false,"target_fragment":"",'
+        '"replacement_text":"","evidence":"","confidence":0.0}}。'
+        "説明文、コードフェンス、追加キーは禁止。"
+    )
+    return [
+        {
+            "role": "system",
+            "content": (
+                "あなたは検証付き川柳ワークショップの共同編集者。"
+                "会話の次の一手を選ぶが、状態変更や保存はしない。返答はJSONだけ。"
+            ),
+        },
+        {"role": "user", "content": prompt},
+    ]
 
 
 def build_haiku_workshop_intent_messages(details: dict[str, object]) -> list[dict[str, str]]:

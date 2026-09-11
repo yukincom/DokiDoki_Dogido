@@ -225,6 +225,39 @@ class StructuredContractTests(unittest.TestCase):
                 },
                 {},
             ),
+            "haiku_workshop_agent_step": (
+                {
+                    "action": "ask",
+                    "purpose": "improve_wording",
+                    "confidence": 0.9,
+                    "evidence": "どの行を直そう",
+                    "speech": "どの行を一緒に直そか？",
+                    "checks": [],
+                    "close_after_action": False,
+                    "close_evidence": "",
+                    "findings": [],
+                    "line_reference": {
+                        "found": False,
+                        "concept_id": "unknown",
+                        "evidence": "",
+                        "confidence": 0.0,
+                    },
+                    "line_proposal": {
+                        "found": False,
+                        "target_fragment": "",
+                        "replacement_text": "",
+                        "evidence": "",
+                        "confidence": 0.0,
+                    },
+                },
+                {
+                    "player_text": "どの行を直そうか迷うな",
+                    "allowed_actions": ["ask"],
+                    "allowed_purposes": ["improve_wording"],
+                    "allowed_checks": ["reading", "meter", "source"],
+                    "allowed_problem_types": ["other"],
+                },
+            ),
             "haiku_workshop_intent": (
                 {
                     "intent": "soft_default",
@@ -348,6 +381,45 @@ class StructuredContractTests(unittest.TestCase):
         )
         self.assertFalse(duplicate.accepted)
         self.assertFalse(unknown.accepted)
+
+    def test_workshop_agent_contract_rejects_mutation_purpose_mismatch(self) -> None:
+        result = validate_structured_payload(
+            "haiku_workshop_agent_step",
+            {
+                "action": "accept_pending",
+                "purpose": "review_pending",
+                "confidence": 0.95,
+                "evidence": "その案で",
+                "speech": "",
+                "checks": [],
+                "close_after_action": False,
+                "close_evidence": "",
+                "findings": [],
+                "line_reference": {
+                    "found": False,
+                    "concept_id": "unknown",
+                    "evidence": "",
+                    "confidence": 0.0,
+                },
+                "line_proposal": {
+                    "found": False,
+                    "target_fragment": "",
+                    "replacement_text": "",
+                    "evidence": "",
+                    "confidence": 0.0,
+                },
+            },
+            details={
+                "player_text": "その案で",
+                "allowed_actions": ["accept_pending"],
+                "allowed_purposes": ["adopt_pending", "review_pending"],
+                "allowed_checks": ["reading", "meter", "source"],
+                "allowed_problem_types": ["other"],
+            },
+        )
+
+        self.assertFalse(result.accepted)
+        self.assertIn("purpose:action_mismatch", result.errors)
 
 
 if __name__ == "__main__":

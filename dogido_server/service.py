@@ -38,6 +38,15 @@ from dogido_server.haiku.combat_pause import (
     update_workshop_combat_state,
 )
 from dogido_server.haiku.materials import material_context_visible
+from dogido_server.haiku.workshop_agent import (
+    WorkshopAgentStep,
+    build_workshop_agent_details,
+    finalize_workshop_agent_step,
+    inspect_workshop,
+    record_workshop_agent_step,
+    workshop_mutation_evidence_is_valid,
+    workshop_player_edit_is_grounded_in_original,
+)
 from dogido_server.haiku.workshop import (
     PendingRevisionAnalysis,
     PlayerLineReplacement,
@@ -2191,7 +2200,9 @@ class DogidoService:
         route_override: str = "",
     ) -> bool:
         route = route_override if route_override in {"casual", "learning"} else ""
-        if not route and self._is_general_conversation_input(session, player_input):
+        if not route and any(action.route_owner == "player_chat" for action in actions):
+            route = "casual"
+        elif not route and self._is_general_conversation_input(session, player_input):
             route = "casual"
         elif (
             player_input.knowledge_query is not None
@@ -3009,7 +3020,10 @@ class DogidoService:
 
         actions = self._respond_to_workshop_input(session, event)
         replies = [action.text for action in actions if action.layer == "speech" and action.text]
-        if replies:
+        released_to_player_chat = any(
+            action.route_owner == "player_chat" for action in actions
+        )
+        if replies and not released_to_player_chat:
             # 実際に選んだ返答だけを履歴へ。保留入力・知識質問・戦闘発話は混ぜない。
             recorded_input = text if text == semantic_text else f"{text}（聞き取りの解釈: {semantic_text}）"
             workshop.dialogue.add_player(recorded_input, at=event.observed_at)
@@ -3107,6 +3121,47 @@ class DogidoService:
         speech_materials = materials_speech_line(workshop)
         debug_materials = materials_debug_line(workshop)
 
+        # 明示保存・採否・終了と既存のfollow-up状態はコードの速い経路を維持する。
+        # それ以外の自然な句相談は、現在句・pending・対話をまとめて読む
+        # 有界な共同編集エージェントへ先に渡す。利用不可／棄権時だけ下の
+        # 旧分類器と定型分岐へ戻る。
+        agent_rule_kind = workshop_open_intent(
+            text,
+            verse=verse,
+            player_input=player_input,
+        )
+        agent_fast_path = bool(
+            conversational
+            or wants_show_workshop_verse(text)
+            or (workshop.pending_revision and pending_revision_decision(text) is not None)
+            or (
+                not workshop.pending_revision
+                and agent_rule_kind in {"close", "praise"}
+            )
+            or (
+                workshop.awaiting_meaning_ack
+                and is_meaning_acknowledgement(text)
+            )
+            or (
+                workshop.awaiting_close_confirmation
+                and close_confirmation_decision(text) is not None
+            )
+        )
+        if (
+            self.settings.llm_enabled
+            and self.settings.haiku_workshop_agent_enabled
+            and agent_rule_kind is not None
+            and not agent_fast_path
+        ):
+            agent_actions = self._try_workshop_agent_turn(
+                session,
+                event,
+                player_text=semantic_text,
+                raw_player_text=text,
+            )
+            if agent_actions is not None:
+                return agent_actions
+
         # AI生成案は自動保存しない。自然文の意味は常駐する chat LLM で
         # 閉じた action に変換し、現在pendingとの整合と保存・破棄はコードで扱う。
         if workshop.pending_revision:
@@ -3118,7 +3173,31 @@ class DogidoService:
                 "accept_pending": "accept",
                 "reject_pending": "reject",
             }.get(pending_analysis.action)
-            semantic_close_requested = pending_analysis.close_request is not None
+            mutation_action = {
+                "accept": "accept_pending",
+                "reject": "reject_pending",
+            }.get(semantic_decision or "")
+            if mutation_action is not None and not workshop_mutation_evidence_is_valid(
+                mutation_action,
+                player_text=text,
+                evidence=pending_analysis.evidence,
+            ):
+                LOGGER.warning(
+                    "haiku_workshop_pending_decision result=rejected "
+                    "reason=unsafe_original_evidence action=%s evidence=%s raw=%s",
+                    mutation_action,
+                    pending_analysis.evidence[:80],
+                    text[:100],
+                )
+                semantic_decision = None
+            semantic_close_requested = bool(
+                pending_analysis.close_request is not None
+                and workshop_mutation_evidence_is_valid(
+                    "close_workshop",
+                    player_text=text,
+                    evidence=pending_analysis.close_request.evidence,
+                )
+            )
             # chat LLM が使えないときも、代表的な明示形だけは従来の
             # closed fullmatch で扱えるようにする。
             decision = semantic_decision or pending_revision_decision(text)
@@ -3330,7 +3409,21 @@ class DogidoService:
             if effective_kind == "request_repair" and not analysis.repair_requested:
                 effective_kind = "other_haiku"
             if analysis.close_request is not None:
-                if analysis.line_proposal is None and not analysis.repair_requested:
+                close_evidence_valid = workshop_mutation_evidence_is_valid(
+                    "close_workshop",
+                    player_text=text,
+                    evidence=analysis.close_request.evidence,
+                )
+                if not close_evidence_valid:
+                    LOGGER.warning(
+                        "haiku_workshop_close_request session_id=%s result=rejected "
+                        "reason=unsafe_original_evidence path=%s evidence=%s raw=%s",
+                        session.session_id,
+                        intent_path,
+                        analysis.close_request.evidence[:80],
+                        text[:100],
+                    )
+                elif analysis.line_proposal is None and not analysis.repair_requested:
                     semantic_close_accepted = True
                     effective_kind = "close"
                     LOGGER.warning(
@@ -3482,6 +3575,18 @@ class DogidoService:
                 and not semantic_evaluation_needs_revision
                 and not semantic_evaluation_unresolved
             ):
+                if not workshop_player_edit_is_grounded_in_original(analysis, text):
+                    LOGGER.warning(
+                        "haiku_workshop_line_proposal session_id=%s result=rejected "
+                        "reason=not_in_original path=%s evidence=%s raw=%s",
+                        session.session_id,
+                        intent_path,
+                        analysis.line_proposal.evidence[:80],
+                        text[:100],
+                    )
+                    analysis_line_proposal_grounded = False
+                else:
+                    analysis_line_proposal_grounded = True
                 # 自然な置換提案は会話モデルの意味抽出を優先する。上で得た
                 # closed regex の候補は、会話モデルが提案を確定できない場合だけ
                 # fallback として残る。ただし現在句そのものが発話に含まれて
@@ -3510,7 +3615,7 @@ class DogidoService:
                     )
                     if index is not None
                 }
-                if len(target_indices) <= 1:
+                if analysis_line_proposal_grounded and len(target_indices) <= 1:
                     player_line_replacement = PlayerLineReplacement(
                         text=analysis.line_proposal.replacement_text,
                         explicit_line_index=(
@@ -3535,7 +3640,7 @@ class DogidoService:
                         intent_path,
                         analysis.line_proposal.evidence[:80],
                     )
-                else:
+                elif analysis_line_proposal_grounded:
                     LOGGER.warning(
                         "haiku_workshop_line_proposal session_id=%s result=rejected "
                         "reason=line_reference_conflict targets=%s evidence=%s",
@@ -3905,6 +4010,672 @@ class DogidoService:
         )
         return [AudioAction(layer="speech", interrupt=False, text=reply)]
 
+    def _try_workshop_agent_turn(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        *,
+        player_text: str,
+        raw_player_text: str,
+    ) -> list[AudioAction] | None:
+        """自然な相談を、最大三手の検証付き共同編集ループで処理する。"""
+
+        workshop = session.haiku_workshop
+        assert workshop is not None
+        base_verse = workshop.display_line()
+        pending_before = workshop.pending_revision
+        turn_steps: list[dict[str, object]] = []
+        phase = "decide"
+        observation: dict[str, object] | None = None
+        feedback_step: WorkshopAgentStep | None = None
+
+        # 最大は decide -> after_inspection -> after_validation。inspect と editor は
+        # 各一回だけで、同じターンに修正生成を繰り返さない。
+        for _round in range(3):
+            step, path = self._plan_workshop_agent_step(
+                workshop,
+                player_text,
+                raw_player_text=raw_player_text,
+                phase=phase,
+                observation=observation,
+                turn_steps=turn_steps,
+            )
+            if step is None:
+                if not turn_steps:
+                    LOGGER.warning(
+                        "haiku_workshop_agent result=legacy_fallback reason=%s player=%s",
+                        path,
+                        player_text[:100],
+                    )
+                    return None
+                failure_code = f"agent_step_{path}"[:80]
+                previous_codes = turn_steps[-1].setdefault("validation_codes", [])
+                if isinstance(previous_codes, list) and failure_code not in previous_codes:
+                    previous_codes.append(failure_code)
+                reply = self._workshop_agent_observation_fallback(workshop, observation)
+                record_workshop_activity(workshop, now=event.observed_at)
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                    feedback_step=feedback_step,
+                )
+                LOGGER.warning(
+                    "haiku_workshop_agent result=code_fallback reason=%s phase=%s player=%s",
+                    path,
+                    phase,
+                    player_text[:100],
+                )
+                return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+            if feedback_step is None and step.action not in {
+                "inspect",
+                "show_current",
+                "accept_pending",
+                "reject_pending",
+                "close_workshop",
+                "unrelated",
+            }:
+                feedback_step = step
+
+            if step.action == "inspect":
+                observation = inspect_workshop(workshop, step.checks)
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome="inspection_completed",
+                    validation_codes=observation.get("validation_codes", []),
+                )
+                turn_steps.append(row)
+                phase = "after_inspection"
+                continue
+
+            if step.action == "propose_revision":
+                repair_analysis = step.analysis
+                if not repair_analysis.findings:
+                    repair_analysis = WorkshopAnalysis(
+                        intent="request_repair",
+                        confidence=step.confidence,
+                        repair_requested=True,
+                        findings=workshop_findings_from_records(workshop.last_findings),
+                    )
+                observation = self._stage_workshop_revision(
+                    workshop,
+                    repair_analysis,
+                )
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome=str(observation.get("status") or "rejected"),
+                    validation_codes=observation.get("validation_codes", []),
+                )
+                turn_steps.append(row)
+                feedback_step = step
+                phase = "after_validation"
+                continue
+
+            if step.action == "stage_player_edit":
+                proposal = step.analysis.line_proposal
+                assert proposal is not None
+                replacement = PlayerLineReplacement(
+                    text=proposal.replacement_text,
+                    explicit_line_index=proposal.line_index,
+                    target_fragment=proposal.target_fragment or None,
+                )
+                result = build_player_line_revision(workshop, replacement)
+                if result.text is None:
+                    row = record_workshop_agent_step(
+                        workshop,
+                        step,
+                        phase=phase,
+                        outcome="player_edit_rejected",
+                        validation_codes=result.failure_reasons,
+                    )
+                    turn_steps.append(row)
+                    reply = self._player_line_revision_failure_reply(result.failure_reasons)
+                else:
+                    workshop.pending_revision = result.text
+                    workshop.pending_revision_surface_text = result.surface_text
+                    workshop.pending_revision_lines = result.lines
+                    workshop.pending_revision_line_sources.clear()
+                    workshop.pending_revision_base_text = result.base_text
+                    workshop.pending_revision_edits = [dict(edit) for edit in result.edits]
+                    workshop.pending_revision_edit_contract = PLAYER_LINE_EDIT_CONTRACT_VERSION
+                    workshop.pending_revision_source = "player_line_confirmed"
+                    workshop.marked_line_index = None
+                    workshop.last_findings.clear()
+                    row = record_workshop_agent_step(
+                        workshop,
+                        step,
+                        phase=phase,
+                        outcome="player_edit_staged",
+                    )
+                    turn_steps.append(row)
+                    # AudioAction.text は表示とTTSを兼ねるため、表記候補ではなく
+                    # コードで確定したひらがな読みを返す（旧局所編集経路と同じ）。
+                    reply = result.text
+                record_workshop_activity(workshop, now=event.observed_at)
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                    feedback_step=step,
+                )
+                return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+            if step.action == "accept_pending":
+                if not pending_revision_is_current(workshop):
+                    clear_pending_revision(workshop)
+                    reply = "元の句と合わんくなったから、案はいったん戻すで。"
+                    outcome = "stale_pending_rejected"
+                    codes = ("stale_edit",)
+                else:
+                    close_after_action = step.close_after_action
+                    reply_actions = self._save_haiku_revision_reply(
+                        session,
+                        event,
+                        workshop.pending_revision or "",
+                        source=workshop.pending_revision_source or "generated_confirmed",
+                        revision_line_sources=list(workshop.pending_revision_line_sources),
+                        revision_edits=list(workshop.pending_revision_edits),
+                        revision_edit_contract=workshop.pending_revision_edit_contract,
+                        revision_base_text=workshop.pending_revision_base_text,
+                        revision_base_surface_text=workshop.display_surface(),
+                        revision_lines=[line.to_dict() for line in workshop.pending_revision_lines]
+                        or None,
+                        parent_revision_id=workshop.current_revision_id,
+                        keep_workshop_open=not close_after_action,
+                    )
+                    reply = reply_actions[0].text or ""
+                    saved = (
+                        session.haiku_workshop is None
+                        if close_after_action
+                        else workshop.pending_revision is None
+                    )
+                    if saved and close_after_action:
+                        clear_pending_revision(workshop)
+                        reply = "元の句と直し、覚えといたで。この句の話はここまでや。"
+                    outcome = (
+                        "pending_saved_and_closed"
+                        if saved and close_after_action
+                        else "pending_saved"
+                        if saved
+                        else "pending_save_failed"
+                    )
+                    codes = () if saved else ("save_failed",)
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome=outcome,
+                    validation_codes=codes,
+                )
+                turn_steps.append(row)
+                record_workshop_activity(workshop, now=event.observed_at)
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                )
+                return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+            if step.action == "reject_pending":
+                clear_pending_revision(workshop)
+                workshop.marked_line_index = None
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
+                if step.close_after_action:
+                    close_workshop(workshop, reason="agent_pending_rejected_close")
+                    session.haiku_workshop = None
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome=(
+                        "pending_rejected_and_closed"
+                        if step.close_after_action
+                        else "pending_rejected"
+                    ),
+                )
+                turn_steps.append(row)
+                record_workshop_activity(workshop, now=event.observed_at)
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                )
+                reply = (
+                    "おけ、案は使わず、この句の話はここまでや。"
+                    if step.close_after_action
+                    else "おけ、元の句はそのままにしとくで。"
+                )
+                return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+            if step.action == "close_workshop":
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome="workshop_closed",
+                )
+                turn_steps.append(row)
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                )
+                close_workshop(workshop, reason="agent_explicit")
+                session.haiku_workshop = None
+                return [AudioAction(layer="speech", interrupt=False, text="おけ、この句の話はここまでや。")]
+
+            if step.action == "show_current":
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome="current_shown",
+                )
+                turn_steps.append(row)
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
+                record_workshop_activity(workshop, now=event.observed_at)
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                    feedback_step=feedback_step,
+                )
+                if (
+                    isinstance(observation, dict)
+                    and observation.get("kind") == "revision_validation"
+                    and observation.get("status") == "proposed"
+                    and workshop.pending_revision
+                ):
+                    reply = (
+                        "検査に通った未採用の案はこれや。\n"
+                        f"{workshop.editing_line()}\n"
+                        "よければ『その案で』って言ってな。"
+                    )
+                elif (
+                    isinstance(observation, dict)
+                    and observation.get("kind") == "revision_validation"
+                    and observation.get("status") == "rejected"
+                ):
+                    reply = (
+                        "案は検査に通らんかったから、元の句はそのままや。\n"
+                        f"{workshop.display_line()}"
+                    )
+                else:
+                    reply = f"いまはこうやで。\n{workshop.editing_line()}"
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text=reply,
+                    )
+                ]
+
+            if step.action == "unrelated":
+                reply = session.machine._render_player_chat_reply(event)
+                if not reply:
+                    row = record_workshop_agent_step(
+                        workshop,
+                        step,
+                        phase=phase,
+                        outcome="main_chat_unavailable",
+                        validation_codes=("no_player_chat_reply",),
+                    )
+                    turn_steps.append(row)
+                    self._finish_workshop_agent_turn(
+                        session,
+                        event,
+                        workshop=workshop,
+                        player_text=player_text,
+                        raw_player_text=raw_player_text,
+                        base_verse=base_verse,
+                        pending_before=pending_before,
+                        turn_steps=turn_steps,
+                    )
+                    return []
+                updated = record_drift(workshop, now=event.observed_at)
+                closed = updated is not None and not updated.open
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome=(
+                        "released_to_main_chat_closed"
+                        if closed
+                        else "released_to_main_chat"
+                    ),
+                )
+                turn_steps.append(row)
+                workshop.awaiting_meaning_ack = False
+                workshop.awaiting_close_confirmation = False
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                )
+                if closed:
+                    session.haiku_workshop = None
+                return [
+                    AudioAction(
+                        layer="speech",
+                        interrupt=False,
+                        text=reply,
+                        route_owner="player_chat",
+                    )
+                ]
+
+            if step.action in {"respond", "explain", "ask", "compare"}:
+                row = record_workshop_agent_step(
+                    workshop,
+                    step,
+                    phase=phase,
+                    outcome="replied_from_verified_context",
+                )
+                turn_steps.append(row)
+                workshop.awaiting_meaning_ack = (
+                    step.action == "explain" and step.purpose == "understand_meaning"
+                )
+                workshop.awaiting_close_confirmation = False
+                workshop.close_confirmation_source = None
+                record_workshop_activity(workshop, now=event.observed_at)
+                reply = step.speech
+                if (
+                    isinstance(observation, dict)
+                    and observation.get("kind") == "revision_validation"
+                    and observation.get("status") == "proposed"
+                    and workshop.pending_revision
+                ):
+                    reply = (
+                        f"{reply}\n{workshop.editing_line()}\n"
+                        "よければ『その案で』って言ってな。"
+                    )
+                self._finish_workshop_agent_turn(
+                    session,
+                    event,
+                    workshop=workshop,
+                    player_text=player_text,
+                    raw_player_text=raw_player_text,
+                    base_verse=base_verse,
+                    pending_before=pending_before,
+                    turn_steps=turn_steps,
+                    feedback_step=feedback_step or step,
+                )
+                LOGGER.warning(
+                    "haiku_workshop_agent result=replied phase=%s action=%s purpose=%s "
+                    "steps=%s player=%s",
+                    phase,
+                    step.action,
+                    step.purpose,
+                    len(turn_steps),
+                    player_text[:100],
+                )
+                return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+        # 三手を使い切った場合も、最後の実観測だけをコード固定で返す。
+        reply = self._workshop_agent_observation_fallback(workshop, observation)
+        record_workshop_activity(workshop, now=event.observed_at)
+        self._finish_workshop_agent_turn(
+            session,
+            event,
+            workshop=workshop,
+            player_text=player_text,
+            raw_player_text=raw_player_text,
+            base_verse=base_verse,
+            pending_before=pending_before,
+            turn_steps=turn_steps,
+            feedback_step=feedback_step,
+        )
+        return [AudioAction(layer="speech", interrupt=False, text=reply)]
+
+    def _plan_workshop_agent_step(
+        self,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+        *,
+        raw_player_text: str,
+        phase: str,
+        observation: dict[str, object] | None,
+        turn_steps: list[dict[str, object]],
+    ) -> tuple[WorkshopAgentStep | None, str]:
+        details = build_workshop_agent_details(
+            workshop,
+            player_text,
+            original_player_text=raw_player_text,
+            phase=phase,
+            observation=observation,
+            turn_steps=turn_steps,
+        )
+        fallback = {
+            "action": "defer_to_legacy",
+            "purpose": "other",
+            "confidence": 0.0,
+            "evidence": "",
+            "speech": "",
+            "checks": [],
+            "close_after_action": False,
+            "close_evidence": "",
+            "findings": [],
+            "line_reference": {
+                "found": False,
+                "concept_id": "unknown",
+                "evidence": "",
+                "confidence": 0.0,
+            },
+            "line_proposal": {
+                "found": False,
+                "target_fragment": "",
+                "replacement_text": "",
+                "evidence": "",
+                "confidence": 0.0,
+            },
+        }
+        try:
+            payload = self.llm.generate_structured_json(
+                StructuredGenerationRequest(
+                    kind="haiku_workshop_agent_step",
+                    fallback_value=fallback,
+                    details=details,
+                    temperature=0.25,
+                    route="chat",
+                    max_tokens=420,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning(
+                "haiku_workshop_agent_step result=error phase=%s detail=%s",
+                phase,
+                exc,
+            )
+            return None, "generation_error"
+        step, reason = finalize_workshop_agent_step(payload, details=details)
+        raw_action = (
+            str(payload.get("action") or "-") if isinstance(payload, dict) else "-"
+        )
+        raw_purpose = (
+            str(payload.get("purpose") or "-") if isinstance(payload, dict) else "-"
+        )
+        LOGGER.warning(
+            "haiku_workshop_agent_step result=%s phase=%s action=%s purpose=%s "
+            "confidence=%.2f reason=%s",
+            "accepted" if step is not None else "rejected",
+            phase,
+            step.action if step is not None else raw_action,
+            step.purpose if step is not None else raw_purpose,
+            step.confidence if step is not None else 0.0,
+            reason,
+        )
+        return step, reason
+
+    @staticmethod
+    def _workshop_agent_observation_fallback(
+        workshop: RecentHaikuWorkshop,
+        observation: dict[str, object] | None,
+    ) -> str:
+        if not isinstance(observation, dict):
+            return "どこを一緒に見たらええか、もう少し教えてな。"
+        if observation.get("kind") == "revision_validation":
+            if observation.get("status") == "proposed" and workshop.pending_revision:
+                return (
+                    "こんなんどうや。\n"
+                    f"{workshop.editing_line()}\n"
+                    "よければ『その案で』って言ってな。"
+                )
+            return "検査に通る案までは作れんかったわ。元の句はそのままや。"
+        rows = observation.get("lines")
+        if isinstance(rows, list) and "meter" in observation.get("checks", []):
+            counts = [
+                str(row.get("mora_count"))
+                for row in rows
+                if isinstance(row, dict) and row.get("mora_count") is not None
+            ]
+            if len(counts) == 3:
+                return f"音数は上から{'・'.join(counts)}やで。どの行を一緒に見よか？"
+        if "source" in observation.get("checks", []):
+            recorded = [
+                row
+                for row in rows
+                if isinstance(row, dict) and row.get("source_status") == "recorded"
+            ] if isinstance(rows, list) else []
+            if len(recorded) == 3:
+                return "三行とも出典の記録があるで。どの行を一緒に見よか？"
+            if not recorded:
+                return "三行には出典の記録が見つからんかったわ。元の句はそのままや。"
+            return (
+                f"出典の記録があるのは三行中{len(recorded)}行やで。"
+                "どの行を一緒に見よか？"
+            )
+        if "reading" in observation.get("checks", []):
+            unavailable = [
+                row
+                for row in rows
+                if isinstance(row, dict) and row.get("reading_status") != "known"
+            ] if isinstance(rows, list) else []
+            if unavailable:
+                return "読みを確定できん行があったわ。元の句はそのままや。"
+            return "今の三行の読みは確認できたで。どの言葉を一緒に見よか？"
+        return "検査結果は確認できたで。どこを一緒に見よか？"
+
+    def _finish_workshop_agent_turn(
+        self,
+        session: SessionInfo,
+        event: GameEvent,
+        *,
+        workshop: RecentHaikuWorkshop,
+        player_text: str,
+        raw_player_text: str,
+        base_verse: str,
+        pending_before: str | None,
+        turn_steps: list[dict[str, object]],
+        feedback_step: WorkshopAgentStep | None = None,
+    ) -> None:
+        """改善記録を保存する。保存失敗はリアルタイム応答へ伝播させない。"""
+
+        if self.memory is None:
+            return
+        try:
+            if feedback_step is not None:
+                problems = {finding.problem for finding in feedback_step.analysis.findings}
+                if "forced_compression" in problems or "meter" in problems:
+                    critique_kind = "forced_compress"
+                elif problems.intersection({"unreadable", "unnatural_japanese", "reading"}):
+                    critique_kind = "unreadable"
+                elif "off_scene" in problems:
+                    critique_kind = "off_context"
+                elif (
+                    feedback_step.action == "explain"
+                    and feedback_step.purpose == "understand_meaning"
+                ):
+                    critique_kind = "ask_meaning"
+                else:
+                    critique_kind = "other"
+                critique = self.memory.save_haiku_critique(
+                    entry_id=workshop.entry_id,
+                    kind=critique_kind,
+                    player_text=raw_player_text,
+                    # ターン開始時に未採用案があれば、感想・比較の対象は
+                    # 正本ではなく実際に見ていた案として残す。
+                    surface_at_time=pending_before or base_verse,
+                    materials_snapshot=dict(workshop.materials or {}),
+                    observed_at=event.observed_at,
+                    session_id=session.session_id,
+                )
+                # 修正依頼そのものは次回発句へのhard/soft規則に自動昇格しない。
+                # それ以外の明示指摘だけ、既存のsoft lessonへつなぐ。
+                if feedback_step.action != "propose_revision":
+                    for lesson in lessons_from_critique_kind(
+                        critique_kind,
+                        player_text=raw_player_text,
+                    ):
+                        self.memory.save_haiku_lesson(
+                            lesson_type=str(lesson.get("lesson_type") or "other"),
+                            note=str(lesson.get("note") or ""),
+                            prefer_materials=bool(lesson.get("prefer_materials")),
+                            forbidden_fragments=list(lesson.get("forbidden_fragments") or []),
+                            from_entry_id=workshop.entry_id,
+                            from_critique_id=str(critique.get("id") or "") or None,
+                            observed_at=event.observed_at,
+                            polarity=str(lesson.get("polarity") or "tighten"),
+                            strength=float(lesson.get("strength") or 0.3),
+                        )
+            self.memory.save_haiku_workshop_turn(
+                entry_id=workshop.entry_id,
+                player_text=raw_player_text,
+                semantic_player_text=player_text,
+                base_verse=base_verse,
+                pending_before=pending_before,
+                pending_after=workshop.pending_revision,
+                steps=turn_steps,
+                observed_at=event.observed_at,
+                session_id=session.session_id,
+            )
+        except OSError as exc:
+            LOGGER.warning(
+                "haiku_workshop_agent_record_failed session_id=%s detail=%s",
+                session.session_id,
+                exc,
+            )
+
     @staticmethod
     def _player_line_revision_failure_reply(reasons: tuple[str, ...]) -> str:
         """局所置換の失敗理由を、本文を創作せず短く返す。"""
@@ -4101,13 +4872,63 @@ class DogidoService:
     ) -> tuple[str, str]:
         """大きい haiku route に対象行だけを直させ、未保存の案として保持する。"""
 
-        if workshop.pending_revision:
-            return "先の案を『その案で』か『元のまま』で決めてから、次を直そか。", "pending_exists"
+        observation = self._stage_workshop_revision(workshop, analysis)
+        status = str(observation.get("status") or "rejected")
+        validation_codes = observation.get("validation_codes")
+        path = (
+            str(validation_codes[0])
+            if isinstance(validation_codes, list) and validation_codes
+            else status
+        )
+        if status != "proposed" or not workshop.pending_revision:
+            if path == "pending_exists":
+                return (
+                    "先の案を『その案で』か『元のまま』で決めてから、次を直そか。",
+                    path,
+                )
+            if path == "no_target":
+                return "どの行を直すか、気になる言葉をもう少し教えてな。", path
+            return "まだうまく直しきれんかったわ。元の句はそのままや。", path
+        # 修正句と採用条件はコードが固定し、対話AIには差し出し方だけを任せる。
+        introduction, introduction_path = self._collaborator_workshop_reply(
+            workshop,
+            player_text,
+            kind="request_repair",
+            analysis=analysis,
+            repair_state="proposed",
+            proposed_revision=workshop.pending_revision,
+        )
+        return (
+            f"{introduction}\n{workshop.editing_line()}\nよければ『その案で』って言ってな。",
+            f"proposed_{introduction_path}",
+        )
 
+    def _stage_workshop_revision(
+        self,
+        workshop: RecentHaikuWorkshop,
+        analysis: WorkshopAnalysis,
+    ) -> dict[str, object]:
+        """既存editorと全検査を実行し、未保存案または機械可読な失敗を返す。"""
+
+        base_text = workshop.display_line()
+        if workshop.pending_revision:
+            return {
+                "kind": "revision_validation",
+                "status": "rejected",
+                "base_text": base_text,
+                "proposed_verse": None,
+                "validation_codes": ["pending_exists"],
+            }
         targets = repair_target_indices(analysis.findings)
         if not targets:
-            return "どの行を直すか、気になる言葉をもう少し教えてな。", "no_target"
-        verse_lines = workshop_verse_lines(workshop.display_line())
+            return {
+                "kind": "revision_validation",
+                "status": "rejected",
+                "base_text": base_text,
+                "proposed_verse": None,
+                "validation_codes": ["no_target"],
+            }
+        verse_lines = workshop_verse_lines(base_text)
         atoms = source_atoms_from_materials(workshop.materials)
         line_sources = line_source_ids_from_materials(
             workshop.materials,
@@ -4117,7 +4938,7 @@ class DogidoService:
         try:
             result = generate_workshop_revision(
                 self.llm,
-                original_text=workshop.display_line(),
+                original_text=base_text,
                 target_indices=targets,
                 findings=tuple(finding.to_dict() for finding in analysis.findings),
                 source_atoms=atoms,
@@ -4130,23 +4951,53 @@ class DogidoService:
             )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("haiku_workshop_revision_failed detail=%s", exc)
-            return "まだうまく直しきれんかったわ。元の句はそのままや。", "failed"
+            workshop.last_repair_feedback = {
+                "base_text": base_text,
+                "validation_passed": False,
+                "failure_reason": "generation_error",
+                "retry_feedback": None,
+                "proposed_text": None,
+            }
+            return {
+                "kind": "revision_validation",
+                "status": "rejected",
+                "base_text": base_text,
+                "proposed_verse": None,
+                "validation_codes": ["generation_error"],
+            }
         workshop.last_repair_feedback = {
-            "base_text": workshop.display_line(),
+            "base_text": base_text,
             "validation_passed": result.accepted,
             "failure_reason": result.failure_reason,
             "retry_feedback": result.retry_feedback,
             "proposed_text": result.text,
         }
+        validation_codes = self._workshop_revision_validation_codes(result)
         if not result.accepted or not result.text:
-            return "まだうまく直しきれんかったわ。元の句はそのままや。", result.failure_reason or "rejected"
+            return {
+                "kind": "revision_validation",
+                "status": "rejected",
+                "base_text": base_text,
+                "proposed_verse": None,
+                "target_line_indices": list(targets),
+                "validation_codes": validation_codes or ["rejected"],
+            }
         pending_lines = build_haiku_lines(
             result.text,
             line_sources=result.line_sources,
             provenance="generated_confirmed",
         )
         if len(pending_lines) != 3:
-            return "まだうまく直しきれんかったわ。元の句はそのままや。", "invalid_line_records"
+            workshop.last_repair_feedback["validation_passed"] = False
+            workshop.last_repair_feedback["failure_reason"] = "invalid_line_records"
+            return {
+                "kind": "revision_validation",
+                "status": "rejected",
+                "base_text": base_text,
+                "proposed_verse": None,
+                "target_line_indices": list(targets),
+                "validation_codes": ["invalid_line_records"],
+            }
         workshop.pending_revision = result.text
         workshop.pending_revision_surface_text = result.text
         workshop.pending_revision_lines = pending_lines
@@ -4155,19 +5006,35 @@ class DogidoService:
         workshop.pending_revision_edits = [edit.to_record() for edit in result.edits]
         workshop.pending_revision_edit_contract = result.edit_contract
         workshop.pending_revision_source = "generated_confirmed"
-        # 修正句と採用条件はコードが固定し、対話AIには差し出し方だけを任せる。
-        introduction, introduction_path = self._collaborator_workshop_reply(
-            workshop,
-            player_text,
-            kind="request_repair",
-            analysis=analysis,
-            repair_state="proposed",
-            proposed_revision=result.text,
-        )
-        return (
-            f"{introduction}\n{result.text}\nよければ『その案で』って言ってな。",
-            f"proposed_{introduction_path}",
-        )
+        return {
+            "kind": "revision_validation",
+            "status": "proposed",
+            "base_text": base_text,
+            "proposed_verse": workshop.editing_surface(),
+            "target_line_indices": list(targets),
+            "validation_codes": ["edit_contract_passed", "grounding_passed", "meter_passed"],
+        }
+
+    @staticmethod
+    def _workshop_revision_validation_codes(result: object) -> list[str]:
+        codes: list[str] = []
+        failure_reason = str(getattr(result, "failure_reason", "") or "").strip()
+        if failure_reason:
+            codes.append(failure_reason)
+        feedback = getattr(result, "retry_feedback", None)
+        if isinstance(feedback, dict):
+            global_failures = feedback.get("global_failure_reasons")
+            if isinstance(global_failures, list):
+                codes.extend(str(value) for value in global_failures if value)
+            line_failures = feedback.get("line_failures")
+            if isinstance(line_failures, list):
+                for row in line_failures:
+                    if not isinstance(row, dict):
+                        continue
+                    reasons = row.get("failure_reasons")
+                    if isinstance(reasons, list):
+                        codes.extend(str(value) for value in reasons if value)
+        return list(dict.fromkeys(codes))[:12]
 
     def _ask_meaning_workshop_reply(
         self,

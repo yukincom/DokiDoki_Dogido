@@ -1814,6 +1814,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             service = DogidoService(
                 Settings(
                     llm_enabled=True,
+                    haiku_workshop_agent_enabled=False,
                     audio_enabled=False,
                     memory_enabled=True,
                     memory_dir=Path(tmp) / "mem",
@@ -2155,6 +2156,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             service = DogidoService(
                 Settings(
                     llm_enabled=True,
+                    haiku_workshop_agent_enabled=False,
                     audio_enabled=False,
                     memory_enabled=True,
                     memory_dir=Path(tmp) / "mem",
@@ -2332,6 +2334,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             llm = IntentLLM()
             settings = Settings(
                 llm_enabled=True,
+                haiku_workshop_agent_enabled=False,
                 audio_enabled=False,
                 decision_policy="py_trees",
                 memory_enabled=True,
@@ -2424,6 +2427,7 @@ class WorkshopServiceIntegrationTests(unittest.TestCase):
             service = DogidoService(
                 Settings(
                     llm_enabled=True,
+                    haiku_workshop_agent_enabled=False,
                     audio_enabled=False,
                     memory_enabled=True,
                     memory_dir=Path(tmp) / "mem",
