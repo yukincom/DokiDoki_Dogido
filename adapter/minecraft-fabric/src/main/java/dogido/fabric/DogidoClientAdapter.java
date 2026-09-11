@@ -30,8 +30,11 @@ import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.BrewingStandBlock;
+import net.minecraft.block.ComposterBlock;
 import net.minecraft.block.DoorBlock;
 import net.minecraft.block.enums.DoubleBlockHalf;
+import net.minecraft.block.entity.CampfireBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.sound.SoundInstance;
@@ -101,6 +104,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
+import net.minecraft.world.biome.Biome;
 
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
@@ -129,6 +133,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private static final int RECENT_BLOCK_BREAK_TTL_TICKS = 200;
     private static final double DROPPED_ITEM_SCAN_RADIUS = 8.0;
     private static final int MAX_DROPPED_ITEM_KINDS = 16;
+    private static final long RAIN_AFTER_SMELL_TICKS = 3L * 60L * 20L;
     // エンダーアイ投擲音: 鮮度 TTL（サーバ側 ender_eye_recent_ms=2000ms と同期）と投擲者判定の距離
     private static final int ENDER_EYE_LAUNCH_TTL_TICKS = 40;
     private static final double ENDER_EYE_LAUNCH_MATCH_RADIUS = 8.0;
@@ -209,6 +214,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     /** 非敵対 Mob + 実再生されたブロック・天候・環境音。戦闘判定には使わない。 */
     private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
     private final Deque<BlockBreakObservation> recentBlockBreakObservations = new ArrayDeque<>();
+    private List<ThreatObservation> currentZombieScentClues = List.of();
+    private List<SmellPolicy.Candidate> currentBlockSmellCandidates = List.of();
+    private SmellPolicy.Observation currentSmellObservation = SmellPolicy.resolve(List.of(), 0, false, null);
+    private long lastBlockSmellScanTick = -1000;
+    private long rainAfterSmellUntilTick = -1;
+    private String previousLocalSmellWeather = null;
 
     private long tickCounter = 0;
     private long lastSnapshotTick = -1;
@@ -478,6 +489,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
         List<AudioThreatObservation> ambientSounds = scanAmbientSounds(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
+        List<ThreatObservation> rawZombieScentClues = deriveZombieScentClues(
+            threats,
+            visibleThreats,
+            audioThreats
+        );
+        updateSmellObservation(player, world, rawZombieScentClues);
+        this.currentZombieScentClues = this.currentSmellObservation.isSpecificZombie()
+            ? rawZombieScentClues.stream()
+                .filter(clue -> clue.distance() <= 8.0)
+                .toList()
+            : List.of();
         List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
@@ -611,6 +633,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
         this.recentBlockBreakObservations.clear();
+        this.currentZombieScentClues = List.of();
+        resetSmellState();
     }
 
     private void resetThreatStateForDimensionChange() {
@@ -662,6 +686,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
         this.recentBlockBreakObservations.clear();
+        this.currentZombieScentClues = List.of();
+        resetSmellState();
+    }
+
+    private void resetSmellState() {
+        this.currentBlockSmellCandidates = List.of();
+        this.currentSmellObservation = SmellPolicy.resolve(List.of(), 0, false, null);
+        this.lastBlockSmellScanTick = -1000;
+        this.rainAfterSmellUntilTick = -1;
+        this.previousLocalSmellWeather = null;
     }
 
     private void resetThreatStateForPositionJump() {
@@ -769,6 +803,291 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             filtered.add(threat);
         }
         return filtered;
+    }
+
+    private List<ThreatObservation> deriveZombieScentClues(
+        List<ThreatObservation> threats,
+        List<ThreatObservation> visibleThreats,
+        List<AudioThreatObservation> audioThreats
+    ) {
+        Set<UUID> visibleIds = new java.util.HashSet<>();
+        for (ThreatObservation threat : visibleThreats) {
+            visibleIds.add(threat.uuid());
+        }
+        Set<String> heardSourceIds = new java.util.HashSet<>();
+        for (AudioThreatObservation threat : audioThreats) {
+            if (threat.sourceId() != null && !threat.sourceId().isBlank()) {
+                heardSourceIds.add(threat.sourceId());
+            }
+        }
+
+        List<ThreatObservation> clues = new ArrayList<>();
+        for (ThreatObservation threat : threats) {
+            if (!ZombieScentPolicy.shouldExposeClue(
+                threat.type(),
+                threat.distance(),
+                threat.lineOfSight(),
+                visibleIds.contains(threat.uuid()),
+                heardSourceIds.contains(threat.uuid().toString())
+            )) {
+                continue;
+            }
+            clues.add(threat);
+            if (clues.size() >= 4) {
+                break;
+            }
+        }
+        return List.copyOf(clues);
+    }
+
+    private void updateSmellObservation(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<ThreatObservation> zombieClues
+    ) {
+        BlockPos origin = player.getBlockPos();
+        String localWeather = localSmellWeather(world, origin);
+        updateRainAfterSmellWindow(localWeather);
+        boolean rainAfterActive = this.rainAfterSmellUntilTick >= this.tickCounter;
+
+        RegistryEntry<Biome> biomeEntry = world.getBiome(origin);
+        Biome biome = biomeEntry.value();
+        int temperatureModifier = SmellPolicy.temperatureModifier(
+            biome.getTemperature(),
+            biome.isCold(origin, world.getSeaLevel())
+        );
+
+        if (
+            this.lastBlockSmellScanTick < 0
+                || this.tickCounter - this.lastBlockSmellScanTick >= this.config.snapshotIntervalTicks
+        ) {
+            this.currentBlockSmellCandidates = scanBlockSmellCandidates(
+                world,
+                origin,
+                SmellPolicy.blockScanDistance(temperatureModifier, rainAfterActive)
+            );
+            this.lastBlockSmellScanTick = this.tickCounter;
+        }
+
+        List<SmellPolicy.Candidate> candidates = new ArrayList<>(this.currentBlockSmellCandidates);
+        for (ThreatObservation clue : zombieClues) {
+            candidates.add(
+                SmellPolicy.zombieCandidate(
+                    clue.type(),
+                    clue.uuid().toString(),
+                    clue.distance()
+                )
+            );
+        }
+        collectHotbarSmellCandidates(player, candidates);
+        collectDroppedItemSmellCandidates(player, world, candidates);
+        String biomeId = world.getBiome(origin).getKey()
+            .map(key -> key.getValue().toString())
+            .orElse("unknown");
+        SmellPolicy.Candidate biomeCandidate = SmellPolicy.biomeCandidate(biomeId);
+        if (biomeCandidate != null) {
+            candidates.add(biomeCandidate);
+        }
+
+        this.currentSmellObservation = SmellPolicy.resolve(
+            candidates,
+            temperatureModifier,
+            rainAfterActive,
+            smellSuppressionReason(player, localWeather)
+        );
+    }
+
+    private void updateRainAfterSmellWindow(String localWeather) {
+        if (
+            "clear".equals(localWeather)
+                && ("rain".equals(this.previousLocalSmellWeather)
+                    || "thunder_rain".equals(this.previousLocalSmellWeather))
+        ) {
+            this.rainAfterSmellUntilTick = this.tickCounter + RAIN_AFTER_SMELL_TICKS;
+        } else if (!"clear".equals(localWeather)) {
+            this.rainAfterSmellUntilTick = -1;
+        }
+        this.previousLocalSmellWeather = localWeather;
+    }
+
+    private String localSmellWeather(ClientWorld world, BlockPos pos) {
+        Biome.Precipitation precipitation = world.getBiome(pos).value()
+            .getPrecipitation(pos, world.getSeaLevel());
+        if (world.isThundering()) {
+            return switch (precipitation) {
+                case RAIN -> "thunder_rain";
+                case SNOW -> "thunder_snow";
+                case NONE -> "thunder_dry";
+            };
+        }
+        if (!world.isRaining()) {
+            return "clear";
+        }
+        return switch (precipitation) {
+            case RAIN -> "rain";
+            case SNOW -> "snow";
+            case NONE -> "dry";
+        };
+    }
+
+    private String smellSuppressionReason(ClientPlayerEntity player, String localWeather) {
+        if (player.isSubmergedInWater()) {
+            return "submerged";
+        }
+        if (localWeather.startsWith("thunder_")) {
+            return "thunder";
+        }
+        if ("rain".equals(localWeather)) {
+            return "rain";
+        }
+        if ("snow".equals(localWeather)) {
+            return "snow";
+        }
+        return null;
+    }
+
+    private void collectHotbarSmellCandidates(
+        ClientPlayerEntity player,
+        List<SmellPolicy.Candidate> candidates
+    ) {
+        for (int slot = 0; slot < net.minecraft.entity.player.PlayerInventory.getHotbarSize(); slot += 1) {
+            ItemStack stack = player.getInventory().getStack(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            SmellPolicy.Candidate candidate = SmellPolicy.hotbarCandidate(itemId(stack));
+            if (candidate != null) {
+                candidates.add(candidate);
+            }
+        }
+    }
+
+    private void collectDroppedItemSmellCandidates(
+        ClientPlayerEntity player,
+        ClientWorld world,
+        List<SmellPolicy.Candidate> candidates
+    ) {
+        double radius = SmellPolicy.MAX_SCAN_DISTANCE;
+        for (Entity entity : world.getOtherEntities(player, player.getBoundingBox().expand(radius))) {
+            if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) {
+                continue;
+            }
+            ItemStack stack = itemEntity.getStack();
+            if (stack.isEmpty()) {
+                continue;
+            }
+            SmellPolicy.Candidate candidate = SmellPolicy.droppedItemCandidate(
+                itemId(stack),
+                itemEntity.getUuid().toString(),
+                Math.sqrt(player.squaredDistanceTo(itemEntity))
+            );
+            if (candidate != null) {
+                candidates.add(candidate);
+            }
+        }
+    }
+
+    private List<SmellPolicy.Candidate> scanBlockSmellCandidates(
+        ClientWorld world,
+        BlockPos origin,
+        int radius
+    ) {
+        List<SmellPolicy.Candidate> candidates = new ArrayList<>();
+        double radiusSquared = radius * radius;
+        for (int dx = -radius; dx <= radius; dx += 1) {
+            for (int dy = -radius; dy <= radius; dy += 1) {
+                for (int dz = -radius; dz <= radius; dz += 1) {
+                    double distanceSquared = (double) dx * dx + (double) dy * dy + (double) dz * dz;
+                    if (distanceSquared > radiusSquared) {
+                        continue;
+                    }
+                    BlockPos sample = origin.add(dx, dy, dz);
+                    BlockState state = world.getBlockState(sample);
+                    if (
+                        state.contains(Properties.DOUBLE_BLOCK_HALF)
+                            && state.get(Properties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER
+                    ) {
+                        continue;
+                    }
+                    String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+                    double distance = Math.sqrt(distanceSquared);
+                    boolean composterFilled = state.getBlock() instanceof ComposterBlock
+                        && state.contains(ComposterBlock.LEVEL)
+                        && state.get(ComposterBlock.LEVEL) > 0;
+                    boolean brewingOccupied = false;
+                    if (state.getBlock() instanceof BrewingStandBlock) {
+                        for (var bottleProperty : BrewingStandBlock.BOTTLE_PROPERTIES) {
+                            if (state.contains(bottleProperty) && Boolean.TRUE.equals(state.get(bottleProperty))) {
+                                brewingOccupied = true;
+                                break;
+                            }
+                        }
+                    }
+                    SmellPolicy.Candidate blockCandidate = SmellPolicy.blockCandidate(
+                        blockId,
+                        "block:" + Registries.BLOCK.getId(state.getBlock()).getPath(),
+                        distance,
+                        composterFilled,
+                        brewingOccupied
+                    );
+                    if (blockCandidate != null) {
+                        candidates.add(blockCandidate);
+                    }
+                    collectCampfireCookingCandidates(world, sample, state, distance, candidates);
+                    if (isRainAfterEarthBlock(state)) {
+                        candidates.add(SmellPolicy.rainAfterCandidate("rain_after:earth", distance));
+                    }
+                }
+            }
+        }
+        return SmellPolicy.compact(candidates);
+    }
+
+    private void collectCampfireCookingCandidates(
+        ClientWorld world,
+        BlockPos pos,
+        BlockState state,
+        double distance,
+        List<SmellPolicy.Candidate> candidates
+    ) {
+        String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        if (!isLitCampfire(state, blockId)) {
+            return;
+        }
+        if (!(world.getBlockEntity(pos) instanceof CampfireBlockEntity campfire)) {
+            return;
+        }
+        for (ItemStack cooking : campfire.getItemsBeingCooked()) {
+            if (cooking.isEmpty()) {
+                continue;
+            }
+            SmellPolicy.Candidate candidate = SmellPolicy.cookingCandidate(
+                itemId(cooking),
+                "block:" + blockId,
+                distance
+            );
+            if (candidate != null) {
+                candidates.add(candidate);
+            }
+        }
+    }
+
+    private boolean isRainAfterEarthBlock(BlockState state) {
+        if (state.isIn(BlockTags.LEAVES) || state.isIn(BlockTags.DIRT)) {
+            return true;
+        }
+        String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
+        return Set.of(
+            "grass",
+            "short_grass",
+            "tall_grass",
+            "fern",
+            "large_fern",
+            "moss_block",
+            "moss_carpet",
+            "leaf_litter",
+            "vine"
+        ).contains(blockId);
     }
 
     private boolean shouldSendCombatEnded(
@@ -1640,7 +1959,33 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         event.addProperty("priority_hint", priorityHint);
         event.addProperty("certainty", certainty);
         root.add("event", event);
+        root.add("smell_observation", buildSmellObservation(this.currentSmellObservation));
+        root.add("zombie_scent_clues", buildZombieScentClues(this.currentZombieScentClues));
         return root;
+    }
+
+    private JsonObject buildSmellObservation(SmellPolicy.Observation observation) {
+        JsonObject json = new JsonObject();
+        json.addProperty("status", observation.status());
+        addOptionalProperty(json, "smell_id", observation.smellId());
+        addOptionalProperty(json, "category", observation.category());
+        addOptionalProperty(json, "valence", observation.valence());
+        addOptionalProperty(json, "source_kind", observation.sourceKind());
+        addOptionalProperty(json, "specificity", observation.specificity());
+        if (observation.effectiveStrength() != null) {
+            json.addProperty("effective_strength", observation.effectiveStrength());
+        }
+        json.addProperty("temperature_modifier", observation.temperatureModifier());
+        json.addProperty("rain_after_active", observation.rainAfterActive());
+        addOptionalProperty(json, "suppression_reason", observation.suppressionReason());
+        json.addProperty("basis", "smell_policy_v1");
+        return json;
+    }
+
+    private void addOptionalProperty(JsonObject json, String name, String value) {
+        if (value != null) {
+            json.addProperty(name, value);
+        }
     }
 
     private JsonObject buildPlayer(ClientPlayerEntity player, ClientWorld world) {
@@ -1899,6 +2244,20 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             entry.addProperty("distance_band", threat.distanceBand());
             entry.addProperty("certainty", threat.certainty());
             entry.addProperty("spoken_name_allowed", threat.spokenNameAllowed());
+            array.add(entry);
+        }
+        return array;
+    }
+
+    private JsonArray buildZombieScentClues(List<ThreatObservation> threats) {
+        JsonArray array = new JsonArray();
+        for (ThreatObservation threat : threats) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("type", threat.type());
+            entry.addProperty("entity_id", threat.uuid().toString());
+            entry.addProperty("distance_band", bucketDistance(threat.distance()));
+            entry.addProperty("certainty", "medium");
+            entry.addProperty("basis", "nearby_without_visual_or_audio");
             array.add(entry);
         }
         return array;

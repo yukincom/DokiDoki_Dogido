@@ -45,7 +45,8 @@ class PlayerChatEPrimePromptTests(unittest.TestCase):
         self.assertLessEqual(len(rules), 5)
         self.assertIn("スタンス: hypothesis", content)
         self.assertIn("hypothesis", content)
-        self.assertIn("見えてへん", content)
+        self.assertIn("コード照合", content)
+        self.assertIn("見えた", content)
         self.assertIn("かもしれん", content)
         # 旧 §2.5b 長文・空 hearing 常時行・mode 二重
         self.assertNotIn("平和時:", content)

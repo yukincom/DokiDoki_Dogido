@@ -22,6 +22,7 @@ from dogido_server.models import (
     PlayerState,
     Position,
     PriorityHint,
+    RecentBlockBreak,
     SourceKind,
     TimePhase,
     VisualThreat,
@@ -626,6 +627,23 @@ class PlayerChatNameCorrectionContextTests(unittest.TestCase):
 
 
 class PlayerChatPlaceContextTests(unittest.TestCase):
+    def _dark_roofed_event(self, **world_updates: object) -> GameEvent:
+        event = make_event(sequence=1)
+        event.player.position.y = 32.0
+        event.world = event.world.model_copy(
+            update={
+                "biome": "birch_forest",
+                "local_light": 3,
+                "sky_visible": False,
+                "ceiling_height": 4.0,
+                "enclosure_score": 0.6,
+                "overhead_cover_type": "solid",
+                "danger_darkness_score": 0.5,
+                **world_updates,
+            }
+        )
+        return event
+
     def test_underground_context_despite_surface_biome(self) -> None:
         """地表バイオームでも sky_visible=false なら地下っぽい空間として渡す。"""
         from dogido_server.config import Settings
@@ -737,3 +755,127 @@ class PlayerChatPlaceContextTests(unittest.TestCase):
         place = machine._player_chat_place_context(event)
         self.assertEqual(place["space_kind"], "open_surface")
         self.assertIn("空が見える", place["place_line"])
+
+    def test_dark_home_uses_bed_and_nearby_respawn_instead_of_cave_wording(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            respawn_point_set=True,
+            respawn_distance=3.0,
+            nearby_bed_count=1,
+        )
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "home_base")
+        self.assertEqual(
+            place["home_evidence"],
+            ("nearby_respawn_point", "nearby_bed"),
+        )
+        self.assertIn("家・拠点らしい", place["place_line"])
+        self.assertIn("ベッド", place["place_line"])
+        self.assertNotIn("地下っぽい", place["place_line"])
+
+    def test_nearby_door_can_support_home_when_bed_is_out_of_scan(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            respawn_point_set=True,
+            respawn_distance=4.0,
+            nearby_bed_count=0,
+            nearby_door_count=1,
+        )
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "home_base")
+        self.assertEqual(
+            place["home_evidence"],
+            ("nearby_respawn_point", "nearby_door"),
+        )
+        self.assertIn("ドア", place["place_line"])
+
+    def test_respawn_point_without_bed_or_door_is_not_enough_for_home(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            respawn_point_set=True,
+            respawn_distance=2.0,
+        )
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "underground_or_roofed")
+        self.assertEqual(place["home_evidence"], ())
+
+    def test_bed_and_door_far_from_respawn_are_not_player_home(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            respawn_point_set=True,
+            respawn_distance=40.0,
+            nearby_bed_count=1,
+            nearby_door_count=1,
+        )
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "underground_or_roofed")
+        self.assertEqual(place["home_evidence"], ())
+
+    def test_window_never_counts_as_home_evidence(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            respawn_point_set=True,
+            respawn_distance=2.0,
+            nearby_window_present=True,
+        )
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "underground_or_roofed")
+        self.assertEqual(place["home_evidence"], ())
+
+    def test_home_evidence_wins_over_cave_biome_as_the_space_kind(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            biome="dripstone_caves",
+            respawn_point_set=True,
+            respawn_distance=2.0,
+            nearby_bed_count=1,
+            nearby_door_count=1,
+        )
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "home_base")
+        self.assertIn("家・拠点らしい", place["place_line"])
+
+    def test_active_mining_remains_more_specific_than_home(self) -> None:
+        from dogido_server.state_machine import DogidoStateMachine
+
+        machine = DogidoStateMachine(Settings(llm_enabled=False, decision_policy="py_trees"))
+        event = self._dark_roofed_event(
+            respawn_point_set=True,
+            respawn_distance=2.0,
+            nearby_bed_count=1,
+            nearby_door_count=1,
+        )
+        event.player.held_item = "minecraft:iron_pickaxe"
+        event.player.block_breaking_active = True
+        event.recent_block_breaks = [
+            RecentBlockBreak(name="stone", material="stone", age_ms=500)
+        ]
+
+        place = machine._player_chat_place_context(event)
+
+        self.assertEqual(place["space_kind"], "active_mining")
+        self.assertIn("採掘中", place["place_line"])

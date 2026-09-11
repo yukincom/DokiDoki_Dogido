@@ -169,7 +169,7 @@ class NormalEnvironmentEvent(_Condition):
             or context.machine._has_pending_player_chat(context.event)
             or context.machine._dragon_special_pending(context.event, context.now)
             or context.machine.state.pending_overworld_return_line
-            or context.signals.light_source_crafted
+            or context.signals.light_source_gain
             or context.machine.state.pending_special_biome_line is not None
             or context.machine.state.pending_structure_entry_key is not None
             or context.machine._has_recent_ender_eye_launch(context.event)
@@ -191,6 +191,10 @@ class NormalEnvironmentEvent(_Condition):
             or context.machine._should_consider_damaging_light_warning(context.event, context.now)
             or context.machine._has_recent_nearby_lightning(context.event)
             or context.machine._has_recent_thunder_sound(context.event)
+            or context.machine._has_unannounced_smell(
+                context.event,
+                context.now,
+            )
             or (
                 getattr(context.event.world.time_phase, "value", context.event.world.time_phase) == "night"
                 and (context.event.world.nearby_firefly_bush_count or 0) > 0

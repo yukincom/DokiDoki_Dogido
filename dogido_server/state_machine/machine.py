@@ -137,7 +137,11 @@ class DogidoStateMachine(
         exited_safe_zone_with_door = False if dimension_changed else self._exited_safe_zone_with_door(event)
         entered_submerged_dark_zone = False if dimension_changed else self._entered_submerged_dark_zone(event)
         entered_mining_fatigue = False if dimension_changed else self._entered_status_effect(event, "mining_fatigue")
-        light_source_crafted = self._light_source_crafted(event)
+        (
+            previous_light_source_count,
+            current_light_source_count,
+            light_source_gain_count,
+        ) = self._light_source_gain(event)
 
         self._sync_haiku_interval_pause(now)
         self._update_memory(event, now)
@@ -151,7 +155,9 @@ class DogidoStateMachine(
         signals.exited_safe_zone_with_door = exited_safe_zone_with_door
         signals.entered_submerged_dark_zone = entered_submerged_dark_zone
         signals.entered_mining_fatigue = entered_mining_fatigue
-        signals.light_source_crafted = light_source_crafted
+        signals.light_source_gain = light_source_gain_count > 0
+        signals.previous_light_source_count = previous_light_source_count
+        signals.current_light_source_count = current_light_source_count
         signals.weather_transition_from = weather_transition[0] if weather_transition is not None else None
         signals.weather_transition_to = weather_transition[1] if weather_transition is not None else None
         if weather_transition is not None:

@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from dogido_server.config import Settings
+from dogido_server.dialogue_context import DialogueContext
 from dogido_server.models import (
     AmbientSound,
     Certainty,
@@ -838,6 +839,260 @@ class PlayerInputEndpointTests(unittest.TestCase):
             rows = service.memory._read_jsonl(service.memory.short_term_path)  # type: ignore[union-attr]
             chat_rows = [row for row in rows if row["type"] == "player_input"]
             self.assertEqual(["チャット入力や", "ボイス入力や"], [row["text"] for row in chat_rows])
+
+
+class GroundedPlayerChatIntegrationTests(unittest.TestCase):
+    class PlannerLLM:
+        def __init__(self, plan: dict[str, object], leaf_text: str) -> None:
+            self.plan = plan
+            self.leaf_text = leaf_text
+            self.structured_requests = []
+            self.leaf_requests = []
+
+        def preload(self) -> bool:
+            return False
+
+        def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+            self.structured_requests.append(request)
+            if request.kind == "player_chat_plan":
+                return {**self.plan, "__dogido_status": "accepted"}
+            return request.fallback_value
+
+        def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+            self.leaf_requests.append(request)
+            return self.leaf_text
+
+    def _machine(
+        self,
+        plan: dict[str, object],
+        leaf_text: str,
+        context: DialogueContext | None = None,
+    ) -> tuple[DogidoStateMachine, PlannerLLM]:
+        llm = self.PlannerLLM(plan, leaf_text)
+        machine = DogidoStateMachine(
+            Settings(decision_policy="py_trees", llm_enabled=True, audio_enabled=False),
+            llm=llm,
+        )
+        if context is not None:
+            machine.dialogue_context_provider = lambda: context
+        return machine, llm
+
+    @staticmethod
+    def _continuation_plan(quote: str) -> dict[str, object]:
+        return {
+            "action": "continue_conversation",
+            "focus": "現在の感想への返答",
+            "entity_query": "",
+            "evidence": [{"turn_id": "current", "quote": quote}],
+            "confidence": 0.95,
+        }
+
+    @staticmethod
+    def _presence_plan(text: str) -> dict[str, object]:
+        return {
+            "action": "check_entity_presence",
+            "focus": "ラバの現在の在否",
+            "entity_query": "ラバ",
+            "evidence": [{"turn_id": "current", "quote": text}],
+            "confidence": 0.96,
+        }
+
+    def test_false_mule_history_does_not_trigger_descriptor_catalog_match(self) -> None:
+        context = DialogueContext()
+        context.add_player("こっちはおるよ", turn_id="old")
+        context.add_dogido("ラバおるなら大丈夫そうやな", turn_id="old:reply")
+        machine, llm = self._machine(
+            self._continuation_plan("大丈夫そうですね"),
+            "ラバも落ち着いたみたいやな。",
+            context,
+        )
+        text = "よしよし、大丈夫そうですね"
+        event = make_event(sequence=1, user_text=text)
+        machine.player_input = route_player_input(text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual(CHAT_REPLY, reply)
+        self.assertEqual(1, len(llm.leaf_requests))
+        details = llm.leaf_requests[0].details
+        self.assertEqual("continue_conversation", details["player_chat_plan_action"])
+        self.assertEqual([], details["catalog_topic_ids"])
+        self.assertEqual("", details["catalog_topic_hints"])
+        self.assertNotIn("ラバ", details["allowed_speech_labels"])
+        self.assertTrue(details["speech_whitelist_enforce"])
+
+    def test_unobserved_presence_question_returns_code_grounded_reply(self) -> None:
+        player_text = "近くにラバがいるの？"
+        machine, llm = self._machine(
+            self._presence_plan(player_text),
+            "ラバならすぐそこにおるで。",
+        )
+        event = make_event(sequence=1, user_text=player_text)
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual("今の観測では、ラバは確認できてへんわ。", reply)
+        self.assertEqual([], llm.leaf_requests)
+
+    def test_user_presence_report_is_not_promoted_to_observation(self) -> None:
+        player_text = "ラバがいる"
+        machine, llm = self._machine(
+            self._continuation_plan(player_text),
+            "ラバがおるんやな。",
+        )
+        event = make_event(sequence=1, user_text=player_text)
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual("ラバがおるんやな。", reply)
+        details = llm.leaf_requests[0].details
+        self.assertEqual("not_applicable", details["entity_grounding_status"])
+        self.assertEqual([], details["entity_observed_ids"])
+        self.assertIn("ラバ", details["allowed_speech_labels"])
+        prompt = build_messages(llm.leaf_requests[0])[1]["content"]
+        self.assertIn("本人の報告", prompt)
+        self.assertIn("自分も見た・確認したとは言わない", prompt)
+
+    def test_matching_passive_observation_allows_confirmed_presence_reply(self) -> None:
+        player_text = "近くにラバがいるの？"
+        machine, llm = self._machine(
+            self._presence_plan(player_text),
+            "うん、ラバは今見えとるで。",
+        )
+        event = make_event(sequence=1, user_text=player_text)
+        event.passive_mobs = [
+            PassiveMob(
+                type="mule",
+                distance=4.0,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+            )
+        ]
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual("うん、ラバは今見えとるで。", reply)
+        details = llm.leaf_requests[0].details
+        self.assertEqual("observed", details["entity_grounding_status"])
+        self.assertEqual(["mule"], details["entity_observed_ids"])
+
+    def test_identification_hints_follow_matching_observation_not_first_catalog_hit(
+        self,
+    ) -> None:
+        player_text = "あの村人は何？"
+        plan = {
+            "action": "identify_entity",
+            "focus": "視認中の対象の同定",
+            "entity_query": "村人",
+            "evidence": [{"turn_id": "current", "quote": player_text}],
+            "confidence": 0.96,
+        }
+        machine, llm = self._machine(
+            plan,
+            "村人ゾンビやと思う。",
+        )
+        event = make_event(sequence=1, user_text=player_text)
+        event.passive_mobs = [
+            PassiveMob(
+                type="zombie_villager",
+                distance=4.0,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+            )
+        ]
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual("村人ゾンビやと思う。", reply)
+        details = llm.leaf_requests[0].details
+        self.assertEqual(["zombie_villager"], details["entity_observed_ids"])
+        self.assertEqual(["zombie_villager"], details["catalog_topic_ids"])
+        self.assertNotIn("villager", details["catalog_topic_ids"])
+        self.assertEqual("", details["identify_skeleton"])
+
+    def test_current_structure_answers_named_structure_presence(self) -> None:
+        player_text = "前哨基地ある？"
+        plan = {
+            "action": "check_entity_presence",
+            "focus": "前哨基地の現在の在否",
+            "entity_query": "前哨基地",
+            "evidence": [{"turn_id": "current", "quote": player_text}],
+            "confidence": 0.96,
+        }
+        machine, llm = self._machine(
+            plan,
+            "うん、ピリジャーぜんしょう基地の中やで。",
+        )
+        machine.state.current_structure = "pillager_outpost"
+        event = make_event(sequence=1, user_text=player_text)
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertEqual("うん、ピリジャーぜんしょう基地の中やで。", reply)
+        details = llm.leaf_requests[0].details
+        self.assertEqual("observed", details["entity_grounding_status"])
+        self.assertEqual(["pillager_outpost"], details["entity_observed_ids"])
+        self.assertEqual(["pillager_outpost"], details["entity_candidate_ids"])
+        self.assertEqual([], details["catalog_topic_ids"])
+        self.assertNotIn("ピリジャー", details["allowed_speech_labels"])
+
+    def test_observed_related_mob_does_not_confirm_named_structure(self) -> None:
+        player_text = "前哨基地ある？"
+        plan = {
+            "action": "check_entity_presence",
+            "focus": "前哨基地の現在の在否",
+            "entity_query": "前哨基地",
+            "evidence": [{"turn_id": "current", "quote": player_text}],
+            "confidence": 0.96,
+        }
+        machine, llm = self._machine(
+            plan,
+            "前哨基地やで。",
+        )
+        event = make_event(sequence=1, user_text=player_text)
+        event.visual_threats = [
+            VisualThreat(
+                type="pillager",
+                entity_id="pillager-1",
+                distance=12.0,
+                direction=Direction(horizontal=HorizontalDirection.FRONT),
+                certainty=Certainty.HIGH,
+            )
+        ]
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertIn("ピリジャーぜんしょう基地は確認できてへん", reply)
+        self.assertEqual([], llm.leaf_requests)
+
+    def test_correction_of_unobserved_assistant_claim_is_fixed_and_apologetic(self) -> None:
+        context = DialogueContext()
+        context.add_player("何かおる？", turn_id="old")
+        context.add_dogido("ラバがすぐそこにおるで", turn_id="old:reply")
+        player_text = "さっきラバいるって言ったけど違うやん"
+        plan = {
+            "action": "correct_previous_reply",
+            "focus": "過去のラバ在否断言の訂正",
+            "entity_query": "ラバ",
+            "evidence": [
+                {"turn_id": "old:reply", "quote": "ラバがすぐそこにおるで"},
+                {"turn_id": "current", "quote": player_text},
+            ],
+            "confidence": 0.98,
+        }
+        machine, llm = self._machine(plan, "ラバはおるって。", context)
+        event = make_event(sequence=1, user_text=player_text)
+        machine.player_input = route_player_input(player_text)
+
+        reply = machine._render_player_chat_reply(event)  # type: ignore[attr-defined]
+
+        self.assertIn("今の観測ではラバは確認できてへん", reply)
+        self.assertIn("断言しすぎた", reply)
+        self.assertEqual([], llm.leaf_requests)
 
 
 if __name__ == "__main__":

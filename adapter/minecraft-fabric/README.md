@@ -15,6 +15,7 @@
 - `status_snapshot` の定期送信
 - 近距離 hostile 検知時の `threat_approaching` 送信
 - 遮蔽された近距離 hostile を `hostile_audio_detected` として送信
+- 実近接源・hotbar・現在バイオーム・温度・天候を競わせ、方向・距離・個数を含めない `smell_observation` 一件として送信
 - プレイヤー死亡時の `player_died` 送信
 - 戦闘収束時の `combat_ended` 送信
 - game-event応答の型付き `select_hotbar` command受信
@@ -37,6 +38,15 @@
 - `SoundManager` まで届いた焚き火などのブロック音・環境音・天候音も `ambient_sounds` へ載せる
 - クライアント側の音観測 TTL は約 **15秒**（300 tick）。「…？ → 今の音なに？」の猶予用
 - サーバの player_chat hearing バッファは別途約 **20秒**
+
+## 匂い（遊びの限定観測）
+
+- 伝播力に必要な範囲だけ調べる指定block、指定itemのhotbar 9slotと落下item、沼バイオーム、未視認・未聴取ゾンビ系だけを候補にする
+- 伝播力、3次元距離、Minecraft温度、雨上がり補正をコードで比較し、同種は合算しない
+- activeな雨・雪・雷と水中は `suppressed`。候補なしも `none` として明示する
+- 火のついたcampfire／soul campfireの実調理slotにある肉・魚だけは寒さによる減衰を受けない
+- 結果payloadは方向、正確な距離、個数、entity IDを含めず、匂いだけでadapterの戦闘追跡を開始しない
+- 詳しい対象ID・計算・雨上がり・サーバー発話は親プロジェクトの [`docs/smell-policy.md`](../../docs/smell-policy.md)
 
 ## 設定ファイル
 

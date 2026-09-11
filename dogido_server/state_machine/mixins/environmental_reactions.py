@@ -3,8 +3,18 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from dogido_server.dialogue.light_source_comment_planner import (
+    LightSourceCommentContext,
+    plan_light_source_comment,
+)
 from dogido_server.knowledge_query import split_knowledge_speech
-from dogido_server.models import EventName, GameEvent
+from dogido_server.models import EventName, GameEvent, SmellObservation
+from dogido_server.smell import (
+    event_smell_observation,
+    observation_is_legacy_zombie,
+    smell_signature,
+    smell_speech,
+)
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.fallback_catalog import fallback_text
 from dogido_server.state_machine.response_catalog import response_text
@@ -85,6 +95,79 @@ class EnvironmentalReactionsMixin:
             recent_ms is not None
             and recent_ms < self.settings.darkness_advice_cooldown_ms
         )
+
+    def _usable_smell_observation(
+        self,
+        event: GameEvent,
+    ) -> SmellObservation | None:
+        """現在フレームで脅威反応と競合しない、解決済みの匂い観測。"""
+
+        # ゾンビ候補はadapterでも個体単位に視認・音を除外する。別の敵を
+        # 見聞きしている戦況では、花や食べ物を含め匂いの自発発話を後回しにする。
+        if event.visual_threats or event.auditory_threats:
+            return None
+        return event_smell_observation(event)
+
+    def _has_unannounced_smell(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> bool:
+        observation = self._usable_smell_observation(event)
+        signature = smell_signature(observation)
+        if signature is None or signature != self.state.active_smell_signature:
+            return False
+        if signature == self.state.announced_smell_signature:
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_smell_comment_at)
+        cooldown_ms = (
+            self.settings.zombie_scent_comment_cooldown_ms
+            if observation_is_legacy_zombie(event)
+            else self.settings.smell_comment_cooldown_ms
+        )
+        return (
+            recent_ms is None
+            or recent_ms >= cooldown_ms
+        )
+
+    def _smell_observation_actions(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> list[AudioAction]:
+        """解決済みの優勢な匂いを一度だけ話す。戦闘状態は変更しない。"""
+
+        if not self._has_unannounced_smell(event, now):
+            return []
+        observation = self._usable_smell_observation(event)
+        speech = smell_speech(observation)
+        self._mark_smell_announced(observation, now)
+        return [
+            AudioAction(
+                layer="speech",
+                interrupt=False,
+                cue_id=speech.cue_id,
+                text=speech.text,
+                protect_ms=2000,
+                speech_profile=speech.speech_profile,
+                queue_priority="foreground",
+            )
+        ]
+
+    def _mark_smell_announced(
+        self,
+        observation: SmellObservation | None,
+        now: datetime,
+    ) -> None:
+        signature = smell_signature(observation)
+        if signature is None:
+            return
+        # 問いへの即時回答では2観測の安定化待ちを消費し、次tickの自発発話を防ぐ。
+        self.state.active_smell_signature = signature
+        self.state.pending_smell_signature = None
+        self.state.pending_smell_observation_count = 0
+        self.state.announced_smell_signature = signature
+        self.state.last_smell_comment_at = now
 
     def _darkness_advice(self, event: GameEvent, signals: DerivedSignals) -> str | None:
         now = event.observed_at
@@ -357,6 +440,16 @@ class EnvironmentalReactionsMixin:
         stop_dark_push: bool,
     ) -> list[AudioAction]:
         """暗所・ボス予兆など。workshop 中は安全系のみ残す。"""
+        observation = self._usable_smell_observation(event)
+        if (
+            observation is not None
+            and observation.smell_id == "zombie"
+            and observation.specificity == "source"
+        ):
+            scent_actions = self._smell_observation_actions(event, now)
+            if scent_actions:
+                return scent_actions
+
         haiku_focus = self._haiku_focus_active()
 
         if not haiku_focus:
@@ -368,7 +461,7 @@ class EnvironmentalReactionsMixin:
             if actions:
                 return actions
 
-            actions = self._light_source_crafted_actions(event, signals, stop_dark_push)
+            actions = self._light_source_gain_actions(event, signals, stop_dark_push, now)
             if actions:
                 return actions
 
@@ -521,6 +614,12 @@ class EnvironmentalReactionsMixin:
         weather_transition = self._weather_transition_callout(event, signals)
         if weather_transition:
             return self._speech_actions(weather_transition)
+
+        # 特定ゾンビ以外の匂いはambient。暗所・ボス予兆などの安全反応や
+        # player inputの直後を押しのけない。未発話signatureは次tickへ残る。
+        scent_actions = self._smell_observation_actions(event, now)
+        if scent_actions:
+            return scent_actions
 
         # エンダーアイ投擲はプレイヤー自身の行動への相槌なので早めに返す
         ender_eye_line = self._emit_ender_eye_throw_line(event, now)
@@ -858,19 +957,77 @@ class EnvironmentalReactionsMixin:
         actions.extend(self._speech_actions(emergency_shelter_morning))
         return actions
 
-    def _light_source_crafted_actions(
+    def _light_source_gain_actions(
         self,
         event: GameEvent,
         signals: DerivedSignals,
         stop_dark_push: bool,
+        now: datetime,
     ) -> list[AudioAction]:
-        if not signals.light_source_crafted:
+        if not signals.light_source_gain:
             return []
-        self._reset_dark_push_state()
+
+        dark_push_context_before = self.state.dark_push_active or self.state.dark_push_stage >= 1
+        dark_push_should_stop = stop_dark_push or self._should_stop_dark_push_stage_one(
+            event,
+            signals,
+        )
+        darkness_recovered = (
+            dark_push_context_before and self._dark_push_recovered(event)
+        )
+        local_light = event.world.local_light
+        surroundings_reasonably_lit = (
+            self._is_nearby_light_source_buffered_event(event)
+            or self._is_lit_interior_safe_pocket_event(event)
+            or signals.danger_darkness_score < self.settings.darkness_alert_threshold
+            or (
+                local_light is not None
+                and local_light > self.settings.darkness_advice_light_threshold
+            )
+        )
+        severe_darkness = (
+            not surroundings_reasonably_lit
+            and signals.danger_darkness_score >= self.settings.darkness_alert_threshold
+            and (
+                local_light is None
+                or local_light <= self.settings.darkness_advice_light_threshold
+            )
+        )
+        recent_ms = self._recent_ms(now, self.state.last_light_source_comment_at)
+        context = LightSourceCommentContext(
+            previous_count=signals.previous_light_source_count,
+            current_count=signals.current_light_source_count,
+            surroundings_reasonably_lit=surroundings_reasonably_lit,
+            severe_darkness=severe_darkness,
+            nearby_light_present=self._has_nearby_light_source_event(event),
+            dark_push_context_before=dark_push_context_before,
+            dark_push_recovered=darkness_recovered,
+            recent_comment=(
+                recent_ms is not None
+                and recent_ms < self.settings.darkness_llm_comment_cooldown_ms
+            ),
+        )
+        plan = plan_light_source_comment(self.llm, context=context)
+
         actions: list[AudioAction] = []
         if stop_dark_push:
             actions.append(self._control_interrupt_action())
-        actions.extend(self._speech_actions(self._render_light_crafted_line(event)))
+        if dark_push_should_stop:
+            # 呼吸音や暗所stageの停止は発話要否と無関係にコードで確定する。
+            self._reset_dark_push_state()
+        if plan.should_speak:
+            line = self._render_light_source_gain_line(
+                event,
+                comment_action=plan.action,
+                surroundings_light=(
+                    "reasonably_lit"
+                    if surroundings_reasonably_lit
+                    else "not_reasonably_lit"
+                ),
+            )
+            if line:
+                self.state.last_light_source_comment_at = now
+                actions.extend(self._speech_actions(line))
         return actions
 
     def _emergency_shelter_entry_actions(

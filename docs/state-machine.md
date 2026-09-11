@@ -362,6 +362,14 @@
 5. ベッドを作れるなら作成を促す
 6. それも無理なら帰宅を促す
 
+### 照明器具が増えたときの発話
+
+- `status_snapshot` の前回値との差から分かるのは、松明・魂の松明・ランタン類の所持総数が増えたことだけ。クラフト、設置、拾得、持ち替えのどれかは推定しない
+- 半スタック以上を持ち、周囲が既存の暗所警告条件に当たらない場合は即時に無言。直近5分に同種コメント済みの場合と、現在も危険な暗さの場合も無言にする
+- それ以外だけ、有界 `light_source_comment_plan` が `stay_silent / acknowledge_supply_gain / relief_after_darkness` の一件を選ぶ。未知action・未知basis・低信頼の発話判断は無言へ落とす
+- `dark_push` の停止可否は従来どおり現在の明るさ・危険度でコード判定する。所持数が増えただけでは停止せず、実際に回復していればplannerが無言を選んでも呼吸音と内部stageは停止する
+- 発話leafへ正確な本数は渡さず、未観測の入手方法や本数を述べた生成結果は固定fallbackへ置き換える
+
 ### 簡易シェルター
 
 - `cardinal_wall_count` と `ceiling_height` は簡易シェルターの形状判定に使う
@@ -398,6 +406,16 @@
 - 方向中心
 - `なんか左奥で声する`
 - 断定は抑える
+
+### 匂い
+
+- `smell_observation` はadapter側の[スメルバトル](smell-policy.md)で解決済みの一件。`none / present / suppressed` を区別する
+- 新しい `present` は同じsignatureを2観測連続で受けてから有効化し、境界で勝者が揺れた1frameを話さない
+- 同じ優勢状態では一度だけ、消失後の再出現や別の勝者にも全体2分クールダウン。旧 `zombie_scent_clues` だけは互換上初回で有効化する
+- visual／auditory脅威と同frameなら自発匂い発話を後回しにするが、匂いの存在状態は失わない
+- 特定ゾンビは従来の警告優先度、それ以外はplayer inputと安全反応の後のambientに置く
+- 匂い単独ではmodeを `normal` のまま保ち、combat activeやworkshop pauseを立てない
+- 同tickにplayer inputがあれば返答を先にし、安定した未発話の匂いは次の安全なtickまで保持する
 
 ### 記憶を伴う場合
 

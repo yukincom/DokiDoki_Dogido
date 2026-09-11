@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 
 from dogido_server.dialogue.player_plan import extract_player_turn_plan
@@ -750,6 +751,16 @@ class NarrationMixin:
         # 文脈 STT 補正は雑談理解だけに使う。明示操作・永続化の判定は
         # PlayerInputContext.raw/normalized_text を参照する別経路のまま。
         user_text = (self.player_input.semantic_text or "").strip()
+        from dogido_server.smell import event_smell_observation, smell_speech
+
+        scent_observation = event_smell_observation(event)
+        scent_mentioned = self._player_chat_mentions_scent(user_text)
+        if scent_mentioned:
+            # 対応済みadapterの none と、旧adapterの観測なしを分ける。presentも
+            # モデルへ生成させず、adapterが解決した一件だけをコード固定で返す。
+            speech = smell_speech(scent_observation)
+            self._mark_smell_announced(scent_observation, event.observed_at)
+            return speech.text
         player_turn_plan = extract_player_turn_plan(user_text)
         safety_priority = self._player_chat_safety_priority(event)
         home_progress = (
@@ -761,30 +772,28 @@ class NarrationMixin:
             build_allowed_speech_labels,
             build_identify_skeleton,
             build_observed_speech_name_corrections,
+            catalog_labels_mentioned_in_text,
             filter_usable_topic_hits,
-            has_threat_presence_query,
             reply_policy_line,
             resolve_reply_stance,
-            should_enforce_speech_whitelist,
+        )
+        from dogido_server.dialogue.player_chat_planner import (
+            fixed_grounded_player_chat_reply,
+            ground_player_chat_entity,
+            plan_player_chat,
         )
 
-        # 音メモ: 音の明示問い または 在否・気配の問い（#33 戦況）
-        # 視覚話題の常時上書きは避けるが、在否では音レンジも材料にする
+        # plannerは談話関係を先に解き、その結果が在否照合なら音も最終材料へ出す。
+        # 読み取り自体は副作用がないため、planner入力用には一度だけ集めておく。
         wants_sound = bool(self.player_input.asks_about_sound)
-        wants_presence = has_threat_presence_query(user_text)
-        hearing_summary = ""
-        hearing_named_mobs: list[str] = []
-        hearing_source_labels: list[str] = []
-        hearing_types: list[str] = []
-        if wants_sound or wants_presence:
-            hearing_summary = self._player_chat_hearing_summary(event)
-            hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
-            hearing_source_labels = self._player_chat_hearing_source_labels(event)
-            hearing_types = self._player_chat_hearing_mob_types(event)
-        threat_summary = self._player_chat_threat_summary(
+        available_hearing_summary = self._player_chat_hearing_summary(event)
+        available_hearing_named_mobs = self._player_chat_hearing_named_mobs(event)
+        available_hearing_source_labels = self._player_chat_hearing_source_labels(event)
+        available_hearing_types = self._player_chat_hearing_mob_types(event)
+        visual_threat_summary = self._player_chat_threat_summary(
             event,
-            include_hearing=wants_sound or wants_presence,
-            hearing_summary=hearing_summary,
+            include_hearing=False,
+            hearing_summary="",
         )
         place_ctx = self._player_chat_place_context(event)
         environment = project_environment(event)
@@ -809,27 +818,98 @@ class NarrationMixin:
                 fallback = "せやな、暗なる前に帰ろか。気いつけてな。"
             else:
                 fallback = "せやな、気いつけて帰ろか。"
-        raw_topic_hits = self._player_chat_topic_hits(user_text, effective_visual_types)
-
         passive_types = self._player_chat_observed_passive_types(event)
         recent_name_context_types = self._player_chat_recent_name_context_types(event)
-        # 存在判定: 視認（recent 含む）∪ 音バッファの種
+        # plannerの照合候補: 視認（recent含む）∪ 平和mob ∪ 実音源。
         observed_ids = self._merge_unique_types(
             effective_visual_types,
             passive_types,
-            hearing_types,
+            available_hearing_types,
+        )
+        observed_entities = self._player_chat_observed_entity_rows(event, observed_ids)
+        history_details = self._player_chat_history_details()
+        look_target_label = self._look_target_label(event)
+        look_for_observation = (
+            look_target_label if self._player_chat_wants_look_answer(user_text) else ""
+        )
+        passive_observation_types = (
+            [] if player_turn_plan.action == "return_home" else passive_types
+        )
+        planner_observation_summary = self._player_chat_observation_summary(
+            event,
+            threat_summary=visual_threat_summary,
+            hearing_summary="",
+            passive_types=passive_observation_types,
+            look_target_label=look_for_observation,
+        )
+        chat_plan = plan_player_chat(
+            self.llm,
+            user_text=user_text,
+            conversation_turns=history_details.get("conversation_turns"),
+            observation_summary=planner_observation_summary,
+            observed_entities=observed_entities,
+            look_target_label=look_for_observation,
+            hearing_summary=available_hearing_summary,
+            inventory_question=bool(self.player_input.asks_inventory),
+            sound_question=wants_sound,
+        )
+        use_hearing = wants_sound or chat_plan.action in {
+            "check_entity_presence",
+            "correct_previous_reply",
+        }
+        hearing_summary = available_hearing_summary if use_hearing else ""
+        hearing_named_mobs = available_hearing_named_mobs if use_hearing else []
+        hearing_source_labels = available_hearing_source_labels if use_hearing else []
+        threat_summary = self._player_chat_threat_summary(
+            event,
+            include_hearing=use_hearing,
+            hearing_summary=hearing_summary,
+        )
+        observation_summary = self._player_chat_observation_summary(
+            event,
+            threat_summary=threat_summary,
+            hearing_summary=hearing_summary,
+            passive_types=passive_observation_types,
+            look_target_label=look_for_observation,
+        )
+
+        # カタログはplannerが対象照合を選んだ場合だけ読む。会話の相槌や形容詞を
+        # 全カタログのvisual_tagsへ流さない。
+        raw_topic_hits = (
+            self._player_chat_topic_hits(chat_plan.entity_query, observed_ids)
+            if chat_plan.requests_catalog
+            else []
         )
         usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
+        entity_grounding = ground_player_chat_entity(
+            chat_plan,
+            topic_hits=usable_topic_hits,
+            observed_entities=observed_entities,
+        )
+        fixed_grounded_reply = fixed_grounded_player_chat_reply(
+            chat_plan,
+            entity_grounding,
+        )
         reply_stance = resolve_reply_stance(
             has_visual_threats=has_visual_for_chat,
             topic_hits=raw_topic_hits,
             threat_summary=threat_summary,
-            user_text=user_text,
+            user_text=chat_plan.entity_query or user_text,
             observed_ids=observed_ids,
         )
         reply_policy = reply_policy_line(reply_stance)
-        # hypothesis のときだけ強い topic を hints / allowed / plausibility に使う
-        topic_for_identify = usable_topic_hits if reply_stance == "hypothesis" else []
+        topic_for_identify: list[dict[str, object]] = []
+        if chat_plan.action == "identify_entity" and reply_stance == "hypothesis":
+            grounded_ids = set(entity_grounding.observed_ids)
+            topic_for_identify = (
+                [
+                    hit
+                    for hit in usable_topic_hits
+                    if str(hit.get("entry_id") or "") in grounded_ids
+                ]
+                if grounded_ids
+                else usable_topic_hits
+            )
         catalog_topic_hints = (
             self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
         )
@@ -840,16 +920,40 @@ class NarrationMixin:
             hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
             recent_mob_types=recent_name_context_types,
         )
+        reported_texts = [user_text]
+        conversation_turns = history_details.get("conversation_turns")
+        if isinstance(conversation_turns, list):
+            reported_texts.extend(
+                str(row.get("text") or "")
+                for row in conversation_turns
+                if isinstance(row, dict) and row.get("role") == "user"
+            )
+        additional_labels = [
+            *(row["label"] for row in observed_entities),
+            *(
+                label
+                for text in reported_texts
+                for label in catalog_labels_mentioned_in_text(text)
+            ),
+            *catalog_labels_mentioned_in_text(look_for_observation),
+        ]
+        for label in additional_labels:
+            if label and label not in allowed_speech_labels:
+                allowed_speech_labels.append(label)
         speech_name_corrections = build_observed_speech_name_corrections(
             recent_name_context_types
         )
-        speech_whitelist_enforce = should_enforce_speech_whitelist(
-            reply_stance, allowed_speech_labels
-        )
+        # 全通常雑談でカタログ名を検査する。許可元は現在観測、現在/過去の
+        # player発話、plannerが選んだ同定候補だけ。assistant履歴だけの名は含めない。
+        speech_whitelist_enforce = True
         identify_skeleton = build_identify_skeleton(
             stance=reply_stance,
             topic_hits=topic_for_identify,
         )
+        if entity_grounding.status == "observed":
+            # 従来のhypothesis骨子は「俺には見えん」を含むため、
+            # コード観測済みの同定とは同時に渡さない。
+            identify_skeleton = None
         from dogido_server.entry_catalog import (
             build_plausibility_hint_lines,
             normalize_biome_id,
@@ -867,23 +971,6 @@ class NarrationMixin:
             structure_ids = []
             plausibility_lines = []
         plausibility_hints = "\n".join(f"- {line}" for line in plausibility_lines)
-        look_target_label = self._look_target_label(event)
-        # ＋は指差しのときだけ観測メモに載せる（戦況・開いた雑談では控えめ）
-        look_for_observation = (
-            look_target_label if self._player_chat_wants_look_answer(user_text) else ""
-        )
-        # 明示された帰宅予定があるターンは、直近の友好モブを主題より前へ出さない。
-        # 脅威・音・指差しは安全に必要なので従来どおり残す。
-        passive_observation_types = (
-            [] if player_turn_plan.action == "return_home" else passive_types
-        )
-        observation_summary = self._player_chat_observation_summary(
-            event,
-            threat_summary=threat_summary,
-            hearing_summary=hearing_summary if (wants_sound or wants_presence) else "",
-            passive_types=passive_observation_types,
-            look_target_label=look_for_observation,
-        )
         LOGGER.warning(
             "player_chat_visual count=%s types=%s recent=%s threat_summary=%s look=%s hearing_n=%s",
             len(event.visual_threats),
@@ -914,6 +1001,17 @@ class NarrationMixin:
             reply_stance,
             ",".join(allowed_speech_labels) or "-",
             speech_whitelist_enforce,
+        )
+        LOGGER.warning(
+            "player_chat_grounding action=%s source=%s focus=%s entity=%s status=%s "
+            "candidates=%s observed=%s",
+            chat_plan.action,
+            chat_plan.source,
+            chat_plan.focus[:80],
+            chat_plan.entity_query or "-",
+            entity_grounding.status,
+            ",".join(entity_grounding.candidate_ids) or "-",
+            ",".join(entity_grounding.observed_ids) or "-",
         )
         LOGGER.warning(
             "player_chat_guidance time_phase=%s safety=%s turn_plan=%s evidence=%s "
@@ -1003,6 +1101,19 @@ class NarrationMixin:
             "hearing_source_labels": hearing_source_labels,
             "asks_about_sound": self.player_input.asks_about_sound,
             "observation_summary": observation_summary,
+            "player_chat_plan_action": chat_plan.action,
+            "player_chat_plan_focus": chat_plan.focus,
+            "player_chat_plan_source": chat_plan.source,
+            "player_chat_plan_evidence": [
+                {"turn_id": row.turn_id, "quote": row.quote}
+                for row in chat_plan.evidence
+            ],
+            "entity_query": entity_grounding.query,
+            "entity_grounding_status": entity_grounding.status,
+            "entity_candidate_ids": list(entity_grounding.candidate_ids),
+            "entity_candidate_labels": list(entity_grounding.candidate_labels),
+            "entity_observed_ids": list(entity_grounding.observed_ids),
+            "entity_observed_labels": list(entity_grounding.observed_labels),
             "catalog_topic_hints": catalog_topic_hints,
             "catalog_topic_ids": [str(hit.get("entry_id") or "") for hit in topic_for_identify],
             "reply_stance": reply_stance,
@@ -1031,7 +1142,7 @@ class NarrationMixin:
             "mob_tactics_notes": list(tactics.get("notes") or []),
             "forbidden_advice": list(tactics.get("forbidden_advice") or []),
             "safe_hints": list(tactics.get("safe_hints") or []),
-            **self._player_chat_history_details(),
+            **history_details,
             **self._player_chat_haiku_workshop_details(),
         }
         # Stage3: workshop open 中の player_chat は脅威以外の look/topic で句を食わない
@@ -1068,9 +1179,10 @@ class NarrationMixin:
                 "player_chat_workshop_strip open=1 look/topic/hearing stripped "
                 "(keep threat only)"
             )
-        # カタログ照合は生成材料にだけ使う。LLM が失敗したときに推測骨子を
-        # そのまま発話すると、誤照合した過去トピックを現在の返答として断言しかねない。
-        # fallback は入力内容を捏造しない中立文へ必ず戻す。
+        # 在否不成立と過去の誤断言訂正は、生成で再度断言させずコード固定で返す。
+        if fixed_grounded_reply:
+            return fixed_grounded_reply
+        # それ以外もfallbackは入力内容を捏造しない中立文へ必ず戻す。
         preferred_fallback = fallback
         text = self._generate_leaf_text(
             kind="player_chat",
@@ -1078,7 +1190,11 @@ class NarrationMixin:
             details=details,
             temperature=0.65,
         )
-        from dogido_server.llm.sanitize import contains_forbidden_mob_advice, is_style_acceptable
+        from dogido_server.llm.sanitize import (
+            contains_forbidden_mob_advice,
+            contains_unsupported_olfactory_claim,
+            is_style_acceptable,
+        )
         from dogido_server.player_chat_policy import rewrite_observed_speech_names
 
         text, applied_name_corrections = rewrite_observed_speech_names(
@@ -1093,6 +1209,12 @@ class NarrationMixin:
             )
 
         if contains_forbidden_mob_advice(text, details):
+            return preferred_fallback
+        if contains_unsupported_olfactory_claim(text, details):
+            LOGGER.warning(
+                "player_chat_scent_reject text=%s",
+                (text or "")[:80],
+            )
             return preferred_fallback
         # S2: 白リスト外種名なども style 不合格 → 骨子 or 中立 fallback
         if not is_style_acceptable("player_chat", text, details):
@@ -1215,6 +1337,8 @@ class NarrationMixin:
         """地表バイオームと「空間」（地下っぽさ）を分けて chat に渡す。
 
         biome id が白樺の森のままでも、sky_visible / 天井 / 囲まれ度で洞窟っぽさを伝える。
+        ただし設定済みリスポーン地点の近くにベッドかドアがあれば、
+        暗い拠点を単なる洞窟として扱わない。
         """
         environment = project_environment(event)
         biome_label = (
@@ -1242,6 +1366,7 @@ class NarrationMixin:
         low_ceiling = ceiling is not None and ceiling <= 8.0
         deep_y = y is not None and y <= 48.0
         enclosed = enclosure >= 0.35
+        home_evidence = self._player_chat_home_evidence(event)
 
         if submerged:
             space_kind = "underwater"
@@ -1249,6 +1374,20 @@ class NarrationMixin:
         elif environment.mining_state == "active":
             space_kind = "active_mining"
             space_ja = "地下で採掘中"
+        elif home_evidence:
+            fixtures_ja = "・".join(
+                label
+                for evidence_id, label in (
+                    ("nearby_bed", "ベッド"),
+                    ("nearby_door", "ドア"),
+                )
+                if evidence_id in home_evidence
+            )
+            space_kind = "home_base"
+            space_ja = (
+                "家・拠点らしい場所"
+                f"（近くの{fixtures_ja}と設定済みリスポーン地点が一致）"
+            )
         elif cave_biome:
             space_kind = "cave_biome"
             space_ja = "洞窟バイオームの中"
@@ -1294,17 +1433,46 @@ class NarrationMixin:
             "sky_visible": sky_visible,
             "place_line": place_line,
             "biome_label": biome_label,
+            "home_evidence": home_evidence,
         }
+
+    def _player_chat_home_evidence(self, event: GameEvent) -> tuple[str, ...]:
+        """雑談用の家らしさ。窓や暗さだけでは拠点へ昇格しない。"""
+        if not self._is_near_respawn_bed(event):
+            return ()
+
+        evidence: list[str] = ["nearby_respawn_point"]
+        if self._has_nearby_sleepable_bed(event):
+            evidence.append("nearby_bed")
+        if (event.world.nearby_door_count or 0) > 0:
+            evidence.append("nearby_door")
+        if len(evidence) == 1:
+            return ()
+        return tuple(evidence)
 
     def _player_chat_topic_hits(
         self,
         user_text: str,
         observed_types: list[str] | tuple[str, ...],
     ) -> list[dict[str, object]]:
-        """プレイヤー文 → カタログ話題候補（種族ハードコードなし）。"""
+        """プレイヤー文 → 観測で順位を曲げないカタログ候補。"""
         from dogido_server.entry_catalog import find_catalog_topics
 
-        return find_catalog_topics(user_text, observed_ids=observed_types)
+        # 先に発話だけで参照先を決め、その後で観測を照合する。
+        # find_catalog_topics の observed boost をここで使うと、
+        # 「前哨基地」への問いが視認中のピリジャーへすり替わり得る。
+        observed = {
+            str(raw or "").removeprefix("minecraft:").strip().lower()
+            for raw in observed_types
+            if str(raw or "").strip()
+        }
+        hits: list[dict[str, object]] = []
+        for raw_hit in find_catalog_topics(user_text):
+            hit = dict(raw_hit)
+            entry_id = str(hit.get("entry_id") or "").strip().lower()
+            hit["observed"] = entry_id in observed
+            hits.append(hit)
+        return hits
 
     def _format_player_chat_topic_hints(self, hits: list[dict[str, object]]) -> str:
         from dogido_server.entry_catalog import format_catalog_topic_hints
@@ -1322,6 +1490,80 @@ class NarrationMixin:
                 seen.add(text)
                 merged.append(text)
         return merged
+
+    def _player_chat_mentions_scent(self, text: str) -> bool:
+        compact = (text or "").replace(" ", "")
+        if any(
+            topic in compact
+            for topic in (
+                "言葉",
+                "ことば",
+                "句",
+                "川柳",
+                "俳句",
+                "表現",
+                "文章",
+                "文体",
+                "作品",
+                "物語",
+                "詩",
+                "比喩",
+                "ニュアンス",
+            )
+        ):
+            return False
+        return bool(
+            re.search(
+                r"(?:この|その|あの|今の|さっきの|ここ(?:の)?).{0,6}"
+                r"(?:匂|臭|にお|香り)",
+                compact,
+            )
+            or re.search(r"(?:何|なに|なん).{0,5}(?:匂|臭|にお|香り)", compact)
+            or re.search(
+                r"(?:匂い|におい|臭い|香り)(?:って|は|が|の)?"
+                r"(?:何|なに|なん|する|した|して|来|きた|漂|残|かも|かな|やろ)",
+                compact,
+            )
+            or re.search(r"(?:匂|臭|にお)(?:う|って|った)", compact)
+            or re.search(r"(?:なんか|何か).{0,5}(?:臭い|くさい)", compact)
+            or "くさっ" in compact
+            or "臭っ" in compact
+        )
+
+    def _player_chat_observed_entity_rows(
+        self,
+        event: GameEvent,
+        observed_types: list[str],
+    ) -> list[dict[str, str]]:
+        """plannerへ渡す、コード観測由来のIDと表示名だけの小さな表。"""
+
+        from dogido_server.entry_catalog import mob_entry, structure_entries
+
+        rows: list[dict[str, str]] = []
+        seen: set[str] = set()
+        candidates = list(observed_types)
+        vehicle = getattr(event.player, "vehicle", None)
+        vehicle_id = str(getattr(vehicle, "vehicle_id", "") or "")
+        if vehicle_id:
+            candidates.append(vehicle_id)
+        current_structure = str(getattr(self.state, "current_structure", "") or "")
+        if current_structure:
+            candidates.append(current_structure)
+        look_target = getattr(event, "look_target", None)
+        if str(getattr(look_target, "kind", "") or "") == "entity":
+            look_name = str(getattr(look_target, "name", "") or "")
+            if look_name:
+                candidates.append(look_name)
+        structures = structure_entries()
+        for raw_type in candidates:
+            entity_id = str(raw_type or "").removeprefix("minecraft:").strip().lower()
+            if not entity_id or entity_id in seen:
+                continue
+            seen.add(entity_id)
+            entry = mob_entry(entity_id) or structures.get(entity_id) or {}
+            label = str(entry.get("label") or entity_id).strip()
+            rows.append({"entity_id": entity_id, "label": label})
+        return rows
 
     def _player_chat_recent_name_context_types(self, event: GameEvent) -> list[str]:
         """危険な一般名の修正にだけ使う、直近の視認・聴取・討伐ID。"""
@@ -1540,20 +1782,35 @@ class NarrationMixin:
             "safe_fallback": safe_fallback,
         }
 
-    def _player_chat_history_details(self) -> dict[str, str]:
+    def _player_chat_history_details(self) -> dict[str, object]:
         """Session 側の DialogueContext があれば会話履歴・出来事を返す。"""
         provider = getattr(self, "dialogue_context_provider", None)
         if provider is None:
-            return {"conversation_history": "", "event_digest": ""}
+            return {
+                "conversation_history": "",
+                "conversation_turns": [],
+                "event_digest": "",
+            }
         try:
             context = provider()
         except Exception:
-            return {"conversation_history": "", "event_digest": ""}
+            return {
+                "conversation_history": "",
+                "conversation_turns": [],
+                "event_digest": "",
+            }
         if context is None:
-            return {"conversation_history": "", "event_digest": ""}
+            return {
+                "conversation_history": "",
+                "conversation_turns": [],
+                "event_digest": "",
+            }
         blocks = context.prompt_blocks()
+        prompt_turns = getattr(context, "prompt_turns", None)
+        turns = prompt_turns() if callable(prompt_turns) else []
         return {
             "conversation_history": str(blocks.get("conversation_history") or ""),
+            "conversation_turns": turns if isinstance(turns, list) else [],
             "event_digest": str(blocks.get("event_digest") or ""),
         }
 
@@ -2068,20 +2325,46 @@ class NarrationMixin:
             temperature=0.4,
         )
 
-    def _render_light_crafted_line(self, event: GameEvent) -> str:
-        return self._generate_leaf_text(
-            kind="light_crafted",
-            fallback_text=fallback_text(
-                "general",
-                "darkness",
-                "light_crafted",
-                prefix=self._player_call_prefix(event),
-            ),
+    def _render_light_source_gain_line(
+        self,
+        event: GameEvent,
+        *,
+        comment_action: str,
+        surroundings_light: str,
+    ) -> str:
+        fallback_key = (
+            "light_source_relief"
+            if comment_action == "relief_after_darkness"
+            else "light_source_gain"
+        )
+        fallback = fallback_text(
+            "general",
+            "darkness",
+            fallback_key,
+            prefix=self._player_call_prefix(event),
+        )
+        line = self._generate_leaf_text(
+            kind="light_source_gain",
+            fallback_text=fallback,
             details={
                 "player_name": self._player_call_name(event),
                 "biome": self._biome_label(event.world.biome),
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
-                "light_count": self._light_source_count(event.inventory),
+                "comment_action": comment_action,
+                "surroundings_light": surroundings_light,
             },
-            temperature=0.62,
+            temperature=0.48,
         )
+        if self._invalid_light_source_gain_claim(line):
+            return fallback
+        return line
+
+    def _invalid_light_source_gain_claim(self, line: str) -> bool:
+        """未観測の入手方法と、不要な本数実況を最終発話から除く。"""
+
+        text = str(line or "")
+        if any(token in text for token in ("クラフト", "作った", "作れた", "置いた", "設置", "拾った")):
+            return True
+        if re.search(r"(?:[0-9０-９]+|[一二三四五六七八九十百]+)\s*(?:本|個)", text):
+            return True
+        return bool(re.search(r"(?:明かり|あかり|松明|ランタン).{0,4}できた", text))

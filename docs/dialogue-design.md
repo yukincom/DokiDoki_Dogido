@@ -131,7 +131,7 @@
 | `aftermath` / `newly_burning_visual` | battle |
 | `death` | peace（責めず立て直す。わーきゃーしない） |
 | 暗所系 (`darkness_*` / `dark_push_*` / `occluded_entry_*` 等) | tension |
-| `emergency_shelter_relief` / `light_crafted` | peace（安堵・喜び） |
+| `emergency_shelter_relief` / `light_source_gain` | peace（安堵・喜び） |
 | `haiku_workshop_reply` | workshop（共同編集者） |
 
 ### `player_chat` の解決
@@ -207,6 +207,14 @@
 - 雷の一言は `weather_transition` leaf で短い独り言へ調整し、失敗時だけ固定 fallback。cue と文字の悲鳴を重ねない
 - 雷雨中にプレイヤーへ返答したら、自発的な雷反応をその時点から3分抑える
 - 地表の雷雨中は友好・中立 Mob の低優先 ambient を止める。洞窟バイオームは地上天候と切り離し、従来どおり反応する
+
+### 匂い（閉じた観測・捏造禁止）
+
+- Fabricが近接源・hotbar・バイオーム・温度・天候を閉じた規則で競わせ、`smell_observation` の一件だけを渡す。正本は[スメルバトル仕様](smell-policy.md)
+- `status=none` は対応済みで匂いなし、field省略は旧adapterで観測不明、`suppressed` は天候・水中で嗅げない状態として分ける
+- 自発発話は2観測安定後のコード固定文で、同じ優勢状態に一度＋全体2分クールダウン。方向・距離・個数・entity IDは言わない
+- 現在の匂いへの問いは現在のtyped結果からコード固定で返し、通常 `player_chat` モデルへ観測を渡さない
+- 通常 `player_chat` が生成した現在の嗅覚断言は棄却する。プレイヤーの匂い報告やassistant履歴を、自分も嗅いだ根拠にしない
 
 ## 6. 優先順位（キャラを壊さないための順）
 

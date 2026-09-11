@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 import unittest
 
 from dogido_server.config import Settings
@@ -65,6 +66,31 @@ class CaptureLLM(DogidoLLM):
 
     def generate_leaf_text(self, request):  # type: ignore[override]
         self.requests.append(request)
+        return f"LLM:{request.kind}"
+
+
+class LightCommentLLM:
+    def __init__(self, action: str) -> None:
+        self.action = action
+        self.structured_requests = []
+        self.leaf_requests = []
+
+    def generate_structured_json(self, request):  # type: ignore[no-untyped-def]
+        self.structured_requests.append(request)
+        basis_ids = (
+            ["dark_push_recovered"]
+            if self.action == "relief_after_darkness"
+            else ["supply_before"]
+        )
+        return {
+            "action": self.action,
+            "basis_ids": basis_ids,
+            "confidence": 0.95,
+            "__dogido_status": "accepted",
+        }
+
+    def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+        self.leaf_requests.append(request)
         return f"LLM:{request.kind}"
 
 
@@ -4573,8 +4599,9 @@ class StateMachineTests(unittest.TestCase):
         self.assertFalse(any(action.text == "LLM:dark_push_after_breath" for action in threat_result.actions))
         self.assertTrue(any(action.text == "LLM:dark_push_after_breath" for action in quiet_result.actions))
 
-    def test_light_source_crafted_stops_dark_push_then_celebrates(self) -> None:
-        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
+    def test_light_source_gain_stops_recovered_dark_push_then_comments_once(self) -> None:
+        llm = LightCommentLLM("relief_after_darkness")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
         entry = GameEvent.model_validate_json(
             """
             {
@@ -4629,7 +4656,7 @@ class StateMachineTests(unittest.TestCase):
             }
             """
         )
-        crafted = GameEvent.model_validate_json(
+        gained = GameEvent.model_validate_json(
             """
             {
               "schema_version": "2026-05-24",
@@ -4661,13 +4688,21 @@ class StateMachineTests(unittest.TestCase):
 
         machine.process(entry)
         machine.process(deeper)
-        result = machine.process(crafted)
+        result = machine.process(gained)
 
         self.assertTrue(any(action.interrupt and action.text is None and action.cue_id is None for action in result.actions))
-        self.assertTrue(any(action.text == "LLM:light_crafted" for action in result.actions))
+        self.assertTrue(any(action.text == "LLM:light_source_gain" for action in result.actions))
+        self.assertFalse(result.state.dark_push_active)
+        self.assertEqual(result.state.dark_push_stage, 0)
+        self.assertEqual(llm.structured_requests[0].kind, "light_source_comment_plan")
+        light_request = next(
+            request for request in llm.leaf_requests if request.kind == "light_source_gain"
+        )
+        self.assertNotIn("light_count", light_request.details)
 
-    def test_light_source_crafted_uses_llm_leaf(self) -> None:
-        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())
+    def test_abundant_light_source_rebound_in_lit_area_stays_silent(self) -> None:
+        llm = LightCommentLLM("acknowledge_supply_gain")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
         before = GameEvent.model_validate_json(
             """
             {
@@ -4692,8 +4727,7 @@ class StateMachineTests(unittest.TestCase):
                 "biome": "dripstone_caves"
               },
               "inventory": {
-                "coal": 1,
-                "stick": 2
+                "torch": 44
               }
             }
             """
@@ -4722,7 +4756,7 @@ class StateMachineTests(unittest.TestCase):
                 "biome": "dripstone_caves"
               },
               "inventory": {
-                "torch": 4
+                "torch": 45
               }
             }
             """
@@ -4731,7 +4765,160 @@ class StateMachineTests(unittest.TestCase):
         machine.process(before)
         result = machine.process(after)
 
-        self.assertTrue(any(action.text == "LLM:light_crafted" for action in result.actions))
+        self.assertFalse(any(action.text == "LLM:light_source_gain" for action in result.actions))
+        self.assertEqual(llm.structured_requests, [])
+        self.assertFalse(any(request.kind == "light_source_gain" for request in llm.leaf_requests))
+
+    def test_light_source_gain_line_rejects_count_and_craft_claim(self) -> None:
+        class InvalidClaimLLM:
+            def generate_leaf_text(self, request):  # type: ignore[no-untyped-def]
+                return "松明46本作れたやん！"
+
+        machine = DogidoStateMachine(
+            Settings(audio_enabled=False),
+            llm=InvalidClaimLLM(),  # type: ignore[arg-type]
+        )
+        event = GameEvent.model_validate_json(
+            """
+            {
+              "schema_version": "2026-05-24",
+              "game": "minecraft-java",
+              "adapter": "dogido-fabric-client",
+              "observed_at": "2026-05-25T21:11:31+09:00",
+              "sequence": 76,
+              "event": {
+                "name": "status_snapshot",
+                "source_kind": "system",
+                "priority_hint": "background",
+                "certainty": "high"
+              },
+              "player": {"name": "main_player"},
+              "world": {"time_phase": "night", "biome": "dripstone_caves"},
+              "inventory": {"torch": 46}
+            }
+            """
+        )
+
+        line = machine._render_light_source_gain_line(
+            event,
+            comment_action="acknowledge_supply_gain",
+            surroundings_light="not_reasonably_lit",
+        )
+
+        self.assertNotIn("46", line)
+        self.assertNotIn("作れた", line)
+        self.assertIn("明かり増えた", line)
+
+    def test_recent_light_source_comment_suppresses_next_gain(self) -> None:
+        llm = LightCommentLLM("acknowledge_supply_gain")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+        before = GameEvent.model_validate(
+            {
+                "schema_version": "2026-05-24",
+                "game": "minecraft-java",
+                "adapter": "dogido-fabric-client",
+                "observed_at": "2026-05-25T21:11:30+09:00",
+                "sequence": 90,
+                "event": {
+                    "name": "status_snapshot",
+                    "source_kind": "system",
+                    "priority_hint": "background",
+                    "certainty": "high",
+                },
+                "player": {"name": "main_player"},
+                "world": {
+                    "time_phase": "night",
+                    "danger_darkness_score": 0.55,
+                    "local_light": 7,
+                    "sky_visible": False,
+                    "biome": "plains",
+                },
+                "inventory": {},
+            }
+        )
+        first_gain = before.model_copy(
+            update={
+                "observed_at": before.observed_at + timedelta(seconds=1),
+                "sequence": 91,
+                "inventory": {"torch": 1},
+            }
+        )
+        second_gain = before.model_copy(
+            update={
+                "observed_at": before.observed_at + timedelta(seconds=2),
+                "sequence": 92,
+                "inventory": {"torch": 2},
+            }
+        )
+
+        machine.process(before)
+        first_result = machine.process(first_gain)
+        second_result = machine.process(second_gain)
+
+        self.assertTrue(any(action.text == "LLM:light_source_gain" for action in first_result.actions))
+        self.assertFalse(any(action.text == "LLM:light_source_gain" for action in second_result.actions))
+        self.assertEqual(len(llm.structured_requests), 1)
+        self.assertEqual(
+            [request.kind for request in llm.leaf_requests].count("light_source_gain"),
+            1,
+        )
+
+    def test_gain_in_persistent_severe_darkness_does_not_reset_dark_push(self) -> None:
+        llm = LightCommentLLM("acknowledge_supply_gain")
+        machine = DogidoStateMachine(Settings(audio_enabled=False), llm=llm)
+        before = GameEvent.model_validate(
+            {
+                "schema_version": "2026-05-24",
+                "game": "minecraft-java",
+                "adapter": "dogido-fabric-client",
+                "observed_at": "2026-05-25T21:11:30+09:00",
+                "sequence": 93,
+                "event": {
+                    "name": "status_snapshot",
+                    "source_kind": "system",
+                    "priority_hint": "background",
+                    "certainty": "high",
+                },
+                "player": {"name": "main_player"},
+                "world": {
+                    "time_phase": "night",
+                    "danger_darkness_score": 0.95,
+                    "local_light": 1,
+                    "sky_visible": False,
+                    "enclosure_score": 0.5,
+                    "biome": "dripstone_caves",
+                },
+                "inventory": {},
+            }
+        )
+        gained = before.model_copy(
+            update={
+                "observed_at": before.observed_at + timedelta(seconds=1),
+                "sequence": 94,
+                "inventory": {"torch": 4},
+            }
+        )
+
+        machine.process(before)
+        machine.state.dark_push_active = True
+        machine.state.dark_push_stage = 2
+        machine.state.dark_push_reference_light = 3
+        machine.state.dark_push_reference_darkness = 0.8
+        result = machine.process(gained)
+
+        self.assertTrue(result.state.dark_push_active)
+        self.assertEqual(result.state.dark_push_stage, 2)
+        self.assertFalse(any(action.text == "LLM:light_source_gain" for action in result.actions))
+        self.assertFalse(
+            any(
+                action.layer == "control"
+                and action.interrupt
+                and action.text is None
+                and action.cue_id is None
+                for action in result.actions
+            )
+        )
+        self.assertEqual(llm.structured_requests, [])
 
     def test_hostile_visible_callout_uses_realtime_template(self) -> None:
         machine = DogidoStateMachine(Settings(audio_enabled=False), llm=FakeLLM())

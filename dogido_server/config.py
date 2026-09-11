@@ -279,6 +279,11 @@ class Settings(BaseSettings):
     player_chat_visual_retention_ms: int = 12000
     # player_chat: 危険な一般名を正式 mob 名へ戻すための視認・聴取・討伐履歴
     player_chat_name_correction_retention_ms: int = 10000
+    # 解決済みの匂いは同じ優勢状態で一度だけ知らせ、再侵入・勝者変更にも
+    # この全体クールダウンを掛ける。
+    smell_comment_cooldown_ms: int = 120000
+    # 旧 .env / 呼出側との読み取り互換。新しい判断には上の一般設定を使う。
+    zombie_scent_comment_cooldown_ms: int = 120000
     # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
     # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。

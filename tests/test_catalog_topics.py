@@ -91,7 +91,8 @@ class PlayerChatTopicPromptTests(unittest.TestCase):
         self.assertIn("カタログからの話題ヒント", content)
         self.assertIn("ウィッチ", content)
         self.assertIn("hypothesis", content)
-        self.assertIn("見えてへん", content)
+        self.assertIn("コード照合", content)
+        self.assertIn("見えた", content)
         self.assertIn("かもしれん", content)
 
     def test_prompt_without_hints_uses_clarify_policy(self) -> None:
@@ -117,7 +118,7 @@ class PlayerChatTopicPromptTests(unittest.TestCase):
         self.assertNotIn("カタログからの話題ヒント", content)
         self.assertIn("スタンス: clarify", content)
         self.assertIn("聞き返す", content)
-        self.assertIn("肯定", content)
+        self.assertIn("確認したふりをせず", content)
 
 
 if __name__ == "__main__":

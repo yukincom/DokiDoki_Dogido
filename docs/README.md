@@ -85,12 +85,13 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 | 2 | [behavior-spec.md](behavior-spec.md) | 挙動仕様 |
 | 3 | [py-trees-integration.md](py-trees-integration.md) | アクション方針（py_trees） |
 | 4 | [dialogue-design.md](dialogue-design.md) | 対話モード（peace / battle 等） |
-| 5 | [voice-delivery-plan.md](voice-delivery-plan.md) | ボイス速度・間・川柳の呼吸（#13） |
-| 6 | [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) | TTS 誤読補正・UniDic 方針 |
-| 7 | [main-dialogue-integration.md](main-dialogue-integration.md) | 本体の会話所有権・戦闘／雷／川柳中断・再生確定 |
-| 8 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
-| 9 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
-| 10 | [mob_list.md](mob_list.md) | モブ日英・反応メモ（人間向け。runtime は catalogs） |
+| 5 | [smell-policy.md](smell-policy.md) | 近接源・温度・天候をコードで解決するスメルバトル |
+| 6 | [voice-delivery-plan.md](voice-delivery-plan.md) | ボイス速度・間・川柳の呼吸（#13） |
+| 7 | [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) | TTS 誤読補正・UniDic 方針 |
+| 8 | [main-dialogue-integration.md](main-dialogue-integration.md) | 本体の会話所有権・戦闘／雷／川柳中断・再生確定 |
+| 9 | [monster-schema.md](monster-schema.md) | 敵対エンティティ定義 |
+| 10 | [skeleton-spec.md](skeleton-spec.md) · [boss-spec.md](boss-spec.md) · [environmental-hostile-spec.md](environmental-hostile-spec.md) | 脅威種別ごとの仕様 |
+| 11 | [mob_list.md](mob_list.md) | モブ日英・反応メモ（人間向け。runtime は catalogs） |
 
 **つながり:** SM = 優先制御 · dialogue = どう喋るか · behavior = 場面例。
 

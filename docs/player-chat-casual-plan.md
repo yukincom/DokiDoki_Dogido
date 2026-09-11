@@ -1,7 +1,8 @@
 # player_chat 雑談3本柱 — 実装計画
 
 **日付:** 2026-07-16  
-**状態:** **P1〜P5 + 現在ターンの予定／安全方針 実装済み**
+**状態:** **P1〜P5 + 現在ターンの予定／安全方針 + 有界grounded planner 実装済み**
+
 **関連:** [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)、[player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md)
 
 ---
@@ -23,7 +24,9 @@
 | なんだあのババア | stance=**hypothesis**、ウィッチ可 |
 | 変な旗 | hypothesis、ピリ可 |
 | 川にサケがいる状況でサケの話 | 観測ラベル「サケ」が事実に載る。弾かれない |
-| 前哨基地ある？（タイガ） | hypothesis + plausibility（F′） |
+| 前哨基地ある？（タイガ） | 現在構造物IDと一致すれば確認済み。バイオームやピリジャー視認だけでは在ると言わない |
+| よしよし、大丈夫そうですね | 会話の続き。`丈夫そう` をラバのvisual tagへ流さない |
+| 近くにラバがいるの？（観測なし） | 「いない」とは断定せず、現在観測では未確認と返す |
 
 ---
 
@@ -88,10 +91,10 @@ GENERIC_TOPIC_TERMS = frozenset({
 
 | stance | catalog_topic_hints | identify_skeleton | speech_whitelist_enforce | plausibility |
 |---|---|---|---|---|
-| **none** | **載せない** | なし | False（現行） | 載せない※ |
-| **clarify** | 載せない | なし | False | 載せない |
-| **hypothesis** | usable_hits のみ | 高信頼時のみ | True | structure 語があるとき |
-| **saw** | 任意（短く） | なし（視認優先） | True | 同上 |
+| **none** | **載せない** | なし | True（許可名が空なら種名を生成させない） | 載せない※ |
+| **clarify** | 載せない | なし | True | 載せない |
+| **hypothesis** | identify actionの usable_hits のみ | 高信頼時のみ | True | identify actionでstructure語があるとき |
+| **saw** | 載せない（観測優先） | なし（視認優先） | True | 載せない |
 
 ※「前哨基地ある？」は usable 非 GENERIC → hypothesis なので F′ は残る。
 
@@ -163,8 +166,9 @@ GENERIC_TOPIC_TERMS = frozenset({
 
 ### 2.3 allowed_speech_labels と観測の一致
 
-- allowed = **観測由来 ∪（hypothesis 時のみ usable topic labels）**  
-- none 時: enforce オフだが、**観測名を observation に載せる**ことで LLM が正しく触れる  
+- allowed = **コード観測由来 ∪ 現在／過去のplayer発話に実在するカタログ名 ∪（plannerが同定を選んだときだけ usable topic labels）**
+- 全通常雑談で enforce を有効にする。assistant履歴だけに現れる種名は許可へ入れず、過去の誤断言を新しい世界根拠にしない
+- player発話の種名は、その人の報告として会話を続けるために許可するが、観測済みへは昇格しない
 - 動物園: 観測があれば載る → habitat 不要  
 - 観測した種に限り、カタログの `observed_speech_aliases` を allowed に加える。現在は商人のラマ→ラマ、洞窟スパイダー→スパイダー、ヒカリイカ→イカ
 - 危険な一般化は `observed_speech_rewrite_from_ids` を持つ種だけ、直近10秒の視認・聴取・討伐推定を根拠に白リスト判定前へ戻す。現在は村人ゾンビを「ゾンビ」とした場合だけ「村人ゾンビ」へ修正
@@ -202,6 +206,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 ```text
 参考傾向:
 - 相棒の返事。実況・定型あいさつにしない
+- 直近の会話の流れに沿って自然に返す。会話を続けるためだけの質問を足さない
 - 【答え方】雑談として自然に。根拠のない種名捏造はしない
 - （戦闘時のみ静止禁止など）
 
@@ -219,9 +224,10 @@ GENERIC_TOPIC_TERMS = frozenset({
 
 ### 3.3 LLM がやりやすい条件（実装チェックリスト）
 
-- [ ] none で **偽 topic / 偽骨子が details に無い**  
-- [ ] 観測があるときだけ **短い事実行**がある  
-- [ ] style reject が none で種名を殺さない（現行 enforce オフ）  
+- [x] none で **偽 topic / 偽骨子が details に無い**
+- [x] 観測があるときだけ **短い事実行**がある
+- [x] none でも、観測またはplayer発話にある種名だけを許可し、assistant履歴だけの種名は捨てる
+- [x] 会話継続それ自体を目的にせず、確認・相談が必要なときだけ質問する。完了や相槌には問い返しを足さない
 - [x] fallback は unusable 時のみ。topic hit や identify 骨子を本文にせず、
   **話題非依存の中立文**へ戻す
   - 任意改善: none + unusable のときだけ、もう少し相槌寄りの fallback  
@@ -248,13 +254,16 @@ GENERIC_TOPIC_TERMS = frozenset({
 user_text
   → 現在ターンの明示予定（return_home のみ。保存しない）
   → 現在フレームの安全方針（地表夕方 or 雷雨。保存しない）
-  → find_catalog_topics (raw)
-  → filter_usable_topic_hits (GENERIC 除去)
+  → completed済み5往復 + 現在入力 + コード観測
+  → player_chat_plan（閉じたaction + 発話内evidence + confidence）
+  → actionが対象照合のときだけ find_catalog_topics (raw)
+  → filter_usable_topic_hits (GENERIC 除去) + 観測ID照合
   → resolve_reply_stance (saw / hypothesis? / clarify / none)
   → observation_summary (visual+buffer+passive+hearing のみ)
-  → allowed = 観測 ∪ (hypothesis 時 usable topic labels)
-  → enforce_wl = saw|hypothesis
-  → hints / skeleton / plausibility = hypothesis 時のみ（条件付き）
+  → allowed = 観測 ∪ player発話の実名 ∪ planner同定候補
+  → enforce_wl = 全通常雑談
+  → hints / skeleton / plausibility = identify + hypothesis 時のみ（条件付き）
+  → 未観測の在否・過去誤断言の訂正はコード固定文
   → details → LLM
   → usable sanitize
   → 直近観測に基づく一意な危険一般名の修正
@@ -263,6 +272,32 @@ user_text
   → 発話IDつき本文を選択・音声queueへ
   → completed された文だけ履歴5往復へ
 ```
+
+## 有界grounded planner（2026-09-11）
+
+通常 `player_chat` は本文生成の前に、structured kind `player_chat_plan` で一度だけ会話焦点を決める。これは汎用ReActや世界操作toolではなく、次のread-only actionから一件を選ぶ限定plannerである。
+
+- `continue_conversation`
+- `check_entity_presence`
+- `identify_entity`
+- `answer_observation`
+- `clarify_reference`
+- `correct_previous_reply`
+
+plannerは発話を生成せず、状態変更・保存・assistを実行しない。`action / focus / entity_query / evidence / confidence` を共通structured contractへ通し、evidenceは現在入力を必須にして、直近の実再生済み会話の連続部分だけを許可する。明示在否問い、playerの平叙存在報告、所持品問、音の問いはコード側のrouting hintでactionも検査し、問いを単な相槌へ落としたり、報告を観測照合へ昇格したりさせない。失敗・低信頼・不正JSONは保守的なコードfallbackへ戻る。
+
+談話関係を先に解くため、通常の相槌や評価文はカタログ全件の描写タグ検索へ流さない。対象照合actionだけがカタログを読み、その候補IDをvisual / passive / hearing / 現在構造物 / 乗車中の乗り物 / 視線先entityのコード観測IDへ照合する。候補順位は先に発話だけで決め、関連Mobの視認で別対象へすり替えない。カタログ一致は観測ではない。未観測の在否質問は「現在観測では確認できない」、過去のassistant誤断言は謝罪と現在観測の切り分けをコード固定で返し、「いない」までは断定しない。
+
+5往復、緊急反応、正本DB、assist、workshop、保存条件は変更しない。2026-09-11の全体回帰は **1314 passed、1 skipped、1500 subtests passed**。実Minecraft・実Qwen・実TTSでの自然さと遅延は未確認。
+
+### 通常雑談の家らしさ（2026-09-11）
+
+通常雑談へ渡す場所投影では、設定済みリスポーン地点から既存の `home_bed_prompt_distance` 以内にいて、周辺にベッドまたはドアが観測された場合を `home_base` とする。これは所有権や完全な安全を断定せず、「家・拠点らしい場所」という会話上の表現だけを強める。
+
+- 暗さ、低い天井、囲まれ度、洞窟バイオームより `home_base` を先にする。ただし水中と、直近のブロック破壊で確認した採掘中はその現在行動を優先する
+- ベッドだけ、ドアだけ、リスポーン地点だけでは足りず、近いリスポーン地点との組み合わせを必須にする
+- 窓は家の根拠にしない。窓だけで `home_base` へ昇格させない
+- この変更は通常雑談の場所表現だけであり、暗所危険度、洞窟検出、緊急シェルター、安全判定は変更しない
 
 ## foreground会話と自動川柳（2026-09-09）
 
@@ -297,6 +332,7 @@ user_text
 | **P3** | 2 | `observation_summary`（passive 行含む）を details + プロンプト | `narration.py`, `player_chat_prompts.py` |
 | **P4** | 1+2 | 回帰テスト一式（木／ババア／旗／サケ観測／もしもし） | tests |
 | **P5** | 3 | topic 非依存の中立 fallback、履歴汚染の確認 | fallbacks, service |
+| **P6** | 1+2+3 | 会話焦点を先に解く有界plannerと対象のコード照合 | planner, narration, contracts, tests |
 
 推奨: **P1 → P2 → P4 の一部 → P3 → P4 完了**。  
 P1 だけで「大きい気→シロクマ」は止まる。
@@ -310,6 +346,8 @@ P1 だけで「大きい気→シロクマ」は止まる。
 3. サケが近くにいる → 事実 or allowed にサケ。雑談でサケに触れて **style で落ちない**  
 4. もしもし等 → **none + 相槌**。ようわからん連打にならない（P5 まで含むとより良い）  
 5. 履歴は **5往復のまま**
+6. 「大丈夫そう」等の会話継続 → **描写タグから種名を補わない**
+7. 在否問い → **カタログ一致だけで存在断言せず、現在観測と照合する**
 
 ---
 
@@ -332,9 +370,11 @@ P1 だけで「大きい気→シロクマ」は止まる。
 | P3 observation_summary | ✅ |
 | P4 回帰テスト `tests/test_player_chat_casual.py` | ✅ |
 | P5 topic 非依存の中立 fallback | ✅ |
+| P6 有界grounded planner + 対象のコード照合 | ✅（コード・自動テスト。実モデル未確認） |
 
 ### 変更ファイル（要約）
 
 - `dogido_server/player_chat_policy.py` … usable filter / stance  
 - `dogido_server/state_machine/mixins/narration.py` … 経路分岐 + 観測サマリ  
 - `dogido_server/llm/player_chat_prompts.py` … observation 節  
+- `dogido_server/dialogue/player_chat_planner.py` … 会話焦点と一件のread action、対象照合

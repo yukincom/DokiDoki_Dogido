@@ -43,6 +43,8 @@
   "world": {},
   "visual_threats": [],
   "auditory_threats": [],
+  "smell_observation": {"status": "none", "temperature_modifier": 0, "rain_after_active": false, "basis": "smell_policy_v1"},
+  "zombie_scent_clues": [],
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
@@ -72,6 +74,7 @@
 - `sequence`
 - `visual_threats`
 - `auditory_threats`
+- `smell_observation`
 - `ambient_sounds`
 - `inventory`
 - `combat`
@@ -405,7 +408,65 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `movement_like`
 - `explosive_threat_like`
 
-## 12.1 `ambient_sounds`
+## 12.1 `smell_observation`
+
+Fabric adapterが近接源・hotbar・バイオーム・温度・天候からスメルバトルを解決した一件。
+正確な位置・距離・個数・entity IDは含めない。計算と対象の正本は
+[スメルバトル仕様](smell-policy.md)。
+
+```json
+{
+  "status": "present",
+  "smell_id": "food",
+  "category": "food",
+  "valence": "mixed",
+  "source_kind": "mixed",
+  "specificity": "category",
+  "effective_strength": 3,
+  "temperature_modifier": 0,
+  "rain_after_active": false,
+  "basis": "smell_policy_v1"
+}
+```
+
+- `status`: `none / present / suppressed`
+- `none` は観測対応済みで匂い源なし。field省略（旧adapter）とは異なる
+- `suppressed` は `suppression_reason: rain / snow / thunder / submerged` を持つ
+- `present` だけが `smell_id / category / valence / source_kind / specificity / effective_strength` を持つ
+- serverは2観測連続で自発発話を安定化し、問いには現在値をコード固定で即答する
+- この観測だけで戦闘状態やworkshop pauseを開始せず、通常LLMへも渡さない
+
+## 12.1a `zombie_scent_clues`（移行互換）
+
+実エンティティの近接を、ドギド固有の「ゾンビの匂い」へ変える限定手掛かり。
+通常の視認・音警告を増やすものではなく、遊びとしての別経路である。
+
+```json
+[
+  {
+    "type": "zombie",
+    "entity_id": "84e2f05a-4bc8-4e23-a7d9-19be9a321c4d",
+    "distance_band": "close",
+    "certainty": "medium",
+    "basis": "nearby_without_visual_or_audio"
+  }
+]
+```
+
+### 閉じた条件
+
+- 対象は `zombie / zombie_villager / husk / drowned` だけ。`skeleton / wither_skeleton / zombified_piglin` は含めない
+- 実エンティティが8ブロック以内にいる
+- 対象への line-of-sight がなく、`visual_threats` にも確定保持されていない
+- 現在の音保持に同じ `entity_id` の音源がない
+- exact position、方向、正確な距離、頭数は発話材料として送らない。距離は `touching / very_close / close` だけ
+- server側でも `visual_threats` または `auditory_threats` があるフレームでは匂い経路を使わない
+- この配列だけでは `combat_active`、`panic / alert`、川柳workshopの戦闘中断を開始しない
+
+新adapterは `smell_observation` を正とし、優勢な匂いが特定ゾンビのときだけこの配列も送る。
+serverは新fieldがない旧adapterに限って、この配列を従来のゾンビ匂いへ読み替える。
+
+## 12.2 `ambient_sounds`
 
 戦闘判定に使わない周囲音。非敵対 Mob の声に加え、クライアントで実際に再生された
 ブロック・天候・環境音を載せる。

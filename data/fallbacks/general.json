@@ -12,12 +12,41 @@
     "dark_push_after_breath_evening": "もう夜かいな。一難去ってまた一難や！",
     "dark_push_after_breath_night": "まだ夜かいな。一難去ってまた一難や！",
     "emergency_shelter_relief": "{prefix}よし！シャルターやな！これで安心や！",
-    "light_crafted": "っしゃ！ {prefix}あかりできたやん、これでさっきよりだいぶ安心できるわ！"
+    "light_source_gain": "お、{prefix}明かり増えたんやな。これなら少し安心やわ。",
+    "light_source_relief": "ふう……{prefix}明かり増えたんやな。ちょっと落ち着いたわ。"
   },
   "combat": {
     "daylight_water_skeleton": "うわっ！スケルトンが水入ってしもた！頼むから陸に寄って燃えてくれ〜〜！頼むわ！",
     "newly_burning_visual": "っしゃ！もえろもえろおお！",
-    "occluded_hostile_presence": "敵対モブがおるな……ちょっと気になるわ。"
+    "occluded_hostile_presence": "敵対モブがおるな……ちょっと気になるわ。",
+    "zombie_scent_nearby": "……くさっ。ゾンビの匂いがする……近くにおるで！"
+  },
+  "smell": {
+    "none": "今は特に匂いせえへんな。匂いなしや。",
+    "suppressed_submerged": "水ん中やと、さすがに匂いは分からへんな。",
+    "suppressed_weather": "今は天気に匂いが流されて、よう分からへんな。",
+    "rotten_flesh": "うっ……腐った肉の匂いきついわ。鼻がつらい。",
+    "decay": "うっ、なんか腐った匂いがする……何の匂いかまでは分からへん。",
+    "composter": "土と生ごみが混じったみたいな、コンポスターの匂いやな。",
+    "brewing_stand": "薬草と薬品が混じったみたいな、醸造の匂いやな。",
+    "swamp": "湿った泥と水草みたいな、沼の匂いやな。",
+    "raw_meat": "生肉っぽい匂いがするな。早めに焼きたいわ。",
+    "raw_fish": "生魚っぽい匂いがするな。",
+    "cooked_meat": "焼いた肉の匂いがするな。ちょっと腹へってきたわ。",
+    "cooked_fish": "焼いた魚の匂いがするな。",
+    "cooking_meat": "お、肉を焼いとる匂いや。これはよう分かるわ。",
+    "cooking_fish": "お、魚を焼いとる匂いや。これはよう分かるわ。",
+    "soup": "スープみたいな匂いがするな。",
+    "cookie": "甘いクッキーの匂いがするな。",
+    "cake": "甘いケーキの匂いがするな。",
+    "bread": "パンの匂いがするな。なんか落ち着くわ。",
+    "food": "食べ物の匂いがいくつか混じっとるな。",
+    "ink_sac": "ちょっと生っぽい、イカ墨の匂いやな。",
+    "flower_pleasant": "花のええ香りがするな。",
+    "flower_unpleasant": "花みたいやけど、ちょっと癖のある匂いやな。",
+    "flower_mixed": "花の匂いやけど、甘いのと枯れた感じが混じっとるな。",
+    "rain_after": "あ、雨上がりの匂いや。濡れた草と土の匂いがするな。",
+    "mixed": "いろんな匂いが混じって、よう分からへんわ。"
   },
   "weather_transition": {
     "clear_after_bad_weather": "ふぅ……ようやく晴れたな。ちょっと落ち着けるかも……でも油断したらあかんぞ。",
@@ -40,6 +69,7 @@
   },
   "chat": {
     "reply": "ようわからん、もうちょい教えて。",
-    "no_hearing_evidence": "ごめん、こっちには今の音の記録が残ってへんわ。"
+    "no_hearing_evidence": "ごめん、こっちには今の音の記録が残ってへんわ。",
+    "no_scent_evidence": "うーん、オレには今、その匂いまでは分からへんわ。"
   }
 }

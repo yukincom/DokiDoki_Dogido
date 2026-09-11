@@ -72,12 +72,13 @@ class ReplyStanceTests(unittest.TestCase):
             self.assertNotIn("だけにする", line)
             self.assertNotIn("作らない", line)
             self.assertNotIn("捏造", line)
-        self.assertIn("尊重", reply_policy_line("hypothesis"))
-        self.assertIn("見えてへん", reply_policy_line("hypothesis"))
+        self.assertIn("コード照合", reply_policy_line("hypothesis"))
+        self.assertIn("見えた", reply_policy_line("hypothesis"))
         self.assertIn("かもしれん", reply_policy_line("hypothesis"))
-        self.assertIn("おらんとおもうわ", reply_policy_line("none"))
+        self.assertIn("確認できへん", reply_policy_line("none"))
         self.assertIn("隣でびび", reply_policy_line("saw"))
         self.assertIn("聞き返す", reply_policy_line("clarify"))
+        self.assertIn("確認したふりをせず", reply_policy_line("clarify"))
 
 
 class AllowedSpeechLabelsTests(unittest.TestCase):
@@ -273,9 +274,10 @@ class AllowedSpeechLabelsTests(unittest.TestCase):
 
         self.assertTrue(should_enforce_speech_whitelist("hypothesis", ["ウィッチ"]))
         self.assertTrue(should_enforce_speech_whitelist("saw", ["ピリジャー"]))
-        self.assertFalse(should_enforce_speech_whitelist("none", []))
-        self.assertFalse(should_enforce_speech_whitelist("none", ["サケ"]))
-        self.assertFalse(should_enforce_speech_whitelist("clarify", []))
+        self.assertTrue(should_enforce_speech_whitelist("none", []))
+        self.assertTrue(should_enforce_speech_whitelist("none", ["サケ"]))
+        self.assertTrue(should_enforce_speech_whitelist("clarify", []))
+        self.assertFalse(should_enforce_speech_whitelist("unknown", []))
 
 
 class IdentifySkeletonTests(unittest.TestCase):
@@ -327,7 +329,8 @@ class PlayerChatPromptStanceTests(unittest.TestCase):
         self.assertEqual(stance, "hypothesis")
         self.assertIn("スタンス: hypothesis", content)
         self.assertIn("いまの答え方:", content)
-        self.assertIn("見えてへん", content)
+        self.assertIn("コード照合", content)
+        self.assertIn("見えた", content)
         self.assertIn("かもしれん", content)
         self.assertIn("ウィッチ", content)
         # 旧の長文 mode_hint / 場所ルールは載せない
@@ -357,6 +360,10 @@ class PlayerChatPromptStanceTests(unittest.TestCase):
         self.assertIn("スタンス: none", content)
         self.assertIn("いまの答え方:", content)
         self.assertIn("プレイヤーを突き放さず", content)
+        self.assertIn("直近の会話の流れに沿って自然に返す", content)
+        self.assertIn("会話を続けること自体を目的にしない", content)
+        self.assertIn("確認や相談が必要なときだけ質問", content)
+        self.assertNotIn("会話を続けられる温度", content)
         self.assertNotIn("カタログからの話題ヒント", content)
         # 規則 bullet はスタンス中心で少なめ
         rule_lines = [line for line in content.splitlines() if line.startswith("- ")]

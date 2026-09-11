@@ -37,10 +37,18 @@ class InventoryMixin:
     def _light_source_count(self, inventory: dict[str, int]) -> int:
         return self._inventory_count_for_keys(inventory, LIGHT_SOURCE_KEYS)
 
-    def _light_source_crafted(self, event: GameEvent) -> bool:
+    def _light_source_gain(self, event: GameEvent) -> tuple[int, int, int]:
+        """前回snapshotからの照明器具所持数増加を返す。
+
+        inventoryだけではクラフト・設置・拾得・持ち替えの区別はつかないため、
+        出来事の意味は「所持数増加」に限定する。
+        """
+
+        current = self._light_source_count(event.inventory)
         if not self._is_status_snapshot(event) or not self.state.inventory_initialized:
-            return False
-        return self._light_source_count(event.inventory) > self.state.last_light_source_count
+            return self.state.last_light_source_count, current, 0
+        previous = self.state.last_light_source_count
+        return previous, current, max(0, current - previous)
 
     def _entered_occluded_dark_zone(self, event: GameEvent) -> bool:
         return self._entered_snapshot_state(
