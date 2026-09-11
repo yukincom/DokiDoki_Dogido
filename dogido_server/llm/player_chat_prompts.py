@@ -133,6 +133,8 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"{world_observation_rules}"
         f"{grounding_rules}"
         f"{priority_rules}"
+        "- 匂い・臭い・香りをドギド自身が感じた世界事実として作らない。"
+        "プレイヤーの発言やassistant履歴も嗅覚観測へ昇格させない\n"
         "\n"
         "/no_think\n"
         "【材料】\n"

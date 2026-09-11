@@ -18,6 +18,33 @@ _DISMISSIVE_PLAYER_CHAT_ENDINGS = (
     re.compile(r"(?:話しかけ|構わ)(?:んといて|ないで)[。！？!?]*$"),
 )
 
+_OLFACTORY_MARKERS = (
+    "匂",
+    "におい",
+    "臭",
+    "くさい",
+    "くさっ",
+    "香り",
+    "香る",
+    "鼻につ",
+)
+
+_FIGURATIVE_OLFACTORY_TOPICS = (
+    "言葉",
+    "ことば",
+    "句",
+    "川柳",
+    "俳句",
+    "表現",
+    "文章",
+    "文体",
+    "作品",
+    "物語",
+    "詩",
+    "比喩",
+    "ニュアンス",
+)
+
 
 def clean_output(text: str | None) -> str:
     if not text:
@@ -240,6 +267,49 @@ def contains_dismissive_player_chat_tone(text: str) -> bool:
 
     compact = re.sub(r"\s+", "", text or "")
     return any(pattern.search(compact) for pattern in _DISMISSIVE_PLAYER_CHAT_ENDINGS)
+
+
+def contains_unsupported_olfactory_claim(
+    text: str,
+    details: dict[str, Any] | None = None,
+) -> bool:
+    """通常player_chatが嗅覚の世界事実を補作するのを止める。
+
+    実ゾンビ手掛かりへの応答は状態機械の固定文なので、生成文には一般論・仮定・
+    比喩だけを許し、「いま嗅いだ」という観測は常に棄却する。
+    """
+
+    compact = re.sub(r"\s+", "", text or "")
+    if not compact or not any(marker in compact for marker in _OLFACTORY_MARKERS):
+        return False
+    details = details or {}
+    user_text = re.sub(r"\s+", "", str(details.get("user_text") or ""))
+    user_uses_olfactory_language = any(
+        marker in user_text for marker in _OLFACTORY_MARKERS
+    )
+    actual_sensing = bool(
+        re.search(
+            r"(?:匂い|におい|臭い|香り)(?:が|は|の)?"
+            r"(?:する|した|して|漂|残|来|きた|や(?:と|ろ|な|で|わ|[。！？!?]|$)|"
+            r"だ(?:[。！？!?]|$)|やろか|かも)",
+            compact,
+        )
+        or re.search(r"(?:匂|臭|にお)(?:う|って|った)", compact)
+        or re.search(r"(?:なんか|何か).{0,5}(?:臭い|くさい)", compact)
+        or "くさっ" in compact
+        or "臭っ" in compact
+        or re.search(r"(?:匂い|におい|臭い|香り)[。！？!?]", compact)
+    )
+    if user_uses_olfactory_language:
+        # 「ゾンビは臭そう」や句の「土の匂い」のように、プレイヤーが始めた
+        # 一般論・仮定・比喩には応答できる。現在嗅いだ報告とは分離する。
+        figurative = any(
+            topic in compact and topic in user_text
+            for topic in _FIGURATIVE_OLFACTORY_TOPICS
+        )
+        if figurative or not actual_sensing:
+            return False
+    return True
 
 
 # 敵対中は原則 NG（寄ってくる／狙われるので静止は危険）。

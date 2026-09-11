@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger("uvicorn.error")
 
-EPISODE_SCHEMA_VERSION = 3
+EPISODE_SCHEMA_VERSION = 4
 EPISODE_RELATIVE_PATH = Path("eval") / "episodes.jsonl"
 
 
@@ -63,12 +63,23 @@ def _auditory_threat_payload(threat: object) -> dict[str, object]:
     }
 
 
+def _zombie_scent_payload(clue: object) -> dict[str, object]:
+    return {
+        "type": getattr(clue, "type", None),
+        "entity_id": getattr(clue, "entity_id", None),
+        "distance_band": _enum_value(getattr(clue, "distance_band", None)),
+        "certainty": _enum_value(getattr(clue, "certainty", None)),
+        "basis": getattr(clue, "basis", None),
+    }
+
+
 def _observation_payload(event: GameEvent) -> dict[str, object]:
     player = event.player
     world = event.world
     combat = event.combat
     visual_items = [_visual_threat_payload(threat) for threat in event.visual_threats]
     auditory_items = [_auditory_threat_payload(threat) for threat in event.auditory_threats]
+    scent_items = [_zombie_scent_payload(clue) for clue in event.zombie_scent_clues]
     nearest_visual = min(
         visual_items,
         key=lambda threat: (
@@ -152,6 +163,11 @@ def _observation_payload(event: GameEvent) -> dict[str, object]:
                 }
             ),
             "items": auditory_items,
+        },
+        "zombie_scent_clues": {
+            "count": len(scent_items),
+            "types": sorted({clue.type for clue in event.zombie_scent_clues}),
+            "items": scent_items,
         },
         "ambient_sounds": [
             {

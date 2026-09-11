@@ -191,6 +191,10 @@ class NormalEnvironmentEvent(_Condition):
             or context.machine._should_consider_damaging_light_warning(context.event, context.now)
             or context.machine._has_recent_nearby_lightning(context.event)
             or context.machine._has_recent_thunder_sound(context.event)
+            or context.machine._has_unannounced_zombie_scent(
+                context.event,
+                context.now,
+            )
             or (
                 getattr(context.event.world.time_phase, "value", context.event.world.time_phase) == "night"
                 and (context.event.world.nearby_firefly_bush_count or 0) > 0

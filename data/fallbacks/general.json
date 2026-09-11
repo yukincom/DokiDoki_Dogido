@@ -18,7 +18,8 @@
   "combat": {
     "daylight_water_skeleton": "うわっ！スケルトンが水入ってしもた！頼むから陸に寄って燃えてくれ〜〜！頼むわ！",
     "newly_burning_visual": "っしゃ！もえろもえろおお！",
-    "occluded_hostile_presence": "敵対モブがおるな……ちょっと気になるわ。"
+    "occluded_hostile_presence": "敵対モブがおるな……ちょっと気になるわ。",
+    "zombie_scent_nearby": "……くさっ。ゾンビの匂いがする……近くにおるで！"
   },
   "weather_transition": {
     "clear_after_bad_weather": "ふぅ……ようやく晴れたな。ちょっと落ち着けるかも……でも油断したらあかんぞ。",
@@ -41,6 +42,7 @@
   },
   "chat": {
     "reply": "ようわからん、もうちょい教えて。",
-    "no_hearing_evidence": "ごめん、こっちには今の音の記録が残ってへんわ。"
+    "no_hearing_evidence": "ごめん、こっちには今の音の記録が残ってへんわ。",
+    "no_scent_evidence": "うーん、オレには今、その匂いまでは分からへんわ。"
   }
 }

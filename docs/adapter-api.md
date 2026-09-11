@@ -90,6 +90,7 @@ adapter の起動時に session を作る。
   "capabilities": [
     "visual_threats",
     "auditory_threats",
+    "zombie_scent_clues",
     "ambient_sounds",
     "inventory",
     "hotbar_slots",

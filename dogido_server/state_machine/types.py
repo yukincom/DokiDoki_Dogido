@@ -130,6 +130,9 @@ class RuntimeState:
     aftermath_until: datetime | None = None
     last_visual_threat_at: datetime | None = None
     last_audio_threat_at: datetime | None = None
+    # 近距離の未視認・未聴取ゾンビ。現在いる個体へ一度だけ匂い警告する。
+    announced_zombie_scent_ids: set[str] = field(default_factory=set)
+    last_zombie_scent_comment_at: datetime | None = None
     last_damage_at: datetime | None = None
     low_health_warning_armed: bool = True
     last_combat_end_at: datetime | None = None

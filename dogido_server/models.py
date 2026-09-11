@@ -335,6 +335,32 @@ class AuditoryThreat(DogidoModel):
     spoken_name_allowed: bool = False  # 発話で具体名を出してよいか（原則 False）
 
 
+class ZombieScentClue(DogidoModel):
+    """近距離の未視認・未聴取ゾンビを、キャラクター上の匂いへ変える限定手掛かり。
+
+    adapter は実エンティティの近接を根拠にするが、正確な座標・方向・距離は送らない。
+    この手掛かりだけでは戦闘状態や workshop の戦闘中断へ移行しない。
+    """
+
+    type: Literal["zombie", "zombie_villager", "husk", "drowned"]
+    entity_id: str = Field(min_length=1, max_length=80)
+    distance_band: DistanceBand
+    certainty: Certainty = Certainty.MEDIUM
+    basis: Literal["nearby_without_visual_or_audio"] = "nearby_without_visual_or_audio"
+
+    @model_validator(mode="after")
+    def _validate_bounded_scent(self) -> ZombieScentClue:
+        if self.distance_band not in {
+            DistanceBand.TOUCHING,
+            DistanceBand.VERY_CLOSE,
+            DistanceBand.CLOSE,
+        }:
+            raise ValueError("zombie scent clue must be within the close distance band")
+        if self.certainty != Certainty.MEDIUM:
+            raise ValueError("zombie scent clue certainty must be medium")
+        return self
+
+
 class AmbientSound(DogidoModel):
     """戦闘判定に使わない周囲音（非敵対Mob・ブロック・天候・環境）。
 
@@ -508,7 +534,7 @@ class GameEvent(DogidoModel):
     """Fabric クライアントアダプタから dogido-server へ送るメッセージ本体（仕様 §4）。
 
     必須: schema_version / game / adapter / observed_at / event
-    推奨: sequence / visual_threats / auditory_threats / inventory / combat
+    推奨: sequence / visual_threats / auditory_threats / zombie_scent_clues / inventory / combat
     任意: passive_mobs / nearby_resources / look_target / meta
     passive_mobs には非敵対状態の中立モブも temperament="neutral" で含まれる。
     旧スキーマ名 peaceful_mobs も受信時に受け付ける。
@@ -527,6 +553,7 @@ class GameEvent(DogidoModel):
     world: WorldState = Field(default_factory=WorldState)
     visual_threats: list[VisualThreat] = Field(default_factory=list)
     auditory_threats: list[AuditoryThreat] = Field(default_factory=list)
+    zombie_scent_clues: list[ZombieScentClue] = Field(default_factory=list, max_length=8)
     ambient_sounds: list[AmbientSound] = Field(default_factory=list)
     passive_mobs: list[PassiveMob] = Field(default_factory=list)
     inventory: dict[str, int] = Field(default_factory=dict)

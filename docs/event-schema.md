@@ -43,6 +43,7 @@
   "world": {},
   "visual_threats": [],
   "auditory_threats": [],
+  "zombie_scent_clues": [],
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
@@ -72,6 +73,7 @@
 - `sequence`
 - `visual_threats`
 - `auditory_threats`
+- `zombie_scent_clues`
 - `ambient_sounds`
 - `inventory`
 - `combat`
@@ -405,7 +407,37 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `movement_like`
 - `explosive_threat_like`
 
-## 12.1 `ambient_sounds`
+## 12.1 `zombie_scent_clues`
+
+実エンティティの近接を、ドギド固有の「ゾンビの匂い」へ変える限定手掛かり。
+通常の視認・音警告を増やすものではなく、遊びとしての別経路である。
+
+```json
+[
+  {
+    "type": "zombie",
+    "entity_id": "84e2f05a-4bc8-4e23-a7d9-19be9a321c4d",
+    "distance_band": "close",
+    "certainty": "medium",
+    "basis": "nearby_without_visual_or_audio"
+  }
+]
+```
+
+### 閉じた条件
+
+- 対象は `zombie / zombie_villager / husk / drowned` だけ。`skeleton / wither_skeleton / zombified_piglin` は含めない
+- 実エンティティが8ブロック以内にいる
+- 対象への line-of-sight がなく、`visual_threats` にも確定保持されていない
+- 現在の音保持に同じ `entity_id` の音源がない
+- exact position、方向、正確な距離、頭数は発話材料として送らない。距離は `touching / very_close / close` だけ
+- server側でも `visual_threats` または `auditory_threats` があるフレームでは匂い経路を使わない
+- この配列だけでは `combat_active`、`panic / alert`、川柳workshopの戦闘中断を開始しない
+
+serverは個体の在圏中に一度だけ固定警告を返し、再侵入・別個体にも全体クールダウンを掛ける。
+現在の匂いへの問いもclue有無に応じた固定文で返し、この配列を通常 `player_chat` モデルへ渡さない。
+
+## 12.2 `ambient_sounds`
 
 戦闘判定に使わない周囲音。非敵対 Mob の声に加え、クライアントで実際に再生された
 ブロック・天候・環境音を載せる。

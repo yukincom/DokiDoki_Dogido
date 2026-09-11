@@ -8,7 +8,7 @@ from dogido_server.dialogue.light_source_comment_planner import (
     plan_light_source_comment,
 )
 from dogido_server.knowledge_query import split_knowledge_speech
-from dogido_server.models import EventName, GameEvent
+from dogido_server.models import EventName, GameEvent, ZombieScentClue
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.fallback_catalog import fallback_text
 from dogido_server.state_machine.response_catalog import response_text
@@ -89,6 +89,70 @@ class EnvironmentalReactionsMixin:
             recent_ms is not None
             and recent_ms < self.settings.darkness_advice_cooldown_ms
         )
+
+    def _usable_zombie_scent_clues(
+        self,
+        event: GameEvent,
+    ) -> tuple[ZombieScentClue, ...]:
+        """現在フレームで視認・聴取と競合しない、限定された匂い手掛かり。"""
+
+        # adapter契約も個体単位で視認・音を除外するが、serverでも再検査する。
+        # 別の敵を見聞きしている戦況では既存のvisual/auditory警告を優先する。
+        if event.visual_threats or event.auditory_threats:
+            return ()
+        return tuple(event.zombie_scent_clues)
+
+    def _has_unannounced_zombie_scent(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> bool:
+        clues = self._usable_zombie_scent_clues(event)
+        if not clues:
+            return False
+        if not any(
+            clue.entity_id not in self.state.announced_zombie_scent_ids
+            for clue in clues
+        ):
+            return False
+        recent_ms = self._recent_ms(now, self.state.last_zombie_scent_comment_at)
+        return (
+            recent_ms is None
+            or recent_ms >= self.settings.zombie_scent_comment_cooldown_ms
+        )
+
+    def _zombie_scent_warning_actions(
+        self,
+        event: GameEvent,
+        now: datetime,
+    ) -> list[AudioAction]:
+        """実近接を根拠に一度だけ匂い警告する。戦闘状態は変更しない。"""
+
+        if not self._has_unannounced_zombie_scent(event, now):
+            return []
+        clues = self._usable_zombie_scent_clues(event)
+        self._mark_zombie_scent_announced(clues, now)
+        return [
+            AudioAction(
+                layer="speech",
+                interrupt=False,
+                cue_id="zombie_scent_warning",
+                text=fallback_text("general", "combat", "zombie_scent_nearby"),
+                protect_ms=2000,
+                speech_profile="battle",
+                queue_priority="foreground",
+            )
+        ]
+
+    def _mark_zombie_scent_announced(
+        self,
+        clues: tuple[ZombieScentClue, ...],
+        now: datetime,
+    ) -> None:
+        self.state.announced_zombie_scent_ids.update(
+            clue.entity_id for clue in clues
+        )
+        self.state.last_zombie_scent_comment_at = now
 
     def _darkness_advice(self, event: GameEvent, signals: DerivedSignals) -> str | None:
         now = event.observed_at
@@ -361,6 +425,10 @@ class EnvironmentalReactionsMixin:
         stop_dark_push: bool,
     ) -> list[AudioAction]:
         """暗所・ボス予兆など。workshop 中は安全系のみ残す。"""
+        scent_actions = self._zombie_scent_warning_actions(event, now)
+        if scent_actions:
+            return scent_actions
+
         haiku_focus = self._haiku_focus_active()
 
         if not haiku_focus:

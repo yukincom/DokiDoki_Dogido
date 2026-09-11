@@ -279,6 +279,9 @@ class Settings(BaseSettings):
     player_chat_visual_retention_ms: int = 12000
     # player_chat: 危険な一般名を正式 mob 名へ戻すための視認・聴取・討伐履歴
     player_chat_name_correction_retention_ms: int = 10000
+    # 未視認・未聴取の近距離ゾンビを匂いで知らせる。個体の在圏中は一度だけ、
+    # 別個体／再侵入にもこの全体クールダウンを掛ける。
+    zombie_scent_comment_cooldown_ms: int = 120000
     # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
     # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。

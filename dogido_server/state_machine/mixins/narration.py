@@ -751,6 +751,17 @@ class NarrationMixin:
         # 文脈 STT 補正は雑談理解だけに使う。明示操作・永続化の判定は
         # PlayerInputContext.raw/normalized_text を参照する別経路のまま。
         user_text = (self.player_input.semantic_text or "").strip()
+        scent_clues = self._usable_zombie_scent_clues(event)
+        scent_mentioned = self._player_chat_mentions_scent(user_text)
+        if scent_mentioned:
+            if not scent_clues:
+                # プレイヤーの嗅覚報告は受け止めるが、adapterの限定手掛かりが
+                # 無い限りドギド自身が匂いを感じたことにはしない。
+                return fallback_text("general", "chat", "no_scent_evidence")
+            # 手掛かりの種類を生成文へ開かず、ゾンビ一般の固定文だけを返す。
+            # 次tickの自発警告とも二重にしない。
+            self._mark_zombie_scent_announced(scent_clues, event.observed_at)
+            return fallback_text("general", "combat", "zombie_scent_nearby")
         player_turn_plan = extract_player_turn_plan(user_text)
         safety_priority = self._player_chat_safety_priority(event)
         home_progress = (
@@ -1180,7 +1191,11 @@ class NarrationMixin:
             details=details,
             temperature=0.65,
         )
-        from dogido_server.llm.sanitize import contains_forbidden_mob_advice, is_style_acceptable
+        from dogido_server.llm.sanitize import (
+            contains_forbidden_mob_advice,
+            contains_unsupported_olfactory_claim,
+            is_style_acceptable,
+        )
         from dogido_server.player_chat_policy import rewrite_observed_speech_names
 
         text, applied_name_corrections = rewrite_observed_speech_names(
@@ -1195,6 +1210,12 @@ class NarrationMixin:
             )
 
         if contains_forbidden_mob_advice(text, details):
+            return preferred_fallback
+        if contains_unsupported_olfactory_claim(text, details):
+            LOGGER.warning(
+                "player_chat_scent_reject text=%s",
+                (text or "")[:80],
+            )
             return preferred_fallback
         # S2: 白リスト外種名なども style 不合格 → 骨子 or 中立 fallback
         if not is_style_acceptable("player_chat", text, details):
@@ -1470,6 +1491,45 @@ class NarrationMixin:
                 seen.add(text)
                 merged.append(text)
         return merged
+
+    def _player_chat_mentions_scent(self, text: str) -> bool:
+        compact = (text or "").replace(" ", "")
+        if any(
+            topic in compact
+            for topic in (
+                "言葉",
+                "ことば",
+                "句",
+                "川柳",
+                "俳句",
+                "表現",
+                "文章",
+                "文体",
+                "作品",
+                "物語",
+                "詩",
+                "比喩",
+                "ニュアンス",
+            )
+        ):
+            return False
+        return bool(
+            re.search(
+                r"(?:この|その|あの|今の|さっきの|ここ(?:の)?).{0,6}"
+                r"(?:匂|臭|にお|香り)",
+                compact,
+            )
+            or re.search(r"(?:何|なに|なん).{0,5}(?:匂|臭|にお|香り)", compact)
+            or re.search(
+                r"(?:匂い|におい|臭い|香り)(?:って|は|が|の)?"
+                r"(?:何|なに|なん|する|した|して|来|きた|漂|残|かも|かな|やろ)",
+                compact,
+            )
+            or re.search(r"(?:匂|臭|にお)(?:う|って|った)", compact)
+            or re.search(r"(?:なんか|何か).{0,5}(?:臭い|くさい)", compact)
+            or "くさっ" in compact
+            or "臭っ" in compact
+        )
 
     def _player_chat_observed_entity_rows(
         self,

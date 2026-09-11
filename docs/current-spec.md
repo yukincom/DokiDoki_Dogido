@@ -228,6 +228,14 @@ Minecraft Java Edition
 - 音源名は実際の `sound_event` を根拠にし、近くのブロックから鳴ったと推測しない
 - 雷鳴の実音には、天候変化の説明とは別に怖がり反応を返す
 
+### ゾンビの匂い（限定された遊び）
+
+- Fabric adapterが実近接を確認した8ブロック以内の `zombie / zombie_villager / husk / drowned` だけを対象にする。スケルトン、ウィザースケルトン、ゾンビピグリンは対象外
+- 対象へのline-of-sight、視認確定保持、同じentity IDの音保持が一つでもあれば `zombie_scent_clues` へ載せない
+- serverもvisual／auditoryがあるフレームを除外し、個体の在圏中は一度だけ「ゾンビの匂い」として固定警告する。再侵入・別個体には2分の全体クールダウン
+- 匂いだけでは戦闘状態、panic／alert、川柳workshopの戦闘中断へ入れない。方向・正確な距離・頭数も言わない
+- 現在の匂いへの問いはtyped手掛かりの有無に応じてコード固定で返し、通常雑談モデルへ手掛かりを渡さない。通常生成の嗅覚断言も棄却する。プレイヤーの匂い報告、過去assistant発話、視線先コンポスターはドギドの嗅覚観測にならない
+
 ## 6. 暗さと危険度の判定
 
 暗さは単純な明るさ判定ではなく、危険度として扱う。
@@ -415,6 +423,7 @@ Minecraft Java Edition
 - `world`
 - `visual_threats`
 - `auditory_threats`
+- `zombie_scent_clues`
 - `ambient_sounds`
 - `inventory`
 - `combat`

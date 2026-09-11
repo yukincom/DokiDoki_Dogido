@@ -209,6 +209,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     /** 非敵対 Mob + 実再生されたブロック・天候・環境音。戦闘判定には使わない。 */
     private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
     private final Deque<BlockBreakObservation> recentBlockBreakObservations = new ArrayDeque<>();
+    private List<ThreatObservation> currentZombieScentClues = List.of();
 
     private long tickCounter = 0;
     private long lastSnapshotTick = -1;
@@ -478,6 +479,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> audioThreats = scanAuditoryThreats(player);
         List<AudioThreatObservation> ambientSounds = scanAmbientSounds(player);
         List<AudioThreatObservation> unseenAudioThreats = filterUnseenAudioThreats(visibleThreats, audioThreats);
+        this.currentZombieScentClues = deriveZombieScentClues(
+            threats,
+            visibleThreats,
+            audioThreats
+        );
         List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
@@ -611,6 +617,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
         this.recentBlockBreakObservations.clear();
+        this.currentZombieScentClues = List.of();
     }
 
     private void resetThreatStateForDimensionChange() {
@@ -662,6 +669,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
         this.recentBlockBreakObservations.clear();
+        this.currentZombieScentClues = List.of();
     }
 
     private void resetThreatStateForPositionJump() {
@@ -769,6 +777,41 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             filtered.add(threat);
         }
         return filtered;
+    }
+
+    private List<ThreatObservation> deriveZombieScentClues(
+        List<ThreatObservation> threats,
+        List<ThreatObservation> visibleThreats,
+        List<AudioThreatObservation> audioThreats
+    ) {
+        Set<UUID> visibleIds = new java.util.HashSet<>();
+        for (ThreatObservation threat : visibleThreats) {
+            visibleIds.add(threat.uuid());
+        }
+        Set<String> heardSourceIds = new java.util.HashSet<>();
+        for (AudioThreatObservation threat : audioThreats) {
+            if (threat.sourceId() != null && !threat.sourceId().isBlank()) {
+                heardSourceIds.add(threat.sourceId());
+            }
+        }
+
+        List<ThreatObservation> clues = new ArrayList<>();
+        for (ThreatObservation threat : threats) {
+            if (!ZombieScentPolicy.shouldExposeClue(
+                threat.type(),
+                threat.distance(),
+                threat.lineOfSight(),
+                visibleIds.contains(threat.uuid()),
+                heardSourceIds.contains(threat.uuid().toString())
+            )) {
+                continue;
+            }
+            clues.add(threat);
+            if (clues.size() >= 4) {
+                break;
+            }
+        }
+        return List.copyOf(clues);
     }
 
     private boolean shouldSendCombatEnded(
@@ -1640,6 +1683,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         event.addProperty("priority_hint", priorityHint);
         event.addProperty("certainty", certainty);
         root.add("event", event);
+        root.add("zombie_scent_clues", buildZombieScentClues(this.currentZombieScentClues));
         return root;
     }
 
@@ -1899,6 +1943,20 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             entry.addProperty("distance_band", threat.distanceBand());
             entry.addProperty("certainty", threat.certainty());
             entry.addProperty("spoken_name_allowed", threat.spokenNameAllowed());
+            array.add(entry);
+        }
+        return array;
+    }
+
+    private JsonArray buildZombieScentClues(List<ThreatObservation> threats) {
+        JsonArray array = new JsonArray();
+        for (ThreatObservation threat : threats) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("type", threat.type());
+            entry.addProperty("entity_id", threat.uuid().toString());
+            entry.addProperty("distance_band", bucketDistance(threat.distance()));
+            entry.addProperty("certainty", "medium");
+            entry.addProperty("basis", "nearby_without_visual_or_audio");
             array.add(entry);
         }
         return array;

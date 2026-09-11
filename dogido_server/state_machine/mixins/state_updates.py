@@ -125,6 +125,14 @@ class StateUpdatesMixin:
         # player_chat 用: 視認脅威も短期バッファへ（話しかけフレームの抜け穴埋め）
         self._remember_visual_for_chat(event, now)
 
+        # 発話済み個体は現在も有効な匂い手掛かりにだけ残す。消えた個体は
+        # 再侵入時に再び候補となるが、全体クールダウンは別に維持する。
+        # 他個体のvisual／auditoryが同tickにあって匂い発話を抑止しても、
+        # adapterが同じゾンビclueを送り続ける限り「在圏中」は切らない。
+        # 対象自身が見える／聞こえるようになればadapter側でclueから外れる。
+        current_scent_ids = {clue.entity_id for clue in event.zombie_scent_clues}
+        self.state.announced_zombie_scent_ids.intersection_update(current_scent_ids)
+
         if event.combat.recent_damage_ms is not None:
             self.state.last_damage_at = now - timedelta(milliseconds=event.combat.recent_damage_ms)
         if event.player.health is None or event.player.health > self.settings.low_health_warning_threshold:
@@ -318,6 +326,8 @@ class StateUpdatesMixin:
         self.state.last_time_phase = None
         self.state.last_visual_threat_at = None
         self.state.last_audio_threat_at = None
+        self.state.announced_zombie_scent_ids.clear()
+        self.state.last_zombie_scent_comment_at = None
         self.state.last_damage_at = None
         self.state.low_health_warning_armed = True
         self.state.last_combat_end_at = None
