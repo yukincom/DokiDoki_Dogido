@@ -360,6 +360,10 @@ class PlayerChatPromptStanceTests(unittest.TestCase):
         self.assertIn("スタンス: none", content)
         self.assertIn("いまの答え方:", content)
         self.assertIn("プレイヤーを突き放さず", content)
+        self.assertIn("直近の会話の流れに沿って自然に返す", content)
+        self.assertIn("会話を続けること自体を目的にしない", content)
+        self.assertIn("確認や相談が必要なときだけ質問", content)
+        self.assertNotIn("会話を続けられる温度", content)
         self.assertNotIn("カタログからの話題ヒント", content)
         # 規則 bullet はスタンス中心で少なめ
         rule_lines = [line for line in content.splitlines() if line.startswith("- ")]

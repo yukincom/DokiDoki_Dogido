@@ -206,6 +206,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 ```text
 参考傾向:
 - 相棒の返事。実況・定型あいさつにしない
+- 直近の会話の流れに沿って自然に返す。会話を続けるためだけの質問を足さない
 - 【答え方】雑談として自然に。根拠のない種名捏造はしない
 - （戦闘時のみ静止禁止など）
 
@@ -226,6 +227,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 - [x] none で **偽 topic / 偽骨子が details に無い**
 - [x] 観測があるときだけ **短い事実行**がある
 - [x] none でも、観測またはplayer発話にある種名だけを許可し、assistant履歴だけの種名は捨てる
+- [x] 会話継続それ自体を目的にせず、確認・相談が必要なときだけ質問する。完了や相槌には問い返しを足さない
 - [x] fallback は unusable 時のみ。topic hit や identify 骨子を本文にせず、
   **話題非依存の中立文**へ戻す
   - 任意改善: none + unusable のときだけ、もう少し相槌寄りの fallback  
