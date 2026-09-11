@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 
 from dogido_server.dialogue.player_plan import extract_player_turn_plan
@@ -2233,20 +2234,46 @@ class NarrationMixin:
             temperature=0.4,
         )
 
-    def _render_light_crafted_line(self, event: GameEvent) -> str:
-        return self._generate_leaf_text(
-            kind="light_crafted",
-            fallback_text=fallback_text(
-                "general",
-                "darkness",
-                "light_crafted",
-                prefix=self._player_call_prefix(event),
-            ),
+    def _render_light_source_gain_line(
+        self,
+        event: GameEvent,
+        *,
+        comment_action: str,
+        surroundings_light: str,
+    ) -> str:
+        fallback_key = (
+            "light_source_relief"
+            if comment_action == "relief_after_darkness"
+            else "light_source_gain"
+        )
+        fallback = fallback_text(
+            "general",
+            "darkness",
+            fallback_key,
+            prefix=self._player_call_prefix(event),
+        )
+        line = self._generate_leaf_text(
+            kind="light_source_gain",
+            fallback_text=fallback,
             details={
                 "player_name": self._player_call_name(event),
                 "biome": self._biome_label(event.world.biome),
                 "time_phase": getattr(event.world.time_phase, "value", event.world.time_phase) or "unknown",
-                "light_count": self._light_source_count(event.inventory),
+                "comment_action": comment_action,
+                "surroundings_light": surroundings_light,
             },
-            temperature=0.62,
+            temperature=0.48,
         )
+        if self._invalid_light_source_gain_claim(line):
+            return fallback
+        return line
+
+    def _invalid_light_source_gain_claim(self, line: str) -> bool:
+        """未観測の入手方法と、不要な本数実況を最終発話から除く。"""
+
+        text = str(line or "")
+        if any(token in text for token in ("クラフト", "作った", "作れた", "置いた", "設置", "拾った")):
+            return True
+        if re.search(r"(?:[0-9０-９]+|[一二三四五六七八九十百]+)\s*(?:本|個)", text):
+            return True
+        return bool(re.search(r"(?:明かり|あかり|松明|ランタン).{0,4}できた", text))

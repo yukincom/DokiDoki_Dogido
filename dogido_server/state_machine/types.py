@@ -175,6 +175,7 @@ class RuntimeState:
     active_creeper_fuse_keys: set[str] = field(default_factory=set)
     last_occluded_dark_zone: bool | None = None
     last_light_source_count: int = 0
+    last_light_source_comment_at: datetime | None = None
     inventory_initialized: bool = False
     last_inventory_counts: dict[str, int] = field(default_factory=dict)
     # player_chat 用の粗い出来事メモ（自然文）。service が DialogueContext に吸い上げる
@@ -300,7 +301,9 @@ class DerivedSignals:
     entered_close_flying_visual: VisualThreat | None = None
     occluded_dark_zone: bool = False
     entered_occluded_dark_zone: bool = False
-    light_source_crafted: bool = False
+    light_source_gain: bool = False
+    previous_light_source_count: int = 0
+    current_light_source_count: int = 0
     submerged: bool = False
     emergency_shelter: bool = False
     entered_emergency_shelter: bool = False

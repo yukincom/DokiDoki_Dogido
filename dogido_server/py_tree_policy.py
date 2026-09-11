@@ -169,7 +169,7 @@ class NormalEnvironmentEvent(_Condition):
             or context.machine._has_pending_player_chat(context.event)
             or context.machine._dragon_special_pending(context.event, context.now)
             or context.machine.state.pending_overworld_return_line
-            or context.signals.light_source_crafted
+            or context.signals.light_source_gain
             or context.machine.state.pending_special_biome_line is not None
             or context.machine.state.pending_structure_entry_key is not None
             or context.machine._has_recent_ender_eye_launch(context.event)

@@ -35,6 +35,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/haiku/verse.py` | 一行の表示・確定ひらがな読み・行概念・出典を同じ正本オブジェクトへ束ねる |
 | `dogido_server/dialogue/chat_policy.py` | 雑談トピック stance（none を守る等）。`player_chat_policy.py` は re-export |
 | `dogido_server/dialogue/player_chat_planner.py` | 通常雑談の会話焦点と一件のread actionを閉じた型で選び、カタログ候補をコード観測IDへ照合。発話・操作・保存はしない |
+| `dogido_server/dialogue/light_source_comment_planner.py` | 照明器具所持数の増加に一言が必要かを閉じた型で選ぶ。クラフト／設置を推定せず、発話・暗所状態解除・操作はしない |
 | `dogido_server/dialogue/foreground.py` | 本体sessionの会話所有権、戦闘保留、再生完了済み会話から作るsoft川柳材料 |
 | `dogido_server/dialogue/main_runtime.py` | 本体の限定国語対話をgame-event worker外で処理し、発話IDの実再生結果へ結ぶ |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
@@ -68,6 +69,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 - 本体の一般雑談は既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界workerへ渡す。正本DBの明示知識回答、戦況、assist、workshopは状態機械側に残す。foreground中は非敵対ambientを止めるが、敵対警告・雷・夕方を止めない。assistant履歴と会話由来の川柳材料は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いepochを混ぜない
 - 通常 `player_chat` は本文生成前に、実再生済み5往復・現在入力・コード観測から閉じたread actionを一件だけ選ぶ。通常の相槌を全カタログ検索へ流さず、対象照合時だけ候補IDを現在観測へコードで突合する。player報告とassistant履歴は世界観測ではない。未観測の在否・過去誤断言の訂正はコード固定。plannerへ世界操作・保存・戦況判断を渡さない
+- 照明器具のinventory増加はクラフト／設置とは断定しない。半スタック以上＋暗所警告外、5分以内の重複、継続中の危険な暗さはコードで無言にし、それ以外だけ有界 `light_source_comment_plan` に発話要否を選ばせる。暗所状態の停止は現在観測でコード確定し、発話leafへ正確な本数を渡さない
 - 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。学習・Web中は発句時計そのものを凍結する
 - 世界操作はLLMへtools一覧として渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。実行capability・現在snapshot・slot・期限・期待item・重複はコード検証する
 - `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。通常Qwenの限定抽出を使い、OS AIの用途を広げない
@@ -229,6 +231,8 @@ player テキスト注入（開発用・**アクティブセッション必須**
 ---
 
 ## 9. 現在の実装スナップショット（目安）
+
+- 2026-09-11照明コメント判断: inventory snapshot の照明器具増加は所持数の増加としてだけ扱い、有界plannerが無言／備え増加への相槌／実際の暗所回復後の安堵から一件だけ選ぶ。半スタック以上＋暗所警告外、同種コメント後5分以内、継続中の危険な暗さはコードで即時に無言。`dark_push` は所持数だけでは止めず、現在の明るさ・危険度による回復判定を維持する。最終leafへ正確な本数を渡さず、入手方法・本数の補作も棄却する。**コード・自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。**
 
 - 2026-09-11通常雑談grounding: 本文生成前に、発話内evidence付きの有界 `player_chat_plan` が会話継続・在否照合・対象同定・観測回答・参照確認・過去誤断言訂正から一件だけ選ぶ。会話継続ではカタログを読まず、対象照合時だけ候補IDをvisual／passive／hearing／現在構造物／乗車／視線先entityのコード観測へ照合する。候補は発話だけで先に決め、関連Mob観測で別対象へすり替えない。明示在否問いとplayerの平叙存在報告もコードrouting hintでactionを再検査する。カタログ一致、player報告、assistant履歴は観測へ昇格しない。全通常雑談の種名白リストも現在観測・player発話・planner同定候補だけへ限定した。未観測の在否は不在断定を避けた固定文、過去誤断言は固定の謝罪・現在観測の切り分け。世界操作・保存・戦況・assist・workshopは従来どおりコード。**コード・自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。**
 

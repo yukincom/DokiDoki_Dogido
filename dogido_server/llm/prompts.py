@@ -65,7 +65,7 @@ from .reaction_prompts import (
     _build_emergency_shelter_relief_messages,
     _build_ender_eye_throw_messages,
     _build_hostile_callout_messages,
-    _build_light_crafted_messages,
+    _build_light_source_gain_messages,
     _build_newly_burning_visual_messages,
     _build_occluded_entry_no_light_messages,
     _build_occluded_entry_with_light_messages,
@@ -73,6 +73,7 @@ from .reaction_prompts import (
     _build_portal_appearance_messages,
     _build_structure_entry_messages,
     _build_weather_transition_messages,
+    build_light_source_comment_plan_messages,
 )
 from .structured_contracts import (
     STRUCTURED_CONTRACT_RETRY_KEY,
@@ -115,7 +116,8 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "dark_push_no_light": _build_dark_push_no_light_messages,
         "dark_push_after_breath": _build_dark_push_after_breath_messages,
         "emergency_shelter_relief": _build_emergency_shelter_relief_messages,
-        "light_crafted": _build_light_crafted_messages,
+        "light_source_comment_plan": build_light_source_comment_plan_messages,
+        "light_source_gain": _build_light_source_gain_messages,
         "daylight_water_skeleton": _build_daylight_water_skeleton_messages,
         "newly_burning_visual": _build_newly_burning_visual_messages,
         "weather_transition": _build_weather_transition_messages,

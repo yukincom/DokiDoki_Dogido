@@ -131,7 +131,7 @@
 | `aftermath` / `newly_burning_visual` | battle |
 | `death` | peace（責めず立て直す。わーきゃーしない） |
 | 暗所系 (`darkness_*` / `dark_push_*` / `occluded_entry_*` 等) | tension |
-| `emergency_shelter_relief` / `light_crafted` | peace（安堵・喜び） |
+| `emergency_shelter_relief` / `light_source_gain` | peace（安堵・喜び） |
 | `haiku_workshop_reply` | workshop（共同編集者） |
 
 ### `player_chat` の解決

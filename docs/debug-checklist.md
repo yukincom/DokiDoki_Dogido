@@ -72,7 +72,7 @@
 - [x] `call_name` をイベント metadata と session の両方から扱えるようにした
 - [x] fallback 文でもプレイヤーの呼び名を差し込めるようにした
 - [x] LLM leaf が accepted か fallback かを server ログへ出すようにした
-- [x] `light_crafted` prompt に残っていた完成文の例文を外した
+- [x] 旧 `light_crafted` prompt の完成文例を外し、現在は `light_source_gain` で入手方法・本数を言わせない
 
 ## これから確認する項目
 

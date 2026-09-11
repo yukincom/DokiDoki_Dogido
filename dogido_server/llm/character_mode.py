@@ -70,7 +70,7 @@ _KIND_DEFAULT_MODE: dict[str, CharacterMode] = {
     "ender_eye_throw": "peace",
     "portal_appearance": "peace",
     "emergency_shelter_relief": "peace",
-    "light_crafted": "peace",
+    "light_source_gain": "peace",
     "weather_transition": "peace",
     "hostile_callout": "battle",
     "occluded_hostile_presence": "battle",

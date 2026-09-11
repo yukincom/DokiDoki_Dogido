@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from dogido_server.dialogue.light_source_comment_planner import (
+    LightSourceCommentContext,
+    plan_light_source_comment,
+)
 from dogido_server.knowledge_query import split_knowledge_speech
 from dogido_server.models import EventName, GameEvent
 from dogido_server.state_machine.constants import *  # noqa: F403
@@ -368,7 +372,7 @@ class EnvironmentalReactionsMixin:
             if actions:
                 return actions
 
-            actions = self._light_source_crafted_actions(event, signals, stop_dark_push)
+            actions = self._light_source_gain_actions(event, signals, stop_dark_push, now)
             if actions:
                 return actions
 
@@ -858,19 +862,77 @@ class EnvironmentalReactionsMixin:
         actions.extend(self._speech_actions(emergency_shelter_morning))
         return actions
 
-    def _light_source_crafted_actions(
+    def _light_source_gain_actions(
         self,
         event: GameEvent,
         signals: DerivedSignals,
         stop_dark_push: bool,
+        now: datetime,
     ) -> list[AudioAction]:
-        if not signals.light_source_crafted:
+        if not signals.light_source_gain:
             return []
-        self._reset_dark_push_state()
+
+        dark_push_context_before = self.state.dark_push_active or self.state.dark_push_stage >= 1
+        dark_push_should_stop = stop_dark_push or self._should_stop_dark_push_stage_one(
+            event,
+            signals,
+        )
+        darkness_recovered = (
+            dark_push_context_before and self._dark_push_recovered(event)
+        )
+        local_light = event.world.local_light
+        surroundings_reasonably_lit = (
+            self._is_nearby_light_source_buffered_event(event)
+            or self._is_lit_interior_safe_pocket_event(event)
+            or signals.danger_darkness_score < self.settings.darkness_alert_threshold
+            or (
+                local_light is not None
+                and local_light > self.settings.darkness_advice_light_threshold
+            )
+        )
+        severe_darkness = (
+            not surroundings_reasonably_lit
+            and signals.danger_darkness_score >= self.settings.darkness_alert_threshold
+            and (
+                local_light is None
+                or local_light <= self.settings.darkness_advice_light_threshold
+            )
+        )
+        recent_ms = self._recent_ms(now, self.state.last_light_source_comment_at)
+        context = LightSourceCommentContext(
+            previous_count=signals.previous_light_source_count,
+            current_count=signals.current_light_source_count,
+            surroundings_reasonably_lit=surroundings_reasonably_lit,
+            severe_darkness=severe_darkness,
+            nearby_light_present=self._has_nearby_light_source_event(event),
+            dark_push_context_before=dark_push_context_before,
+            dark_push_recovered=darkness_recovered,
+            recent_comment=(
+                recent_ms is not None
+                and recent_ms < self.settings.darkness_llm_comment_cooldown_ms
+            ),
+        )
+        plan = plan_light_source_comment(self.llm, context=context)
+
         actions: list[AudioAction] = []
         if stop_dark_push:
             actions.append(self._control_interrupt_action())
-        actions.extend(self._speech_actions(self._render_light_crafted_line(event)))
+        if dark_push_should_stop:
+            # 呼吸音や暗所stageの停止は発話要否と無関係にコードで確定する。
+            self._reset_dark_push_state()
+        if plan.should_speak:
+            line = self._render_light_source_gain_line(
+                event,
+                comment_action=plan.action,
+                surroundings_light=(
+                    "reasonably_lit"
+                    if surroundings_reasonably_lit
+                    else "not_reasonably_lit"
+                ),
+            )
+            if line:
+                self.state.last_light_source_comment_at = now
+                actions.extend(self._speech_actions(line))
         return actions
 
     def _emergency_shelter_entry_actions(

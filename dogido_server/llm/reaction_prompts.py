@@ -2,8 +2,48 @@
 
 from __future__ import annotations
 
+import json
+
 from .prompt_common import leaf_dialog
 from .types import LeafGenerationRequest
+
+
+def build_light_source_comment_plan_messages(request: object) -> list[dict[str, str]]:
+    """照明器具の増加について、発話要否だけを閉じた型で選ぶ。"""
+
+    details = dict(getattr(request, "details", {}) or {})
+    actions = details.get("allowed_actions") or []
+    facts = details.get("facts") or []
+    user_prompt = (
+        "inventory snapshotで照明器具の所持数が増えた。ひと言が本当に必要かを判断する。\n"
+        "この観測だけでは、クラフトした、置いた、拾った、持ち替えた、のどれかは分からない。"
+        "発話文は生成せず、暗所状態の解除・ゲーム操作・保存も行わない。\n"
+        "actions:\n"
+        "- stay_silent: 情報価値が低い、重複、周囲が十分明るい、または安全反応を優先する\n"
+        "- acknowledge_supply_gain: 初めて明かりを得た、または少ない備えが増えた節目にだけ短く触れる\n"
+        "- relief_after_darkness: 暗所押し込み中だった状態が、現在観測で実際に回復したときだけ安堵する\n"
+        "許可されていないactionを選ばない。基本はstay_silentで、話す理由が明確なときだけ"
+        "別actionを選ぶ。supply_after=abundantかつsurroundings_light=reasonably_litなら"
+        "必ずstay_silent。recent_light_comment=trueでも必ずstay_silent。\n"
+        "basis_idsはfactsにあるIDから、判断に直接使ったものを重複なく1〜3件だけ選ぶ。"
+        "relief_after_darknessならdark_push_recoveredを必ず含める。"
+        "acknowledge_supply_gainならfirst_light_supply、supply_before、surroundings_lightの"
+        "どれかを必ず含める。数値やfactsにない出来事を補作しない。\n"
+        f"許可actions: {json.dumps(actions, ensure_ascii=False)}\n"
+        f"facts: {json.dumps(facts, ensure_ascii=False)}\n"
+        "返答はJSONオブジェクトのみ。形式: "
+        '{"action":"stay_silent","basis_ids":["supply_after"],"confidence":0.0}'
+    )
+    return [
+        {
+            "role": "system",
+            "content": (
+                "あなたは照明器具の所持数変化への発話要否だけを決める限定planner。"
+                "指定されたJSON以外は返さない。"
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
 
 
 def _build_aftermath_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
@@ -382,24 +422,33 @@ def _build_emergency_shelter_relief_messages(request: LeafGenerationRequest) -> 
     return leaf_dialog('emergency_shelter_relief', request, user_prompt)
 
 
-def _build_light_crafted_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
+def _build_light_source_gain_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:
     details = request.details
+    reason = str(details.get("comment_action") or "acknowledge_supply_gain")
+    reason_line = (
+        "暗い場所で怯えていたが、現在観測では暗さが実際に改善したので、短く安堵する。\n"
+        if reason == "relief_after_darkness"
+        else "備えが増えた小さな節目として、短く安心する。\n"
+    )
     user_prompt = (
         "参考傾向:\n"
-        "- 怖がりでも、明かりを作れた瞬間だけかなり嬉しい\n"
-        "- ほっとした勢いで少しテンションが上がる\n"
-        "- ただし言い回しは自然な日本語のまま\n\n"
+        "- 必要だと判断済みの一度だけ、控えめに触れる\n"
+        "- 怖がりな相棒が少しほっとする\n"
+        "- 大げさな達成報告や実況にしない\n\n"
         "/no_think\n"
         "本番:\n"
-        "プレイヤーが照明器具を作った。"
+        "inventory snapshotで、プレイヤーの照明器具の所持数が前回より増えた。"
+        "増えた理由は観測できていないので、作った・クラフトした・置いた・拾ったとは言わない。"
         f"プレイヤーの呼び名は{details.get('player_name', 'プレイヤー')}。"
         "自然なら一度だけその呼び名を入れてよい。\n"
         f"場所は{details.get('biome', 'unknown')}。\n"
         f"時間帯は{details.get('time_phase', 'unknown')}。\n"
-        f"いま持っている照明器具数は{details.get('light_count', 'unknown')}。\n"
-        "怖がりだけど今だけテンション高めで、例文をそのまま使わず、会話っぽく30〜40文字くらいで一言だけ返す。"
+        f"周囲の明るさ区分は{details.get('surroundings_light', 'unknown')}。\n"
+        f"{reason_line}"
+        "所持数や増加数を数字・漢数字・『何本』『何個』の形で言わない。"
+        "例文をそのまま使わず、自然な関西弁で20〜32文字くらいの一言だけ返す。"
     )
-    return leaf_dialog('light_crafted', request, user_prompt)
+    return leaf_dialog('light_source_gain', request, user_prompt)
 
 
 def _build_daylight_water_skeleton_messages(request: LeafGenerationRequest) -> list[dict[str, str]]:

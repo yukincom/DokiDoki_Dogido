@@ -201,6 +201,16 @@ class _PlayerChatPlan(_StrictModel):
         return self
 
 
+class _LightSourceCommentPlan(_StrictModel):
+    action: Literal[
+        "stay_silent",
+        "acknowledge_supply_gain",
+        "relief_after_darkness",
+    ]
+    basis_ids: Annotated[list[NonEmptyText], Field(min_length=1, max_length=3)]
+    confidence: Confidence
+
+
 _MODELS: dict[str, type[BaseModel]] = {
     "language_dialogue_interpretation": Interpretation,
     "language_dialogue_reply": GroundedReply,
@@ -211,6 +221,7 @@ _MODELS: dict[str, type[BaseModel]] = {
     "language_web_consent": WebConsent,
     "assist_select_sword_intent": _SelectSwordIntent,
     "player_chat_plan": _PlayerChatPlan,
+    "light_source_comment_plan": _LightSourceCommentPlan,
     "haiku_draft": _HaikuDraft,
     "haiku_irony": _Irony,
     "haiku_line_grounding": _LineGrounding,
@@ -308,6 +319,20 @@ def structured_contract_retry_instruction(
                 "routing_hintsでplayerの平叙存在報告と確定済みなので、"
                 "check_entity_presenceまたはidentify_entityへ変えない"
             )
+    elif kind == "light_source_comment_plan":
+        constraints.append(
+            "actionは次から選ぶ: "
+            + json.dumps(sorted(_string_set(request_details.get("allowed_actions"))))
+        )
+        constraints.append(
+            "basis_idsは次の文字列から判断に使ったものだけを重複なく1〜3件返す: "
+            + json.dumps(sorted(_light_comment_basis_ids(request_details)))
+        )
+        constraints.append(
+            "relief_after_darknessはdark_push_recoveredをbasis_idsへ含める。"
+            "acknowledge_supply_gainはfirst_light_supply、supply_before、"
+            "surroundings_lightのどれかを含める"
+        )
     elif kind == "haiku_line_grounding":
         constraints.append(
             "assessments.line_indexをこの順で一件ずつ返す: "
@@ -369,7 +394,6 @@ def _validate_dynamic_contract(
             "matched_pattern_ids",
             errors,
         )
-
     elif kind == "player_chat_plan":
         allowed_actions = _string_set(details.get("allowed_actions"))
         if allowed_actions and payload["action"] not in allowed_actions:
@@ -417,6 +441,28 @@ def _validate_dynamic_contract(
             and payload["action"] in {"check_entity_presence", "identify_entity"}
         ):
             errors.append("action:routing_hint_preserves_player_report")
+
+    elif kind == "light_source_comment_plan":
+        allowed_actions = _string_set(details.get("allowed_actions"))
+        if allowed_actions and payload["action"] not in allowed_actions:
+            errors.append("action:not_allowed")
+        _check_unique_known_ids(
+            payload["basis_ids"],
+            _light_comment_basis_ids(details),
+            "basis_ids",
+            errors,
+        )
+        if (
+            payload["action"] == "relief_after_darkness"
+            and "dark_push_recovered" not in payload["basis_ids"]
+        ):
+            errors.append("basis_ids:dark_push_recovered_required")
+        if payload["action"] == "acknowledge_supply_gain" and not {
+            "first_light_supply",
+            "supply_before",
+            "surroundings_light",
+        }.intersection(payload["basis_ids"]):
+            errors.append("basis_ids:acknowledgement_reason_required")
 
     elif kind == "haiku_scene":
         allowed_ids = _source_atom_ids(details)
@@ -490,6 +536,16 @@ def _source_atom_ids(details: dict[str, Any]) -> set[str]:
         str(row["atom_id"])
         for row in details.get("source_atoms", [])
         if isinstance(row, dict) and isinstance(row.get("atom_id"), str) and row["atom_id"]
+    }
+
+
+def _light_comment_basis_ids(details: dict[str, Any]) -> set[str]:
+    return {
+        str(row["basis_id"])
+        for row in details.get("facts", [])
+        if isinstance(row, dict)
+        and isinstance(row.get("basis_id"), str)
+        and row["basis_id"]
     }
 
 

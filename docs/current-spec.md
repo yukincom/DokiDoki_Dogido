@@ -280,6 +280,10 @@ Minecraft Java Edition
 - `暗い` と `危ない` は別概念にする
 - 松明を促す判断は、単なる照度より湧きリスクを優先する
 - 反応は単発コールアウトにせず、`dark_push` / shelter などの内部状態で連続的に扱う
+- inventory snapshot の照明器具増加は、クラフトや設置の成功とは断定しない。前回より所持数が増えた観測としてだけ扱う
+- 照明器具増加への通常コメントは、有界 `light_source_comment_plan` が `stay_silent / acknowledge_supply_gain / relief_after_darkness` から一件だけ選ぶ。発話・暗所状態解除・操作はplannerへ渡さない
+- 半スタック以上の照明を持ち、既存の暗所警告条件にも当たらない場面と、同種コメント後5分以内はコードで無言にする。現在も危険な暗さならコメントせず、既存の警告を優先する
+- 最終発話には正確な所持数・増加数を渡さず、クラフト・設置・拾得を補作した文もコードで棄却する
 - emergency shelter の形状（低い天井・四方の壁）と、入場安堵を話す条件は分ける
   - 入場安堵は夜（`time_phase=night` または hostile spawn 開始 tick 以降）のみ
   - 設定済みリスポーン地点の近くにベッドがある場所は拠点として扱い、emergency shelter から除外

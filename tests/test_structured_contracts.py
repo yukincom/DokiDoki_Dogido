@@ -145,6 +145,23 @@ class StructuredContractTests(unittest.TestCase):
                     },
                 },
             ),
+            "light_source_comment_plan": (
+                {
+                    "action": "stay_silent",
+                    "basis_ids": ["supply_after", "surroundings_light"],
+                    "confidence": 0.9,
+                },
+                {
+                    "allowed_actions": ["stay_silent"],
+                    "facts": [
+                        {"basis_id": "supply_after", "value": "abundant"},
+                        {
+                            "basis_id": "surroundings_light",
+                            "value": "reasonably_lit",
+                        },
+                    ],
+                },
+            ),
             "haiku_draft": (
                 {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]},
                 {},
