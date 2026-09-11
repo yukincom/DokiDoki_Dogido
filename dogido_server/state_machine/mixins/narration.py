@@ -1317,6 +1317,8 @@ class NarrationMixin:
         """地表バイオームと「空間」（地下っぽさ）を分けて chat に渡す。
 
         biome id が白樺の森のままでも、sky_visible / 天井 / 囲まれ度で洞窟っぽさを伝える。
+        ただし設定済みリスポーン地点の近くにベッドかドアがあれば、
+        暗い拠点を単なる洞窟として扱わない。
         """
         environment = project_environment(event)
         biome_label = (
@@ -1344,6 +1346,7 @@ class NarrationMixin:
         low_ceiling = ceiling is not None and ceiling <= 8.0
         deep_y = y is not None and y <= 48.0
         enclosed = enclosure >= 0.35
+        home_evidence = self._player_chat_home_evidence(event)
 
         if submerged:
             space_kind = "underwater"
@@ -1351,6 +1354,20 @@ class NarrationMixin:
         elif environment.mining_state == "active":
             space_kind = "active_mining"
             space_ja = "地下で採掘中"
+        elif home_evidence:
+            fixtures_ja = "・".join(
+                label
+                for evidence_id, label in (
+                    ("nearby_bed", "ベッド"),
+                    ("nearby_door", "ドア"),
+                )
+                if evidence_id in home_evidence
+            )
+            space_kind = "home_base"
+            space_ja = (
+                "家・拠点らしい場所"
+                f"（近くの{fixtures_ja}と設定済みリスポーン地点が一致）"
+            )
         elif cave_biome:
             space_kind = "cave_biome"
             space_ja = "洞窟バイオームの中"
@@ -1396,7 +1413,22 @@ class NarrationMixin:
             "sky_visible": sky_visible,
             "place_line": place_line,
             "biome_label": biome_label,
+            "home_evidence": home_evidence,
         }
+
+    def _player_chat_home_evidence(self, event: GameEvent) -> tuple[str, ...]:
+        """雑談用の家らしさ。窓や暗さだけでは拠点へ昇格しない。"""
+        if not self._is_near_respawn_bed(event):
+            return ()
+
+        evidence: list[str] = ["nearby_respawn_point"]
+        if self._has_nearby_sleepable_bed(event):
+            evidence.append("nearby_bed")
+        if (event.world.nearby_door_count or 0) > 0:
+            evidence.append("nearby_door")
+        if len(evidence) == 1:
+            return ()
+        return tuple(evidence)
 
     def _player_chat_topic_hits(
         self,
