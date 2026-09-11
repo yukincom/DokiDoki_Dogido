@@ -9,7 +9,7 @@ final class ZombieScentPolicyTest {
     @Test
     void allowsOnlyCloseHiddenUnheardZombieFamily() {
         for (String type : new String[] {"zombie", "zombie_villager", "husk", "drowned"}) {
-            assertTrue(ZombieScentPolicy.shouldExposeClue(type, 8.0, false, false, false));
+            assertTrue(ZombieScentPolicy.shouldExposeClue(type, 10.0, false, false, false));
         }
         assertTrue(
             ZombieScentPolicy.shouldExposeClue(
@@ -32,7 +32,7 @@ final class ZombieScentPolicyTest {
 
     @Test
     void excludesDistantVisibleOrHeardZombie() {
-        assertFalse(ZombieScentPolicy.shouldExposeClue("zombie", 8.01, false, false, false));
+        assertFalse(ZombieScentPolicy.shouldExposeClue("zombie", 10.01, false, false, false));
         assertFalse(ZombieScentPolicy.shouldExposeClue("zombie", 4.0, true, false, false));
         assertFalse(ZombieScentPolicy.shouldExposeClue("zombie", 4.0, false, true, false));
         assertFalse(ZombieScentPolicy.shouldExposeClue("zombie", 4.0, false, false, true));

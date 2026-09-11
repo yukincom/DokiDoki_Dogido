@@ -69,7 +69,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 - 本体の一般雑談は既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界workerへ渡す。正本DBの明示知識回答、戦況、assist、workshopは状態機械側に残す。foreground中は非敵対ambientを止めるが、敵対警告・雷・夕方を止めない。assistant履歴と会話由来の川柳材料は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いepochを混ぜない
 - 通常 `player_chat` は本文生成前に、実再生済み5往復・現在入力・コード観測から閉じたread actionを一件だけ選ぶ。通常の相槌を全カタログ検索へ流さず、対象照合時だけ候補IDを現在観測へコードで突合する。player報告とassistant履歴は世界観測ではない。未観測の在否・過去誤断言の訂正はコード固定。plannerへ世界操作・保存・戦況判断を渡さない
-- 嗅覚は一般センサーにしない。Fabricの実近接から作る `zombie_scent_clues` がある場合だけ、未視認・未聴取の8ブロック以内のゾンビ系を匂いとして一度知らせる。スケルトン・方向・正確な距離・頭数は対象外。匂い単独で戦闘mode／workshop pauseを立てず、現在の匂いへの問いはclue有無に応じたコード固定文、通常雑談の嗅覚断言は生成後に棄却する
+- 嗅覚は一般LLMセンサーにしない。Fabricが指定した近接源・hotbar・バイオーム・温度・天候をコードのスメルバトルで一件へ解決し、`none / present / suppressed` を明示する。方向・距離・個数・entity IDはserverへ渡さず、匂い単独で戦闘mode／workshop pauseを立てない。現在の匂いへの問いはコード固定文、通常雑談の嗅覚断言は生成後に棄却する。正本は `docs/smell-policy.md`
 - 照明器具のinventory増加はクラフト／設置とは断定しない。半スタック以上＋暗所警告外、5分以内の重複、継続中の危険な暗さはコードで無言にし、それ以外だけ有界 `light_source_comment_plan` に発話要否を選ばせる。暗所状態の停止は現在観測でコード確定し、発話leafへ正確な本数を渡さない
 - 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。学習・Web中は発句時計そのものを凍結する
 - 世界操作はLLMへtools一覧として渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。実行capability・現在snapshot・slot・期限・期待item・重複はコード検証する
@@ -233,7 +233,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
-- 2026-09-11ゾンビの匂い: Fabricが実索敵した8ブロック以内の `zombie / zombie_villager / husk / drowned` から、line-of-sight・視認確定保持・同一entity IDの音保持がない個体だけを `zombie_scent_clues` へ載せる。serverはvisual／auditoryと競合しないフレームで在圏中一度＋全体2分クールダウンの固定警告を返す。スケルトン・ゾンビピグリン、方向・正確な距離・頭数は対象外。匂い単独でcombat／panic／alert／workshop pauseへ入れず、現在の匂いへの問いはclue有無に応じてコード固定で返し、通常player chatモデルへclueを渡さない。生成された嗅覚断言も棄却する。**コード・Python/Java自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。**
+- 2026-09-11スメルバトル: Fabricが実近接源・hotbar 9slot・現在バイオーム・温度・天候を閉じた規則で競わせ、`smell_observation` の `none / present / suppressed` 一件へ解決する。同種非加算、分類tie、腐った肉によるゾンビmask、温度減衰、焚き火の実調理slot、雨上がり180秒、雨雪雷・水中抑止をコードで確定。serverは2観測安定後、同状態一度＋全体2分クールダウンの固定文だけを話す。方向・距離・個数・entity IDは渡さず、匂い単独でcombat／panic／alert／workshop pauseへ入れない。旧 `zombie_scent_clues` は移行互換。1.21.11に実IDがない硫黄ブロック・金のタンポポは保留。**コード・Python/Java自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。** [詳細](docs/smell-policy.md)。
 
 - 2026-09-11照明コメント判断: inventory snapshot の照明器具増加は所持数の増加としてだけ扱い、有界plannerが無言／備え増加への相槌／実際の暗所回復後の安堵から一件だけ選ぶ。半スタック以上＋暗所警告外、同種コメント後5分以内、継続中の危険な暗さはコードで即時に無言。`dark_push` は所持数だけでは止めず、現在の明るさ・危険度による回復判定を維持する。最終leafへ正確な本数を渡さず、入手方法・本数の補作も棄却する。**コード・自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。**
 

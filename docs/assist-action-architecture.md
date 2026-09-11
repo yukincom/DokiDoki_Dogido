@@ -249,7 +249,9 @@ C を空箱だけで先行させず、**実装済みAを再利用して、剣1�
 
 ここでいう「1反応」は、server が受理して実際に処理した **非重複のゲームイベント1件**。発話しなかった判断も `no_action` として1行にする。同一 sequence / idempotency key の重複受信は再判断していないため、新しい行を作らない。
 
-初版は `schema_version: 1`、支援結果を接続した現行版は `schema_version: 2` と `record_type: decision_episode` を持つ。既存行を書き換えないため、同じJSONL内に版が混在してよい。
+初版は `schema_version: 1`。支援結果などの観測追加を重ね、現行版は
+`schema_version: 5` と `record_type: decision_episode` を持ち、`observation.smell_observation` も記録する。
+既存行を書き換えないため、同じJSONL内に版が混在してよい。
 
 | キー | 内容 |
 |---|---|

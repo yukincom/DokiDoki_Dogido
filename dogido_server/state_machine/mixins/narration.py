@@ -751,17 +751,16 @@ class NarrationMixin:
         # 文脈 STT 補正は雑談理解だけに使う。明示操作・永続化の判定は
         # PlayerInputContext.raw/normalized_text を参照する別経路のまま。
         user_text = (self.player_input.semantic_text or "").strip()
-        scent_clues = self._usable_zombie_scent_clues(event)
+        from dogido_server.smell import event_smell_observation, smell_speech
+
+        scent_observation = event_smell_observation(event)
         scent_mentioned = self._player_chat_mentions_scent(user_text)
         if scent_mentioned:
-            if not scent_clues:
-                # プレイヤーの嗅覚報告は受け止めるが、adapterの限定手掛かりが
-                # 無い限りドギド自身が匂いを感じたことにはしない。
-                return fallback_text("general", "chat", "no_scent_evidence")
-            # 手掛かりの種類を生成文へ開かず、ゾンビ一般の固定文だけを返す。
-            # 次tickの自発警告とも二重にしない。
-            self._mark_zombie_scent_announced(scent_clues, event.observed_at)
-            return fallback_text("general", "combat", "zombie_scent_nearby")
+            # 対応済みadapterの none と、旧adapterの観測なしを分ける。presentも
+            # モデルへ生成させず、adapterが解決した一件だけをコード固定で返す。
+            speech = smell_speech(scent_observation)
+            self._mark_smell_announced(scent_observation, event.observed_at)
+            return speech.text
         player_turn_plan = extract_player_turn_plan(user_text)
         safety_priority = self._player_chat_safety_priority(event)
         home_progress = (

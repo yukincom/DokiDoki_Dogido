@@ -407,13 +407,15 @@
 - `なんか左奥で声する`
 - 断定は抑える
 
-### ゾンビの匂い
+### 匂い
 
-- `zombie_scent_clues` は実近接に基づくが、visual／auditoryとは別の遊びの手掛かり
-- 未視認・未聴取の近距離ゾンビ系だけを、在圏中一度＋全体2分クールダウンで固定文にする
-- スケルトンは対象外。方向・正確な距離・頭数は発話しない
-- この手掛かり単独ではmodeを `normal` のまま保ち、combat activeやworkshop pauseを立てない
-- 同tickにplayer inputがあれば返答を先にし、匂い警告は未発話個体として次の安全なtickまで保持する
+- `smell_observation` はadapter側の[スメルバトル](smell-policy.md)で解決済みの一件。`none / present / suppressed` を区別する
+- 新しい `present` は同じsignatureを2観測連続で受けてから有効化し、境界で勝者が揺れた1frameを話さない
+- 同じ優勢状態では一度だけ、消失後の再出現や別の勝者にも全体2分クールダウン。旧 `zombie_scent_clues` だけは互換上初回で有効化する
+- visual／auditory脅威と同frameなら自発匂い発話を後回しにするが、匂いの存在状態は失わない
+- 特定ゾンビは従来の警告優先度、それ以外はplayer inputと安全反応の後のambientに置く
+- 匂い単独ではmodeを `normal` のまま保ち、combat activeやworkshop pauseを立てない
+- 同tickにplayer inputがあれば返答を先にし、安定した未発話の匂いは次の安全なtickまで保持する
 
 ### 記憶を伴う場合
 

@@ -361,6 +361,187 @@ class ZombieScentClue(DogidoModel):
         return self
 
 
+SmellStatus = Literal["none", "present", "suppressed"]
+SmellId = Literal[
+    "zombie",
+    "rotten_flesh",
+    "decay",
+    "composter",
+    "brewing_stand",
+    "swamp",
+    "raw_meat",
+    "raw_fish",
+    "cooked_meat",
+    "cooked_fish",
+    "cooking_meat",
+    "cooking_fish",
+    "soup",
+    "cookie",
+    "cake",
+    "bread",
+    "food",
+    "ink_sac",
+    "lily_of_the_valley",
+    "lilac",
+    "peony",
+    "rose_bush",
+    "wither_rose",
+    "cactus_flower",
+    "flowering_azalea",
+    "allium",
+    "pitcher_plant",
+    "torchflower",
+    "open_eyeblossom",
+    "flower",
+    "rain_after",
+    "mixed",
+]
+SmellCategory = Literal[
+    "decay",
+    "compost",
+    "brewing",
+    "swamp",
+    "food",
+    "flower",
+    "ink",
+    "rain_after",
+    "mixed",
+]
+SmellValence = Literal["pleasant", "unpleasant", "mixed"]
+SmellSourceKind = Literal[
+    "entity",
+    "block",
+    "hotbar",
+    "dropped_item",
+    "biome",
+    "mixed",
+]
+SmellSpecificity = Literal["source", "category", "mixed"]
+SmellSuppressionReason = Literal["rain", "snow", "thunder", "submerged"]
+
+_SMELL_SOURCE_SHAPES: dict[str, tuple[str, str, frozenset[str]]] = {
+    "zombie": ("decay", "unpleasant", frozenset({"entity"})),
+    "rotten_flesh": (
+        "decay",
+        "unpleasant",
+        frozenset({"hotbar", "dropped_item"}),
+    ),
+    "composter": ("compost", "unpleasant", frozenset({"block"})),
+    "brewing_stand": ("brewing", "mixed", frozenset({"block"})),
+    "swamp": ("swamp", "mixed", frozenset({"biome"})),
+    "raw_meat": ("food", "unpleasant", frozenset({"hotbar", "dropped_item"})),
+    "raw_fish": ("food", "unpleasant", frozenset({"hotbar", "dropped_item"})),
+    "cooked_meat": ("food", "pleasant", frozenset({"hotbar", "dropped_item"})),
+    "cooked_fish": ("food", "pleasant", frozenset({"hotbar", "dropped_item"})),
+    "cooking_meat": ("food", "pleasant", frozenset({"block"})),
+    "cooking_fish": ("food", "pleasant", frozenset({"block"})),
+    "soup": ("food", "pleasant", frozenset({"hotbar", "dropped_item"})),
+    "cookie": ("food", "pleasant", frozenset({"hotbar", "dropped_item"})),
+    "cake": (
+        "food",
+        "pleasant",
+        frozenset({"hotbar", "dropped_item", "block"}),
+    ),
+    "bread": ("food", "pleasant", frozenset({"hotbar", "dropped_item"})),
+    "ink_sac": ("ink", "unpleasant", frozenset({"hotbar"})),
+    "lily_of_the_valley": ("flower", "pleasant", frozenset({"hotbar", "block"})),
+    "lilac": ("flower", "pleasant", frozenset({"hotbar", "block"})),
+    "peony": ("flower", "pleasant", frozenset({"hotbar", "block"})),
+    "rose_bush": ("flower", "pleasant", frozenset({"hotbar", "block"})),
+    "cactus_flower": ("flower", "pleasant", frozenset({"hotbar", "block"})),
+    "flowering_azalea": ("flower", "pleasant", frozenset({"hotbar", "block"})),
+    "wither_rose": ("flower", "mixed", frozenset({"hotbar", "block"})),
+    "allium": ("flower", "unpleasant", frozenset({"hotbar", "block"})),
+    "pitcher_plant": ("flower", "unpleasant", frozenset({"hotbar", "block"})),
+    "torchflower": ("flower", "unpleasant", frozenset({"hotbar", "block"})),
+    "open_eyeblossom": ("flower", "unpleasant", frozenset({"hotbar", "block"})),
+    "rain_after": ("rain_after", "pleasant", frozenset({"block"})),
+}
+
+_SMELL_CATEGORY_VALENCES: dict[str, frozenset[str]] = {
+    "decay": frozenset({"unpleasant"}),
+    "food": frozenset({"pleasant", "unpleasant", "mixed"}),
+    "flower": frozenset({"pleasant", "unpleasant", "mixed"}),
+}
+
+
+class SmellObservation(DogidoModel):
+    """adapter がスメルバトルを解決した、方向・正確な距離・頭数なしの嗅覚観測。
+
+    ``none`` は対応済みadapterが候補を調べて匂いなしと確定した状態。
+    フィールド自体が無い旧adapterとは区別する。雨雪雷・水中は
+    ``suppressed`` とし、「匂いが無い」と「嗅げない」も混同しない。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: SmellStatus
+    smell_id: SmellId | None = None
+    category: SmellCategory | None = None
+    valence: SmellValence | None = None
+    source_kind: SmellSourceKind | None = None
+    specificity: SmellSpecificity | None = None
+    effective_strength: int | None = Field(default=None, ge=1, le=12)
+    temperature_modifier: int = Field(default=0, ge=-7, le=2)
+    rain_after_active: bool = False
+    suppression_reason: SmellSuppressionReason | None = None
+    basis: Literal["smell_policy_v1"] = "smell_policy_v1"
+
+    @model_validator(mode="after")
+    def _validate_status_shape(self) -> SmellObservation:
+        present_fields = (
+            self.smell_id,
+            self.category,
+            self.valence,
+            self.source_kind,
+            self.specificity,
+            self.effective_strength,
+        )
+        if self.status == "present":
+            if any(value is None for value in present_fields):
+                raise ValueError("present smell observation requires resolved smell fields")
+            if self.suppression_reason is not None:
+                raise ValueError("present smell observation cannot be suppressed")
+            if self.specificity == "mixed" and (
+                self.smell_id != "mixed"
+                or self.category != "mixed"
+                or self.valence != "mixed"
+                or self.source_kind != "mixed"
+            ):
+                raise ValueError("mixed smell observation requires the mixed parent shape")
+            if self.specificity == "category" and (
+                self.smell_id != self.category or self.source_kind != "mixed"
+            ):
+                raise ValueError("category smell observation requires its parent category")
+            if self.specificity == "source" and self.source_kind == "mixed":
+                raise ValueError("source smell observation requires one source kind")
+            if self.specificity == "source":
+                expected = _SMELL_SOURCE_SHAPES.get(str(self.smell_id))
+                if expected is None:
+                    raise ValueError("source smell observation requires a concrete smell id")
+                category, valence, source_kinds = expected
+                if (
+                    self.category != category
+                    or self.valence != valence
+                    or self.source_kind not in source_kinds
+                ):
+                    raise ValueError("source smell observation has an invalid semantic shape")
+                if self.smell_id == "rain_after" and not self.rain_after_active:
+                    raise ValueError("rain-after smell requires an active rain-after window")
+            if self.specificity == "category":
+                allowed_valences = _SMELL_CATEGORY_VALENCES.get(str(self.category))
+                if allowed_valences is None or self.valence not in allowed_valences:
+                    raise ValueError("category smell observation has an invalid semantic shape")
+            return self
+        if any(value is not None for value in present_fields):
+            raise ValueError("non-present smell observation cannot carry a resolved source")
+        if self.status == "suppressed" and self.suppression_reason is None:
+            raise ValueError("suppressed smell observation requires a reason")
+        if self.status == "none" and self.suppression_reason is not None:
+            raise ValueError("none smell observation cannot carry a suppression reason")
+        return self
+
+
 class AmbientSound(DogidoModel):
     """戦闘判定に使わない周囲音（非敵対Mob・ブロック・天候・環境）。
 
@@ -534,7 +715,7 @@ class GameEvent(DogidoModel):
     """Fabric クライアントアダプタから dogido-server へ送るメッセージ本体（仕様 §4）。
 
     必須: schema_version / game / adapter / observed_at / event
-    推奨: sequence / visual_threats / auditory_threats / zombie_scent_clues / inventory / combat
+    推奨: sequence / visual_threats / auditory_threats / smell_observation / inventory / combat
     任意: passive_mobs / nearby_resources / look_target / meta
     passive_mobs には非敵対状態の中立モブも temperament="neutral" で含まれる。
     旧スキーマ名 peaceful_mobs も受信時に受け付ける。
@@ -553,6 +734,8 @@ class GameEvent(DogidoModel):
     world: WorldState = Field(default_factory=WorldState)
     visual_threats: list[VisualThreat] = Field(default_factory=list)
     auditory_threats: list[AuditoryThreat] = Field(default_factory=list)
+    smell_observation: SmellObservation | None = None
+    # 旧adapterとの読み取り互換。新adapterはスメルバトル後の結果を上へ載せる。
     zombie_scent_clues: list[ZombieScentClue] = Field(default_factory=list, max_length=8)
     ambient_sounds: list[AmbientSound] = Field(default_factory=list)
     passive_mobs: list[PassiveMob] = Field(default_factory=list)

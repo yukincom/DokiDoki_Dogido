@@ -6,6 +6,11 @@ from datetime import datetime, timedelta
 from math import inf
 
 from dogido_server.models import EventName, GameEvent, HorizontalDirection
+from dogido_server.smell import (
+    event_smell_observation,
+    observation_is_legacy_zombie,
+    smell_signature,
+)
 from dogido_server.state_machine.constants import (
     DRAGON_PERCH_PHASES,
     PLAYER_CHAT_HOME_PROGRESS_MAX_SAMPLES,
@@ -125,13 +130,7 @@ class StateUpdatesMixin:
         # player_chat 用: 視認脅威も短期バッファへ（話しかけフレームの抜け穴埋め）
         self._remember_visual_for_chat(event, now)
 
-        # 発話済み個体は現在も有効な匂い手掛かりにだけ残す。消えた個体は
-        # 再侵入時に再び候補となるが、全体クールダウンは別に維持する。
-        # 他個体のvisual／auditoryが同tickにあって匂い発話を抑止しても、
-        # adapterが同じゾンビclueを送り続ける限り「在圏中」は切らない。
-        # 対象自身が見える／聞こえるようになればadapter側でclueから外れる。
-        current_scent_ids = {clue.entity_id for clue in event.zombie_scent_clues}
-        self.state.announced_zombie_scent_ids.intersection_update(current_scent_ids)
+        self._update_smell_presence(event)
 
         if event.combat.recent_damage_ms is not None:
             self.state.last_damage_at = now - timedelta(milliseconds=event.combat.recent_damage_ms)
@@ -277,6 +276,58 @@ class StateUpdatesMixin:
             self.state.multi_increase_announced_ids &= visible_ids
         self._log_haiku_block_state(event, now)
 
+    def _update_smell_presence(self, event: GameEvent) -> None:
+        """優勢な匂いを2観測で安定化し、同じ状態の連呼を防ぐ。"""
+
+        observation = event_smell_observation(event)
+        signature = smell_signature(observation)
+        if signature is None:
+            # 旧adapterはfield省略＋clue空が唯一の「離脱」表現なので、従来どおり
+            # 一度で解除する。新adapterの明示none/suppressedだけを2観測で安定化する。
+            if event.smell_observation is None:
+                self.state.active_smell_signature = None
+                self.state.pending_smell_signature = None
+                self.state.pending_smell_observation_count = 0
+                self.state.announced_smell_signature = None
+                return
+            if self.state.active_smell_signature is None:
+                self.state.pending_smell_signature = None
+                self.state.pending_smell_observation_count = 0
+                return
+            absent_signature = "__absent__"
+            if self.state.pending_smell_signature == absent_signature:
+                self.state.pending_smell_observation_count += 1
+            else:
+                self.state.pending_smell_signature = absent_signature
+                self.state.pending_smell_observation_count = 1
+            if self.state.pending_smell_observation_count >= 2:
+                self.state.active_smell_signature = None
+                self.state.pending_smell_signature = None
+                self.state.pending_smell_observation_count = 0
+                self.state.announced_smell_signature = None
+            return
+
+        if signature == self.state.active_smell_signature:
+            self.state.pending_smell_signature = None
+            self.state.pending_smell_observation_count = 0
+            return
+
+        if signature == self.state.pending_smell_signature:
+            self.state.pending_smell_observation_count += 1
+        else:
+            self.state.pending_smell_signature = signature
+            self.state.pending_smell_observation_count = 1
+
+        # 旧adapterのゾンビclueは従来どおり初回で有効化する。新しい一般
+        # スメル状態は境界での勝者の揺れを避けるため、同じ結果を2回要求する。
+        required_observations = 1 if observation_is_legacy_zombie(event) else 2
+        if self.state.pending_smell_observation_count < required_observations:
+            return
+        self.state.active_smell_signature = signature
+        self.state.pending_smell_signature = None
+        self.state.pending_smell_observation_count = 0
+        self.state.announced_smell_signature = None
+
     def _update_respawn_distance_samples(self, event: GameEvent, now: datetime) -> None:
         """同じディメンション内の短い距離列だけを保持する。目標メモリではない。"""
 
@@ -326,8 +377,11 @@ class StateUpdatesMixin:
         self.state.last_time_phase = None
         self.state.last_visual_threat_at = None
         self.state.last_audio_threat_at = None
-        self.state.announced_zombie_scent_ids.clear()
-        self.state.last_zombie_scent_comment_at = None
+        self.state.active_smell_signature = None
+        self.state.pending_smell_signature = None
+        self.state.pending_smell_observation_count = 0
+        self.state.announced_smell_signature = None
+        self.state.last_smell_comment_at = None
         self.state.last_damage_at = None
         self.state.low_health_warning_armed = True
         self.state.last_combat_end_at = None

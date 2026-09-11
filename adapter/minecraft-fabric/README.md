@@ -15,7 +15,7 @@
 - `status_snapshot` の定期送信
 - 近距離 hostile 検知時の `threat_approaching` 送信
 - 遮蔽された近距離 hostile を `hostile_audio_detected` として送信
-- 8ブロック以内にいる未視認・未聴取のゾンビ系だけを、発話用の方向・正確な距離・頭数を含めない `zombie_scent_clues` として送信（スケルトンは対象外）
+- 実近接源・hotbar・現在バイオーム・温度・天候を競わせ、方向・距離・個数を含めない `smell_observation` 一件として送信
 - プレイヤー死亡時の `player_died` 送信
 - 戦闘収束時の `combat_ended` 送信
 - game-event応答の型付き `select_hotbar` command受信
@@ -39,13 +39,14 @@
 - クライアント側の音観測 TTL は約 **15秒**（300 tick）。「…？ → 今の音なに？」の猶予用
 - サーバの player_chat hearing バッファは別途約 **20秒**
 
-## ゾンビの匂い（遊びの限定観測）
+## 匂い（遊びの限定観測）
 
-- 実際に索敵した `zombie / zombie_villager / husk / drowned` が8ブロック以内にいる場合だけ候補にする
-- 対象へのline-of-sightがある、視認確定保持中、または同じentity IDの音を保持中なら送らない
-- `skeleton / wither_skeleton / zombified_piglin` と他の敵は対象外
-- payloadは種別・entity ID・粗い距離帯・固定basisだけ。方向、exact position、正確な距離は送らない
-- 匂いだけではadapterの戦闘追跡を開始しない。serverが在圏中一度＋全体クールダウンで発話を決める
+- 伝播力に必要な範囲だけ調べる指定block、指定itemのhotbar 9slotと落下item、沼バイオーム、未視認・未聴取ゾンビ系だけを候補にする
+- 伝播力、3次元距離、Minecraft温度、雨上がり補正をコードで比較し、同種は合算しない
+- activeな雨・雪・雷と水中は `suppressed`。候補なしも `none` として明示する
+- 火のついたcampfire／soul campfireの実調理slotにある肉・魚だけは寒さによる減衰を受けない
+- 結果payloadは方向、正確な距離、個数、entity IDを含めず、匂いだけでadapterの戦闘追跡を開始しない
+- 詳しい対象ID・計算・雨上がり・サーバー発話は親プロジェクトの [`docs/smell-policy.md`](../../docs/smell-policy.md)
 
 ## 設定ファイル
 

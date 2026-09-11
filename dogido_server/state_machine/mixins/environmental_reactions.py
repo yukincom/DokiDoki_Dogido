@@ -8,7 +8,13 @@ from dogido_server.dialogue.light_source_comment_planner import (
     plan_light_source_comment,
 )
 from dogido_server.knowledge_query import split_knowledge_speech
-from dogido_server.models import EventName, GameEvent, ZombieScentClue
+from dogido_server.models import EventName, GameEvent, SmellObservation
+from dogido_server.smell import (
+    event_smell_observation,
+    observation_is_legacy_zombie,
+    smell_signature,
+    smell_speech,
+)
 from dogido_server.state_machine.constants import *  # noqa: F403
 from dogido_server.state_machine.fallback_catalog import fallback_text
 from dogido_server.state_machine.response_catalog import response_text
@@ -90,69 +96,78 @@ class EnvironmentalReactionsMixin:
             and recent_ms < self.settings.darkness_advice_cooldown_ms
         )
 
-    def _usable_zombie_scent_clues(
+    def _usable_smell_observation(
         self,
         event: GameEvent,
-    ) -> tuple[ZombieScentClue, ...]:
-        """現在フレームで視認・聴取と競合しない、限定された匂い手掛かり。"""
+    ) -> SmellObservation | None:
+        """現在フレームで脅威反応と競合しない、解決済みの匂い観測。"""
 
-        # adapter契約も個体単位で視認・音を除外するが、serverでも再検査する。
-        # 別の敵を見聞きしている戦況では既存のvisual/auditory警告を優先する。
+        # ゾンビ候補はadapterでも個体単位に視認・音を除外する。別の敵を
+        # 見聞きしている戦況では、花や食べ物を含め匂いの自発発話を後回しにする。
         if event.visual_threats or event.auditory_threats:
-            return ()
-        return tuple(event.zombie_scent_clues)
+            return None
+        return event_smell_observation(event)
 
-    def _has_unannounced_zombie_scent(
+    def _has_unannounced_smell(
         self,
         event: GameEvent,
         now: datetime,
     ) -> bool:
-        clues = self._usable_zombie_scent_clues(event)
-        if not clues:
+        observation = self._usable_smell_observation(event)
+        signature = smell_signature(observation)
+        if signature is None or signature != self.state.active_smell_signature:
             return False
-        if not any(
-            clue.entity_id not in self.state.announced_zombie_scent_ids
-            for clue in clues
-        ):
+        if signature == self.state.announced_smell_signature:
             return False
-        recent_ms = self._recent_ms(now, self.state.last_zombie_scent_comment_at)
+        recent_ms = self._recent_ms(now, self.state.last_smell_comment_at)
+        cooldown_ms = (
+            self.settings.zombie_scent_comment_cooldown_ms
+            if observation_is_legacy_zombie(event)
+            else self.settings.smell_comment_cooldown_ms
+        )
         return (
             recent_ms is None
-            or recent_ms >= self.settings.zombie_scent_comment_cooldown_ms
+            or recent_ms >= cooldown_ms
         )
 
-    def _zombie_scent_warning_actions(
+    def _smell_observation_actions(
         self,
         event: GameEvent,
         now: datetime,
     ) -> list[AudioAction]:
-        """実近接を根拠に一度だけ匂い警告する。戦闘状態は変更しない。"""
+        """解決済みの優勢な匂いを一度だけ話す。戦闘状態は変更しない。"""
 
-        if not self._has_unannounced_zombie_scent(event, now):
+        if not self._has_unannounced_smell(event, now):
             return []
-        clues = self._usable_zombie_scent_clues(event)
-        self._mark_zombie_scent_announced(clues, now)
+        observation = self._usable_smell_observation(event)
+        speech = smell_speech(observation)
+        self._mark_smell_announced(observation, now)
         return [
             AudioAction(
                 layer="speech",
                 interrupt=False,
-                cue_id="zombie_scent_warning",
-                text=fallback_text("general", "combat", "zombie_scent_nearby"),
+                cue_id=speech.cue_id,
+                text=speech.text,
                 protect_ms=2000,
-                speech_profile="battle",
+                speech_profile=speech.speech_profile,
                 queue_priority="foreground",
             )
         ]
 
-    def _mark_zombie_scent_announced(
+    def _mark_smell_announced(
         self,
-        clues: tuple[ZombieScentClue, ...],
+        observation: SmellObservation | None,
         now: datetime,
     ) -> None:
-        self.state.announced_zombie_scent_ids.update(
-            clue.entity_id for clue in clues
-        )
-        self.state.last_zombie_scent_comment_at = now
+        signature = smell_signature(observation)
+        if signature is None:
+            return
+        # 問いへの即時回答では2観測の安定化待ちを消費し、次tickの自発発話を防ぐ。
+        self.state.active_smell_signature = signature
+        self.state.pending_smell_signature = None
+        self.state.pending_smell_observation_count = 0
+        self.state.announced_smell_signature = signature
+        self.state.last_smell_comment_at = now
 
     def _darkness_advice(self, event: GameEvent, signals: DerivedSignals) -> str | None:
         now = event.observed_at
@@ -425,9 +440,15 @@ class EnvironmentalReactionsMixin:
         stop_dark_push: bool,
     ) -> list[AudioAction]:
         """暗所・ボス予兆など。workshop 中は安全系のみ残す。"""
-        scent_actions = self._zombie_scent_warning_actions(event, now)
-        if scent_actions:
-            return scent_actions
+        observation = self._usable_smell_observation(event)
+        if (
+            observation is not None
+            and observation.smell_id == "zombie"
+            and observation.specificity == "source"
+        ):
+            scent_actions = self._smell_observation_actions(event, now)
+            if scent_actions:
+                return scent_actions
 
         haiku_focus = self._haiku_focus_active()
 
@@ -593,6 +614,12 @@ class EnvironmentalReactionsMixin:
         weather_transition = self._weather_transition_callout(event, signals)
         if weather_transition:
             return self._speech_actions(weather_transition)
+
+        # 特定ゾンビ以外の匂いはambient。暗所・ボス予兆などの安全反応や
+        # player inputの直後を押しのけない。未発話signatureは次tickへ残る。
+        scent_actions = self._smell_observation_actions(event, now)
+        if scent_actions:
+            return scent_actions
 
         # エンダーアイ投擲はプレイヤー自身の行動への相槌なので早めに返す
         ender_eye_line = self._emit_ender_eye_throw_line(event, now)

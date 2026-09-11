@@ -8,7 +8,7 @@ import unittest
 
 from dogido_server.config import Settings
 from dogido_server.episode_log import EPISODE_SCHEMA_VERSION, EpisodeRecorder
-from dogido_server.models import GameEvent, OutputFlags
+from dogido_server.models import GameEvent, OutputFlags, SmellObservation
 from dogido_server.service import DogidoService
 from dogido_server.state_machine import AudioAction
 
@@ -157,6 +157,28 @@ class EpisodeRecorderIntegrationTest(unittest.TestCase):
             self.assertEqual(row["decision"]["mode_after"], "normal")  # type: ignore[index]
             self.assertEqual(row["action"]["items"], [])  # type: ignore[index]
             self.assertEqual(row["result"]["status"], "no_action")  # type: ignore[index]
+
+    def test_episode_records_explicit_no_smell_observation(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service = DogidoService(
+                Settings(
+                    audio_enabled=False,
+                    llm_enabled=False,
+                    memory_enabled=True,
+                    memory_dir=root,
+                )
+            )
+            event = make_quiet_event().model_copy(
+                update={"smell_observation": SmellObservation(status="none")}
+            )
+
+            service.process_event(event)
+
+            row = read_episode_rows(root / "eval" / "episodes.jsonl")[0]
+            smell = row["observation"]["smell_observation"]  # type: ignore[index]
+            self.assertEqual("none", smell["status"])
+            self.assertEqual("smell_policy_v1", smell["basis"])
 
     def test_state_before_is_captured_before_service_clears_stuck_haiku(self) -> None:
         with TemporaryDirectory() as tmp:

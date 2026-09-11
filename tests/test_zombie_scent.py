@@ -25,6 +25,7 @@ from dogido_server.models import (
     Position,
     PriorityHint,
     SourceKind,
+    SmellObservation,
     TimePhase,
     VisualThreat,
     Weather,
@@ -55,6 +56,24 @@ def scent_clue(
     )
 
 
+def smell_observation(
+    smell_id: str = "bread",
+    *,
+    category: str = "food",
+    valence: str = "pleasant",
+    specificity: str = "source",
+) -> SmellObservation:
+    return SmellObservation(
+        status="present",
+        smell_id=smell_id,
+        category=category,  # type: ignore[arg-type]
+        valence=valence,  # type: ignore[arg-type]
+        source_kind="hotbar" if specificity == "source" else "mixed",
+        specificity=specificity,  # type: ignore[arg-type]
+        effective_strength=3,
+    )
+
+
 def make_event(
     *,
     sequence: int,
@@ -62,6 +81,7 @@ def make_event(
     clues: list[ZombieScentClue] | None = None,
     visual: list[VisualThreat] | None = None,
     auditory: list[AuditoryThreat] | None = None,
+    smell: SmellObservation | None = None,
     user_text: str | None = None,
 ) -> GameEvent:
     return GameEvent(
@@ -93,6 +113,7 @@ def make_event(
         ),
         visual_threats=list(visual or []),
         auditory_threats=list(auditory or []),
+        smell_observation=smell,
         zombie_scent_clues=list(clues or []),
         combat=CombatState(combat_active_hint=False),
         meta=MetaState(user_text=user_text),
@@ -225,7 +246,10 @@ class ZombieScentStateMachineTests(unittest.TestCase):
                 visual=[other_visual],
             )
         )
-        self.assertIn("zombie-1", machine.state.announced_zombie_scent_ids)
+        self.assertEqual(
+            "source:zombie:decay:unpleasant",
+            machine.state.announced_smell_signature,
+        )
         still_present = machine.process(
             make_event(sequence=3, at_sec=121, clues=[scent_clue()])
         )
@@ -244,6 +268,198 @@ class ZombieScentStateMachineTests(unittest.TestCase):
 
         self.assertEqual([CHAT_REPLY], [action.text for action in chat.actions if action.text])
         self.assertTrue(any(action.cue_id == "zombie_scent_warning" for action in scent.actions))
+
+
+class GeneralSmellStateMachineTests(unittest.TestCase):
+    def make_machine(self, **settings: object) -> DogidoStateMachine:
+        return DogidoStateMachine(
+            Settings(
+                decision_policy="py_trees",
+                llm_enabled=False,
+                audio_enabled=False,
+                **settings,
+            )
+        )
+
+    def test_present_shape_is_closed_and_non_present_rejects_source_fields(self) -> None:
+        self.assertEqual("present", smell_observation().status)
+        with self.assertRaises(ValidationError):
+            SmellObservation(status="present", smell_id="bread")
+        with self.assertRaises(ValidationError):
+            SmellObservation(status="none", smell_id="bread")
+        with self.assertRaises(ValidationError):
+            SmellObservation(status="suppressed")
+        with self.assertRaises(ValidationError):
+            SmellObservation(
+                status="present",
+                smell_id="unknown_smell",
+                category="food",
+                valence="pleasant",
+                source_kind="hotbar",
+                specificity="source",
+                effective_strength=3,
+            )
+        with self.assertRaises(ValidationError):
+            SmellObservation.model_validate(
+                {
+                    **smell_observation().model_dump(),
+                    "source_id": "must-not-cross-adapter-boundary",
+                }
+            )
+        with self.assertRaises(ValidationError):
+            SmellObservation.model_validate(
+                {
+                    **smell_observation("bread").model_dump(),
+                    "category": "decay",
+                }
+            )
+        with self.assertRaises(ValidationError):
+            SmellObservation.model_validate(
+                {
+                    **smell_observation("bread").model_dump(),
+                    "smell_id": "zombie",
+                    "category": "decay",
+                    "valence": "unpleasant",
+                    "source_kind": "hotbar",
+                }
+            )
+        with self.assertRaises(ValidationError):
+            SmellObservation(
+                status="present",
+                smell_id="rain_after",
+                category="rain_after",
+                valence="pleasant",
+                source_kind="block",
+                specificity="source",
+                effective_strength=1,
+            )
+
+    def test_new_observation_requires_two_matching_snapshots(self) -> None:
+        machine = self.make_machine()
+        first = machine.process(
+            make_event(sequence=1, smell=smell_observation("bread"))
+        )
+        second = machine.process(
+            make_event(sequence=2, at_sec=1, smell=smell_observation("bread"))
+        )
+        third = machine.process(
+            make_event(sequence=3, at_sec=2, smell=smell_observation("bread"))
+        )
+
+        self.assertFalse(any(action.cue_id == "smell_bread" for action in first.actions))
+        self.assertEqual(
+            [fallback_text("general", "smell", "bread")],
+            [action.text for action in second.actions if action.cue_id == "smell_bread"],
+        )
+        self.assertFalse(any(action.cue_id == "smell_bread" for action in third.actions))
+
+    def test_one_frame_winner_flap_never_speaks(self) -> None:
+        machine = self.make_machine()
+        bread = machine.process(
+            make_event(sequence=1, smell=smell_observation("bread"))
+        )
+        cookie = machine.process(
+            make_event(sequence=2, at_sec=1, smell=smell_observation("cookie"))
+        )
+
+        self.assertFalse(
+            any((action.cue_id or "").startswith("smell_") for action in bread.actions)
+        )
+        self.assertFalse(
+            any((action.cue_id or "").startswith("smell_") for action in cookie.actions)
+        )
+
+    def test_non_zombie_smell_waits_behind_player_input_priority(self) -> None:
+        machine = self.make_machine()
+        observation = smell_observation("bread")
+
+        chat = machine.process(
+            make_event(
+                sequence=1,
+                smell=observation,
+                user_text="森、暗いな",
+            )
+        )
+        muted = machine.process(make_event(sequence=2, at_sec=1, smell=observation))
+        ready = machine.process(make_event(sequence=3, at_sec=21, smell=observation))
+
+        self.assertEqual([CHAT_REPLY], [action.text for action in chat.actions if action.text])
+        self.assertFalse(any(action.cue_id == "smell_bread" for action in muted.actions))
+        self.assertTrue(any(action.cue_id == "smell_bread" for action in ready.actions))
+
+    def test_none_and_suppressed_clear_presence_after_two_without_speech(self) -> None:
+        for observation in (
+            SmellObservation(status="none"),
+            SmellObservation(status="suppressed", suppression_reason="rain"),
+        ):
+            with self.subTest(status=observation.status):
+                machine = self.make_machine()
+                machine.process(make_event(sequence=1, smell=smell_observation()))
+                machine.process(make_event(sequence=2, at_sec=1, smell=smell_observation()))
+                first_absent = machine.process(
+                    make_event(sequence=3, at_sec=2, smell=observation)
+                )
+                self.assertIsNotNone(machine.state.active_smell_signature)
+                result = machine.process(
+                    make_event(sequence=4, at_sec=3, smell=observation)
+                )
+                self.assertIsNone(machine.state.active_smell_signature)
+                self.assertFalse(
+                    any(
+                        (action.cue_id or "").startswith("smell_")
+                        for action in first_absent.actions + result.actions
+                    )
+                )
+
+    def test_category_and_cross_category_ties_use_fixed_general_speech(self) -> None:
+        cases = (
+            (
+                smell_observation(
+                    "flower",
+                    category="flower",
+                    valence="mixed",
+                    specificity="category",
+                ),
+                "smell_flower_mixed",
+                fallback_text("general", "smell", "flower_mixed"),
+            ),
+            (
+                smell_observation(
+                    "mixed",
+                    category="mixed",
+                    valence="mixed",
+                    specificity="mixed",
+                ),
+                "smell_mixed",
+                fallback_text("general", "smell", "mixed"),
+            ),
+        )
+        for observation, cue_id, expected_text in cases:
+            with self.subTest(smell_id=observation.smell_id):
+                machine = self.make_machine()
+                machine.process(make_event(sequence=1, smell=observation))
+                result = machine.process(make_event(sequence=2, at_sec=1, smell=observation))
+                self.assertEqual(
+                    [expected_text],
+                    [action.text for action in result.actions if action.cue_id == cue_id],
+                )
+
+    def test_same_smell_reentry_waits_for_general_cooldown(self) -> None:
+        machine = self.make_machine(smell_comment_cooldown_ms=120_000)
+        observation = smell_observation("bread")
+        machine.process(make_event(sequence=1, smell=observation))
+        machine.process(make_event(sequence=2, at_sec=1, smell=observation))
+        machine.process(make_event(sequence=3, at_sec=10, smell=SmellObservation(status="none")))
+        machine.process(make_event(sequence=4, at_sec=11, smell=SmellObservation(status="none")))
+        machine.process(make_event(sequence=5, at_sec=60, smell=observation))
+        early = machine.process(make_event(sequence=6, at_sec=61, smell=observation))
+        machine.process(make_event(sequence=7, at_sec=122, smell=SmellObservation(status="none")))
+        machine.process(make_event(sequence=8, at_sec=123, smell=SmellObservation(status="none")))
+        machine.process(make_event(sequence=9, at_sec=124, smell=observation))
+        ready = machine.process(make_event(sequence=10, at_sec=125, smell=observation))
+
+        self.assertFalse(any(action.cue_id == "smell_bread" for action in early.actions))
+        self.assertTrue(any(action.cue_id == "smell_bread" for action in ready.actions))
 
 
 class PlayerChatOlfactoryGroundingTests(unittest.TestCase):
@@ -281,6 +497,70 @@ class PlayerChatOlfactoryGroundingTests(unittest.TestCase):
         self.assertEqual(
             [NO_SCENT_EVIDENCE],
             [action.text for action in result.actions if action.text],
+        )
+
+    def test_explicit_none_and_suppressed_are_distinct_fixed_answers(self) -> None:
+        llm = RecordingLLM("モデルには聞かない")
+        none = self.make_machine(llm).process(
+            make_event(
+                sequence=1,
+                user_text="今ここ、何の匂い？",
+                smell=SmellObservation(status="none"),
+            )
+        )
+        submerged = self.make_machine(llm).process(
+            make_event(
+                sequence=1,
+                user_text="今ここ、何の匂い？",
+                smell=SmellObservation(
+                    status="suppressed",
+                    suppression_reason="submerged",
+                ),
+            )
+        )
+
+        self.assertEqual(0, llm.calls)
+        self.assertEqual(
+            [fallback_text("general", "smell", "none")],
+            [action.text for action in none.actions if action.text],
+        )
+        self.assertEqual(
+            [fallback_text("general", "smell", "suppressed_submerged")],
+            [action.text for action in submerged.actions if action.text],
+        )
+
+    def test_present_smell_answer_is_fixed_and_new_observation_wins_over_legacy(self) -> None:
+        llm = RecordingLLM("モデルには聞かない")
+        machine = self.make_machine(llm)
+        observation = smell_observation("bread")
+
+        answer = machine.process(
+            make_event(
+                sequence=1,
+                user_text="今ここ、何の匂い？",
+                smell=observation,
+                clues=[scent_clue()],
+            )
+        )
+        followup = machine.process(
+            make_event(
+                sequence=2,
+                at_sec=1,
+                smell=observation,
+                clues=[scent_clue()],
+            )
+        )
+
+        self.assertEqual(0, llm.calls)
+        self.assertEqual(
+            [fallback_text("general", "smell", "bread")],
+            [action.text for action in answer.actions if action.text],
+        )
+        self.assertFalse(
+            any(
+                action.cue_id in {"smell_bread", "zombie_scent_warning"}
+                for action in followup.actions
+            )
         )
 
     def test_player_composter_guess_does_not_license_assistant_smell(self) -> None:
