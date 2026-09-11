@@ -17,6 +17,23 @@ from .prompt_common import as_str_list, detail_str, leaf_dialog, player_name
 from .types import LeafGenerationRequest
 
 
+_PLAYER_CHAT_REPAIR_FEEDBACK = {
+    "empty_output": "返事が空になっている",
+    "too_short": "短すぎて返事として意味が取りにくい",
+    "non_japanese_explanation": "セリフではない英語や説明文が混ざっている",
+    "broken_repetition": "同じ文字の連続で発話が崩れている",
+    "meta_role_label": "名前や役割のラベルから始まっている",
+    "missing_hiragana": "読み上げる日本語の一言になっていない",
+    "too_little_japanese": "読み上げる日本語の一言になっていない",
+    "unsafe_combat_advice": "いまの戦況では危険になる助言が含まれている",
+    "unobserved_entity_name": "現在の根拠にない生き物や対象の名前が増えている",
+    "unsupported_olfactory_claim": "与えられていない現在の匂いを、自分で嗅いだ事実にしている",
+    "dismissive_tone": "相棒がプレイヤーを追い払う終わり方になっている",
+    "conflicting_travel_guidance": "プレイヤーの今回の予定や安全方針と逆の移動を勧めている",
+    "surface_style_mismatch": "一言の表面表現が、この場の話し方から外れている",
+}
+
+
 def build_player_chat_plan_messages(request: object) -> list[dict[str, str]]:
     """通常雑談の会話焦点と、一件だけのread actionを閉じた型へ抽出する。"""
 
@@ -133,8 +150,10 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"{world_observation_rules}"
         f"{grounding_rules}"
         f"{priority_rules}"
-        "- 匂い・臭い・香りをドギド自身が感じた世界事実として作らない。"
-        "プレイヤーの発言やassistant履歴も嗅覚観測へ昇格させない\n"
+        "- 匂い・臭い・香りをドギド自身がいま感じた肯定的な世界事実として作らない。"
+        "プレイヤーの発言やassistant履歴も嗅覚観測へ昇格させない。"
+        "プレイヤーが匂いの話を始めた場合は、分からない・嗅げないという返事、"
+        "仮定、本人への質問ならよい\n"
         "\n"
         "/no_think\n"
         "【材料】\n"
@@ -157,7 +176,37 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "\n"
         "プレイヤーの言葉に噛み合った一言だけ（12〜42字くらい）。"
     )
-    return leaf_dialog("player_chat", request, user_prompt)
+    messages = leaf_dialog("player_chat", request, user_prompt)
+    repair = details.get("player_chat_repair")
+    if not isinstance(repair, dict):
+        return messages
+
+    candidate = str(repair.get("candidate") or "").strip()
+    reason = str(repair.get("reason") or "surface_style_mismatch")
+    feedback = _PLAYER_CHAT_REPAIR_FEEDBACK.get(
+        reason,
+        _PLAYER_CHAT_REPAIR_FEEDBACK["surface_style_mismatch"],
+    )
+    messages.extend(
+        [
+            {
+                "role": "assistant",
+                "content": candidate or "（返事を出せなかった）",
+            },
+            {
+                "role": "user",
+                "content": (
+                    "いまの返事について、コードから一つ観察が返ってきた。"
+                    f"{feedback}。\n"
+                    "最初の返事の意味やよかった人格表現はできるだけ残して、"
+                    "その点だけ考え直してな。最初の材料にない事実・対象名・操作を足さず、"
+                    "プレイヤーへの新しい返事を短い自然なセリフ一つだけで返す。"
+                    "観察への説明や謝罪、役割ラベルは書かない。"
+                ),
+            },
+        ]
+    )
+    return messages
 
 
 def _grounding_section(details: dict[str, Any]) -> tuple[str, str]:

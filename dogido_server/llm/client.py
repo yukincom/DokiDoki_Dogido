@@ -26,8 +26,10 @@ from .sanitize import (
     is_style_acceptable,
     is_usable_output,
     looks_japanese_forward,
+    player_chat_style_rejection_reason,
     strip_allowed_ascii_tokens,
     summarize_for_log,
+    usability_rejection_reason,
 )
 from .structured_contracts import (
     STRUCTURED_CONTRACT_RETRY_KEY,
@@ -146,8 +148,9 @@ class DogidoLLM:
             1. バックエンドで生成
             2. 発話テキストをクリーニング
             3. 使用可否チェック
-            4. スタイルチェック
-            5. 全チェック通過で採用、失敗なら fallback_text を返す
+            4. スタイル・groundingチェック
+            5. player_chat だけは不合格理由を返して最大1回言い直す
+            6. 全チェック通過で採用、失敗なら fallback_text を返す
         """
         if not self.enabled():
             LOGGER.warning("llm_leaf kind=%s result=fallback reason=disabled", request.kind)
@@ -170,19 +173,51 @@ class DogidoLLM:
                 return request.fallback_text
         duration_ms = round((time.monotonic() - generation_started_at) * 1000)
 
-        # ロックはバックエンド呼び出しだけを保護する。
-        # 後処理は純粋関数なのでロック外で行うが、将来ここで _model / _tokenizer に触るなら要見直し。
-        cleaned = self._clean_output(text)
-        if not self._is_usable_output(cleaned, request.details):
+        # ロックはバックエンド呼び出しだけを保護する。後処理は純粋関数。
+        cleaned, reason, issue = self._validate_leaf_candidate(request, text)
+        if reason is not None:
+            if request.kind == "player_chat":
+                return self._repair_player_chat_candidate(
+                    request,
+                    initial_text=text,
+                    initial_cleaned=cleaned,
+                    initial_reason=reason,
+                    initial_issue=issue or reason,
+                    initial_duration_ms=duration_ms,
+                )
             LOGGER.warning(
-                "llm_leaf kind=%s result=fallback reason=unusable_output "
+                "llm_leaf kind=%s result=fallback reason=%s issue=%s "
                 "duration_ms=%s raw=%s cleaned=%s",
                 request.kind,
+                reason,
+                issue or reason,
                 duration_ms,
                 self._summarize_for_log(text),
                 self._summarize_for_log(cleaned),
             )
             return request.fallback_text
+        LOGGER.warning(
+            "llm_leaf kind=%s result=accepted duration_ms=%s text=%s",
+            request.kind,
+            duration_ms,
+            self._summarize_for_log(cleaned),
+        )
+        return cleaned or request.fallback_text
+
+    def _validate_leaf_candidate(
+        self,
+        request: LeafGenerationRequest,
+        text: str | None,
+        *,
+        phase: str = "initial",
+    ) -> tuple[str, str | None, str | None]:
+        """候補を正規化し、(本文, 従来理由, 詳細理由) を返す。"""
+
+        cleaned = self._clean_output(text)
+        if not self._is_usable_output(cleaned, request.details):
+            issue = usability_rejection_reason(cleaned, request.details)
+            return cleaned, "unusable_output", issue or "unusable_output"
+
         if request.kind == "player_chat":
             # 観測済みの亜種を一般名にしてしまった場合は、白リスト判定より先に
             # カタログで許可された一意な正式名へ戻す。
@@ -194,30 +229,106 @@ class DogidoLLM:
             )
             if applied_name_corrections:
                 LOGGER.warning(
-                    "llm_leaf kind=%s result=name_corrected corrections=%s text=%s",
+                    "llm_leaf kind=%s result=name_corrected phase=%s corrections=%s text=%s",
                     request.kind,
+                    phase,
                     ",".join(
                         f"{source}->{target}"
                         for source, target in applied_name_corrections
                     ),
                     self._summarize_for_log(cleaned),
                 )
+
         if not self._is_style_acceptable(request.kind, cleaned, request.details):
+            issue = (
+                player_chat_style_rejection_reason(cleaned, request.details)
+                if request.kind == "player_chat"
+                else "style_mismatch"
+            )
+            return cleaned, "style_mismatch", issue
+        return cleaned, None, None
+
+    def _repair_player_chat_candidate(
+        self,
+        request: LeafGenerationRequest,
+        *,
+        initial_text: str | None,
+        initial_cleaned: str,
+        initial_reason: str,
+        initial_issue: str,
+        initial_duration_ms: int,
+    ) -> str:
+        """検査理由を同じ会話へ返し、player_chat を一度だけ言い直させる。"""
+
+        LOGGER.warning(
+            "llm_leaf kind=player_chat result=repair_requested reason=%s issue=%s "
+            "duration_ms=%s raw=%s cleaned=%s",
+            initial_reason,
+            initial_issue,
+            initial_duration_ms,
+            self._summarize_for_log(initial_text),
+            self._summarize_for_log(initial_cleaned),
+        )
+        repair_details = dict(request.details)
+        repair_details["player_chat_repair"] = {
+            "candidate": initial_cleaned[:600],
+            "reason": initial_issue,
+        }
+        repair_request = replace(request, details=repair_details)
+        repair_started_at = time.monotonic()
+        try:
+            with self._lock:
+                repair_text = self._generate_backend_text(repair_request)
+        except Exception as exc:
+            repair_duration_ms = round((time.monotonic() - repair_started_at) * 1000)
             LOGGER.warning(
-                "llm_leaf kind=%s result=fallback reason=style_mismatch "
-                "duration_ms=%s cleaned=%s",
-                request.kind,
-                duration_ms,
-                self._summarize_for_log(cleaned),
+                "llm_leaf kind=player_chat result=repair_failed reason=generation_error fallback=1 "
+                "initial_reason=%s issue=%s duration_ms=%s repair_duration_ms=%s detail=%s",
+                initial_reason,
+                initial_issue,
+                initial_duration_ms,
+                repair_duration_ms,
+                exc,
             )
             return request.fallback_text
-        LOGGER.warning(
-            "llm_leaf kind=%s result=accepted duration_ms=%s text=%s",
-            request.kind,
-            duration_ms,
-            self._summarize_for_log(cleaned),
+
+        repair_duration_ms = round((time.monotonic() - repair_started_at) * 1000)
+        repaired, repair_reason, repair_issue = self._validate_leaf_candidate(
+            request,
+            repair_text,
+            phase="repair",
         )
-        return cleaned or request.fallback_text
+        total_duration_ms = initial_duration_ms + repair_duration_ms
+        if repair_reason is not None:
+            LOGGER.warning(
+                "llm_leaf kind=player_chat result=repair_rejected fallback=1 "
+                "initial_reason=%s initial_issue=%s repair_reason=%s repair_issue=%s "
+                "duration_ms=%s initial_duration_ms=%s repair_duration_ms=%s "
+                "raw=%s cleaned=%s",
+                initial_reason,
+                initial_issue,
+                repair_reason,
+                repair_issue or repair_reason,
+                total_duration_ms,
+                initial_duration_ms,
+                repair_duration_ms,
+                self._summarize_for_log(repair_text),
+                self._summarize_for_log(repaired),
+            )
+            return request.fallback_text
+
+        LOGGER.warning(
+            "llm_leaf kind=player_chat result=repair_accepted initial_reason=%s "
+            "initial_issue=%s duration_ms=%s initial_duration_ms=%s "
+            "repair_duration_ms=%s text=%s",
+            initial_reason,
+            initial_issue,
+            total_duration_ms,
+            initial_duration_ms,
+            repair_duration_ms,
+            self._summarize_for_log(repaired),
+        )
+        return repaired or request.fallback_text
 
     def generate_structured_json(self, request: StructuredGenerationRequest) -> dict[str, Any]:
         """JSON オブジェクトを 1 件生成して返す。失敗時は fallback_value を返す。"""

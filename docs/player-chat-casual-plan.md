@@ -178,7 +178,7 @@ GENERIC_TOPIC_TERMS = frozenset({
 
 - 既存 `event_digest`（〜8件）はそのまま5往復と併用  
 - 変更するなら: ambient「サケを見た」が確実に digest に入っているか確認（既に `〜を見た` あり）  
-- **reject / style_mismatch の文は dogido 履歴に載せない**（汚染防止。service 側を確認・必要なら修正）
+- **reject / style_mismatch の文は dogido 履歴に載せない**。一回再考へ渡す候補も一時的な同一生成内の文脈だけで、再生完了履歴には載せない
 
 ### 2.5 テスト（柱2）
 
@@ -228,8 +228,8 @@ GENERIC_TOPIC_TERMS = frozenset({
 - [x] 観測があるときだけ **短い事実行**がある
 - [x] none でも、観測またはplayer発話にある種名だけを許可し、assistant履歴だけの種名は捨てる
 - [x] 会話継続それ自体を目的にせず、確認・相談が必要なときだけ質問する。完了や相槌には問い返しを足さない
-- [x] fallback は unusable 時のみ。topic hit や identify 骨子を本文にせず、
-  **話題非依存の中立文**へ戻す
+- [x] 自然な自己言及・謝罪・方言・比喩は広域禁止語で落とさず、空出力・役割ラベル・英語説明・生成崩れと具体的なgrounding／安全違反だけを検査する
+- [x] 不合格時は候補と閉じた理由を同じ会話へ一度返し、意味と人格を残した言い直しを最大1回だけ生成・再検査する。再不合格時だけ、topic hit や identify 骨子を本文にしない**話題非依存の中立 fallback**へ戻す
   - 任意改善: none + unusable のときだけ、もう少し相槌寄りの fallback  
   - 例: 「おう、聞こえてるで」は以前問題になったので使わない。  
     「うん」「そうやな、もうちょい Tra 言って」程度の中立相槌を別キーにしてもよい  
@@ -268,6 +268,8 @@ user_text
   → usable sanitize
   → 直近観測に基づく一意な危険一般名の修正
   → style / allowed_speech_labels sanitize
+  → 不合格時だけ候補 + コード理由を同じ会話へ返して一回言い直し
+  → usable / grounding / style を再検査（再不合格なら固定fallback）
   → player入力を受理
   → 発話IDつき本文を選択・音声queueへ
   → completed された文だけ履歴5往復へ
@@ -289,6 +291,14 @@ plannerは発話を生成せず、状態変更・保存・assistを実行しな�
 談話関係を先に解くため、通常の相槌や評価文はカタログ全件の描写タグ検索へ流さない。対象照合actionだけがカタログを読み、その候補IDをvisual / passive / hearing / 現在構造物 / 乗車中の乗り物 / 視線先entityのコード観測IDへ照合する。候補順位は先に発話だけで決め、関連Mobの視認で別対象へすり替えない。カタログ一致は観測ではない。未観測の在否質問は「現在観測では確認できない」、過去のassistant誤断言は謝罪と現在観測の切り分けをコード固定で返し、「いない」までは断定しない。
 
 5往復、緊急反応、正本DB、assist、workshop、保存条件は変更しない。2026-09-11の全体回帰は **1314 passed、1 skipped、1500 subtests passed**。実Minecraft・実Qwen・実TTSでの自然さと遅延は未確認。
+
+## 発話候補の一回再考（2026-09-11）
+
+`player_chat_plan` の後に作る本文だけを対象に、小さな observe → revise → revalidate を追加した。最初の候補が検査に通れば追加呼び出しはない。不合格時だけ、前の候補をassistant発話、コード由来の一件の理由を次のuser観察として同じプロンプト末尾へ足す。二案目を同じコード検査へ通し、最大2生成で終了する。
+
+採否・fallback・世界事実・状態変更はコードのまま。不合格理由は閉じた種類だけで、モデルに次の行動や保存を選ばせない。このため汎用ReActではなく、通常雑談一文の有界な会話修正である。`repair_requested / repair_accepted / repair_rejected / repair_failed` のログで実会話の効果と追加遅延を比較する。不合格案は再生されず、completed履歴にも入らない。
+
+ローカルQwenの独立テキスト試験では、崩れた匂い質問への初案 `playerはどう？` が `non_japanese_explanation` を受け、日本語だけの二案目へ直った。意図的な `なんか花の匂いがするで。` は `unsupported_olfactory_claim` を受け、非嗅覚の相槌へ一回で戻った。`ドギド:` の無害な話者ラベルは再生成せずcleanだけで外れた。モデル読込後の追加生成は各約0.7秒だった。全Python回帰は **1346 passed、1 skipped、1510 subtests passed**。これは実Minecraft・実TTSや長時間の自然さを証明しない。
 
 ### 通常雑談の家らしさ（2026-09-11）
 
@@ -333,6 +343,7 @@ plannerは発話を生成せず、状態変更・保存・assistを実行しな�
 | **P4** | 1+2 | 回帰テスト一式（木／ババア／旗／サケ観測／もしもし） | tests |
 | **P5** | 3 | topic 非依存の中立 fallback、履歴汚染の確認 | fallbacks, service |
 | **P6** | 1+2+3 | 会話焦点を先に解く有界plannerと対象のコード照合 | planner, narration, contracts, tests |
+| **P7** | 3 | 広域禁止語の緩和 + 不合格理由を返す一回再考 + 同じ検査で再採否 | llm client, sanitize, prompts, tests |
 
 推奨: **P1 → P2 → P4 の一部 → P3 → P4 完了**。  
 P1 だけで「大きい気→シロクマ」は止まる。

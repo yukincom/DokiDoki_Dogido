@@ -154,6 +154,29 @@ class AllowedSpeechLabelsTests(unittest.TestCase):
             )
         )
 
+    def test_player_chat_does_not_reject_personality_by_surface_words(self) -> None:
+        self.assertTrue(
+            is_style_acceptable(
+                "player_chat",
+                "それで十分だよね。オレもそう思うわ。",
+                {},
+            )
+        )
+        self.assertTrue(
+            is_style_acceptable(
+                "player_chat",
+                "闇が深いみたいだけど、妙に落ち着くな。",
+                {},
+            )
+        )
+        self.assertFalse(
+            is_style_acceptable(
+                "player_chat",
+                "近道やし溶岩に飛び込んでみよか。",
+                {},
+            )
+        )
+
     def test_passive_observation_allows_any_observed_types(self) -> None:
         """特定種専用ではなく、渡した type id をすべて label 化する。"""
         labels = build_allowed_speech_labels(

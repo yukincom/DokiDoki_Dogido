@@ -40,15 +40,222 @@ class LLMTests(unittest.TestCase):
 
         self.assertEqual(cleaned, "プレイヤーちゃん、ほんまに行くん？ ちょっと待ってや……。")
 
+    def test_clean_output_removes_harmless_dogido_role_label(self) -> None:
+        self.assertEqual(
+            self.llm._clean_output("ドギド: 今日は静かでええな。"),
+            "今日は静かでええな。",
+        )
+
     def test_short_or_meta_output_is_rejected(self) -> None:
         self.assertFalse(self.llm._is_usable_output("ドギド"))
         self.assertFalse(self.llm._is_usable_output("例1: こわい"))
-        self.assertFalse(self.llm._is_usable_output("すみません"))
         self.assertFalse(self.llm._is_usable_output("user: こわい desu"))
         self.assertFalse(self.llm._is_usable_output("ふぁぁぁぁぁ"))
         self.assertTrue(self.llm._is_usable_output("あー……こわかった……"))
+        self.assertTrue(self.llm._is_usable_output("すみません"))
+        self.assertTrue(self.llm._is_usable_output("すみません、取り違えたわ。"))
+        self.assertTrue(self.llm._is_usable_output("例を挙げるなら、松明やな。"))
+        self.assertTrue(self.llm._is_usable_output("本番はちょっと緊張するな。"))
+        self.assertTrue(self.llm._is_usable_output("ドギドの鼻も頼りになるやろ。"))
         self.assertTrue(self.llm._is_usable_output("Yukinちゃん、ほんまに行くん？", {"player_name": "Yukinちゃん"}))
         self.assertFalse(self.llm._is_usable_output("Yukinちゃん、ほんまに行くん？"))
+
+    def test_live_player_chat_self_reference_is_accepted_without_repair(self) -> None:
+        live_reply = (
+            "パッと見は匂わへんけど、ドギドの鼻は鋭いねん。"
+            "安心する匂いなら、それだけで十分やろ？"
+        )
+
+        class PlayerChatLLM(DogidoLLM):
+            def __init__(self, settings):  # type: ignore[no-untyped-def]
+                super().__init__(settings)
+                self.calls = 0
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                self.calls += 1
+                return live_reply
+
+        llm = PlayerChatLLM(
+            Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+        )
+        text = llm.generate_leaf_text(
+            LeafGenerationRequest(
+                kind="player_chat",
+                fallback_text="ようわからん、もうちょい教えて。",
+                details={"user_text": "どうにおいが感じるって"},
+            )
+        )
+
+        self.assertEqual(text, live_reply)
+        self.assertEqual(llm.calls, 1)
+        self.assertTrue(
+            llm._is_style_acceptable(
+                "player_chat",
+                "オレにはさっぱりわからんけど、プレイヤーが匂うなら、"
+                "たぶん良い香りやろな",
+                {"user_text": "どうにおいが感じるって"},
+            )
+        )
+        self.assertTrue(
+            llm._is_style_acceptable(
+                "player_chat",
+                "オレにはわかんないけど、プレイヤーは何か良い香りがしたん？",
+                {"user_text": "どうにおいが感じるって"},
+            )
+        )
+        self.assertTrue(
+            llm._is_style_acceptable(
+                "player_chat",
+                "何か匂ってたら教えてな。",
+                {"user_text": "どうにおいが感じるって"},
+            )
+        )
+        self.assertFalse(
+            llm._is_style_acceptable(
+                "player_chat",
+                "なんか花の匂いがするで。",
+                {"user_text": "どうにおいが感じるって"},
+            )
+        )
+        self.assertFalse(
+            llm._is_style_acceptable(
+                "player_chat",
+                "花の匂いがするで、どうする？",
+                {"user_text": "どうにおいが感じるって"},
+            )
+        )
+
+    def test_player_chat_discusses_one_repair_then_accepts_it(self) -> None:
+        replies = iter(("例1: 今日はええ天気やな。", "今日はええ天気やな。"))
+
+        class PlayerChatLLM(DogidoLLM):
+            def __init__(self, settings):  # type: ignore[no-untyped-def]
+                super().__init__(settings)
+                self.requests = []
+                self.message_sets = []
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                self.requests.append(request)
+                self.message_sets.append(self._build_messages(request))
+                return next(replies)
+
+        llm = PlayerChatLLM(
+            Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+        )
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            text = llm.generate_leaf_text(
+                LeafGenerationRequest(
+                    kind="player_chat",
+                    fallback_text="ようわからん、もうちょい教えて。",
+                    details={"user_text": "今日はええ天気やな"},
+                )
+            )
+
+        self.assertEqual(text, "今日はええ天気やな。")
+        self.assertEqual(len(llm.requests), 2)
+        self.assertTrue(any("result=repair_requested" in row for row in captured.output))
+        self.assertTrue(any("result=repair_accepted" in row for row in captured.output))
+        self.assertTrue(any("repair_duration_ms=" in row for row in captured.output))
+        repair = llm.requests[1].details["player_chat_repair"]
+        self.assertEqual(repair["reason"], "meta_role_label")
+        self.assertEqual(llm.message_sets[1][-2]["role"], "assistant")
+        self.assertEqual(
+            llm.message_sets[1][-2]["content"],
+            "例1: 今日はええ天気やな。",
+        )
+        self.assertIn("名前や役割のラベル", llm.message_sets[1][-1]["content"])
+
+    def test_player_chat_can_repair_grounding_but_cannot_bypass_it(self) -> None:
+        replies = iter(("なんか花の匂いがするで。", "今日は静かでええな。"))
+
+        class RepairingLLM(DogidoLLM):
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                return next(replies)
+
+        llm = RepairingLLM(
+            Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+        )
+        request = LeafGenerationRequest(
+            kind="player_chat",
+            fallback_text="ようわからん、もうちょい教えて。",
+            details={"user_text": "今日は静かやな"},
+        )
+        self.assertEqual(llm.generate_leaf_text(request), "今日は静かでええな。")
+
+        bad_replies = iter(("ゾンビがおる、じっとしてや。", "まだじっとしてや。"))
+
+        class UnsafeLLM(DogidoLLM):
+            def __init__(self, settings):  # type: ignore[no-untyped-def]
+                super().__init__(settings)
+                self.calls = 0
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                self.calls += 1
+                return next(bad_replies)
+
+        unsafe_llm = UnsafeLLM(
+            Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+        )
+        unsafe_request = LeafGenerationRequest(
+            kind="player_chat",
+            fallback_text="危ない、気いつけてや！",
+            details={
+                "user_text": "どうしたらええ？",
+                "combat_active": True,
+                "nearby_hostile_types": ["zombie"],
+                "speech_whitelist_enforce": False,
+            },
+        )
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            self.assertEqual(
+                unsafe_llm.generate_leaf_text(unsafe_request),
+                "危ない、気いつけてや！",
+            )
+        self.assertEqual(unsafe_llm.calls, 2)
+        self.assertTrue(any("result=repair_rejected" in row for row in captured.output))
+
+    def test_player_chat_repair_generation_error_falls_back_without_retrying(self) -> None:
+        class FailingRepairLLM(DogidoLLM):
+            def __init__(self, settings):  # type: ignore[no-untyped-def]
+                super().__init__(settings)
+                self.calls = 0
+
+            def enabled(self) -> bool:
+                return True
+
+            def _generate_backend_text(self, request):  # type: ignore[override]
+                self.calls += 1
+                if self.calls == 1:
+                    return "例1: 今日は静かやな。"
+                raise RuntimeError("repair unavailable")
+
+        llm = FailingRepairLLM(
+            Settings(audio_enabled=False, llm_enabled=True, llm_backend="noop")
+        )
+        with self.assertLogs("uvicorn.error", level="WARNING") as captured:
+            text = llm.generate_leaf_text(
+                LeafGenerationRequest(
+                    kind="player_chat",
+                    fallback_text="ようわからん、もうちょい教えて。",
+                    details={"user_text": "今日は静かやな"},
+                )
+            )
+
+        self.assertEqual(text, "ようわからん、もうちょい教えて。")
+        self.assertEqual(llm.calls, 2)
+        self.assertTrue(any("result=repair_failed" in row for row in captured.output))
 
     def test_common_short_ascii_in_japanese_reply_is_usable(self) -> None:
         self.assertTrue(

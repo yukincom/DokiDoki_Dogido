@@ -45,6 +45,18 @@ _FIGURATIVE_OLFACTORY_TOPICS = (
     "ニュアンス",
 )
 
+_META_OUTPUT_LABEL = re.compile(
+    r"^(?:ドギド|user|assistant|例\s*\d*|本番)\s*[:：]",
+    flags=re.IGNORECASE,
+)
+
+_DEADLY_ACTION_PATTERNS = (
+    "溶岩に飛び",
+    "溶岩に入",
+    "奈落に飛び",
+    "Voidに",
+)
+
 
 def clean_output(text: str | None) -> str:
     if not text:
@@ -58,7 +70,12 @@ def clean_output(text: str | None) -> str:
     candidates: list[str] = []
     for raw_line in lines:
         line = raw_line.strip()
-        line = re.sub(r"^(Final answer|Answer|返答|出力|セリフ)\s*[:：]\s*", "", line, flags=re.IGNORECASE).strip()
+        line = re.sub(
+            r"^(Final answer|Answer|返答|出力|セリフ|ドギド)\s*[:：]\s*",
+            "",
+            line,
+            flags=re.IGNORECASE,
+        ).strip()
         if not line:
             continue
         if line.startswith(("Here's a thinking process", "Here is a thinking process", "Let's think")):
@@ -81,34 +98,46 @@ def clean_output(text: str | None) -> str:
 
 
 def is_usable_output(text: str, details: dict[str, Any] | None = None) -> bool:
+    return usability_rejection_reason(text, details) is None
+
+
+def usability_rejection_reason(
+    text: str,
+    details: dict[str, Any] | None = None,
+) -> str | None:
+    """発話として壊れている理由を返す。
+
+    人格表現の良し悪しではなく、空出力・役割ラベル・英語の説明文・生成崩れの
+    ような外形だけを見る。自然な自己言及や謝罪、会話中の「例」「本番」は許す。
+    """
+
     if not text:
-        return False
+        return "empty_output"
     if len(text) < 4:
-        return False
+        return "too_short"
     normalized = strip_allowed_ascii_tokens(text, details or {})
     if re.search(r"[A-Za-z]{2,}", normalized):
-        return False
+        return "non_japanese_explanation"
     if re.search(r"(.)\1{3,}", text):
-        return False
-    banned_fragments = ("ドギド", "すみません", "申し訳", "例", "本番", "user", "assistant")
-    if any(fragment in text for fragment in banned_fragments):
-        return False
+        return "broken_repetition"
+    if _META_OUTPUT_LABEL.search(text):
+        return "meta_role_label"
 
     compact = re.sub(r"\s+", "", normalized)
     if not compact:
-        return False
+        return "empty_output"
 
     japanese_like = sum(1 for ch in compact if is_japanese_like_char(ch))
     if japanese_like / max(len(compact), 1) < 0.85:
-        return False
+        return "non_japanese_explanation"
 
     hiragana_count = sum(1 for ch in compact if "\u3040" <= ch <= "\u309f")
     kanji_count = sum(1 for ch in compact if "\u4e00" <= ch <= "\u9fff")
     if hiragana_count == 0:
-        return False
+        return "missing_hiragana"
     if hiragana_count + kanji_count < 3:
-        return False
-    return True
+        return "too_little_japanese"
+    return None
 
 
 def strip_allowed_ascii_tokens(text: str, details: dict[str, Any]) -> str:
@@ -149,6 +178,8 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
     if kind == "player_chat":
         from dogido_server.dialogue.player_plan import conflicts_with_player_travel_guidance
 
+        if contains_unsupported_olfactory_claim(text, details):
+            return False
         if contains_dismissive_player_chat_tone(text):
             return False
         if conflicts_with_player_travel_guidance(
@@ -170,7 +201,9 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
         "hostile_callout",
     }:
         return True
-    banned_patterns = [
+    # 通常雑談はプロンプトと会話文脈に人格表現を任せ、方言・比喩の単語だけで
+    # 落とさない。他の短い反応 leaf は用途が狭いため従来の表面制約を維持する。
+    banned_patterns = [] if kind == "player_chat" else [
         "だよ",
         "だよね",
         "なんだよ",
@@ -245,12 +278,7 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
             "火をつけ",
         ])
     if kind in {"player_chat", "hostile_callout"}:
-        banned_patterns.extend([
-            "溶岩に飛び",
-            "溶岩に入",
-            "奈落に飛び",
-            "Voidに",
-        ])
+        banned_patterns.extend(_DEADLY_ACTION_PATTERNS)
     if any(pattern in text for pattern in banned_patterns):
         return False
     if kind == "darkness_escape" and not has_kansai_marker(text):
@@ -260,6 +288,47 @@ def is_style_acceptable(kind: str, text: str, details: dict[str, Any] | None = N
     if has_suffix_chain_noise(text):
         return False
     return True
+
+
+def player_chat_style_rejection_reason(
+    text: str,
+    details: dict[str, Any] | None = None,
+) -> str:
+    """不合格の player_chat へ返す、閉じた再考理由コード。
+
+    最終採否は引き続き ``is_style_acceptable`` が正本。この関数はモデルへ
+    具体的な観察を一件返すためだけに、既知の理由を細分化する。
+    """
+
+    details = details or {}
+    if any(pattern in text for pattern in _DEADLY_ACTION_PATTERNS):
+        return "unsafe_combat_advice"
+    if contains_forbidden_mob_advice(text, details):
+        return "unsafe_combat_advice"
+    if details.get("speech_whitelist_enforce"):
+        from dogido_server.player_chat_policy import contains_unlisted_speech_names
+
+        if contains_unlisted_speech_names(
+            text,
+            details.get("allowed_speech_labels") or [],
+        ):
+            return "unobserved_entity_name"
+    if contains_unsupported_olfactory_claim(text, details):
+        return "unsupported_olfactory_claim"
+    if contains_dismissive_player_chat_tone(text):
+        return "dismissive_tone"
+
+    from dogido_server.dialogue.player_plan import conflicts_with_player_travel_guidance
+
+    if conflicts_with_player_travel_guidance(
+        text,
+        player_turn_plan=str(details.get("player_turn_plan") or "none"),
+        safety_priority=str(details.get("safety_priority") or "none"),
+    ):
+        return "conflicting_travel_guidance"
+    if has_excessive_repetition(text) or has_suffix_chain_noise(text):
+        return "broken_repetition"
+    return "surface_style_mismatch"
 
 
 def contains_dismissive_player_chat_tone(text: str) -> bool:
@@ -276,7 +345,8 @@ def contains_unsupported_olfactory_claim(
     """通常player_chatが嗅覚の世界事実を補作するのを止める。
 
     実スメル観測への応答は状態機械の固定文なので、生成文には一般論・仮定・
-    比喩だけを許し、「いま嗅いだ」という観測は常に棄却する。
+    比喩・嗅げないという返事・プレイヤーへの質問を許し、「いま嗅いだ」という
+    肯定的な観測だけを棄却する。
     """
 
     compact = re.sub(r"\s+", "", text or "")
@@ -287,18 +357,11 @@ def contains_unsupported_olfactory_claim(
     user_uses_olfactory_language = any(
         marker in user_text for marker in _OLFACTORY_MARKERS
     )
-    actual_sensing = bool(
-        re.search(
-            r"(?:匂い|におい|臭い|香り)(?:が|は|の)?"
-            r"(?:する|した|して|漂|残|来|きた|や(?:と|ろ|な|で|わ|[。！？!?]|$)|"
-            r"だ(?:[。！？!?]|$)|やろか|かも)",
-            compact,
-        )
-        or re.search(r"(?:匂|臭|にお)(?:う|って|った)", compact)
-        or re.search(r"(?:なんか|何か).{0,5}(?:臭い|くさい)", compact)
-        or "くさっ" in compact
-        or "臭っ" in compact
-        or re.search(r"(?:匂い|におい|臭い|香り)[。！？!?]", compact)
+    actual_sensing = any(
+        _contains_positive_olfactory_expression(clause)
+        for clause in re.findall(r"[^。！？!?]+[。！？!?]?", compact)
+        # プレイヤーへ「何か香りがしたん？」と聞き返すのは観測断言ではない。
+        if not _is_olfactory_question_clause(clause)
     )
     if user_uses_olfactory_language:
         # 「ゾンビは臭そう」や句の「土の匂い」のように、プレイヤーが始めた
@@ -310,6 +373,41 @@ def contains_unsupported_olfactory_claim(
         if figurative or not actual_sensing:
             return False
     return True
+
+
+def _contains_positive_olfactory_expression(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:匂い|におい|臭い|香り)(?:が|は|の)?"
+            r"(?:する(?!なら|ならば)|した(?!なら|ならば)|"
+            r"して(?!たら|れば)|漂|残|来|きた)",
+            text,
+        )
+        or re.search(r"(?:匂|臭|にお)う(?!なら|ならば)", text)
+        or re.search(r"(?:匂|臭|にお)(?:って(?!たら|れば)|った(?!ら))", text)
+        or re.search(r"香る(?!なら|ならば)", text)
+        or re.search(r"(?:なんか|何か).{0,5}(?:臭い|くさい)", text)
+        or "くさっ" in text
+        or "臭っ" in text
+    )
+
+
+def _is_olfactory_question_clause(text: str) -> bool:
+    if not text.endswith(("？", "?")):
+        return False
+    return bool(
+        re.search(
+            r"(?:匂い|におい|臭い|香り)(?:が|は|の)?"
+            r"(?:する|した|してる|漂う|残る|来た|きた)"
+            r"(?:ん|の|か|と思う|って感じ)?[？?]$",
+            text,
+        )
+        or re.search(
+            r"(?:匂う|におう|臭う|香る|くさい|生臭い|臭い)"
+            r"(?:ん|の|か|と思う)?[？?]$",
+            text,
+        )
+    )
 
 
 # 敵対中は原則 NG（寄ってくる／狙われるので静止は危険）。
