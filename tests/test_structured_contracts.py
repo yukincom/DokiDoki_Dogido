@@ -125,6 +125,26 @@ class StructuredContractTests(unittest.TestCase):
                 },
                 {},
             ),
+            "player_chat_plan": (
+                {
+                    "action": "continue_conversation",
+                    "focus": "直近の会話への相槌",
+                    "entity_query": "",
+                    "evidence": [
+                        {"turn_id": "current", "quote": "大丈夫そう"}
+                    ],
+                    "confidence": 0.9,
+                },
+                {
+                    "allowed_actions": ["continue_conversation"],
+                    "history": [],
+                    "current": {
+                        "turn_id": "current",
+                        "role": "user",
+                        "text": "大丈夫そうやな",
+                    },
+                },
+            ),
             "haiku_draft": (
                 {"lines": ["はるのかぜ", "ひつじがあるく", "よるのつき"]},
                 {},

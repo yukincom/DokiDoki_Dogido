@@ -43,7 +43,7 @@ from .haiku_prompts import (
     build_haiku_line_regeneration_messages,
     build_haiku_scene_messages,
 )
-from .player_chat_prompts import build_player_chat_messages
+from .player_chat_prompts import build_player_chat_messages, build_player_chat_plan_messages
 from .prompt_common import dialog_messages, leaf_dialog
 from .workshop_prompts import (
     build_haiku_workshop_combat_input_messages,
@@ -123,6 +123,7 @@ def build_messages(request: Any) -> list[dict[str, str]]:
         "structure_entry": _build_structure_entry_messages,
         "ender_eye_throw": _build_ender_eye_throw_messages,
         "portal_appearance": _build_portal_appearance_messages,
+        "player_chat_plan": build_player_chat_plan_messages,
         "player_chat": build_player_chat_messages,
         "assist_select_sword_intent": _build_select_sword_intent_messages,
     }

@@ -168,6 +168,39 @@ class _SelectSwordIntent(_StrictModel):
     confidence: Confidence
 
 
+class _PlayerChatPlanEvidence(_StrictModel):
+    turn_id: NonEmptyText
+    quote: NonEmptyText
+
+
+class _PlayerChatPlan(_StrictModel):
+    action: Literal[
+        "continue_conversation",
+        "check_entity_presence",
+        "identify_entity",
+        "answer_observation",
+        "clarify_reference",
+        "correct_previous_reply",
+    ]
+    focus: NonEmptyText
+    entity_query: str
+    evidence: Annotated[list[_PlayerChatPlanEvidence], Field(min_length=1, max_length=3)]
+    confidence: Confidence
+
+    @model_validator(mode="after")
+    def _entity_query_matches_action(self) -> _PlayerChatPlan:
+        entity_actions = {
+            "check_entity_presence",
+            "identify_entity",
+            "correct_previous_reply",
+        }
+        if self.action in entity_actions and not self.entity_query:
+            raise ValueError("entity action requires entity_query")
+        if self.action not in entity_actions and self.entity_query:
+            raise ValueError("non-entity action forbids entity_query")
+        return self
+
+
 _MODELS: dict[str, type[BaseModel]] = {
     "language_dialogue_interpretation": Interpretation,
     "language_dialogue_reply": GroundedReply,
@@ -177,6 +210,7 @@ _MODELS: dict[str, type[BaseModel]] = {
     "language_research_reading": ResearchReading,
     "language_web_consent": WebConsent,
     "assist_select_sword_intent": _SelectSwordIntent,
+    "player_chat_plan": _PlayerChatPlan,
     "haiku_draft": _HaikuDraft,
     "haiku_irony": _Irony,
     "haiku_line_grounding": _LineGrounding,
@@ -240,6 +274,40 @@ def structured_contract_retry_instruction(
             "matched_pattern_idsは次の文字列だけを重複なく使う: "
             + json.dumps(sorted(_participation_pattern_ids(request_details)))
         )
+    elif kind == "player_chat_plan":
+        constraints.append(
+            "actionは次から選ぶ: "
+            + json.dumps(sorted(_string_set(request_details.get("allowed_actions"))))
+        )
+        constraints.append(
+            "evidence.turn_idとquoteはhistory/currentにある発話IDと連続部分を正確にコピーし、"
+            "currentを必ず含める。entity_queryもevidence.quote内の連続部分にする"
+        )
+        routing_hints = request_details.get("routing_hints")
+        if isinstance(routing_hints, dict) and (
+            routing_hints.get("inventory_question") is True
+            or routing_hints.get("sound_question") is True
+        ):
+            constraints.append(
+                "routing_hintsで確定済みの所持品または音の問いなので、"
+                "actionはanswer_observationにする"
+            )
+        if (
+            isinstance(routing_hints, dict)
+            and routing_hints.get("presence_question") is True
+        ):
+            constraints.append(
+                "routing_hintsで明示的な在否問いと確定済みなので、"
+                "actionはcheck_entity_presenceにする"
+            )
+        if (
+            isinstance(routing_hints, dict)
+            and routing_hints.get("plain_presence_report") is True
+        ):
+            constraints.append(
+                "routing_hintsでplayerの平叙存在報告と確定済みなので、"
+                "check_entity_presenceまたはidentify_entityへ変えない"
+            )
     elif kind == "haiku_line_grounding":
         constraints.append(
             "assessments.line_indexをこの順で一件ずつ返す: "
@@ -301,6 +369,54 @@ def _validate_dynamic_contract(
             "matched_pattern_ids",
             errors,
         )
+
+    elif kind == "player_chat_plan":
+        allowed_actions = _string_set(details.get("allowed_actions"))
+        if allowed_actions and payload["action"] not in allowed_actions:
+            errors.append("action:not_allowed")
+        turns = _player_chat_turns(details)
+        evidence_turn_ids: set[str] = set()
+        for index, row in enumerate(payload["evidence"]):
+            turn_id = row["turn_id"]
+            quote = row["quote"]
+            if turn_id in evidence_turn_ids:
+                errors.append(f"evidence.{index}.turn_id:duplicate")
+            evidence_turn_ids.add(turn_id)
+            source = turns.get(turn_id)
+            if source is None:
+                errors.append(f"evidence.{index}.turn_id:unknown")
+            elif quote not in source["text"]:
+                errors.append(f"evidence.{index}.quote:not_exact")
+        if "current" not in evidence_turn_ids:
+            errors.append("evidence:current_required")
+        entity_query = payload["entity_query"]
+        if entity_query and not any(
+            entity_query in row["quote"] for row in payload["evidence"]
+        ):
+            errors.append("entity_query:not_in_evidence")
+        if payload["action"] == "correct_previous_reply" and not any(
+            turns.get(row["turn_id"], {}).get("role") == "assistant"
+            for row in payload["evidence"]
+        ):
+            errors.append("evidence:assistant_required")
+        routing_hints = details.get("routing_hints")
+        if isinstance(routing_hints, dict) and (
+            routing_hints.get("inventory_question") is True
+            or routing_hints.get("sound_question") is True
+        ) and payload["action"] != "answer_observation":
+            errors.append("action:routing_hint_requires_answer_observation")
+        if (
+            isinstance(routing_hints, dict)
+            and routing_hints.get("presence_question") is True
+            and payload["action"] != "check_entity_presence"
+        ):
+            errors.append("action:routing_hint_requires_presence_check")
+        if (
+            isinstance(routing_hints, dict)
+            and routing_hints.get("plain_presence_report") is True
+            and payload["action"] in {"check_entity_presence", "identify_entity"}
+        ):
+            errors.append("action:routing_hint_preserves_player_report")
 
     elif kind == "haiku_scene":
         allowed_ids = _source_atom_ids(details)
@@ -385,6 +501,32 @@ def _participation_pattern_ids(details: dict[str, Any]) -> set[str]:
         and isinstance(row.get("pattern_id"), str)
         and row["pattern_id"]
     }
+
+
+def _player_chat_turns(details: dict[str, Any]) -> dict[str, dict[str, str]]:
+    rows: list[object] = []
+    history = details.get("history")
+    if isinstance(history, list):
+        rows.extend(history)
+    current = details.get("current")
+    if isinstance(current, dict):
+        rows.append(current)
+    turns: dict[str, dict[str, str]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        turn_id = row.get("turn_id")
+        role = row.get("role")
+        text = row.get("text")
+        if (
+            isinstance(turn_id, str)
+            and turn_id
+            and role in {"user", "assistant"}
+            and isinstance(text, str)
+            and text
+        ):
+            turns[turn_id] = {"role": role, "text": text}
+    return turns
 
 
 def _requested_indices(value: object, key: str) -> list[int]:

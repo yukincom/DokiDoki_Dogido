@@ -9,11 +9,79 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .character_mode import CharacterMode, character_mode_for_request
 from .prompt_common import as_str_list, detail_str, leaf_dialog, player_name
 from .types import LeafGenerationRequest
+
+
+def build_player_chat_plan_messages(request: object) -> list[dict[str, str]]:
+    """通常雑談の会話焦点と、一件だけのread actionを閉じた型へ抽出する。"""
+
+    details = dict(getattr(request, "details", {}) or {})
+    history = details.get("history") if isinstance(details.get("history"), list) else []
+    current = details.get("current") if isinstance(details.get("current"), dict) else {}
+    observations = (
+        details.get("observations")
+        if isinstance(details.get("observations"), dict)
+        else {}
+    )
+    routing_hints = (
+        details.get("routing_hints")
+        if isinstance(details.get("routing_hints"), dict)
+        else {}
+    )
+    actions = details.get("allowed_actions") or []
+    user_prompt = (
+        "通常のMinecraft雑談について、いま返す対象と必要なread actionを一件だけ選ぶ。\n"
+        "発話文は生成せず、状態変更・保存・ゲーム操作も行わない。\n"
+        "まず直近会話と現在発話の談話関係を解決し、その後で必要な場合だけ現在観測や"
+        "エンティティカタログの照合を選ぶ。単語や形容だけで対象を推定しない。\n"
+        "historyのassistant発話は過去に実際に再生された会話だが、世界事実の根拠ではない。"
+        "その断言が現在観測にないときは引き継がない。\n"
+        "user発話にある存在・出来事は本人の報告であり、現在観測済みとは限らない。"
+        "報告として会話を続けることはできるが、自分が見た事実へ昇格させない。\n"
+        "actions:\n"
+        "- continue_conversation: 相槌、評価、感想、直前会話の自然な続き\n"
+        "- check_entity_presence: 特定の生き物・対象が今いるかという問い\n"
+        "- identify_entity: プレイヤーが示す対象の種類を尋ねる問い\n"
+        "- answer_observation: 現在の周囲・天気・場所など観測内容への問い\n"
+        "- clarify_reference: 対象が会話から一意に定まらず、聞き返す必要がある\n"
+        "- correct_previous_reply: assistantの直前の世界断言への訂正要求や矛盾指摘\n"
+        "routing_hintsでinventory_questionまたはsound_questionがtrueなら、既存コードが"
+        "質問種別を確定済みなのでanswer_observationを選び、entity actionへ変えない。\n"
+        "routing_hints.presence_questionがtrueならcheck_entity_presenceを選ぶ。"
+        "plain_presence_reportがtrueなら本人の報告なので、check_entity_presenceや"
+        "identify_entityへ変えない。\n"
+        "entity_queryはentity actionのときだけ、対象を表す発話中の連続部分を入れる。"
+        "現在発話が『まだおる？』のような省略なら、history中のuserまたはassistant発話から"
+        "対象語を取ってよいが、そのturnもevidenceへ含める。\n"
+        "focusは入力内容の会話焦点だけを短く要約し、観測や候補の新事実を足さない。\n"
+        "evidenceは1〜3件。turn_idとquoteを入力から正確にコピーし、currentを必ず含める。"
+        "correct_previous_replyはassistantの根拠も含める。確信が弱ければconfidenceを下げる。\n"
+        f"許可actions: {json.dumps(actions, ensure_ascii=False)}\n"
+        f"history: {json.dumps(history, ensure_ascii=False)}\n"
+        f"current: {json.dumps(current, ensure_ascii=False)}\n"
+        f"routing_hints: {json.dumps(routing_hints, ensure_ascii=False)}\n"
+        "現在観測（会話の参照解決に必要な場合だけ使う）: "
+        f"{json.dumps(observations, ensure_ascii=False)}\n"
+        "返答はJSONオブジェクトのみ。形式: "
+        '{"action":"continue_conversation","focus":"短い焦点",'
+        '"entity_query":"","evidence":[{"turn_id":"current",'
+        '"quote":"入力中の連続部分"}],"confidence":0.0}'
+    )
+    return [
+        {
+            "role": "system",
+            "content": (
+                "あなたは通常雑談の限定planner。発話にない内容を補わず、"
+                "指定されたJSONだけを返す。"
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
 
 
 def _dogido_chat_spirit() -> str:
@@ -49,6 +117,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     digest_rules, digest_block = _digest_section(details)
     combat_safety_rules = _combat_safety_rules(details, character_mode)
     world_observation_rules = _world_observation_rules(details)
+    grounding_rules, grounding_block = _grounding_section(details)
     priority_rules, priority_block = _current_turn_priority_section(details)
 
     user_prompt = (
@@ -60,12 +129,14 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"{digest_rules}"
         f"{combat_safety_rules}"
         f"{world_observation_rules}"
+        f"{grounding_rules}"
         f"{priority_rules}"
         "\n"
         "/no_think\n"
         "【材料】\n"
         f"{history_block}"
         f"{digest_block}"
+        f"{grounding_block}"
         f"プレイヤー:「{user_text}」\n"
         f"呼び名: {player_name(details)}（自然なら一度だけ）\n"
         f"場所: {place}\n"
@@ -83,6 +154,39 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         "プレイヤーの言葉に噛み合った一言だけ（12〜42字くらい）。"
     )
     return leaf_dialog("player_chat", request, user_prompt)
+
+
+def _grounding_section(details: dict[str, Any]) -> tuple[str, str]:
+    action = detail_str(details, "player_chat_plan_action")
+    if not action:
+        return "", ""
+    entity_query = detail_str(details, "entity_query")
+    status = detail_str(details, "entity_grounding_status", "not_applicable")
+    candidate_labels = as_str_list(details.get("entity_candidate_labels"))
+    observed_labels = as_str_list(details.get("entity_observed_labels"))
+    rules = (
+        "- 会話plannerのactionとコード照合結果を最優先する。assistant履歴の世界断言は"
+        "照合結果より強い根拠にしない\n"
+        "- userの存在報告は本人の報告として受け止め、自分も見た・確認したとは言わない\n"
+    )
+    if status == "not_observed":
+        rules += (
+            "- 対象は現在観測で確認できていない。『いない』と断定せず、"
+            "見えている・近くにいる・すぐそこ等とも言わない\n"
+        )
+    elif status == "observed":
+        rules += "- 対象は現在観測で確認済み。照合済みの呼び名だけを使う\n"
+    elif status in {"unknown", "ambiguous"}:
+        rules += "- 対象を一意に照合できていない。名前や在否を補作せず短く聞き返す\n"
+    # model生成のfocusは診断ログにのみ保持し、本文生成の事実材料にはしない。
+    lines = [f"action: {action}", f"entity_status: {status}"]
+    if entity_query:
+        lines.append(f"entity_query: {entity_query}")
+    if candidate_labels:
+        lines.append(f"catalog_candidates: {'、'.join(candidate_labels)}")
+    if observed_labels:
+        lines.append(f"observed_entities: {'、'.join(observed_labels)}")
+    return rules, "【会話plannerとコード照合】\n" + "\n".join(lines) + "\n"
 
 
 def _world_observation_rules(details: dict[str, Any]) -> str:
