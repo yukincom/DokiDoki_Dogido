@@ -1778,11 +1778,13 @@ class DogidoService:
             "warning": logging.WARNING,
             "error": logging.ERROR,
         }[payload.level]
-        LOGGER.log(
-            level,
-            message,
-            extra={"dogido_diagnostic_skip": True},
-        )
+        if not (payload.event == "capture" and payload.reason == "aec_levels"
+                and payload.level == "info"):
+            LOGGER.log(
+                level,
+                message,
+                extra={"dogido_diagnostic_skip": True},
+            )
         return {"accepted": entry_id is not None, "entry_id": entry_id}
 
     def voice_input_context(self) -> VoiceInputContextResponse:
