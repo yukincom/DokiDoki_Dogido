@@ -70,8 +70,9 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 3 | [sample-event-log-cases.md](sample-event-log-cases.md) | イベントログの代表ケース |
 | 4 | [runtime-dependencies.md](runtime-dependencies.md) | 実行時依存関係 |
 | 5 | [debug-checklist.md](debug-checklist.md) | デバッグ手順 |
-| 6 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
-| 6a | [language-dialogue-voice-test.md](language-dialogue-voice-test.md) | ユーザー操作の実マイク・STT・ドギド音声・実Chrome独立試験 |
+| 6 | [shared-llm-profile.md](shared-llm-profile.md) | 別に起動した共有 MLX endpoint と従来 standalone の明示切替 |
+| 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
+| 7a | [language-dialogue-voice-test.md](language-dialogue-voice-test.md) | ユーザー操作の実マイク・STT・ドギド音声・実Chrome独立試験 |
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 

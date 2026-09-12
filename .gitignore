@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 .env
+.env.shared
 .dogido_tmp/
 .dogido_memory/
 .dogido_training/

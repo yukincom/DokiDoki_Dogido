@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -39,6 +40,13 @@ PROVIDER_API_FAMILIES = {
     "gemini": "gemini_generate_content",
     "custom": "chat_completions",
 }
+
+RUNTIME_PROFILE_ENV = "DOGIDO_ENV_PROFILE"
+RUNTIME_PROFILE_STANDALONE = "standalone"
+RUNTIME_PROFILE_SHARED = "shared"
+SHARED_PROFILE_ENV_FILE = Path(".env.shared")
+SHARED_LLM_BASE_URL = "http://127.0.0.1:8080/v1"
+SHARED_LLM_MODEL = "default_model"
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,6 +477,55 @@ class Settings(BaseSettings):
         return normalized_backend
 
 
+def _runtime_profile() -> str:
+    profile = os.environ.get(RUNTIME_PROFILE_ENV, RUNTIME_PROFILE_STANDALONE).strip().lower()
+    if not profile:
+        return RUNTIME_PROFILE_STANDALONE
+    if profile not in {RUNTIME_PROFILE_STANDALONE, RUNTIME_PROFILE_SHARED}:
+        raise RuntimeError(
+            f"{RUNTIME_PROFILE_ENV} must be standalone or shared, got {profile!r}"
+        )
+    return profile
+
+
+def _validate_shared_profile(settings: Settings) -> None:
+    errors: list[str] = []
+    if not settings.llm_enabled:
+        errors.append("DOGIDO_LLM_ENABLED must be true")
+
+    for route in ("chat", "haiku"):
+        route_settings = settings.llm_route_settings(route)
+        prefix = f"DOGIDO_LLM_{route.upper()}"
+        if route_settings.llm_provider != "local":
+            errors.append(f"{prefix}_PROVIDER must resolve to local")
+        if route_settings.llm_effective_backend != "chat_completions":
+            errors.append(f"{prefix}_BACKEND must resolve to chat_completions")
+        resolved_base_url = (route_settings.llm_resolved_base_url or "").rstrip("/")
+        if resolved_base_url != SHARED_LLM_BASE_URL:
+            errors.append(f"{prefix}_BASE_URL must resolve to {SHARED_LLM_BASE_URL}")
+        if route_settings.llm_model != SHARED_LLM_MODEL:
+            errors.append(f"{prefix}_MODEL must resolve to {SHARED_LLM_MODEL}")
+
+    if settings.platform_ai_provider != "chat":
+        errors.append("DOGIDO_PLATFORM_AI_PROVIDER must be chat")
+
+    if errors:
+        detail = "; ".join(errors)
+        raise RuntimeError(f"invalid shared runtime profile: {detail}")
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    profile = _runtime_profile()
+    if profile == RUNTIME_PROFILE_STANDALONE:
+        return Settings()
+
+    shared_env_file = Path.cwd() / SHARED_PROFILE_ENV_FILE
+    if not shared_env_file.is_file():
+        raise RuntimeError(
+            f"shared runtime profile requires {shared_env_file}; "
+            "copy .env.shared.example to .env.shared first"
+        )
+    settings = Settings(_env_file=(Path(".env"), shared_env_file))
+    _validate_shared_profile(settings)
+    return settings

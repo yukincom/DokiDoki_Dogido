@@ -1,0 +1,98 @@
+[
+  {
+    "id": "chat_leaf",
+    "request_type": "leaf",
+    "route": "chat",
+    "kind": "occluded_entry_no_light",
+    "temperature": 0.42,
+    "max_tokens": 72,
+    "prompt_fragment": "場所はsynthetic_cave",
+    "details": {
+      "player_name": "合成試験",
+      "biome": "synthetic_cave",
+      "time_phase": "night",
+      "craftable": false,
+      "local_light": 3
+    },
+    "fallback": "fallback",
+    "response": "合成試験、その暗さでほんまに入るん？ ちょっと怖いわ……。"
+  },
+  {
+    "id": "chat_structured",
+    "request_type": "structured",
+    "route": "chat",
+    "kind": "player_chat_plan",
+    "temperature": 0.15,
+    "max_tokens": 320,
+    "prompt_fragment": "synthetic_player_turn",
+    "details": {
+      "allowed_actions": ["continue_conversation"],
+      "history": [],
+      "current": {
+        "turn_id": "current",
+        "role": "user",
+        "text": "synthetic_player_turn"
+      },
+      "observations": {},
+      "routing_hints": {}
+    },
+    "fallback": {
+      "action": "continue_conversation",
+      "focus": "fallback",
+      "entity_query": "",
+      "evidence": [
+        {
+          "turn_id": "current",
+          "quote": "synthetic_player_turn"
+        }
+      ],
+      "confidence": 0.0
+    },
+    "response": {
+      "action": "continue_conversation",
+      "focus": "合成入力の疎通確認",
+      "entity_query": "",
+      "evidence": [
+        {
+          "turn_id": "current",
+          "quote": "synthetic_player_turn"
+        }
+      ],
+      "confidence": 0.98
+    }
+  },
+  {
+    "id": "haiku_structured",
+    "request_type": "structured",
+    "route": "haiku",
+    "kind": "haiku_draft",
+    "temperature": 0.2,
+    "max_tokens": 192,
+    "prompt_fragment": "synthetic_haiku_material",
+    "details": {
+      "feature_candidates": ["synthetic_haiku_material"],
+      "candidate_tensions": ["朝と洞窟"],
+      "source_atoms": [
+        {
+          "atom_id": "synthetic:0",
+          "text": "朝の草地"
+        },
+        {
+          "atom_id": "synthetic:1",
+          "text": "洞窟の入口"
+        },
+        {
+          "atom_id": "synthetic:2",
+          "text": "手に木のシャベル"
+        }
+      ],
+      "generation_strategy": "three_slot"
+    },
+    "fallback": {
+      "lines": ["fallback", "fallback", "fallback"]
+    },
+    "response": {
+      "lines": ["あさのくさ", "どうくつのまえ", "きのしゃべる"]
+    }
+  }
+]
