@@ -2,6 +2,8 @@ package dogido.fabric;
 
 /** Pure geometry in Minecraft's GUI-scaled pixels. Keeps the PNG within a resized viewport. */
 final class CharacterPlacement {
+    static final int TEXTURE_WIDTH = 1305;
+    static final int TEXTURE_HEIGHT = 1298;
     record Bounds(int x, int y, int width, int height) { }
 
     static Bounds lowerLeft(int screenWidth, int screenHeight, int width, int left, int bottom) {
@@ -18,8 +20,8 @@ final class CharacterPlacement {
     static Bounds fit(int screenWidth, int screenHeight, int requestedWidth, int right, int bottom) {
         int sw = Math.max(1, screenWidth);
         int sh = Math.max(1, screenHeight);
-        int width = Math.max(1, Math.min(Math.min(requestedWidth, sw), (int) Math.floor(sh * 728.0 / 680)));
-        int height = Math.max(1, Math.min(sh, (int) Math.round(width * 680.0 / 728)));
+        int width = Math.max(1, Math.min(Math.min(requestedWidth, sw), (int) Math.floor(sh * (double) TEXTURE_WIDTH / TEXTURE_HEIGHT)));
+        int height = Math.max(1, Math.min(sh, (int) Math.round(width * (double) TEXTURE_HEIGHT / TEXTURE_WIDTH)));
         return new Bounds(Math.clamp(sw - width - right, 0, sw - width),
             Math.clamp(sh - height - bottom, 0, sh - height), width, height);
     }

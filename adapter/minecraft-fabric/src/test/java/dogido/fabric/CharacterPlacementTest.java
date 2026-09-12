@@ -1,16 +1,28 @@
 package dogido.fabric;
 
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class CharacterPlacementTest {
     @Test void approvedPlacementUsesViewportPercentagesOnLowerLeft() {
-        assertEquals(new CharacterPlacement.Bounds(16, 292, 58, 54), CharacterPlacement.approved(640, 360));
-        assertEquals(new CharacterPlacement.Bounds(25, 492, 90, 84), CharacterPlacement.approved(1000, 600));
+        assertEquals(new CharacterPlacement.Bounds(16, 288, 58, 58), CharacterPlacement.approved(640, 360));
+        assertEquals(new CharacterPlacement.Bounds(25, 486, 90, 90), CharacterPlacement.approved(1000, 600));
     }
     @Test void defaultPlacementKeepsRequestedMarginsAndAspectRatio() {
         var bounds = CharacterPlacement.fit(640, 360, 96, 12, 36);
-        assertEquals(new CharacterPlacement.Bounds(532, 234, 96, 90), bounds);
+        assertEquals(new CharacterPlacement.Bounds(532, 229, 96, 95), bounds);
+    }
+
+    @Test void packagedArtworkMatchesItsDeclaredCanvasAndKeepsAlpha() throws Exception {
+        try (var input = getClass().getResourceAsStream("/assets/dogido/textures/gui/character.png")) {
+            assertNotNull(input);
+            var artwork = ImageIO.read(input);
+            assertNotNull(artwork);
+            assertEquals(CharacterPlacement.TEXTURE_WIDTH, artwork.getWidth());
+            assertEquals(CharacterPlacement.TEXTURE_HEIGHT, artwork.getHeight());
+            assertTrue(artwork.getColorModel().hasAlpha());
+        }
     }
 
     @Test void resizingAndOversizedOffsetsCannotMoveCharacterOffscreen() {
