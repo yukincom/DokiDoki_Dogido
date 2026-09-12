@@ -4,33 +4,33 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ドギド — いつもの居場所</title>
 <style>
-  *{box-sizing:border-box}body{margin:0;background:#f4f0e5;color:#363b2b;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif}
+  *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:#f4f0e5;color:#363b2b;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif}
   main{max-width:1400px;margin:auto;padding:32px}header{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:24px}
   h1{font-size:25px;font-weight:650;margin:5px 0 8px}p{margin:0;color:#737464;font-size:14px;line-height:1.8}.eyebrow{font-size:11px;letter-spacing:.14em;color:#8a8069}
   .badge{font-size:12px;border:1px solid #d6d0be;border-radius:24px;padding:8px 14px;white-space:nowrap}
   .workspace{display:grid;grid-template-columns:minmax(0,1fr) 224px;gap:24px;align-items:start}
   .stage{position:relative;overflow:hidden;line-height:0;background:#22271f;border-radius:12px;box-shadow:0 8px 28px #292d2520}
-  .world{display:block;width:100%;height:auto}.character{position:absolute;width:15%;right:1.875%;bottom:11.11%;pointer-events:none;line-height:0}.character img{width:100%;height:auto;display:block}
+  .world{display:block;width:100%;height:auto}.character{position:absolute;width:10%;right:6.5%;top:8%;pointer-events:none;line-height:0}.character img{width:100%;height:auto;display:block}
   .float{animation:float 3.8s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
   @media(prefers-reduced-motion:reduce){.float{animation:none}}
   aside{background:#fffcf4;border:1px solid #ded9c9;padding:20px;border-radius:12px}h2{font-size:15px;margin:0 0 20px}
   label{display:block;font-size:13px;margin:20px 0 8px}.value{float:right;color:#797663;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#758260}
-  .buttons{display:flex;gap:6px;margin:14px 0}button{font:inherit;font-size:12px;padding:8px;border:1px solid #d9d5c5;background:#fffdf7;border-radius:7px;cursor:pointer;color:inherit;white-space:nowrap}button:hover,button[aria-pressed=true]{background:#e5ead8;border-color:#87946e}
+  .buttons{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}button{font:inherit;font-size:12px;padding:8px;border:1px solid #d9d5c5;background:#fffdf7;border-radius:7px;cursor:pointer;color:inherit;white-space:nowrap}button:hover,button[aria-pressed=true]{background:#e5ead8;border-color:#87946e}
   .check{display:flex;gap:8px;align-items:center;font-size:13px}input[type=checkbox]{accent-color:#758260}.note{font-size:12px;margin-top:22px;color:#898572}
   footer{display:flex;gap:30px;justify-content:space-between;padding-top:17px}footer p{font-size:12px}.future{margin-top:28px;padding-top:20px;border-top:1px solid #ddd7c8;font-size:13px;line-height:1.8;color:#777765}
   @media(max-width:780px){main{padding:16px}.workspace{grid-template-columns:1fr}aside{display:block}header{align-items:start}.badge{display:none}footer{display:block}}
 </style>
 <main>
-  <header><div><div class="eyebrow">DOKIDOKI DOGIDO / PLACEMENT STUDY 01</div><h1>いつもの居場所。</h1><p>右下で、ちょっとだけ浮かんでいる。まずはこの距離感から。</p></div><span class="badge">通常時の配置イメージ</span></header>
+  <header><div><div class="eyebrow">DOKIDOKI DOGIDO / PLACEMENT STUDY 02</div><h1>いつもの居場所。</h1><p>右上で、ちょっとだけ浮かんでいる。手元から離れた、この距離感。</p></div><span class="badge">通常時の配置イメージ</span></header>
   <div class="workspace">
     <section aria-label="過去のプレイスクリーンショットを使った配置プレビュー">
-      <div class="stage"><img class="world" id="world" src="day-full.png" alt="ホットバー全体と手持ちのシャベルが写った、昼のMinecraftスクリーンショット"><div class="character" id="character"><img class="float" id="pose" src="../../adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/character.png" alt="ドギド"></div></div>
-      <footer><p>背景：過去の実プレイ画像を切り抜かず全体表示。<br>クリエイティブ時の画像のため、体力・満腹度の重なりは別途確認が必要です。</p><p>絵：ドギド整え.png ／ 原画のまま</p></footer>
+      <div class="stage"><video class="world" id="gameplay" src="gameplay.mp4" autoplay loop muted playsinline aria-label="体力・満腹度・ホットバーを含む実プレイ録画"></video><img class="world" id="world" hidden src="day-full.png" alt="ホットバー全体と手持ちのシャベルが写った、昼のMinecraftスクリーンショット"><div class="character" id="character"><img class="float" id="pose" src="../../adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/character.png" alt="ドギド"></div></div>
+      <footer><p id="background-note">背景：9/12の実プレイ録画。体力・満腹度・ホットバーを含むゲーム画面全体。<br>録画の3〜60秒をループ。現在のゲームとの連動はありません。</p><p>絵：ドギド整え.png ／ 原画のまま</p></footer>
     </section>
-    <aside><h2>ドギドの置き場所</h2><div class="buttons" aria-label="背景の候補"><button data-scene="day" aria-pressed="true">昼・シャベル</button><button data-scene="night">夜・盾</button></div><div class="buttons" aria-label="大きさの候補"><button data-size="10">小さめ</button><button data-size="15" aria-pressed="true">ふつう</button><button data-size="20">大きめ</button></div>
-      <label for="size">大きさ <span class="value" id="size-value"></span></label><input id="size" type="range" min="6" max="28" step="0.5" value="15">
-      <label for="right">右端から <span class="value" id="right-value"></span></label><input id="right" type="range" min="0" max="25" step="0.5" value="2">
-      <label for="bottom">下端から <span class="value" id="bottom-value"></span></label><input id="bottom" type="range" min="0" max="35" step="0.5" value="8">
+    <aside><h2>ドギドの置き場所</h2><div class="buttons" aria-label="背景の候補"><button data-scene="video" aria-pressed="true">今回の動画</button><button data-scene="day">昼</button><button data-scene="night">夜</button></div><button id="playback">動画を一時停止</button><div class="buttons" aria-label="大きさの候補"><button data-size="10">小さめ</button><button data-size="15" aria-pressed="true">ふつう</button><button data-size="20">大きめ</button></div>
+      <label for="size">大きさ <span class="value" id="size-value"></span></label><input id="size" type="range" min="6" max="28" step="0.5" value="10">
+      <label for="right">右端から <span class="value" id="right-value"></span></label><input id="right" type="range" min="0" max="25" step="0.5" value="6.5">
+      <label for="top">上端から <span class="value" id="top-value"></span></label><input id="top" type="range" min="0" max="35" step="0.5" value="8">
       <label class="check"><input type="checkbox" id="motion" checked>ゆっくり、ホヨホヨ</label>
       <label class="check"><input type="checkbox" id="visible" checked>ドギドを表示する</label>
       <div class="buttons"><button id="reset">最初の位置へ</button></div>
@@ -41,8 +41,12 @@
 </main>
 <script>
 const $=id=>document.getElementById(id);
-function update(){for(const id of ['size','right','bottom']){$(id+'-value').textContent=$(id).value+'%'}$('character').style.width=$('size').value+'%';$('character').style.right=$('right').value+'%';$('character').style.bottom=$('bottom').value+'%';$('character').hidden=!$('visible').checked;$('pose').classList.toggle('float',$('motion').checked);document.querySelectorAll('[data-size]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===$('size').value)))}
-document.querySelectorAll('input').forEach(e=>e.addEventListener('input',update));document.querySelectorAll('[data-size]').forEach(b=>b.addEventListener('click',()=>{$('size').value=b.dataset.size;update()}));$('reset').addEventListener('click',()=>{$('size').value=15;$('right').value=2;$('bottom').value=8;$('motion').checked=true;$('visible').checked=true;update()});update();
-document.querySelectorAll('[data-scene]').forEach(b=>b.addEventListener('click',()=>{$('world').src=b.dataset.scene+'-full.png';$('world').alt=b.dataset.scene==='day'?'ホットバー全体と手持ちのシャベルが写った、昼のMinecraftスクリーンショット':'ホットバー全体、オフハンドの盾、手持ちの種が写った、夜のMinecraftスクリーンショット';document.querySelectorAll('[data-scene]').forEach(e=>e.setAttribute('aria-pressed',String(e===b)))}));
+function update(){for(const id of ['size','right','top']){$(id+'-value').textContent=$(id).value+'%'}$('character').style.width=$('size').value+'%';$('character').style.right=$('right').value+'%';$('character').style.top=$('top').value+'%';$('character').hidden=!$('visible').checked;$('pose').classList.toggle('float',$('motion').checked);document.querySelectorAll('[data-size]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.size===$('size').value)))}
+document.querySelectorAll('input').forEach(e=>e.addEventListener('input',update));document.querySelectorAll('[data-size]').forEach(b=>b.addEventListener('click',()=>{$('size').value=b.dataset.size;update()}));$('reset').addEventListener('click',()=>{$('size').value=10;$('right').value=6.5;$('top').value=8;$('motion').checked=true;$('visible').checked=true;update()});update();
+const video=$('gameplay');
+function play(){video.play().catch(()=>{$('playback').textContent='動画を再生'});}
+video.addEventListener('play',()=>{$('playback').textContent='動画を一時停止'});video.addEventListener('pause',()=>{$('playback').textContent='動画を再生'});
+$('playback').addEventListener('click',()=>{if(video.paused)play();else video.pause()});
+document.querySelectorAll('[data-scene]').forEach(b=>b.addEventListener('click',()=>{const isVideo=b.dataset.scene==='video';video.hidden=!isVideo;$('world').hidden=isVideo;$('playback').hidden=!isVideo;if(isVideo){play();$('background-note').textContent='背景：9/12の実プレイ録画。体力・満腹度・ホットバーを含む画面全体。録画の3〜60秒をループ。'}else{video.pause();$('world').src=b.dataset.scene+'-full.png';$('world').alt=b.dataset.scene==='day'?'ホットバー全体とシャベルが写った昼の画面':'ホットバー全体と盾が写った夜の画面';$('background-note').textContent='背景：過去のスクリーンショット全体。こちらはクリエイティブ時のため体力・満腹度は表示されていません。'}document.querySelectorAll('[data-scene]').forEach(e=>e.setAttribute('aria-pressed',String(e===b)))}));
 </script>
 </html>
