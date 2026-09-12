@@ -86,10 +86,6 @@ case "${mode}" in
 esac
 
 print -- "========== ${label} =========="
-print -- "実行元: ${PROJECT_ROOT}"
-print -- "Python: ${PYTHON_BIN}"
-print -- "プロファイル: ${profile}"
-print -- "停止: Ctrl+C（停止後は同じシェルへ戻ります）"
 
 cd "${PROJECT_ROOT}"
 "${PYTHON_BIN}" -m "${module}"

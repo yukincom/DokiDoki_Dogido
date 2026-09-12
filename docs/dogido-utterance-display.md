@@ -79,8 +79,8 @@ macOSではTerminal本来の2タブを使う。一方で
 `scripts/start_dogido.command voice` を実行する。tmuxや独自のマウス処理は
 使わず、Terminal標準のホイール、ドラッグ選択、選択色、`Command+C`を保つ。
 停止は `Ctrl+C` とし、停止後は同じタブ・同じシェルで同じコマンドを再実行する。
-起動時にはPython実行ファイル・仮想環境・
-`dogido_server`の読込元を最初に表示する。診断画面には絶対パスを出さず、
+実行元・Python・プロファイルは `scripts/start_dogido.command --dry-run` で確認できる。
+通常起動ではこれらの案内を表示しない。診断画面には絶対パスを出さず、
 「通常チェックアウト」または「Codex作業ツリー」、Python環境名、PID、
 起動識別子を表示する。
 
