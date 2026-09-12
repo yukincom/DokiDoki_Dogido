@@ -172,7 +172,9 @@ def main(argv=None) -> int:
                                       "acoustic_quality_verified": False, **processor.levels()}))
                     return 0
                 if time.monotonic() - last_report >= 5:
-                    diagnostic("aec_levels", **processor.levels())
+                    levels = processor.levels()
+                    if args.probe_seconds:
+                        diagnostic("aec_levels", **levels)
                     last_report = time.monotonic()
         finally:
             signal.signal(signal.SIGTERM, previous)

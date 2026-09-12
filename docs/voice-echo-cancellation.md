@@ -87,8 +87,8 @@ DOGIDO_VOICE_ECHO_CANCELLATION=webrtc python -m dogido_server.voice_input
 
 ## 診断と戻し方
 
-`aec_started`、約5秒ごとの `aec_levels`（mic/reference/cleanのRMS）、`aec_failed` を既存の
-`capture` 診断として表示する。PCM・認証情報は含まない。stderrは継続して読み、保持末尾は4KiBに制限する。
+通常起動では `aec_started` と `aec_failed` を既存の `capture` 診断として表示する。
+`aec_levels`（mic/reference/cleanのRMS）は `--probe-seconds` による音量検査中だけ表示する。PCM・認証情報は含まない。stderrは継続して読み、保持末尾は4KiBに制限する。
 フレーム停止時の主なnative codeは `1=形式/参照欠落`、`2=時計不連続`、`3=入力滞留`、
 `4=不正サンプル`、`5=入力停止`、`6=機器変更`、`7=出力pipe詰まり`。
 
