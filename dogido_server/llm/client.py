@@ -120,7 +120,7 @@ class DogidoLLM:
 
                 if self.settings.llm_uses_remote_api:
                     # API バックエンドはリクエスト時に接続するためプリロード不要
-                    LOGGER.warning(
+                    LOGGER.debug(
                         "llm_preload backend=%s provider=%s result=skipped base_url=%s",
                         self.settings.llm_effective_backend,
                         self.settings.llm_provider,
