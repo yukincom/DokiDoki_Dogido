@@ -31,6 +31,24 @@
 - `nearby_resources` の本格拡張（現状は原木・板・羊毛・石炭に加え、積雪実測用の雪3種だけ）
 - エリトラ滑空など、乗り物ではないプレイヤー活動
 
+## 右下のドギド（静止画試作）
+
+ワールド内の右下へ、作者の透過PNGを一枚表示する配置試作。初期幅は96 GUIピクセル、
+右余白12、下余白36。MinecraftのGUIスケールに追従し、F1や画面メニュー中は隠れる。
+サーバーへの接続は不要。会話・戦闘・workshop・上下動との連動は今後の予定。
+
+クライアント内のチャット欄で以下を入力して閉じると、即時に変更が見える。
+
+- `/dogidohud size 72` — 小さくする（幅24〜256）
+- `/dogidohud offset 12 36` — 右端・下端からの余白
+- `/dogidohud hide` / `/dogidohud show` — 表示切替
+- `/dogidohud reset` — 初期位置・サイズ・表示へ戻す
+
+設定は `config/dogido-character.properties` に保存する。
+初回は `./gradlew test build` 後に試作jarを導入して確認する。
+**ビルドと配置計算テスト済み。実Minecraftでの透過描画、GUIスケール変更、F1、再起動後の設定復元は未確認。**
+通常時の配置案は [`tools/character-placement/index.html`](../../tools/character-placement/index.html)。
+
 ## 音まわり（現状）
 
 - Minecraft の sound packet から `auditory_threats` / `ambient_sounds` を載せる

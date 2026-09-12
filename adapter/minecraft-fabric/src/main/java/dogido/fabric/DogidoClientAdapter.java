@@ -274,6 +274,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
+        DogidoCharacterHud.register();
         this.config = DogidoConfig.load();
         this.eventClient = new DogidoEventClient(LOGGER, this.config, this::handleSelectHotbarCommand);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
