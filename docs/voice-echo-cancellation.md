@@ -66,7 +66,7 @@ bash scripts/setup_echo_capture.sh
 **従来入力とAEC入力を同時起動しない。**
 
 ```bash
-zsh scripts/start_dogido_test.command voice-aec
+zsh scripts/start_dogido.command voice-aec
 ```
 
 通常の開発環境なら次でも同じ。モデル・サーバー設定は既存の `.env` を使う。

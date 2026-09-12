@@ -75,8 +75,8 @@ snapshot取得は短い専用lockだけを使い、LLM処理を直列化するse
 Minecraft画面・マイク・スピーカーを使えるときだけ、次の順で確認する。昼間のコード検査では代替できない、聞こえ方と実際の割り込みを中心に見る。
 
 macOSではTerminal本来の2タブを使う。一方で
-`scripts/start_dogido_test.command server`、もう一方で
-`scripts/start_dogido_test.command voice` を実行する。tmuxや独自のマウス処理は
+`scripts/start_dogido.command server`、もう一方で
+`scripts/start_dogido.command voice` を実行する。tmuxや独自のマウス処理は
 使わず、Terminal標準のホイール、ドラッグ選択、選択色、`Command+C`を保つ。
 停止は `Ctrl+C` とし、停止後は同じタブ・同じシェルで同じコマンドを再実行する。
 起動時にはPython実行ファイル・仮想環境・
@@ -89,7 +89,7 @@ macOSではTerminal本来の2タブを使う。一方で
 直近15秒以内に届いていることを別々に表す。
 
 1. **起動と画面**
-   - Terminalの2タブで `scripts/start_dogido_test.command server` と `scripts/start_dogido_test.command voice` をそれぞれ実行し、両方のログを確認する。
+   - Terminalの2タブで `scripts/start_dogido.command server` と `scripts/start_dogido.command voice` をそれぞれ実行し、両方のログを確認する。
    - `http://127.0.0.1:5055/dogido` が「接続中」になることを確認する。
    - 診断欄が成功した `game-events`、`player-input`、`voice-input/context` のアクセスログで埋まらないことを確認する。
 2. **音声認識の成功**

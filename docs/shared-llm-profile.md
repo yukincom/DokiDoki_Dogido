@@ -27,13 +27,13 @@ context・cache は共有 MLX サーバー側で管理します。`GET /v1/model
 
 ```bash
 # 共有 endpoint を使う
-./scripts/start_dogido_test.command --profile shared server
+./scripts/start_dogido.command --profile shared server
 
 # 従来のプロセス内 MLX を明示して使う
-./scripts/start_dogido_test.command --profile standalone server
+./scripts/start_dogido.command --profile standalone server
 
 # 起動せず設定元を確認する
-./scripts/start_dogido_test.command --profile standalone --dry-run
+./scripts/start_dogido.command --profile standalone --dry-run
 ```
 
 引数を省略した既存コマンドも `standalone` のままです。共有 endpoint 自体はこのスクリプトで
