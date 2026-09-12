@@ -82,12 +82,12 @@ final class DogidoCharacterHud {
             : CharacterPlacement.lowerLeft(context.getScaledWindowWidth(), context.getScaledWindowHeight(), width, right, bottom);
         float floatOffset = motion ? (float) ((1 - Math.cos(System.nanoTime() / 1_000_000_000.0 * Math.PI * 2 / 3.8))
             * context.getScaledWindowWidth() * -.0025) : 0;
-        // Mirror only the drawing, never the original image, scroll text, or game view.
+        // Reverse texture U, not vertex winding: GUI_TEXTURED culls back faces.
+        // A negative matrix scale makes the entire character invisible.
         context.getMatrices().pushMatrix();
-        context.getMatrices().translate(2 * bounds.x() + bounds.width(), floatOffset);
-        context.getMatrices().scale(-1, 1);
+        context.getMatrices().translate(0, floatOffset);
         context.drawTexture(RenderPipelines.GUI_TEXTURED, TEXTURE, bounds.x(), bounds.y(),
-            0, 0, bounds.width(), bounds.height(), 728, 680, 728, 680);
+            728, 0, bounds.width(), bounds.height(), -728, 680, 728, 680);
         context.getMatrices().popMatrix();
     }
 

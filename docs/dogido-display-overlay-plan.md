@@ -4,6 +4,8 @@
 **状態:** 2026-09-12、採用した左下・右向きドギドと、右下の川柳掛け軸をFabricへ実装。読み取り専用snapshotでworkshop開始・終了・未採用案・編集対象・危険中断へ接続した。サーバー・Java自動テストとビルド済み。実Minecraftでの表示・音声編集・危険割り込みを含む一連の確認は未完了。通常雑談のゲーム内字幕は対象外。ゲーム外の発言履歴は別機能。
 **きっかけ:** [issue #28](https://github.com/yukincom/DokiDoki_Dogido/issues/28) — 川柳 preface を材料どおり長くしたい一方、TTS だけでは長い説明が鬱陶しい。workshop 中にセリフを画面に残したい。
 
+2026-09-13: 常駐ドギドの左右反転を負の行列scaleから画像U座標の反転へ修正。Minecraft 1.21.11の `GUI_TEXTURED` は裏面をカリングするため、描画面ごと裏返すと絵が消える。左下位置・右向き・上下動・表示設定は維持。修正版の実ゲーム表示確認は未完了。掛け軸の `closed` 時の非表示とは別の問題。
+
 関連:
 
 - [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)（workshop / preface）
