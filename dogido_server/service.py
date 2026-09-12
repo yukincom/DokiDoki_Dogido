@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import logging
 import threading
-from typing import Iterable
+from typing import Callable, Iterable
 from uuid import uuid4
 
 from dogido_server.assist import ActionContext, ActionName, build_assist_registry
@@ -107,6 +107,7 @@ from dogido_server.haiku.verse import (
 )
 from dogido_server.llm import DogidoLLMRouter, LeafGenerationRequest, StructuredGenerationRequest
 from dogido_server.language_dialogue.conversation_turns import TurnLedger
+from dogido_server.language_dialogue.main_web import build_main_web_research
 from dogido_server.memory import MemoryStore
 from dogido_server.models import (
     AcceptedEventResponse,
@@ -257,8 +258,14 @@ class ProcessedEvent:
 
 
 class DogidoService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        main_language_web_factory: Callable[[], object | None] | None = None,
+    ) -> None:
         self.settings = settings
+        self._main_language_web_factory = main_language_web_factory
         self.sessions: dict[str, SessionInfo] = {}
         self.audio = AudioDispatcher(
             settings,
@@ -757,9 +764,16 @@ class DogidoService:
         # 国語・一般知識の限定対話だけは非同期workerへ渡し、game-event直列処理を塞がない。
         conversation_now = event.observed_at
         foreground = session.foreground_dialogue
+        foreground_ttl_ms = self.settings.conversation_active_ttl_ms
+        if foreground.route == "web" and session.language_runtime is not None:
+            # 調査開始後は独立対話で既に使っている30分の読書期限を正にする。
+            # 同意待ち／起動待ちにはresearchがないため、通常の5分期限のまま。
+            research_ttl_ms = session.language_runtime.active_research_ttl_ms()
+            if research_ttl_ms is not None:
+                foreground_ttl_ms = research_ttl_ms
         foreground.expire_if_idle(
             conversation_now,
-            ttl_ms=self.settings.conversation_active_ttl_ms,
+            ttl_ms=foreground_ttl_ms,
         )
         if (
             foreground.route == "haiku_workshop"
@@ -2094,6 +2108,11 @@ class DogidoService:
         for envelope in runtime.poll():
             if envelope.get("work_kind") == "turn":
                 result = runtime.accept_turn_result(envelope, observed_at=event.observed_at)
+                self._remember_main_web_return_context(
+                    session,
+                    result,
+                    observed_at=event.observed_at,
+                )
                 host_request = result.get("host_chat_request")
                 if isinstance(host_request, dict):
                     if not self._queue_host_chat_request(session, host_request):
@@ -2104,8 +2123,12 @@ class DogidoService:
                 if result.get("reply"):
                     self._enqueue_main_language_result(session, result)
             elif envelope.get("work_kind") == "playback_control":
-                # Web制御結果は発話本文ではない。状態更新はLanguageDialogue内で完了。
-                result = dict(envelope.get("result") or {})
+                # Web制御は通常のplayer turnではない。失敗案内等があれば
+                # 案内専用turnとして実再生完了まで追跡する。
+                result = runtime.accept_control_result(
+                    envelope,
+                    observed_at=event.observed_at,
+                )
                 if result.get("reply"):
                     self._enqueue_main_language_result(session, result)
 
@@ -2164,6 +2187,27 @@ class DogidoService:
                 route_owner="main_language_dialogue",
             )
         ]
+
+    @staticmethod
+    def _remember_main_web_return_context(
+        session: SessionInfo,
+        result: dict[str, object],
+        *,
+        observed_at: datetime,
+    ) -> None:
+        """Web本文を持ち帰らず、調べた問い一件だけを本体の短期文脈へ渡す。"""
+
+        context = result.get("return_context")
+        if not isinstance(context, dict):
+            return
+        topic = " ".join(str(context.get("researched_topic") or "").split())[:160]
+        if not topic:
+            return
+        session.dialogue.add_digest(
+            "research",
+            f"直前にプレイヤーと『{topic}』をWebで調べた。",
+            at=observed_at,
+        )
 
     def _queue_host_chat_request(
         self,
@@ -5370,10 +5414,12 @@ class DogidoService:
             and self.settings.llm_enabled
             and session.language_runtime is None
         ):
+            web = self._new_main_language_web(session.session_id)
             session.language_runtime = MainLanguageRuntime(
                 self.llm,
                 ledger=session.dialogue_turns,
                 foreground=session.foreground_dialogue,
+                web=web,
                 history_provider=session.dialogue.prompt_turns,
                 situation_provider=session.dialogue.situation_lines,
                 topic_fresh_ms=self.settings.conversation_topic_fresh_ms,
@@ -5385,6 +5431,43 @@ class DogidoService:
         session.machine.haiku_lessons_provider = lambda: (
             self.memory.list_recent_haiku_lessons(limit=3) if self.memory is not None else []
         )
+
+    def _new_main_language_web(self, session_id: str) -> object | None:
+        """利用可能な専用経路だけを休眠状態でsessionへ渡す。"""
+
+        if not self.settings.main_language_web_enabled:
+            LOGGER.info(
+                "main_language_web status=disabled session_id=%s",
+                session_id,
+            )
+            return None
+        try:
+            if self._main_language_web_factory is not None:
+                web = self._main_language_web_factory()
+                status = "injected_ready" if web is not None else "injected_unavailable"
+            else:
+                web, availability = build_main_web_research()
+                status = availability.reason
+        except Exception as exc:  # noqa: BLE001 - 任意Web依存でsession作成を壊さない
+            LOGGER.warning(
+                "main_language_web status=factory_failed session_id=%s error=%s",
+                session_id,
+                type(exc).__name__,
+            )
+            return None
+        if web is not None and not callable(getattr(web, "search", None)):
+            LOGGER.warning(
+                "main_language_web status=invalid_provider session_id=%s",
+                session_id,
+            )
+            return None
+        log = LOGGER.info if web is not None else LOGGER.warning
+        log(
+            "main_language_web status=%s session_id=%s",
+            status,
+            session_id,
+        )
+        return web
 
     def _implicit_session_id(self, event: GameEvent) -> str:
         player = (event.player.name or "player").replace(" ", "_")

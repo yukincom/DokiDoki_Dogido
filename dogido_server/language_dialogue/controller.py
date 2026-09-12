@@ -107,6 +107,14 @@ class LanguageDialogue(WebHandoffMixin):
         """本体側へ戻す情報は調べた話題1件だけ。本文・答え・理解度は含めない。"""
         return {"researched_topic": self.last_research_topic} if self.last_research_topic else {}
 
+    def active_research_ttl_ms(self) -> int | None:
+        """Web閲覧中だけ、通常会話とは別の既存無活動期限をhostへ返す。"""
+
+        with self._lock:
+            if self.research is None:
+                return None
+            return max(1000, round(self.research_ttl_seconds * 1000))
+
     def _clear_focus(self, *, remember_research=False):
         if remember_research and self.research:
             self.last_research_topic = self.research.question[:160]
@@ -288,6 +296,17 @@ class LanguageDialogue(WebHandoffMixin):
                 "role": "assistant",
                 "text": reply,
             })
+            return True
+
+    def defer_host_reply(self, turn_id: str) -> bool:
+        """player turnを増やさず、host所有の案内だけを実再生待ちにする。"""
+
+        if not isinstance(turn_id, str) or not turn_id or len(turn_id) > 180:
+            raise ValueError("1〜180字のturn_idが必要")
+        with self._lock:
+            if turn_id in self._deferred_reply_turn_ids:
+                return False
+            self._deferred_reply_turn_ids.add(turn_id)
             return True
 
     def observe_external_user_turn(

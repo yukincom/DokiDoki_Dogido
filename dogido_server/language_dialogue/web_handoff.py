@@ -81,11 +81,19 @@ class WebHandoffMixin:
                 record.update(status="web_consent_requested", reply=WEB_PERMISSION_AGAIN)
             return True
 
-    def on_speech_playback_result(self, utterance_id: str, *, status: str, event_id: str, cancelled=None):
+    def on_speech_playback_result(
+        self,
+        utterance_id: str,
+        *,
+        status: str,
+        event_id: str,
+        cancelled=None,
+        defer_reply_history: bool = False,
+    ):
         """対象案内の再生プロセス正常終了だけを受ける。生成完了・推定秒数は不可。
 
         busy時はdeferredを返し未消費。ホストが安全時に同じ通知を再配送できる。
-        テキストCLIは明示模擬、独立音声試験は実再生プロセス終了。本体音声には未接続。
+        テキストCLIは明示模擬、独立音声試験と本体は実再生プロセス終了を渡す。
         """
         if status not in {"completed", "cancelled", "failed"}:
             raise ValueError("音声再生のcompleted/cancelled/failedが必要")
@@ -116,7 +124,8 @@ class WebHandoffMixin:
             with self._lock:
                 if epoch != self._epoch or (cancelled is not None and cancelled()):
                     return dict(row, status="interrupted", reply="", references=[])
-                self._remember_reply(row, event_id)
+                if not defer_reply_history:
+                    self._remember_reply(row, event_id)
                 self.last_activity = self.clock()
                 return dict(row, mode_after=self.mode)
         except Exception as exc:
@@ -124,6 +133,31 @@ class WebHandoffMixin:
         finally:
             with self._lock:
                 self._busy = False
+
+    def abandon_web_handoff(self, utterance_id: str, *, reason: str) -> dict:
+        """hostが完了後の制御処理を受け付けられない時だけ、許可を失効する。"""
+
+        if not isinstance(utterance_id, str) or not utterance_id or len(utterance_id) > 160:
+            raise ValueError("対象utterance_idが必要")
+        if not isinstance(reason, str) or not reason or len(reason) > 120:
+            raise ValueError("1〜120字のreasonが必要")
+        with self._lock:
+            row = {
+                "control": "web_handoff_abandoned",
+                "utterance_id": utterance_id,
+                "reason": reason,
+                "reply": "",
+            }
+            pending = self._pending_web
+            if (
+                not pending
+                or pending.phase != "awaiting_playback"
+                or pending.utterance_id != utterance_id
+            ):
+                return dict(row, status="stale_playback")
+            self._pending_web = None
+            self.last_activity = self.clock()
+            return dict(row, status="web_handoff_cancelled")
 
     def _search_after_speech(self, pending, record, epoch, *, host_cancelled=None):
         def cancelled():

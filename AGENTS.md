@@ -40,6 +40,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/dialogue/light_source_comment_planner.py` | 照明器具所持数の増加に一言が必要かを閉じた型で選ぶ。クラフト／設置を推定せず、発話・暗所状態解除・操作はしない |
 | `dogido_server/dialogue/foreground.py` | 本体sessionの会話所有権、戦闘保留、再生完了済み会話から作るsoft川柳材料 |
 | `dogido_server/dialogue/main_runtime.py` | 本体の限定国語対話をgame-event worker外で処理し、発話IDの実再生結果へ結ぶ |
+| `dogido_server/language_dialogue/main_web.py` | 本体起動時に副作用なく専用Chrome前提を確認し、同意済み検索用providerを休眠構築 |
 | `dogido_server/llm/` | prompts / client / haiku 音数・usable / route |
 | `dogido_server/llm/structured_contracts.py` | workshop・assist等の現行JSON外形。自動川柳6種は8月完成版のドメイン検査と最大6回再生成を維持 |
 | `dogido_server/llm/character_mode.py` | 冒険の怖がり役と workshop の共同編集者役 |
@@ -70,7 +71,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 - STT文脈補正は `source=voice` と現在候補だけ。`raw/normalized` は保持して明示操作の正、`interpreted/semantic` は会話理解と限定意味抽出に使う。意味抽出から保存するときも原文・evidence・CASを検証する。剣支援の実測誤変換 `県に持ち替え/変えて/ハインコ（変更）/チェンに変更` は voice-only・操作語直結の閉じた規則で解釈面だけ補正し、typed・単独の候補語・その語の会話は対象外
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
-- 本体の一般雑談は既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界workerへ渡す。正本DBの明示知識回答、戦況、assist、workshopは状態機械側に残す。foreground中は非敵対ambientを止めるが、敵対警告・雷・夕方を止めない。assistant履歴と会話由来の川柳材料は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いepochを混ぜない
+- 本体の一般雑談は既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界workerへ渡す。正本DBの明示知識回答、戦況、assist、workshopは状態機械側に残す。利用前提が揃うMacのWeb調査は、同意→案内音声の実再生 `completed`→専用Chromeの一度だけの検索に閉じ、検索自体も同じbackground workerで行う。調査中はWeb用30分期限まで `web` foregroundを保持し、復帰時は話題一件だけを短期文脈へ渡す。ページ本文・URLは本体会話や長期記憶へ持ち帰らない。foreground中は非敵対ambientを止めるが、敵対警告・雷・夕方を止めない。assistant履歴と会話由来の川柳材料は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いepochを混ぜない。Minecraftのpause contractは別途合意まで実装しない
 - 通常 `player_chat` は本文生成前に、実再生済み5往復・現在入力・コード観測から閉じたread actionを一件だけ選ぶ。通常の相槌を全カタログ検索へ流さず、対象照合時だけ候補IDを現在観測へコードで突合する。player報告とassistant履歴は世界観測ではない。未観測の在否・過去誤断言の訂正はコード固定。plannerへ世界操作・保存・戦況判断を渡さない
 - 通常 `player_chat` の採否は自然な自己言及・謝罪・方言・比喩を単語だけで落とさない。空出力・役割ラベル・英語説明・生成崩れと、危険助言・未観測名・嗅覚補作・突き放し・現在方針との衝突だけをコードで検査する。不合格時は候補と閉じた理由を同じ会話モデルへ一度だけ返して言い直させ、二案目にも同じ検査を通す。採用・fallback・状態変更はコードが決め、不合格案を会話履歴へ入れない。これは汎用ReActや世界操作loopではない
 - 嗅覚は一般LLMセンサーにしない。Fabricが指定した近接源・hotbar・バイオーム・温度・天候をコードのスメルバトルで一件へ解決し、`none / present / suppressed` を明示する。方向・距離・個数・entity IDはserverへ渡さず、匂い単独で戦闘mode／workshop pauseを立てない。現在の匂いへの問いはコード固定文、通常雑談の嗅覚断言は生成後に棄却する。正本は `docs/smell-policy.md`
@@ -238,6 +239,8 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 ## 9. 現在の実装スナップショット（目安）
 
+- 2026-09-12本体Chrome統合: 限定国語対話へ、専用MCP実行ファイル・MCP SDK・可視設定・Google Chromeの副作用なし確認と、休眠providerを接続。同意確認→「ほな一緒にいこか！」の実再生 `completed`→game-event worker外の一度だけの検索を本体台帳へ結び、失敗・取消・開始前の戦闘・古いepoch・満杯では開かない。既に読書中なら敵対警告後も調査文脈を保持する。成功後は `web` foregroundと30分の読書期限でambient／発句時計を抑止し、明示復帰で調査話題一件だけを本体短期digestへ戻す。専用clientはsession終了時に閉じ、通常Chrome・ページ本文・URL・長期記憶・世界操作を触らない。**コード・自動テスト・非起動preflight済み。実Minecraft／Qwen／TTS／Chrome E2E、OS前面復帰、Minecraft pauseは未確認。** [詳細](docs/main-dialogue-integration.md)。
+
 - 2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・未採用案・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合。説明／質問／読み・音数・出典検査／修正提案／比較／表示／局所編集／採否／終了から一手を選び、検査・editor結果後は一度だけ返答を再判断する。同一turnのeditor再実行、未実行の成功断言、直接の正本・pending・保存変更は禁止。正本、行対象、CAS、音数、hard制約、採否、保存、戦闘中断はコード。局所編集・採否・終了は音声認識原文中の行為evidenceを必須にし、疑問・否定・条件・引用・伝聞を棄却する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談の返答が成立した同じ入力だけを二回driftへ数える。初手不成立は旧分類器、実観測後はコード固定fallbackへ戻す。相談目的・action・outcome・checks・validation code・発話evidence・原文／解釈・正本／pending前後だけを`haiku_workshop_turns.jsonl`へ残し、思考文・agent speech・長期会話は保存／常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
 
 - 2026-09-11通常雑談の一回再考: `player_chat` の旧い広域禁止語から自然な「ドギド」自己言及・謝罪・「例」「本番」と表面上の方言差を外した。無害な `ドギド:` 話者ラベルは除去して採用する。最初の候補が外形またはgrounding検査に落ちた場合だけ、同じ会話へ候補とコード由来の理由を返し、意味と人格を残した言い直しを最大1回生成する。二案目も危険助言・未観測名・現在嗅覚の補作・突き放し・移動方針衝突を再検査し、再不合格なら従来どおり固定fallback。不合格案は履歴・状態・保存へ入れず、結果をログで区別する。**コード・全Python自動テスト済み。ローカルQwenの独立テキスト試験で、英語ラベル混入と未観測嗅覚の二経路は一回再考後に採用、warm時の追加生成は各約0.7秒。実Minecraft・実TTS・長時間の採用率／自然さは未確認。**
@@ -250,7 +253,7 @@ player テキスト注入（開発用・**アクティブセッション必須**
 
 - 2026-09-11通常雑談の家らしさ: 設定済みリスポーン地点から既存距離内にいて、周辺にベッドまたはドアがあるときだけ場所投影を `home_base` にする。暗い拠点を単なる洞窟へ落とさない一方、水中と実破壊根拠のある採掘中を優先する。窓、リスポーン地点単独、遠いベッド／ドアは家の根拠にせず、暗所危険度・洞窟検出・安全判定は変えない。**コード・自動テスト済み、実Minecraft・実Qwen・実TTSは未確認。**
 
-- 2026-09-09本体会話更新: `none / casual / learning / web / haiku_workshop` のforeground所有権を維持し、通常雑談・正本DB回答・限定国語workerのID付き完了履歴を共有。一般話題は独立試験文脈で答えず元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は2分以上または明示名指し／転換なら即時移管、2分未満の宛先不明入力は無言で一件・5分保留し、呼び直しの固定確認が実再生完了した後の肯定でだけ元turnを移管する。有効な本人入力は本体TTSへbarge-inし、取得済みbatch末尾もterminal化するが、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文を非永続診断、コード観測を状況メモにする。危険前5往復は危険後3通常turn目まで保護し、`player_died` でforeground戦闘を解放。一件だけの戦闘話題保留10 accepted player turn、雷・夕方の入力再queue、ambient抑止、雑談中10分周期川柳、学習・Web中の周期凍結は維持。固定の会話中川柳導入では未発話解釈をspoken provenanceにしない。**実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webとゲームpauseは共有contract未合意のため未接続、Fabric変更なし。** [詳細](docs/main-dialogue-integration.md)。
+- 2026-09-09本体会話更新: `none / casual / learning / web / haiku_workshop` のforeground所有権を維持し、通常雑談・正本DB回答・限定国語workerのID付き完了履歴を共有。一般話題は独立試験文脈で答えず元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は2分以上または明示名指し／転換なら即時移管、2分未満の宛先不明入力は無言で一件・5分保留し、呼び直しの固定確認が実再生完了した後の肯定でだけ元turnを移管する。有効な本人入力は本体TTSへbarge-inし、取得済みbatch末尾もterminal化するが、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文を非永続診断、コード観測を状況メモにする。危険前5往復は危険後3通常turn目まで保護し、`player_died` でforeground戦闘を解放。一件だけの戦闘話題保留10 accepted player turn、雷・夕方の入力再queue、ambient抑止、雑談中10分周期川柳、学習・Web中の周期凍結は維持。固定の会話中川柳導入では未発話解釈をspoken provenanceにしない。**この時点では実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webとゲームpauseは未接続、Fabric変更なし。** [詳細](docs/main-dialogue-integration.md)。
 
 - 2026-09-09対話・参加予測: 独立音声試験は、起動／明示リセット後の最初の入力を必ず受理し、受理後に常駐chatモデルで次の意味上の発話型を5件だけ予測する。明示名指し・話題転換語・質問・Minecraft話題はコードで必ず通す。それ以外も、予測不一致の大きな話題断絶を発話内根拠つき・信頼度0.85以上で `possibly_not_addressed` と抽出できた場合だけ通常履歴外へ保留し、失敗・低信頼・迷いは受理側へ倒す。保留は上限5件をログに残し、「待たせたね」等は `side_conversation_resolved` として「ええんやで。」、明示訂正は直近1件だけ再処理する。`handoff` は静音契機にせず、5分無活動後の `QUIET` と `/listen` の `MIC_OFF` は分離する。StackChanの未検証scene分類器は移植していない。解釈契約は情報要求・雑談・その他を分離し、一般雑談を本体既存 `player_chat` leafへ渡す。参加予測は返答を生成しない。独立音声hostは `turn_id` と発話IDを結ぶ5往復・5分の台帳を持ち、assistant発話を実再生 `completed` 後だけ履歴へ確定する。生成・参加分類・Google処理は有界直列workerで行い、完了時にepochを再検証する。次の音声は生成・再生中に直近1件だけ保留し、自動barge-inはせず `/interrupt` を明示手段とする。実Google概要は15秒後の1回だけ読み、自動再取得なし。研究中の別質問推定は確認を挟む。ドギド関連380件＋87 subtests成功、Chromeモック50件は直前の15秒化で成功。**通常会話・完了履歴・worker・予測保留の変更後は、実モデル・実家庭音声で未確認**。
 

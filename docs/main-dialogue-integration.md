@@ -1,6 +1,6 @@
 # 本体の会話所有権・中断・再生確定
 
-**状態:** 2026-09-10、Web／ゲーム一時停止を除く本体接続と、話題転換・本人barge-in・危険前履歴保護をコード・自動テスト済み。実Minecraft、実モデル、実音声は未確認。
+**状態:** 2026-09-12、限定国語対話・同意済みの専用Chrome検索・話題転換・本人barge-in・危険前履歴保護を本体へ接続し、コード・自動テスト済み。実Minecraft、実モデル、実TTS、実Chromeを重ねた本体E2Eは未確認。Minecraftの実pauseは未接続。
 
 独立 `language_dialogue` で確かめた国語対話を、本体の状態機械を置き換えずに接続するための境界を定める。戦況、assist、川柳workshop、保存判断は従来どおりコード側が所有する。
 
@@ -91,13 +91,32 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 - `learning` と `web` の間は発句間隔そのものを凍結する。解除直後に抑止時間分をまとめて経過扱いにしない。
 - 発句準備中に危険が来た場合は、既存規則どおり古いprompt・材料・pendingを破棄する。
 
-## 6. まだ接続していない境界
+## 6. Web接続と、まだ接続していないMinecraft一時停止
 
-### WebとMinecraft一時停止
+### 本体の専用Chrome検索
 
-本体 `MainLanguageRuntime` には現在Web providerを渡していない。独立試験のWeb同意・15秒単発読み取りを、そのまま本体へ有効化してはいない。
+本体 `MainLanguageRuntime` は、利用前提が揃うMacでだけ独立試験と同じ可視Chrome providerを受け取る。起動時の確認はファイル・設定・任意依存の読み取りだけで、ChromeやMCPプロセスは開始しない。
 
-共有contractは未合意のため、Fabric／server双方へまだ実装しない。現在の**提案**は次のとおり。
+```text
+国語・語句の問い
+  -> Web検索の同意確認
+  -> 「ほな一緒にいこか！」を音声キューへ
+  -> 対応する発話IDの実再生 completed
+  -> game-event worker外の有界workerで、専用Chromeへ検索を一度だけ開く
+  -> foreground=web のまま、本人の報告・質問・明示復帰を待つ
+```
+
+- `DOGIDO_MAIN_LANGUAGE_WEB_ENABLED=true` が既定。専用MCP実行ファイル、MCP SDK、`show_browser=true` の表示用設定、Google Chromeのいずれかが欠ける場合はWebだけを無効にし、国語対話とsession作成は継続する。
+- 同意前・案内音声の生成／開始だけ・`failed`・`cancelled`・古いepoch・開始前の戦闘中断・満杯で制御処理を受け付けられない場合は開かない。対応する `completed` は一度だけ消費する。既にページを開いて読書中なら、敵対警告を優先しつつ調査文脈は戦闘後まで保持する。
+- 検索・15秒後の単発読み取りは既存の直列background workerで行い、ゲームイベント処理を待たせない。検索直後には説明音声を重ねず、表示されたページを読む時間を優先する。
+- 調査文脈がある間は `foreground=web` が非敵対ambientを抑止し、自動川柳の時計を凍結する。通常会話の5分期限ではなく、既存のWeb読書用30分期限を使う。
+- CAPTCHA、検索失敗、不正なproviderでは固定の失敗案内へ落として `learning` に戻す。通常のChromeプロフィールや既存タブは使わない。
+- 「冒険に戻る」等の明示復帰で `foreground` を解除する。本体の短期文脈へ持ち帰るのは `return_context.researched_topic` の一件だけで、ページ本文・AI概要・URL・理解度は渡さない。復帰案内も他のassistant本文と同じく、実再生 `completed` 後だけ会話履歴へ入る。
+- MCP接続と専用Chromeはsession runtimeが所有し、session終了時に閉じる。明示復帰時のMinecraft再フォーカス、専用タブの即時close、OS前面監視、自動再読はまだ行わない。
+
+### Minecraft一時停止
+
+Web接続はMinecraftを実pauseした証拠にはしない。共有contractは未合意のため、Fabric／server双方へpause commandをまだ実装しない。現在の**提案**は次のとおり。
 
 - execution capability: `client.game.pause.v1`
 - server command: `pause_game` のみ
@@ -113,6 +132,8 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 
 - 実Minecraftのevent列と実LLMの遅延を重ねた応答順
 - 実TTSの完了callback、本人barge-in、危険割り込み、queue置換
+- 本体の同意音声→専用Chrome起動→単発検索→発話による復帰と、CAPTCHA時の見え方
+- Chrome表示中にMinecraftをユーザー操作でどう止めるか。現行はpause commandも実pause ackもない
 - `/api/v1/player-input` はserviceの直列入口であるため、同期中の状態機械leaf生成そのものを途中停止する境界は未実装。入力受理後の音声は止まり、入力は一度だけ次の処理へ進む
 - 戦闘後10 turnの自然な再開会話
 - 危険前5往復＋危険後3 turnの実会話品質と、家庭音声の純粋な叫声／意味のある発話の境界
@@ -138,6 +159,8 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 - 危険前5往復を危険後3 player turn目まで限定対話にも共有し、4 turn目で解除する
 - 固定の雑談中川柳導入で、未発話の取り合わせ説明をspoken source atomにしない
 - 音声callbackとgame-event回収の同時実行、満杯のイベント列、重複した完了通知でも終端結果と履歴を壊さない
+- Web同意→案内音声の `completed` 後だけ一度起動し、失敗・取消・戦闘・満杯・重複完了では開かない
+- Web成功時のforeground所有、通常会話5分を越える読書期限、ambient抑止、復帰時の話題一件だけの受け渡し、session終了時の専用client close
 
 全体回帰は次で確認する。
 
@@ -145,4 +168,4 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 python -m pytest -q
 ```
 
-2026-09-10の最終回帰は **1275 passed、1 skipped、1496 subtests passed**。
+2026-09-12の最終回帰は **1389 passed、1 skipped、1512 subtests passed**。

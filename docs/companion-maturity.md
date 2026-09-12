@@ -176,6 +176,8 @@ soft workshop 方針は後半をすでに押さえている。
 
 ## 6. 現状スナップショット（2026-09-01）
 
+2026-09-12本体Chrome統合: 限定国語対話へ、専用MCP実行ファイル・MCP SDK・可視設定・Google Chromeの副作用なし確認と、休眠providerを接続した。同意確認→「ほな一緒にいこか！」の実再生 `completed`→game-event worker外の一度だけの検索を本体台帳へ結び、失敗・取消・開始前の戦闘・古いepoch・満杯では開かない。既に読書中なら敵対警告後も調査文脈を保持する。成功後は `web` foregroundと既存の30分読書期限でambient／発句時計を抑止し、明示復帰で調査話題一件だけを本体短期digestへ戻す。専用clientはsession終了時に閉じ、通常Chrome・ページ本文・URL・長期記憶・世界操作を触らない。**コード・自動テスト・非起動preflight済み。実Minecraft／Qwen／TTS／Chrome E2E、OS前面復帰、Minecraft pauseは未確認。** [境界と残件](main-dialogue-integration.md)。
+
 2026-09-11通常雑談の一回再考: 自然な「ドギド」自己言及を旧 `unusable_output` の広域禁止から外し、謝罪・「例」「本番」・表面上の方言差も単語だけで棄却しない。外形またはgrounding不合格時だけ、同じ会話へ候補と閉じた理由を返して一度言い直し、二案目にも同じ検査を適用する。再不合格は固定fallback、不合格案は履歴外。汎用ReActにはせず発話候補だけを扱う。**コード・全Python自動テスト済み。ローカルQwen独立試験では英語ラベル混入と未観測嗅覚を各一回で修正し、warm時の追加生成は約0.7秒。実Minecraft・実TTS・長時間の自然さは未確認。**
 
 2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・pending・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合した。説明／質問／検査／提案／比較等から一手を選び、読み・音数・出典またはeditor validation後は一度だけ返答を再判断する。正本・行対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード。局所編集・採否・終了は音声認識原文にも行為evidenceがある場合だけ通し、疑問・否定・条件・引用・伝聞は拒否する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談返答が成立した同じ入力だけを二回driftへ数える。初手不成立は旧分類器、実観測後はコード固定fallback。実行step・検証結果・発話根拠・原文／解釈だけを改善JSONLへ有界記録し、思考文・agent speech・長期会話は保存・常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
@@ -186,7 +188,7 @@ soft workshop 方針は後半をすでに押さえている。
 
 2026-09-11通常雑談の家らしさ: 設定済みリスポーン地点から既存距離内にいて、周辺にベッドまたはドアがあるときだけ、場所投影を `home_base`（家・拠点らしい場所）へ上げる。暗さ・低い天井・囲まれ度・洞窟バイオームより先にするが、水中と実破壊根拠のある採掘中は優先しない。窓、リスポーン地点単独、遠いベッド／ドアでは上げず、暗所危険度・洞窟検出・安全判定は変更していない。**コード・自動テスト済み。実Minecraft・実Qwen・実TTSは未確認。**
 
-2026-09-09本体会話更新: session内の `none / casual / learning / web / haiku_workshop` foreground所有権を維持しつつ、通常雑談・正本DB回答・限定国語workerが同じID付き完了履歴を使うようにした。workerが一般話題を判定した場合は独立試験の仮想Minecraft文脈で答えず、元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は、直前会話から2分以上または明示名指し／転換なら即時移管し、2分未満の宛先不明入力は無言で一件保留する。後の呼び直しでは固定の驚き・謝罪と元話題を確認し、その音声が実再生完了してから肯定で元turnを一度だけ移管する。保留は5分で `expired_unaddressed`。本人の有効入力は本体TTSへbarge-inし、取得済みbatch末尾も各一度terminal化する一方、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文は非永続診断、LLM側は同時点のコード観測による状況メモだけを使う。危険前の通常5往復は危険中と危険後3通常turn目まで一時保護し、戦況発話では押し出さない。`player_died` は `combat_ended` なしでforeground戦闘を解放する。従来の戦闘話題bookmark 10 player turn、雷・夕方の入力保全、ambient抑止、雑談中の10分周期川柳、学習・Web中の周期凍結は維持。固定の雑談中川柳導入では、裏で生成した未発話の取り合わせを `preface:spoken` にしない。**実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webはpause contract未合意のため未接続で、Fabric変更もない。** [境界と残件](main-dialogue-integration.md)。
+2026-09-09本体会話更新: session内の `none / casual / learning / web / haiku_workshop` foreground所有権を維持しつつ、通常雑談・正本DB回答・限定国語workerが同じID付き完了履歴を使うようにした。workerが一般話題を判定した場合は独立試験の仮想Minecraft文脈で答えず、元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は、直前会話から2分以上または明示名指し／転換なら即時移管し、2分未満の宛先不明入力は無言で一件保留する。後の呼び直しでは固定の驚き・謝罪と元話題を確認し、その音声が実再生完了してから肯定で元turnを一度だけ移管する。保留は5分で `expired_unaddressed`。本人の有効入力は本体TTSへbarge-inし、取得済みbatch末尾も各一度terminal化する一方、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文は非永続診断、LLM側は同時点のコード観測による状況メモだけを使う。危険前の通常5往復は危険中と危険後3通常turn目まで一時保護し、戦況発話では押し出さない。`player_died` は `combat_ended` なしでforeground戦闘を解放する。従来の戦闘話題bookmark 10 player turn、雷・夕方の入力保全、ambient抑止、雑談中の10分周期川柳、学習・Web中の周期凍結は維持。固定の雑談中川柳導入では、裏で生成した未発話の取り合わせを `preface:spoken` にしない。**この時点では実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webは未接続で、Fabric変更もない。** [境界と残件](main-dialogue-integration.md)。
 
 2026-09-09対話・参加予測: 独立音声試験は、起動／明示リセット後の最初の入力を必ず受理し、受理後に常駐chatモデルで次の意味上の発話型を5件だけ予測する。明示名指し・話題転換語・質問・Minecraft話題はコードで必ず通す。それ以外も、予測不一致の大きな話題断絶を発話内根拠つき・信頼度0.85以上で `possibly_not_addressed` と抽出できた場合だけ通常履歴外へ保留し、失敗・低信頼・迷いは受理側へ倒す。保留は上限5件をログに残し、「待たせたね」等は `side_conversation_resolved` として「ええんやで。」、明示訂正は直近1件だけ再処理する。`handoff` は静音契機にせず、5分無活動後の `QUIET` と `/listen` の `MIC_OFF` は分離する。StackChanの未検証scene分類器は移植していない。解釈契約は情報要求・雑談・その他を分離し、一般雑談を本体既存 `player_chat` leafへ渡す。参加予測は返答を生成しない。独立音声hostは `turn_id` と発話IDを結ぶ5往復・5分の台帳を持ち、assistant発話を実再生 `completed` 後だけ履歴へ確定する。生成・参加分類・Google処理は有界直列workerで行い、完了時にepochを再検証する。次の音声は生成・再生中に直近1件だけ保留し、自動barge-inはせず `/interrupt` を明示手段とする。実Google概要は15秒後の1回だけ読み、自動再取得なし。研究中の別質問推定は確認を挟む。ドギド関連380件＋87 subtests成功、Chromeモック50件は直前の15秒化で成功。**通常会話・完了履歴・worker・予測保留の変更後は、実モデル・実家庭音声で未確認**。
 
@@ -216,7 +218,7 @@ soft workshop 方針は後半をすでに押さえている。
 
 | 領域 | 状態 |
 |---|---|
-| 本体foreground会話 | コード・自動テスト済み（既存雑談／限定国語worker／共有ID履歴／突然の話題の2分判定＋5分宛先保留／本人barge-in／実再生terminal／危険前5往復＋危険後3turn保護／純粋な音声叫声の診断・状況分離／戦闘話題bookmark 10 player turn／雷・夕方入力保全／ambient抑止／雑談由来自動川柳soft材料）。本体WebとMinecraft pauseは共有contract未合意のため未接続、実機未確認 |
+| 本体foreground会話 | コード・自動テスト済み（既存雑談／限定国語worker／共有ID履歴／突然の話題の2分判定＋5分宛先保留／本人barge-in／実再生terminal／危険前5往復＋危険後3turn保護／純粋な音声叫声の診断・状況分離／戦闘話題bookmark 10 player turn／雷・夕方入力保全／ambient抑止／雑談由来自動川柳soft材料／同意＋案内音声完了後の専用Chrome単発検索／Web用30分foreground／復帰時の話題一件だけの短期受け渡し）。実Minecraft／Qwen／TTS／Chrome E2EとMinecraft pauseは未確認 |
 | workshop H1〜H5.2・H7-lite・H9 | 済（現在句・pending・直近対話から相談目的と次手を一つ選び、必要時だけ読み／音数／出典を実検査。既存editorの検証結果を見て一度だけ返答を再判断し、実行step・検証結果・発話根拠を改善JSONLへ有界記録する。soft lesson・明示緩め・TTL・`line_1/2/3`／一行置換／pending採否／自然な終了も維持。正本・CAS・保存・close・敵の安全判定はコード。戦闘中は句とpendingを保持してpause） |
 | H6 固定語 materials 突合 | **撤回** |
 | 発句 source atom 品質ゲート | 済（原文snapshot・実際に話した自然な関西弁の検証済み詩的解釈・節単位preface provenance/主張範囲・詩的解釈を句全体で共有する行別出典・見どころ明示要素から一次atomへの再結合・固定導入時の未発話解釈を `generated_unspoken` としてspoken provenanceから除外・一意なカタログ名かな訂正・UniDicによる漢字候補の事前かな化・4生成方式を同じ検査器で固定比較・失敗理由つき最大6回再生成・既出候補即時棄却・fail-closed） |

@@ -347,11 +347,12 @@
 - `casual / learning / web / haiku_workshop` 中は、友好・中立Mobのambient発話を止める。敵対警告は止めない
 - hostileで `casual / learning` を一件だけ保留し、戦闘後10件の受理済みplayer turn以内に明示再開されなければ破棄する。game tickと自動calloutは数えない
 - 国語・語句の明示質問と学習中の続きは有界workerへ渡し、完了結果を次の安全なgame eventで回収する。正本DBの明示知識回答、戦況・assist・workshopは状態機械側に残す
+- 利用前提が揃うMacでは、Web同意と案内音声の実再生完了後だけ、同じ有界workerで専用Chromeへ検索を一度開く。調査中は `web` がforegroundを所有し、Web用30分期限までambientと発句時計を止める
 - assistant本文は選択時でなく、発話IDに対応する実再生 `completed` を回収した後だけ5往復履歴へ入れる
 - 学習中の無関係な別話題は、直前会話から2分以上または明示名指し／転換なら本体chatへ即時移管する。2分未満で宛先不明なら5分だけ無言保留し、呼び直しの確認音声が完了してから同じ元turnを一度だけ移管する
 - 有効な本人入力は再生中音声へのbarge-inになる。純粋な音声叫声は通常会話へ入れず、コード観測の状況メモだけを使う
 - 危険前の通常5往復は危険中に保護し、危険終了後の通常player turn 3件目まで共有する。戦況発話と叫び声はこの履歴を消費しない
-- 詳細と未接続のWeb pause境界は [main-dialogue-integration.md](main-dialogue-integration.md)
+- 詳細と未接続のMinecraft pause境界は [main-dialogue-integration.md](main-dialogue-integration.md)
 
 ### 暗所助言フロー
 

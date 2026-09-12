@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     # 本体の国語・語句質問を、ゲームイベントworker外の限定対話へ渡す。
     # 世界操作・戦況・川柳workshopは従来どおり状態機械が所有する。
     main_language_dialogue_enabled: bool = True
+    # 既存の専用ChromeとMCP SDKが揃う端末だけ、同意済みのWeb調査を有効にする。
+    # 起動時にはブラウザーもMCPも開始せず、案内音声の実再生完了後まで待つ。
+    main_language_web_enabled: bool = True
     conversation_active_ttl_ms: int = Field(default=300000, ge=30000, le=3600000)
     # learning中の無関係な発話を「新しい話」と即扱う無会話時間。
     conversation_topic_fresh_ms: int = Field(default=120000, ge=0, le=3600000)
