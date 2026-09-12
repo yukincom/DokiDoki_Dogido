@@ -24,12 +24,14 @@ import org.slf4j.LoggerFactory;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
-/** Client-only placement study; no server connection or conversation state needed. */
+/** Permanent companion, independent of workshop and server availability. */
 final class DogidoCharacterHud {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-character-hud");
     private static final Identifier TEXTURE = Identifier.of("dogido", "textures/gui/character.png");
     private final Path configPath = FabricLoader.getInstance().getConfigDir().resolve("dogido-character.properties");
     private boolean visible = true;
+    private boolean autoLayout = true;
+    private boolean motion = true;
     private int width = 96;
     private int right = 12;
     private int bottom = 36;
@@ -44,24 +46,29 @@ final class DogidoCharacterHud {
             dispatcher.register(literal("dogidohud")
                 .executes(context -> {
                     context.getSource().sendFeedback(Text.literal(
-                        "ドギド表示: /dogidohud size 96（幅）・offset 12 36（右・下の余白）・hide / show・reset"));
+                        "ドギド表示: 左下・右向き。/dogidohud size 96（GUI幅）・offset 12 36（左・下）・hide / show・motion on|off・reset"));
                     return 1;
                 })
                 .then(literal("hide").executes(context -> { hud.visible = false; return hud.save(); }))
                 .then(literal("show").executes(context -> { hud.visible = true; return hud.save(); }))
                 .then(literal("size").then(argument("width", IntegerArgumentType.integer(24, 256))
-                    .executes(context -> { hud.width = IntegerArgumentType.getInteger(context, "width"); return hud.save(); })))
+                    .executes(context -> { hud.autoLayout = false; hud.width = IntegerArgumentType.getInteger(context, "width"); return hud.save(); })))
                 .then(literal("offset").then(argument("right", IntegerArgumentType.integer(0, 2048))
                     .then(argument("bottom", IntegerArgumentType.integer(0, 2048))
                         .executes(context -> {
+                            hud.autoLayout = false;
                             hud.right = IntegerArgumentType.getInteger(context, "right");
                             hud.bottom = IntegerArgumentType.getInteger(context, "bottom");
                             return hud.save();
                         }))))
                 .then(literal("reset").executes(context -> {
-                    hud.visible = true; hud.width = 96; hud.right = 12; hud.bottom = 36;
+                    hud.visible = true; hud.autoLayout = true; hud.motion = true;
+                    hud.width = 96; hud.right = 12; hud.bottom = 36;
                     return hud.save();
-                }))));
+                }))
+                .then(literal("motion")
+                    .then(literal("off").executes(context -> { hud.motion = false; return hud.save(); }))
+                    .then(literal("on").executes(context -> { hud.motion = true; return hud.save(); })))));
     }
 
     private void render(DrawContext context, RenderTickCounter tickCounter) {
@@ -70,11 +77,18 @@ final class DogidoCharacterHud {
                 || client.currentScreen != null) {
             return;
         }
-        CharacterPlacement.Bounds bounds = CharacterPlacement.fit(
-            context.getScaledWindowWidth(), context.getScaledWindowHeight(), width, right, bottom);
-        // Draw the user's original PNG intact, including alpha and its original aspect ratio.
+        CharacterPlacement.Bounds bounds = autoLayout
+            ? CharacterPlacement.approved(context.getScaledWindowWidth(), context.getScaledWindowHeight())
+            : CharacterPlacement.lowerLeft(context.getScaledWindowWidth(), context.getScaledWindowHeight(), width, right, bottom);
+        float floatOffset = motion ? (float) ((1 - Math.cos(System.nanoTime() / 1_000_000_000.0 * Math.PI * 2 / 3.8))
+            * context.getScaledWindowWidth() * -.0025) : 0;
+        // Mirror only the drawing, never the original image, scroll text, or game view.
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(2 * bounds.x() + bounds.width(), floatOffset);
+        context.getMatrices().scale(-1, 1);
         context.drawTexture(RenderPipelines.GUI_TEXTURED, TEXTURE, bounds.x(), bounds.y(),
             0, 0, bounds.width(), bounds.height(), 728, 680, 728, 680);
+        context.getMatrices().popMatrix();
     }
 
     private void load() {
@@ -86,6 +100,8 @@ final class DogidoCharacterHud {
         try (InputStream input = Files.newInputStream(configPath)) {
             properties.load(input);
             visible = Boolean.parseBoolean(properties.getProperty("visible", "true"));
+            autoLayout = Boolean.parseBoolean(properties.getProperty("auto_layout", "true"));
+            motion = Boolean.parseBoolean(properties.getProperty("motion", "true"));
             width = readInt(properties, "width", 96, 24, 256);
             right = readInt(properties, "right", 12, 0, 2048);
             bottom = readInt(properties, "bottom", 36, 0, 2048);
@@ -105,6 +121,8 @@ final class DogidoCharacterHud {
     private int save() {
         Properties properties = new Properties();
         properties.setProperty("visible", Boolean.toString(visible));
+        properties.setProperty("auto_layout", Boolean.toString(autoLayout));
+        properties.setProperty("motion", Boolean.toString(motion));
         properties.setProperty("width", Integer.toString(width));
         properties.setProperty("right", Integer.toString(right));
         properties.setProperty("bottom", Integer.toString(bottom));

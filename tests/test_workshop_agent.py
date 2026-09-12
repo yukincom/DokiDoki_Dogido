@@ -418,6 +418,9 @@ def test_failed_revision_is_returned_once_and_becomes_improvement_record(tmp_pat
     assert "意味を残せんかった" in actions[0].text
     assert session.haiku_workshop is not None
     assert session.haiku_workshop.display_line() == VERSE
+    assert session.haiku_workshop.hud_editing
+    assert session.haiku_workshop.hud_selected_line == 1
+    assert service.workshop_hud.get(session.session_id)["selected_line"] == 1
     assert session.haiku_workshop.pending_revision is None
     second = service.llm.requests[1]
     observation = second.details["tool_observation"]

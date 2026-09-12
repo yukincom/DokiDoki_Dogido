@@ -31,6 +31,7 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 | `dogido_server/haiku/workshop.py` | 句 pin（open/close）、旧分類fallback、soft lesson、行概念と採否の検証 |
 | `dogido_server/haiku/workshop_agent.py` | 現在句・pending・直近対話を読む有界共同編集step、実検査、発話・根拠検証。状態変更・保存権限は持たない |
 | `dogido_server/haiku/workshop_context.py` | 一句の直近対話・見どころ・材料・照合先・修正結果の読み取り用共有文脈。採用・保存の権限は持たない |
+| `dogido_server/haiku/hud.py` | Minecraft掛け軸用の読み取り専用投影cache。正本／未採用案／表示専用選択を分離し、GETから判断・保存しない |
 | `dogido_server/haiku/combat_pause.py` | 戦闘中の句保持pause、勝利／離脱後の再開、安定した単独敵の暫定継続 |
 | `dogido_server/haiku/edit_contract.py` | workshop 行差分の compare-and-swap 検証（生成・採用・保存で共有） |
 | `dogido_server/haiku/verse.py` | 一行の表示・確定ひらがな読み・行概念・出典を同じ正本オブジェクトへ束ねる |

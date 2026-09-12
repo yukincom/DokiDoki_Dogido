@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from functools import partial
 from importlib.resources import files
 from typing import Annotated, Any, Callable, TypeVar
 
@@ -61,7 +60,13 @@ def create_app(
         **kwargs: Any,
     ) -> _T:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(service_executor, partial(function, *args, **kwargs))
+        def invoke_and_publish() -> _T:
+            try:
+                return function(*args, **kwargs)
+            finally:
+                # Inside the worker, including cancellation and exception paths.
+                service.publish_workshop_hud()
+        return await loop.run_in_executor(service_executor, invoke_and_publish)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -145,6 +150,17 @@ def create_app(
                 "X-Content-Type-Options": "nosniff",
             },
         )
+
+    @app.get("/api/v1/haiku-workshop/snapshot")
+    async def get_workshop_hud_snapshot(
+        session_id: str,
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> JSONResponse:
+        _ensure_authorized(resolved_settings, authorization)
+        snapshot = service.workshop_hud.get(session_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="unknown_session_id")
+        return JSONResponse(snapshot, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/v1/adapter-sessions", response_model=AdapterSessionCreateResponse, status_code=201)
     async def create_adapter_session(

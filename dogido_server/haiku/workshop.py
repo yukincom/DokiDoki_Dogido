@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import re
 from typing import Any
+from uuid import uuid4
 
 from dogido_server.dialogue_context import DialogueContext
 from dogido_server.memory_types import HaikuEmission, HaikuLine
@@ -423,6 +424,10 @@ class RecentHaikuWorkshop:
     combat_last_resume_reason: str | None = None
     combat_override_signature: str | None = None
     awaiting_combat_resume_confirmation: bool = False
+    # Presentation only: never used by mutation, safety, or memory decisions.
+    hud_id: str = field(default_factory=lambda: "workshop_" + uuid4().hex)
+    hud_editing: bool = False
+    hud_selected_line: int | None = None
 
     def display_line(self) -> str:
         """明示採用済みの確定読み。pending案とは混ぜない。"""
@@ -545,6 +550,8 @@ def pause_workshop_for_combat(
     if workshop.combat_paused:
         return False
     workshop.combat_paused = True
+    workshop.hud_editing = False
+    workshop.hud_selected_line = None
     workshop.combat_paused_at = now
     workshop.combat_pause_reason = "combat"
     workshop.combat_hostile_types = list(
@@ -633,6 +640,8 @@ def clear_pending_revision(workshop: RecentHaikuWorkshop) -> None:
     """未採用案だけを捨てる。現在句と長期記憶は変更しない。"""
 
     workshop.pending_revision = None
+    workshop.hud_editing = False
+    workshop.hud_selected_line = None
     workshop.pending_revision_surface_text = None
     workshop.pending_revision_lines = ()
     workshop.pending_revision_line_sources.clear()

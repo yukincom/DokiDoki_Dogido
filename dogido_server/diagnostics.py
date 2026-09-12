@@ -18,6 +18,7 @@ _ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _QUIET_ACCESS_PATHS = {
     "/healthz",
     "/api/v1/display/snapshot",
+    "/api/v1/haiku-workshop/snapshot",
     "/api/v1/game-events",
     "/api/v1/game-events/batch",
     "/api/v1/player-input",

@@ -8,7 +8,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import net.minecraft.client.MinecraftClient;
 
 import org.slf4j.Logger;
 
@@ -27,6 +29,8 @@ final class DogidoEventClient {
     private final Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler;
     private volatile String sessionId;
     private volatile String lastPlayerName = "unknown";
+    private final AtomicBoolean displayRequestInFlight = new AtomicBoolean();
+    private final AtomicLong worldEpoch = new AtomicLong();
 
     DogidoEventClient(
         Logger logger,
@@ -49,6 +53,41 @@ final class DogidoEventClient {
         return this.sequence.incrementAndGet();
     }
 
+    long currentSequence() { return this.sequence.get(); }
+
+    void invalidateDisplayRequests() { this.worldEpoch.incrementAndGet(); }
+
+    void disconnected() {
+        this.sessionId = null;
+        invalidateDisplayRequests();
+    }
+
+    void pollWorkshopDisplay(Consumer<WorkshopDisplayState.Snapshot> handler) {
+        String requestSession = this.sessionId;
+        long epoch = this.worldEpoch.get();
+        if (!this.config.enabled || requestSession == null || !this.displayRequestInFlight.compareAndSet(false, true)) return;
+        try {
+            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(this.config.serverBaseUrl
+                + "/api/v1/haiku-workshop/snapshot?session_id="
+                + java.net.URLEncoder.encode(requestSession, java.nio.charset.StandardCharsets.UTF_8)))
+                .timeout(Duration.ofSeconds(3)).GET();
+            if (this.config.hasAuthToken()) request.header("Authorization", "Bearer " + this.config.authToken);
+            this.httpClient.sendAsync(request.build(), HttpResponse.BodyHandlers.ofString())
+                .whenComplete((response, error) -> {
+                    WorkshopDisplayState.Snapshot snapshot = error == null && response.statusCode() == 200
+                        ? WorkshopDisplayState.parse(response.body(), requestSession) : null;
+                    MinecraftClient.getInstance().execute(() -> {
+                        // Check again on the render/game thread, after any leave/rejoin or recovery.
+                        if (epoch == this.worldEpoch.get() && requestSession.equals(this.sessionId)) handler.accept(snapshot);
+                    });
+                    this.displayRequestInFlight.set(false);
+                });
+        } catch (RuntimeException error) {
+            this.displayRequestInFlight.set(false);
+            handler.accept(null);
+        }
+    }
+
     synchronized void ensureSession(String playerName) {
         if (playerName != null && !playerName.isBlank()) {
             this.lastPlayerName = playerName;
@@ -56,6 +95,7 @@ final class DogidoEventClient {
         if (this.sessionId != null || !this.config.enabled) {
             return;
         }
+        long registrationEpoch = this.worldEpoch.get();
 
         JsonObject payload = new JsonObject();
         payload.addProperty("adapter_name", DogidoBuildInfo.ADAPTER_NAME);
@@ -84,6 +124,7 @@ final class DogidoEventClient {
         capabilities.add("absolute_hostile_direction");
         capabilities.add("creeper_fuse_state");
         capabilities.add("creeper_detonation_events");
+        capabilities.add("workshop_display.v1");
         payload.add("capabilities", capabilities);
         JsonArray executionCapabilities = new JsonArray();
         executionCapabilities.add("client.hotbar.select.v1");
@@ -112,7 +153,7 @@ final class DogidoEventClient {
                 return;
             }
             JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
-            if (body.has("session_id")) {
+            if (body.has("session_id") && registrationEpoch == this.worldEpoch.get()) {
                 this.sessionId = body.get("session_id").getAsString();
                 this.logger.info("Dogido session created: {}", this.sessionId);
             }
@@ -137,6 +178,7 @@ final class DogidoEventClient {
             .POST(HttpRequest.BodyPublishers.ofString(this.gson.toJson(outbound)));
 
         String requestSessionId = this.sessionId;
+        long requestWorldEpoch = this.worldEpoch.get();
         if (requestSessionId != null) {
             requestBuilder.header("X-Dogido-Session-Id", requestSessionId);
         }
@@ -146,6 +188,8 @@ final class DogidoEventClient {
 
         return this.httpClient.sendAsync(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
             .thenAccept(response -> {
+                if (requestWorldEpoch != this.worldEpoch.get()
+                        || !java.util.Objects.equals(requestSessionId, this.sessionId)) return;
                 if (
                     DogidoCommandProtocol.isUnknownSessionResponse(
                         response.statusCode(),
@@ -182,6 +226,7 @@ final class DogidoEventClient {
                 rejectedSessionId
             );
             this.sessionId = null;
+            this.worldEpoch.incrementAndGet();
             playerName = this.lastPlayerName;
         }
         this.ensureSession(playerName);

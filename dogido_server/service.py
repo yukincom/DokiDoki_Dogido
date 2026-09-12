@@ -38,6 +38,7 @@ from dogido_server.haiku.combat_pause import (
     update_workshop_combat_state,
 )
 from dogido_server.haiku.materials import material_context_visible
+from dogido_server.haiku.hud import WorkshopHudSnapshots
 from dogido_server.haiku.workshop_agent import (
     WorkshopAgentStep,
     build_workshop_agent_details,
@@ -264,6 +265,7 @@ class DogidoService:
             on_playback_event=self._on_audio_playback_event,
         )
         self.display = DisplayHistory(max_entries=settings.display_history_max_entries)
+        self.workshop_hud = WorkshopHudSnapshots()
         self.runtime_status = RuntimeStatus(
             heartbeat_interval_ms=settings.heartbeat_interval_ms
         )
@@ -1715,6 +1717,21 @@ class DogidoService:
                         session.dialogue_turns.dispatched(action.utterance_id)
             self.audio.play_actions(actions)
 
+    def publish_workshop_hud(self) -> None:
+        """Called on the service worker only; a display failure must not fail an action."""
+        try:
+            self.workshop_hud.publish(self.sessions)
+        except Exception:
+            self.workshop_hud.clear()
+            LOGGER.exception("workshop_hud_projection_failed")
+
+    def _mark_workshop_hud_edit(
+        self, workshop: RecentHaikuWorkshop, selected_line: int | None,
+    ) -> None:
+        workshop.hud_editing = True
+        workshop.hud_selected_line = selected_line
+        self.publish_workshop_hud()
+
     def display_snapshot(self, *, session_id: str | None = None) -> dict[str, object]:
         """ゲーム外画面へ、発言・参考資料・診断ログを一つのsnapshotで返す。"""
 
@@ -3037,6 +3054,8 @@ class DogidoService:
     ) -> list[AudioAction]:
         workshop = session.haiku_workshop
         assert workshop is not None
+        workshop.hud_editing = False
+        workshop.hud_selected_line = None
         player_input = session.machine.player_input
         text = (player_input.raw_text or "").strip()
         semantic_text = (player_input.semantic_text or text).strip()
@@ -3867,6 +3886,7 @@ class DogidoService:
         if player_line_replacement is not None:
             result = build_player_line_revision(workshop, player_line_replacement)
             target_line = result.target_line_index
+            self._mark_workshop_hud_edit(workshop, target_line)
             if result.text is None:
                 LOGGER.warning(
                     "haiku_workshop_player_line_edit session_id=%s result=rejected "
@@ -4130,6 +4150,7 @@ class DogidoService:
                     target_fragment=proposal.target_fragment or None,
                 )
                 result = build_player_line_revision(workshop, replacement)
+                self._mark_workshop_hud_edit(workshop, result.target_line_index)
                 if result.text is None:
                     row = record_workshop_agent_step(
                         workshop,
@@ -4406,6 +4427,12 @@ class DogidoService:
                 ]
 
             if step.action in {"respond", "explain", "ask", "compare"}:
+                if step.purpose == "improve_wording":
+                    # UI-only consultation cue; this does not stage or adopt a revision.
+                    self._mark_workshop_hud_edit(
+                        workshop, workshop.hud_selected_line
+                        if workshop.hud_editing else workshop.marked_line_index,
+                    )
                 row = record_workshop_agent_step(
                     workshop,
                     step,
@@ -4920,6 +4947,7 @@ class DogidoService:
                 "validation_codes": ["pending_exists"],
             }
         targets = repair_target_indices(analysis.findings)
+        self._mark_workshop_hud_edit(workshop, targets[0] if len(targets) == 1 else None)
         if not targets:
             return {
                 "kind": "revision_validation",

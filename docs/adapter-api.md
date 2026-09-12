@@ -652,3 +652,33 @@ Minecraft画面とは別に、ブラウザで `GET /dogido` を開くと、ド�
 - 成功した高頻度APIのアクセスログは省略し、同じAPIの400以上の応答と、それ以外の運用ログは残す。
 - 会話記憶とは別のプロセス内履歴で、サーバー再起動時に消去する。
 - auth が有効なときはsnapshot APIに `Authorization: Bearer <token>` が必要。画面の入力欄はトークンをブラウザへ永続保存しない。
+
+## 25. ゲーム内の川柳掛け軸
+
+`GET /api/v1/haiku-workshop/snapshot?session_id=ses_...` は、指定sessionのworkshopを読み取り専用で返す。
+既存Bearer認証を使用し、未知／削除済みsessionは404、成功時は`Cache-Control: no-store`。
+通常の発言履歴とは別で、LLM・世界操作・保存・採用・pause判定をGETから実行しない。
+
+```json
+{
+  "schema_version": 1,
+  "session_id": "ses_...",
+  "revision": 3,
+  "observed_sequence": 42,
+  "workshop_id": "workshop_...",
+  "state": "open",
+  "canonical_lines": ["くわをもち", "はたけのまえで", "ひとやすみ"],
+  "pending_lines": [],
+  "editing": true,
+  "selected_line": 1,
+  "provisional_resume": false
+}
+```
+
+- `state`: `closed / open / danger`。閉鎖時の句配列は空。`workshop_id`はpin単位で安定し、戦闘中断・再開で変わらない。
+- `canonical_lines`は採用済みの表示三行。CASが現在句に合う未採用案だけを`pending_lines`に別記し、描画時は「未採用案」と明記する。不整合案をGETから破棄しない。
+- `editing / selected_line`は表示専用。選択行は0始まりの0/1/2またはnull。確定した編集対象か、編集相談の検証済み行参照を映す。単なる意味質問の行マークだけでは編集中にしない。操作ボタンや保存権限ではない。
+- service専用workerの操作完了時に投影を作り、短いlockで置換する。GETは独立cacheだけを読み、LLM処理待ちのキューへ入れない。編集対象確定時にも投影し、生成待ちの間に対象を出せる。投影エラーは本体処理へ伝播させず、cacheを無効化する。
+- Fabricは同時一件・約400ms間隔で取得し、session・schema・revision・行数／外形を検証する。描画はゲームスレッド。欠損／失敗／3秒以上の未受信は即非表示。新しいMinecraft接続ではsessionを再登録し、古い応答を捨てる。
+- ローカルの敵／被弾／死亡観測でも即遮蔽し、`observed_sequence`が新しい危険観測まで追いつく前の応答では復帰させない。`provisional_resume`は既存の明示・低脅威再開がコードで成立したときだけtrue。再接近・被弾・敵変更はその許可を再度遮蔽する。匂い単独では遮蔽しない。
+- 句の出現／通常終了は各1秒、危険は即時。編集中の対象切替はフェードせず、一度だけ短い操作音を出す。初回接続・同じsnapshotの再受信では音を出さない。TTSの実再生完了との厳密な同期ではない。

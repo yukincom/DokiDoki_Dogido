@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class CharacterPlacementTest {
+    @Test void approvedPlacementUsesViewportPercentagesOnLowerLeft() {
+        assertEquals(new CharacterPlacement.Bounds(16, 292, 58, 54), CharacterPlacement.approved(640, 360));
+        assertEquals(new CharacterPlacement.Bounds(25, 492, 90, 84), CharacterPlacement.approved(1000, 600));
+    }
     @Test void defaultPlacementKeepsRequestedMarginsAndAspectRatio() {
         var bounds = CharacterPlacement.fit(640, 360, 96, 12, 36);
         assertEquals(new CharacterPlacement.Bounds(532, 234, 96, 90), bounds);

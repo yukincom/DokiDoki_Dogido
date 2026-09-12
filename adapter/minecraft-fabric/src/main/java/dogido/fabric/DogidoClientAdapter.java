@@ -260,6 +260,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private String lastAmbientMobSignature = "";
     private String lastOminousSoundKind = "";
     private boolean combatActive = false;
+    private DogidoWorkshopHud workshopHud;
+    private ClientWorld displayWorld;
+    private Object displayConnection;
+    private String displayThreatSignature = "";
     private boolean wasDead = false;
     private boolean wasSleeping = false;
     private boolean respawnPointObserved = false;
@@ -274,6 +278,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
+        this.workshopHud = DogidoWorkshopHud.register();
         DogidoCharacterHud.register();
         this.config = DogidoConfig.load();
         this.eventClient = new DogidoEventClient(LOGGER, this.config, this::handleSelectHotbarCommand);
@@ -432,10 +437,28 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         ClientPlayerEntity player = client.player;
         ClientWorld world = client.world;
+        if (this.displayConnection != null && this.displayConnection != client.getNetworkHandler()) {
+            // A new Minecraft connection must not inherit another world's workshop pin.
+            // Dimension changes on the same connection retain the existing session.
+            this.eventClient.disconnected();
+            this.workshopHud.reset();
+            this.displayConnection = null;
+        }
         if (player == null || world == null) {
+            if (this.displayWorld != null) this.eventClient.invalidateDisplayRequests();
+            this.workshopHud.reset();
+            this.displayWorld = null;
             this.resetTransientState();
             return;
         }
+        if (this.displayWorld != world) {
+            this.eventClient.invalidateDisplayRequests();
+            this.workshopHud.reset();
+            this.workshopHud.synchronizeAfter(this.eventClient.currentSequence() + 1);
+            this.displayWorld = world;
+        }
+        this.displayConnection = client.getNetworkHandler();
+        long displaySequenceBefore = this.eventClient.currentSequence();
         String currentDimensionId = world.getRegistryKey().getValue().toString();
         if (this.lastDimensionId != null && !this.lastDimensionId.equals(currentDimensionId)) {
             resetThreatStateForDimensionChange();
@@ -573,6 +596,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         this.wasDead = deadNow;
         expireThreatMemory();
+        // Presentation-only occlusion. Never changes combat, workshop, or world state.
+        String displaySignature = threatSignature(visibleThreats) + audioThreatSignature(audioThreats)
+            + visibleThreats.stream().map(threat -> threat.uuid() + ":" + threat.approaching()).toList();
+        boolean displayDangerChanged = !displaySignature.equals(this.displayThreatSignature)
+            || this.lastDamageTick == this.tickCounter || deadNow;
+        this.displayThreatSignature = displaySignature;
+        long displayBarrier = this.eventClient.currentSequence() > displaySequenceBefore
+            ? this.eventClient.currentSequence() : this.eventClient.currentSequence() + 1;
+        this.workshopHud.danger(deadNow || this.combatActive || !visibleThreats.isEmpty() || !audioThreats.isEmpty()
+            || this.tickCounter - this.lastDamageTick <= this.config.combatEndedQuietTicks,
+            displayDangerChanged, displayBarrier);
+        if (this.tickCounter % 8 == 0) this.eventClient.pollWorkshopDisplay(this.workshopHud::receive);
     }
 
     private void resetTransientState() {

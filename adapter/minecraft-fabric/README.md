@@ -31,22 +31,34 @@
 - `nearby_resources` の本格拡張（現状は原木・板・羊毛・石炭に加え、積雪実測用の雪3種だけ）
 - エリトラ滑空など、乗り物ではないプレイヤー活動
 
-## 右下のドギド（静止画試作）
+## 左下のドギドとワークショップの掛け軸
 
-ワールド内の右下へ、作者の透過PNGを一枚表示する配置試作。初期幅は96 GUIピクセル、
-右余白12、下余白36。MinecraftのGUIスケールに追従し、F1や画面メニュー中は隠れる。
-サーバーへの接続は不要。会話・戦闘・workshop・上下動との連動は今後の予定。
+ドギドは左下・右向き。画面幅の9%、左余白2.5%、下余白4%で、ゆっくり上下する。
+原画ファイルは変更せず、表示だけ左右反転する。ドギド一枚はサーバーなしでも表示する。
+F1、メニュー、インベントリ、チャット入力中は両方隠れる。
+
+サーバーでworkshopが開くと、右下の掛け軸へ三行を縦書き表示する。
+約1秒で現れ、終了時は約1秒で消える。敵の接近・被弾などの危険時は即非表示。
+修正案は「未採用案」と明記し、音声・チャットの修正が検証されたら表示にも反映する。
+編集相談では左から上・中・下を出し、確認できた対象行を枠と橙色で示す。
+選択バーは読み取り専用で、クリックして操作する画面ではない。修正・採否は従来の発話で行う。
+書体はMinecraftの標準フォントを使う（ブラウザ試作の明朝体とは異なる）。
 
 クライアント内のチャット欄で以下を入力して閉じると、即時に変更が見える。
 
 - `/dogidohud size 72` — 小さくする（幅24〜256）
-- `/dogidohud offset 12 36` — 右端・下端からの余白
+- `/dogidohud offset 12 36` — 左端・下端からの余白（GUIピクセル）
 - `/dogidohud hide` / `/dogidohud show` — 表示切替
-- `/dogidohud reset` — 初期位置・サイズ・表示へ戻す
+- `/dogidohud reset` — 採用した画面比率の配置へ戻す
+- `/dogidohud motion off` / `on` — 上下動の切替
+- `/dogidoscroll hide` / `show` — 掛け軸だけの表示切替
+- `/dogidoscroll sound off` / `on` — 編集時の短い操作音の切替
+- `/dogidoscroll motion off` / `on` — 掛け軸のフェードを即時切替にする
 
-設定は `config/dogido-character.properties` に保存する。
-初回は `./gradlew test build` 後に試作jarを導入して確認する。
-**ビルドと配置計算テスト済み。実Minecraftでの透過描画、GUIスケール変更、F1、再起動後の設定復元は未確認。**
+ドギドの設定は `config/dogido-character.properties` に保存する。旧試作設定には新しい画面比率の配置を適用し、`size`／`offset`指定時だけ固定GUIピクセルに切り替える。
+掛け軸の表示・音・フェード切替は、このMinecraft起動中だけ有効。
+`./gradlew test build` 後にjarを導入し、同じ版のサーバーを起動する。
+**サーバー・Java自動テストとビルド済み。実Minecraft表示・音声編集・危険割り込みの一連の確認は未完了。**
 通常時の配置案は [`tools/character-placement/index.html`](../../tools/character-placement/index.html)。
 
 ## 音まわり（現状）
@@ -86,6 +98,7 @@
 
 - `dogido-server` を先に起動する
 - この mod は `POST /api/v1/adapter-sessions` と `POST /api/v1/game-events` を使う
+- 掛け軸は `GET /api/v1/haiku-workshop/snapshot?session_id=...` を約400ms間隔で非同期取得する。取得失敗・不正応答・3秒以上の未受信では即非表示にする。別のMinecraft接続ではsessionを作り直し、旧ワールドの句を引き継がない。同じ接続のディメンション移動はsessionを維持する。
 - 観測capabilityと `client.hotbar.select.v1` の実行capabilityは分けてsession登録する
 - server再起動でsession IDが失効した場合は `409 unknown_session_id` を受けて自動再登録する。serverだけの再起動でMinecraftを再起動する必要はない
 - 支援commandはheartbeatではなくgame-event応答で受ける。任意のMinecraftコマンド文字列は実行しない
