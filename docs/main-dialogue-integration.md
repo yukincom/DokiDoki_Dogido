@@ -1,6 +1,6 @@
 # 本体の会話所有権・中断・再生確定
 
-**状態:** 2026-09-12、限定国語対話・同意済みの専用Chrome検索・話題転換・本人barge-in・危険前履歴保護を本体へ接続し、コード・自動テスト済み。実Minecraft、実モデル、実TTS、実Chromeを重ねた本体E2Eは未確認。Minecraftの実pauseは未接続。
+**状態:** 2026-09-14、限定国語対話・同意済みの専用Chrome検索・話題転換・本人barge-in・危険前履歴保護の変更をmainへ統合。コード・自動テスト済み。ユーザー環境ではMinecraftの自動ポーズと川柳生成カウント停止を確認済み。統合後の実Minecraft、実モデル、実TTS、実Chromeを重ねた本体E2Eは別途確認する。
 
 独立 `language_dialogue` で確かめた国語対話を、本体の状態機械を置き換えずに接続するための境界を定める。戦況、assist、川柳workshop、保存判断は従来どおりコード側が所有する。
 
@@ -91,7 +91,7 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 - `learning` と `web` の間は発句間隔そのものを凍結する。解除直後に抑止時間分をまとめて経過扱いにしない。
 - 発句準備中に危険が来た場合は、既存規則どおり古いprompt・材料・pendingを破棄する。
 
-## 6. Web接続と、まだ接続していないMinecraft一時停止
+## 6. Web接続とMinecraftの自動ポーズ
 
 ### 本体の専用Chrome検索
 
@@ -116,15 +116,7 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 
 ### Minecraft一時停止
 
-Web接続はMinecraftを実pauseした証拠にはしない。共有contractは未合意のため、Fabric／server双方へpause commandをまだ実装しない。現在の**提案**は次のとおり。
-
-- execution capability: `client.game.pause.v1`
-- server command: `pause_game` のみ
-- 実pause成功ackを受け取るまでWebを開かない
-- Dogidoからの `unpause` commandは設けず、再開はユーザー操作だけ
-- multiplayerやpause非対応環境ではfail closedし、Webを開かない
-
-このID・HTTP外形は提案であり、合意後に `adapter-api`、モデル、Fabric実装、ack、失敗／再起動試験を同時に追加する。
+2026-09-14、ユーザー環境ではMinecraftが自動ポーズし、ドギドの川柳生成カウントも停止していると確認された。現在の動作を採用し、一時停止・復帰の追加設計は残件から外す。従来の `client.game.pause.v1`／`pause_game`／pause ackの提案は採用せず、Chrome接続の前提にしない。この確認を別環境やmultiplayerでの動作保証へ拡張しない。
 
 ### 実機確認
 
@@ -133,7 +125,6 @@ Web接続はMinecraftを実pauseした証拠にはしない。共有contractは�
 - 実Minecraftのevent列と実LLMの遅延を重ねた応答順
 - 実TTSの完了callback、本人barge-in、危険割り込み、queue置換
 - 本体の同意音声→専用Chrome起動→単発検索→発話による復帰と、CAPTCHA時の見え方
-- Chrome表示中にMinecraftをユーザー操作でどう止めるか。現行はpause commandも実pause ackもない
 - `/api/v1/player-input` はserviceの直列入口であるため、同期中の状態機械leaf生成そのものを途中停止する境界は未実装。入力受理後の音声は止まり、入力は一度だけ次の処理へ進む
 - 戦闘後10 turnの自然な再開会話
 - 危険前5往復＋危険後3 turnの実会話品質と、家庭音声の純粋な叫声／意味のある発話の境界

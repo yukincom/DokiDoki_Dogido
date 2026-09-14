@@ -7,7 +7,7 @@
 - 最初の支援アクション（剣への持ち替え）: 2026-08-16（コード・自動テスト・Minecraft実機確認済み）
 - 閉じたスメルバトル: 2026-09-11（コード・自動テスト済み、実Minecraft未確認）
 - 川柳workshopの検証付き共同編集agent: 2026-09-12（コード・自動テストとローカルQwen独立step確認済み、実Minecraft／TTS／editor E2E未確認）
-- 本体の同意済み専用Chrome検索: 2026-09-12（コード・自動テスト・利用前提の非起動確認済み、実Minecraft／TTS／Chrome E2Eとゲームpauseは未確認）
+- 本体の同意済み専用Chrome検索: 2026-09-12（コード・自動テスト・利用前提の非起動確認済み、統合後の実Minecraft／TTS／Chrome E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み）
 
 既存のメモより優先して参照する前提です。
 
@@ -492,7 +492,7 @@ adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕�
 6. 発話あり／なしの決定を schema version 付き episode JSONL へ記録する
 7. 最初の限定支援 `select_sword` をhotbar実測・typed command・Fabric再検証・実結果ログまで接続する（実機確認済み）
 8. 川柳workshopを一つの有界共同編集stepへ統合し、読み／音数／出典・editor validation後の再判断、否定等を除外した明示採用＋CAS保存、採否＋終了のtransaction、同ターンの通常雑談handoff、実行step・検証結果・発話根拠の改善JSONLを実装する（実機未確認）
-9. 本体の限定国語対話へ、専用Chromeの利用前提確認、Web同意、案内音声の実再生完了、一度だけの非同期検索、Web foreground、明示復帰、調査話題一件だけの短期受け渡しを接続する（実Minecraft／TTS／Chromeとゲームpauseは未確認）
+9. 本体の限定国語対話へ、専用Chromeの利用前提確認、Web同意、案内音声の実再生完了、一度だけの非同期検索、Web foreground、明示復帰、調査話題一件だけの短期受け渡しを接続する（統合後の実Minecraft／TTS／Chrome E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み）
 
 ### 進行中 / 優先して磨く
 

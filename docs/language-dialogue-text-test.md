@@ -5,11 +5,11 @@
 **文字だけを手動で試す場合:** [入力台本と実Chrome用ランチャー](language-dialogue-manual-test.md)（2026-09-09）。
 `zsh scripts/start_language_web_test.command` で対話待ちへ入り、台本は1行ずつ入力する。会話の自動実行はしない。
 
-状態：独立コンポーネントを維持しつつ、2026-09-12に本体serviceへ国語・語句の限定対話、非同期worker、再生完了台帳、同意済みの専用Chrome検索まで接続。Minecraftの実pause、workshopへの統合、実Minecraft／TTS／Chromeを重ねた本体E2Eは未確認。
+状態：独立コンポーネントを維持しつつ、2026-09-12に本体serviceへ国語・語句の限定対話、非同期worker、再生完了台帳、同意済みの専用Chrome検索まで接続。workshopへの統合、統合後の実Minecraft／TTS／Chromeを重ねた本体E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み。
 
 2026-09-09本体接続：一般雑談はMinecraft観測を持つ既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界な `MainLanguageRuntime` へ分けた。戦況・assist・正本DBの明示知識回答・workshopは従来の状態機械が所有する。正本DB回答と通常雑談の同じID付き履歴を解釈器にも共有し、assistant本文は実再生 `completed` 後だけ確定する。workerが一般話題を返しても独立試験用の仮想文脈では答えず、元turnを本体へ戻して現在のMinecraft観測で一度だけ答える。学習中の突然の別話題は、2分以上の間・明示名指し・明示転換なら即時移管し、それ未満の宛先不明入力は5分だけ無言保留する。呼び直し後の固定確認が実再生完了してから、肯定で同じ元turnを一度だけ移管する。戦闘中は旧生成をepochで捨て、一件の話題を10 player turnだけ保留する一方、危険前5往復は危険後3通常turn目まで別枠保護する。純粋な音声叫声は通常履歴へ入れず、コード観測の状況メモに置き換える。
 
-2026-09-12本体Web接続：利用前提が揃うMacでは、同じruntimeへ可視Chrome providerを休眠状態で渡す。Web同意→「ほな一緒にいこか！」の実再生 `completed`→有界workerで専用Chromeへ一度だけ検索、という順序を本体音声台帳へ接続した。調査中は `foreground=web` とWeb用30分期限でambientと自動川柳を止め、明示復帰後は調べた話題一件だけを本体の短期文脈へ渡す。失敗・取消・開始前の戦闘・古いepoch・満杯では開かず、既に読書中の調査文脈は敵対警告後も保持する。**Minecraftの実pauseとOS前面復帰は未接続で、本体の実Minecraft／TTS／Chrome E2Eも未確認。** 詳細は [本体会話統合](main-dialogue-integration.md)。
+2026-09-12本体Web接続：利用前提が揃うMacでは、同じruntimeへ可視Chrome providerを休眠状態で渡す。Web同意→「ほな一緒にいこか！」の実再生 `completed`→有界workerで専用Chromeへ一度だけ検索、という順序を本体音声台帳へ接続した。調査中は `foreground=web` とWeb用30分期限でambientと自動川柳を止め、明示復帰後は調べた話題一件だけを本体の短期文脈へ渡す。失敗・取消・開始前の戦闘・古いepoch・満杯では開かず、既に読書中の調査文脈は敵対警告後も保持する。**Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み。OS前面復帰と統合後の本体の実Minecraft／TTS／Chrome E2Eは別途確認。** 詳細は [本体会話統合](main-dialogue-integration.md)。
 
 2026-09-09更新：解釈契約に `information_request / casual / other` を追加し、挨拶・感謝・質問を求めない雑談を資料不足の質問としてWebへ送らない。代表的な挨拶はコード固定で短く返す。一般的な雑談は本体ですでに使っている `player_chat` leafへ渡し、国語解釈に失敗した普通の陳述も質問用の聞き返しへ固定しない。この独立経路には現在のMinecraft観測を渡さず、見ていない世界状態を事実として足さないよう明示する。実Google概要は15秒後の1回だけ読み、未完成でも同じタブを再取得しない。研究中に別質問と推定しただけでは文脈を捨てず、「今の続き／別の質問」を確認する。これはSTT誤変換そのものの修正ではない。
 
@@ -120,10 +120,10 @@ python -m pytest tests/test_language_dialogue.py tests/test_structured_contracts
 
 ```bash
 git clone https://github.com/yukincom/chrome-web-mcp-macos.git .dogido_tools/chrome-web-mcp-macos
-git -C .dogido_tools/chrome-web-mcp-macos checkout --detach 47d43f9d56d7c02774f73407e6b0410daaa55bc6
-git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-reviewed-url-and-ai-overview.patch
+git -C .dogido_tools/chrome-web-mcp-macos checkout --detach ec29738c9370aef0c6285c5cefdf09e5444edc70
 git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-overview-reread.patch
 git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-eight-second-single-read.patch
+git -C .dogido_tools/chrome-web-mcp-macos apply ../../scripts/patches/chrome-web-fifteen-second-single-read.patch
 (cd .dogido_tools/chrome-web-mcp-macos && uv sync --frozen --python python)
 python -m pip install -e '.[web-research]'
 ```

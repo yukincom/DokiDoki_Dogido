@@ -352,7 +352,7 @@
 - 学習中の無関係な別話題は、直前会話から2分以上または明示名指し／転換なら本体chatへ即時移管する。2分未満で宛先不明なら5分だけ無言保留し、呼び直しの確認音声が完了してから同じ元turnを一度だけ移管する
 - 有効な本人入力は再生中音声へのbarge-inになる。純粋な音声叫声は通常会話へ入れず、コード観測の状況メモだけを使う
 - 危険前の通常5往復は危険中に保護し、危険終了後の通常player turn 3件目まで共有する。戦況発話と叫び声はこの履歴を消費しない
-- 詳細と未接続のMinecraft pause境界は [main-dialogue-integration.md](main-dialogue-integration.md)
+- 詳細と確認済みのMinecraft自動ポーズは [main-dialogue-integration.md](main-dialogue-integration.md)
 
 ### 暗所助言フロー
 
