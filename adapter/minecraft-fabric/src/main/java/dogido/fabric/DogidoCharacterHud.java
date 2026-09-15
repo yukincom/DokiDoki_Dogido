@@ -28,6 +28,8 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
 final class DogidoCharacterHud {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-character-hud");
     private static final Identifier TEXTURE = Identifier.of("dogido", "textures/gui/character.png");
+    private static final Identifier CLOSED_TEXTURE = Identifier.of("dogido", "textures/gui/character_closed.png");
+    private final long animationStartedNanos = System.nanoTime();
     private final Path configPath = FabricLoader.getInstance().getConfigDir().resolve("dogido-character.properties");
     private boolean visible = true;
     private boolean autoLayout = true;
@@ -85,7 +87,9 @@ final class DogidoCharacterHud {
         // Use the author's right-facing artwork as-is: never mirror geometry or UVs.
         context.getMatrices().pushMatrix();
         context.getMatrices().translate(0, floatOffset);
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, TEXTURE, bounds.x(), bounds.y(),
+        Identifier texture = CharacterBlink.closed((System.nanoTime() - animationStartedNanos) / 1_000_000, motion)
+            ? CLOSED_TEXTURE : TEXTURE;
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, bounds.x(), bounds.y(),
             0, 0, bounds.width(), bounds.height(), CharacterPlacement.TEXTURE_WIDTH,
             CharacterPlacement.TEXTURE_HEIGHT, CharacterPlacement.TEXTURE_WIDTH, CharacterPlacement.TEXTURE_HEIGHT);
         context.getMatrices().popMatrix();

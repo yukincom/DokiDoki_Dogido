@@ -2,8 +2,8 @@ package dogido.fabric;
 
 /** Pure geometry in Minecraft's GUI-scaled pixels. Keeps the PNG within a resized viewport. */
 final class CharacterPlacement {
-    static final int TEXTURE_WIDTH = 1305;
-    static final int TEXTURE_HEIGHT = 1298;
+    static final int TEXTURE_WIDTH = 1398;
+    static final int TEXTURE_HEIGHT = 1336;
     record Bounds(int x, int y, int width, int height) { }
 
     static Bounds lowerLeft(int screenWidth, int screenHeight, int width, int left, int bottom) {

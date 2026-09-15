@@ -34,7 +34,7 @@
 ## 左下のドギドとワークショップの掛け軸
 
 ドギドは左下・右向き。画面幅の9%、左余白2.5%、下余白4%で、ゆっくり上下する。
-作者制作の右向き原画 `Dogido_nomalR.png` を無加工で使用し、コードやCSSでの左右反転は行わない。
+作者制作の太線原画 `Dogido_nomal.png` / `Dogido_nomal_close.png` を無加工で使用し、通常顔4.5秒・閉じ目140ミリ秒で瞬きする。コードやCSSでの左右反転・左右対称化は行わない。
 ドギド一枚はサーバーなしでも表示する。
 F1、メニュー、インベントリ、チャット入力中は両方隠れる。
 
@@ -51,7 +51,7 @@ F1、メニュー、インベントリ、チャット入力中は両方隠れる
 - `/dogidohud offset 12 36` — 左端・下端からの余白（GUIピクセル）
 - `/dogidohud hide` / `/dogidohud show` — 表示切替
 - `/dogidohud reset` — 採用した画面比率の配置へ戻す
-- `/dogidohud motion off` / `on` — 上下動の切替
+- `/dogidohud motion off` / `on` — 上下動と瞬きの切替（offでは通常顔）
 - `/dogidoscroll hide` / `show` — 掛け軸だけの表示切替
 - `/dogidoscroll sound off` / `on` — 編集時の短い操作音の切替
 - `/dogidoscroll motion off` / `on` — 掛け軸のフェードを即時切替にする

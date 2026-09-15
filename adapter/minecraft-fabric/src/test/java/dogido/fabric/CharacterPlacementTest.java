@@ -6,22 +6,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class CharacterPlacementTest {
     @Test void approvedPlacementUsesViewportPercentagesOnLowerLeft() {
-        assertEquals(new CharacterPlacement.Bounds(16, 288, 58, 58), CharacterPlacement.approved(640, 360));
-        assertEquals(new CharacterPlacement.Bounds(25, 486, 90, 90), CharacterPlacement.approved(1000, 600));
+        assertEquals(new CharacterPlacement.Bounds(16, 291, 58, 55), CharacterPlacement.approved(640, 360));
+        assertEquals(new CharacterPlacement.Bounds(25, 490, 90, 86), CharacterPlacement.approved(1000, 600));
     }
     @Test void defaultPlacementKeepsRequestedMarginsAndAspectRatio() {
         var bounds = CharacterPlacement.fit(640, 360, 96, 12, 36);
-        assertEquals(new CharacterPlacement.Bounds(532, 229, 96, 95), bounds);
+        assertEquals(new CharacterPlacement.Bounds(532, 232, 96, 92), bounds);
     }
 
     @Test void packagedArtworkMatchesItsDeclaredCanvasAndKeepsAlpha() throws Exception {
-        try (var input = getClass().getResourceAsStream("/assets/dogido/textures/gui/character.png")) {
-            assertNotNull(input);
-            var artwork = ImageIO.read(input);
-            assertNotNull(artwork);
-            assertEquals(CharacterPlacement.TEXTURE_WIDTH, artwork.getWidth());
-            assertEquals(CharacterPlacement.TEXTURE_HEIGHT, artwork.getHeight());
-            assertTrue(artwork.getColorModel().hasAlpha());
+        for (String filename : new String[]{"character.png", "character_closed.png"}) {
+            try (var input = getClass().getResourceAsStream("/assets/dogido/textures/gui/" + filename)) {
+                assertNotNull(input);
+                var artwork = ImageIO.read(input);
+                assertNotNull(artwork);
+                assertEquals(CharacterPlacement.TEXTURE_WIDTH, artwork.getWidth());
+                assertEquals(CharacterPlacement.TEXTURE_HEIGHT, artwork.getHeight());
+                assertTrue(artwork.getColorModel().hasAlpha());
+            }
         }
     }
 
