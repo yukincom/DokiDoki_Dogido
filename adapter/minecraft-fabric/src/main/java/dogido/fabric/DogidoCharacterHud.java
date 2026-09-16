@@ -29,6 +29,8 @@ final class DogidoCharacterHud {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-character-hud");
     private static final Identifier TEXTURE = Identifier.of("dogido", "textures/gui/character.png");
     private static final Identifier CLOSED_TEXTURE = Identifier.of("dogido", "textures/gui/character_closed.png");
+    private static final Identifier THINKING_TEXTURE = Identifier.of("dogido", "textures/gui/character_thinking.png");
+    private final CharacterDisplayState state = new CharacterDisplayState();
     private final long animationStartedNanos = System.nanoTime();
     private final Path configPath = FabricLoader.getInstance().getConfigDir().resolve("dogido-character.properties");
     private boolean visible = true;
@@ -38,7 +40,7 @@ final class DogidoCharacterHud {
     private int right = 12;
     private int bottom = 36;
 
-    static void register() {
+    static DogidoCharacterHud register() {
         DogidoCharacterHud hud = new DogidoCharacterHud();
         hud.load();
         // Inherit F1 hiding; vanilla chat and accessibility subtitles stay above the character.
@@ -71,7 +73,13 @@ final class DogidoCharacterHud {
                 .then(literal("motion")
                     .then(literal("off").executes(context -> { hud.motion = false; return hud.save(); }))
                     .then(literal("on").executes(context -> { hud.motion = true; return hud.save(); })))));
+        return hud;
     }
+
+    void reset() { state.reset(); }
+    void synchronizeAfter(long sequence) { state.synchronizeAfter(sequence); }
+    void danger(boolean danger, boolean changed, long sequence) { state.danger(danger, changed, sequence); }
+    void receive(WorkshopDisplayState.Snapshot snapshot) { state.receive(snapshot, DogidoWorkshopHud.now()); }
 
     private void render(DrawContext context, RenderTickCounter tickCounter) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -79,19 +87,26 @@ final class DogidoCharacterHud {
                 || client.currentScreen != null) {
             return;
         }
+        boolean thinking = state.thinking(DogidoWorkshopHud.now());
+        int tw = thinking ? ThinkingMesh.WIDTH : CharacterPlacement.TEXTURE_WIDTH;
+        int th = thinking ? ThinkingMesh.HEIGHT : CharacterPlacement.TEXTURE_HEIGHT;
         CharacterPlacement.Bounds bounds = autoLayout
-            ? CharacterPlacement.approved(context.getScaledWindowWidth(), context.getScaledWindowHeight())
-            : CharacterPlacement.lowerLeft(context.getScaledWindowWidth(), context.getScaledWindowHeight(), width, right, bottom);
+            ? CharacterPlacement.approved(context.getScaledWindowWidth(), context.getScaledWindowHeight(), tw, th)
+            : CharacterPlacement.lowerLeft(context.getScaledWindowWidth(), context.getScaledWindowHeight(), width, right, bottom, tw, th);
         float floatOffset = motion ? (float) ((1 - Math.cos(System.nanoTime() / 1_000_000_000.0 * Math.PI * 2 / 3.8))
             * context.getScaledWindowWidth() * -.0025) : 0;
         // Use the author's right-facing artwork as-is: never mirror geometry or UVs.
         context.getMatrices().pushMatrix();
         context.getMatrices().translate(0, floatOffset);
-        Identifier texture = CharacterBlink.closed((System.nanoTime() - animationStartedNanos) / 1_000_000, motion)
-            ? CLOSED_TEXTURE : TEXTURE;
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, bounds.x(), bounds.y(),
-            0, 0, bounds.width(), bounds.height(), CharacterPlacement.TEXTURE_WIDTH,
-            CharacterPlacement.TEXTURE_HEIGHT, CharacterPlacement.TEXTURE_WIDTH, CharacterPlacement.TEXTURE_HEIGHT);
+        if (thinking && motion) {
+            ThinkingCharacterRenderState.draw(context, THINKING_TEXTURE, bounds, DogidoWorkshopHud.now());
+        } else {
+            Identifier texture = thinking ? THINKING_TEXTURE
+                : CharacterBlink.closed((System.nanoTime() - animationStartedNanos) / 1_000_000, motion)
+                    ? CLOSED_TEXTURE : TEXTURE;
+            context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, bounds.x(), bounds.y(),
+                0, 0, bounds.width(), bounds.height(), tw, th, tw, th);
+        }
         context.getMatrices().popMatrix();
     }
 

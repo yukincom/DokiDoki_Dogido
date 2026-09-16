@@ -17,6 +17,12 @@ def project_workshop(session: Any) -> dict[str, object]:
         "observed_sequence": session.last_sequence or 0,
         "workshop_id": None,
         "state": "closed",
+        "character_state": (
+            "thinking" if getattr(session.machine, "haiku_thinking_depth", 0) > 0
+            and session.machine.state.mode == "normal"
+            and not (workshop and workshop.combat_paused)
+            else "normal"
+        ),
         "canonical_lines": [],
         "pending_lines": [],
         "editing": False,

@@ -11,7 +11,7 @@ import java.util.Objects;
 final class WorkshopDisplayState {
     record Snapshot(String sessionId, String workshopId, long revision, long observedSequence,
                     String state, List<String> canonical, List<String> pending,
-                    boolean editing, Integer selectedLine, boolean provisionalResume) {
+                    boolean editing, Integer selectedLine, boolean provisionalResume, String characterState) {
         List<String> shownLines() { return pending.isEmpty() ? canonical : pending; }
     }
 
@@ -36,8 +36,11 @@ final class WorkshopDisplayState {
             long revision = integer(json, "revision");
             long observed = integer(json, "observed_sequence");
             if (revision < 0 || observed < 0) return null;
+            // Additive v1 field: older servers keep the normal, blinking character.
+            String character = json.has("character_state") ? string(json, "character_state") : "normal";
+            if (!List.of("normal", "thinking").contains(character)) return null;
             return new Snapshot(sessionId, id, revision, observed, state, canonical, pending,
-                editingValue.getAsBoolean(), selected, provisional.getAsBoolean());
+                editingValue.getAsBoolean(), selected, provisional.getAsBoolean(), character);
         } catch (RuntimeException error) {
             return null;
         }

@@ -10,6 +10,7 @@ from dogido_server.app import create_app
 from dogido_server.config import Settings
 from dogido_server.haiku.edit_contract import PLAYER_LINE_EDIT_CONTRACT_VERSION
 from dogido_server.haiku.hud import WorkshopHudSnapshots, project_workshop
+from dogido_server.haiku.presentation import thinking_pose
 from dogido_server.haiku.workshop import (
     PlayerLineReplacement, RecentHaikuWorkshop, advance_workshop_revision,
     build_player_line_revision, clear_pending_revision, pause_workshop_for_combat,
@@ -171,3 +172,97 @@ def test_worker_failure_still_publishes_completed_state(monkeypatch):
         with pytest.raises(ValueError):
             client.post(f"/api/v1/adapter-sessions/{sid}/heartbeat", json={"sent_at": NOW.isoformat()}, headers=AUTH)
         assert client.get(f"/api/v1/haiku-workshop/snapshot?session_id={sid}", headers=AUTH).json()["state"] == "open"
+
+
+def test_character_state_is_independent_of_workshop_and_pending_preface():
+    s = session()
+    assert project_workshop(s)["character_state"] == "normal"
+    s.machine.state.pending_haiku_after_preface = True
+    assert project_workshop(s)["character_state"] == "normal"  # queued/spoken preface isn't generation
+    s.haiku_workshop = None
+    with thinking_pose(s.machine):
+        assert project_workshop(s)["state"] == "closed"
+        assert project_workshop(s)["character_state"] == "thinking"
+        s.machine.state.mode = "panic"
+        assert project_workshop(s)["character_state"] == "normal"
+    assert s.machine.haiku_thinking_depth == 0
+
+
+def test_nested_generation_publishes_only_outer_edges_and_cleans_up_on_error():
+    s = session()
+    seen = []
+    s.machine.haiku_presentation_observer = lambda: seen.append(project_workshop(s)["character_state"])
+    with pytest.raises(ValueError):
+        with thinking_pose(s.machine):
+            with thinking_pose(s.machine):
+                assert project_workshop(s)["character_state"] == "thinking"
+            assert seen == ["thinking"]
+            raise ValueError("generation failed")
+    assert seen == ["thinking", "normal"]
+    assert s.machine.haiku_thinking_depth == 0
+
+
+@pytest.mark.parametrize("method,first_step", [
+    ("_begin_prefaced_haiku", "_haiku_context"),
+    ("_complete_prefaced_haiku", "_prepare_pending_haiku_generation"),
+    ("_render_haiku_line", "_haiku_context"),
+])
+def test_real_generation_entry_is_visible_while_worker_busy_and_failure_restores_normal(monkeypatch, method, first_step):
+    with make_client() as client:
+        sid = client.post("/api/v1/adapter-sessions", json=CREATE, headers=AUTH).json()["session_id"]
+        service = client.app.state.service
+        machine = service.sessions[sid].machine
+        entered, release = Event(), Event()
+        def blocked(*args):
+            entered.set()
+            assert release.wait(5)
+            raise ValueError("generation failed")
+        monkeypatch.setattr(machine, first_step, blocked)
+        def generate(*args, **kwargs):
+            if method == "_render_haiku_line":
+                return getattr(machine, method)(None)
+            return getattr(machine, method)(None, NOW)
+        monkeypatch.setattr(service, "heartbeat", generate)
+        url = f"/api/v1/haiku-workshop/snapshot?session_id={sid}"
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            action = pool.submit(client.post, f"/api/v1/adapter-sessions/{sid}/heartbeat", json={"sent_at": NOW.isoformat()}, headers=AUTH)
+            try:
+                assert entered.wait(2)
+                read = pool.submit(client.get, url, headers=AUTH).result(timeout=1)
+                assert read.json()["character_state"] == "thinking"
+                thinking_revision = read.json()["revision"]
+            finally:
+                release.set()
+            with pytest.raises(ValueError, match="generation failed"):
+                action.result(timeout=2)
+        result = client.get(url, headers=AUTH).json()
+        assert result["character_state"] == "normal"
+        assert result["revision"] > thinking_revision
+
+
+def test_completed_verse_restores_normal_before_caller_can_enqueue_speech(monkeypatch):
+    with make_client() as client:
+        sid = client.post("/api/v1/adapter-sessions", json=CREATE, headers=AUTH).json()["session_id"]
+        service = client.app.state.service
+        machine = service.sessions[sid].machine
+        observed = []
+        def prepare(event):
+            observed.append(service.workshop_hud.get(sid)["character_state"])
+            machine._pending_haiku_fixed_line = VERSE
+            machine._pending_haiku_prompt_details = None
+            machine._pending_haiku_source_atoms = ()
+        monkeypatch.setattr(machine, "_prepare_pending_haiku_generation", prepare)
+        monkeypatch.setattr(machine, "_remember_haiku_emission", lambda event, now, line, **kwargs: line)
+        assert machine._complete_prefaced_haiku(None, NOW) == VERSE
+        assert observed == ["thinking"]
+        assert service.workshop_hud.get(sid)["character_state"] == "normal"
+
+
+def test_presentation_failure_does_not_change_generation_result():
+    s = session()
+    def broken():
+        raise RuntimeError("display unavailable")
+    s.machine.haiku_presentation_observer = broken
+    with thinking_pose(s.machine):
+        assert s.machine.haiku_thinking_depth == 1
+    assert s.machine.haiku_thinking_depth == 0
