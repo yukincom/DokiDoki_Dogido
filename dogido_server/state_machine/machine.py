@@ -81,6 +81,7 @@ class DogidoStateMachine(
         # serviceが、高優先発話に先送りされた質問だけを再キューするための
         # 現在tick限定フラグ。DB回答と現在句の質問処理でだけTrueにする。
         self.knowledge_query_handled = False
+        self.player_chat_repair = None
         # 現在tickの知識回答に対応する参考資料。本文とは別にAudioActionへ載せる。
         self.knowledge_reply_references: tuple[SpeechReference, ...] = ()
         # service が pending_player_text 待ちのとき True（ambient 抑止用）
@@ -96,6 +97,7 @@ class DogidoStateMachine(
         player_input_context: PlayerInputContext | None = None,
     ) -> StateMachineResult:
         now = event.observed_at
+        self.player_chat_repair = None
         self.knowledge_query_handled = False
         self.knowledge_reply_references = ()
         previous_mode = self.state.mode

@@ -2333,6 +2333,9 @@ class DogidoService:
             at=now,
             turn_id=turn_id,
         )
+        repair = session.machine.player_chat_repair
+        if route == "casual" and repair is not None and repair.current_text == player_input.raw_text:
+            session.dialogue.record_repair(turn_id, repair)
         utterance_id = reply.utterance_id or ("main-chat-reply:" + uuid4().hex)
         reply.utterance_id = utterance_id
         reply.conversation_turn_id = turn_id

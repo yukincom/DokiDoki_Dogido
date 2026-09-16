@@ -13,6 +13,9 @@ import json
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from dogido_server.dialogue.conversation_repair import (
+    ConversationRepairPayload, REPAIR_ACTIONS, parse_conversation_repair,
+)
 
 from dogido_server.language_dialogue.contracts import (
     GroundedReply,
@@ -223,11 +226,14 @@ class _PlayerChatPlan(_StrictModel):
         "answer_observation",
         "clarify_reference",
         "correct_previous_reply",
+        "repair_conversation",
+        "clarify_repair",
     ]
     focus: NonEmptyText
     entity_query: str
     evidence: Annotated[list[_PlayerChatPlanEvidence], Field(min_length=1, max_length=3)]
     confidence: Confidence
+    repair: ConversationRepairPayload | None = None
 
     @model_validator(mode="after")
     def _entity_query_matches_action(self) -> _PlayerChatPlan:
@@ -240,6 +246,8 @@ class _PlayerChatPlan(_StrictModel):
             raise ValueError("entity action requires entity_query")
         if self.action not in entity_actions and self.entity_query:
             raise ValueError("non-entity action forbids entity_query")
+        if (self.action in REPAIR_ACTIONS) != (self.repair is not None):
+            raise ValueError("repair actions require repair; other actions forbid it")
         return self
 
 
@@ -501,6 +509,15 @@ def _validate_dynamic_contract(
             for row in payload["evidence"]
         ):
             errors.append("evidence:assistant_required")
+        if payload["action"] in REPAIR_ACTIONS:
+            repair = parse_conversation_repair(payload["action"], payload.get("repair"), details)
+            if repair is None:
+                errors.append("repair:ungrounded")
+            elif not any(
+                row["turn_id"] == repair.target_turn_id and repair.target_quote in row["quote"]
+                for row in payload["evidence"]
+            ):
+                errors.append("repair:target_evidence_required")
         routing_hints = details.get("routing_hints")
         if isinstance(routing_hints, dict) and (
             routing_hints.get("inventory_question") is True

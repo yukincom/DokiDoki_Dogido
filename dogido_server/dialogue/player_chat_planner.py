@@ -13,6 +13,10 @@ import re
 from typing import Any, Literal
 
 from dogido_server.llm.types import StructuredGenerationRequest
+from dogido_server.dialogue.conversation_repair import (
+    ConversationRepair, REPAIR_ACTIONS, REPAIR_FIELDS, parse_conversation_repair,
+    has_repair_signal, pending_repair,
+)
 
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -24,6 +28,8 @@ PlayerChatPlanAction = Literal[
     "answer_observation",
     "clarify_reference",
     "correct_previous_reply",
+    "repair_conversation",
+    "clarify_repair",
 ]
 PlayerChatEntityStatus = Literal[
     "not_applicable",
@@ -40,6 +46,8 @@ PLAYER_CHAT_PLAN_ACTIONS: tuple[PlayerChatPlanAction, ...] = (
     "answer_observation",
     "clarify_reference",
     "correct_previous_reply",
+    "repair_conversation",
+    "clarify_repair",
 )
 
 _ENTITY_ACTIONS = frozenset(
@@ -65,6 +73,7 @@ class PlayerChatPlan:
     confidence: float
     source: Literal["model", "fallback"]
     status: str
+    repair: ConversationRepair | None = None
 
     @property
     def requests_catalog(self) -> bool:
@@ -195,6 +204,8 @@ def plan_player_chat(
     hearing_summary: str = "",
     inventory_question: bool = False,
     sound_question: bool = False,
+    raw_user_text: str | None = None,
+    repair_enabled: bool = True,
 ) -> PlayerChatPlan:
     """会話焦点と一件のread actionを選ぶ。失敗時は安全な閉じたfallback。"""
 
@@ -210,9 +221,17 @@ def plan_player_chat(
     if not current_text or not callable(generate):
         return fallback
 
+    raw_text = current_text if raw_user_text is None else raw_user_text[:1000]
+    pending = pending_repair(history) if repair_enabled else {}
+    may_repair = repair_enabled and (has_repair_signal(raw_text) or bool(pending))
+
     details: dict[str, Any] = {
-        "allowed_actions": list(PLAYER_CHAT_PLAN_ACTIONS),
+        "allowed_actions": [
+            action for action in PLAYER_CHAT_PLAN_ACTIONS
+            if may_repair or action not in REPAIR_ACTIONS
+        ],
         "history": history,
+        "pending_repair": pending,
         "observations": {
             "summary": _clean_text(observation_summary, limit=600),
             "observed_entities": _normalize_observed_entities(observed_entities),
@@ -229,6 +248,7 @@ def plan_player_chat(
             "turn_id": "current",
             "role": "user",
             "text": current_text,
+            "raw_text": raw_text,
         },
     }
     fallback_payload = {
@@ -249,7 +269,7 @@ def plan_player_chat(
                 details=details,
                 temperature=0.0,
                 route="chat",
-                max_tokens=320,
+                max_tokens=640,
             )
         )
     except Exception as exc:
@@ -303,7 +323,7 @@ def _parse_model_plan(payload: object, details: dict[str, Any]) -> PlayerChatPla
     if status != "accepted":
         return None
     action = str(payload.get("action") or "")
-    if action not in PLAYER_CHAT_PLAN_ACTIONS:
+    if action not in details.get("allowed_actions", PLAYER_CHAT_PLAN_ACTIONS):
         return None
     focus = _clean_text(str(payload.get("focus") or ""), limit=80)
     entity_query = _clean_text(str(payload.get("entity_query") or ""), limit=120)
@@ -313,12 +333,12 @@ def _parse_model_plan(payload: object, details: dict[str, Any]) -> PlayerChatPla
         return None
     minimum_confidence = (
         _MIN_CORRECTION_CONFIDENCE
-        if action == "correct_previous_reply"
+        if action == "correct_previous_reply" or action in REPAIR_ACTIONS
         else _MIN_ENTITY_CONFIDENCE
         if action in _ENTITY_ACTIONS
         else _MIN_MODEL_CONFIDENCE
     )
-    if not focus or confidence < minimum_confidence or confidence > 1.0:
+    if not focus or not minimum_confidence <= confidence <= 1.0:
         return None
 
     turn_rows = [*details.get("history", []), details.get("current", {})]
@@ -358,6 +378,19 @@ def _parse_model_plan(payload: object, details: dict[str, Any]) -> PlayerChatPla
     ):
         return None
 
+    repair = None
+    if action in REPAIR_ACTIONS:
+        repair = parse_conversation_repair(action, payload.get("repair"), details)
+        if repair is None:
+            return None
+        if not any(
+            row.turn_id == repair.target_turn_id and repair.target_quote in row.quote
+            for row in evidence
+        ):
+            return None
+    elif payload.get("repair") is not None:
+        return None
+
     return PlayerChatPlan(
         action=action,  # type: ignore[arg-type]
         focus=focus,
@@ -366,6 +399,7 @@ def _parse_model_plan(payload: object, details: dict[str, Any]) -> PlayerChatPla
         confidence=confidence,
         source="model",
         status=status,
+        repair=repair,
     )
 
 
@@ -423,7 +457,9 @@ def _normalize_history(value: object) -> list[dict[str, str]]:
         )
         if role not in {"user", "assistant"} or not text or not turn_id:
             continue
-        rows.append({"turn_id": turn_id, "role": role, "text": text})
+        row = {"turn_id": turn_id, "role": role, "text": text}
+        row.update({key: str(raw[key]) for key in REPAIR_FIELDS if key in raw})
+        rows.append(row)
     return rows
 
 

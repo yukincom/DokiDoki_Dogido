@@ -67,7 +67,39 @@ def build_player_chat_plan_messages(request: object) -> list[dict[str, str]]:
         "- answer_observation: 現在の周囲・天気・場所など観測内容への問い\n"
         "- clarify_reference: 対象が会話から一意に定まらず、聞き返す必要がある\n"
         "- correct_previous_reply: assistantの直前の世界断言への訂正要求や矛盾指摘\n"
-        "routing_hintsでinventory_questionまたはsound_questionがtrueなら、既存コードが"
+        + (
+        "- repair_conversation: 本人が会話の取り違えを明示訂正し、正しい意味も述べた\n"
+        "- clarify_repair: 本人が取り違えを指摘したが、正しい意味はまだ分からない\n"
+        "repair_conversation/clarify_repairは世界の在否訂正とは別。普通の反対意見、"
+        "話題転換、引用や仮定の『違う』を会話修復にしない。音が似ているだけで"
+        "『1位』を『一員』に直さない。本人の訂正がないときrepairはnull。\n"
+        "会話修復ではrepairにtarget_turn_id（history中の誤解されたuser発話または"
+        "取り違えたassistant返答のID）、target_quote（その発話の連続部分）、"
+        "signal_quote（current.raw_text中の訂正を示す連続部分）、"
+        "replacement_quote（本人が述べた正しい意味の連続部分）を入れる。"
+        "targetもevidenceに含め、補作や文法修正をせず原文からコピーする。\n"
+        "『違う、仲間になるのは無理ってこと』ならreplacement_quoteは"
+        "『仲間になるのは無理ってこと』。『違う』だけならclarify_repairにして"
+        "replacement_quoteは空。本人がまだ説明していない意味を推測しない。\n"
+        "直前の返答への短い否定一語は、反対意見か聞き違いの指摘かも未確定なので、"
+        "clarify_repairでその返答を対象に一問確認する。具体的な反対意見が既に"
+        "述べられている場合とは区別する。historyがない場合は対象を捏造しない。\n"
+        "返答の取り違えを指摘している発話は、通常の続きよりrepair actionを優先する。"
+        "意図を確認したいというfocusを書くだけのcontinue_conversationでは聞き返しにならない。"
+        "修復時のJSONの形は、例えば（ID・引用は今回の入力に合わせる）: "
+        '{"action":"clarify_repair","focus":"発言の取り違えの確認","entity_query":"",'
+        '"evidence":[{"turn_id":"current","quote":"そういう意味じゃない"},'
+        '{"turn_id":"t1:reply","quote":"一番になりたいんやな"}],"confidence":0.95,'
+        '"repair":{"target_turn_id":"t1:reply","target_quote":"一番になりたいんやな",'
+        '"signal_quote":"そういう意味じゃない","replacement_quote":""}}\n'
+        "pending_repairがあるときだけ、実再生済みの聞き返しへの次の説明を"
+        "同じtargetのrepair_conversationとして受け取れる。その場合signal_quoteは空でよい。"
+        "聞き返しに対する具体的な説明なら、continue_conversationではなく"
+        "repair_conversationを選び、pending_repairの対象IDと対象引用を引き継ぐ。"
+        "『そう』『うん』だけでは意味が確定しない。別の話題なら通常のactionを選ぶ。\n"
+        if "repair_conversation" in actions else ""
+        )
+        + "routing_hintsでinventory_questionまたはsound_questionがtrueなら、既存コードが"
         "質問種別を確定済みなのでanswer_observationを選び、entity actionへ変えない。\n"
         "routing_hints.presence_questionがtrueならcheck_entity_presenceを選ぶ。"
         "plain_presence_reportがtrueなら本人の報告なので、check_entity_presenceや"
@@ -81,15 +113,16 @@ def build_player_chat_plan_messages(request: object) -> list[dict[str, str]]:
         f"許可actions: {json.dumps(actions, ensure_ascii=False)}\n"
         f"history: {json.dumps(history, ensure_ascii=False)}\n"
         f"current: {json.dumps(current, ensure_ascii=False)}\n"
+        f"pending_repair: {json.dumps(details.get('pending_repair') or {}, ensure_ascii=False)}\n"
         f"routing_hints: {json.dumps(routing_hints, ensure_ascii=False)}\n"
         "現在観測（会話の参照解決に必要な場合だけ使う）: "
         f"{json.dumps(observations, ensure_ascii=False)}\n"
         "返答はJSONオブジェクトのみ。形式: "
         '{"action":"continue_conversation","focus":"短い焦点",'
         '"entity_query":"","evidence":[{"turn_id":"current",'
-        '"quote":"入力中の連続部分"}],"confidence":0.0}'
+        '"quote":"入力中の連続部分"}],"confidence":0.0,"repair":null}'
     )
-    return [
+    messages = [
         {
             "role": "system",
             "content": (
@@ -99,6 +132,27 @@ def build_player_chat_plan_messages(request: object) -> list[dict[str, str]]:
         },
         {"role": "user", "content": user_prompt},
     ]
+    pending = details.get("pending_repair")
+    if isinstance(pending, dict) and pending:
+        messages.append({
+            "role": "user",
+            "content": (
+                "今回の会話段階は、誤解を聞き返した直後。現在発話をその質問への回答として"
+                "最初に検討する。質問への具体的な意味の説明ならrepair_conversationを選ぶ。"
+                "その説明が現在発話中にあるのに単なるcontinue_conversationにしない。"
+                "対象は次のpendingのIDと引用をそのまま使い、signal_quoteは空、"
+                "replacement_quoteは現在発話から抜き出す。currentと対象をevidenceに含める。"
+                "相槌だけならまだ確定しない。関係のない別の話題・新しい質問なら"
+                "修復にせず適切な通常actionを選ぶ。JSONの形と観測質問の優先は上記のまま。\n"
+                f"訂正待ち: {json.dumps(pending, ensure_ascii=False)}\n"
+                "修復の場合の対象evidenceはこの一件をコピーする（聞き返しのIDと混同しない）: "
+                + json.dumps({"turn_id": pending.get("repair_target_turn_id"),
+                              "quote": pending.get("repair_target_quote")}, ensure_ascii=False)
+                + "\nこれにcurrentのevidenceを加える。\n"
+                f"今回の説明候補: {json.dumps(current, ensure_ascii=False)}"
+            ),
+        })
+    return messages
 
 
 def _dogido_chat_spirit() -> str:
@@ -138,6 +192,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
     world_observation_rules = _world_observation_rules(details)
     grounding_rules, grounding_block = _grounding_section(details)
     priority_rules, priority_block = _current_turn_priority_section(details)
+    repair_block = _conversation_repair_section(details)
 
     user_prompt = (
         f"{_dogido_chat_spirit()}\n"
@@ -160,6 +215,7 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         f"{history_block}"
         f"{digest_block}"
         f"{grounding_block}"
+        f"{repair_block}"
         f"プレイヤー:「{user_text}」\n"
         f"呼び名: {player_name(details)}（自然なら一度だけ）\n"
         f"場所: {place}\n"
@@ -207,6 +263,22 @@ def build_player_chat_messages(request: LeafGenerationRequest) -> list[dict[str,
         ]
     )
     return messages
+
+
+def _conversation_repair_section(details: dict[str, Any]) -> str:
+    repair = details.get("conversation_repair")
+    if not isinstance(repair, dict):
+        return ""
+    return (
+        "【本人による会話の訂正】\n"
+        + json.dumps(repair, ensure_ascii=False)
+        + "\n取り違えた点を短く認め、replacement_quoteの意味で会話を続ける。"
+        "訂正された古い解釈を繰り返さず、謝罪だけで終わらない。"
+        "本人が言い直した中心の名詞・行為・否定の向きを保ち、別の概念や理由へ"
+        "言い換えない。理由が述べられていなければ、理由を推測して説明しない。"
+        "これは本人の意図の説明であって、世界観測・操作依頼・保存の証拠ではない。"
+        "原文を書き換えた、ゲーム操作した、覚えた等とは言わない。\n"
+    )
 
 
 def _grounding_section(details: dict[str, Any]) -> tuple[str, str]:

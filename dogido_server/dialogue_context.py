@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
+from dogido_server.dialogue.conversation_repair import ConversationRepair, repair_note
 
 
 @dataclass(slots=True)
@@ -17,6 +18,7 @@ class DialogueUtterance:
     text: str
     at: datetime | None = None
     turn_id: str = ""
+    repair: ConversationRepair | None = None
 
 
 @dataclass(slots=True)
@@ -116,6 +118,21 @@ class DialogueContext:
         self._danger_active = True
         self._post_danger_player_turns_remaining = 0
 
+    def record_repair(self, turn_id: str, repair: ConversationRepair) -> bool:
+        """現在player行へ検証済みの修復を付記する。元の発話は変更しない。"""
+        current = next((row for row in reversed(self._utterances)
+                        if row.role == "player" and row.turn_id == turn_id), None)
+        if current is None or current.repair is not None:
+            return False
+        if current.text != self._clip(repair.current_text):
+            return False
+        target = next((row for row in self.prompt_turns()
+                       if row["turn_id"] == repair.target_turn_id), None)
+        if target is None or repair.target_quote not in target["text"]:
+            return False
+        current.repair = repair
+        return True
+
     def end_danger_retention(self, *, player_turns: int = 3) -> None:
         if not self._danger_active:
             return
@@ -150,6 +167,8 @@ class DialogueContext:
         for item in self._prompt_utterances():
             prefix = "プレイヤー" if item.role == "player" else "ドギド"
             lines.append(f"{prefix}: {item.text}")
+            if item.repair is not None:
+                lines.append(f"  [{repair_note(item.repair.prompt_fields())}]")
         return lines
 
     def prompt_turns(self) -> list[dict[str, str]]:
@@ -160,6 +179,8 @@ class DialogueContext:
             if role == "assistant" and not turn_id.endswith(":reply"):
                 turn_id += ":reply"
             row = {"turn_id": turn_id, "role": role, "text": item.text}
+            if item.repair is not None:
+                row.update(item.repair.prompt_fields())
             if item.at is not None:
                 row["observed_at"] = item.at.isoformat()
             rows.append(row)

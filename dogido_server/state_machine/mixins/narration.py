@@ -715,6 +715,9 @@ class NarrationMixin:
 
     def _render_player_chat_reply(self, event: GameEvent) -> str:
         from dogido_server.llm.prompts import resolve_character_mode_from_state
+        from dogido_server.dialogue.conversation_repair import repair_fallback
+
+        self.player_chat_repair = None
 
         if self.player_input.knowledge_query is not None:
             return self._render_knowledge_reply()
@@ -852,7 +855,17 @@ class NarrationMixin:
             hearing_summary=available_hearing_summary,
             inventory_question=bool(self.player_input.asks_inventory),
             sound_question=wants_sound,
+            raw_user_text=self.player_input.raw_text,
+            repair_enabled=not self._haiku_workshop_is_open(),
         )
+        self.player_chat_repair = chat_plan.repair
+        if chat_plan.repair is not None:
+            LOGGER.info(
+                "conversation_repair action=%s target=%s source=player_statement",
+                chat_plan.action, chat_plan.repair.target_turn_id,
+            )
+            if chat_plan.action == "clarify_repair":
+                return repair_fallback(chat_plan.repair)
         use_hearing = wants_sound or chat_plan.action in {
             "check_entity_presence",
             "correct_previous_reply",
@@ -1104,6 +1117,14 @@ class NarrationMixin:
             "player_chat_plan_action": chat_plan.action,
             "player_chat_plan_focus": chat_plan.focus,
             "player_chat_plan_source": chat_plan.source,
+            "conversation_repair": (
+                {
+                    "target_turn_id": chat_plan.repair.target_turn_id,
+                    "target_quote": chat_plan.repair.target_quote,
+                    "replacement_quote": chat_plan.repair.replacement_quote,
+                }
+                if chat_plan.repair is not None else None
+            ),
             "player_chat_plan_evidence": [
                 {"turn_id": row.turn_id, "quote": row.quote}
                 for row in chat_plan.evidence
@@ -1183,7 +1204,9 @@ class NarrationMixin:
         if fixed_grounded_reply:
             return fixed_grounded_reply
         # それ以外もfallbackは入力内容を捏造しない中立文へ必ず戻す。
-        preferred_fallback = fallback
+        preferred_fallback = (
+            repair_fallback(chat_plan.repair) if chat_plan.repair is not None else fallback
+        )
         text = self._generate_leaf_text(
             kind="player_chat",
             fallback_text=preferred_fallback,

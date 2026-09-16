@@ -405,10 +405,11 @@ def extract_reading_correction(raw_text: str | None) -> tuple[str, str, str | No
             and surface != reading
             and 1 <= len(surface) <= 20
             and 1 <= len(reading) <= 16
+            and not re.search(r"[、。！？!?]", surface)
             # 「広がる緑は、にしてはどうでした」のような自然文を読み訂正へ
             # 横取りしない。省略形は短い語の読みだけに閉じる。
             and not re.search(
-                r"(?:にして|として|どう|でした|ですか|なら|けど|から|ので|ほう|まま)",
+                r"(?:にして|として|どう|でした|ですか|なら|けど|から|ので|ほう|まま|ってこと|ということ)",
                 reading,
             )
         ):
