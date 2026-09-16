@@ -8,6 +8,8 @@
 
 2026-09-15: 作者が太線化した `Dogido_nomal.png` / `Dogido_nomal_close.png`（両方1398×1336）を無加工で採用。対称化した生成案は不採用。常駐HUDは通常顔4.5秒・閉じ目140ミリ秒をクライアント内だけで切り替え、`motion off` では上下動と瞬きを止める。配置・反転なし・表示条件・掛け軸判断は維持。新しい瞬きの実ゲーム確認は未完了。
 
+2026-09-16: 川柳の取り合わせ／本句／workshop修正案の実生成区間だけ`character_state=thinking`を既存snapshotへ追加し、正常終了・失敗・取消のfinallyで発話queue投入前にnormalへ戻す。workshop open／preface待ち／通常雑談からは推定しない。Fabricへ作者原画`thinking2.png`を追加し、同じ左下・幅9%で表示。連続メッシュの外周だけを動かし、顔・手・思考の小さい丸を固定。通信失敗・3秒の未受信・ローカル危険／死亡／ワールド変更は通常顔へ戻す。通常顔の瞬きと`motion off`を維持。コード・自動テスト／ビルドで確認、実Minecraft・実音声開始との目視確認は未完了。約400msポーリングのため音声開始との厳密な同期ではない。
+
 関連:
 
 - [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)（workshop / preface）

@@ -12,6 +12,7 @@ from dogido_server.entry_catalog import block_entry, item_entry, mob_entry, mob_
 from dogido_server.dialogue.foreground import CASUAL_HAIKU_PREFACE
 from dogido_server.environment_context import project_environment
 from dogido_server.haiku.generation import generate_grounded_haiku
+from dogido_server.haiku.presentation import during_haiku_generation
 from dogido_server.haiku.materials import attach_fragment_links, build_workshop_materials_seed
 from dogido_server.haiku.source_atoms import (
     CatalogSourceSnapshot,
@@ -278,6 +279,7 @@ class HaikuMixin:
         LOGGER.warning("haiku_emit result=emitted text=%s", summarize_for_log(line))
         return line
 
+    @during_haiku_generation
     def _begin_prefaced_haiku(self, event: GameEvent, now: datetime) -> str:
         """取り合わせ文を先に返し、scene整理と本句生成は次フレームへ送る。"""
         context = self._haiku_context(event)
@@ -342,6 +344,7 @@ class HaikuMixin:
         LOGGER.warning("haiku_emit result=preface text=%s", summarize_for_log(spoken))
         return spoken
 
+    @during_haiku_generation
     def _complete_prefaced_haiku(self, event: GameEvent, now: datetime) -> str:
         self.state.pending_haiku_after_preface = False
         self.state.pending_haiku_started_at = None
@@ -667,6 +670,7 @@ class HaikuMixin:
         # 見どころが無いときも二重に「ここで一句」と言わない
         return "なんか浮かんできたわ。"
 
+    @during_haiku_generation
     def _render_haiku_line(self, event: GameEvent) -> str:
         context = self._haiku_context(event)
         irony, _ = self._detect_haiku_irony(context)

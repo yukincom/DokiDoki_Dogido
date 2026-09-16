@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import logging
@@ -95,6 +96,7 @@ from dogido_server.haiku.workshop import (
     workshop_verse_lines,
 )
 from dogido_server.haiku.generation import generate_workshop_revision
+from dogido_server.haiku.presentation import thinking_pose
 from dogido_server.haiku.workshop_context import workshop_context_details
 from dogido_server.haiku.edit_contract import PLAYER_LINE_EDIT_CONTRACT_VERSION
 from dogido_server.haiku.source_atoms import (
@@ -5010,19 +5012,21 @@ class DogidoService:
             allowed_atom_ids={atom.atom_id for atom in atoms},
         )
         try:
-            result = generate_workshop_revision(
-                self.llm,
-                original_text=base_text,
-                target_indices=targets,
-                findings=tuple(finding.to_dict() for finding in analysis.findings),
-                source_atoms=atoms,
-                original_line_sources=line_sources,
-                details={
-                    **dict(workshop.materials or {}),
-                    "workshop_context": workshop_context_details(workshop),
-                },
-                max_tokens=self.settings.haiku_structured_max_tokens,
-            )
+            owner = next((s for s in self.sessions.values() if s.haiku_workshop is workshop), None)
+            with thinking_pose(owner.machine) if owner is not None else nullcontext():
+                result = generate_workshop_revision(
+                    self.llm,
+                    original_text=base_text,
+                    target_indices=targets,
+                    findings=tuple(finding.to_dict() for finding in analysis.findings),
+                    source_atoms=atoms,
+                    original_line_sources=line_sources,
+                    details={
+                        **dict(workshop.materials or {}),
+                        "workshop_context": workshop_context_details(workshop),
+                    },
+                    max_tokens=self.settings.haiku_structured_max_tokens,
+                )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("haiku_workshop_revision_failed detail=%s", exc)
             workshop.last_repair_feedback = {
@@ -5405,6 +5409,8 @@ class DogidoService:
         return self.sessions[implicit_id]
 
     def _bind_dialogue_provider(self, session: SessionInfo) -> None:
+        # Published on the same service worker at generation entry/exit, not from GET.
+        session.machine.haiku_presentation_observer = self.publish_workshop_hud
         session.machine.dialogue_context_provider = lambda: session.dialogue
         session.machine.foreground_dialogue_provider = (
             lambda: session.foreground_dialogue.snapshot()

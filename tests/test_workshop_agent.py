@@ -403,15 +403,15 @@ def test_failed_revision_is_returned_once_and_becomes_improvement_record(tmp_pat
             }
         ]
     }
-    monkeypatch.setattr(
-        "dogido_server.service.generate_workshop_revision",
-        lambda *args, **kwargs: WorkshopRevisionResult(
+    def rejected_revision(*args, **kwargs):
+        assert service.workshop_hud.get(session.session_id)["character_state"] == "thinking"
+        return WorkshopRevisionResult(
             None,
             False,
             failure_reason="invalid_revision",
             retry_feedback=feedback,
-        ),
-    )
+        )
+    monkeypatch.setattr("dogido_server.service.generate_workshop_revision", rejected_revision)
 
     actions = _send(service, session, "中七が場面と違うから直して")
 
@@ -421,6 +421,7 @@ def test_failed_revision_is_returned_once_and_becomes_improvement_record(tmp_pat
     assert session.haiku_workshop.hud_editing
     assert session.haiku_workshop.hud_selected_line == 1
     assert service.workshop_hud.get(session.session_id)["selected_line"] == 1
+    assert service.workshop_hud.get(session.session_id)["character_state"] == "normal"
     assert session.haiku_workshop.pending_revision is None
     second = service.llm.requests[1]
     observation = second.details["tool_observation"]

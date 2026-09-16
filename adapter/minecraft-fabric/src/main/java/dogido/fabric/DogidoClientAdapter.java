@@ -261,6 +261,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private String lastOminousSoundKind = "";
     private boolean combatActive = false;
     private DogidoWorkshopHud workshopHud;
+    private DogidoCharacterHud characterHud;
     private ClientWorld displayWorld;
     private Object displayConnection;
     private String displayThreatSignature = "";
@@ -279,7 +280,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     public void onInitializeClient() {
         INSTANCE = this;
         this.workshopHud = DogidoWorkshopHud.register();
-        DogidoCharacterHud.register();
+        this.characterHud = DogidoCharacterHud.register();
         this.config = DogidoConfig.load();
         this.eventClient = new DogidoEventClient(LOGGER, this.config, this::handleSelectHotbarCommand);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
@@ -432,6 +433,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private void onClientTick(MinecraftClient client) {
         if (!this.config.enabled) {
+            this.characterHud.reset();
             return;
         }
 
@@ -442,12 +444,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             // Dimension changes on the same connection retain the existing session.
             this.eventClient.disconnected();
             this.workshopHud.reset();
+            this.characterHud.reset();
             this.displayConnection = null;
         }
         if (player == null || world == null) {
             if (this.displayWorld != null) this.eventClient.invalidateDisplayRequests();
             this.workshopHud.reset();
             this.displayWorld = null;
+            this.characterHud.reset();
             this.resetTransientState();
             return;
         }
@@ -455,6 +459,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.eventClient.invalidateDisplayRequests();
             this.workshopHud.reset();
             this.workshopHud.synchronizeAfter(this.eventClient.currentSequence() + 1);
+            this.characterHud.reset();
+            this.characterHud.synchronizeAfter(this.eventClient.currentSequence() + 1);
             this.displayWorld = world;
         }
         this.displayConnection = client.getNetworkHandler();
@@ -604,10 +610,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.displayThreatSignature = displaySignature;
         long displayBarrier = this.eventClient.currentSequence() > displaySequenceBefore
             ? this.eventClient.currentSequence() : this.eventClient.currentSequence() + 1;
-        this.workshopHud.danger(deadNow || this.combatActive || !visibleThreats.isEmpty() || !audioThreats.isEmpty()
-            || this.tickCounter - this.lastDamageTick <= this.config.combatEndedQuietTicks,
-            displayDangerChanged, displayBarrier);
-        if (this.tickCounter % 8 == 0) this.eventClient.pollWorkshopDisplay(this.workshopHud::receive);
+        boolean displayDanger = deadNow || this.combatActive || !visibleThreats.isEmpty() || !audioThreats.isEmpty()
+            || this.tickCounter - this.lastDamageTick <= this.config.combatEndedQuietTicks;
+        this.workshopHud.danger(displayDanger, displayDangerChanged, displayBarrier);
+        this.characterHud.danger(displayDanger, displayDangerChanged, displayBarrier);
+        if (this.tickCounter % 8 == 0) this.eventClient.pollWorkshopDisplay(snapshot -> {
+            this.workshopHud.receive(snapshot);
+            this.characterHud.receive(snapshot);
+        });
     }
 
     private void resetTransientState() {

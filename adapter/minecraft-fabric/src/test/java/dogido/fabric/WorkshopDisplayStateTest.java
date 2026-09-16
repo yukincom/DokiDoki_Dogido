@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 final class WorkshopDisplayStateTest {
     private static final List<String> VERSE = List.of("くわをもち", "はたけのまえで", "ひとやすみ");
     private static WorkshopDisplayState.Snapshot snapshot(long revision, long sequence, String mode, boolean editing, Integer line, boolean provisional) {
-        return new WorkshopDisplayState.Snapshot("ses_a", "verse_a", revision, sequence, mode, VERSE, List.of(), editing, line, provisional);
+        return new WorkshopDisplayState.Snapshot("ses_a", "verse_a", revision, sequence, mode, VERSE, List.of(), editing, line, provisional, "normal");
     }
     private static String json() {
         return """

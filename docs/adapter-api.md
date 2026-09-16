@@ -671,14 +671,17 @@ Minecraft画面とは別に、ブラウザで `GET /dogido` を開くと、ド�
   "pending_lines": [],
   "editing": true,
   "selected_line": 1,
-  "provisional_resume": false
+  "provisional_resume": false,
+  "character_state": "normal"
 }
 ```
 
 - `state`: `closed / open / danger`。閉鎖時の句配列は空。`workshop_id`はpin単位で安定し、戦闘中断・再開で変わらない。
+- `character_state`: `normal / thinking`（schema v1の追加フィールド。旧serverで欠ける場合はnormal）。新規川柳の取り合わせ／本句と、workshopの修正案を実際に生成している区間だけthinking。workshop open、preface待ち、音声待ち・読み上げ、雑談生成だけではthinkingにしない。生成の入口とfinallyでservice workerから即投影し、返り値を発話queueへ渡す前にnormalへ戻す。例外・生成取消もfinallyで解除。GETは生成worker待ちにならない。
 - `canonical_lines`は採用済みの表示三行。CASが現在句に合う未採用案だけを`pending_lines`に別記し、描画時は「未採用案」と明記する。不整合案をGETから破棄しない。
 - `editing / selected_line`は表示専用。選択行は0始まりの0/1/2またはnull。確定した編集対象か、編集相談の検証済み行参照を映す。単なる意味質問の行マークだけでは編集中にしない。操作ボタンや保存権限ではない。
 - service専用workerの操作完了時に投影を作り、短いlockで置換する。GETは独立cacheだけを読み、LLM処理待ちのキューへ入れない。編集対象確定時にも投影し、生成待ちの間に対象を出せる。投影エラーは本体処理へ伝播させず、cacheを無効化する。
 - Fabricは同時一件・約400ms間隔で取得し、session・schema・revision・行数／外形を検証する。描画はゲームスレッド。欠損／失敗／3秒以上の未受信は即非表示。新しいMinecraft接続ではsessionを再登録し、古い応答を捨てる。
+- キャラクター本体は欠損／失敗／3秒以上の未受信でも隠さず、通常顔＋瞬きへ戻る。ローカル危険・死亡・ワールド変更でも考え顔を解除し、古いrevision／危険観測より前のsnapshotで復帰しない。音声とは別の約400msポーリング表示なので、画面切替と実音声開始のフレーム単位の同期は保証しない。
 - ローカルの敵／被弾／死亡観測でも即遮蔽し、`observed_sequence`が新しい危険観測まで追いつく前の応答では復帰させない。`provisional_resume`は既存の明示・低脅威再開がコードで成立したときだけtrue。再接近・被弾・敵変更はその許可を再度遮蔽する。匂い単独では遮蔽しない。
 - 句の出現／通常終了は各1秒、危険は即時。編集中の対象切替はフェードせず、一度だけ短い操作音を出す。初回接続・同じsnapshotの再受信では音を出さない。TTSの実再生完了との厳密な同期ではない。
