@@ -29,6 +29,12 @@ from dogido_server.haiku.hud import project_workshop
 TOKEN = "connection-test-only"
 
 
+def event(sequence=18):
+    return {"schema_version": "2026-05-24", "adapter": "fabric", "sequence": sequence,
+            "observed_at": "2026-09-21T00:00:00Z", "event": {"name": "status_snapshot",
+            "source_kind": "system", "priority_hint": "background", "certainty": "high"}}
+
+
 @contextmanager
 def server(binary: Path, log_path: Path, stop_signal=signal.SIGTERM):
     env = dict(os.environ, DOGIDO_AUTH_TOKEN=TOKEN)
@@ -141,7 +147,12 @@ def main():
             assert snapshot["runtime"]["runtime_environment"] == "Rust"
             assert snapshot["diagnostics"] and snapshot["utterances"] == []
             passed.append("runtime_and_diagnostics_snapshot")
-            status, body = request(address, "POST", "/api/v1/game-events", {"sequence": 18}, session_id=old_id)
+            assert request(address, "POST", "/api/v1/game-events", {"sequence": 18}, session_id=old_id)[0] == 422
+            assert request(address, "POST", "/api/v1/game-events/batch",
+                           {"events": [event(), {"sequence": 19}]}, session_id=old_id)[0] == 422
+            assert hud(address, old_id, 17)["observed_sequence"] == 17
+            passed.append("invalid_event_and_batch_do_not_consume_sequence")
+            status, body = request(address, "POST", "/api/v1/game-events", event(), session_id=old_id)
             assert status == 501 and body["accepted"] is False
             assert hud(address, old_id, 17)["observed_sequence"] == 17
             status, body = request(address, "POST", "/api/v1/player-input", {"text": "こんにちは", "source": "voice"})
@@ -150,7 +161,7 @@ def main():
         passed.append("sigterm_drains_and_stops_worker")
         with server(binary, log2, signal.SIGINT) as address:
             assert request(address, "GET", f"/api/v1/haiku-workshop/snapshot?session_id={old_id}")[0] == 404
-            status, body = request(address, "POST", "/api/v1/game-events", {}, session_id=old_id)
+            status, body = request(address, "POST", "/api/v1/game-events", event(), session_id=old_id)
             assert status == 409 and body == {"detail": {"code": "unknown_session_id", "session_id": old_id}}
             passed.append("restart_invalidates_old_session")
             current_id = register(address)

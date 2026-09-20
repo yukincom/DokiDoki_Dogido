@@ -1,4 +1,5 @@
 //! 接続段階で移した契約だけ。世界観測・会話・操作の型を代用しない。
+pub use crate::ingress::InputSource;
 use chrono::{DateTime, FixedOffset};
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -37,14 +38,6 @@ pub struct PlayerInputRequest {
     pub text: String,
     #[serde(default)]
     pub source: InputSource,
-}
-
-#[derive(Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum InputSource {
-    #[default]
-    Text,
-    Voice,
 }
 
 #[derive(Default, Deserialize)]

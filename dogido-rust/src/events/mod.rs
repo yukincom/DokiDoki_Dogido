@@ -1,0 +1,67 @@
+//! Fabric受信契約。外形・範囲・意味検査を通過したイベントだけを公開する。
+mod models;
+mod semantic;
+mod wire;
+
+pub use models::*;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+use std::ops::Deref;
+pub use wire::EventTime;
+
+trait Validate {
+    fn validate(&self) -> Result<(), String>;
+}
+impl<T: Validate> Validate for Option<T> {
+    fn validate(&self) -> Result<(), String> {
+        self.as_ref().map_or(Ok(()), Validate::validate)
+    }
+}
+impl<T: Validate> Validate for Vec<T> {
+    fn validate(&self) -> Result<(), String> {
+        self.iter().try_for_each(Validate::validate)
+    }
+}
+fn ensure(condition: bool, message: &str) -> Result<(), String> {
+    if condition {
+        Ok(())
+    } else {
+        Err(message.into())
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(transparent)]
+pub struct GameEvent(EventData);
+
+impl GameEvent {
+    pub fn parse(mut value: Value) -> Result<Self, String> {
+        // 旧名をextraにも残すPythonのbefore-validatorと同じ優先順。
+        if let Some(object) = value.as_object_mut()
+            && !object.contains_key("passive_mobs")
+            && let Some(legacy) = object.get("peaceful_mobs").cloned()
+        {
+            object.insert("passive_mobs".into(), legacy);
+        }
+        let data: EventData = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        data.validate()?;
+        Ok(Self(data))
+    }
+}
+impl Deref for GameEvent {
+    type Target = EventData;
+    fn deref(&self) -> &EventData {
+        &self.0
+    }
+}
+impl<'de> Deserialize<'de> for GameEvent {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::parse(Value::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct BatchEvents {
+    #[serde(default)]
+    pub events: Vec<GameEvent>,
+}

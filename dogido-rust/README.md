@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-現在はセッション登録・再接続・終了と表示データの受付を確認する段階です。ゲームの判断・会話・音声は未移植です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+現在はセッション登録・再接続・終了、表示データ、ゲームイベントの受信検査を確認する段階です。ゲームの判断・会話・音声は未移植です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -34,11 +34,13 @@ dogido-rust/target/release/dogido-rust serve
 | `/api/v1/adapter-sessions/{id}` | DELETEで終了。繰り返し終了も成功 |
 | `/api/v1/display/snapshot` | 起動元、接続状態、登録／終了等の診断ログ。発言・資料はまだ空 |
 | `/api/v1/haiku-workshop/snapshot` | 閉じたworkshopの既存形式。未知IDは404 |
-| `/api/v1/game-events`・`/batch` | 古いsession IDは409。既知IDでも世界処理が未対応なので501 |
+| `/api/v1/game-events`・`/batch` | 不正データは422。検査後、古いsession IDは409、既知IDでも世界処理が未対応なので501 |
 | `/api/v1/player-input` | 空入力・sessionなしは理由付きで拒否。それ以外も会話が未対応なので501 |
 | 音声文脈・音声診断・記憶API | 未実装を501で返す |
 
-501では`accepted=false`を返し、観測sequenceの消費・発話・操作・保存はしません。イベントの受信は接続表示の更新にだけ使います。`game-events`の全フィールド検証・重複判定・入力待ち列は、判断処理の移植時に追加します。
+501では`accepted=false`を返し、観測sequenceの消費・発話・操作・保存はしません。検査済みイベントの受信は接続表示の更新にだけ使います。重複判定と入力待ち列は独立した部品として実装済みですが、会話の消費先がない間はHTTP受付から使用しません。
+
+受信検査は現行のフィールド・enum・範囲・ホットバー重複・匂いの意味制約を扱います。旧`peaceful_mobs`の互換名と、匂い以外の未知フィールドも保持します。整数は符号付き64bit、実数は有限の64bit浮動小数点で扱います。Pythonの任意精度整数や非有限値まで受理する契約にはしていません。
 
 状態変更は一つの処理係へ直列に渡し、表示GETは公開済みsnapshotだけを直接読みます。HTTP側が待機を取り消しても、キューに入った登録／終了の順序と投影の公開は維持します。接続が途絶えた表示も定期更新します。
 
@@ -87,6 +89,22 @@ python dogido-rust/scripts/check_server.py
 ```
 
 一時ポートでRustサーバーを起動し、Pythonの型と閉鎖HUDの投影を照合します。再起動後の404／409と再登録、Ctrl+C／SIGTERMでの終了を確認し、結果を`reports/server-check.json`へ保存します。試験プロセスは終了時に回収し、実モデル・TTSは呼びません。
+
+イベントの採否・既定値・拡張項目、重複判定、入力保持をPythonと比較します。ネットワーク接続はありません。
+
+```sh
+./dogido-rust/cargo.sh build --locked --example check_inputs
+python dogido-rust/scripts/compare_inputs.py
+```
+
+結果は`reports/input-comparison.json`へ保存します。入力待ち列の比較は本文正規化後の保持・順序までで、STT補正、会話への振り分け、危険時の保留判断、音声中断は含みません。
+
+Python側の受信モデルを変更した場合は、宣言を再生成し、意味検証と比較結果を確認します。生成後のRust実行にPythonは不要です。
+
+```sh
+python dogido-rust/scripts/generate_event_types.py
+./dogido-rust/cargo.sh fmt
+```
 
 ## 接続実装の範囲
 

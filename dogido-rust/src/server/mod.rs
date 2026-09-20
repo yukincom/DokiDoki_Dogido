@@ -19,6 +19,7 @@ use chrono::Utc;
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot, watch};
 
+use crate::events::{BatchEvents, GameEvent};
 use contracts::{
     HeartbeatRequest, PlayerInputRequest, SessionRequest, SnapshotQuery, WorkshopQuery,
 };
@@ -287,15 +288,9 @@ fn session_header(headers: &HeaderMap) -> Option<String> {
 async fn game_event(
     State(state): State<AppState>,
     headers: HeaderMap,
-    payload: Result<Json<Value>, JsonRejection>,
+    payload: Result<Json<GameEvent>, JsonRejection>,
 ) -> Result<ApiReply, ApiReply> {
-    let body = parse(payload)?;
-    if !body.is_object() {
-        return Err(ApiReply::error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            json!("expected event object"),
-        ));
-    }
+    let _event = parse(payload)?;
     Ok(state
         .submit(Operation::GameEvent {
             session_id: session_header(&headers),
@@ -306,25 +301,10 @@ async fn game_event(
 async fn game_event_batch(
     State(state): State<AppState>,
     headers: HeaderMap,
-    payload: Result<Json<Value>, JsonRejection>,
+    payload: Result<Json<BatchEvents>, JsonRejection>,
 ) -> Result<ApiReply, ApiReply> {
     let body = parse(payload)?;
-    if !body.is_object() {
-        return Err(ApiReply::error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            json!("expected batch object"),
-        ));
-    }
-    let size = match body.get("events") {
-        None => 0,
-        Some(Value::Array(events)) => events.len(),
-        _ => {
-            return Err(ApiReply::error(
-                StatusCode::UNPROCESSABLE_ENTITY,
-                json!("events must be an array"),
-            ));
-        }
-    };
+    let size = body.events.len();
     Ok(state
         .submit(Operation::GameEvent {
             session_id: session_header(&headers),
