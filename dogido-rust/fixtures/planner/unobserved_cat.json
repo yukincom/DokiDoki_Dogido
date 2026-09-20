@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "model": "default_model",
+  "enable_thinking": false,
+  "details": {
+    "allowed_actions": [
+      "continue_conversation",
+      "check_entity_presence",
+      "identify_entity",
+      "answer_observation",
+      "clarify_reference",
+      "correct_previous_reply"
+    ],
+    "history": [
+      {
+        "turn_id": "goat:reply",
+        "role": "assistant",
+        "text": "ヤギおるな。"
+      }
+    ],
+    "pending_repair": {},
+    "observations": {
+      "summary": "",
+      "observed_entities": [],
+      "look_target_label": "",
+      "hearing_summary": ""
+    },
+    "routing_hints": {
+      "inventory_question": false,
+      "sound_question": false,
+      "presence_question": true,
+      "plain_presence_report": false
+    },
+    "current": {
+      "turn_id": "current",
+      "role": "user",
+      "text": "猫はいる？",
+      "raw_text": "猫はいる？"
+    }
+  },
+  "fallback": {
+    "action": "check_entity_presence",
+    "focus": "現在の対象の在否",
+    "entity_query": "猫はいる？",
+    "evidence": [
+      {
+        "turn_id": "current",
+        "quote": "猫はいる？"
+      }
+    ],
+    "confidence": 0.0,
+    "source": "fallback",
+    "status": "fallback",
+    "repair": null,
+    "presence_challenged": false
+  }
+}

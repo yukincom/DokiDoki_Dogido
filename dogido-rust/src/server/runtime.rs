@@ -15,7 +15,7 @@ use super::{
 };
 
 pub(super) enum Operation {
-    Create(SessionRequest),
+    Create(Box<SessionRequest>),
     Heartbeat(String, HeartbeatRequest),
     Close(String),
     GameEvent {
@@ -180,7 +180,7 @@ impl Runtime {
                 self.data.sessions.insert(
                     id.clone(),
                     Session {
-                        registration,
+                        registration: *registration,
                         last_seen: now,
                         last_sequence: None,
                     },
@@ -324,7 +324,7 @@ mod tests {
             "execution_capabilities": ["client.hotbar.select.v1"], "adapter_build": "future"
         }))
         .unwrap();
-        let reply = runtime.apply(Operation::Create(registration));
+        let reply = runtime.apply(Operation::Create(Box::new(registration)));
         let id = reply.body["session_id"].as_str().unwrap();
         let session = &runtime.data.sessions[id];
         assert_eq!(session.registration.capabilities, ["visual_threats"]);

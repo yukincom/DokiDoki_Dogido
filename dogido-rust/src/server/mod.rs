@@ -244,7 +244,9 @@ async fn create_session(
     State(state): State<AppState>,
     payload: Result<Json<SessionRequest>, JsonRejection>,
 ) -> Result<ApiReply, ApiReply> {
-    Ok(state.submit(Operation::Create(parse(payload)?)).await)
+    Ok(state
+        .submit(Operation::Create(Box::new(parse(payload)?)))
+        .await)
 }
 async fn heartbeat(
     State(state): State<AppState>,

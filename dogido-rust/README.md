@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-現在はセッション登録・再接続・終了、表示データ、ゲームイベントの受信検査を確認する段階です。ゲームの判断・会話・音声は未移植です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+セッション登録・再接続・終了、表示データ、ゲームイベントの受信検査に加え、通常会話の限定plannerを単独実装しています。ゲームの判断、返答本文、短期履歴の更新、音声、HTTPから会話への配線は未移植です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -64,11 +64,48 @@ dogido-rust/target/release/dogido-rust generate dogido-rust/fixtures/connection.
 
 出力JSONには返答、`finish_reason`、入力／生成トークン数、要求／応答のモデル名、応答ID、API所要時間を残します。トークン数が返らなかった場合は`null`です。`elapsed_ms`は一回のAPI呼出と応答読取の時間で、音声の体感応答時間とは別です。
 
+## 通常会話plannerの単独確認
+
+```sh
+dogido-rust/target/release/dogido-rust plan-chat dogido-rust/fixtures/planner/explicit_repair.json
+```
+
+本人の訂正、聞き返し、会話継続、現在観測への照合など一件のread actionを選びます。現在の発話と実再生済み履歴に根拠があるかをRustで検査し、AIに履歴・世界・保存の変更権限を渡しません。引用内の訂正語や原文にない置換語は採用しません。対象候補と現在観測の照合、および未観測時の固定返答も独立関数として移植しています。
+
+入力は状態機械が作る読み取り用の`PreparedPlan`です。現段階では現行Pythonが作った文脈・カタログ由来のfallbackを合成fixtureに書き出して使います。文脈の収集・カタログ検索・通常返答の生成はまだ移植していません。`serve`の会話APIには未接続で、このCLIだけでは相棒と会話できません。
+
+現行の日本語prompt、温度0、上限640、thinking指定を維持します。JSON契約違反時だけ再試行1回、低信頼・初回のJSON途中切れ・通信失敗では追加呼出しません。型エラーの診断名はRust用ですが、発話根拠・routing違反の診断と再試行の条件はPythonと同じです。各試行の本文・終了理由・トークン数・API時間をreportへ残します。
+
+起動済みモデルで6件を逐次確認するには、次を実行します。実モデルの使用が許可された環境でのみ実行してください。
+
+```sh
+python dogido-rust/scripts/check_planner_live.py
+```
+
+2026-09-21の確認では、会話継続・本人訂正・聞き返し・引用語・未観測の猫への問い・聞き返し後の説明の6件が各1回で採用されました。API時間は1,568〜3,284ms、全件`finish_reason=stop`。要求・応答モデル名とも`default_model`で、具体的なモデル名は応答から確定できません。合成文脈でのplanner検証であり、返答文・STT・TTSを含む応答時間や速度改善率ではありません。
+
 ## 検証
 
 ```sh
 ./dogido-rust/cargo.sh test --locked
 ./dogido-rust/cargo.sh clippy --locked --all-targets -- -D warnings
+```
+
+plannerのprompt・採否・訂正原文・現在観測をPythonと比較します。通信試験は一時ポートの模擬サーバーを使い、終了時に必ず回収します。
+
+```sh
+./dogido-rust/cargo.sh build --locked --examples --bin dogido-rust
+python dogido-rust/scripts/compare_planner.py
+python dogido-rust/scripts/check_planner_transport.py
+```
+
+同一入力比較2,145件、実HTTPでの再試行・失敗確認12件。結果は`reports/planner-comparison.json`と`reports/planner-transport.json`です。実再生完了履歴の投影を入力にしており、実際の音声完了イベントや履歴更新の配線はこの比較に含めません。
+
+Python側のplanner定型文や比較fixtureを変更した場合の再生成は以下です。これらの生成物を使うRust実行時にはPythonを呼びません。
+
+```sh
+python dogido-rust/scripts/generate_planner_prompts.py
+python dogido-rust/scripts/planner_cases.py
 ```
 
 既存Python環境で比較器を実行します。先に通常の開発用ビルドを作ってください。
@@ -110,6 +147,6 @@ python dogido-rust/scripts/generate_event_types.py
 
 - RigのChat Completions経路を明示し、messages・温度・トークン上限・thinking指定を保持します。
 - messagesは既存Pythonと同じrole／文字列形式に揃えます。通信の自動再試行とリダイレクトは無効です。
-- 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成は、今後移植するドギドの処理が担当します。
+- 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerの契約検査は移植済みで、川柳などは未移植です。
 - 対象は現在のMLXの通常のChat Completions応答です。Rigは`id`・`model`・messageの`role`等を要求するため、旧Pythonが許容する省略形すべての互換実装ではありません。
-- 移植済みの型はLLM境界とsession／heartbeat／player-inputの外形です。Fabricイベント全体、設定全体、記憶の保存形式の互換性は、それぞれの移植時に検証します。
+- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。設定全体、記憶の保存形式の互換性は、それぞれの移植時に検証します。

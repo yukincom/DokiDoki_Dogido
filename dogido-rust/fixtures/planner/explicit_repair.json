@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "model": "default_model",
+  "enable_thinking": false,
+  "details": {
+    "allowed_actions": [
+      "continue_conversation",
+      "check_entity_presence",
+      "identify_entity",
+      "answer_observation",
+      "clarify_reference",
+      "correct_previous_reply",
+      "repair_conversation",
+      "clarify_repair"
+    ],
+    "history": [
+      {
+        "turn_id": "old",
+        "role": "user",
+        "text": "1位になるのは無理やな"
+      },
+      {
+        "turn_id": "old:reply",
+        "role": "assistant",
+        "text": "1位になれんでもええやん。"
+      }
+    ],
+    "pending_repair": {},
+    "observations": {
+      "summary": "",
+      "observed_entities": [],
+      "look_target_label": "",
+      "hearing_summary": ""
+    },
+    "routing_hints": {
+      "inventory_question": false,
+      "sound_question": false,
+      "presence_question": false,
+      "plain_presence_report": false
+    },
+    "current": {
+      "turn_id": "current",
+      "role": "user",
+      "text": "違う、仲間になるのは無理ってこと",
+      "raw_text": "違う、仲間になるのは無理ってこと"
+    }
+  },
+  "fallback": {
+    "action": "continue_conversation",
+    "focus": "直近の会話への返答",
+    "entity_query": "",
+    "evidence": [
+      {
+        "turn_id": "current",
+        "quote": "違う、仲間になるのは無理ってこと"
+      }
+    ],
+    "confidence": 0.0,
+    "source": "fallback",
+    "status": "fallback",
+    "repair": null,
+    "presence_challenged": false
+  }
+}
