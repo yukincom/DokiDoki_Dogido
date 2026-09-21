@@ -35,6 +35,7 @@ pub struct HeartbeatRequest {
 
 #[derive(Deserialize)]
 pub struct PlayerInputRequest {
+    pub session_id: Option<String>,
     pub text: String,
     #[serde(default)]
     pub source: InputSource,

@@ -1,4 +1,4 @@
-//! 接続専用サーバー。LLM client・音声・記憶storeは構築しない。
+//! 接続専用と、明示選択した平時会話preview。記憶store・世界操作は未接続。
 pub mod contracts;
 mod runtime;
 
@@ -31,6 +31,7 @@ pub struct ServerConfig {
     pub accepted_schema_version: String,
     pub heartbeat_interval_ms: u64,
     pub max_batch_size: usize,
+    pub dialogue: Option<Arc<crate::dialogue::Dialogue>>,
 }
 
 impl Default for ServerConfig {
@@ -40,6 +41,7 @@ impl Default for ServerConfig {
             accepted_schema_version: "2026-05-24".into(),
             heartbeat_interval_ms: 5000,
             max_batch_size: 25,
+            dialogue: None,
         }
     }
 }
@@ -84,6 +86,7 @@ struct AppState {
     commands: mpsc::UnboundedSender<Command>,
     published: watch::Receiver<Arc<Published>>,
     auth_token: Option<Arc<str>>,
+    dialogue: Option<Arc<crate::dialogue::Dialogue>>,
 }
 
 impl AppState {
@@ -113,15 +116,20 @@ impl Application {
             .as_deref()
             .filter(|key| !key.is_empty())
             .map(Arc::from);
+        let dialogue = config.dialogue.clone();
         let (commands, published, worker) = runtime::spawn(config);
         let state = AppState {
             commands,
             published,
             auth_token,
+            dialogue,
         };
         let router = Router::new()
             .route("/healthz", get(health))
             .route("/dogido", get(display_page))
+            .route("/rust-chat", get(chat_page))
+            .route("/api/v1/rust-dialogue/snapshot", get(chat_snapshot))
+            .route("/api/v1/rust-dialogue/interrupt", post(chat_interrupt))
             .route("/api/v1/adapter-sessions", post(create_session))
             .route("/api/v1/adapter-sessions/{id}/heartbeat", post(heartbeat))
             .route("/api/v1/adapter-sessions/{id}", delete(close_session))
@@ -154,12 +162,18 @@ impl Application {
         if let Some(worker) = self.worker.take() {
             worker.await?;
         }
+        if let Some(dialogue) = &self.state.dialogue {
+            dialogue.shutdown().await;
+        }
         Ok(())
     }
 }
 
 impl Drop for Application {
     fn drop(&mut self) {
+        if let Some(dialogue) = &self.state.dialogue {
+            dialogue.cancel_all();
+        }
         if let Some(worker) = &self.worker {
             worker.abort();
         }
@@ -199,22 +213,42 @@ async fn access(State(state): State<AppState>, request: Request, next: Next) -> 
     response
 }
 
-async fn health() -> Json<Value> {
+async fn health(State(state): State<AppState>) -> Json<Value> {
+    let enabled = state.dialogue.is_some();
     Json(
         json!({"ok": true, "service": "dogido-server", "version": env!("CARGO_PKG_VERSION"),
-        "runtime": "rust", "phase": "connection_only", "dialogue_ready": false, "llm_enabled": false}),
+        "runtime": "rust", "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": enabled, "llm_enabled": enabled}),
     )
 }
 
-async fn display_page() -> Response {
+async fn display_page(State(state): State<AppState>) -> Response {
+    let banner = if state.dialogue.is_some() {
+        "Rust版・平時の会話試験。戦闘・川柳・世界操作は未接続。<a href=\"/rust-chat\">会話入力を開く</a>"
+    } else {
+        "接続テスト用です。会話・警告・音声はまだ使えません。"
+    };
     // Python版の画面は変更せず、同じHTMLを埋め込んで実行環境の表示だけ合わせる。
     let html = include_str!("../../../dogido_server/static/dogido.html")
         .replace("Python環境:", "実行環境:")
-        .replace("runtime.python_environment || '不明'", "runtime.runtime_environment || runtime.python_environment || '不明'")
-        .replace("`${environment}（仮想環境ではありません）`", "`${environment}`")
+        .replace(
+            "runtime.python_environment || '不明'",
+            "runtime.runtime_environment || runtime.python_environment || '不明'",
+        )
+        .replace(
+            "`${environment}（仮想環境ではありません）`",
+            "`${environment}`",
+        )
+        .replace("tag.textContent = categoryLabels[item.category] || '発言';",
+            "tag.textContent = item.playback_status ? ({generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');")
         // heartbeatが途切れるとrevisionは止まるため、接続状態だけは毎回描画する。
-        .replace("const data = await response.json();", "const data = await response.json();\n          renderRuntime(data);")
-        .replace("<main class=\"page\">", "<main class=\"page\"><p role=\"status\">接続テスト用です。会話・警告・音声はまだ使えません。</p>");
+        .replace(
+            "const data = await response.json();",
+            "const data = await response.json();\n          renderRuntime(data);",
+        )
+        .replace(
+            "<main class=\"page\">",
+            &format!("<main class=\"page\"><p role=\"status\">{banner}</p>"),
+        );
     let mut response = Html(html).into_response();
     response.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
         "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"));
@@ -292,7 +326,20 @@ async fn game_event(
     headers: HeaderMap,
     payload: Result<Json<GameEvent>, JsonRejection>,
 ) -> Result<ApiReply, ApiReply> {
-    let _event = parse(payload)?;
+    let event = parse(payload)?;
+    if state.dialogue.is_some() {
+        return Ok(state
+            .submit(Operation::DialogueEvents {
+                session_id: session_header(&headers),
+                events: vec![event],
+                batch: false,
+                key: headers
+                    .get("idempotency-key")
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_owned),
+            })
+            .await);
+    }
     Ok(state
         .submit(Operation::GameEvent {
             session_id: session_header(&headers),
@@ -307,6 +354,16 @@ async fn game_event_batch(
 ) -> Result<ApiReply, ApiReply> {
     let body = parse(payload)?;
     let size = body.events.len();
+    if state.dialogue.is_some() {
+        return Ok(state
+            .submit(Operation::DialogueEvents {
+                session_id: session_header(&headers),
+                events: body.events,
+                batch: true,
+                key: None,
+            })
+            .await);
+    }
     Ok(state
         .submit(Operation::GameEvent {
             session_id: session_header(&headers),
@@ -321,9 +378,23 @@ async fn player_input(
     Ok(state.submit(Operation::PlayerInput(parse(payload)?)).await)
 }
 async fn voice_context(State(state): State<AppState>) -> ApiReply {
+    if let Some(d) = &state.dialogue {
+        return ApiReply::ok(json!({"prompt_mode":"normal", "session_id": d.only_session()}));
+    }
     state.submit(Operation::Unsupported("voice_context")).await
 }
-async fn voice_diagnostic(State(state): State<AppState>) -> ApiReply {
+async fn voice_diagnostic(
+    State(state): State<AppState>,
+    payload: Result<Json<Value>, JsonRejection>,
+) -> ApiReply {
+    if state.dialogue.is_some() {
+        let value = match parse(payload) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+        tracing::info!(event="voice_input", diagnostic=%value);
+        return ApiReply::ok(json!({"accepted":true}));
+    }
     state
         .submit(Operation::Unsupported("voice_diagnostics"))
         .await
@@ -334,3 +405,29 @@ async fn memory(State(state): State<AppState>) -> ApiReply {
 
 #[cfg(test)]
 mod tests;
+
+async fn chat_page() -> Html<&'static str> {
+    Html(include_str!("chat.html"))
+}
+async fn chat_snapshot(State(state): State<AppState>, Query(q): Query<SnapshotQuery>) -> ApiReply {
+    match &state.dialogue {
+        Some(d) => ApiReply::ok(d.snapshot(q.session_id.as_deref())),
+        None => ApiReply::unsupported("player_dialogue"),
+    }
+}
+async fn chat_interrupt(
+    State(state): State<AppState>,
+    payload: Result<Json<SnapshotQuery>, JsonRejection>,
+) -> Result<ApiReply, ApiReply> {
+    let q = parse(payload)?;
+    let Some(d) = &state.dialogue else {
+        return Ok(ApiReply::unsupported("player_dialogue"));
+    };
+    let Some(id) = q.session_id.or_else(|| d.only_session()) else {
+        return Ok(ApiReply::ok(
+            json!({"accepted":false,"reason":"select_one_session"}),
+        ));
+    };
+    d.interrupt(&id);
+    Ok(ApiReply::ok(json!({"accepted":true})))
+}

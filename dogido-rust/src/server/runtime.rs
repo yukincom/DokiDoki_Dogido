@@ -22,6 +22,12 @@ pub(super) enum Operation {
         session_id: Option<String>,
         batch_size: Option<usize>,
     },
+    DialogueEvents {
+        session_id: Option<String>,
+        events: Vec<crate::events::GameEvent>,
+        batch: bool,
+        key: Option<String>,
+    },
     PlayerInput(PlayerInputRequest),
     Unsupported(&'static str),
     Shutdown,
@@ -46,6 +52,7 @@ struct Session {
 
 /// GET側には変更権限を渡さず、処理済みの投影だけを公開する。
 pub(super) struct Published {
+    dialogue: Option<Arc<crate::dialogue::Dialogue>>,
     runtime: Value,
     sessions: BTreeMap<String, Session>,
     runtime_revision: u64,
@@ -58,9 +65,14 @@ pub(super) struct Published {
 impl Published {
     pub fn display(&self, session_id: Option<String>, now: DateTime<Utc>) -> Value {
         let freshness = (self.heartbeat_interval_ms.saturating_mul(3) / 1000).max(15);
-        let fresh: Vec<_> = self
+        let game_sessions: Vec<_> = self
             .sessions
             .values()
+            .filter(|s| s.registration.game == "minecraft-java")
+            .collect();
+        let fresh: Vec<_> = game_sessions
+            .iter()
+            .copied()
             .filter(|s| (now - s.last_seen).num_milliseconds() <= (freshness * 1000) as i64)
             .collect();
         let mut adapters: Vec<_> = fresh
@@ -78,14 +90,18 @@ impl Published {
         adapters.dedup();
         let connection = if !fresh.is_empty() {
             "connected"
-        } else if self.sessions.is_empty() {
+        } else if game_sessions.is_empty() {
             "not_connected"
         } else {
             "stale"
         };
+        let dialogue = self
+            .dialogue
+            .as_ref()
+            .map(|d| d.snapshot(session_id.as_deref()));
         json!({
-            "schema_version": 1, "revision": 0, "generated_at": now,
-            "session_id": session_id, "utterances": [], "references": [],
+            "schema_version": 1, "revision": dialogue.as_ref().map(|d|d["revision"].clone()).unwrap_or(json!(0)), "generated_at": now,
+            "session_id": session_id, "utterances": dialogue.as_ref().map(|d|d["utterances"].clone()).unwrap_or(json!([])), "references": [],
             "retention": {"storage": "process_memory", "max_utterances": 200, "cleared_on_restart": true},
             "diagnostic_schema_version": 1, "diagnostic_revision": self.diagnostic_revision,
             "diagnostics": self.diagnostics,
@@ -93,11 +109,11 @@ impl Published {
             "runtime_revision": self.runtime_revision, "runtime": self.runtime,
             "minecraft": {
                 "state": connection, "connected": !fresh.is_empty(), "active_sessions": fresh.len(),
-                "registered_sessions": self.sessions.len(), "adapters": adapters,
-                "last_seen_at": self.sessions.values().map(|s| s.last_seen).max(),
+                "registered_sessions": game_sessions.len(), "adapters": adapters,
+                "last_seen_at": game_sessions.iter().map(|s| s.last_seen).max(),
                 "freshness_seconds": freshness,
             },
-            "migration": {"phase": "connection_only", "dialogue_ready": false, "llm_enabled": false},
+            "migration": {"phase": if dialogue.is_some() {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": dialogue.is_some(), "llm_enabled": dialogue.is_some()},
         })
     }
 
@@ -121,9 +137,10 @@ impl Runtime {
     fn new(config: ServerConfig) -> Self {
         let mut runtime = Self {
             data: Published {
+                dialogue: config.dialogue.clone(),
                 runtime: json!({
                     "instance_id": new_id("run"), "started_at": Utc::now(),
-                    "source_kind": "rust_migration", "source_label_ja": "Rust版・接続テスト",
+                    "source_kind": "rust_migration", "source_label_ja": if config.dialogue.is_some() {"Rust版・平時会話試験"} else {"Rust版・接続テスト"},
                     "runtime_environment": "Rust", "python_environment": null,
                     "virtual_environment": false, "process_id": std::process::id(),
                 }),
@@ -138,7 +155,11 @@ impl Runtime {
         };
         runtime.record(
             "server_ready",
-            "Rust版の接続テスト。会話・警告・音声は未対応。外部AI接続なし。".into(),
+            if runtime.config.dialogue.is_some() {
+                "Rust版の平時会話試験。戦闘・川柳・操作は未接続。".into()
+            } else {
+                "Rust版の接続テスト。会話・警告・音声は未対応。外部AI接続なし。".into()
+            },
         );
         runtime
     }
@@ -158,6 +179,7 @@ impl Runtime {
 
     fn snapshot(&self) -> Arc<Published> {
         Arc::new(Published {
+            dialogue: self.data.dialogue.clone(),
             runtime: self.data.runtime.clone(),
             sessions: self.data.sessions.clone(),
             runtime_revision: self.data.runtime_revision,
@@ -177,6 +199,23 @@ impl Runtime {
                     "adapter_session_created",
                     format!("接続を登録しました session_id={id}"),
                 );
+                if let Some(d) = &self.config.dialogue {
+                    if self.data.sessions.len() >= 8 {
+                        return ApiReply::error(
+                            StatusCode::TOO_MANY_REQUESTS,
+                            json!("session_limit"),
+                        );
+                    }
+                    d.register(
+                        &id,
+                        registration
+                            .call_name
+                            .as_deref()
+                            .unwrap_or(&registration.player_name),
+                        registration.adapter_name == "rust-conversation-preview"
+                            && registration.game == "none",
+                    );
+                }
                 self.data.sessions.insert(
                     id.clone(),
                     Session {
@@ -212,6 +251,9 @@ impl Runtime {
                 ApiReply::ok(json!({"ok": true, "session_id": id, "server_time": Utc::now()}))
             }
             Operation::Close(id) => {
+                if let Some(d) = &self.config.dialogue {
+                    d.close(&id);
+                }
                 if self.data.sessions.remove(&id).is_some() {
                     self.data.runtime_revision += 1;
                     self.data.hud_revision += 1;
@@ -249,7 +291,68 @@ impl Runtime {
                 // 観測を解釈・処理していないため、202や架空のnormal状態を返さない。
                 ApiReply::unsupported("game_event_processing")
             }
+            Operation::DialogueEvents {
+                session_id,
+                events,
+                batch,
+                key,
+            } => {
+                if events.len() > self.config.max_batch_size {
+                    return ApiReply::error(
+                        StatusCode::BAD_REQUEST,
+                        json!("events exceeds max_batch_size"),
+                    );
+                }
+                let Some(id) = session_id else {
+                    return ApiReply::error(
+                        StatusCode::CONFLICT,
+                        json!({"code":"unknown_session_id"}),
+                    );
+                };
+                let Some(session) = self.data.sessions.get_mut(&id) else {
+                    return ApiReply::error(
+                        StatusCode::CONFLICT,
+                        json!({"code":"unknown_session_id","session_id":id}),
+                    );
+                };
+                let Some(d) = &self.config.dialogue else {
+                    return ApiReply::unsupported("player_dialogue");
+                };
+                session.last_seen = Utc::now();
+                let results: Vec<Value> = events
+                    .into_iter()
+                    .map(|e| {
+                        let sequence = e.sequence.and_then(|n| n.try_into().ok());
+                        let result = d.observe(&id, e, key.as_deref());
+                        if result["deduplicated"] == false && sequence.is_some() {
+                            session.last_sequence = sequence;
+                        }
+                        result
+                    })
+                    .collect();
+                self.data.runtime_revision += 1;
+                let duplicates = results.iter().filter(|r| r["deduplicated"] == true).count();
+                ApiReply::new(
+                    StatusCode::ACCEPTED,
+                    if batch {
+                        json!({"accepted":true,"received":results.len(),"processed":results.len()-duplicates,"deduplicated":duplicates,"commands":[],"acknowledged_command_ids":[],"server_time":Utc::now()})
+                    } else {
+                        results.into_iter().next().unwrap()
+                    },
+                )
+            }
             Operation::PlayerInput(request) => {
+                if let Some(d) = &self.config.dialogue {
+                    return ApiReply::ok(d.submit(
+                        request.session_id.as_deref(),
+                        &request.text,
+                        if request.source == crate::ingress::InputSource::Voice {
+                            "voice"
+                        } else {
+                            "text"
+                        },
+                    ));
+                }
                 if request.text.trim().is_empty() {
                     ApiReply::ok(json!({"accepted": false, "reason": "empty_text"}))
                 } else if self.data.sessions.is_empty() {
@@ -260,6 +363,9 @@ impl Runtime {
             }
             Operation::Unsupported(feature) => ApiReply::unsupported(feature),
             Operation::Shutdown => {
+                if let Some(d) = &self.config.dialogue {
+                    d.cancel_all();
+                }
                 self.data.sessions.clear();
                 self.data.runtime_revision += 1;
                 self.data.hud_revision += 1;
@@ -314,6 +420,16 @@ pub(super) fn spawn(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn game_free_preview_does_not_claim_minecraft_is_connected() {
+        let mut runtime = Runtime::new(ServerConfig::default());
+        let registration: SessionRequest=serde_json::from_value(json!({"adapter_name":"rust-conversation-preview","adapter_version":"1","game":"none","schema_version":"2026-05-24","player_name":"試験"})).unwrap();
+        runtime.apply(Operation::Create(Box::new(registration)));
+        let view = runtime.snapshot().display(None, Utc::now());
+        assert_eq!(view["minecraft"]["state"], "not_connected");
+        assert_eq!(view["minecraft"]["active_sessions"], 0);
+    }
 
     #[test]
     fn presence_expires_without_mutating_the_published_state() {

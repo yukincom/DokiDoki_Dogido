@@ -3,6 +3,7 @@ use std::{io::Write, net::SocketAddr, path::PathBuf, time::Duration};
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use dogido_rust::{
+    dialogue::{Dialogue, DialogueConfig},
     llm::RigLlm,
     planner::{self, PreparedPlan},
     server::{Application, ServerConfig},
@@ -33,6 +34,39 @@ enum Command {
     Serve {
         #[arg(long, default_value = "127.0.0.1:5056")]
         listen: SocketAddr,
+    },
+    /// 平時の会話試験。Python補助、既存モデル、VOICEVOXを使う。
+    ServeDialogue {
+        #[arg(long, default_value = "127.0.0.1:5056")]
+        listen: SocketAddr,
+        #[arg(long, default_value = "python3")]
+        python: PathBuf,
+        #[arg(long, default_value = "default_model")]
+        model: String,
+        #[arg(long, default_value = "http://127.0.0.1:8080/v1")]
+        base_url: String,
+        #[arg(long, default_value = "http://127.0.0.1:50021")]
+        voicevox_url: String,
+        #[arg(long, default_value_t = 21)]
+        speaker: u32,
+        #[arg(long, default_value_t = 0.88)]
+        speed: f64,
+        #[arg(long, default_value = "/usr/bin/afplay")]
+        audio_player: PathBuf,
+        #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
+        audio_dir: PathBuf,
+        #[arg(long, default_value_t = 72)]
+        max_tokens: u64,
+        #[arg(long, default_value_t = 20_000)]
+        timeout_ms: u64,
+        #[arg(long, default_value = "auto")]
+        reading_engine: String,
+        #[arg(long, default_value_t = 0.0)]
+        pitch: f64,
+        #[arg(long, default_value_t = 1.0)]
+        volume: f64,
+        #[arg(long)]
+        no_audio: bool,
     },
     /// 要求の型だけを確認する。ネットワーク・モデル生成なし。
     Check { request: PathBuf },
@@ -67,7 +101,43 @@ async fn main() -> Result<()> {
             let report = planner::run(&client, &input).await?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
-        Command::Serve { listen } => serve(listen).await?,
+        Command::Serve { listen } => serve(listen, None).await?,
+        Command::ServeDialogue {
+            listen,
+            python,
+            model,
+            base_url,
+            voicevox_url,
+            speaker,
+            speed,
+            audio_player,
+            audio_dir,
+            no_audio,
+            max_tokens,
+            timeout_ms,
+            reading_engine,
+            pitch,
+            volume,
+        } => {
+            let dialogue = Dialogue::new(DialogueConfig {
+                python,
+                model,
+                base_url,
+                voicevox_url,
+                speaker,
+                speed,
+                player: audio_player,
+                audio_dir,
+                audio_enabled: !no_audio,
+                max_tokens,
+                timeout_ms,
+                reading_engine,
+                pitch,
+                volume,
+                ..DialogueConfig::default()
+            })?;
+            serve(listen, Some(dialogue)).await?;
+        }
         Command::Check { request } => {
             let input = read_request(&request)?;
             println!(
@@ -96,7 +166,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn serve(listen: SocketAddr) -> Result<()> {
+async fn serve(listen: SocketAddr, dialogue: Option<std::sync::Arc<Dialogue>>) -> Result<()> {
     ensure!(
         listen.ip().is_loopback(),
         "connection-test server requires a loopback address"
@@ -117,16 +187,21 @@ async fn serve(listen: SocketAddr) -> Result<()> {
         .await
         .context("cannot bind Rust server")?;
     let address = listener.local_addr()?;
+    let enabled = dialogue.is_some();
     let app = Application::new(ServerConfig {
+        dialogue,
         auth_token: std::env::var("DOGIDO_AUTH_TOKEN").ok(),
         ..ServerConfig::default()
     });
     println!(
         "{}",
         serde_json::json!({"event": "server_listening", "address": address.to_string(),
-        "phase": "connection_only", "llm_enabled": false})
+        "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "llm_enabled": enabled})
     );
     std::io::stdout().flush()?;
+    if enabled {
+        tracing::info!("会話入力: http://{address}/rust-chat — 平時の会話だけを試す移行モード");
+    }
     tracing::info!("接続画面: http://{address}/dogido — 終了は Ctrl+C");
     let shutdown = async move {
         #[cfg(unix)]
