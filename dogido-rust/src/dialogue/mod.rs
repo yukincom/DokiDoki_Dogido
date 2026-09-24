@@ -2,6 +2,7 @@
 mod audio;
 mod bridge;
 mod history;
+mod sentences;
 
 use crate::{
     events::GameEvent,

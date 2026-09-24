@@ -20,6 +20,8 @@ def voice_settings(settings, folder):
     if settings.voice_echo_helper is None:
         settings.voice_echo_helper = folder / ".dogido_tools/echo-cancel/bin/dogido-audio-capture"
     settings.voice_echo_cancellation = "webrtc"
+    # Rust会話試験の発話区切り。共有Python版の設定ファイルは変更しない。
+    settings.voice_silence_ms = 800
     settings.bind_host, settings.bind_port = "127.0.0.1", 5056
     return settings
 
@@ -41,6 +43,7 @@ def main():
         echo_command(settings)
         vad = resolve_vad_paths(settings, cli)
         print(f"音声入力: {model.name} / AECあり / VAD {'あり' if vad else 'なし'}", flush=True)
+        print(f"発話区切り: 無音 {settings.voice_silence_ms}ms", flush=True)
         print("配送先: http://127.0.0.1:5056 / 終了はこのターミナルで Ctrl+C", flush=True)
         if args.check:
             print("設定・必要ファイルを確認しました。録音・サーバー起動は行っていません。")

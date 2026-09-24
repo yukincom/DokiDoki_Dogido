@@ -1,0 +1,32 @@
+voicevox-sentence-stream
+Copyright (c) 2026 yukincom
+
+The sentence-streaming approach and Japanese immediate sentence boundaries
+were developed while modifying Hermes Agent's tools/tts_streaming.py.
+This standalone implementation adapts that approach with a lossless bounded
+splitter, a standalone standard-library VOICEVOX client, explicit WAV/PCM
+metadata, cancellation, tests, and examples by yukincom.
+
+Hermes Agent: https://github.com/NousResearch/hermes-agent
+Source: https://github.com/NousResearch/hermes-agent/blob/main/tools/tts_streaming.py
+Copyright (c) 2025 Nous Research
+License: MIT (retained in LICENSE)
+
+VOICEVOX Engine: https://github.com/VOICEVOX/voicevox_engine
+The engine and voice data are not bundled or licensed by this repository.
+Example voice credit: VOICEVOX:ずんだもん
+
+The optional segmented STT utility and tests are by yukincom. Its ctypes
+declarations follow whisper.cpp 1.8.3's public C API:
+https://github.com/ggml-org/whisper.cpp/blob/v1.8.3/include/whisper.h
+whisper.cpp is MIT licensed; copyright (c) 2023-2026 The ggml authors.
+FFmpeg, whisper.cpp binaries, Whisper models and Silero models are not bundled.
+Their respective licenses and model terms apply separately.
+
+Dogido Rust adaptation:
+src/dialogue/sentences.rs ports the SentenceSplitter boundaries from
+https://github.com/yukincom/voicevox-sentence-stream
+commit c1d0642dd3a0639938add4897c1a613a356b25e8 (src/voicevox_sentence_stream/core.py).
+The Rust audio layer adds a single-sentence prefetch queue and owns playback
+and cancellation. It receives validated complete replies, not raw LLM deltas.
+The upstream optional STT implementation is not included in this adaptation.

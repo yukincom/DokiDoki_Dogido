@@ -32,7 +32,7 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 ./dogido-rust/start_voice.command
 ```
 
-既存のwhisper・VAD・WebRTC AECを再利用し、5056へ送ります。**終了はそれぞれのターミナルでCtrl+C**。通常Python版のサーバー・マイク入力を停止してから試験してください。共有MLXやVOICEVOXエンジンの起動・停止は行いません。準備だけの確認には両ファイルの`--check`を使えます。録音やモデル生成は行いません。
+既存のwhisper・VAD・WebRTC AECを再利用し、無音800msで発話を区切って5056へ送ります。**終了はそれぞれのターミナルでCtrl+C**。通常Python版のサーバー・マイク入力を停止してから試験してください。共有MLXやVOICEVOXエンジンの起動・停止は行いません。準備だけの確認には両ファイルの`--check`を使えます。録音やモデル生成は行いません。
 
 起動ファイルはGitの共通ディレクトリから元チェックアウトを探し、その`.env`と`dogido-llm`を読みます。別の場所は`DOGIDO_RUST_SETTINGS_DIR`、Pythonだけは`DOGIDO_PYTHON`で指定できます。設定ファイル自体は変更しません。VOICEVOXのspeaker・平時の話速・pitch・volume・読み設定、chat routeのモデル・上限・timeoutを引き継ぎます。出力sampling rateの個別設定は未対応のため、指定時は理由を表示して停止します。
 
@@ -46,7 +46,10 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 - 新しい入力、停止、session終了、危険な観測、観測の途絶で古い処理を取り消します。生成・再生を直列化し、所有するhelperとplayerを終了まで待ちます。モデルへのHTTP取消は共有MLXプロセス自体を停止しません。
 - ゲーム接続時は時刻付きの10秒以内の観測が必要です。敵・被弾・危険な暗さがある場面は試験から外します。この限定停止条件は、未移植の戦闘状態機械の代替ではありません。
 - テキスト入力はsessionを選べます。既存マイクの入力先はsessionが一つの場合だけ確定します。複数の接続があるときは余分な試験接続を終了してください。
-- 音声は必要な台詞だけ合成し、メモリに最大128件・32MB保持します。再生用WAVは再生終了・取消で削除します。会話表示は200件までで、再起動すると履歴・cacheは消えます。長期記憶の読み書きはありません。
+- 音声は検査・読み補正済みの返答を文ごとに合成し、一文目の再生中に次の一文だけを先読みします。全ての文が再生を終えて初めて返答を完了にします。途中の失敗・取消で後続音声を捨て、全文を履歴に確定しません。LLM生成中の発声は未接続です。
+- 必要な文だけを合成し、メモリに最大128件・32MB保持します。再生用WAVは再生終了・取消で削除します。会話表示は200件までで、再起動すると履歴・cacheは消えます。長期記憶の読み書きはありません。
+
+文分割は[voicevox-sentence-stream](https://github.com/yukincom/voicevox-sentence-stream)の日本語即時境界・180文字上限・末尾保持をRustへ移植しています。来歴とMITライセンスは[third-party](third-party/voicevox-sentence-stream/NOTICE)に保持しています。`audio_sentence_ready`に文ごとの合成時間、`audio_first_sentence`に音声準備から最初のplayer起動までの時間を出します。実際に耳へ届く時刻の計測とは区別します。
 
 Python補助は`dialogue_helper.py`一件のstdio処理です。既存の通常雑談の材料・本文prompt・発話の採否・UniDicを再利用します。helperはgame-eventの判断、モデルHTTP、音声、保存を担当しません。これらの材料生成・検査・読みをRustへ移して同一入力比較を通した後に補助を外します。音声入力側のPython撤去は別段階です。
 
@@ -54,6 +57,7 @@ Python補助は`dialogue_helper.py`一件のstdio処理です。既存の通常�
 
 ```sh
 python dogido-rust/scripts/check_dialogue.py
+python dogido-rust/scripts/check_sentence_audio.py
 ```
 
 既存モデルとVOICEVOXを使う明示的な試聴（このMacで音声が流れます）:

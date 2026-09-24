@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +68,8 @@ def submit(base, sid, text="こんにちは"):
 
 @contextmanager
 def dependencies():
-    controls = {"delay": 0, "fail_tts": False, "leaf": "こんにちは。話しかけてくれてうれしいわ。"}
+    controls = {"delay": 0, "fail_tts": False, "leaf": "こんにちは。話しかけてくれてうれしいわ。",
+                "tts_gates": {}, "fail_sentence": None}
     seen = []
     wav = io.BytesIO()
     with wave.open(wav, "wb") as f:
@@ -98,10 +100,17 @@ def dependencies():
                     "model": "mock-model", "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}).encode()
             elif self.path.startswith("/audio_query?"):
-                raw = b'{}'
+                text = parse_qs(urlsplit(self.path).query)["text"][0]
+                raw = json.dumps({"test_text": text}).encode()
                 if controls["fail_tts"]: status = 503
             elif self.path.startswith("/synthesis?"):
                 raw, mime = wav.getvalue(), "audio/wav"
+                text = incoming["test_text"]
+                gate = controls["tts_gates"].get(text)
+                if gate is not None and not gate.wait(timeout=12):
+                    status = 504
+                if text == controls["fail_sentence"]:
+                    status = 503
             else:
                 status, raw = 404, b'{}'
             try:
@@ -113,7 +122,9 @@ def dependencies():
     server.daemon_threads = False
     t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": .05}); t.start()
     try: yield f"http://127.0.0.1:{server.server_port}", controls, seen
-    finally: server.shutdown(); server.server_close(); t.join(timeout=3); assert not t.is_alive()
+    finally:
+        for gate in controls["tts_gates"].values(): gate.set()
+        server.shutdown(); server.server_close(); t.join(timeout=3); assert not t.is_alive()
 
 
 @contextmanager
