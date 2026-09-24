@@ -24,11 +24,11 @@ fn main() -> anyhow::Result<()> {
             );
             let mut actions = Vec::new();
             if let Some(plan) = plan {
-                if let Some(c) = plan.cue {
-                    actions.push(json!({"text":c.text,"cue_id":c.id}));
+                if let Some(c) = &plan.cue {
+                    actions.push(json!({"text":c.text,"cue_id":c.id,"cue_sequence":[]}));
                 }
                 if !plan.text.is_empty() {
-                    actions.push(json!({"text":plan.text,"cue_id":null}));
+                    actions.push(json!({"text":plan.text,"cue_id":null,"cue_sequence":if plan.fragment_paths(&settings.cue_dir).is_some() {plan.cue_sequence.clone()} else {vec![]}}));
                 }
             }
             rows.push(actions);

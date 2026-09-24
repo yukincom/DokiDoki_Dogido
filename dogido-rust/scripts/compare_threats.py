@@ -44,18 +44,51 @@ def main():
               series([(0,{"distance":8.2,"damage":3001})])]
     # 長い連続視認の停滞警告は未移植。個体cooldownは消失後の再観測で比較する。
     cases[-8]["steps"][1]["event"]["visual_threats"]=[]
+    # 群れの初見・混合・包囲・体数境界、並び替え、単独からの増加。
+    group_cases=[]
+    def group(ms, types, distances=None, directions=None, **kw):
+        e=event(ms,**kw)
+        e['player']['dimension']='minecraft:overworld'
+        e['visual_threats']=[event(ms,kind=t,entity=f'{t}{i}',distance=(distances or [8.2]*len(types))[i],direction=(directions or ['left']*len(types))[i])['visual_threats'][0] for i,t in enumerate(types)]
+        return {'ms':ms,'event':e}
+    for types in ([t]*n for t in ['zombie','skeleton','spider','creeper'] for n in [2,3,4,8,9,12]):
+        group_cases.append({'steps':[group(0,types)]})
+    for types in [['zombie','zombie','skeleton'],['zombie','spider'],['zombie','creeper','skeleton'],['zombie']*2+['skeleton','creeper']]:
+        for distance in [3.01,8.2,10,10.01,18,None]:
+            for direction in ['front','back_left',None]:
+                group_cases.append({'steps':[group(0,types,[distance]*len(types),[direction]*len(types))]})
+    group_cases += [
+        {'steps':[group(ms,['zombie']*2) for ms in [0,100,29999,30000]]},
+        {'steps':[group(0,['zombie']), group(7000,['zombie']*4), group(7100,['zombie']*4)]},
+        {'steps':[group(0,['zombie']), group(7000,['zombie']*2), group(7100,['zombie']*2)]},
+        {'steps':[group(0,['zombie']*2,[8,8]), group(2000,['zombie']*3,[8,8,2]),group(2100,['zombie']*3,[8,8,2])]},
+        {'steps':[group(0,['zombie']*2+['skeleton','creeper'],[2,6,9.5,6.2],['front','left','right','back_right'])]},
+        {'steps':[group(0,['zombie','skeleton'],[8,8],biome='deep_dark')]},
+    ]
+    for kinds in [['zombie']*2,['zombie','skeleton']]:
+        group_cases.append({'steps':[group(0,kinds,[18,18])]})
+    # 導火は群れより先。
+    c=group(0,['zombie','creeper','zombie']); c['event']['visual_threats'][1]['fuse_active']=True
+    group_cases.append({'steps':[c]})
+    for size in [1,2]:
+        group_cases.append({'steps':[group(0,['zombie']*size),group(1000,[]),group(2000,['zombie']*2)]})
+    group_cases.append({'steps':[group(0,['zombie','skeleton'],[6,18])]})
+    for micros,sequence in [(0,0),(123,4),(1234,7),(5678,8)]:
+        c=group(micros,['zombie']*9);c['event']['sequence']=sequence
+        group_cases.append({'steps':[c]})
+    cases += group_cases
     settings=Settings(_env_file=None,llm_enabled=False,audio_enabled=False,decision_policy="legacy")
     shared={k:getattr(settings,k) for k in ("panic_distance","rear_warning_distance","recent_damage_window_ms","hostile_comment_cooldown_ms","multi_hostile_comment_cooldown_ms","panic_scream_cooldown_ms")}
     expected=[]
     for case in cases:
         case["settings"]=shared
         machine=DogidoStateMachine(settings)
-        expected.append([[{"text":a.text,"cue_id":a.cue_id} for a in machine.process(GameEvent.model_validate(s["event"])).actions
+        expected.append([[{"text":a.text,"cue_id":a.cue_id,"cue_sequence":list(a.cue_sequence or ())} for a in machine.process(GameEvent.model_validate(s["event"])).actions
                           if a.layer in {"callout","panic_cue"}] for s in case["steps"]])
     result=subprocess.run([str(ROOT/"dogido-rust/target/debug/examples/check_threats")],input="".join(json.dumps(c,ensure_ascii=False)+"\n" for c in cases),text=True,capture_output=True,check=True)
     actual=[json.loads(line) for line in result.stdout.splitlines()]
     failures=[{"index":i,"case":cases[i],"python":p,"rust":r} for i,(p,r) in enumerate(zip(expected,actual,strict=True)) if p!=r]
-    report={"cases":len(cases),"matched":len(cases)-len(failures),"failures":failures,"scope":"single visual / cue / fuse; not full combat parity"}
+    report={"cases":len(cases),"matched":len(cases)-len(failures),"failures":failures,"scope":"ordinary single/group visual / cue / fuse; not full combat parity"}
     path=ROOT/"dogido-rust/reports/threat-parity.json"
     path.parent.mkdir(exist_ok=True); path.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
     if failures:

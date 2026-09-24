@@ -6,7 +6,7 @@
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#171b21;color:#eef1f4}body{max-width:850px;margin:32px auto;padding:0 20px}h1{font-size:1.5rem;margin-bottom:10px}p{line-height:1.7;color:#bac4ce}a{color:#91dcd2}section{background:#222a34;border:1px solid #3d4c5b;border-radius:14px;padding:20px;margin:20px 0}label{display:block;margin:12px 0 6px}input,textarea,select,button{font:inherit;border-radius:8px;border:1px solid #607183;padding:10px;background:#171b21;color:inherit}textarea{box-sizing:border-box;width:100%;resize:vertical}button{cursor:pointer;background:#315a59;margin:8px 8px 0 0}button:disabled{opacity:.5;cursor:wait}.entry{border-top:1px solid #42505f;padding:16px 0;white-space:pre-wrap;overflow-wrap:anywhere}.speaker{font-size:.8rem;color:#a9b7c8;margin:6px 0}.status{color:#94dfcf;font-size:.85rem}.error{color:#ffc08c;white-space:pre-wrap}#log:empty:before{content:'まだ会話はありません。接続先を選んで話しかけてください。';color:#a9b7c8}small{color:#a9b7c8}details input{width:75%}
 </style>
 <h1>ドギド · Rust会話テスト</h1>
-<p>平時の会話と、単独の通常敵の視認警告・クリーパーの導火開始を確認できます。音だけの敵・群れ・ボス固有の反応・川柳・世界操作は未移植です。<br>音声が最後まで再生された返答だけ、次の会話へ引き継ぎます。</p>
+<p>平時の会話と、通常敵の単体・群れの視認警告・クリーパーの導火開始を確認できます。音だけの敵・ボス固有の反応・川柳・世界操作は未移植です。<br>音声が最後まで再生された返答だけ、次の会話へ引き継ぎます。</p>
 <details><summary>API認証を設定している場合</summary><label for="token">認証トークン（この画面のメモリ内だけで使用）</label><input id="token" type="password" autocomplete="off"></details>
 <section>
 <label for="session">会話する接続</label><select id="session"><option value="">接続を確認中…</option></select>

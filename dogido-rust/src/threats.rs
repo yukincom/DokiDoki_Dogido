@@ -1,5 +1,6 @@
-//! 視認警告の最初の移植範囲。群れ・ボス・聴覚・戦闘後の判断は未移植。
+//! 通常敵の単体・群れ視認警告。ボス・聴覚・戦闘後の判断は未移植。
 //! 記憶の時刻は呼び手の単調時計。AI、音声、履歴への書込みはここでは行わない。
+mod groups;
 use crate::events::{GameEvent, HorizontalDirection as H, VisualThreat};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -15,6 +16,10 @@ pub struct Settings {
     pub hostile_comment_cooldown_ms: u64,
     pub multi_hostile_comment_cooldown_ms: u64,
     pub panic_scream_cooldown_ms: u64,
+    pub hostile_mass_callout_threshold: usize,
+    pub hostile_query_distance: f64,
+    pub other_realm_swarm_visual_threshold: usize,
+    pub other_realm_audio_generic_threshold: usize,
     pub battle_speed: f64,
     pub cue_dir: PathBuf,
 }
@@ -27,6 +32,10 @@ impl Default for Settings {
             hostile_comment_cooldown_ms: 60_000,
             multi_hostile_comment_cooldown_ms: 30_000,
             panic_scream_cooldown_ms: 1200,
+            hostile_mass_callout_threshold: 4,
+            hostile_query_distance: 16.0,
+            other_realm_swarm_visual_threshold: 4,
+            other_realm_audio_generic_threshold: 2,
             battle_speed: 1.0,
             cue_dir: "cue_voice".into(),
         }
@@ -39,6 +48,8 @@ impl Settings {
                 && self.panic_distance >= 0.0
                 && self.rear_warning_distance.is_finite()
                 && self.rear_warning_distance >= 0.0
+                && self.hostile_query_distance.is_finite()
+                && self.hostile_query_distance >= 0.0
                 && self.battle_speed.is_finite()
                 && self.battle_speed > 0.0,
             "invalid warning settings"
@@ -142,6 +153,9 @@ pub struct Warning {
     pub kind: &'static str,
     pub text: String,
     pub cue: Option<Cue>,
+    pub cue_sequence: Vec<String>,
+    pub group_counts: Vec<(String, usize)>,
+    pub group_support: Vec<String>,
 }
 impl Warning {
     /// 同じ未完了警告を現在の方向へ更新する。通常cooldownの新規警告ではない。
@@ -151,6 +165,16 @@ impl Warning {
         settings: &Settings,
         cue_started: bool,
     ) -> Option<Self> {
+        if self.kind != "creeper_fuse"
+            && self.kind != "close_ambush"
+            && (!self.group_counts.is_empty() || groups::has_report(event, settings))
+        {
+            let mut next = groups::refresh(self, event, settings)?;
+            if !cue_started {
+                next.cue = self.cue.clone();
+            }
+            return Some(next);
+        }
         let t = event.visual_threats.iter().find(|t| {
             identity(t) == self.target
                 && t.r#type == self.hostile_type
@@ -168,7 +192,14 @@ impl Warning {
         };
         (!next.text.is_empty() || next.cue.is_some()).then_some(next)
     }
-    pub fn applicable(&self, event: &GameEvent) -> bool {
+    pub fn applicable(&self, event: &GameEvent, settings: &Settings) -> bool {
+        if !self.group_counts.is_empty() {
+            return groups::refresh(self, event, settings)
+                .is_some_and(|next| next.kind == self.kind && next.text == self.text);
+        }
+        if self.kind == "visual_hostile" && groups::has_report(event, settings) {
+            return false;
+        }
         event.visual_threats.iter().any(|t| {
             identity(t) == self.target
                 && t.r#type == self.hostile_type
@@ -195,6 +226,9 @@ pub struct Policy {
     active_fuses: HashSet<String>,
     last_callout: Option<u64>,
     last_cue: Option<u64>,
+    last_single: Option<(String, u64)>,
+    increase_ids: HashSet<String>,
+    last_ground_count: usize,
 }
 fn elapsed(now: u64, at: Option<u64>, window: u64) -> bool {
     at.is_none_or(|at| now.saturating_sub(at) >= window)
@@ -238,19 +272,7 @@ impl Policy {
             None
         } else if let [t] = e.visual_threats.as_slice() {
             // この段階は通常の単独敵。専用の環境・ボス・後方奇襲規則は後続で移す。
-            let supported = matches!(
-                t.r#type.as_str(),
-                "zombie"
-                    | "zombie_villager"
-                    | "skeleton"
-                    | "spider"
-                    | "cave_spider"
-                    | "husk"
-                    | "stray"
-                    | "creeper"
-                    | "charged_creeper"
-            ) && !t.on_fire
-                && !t.in_water;
+            let supported = groups::ordinary(t);
             let special_rear = matches!(e.event.name, crate::events::EventName::ThreatApproaching)
                 && t.direction.horizontal == Some(H::Back)
                 && !CATALOG.ranged.contains(&t.r#type)
@@ -260,12 +282,17 @@ impl Policy {
             } else {
                 self.single(t, e, now, s)
             }
+        } else if e.visual_threats.len() >= 2 && e.visual_threats.iter().all(groups::ordinary) {
+            self.group(e, now, s)
         } else {
             None
         };
         for t in &e.visual_threats {
             self.seen.insert(identity(t), now);
         }
+        self.update_group_presence(e, s);
+        let current_ids: HashSet<_> = e.visual_threats.iter().map(identity).collect();
+        self.increase_ids.retain(|id| current_ids.contains(id));
         self.active_fuses = e
             .visual_threats
             .iter()
@@ -309,19 +336,7 @@ impl Policy {
             return None;
         }
         let panic = is_panic(t, e, s);
-        let gasp = t.distance.is_some_and(|d| {
-            rear(t) && d <= s.rear_warning_distance
-                || if CATALOG.ranged.contains(&t.r#type) {
-                    d <= CATALOG
-                        .effective_range
-                        .get(&t.r#type)
-                        .copied()
-                        .unwrap_or(6.0)
-                        + 1.5
-                } else {
-                    d <= 6.0 || t.approaching && d <= 7.0
-                }
-        });
+        let gasp = spotted_gasp(t, s);
         Some(self.plan(
             t,
             "visual_hostile",
@@ -371,6 +386,7 @@ impl Policy {
         if !text.is_empty() {
             self.commented.insert(key.clone(), now);
             self.last_callout = Some(now);
+            self.last_single = Some((t.r#type.clone(), now));
         }
         Warning {
             target: key,
@@ -379,6 +395,9 @@ impl Policy {
             kind,
             text,
             cue,
+            cue_sequence: Vec::new(),
+            group_counts: Vec::new(),
+            group_support: Vec::new(),
         }
     }
 }
@@ -390,4 +409,20 @@ fn is_panic(t: &VisualThreat, e: &GameEvent, s: &Settings) -> bool {
         || e.combat
             .recent_damage_ms
             .is_some_and(|ms| ms >= 0 && ms as u64 <= s.recent_damage_window_ms)
+}
+
+fn spotted_gasp(t: &VisualThreat, s: &Settings) -> bool {
+    t.distance.is_some_and(|d| {
+        rear(t) && d <= s.rear_warning_distance
+            || if CATALOG.ranged.contains(&t.r#type) {
+                d <= CATALOG
+                    .effective_range
+                    .get(&t.r#type)
+                    .copied()
+                    .unwrap_or(6.0)
+                    + 1.5
+            } else {
+                d <= 6.0 || t.approaching && d <= 7.0
+            }
+    })
 }

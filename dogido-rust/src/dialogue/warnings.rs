@@ -171,7 +171,17 @@ impl Dialogue {
                     self.audio.speak(&config,cue.text,&mut cancel,&started).await?;
                 }
             }
-            if !plan.text.is_empty() {self.audio.speak(&config,&plan.text,&mut cancel,started).await?;}
+            if let Some(paths) = plan.fragment_paths(&config.warnings.cue_dir) {
+                tracing::info!(event="warning_fragments", fragments=paths.len());
+                for (index, path) in paths.iter().enumerate() {
+                    self.audio.play_file(&config,path,&mut cancel,index,&started).await?;
+                }
+            } else if !plan.text.is_empty() {
+                if !plan.cue_sequence.is_empty() {
+                    tracing::warn!(event="warning_fragments_fallback",reason="file_missing");
+                }
+                self.audio.speak(&config,&plan.text,&mut cancel,started).await?;
+            }
             Ok::<(),anyhow::Error>(())
         }.await;
         monitor.abort();

@@ -230,7 +230,7 @@ impl Dialogue {
             let changed = s
                 .warning
                 .as_ref()
-                .is_some_and(|w| !recent || !w.plan.applicable(&event));
+                .is_some_and(|w| !recent || !w.plan.applicable(&event, &self.config.warnings));
             let relocated = if changed && recent {
                 s.warning.as_ref().and_then(|w| {
                     let cue_started = d
@@ -566,6 +566,68 @@ impl Dialogue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn pending_group_uses_latest_composition_after_queue_saturation() {
+        let dialogue = Dialogue::new(DialogueConfig {
+            audio_enabled: false,
+            ..DialogueConfig::default()
+        })
+        .unwrap();
+        dialogue.register("s", "試験", false);
+        let event = |sequence, types: &[&str]| {
+            GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture",
+                "observed_at":chrono::Utc::now(),"sequence":sequence,
+                "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+                "visual_threats":types.iter().enumerate().map(|(i,t)| json!({"type":t,"entity_id":format!("{t}{i}"),
+                    "distance":8.2,"direction":{"horizontal":"front"}})).collect::<Vec<_>>()
+            })).unwrap()
+        };
+        {
+            let mut d = dialogue.data.lock().unwrap();
+            let plan = d
+                .sessions
+                .get_mut("s")
+                .unwrap()
+                .threat_policy
+                .observe(
+                    &event(1, &["zombie"; 3]),
+                    0,
+                    false,
+                    &dialogue.config.warnings,
+                )
+                .unwrap();
+            Dialogue::queue_warning(&mut d, "s", &plan);
+            d.rows.back_mut().unwrap()["started_at"] = chrono::Utc::now().to_rfc3339().into();
+        }
+        for _ in 0..16 {
+            dialogue
+                .jobs
+                .lock()
+                .unwrap()
+                .push(tokio::spawn(std::future::pending()));
+        }
+        dialogue.observe("s", event(2, &["zombie"; 2]), None);
+        dialogue.observe("s", event(3, &["zombie", "skeleton"]), None);
+        {
+            let d = dialogue.data.lock().unwrap();
+            let pending = d.sessions["s"].pending_warning.as_ref().unwrap();
+            assert_eq!(pending.text, "スケルトン1体、ゾンビ1体おるで。");
+            assert!(pending.cue.is_none());
+        }
+        let jobs = std::mem::take(&mut *dialogue.jobs.lock().unwrap());
+        for job in jobs {
+            job.abort();
+            let _ = job.await;
+        }
+        dialogue.observe("s", event(4, &["zombie"; 2]), None);
+        let view = dialogue.snapshot(None);
+        let rows = view["utterances"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["playback_status"], "cancelled");
+        assert_eq!(rows[1]["text"], "ゾンビ2体おるで。");
+        dialogue.shutdown().await;
+    }
 
     #[tokio::test]
     async fn pending_warning_tracks_repeated_direction_changes_while_jobs_are_full() {

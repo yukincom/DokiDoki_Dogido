@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話の入力・planner・短期履歴・VOICEVOX再生・表示と、単独の通常敵の視認警告・クリーパー導火開始をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。全戦闘判断・川柳・世界操作・長期記憶は未移植です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話の入力・planner・短期履歴・VOICEVOX再生・表示と、通常敵の単体・群れの視認警告・クリーパー導火開始をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。全戦闘判断・川柳・世界操作・長期記憶は未移植です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -59,22 +59,29 @@ Python補助は`dialogue_helper.py`一件のstdio処理です。既存の通常�
 python dogido-rust/scripts/check_dialogue.py
 python dogido-rust/scripts/check_sentence_audio.py
 python dogido-rust/scripts/check_warnings.py
+python dogido-rust/scripts/check_group_warnings.py
 ```
 
 ### 視認警告の移植範囲
 
 通常の単独視認はゾンビ、村人ゾンビ、スケルトン、クモ、洞窟グモ、ハスク、ストレイ、クリーパー、帯電クリーパーを対象にします。既存の距離境界、個体60秒／全体30秒の通知抑制、初見3m以内の悲鳴、近接時のgasp、deep_darkの悲鳴抑制を使います。設定値は起動時にPython版Settingsから読みます。導火開始は個体のfalse→trueで通常警告に優先し、trueの保持では繰り返しません。台詞とcueは既存のものを使用し、LLMやPython補助を呼びません。戦闘の話速とcue保存先も既存設定を引き継ぎます。cueが欠けた場合は同じ台詞をTTSで合成します。
 
+上記9種だけの群れは、既存の優先順位に従い「単独報告後30秒未満の同種増加 → 全体30秒の抑制 → 4体以上の包囲 → 複数種のまとめ → 同種2〜3体の数」を選びます。9体以上は既存の大群文です。同種の数報告は10m以内の数（adapterに値があれば優先）が2以上のときに始め、本文の数は全視認リストから取ります。種類が混ざる場合は10m条件を付けません。包囲文では射撃・爆発役の種類と方向を優先します。導火開始は群れより先です。
+
+数の本文は既存の「敵名・体数・おるで」音声素材を順番に再生します。全素材の存在を先に確認し、一つでも欠けていれば本文全体をTTSへ戻します。Python版の結合ファイル方式から、Rust版では同じ取消権限で断片を逐次再生する方式へ移しています。断片間の実際の間は実機確認が必要です。TTSの全件事前生成は行いません。
+
+発声中の体数・種類変更は古い警告を取り消して最新の観測へ更新します。体数が同じまま距離境界を越える移動や入力順だけの変更では止めません。包囲文の同順位対象も配送中は選択を維持します。現在の観測で敵が消えた後は、群れの通知抑制と「増えた」の基準を解除します。
+
 会話を取り消してから、同じplayer所有権で警告を再生します。反復観測は再生中の警告を取り消しません。対象消失・10秒の観測途絶・手動停止・session終了・サーバー終了で取消し、同じ個体の方向が変わった場合は未完了の本文を新方向へ更新します。警告は通常assistant履歴には入りません。`warning_queued`に対象と理由、`warning_status`に再生結果、`audio_interrupt`と画面に中断理由を残します。
 
-音だけの敵、群れ、ボス専用反応、特殊な「うしろ」警告、燃焼／水中の敵、停滞警告、暗所の悲鳴、低体力、静かにする指示、撃破／爆散／戦闘終了と会話復帰は後続段階です。個々のルールの比較を、全戦闘の互換性確認とは扱いません。
+音だけの敵、上記9種以外の敵、ボス専用反応、異世界到着直後の群れラッチ、特殊な「うしろ」警告、燃焼／水中の敵、停滞警告、暗所の悲鳴、低体力、静かにする指示、撃破／爆散／戦闘終了と会話復帰は後続段階です。個々のルールの比較を、全戦闘の互換性確認とは扱いません。
 
 ```sh
 ./dogido-rust/cargo.sh build --locked --examples --bin dogido-rust
 python dogido-rust/scripts/compare_threats.py
 ```
 
-比較器は既存Python状態機械へ同じ観測系列を渡し、警告文とcueを比較します。`src/threat_catalog.json`は既存ラベル・射程のスナップショットで、比較時に原本との一致も検査します。結果は`reports/threat-parity.json`、HTTPの取消試験は`reports/warning-check.json`です。実際の聞こえ方・Minecraft上の割込みは[実機チェック](manual-dialogue-check.md)で確認します。
+比較器は既存Python状態機械へ同じ観測系列を渡し、警告文・cue・数の音声断片列を比較します。`src/threat_catalog.json`は既存ラベル・射程のスナップショットで、比較時に原本との一致も検査します。結果は`reports/threat-parity.json`、HTTPの取消試験は`reports/warning-check.json`、群れの断片配送・再出現・更新は`reports/group-warning-check.json`です。実際の聞こえ方・Minecraft上の割込みは[実機チェック](manual-dialogue-check.md)で確認します。
 
 既存モデルとVOICEVOXを使う明示的な試聴（このMacで音声が流れます）:
 

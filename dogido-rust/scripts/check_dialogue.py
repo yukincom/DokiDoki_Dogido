@@ -128,7 +128,7 @@ def dependencies():
 
 
 @contextmanager
-def running(binary, directory, dependency, *, live=False, player=None):
+def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None):
     log_path = directory / "runtime.log"
     env = dict(os.environ)
     env.pop("DOGIDO_AUTH_TOKEN", None); env.pop("DOGIDO_LLM_API_KEY", None)
@@ -139,7 +139,8 @@ def running(binary, directory, dependency, *, live=False, player=None):
     with log_path.open("w") as log:
         p = subprocess.Popen([str(binary), "serve-dialogue", "--listen", "127.0.0.1:0", "--python", sys.executable,
             "--base-url", dependency + "/v1", "--voicevox-url", "http://127.0.0.1:50021" if live else dependency,
-            "--audio-player", str(player), "--audio-dir", str(directory / "audio")],
+            "--audio-player", str(player), "--audio-dir", str(directory / "audio"),
+            "--warning-settings", json.dumps(warning_settings or {})],
             stdout=subprocess.PIPE, stderr=log, text=True, env=env)
         try:
             with selectors.DefaultSelector() as selector:
