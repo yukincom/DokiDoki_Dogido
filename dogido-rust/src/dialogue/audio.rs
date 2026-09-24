@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use serde_json::Value;
 use std::{
     collections::VecDeque,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -216,11 +216,25 @@ impl Audio {
                 .join(format!("{}.wav", uuid::Uuid::new_v4())),
         );
         tokio::fs::write(&path.0, bytes).await?;
+        self.play_file(config, &path.0, cancel, index, started)
+            .await
+    }
+
+    /// 既存cueもTTSも同じplayer所有権で停止・回収する。cue原本は削除しない。
+    pub async fn play_file(
+        &self,
+        config: &DialogueConfig,
+        path: &Path,
+        cancel: &mut watch::Receiver<bool>,
+        index: usize,
+        started: impl FnOnce(),
+    ) -> Result<()> {
+        ensure!(config.audio_enabled, "audio_disabled");
         if *cancel.borrow() {
             anyhow::bail!("cancelled");
         }
         let mut child = Command::new(&config.player)
-            .arg(&path.0)
+            .arg(path)
             .kill_on_drop(true)
             .spawn()?;
         let pid = child.id();

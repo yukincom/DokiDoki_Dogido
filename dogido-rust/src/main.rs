@@ -21,6 +21,8 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+// 一度だけ解析する起動引数。サーバーの反復処理・待ち列へこのenumは保持しない。
+#[allow(clippy::large_enum_variant)]
 enum Command {
     /// 通常雑談plannerだけを比較。状態機械の投影fixtureを読み、発話・操作・保存はしない。
     PlanChat {
@@ -51,6 +53,9 @@ enum Command {
         speaker: u32,
         #[arg(long, default_value_t = 0.88)]
         speed: f64,
+        /// 既存設定から移植済み警告に必要な値だけを受け取るJSON。
+        #[arg(long, default_value = "{}")]
+        warning_settings: String,
         #[arg(long, default_value = "/usr/bin/afplay")]
         audio_player: PathBuf,
         #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
@@ -110,6 +115,7 @@ async fn main() -> Result<()> {
             voicevox_url,
             speaker,
             speed,
+            warning_settings,
             audio_player,
             audio_dir,
             no_audio,
@@ -126,6 +132,7 @@ async fn main() -> Result<()> {
                 voicevox_url,
                 speaker,
                 speed,
+                warnings: serde_json::from_str(&warning_settings)?,
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,

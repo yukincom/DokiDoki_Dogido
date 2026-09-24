@@ -1,8 +1,9 @@
-//! 平時の一往復用。戦闘・川柳・世界操作の代替にはしない。
+//! 平時会話と移植済み視認警告。全戦闘・川柳・世界操作の代替にはしない。
 mod audio;
 mod bridge;
 mod history;
 mod sentences;
+mod warnings;
 
 use crate::{
     events::GameEvent,
@@ -37,6 +38,7 @@ pub struct DialogueConfig {
     pub audio_dir: PathBuf,
     pub player: PathBuf,
     pub audio_enabled: bool,
+    pub warnings: crate::threats::Settings,
 }
 impl Default for DialogueConfig {
     fn default() -> Self {
@@ -56,6 +58,7 @@ impl Default for DialogueConfig {
             audio_dir: PathBuf::from(".dogido_tmp/rust-dialogue"),
             player: "/usr/bin/afplay".into(),
             audio_enabled: true,
+            warnings: crate::threats::Settings::default(),
         }
     }
 }
@@ -70,6 +73,9 @@ struct Session {
     current_turn: String,
     status: String,
     cancel: Option<watch::Sender<bool>>,
+    threat_policy: crate::threats::Policy,
+    warning: Option<warnings::Active>,
+    pending_warning: Option<crate::threats::Warning>,
 }
 #[derive(Default)]
 struct Data {
@@ -85,6 +91,7 @@ pub struct Dialogue {
     data: Mutex<Data>,
     serial: Semaphore,
     jobs: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    clock: Instant,
 }
 fn id(prefix: &str) -> String {
     format!("{prefix}_{}", uuid::Uuid::new_v4().simple())
@@ -127,6 +134,7 @@ fn empty_event(name: &str) -> Value {
 
 impl Dialogue {
     pub fn new(config: DialogueConfig) -> Result<Arc<Self>> {
+        config.warnings.validate()?;
         anyhow::ensure!(config.helper.is_file(), "dialogue helper missing");
         anyhow::ensure!(
             config.max_tokens > 0 && config.max_tokens <= 512,
@@ -152,6 +160,7 @@ impl Dialogue {
             data: Mutex::new(Data::default()),
             serial: Semaphore::new(1),
             jobs: Mutex::new(vec![]),
+            clock: Instant::now(),
         }))
     }
     pub fn register(&self, session_id: &str, name: &str, preview: bool) {
@@ -169,17 +178,18 @@ impl Dialogue {
                 current_turn: String::new(),
                 status: "ready".into(),
                 cancel: None,
+                threat_policy: crate::threats::Policy::default(),
+                warning: None,
+                pending_warning: None,
             },
         );
         d.revision += 1;
     }
     pub fn close(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
-        if let Some(s) = d.sessions.remove(session_id)
-            && let Some(c) = s.cancel
-        {
-            let _ = c.send(true);
-        }
+        Self::cancel_chat(&mut d, session_id, "session_closed");
+        Self::cancel_warning(&mut d, session_id, "session_closed");
+        d.sessions.remove(session_id);
         d.revision += 1;
     }
     pub fn only_session(&self) -> Option<String> {
@@ -199,23 +209,89 @@ impl Dialogue {
         let sequence = event.sequence;
         let recent = recent_observation(&event);
         let text = event.meta.user_text.clone().unwrap_or_default();
+        // submitと同じlock順序。shutdownが取りこぼす未登録jobを作らない。
+        let mut jobs = self.jobs.lock().unwrap();
+        jobs.retain(|j| !j.is_finished());
         let mut d = self.data.lock().unwrap();
+        if d.stopped {
+            return json!({"accepted":false,"reason":"server_stopping"});
+        }
         let Some(s) = d.sessions.get_mut(session_id) else {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
         let duplicate = s.sequences.admit(sequence, key) != Admission::New;
         if !duplicate {
-            if danger(&event) {
-                s.epoch += 1;
-                if let Some(c) = s.cancel.take() {
-                    let _ = c.send(true);
-                }
-                s.status = "危険中の会話は試験対象外".into();
+            if let Some(reason) = warnings::interruption_reason(&event) {
+                Self::cancel_chat(&mut d, session_id, reason);
+                d.sessions.get_mut(session_id).unwrap().status =
+                    "危険を観測（戦闘中の会話は未移植）".into();
             }
+            let s = d.sessions.get(session_id).unwrap();
+            let changed = s
+                .warning
+                .as_ref()
+                .is_some_and(|w| !recent || !w.plan.applicable(&event));
+            let relocated = if changed && recent {
+                s.warning.as_ref().and_then(|w| {
+                    let cue_started = d
+                        .rows
+                        .iter()
+                        .find(|r| r["turn_id"] == w.turn)
+                        .is_some_and(|r| r.get("started_at").is_some());
+                    w.plan.relocated(&event, &self.config.warnings, cue_started)
+                })
+            } else {
+                None
+            };
+            if changed {
+                Self::cancel_warning(
+                    &mut d,
+                    session_id,
+                    if recent {
+                        "target_changed_or_gone"
+                    } else {
+                        "stale_observation"
+                    },
+                );
+            }
+            let s = d.sessions.get_mut(session_id).unwrap();
+            if changed {
+                s.pending_warning = relocated;
+            }
+            if !recent {
+                s.pending_warning = None;
+            } else if let Some(pending) = s.pending_warning.take() {
+                // 配送枠を待つ間にさらに向きが変わっても、未完了の本文を失わない。
+                // 既に開始したcueは最初のrelocatedで除いている。
+                s.pending_warning = pending.relocated(&event, &self.config.warnings, false);
+            }
+            let plan = if recent && jobs.len() < 16 {
+                let new_plan = s.threat_policy.observe(
+                    &event,
+                    self.clock.elapsed().as_millis() as u64,
+                    s.warning.is_some(),
+                    &self.config.warnings,
+                );
+                new_plan.or_else(|| s.pending_warning.take())
+            } else {
+                None
+            };
             s.latest = Some(event);
             s.received = recent.then(Instant::now);
+            if let Some(plan) = plan {
+                d.sessions.get_mut(session_id).unwrap().pending_warning = None;
+                Self::cancel_warning(&mut d, session_id, "higher_priority_warning");
+                let (turn, rx) = Self::queue_warning(&mut d, session_id, &plan);
+                let this = self.clone();
+                let sid = session_id.to_owned();
+                jobs.push(tokio::spawn(async move {
+                    this.run_warning(sid, turn, plan, rx).await;
+                }));
+            }
+            d.revision += 1;
         }
         drop(d);
+        drop(jobs);
         let input = if !duplicate && !text.trim().is_empty() {
             self.submit(Some(session_id), &text, "text")
         } else {
@@ -247,7 +323,7 @@ impl Dialogue {
         let Some(s) = d.sessions.get_mut(&session_id) else {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
-        if !fresh(s) {
+        if !fresh(s) || s.warning.is_some() {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
         let active_turn = s.current_turn.clone();
@@ -264,10 +340,8 @@ impl Dialogue {
         {
             return json!({"accepted":true,"deduplicated":true,"turn_id":last["turn_id"]});
         }
+        Self::cancel_chat(&mut d, &session_id, "new_player_input");
         let s = d.sessions.get_mut(&session_id).unwrap();
-        if let Some(c) = s.cancel.take() {
-            let _ = c.send(true);
-        }
         s.epoch += 1;
         let epoch = s.epoch;
         let turn = id("turn");
@@ -308,13 +382,8 @@ impl Dialogue {
     }
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
-        if let Some(s) = d.sessions.get_mut(session_id) {
-            s.epoch += 1;
-            s.status = "cancelled".into();
-            if let Some(c) = s.cancel.take() {
-                let _ = c.send(true);
-            }
-        }
+        Self::cancel_chat(&mut d, session_id, "manual_interrupt");
+        Self::cancel_warning(&mut d, session_id, "manual_interrupt");
         d.revision += 1;
     }
     fn update(
@@ -346,6 +415,12 @@ impl Dialogue {
         if current {
             let s = d.sessions.get_mut(sid).unwrap();
             s.status = status.into();
+            if matches!(
+                status,
+                "completed" | "cancelled" | "failed" | "unsupported" | "quiet"
+            ) {
+                s.cancel = None;
+            }
             if let Some(result) = result {
                 if status == "queued"
                     && let Ok(repair) = serde_json::from_value::<Repair>(result["repair"].clone())
@@ -386,8 +461,9 @@ impl Dialogue {
                 tokio::select! {
                     _=bridge::cancelled(&mut monitor_cancel)=>break,
                     _=tokio::time::sleep(Duration::from_millis(200))=>{
-                        let stale={let d=owner.data.lock().unwrap();d.sessions.get(&monitor_sid).is_some_and(|s|s.epoch==epoch && !fresh(s))};
-                        if stale {owner.interrupt(&monitor_sid);break;}
+                        let mut d=owner.data.lock().unwrap();
+                        let stale=d.sessions.get(&monitor_sid).is_some_and(|s|s.epoch==epoch && !fresh(s));
+                        if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}
                     }
                 }
             }
@@ -467,11 +543,10 @@ impl Dialogue {
         {
             let mut d = self.data.lock().unwrap();
             d.stopped = true;
-            for s in d.sessions.values_mut() {
-                s.epoch += 1;
-                if let Some(c) = s.cancel.take() {
-                    let _ = c.send(true);
-                }
+            let ids = d.sessions.keys().cloned().collect::<Vec<_>>();
+            for sid in ids {
+                Self::cancel_chat(&mut d, &sid, "server_shutdown");
+                Self::cancel_warning(&mut d, &sid, "server_shutdown");
             }
         }
     }
@@ -491,6 +566,68 @@ impl Dialogue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn pending_warning_tracks_repeated_direction_changes_while_jobs_are_full() {
+        for (kind, fuse) in [("zombie", false), ("creeper", true)] {
+            let dialogue = Dialogue::new(DialogueConfig {
+                audio_enabled: false,
+                ..DialogueConfig::default()
+            })
+            .unwrap();
+            dialogue.register("s", "試験", false);
+            let event = |sequence, direction| {
+                GameEvent::parse(json!({
+                "schema_version":"2026-05-24","adapter":"fixture","observed_at":chrono::Utc::now(),"sequence":sequence,
+                "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+                "visual_threats":[{"type":kind,"entity_id":"z1","distance":8.2,"direction":{"horizontal":direction},"fuse_active":fuse}]
+            })).unwrap()
+            };
+            {
+                let mut d = dialogue.data.lock().unwrap();
+                let plan = d
+                    .sessions
+                    .get_mut("s")
+                    .unwrap()
+                    .threat_policy
+                    .observe(&event(1, "front"), 0, false, &dialogue.config.warnings)
+                    .unwrap();
+                Dialogue::queue_warning(&mut d, "s", &plan);
+            }
+            // 実モデル・playerを使わず、配送枠だけ埋める。
+            for _ in 0..16 {
+                dialogue
+                    .jobs
+                    .lock()
+                    .unwrap()
+                    .push(tokio::spawn(std::future::pending()));
+            }
+            dialogue.observe("s", event(2, "right"), None);
+            dialogue.observe("s", event(3, "left"), None);
+            {
+                let d = dialogue.data.lock().unwrap();
+                let pending = d.sessions["s"].pending_warning.as_ref().unwrap();
+                assert_eq!(
+                    pending.horizontal,
+                    Some(crate::events::HorizontalDirection::Left)
+                );
+                assert!(pending.text.contains("左"));
+            }
+            let jobs = std::mem::take(&mut *dialogue.jobs.lock().unwrap());
+            for job in jobs {
+                job.abort();
+                let _ = job.await;
+            }
+            dialogue.observe("s", event(4, "back_left"), None);
+            let view = dialogue.snapshot(None);
+            let rows = view["utterances"].as_array().unwrap();
+            assert_eq!(rows.len(), 2);
+            assert_eq!(rows[0]["playback_status"], "cancelled");
+            assert_eq!(rows[1]["warning"]["horizontal"], "back_left");
+            assert!(rows[1]["text"].as_str().unwrap().contains("左後ろ"));
+            dialogue.shutdown().await;
+        }
+    }
 
     #[tokio::test]
     async fn late_playback_completion_cannot_commit_after_global_shutdown() {

@@ -66,7 +66,8 @@ def main():
     print(f"Rust版の平時会話試験 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
-    print("会話材料・発話検査は一時的にPython補助を利用します。戦闘・川柳・世界操作は未接続です。", flush=True)
+    print("会話材料・発話検査はPython補助を利用。単独の通常敵の視認警告・導火開始はRustで処理します。", flush=True)
+    print("音だけの敵・群れ・ボス固有の反応・戦闘後の復帰・川柳・世界操作は未移植です。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
@@ -84,6 +85,13 @@ def main():
     command = [str(binary), "serve-dialogue", "--listen", "127.0.0.1:5056", "--python", sys.executable,
         "--model", model, "--base-url", base, "--voicevox-url", settings.voicevox_url,
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
+        "--warning-settings", json.dumps({
+            **{key: getattr(settings, key) for key in (
+                "panic_distance", "rear_warning_distance", "recent_damage_window_ms",
+                "hostile_comment_cooldown_ms", "multi_hostile_comment_cooldown_ms", "panic_scream_cooldown_ms")},
+            "battle_speed": settings.voicevox_speed_scale,
+            "cue_dir": str(settings.cue_audio_dir.resolve()),
+        }),
         "--pitch", str(settings.voicevox_pitch_scale), "--volume", str(settings.voicevox_volume_scale),
         "--max-tokens", str(settings.llm_chat_max_tokens or settings.llm_max_tokens),
         "--timeout-ms", str(int(1000 * (settings.llm_chat_timeout_sec or settings.llm_timeout_sec))),

@@ -4,4 +4,5 @@ pub mod ingress;
 pub mod llm;
 pub mod planner;
 pub mod server;
+pub mod threats;
 pub mod types;
