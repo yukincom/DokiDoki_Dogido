@@ -43,6 +43,7 @@ pub struct Engine {
     stalled_spoken: Option<u64>,
     last_named: Option<(String, u64)>,
     dark_push_active: bool,
+    dark_push_audio_active: bool,
     configured: bool,
 }
 impl Default for Engine {
@@ -68,13 +69,24 @@ impl Default for Engine {
             stalled_spoken: None,
             last_named: None,
             dark_push_active: false,
+            dark_push_audio_active: false,
             configured: false,
         }
     }
 }
 impl Engine {
+    pub fn environmental_presence(&self, now: u64, settings: &Settings) -> (bool, bool) {
+        (
+            self.specials.boss_presence(now, settings),
+            self.specials.ominous_presence(now, settings),
+        )
+    }
     pub fn set_dark_push_active(&mut self, active: bool) {
-        self.dark_push_active = active;
+        self.set_dark_push_context(active, active);
+    }
+    pub fn set_dark_push_context(&mut self, context: bool, audio_active: bool) {
+        self.dark_push_active = context;
+        self.dark_push_audio_active = audio_active;
     }
     pub fn take_notes(&mut self) -> Vec<String> {
         self.outcomes.take_notes()
@@ -129,6 +141,7 @@ impl Engine {
             self.stalled_spoken = None;
             self.last_named = None;
             self.dark_push_active = false;
+            self.dark_push_audio_active = false;
         }
         let e = self.context(event, now, complete);
         let prior_audio = self.last_audio;
@@ -252,9 +265,9 @@ impl Engine {
                 self.deliver(&e, now, speech, &mut d);
             }
         }
-        if self.dark_push_active && blocks_environment(&e) {
+        if self.dark_push_audio_active && blocks_environment(&e) {
             d.stop_audio = true;
-            self.dark_push_active = false;
+            self.dark_push_audio_active = false;
         }
         if complete {
             self.policy.finish_frame(&e, now, ws);

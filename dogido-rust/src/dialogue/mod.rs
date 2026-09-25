@@ -1,7 +1,9 @@
-//! 通常会話とコード所有の戦闘判断。川柳・世界操作は別の移行段階。
+//! 通常会話、冒険中の判断、限定操作の配送。川柳は別の移行段階。
+mod assist_runtime;
 mod audio;
 mod bridge;
 mod combat_runtime;
+mod environment_runtime;
 mod history;
 mod sentences;
 mod warnings;
@@ -83,6 +85,16 @@ struct Session {
     status: String,
     cancel: Option<watch::Sender<bool>>,
     combat: crate::combat::core::Engine,
+    assist: crate::assist::AssistState,
+    assist_pending: Option<assist_runtime::Pending>,
+    danger: crate::environment::danger::Danger,
+    ambient: crate::environment::ambient::Ambient,
+    environment_latest: Option<GameEvent>,
+    last_player_input: Option<u64>,
+    casual_foreground: bool,
+    input_generation: u64,
+    light_cancel: Option<watch::Sender<bool>>,
+    deferred_input: Option<environment_runtime::DeferredInput>,
     warning: Option<warnings::Active>,
     pending_warning: Option<Vec<crate::combat::model::Speech>>,
     pending_input: Option<String>,
@@ -204,6 +216,16 @@ impl Dialogue {
                 status: "ready".into(),
                 cancel: None,
                 combat: crate::combat::core::Engine::default(),
+                assist: crate::assist::AssistState::new([]),
+                assist_pending: None,
+                danger: crate::environment::danger::Danger::default(),
+                ambient: crate::environment::ambient::Ambient::default(),
+                environment_latest: None,
+                last_player_input: None,
+                casual_foreground: false,
+                input_generation: 0,
+                light_cancel: None,
+                deferred_input: None,
                 warning: None,
                 pending_warning: None,
                 pending_input: None,
@@ -215,6 +237,8 @@ impl Dialogue {
         let mut d = self.data.lock().unwrap();
         Self::cancel_chat(&mut d, session_id, "session_closed");
         Self::cancel_warning(&mut d, session_id, "session_closed");
+        Self::cancel_assist(&mut d, session_id);
+        Self::cancel_light(&mut d, session_id);
         d.sessions.remove(session_id);
         d.revision += 1;
     }
@@ -246,7 +270,16 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
         let duplicate = s.sequences.admit(sequence, key) != Admission::New;
+        let results = s.assist.observe_results(
+            &event.command_results,
+            chrono::Utc::now(),
+            s.warning.is_some() || s.pending_warning.is_some() || s.cancel.is_some(),
+        );
+        for observed in &results.observed {
+            tracing::info!(event="assist_result",session_id=session_id,result=%json!(observed));
+        }
         let mut input_handled = false;
+        let mut input_generation = None;
         if !duplicate {
             let now = self.clock.elapsed().as_millis() as u64;
             let complete = complete_observation(&event);
@@ -258,6 +291,31 @@ impl Dialogue {
             if complete || recent && event.event.source_kind == SourceKind::Auditory {
                 s.audio_latest = Some(event.clone());
                 s.audio_received = recent.then(Instant::now);
+            }
+            if recent {
+                s.environment_latest = Some(environment_runtime::context(s, &event, complete));
+                let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
+                s.danger.set_presence(boss, ominous);
+                s.danger.update(&event, now, complete, &self.config.combat);
+                s.ambient.update(&event, now, complete, &self.config.combat);
+                s.combat.set_dark_push_context(
+                    s.danger.dark_push_active(),
+                    s.warning
+                        .as_ref()
+                        .is_some_and(|w| w.actions.iter().any(environment_runtime::dark_audio))
+                        || s.pending_warning
+                            .as_ref()
+                            .is_some_and(|a| a.iter().any(environment_runtime::dark_audio)),
+                );
+            }
+            if recent && !text.trim().is_empty() {
+                Self::cancel_assist(&mut d, session_id);
+                Self::cancel_light(&mut d, session_id);
+                let s = d.sessions.get_mut(session_id).unwrap();
+                s.input_generation = s.input_generation.wrapping_add(1);
+                input_generation = Some(s.input_generation);
+                s.last_player_input = Some(now);
+                s.ambient.note_player_input(now);
             }
             self.refresh_combat_audio(&mut d, session_id);
             if recent {
@@ -272,6 +330,23 @@ impl Dialogue {
                     &self.config.warnings,
                 );
                 input_handled = decision.input_handled;
+                let combat_priority = if decision
+                    .actions
+                    .iter()
+                    .any(|a| a.kind == "dark_push_forward")
+                {
+                    environment_runtime::CombatPriority::FrontAmbush
+                } else if !decision.actions.is_empty() || !decision.chat_allowed {
+                    environment_runtime::CombatPriority::Selected
+                } else {
+                    environment_runtime::CombatPriority::None
+                };
+                if decision.dimension_changed {
+                    Self::cancel_assist(&mut d, session_id);
+                    let s = d.sessions.get_mut(session_id).unwrap();
+                    s.input_generation = s.input_generation.wrapping_add(1);
+                    s.deferred_input = None;
+                }
                 self.apply_combat_decision(
                     &mut d,
                     &mut jobs,
@@ -280,23 +355,60 @@ impl Dialogue {
                     input_handled.then_some(text.as_str()),
                     warnings::interruption_reason(&event),
                 );
+                self.process_environment(
+                    &mut d,
+                    &mut jobs,
+                    session_id,
+                    &event,
+                    now,
+                    combat_priority,
+                );
+                let s = d.sessions.get_mut(session_id).unwrap();
+                s.danger.finish_frame(s.mode);
             }
             self.start_pending(&mut d, &mut jobs, session_id);
             d.revision += 1;
+        }
+        if let Some(feedback) = results.feedback {
+            self.queue_fixed_reply(&mut d, &mut jobs, session_id, feedback, None);
         }
         drop(d);
         drop(jobs);
         let input = if input_handled {
             json!({"accepted":true,"reason":"combat_input"})
         } else if !duplicate && !text.trim().is_empty() {
-            self.submit(Some(session_id), &text, "text")
+            self.submit_inner(
+                Some(session_id),
+                &text,
+                "text",
+                false,
+                input_generation.map(|g| (g, None)),
+            )
         } else {
             Value::Null
         };
+        let commands = self
+            .data
+            .lock()
+            .unwrap()
+            .sessions
+            .get(session_id)
+            .map(|s| s.assist.pending_commands(chrono::Utc::now()))
+            .unwrap_or_default();
         json!({"accepted":true,"event_id":id("evt"),"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
-            "state":null,"outputs":null,"commands":[],"acknowledged_command_ids":[],"server_time":chrono::Utc::now(),"phase":"dialogue_preview","player_input":input})
+            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":chrono::Utc::now(),"phase":"dialogue_preview","player_input":input})
     }
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
+        self.submit_inner(selected, text, source, false, None)
+    }
+    fn submit_inner(
+        self: &Arc<Self>,
+        selected: Option<&str>,
+        text: &str,
+        source: &str,
+        skip_assist: bool,
+        expected_generation: Option<(u64, Option<String>)>,
+    ) -> Value {
         if text.trim().is_empty() {
             return json!({"accepted":false,"reason":"empty_text"});
         }
@@ -319,9 +431,26 @@ impl Dialogue {
         let Some(s) = d.sessions.get_mut(&session_id) else {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
+        if expected_generation
+            .as_ref()
+            .is_some_and(|(g, _)| *g != s.input_generation)
+        {
+            return json!({"accepted":false,"reason":"superseded_input"});
+        }
         if !observation_fresh(s) {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
+        if let Some(p) = s
+            .assist_pending
+            .as_ref()
+            .filter(|p| p.input.raw_text == text)
+        {
+            return json!({"accepted":true,"deduplicated":true,"turn_id":p.turn,"session_id":session_id});
+        }
+        if s.deferred_input.as_ref().is_some_and(|p| p.text == text) {
+            return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
+        }
+        s.deferred_input = None;
         if let Some(w) = s
             .warning
             .as_ref()
@@ -332,6 +461,40 @@ impl Dialogue {
         if s.pending_input.as_deref() == Some(text) && s.pending_warning.is_some() {
             return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
         }
+        if expected_generation.is_none() {
+            s.input_generation = s.input_generation.wrapping_add(1);
+        }
+        Self::cancel_assist(&mut d, &session_id);
+        Self::cancel_light(&mut d, &session_id);
+        let now = self.clock.elapsed().as_millis() as u64;
+        let s = d.sessions.get_mut(&session_id).unwrap();
+        s.last_player_input = Some(now);
+        s.ambient.note_player_input(now);
+        if s.warning.as_ref().is_some_and(|w| {
+            w.actions
+                .iter()
+                .all(|a| a.delivery == crate::combat::model::Delivery::Ambient)
+        }) {
+            Self::cancel_warning(&mut d, &session_id, "new_player_input");
+        }
+        if !skip_assist
+            && let Some(result) = self.assist_input(&mut d, &mut jobs, &session_id, text, source)
+        {
+            return result;
+        }
+        let s = d.sessions.get_mut(&session_id).unwrap();
+        if let Some(event) = s.environment_latest.as_ref().or(s.latest.as_ref())
+            && s.chat_allowed
+            && let Some(mut speech) = s.ambient.smell_query(event, text, now)
+        {
+            speech.delivery = crate::combat::model::Delivery::PlayerReply;
+            s.pending_warning = Some(vec![speech]);
+            s.pending_input = Some(text.to_owned());
+            Self::cancel_chat(&mut d, &session_id, "smell_query");
+            self.start_pending(&mut d, &mut jobs, &session_id);
+            return json!({"accepted":true,"session_id":session_id,"reason":"smell_query"});
+        }
+        let s = d.sessions.get_mut(&session_id).unwrap();
         if let Some(event) = s.latest.clone() {
             let decision = s.combat.input(
                 &event,
@@ -358,6 +521,20 @@ impl Dialogue {
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
         if !fresh(s) || s.warning.is_some() {
+            if fresh(s)
+                && s.warning.as_ref().is_some_and(|w| {
+                    w.actions
+                        .iter()
+                        .all(|a| a.delivery == crate::combat::model::Delivery::UrgentEnvironment)
+                })
+            {
+                s.deferred_input = Some(environment_runtime::DeferredInput {
+                    text: text.to_owned(),
+                    source: source.to_owned(),
+                    previous_turn: None,
+                });
+                return json!({"accepted":true,"queued":true,"session_id":session_id,"reason":"after_environment_warning"});
+            }
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
         let active_turn = s.current_turn.clone();
@@ -386,10 +563,14 @@ impl Dialogue {
             .as_ref()
             .map(|e| serde_json::to_value(e).unwrap())
             .unwrap_or_else(|| empty_event(&s.name));
+        if let Some((_, Some(previous))) = expected_generation {
+            s.history.replace_unanswered(&previous);
+        }
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":s.combat_digest.iter().map(|n|format!("- {n}")).collect::<Vec<_>>().join("\n"),"event":event});
         s.history.push(&turn, "user", text);
+        s.casual_foreground = true;
         let (cancel, rx) = watch::channel(false);
         s.cancel = Some(cancel);
         if d.rows.len() == 200 {
@@ -419,6 +600,12 @@ impl Dialogue {
         let mut d = self.data.lock().unwrap();
         Self::cancel_chat(&mut d, session_id, "manual_interrupt");
         Self::cancel_warning(&mut d, session_id, "manual_interrupt");
+        Self::cancel_assist(&mut d, session_id);
+        Self::cancel_light(&mut d, session_id);
+        if let Some(s) = d.sessions.get_mut(session_id) {
+            s.deferred_input = None;
+            s.input_generation = s.input_generation.wrapping_add(1);
+        }
         d.revision += 1;
     }
     fn update(
@@ -582,6 +769,8 @@ impl Dialogue {
             for sid in ids {
                 Self::cancel_chat(&mut d, &sid, "server_shutdown");
                 Self::cancel_warning(&mut d, &sid, "server_shutdown");
+                Self::cancel_assist(&mut d, &sid);
+                Self::cancel_light(&mut d, &sid);
             }
         }
     }

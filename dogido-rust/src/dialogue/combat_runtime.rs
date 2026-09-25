@@ -15,22 +15,14 @@ impl Dialogue {
             s.latest
                 .as_ref()
                 .filter(|_| super::observation_fresh(s))
-                .map(|e| {
-                    vec![
-                        s.combat
-                            .answer_query(
-                                e,
-                                text,
-                                self.clock.elapsed().as_millis() as u64,
-                                &self.config.combat,
-                            )
-                            .unwrap_or_else(|| {
-                                Speech::new(
-                                    "hostile_direction",
-                                    "今は方位と距離を確かめられへんわ。",
-                                )
-                            }),
-                    ]
+                .map(|_| {
+                    vec![warnings::answer_fixed_query(
+                        s,
+                        text,
+                        s.warning.as_ref().unwrap().actions[0].kind,
+                        self.clock.elapsed().as_millis() as u64,
+                        &self.config.combat,
+                    )]
                 })
         });
         let query_changed = query.is_some()
@@ -42,16 +34,22 @@ impl Dialogue {
             });
         let invalid = query_changed
             || s.warning.as_ref().is_some_and(|w| {
-                w.actions
-                    .iter()
-                    .any(|a| !warnings::applicable(a, s, &self.config.warnings))
+                w.actions.iter().any(|a| {
+                    !warnings::applicable(a, s, &self.config.warnings, &self.config.combat)
+                })
             });
         let refreshed = if query_changed {
             query_actions
         } else if invalid {
-            s.warning
-                .as_ref()
-                .and_then(|w| warnings::refresh(&w.actions, s, &self.config.warnings, w.started))
+            s.warning.as_ref().and_then(|w| {
+                warnings::refresh(
+                    &w.actions,
+                    s,
+                    &self.config.warnings,
+                    &self.config.combat,
+                    w.started,
+                )
+            })
         } else {
             None
         };
@@ -94,25 +92,23 @@ impl Dialogue {
                 s.latest
                     .as_ref()
                     .filter(|_| super::observation_fresh(s))
-                    .map(|e| {
-                        vec![
-                            s.combat
-                                .answer_query(
-                                    e,
-                                    s.pending_input.as_deref().unwrap(),
-                                    self.clock.elapsed().as_millis() as u64,
-                                    &self.config.combat,
-                                )
-                                .unwrap_or_else(|| {
-                                    Speech::new(
-                                        "hostile_direction",
-                                        "今は方位と距離を確かめられへんわ。",
-                                    )
-                                }),
-                        ]
+                    .map(|_| {
+                        vec![warnings::answer_fixed_query(
+                            s,
+                            s.pending_input.as_deref().unwrap(),
+                            pending[0].kind,
+                            self.clock.elapsed().as_millis() as u64,
+                            &self.config.combat,
+                        )]
                     })
             } else {
-                warnings::refresh(&pending, s, &self.config.warnings, false)
+                warnings::refresh(
+                    &pending,
+                    s,
+                    &self.config.warnings,
+                    &self.config.combat,
+                    false,
+                )
             };
         }
     }

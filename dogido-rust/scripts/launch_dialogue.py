@@ -63,13 +63,15 @@ def main():
             raise ValueError("この起動ファイルは既存のlocalhostモデル・VOICEVOX専用です。")
     if settings.voicevox_output_sampling_rate is not None:
         raise ValueError("音声のsampling rate個別設定は未移植です。変更せずに終了します。")
-    combat_settings = {key: getattr(settings, key) for key in
-        json.loads((ROOT / "dogido-rust/src/combat/defaults.json").read_text())}
-    print(f"Rust版の会話・戦闘試験 / 実行元: {ROOT}", flush=True)
+    combat_defaults = json.loads((ROOT / "dogido-rust/src/combat/defaults.json").read_text())
+    for file in sorted((ROOT / "dogido-rust/src/environment").glob("*_defaults.json")):
+        combat_defaults.update(json.loads(file.read_text()))
+    combat_settings = {key: getattr(settings, key) for key in combat_defaults}
+    print(f"Rust版の冒険会話試験 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
-    print("会話材料・発話検査はPython補助を利用。戦闘の判断・位置と体数の回答・音声配送はRustで処理します。", flush=True)
-    print("暗所などの非戦闘環境演出・川柳・世界操作は後続の移行段階です。", flush=True)
+    print("会話材料・発話検査はPython補助を利用。戦闘・環境反応の判断、剣への持ち替え、音声配送はRustで処理します。", flush=True)
+    print("川柳・共同編集・長期記憶は後続の移行段階です。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:

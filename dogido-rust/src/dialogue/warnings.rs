@@ -1,7 +1,7 @@
 //! 一つの戦闘判断から選ばれた音声を、同じ取消所有権で順に配送する。
 use super::{Data, Dialogue, Session, bridge, id, observation_fresh};
 use crate::{
-    combat::model::{Scope, Speech},
+    combat::model::{Delivery, Scope, Speech},
     events::GameEvent,
     threats::Warning,
 };
@@ -73,7 +73,37 @@ pub(super) fn applicable(
     action: &Speech,
     session: &Session,
     settings: &crate::threats::Settings,
+    environment_settings: &crate::combat::model::Settings,
 ) -> bool {
+    if matches!(
+        action.delivery,
+        Delivery::Ambient | Delivery::UrgentEnvironment
+    ) || action.kind == "smell"
+    {
+        if !observation_fresh(session) {
+            return false;
+        }
+        let Some(event) = session
+            .environment_latest
+            .as_ref()
+            .or(session.latest.as_ref())
+        else {
+            return false;
+        };
+        if !session
+            .danger
+            .still_applicable(action, event, environment_settings)
+            || !crate::environment::ambient::still_applicable(action, event)
+        {
+            return false;
+        }
+        if action.kind == "light_source_gain" {
+            let light = session.danger.light_context(event, environment_settings);
+            if light.severe_darkness {
+                return false;
+            }
+        }
+    }
     if let Some(plan) = &action.visual_plan {
         return observation_fresh(session)
             && session
@@ -85,10 +115,11 @@ pub(super) fn applicable(
         Scope::Event => true,
         Scope::Safe => {
             observation_fresh(session)
-                && matches!(
+                && (matches!(
                     session.mode,
                     crate::combat::model::Mode::Normal | crate::combat::model::Mode::Aftermath
-                )
+                ) || session.mode == crate::combat::model::Mode::Alert
+                    && (action.delivery == Delivery::Ambient || action.kind == "smell"))
                 && session
                     .latest
                     .as_ref()
@@ -126,6 +157,7 @@ pub(super) fn refresh(
     actions: &[Speech],
     session: &Session,
     settings: &crate::threats::Settings,
+    environment_settings: &crate::combat::model::Settings,
     started: bool,
 ) -> Option<Vec<Speech>> {
     actions
@@ -140,7 +172,7 @@ pub(super) fn refresh(
                 speech.text = next.text.clone();
                 speech.visual_plan = Some(next);
                 Some(speech)
-            } else if applicable(action, session, settings) {
+            } else if applicable(action, session, settings, environment_settings) {
                 Some(action.clone())
             } else {
                 None
@@ -299,7 +331,12 @@ impl Dialogue {
             d.rows.pop_front();
         }
         let plan = actions.iter().find_map(|a| a.visual_plan.as_ref());
-        d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"category":"callout",
+        let category = if actions.iter().any(|a| a.delivery == Delivery::Combat) {
+            "callout"
+        } else {
+            "speech"
+        };
+        d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"category":category,
             "source":if input.is_some(){"player_input"}else{"game_observation"},"player_input_text":input,
             "text":display_text(actions),"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both",
             "playback_status":"queued","warning":plan,"combat_actions":actions}));
@@ -368,7 +405,7 @@ impl Dialogue {
                     _=tokio::time::sleep(Duration::from_millis(100))=>{
                         let mut d=owner.data.lock().unwrap();
                         let stale=d.sessions.get(&monitor_sid).is_some_and(|s|s.warning.as_ref().is_some_and(|w|w.turn==monitor_turn
-                            && w.actions.iter().any(|a|!applicable(a,s,&owner.config.warnings))));
+                            && w.actions.iter().any(|a|!applicable(a,s,&owner.config.warnings,&owner.config.combat))));
                         if stale{Self::cancel_warning(&mut d,&monitor_sid,"stale_observation");break;}
                     }
                 }
@@ -384,17 +421,19 @@ impl Dialogue {
                 let mut resolved=actions;
                 if let Some(text)=input.as_deref().filter(|_|is_query(&resolved)) {
                     anyhow::ensure!(observation_fresh(s),"stale observation");
-                    let event=s.latest.as_ref().ok_or_else(||anyhow::anyhow!("no snapshot"))?;
-                    resolved=vec![s.combat.answer_query(event,text,self.clock.elapsed().as_millis() as u64,&self.config.combat)
-                        .unwrap_or_else(||Speech::new("hostile_direction","今は方位と距離を確かめられへんわ。"))];
+                    resolved=vec![answer_fixed_query(s,text,resolved[0].kind,self.clock.elapsed().as_millis() as u64,&self.config.combat)];
                     s.warning.as_mut().unwrap().actions=resolved.clone();
                     if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){row["text"]=display_text(&resolved).into();row["combat_actions"]=json!(resolved);}
                 }
                 resolved
             };
-            let mut config=self.config.clone();config.speed=config.warnings.battle_speed;
+            let mut config=self.config.clone();
+            if actions.iter().any(|a| matches!(a.delivery, Delivery::Combat | Delivery::UrgentEnvironment)) {
+                config.speed=config.warnings.battle_speed;
+            }
             let began=AtomicBool::new(false);
-            for action in &actions{
+            let mut rendered=actions.clone();
+            for (index,action) in actions.iter().enumerate(){
                 anyhow::ensure!(!*cancel.borrow(),"cancelled");
                 let action_began=AtomicBool::new(false);
                 let started=||{
@@ -409,9 +448,12 @@ impl Dialogue {
                     match bridge::render(&config,&self.llm,input,&mut cancel).await{
                         Ok(result)=>{
                             text=result["spoken_text"].as_str().unwrap_or(&text).to_owned();
+                            rendered[index].text=result["text"].as_str().unwrap_or(&action.text).to_owned();
                             let mut d=self.data.lock().unwrap();
                             if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){
-                                row["text"]=result["text"].clone();row["llm_reports"]=result["llm_reports"].clone();
+                                row["text"]=display_text(&rendered).into();
+                                if !row["llm_reports"].is_array(){row["llm_reports"]=json!([]);}
+                                if let Some(reports)=result["llm_reports"].as_array(){row["llm_reports"].as_array_mut().unwrap().extend(reports.iter().cloned());}
                             }
                             d.revision+=1;
                         }
@@ -463,6 +505,7 @@ impl Dialogue {
                 );
             }
         }
+        self.resume_deferred(&sid);
     }
 }
 
@@ -470,8 +513,37 @@ pub(super) fn is_query(actions: &[Speech]) -> bool {
     actions.len() == 1
         && matches!(
             actions[0].kind,
-            "hostile_direction" | "hostile_count" | "dragon_direction"
+            "hostile_direction" | "hostile_count" | "dragon_direction" | "smell"
         )
+}
+
+pub(super) fn answer_fixed_query(
+    session: &Session,
+    text: &str,
+    kind: &str,
+    now: u64,
+    settings: &crate::combat::model::Settings,
+) -> Speech {
+    if kind == "smell" {
+        let mut reply = crate::environment::ambient::current_smell_reply(
+            session
+                .environment_latest
+                .as_ref()
+                .or(session.latest.as_ref())
+                .expect("fresh query"),
+        );
+        reply.delivery = Delivery::PlayerReply;
+        return reply;
+    }
+    session
+        .combat
+        .answer_query(
+            session.latest.as_ref().expect("fresh query"),
+            text,
+            now,
+            settings,
+        )
+        .unwrap_or_else(|| Speech::new("hostile_direction", "今は方位と距離を確かめられへんわ。"))
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話と戦闘の判断・音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。暗所・天候などの非戦闘環境演出、川柳、世界操作、長期記憶は後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。川柳、共同編集、長期記憶、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -62,6 +62,7 @@ python dogido-rust/scripts/check_warnings.py
 python dogido-rust/scripts/check_group_warnings.py
 python dogido-rust/scripts/check_warning_observations.py
 python dogido-rust/scripts/check_combat_runtime.py
+python dogido-rust/scripts/check_environment_runtime.py
 ```
 
 ### 戦闘の移植範囲
@@ -76,7 +77,7 @@ python dogido-rust/scripts/check_combat_runtime.py
 
 固定警告と位置・体数回答はLLMを呼びません。既存の死亡・安堵・遮蔽された敵音・昼の水中スケルトン・燃焼・deep_dark不穏音の言い回しだけ、元のprompt・検査をPython補助で再利用し、RustのRigから生成します。失敗時は既存固定文へ戻ります。判断・優先順・状態変更はRustが所有し、安堵では観測根拠より強い撃破主張を棄却します。短期の状況メモはコード事実8件・各80字までで、未再生の発話を会話履歴へ入れません。
 
-暗所で逃げるよう促す演出そのものは未移植です。その演出中の前方奇襲は純粋判断と境界フックまで実装し、暗所側の段階管理を移すときに接続します。川柳workshop中の戦闘pause／復帰はworkshop移植時に接続します。
+暗所への入口、逃げるよう促す段階、呼吸、明るさ回復の安堵と、その最中の前方奇襲を接続しています。暗所の状態と再生中の音声を分け、戦闘へ移った後の反復観測で警告本文を止めません。川柳workshop中の戦闘pause／復帰はworkshop移植時に接続します。
 
 ```sh
 ./dogido-rust/cargo.sh build --locked --offline --examples --bin dogido-rust
@@ -86,6 +87,23 @@ python dogido-rust/scripts/check_combat_runtime.py
 ```
 
 `compare_combat.py`はPython正本と同じ系列で状態・台詞・cue・断片列を比較します。269系列の等値と、部分観測・保留・優先順など5系列の意図的変更を別々に確認します。結果は`reports/combat-parity.json`、模擬LLM・TTS・playerによるHTTP確認は`reports/combat-runtime-check.json`です。実マイク・スピーカー・Minecraft上の聞こえ方は[実機チェック](manual-dialogue-check.md)で確認します。
+
+### 環境反応と剣への持ち替え
+
+`src/environment/`が暗所・避難・夕方・雷・天候・ポータル・危険な光源、友好／中立モブ、建物・バイオーム・ホタル・匂い・照明器具の所持数変化を扱います。乗り物は乗車中だけ会話材料にし、独立した常時実況は追加しません。モブへの反応は会話後30秒の抑制を引き継ぎます。同じモブの反復cooldownとは別です。雷などの割込み後は受理済みの会話を再開し、未回答の同じ入力を履歴に重ねません。
+
+環境の現在性は生成中・再生前にも照合します。現行Fabricの音／モブ通知に含まれる完全なworld/player sectionでは、建物・ポータル・乗り物等の不在も反映します。空の敵配列で視認を消したり、全観測の10秒期限を延長したりはしません。環境sectionを省略した通知は直前の全観測とその期限を使います。
+
+`src/assist/`は明示した剣への持ち替えだけを扱います。定型の依頼はモデルなし、自然文は根拠付きの限定抽出です。原文・現在のslot・実行capability・命令期限・結果ACKをRustが検証します。音声の「県に持ち替えて」等の補正は音声入力に限ります。知識質問、引用、否定、過去の報告から操作せず、初回の失敗を成功として話しません。実行された結果はadapterのACKで確認します。
+
+```sh
+./dogido-rust/cargo.sh build --locked --offline --examples --bin dogido-rust
+python scripts/compare_assist.py
+python scripts/compare_environment_danger.py
+python dogido-rust/scripts/check_environment_runtime.py
+```
+
+操作支援は同一入力1,572系列と意図的修正2系列、危険環境は91系列、ambientはPython由来202参照ケースで比較しています。地表の夕方警告を常に割込みにする差は危険環境比較器で明示的に正規化しています。命令期限切れの即時整理・成功未確認の断言抑止・未知結果への誤応答防止は等値比較とは分けています。統合試験は模擬LLM・TTS・playerによるものです。実ゲームの持ち替え、実モデルの表現、実スピーカーの間は実機確認が必要です。
 
 既存モデルとVOICEVOXを使う明示的な試聴（このMacで音声が流れます）:
 

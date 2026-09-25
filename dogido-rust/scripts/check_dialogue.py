@@ -82,7 +82,10 @@ def dependencies():
             status, mime = 200, "application/json"
             if self.path == "/v1/chat/completions":
                 time.sleep(controls["delay"])
-                if incoming["max_tokens"] == 640:
+                structured = controls.get("structured", {}).get(incoming["max_tokens"])
+                if structured is not None:
+                    text = json.dumps(structured, ensure_ascii=False)
+                elif incoming["max_tokens"] == 640:
                     # 現行prompt中のcurrentだけを読む。テストが入力にないevidenceを作らない。
                     decoder = json.JSONDecoder()
                     current = None

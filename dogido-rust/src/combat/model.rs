@@ -35,8 +35,20 @@ pub struct LeafRequest {
     pub temperature: f64,
 }
 
+/// 音声の実行層だけが付ける優先区分。判断の比較データには混ぜない。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Delivery {
+    #[default]
+    Combat,
+    Ambient,
+    UrgentEnvironment,
+    PlayerReply,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Speech {
+    #[serde(skip)]
+    pub delivery: Delivery,
     pub kind: &'static str,
     pub text: String,
     pub cue_id: Option<&'static str>,
@@ -54,6 +66,7 @@ pub struct Speech {
 impl Speech {
     pub fn new(kind: &'static str, text: impl Into<String>) -> Self {
         Self {
+            delivery: Delivery::Combat,
             kind,
             text: text.into(),
             cue_id: None,
@@ -79,7 +92,18 @@ impl Speech {
 pub struct Settings(pub Map<String, Value>);
 impl Default for Settings {
     fn default() -> Self {
-        Self(serde_json::from_str(include_str!("defaults.json")).expect("checked combat defaults"))
+        let mut values: Map<String, Value> =
+            serde_json::from_str(include_str!("defaults.json")).expect("checked combat defaults");
+        for file in [
+            include_str!("../environment/danger_defaults.json"),
+            include_str!("../environment/ambient_defaults.json"),
+        ] {
+            values.extend(
+                serde_json::from_str::<Map<String, Value>>(file)
+                    .expect("checked environment defaults"),
+            );
+        }
+        Self(values)
     }
 }
 impl Settings {

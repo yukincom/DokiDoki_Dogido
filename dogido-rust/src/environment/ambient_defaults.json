@@ -1,0 +1,15 @@
+{
+  "ambient_mob_comment_cooldown_ms": 120000,
+  "ambient_villager_crowd_threshold": 3,
+  "smell_comment_cooldown_ms": 120000,
+  "zombie_scent_comment_cooldown_ms": 120000,
+  "player_input_priority_cooldown_ms": 20000,
+  "darkness_llm_comment_cooldown_ms": 300000,
+  "ender_eye_recent_ms": 2000,
+  "ender_eye_comment_cooldown_ms": 8000,
+  "conversation_ambient_mute_ms": 30000,
+  "conversation_active_ttl_ms": 300000,
+  "weather_sound_recent_ms": 4000,
+  "special_biome_comment_cooldown_ms": 600000,
+  "structure_comment_cooldown_ms": 600000
+}

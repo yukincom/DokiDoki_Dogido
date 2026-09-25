@@ -30,6 +30,8 @@ pub async fn render(
     input: Value,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
+    let light_plan = input["op"] == "light_plan";
+    let routing_only = input["op"] == "assist_route";
     let combat_kind =
         (input["op"] == "combat_leaf").then(|| input["kind"].as_str().unwrap_or("").to_owned());
     if let Some(kind) = combat_kind.as_deref() {
@@ -42,6 +44,18 @@ pub async fn render(
                     | "newly_burning_visual"
                     | "deep_dark_ominous_sound"
                     | "occluded_hostile_presence"
+                    | "ambient"
+                    | "weather_transition"
+                    | "ender_eye_throw"
+                    | "structure_entry"
+                    | "light_source_gain"
+                    | "darkness_escape"
+                    | "occluded_entry_with_light"
+                    | "occluded_entry_no_light"
+                    | "dark_push_no_light"
+                    | "dark_push_after_breath"
+                    | "emergency_shelter_relief"
+                    | "portal_appearance"
             ),
             "unexpected combat leaf"
         );
@@ -67,7 +81,10 @@ pub async fn render(
             let mut frame: Value = serde_json::from_str(&line).context("invalid helper JSON")?;
             let reply = match frame["op"].as_str() {
                 Some("plan") => {
-                    ensure!(combat_kind.is_none(), "combat leaf cannot invoke planner");
+                    ensure!(
+                        combat_kind.is_none() && !light_plan && !routing_only,
+                        "reaction cannot invoke chat planner"
+                    );
                     plans += 1;
                     ensure!(plans == 1, "planner step limit exceeded");
                     let request: PreparedPlan = serde_json::from_value(frame["input"].take())?;
@@ -84,13 +101,20 @@ pub async fn render(
                     output
                 }
                 Some("generate") => {
+                    ensure!(!routing_only, "input routing cannot generate");
                     leaves += 1;
                     ensure!(leaves <= 2, "leaf retry limit exceeded");
                     let request: GenerationRequest = serde_json::from_value(frame["input"].take())?;
                     ensure!(
-                        request.kind == combat_kind.as_deref().unwrap_or("player_chat")
+                        request.kind
+                            == (if light_plan {
+                                "light_source_comment_plan"
+                            } else {
+                                combat_kind.as_deref().unwrap_or("player_chat")
+                            })
                             && request.model == config.model
-                            && request.max_tokens == config.max_tokens
+                            && request.max_tokens
+                                == (if light_plan { 160 } else { config.max_tokens })
                             && !request.enable_thinking,
                         "unexpected helper generation"
                     );

@@ -140,7 +140,7 @@ impl Runtime {
                 dialogue: config.dialogue.clone(),
                 runtime: json!({
                     "instance_id": new_id("run"), "started_at": Utc::now(),
-                    "source_kind": "rust_migration", "source_label_ja": if config.dialogue.is_some() {"Rust版・平時会話試験"} else {"Rust版・接続テスト"},
+                    "source_kind": "rust_migration", "source_label_ja": if config.dialogue.is_some() {"Rust版・冒険会話試験"} else {"Rust版・接続テスト"},
                     "runtime_environment": "Rust", "python_environment": null,
                     "virtual_environment": false, "process_id": std::process::id(),
                 }),
@@ -156,7 +156,8 @@ impl Runtime {
         runtime.record(
             "server_ready",
             if runtime.config.dialogue.is_some() {
-                "Rust版の平時会話試験。戦闘・川柳・操作は未接続。".into()
+                "Rust版の冒険会話試験。会話・戦闘・環境反応・剣の持ち替えに対応。川柳は移行中。"
+                    .into()
             } else {
                 "Rust版の接続テスト。会話・警告・音声は未対応。外部AI接続なし。".into()
             },
@@ -215,6 +216,7 @@ impl Runtime {
                         registration.adapter_name == "rust-conversation-preview"
                             && registration.game == "none",
                     );
+                    d.set_execution_capabilities(&id, &registration.execution_capabilities);
                 }
                 self.data.sessions.insert(
                     id.clone(),
@@ -332,10 +334,27 @@ impl Runtime {
                     .collect();
                 self.data.runtime_revision += 1;
                 let duplicates = results.iter().filter(|r| r["deduplicated"] == true).count();
+                // 最終観測時点で有効な命令だけ再配送し、batch途中で受領した結果もACKする。
+                let commands = results
+                    .last()
+                    .map(|r| r["commands"].clone())
+                    .unwrap_or(json!([]));
+                let mut acknowledged = Vec::new();
+                for result in &results {
+                    for id in result["acknowledged_command_ids"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                    {
+                        if !acknowledged.contains(id) {
+                            acknowledged.push(id.clone());
+                        }
+                    }
+                }
                 ApiReply::new(
                     StatusCode::ACCEPTED,
                     if batch {
-                        json!({"accepted":true,"received":results.len(),"processed":results.len()-duplicates,"deduplicated":duplicates,"commands":[],"acknowledged_command_ids":[],"server_time":Utc::now()})
+                        json!({"accepted":true,"received":results.len(),"processed":results.len()-duplicates,"deduplicated":duplicates,"commands":commands,"acknowledged_command_ids":acknowledged,"server_time":Utc::now()})
                     } else {
                         results.into_iter().next().unwrap()
                     },

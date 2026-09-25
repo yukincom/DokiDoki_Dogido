@@ -15,7 +15,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.config import Settings
 from dogido_server.llm.client import DogidoLLM
-from dogido_server.llm.types import LeafGenerationRequest
+from dogido_server.llm.types import LeafGenerationRequest, StructuredGenerationRequest
 from dogido_server.llm.prompts import build_messages
 try:
     from dogido_server.llm.types import GeneratedText
@@ -51,6 +51,9 @@ def exchange(value):
 
 COMBAT_LEAVES = frozenset({"death", "aftermath", "daylight_water_skeleton", "newly_burning_visual",
                            "deep_dark_ominous_sound", "occluded_hostile_presence"})
+ENVIRONMENT_LEAVES = frozenset({"ambient", "weather_transition", "ender_eye_throw", "structure_entry", "light_source_gain",
+    "darkness_escape", "occluded_entry_with_light", "occluded_entry_no_light", "dark_push_no_light",
+    "dark_push_after_breath", "emergency_shelter_relief", "portal_appearance"})
 
 
 class BridgeLLM(DogidoLLM):
@@ -87,7 +90,7 @@ class BridgeLLM(DogidoLLM):
             raise ValueError("unexpected helper leaf")
         response = exchange({"op": "generate", "input": {"schema_version": 1, "kind": request.kind,
             "model": self.model, "messages": build_messages(request), "temperature": request.temperature,
-            "max_tokens": self.settings.llm_max_tokens, "enable_thinking": False}})
+            "max_tokens": request.max_tokens or self.settings.llm_max_tokens, "enable_thinking": False}})
         return GeneratedText(**response["generated"])
 
 
@@ -129,12 +132,13 @@ def run_turn(data):
 def run_combat_leaf(data):
     """Rustで確定した出来事のprompt・発話検査だけ。観測、状態機械、保存を進めない。"""
     kind = data["kind"]
-    if kind not in COMBAT_LEAVES:
+    if kind not in COMBAT_LEAVES | ENVIRONMENT_LEAVES:
         raise ValueError("unsupported combat leaf")
     settings = Settings(_env_file=None, llm_enabled=True, llm_backend="chat_completions",
         llm_provider="local", llm_model=data["model"], llm_max_tokens=data["max_tokens"],
         audio_enabled=False, memory_enabled=False, tts_reading_engine=data.get("reading_engine", "auto"))
     details = dict(data["details"])
+    details.pop("__ambient_guard", None)
     suffix = str(details.pop("__speech_suffix", ""))
     fallback = data["fallback_text"]
     if suffix and fallback.endswith(suffix):
@@ -145,16 +149,40 @@ def run_combat_leaf(data):
     if kind == "aftermath" and DogidoStateMachine._aftermath_claim_conflicts(
             str(details.get("combat_outcome", "disengaged")), text):
         text = fallback
+    if kind == "light_source_gain":
+        # 所持数増加からクラフト・設置・本数を補作しない既存の最終検査。
+        machine = DogidoStateMachine(settings, llm=llm)
+        if machine._invalid_light_source_gain_claim(text):
+            text = fallback
     text += suffix
     emit({"op": "result", "text": text,
           "spoken_text": prepare_text_for_tts(text, engine=settings.tts_reading_engine)})
+
+
+def run_light_plan(data):
+    """所持数変化への一言の必要性。状態・発話・操作はRust側に残す。"""
+    settings = Settings(_env_file=None, llm_enabled=True, llm_backend="chat_completions",
+        llm_provider="local", llm_model=data["model"], llm_max_tokens=160,
+        audio_enabled=False, memory_enabled=False)
+    llm = BridgeLLM(settings, data["model"], allowed_leaf="light_source_comment_plan")
+    payload = DogidoLLM.generate_structured_json(llm, StructuredGenerationRequest(
+        kind="light_source_comment_plan", details=data["details"],
+        fallback_value=data["fallback_payload"], temperature=0.0, route="chat", max_tokens=160))
+    emit({"op": "result", "payload": payload})
+
+
+def run_assist_route(data):
+    # 知識質問を持ち替え抽出へ回さない。モデルも状態機械も呼び出さない。
+    context = route_player_input(data["text"])
+    emit({"op": "result", "knowledge_query": context.knowledge_query is not None})
 
 
 if __name__ == "__main__":
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="[会話補助] %(message)s")
     try:
         data = json.loads(sys.stdin.readline())
-        (run_combat_leaf if data.get("op") == "combat_leaf" else run_turn)(data)
+        {"combat_leaf": run_combat_leaf, "light_plan": run_light_plan,
+         "assist_route": run_assist_route}.get(data.get("op"), run_turn)(data)
     except Exception as exc:
         emit({"op": "error", "error": f"{type(exc).__name__}: {exc}"})
         raise SystemExit(1)

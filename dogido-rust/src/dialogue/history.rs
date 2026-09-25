@@ -19,6 +19,17 @@ fn clip(text: &str) -> String {
     }
 }
 impl History {
+    /// 同じ実入力の再開時にだけ古い未回答turnを置き換える。診断行は保持する。
+    pub fn replace_unanswered(&mut self, turn: &str) {
+        if !self
+            .rows
+            .iter()
+            .any(|r| r["turn_id"] == format!("{turn}:reply"))
+        {
+            self.rows
+                .retain(|r| !(r["role"] == "user" && r["turn_id"] == turn));
+        }
+    }
     pub fn rows(&self) -> Vec<Value> {
         self.rows.iter().cloned().collect()
     }
