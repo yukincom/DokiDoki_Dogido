@@ -128,7 +128,7 @@ def dependencies():
 
 
 @contextmanager
-def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None):
+def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None, combat_settings=None):
     log_path = directory / "runtime.log"
     env = dict(os.environ)
     env.pop("DOGIDO_AUTH_TOKEN", None); env.pop("DOGIDO_LLM_API_KEY", None)
@@ -140,7 +140,8 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
         p = subprocess.Popen([str(binary), "serve-dialogue", "--listen", "127.0.0.1:0", "--python", sys.executable,
             "--base-url", dependency + "/v1", "--voicevox-url", "http://127.0.0.1:50021" if live else dependency,
             "--audio-player", str(player), "--audio-dir", str(directory / "audio"),
-            "--warning-settings", json.dumps(warning_settings or {})],
+            "--warning-settings", json.dumps(warning_settings or {}),
+            "--combat-settings", json.dumps(combat_settings or {})],
             stdout=subprocess.PIPE, stderr=log, text=True, env=env)
         try:
             with selectors.DefaultSelector() as selector:
@@ -150,6 +151,9 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             ready = json.loads(line)
             assert ready["phase"] == "dialogue_preview"
             yield "http://" + ready["address"], p, log_path
+        except BaseException:
+            print(log_path.read_text()[-6000:], file=sys.stderr)
+            raise
         finally:
             if p.poll() is None:
                 p.send_signal(signal.SIGINT)
@@ -157,17 +161,17 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
                 except subprocess.TimeoutExpired:
                     p.kill(); p.wait(); raise AssertionError("owned server failed to stop")
             p.stdout.close()
-        assert p.returncode == 0, log_path.read_text()
-    logs = log_path.read_text()
-    assert "dialogue_stopped" in logs
-    # 起動したhelperとplayerの実PIDが終了していることをOSへ確認。
-    pids = set(re.findall(r'event="(?:helper_started|audio_started)" pid=Some\((\d+)\)', logs))
-    assert pids, logs
-    for pid in pids:
-        try: os.kill(int(pid), 0)
-        except ProcessLookupError: continue
-        raise AssertionError(f"owned child still alive: {pid}")
-    assert not list((directory / "audio").glob("*.wav")), "temporary playback file remains"
+            assert p.returncode == 0, log_path.read_text()
+            logs = log_path.read_text()
+            assert "dialogue_stopped" in logs
+            # 起動したhelperとplayerの実PIDが終了していることをOSへ確認。
+            pids = set(re.findall(r'event="(?:helper_started|audio_started)" pid=Some\((\d+)\)', logs))
+            assert pids, logs
+            for pid in pids:
+                try: os.kill(int(pid), 0)
+                except ProcessLookupError: continue
+                raise AssertionError(f"owned child still alive: {pid}")
+            assert not list((directory / "audio").glob("*.wav")), "temporary playback file remains"
 
 
 def main():
@@ -242,17 +246,18 @@ def main():
             assert snapshot(base)["sessions"][0]["history"] == []
             passed.append("session_close_cancels_and_new_session_has_no_history")
             assert not request(base, "/api/v1/player-input", {"text": "こんにちは"})["accepted"]
-            def event(seq, stale=False, dark=False):
+            def event(seq, stale=False, danger=False):
                 return {"schema_version":"2026-05-24", "adapter":"fabric", "sequence":seq,
                     "observed_at": (datetime.now(timezone.utc)-timedelta(seconds=30 if stale else 0)).isoformat(),
                     "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
-                    "world":{"danger_darkness_score": .9 if dark else .0}}
+                    "combat":{"recent_damage_ms": 0 if danger else 10000}}
             request(base, "/api/v1/game-events", event(1, stale=True), sid=sid)
             assert not request(base, "/api/v1/player-input", {"text": "こんにちは"})["accepted"]
             request(base, "/api/v1/game-events", event(2), sid=sid)
             assert request(base, "/api/v1/game-events", event(2), sid=sid)["deduplicated"]
             turn = submit(base, sid, "こんにちは")
-            request(base, "/api/v1/game-events", event(3, dark=True), sid=sid)
+            # 全戦闘Engine移行後はpanic優先を確認する。暗いだけのAlertは会話を一律禁止しない。
+            request(base, "/api/v1/game-events", event(3, danger=True), sid=sid)
             wait_for(lambda: row(base, turn, {"cancelled"}))
             passed.append("fresh_observation_required_and_danger_cancels")
             request(base, "/api/v1/game-events", event(4), sid=sid)

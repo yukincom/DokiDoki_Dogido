@@ -1,6 +1,7 @@
-//! 平時会話と移植済み視認警告。全戦闘・川柳・世界操作の代替にはしない。
+//! 通常会話とコード所有の戦闘判断。川柳・世界操作は別の移行段階。
 mod audio;
 mod bridge;
+mod combat_runtime;
 mod history;
 mod sentences;
 mod warnings;
@@ -39,6 +40,7 @@ pub struct DialogueConfig {
     pub player: PathBuf,
     pub audio_enabled: bool,
     pub warnings: crate::threats::Settings,
+    pub combat: crate::combat::model::Settings,
 }
 impl Default for DialogueConfig {
     fn default() -> Self {
@@ -59,6 +61,7 @@ impl Default for DialogueConfig {
             player: "/usr/bin/afplay".into(),
             audio_enabled: true,
             warnings: crate::threats::Settings::default(),
+            combat: crate::combat::model::Settings::default(),
         }
     }
 }
@@ -68,16 +71,21 @@ struct Session {
     // 全視認を含む観測とその受信時刻。部分通知で消去・延命しない。
     latest: Option<GameEvent>,
     received: Option<Instant>,
-    partial_danger: bool,
+    audio_latest: Option<GameEvent>,
+    audio_received: Option<Instant>,
+    chat_allowed: bool,
+    mode: crate::combat::model::Mode,
     sequences: SequenceLedger,
     history: history::History,
+    combat_digest: VecDeque<String>,
     epoch: u64,
     current_turn: String,
     status: String,
     cancel: Option<watch::Sender<bool>>,
-    threat_policy: crate::threats::Policy,
+    combat: crate::combat::core::Engine,
     warning: Option<warnings::Active>,
-    pending_warning: Option<crate::threats::Warning>,
+    pending_warning: Option<Vec<crate::combat::model::Speech>>,
+    pending_input: Option<String>,
 }
 #[derive(Default)]
 struct Data {
@@ -97,16 +105,6 @@ pub struct Dialogue {
 }
 fn id(prefix: &str) -> String {
     format!("{prefix}_{}", uuid::Uuid::new_v4().simple())
-}
-fn danger(event: &GameEvent) -> bool {
-    !event.visual_threats.is_empty()
-        || !event.auditory_threats.is_empty()
-        || event.combat.combat_active_hint == Some(true)
-        || event.combat.recent_damage_ms.is_some_and(|ms| ms < 8000)
-        || event
-            .world
-            .danger_darkness_score
-            .is_some_and(|score| score >= 0.72)
 }
 // Fabricの音・ambient通知はvisual_threats=[]を送るが、視認消失の証拠ではない。
 // 分類は送信側の観測範囲で決める。配列が空かどうかで推測しない。
@@ -138,16 +136,15 @@ fn recent_observation(event: &GameEvent) -> bool {
         crate::events::EventTime::Naive(_) => false,
     }
 }
-fn fresh(session: &Session) -> bool {
+fn observation_fresh(session: &Session) -> bool {
     session.preview
-        || (!session.partial_danger
-            && session
-                .received
-                .is_some_and(|at| at.elapsed() <= Duration::from_secs(10))
-            && session
-                .latest
-                .as_ref()
-                .is_some_and(|e| recent_observation(e) && !danger(e)))
+        || session
+            .received
+            .is_some_and(|at| at.elapsed() <= Duration::from_secs(10))
+            && session.latest.as_ref().is_some_and(recent_observation)
+}
+fn fresh(session: &Session) -> bool {
+    observation_fresh(session) && session.chat_allowed
 }
 fn empty_event(name: &str) -> Value {
     json!({"schema_version":"2026-05-24","adapter":"rust-conversation-preview","observed_at":chrono::Utc::now(),
@@ -155,8 +152,9 @@ fn empty_event(name: &str) -> Value {
 }
 
 impl Dialogue {
-    pub fn new(config: DialogueConfig) -> Result<Arc<Self>> {
+    pub fn new(mut config: DialogueConfig) -> Result<Arc<Self>> {
         config.warnings.validate()?;
+        config.combat = crate::combat::model::Settings::merged(&config.combat.0)?;
         anyhow::ensure!(config.helper.is_file(), "dialogue helper missing");
         anyhow::ensure!(
             config.max_tokens > 0 && config.max_tokens <= 512,
@@ -194,16 +192,21 @@ impl Dialogue {
                 preview,
                 latest: None,
                 received: None,
-                partial_danger: false,
+                audio_latest: None,
+                audio_received: None,
+                chat_allowed: true,
+                mode: crate::combat::model::Mode::Normal,
                 sequences: SequenceLedger::default(),
                 history: history::History::default(),
+                combat_digest: VecDeque::new(),
                 epoch: 0,
                 current_turn: String::new(),
                 status: "ready".into(),
                 cancel: None,
-                threat_policy: crate::threats::Policy::default(),
+                combat: crate::combat::core::Engine::default(),
                 warning: None,
                 pending_warning: None,
+                pending_input: None,
             },
         );
         d.revision += 1;
@@ -243,87 +246,49 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
         let duplicate = s.sequences.admit(sequence, key) != Admission::New;
+        let mut input_handled = false;
         if !duplicate {
-            if let Some(reason) = warnings::interruption_reason(&event) {
-                Self::cancel_chat(&mut d, session_id, reason);
-                d.sessions.get_mut(session_id).unwrap().status =
-                    "危険を観測（戦闘中の会話は未移植）".into();
-            }
-            if complete_observation(&event) {
-                let s = d.sessions.get(session_id).unwrap();
-                let changed = s
-                    .warning
-                    .as_ref()
-                    .is_some_and(|w| !recent || !w.plan.applicable(&event, &self.config.warnings));
-                let relocated = if changed && recent {
-                    s.warning.as_ref().and_then(|w| {
-                        let cue_started = d
-                            .rows
-                            .iter()
-                            .find(|r| r["turn_id"] == w.turn)
-                            .is_some_and(|r| r.get("started_at").is_some());
-                        w.plan.relocated(&event, &self.config.warnings, cue_started)
-                    })
-                } else {
-                    None
-                };
-                if changed {
-                    tracing::info!(event="warning_invalidated",session_id,
-                    source_event=?event.event.name,visual_count=event.visual_threats.len(),recent);
-                    Self::cancel_warning(
-                        &mut d,
-                        session_id,
-                        if recent {
-                            "target_changed_or_gone"
-                        } else {
-                            "stale_observation"
-                        },
-                    );
-                }
-                let s = d.sessions.get_mut(session_id).unwrap();
-                if changed {
-                    s.pending_warning = relocated;
-                }
-                if !recent {
-                    s.pending_warning = None;
-                } else if let Some(pending) = s.pending_warning.take() {
-                    // 配送枠を待つ間にさらに向きが変わっても、未完了の本文を失わない。
-                    // 既に開始したcueは最初のrelocatedで除いている。
-                    s.pending_warning = pending.relocated(&event, &self.config.warnings, false);
-                }
-                let plan = if recent && jobs.len() < 16 {
-                    let new_plan = s.threat_policy.observe(
-                        &event,
-                        self.clock.elapsed().as_millis() as u64,
-                        s.warning.is_some(),
-                        &self.config.warnings,
-                    );
-                    new_plan.or_else(|| s.pending_warning.take())
-                } else {
-                    None
-                };
-                s.partial_danger = false;
-                s.latest = Some(event);
+            let now = self.clock.elapsed().as_millis() as u64;
+            let complete = complete_observation(&event);
+            let s = d.sessions.get_mut(session_id).unwrap();
+            if complete {
+                s.latest = Some(event.clone());
                 s.received = recent.then(Instant::now);
-                if let Some(plan) = plan {
-                    d.sessions.get_mut(session_id).unwrap().pending_warning = None;
-                    Self::cancel_warning(&mut d, session_id, "higher_priority_warning");
-                    let (turn, rx) = Self::queue_warning(&mut d, session_id, &plan);
-                    let this = self.clone();
-                    let sid = session_id.to_owned();
-                    jobs.push(tokio::spawn(async move {
-                        this.run_warning(sid, turn, plan, rx).await;
-                    }));
-                }
-            } else {
-                // 部分通知は危険を加えることだけできる。安全な全観測まで会話を再開しない。
-                d.sessions.get_mut(session_id).unwrap().partial_danger |= danger(&event);
             }
+            if complete || recent && event.event.source_kind == SourceKind::Auditory {
+                s.audio_latest = Some(event.clone());
+                s.audio_received = recent.then(Instant::now);
+            }
+            self.refresh_combat_audio(&mut d, session_id);
+            if recent {
+                let s = d.sessions.get_mut(session_id).unwrap();
+                let busy = s.warning.is_some() || s.pending_warning.is_some() || jobs.len() >= 16;
+                let decision = s.combat.observe(
+                    &event,
+                    now,
+                    complete,
+                    busy,
+                    &self.config.combat,
+                    &self.config.warnings,
+                );
+                input_handled = decision.input_handled;
+                self.apply_combat_decision(
+                    &mut d,
+                    &mut jobs,
+                    session_id,
+                    decision,
+                    input_handled.then_some(text.as_str()),
+                    warnings::interruption_reason(&event),
+                );
+            }
+            self.start_pending(&mut d, &mut jobs, session_id);
             d.revision += 1;
         }
         drop(d);
         drop(jobs);
-        let input = if !duplicate && !text.trim().is_empty() {
+        let input = if input_handled {
+            json!({"accepted":true,"reason":"combat_input"})
+        } else if !duplicate && !text.trim().is_empty() {
             self.submit(Some(session_id), &text, "text")
         } else {
             Value::Null
@@ -354,6 +319,44 @@ impl Dialogue {
         let Some(s) = d.sessions.get_mut(&session_id) else {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
+        if !observation_fresh(s) {
+            return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
+        }
+        if let Some(w) = s
+            .warning
+            .as_ref()
+            .filter(|w| w.input.as_deref() == Some(text))
+        {
+            return json!({"accepted":true,"deduplicated":true,"turn_id":w.turn,"session_id":session_id});
+        }
+        if s.pending_input.as_deref() == Some(text) && s.pending_warning.is_some() {
+            return json!({"accepted":true,"deduplicated":true,"queued":true,"session_id":session_id});
+        }
+        if let Some(event) = s.latest.clone() {
+            let decision = s.combat.input(
+                &event,
+                text,
+                self.clock.elapsed().as_millis() as u64,
+                &self.config.combat,
+                &self.config.warnings,
+            );
+            if let Some(decision) = decision {
+                Self::cancel_chat(&mut d, &session_id, "combat_input");
+                self.apply_combat_decision(
+                    &mut d,
+                    &mut jobs,
+                    &session_id,
+                    decision,
+                    Some(text),
+                    None,
+                );
+                self.start_pending(&mut d, &mut jobs, &session_id);
+                let s = &d.sessions[&session_id];
+                return json!({"accepted":true,"session_id":session_id,"reason":"combat_input",
+                    "turn_id":if s.pending_warning.is_some(){None}else{s.warning.as_ref().map(|w|w.turn.clone())},"queued":s.pending_warning.is_some(),"state":s.mode});
+            }
+        }
+        let s = d.sessions.get_mut(&session_id).unwrap();
         if !fresh(s) || s.warning.is_some() {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
@@ -384,7 +387,8 @@ impl Dialogue {
             .map(|e| serde_json::to_value(e).unwrap())
             .unwrap_or_else(|| empty_event(&s.name));
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,
-            "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),"event":event});
+            "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
+            "event_digest":s.combat_digest.iter().map(|n|format!("- {n}")).collect::<Vec<_>>().join("\n"),"event":event});
         s.history.push(&turn, "user", text);
         let (cancel, rx) = watch::channel(false);
         s.cancel = Some(cancel);
@@ -567,7 +571,7 @@ impl Dialogue {
     pub fn snapshot(&self, selected: Option<&str>) -> Value {
         let d = self.data.lock().unwrap();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows()})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":d.rows.iter().filter(|r|selected.is_none_or(|id|r["session_id"]==id)).collect::<Vec<_>>()})
     }
     pub fn cancel_all(&self) {
@@ -616,11 +620,7 @@ mod tests {
         };
         {
             let mut d = dialogue.data.lock().unwrap();
-            let plan = d
-                .sessions
-                .get_mut("s")
-                .unwrap()
-                .threat_policy
+            let plan = crate::threats::Policy::default()
                 .observe(
                     &event(1, &["zombie"; 3]),
                     0,
@@ -628,8 +628,15 @@ mod tests {
                     &dialogue.config.warnings,
                 )
                 .unwrap();
-            Dialogue::queue_warning(&mut d, "s", &plan);
+            Dialogue::queue_actions(&mut d, "s", &[warnings::from_warning(plan)], None);
             d.rows.back_mut().unwrap()["started_at"] = chrono::Utc::now().to_rfc3339().into();
+            d.sessions
+                .get_mut("s")
+                .unwrap()
+                .warning
+                .as_mut()
+                .unwrap()
+                .started = true;
         }
         for _ in 0..16 {
             dialogue
@@ -650,8 +657,11 @@ mod tests {
         {
             let d = dialogue.data.lock().unwrap();
             assert_eq!(d.sessions["s"].received, received);
-            assert!(d.sessions["s"].partial_danger);
-            let pending = d.sessions["s"].pending_warning.as_ref().unwrap();
+            assert!(!d.sessions["s"].chat_allowed);
+            let pending = d.sessions["s"].pending_warning.as_ref().unwrap()[0]
+                .visual_plan
+                .as_ref()
+                .unwrap();
             assert_eq!(pending.text, "スケルトン1体、ゾンビ1体おるで。");
             assert!(pending.cue.is_none());
         }
@@ -687,14 +697,10 @@ mod tests {
             };
             {
                 let mut d = dialogue.data.lock().unwrap();
-                let plan = d
-                    .sessions
-                    .get_mut("s")
-                    .unwrap()
-                    .threat_policy
+                let plan = crate::threats::Policy::default()
                     .observe(&event(1, "front"), 0, false, &dialogue.config.warnings)
                     .unwrap();
-                Dialogue::queue_warning(&mut d, "s", &plan);
+                Dialogue::queue_actions(&mut d, "s", &[warnings::from_warning(plan)], None);
             }
             // 実モデル・playerを使わず、配送枠だけ埋める。
             for _ in 0..16 {
@@ -708,7 +714,10 @@ mod tests {
             dialogue.observe("s", event(3, "left"), None);
             {
                 let d = dialogue.data.lock().unwrap();
-                let pending = d.sessions["s"].pending_warning.as_ref().unwrap();
+                let pending = d.sessions["s"].pending_warning.as_ref().unwrap()[0]
+                    .visual_plan
+                    .as_ref()
+                    .unwrap();
                 assert_eq!(
                     pending.horizontal,
                     Some(crate::events::HorizontalDirection::Left)

@@ -30,6 +30,22 @@ pub async fn render(
     input: Value,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
+    let combat_kind =
+        (input["op"] == "combat_leaf").then(|| input["kind"].as_str().unwrap_or("").to_owned());
+    if let Some(kind) = combat_kind.as_deref() {
+        ensure!(
+            matches!(
+                kind,
+                "death"
+                    | "aftermath"
+                    | "daylight_water_skeleton"
+                    | "newly_burning_visual"
+                    | "deep_dark_ominous_sound"
+                    | "occluded_hostile_presence"
+            ),
+            "unexpected combat leaf"
+        );
+    }
     let mut child = Command::new(&config.python)
         .arg(&config.helper)
         .stdin(Stdio::piped())
@@ -51,6 +67,7 @@ pub async fn render(
             let mut frame: Value = serde_json::from_str(&line).context("invalid helper JSON")?;
             let reply = match frame["op"].as_str() {
                 Some("plan") => {
+                    ensure!(combat_kind.is_none(), "combat leaf cannot invoke planner");
                     plans += 1;
                     ensure!(plans == 1, "planner step limit exceeded");
                     let request: PreparedPlan = serde_json::from_value(frame["input"].take())?;
@@ -71,7 +88,7 @@ pub async fn render(
                     ensure!(leaves <= 2, "leaf retry limit exceeded");
                     let request: GenerationRequest = serde_json::from_value(frame["input"].take())?;
                     ensure!(
-                        request.kind == "player_chat"
+                        request.kind == combat_kind.as_deref().unwrap_or("player_chat")
                             && request.model == config.model
                             && request.max_tokens == config.max_tokens
                             && !request.enable_thinking,
@@ -79,7 +96,7 @@ pub async fn render(
                     );
                     match llm.generate(&request).await {
                         Ok(report) => {
-                            tracing::info!(kind="player_chat", elapsed_ms=report.elapsed_ms as u64, completion_tokens=?report.generated.completion_tokens, finish_reason=?report.generated.finish_reason);
+                            tracing::info!(kind=request.kind, elapsed_ms=report.elapsed_ms as u64, completion_tokens=?report.generated.completion_tokens, finish_reason=?report.generated.finish_reason);
                             let output = serde_json::to_value(report)?;
                             reports.push(output.clone());
                             output

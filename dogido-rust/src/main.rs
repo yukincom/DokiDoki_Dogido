@@ -56,6 +56,8 @@ enum Command {
         /// 既存設定から移植済み警告に必要な値だけを受け取るJSON。
         #[arg(long, default_value = "{}")]
         warning_settings: String,
+        #[arg(long, default_value = "{}")]
+        combat_settings: String,
         #[arg(long, default_value = "/usr/bin/afplay")]
         audio_player: PathBuf,
         #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
@@ -116,6 +118,7 @@ async fn main() -> Result<()> {
             speaker,
             speed,
             warning_settings,
+            combat_settings,
             audio_player,
             audio_dir,
             no_audio,
@@ -133,6 +136,9 @@ async fn main() -> Result<()> {
                 speaker,
                 speed,
                 warnings: serde_json::from_str(&warning_settings)?,
+                combat: dogido_rust::combat::model::Settings::merged(&serde_json::from_str(
+                    &combat_settings,
+                )?)?,
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,

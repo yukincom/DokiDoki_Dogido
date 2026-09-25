@@ -4,19 +4,7 @@ use crate::events::EventTime;
 use std::cmp::Ordering;
 
 pub(super) fn ordinary(t: &VisualThreat) -> bool {
-    matches!(
-        t.r#type.as_str(),
-        "zombie"
-            | "zombie_villager"
-            | "skeleton"
-            | "spider"
-            | "cave_spider"
-            | "husk"
-            | "stray"
-            | "creeper"
-            | "charged_creeper"
-    ) && !t.on_fire
-        && !t.in_water
+    t.r#type != "ender_dragon"
 }
 fn counts(e: &GameEvent) -> Vec<(String, usize)> {
     let mut counts = HashMap::new();
@@ -51,7 +39,7 @@ fn other_realm(e: &GameEvent, s: &Settings) -> bool {
             || !e.visual_threats.is_empty()
                 && e.auditory_threats.len() >= s.other_realm_audio_generic_threshold)
 }
-fn priority(a: &VisualThreat, b: &VisualThreat) -> Ordering {
+pub(super) fn priority(a: &VisualThreat, b: &VisualThreat) -> Ordering {
     let key = |t: &VisualThreat| {
         let d = t.distance.unwrap_or(f64::INFINITY);
         let range = CATALOG
@@ -85,7 +73,17 @@ fn overwhelmed(e: &GameEvent, preferred: &[String]) -> (String, Vec<String>) {
         .iter()
         .filter(|t| {
             CATALOG.ranged.contains(&t.r#type)
-                || matches!(t.r#type.as_str(), "creeper" | "charged_creeper")
+                || matches!(
+                    t.r#type.as_str(),
+                    "creeper"
+                        | "charged_creeper"
+                        | "enderman"
+                        | "warden"
+                        | "ravager"
+                        | "elder_guardian"
+                        | "wither"
+                        | "ender_dragon"
+                )
         })
         .collect();
     support.sort_by(|a, b| {
@@ -108,7 +106,13 @@ fn overwhelmed(e: &GameEvent, preferred: &[String]) -> (String, Vec<String>) {
         let parts = support
             .iter()
             .take(2)
-            .map(|t| format!("{}に{}", direction(t), CATALOG.labels[&t.r#type]))
+            .map(|t| {
+                format!(
+                    "{}に{}",
+                    direction(t),
+                    CATALOG.labels.get(&t.r#type).unwrap_or(&t.r#type)
+                )
+            })
             .collect::<Vec<_>>()
             .join("、");
         format!("あかんあかんあかん！もうあかん！四方八方敵やんけ！ {parts}おる！")
@@ -166,7 +170,7 @@ fn render(
     increase: Option<&str>,
     previous: Option<&Warning>,
 ) -> Option<Warning> {
-    if e.visual_threats.len() < 2 || !e.visual_threats.iter().all(ordinary) {
+    if e.visual_threats.len() < 2 {
         return None;
     }
     let counts = counts(e);
@@ -175,10 +179,21 @@ fn render(
     let (kind, text) = if let Some(t) = increase {
         (
             "hostile_increase",
-            format!("{}が増えたで！", CATALOG.labels[t]),
+            format!(
+                "{}が増えたで！",
+                CATALOG.labels.get(t).map(String::as_str).unwrap_or(t)
+            ),
         )
     } else if e.visual_threats.len() >= 4 {
-        if e.visual_threats.len() >= 9 || other_realm(e, s) {
+        if (e.visual_threats.len() >= 9
+            && !e.visual_threats.iter().any(|t| {
+                matches!(
+                    t.r#type.as_str(),
+                    "warden" | "wither" | "ender_dragon" | "elder_guardian" | "ravager"
+                )
+            }))
+            || other_realm(e, s)
+        {
             ("hostile_massive", massive(e))
         } else {
             let (text, targets) = overwhelmed(
@@ -194,7 +209,7 @@ fn render(
     {
         let mut parts = Vec::new();
         for (t, n) in counts.iter().take(3) {
-            parts.push(format!("{}{n}体", CATALOG.labels[t]));
+            parts.push(format!("{}{n}体", CATALOG.labels.get(t).unwrap_or(t)));
             sequence.extend([format!("mob/{t}"), format!("common/counts/{n}")]);
         }
         sequence.push("common/phrases/orude".into());
@@ -212,6 +227,7 @@ fn render(
         cue_sequence: sequence,
         group_counts: counts,
         group_support,
+        suppressed: false,
     })
 }
 
@@ -227,11 +243,16 @@ pub(super) fn refresh(w: &Warning, e: &GameEvent, s: &Settings) -> Option<Warnin
             hostile_type: t.r#type.clone(),
             horizontal: t.direction.horizontal,
             kind: "visual_hostile",
-            text: visual_text(t, is_panic(t, e, s)),
+            text: if w.suppressed {
+                format!("{}……", direction(t))
+            } else {
+                visual_text(t, is_panic(t, e, s))
+            },
             cue: None,
             cue_sequence: Vec::new(),
             group_counts: Vec::new(),
             group_support: Vec::new(),
+            suppressed: w.suppressed,
         });
     }
     let same_counts = counts(e) == w.group_counts;
@@ -241,42 +262,23 @@ pub(super) fn refresh(w: &Warning, e: &GameEvent, s: &Settings) -> Option<Warnin
         // 観測時刻ごとに同義の台詞へ変わって音声を再起動しない。
         next.text = w.text.clone();
     }
+    if w.suppressed {
+        next.soften(e);
+    }
     Some(next)
 }
 
 impl Policy {
     pub(super) fn group(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Warning> {
-        if self.cue_allowed(e, now, s)
-            && e.visual_threats.iter().any(|t| {
-                self.seen.contains_key(&identity(t))
-                    || self.commented.contains_key(&identity(t))
-                    || self.screamed.contains_key(&identity(t))
-            })
-        {
-            let close = e
-                .visual_threats
-                .iter()
-                .filter(|t| {
-                    let id = identity(t);
-                    t.distance.is_some_and(|d| d <= 3.0)
-                        && !self.seen.contains_key(&id)
-                        && !self.commented.contains_key(&id)
-                        && !self.screamed.contains_key(&id)
-                })
-                .min_by(|a, b| a.distance.unwrap().total_cmp(&b.distance.unwrap()));
-            if let Some(t) = close {
-                self.screamed.insert(identity(t), now);
-                return Some(self.plan(
-                    t,
-                    "close_ambush",
-                    String::new(),
-                    Some(("panic_scream_start", "きゃー！")),
-                    e,
-                    now,
-                    s,
-                ));
-            }
-        }
+        self.close_ambush(e, now, s)
+            .or_else(|| self.group_regular(e, now, s))
+    }
+    pub(super) fn group_regular(
+        &mut self,
+        e: &GameEvent,
+        now: u64,
+        s: &Settings,
+    ) -> Option<Warning> {
         let increase = self.last_single.as_ref().and_then(|(kind, at)| {
             if elapsed(now, Some(*at), s.multi_hostile_comment_cooldown_ms) {
                 return None;
@@ -305,9 +307,13 @@ impl Policy {
             let target = e
                 .visual_threats
                 .iter()
-                .filter(|t| !self.commented.contains_key(&identity(t)))
+                .filter(|t| {
+                    t.r#type != "ender_dragon"
+                        && !self.commented.contains_key(&identity(t))
+                        && !self.heard.contains_key(&identity(t))
+                })
                 .min_by(|a, b| priority(a, b))?;
-            return self.single(target, e, now, s);
+            return self.single_regular(target, e, now, s);
         };
         if let Some((_, ids)) = increase {
             self.increase_ids.extend(ids);
@@ -357,7 +363,7 @@ pub(super) fn has_report(e: &GameEvent, s: &Settings) -> bool {
     render(e, s, None, None).is_some()
 }
 
-fn ground_count(e: &GameEvent, s: &Settings) -> usize {
+pub(super) fn ground_count(e: &GameEvent, s: &Settings) -> usize {
     e.combat
         .hostiles_within_scan_ground
         .or(e.combat.hostiles_within_30_ground)

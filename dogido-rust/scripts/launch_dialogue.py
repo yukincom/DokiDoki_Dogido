@@ -63,11 +63,13 @@ def main():
             raise ValueError("この起動ファイルは既存のlocalhostモデル・VOICEVOX専用です。")
     if settings.voicevox_output_sampling_rate is not None:
         raise ValueError("音声のsampling rate個別設定は未移植です。変更せずに終了します。")
-    print(f"Rust版の平時会話試験 / 実行元: {ROOT}", flush=True)
+    combat_settings = {key: getattr(settings, key) for key in
+        json.loads((ROOT / "dogido-rust/src/combat/defaults.json").read_text())}
+    print(f"Rust版の会話・戦闘試験 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
-    print("会話材料・発話検査はPython補助を利用。通常敵の単体・群れの視認警告・導火開始はRustで処理します。", flush=True)
-    print("音だけの敵・ボス固有の反応・戦闘後の復帰・川柳・世界操作は未移植です。", flush=True)
+    print("会話材料・発話検査はPython補助を利用。戦闘の判断・位置と体数の回答・音声配送はRustで処理します。", flush=True)
+    print("暗所などの非戦闘環境演出・川柳・世界操作は後続の移行段階です。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
@@ -85,6 +87,7 @@ def main():
     command = [str(binary), "serve-dialogue", "--listen", "127.0.0.1:5056", "--python", sys.executable,
         "--model", model, "--base-url", base, "--voicevox-url", settings.voicevox_url,
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
+        "--combat-settings", json.dumps(combat_settings),
         "--warning-settings", json.dumps({
             **{key: getattr(settings, key) for key in (
                 "panic_distance", "rear_warning_distance", "recent_damage_window_ms",

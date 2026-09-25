@@ -156,6 +156,7 @@ pub struct Warning {
     pub cue_sequence: Vec<String>,
     pub group_counts: Vec<(String, usize)>,
     pub group_support: Vec<String>,
+    pub suppressed: bool,
 }
 impl Warning {
     /// 同じ未完了警告を現在の方向へ更新する。通常cooldownの新規警告ではない。
@@ -190,6 +191,9 @@ impl Warning {
             "visual_hostile" => visual_text(t, is_panic(t, event, settings)),
             _ => String::new(),
         };
+        if self.suppressed && self.kind == "visual_hostile" {
+            next.text = format!("{}……", direction(t));
+        }
         (!next.text.is_empty() || next.cue.is_some()).then_some(next)
     }
     pub fn applicable(&self, event: &GameEvent, settings: &Settings) -> bool {
@@ -218,11 +222,12 @@ impl Warning {
         .join(" ")
     }
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Policy {
     seen: HashMap<String, u64>,
     screamed: HashMap<String, u64>,
     commented: HashMap<String, u64>,
+    heard: HashMap<String, u64>,
     active_fuses: HashSet<String>,
     last_callout: Option<u64>,
     last_cue: Option<u64>,
@@ -234,6 +239,166 @@ fn elapsed(now: u64, at: Option<u64>, window: u64) -> bool {
     at.is_none_or(|at| now.saturating_sub(at) >= window)
 }
 impl Policy {
+    pub fn begin_frame(&mut self, now: u64, s: &Settings) {
+        for entries in [
+            &mut self.seen,
+            &mut self.screamed,
+            &mut self.commented,
+            &mut self.heard,
+        ] {
+            entries.retain(|_, at| now.saturating_sub(*at) < s.hostile_comment_cooldown_ms);
+        }
+    }
+    pub fn finish_frame(&mut self, e: &GameEvent, now: u64, s: &Settings) {
+        for t in &e.visual_threats {
+            self.seen.insert(identity(t), now);
+        }
+        self.update_group_presence(e, s);
+        let current: HashSet<_> = e.visual_threats.iter().map(identity).collect();
+        self.increase_ids.retain(|id| current.contains(id));
+        self.active_fuses = e
+            .visual_threats
+            .iter()
+            .filter(|t| fusing(t))
+            .map(identity)
+            .collect();
+    }
+    pub fn mark_handled(&mut self, ids: &[String], single: Option<&str>, now: u64) {
+        for id in ids {
+            self.commented.insert(id.clone(), now);
+        }
+        self.last_callout = Some(now);
+        self.last_single = single.map(|kind| (kind.to_owned(), now));
+    }
+    pub fn mark_commented(&mut self, ids: &[String], now: u64) {
+        for id in ids {
+            self.commented.insert(id.clone(), now);
+        }
+    }
+    pub fn mark_heard(&mut self, ids: &[String], now: u64) {
+        for id in ids {
+            self.heard.insert(id.clone(), now);
+        }
+    }
+    pub fn mark_cue(&mut self, now: u64) {
+        self.last_cue = Some(now);
+    }
+    pub fn common_cue_ready(&self, now: u64, s: &Settings) -> bool {
+        elapsed(now, self.last_cue, s.panic_scream_cooldown_ms)
+    }
+    pub fn commented_recent(&self, id: &str, now: u64, s: &Settings) -> bool {
+        !elapsed(
+            now,
+            self.commented.get(id).copied(),
+            s.hostile_comment_cooldown_ms,
+        )
+    }
+    pub fn priority_cooldown(&self, now: u64, s: &Settings) -> bool {
+        !elapsed(now, self.last_callout, s.multi_hostile_comment_cooldown_ms)
+    }
+    pub fn fuse(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Warning> {
+        let t = e
+            .visual_threats
+            .iter()
+            .filter(|t| fusing(t) && !self.active_fuses.contains(&identity(t)))
+            .min_by(|a, b| {
+                (a.r#type != "charged_creeper")
+                    .cmp(&(b.r#type != "charged_creeper"))
+                    .then_with(|| {
+                        a.distance
+                            .unwrap_or(f64::INFINITY)
+                            .total_cmp(&b.distance.unwrap_or(f64::INFINITY))
+                    })
+            })?;
+        Some(self.plan(
+            t,
+            "creeper_fuse",
+            fuse_text(t),
+            Some(("spot_hostile_gasp", "ひいっ！")),
+            e,
+            now,
+            s,
+        ))
+    }
+    pub fn close_ambush(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Warning> {
+        if !self.cue_allowed(e, now, s) {
+            return None;
+        }
+        let known = e.visual_threats.len() == 1
+            || e.visual_threats.iter().any(|t| {
+                let id = identity(t);
+                self.seen.contains_key(&id)
+                    || self.commented.contains_key(&id)
+                    || self.screamed.contains_key(&id)
+            });
+        if !known {
+            return None;
+        }
+        let t = e
+            .visual_threats
+            .iter()
+            .filter(|t| {
+                let id = identity(t);
+                !daylight_water_survivor(t, e)
+                    && t.distance.is_some_and(|d| d <= 3.0)
+                    && !self.seen.contains_key(&id)
+                    && !self.commented.contains_key(&id)
+                    && !self.screamed.contains_key(&id)
+            })
+            .min_by(|a, b| a.distance.unwrap().total_cmp(&b.distance.unwrap()))?;
+        self.screamed.insert(identity(t), now);
+        Some(self.plan(
+            t,
+            "close_ambush",
+            String::new(),
+            Some(("panic_scream_start", "きゃー！")),
+            e,
+            now,
+            s,
+        ))
+    }
+    pub fn has_close_ambush(&self, e: &GameEvent) -> bool {
+        let known = e.visual_threats.len() == 1
+            || e.visual_threats.iter().any(|t| {
+                let id = identity(t);
+                self.seen.contains_key(&id)
+                    || self.commented.contains_key(&id)
+                    || self.screamed.contains_key(&id)
+            });
+        known
+            && e.visual_threats.iter().any(|t| {
+                let id = identity(t);
+                !daylight_water_survivor(t, e)
+                    && t.distance.is_some_and(|d| d <= 3.0)
+                    && !self.seen.contains_key(&id)
+                    && !self.commented.contains_key(&id)
+                    && !self.screamed.contains_key(&id)
+            })
+    }
+    pub fn ordinary(
+        &mut self,
+        e: &GameEvent,
+        now: u64,
+        s: &Settings,
+        suppressed: bool,
+    ) -> Option<Warning> {
+        let prior_cue = self.last_cue;
+        let mut plan = if let [t] = e.visual_threats.as_slice() {
+            if t.r#type == "ender_dragon" {
+                return None;
+            }
+            self.single_regular(t, e, now, s)
+        } else if e.visual_threats.len() >= 2 {
+            self.group_regular(e, now, s)
+        } else {
+            None
+        }?;
+        if suppressed {
+            plan.soften(e);
+            self.last_cue = prior_cue;
+        }
+        Some(plan)
+    }
     /// busyの間は通常警告を消費しない。新規導火だけ現在の音声に優先する。
     pub fn observe(
         &mut self,
@@ -347,7 +512,7 @@ impl Policy {
             s,
         ))
     }
-    fn cue_allowed(&self, e: &GameEvent, now: u64, s: &Settings) -> bool {
+    pub fn cue_allowed(&self, e: &GameEvent, now: u64, s: &Settings) -> bool {
         e.world
             .biome
             .as_deref()
@@ -398,8 +563,95 @@ impl Policy {
             cue_sequence: Vec::new(),
             group_counts: Vec::new(),
             group_support: Vec::new(),
+            suppressed: false,
         }
     }
+    fn single_regular(
+        &mut self,
+        t: &VisualThreat,
+        e: &GameEvent,
+        now: u64,
+        s: &Settings,
+    ) -> Option<Warning> {
+        let key = identity(t);
+        if self.commented_recent(&key, now, s)
+            || !elapsed(
+                now,
+                self.heard.get(&key).copied(),
+                s.hostile_comment_cooldown_ms,
+            )
+            || self.priority_cooldown(now, s)
+        {
+            return None;
+        }
+        Some(self.plan(
+            t,
+            "visual_hostile",
+            visual_text(t, is_panic(t, e, s)),
+            spotted_gasp(t, s).then_some(("spot_hostile_gasp", "ハッ")),
+            e,
+            now,
+            s,
+        ))
+    }
+}
+
+impl Warning {
+    pub fn soften(&mut self, e: &GameEvent) {
+        self.suppressed = true;
+        self.cue = None;
+        if self.kind == "visual_hostile" {
+            if let Some(t) = e.visual_threats.iter().find(|t| identity(t) == self.target) {
+                self.text = format!("{}……", direction(t));
+            }
+        } else if self.kind == "hostile_massive" {
+            self.text = "敵がぎょうさんおる……。".into();
+        } else if self.kind == "hostile_overwhelmed" {
+            let parts = self
+                .group_support
+                .iter()
+                .filter_map(|id| e.visual_threats.iter().find(|t| identity(t) == *id))
+                .map(|t| {
+                    format!(
+                        "{}に{}",
+                        direction(t),
+                        CATALOG.labels.get(&t.r#type).unwrap_or(&t.r#type)
+                    )
+                })
+                .collect::<Vec<_>>();
+            self.text = if parts.is_empty() {
+                "あかんあかんあかん……もうあかん……。".into()
+            } else {
+                format!("あかんあかん……。{}……。", parts.join("、"))
+            };
+        } else if self.kind == "hostile_count" {
+            self.text = self.text.trim_end_matches("おるで。").to_owned() + "おる……。";
+            if let Some(last) = self.cue_sequence.last_mut() {
+                *last = "common/phrases/ga_orude".into();
+            }
+        }
+    }
+}
+fn daylight_water_survivor(t: &VisualThreat, e: &GameEvent) -> bool {
+    matches!(
+        e.world.time_phase,
+        Some(crate::events::TimePhase::Morning | crate::events::TimePhase::Day)
+    ) && e.world.sky_visible == Some(true)
+        && t.in_water
+        && !t.on_fire
+        && matches!(
+            t.r#type.as_str(),
+            "skeleton" | "zombie" | "drowned" | "zombie_villager" | "zombified_piglin" | "phantom"
+        )
+}
+
+pub fn ground_count(e: &GameEvent, s: &Settings) -> usize {
+    groups::ground_count(e, s)
+}
+pub fn highest(e: &GameEvent) -> Option<&VisualThreat> {
+    e.visual_threats
+        .iter()
+        .min_by(|a, b| groups::priority(a, b))
 }
 
 fn is_panic(t: &VisualThreat, e: &GameEvent, s: &Settings) -> bool {
@@ -411,7 +663,7 @@ fn is_panic(t: &VisualThreat, e: &GameEvent, s: &Settings) -> bool {
             .is_some_and(|ms| ms >= 0 && ms as u64 <= s.recent_damage_window_ms)
 }
 
-fn spotted_gasp(t: &VisualThreat, s: &Settings) -> bool {
+pub fn spotted_gasp(t: &VisualThreat, s: &Settings) -> bool {
     t.distance.is_some_and(|d| {
         rear(t) && d <= s.rear_warning_distance
             || if CATALOG.ranged.contains(&t.r#type) {

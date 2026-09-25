@@ -15,6 +15,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.config import Settings
 from dogido_server.llm.client import DogidoLLM
+from dogido_server.llm.types import LeafGenerationRequest
 from dogido_server.llm.prompts import build_messages
 try:
     from dogido_server.llm.types import GeneratedText
@@ -48,10 +49,15 @@ def exchange(value):
     return reply
 
 
+COMBAT_LEAVES = frozenset({"death", "aftermath", "daylight_water_skeleton", "newly_burning_visual",
+                           "deep_dark_ominous_sound", "occluded_hostile_presence"})
+
+
 class BridgeLLM(DogidoLLM):
-    def __init__(self, settings, model):
+    def __init__(self, settings, model, allowed_leaf="player_chat"):
         super().__init__(settings)
         self.model = model
+        self.allowed_leaf = allowed_leaf
 
     def generate_structured_json(self, request):
         if request.kind != "player_chat_plan":
@@ -77,8 +83,8 @@ class BridgeLLM(DogidoLLM):
         return payload
 
     def _generate_backend_text(self, request):
-        if request.kind != "player_chat":
-            raise ValueError("helper only supports player_chat leaf")
+        if request.kind != self.allowed_leaf:
+            raise ValueError("unexpected helper leaf")
         response = exchange({"op": "generate", "input": {"schema_version": 1, "kind": request.kind,
             "model": self.model, "messages": build_messages(request), "temperature": request.temperature,
             "max_tokens": self.settings.llm_max_tokens, "enable_thinking": False}})
@@ -112,7 +118,7 @@ def run_turn(data):
     history = data["history"]
     machine.dialogue_context_provider = lambda: SimpleNamespace(
         prompt_turns=lambda: history, prompt_blocks=lambda: {
-            "conversation_history": data["conversation_history"], "event_digest": ""})
+            "conversation_history": data["conversation_history"], "event_digest": str(data.get("event_digest", ""))})
     # process(event)を呼ばない。戦闘判断・発句・世界操作・記憶はこの補助の対象外。
     text = machine._render_player_chat_reply(event)
     emit({"op": "result", "text": text,
@@ -120,10 +126,35 @@ def run_turn(data):
           "repair": asdict(machine.player_chat_repair) if machine.player_chat_repair else None})
 
 
+def run_combat_leaf(data):
+    """Rustで確定した出来事のprompt・発話検査だけ。観測、状態機械、保存を進めない。"""
+    kind = data["kind"]
+    if kind not in COMBAT_LEAVES:
+        raise ValueError("unsupported combat leaf")
+    settings = Settings(_env_file=None, llm_enabled=True, llm_backend="chat_completions",
+        llm_provider="local", llm_model=data["model"], llm_max_tokens=data["max_tokens"],
+        audio_enabled=False, memory_enabled=False, tts_reading_engine=data.get("reading_engine", "auto"))
+    details = dict(data["details"])
+    suffix = str(details.pop("__speech_suffix", ""))
+    fallback = data["fallback_text"]
+    if suffix and fallback.endswith(suffix):
+        fallback = fallback[:-len(suffix)].rstrip()
+    llm = BridgeLLM(settings, data["model"], allowed_leaf=kind)
+    text = llm.generate_leaf_text(LeafGenerationRequest(kind=kind, fallback_text=fallback,
+        details=details, temperature=data["temperature"], route="chat"))
+    if kind == "aftermath" and DogidoStateMachine._aftermath_claim_conflicts(
+            str(details.get("combat_outcome", "disengaged")), text):
+        text = fallback
+    text += suffix
+    emit({"op": "result", "text": text,
+          "spoken_text": prepare_text_for_tts(text, engine=settings.tts_reading_engine)})
+
+
 if __name__ == "__main__":
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="[会話補助] %(message)s")
     try:
-        run_turn(json.loads(sys.stdin.readline()))
+        data = json.loads(sys.stdin.readline())
+        (run_combat_leaf if data.get("op") == "combat_leaf" else run_turn)(data)
     except Exception as exc:
         emit({"op": "error", "error": f"{type(exc).__name__}: {exc}"})
         raise SystemExit(1)

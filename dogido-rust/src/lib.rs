@@ -1,3 +1,4 @@
+pub mod combat;
 pub mod dialogue;
 pub mod events;
 pub mod ingress;

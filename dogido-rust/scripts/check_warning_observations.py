@@ -58,7 +58,7 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
 
             def warnings(sid):
                 return [r for r in snapshot(base)["utterances"]
-                        if r["session_id"] == sid and r["category"] == "callout"]
+                        if r["session_id"] == sid and r["category"] == "callout" and r.get("warning") is not None]
 
             def played():
                 return (folder / "played").read_text().splitlines() if (folder / "played").exists() else []
