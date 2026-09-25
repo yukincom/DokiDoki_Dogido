@@ -6,7 +6,7 @@ mod sentences;
 mod warnings;
 
 use crate::{
-    events::GameEvent,
+    events::{EventName, GameEvent, SourceKind},
     ingress::{Admission, SequenceLedger},
     llm::RigLlm,
     planner::repair::Repair,
@@ -65,8 +65,10 @@ impl Default for DialogueConfig {
 struct Session {
     name: String,
     preview: bool,
+    // 全視認を含む観測とその受信時刻。部分通知で消去・延命しない。
     latest: Option<GameEvent>,
     received: Option<Instant>,
+    partial_danger: bool,
     sequences: SequenceLedger,
     history: history::History,
     epoch: u64,
@@ -106,6 +108,25 @@ fn danger(event: &GameEvent) -> bool {
             .danger_darkness_score
             .is_some_and(|score| score >= 0.72)
 }
+// Fabricの音・ambient通知はvisual_threats=[]を送るが、視認消失の証拠ではない。
+// 分類は送信側の観測範囲で決める。配列が空かどうかで推測しない。
+fn complete_observation(event: &GameEvent) -> bool {
+    match event.event.name {
+        EventName::StatusSnapshot
+        | EventName::ThreatApproaching
+        | EventName::PlayerDied
+        | EventName::HostileDefeated
+        | EventName::CreeperDetonated
+        | EventName::CombatEnded => true,
+        // レガシーのthreat_detectedは視認と聴覚の両方を受け付ける。
+        EventName::ThreatDetected => event.event.source_kind == SourceKind::Visual,
+        EventName::HostileAudioDetected
+        | EventName::AmbientMobDetected
+        | EventName::DangerDarknessChanged
+        | EventName::ResourceOptionFound
+        | EventName::TimePhaseChanged => false,
+    }
+}
 fn recent_observation(event: &GameEvent) -> bool {
     match &event.observed_at {
         crate::events::EventTime::Aware(at) => {
@@ -119,9 +140,10 @@ fn recent_observation(event: &GameEvent) -> bool {
 }
 fn fresh(session: &Session) -> bool {
     session.preview
-        || (session
-            .received
-            .is_some_and(|at| at.elapsed() <= Duration::from_secs(10))
+        || (!session.partial_danger
+            && session
+                .received
+                .is_some_and(|at| at.elapsed() <= Duration::from_secs(10))
             && session
                 .latest
                 .as_ref()
@@ -172,6 +194,7 @@ impl Dialogue {
                 preview,
                 latest: None,
                 received: None,
+                partial_danger: false,
                 sequences: SequenceLedger::default(),
                 history: history::History::default(),
                 epoch: 0,
@@ -226,67 +249,75 @@ impl Dialogue {
                 d.sessions.get_mut(session_id).unwrap().status =
                     "危険を観測（戦闘中の会話は未移植）".into();
             }
-            let s = d.sessions.get(session_id).unwrap();
-            let changed = s
-                .warning
-                .as_ref()
-                .is_some_and(|w| !recent || !w.plan.applicable(&event, &self.config.warnings));
-            let relocated = if changed && recent {
-                s.warning.as_ref().and_then(|w| {
-                    let cue_started = d
-                        .rows
-                        .iter()
-                        .find(|r| r["turn_id"] == w.turn)
-                        .is_some_and(|r| r.get("started_at").is_some());
-                    w.plan.relocated(&event, &self.config.warnings, cue_started)
-                })
+            if complete_observation(&event) {
+                let s = d.sessions.get(session_id).unwrap();
+                let changed = s
+                    .warning
+                    .as_ref()
+                    .is_some_and(|w| !recent || !w.plan.applicable(&event, &self.config.warnings));
+                let relocated = if changed && recent {
+                    s.warning.as_ref().and_then(|w| {
+                        let cue_started = d
+                            .rows
+                            .iter()
+                            .find(|r| r["turn_id"] == w.turn)
+                            .is_some_and(|r| r.get("started_at").is_some());
+                        w.plan.relocated(&event, &self.config.warnings, cue_started)
+                    })
+                } else {
+                    None
+                };
+                if changed {
+                    tracing::info!(event="warning_invalidated",session_id,
+                    source_event=?event.event.name,visual_count=event.visual_threats.len(),recent);
+                    Self::cancel_warning(
+                        &mut d,
+                        session_id,
+                        if recent {
+                            "target_changed_or_gone"
+                        } else {
+                            "stale_observation"
+                        },
+                    );
+                }
+                let s = d.sessions.get_mut(session_id).unwrap();
+                if changed {
+                    s.pending_warning = relocated;
+                }
+                if !recent {
+                    s.pending_warning = None;
+                } else if let Some(pending) = s.pending_warning.take() {
+                    // 配送枠を待つ間にさらに向きが変わっても、未完了の本文を失わない。
+                    // 既に開始したcueは最初のrelocatedで除いている。
+                    s.pending_warning = pending.relocated(&event, &self.config.warnings, false);
+                }
+                let plan = if recent && jobs.len() < 16 {
+                    let new_plan = s.threat_policy.observe(
+                        &event,
+                        self.clock.elapsed().as_millis() as u64,
+                        s.warning.is_some(),
+                        &self.config.warnings,
+                    );
+                    new_plan.or_else(|| s.pending_warning.take())
+                } else {
+                    None
+                };
+                s.partial_danger = false;
+                s.latest = Some(event);
+                s.received = recent.then(Instant::now);
+                if let Some(plan) = plan {
+                    d.sessions.get_mut(session_id).unwrap().pending_warning = None;
+                    Self::cancel_warning(&mut d, session_id, "higher_priority_warning");
+                    let (turn, rx) = Self::queue_warning(&mut d, session_id, &plan);
+                    let this = self.clone();
+                    let sid = session_id.to_owned();
+                    jobs.push(tokio::spawn(async move {
+                        this.run_warning(sid, turn, plan, rx).await;
+                    }));
+                }
             } else {
-                None
-            };
-            if changed {
-                Self::cancel_warning(
-                    &mut d,
-                    session_id,
-                    if recent {
-                        "target_changed_or_gone"
-                    } else {
-                        "stale_observation"
-                    },
-                );
-            }
-            let s = d.sessions.get_mut(session_id).unwrap();
-            if changed {
-                s.pending_warning = relocated;
-            }
-            if !recent {
-                s.pending_warning = None;
-            } else if let Some(pending) = s.pending_warning.take() {
-                // 配送枠を待つ間にさらに向きが変わっても、未完了の本文を失わない。
-                // 既に開始したcueは最初のrelocatedで除いている。
-                s.pending_warning = pending.relocated(&event, &self.config.warnings, false);
-            }
-            let plan = if recent && jobs.len() < 16 {
-                let new_plan = s.threat_policy.observe(
-                    &event,
-                    self.clock.elapsed().as_millis() as u64,
-                    s.warning.is_some(),
-                    &self.config.warnings,
-                );
-                new_plan.or_else(|| s.pending_warning.take())
-            } else {
-                None
-            };
-            s.latest = Some(event);
-            s.received = recent.then(Instant::now);
-            if let Some(plan) = plan {
-                d.sessions.get_mut(session_id).unwrap().pending_warning = None;
-                Self::cancel_warning(&mut d, session_id, "higher_priority_warning");
-                let (turn, rx) = Self::queue_warning(&mut d, session_id, &plan);
-                let this = self.clone();
-                let sid = session_id.to_owned();
-                jobs.push(tokio::spawn(async move {
-                    this.run_warning(sid, turn, plan, rx).await;
-                }));
+                // 部分通知は危険を加えることだけできる。安全な全観測まで会話を再開しない。
+                d.sessions.get_mut(session_id).unwrap().partial_danger |= danger(&event);
             }
             d.revision += 1;
         }
@@ -609,8 +640,17 @@ mod tests {
         }
         dialogue.observe("s", event(2, &["zombie"; 2]), None);
         dialogue.observe("s", event(3, &["zombie", "skeleton"]), None);
+        let received = dialogue.data.lock().unwrap().sessions["s"].received;
+        let mut partial = empty_event("試験");
+        partial["sequence"] = 4.into();
+        partial["event"]["name"] = "hostile_audio_detected".into();
+        partial["event"]["source_kind"] = "auditory".into();
+        partial["auditory_threats"] = json!([{"label":"zombie"}]);
+        dialogue.observe("s", GameEvent::parse(partial).unwrap(), None);
         {
             let d = dialogue.data.lock().unwrap();
+            assert_eq!(d.sessions["s"].received, received);
+            assert!(d.sessions["s"].partial_danger);
             let pending = d.sessions["s"].pending_warning.as_ref().unwrap();
             assert_eq!(pending.text, "スケルトン1体、ゾンビ1体おるで。");
             assert!(pending.cue.is_none());
@@ -620,7 +660,7 @@ mod tests {
             job.abort();
             let _ = job.await;
         }
-        dialogue.observe("s", event(4, &["zombie"; 2]), None);
+        dialogue.observe("s", event(5, &["zombie"; 2]), None);
         let view = dialogue.snapshot(None);
         let rows = view["utterances"].as_array().unwrap();
         assert_eq!(rows.len(), 2);
