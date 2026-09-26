@@ -30,6 +30,10 @@ impl Dialogue {
     }
 
     async fn workshop_body(&self, input: &Value, helper: &mut Helper) -> Result<Value> {
+        let corrections = self.reading_overlay().await?;
+        helper
+            .exchange(json!({"op":"reading_overlay", "rows":corrections}))
+            .await?;
         let text = input["text"].as_str().context("workshop input text")?;
         let mut snapshot = input["workshop"].clone();
         let view = &input["workshop"];

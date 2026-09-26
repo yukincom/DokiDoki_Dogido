@@ -32,6 +32,7 @@ from dogido_server.models import GameEvent
 from dogido_server.player_input import route_player_input
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.tts_reading import prepare_text_for_tts
+from reading_overlay import apply_reading_snapshot
 
 
 def emit(value):
@@ -107,7 +108,7 @@ def run_turn(data):
     context.raw_text = data["text"]
     context.interpreted_text = data["text"]
     if any((context.requests_sword, context.asks_save_last_haiku, context.asks_haiku_recall,
-            context.revised_haiku_text, context.reading_correction, context.player_haiku_text,
+            context.revised_haiku_text, context.player_haiku_text,
             context.asks_hostile_count, context.asks_hostile_direction, context.asks_dragon_direction)):
         emit({"op": "result", "unsupported": "通常会話の試験中です。その操作・川柳の機能はまだ接続していません。"})
         return
@@ -181,6 +182,7 @@ if __name__ == "__main__":
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="[会話補助] %(message)s")
     try:
         data = json.loads(sys.stdin.readline())
+        apply_reading_snapshot(data.get("reading_corrections", []))
         {"combat_leaf": run_combat_leaf, "light_plan": run_light_plan,
          "assist_route": run_assist_route}.get(data.get("op"), run_turn)(data)
     except Exception as exc:

@@ -19,6 +19,7 @@ from dogido_server.llm.types import StructuredGenerationRequest
 from dogido_server.models import GameEvent
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.state_machine.haiku_context import IronyContext, SceneContext
+from reading_overlay import apply_reading_snapshot
 
 
 class _PreparationSettings(Settings):
@@ -104,6 +105,7 @@ class HaikuPreparation:
     def _context(self, frame: dict[str, Any]) -> dict[str, Any]:
         if self._stage != "new":
             raise ValueError("haiku context is already captured")
+        apply_reading_snapshot(frame.get("reading_corrections", []))
         raw_settings = frame.get("settings", {})
         if not isinstance(raw_settings, dict):
             raise ValueError("settings must be an object")

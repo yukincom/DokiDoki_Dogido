@@ -27,9 +27,10 @@ pub async fn cancelled(cancel: &mut watch::Receiver<bool>) {
 pub async fn render(
     config: &DialogueConfig,
     llm: &RigLlm,
-    input: Value,
+    mut input: Value,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
+    input["reading_corrections"] = json!(super::reading_runtime::load_overlay(config).await?);
     let light_plan = input["op"] == "light_plan";
     let routing_only = input["op"] == "assist_route";
     let combat_kind =

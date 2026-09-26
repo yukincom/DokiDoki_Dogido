@@ -47,7 +47,7 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 - ゲーム接続時は時刻付きの10秒以内の観測が必要です。パニック時には警告を優先し、通常会話を止めます。敵の方角・距離・体数の質問と「静かにして」は、その会話停止判定より先に処理します。暗いという理由だけでは通常会話を一律拒否しません。
 - テキスト入力はsessionを選べます。既存マイクの入力先はsessionが一つの場合だけ確定します。複数の接続があるときは余分な試験接続を終了してください。
 - 音声は検査・読み補正済みの返答を文ごとに合成し、一文目の再生中に次の一文だけを先読みします。全ての文が再生を終えて初めて返答を完了にします。途中の失敗・取消で後続音声を捨て、全文を履歴に確定しません。LLM生成中の発声は未接続です。
-- 必要な文だけを合成し、メモリに最大128件・32MB保持します。再生用WAVは再生終了・取消で削除します。会話表示は200件までで、再起動すると履歴・cacheは消えます。長期記憶の読み書きはありません。
+- 必要な文だけを合成し、メモリに最大128件・32MB保持します。再生用WAVは再生終了・取消で削除します。会話表示は200件までで、再起動すると履歴・cacheは消えます。通常会話本文の長期保存は行いません。川柳と読み訂正の保存は後述します。
 
 文分割は[voicevox-sentence-stream](https://github.com/yukincom/voicevox-sentence-stream)の日本語即時境界・180文字上限・末尾保持をRustへ移植しています。来歴とMITライセンスは[third-party](third-party/voicevox-sentence-stream/NOTICE)に保持しています。`audio_sentence_ready`に文ごとの合成時間、`audio_first_sentence`に音声準備から最初のplayer起動までの時間を出します。実際に耳へ届く時刻の計測とは区別します。
 
@@ -200,6 +200,10 @@ python dogido-rust/scripts/check_haiku_bridge.py
 
 同じ単独敵が3ブロックより遠く、接近や直近被弾がなく8秒以上安定した場合は、「句の続きを話そう」などの意思を確かめて相談を再開できます。自動では再開しません。敵の接近・被弾・個体や数の変化では再び中断します。中断中の入力だけをOS AI優先の五分類へ渡し、使えない場合はchat routeと既存の閉じた規則へ戻します。通常会話にはこの分類を追加しません。設定は既存の `DOGIDO_PLATFORM_AI_PROVIDER` 等を引き継ぎ、自動モデル取得は既定offです。
 
+読み訂正は「読み: 草地=くさち」「草地の読みはくさち」の明示形をモデルなしで保存します。「草地はくさち」の省略形は、相談中なら現在の材料のラベルと一致する場合だけ優先し、句の変更提案を横取りしません。「そうちじゃなくてくさち」の全かな訂正は、現在の既知バイオーム名へ対応させます。引用文中の訂正を保存せず、バイオーム不明なら語名を確認します。現在句・未採用案は変更しません。
+
+読みの保存先は設定した移行用記憶ルートの `long_term/catalog_corrections.jsonl` です。接続IDが変わっても同じルートから再読込し、次の発句に正しい読みと禁止する誤読を渡します。この辞書はその記憶ルートを使う接続で共有し、人物別の記憶分割は追加していません。既存Pythonでも読める追記形式で、元のPython版の記憶へは書き込みません。保存失敗時は成功を答えず、記憶無効時は読み書きしません。保存・受付・取消はRust、カタログと辞書への反映は既存Python補助を使います。
+
 lesson・想起は後続段階です。OS SDK・prompt・JSON契約と発話根拠の検査・短文照合・辞書読み・既存の行制約は一時的なPython補助を残しています。未採用案、現在句との一致検査、採否、修正履歴保存、相談段階と再生完了の照合はRustで処理します。
 
 相談段階の検証:
@@ -213,6 +217,7 @@ python dogido-rust/scripts/check_workshop_revision.py
 python dogido-rust/scripts/check_workshop_followup.py
 python dogido-rust/scripts/check_workshop_combat.py
 python dogido-rust/scripts/check_workshop_provisional.py
+python dogido-rust/scripts/check_reading_runtime.py
 python -m pytest dogido-rust/scripts/test_combat_input_helper.py -q
 ```
 

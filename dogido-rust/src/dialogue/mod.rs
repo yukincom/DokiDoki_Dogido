@@ -6,6 +6,7 @@ mod combat_runtime;
 mod environment_runtime;
 mod haiku_runtime;
 mod history;
+mod reading_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
 mod sentences;
@@ -662,7 +663,7 @@ impl Dialogue {
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":s.combat_digest.iter().map(|n|format!("- {n}")).collect::<Vec<_>>().join("\n"),"event":event});
-        if workshop.is_none() {
+        if workshop.is_none() && crate::reading_correction::parse(text).is_none() {
             s.history.push(&turn, "user", text);
             s.casual_foreground = true;
         }
@@ -771,6 +772,8 @@ impl Dialogue {
                     row["llm_reports"] = reports.clone();
                 }
                 for key in [
+                    "memory_action",
+                    "memory_outcome",
                     "workshop_action",
                     "workshop_steps",
                     "workshop_reason",
@@ -861,7 +864,7 @@ impl Dialogue {
                 {
                     s.history.annotate(turn, &repair);
                 }
-                if status == "completed" && !workshop_reply {
+                if status == "completed" && !workshop_reply && result["memory_action"].is_null() {
                     s.history
                         .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
                     if let Some(pair) = s
@@ -948,7 +951,13 @@ impl Dialogue {
             }
         });
         let mut completed = false;
-        let result = if input["workshop"].is_object() {
+        let correction = crate::reading_correction::for_input(
+            input["text"].as_str().unwrap_or(""),
+            &input["workshop"],
+        );
+        let result = if let Some(correction) = correction {
+            self.correct_reading(&sid, epoch, &input, correction).await
+        } else if input["workshop"].is_object() {
             match self.render_workshop(&input, &mut cancel).await {
                 Ok(workshop) if workshop["workshop_action"] == "unrelated" => {
                     let safe = self
@@ -1051,7 +1060,8 @@ impl Dialogue {
                     };
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
                         && status == "completed"
-                        && result["workshop_action"].is_null();
+                        && result["workshop_action"].is_null()
+                        && result["memory_action"].is_null();
                 }
             }
             Err(error) => {

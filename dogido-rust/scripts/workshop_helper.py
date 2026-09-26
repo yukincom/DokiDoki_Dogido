@@ -24,6 +24,7 @@ from dogido_server.llm.structured_contracts import validate_structured_payload
 from dogido_server.llm.character_mode import WORKSHOP_IDENTITY_PROMPT
 from dogido_server.memory_types import HaikuLine
 from dogido_server.tts_reading import prepare_text_for_tts
+from reading_overlay import apply_reading_snapshot
 
 KIND = "haiku_workshop_agent_step"
 FOLLOWUP_ACTIONS = {"acknowledge_meaning", "confirm_close", "continue_workshop", "resume_workshop", "decline_resume"}
@@ -218,6 +219,9 @@ def details_for(frame):
 
 
 def handle(frame):
+    if frame["op"] == "reading_overlay":
+        apply_reading_snapshot(frame["rows"])
+        return {"applied": True}
     if frame["op"] == "fixed_followup":
         action = None
         if frame["stage"] == "combat_resume_confirmation":

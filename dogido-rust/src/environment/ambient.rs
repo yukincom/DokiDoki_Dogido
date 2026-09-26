@@ -12,6 +12,7 @@ use crate::{
     combat::model::{LeafRequest, Mode, Scope, Settings, Speech, elapsed},
     events::{EventName, GameEvent},
 };
+pub(crate) use catalog::biome_label;
 pub use light::{LightContext, LightPlanRequest};
 use serde_json::{Value, json};
 use std::collections::HashMap;
