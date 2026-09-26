@@ -1147,14 +1147,7 @@ mod tests {
                 )
                 .unwrap();
             Dialogue::queue_actions(&mut d, "s", &[warnings::from_warning(plan)], None);
-            d.rows.back_mut().unwrap()["started_at"] = chrono::Utc::now().to_rfc3339().into();
-            d.sessions
-                .get_mut("s")
-                .unwrap()
-                .warning
-                .as_mut()
-                .unwrap()
-                .started = true;
+            // 発声前の待機中は、最新の個体数・構成へ更新する。
         }
         for _ in 0..16 {
             dialogue
@@ -1181,7 +1174,7 @@ mod tests {
                 .as_ref()
                 .unwrap();
             assert_eq!(pending.text, "スケルトン1体、ゾンビ1体おるで。");
-            assert!(pending.cue.is_none());
+            assert!(pending.cue.is_some());
         }
         let jobs = std::mem::take(&mut *dialogue.jobs.lock().unwrap());
         for job in jobs {
@@ -1193,7 +1186,7 @@ mod tests {
         let rows = view["utterances"].as_array().unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["playback_status"], "cancelled");
-        assert_eq!(rows[1]["text"], "ゾンビ2体おるで。");
+        assert_eq!(rows[1]["text"], "ひいっ！ ゾンビ2体おるで。");
         dialogue.shutdown().await;
     }
 

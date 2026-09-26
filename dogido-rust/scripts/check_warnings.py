@@ -47,10 +47,11 @@ def main():
 
             sid=fresh(); (folder/'mode').write_text('slow'); send(sid)
             wt=wait_for(lambda:warnings(sid))[-1]['turn_id']; wait_for(lambda:row(base,wt,{'started'}))
-            send(sid,gone=True); assert wait_for(lambda:row(base,wt,{'cancelled'}))['cancel_reason']=='target_changed_or_gone'
-            passed.append('disappeared_target_cancels_player'); close(sid); (folder/'mode').write_text('ok')
+            (folder/'mode').write_text('ok'); send(sid,gone=True)
+            wait_for(lambda:row(base,wt,{'completed'}))
+            passed.append('started_warning_finishes_after_target_disappears'); close(sid)
 
-            # 本文TTS待ちに方向を変える。導火はgasp再生済みでも本文を新方向へ更新する。
+            # 未再生なら方向を更新。第一声が始まった導火警告は最後まで配送。
             for kind,fuse,held in [('zombie',None,'前にゾンビおるで。'),('creeper',True,' クリーパー膨らんどる、爆発するでぇ！')]:
                 sid=fresh(); gate=threading.Event(); control['tts_gates'][held]=gate
                 # entity z1の候補0で固定。fuse本文では第一文「前！」の後の合成を保留。
@@ -60,20 +61,48 @@ def main():
                     wait_for(lambda:any(r['path'].startswith('/synthesis') and r['body'].get('test_text')==held for r in seen[before:]))
                 except AssertionError:
                     print(kind, json.dumps(seen[before:],ensure_ascii=False)); print(log.read_text()[-6000:]); raise
-                if fuse:wait_for(lambda:row(base,old,{'started'}))
-                # 両方向で共通の導火第二文だけ解放し、古いproducerは取消されたことを別途確認。
+                if fuse: wait_for(lambda:row(base,old,{'started'}))
                 send(sid,kind=kind,entity='z1',direction='right',fuse=fuse)
-                wait_for(lambda:row(base,old,{'cancelled'})); gate.set()
-                new=wait_for(lambda:next((r for r in warnings(sid) if r['turn_id']!=old),None))
-                done=wait_for(lambda:row(base,new['turn_id'],{'completed'})); assert '右' in done['text'],done
-                assert len(warnings(sid))==2 and llm_count()==calls
-                passed.append(kind+'_direction_updated_during_synthesis'); close(sid)
+                gate.set()
+                if fuse:
+                    done=wait_for(lambda:row(base,old,{'completed'})); assert '前' in done['text'],done
+                    assert len(warnings(sid))==1
+                    passed.append('started_fuse_warning_finishes_across_direction_change')
+                else:
+                    assert wait_for(lambda:row(base,old,{'cancelled'})).get('started_at') is None
+                    new=wait_for(lambda:next((r for r in warnings(sid) if r['turn_id']!=old),None))
+                    done=wait_for(lambda:row(base,new['turn_id'],{'completed'})); assert '右' in done['text'],done
+                    assert len(warnings(sid))==2
+                    passed.append('unstarted_warning_direction_updated_during_synthesis')
+                assert llm_count()==calls
+                close(sid)
+
+            sid=fresh(); (folder/'mode').write_text('slow'); send(sid,direction='front')
+            old=wait_for(lambda:warnings(sid))[-1]['turn_id']; wait_for(lambda:row(base,old,{'started'}))
+            (folder/'mode').write_text('ok'); send(sid,direction='right')
+            done=wait_for(lambda:row(base,old,{'completed'})); assert '前' in done['text']
+            assert len(warnings(sid))==1
+            passed.append('started_normal_warning_finishes_across_direction_change'); close(sid)
+
+            # 未再生の警告は最新方向へ差し替える。別sessionの再生でserialを塞ぐ。
+            blocker=fresh(); send(blocker,gone=True); (folder/'mode').write_text('slow')
+            blocked=submit(base,blocker); wait_for(lambda:row(base,blocked,{'started'}))
+            sid=fresh(); send(sid,entity='queued-z',direction='front')
+            old=wait_for(lambda:warnings(sid))[-1]['turn_id']
+            assert row(base,old,{'queued'})
+            send(sid,entity='queued-z',direction='right')
+            assert wait_for(lambda:row(base,old,{'cancelled'})).get('started_at') is None
+            (folder/'mode').write_text('ok'); close(blocker)
+            new=wait_for(lambda:next((r for r in warnings(sid) if r['turn_id']!=old),None))
+            done=wait_for(lambda:row(base,new['turn_id'],{'completed'})); assert '右' in done['text'],done
+            calls=llm_count()
+            passed.append('unstarted_warning_uses_latest_direction'); close(sid)
 
             sid=fresh(); (folder/'mode').write_text('slow'); send(sid,distance=4)
             old=wait_for(lambda:warnings(sid))[-1]['turn_id']; wait_for(lambda:row(base,old,{'started'}))
             (folder/'mode').write_text('ok'); send(sid,kind='creeper',entity='c1',distance=4,fuse=True)
             new=wait_for(lambda:next((r for r in warnings(sid) if r['turn_id']!=old),None))
-            assert wait_for(lambda:row(base,old,{'cancelled'}))['cancel_reason']=='target_changed_or_gone'
+            assert wait_for(lambda:row(base,old,{'cancelled'}))['cancel_reason']=='higher_priority_warning'
             for _ in range(5):send(sid,kind='creeper',entity='c1',distance=4,fuse=True)
             wait_for(lambda:row(base,new['turn_id'],{'completed'})); assert len(warnings(sid))==2
             send(sid,kind='creeper',entity='c1',distance=4,fuse=False)

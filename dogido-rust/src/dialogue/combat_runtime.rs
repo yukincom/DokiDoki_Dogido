@@ -27,16 +27,14 @@ impl Dialogue {
         });
         let query_changed = query.is_some()
             && s.warning.as_ref().is_some_and(|w| {
-                query_actions.as_ref().is_none_or(|a| {
-                    a[0].text != w.actions[0].text
-                        && !(w.started && minor_distance_change(&w.actions[0], &a[0]))
-                })
+                !w.started
+                    && query_actions
+                        .as_ref()
+                        .is_none_or(|a| a[0].text != w.actions[0].text)
             });
         let invalid = query_changed
             || s.warning.as_ref().is_some_and(|w| {
-                w.actions.iter().any(|a| {
-                    !warnings::applicable(a, s, &self.config.warnings, &self.config.combat)
-                })
+                !warnings::active_applicable(w, s, &self.config.warnings, &self.config.combat)
             });
         let refreshed = if query_changed {
             query_actions
@@ -134,6 +132,10 @@ impl Dialogue {
         }
         s.mode = decision.mode;
         s.chat_allowed = decision.chat_allowed;
+        // 戦闘後の安堵は緊急警告ではない。始めた台詞の後へ回す。
+        let defer_relief = s.warning.as_ref().is_some_and(warnings::Active::finishing)
+            && !decision.actions.is_empty()
+            && decision.actions.iter().all(|a| a.kind == "aftermath");
         if (!decision.chat_allowed && !super::workshop_combat_input::provisional(s))
             || !decision.actions.is_empty()
             || decision.stop_audio
@@ -142,7 +144,7 @@ impl Dialogue {
             Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
             Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
         }
-        if decision.dimension_changed || decision.stop_audio {
+        if decision.dimension_changed || (decision.stop_audio && !defer_relief) {
             Self::cancel_warning(
                 d,
                 sid,
@@ -161,7 +163,7 @@ impl Dialogue {
                 .as_ref()
                 .is_some_and(warnings::Active::protected);
             let interrupt = decision.actions.iter().any(|a| a.interrupt);
-            if d.sessions[sid].warning.is_some() && (!protected || interrupt) {
+            if d.sessions[sid].warning.is_some() && (!protected || interrupt) && !defer_relief {
                 Self::cancel_warning(d, sid, "higher_priority_warning");
             }
             let s = d.sessions.get_mut(sid).unwrap();
@@ -201,30 +203,4 @@ impl Dialogue {
             this.run_warning(sid, turn, actions, rx).await;
         }));
     }
-}
-
-// 方向・対象が同じで、概算距離だけが3ブロック以内で変わった場合は
-// 読み始めた一文を完走する。待機中は毎回最新へ更新する。
-fn minor_distance_change(old: &Speech, new: &Speech) -> bool {
-    if !matches!(old.kind, "hostile_direction" | "dragon_direction")
-        || old.kind != new.kind
-        || serde_json::to_value(&old.scope).ok() != serde_json::to_value(&new.scope).ok()
-    {
-        return false;
-    }
-    let normalize = |s: &str| {
-        s.chars()
-            .filter(|c| !c.is_ascii_digit())
-            .collect::<String>()
-    };
-    let number = |s: &str| {
-        s.split(|c: char| !c.is_ascii_digit())
-            .find(|p| !p.is_empty())
-            .and_then(|v| v.parse::<u64>().ok())
-    };
-    normalize(&old.text) == normalize(&new.text)
-        && match (number(&old.text), number(&new.text)) {
-            (Some(a), Some(b)) => a.abs_diff(b) <= 3,
-            _ => false,
-        }
 }

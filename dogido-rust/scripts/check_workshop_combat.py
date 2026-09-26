@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 import time
-from check_dialogue import request, row, wait_for
+from check_dialogue import register, request, row, submit, wait_for
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import ready, session, install
 from check_workshop_edits import edit, finish, revisions
@@ -48,6 +48,26 @@ def returned(send, rows, sid, count=1):
 
 def main():
     passed = []
+    # 称賛/明示終了は返事の再生より先に閉じる。返事を戦闘が消しても復活しない。
+    for text in ["いい句だね", "終了でいいよ"]:
+        with fixture(combat_settings=SETTINGS, interval_ms=5000) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+            sid = register(base, preview=False)
+            drive(send, sid, lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "completed" for r in rows(sid)))
+            original = stored(sid)
+            calls = install(control, lambda *args: (_ for _ in ()).throw(AssertionError("fixed close called model")))
+            (folder / "player_mode").write_text("slow")
+            turn = submit(base, sid, text)
+            assert hud(sid)["state"] == "closed"
+            wait_for(lambda: row(base, turn, {"started"}))
+            (folder / "player_mode").write_text("ok")
+            send(sid, visual_threats=[{**MOB, "type": "enderman"}], combat={"combat_active_hint": True})
+            wait_for(lambda: row(base, turn, {"cancelled"}))
+            end(send, rows, sid)
+            for _ in range(5):
+                send(sid); time.sleep(.1)
+            assert hud(sid)["state"] == "closed" and not actions(rows, sid, "workshop_resume")
+            assert not calls and stored(sid) == original and not revisions(folder, sid)
+            passed.append("praise_closes_before_interrupted_ack" if text == "いい句だね" else "explicit_close_survives_interrupted_ack")
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows); original = stored(sid)
         enter(send, rows, sid)
@@ -55,7 +75,7 @@ def main():
         aftermath = end(send, rows, sid, "player_kill")
         llm_before = len([x for x in seen if x["path"] == "/v1/chat/completions"])
         r = returned(send, rows, sid)
-        assert "倒せた" in r["text"] and "\n".join(LINES) in r["text"] and r["text"].endswith("続ける？"), r
+        assert "倒せた" in r["text"] and r["text"].endswith("\n".join(LINES)) and "続ける？" not in r["text"], r
         assert datetime.fromisoformat(r["created_at"]) >= datetime.fromisoformat(aftermath["completed_at"])
         assert session(base, sid)["workshop_followup"] == "combat_resume_confirmation"
         assert not session(base, sid)["history"] and not session(base, sid)["workshop_history"]

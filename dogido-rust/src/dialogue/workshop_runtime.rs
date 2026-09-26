@@ -297,7 +297,14 @@ impl Dialogue {
             speech = fixed_speech.into();
         }
         match action.as_str() {
-            "close_workshop" => speech = "ほな、この句はここまでにしよか。".into(),
+            "close_workshop" => {
+                speech = if workshop::fixed_praise(text) {
+                    "気にいってもらえてうれしいわ。"
+                } else {
+                    "ほな、この句はここまでにしよか。"
+                }
+                .into()
+            }
             "show_current" => speech = workshop_edit::reading(lines),
             "stage_player_edit" => {
                 speech = proposed.as_ref().map_or_else(

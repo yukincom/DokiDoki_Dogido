@@ -25,9 +25,59 @@ pub(super) struct Active {
     pub protected_until: Option<Instant>,
 }
 impl Active {
-    pub fn protected(&self) -> bool {
-        self.protected_until.is_some_and(|t| Instant::now() < t)
+    pub fn finishing(&self) -> bool {
+        self.started && self.actions.iter().all(can_finish)
     }
+    pub fn protected(&self) -> bool {
+        self.finishing() || self.protected_until.is_some_and(|t| Instant::now() < t)
+    }
+}
+
+// 通常の観測変化では、悲鳴・断片・本文を含む一つの台詞を最後まで配送する。
+// 呼吸ループと、句の版・戦闘pauseに結び付く再開確認は途中でも失効させる。
+fn can_finish(action: &Speech) -> bool {
+    action.cue_id != Some("suppressed_breath")
+        && action.kind != "dark_push_stop"
+        && !matches!(
+            action.scope,
+            Scope::Workshop { .. } | Scope::WorkshopReply { .. }
+        )
+}
+
+pub(super) fn active_applicable(
+    active: &Active,
+    session: &Session,
+    settings: &crate::threats::Settings,
+    environment_settings: &crate::combat::model::Settings,
+) -> bool {
+    active.actions.iter().all(|action| {
+        if !active.started || !can_finish(action) {
+            return applicable(action, session, settings, environment_settings);
+        }
+        // 再生開始後の対象消失・方向・個数・明るさ等は、発話の途中停止にしない。
+        // 観測自体の失効、平時の台詞中の敵・被弾は従来どおり停止する。
+        let fresh = if matches!(action.scope, Scope::Auditory(_)) {
+            session
+                .audio_received
+                .is_some_and(|at| at.elapsed() <= Duration::from_secs(10))
+        } else {
+            observation_fresh(session)
+        };
+        fresh
+            && (applicable(action, session, settings, environment_settings)
+                || !(matches!(
+                    action.delivery,
+                    Delivery::Ambient | Delivery::UrgentEnvironment
+                ) || matches!(action.scope, Scope::Safe))
+                || session
+                    .latest
+                    .as_ref()
+                    .is_some_and(|e| interruption_reason(e).is_none())
+                    && session
+                        .audio_latest
+                        .as_ref()
+                        .is_none_or(|e| interruption_reason(e).is_none()))
+    })
 }
 
 pub(super) fn interruption_reason(e: &GameEvent) -> Option<&'static str> {
@@ -446,7 +496,7 @@ impl Dialogue {
                     _=tokio::time::sleep(Duration::from_millis(100))=>{
                         let mut d=owner.data.lock().unwrap();
                         let stale=d.sessions.get(&monitor_sid).is_some_and(|s|s.warning.as_ref().is_some_and(|w|w.turn==monitor_turn
-                            && w.actions.iter().any(|a|!applicable(a,s,&owner.config.warnings,&owner.config.combat))));
+                            && !active_applicable(w,s,&owner.config.warnings,&owner.config.combat)));
                         if stale{Self::cancel_warning(&mut d,&monitor_sid,"stale_observation");break;}
                     }
                 }
@@ -544,6 +594,15 @@ impl Dialogue {
                     },
                     Some(e.to_string()),
                 );
+            }
+        }
+        {
+            let mut jobs = self.jobs.lock().unwrap();
+            jobs.retain(|job| !job.is_finished());
+            let mut d = self.data.lock().unwrap();
+            if !d.stopped && d.sessions.contains_key(&sid) {
+                self.refresh_combat_audio(&mut d, &sid);
+                self.start_pending(&mut d, &mut jobs, &sid);
             }
         }
         self.resume_deferred(&sid);

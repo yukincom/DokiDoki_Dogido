@@ -87,10 +87,14 @@ time.sleep(float((root/'delay').read_text()))
             assert row(base,turn,{"started"}), rows(sid)
             passed.append("small_distance_change_does_not_restart_started_answer")
             send(sid,mobs=[mob(distance=5,cardinal="east",direction="right")])
-            assert wait_for(lambda:row(base,turn,{"cancelled"}))["cancel_reason"]=="target_changed_or_gone"
+            old=wait_for(lambda:row(base,turn,{"completed"}))
+            assert "東" not in old["text"]
+            say(sid,"ゾンビどこ？")
             answer=wait_for(lambda:done(sid,"ゾンビどこ？"))
+            if answer["turn_id"]==turn:
+                answer=wait_for(lambda:next((r for r in rows(sid) if r.get("player_input_text")=="ゾンビどこ？" and r["turn_id"]!=turn and r["playback_status"]=="completed"),None))
             assert "東" in answer["text"] and "5ブロック" in answer["text"],answer
-            passed.append("inflight_query_deduplicated_and_rechecked_after_movement")
+            passed.append("started_query_finishes_and_next_question_uses_current_direction")
             close(sid); (folder/"delay").write_text(".06")
 
             sid=register(base,preview=False)
@@ -103,7 +107,7 @@ time.sleep(float((root/'delay').read_text()))
             send(sid)
             answer=wait_for(lambda:done(sid,"ゾンビどこ？"))
             assert "確かめられへん" in answer["text"],answer
-            assert row(base,warning["turn_id"],{"cancelled"})
+            assert row(base,warning["turn_id"],{"completed"})
             passed.append("queued_question_survives_prior_warning_target_disappearance")
             close(sid);(folder/"delay").write_text(".06")
 

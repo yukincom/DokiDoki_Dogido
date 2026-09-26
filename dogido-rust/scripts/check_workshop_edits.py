@@ -59,6 +59,10 @@ def main():
         assert r["workshop_action"]=="ask" and hud(sid)["state"]=="open" and hud(sid)["pending_lines"]
         assert len(calls)==1
         passed.append("show_pending_and_close_requires_explicit_adoption_or_rejection")
+        r=finish(base,send,sid,"いい句だね")
+        assert r["workshop_action"]=="ask" and hud(sid)["state"]=="open" and hud(sid)["pending_lines"]
+        assert not revisions(folder,sid) and stored(sid)==original and len(calls)==1
+        passed.append("praise_does_not_adopt_or_discard_pending_edit")
         r=finish(base,send,sid,"採用して")
         assert r.get("workshop_outcome")=="pending_saved",r
         rs=revisions(folder,sid)

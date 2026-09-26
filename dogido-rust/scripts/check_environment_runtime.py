@@ -148,6 +148,14 @@ def main():
             close(sid); control["delay"] = 0
             passed.append("dark_warning_invalidated_after_light_recovery")
 
+            sid = register(); send(sid); (folder / "delay").write_text(".5")
+            send(sid, world=dark)
+            warning = wait_for(lambda: match(sid, "dark_push_no_light", "started"))
+            send(sid)
+            wait_for(lambda: row(base, warning["turn_id"], {"completed"}))
+            close(sid); (folder / "delay").write_text(".04")
+            passed.append("started_darkness_comment_finishes_after_light_recovery")
+
             zombie = {"type": "zombie", "entity_id": "z", "distance": 3,
                 "direction": {"horizontal": "right", "cardinal": "east"}}
             sid = register(); send(sid, world=dark)
@@ -211,6 +219,22 @@ def main():
             close(sid); control["delay"] = 0
             passed.append("ambient_mob_disappearance_cancels_pending_leaf")
 
+            sid = register(); send(sid); (folder / "delay").write_text(".5")
+            send(sid, passive_mobs=[cat])
+            comment = wait_for(lambda: match(sid, "ambient", "started"))
+            send(sid)
+            wait_for(lambda: row(base, comment["turn_id"], {"completed"}))
+            close(sid); (folder / "delay").write_text(".04")
+            passed.append("started_mob_comment_finishes_after_mob_disappears")
+
+            sid = register(); send(sid); (folder / "delay").write_text(".5")
+            send(sid, passive_mobs=[cat])
+            comment = wait_for(lambda: match(sid, "ambient", "started"))
+            send(sid, visual_threats=[zombie])
+            wait_for(lambda: row(base, comment["turn_id"], {"cancelled"}))
+            close(sid); (folder / "delay").write_text(".04")
+            passed.append("hostile_still_interrupts_started_mob_comment")
+
             sid = register(); send(sid)
             control["delay"] = .3
             turn = say(sid, "こんにちは")["turn_id"]
@@ -257,9 +281,12 @@ def main():
             old = wait_for(lambda: match(sid, "smell", "started"))
             send(sid, smell_observation={"status": "none"})
             new = wait_for(lambda: match(sid, "smell", "completed"))
-            assert old["turn_id"] != new["turn_id"] and old["text"] != new["text"], (old, new)
+            assert old["turn_id"] == new["turn_id"] and old["text"] == new["text"], (old, new)
+            say(sid, "今何の匂い？")
+            current = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] != old["turn_id"] and r.get("player_input_text") == "今何の匂い？" and r["playback_status"] == "completed"),None))
+            assert current["text"] != old["text"]
             close(sid); (folder / "delay").write_text(".04")
-            passed.append("explicit_smell_answer_rechecks_current_observation")
+            passed.append("started_smell_answer_finishes_and_next_question_rechecks_observation")
 
             sid = register(); send(sid)
             control["leaf"] = "こんにちは。話しかけてくれてうれしいわ。"

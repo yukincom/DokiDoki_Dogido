@@ -49,7 +49,7 @@ impl Reason {
             Self::Escaped => "ひとまず離れられたみたいやな。",
             Self::Safe => "落ち着いたみたいやな。",
         };
-        format!("{lead}中断してた句はこれやで。\n{verse}\n続ける？")
+        format!("{lead}中断してた句はこれやで。\n{verse}")
     }
 }
 

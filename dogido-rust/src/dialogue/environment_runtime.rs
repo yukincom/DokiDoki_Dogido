@@ -213,7 +213,7 @@ impl Dialogue {
             let s = &d.sessions[sid];
             if s.warning
                 .as_ref()
-                .is_some_and(|w| w.actions.iter().any(dark_audio))
+                .is_some_and(|w| !w.finishing() && w.actions.iter().any(dark_audio))
             {
                 Self::cancel_warning(d, sid, "darkness_recovered");
             } else if s

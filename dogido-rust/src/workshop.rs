@@ -156,6 +156,9 @@ pub fn fallback(observation: Option<&Value>) -> String {
 
 /// 原文が代表形に完全一致するときだけ、モデルを使わず一手を確定する。
 pub fn fixed_action(text: &str) -> Option<&'static str> {
+    if fixed_praise(text) {
+        return Some("close_workshop");
+    }
     match text.trim().trim_end_matches(['。', '！', '!']) {
         "終了" | "終わり" | "川柳は終了" | "川柳終わり" | "句はここまで" | "終了でいいよ" => {
             Some("close_workshop")
@@ -163,6 +166,74 @@ pub fn fixed_action(text: &str) -> Option<&'static str> {
         "今の句" | "今の川柳" | "もう一度読んで" => Some("show_current"),
         _ => None,
     }
+}
+
+/// 旧workshopの明確な称賛だけを同期で確定する。疑問・否定・引用は全体一致から外れる。
+pub fn fixed_praise(text: &str) -> bool {
+    let mut text = text.trim().trim_end_matches(['。', '！', '!']);
+    for prefix in ["うん", "ほんまに", "めっちゃ", "なかなか", "すごく"] {
+        if let Some(rest) = text.strip_prefix(prefix) {
+            text = rest.trim_start_matches(['、', ',', ' ']);
+            break;
+        }
+    }
+    for subject in ["これ", "この句", "その句", "句"] {
+        if let Some(rest) = text.strip_prefix(subject) {
+            text = rest
+                .strip_prefix(['は', 'が'])
+                .unwrap_or(rest)
+                .trim_start_matches(['、', ',', ' ']);
+            break;
+        }
+    }
+    [
+        "いい句",
+        "良い句",
+        "ええ句",
+        "いい",
+        "ええ",
+        "うまい",
+        "上手",
+        "好き",
+        "気に入った",
+        "そのままでいい",
+        "そのままでええ",
+    ]
+    .iter()
+    .any(|base| {
+        text.strip_prefix(base).is_some_and(|tail| {
+            [
+                "",
+                "やな",
+                "やね",
+                "やん",
+                "やで",
+                "やわ",
+                "や",
+                "だね",
+                "ですね",
+                "だ",
+                "です",
+                "な",
+                "ね",
+                "よ",
+                "わ",
+                "と思う",
+                "って思う",
+                "だと思う",
+                "だって思う",
+                "やと思う",
+                "やって思う",
+                "とおもう",
+                "っておもう",
+                "だとおもう",
+                "だっておもう",
+                "やとおもう",
+                "やっておもう",
+            ]
+            .contains(&tail)
+        })
+    })
 }
 
 #[cfg(test)]
@@ -186,6 +257,32 @@ mod tests {
             "終了と言った",
             "終了でいいよ？",
         ] {
+            assert_eq!(fixed_action(text), None);
+        }
+    }
+    #[test]
+    fn fixed_praise_closes_only_unqualified_whole_utterances() {
+        for text in [
+            "いい句だね",
+            "ええ句やな。",
+            "うん、この句は好き！",
+            "ほんまに上手",
+            "そのままでいい",
+            "良い句だと思う",
+        ] {
+            assert!(fixed_praise(text), "{text}");
+            assert_eq!(fixed_action(text), Some("close_workshop"));
+        }
+        for text in [
+            "いい句だね？",
+            "『いい句だね』",
+            "いい句ではない",
+            "いい句だねと言った",
+            "いい句だけど下五を直して",
+            "いい句なら終わろう",
+            "好きじゃない",
+        ] {
+            assert!(!fixed_praise(text), "{text}");
             assert_eq!(fixed_action(text), None);
         }
     }

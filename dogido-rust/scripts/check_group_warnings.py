@@ -61,15 +61,13 @@ time.sleep(2 if p.exists() else .08)
             assert any(r['path'].startswith('/synthesis') and r['body'].get('test_text')=='ゾンビ3体おるで。' for r in seen[calls:])
             passed.append('missing_fragment_uses_whole_body_tts');close(sid);missing.write_bytes(b'fixture')
 
-            # 再生途中の3体→2体は更新する。古い3体clipが後ろから出てこない。
+            # 話し始めた三体の報告は、途中で二体になっても断片を切らず完走する。
             sid=fresh(); (folder/'slow').touch();before=len(played()); send(sid,['zombie']*3)
             wt=wait_for(lambda:warnings(sid))[-1]['turn_id'];wait_for(lambda:row(base,wt,{'started'}))
             (folder/'slow').unlink();send(sid,['zombie']*2)
-            assert wait_for(lambda:row(base,wt,{'cancelled'}))['cancel_reason']=='target_changed_or_gone'
-            new=wait_for(lambda:next((r for r in warnings(sid) if r['turn_id']!=wt),None))
-            wait_for(lambda:row(base,new['turn_id'],{'completed'}));assert new['warning']['text']=='ゾンビ2体おるで。'
-            assert not any(p.endswith('/counts/3.mp3') for p in played()[before:])
-            passed.append('decrease_replaces_stale_count_without_old_fragments');close(sid)
+            wait_for(lambda:row(base,wt,{'completed'}))
+            assert len(warnings(sid))==1 and any(p.endswith('/counts/3.mp3') for p in played()[before:])
+            passed.append('started_count_finishes_all_fragments_after_decrease');close(sid)
 
             sid=fresh(); send(sid,['zombie']);wt=wait_for(lambda:warnings(sid))[-1]['turn_id']
             wait_for(lambda:row(base,wt,{'completed'})); send(sid,['zombie']*2)
@@ -89,10 +87,10 @@ time.sleep(2 if p.exists() else .08)
 
             sid=fresh();(folder/'slow').touch();send(sid,['zombie']*2)
             wt=wait_for(lambda:warnings(sid))[-1]['turn_id'];wait_for(lambda:row(base,wt,{'started'}))
-            send(sid,[]);wait_for(lambda:row(base,wt,{'cancelled'}));time.sleep(.15)
+            (folder/'slow').unlink();send(sid,[]);wait_for(lambda:row(base,wt,{'completed'}));time.sleep(.15)
             assert len(warnings(sid))==1
-            passed.append('empty_observation_cancels_whole_group')
-            (folder/'slow').unlink(); send(sid,['zombie']*2)
+            passed.append('started_group_finishes_after_disappearance')
+            send(sid,['zombie']*2)
             new=wait_for(lambda:next((r for r in warnings(sid) if r['turn_id']!=wt),None))
             wait_for(lambda:row(base,new['turn_id'],{'completed'}))
             assert new['warning']['kind']=='hostile_count'

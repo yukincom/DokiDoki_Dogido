@@ -95,17 +95,18 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
                 close(sid)
 
             sid = register(base, preview=False)
-            (folder / "delay").write_text("30")
+            (folder / "delay").write_text(".5")
             send(sid)
             wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
             wait_for(lambda: row(base, wt, {"started"}))
             send(sid, name="hostile_audio_detected")
             send(sid, empty=True)
-            assert wait_for(lambda: row(base, wt, {"cancelled"}))["cancel_reason"] == "target_changed_or_gone"
-            passed.append("complete_empty_snapshot_still_cancels")
+            wait_for(lambda: row(base, wt, {"completed"}))
+            passed.append("complete_empty_snapshot_allows_started_warning_to_finish")
             close(sid)
 
             # 新しい部分通知だけが来続けても、視認情報の10秒期限は延長しない。
+            (folder / "delay").write_text("30")
             sid = register(base, preview=False)
             send(sid)
             wt = wait_for(lambda: warnings(sid))[-1]["turn_id"]
@@ -124,12 +125,14 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
             send(sid, empty=True)
             turn = submit(base, sid)
             wait_for(lambda: row(base, turn, {"started"}))
+            (folder / "delay").write_text(".05")
             send(sid, name="hostile_audio_detected")
             assert wait_for(lambda: row(base, turn, {"cancelled"}))["cancel_reason"] == "auditory_hostile"
             send(sid, name="ambient_mob_detected")
             reject_chat(sid)
+            wait_for(lambda: any(r["session_id"] == sid and r["category"] == "callout"
+                                and r["playback_status"] == "completed" for r in snapshot(base)["utterances"]))
             send(sid, empty=True)
-            (folder / "delay").write_text(".05")
             turn = submit(base, sid, "もう大丈夫かな")
             wait_for(lambda: row(base, turn, {"completed"}))
             passed.append("partial_danger_blocks_chat_until_complete_safe_observation")

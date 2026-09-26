@@ -70,7 +70,7 @@ def consultation_messages(details):
             "purposeはfinish_workshop。まだ話したい返事ならcontinue_workshop、purposeはcontinue_discussion。"
             "案の採用とは区別する。新しい句の質問は通常のexplain/inspect等で答える。\n")
     if "resume_workshop" in details["allowed_actions"]:
-        extra += ("戦闘後に同じ句を再掲し『続ける？』まで再生済み。続ける同意はresume_workshop、purposeはcontinue_discussion。"
+        extra += ("戦闘後に同じ句を最後まで再掲済み。続ける同意はresume_workshop、purposeはcontinue_discussion。"
             "やめる意思はdecline_resume、purposeはfinish_workshop。新しい質問や編集依頼は通常の一手で処理する。"
             "未採用案の採用・破棄とは別。\n")
     if FOLLOWUP_ACTIONS.intersection(details["allowed_actions"]):
