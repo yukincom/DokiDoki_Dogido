@@ -52,7 +52,11 @@ impl Helper {
             .await
     }
 
-    async fn exchange_with_timeout(&mut self, frame: Value, timeout: Duration) -> Result<Value> {
+    pub async fn exchange_with_timeout(
+        &mut self,
+        frame: Value,
+        timeout: Duration,
+    ) -> Result<Value> {
         ensure!(
             !self.poisoned,
             "haiku helper protocol is closed after failure"

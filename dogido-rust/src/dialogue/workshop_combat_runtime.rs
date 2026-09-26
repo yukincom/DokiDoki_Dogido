@@ -79,6 +79,7 @@ impl Dialogue {
             || s.assist_pending.is_some()
             || s.deferred_input.is_some()
             || s.haiku.active.is_some()
+            || s.combat_input.is_some()
         {
             return;
         }
@@ -122,7 +123,7 @@ impl Dialogue {
             .haiku
             .workshop
             .as_mut()
-            .filter(|w| w.open && w.combat_paused())?;
+            .filter(|w| w.open && (w.combat_paused() || w.provisional.is_some()))?;
         if crate::workshop::fixed_action(text) != Some("close_workshop") {
             return None;
         }

@@ -243,6 +243,7 @@ impl Dialogue {
                 },
                 true,
                 Some((generation, None)),
+                false,
             );
         }
     }

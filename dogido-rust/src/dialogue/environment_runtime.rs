@@ -189,6 +189,7 @@ impl Dialogue {
                 &input.source,
                 true,
                 Some((generation, input.previous_turn)),
+                false,
             );
         }
     }

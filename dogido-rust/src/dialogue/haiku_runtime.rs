@@ -28,6 +28,8 @@ pub struct Settings {
     pub memory_dir: PathBuf,
     pub workshop_open_ms: u64,
     pub workshop_idle_ms: u64,
+    pub low_threat_resume_delay_ms: u64,
+    pub platform_ai: super::combat_classifier::Settings,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -49,6 +51,8 @@ impl Default for Settings {
             memory_dir: PathBuf::from(".dogido_memory/rust-migration"),
             workshop_open_ms: 240_000,
             workshop_idle_ms: 120_000,
+            low_threat_resume_delay_ms: 8_000,
+            platform_ai: super::combat_classifier::Settings::default(),
         }
     }
 }
@@ -59,6 +63,11 @@ pub(super) struct Routes {
 impl Routes {
     pub fn new(c: &DialogueConfig) -> Result<Self> {
         let h = &c.haiku;
+        h.platform_ai.validate()?;
+        ensure!(
+            h.low_threat_resume_delay_ms >= 1000,
+            "invalid workshop resume delay"
+        );
         ensure!(
             h.structured_max_tokens > 0
                 && h.grounding_max_tokens > 0
@@ -185,10 +194,24 @@ impl Dialogue {
         };
         let now = Instant::now();
         let observed = observation_fresh(s);
+        let ready = super::workshop_combat_input::ready(
+            s,
+            self.clock.elapsed().as_millis() as u64,
+            &self.config,
+        );
+        let clear = super::workshop_combat_runtime::clear_for_resume(s);
         let h = &mut s.haiku;
         if let Some(w) = h.workshop.as_mut() {
             let before = (w.is_open(), w.combat_paused());
-            if s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed {
+            if clear {
+                w.provisional = None;
+            }
+            let provisional = w.provisional.is_some() && w.provisional == ready;
+            if !provisional
+                && (w.provisional.is_some()
+                    || s.mode != crate::combat::model::Mode::Normal
+                    || !s.chat_allowed)
+            {
                 w.pause(now);
             }
             if w.combat_paused()

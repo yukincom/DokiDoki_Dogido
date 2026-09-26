@@ -112,6 +112,12 @@ pub(super) fn applicable(
                 .is_some_and(|e| plan.applicable(e, settings));
     }
     match &action.scope {
+        Scope::WorkshopReply { id, version } => {
+            super::workshop_combat_input::allowed(session)
+                && session.haiku.workshop.as_ref().is_some_and(|w| {
+                    w.open && !w.combat_paused() && w.hud_id == *id && w.version == *version
+                })
+        }
         Scope::Workshop { id, version } => {
             super::workshop_combat_runtime::applicable(session, id, *version)
         }

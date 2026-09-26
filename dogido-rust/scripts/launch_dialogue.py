@@ -71,6 +71,9 @@ def main():
         "max_tokens": settings.llm_haiku_max_tokens or settings.llm_max_tokens,
         "timeout_ms": int(1000 * (settings.llm_haiku_timeout_sec or settings.llm_timeout_sec)),
         "memory_enabled": settings.memory_enabled,
+        "low_threat_resume_delay_ms": settings.workshop_low_threat_resume_delay_ms,
+        "platform_ai": {k: getattr(settings, "platform_ai_" + k) for k in (
+            "provider", "timeout_sec", "refresh_sec", "failure_cooldown_sec", "foundry_model_alias", "allow_model_download")},
         "memory_dir": str(ROOT / ".dogido_memory/rust-migration"),
     }
     for url in (base, haiku_base, settings.voicevox_url):
@@ -95,6 +98,7 @@ def main():
         from dialogue_helper import BridgeLLM
         from haiku_preparation import HaikuPreparation
         from workshop_helper import handle as workshop_handle
+        from combat_input_helper import Worker as CombatInputWorker
         print("Python補助の依存を確認しました。モデル生成・録音・サーバー起動は行っていません。")
         return
     binary = ROOT / "dogido-rust/target/release/dogido-rust"

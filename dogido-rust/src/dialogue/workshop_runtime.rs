@@ -373,7 +373,7 @@ impl Dialogue {
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
-            "dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
+            "provisional":w.provisional,"dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }
 }

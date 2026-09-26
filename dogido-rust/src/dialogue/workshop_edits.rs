@@ -27,7 +27,9 @@ impl Dialogue {
             ensure!(!d.stopped, "shutdown");
             let s = d.sessions.get_mut(sid).context("session_closed")?;
             ensure!(
-                s.epoch == epoch && fresh(s) && s.cancel.as_ref().is_some_and(|c| !*c.borrow()),
+                s.epoch == epoch
+                    && workshop_combat_input::allowed(s)
+                    && s.cancel.as_ref().is_some_and(|c| !*c.borrow()),
                 "cancelled_edit"
             );
             let w = s.haiku.workshop.as_mut().context("workshop_closed")?;

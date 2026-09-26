@@ -134,7 +134,7 @@ impl Dialogue {
         }
         s.mode = decision.mode;
         s.chat_allowed = decision.chat_allowed;
-        if !decision.chat_allowed
+        if (!decision.chat_allowed && !super::workshop_combat_input::provisional(s))
             || !decision.actions.is_empty()
             || decision.stop_audio
             || decision.dimension_changed

@@ -7,8 +7,10 @@ mod environment_runtime;
 mod haiku_runtime;
 mod history;
 pub use haiku_runtime::Settings as HaikuSettings;
+mod combat_classifier;
 mod sentences;
 mod warnings;
+mod workshop_combat_input;
 mod workshop_combat_runtime;
 mod workshop_edits;
 mod workshop_runtime;
@@ -88,6 +90,8 @@ struct Session {
     history: history::History,
     haiku: haiku_runtime::State,
     combat_digest: VecDeque<String>,
+    stable_threat: crate::workshop_combat_input::StableThreat,
+    combat_input: Option<workshop_combat_input::Pending>,
     epoch: u64,
     current_turn: String,
     status: String,
@@ -119,6 +123,7 @@ pub struct Dialogue {
     llm: RigLlm,
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
+    combat_classifier: combat_classifier::Classifier,
     data: Mutex<Data>,
     serial: Semaphore,
     jobs: Mutex<Vec<tokio::task::JoinHandle<()>>>,
@@ -198,6 +203,7 @@ impl Dialogue {
             )?,
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
+            combat_classifier: combat_classifier::Classifier::default(),
             config,
             data: Mutex::new(Data::default()),
             serial: Semaphore::new(1),
@@ -222,6 +228,8 @@ impl Dialogue {
                 history: history::History::default(),
                 haiku: haiku_runtime::State::default(),
                 combat_digest: VecDeque::new(),
+                stable_threat: crate::workshop_combat_input::StableThreat::default(),
+                combat_input: None,
                 epoch: 0,
                 current_turn: String::new(),
                 status: "ready".into(),
@@ -248,6 +256,7 @@ impl Dialogue {
         let mut d = self.data.lock().unwrap();
         Self::cancel_haiku(&mut d, session_id, "session_closed");
         Self::cancel_chat(&mut d, session_id, "session_closed");
+        Self::cancel_combat_input(&mut d, session_id);
         Self::cancel_warning(&mut d, session_id, "session_closed");
         Self::cancel_assist(&mut d, session_id);
         Self::cancel_light(&mut d, session_id);
@@ -304,6 +313,19 @@ impl Dialogue {
                 s.audio_latest = Some(event.clone());
                 s.audio_received = recent.then(Instant::now);
             }
+            if complete {
+                if recent {
+                    s.stable_threat.observe(
+                        &event,
+                        now,
+                        self.config.warnings.recent_damage_window_ms,
+                    );
+                } else {
+                    s.stable_threat.reset();
+                }
+            } else if recent && warnings::interruption_reason(&event).is_some() {
+                s.stable_threat.reset();
+            }
             if recent {
                 s.environment_latest = Some(environment_runtime::context(s, &event, complete));
                 let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
@@ -324,6 +346,7 @@ impl Dialogue {
                 Self::cancel_haiku(&mut d, session_id, "current_threat");
             }
             if recent && !text.trim().is_empty() {
+                Self::cancel_combat_input(&mut d, session_id);
                 Self::cancel_haiku(&mut d, session_id, "new_player_input");
                 Self::cancel_assist(&mut d, session_id);
                 Self::cancel_light(&mut d, session_id);
@@ -333,6 +356,7 @@ impl Dialogue {
                 s.last_player_input = Some(now);
                 s.ambient.note_player_input(now);
             }
+            self.tick_workshop(&mut d, session_id);
             self.refresh_combat_audio(&mut d, session_id);
             if recent {
                 let s = d.sessions.get_mut(session_id).unwrap();
@@ -358,6 +382,12 @@ impl Dialogue {
                     environment_runtime::CombatPriority::None
                 };
                 if decision.dimension_changed {
+                    Self::cancel_combat_input(&mut d, session_id);
+                    d.sessions
+                        .get_mut(session_id)
+                        .unwrap()
+                        .stable_threat
+                        .reset();
                     Self::cancel_assist(&mut d, session_id);
                     let s = d.sessions.get_mut(session_id).unwrap();
                     s.input_generation = s.input_generation.wrapping_add(1);
@@ -410,6 +440,7 @@ impl Dialogue {
                 "text",
                 false,
                 input_generation.map(|g| (g, None)),
+                false,
             )
         } else {
             Value::Null
@@ -426,7 +457,7 @@ impl Dialogue {
             "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":chrono::Utc::now(),"phase":"dialogue_preview","player_input":input})
     }
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
-        self.submit_inner(selected, text, source, false, None)
+        self.submit_inner(selected, text, source, false, None, false)
     }
     fn submit_inner(
         self: &Arc<Self>,
@@ -435,6 +466,7 @@ impl Dialogue {
         source: &str,
         skip_assist: bool,
         expected_generation: Option<(u64, Option<String>)>,
+        combat_classified: bool,
     ) -> Value {
         if text.trim().is_empty() {
             return json!({"accepted":false,"reason":"empty_text"});
@@ -467,6 +499,9 @@ impl Dialogue {
         if !observation_fresh(s) {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
+        if let Some(p) = s.combat_input.as_ref().filter(|p| p.text == text) {
+            return json!({"accepted":true,"deduplicated":true,"turn_id":p.turn,"session_id":session_id});
+        }
         if let Some(p) = s
             .assist_pending
             .as_ref()
@@ -491,6 +526,7 @@ impl Dialogue {
         if expected_generation.is_none() {
             s.input_generation = s.input_generation.wrapping_add(1);
         }
+        Self::cancel_combat_input(&mut d, &session_id);
         Self::cancel_haiku(&mut d, &session_id, "new_player_input");
         Self::cancel_assist(&mut d, &session_id);
         Self::cancel_light(&mut d, &session_id);
@@ -557,21 +593,14 @@ impl Dialogue {
         {
             Self::cancel_warning(&mut d, &session_id, "new_player_input");
         }
-        let s = d.sessions.get_mut(&session_id).unwrap();
-        if workshop_combat_runtime::clear_for_resume(s)
-            && s.warning.is_none()
-            && s.pending_warning.is_none()
-            && let Some(w) = s
-                .haiku
-                .workshop
-                .as_mut()
-                .filter(|w| w.open && w.combat_paused())
+        if !combat_classified
+            && let Some(result) =
+                self.classify_paused_input(&mut d, &mut jobs, &session_id, text, source)
         {
-            // 先にplayerが話した場合は同じ入力を現在句の一手へ渡す。仮の「うん」は作らない。
-            w.resume(Instant::now());
-            w.recovery = crate::workshop_combat::Recovery::default();
+            return result;
         }
-        if !fresh(s) || s.warning.is_some() {
+        let s = d.sessions.get_mut(&session_id).unwrap();
+        if !workshop_combat_input::allowed(s) || s.warning.is_some() {
             if fresh(s)
                 && s.warning.as_ref().is_some_and(|w| {
                     w.actions
@@ -667,6 +696,7 @@ impl Dialogue {
         let mut d = self.data.lock().unwrap();
         Self::cancel_haiku(&mut d, session_id, "manual_interrupt");
         Self::cancel_chat(&mut d, session_id, "manual_interrupt");
+        Self::cancel_combat_input(&mut d, session_id);
         Self::cancel_warning(&mut d, session_id, "manual_interrupt");
         Self::cancel_assist(&mut d, session_id);
         Self::cancel_light(&mut d, session_id);
@@ -891,6 +921,7 @@ impl Dialogue {
         let monitor_sid = sid.clone();
         let mut monitor_cancel = cancel.clone();
         let workshop_id = input["workshop"]["workshop_id"].as_str().map(str::to_owned);
+        let provisional_target = input["workshop"]["provisional"].as_str().map(str::to_owned);
         let monitor = tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -898,7 +929,15 @@ impl Dialogue {
                     _=tokio::time::sleep(Duration::from_millis(200))=>{
                         let mut d=owner.data.lock().unwrap();
                         owner.tick_workshop(&mut d, &monitor_sid);
-                        let stale=d.sessions.get(&monitor_sid).is_some_and(|s|s.epoch==epoch && !fresh(s));
+                        let stale = d.sessions.get(&monitor_sid).is_some_and(|s| {
+                            // 閉じる返答の配送中も、開始時と同じ安定した敵なら最後まで話せる。
+                            let same_threat = provisional_target.as_ref().is_some_and(|key| {
+                                workshop_combat_input::ready(s, owner.clock.elapsed().as_millis() as u64, &owner.config).as_ref() == Some(key)
+                            });
+                            let workshop_allowed = workshop_id.is_some()
+                                && (workshop_combat_input::provisional(s) || same_threat);
+                            s.epoch == epoch && !(fresh(s) || workshop_allowed)
+                        });
                         if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}
                         let expired = workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
                             .filter(|s| s.epoch==epoch).is_some_and(|s| s.haiku.workshop.as_ref()
@@ -912,33 +951,44 @@ impl Dialogue {
         let result = if input["workshop"].is_object() {
             match self.render_workshop(&input, &mut cancel).await {
                 Ok(workshop) if workshop["workshop_action"] == "unrelated" => {
-                    let mut ordinary = input.clone();
-                    // 対話plannerには過去の通常会話と現在入力だけを渡す。
-                    ordinary["workshop"] = Value::Null;
-                    match bridge::render(&self.config, &self.llm, ordinary, &mut cancel).await {
-                        Ok(mut result) => {
-                            let mut reports = workshop["llm_reports"]
-                                .as_array()
-                                .cloned()
-                                .unwrap_or_default();
-                            reports.extend(
-                                result["llm_reports"]
+                    let safe = self
+                        .data
+                        .lock()
+                        .unwrap()
+                        .sessions
+                        .get(&sid)
+                        .is_some_and(fresh);
+                    if !safe {
+                        Err(anyhow::anyhow!("combat_workshop_only"))
+                    } else {
+                        let mut ordinary = input.clone();
+                        // 対話plannerには過去の通常会話と現在入力だけを渡す。
+                        ordinary["workshop"] = Value::Null;
+                        match bridge::render(&self.config, &self.llm, ordinary, &mut cancel).await {
+                            Ok(mut result) => {
+                                let mut reports = workshop["llm_reports"]
                                     .as_array()
                                     .cloned()
-                                    .unwrap_or_default(),
-                            );
-                            for key in [
-                                "workshop_id",
-                                "workshop_action",
-                                "workshop_steps",
-                                "workshop_reason",
-                            ] {
-                                result[key] = workshop[key].clone();
+                                    .unwrap_or_default();
+                                reports.extend(
+                                    result["llm_reports"]
+                                        .as_array()
+                                        .cloned()
+                                        .unwrap_or_default(),
+                                );
+                                for key in [
+                                    "workshop_id",
+                                    "workshop_action",
+                                    "workshop_steps",
+                                    "workshop_reason",
+                                ] {
+                                    result[key] = workshop[key].clone();
+                                }
+                                result["llm_reports"] = json!(reports);
+                                Ok(result)
                             }
-                            result["llm_reports"] = json!(reports);
-                            Ok(result)
+                            Err(error) => Err(error),
                         }
-                        Err(error) => Err(error),
                     }
                 }
                 result => result,
@@ -1045,6 +1095,7 @@ impl Dialogue {
             for sid in ids {
                 Self::cancel_haiku(&mut d, &sid, "server_shutdown");
                 Self::cancel_chat(&mut d, &sid, "server_shutdown");
+                Self::cancel_combat_input(&mut d, &sid);
                 Self::cancel_warning(&mut d, &sid, "server_shutdown");
                 Self::cancel_assist(&mut d, &sid);
                 Self::cancel_light(&mut d, &sid);
@@ -1057,6 +1108,7 @@ impl Dialogue {
         for job in jobs {
             let _ = job.await;
         }
+        self.combat_classifier.close().await;
         tracing::info!(
             event = "dialogue_stopped",
             message = "会話補助・音声の終了を確認しました"

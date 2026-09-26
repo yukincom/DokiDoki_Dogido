@@ -50,7 +50,7 @@ def fixture(*, combat_settings=None, **settings):
                         "failure_reasons": {}}
             return None  # existing casual planner/leaf mock
         control["structured_handler"] = structured
-        h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), **settings}
+        h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), "platform_ai": {"provider": "chat"}, **settings}
         try:
             with running(ROOT / "target/debug/dogido-rust", folder, dep, haiku_settings=h, combat_settings=combat_settings) as (base, process, log):
                 state = {"sequence": 0}
