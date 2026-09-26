@@ -3,20 +3,26 @@ use crate::haiku::meter::count_japanese_sounds;
 use crate::haiku_record::HaikuLine;
 use serde_json::{Value, json};
 
-pub fn allowed_actions(after_inspection: bool) -> Vec<&'static str> {
-    if after_inspection {
-        vec!["respond", "explain", "ask", "show_current"]
-    } else {
-        vec![
-            "respond",
-            "explain",
-            "ask",
-            "inspect",
-            "show_current",
-            "close_workshop",
-            "unrelated",
-        ]
+pub fn allowed_actions(after_inspection: bool, pending: bool) -> Vec<&'static str> {
+    let mut actions = vec![
+        "respond",
+        "explain",
+        "ask",
+        "show_current",
+        "stage_player_edit",
+    ];
+    if !after_inspection {
+        actions.extend(["inspect", "unrelated"]);
+        if pending {
+            actions.extend(["accept_pending", "reject_pending"]);
+        } else {
+            actions.push("close_workshop");
+        }
     }
+    if pending {
+        actions.push("compare");
+    }
+    actions
 }
 
 /// 生成時に確定した読み・行出典だけを検査する。現在世界の観測で上書きしない。
@@ -179,14 +185,9 @@ mod tests {
     }
     #[test]
     fn one_inspection_per_turn_and_no_unimplemented_mutations() {
-        assert!(!allowed_actions(true).contains(&"inspect"));
-        for a in [
-            "stage_player_edit",
-            "propose_revision",
-            "accept_pending",
-            "reject_pending",
-        ] {
-            assert!(!allowed_actions(false).contains(&a));
+        assert!(!allowed_actions(true, false).contains(&"inspect"));
+        for a in ["propose_revision", "accept_pending", "reject_pending"] {
+            assert!(!allowed_actions(false, false).contains(&a));
         }
     }
 }

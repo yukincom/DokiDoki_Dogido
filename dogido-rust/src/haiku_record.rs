@@ -21,7 +21,7 @@ const LINE_META: [(&str, &str, &str); 3] = [
     ("line_2", "middle", "中七"),
     ("line_3", "lower", "下五"),
 ];
-static SAVE_LOCK: Mutex<()> = Mutex::new(());
+pub(crate) static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -247,7 +247,7 @@ impl MemoryStore {
     }
 }
 
-fn locked_file(path: &Path) -> Result<File> {
+pub(crate) fn locked_file(path: &Path) -> Result<File> {
     fs::create_dir_all(path.parent().context("memory parent")?)?;
     let file = OpenOptions::new()
         .create(true)
@@ -262,7 +262,7 @@ fn locked_file(path: &Path) -> Result<File> {
     Ok(file)
 }
 
-fn append_line(file: &mut File, entry: &Value) -> Result<()> {
+pub(crate) fn append_line(file: &mut File, entry: &Value) -> Result<()> {
     let mut bytes = Vec::new();
     if file.metadata()?.len() > 0 {
         file.seek(SeekFrom::End(-1))?;
@@ -282,6 +282,10 @@ fn append_line(file: &mut File, entry: &Value) -> Result<()> {
 
 #[derive(Clone, Debug)]
 pub struct Workshop {
+    pub current_lines: Vec<HaikuLine>,
+    pub pending: Option<crate::workshop_edit::Pending>,
+    pub revision_id: Option<String>,
+    pub version: u64,
     pub emission: Emission,
     pub entry_id: Option<String>,
     pub hud_id: String,
@@ -328,6 +332,10 @@ impl Workshop {
             }
         }
         Self {
+            current_lines: emission.prepared.lines.clone(),
+            pending: None,
+            revision_id: None,
+            version: 0,
             emission,
             entry_id,
             hud_id: format!("workshop_{}", uuid::Uuid::new_v4().simple()),
@@ -396,8 +404,8 @@ impl Workshop {
     }
 }
 
-/// Initial-workshop projection. Editing/pending/provisional state belongs to
-/// phase 6. The owning snapshot cache adds its revision when publishing.
+/// Read-only canonical/pending projection. The owning snapshot cache adds its
+/// revision when publishing; projection never changes adoption or lifetimes.
 pub fn project_workshop(
     workshop: Option<&Workshop>,
     session_id: &str,
@@ -411,8 +419,9 @@ pub fn project_workshop(
         "workshop_id":active.map(|w|w.hud_id.as_str()),
         "state":if active.is_some() {if danger {"danger"} else {"open"}} else {"closed"},
         "character_state":if active.is_none() && mode=="normal" && thinking {"thinking"} else {"normal"},
-        "canonical_lines":active.map(|w|w.emission.prepared.lines.iter().map(|l|l.surface_text.trim()).collect::<Vec<_>>()).unwrap_or_default(),
-        "pending_lines":[],"editing":false,"selected_line":null,"provisional_resume":false})
+        "canonical_lines":active.map(|w|w.current_lines.iter().map(|l|l.surface_text.trim()).collect::<Vec<_>>()).unwrap_or_default(),
+        "pending_lines":active.and_then(|w|w.pending.as_ref()).map(|p|p.lines.iter().map(|l|l.surface_text.as_str()).collect::<Vec<_>>()).unwrap_or_default(),
+        "editing":active.is_some_and(|w|w.pending.is_some()),"selected_line":active.and_then(|w|w.pending.as_ref()).map(|p|p.selected_line),"provisional_resume":false})
 }
 
 #[cfg(test)]

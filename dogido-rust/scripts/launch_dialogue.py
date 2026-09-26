@@ -87,7 +87,7 @@ def main():
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
     print("会話材料・発話検査はPython補助を利用。戦闘・環境反応の判断、剣への持ち替え、音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
-    print("情景発話・発句・保存・掛け軸と、句の意味相談・読み/音数/出典確認に対応。修正案・採否・想起は次の移行段階です。", flush=True)
+    print("情景発話・発句・保存・掛け軸と、意味相談・読み/音数/出典確認・一行編集・未採用案の採否に対応。AI修正生成・想起は次の移行段階です。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:

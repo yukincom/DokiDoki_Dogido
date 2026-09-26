@@ -7,12 +7,14 @@
 from dataclasses import asdict
 from datetime import datetime
 import json
+import re
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from dogido_server.haiku.workshop import RecentHaikuWorkshop
-from dogido_server.haiku.workshop_agent import build_workshop_agent_details, finalize_workshop_agent_step
+from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision)
+from dogido_server.haiku.workshop_agent import (build_workshop_agent_details, finalize_workshop_agent_step,
+                                               _state_change_evidence_is_safe)
 from dogido_server.haiku.workshop_context import workshop_context_block
 from dogido_server.llm.structured_contracts import validate_structured_payload
 from dogido_server.memory_types import HaikuLine
@@ -27,8 +29,43 @@ INACTIVE_FIELDS = {
 }
 
 
+def explicit_player_edit(text, evidence):
+    # The legacy extraction only verifies that replacement/evidence occur in the
+    # utterance. That also holds for "にしないで"; check the act of editing too.
+    if not _state_change_evidence_is_safe("stage_player_edit", player_text=text, evidence=evidence):
+        return False
+    outside_quotes = re.sub(r"「[^「」]*」|『[^『』]*』", "候補", text)
+    if re.search(r"(?:に|へ)(?:しない|しなく|するな|せん|せえへん|変えない|変えるな|変えん|変えへん)|"
+                 r"(?:置き換え|変更し|修正し|直さ)(?:ない|ん|へん)|"
+                 r"(?:に|へ)(?:したら|するなら|変えたら)|もし|(?:とは|わけでは|わけじゃ).{0,12}(?:ない|へん)", outside_quotes):
+        return False
+    return bool(re.search(r"(?:に|へ)(?:して|変えて|かえて|替えて|直して|置き換えて|変更して)|"
+                          r"(?:に|へ)(?:変えた|した)(?:方|ほう)が(?:いい|ええ|良い|よい)|"
+                          r"(?:の方|のほう)が(?:いい|ええ|良い|よい)|で(?:いい|ええ|良い|よい)", outside_quotes))
+
+
 def consultation_messages(details):
     """相談に使わない編集用空欄を生成させない。文脈と既存の根拠検証は維持する。"""
+    editing = "stage_player_edit" in details["allowed_actions"]
+    pending = bool(details.get("pending_verse"))
+    extra = ""
+    if editing:
+        extra += (
+            "stage_player_edit=発話で指定された一行の置換を検査へ渡す。purposeはimprove_wording。"
+            "発話にない置換語を考えない。修正依頼だけならaskで新しい行を尋ねる。"
+            "このactionだけline_referenceとline_proposalを追加する。\n"
+            'line_reference: {"found":true,"concept_id":"line_1","evidence":"上五","confidence":0.95}。'
+            '概念はline_1=上五、line_2=中七、line_3=下五。行が不明ならfound:false,concept_id:"unknown"。\n'
+            'line_proposal: {"found":true,"target_fragment":"","replacement_text":"発話にある置換語",'
+            '"evidence":"置換依頼の連続部分","confidence":0.95}。行中の語で対象を指定されたらtarget_fragmentに抜く。\n'
+        )
+    if pending:
+        extra += (
+            "未採用案がある。compare=元句と案の比較、accept_pending=案の明示採用、reject_pending=案の明示却下。"
+            "採用purposeはadopt_pending、却下はdiscard_pending。採否と明示終了を同時に頼まれた場合だけ"
+            'close_after_action:true,close_evidence:"終了意思の原文"を追加する。'
+            "採否が不明な終了要求はaskで採否を確認する。\n"
+        )
     prompt = (
         "現在の一句について、相談の次の一手を一つだけJSONで返す。\n"
         "action: respond=感想への返答、explain=句の意味の説明、ask=不足点を一つ質問、"
@@ -40,45 +77,58 @@ def consultation_messages(details):
         "読み/音数/出典を尋ねられたら、実検査結果が無い項目をinspectにする。"
         "checksはreading/meter/sourceから必要なものだけ。検査後はその結果を説明する。"
         "検査前に読み・音数・出典記録を断言しない。\n"
-        "respond/explain/askだけspeechへ自然な関西弁一文を120字以内で入れる。"
+        "respond/explain/ask/compareだけspeechへ自然な関西弁一文を120字以内で入れる。"
         "ほかのactionのspeechは空。inspect以外のchecksは空配列。"
-        "confidenceは今回の確信度0〜1。会話は0.72以上、終了は0.85以上。"
+        "confidenceは今回の確信度0〜1。会話は0.72以上、編集・採用・却下・終了は0.85以上。"
         "evidenceは今回の発話の連続部分を原文通り抜く。"
         "終了は疑問・引用・伝聞・条件・否定では選ばず、以前の同意も根拠にしない。"
         "判断できなければaskで確認する。終了のpurposeはfinish_workshop。\n"
-        f"段階: {details['phase']}\n"
+        f"{extra}段階: {details['phase']}\n"
         f"今回のプレイヤー発話（会話理解用）: {details['player_text']}\n"
         f"このターンの実行済み一手: {json.dumps(details['turn_steps'], ensure_ascii=False)}\n"
         f"コードから返った実検査結果: {json.dumps(details['tool_observation'], ensure_ascii=False)}\n"
         f"{workshop_context_block(details)}"
         f"許可action: {', '.join(details['allowed_actions'])}\n"
         f"許可purpose: {', '.join(details['allowed_purposes'])}\n"
-        'JSONはaction,purpose,confidence,evidence,speech,checksの6キーのみ。'
+        'JSONはaction,purpose,confidence,evidence,speech,checksの6キーを必須とし、上記action固有項目だけ追加。'
         '例: {"action":"ask","purpose":"continue_discussion","confidence":0.8,'
         '"evidence":"発話の連続部分","speech":"短い質問","checks":[]}。説明文・思考文は禁止。'
     )
-    return [{"role": "system", "content": "あなたは川柳の共同編集者ドギド。今は一句を読む・相談する・終了する一手だけを選ぶ。指定JSONだけを返す。"},
+    return [{"role": "system", "content": "あなたは川柳の共同編集者ドギド。今は一句について許可された一手だけを選ぶ。指定JSONだけを返す。"},
             {"role": "user", "content": prompt}]
 
 
-def details_for(frame):
+def snapshot_for(frame):
     view = frame["workshop"]
     e = view["emission"]
+    current = view.get("current_lines", e["lines"])
     workshop = RecentHaikuWorkshop(
-        surface_text=e["reading_text"], emitted_at=datetime.fromisoformat(e["created_at"]),
-        current_lines=tuple(HaikuLine(**row) for row in e["lines"]),
+        surface_text="\n".join(l["reading_text"] for l in current), emitted_at=datetime.fromisoformat(e["created_at"]),
+        current_lines=tuple(HaikuLine(**row) for row in current),
         interpretation=e.get("interpretation"), materials=view["materials"],
         agent_steps=view.get("agent_steps", [])[-12:],
     )
+    pending = view.get("pending")
+    if pending:
+        workshop.pending_revision_lines = tuple(HaikuLine(**row) for row in pending["lines"])
+        workshop.pending_revision = "\n".join(l["reading_text"] for l in pending["lines"])
+        workshop.pending_revision_surface_text = "\n".join(l["surface_text"] for l in pending["lines"])
+        workshop.pending_revision_base_text = "\n".join(l["reading_text"] for l in pending["base"])
+        workshop.pending_revision_source = "player_line_confirmed"
     for pair in view.get("dialogue", [])[-4:]:
         workshop.dialogue.add_player(pair["player_text"], turn_id=pair["turn_id"])
         workshop.dialogue.add_dogido(pair["dogido_text"], turn_id=pair["turn_id"])
+    return workshop
+
+
+def details_for(frame):
+    workshop = snapshot_for(frame)
     details = build_workshop_agent_details(
         workshop, frame["text"], original_player_text=frame["text"],
         phase=frame["phase"], observation=frame.get("observation"),
         turn_steps=frame.get("turn_steps", []),
     )
-    # 実行できる一手はRustが渡す。未移植の編集・採否を選ばせない。
+    # 実行できる一手はRustが渡す。未移植のAI修正生成等を選ばせない。
     details["allowed_actions"] = [a for a in details["allowed_actions"] if a in frame["allowed_actions"]]
     return details
 
@@ -86,6 +136,14 @@ def details_for(frame):
 def handle(frame):
     if frame["op"] == "reading":
         return {"spoken_text": prepare_text_for_tts(frame["text"], engine=frame.get("reading_engine", "auto"))}
+    if frame["op"] == "player_edit":
+        # Replacement is from a previously validated extraction. This pure helper
+        # keeps the existing dictionary/hard-rule behavior; Rust owns CAS and state.
+        proposal = frame["proposal"]
+        result = build_player_line_revision(snapshot_for(frame), PlayerLineReplacement(
+            text=proposal["replacement_text"], explicit_line_index=proposal.get("line_index"),
+            target_fragment=proposal.get("target_fragment") or None))
+        return asdict(result)
     details = details_for(frame)
     if frame["op"] == "prepare":
         messages = consultation_messages(details)
@@ -99,13 +157,16 @@ def handle(frame):
         return {"messages": messages}
     if frame["op"] == "validate":
         payload = frame["payload"]
-        # 省略を許すのは相談で使わない5項目だけ。必須6項目や未知キーは既存契約で拒否する。
+        # 省略された項目は非操作の値で補う。編集には実在するline_proposalが必須で、
+        # 必須6項目・未知キー・採否/終了の根拠は既存契約でも検査する。
         if isinstance(payload, dict):
             payload = {**INACTIVE_FIELDS, **payload}
         contract = validate_structured_payload(KIND, payload, details=details)
         if not contract.accepted:
             return {"contract_errors": list(contract.errors), "step": None, "reason": "schema_contract_error"}
         step, reason = finalize_workshop_agent_step(payload, details=details)
+        if step and step.action == "stage_player_edit" and not explicit_player_edit(frame["text"], step.evidence):
+            step, reason = None, "player_edit_intent_not_explicit"
         return {"contract_errors": [], "step": asdict(step) if step else None, "reason": reason}
     raise ValueError("unsupported workshop helper operation")
 

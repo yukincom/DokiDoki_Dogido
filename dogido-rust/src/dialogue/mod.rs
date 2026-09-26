@@ -9,6 +9,7 @@ mod history;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod sentences;
 mod warnings;
+mod workshop_edits;
 mod workshop_runtime;
 
 use crate::{
@@ -579,8 +580,8 @@ impl Dialogue {
         Self::cancel_chat(&mut d, &session_id, "new_player_input");
         let s = d.sessions.get_mut(&session_id).unwrap();
         let workshop = Self::workshop_view(s, text);
-        let fixed_close =
-            workshop.is_some() && crate::workshop::fixed_action(text) == Some("close_workshop");
+        let fixed_close = workshop.as_ref().is_some_and(|w| w["pending"].is_null())
+            && crate::workshop::fixed_action(text) == Some("close_workshop");
         if fixed_close && let Some(w) = s.haiku.workshop.as_mut() {
             // 完全一致の明示終了は既存と同じ同期経路。音声準備を待ってpinを延命しない。
             w.close("explicit_close");
@@ -675,7 +676,9 @@ impl Dialogue {
                     w.hud_id == *wid
                         && !w.combat_paused()
                         && (w.is_open()
-                            || (fixed_close && w.close_reason.as_deref() == Some("explicit_close")))
+                            || ((fixed_close
+                                || result.is_some_and(|r| r["workshop_closed_by_turn"] == true))
+                                && w.close_reason.as_deref() == Some("explicit_close")))
                 });
             if !valid {
                 Self::cancel_chat(&mut d, sid, "workshop_changed");
@@ -696,7 +699,13 @@ impl Dialogue {
                 if let Some(reports) = result.get("llm_reports") {
                     row["llm_reports"] = reports.clone();
                 }
-                for key in ["workshop_action", "workshop_steps", "workshop_reason"] {
+                for key in [
+                    "workshop_action",
+                    "workshop_steps",
+                    "workshop_reason",
+                    "workshop_outcome",
+                    "workshop_revision_id",
+                ] {
                     if let Some(value) = result.get(key) {
                         row[key] = value.clone();
                     }
@@ -800,11 +809,29 @@ impl Dialogue {
         sid: String,
         turn: String,
         epoch: u64,
-        input: Value,
+        mut input: Value,
         mut cancel: watch::Receiver<bool>,
     ) {
         let started = Instant::now();
         let permit = tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,"cancelled",None);return;}, p=self.serial.acquire()=>p.unwrap() };
+        // An earlier authorized save may have completed while this turn waited.
+        // Rebuild the read-only context before planning against that new version.
+        if input["workshop"].is_object() {
+            let mut d = self.data.lock().unwrap();
+            if let Some(s) = d.sessions.get_mut(&sid)
+                && s.epoch == epoch
+                && s.haiku.workshop.as_ref().is_some_and(|w| {
+                    w.open
+                        && input["workshop"]["workshop_id"] == w.hud_id
+                        && input["workshop"]["version"] != w.version
+                })
+            {
+                let text = input["text"].as_str().unwrap_or("").to_owned();
+                if let Some(view) = Self::workshop_view(s, &text) {
+                    input["workshop"] = view;
+                }
+            }
+        }
         // 観測更新が途切れた場合も、古い場所の返答・音声を続けない。
         let owner = self.clone();
         let monitor_sid = sid.clone();
@@ -867,6 +894,22 @@ impl Dialogue {
         };
         match result {
             Ok(mut result) => {
+                if let Err(error) = self.apply_workshop_edit(&sid, epoch, &mut result).await {
+                    result["text"] =
+                        "句が変わったか、編集を続けられん状態になったわ。もう一度確認してな。"
+                            .into();
+                    result["spoken_text"] = result["text"].clone();
+                    result["workshop_reason"] = error.to_string().into();
+                    result["workshop_action"] = "fallback".into();
+                }
+                if let Some(outcome) = result.get("workshop_outcome").cloned()
+                    && let Some(last) = result
+                        .get_mut("workshop_steps")
+                        .and_then(Value::as_array_mut)
+                        .and_then(|s| s.last_mut())
+                {
+                    last["outcome"] = outcome;
+                }
                 if let Some(unsupported) = result.get("unsupported").cloned() {
                     result["error"] = unsupported;
                     self.update(&sid, &turn, epoch, "unsupported", Some(&result));

@@ -55,3 +55,37 @@ def test_prompt_keeps_source_and_history_but_does_not_request_unused_edit_fields
     assert "葉と斧やで。" in prompt and "葉と斧の対比" in prompt
     assert "source_atoms" in prompt and "saved_line_sources" in prompt
     assert "line_proposal" not in prompt and "close_after_action" not in prompt
+
+
+@pytest.mark.parametrize("text", [
+    "上五を『さくらいろ』にして", "上五を『さくらいろ』に変えて",
+    "上五は『さくらいろ』の方がいい", "上五は『さくらいろ』でいい",
+])
+def test_explicit_edit_allows_quoted_replacement(text):
+    from check_workshop_edits import edit
+    f=frame(text); f["allowed_actions"].append("stage_player_edit"); f["payload"]=edit(text)
+    r=handle(f)
+    assert r["step"] and r["step"]["analysis"]["line_proposal"]["replacement_text"]=="さくらいろ",r
+
+
+@pytest.mark.parametrize("text", [
+    "上五を『さくらいろ』にしないで", "上五を『さくらいろ』に変えないで",
+    "上五を『さくらいろ』にするな", "上五を『さくらいろ』にして？",
+    "上五を『さくらいろ』にしてと言われた", "『上五をさくらいろにして』と聞いた",
+    "上五を『さくらいろ』にしたらどうなる", "上五を『さくらいろ』にするなら考える",
+    "上五は『さくらいろ』がいいとは思わない", "上五を『さくらいろ』にしてって言っただけ",
+    "上五は『さくらいろ』という言葉が好き", "上五を直して",
+])
+def test_edit_needs_unnegated_unquoted_current_act(text):
+    from check_workshop_edits import edit
+    f=frame(text); f["allowed_actions"].append("stage_player_edit"); f["payload"]=edit(text)
+    assert handle(f)["step"] is None
+
+
+def test_player_edit_dictionary_surface_and_reading_are_bound_together():
+    from check_workshop_edits import edit
+    f=frame("上五を『桜色』にして"); f["allowed_actions"].append("stage_player_edit"); f["payload"]=edit(f["text"],replacement="桜色")
+    step=handle(f)["step"]
+    result=handle({"op":"player_edit","workshop":f["workshop"],"proposal":step["analysis"]["line_proposal"]})
+    assert result["lines"][0]["surface_text"]=="桜色" and result["lines"][0]["reading_text"]=="さくらいろ"
+    assert result["lines"][0]["source_atom_ids"]==() and result["lines"][0]["provenance"]=="player_explicit"
