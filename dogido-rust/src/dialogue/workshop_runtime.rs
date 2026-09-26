@@ -6,6 +6,7 @@ use crate::{
     types::GenerationRequest,
     workshop,
     workshop_edit::{self, Pending},
+    workshop_followup::{self, Stage},
 };
 use anyhow::{Context, ensure};
 
@@ -43,6 +44,24 @@ impl Dialogue {
         let mut reason = "accepted".to_owned();
         let mut action = workshop::fixed_action(text).map(str::to_owned);
         let mut speech = String::new();
+        let stage: Stage = serde_json::from_value(view["followup"].clone())?;
+        if action.is_none() {
+            let fixed = helper
+                .exchange(json!({"op":"fixed_followup", "text":text,
+                "stage":stage,"pending":pending.is_some()}))
+                .await?;
+            action = fixed["action"]
+                .as_str()
+                .filter(|a| stage.actions(pending.is_some()).contains(a))
+                .map(str::to_owned);
+            if let Some(a) = &action {
+                reason = "fixed_followup".into();
+                steps.push(json!({"phase":"decide","action":a,"outcome":"selected",
+                    "evidence":text,"checks":[],"validation_codes":[],
+                    "purpose":match a.as_str() {"acknowledge_meaning"=>"understand_meaning",
+                        "confirm_close"=>"finish_workshop",_=>"continue_discussion"}}));
+            }
+        }
         if action.as_deref() == Some("close_workshop") && pending.is_some() {
             action = Some("ask".into());
             speech = "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
@@ -62,7 +81,10 @@ impl Dialogue {
             // 初手→必要時の実検査→修正検証後の返答。editorは同じturnで一度だけ。
             let mut phase = "decide";
             for _ in 0..3 {
-                let allowed = workshop::allowed_actions(phase, snapshot["pending"].is_object());
+                let mut allowed = workshop::allowed_actions(phase, snapshot["pending"].is_object());
+                if phase == "decide" {
+                    allowed.extend(stage.actions(pending.is_some()).iter().copied());
+                }
                 let mut frame = json!({"workshop":snapshot,"text":text,"phase":phase,
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
@@ -126,6 +148,13 @@ impl Dialogue {
                             allowed.contains(&a),
                             "workshop action outside migration scope"
                         );
+                        if workshop_followup::is_action(a)
+                            && let Err(error) =
+                                workshop_followup::validate(step, text, stage, pending.is_some())
+                        {
+                            reason = error.to_string();
+                            break;
+                        }
                         // 状態変更は補助の検査後にも原文・信頼度をRustで確認する。
                         if matches!(
                             a,
@@ -258,6 +287,9 @@ impl Dialogue {
             }
         }
         let action = action.unwrap_or_else(|| "fallback".into());
+        if let Some(fixed_speech) = workshop_followup::speech(&action) {
+            speech = fixed_speech.into();
+        }
         match action.as_str() {
             "close_workshop" => speech = "ほな、この句はここまでにしよか。".into(),
             "show_current" => speech = workshop_edit::reading(lines),
@@ -318,7 +350,9 @@ impl Dialogue {
         };
         Ok(
             json!({"text":speech,"spoken_text":spoken,"workshop_id":view["workshop_id"],
-            "workshop_action":action,"workshop_version":view["version"],"workshop_proposed":proposed,"workshop_close_after":close_after,"workshop_steps":steps,"workshop_reason":reason,"llm_reports":reports}),
+            "workshop_action":action,"workshop_version":view["version"],"workshop_proposed":proposed,"workshop_close_after":close_after,
+            "workshop_followup":Stage::after_completed(&action, steps.last().and_then(|s|s["purpose"].as_str()).unwrap_or(""), pending.is_some() || proposed.is_some()),
+            "workshop_steps":steps,"workshop_reason":reason,"llm_reports":reports}),
         )
     }
 
@@ -333,7 +367,7 @@ impl Dialogue {
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
-            "dialogue":w.dialogue,"agent_steps":w.agent_steps,"text":text}),
+            "dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }
 }

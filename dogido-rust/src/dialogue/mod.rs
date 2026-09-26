@@ -580,6 +580,10 @@ impl Dialogue {
         Self::cancel_chat(&mut d, &session_id, "new_player_input");
         let s = d.sessions.get_mut(&session_id).unwrap();
         let workshop = Self::workshop_view(s, text);
+        if let Some(w) = s.haiku.workshop.as_mut() {
+            // 一回の返答にだけ対応。取消・失敗した次のターンへ古い「うん」の対象を残さない。
+            w.followup = crate::workshop_followup::Stage::Discussion;
+        }
         let fixed_close = workshop.as_ref().is_some_and(|w| w["pending"].is_null())
             && crate::workshop::fixed_action(text) == Some("close_workshop");
         if fixed_close && let Some(w) = s.haiku.workshop.as_mut() {
@@ -642,6 +646,9 @@ impl Dialogue {
         if let Some(s) = d.sessions.get_mut(session_id) {
             s.deferred_input = None;
             s.input_generation = s.input_generation.wrapping_add(1);
+            if let Some(w) = s.haiku.workshop.as_mut() {
+                w.followup = crate::workshop_followup::Stage::Discussion;
+            }
         }
         d.revision += 1;
     }
@@ -675,6 +682,9 @@ impl Dialogue {
                 .is_some_and(|w| {
                     w.hud_id == *wid
                         && !w.combat_paused()
+                        && (result.is_none_or(|r| r["workshop_action"] != "confirm_close")
+                            || (w.pending.is_none()
+                                && result.is_some_and(|r| r["workshop_version"] == w.version)))
                         && (w.is_open()
                             || ((fixed_close
                                 || result.is_some_and(|r| r["workshop_closed_by_turn"] == true))
@@ -705,6 +715,7 @@ impl Dialogue {
                     "workshop_reason",
                     "workshop_outcome",
                     "workshop_revision_id",
+                    "workshop_followup",
                 ] {
                     if let Some(value) = result.get(key) {
                         row[key] = value.clone();
@@ -743,7 +754,9 @@ impl Dialogue {
                                 w.agent_steps.pop_front();
                             }
                         }
-                        if result["workshop_action"] == "close_workshop" {
+                        if result["workshop_action"] == "close_workshop"
+                            || result["workshop_action"] == "confirm_close"
+                        {
                             w.close("explicit_close");
                         }
                     }
@@ -756,6 +769,15 @@ impl Dialogue {
                         .filter(|w| Some(&w.hud_id) == workshop_id.as_ref())
                 {
                     if workshop_reply {
+                        if w.open
+                            && !w.combat_paused()
+                            && result["workshop_version"] == w.version
+                            && w.pending.is_none()
+                        {
+                            w.followup =
+                                serde_json::from_value(result["workshop_followup"].clone())
+                                    .unwrap_or_default();
+                        }
                         w.drift_count = 0;
                         w.record_activity(Instant::now());
                         if !w.dialogue.iter().any(|p| p["turn_id"] == turn) {
@@ -980,7 +1002,7 @@ impl Dialogue {
     pub fn snapshot(&self, selected: Option<&str>) -> Value {
         let d = self.data.lock().unwrap();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":d.rows.iter().filter(|r|selected.is_none_or(|id|r["session_id"]==id)).collect::<Vec<_>>()})
     }
     pub fn cancel_all(&self) {

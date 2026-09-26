@@ -111,6 +111,38 @@ def test_repair_finding_cannot_target_an_invented_fragment():
     assert result["step"]["analysis"]["findings"][0]["line_index"] is None
 
 
+@pytest.mark.parametrize("stage,text,expected", [
+    ("meaning_explained", "なるほどね", "acknowledge_meaning"),
+    ("meaning_explained", "『なるほど』と言った", None),
+    ("discussion", "なるほどね", None),
+    ("close_confirmation", "うん", "confirm_close"),
+    ("close_confirmation", "うん？", None),
+    ("close_confirmation", "まだ続けたい", "continue_workshop"),
+])
+def test_followup_patterns_are_only_for_current_stage(stage, text, expected):
+    f = {"op": "fixed_followup", "stage": stage, "text": text, "pending": False}
+    assert handle(f)["action"] == expected
+    f["pending"] = True
+    assert handle(f)["action"] is None
+
+
+def test_followup_context_and_actions_are_in_same_planner_prompt():
+    f = frame(); f["op"] = "prepare"
+    f["workshop"]["followup"] = "meaning_explained"
+    f["allowed_actions"].append("acknowledge_meaning")
+    prompt = str(handle(f))
+    assert "会話段階: meaning_explained" in prompt and "acknowledge_meaning" in prompt
+
+
+@pytest.mark.parametrize("text", ["いいよとは言ってない", "いいよとは思わない", "いいよ？", "いいよと返したらどうなる", "『いいよ』と聞いた", "いいよ、でももう少し話したい"])
+def test_followup_assent_must_not_be_negated_or_hypothetical(text):
+    from check_workshop_followup import followup
+    f = frame(text); f["workshop"]["followup"] = "close_confirmation"
+    f["allowed_actions"].append("confirm_close")
+    f["payload"] = followup("いいよ", "confirm_close")
+    assert handle(f)["step"] is None
+
+
 def test_generated_repair_does_not_follow_model_to_a_different_named_line():
     from check_workshop_revision import proposal
     f=frame("上五を直して");f["allowed_actions"].append("propose_revision");f["payload"]=proposal(f["text"])

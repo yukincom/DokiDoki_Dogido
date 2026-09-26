@@ -12,7 +12,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision, _explicit_workshop_line_indices)
+from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision, _explicit_workshop_line_indices,
+    is_meaning_acknowledgement, close_confirmation_decision)
 from dogido_server.haiku.workshop_agent import (build_workshop_agent_details, finalize_workshop_agent_step,
                                                _state_change_evidence_is_safe)
 from dogido_server.haiku.workshop_context import workshop_context_block, workshop_context_details
@@ -23,6 +24,7 @@ from dogido_server.memory_types import HaikuLine
 from dogido_server.tts_reading import prepare_text_for_tts
 
 KIND = "haiku_workshop_agent_step"
+FOLLOWUP_ACTIONS = {"acknowledge_meaning", "confirm_close", "continue_workshop"}
 CONSULTATION_KEYS = {"action", "purpose", "confidence", "evidence", "speech", "checks"}
 INACTIVE_FIELDS = {
     "close_after_action": False, "close_evidence": "", "findings": [],
@@ -60,6 +62,16 @@ def consultation_messages(details):
     editing = "stage_player_edit" in details["allowed_actions"]
     pending = bool(details.get("pending_verse"))
     extra = ""
+    if "acknowledge_meaning" in details["allowed_actions"]:
+        extra += ("直前に意味の説明を再生済み。今回の発話がその説明への納得だけならacknowledge_meaning、"
+            "purposeはunderstand_meaning。評価・褒め言葉・新しい質問・修正要求とは区別する。\n")
+    if "confirm_close" in details["allowed_actions"]:
+        extra += ("『この句の話はここまででええ？』を再生済み。その問いへの今回の同意ならconfirm_close、"
+            "purposeはfinish_workshop。まだ話したい返事ならcontinue_workshop、purposeはcontinue_discussion。"
+            "案の採用とは区別する。新しい句の質問は通常のexplain/inspect等で答える。\n")
+    if FOLLOWUP_ACTIONS.intersection(details["allowed_actions"]):
+        extra += ("acknowledge_meaning/confirm_close/continue_workshopは6キーだけ、speechは空、checksは空配列、"
+            "confidenceは0.85以上。原文の引用・否定・条件・伝聞・疑問を同意にしない。\n")
     if editing:
         extra += (
             "stage_player_edit=発話で指定された一行の置換を検査へ渡す。purposeはimprove_wording。"
@@ -110,7 +122,7 @@ def consultation_messages(details):
         "evidenceは今回の発話の連続部分を原文通り抜く。"
         "終了は疑問・引用・伝聞・条件・否定では選ばず、以前の同意も根拠にしない。"
         "判断できなければaskで確認する。終了のpurposeはfinish_workshop。\n"
-        f"{extra}段階: {details['phase']}\n"
+        f"{extra}会話段階: {details['conversation_stage']}\n段階: {details['phase']}\n"
         f"今回のプレイヤー発話（会話理解用）: {details['player_text']}\n"
         f"このターンの実行済み一手: {json.dumps(details['turn_steps'], ensure_ascii=False)}\n"
         f"コードから返った実検査結果: {json.dumps(details['tool_observation'], ensure_ascii=False)}\n"
@@ -134,6 +146,8 @@ def snapshot_for(frame):
         current_lines=tuple(HaikuLine(**row) for row in current),
         interpretation=e.get("interpretation"), materials=view["materials"],
         agent_steps=view.get("agent_steps", [])[-12:],
+        awaiting_meaning_ack=view.get("followup") == "meaning_explained",
+        awaiting_close_confirmation=view.get("followup") == "close_confirmation",
     )
     pending = view.get("pending")
     if pending:
@@ -157,10 +171,19 @@ def details_for(frame):
     )
     # 実行できる一手はRustが渡す。段階とpendingに応じて一手を制限する。
     details["allowed_actions"] = [a for a in details["allowed_actions"] if a in frame["allowed_actions"]]
+    details["allowed_actions"] += [a for a in frame["allowed_actions"] if a in FOLLOWUP_ACTIONS]
     return details
 
 
 def handle(frame):
+    if frame["op"] == "fixed_followup":
+        action = None
+        if not frame["pending"]:
+            if frame["stage"] == "meaning_explained" and is_meaning_acknowledgement(frame["text"]):
+                action = "acknowledge_meaning"
+            elif frame["stage"] == "close_confirmation":
+                action = {"accept": "confirm_close", "continue": "continue_workshop"}.get(close_confirmation_decision(frame["text"]))
+        return {"action": action}
     if frame["op"] in {"prepare", "transform"} and "request" in frame:
         return haiku_handle(frame)
     if frame["op"] == "revision_input":
@@ -196,6 +219,28 @@ def handle(frame):
         return {"messages": messages}
     if frame["op"] == "validate":
         payload = frame["payload"]
+        if isinstance(payload, dict) and payload.get("action") in FOLLOWUP_ACTIONS:
+            if payload["action"] not in details["allowed_actions"]:
+                return {"contract_errors": [], "step": None, "reason": "action_not_allowed"}
+            # 外形・confidence・段階・pending・evidenceはRustが厳格に検査する。
+            # ここには移植前と同じ原文の否定・引用等の純粋な言語検査だけを残す。
+            action = payload["action"]
+            text = frame["text"]
+            evidence = payload.get("evidence")
+            safe = isinstance(evidence, str) and _state_change_evidence_is_safe(
+                "close_workshop" if action == "confirm_close" else "stage_player_edit",
+                player_text=text, evidence=evidence)
+            # 短い同意は「終了」のような操作語を含まない。操作語向けの旧検査だけでは
+            # 「いいよとは言ってない」を見落とすため、同意の否定・仮定も照合する。
+            if action in {"confirm_close", "acknowledge_meaning"} and re.search(
+                    r"(?:とは|って|という意味|ということ|わけ|つもり).{0,20}(?:ない|なく|ません|へん)|"
+                    r"(?:言|い)(?:って|った)(?:ない|わけ|つもり)|もし|仮に|たら|なら|[?？]", text):
+                safe = False
+            if action == "acknowledge_meaning" and re.search(
+                    r"わか(?:ら|り|って)ない|分か(?:ら|り|って)ない|理解(?:できない|してない)|納得(?:できない|してない)|違う|ちがう|まだ|ではない|じゃない", text):
+                safe = False
+            return {"contract_errors": [], "step": payload if safe else None,
+                    "reason": "accepted" if safe else "unsafe_followup_evidence"}
         # 省略された項目は非操作の値で補う。編集には実在するline_proposalが必須で、
         # 必須6項目・未知キー・採否/終了の根拠は既存契約でも検査する。
         if isinstance(payload, dict):

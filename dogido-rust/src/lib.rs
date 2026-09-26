@@ -15,3 +15,4 @@ pub mod threats;
 pub mod types;
 pub mod workshop;
 pub mod workshop_edit;
+pub mod workshop_followup;

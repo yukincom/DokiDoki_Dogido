@@ -296,6 +296,7 @@ pub struct Workshop {
     pub dialogue: VecDeque<Value>,
     pub agent_steps: VecDeque<Value>,
     pub drift_count: usize,
+    pub followup: crate::workshop_followup::Stage,
     completed: Instant,
     last_activity: Instant,
     paused_at: Option<Instant>,
@@ -345,6 +346,7 @@ impl Workshop {
             dialogue: VecDeque::new(),
             agent_steps: VecDeque::new(),
             drift_count: 0,
+            followup: crate::workshop_followup::Stage::Discussion,
             completed,
             last_activity: completed,
             paused_at: None,
@@ -358,6 +360,7 @@ impl Workshop {
         self.paused_at.is_some()
     }
     pub fn close(&mut self, reason: impl Into<String>) {
+        self.followup = crate::workshop_followup::Stage::Discussion;
         self.open = false;
         self.close_reason = Some(reason.into());
         self.paused_at = None;
@@ -367,6 +370,7 @@ impl Workshop {
             return false;
         }
         self.paused_at = Some(now.max(self.completed));
+        self.followup = crate::workshop_followup::Stage::Discussion;
         true
     }
     pub fn resume(&mut self, now: Instant) -> bool {
