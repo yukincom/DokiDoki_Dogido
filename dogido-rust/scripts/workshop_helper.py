@@ -25,6 +25,7 @@ from dogido_server.llm.character_mode import WORKSHOP_IDENTITY_PROMPT
 from dogido_server.memory_types import HaikuLine
 from dogido_server.tts_reading import prepare_text_for_tts
 from reading_overlay import apply_reading_snapshot
+from memory_query import recall_query
 
 KIND = "haiku_workshop_agent_step"
 FOLLOWUP_ACTIONS = {"acknowledge_meaning", "confirm_close", "continue_workshop", "resume_workshop", "decline_resume"}
@@ -153,6 +154,10 @@ def consultation_messages(details):
         "由来や意味は当時の材料・詩的解釈と比較して説明し、不明な対応を作らない。"
         "過去の自分の説明も取り違えうる。指摘されたら記録を再確認して答える。\n"
         "読み/音数/出典を尋ねられたら、実検査結果が無い項目をinspectにする。"
+        "プレイヤーが現在句の問題を具体的に指摘した場合、respond/explain/askにもfindingsを付けられる。"
+        "findingsは今回の指摘と実在する句の断片だけ。問題を勝手に追加しない。"
+        '外形は[{"line_index":0,"fragment":"句中の断片","problem":"unreadable","note":"今回の指摘","confidence":0.9}]。'
+        f"problemは{', '.join(details['allowed_problem_types'])}から選ぶ。"
         "checksはreading/meter/sourceから必要なものだけ。検査後はその結果を説明する。"
         "検査前に読み・音数・出典記録を断言しない。\n"
         "respond/explain/ask/compareだけspeechへ自然な関西弁一文を120字以内で入れる。"
@@ -219,6 +224,8 @@ def details_for(frame):
 
 
 def handle(frame):
+    if frame["op"] == "memory_query":
+        return {"query": recall_query(frame["text"], frame.get("now"))}
     if frame["op"] == "reading_overlay":
         apply_reading_snapshot(frame["rows"])
         return {"applied": True}

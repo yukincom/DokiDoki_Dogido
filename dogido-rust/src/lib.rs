@@ -5,6 +5,7 @@ pub mod environment;
 pub mod events;
 pub mod haiku;
 pub mod haiku_bridge;
+pub mod haiku_memory;
 pub mod haiku_record;
 pub mod haiku_response;
 pub mod ingress;

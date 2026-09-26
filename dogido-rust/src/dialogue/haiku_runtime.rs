@@ -372,8 +372,9 @@ impl Dialogue {
         macro_rules! step {($future:expr)=>{tokio::select!{biased;_=bridge::cancelled(cancel)=>Err(anyhow::anyhow!("haiku cancelled")),r=$future=>r}?};}
         let h = &self.config.haiku;
         let corrections = step!(self.reading_overlay());
+        let lessons = step!(self.active_lessons());
         let context=step!(helper.exchange(json!({"op":"haiku_context","event":event,"completed_turns":completed,
-            "reading_corrections":corrections,
+            "reading_corrections":corrections,"lessons":lessons,
             "settings":{"llm_enabled":h.llm_enabled,"haiku_structured_max_tokens":h.structured_max_tokens,"haiku_grounding_max_tokens":h.grounding_max_tokens,"haiku_generation_strategy":h.generation_strategy,"haiku_max_regeneration_rounds":h.max_regeneration_rounds}})));
         let mut backend = LiveBackend {
             helper,

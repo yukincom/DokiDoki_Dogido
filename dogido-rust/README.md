@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。lesson・記憶の検索、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索も接続済みです。旧分類器へのfallback、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -204,7 +204,11 @@ python dogido-rust/scripts/check_haiku_bridge.py
 
 読みの保存先は設定した移行用記憶ルートの `long_term/catalog_corrections.jsonl` です。接続IDが変わっても同じルートから再読込し、次の発句に正しい読みと禁止する誤読を渡します。この辞書はその記憶ルートを使う接続で共有し、人物別の記憶分割は追加していません。既存Pythonでも読める追記形式で、元のPython版の記憶へは書き込みません。保存失敗時は成功を答えず、記憶無効時は読み書きしません。保存・受付・取消はRust、カタログと辞書への反映は既存Python補助を使います。
 
-lesson・想起は後続段階です。OS SDK・prompt・JSON契約と発話根拠の検査・短文照合・辞書読み・既存の行制約は一時的なPython補助を残しています。未採用案、現在句との一致検査、採否、修正履歴保存、相談段階と再生完了の照合はRustで処理します。
+句への指摘は、検証済みの相談結果から `long_term/haiku_critiques.jsonl` と `haiku_lessons.jsonl` に保存します。次の発句では最大3種類の注意を参考として渡し、禁止語にはしません。14日より古い注意、またはその後6句以上が保存された注意は参照しません。「いい句」の称賛は注意を消さず、「気にせんで」「前の注意はもういらん」で明示的に緩めます。修正案を求める依頼だけでは新しい注意を増やしません。
+
+「覚えてる句を教えて」「今日の句」「雪原の句を思い出して」で、同じ記憶設定の保存済みの句と採用済み修正を検索し、最大2件を返します。設定ルート直下の既存JSONLと `sessions/<接続ID>/long_term/` が対象です。現在地だけには限定せず、指定した場所・保存日時で探します。条件に合わず別の句を返す場合は、その旨を伝えます。未採用案を検索結果へ加えず、相談中の現在句や案も変更しません。検索と明示的な注意の解除はLLMを呼びません。
+
+OS SDK・prompt・JSON契約と発話根拠の検査・短文照合・場所と日付の日本語解釈・辞書読み・既存の行制約は一時的なPython補助を残しています。未採用案、現在句との一致検査、採否、記憶の保存・検索・期限判定、相談段階と再生完了の照合はRustで処理します。
 
 相談段階の検証:
 
@@ -218,6 +222,8 @@ python dogido-rust/scripts/check_workshop_followup.py
 python dogido-rust/scripts/check_workshop_combat.py
 python dogido-rust/scripts/check_workshop_provisional.py
 python dogido-rust/scripts/check_reading_runtime.py
+python dogido-rust/scripts/check_memory_runtime.py
+python -m pytest dogido-rust/scripts/test_memory_query.py -q
 python -m pytest dogido-rust/scripts/test_combat_input_helper.py -q
 ```
 
@@ -320,4 +326,4 @@ python dogido-rust/scripts/generate_event_types.py
 - messagesは既存Pythonと同じrole／文字列形式に揃えます。通信の自動再試行とリダイレクトは無効です。
 - 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerと自動川柳の生成・検査ループは移植済みです。ゲーム中の自動発句・情景音声・保存・掛け軸も接続済みです。
 - 対象は現在のMLXの通常のChat Completions応答です。Rigは`id`・`model`・messageの`role`等を要求するため、旧Pythonが許容する省略形すべての互換実装ではありません。
-- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。句の自動保存形式もPythonと照合済みです。設定全体やrevision・lesson等の記憶形式は、後続の移植時に検証します。
+- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。句の自動保存、採用済みrevision、critique・lesson・読み訂正の形式はPythonと照合済みです。設定全体、旧分類器fallback、明示形式の句保存などは引き続き移植中です。

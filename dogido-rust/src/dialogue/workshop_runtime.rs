@@ -35,6 +35,14 @@ impl Dialogue {
             .exchange(json!({"op":"reading_overlay", "rows":corrections}))
             .await?;
         let text = input["text"].as_str().context("workshop input text")?;
+        // Reuse this helper's existing catalog/date interpretation; no extra
+        // model call or process for a normal workshop question.
+        let recall = helper
+            .exchange(json!({"op":"memory_query","text":text,"now":chrono::Utc::now()}))
+            .await?;
+        if recall["query"].is_object() {
+            return Ok(json!({"memory_query":recall["query"],"llm_reports":[]}));
+        }
         let mut snapshot = input["workshop"].clone();
         let view = &input["workshop"];
         let current: Vec<HaikuLine> = serde_json::from_value(view["current_lines"].clone())?;
@@ -44,6 +52,7 @@ impl Dialogue {
         let mut close_after = false;
         let mut observation = Value::Null;
         let mut steps = Vec::new();
+        let mut feedback = Value::Null;
         let mut reports = Vec::new();
         let mut reason = "accepted".to_owned();
         let mut action = workshop::fixed_action(text).map(str::to_owned);
@@ -199,6 +208,12 @@ impl Dialogue {
                     break;
                 };
                 let a = step["action"].as_str().unwrap();
+                let candidate = json!({"action":a,"purpose":step["purpose"],"findings":step["analysis"]["findings"]});
+                if (feedback.is_null() || a == "propose_revision")
+                    && crate::haiku_memory::feedback_kind(&candidate).is_some()
+                {
+                    feedback = candidate;
+                }
                 if a == "inspect" {
                     let checks: Vec<String> = serde_json::from_value(step["checks"].clone())?;
                     observation = workshop::inspect(lines, &checks);
@@ -303,6 +318,9 @@ impl Dialogue {
             }
         }
         let action = action.unwrap_or_else(|| "fallback".into());
+        if action == "close_workshop" && workshop::fixed_praise(text) {
+            feedback = json!({"action":"praise","findings":[]});
+        }
         if let Some(fixed_speech) = workshop_followup::speech(&action) {
             speech = fixed_speech.into();
         }
@@ -375,7 +393,7 @@ impl Dialogue {
             json!({"text":speech,"spoken_text":spoken,"workshop_id":view["workshop_id"],
             "workshop_action":action,"workshop_version":view["version"],"workshop_proposed":proposed,"workshop_close_after":close_after,
             "workshop_followup":Stage::after_completed(&action, steps.last().and_then(|s|s["purpose"].as_str()).unwrap_or(""), pending.is_some() || proposed.is_some()),
-            "workshop_steps":steps,"workshop_reason":reason,"llm_reports":reports}),
+            "workshop_steps":steps,"workshop_reason":reason,"workshop_feedback":feedback,"llm_reports":reports}),
         )
     }
 
@@ -389,6 +407,7 @@ impl Dialogue {
         w.record_activity(Instant::now());
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
+            "entry_id":w.entry_id,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "provisional":w.provisional,"dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )

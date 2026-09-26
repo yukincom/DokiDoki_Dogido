@@ -6,6 +6,7 @@ mod combat_runtime;
 mod environment_runtime;
 mod haiku_runtime;
 mod history;
+mod memory_runtime;
 mod reading_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
@@ -663,7 +664,10 @@ impl Dialogue {
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":s.combat_digest.iter().map(|n|format!("- {n}")).collect::<Vec<_>>().join("\n"),"event":event});
-        if workshop.is_none() && crate::reading_correction::parse(text).is_none() {
+        if workshop.is_none()
+            && crate::reading_correction::parse(text).is_none()
+            && !crate::haiku_memory::memory_candidate(text)
+        {
             s.history.push(&turn, "user", text);
             s.casual_foreground = true;
         }
@@ -780,6 +784,7 @@ impl Dialogue {
                     "workshop_outcome",
                     "workshop_revision_id",
                     "workshop_followup",
+                    "workshop_feedback_outcome",
                 ] {
                     if let Some(value) = result.get(key) {
                         row[key] = value.clone();
@@ -800,6 +805,10 @@ impl Dialogue {
             if let Some(result) = result {
                 let workshop_reply =
                     workshop_id.is_some() && result["workshop_action"] != "unrelated";
+                if status == "queued" && !workshop_reply && result["memory_action"].is_null() {
+                    s.history.push(turn, "user", &player_text);
+                    s.casual_foreground = true;
+                }
                 if status == "queued" && workshop_id.is_some() {
                     if !workshop_reply {
                         s.history.push(turn, "user", &player_text);
@@ -957,6 +966,8 @@ impl Dialogue {
         );
         let result = if let Some(correction) = correction {
             self.correct_reading(&sid, epoch, &input, correction).await
+        } else if crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")) {
+            self.clear_lessons(&sid, epoch, &input).await
         } else if input["workshop"].is_object() {
             match self.render_workshop(&input, &mut cancel).await {
                 Ok(workshop) if workshop["workshop_action"] == "unrelated" => {
@@ -1003,10 +1014,18 @@ impl Dialogue {
                 result => result,
             }
         } else {
-            bridge::render(&self.config, &self.llm, input, &mut cancel).await
+            bridge::render(&self.config, &self.llm, input.clone(), &mut cancel).await
+        };
+        let result = match result {
+            Ok(r) if r["memory_query"].is_object() => {
+                self.recall_poems(&sid, epoch, &input, &r["memory_query"], &mut cancel)
+                    .await
+            }
+            r => r,
         };
         match result {
             Ok(mut result) => {
+                self.record_feedback(&sid, epoch, &input, &mut result).await;
                 if let Err(error) = self.apply_workshop_edit(&sid, epoch, &mut result).await {
                     result["text"] =
                         "句が変わったか、編集を続けられん状態になったわ。もう一度確認してな。"

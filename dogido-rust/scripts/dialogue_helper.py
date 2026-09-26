@@ -107,7 +107,11 @@ def run_turn(data):
     # 自動ASR変換を原文へ混ぜない。文脈STT補正の再移植は別段階。
     context.raw_text = data["text"]
     context.interpreted_text = data["text"]
-    if any((context.requests_sword, context.asks_save_last_haiku, context.asks_haiku_recall,
+    if context.asks_haiku_recall and not (context.asks_save_last_haiku or context.revised_haiku_text or context.player_haiku_text):
+        from memory_query import recall_query
+        emit({"op": "result", "memory_query": recall_query(data["text"])})
+        return
+    if any((context.requests_sword, context.asks_save_last_haiku,
             context.revised_haiku_text, context.player_haiku_text,
             context.asks_hostile_count, context.asks_hostile_direction, context.asks_dragon_direction)):
         emit({"op": "result", "unsupported": "通常会話の試験中です。その操作・川柳の機能はまだ接続していません。"})
