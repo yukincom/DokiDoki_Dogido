@@ -13,3 +13,4 @@ pub mod planner;
 pub mod server;
 pub mod threats;
 pub mod types;
+pub mod workshop;

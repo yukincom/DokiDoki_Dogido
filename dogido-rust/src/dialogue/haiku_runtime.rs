@@ -202,50 +202,6 @@ impl Dialogue {
             }
         }
     }
-    pub(super) fn workshop_input(
-        self: &Arc<Self>,
-        d: &mut Data,
-        jobs: &mut Vec<tokio::task::JoinHandle<()>>,
-        sid: &str,
-        text: &str,
-    ) -> Option<Value> {
-        let w = d
-            .sessions
-            .get_mut(sid)?
-            .haiku
-            .workshop
-            .as_mut()
-            .filter(|w| w.is_open())?;
-        let command = text.trim().trim_end_matches(['。', '！', '!', '？', '?']);
-        if text.trim().ends_with(['？', '?']) {
-            return Some(
-                json!({"accepted":false,"reason":"workshop_editing_not_migrated","detail":"句の相談・共同編集は次の移行段階です。現在の句は掛け軸で確認できます。"}),
-            );
-        }
-        let reply = match command {
-            "終了" | "終わり" | "川柳は終了" | "川柳終わり" | "句はここまで" =>
-            {
-                w.close("explicit_close");
-                "ほな、この句はここまでにしよか。".to_owned()
-            }
-            "今の句" | "今の川柳" | "もう一度読んで" => {
-                w.record_activity(Instant::now());
-                w.emission()
-                    .prepared
-                    .reading_text
-                    .clone()
-                    .unwrap_or_default()
-            }
-            _ => {
-                return Some(
-                    json!({"accepted":false,"reason":"workshop_editing_not_migrated","detail":"句の相談・共同編集は次の移行段階です。「終了」で通常会話へ戻れます。"}),
-                );
-            }
-        };
-        self.queue_fixed_reply(d, jobs, sid, reply, Some(text));
-        d.revision += 1;
-        Some(json!({"accepted":true,"session_id":sid,"reason":"workshop_fixed_reply"}))
-    }
     pub fn workshop_snapshot(&self, sid: &str, sequence: u64) -> Option<Value> {
         let d = self.data.lock().unwrap();
         let s = d.sessions.get(sid)?;

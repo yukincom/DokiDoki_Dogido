@@ -87,13 +87,14 @@ def main():
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
     print("会話材料・発話検査はPython補助を利用。戦闘・環境反応の判断、剣への持ち替え、音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
-    print("情景発話・発句・保存・掛け軸に対応。句の共同編集と過去の句の想起は次の移行段階です。", flush=True)
+    print("情景発話・発句・保存・掛け軸と、句の意味相談・読み/音数/出典確認に対応。修正案・採否・想起は次の移行段階です。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
         from dogido_server.state_machine import DogidoStateMachine
         from dialogue_helper import BridgeLLM
         from haiku_preparation import HaikuPreparation
+        from workshop_helper import handle as workshop_handle
         print("Python補助の依存を確認しました。モデル生成・録音・サーバー起動は行っていません。")
         return
     binary = ROOT / "dogido-rust/target/release/dogido-rust"

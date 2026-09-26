@@ -9,6 +9,7 @@ mod history;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod sentences;
 mod warnings;
+mod workshop_runtime;
 
 use crate::{
     events::{EventName, GameEvent, SourceKind},
@@ -560,9 +561,6 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
         self.tick_workshop(&mut d, &session_id);
-        if let Some(result) = self.workshop_input(&mut d, &mut jobs, &session_id, text) {
-            return result;
-        }
         let s = d.sessions.get_mut(&session_id).unwrap();
         let active_turn = s.current_turn.clone();
         // 同じ進行中入力の二重配送を、割り込みやLLM再呼出しにしない。
@@ -580,6 +578,13 @@ impl Dialogue {
         }
         Self::cancel_chat(&mut d, &session_id, "new_player_input");
         let s = d.sessions.get_mut(&session_id).unwrap();
+        let workshop = Self::workshop_view(s, text);
+        let fixed_close =
+            workshop.is_some() && crate::workshop::fixed_action(text) == Some("close_workshop");
+        if fixed_close && let Some(w) = s.haiku.workshop.as_mut() {
+            // 完全一致の明示終了は既存と同じ同期経路。音声準備を待ってpinを延命しない。
+            w.close("explicit_close");
+        }
         s.epoch += 1;
         let epoch = s.epoch;
         let turn = id("turn");
@@ -593,18 +598,21 @@ impl Dialogue {
         if let Some((_, Some(previous))) = expected_generation {
             s.history.replace_unanswered(&previous);
         }
-        let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,
+        let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":s.combat_digest.iter().map(|n|format!("- {n}")).collect::<Vec<_>>().join("\n"),"event":event});
-        s.history.push(&turn, "user", text);
-        s.casual_foreground = true;
+        if workshop.is_none() {
+            s.history.push(&turn, "user", text);
+            s.casual_foreground = true;
+        }
         let (cancel, rx) = watch::channel(false);
         s.cancel = Some(cancel);
         if d.rows.len() == 200 {
             d.rows.pop_front();
         }
         d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
-            "created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating"}));
+            "created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
+            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close}));
         d.revision += 1;
         drop(d);
         tracing::info!(
@@ -646,6 +654,34 @@ impl Dialogue {
     ) -> bool {
         let mut d = self.data.lock().unwrap();
         let current = !d.stopped && d.sessions.get(sid).is_some_and(|s| s.epoch == epoch);
+        let row = d.rows.iter().find(|r| r["turn_id"] == turn);
+        let workshop_id = row
+            .and_then(|r| r["workshop_id"].as_str())
+            .map(str::to_owned);
+        let fixed_close = row.is_some_and(|r| r["workshop_fixed_close"] == true);
+        let player_text = row
+            .and_then(|r| r["player_input_text"].as_str())
+            .unwrap_or("")
+            .to_owned();
+        if current
+            && status == "queued"
+            && let Some(wid) = workshop_id.as_ref()
+        {
+            let valid = d
+                .sessions
+                .get(sid)
+                .and_then(|s| s.haiku.workshop.as_ref())
+                .is_some_and(|w| {
+                    w.hud_id == *wid
+                        && !w.combat_paused()
+                        && (w.is_open()
+                            || (fixed_close && w.close_reason.as_deref() == Some("explicit_close")))
+                });
+            if !valid {
+                Self::cancel_chat(&mut d, sid, "workshop_changed");
+                return false;
+            }
+        }
         let status = if !current { "cancelled" } else { status };
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
             row["playback_status"] = status.into();
@@ -660,6 +696,11 @@ impl Dialogue {
                 if let Some(reports) = result.get("llm_reports") {
                     row["llm_reports"] = reports.clone();
                 }
+                for key in ["workshop_action", "workshop_steps", "workshop_reason"] {
+                    if let Some(value) = result.get(key) {
+                        row[key] = value.clone();
+                    }
+                }
             }
         }
         if current {
@@ -673,12 +714,61 @@ impl Dialogue {
                 s.cancel = None;
             }
             if let Some(result) = result {
+                let workshop_reply =
+                    workshop_id.is_some() && result["workshop_action"] != "unrelated";
+                if status == "queued" && workshop_id.is_some() {
+                    if !workshop_reply {
+                        s.history.push(turn, "user", &player_text);
+                        s.casual_foreground = true;
+                    }
+                    if let Some(w) = s
+                        .haiku
+                        .workshop
+                        .as_mut()
+                        .filter(|w| Some(&w.hud_id) == workshop_id.as_ref())
+                    {
+                        w.record_activity(Instant::now());
+                        if let Some(steps) = result["workshop_steps"].as_array() {
+                            w.agent_steps.extend(steps.iter().cloned());
+                            while w.agent_steps.len() > 12 {
+                                w.agent_steps.pop_front();
+                            }
+                        }
+                        if result["workshop_action"] == "close_workshop" {
+                            w.close("explicit_close");
+                        }
+                    }
+                }
+                if status == "completed"
+                    && let Some(w) = s
+                        .haiku
+                        .workshop
+                        .as_mut()
+                        .filter(|w| Some(&w.hud_id) == workshop_id.as_ref())
+                {
+                    if workshop_reply {
+                        w.drift_count = 0;
+                        w.record_activity(Instant::now());
+                        if !w.dialogue.iter().any(|p| p["turn_id"] == turn) {
+                            w.dialogue.push_back(json!({"turn_id":turn,"player_text":player_text,"dogido_text":result["text"]}));
+                            while w.dialogue.len() > 4 {
+                                w.dialogue.pop_front();
+                            }
+                        }
+                    } else {
+                        w.drift_count += 1;
+                        if w.drift_count >= 2 {
+                            w.close("drift");
+                        }
+                    }
+                }
                 if status == "queued"
+                    && !workshop_reply
                     && let Ok(repair) = serde_json::from_value::<Repair>(result["repair"].clone())
                 {
                     s.history.annotate(turn, &repair);
                 }
-                if status == "completed" {
+                if status == "completed" && !workshop_reply {
                     s.history
                         .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
                     if let Some(pair) = s
@@ -719,20 +809,62 @@ impl Dialogue {
         let owner = self.clone();
         let monitor_sid = sid.clone();
         let mut monitor_cancel = cancel.clone();
+        let workshop_id = input["workshop"]["workshop_id"].as_str().map(str::to_owned);
         let monitor = tokio::spawn(async move {
             loop {
                 tokio::select! {
                     _=bridge::cancelled(&mut monitor_cancel)=>break,
                     _=tokio::time::sleep(Duration::from_millis(200))=>{
                         let mut d=owner.data.lock().unwrap();
+                        owner.tick_workshop(&mut d, &monitor_sid);
                         let stale=d.sessions.get(&monitor_sid).is_some_and(|s|s.epoch==epoch && !fresh(s));
                         if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}
+                        let expired = workshop_id.as_ref().is_some_and(|wid| d.sessions.get(&monitor_sid)
+                            .filter(|s| s.epoch==epoch).is_some_and(|s| s.haiku.workshop.as_ref()
+                                .is_none_or(|w| w.hud_id != *wid || (!w.is_open() && w.close_reason.as_deref()!=Some("explicit_close")))));
+                        if expired {Self::cancel_chat(&mut d,&monitor_sid,"workshop_changed");break;}
                     }
                 }
             }
         });
         let mut completed = false;
-        let result = bridge::render(&self.config, &self.llm, input, &mut cancel).await;
+        let result = if input["workshop"].is_object() {
+            match self.render_workshop(&input, &mut cancel).await {
+                Ok(workshop) if workshop["workshop_action"] == "unrelated" => {
+                    let mut ordinary = input.clone();
+                    // 対話plannerには過去の通常会話と現在入力だけを渡す。
+                    ordinary["workshop"] = Value::Null;
+                    match bridge::render(&self.config, &self.llm, ordinary, &mut cancel).await {
+                        Ok(mut result) => {
+                            let mut reports = workshop["llm_reports"]
+                                .as_array()
+                                .cloned()
+                                .unwrap_or_default();
+                            reports.extend(
+                                result["llm_reports"]
+                                    .as_array()
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            );
+                            for key in [
+                                "workshop_id",
+                                "workshop_action",
+                                "workshop_steps",
+                                "workshop_reason",
+                            ] {
+                                result[key] = workshop[key].clone();
+                            }
+                            result["llm_reports"] = json!(reports);
+                            Ok(result)
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                result => result,
+            }
+        } else {
+            bridge::render(&self.config, &self.llm, input, &mut cancel).await
+        };
         match result {
             Ok(mut result) => {
                 if let Some(unsupported) = result.get("unsupported").cloned() {
@@ -771,7 +903,8 @@ impl Dialogue {
                         }
                     };
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
-                        && status == "completed";
+                        && status == "completed"
+                        && result["workshop_action"].is_null();
                 }
             }
             Err(error) => {
@@ -804,7 +937,7 @@ impl Dialogue {
     pub fn snapshot(&self, selected: Option<&str>) -> Value {
         let d = self.data.lock().unwrap();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":d.rows.iter().filter(|r|selected.is_none_or(|id|r["session_id"]==id)).collect::<Vec<_>>()})
     }
     pub fn cancel_all(&self) {

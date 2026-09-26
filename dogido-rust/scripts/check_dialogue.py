@@ -103,6 +103,10 @@ def dependencies():
                 raw = json.dumps({"id": "mock", "object": "chat.completion", "created": 0,
                     "model": "mock-model", "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}).encode()
+                if "completion_override" in controls:
+                    actual = controls["completion_override"](incoming)
+                    if actual is not None:
+                        raw = json.dumps(actual, ensure_ascii=False).encode()
             elif self.path.startswith("/audio_query?"):
                 text = parse_qs(urlsplit(self.path).query)["text"][0]
                 raw = json.dumps({"test_text": text}).encode()

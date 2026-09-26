@@ -6,6 +6,7 @@ use chrono::{DateTime, SecondsFormat, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::{
+    collections::VecDeque,
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -287,6 +288,10 @@ pub struct Workshop {
     pub materials: Map<String, Value>,
     pub open: bool,
     pub close_reason: Option<String>,
+    /// 一句専用。実再生済みの対だけを最大4往復保持する。
+    pub dialogue: VecDeque<Value>,
+    pub agent_steps: VecDeque<Value>,
+    pub drift_count: usize,
     completed: Instant,
     last_activity: Instant,
     paused_at: Option<Instant>,
@@ -329,6 +334,9 @@ impl Workshop {
             materials,
             open: true,
             close_reason: None,
+            dialogue: VecDeque::new(),
+            agent_steps: VecDeque::new(),
+            drift_count: 0,
             completed,
             last_activity: completed,
             paused_at: None,

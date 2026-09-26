@@ -184,7 +184,23 @@ python dogido-rust/scripts/check_haiku_bridge.py
 
 起動設定は既存のchat／haiku別routeと、192トークンの生成・512トークンの検査を読みます。材料構築・辞書読み・promptは移行用Python補助、生成・採否・時計・保存・表示・音声の所有権はRustです。自動保存先は `.dogido_memory/rust-migration/sessions/<session_id>/` で、既存の記憶と分けています。完成句はその後の音声失敗でも残し、再生済みの会話とは区別します。
 
-現在のworkshopは表示・期限管理、「今の句」「終了」などの代表形だけに対応します。自然な意味質問・一行編集・採否・lesson・想起は後続段階です。未対応の句相談は受付結果に理由を返します。「終了」で通常会話に戻れます。
+現在のworkshopは意味の相談、読み・音数・出典の確認、三行の表示と終了に対応します。検査はRustで行い、結果を見て説明する一手だけを追加できます。句の相談は実再生済みの直近4往復を独立して保持します。「終了」「終了でいいよ」はモデルを使わず即時に閉じます。自然な終了も原文の意思を検証します。
+
+一行編集・修正案・採否・lesson・想起、意味説明後の納得からの終了確認、戦闘後の再開意思確認は後続段階です。編集や保存を実行した扱いにはしません。prompt・JSON契約と発話根拠の検査・読み補正は一時的なPython補助を残しています。
+
+相談段階の検証:
+
+```bash
+python dogido-rust/scripts/compare_workshop_inspection.py
+python -m pytest dogido-rust/scripts/test_workshop_helper.py -q
+python dogido-rust/scripts/check_workshop_runtime.py
+```
+
+実モデルの相談だけを試す場合は、起動済みの接続先を明示します。観測・句・音声は模擬で、実ゲームやスピーカーは使いません。このコマンド自体はMLXを起動・停止しません。
+
+```bash
+python dogido-rust/scripts/check_workshop_live.py --base-url http://127.0.0.1:8080/v1 --output .dogido_tmp/workshop-live.json
+```
 
 ```sh
 python dogido-rust/scripts/test_haiku_preparation.py
