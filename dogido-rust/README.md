@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。川柳、共同編集、長期記憶、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。川柳の生成・検査ループは単独実装済みで、ゲーム中の発句・情景音声・保存・掛け軸への接続はこれからです。共同編集、長期記憶、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -161,6 +161,23 @@ dogido-rust/target/release/dogido-rust generate dogido-rust/fixtures/connection.
 
 出力JSONには返答、`finish_reason`、入力／生成トークン数、要求／応答のモデル名、応答ID、API所要時間を残します。トークン数が返らなかった場合は`null`です。`elapsed_ms`は一回のAPI呼出と応答読取の時間で、音声の体感応答時間とは別です。
 
+## 自動川柳の生成・検査を比較する
+
+`src/haiku/`は準備済みの材料から三行を生成し、音数・文字種・出典・自然さを検査します。内容の再生成は不合格slotだけ、検査票の欠落は元の行を保持して一度だけ再検査します。再検査も読めなければ`grounding_unavailable`で終了します。出典は検査中だけ一時番号にし、結果には元IDと材料を保持します。検査の既定上限は512トークンで、句生成の上限と別です。
+
+`haiku_response`は合否と出典の両方が完成した外側のJSON項目だけを回収します。説明末尾の途中切れを許容する一方、出典配列の途中にある一件を完全な検査票として拾いません。`haiku_bridge`はRig経由のchat／haiku routeと、prompt・読み補助の寿命を管理します。取消はwatchで通知し、呼出元は処理の完了まで待ちます。
+
+```sh
+./dogido-rust/cargo.sh build --locked --offline --examples
+python dogido-rust/scripts/compare_haiku.py
+python dogido-rust/scripts/compare_haiku_response.py
+python dogido-rust/scripts/check_haiku_bridge.py
+```
+
+生成結果・要求・promptの67ケース、検査票解析4,875ケースを現行Pythonと照合します。模擬HTTPではroute、512トークン、元行の再検査、不合格行だけの再生成、通信失敗、取消・期限切れ時のhelper回収を確認します。比較基準のPythonは合否先行・番号付き材料・512トークンの修正を含む版が必要です。
+
+生成単独の接続器は`examples/generate_haiku.rs`です。要求JSONに`input`（材料・制約）、`chat`と`haiku`（各`base_url / model / max_tokens / timeout_ms`）を指定し、`--python`で既存の依存が入ったPythonを選びます。接続先の省略による自動接続はありません。これは生成部品の確認で、`serve-dialogue`の自動発句、音声、workshop、JSONL保存へはまだ接続していません。
+
 ## 通常会話plannerの単独確認
 
 ```sh
@@ -244,6 +261,6 @@ python dogido-rust/scripts/generate_event_types.py
 
 - RigのChat Completions経路を明示し、messages・温度・トークン上限・thinking指定を保持します。
 - messagesは既存Pythonと同じrole／文字列形式に揃えます。通信の自動再試行とリダイレクトは無効です。
-- 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerの契約検査は移植済みで、川柳などは未移植です。
+- 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerと自動川柳の生成・検査ループは移植済みです。川柳のゲーム中の発句・保存への接続はこれからです。
 - 対象は現在のMLXの通常のChat Completions応答です。Rigは`id`・`model`・messageの`role`等を要求するため、旧Pythonが許容する省略形すべての互換実装ではありません。
 - LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。設定全体、記憶の保存形式の互換性は、それぞれの移植時に検証します。
