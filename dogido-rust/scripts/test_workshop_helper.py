@@ -5,6 +5,14 @@ from check_workshop_runtime import step
 from workshop_helper import CONSULTATION_KEYS, handle
 
 
+def test_whole_verse_uses_existing_dictionary_records_without_meter_rewriting():
+    # The author's whole-poem archive is not a generated 5/7/5 candidate.
+    result = handle({"op": "whole_verse", "text": "はる\nさくらのは\nあさ", "source": "formal"})
+    assert [line["reading_text"] for line in result["lines"]] == ["はる", "さくらのは", "あさ"]
+    assert all(line["provenance"] == "formal" and not line["source_atom_ids"] for line in result["lines"])
+    assert handle({"op": "whole_verse", "text": "未分割のまま", "source": "formal"}) == {"lines": []}
+
+
 def frame(text="この句はどういう意味？", action="explain", speech="明るい葉と黒い斧を並べたんやで。"):
     lines = [{"line_id": f"line_{i+1}", "line_index": i, "position": ["upper", "middle", "lower"][i],
         "canonical_name": ["上五", "中七", "下五"][i], "surface_text": reading, "reading_text": reading,

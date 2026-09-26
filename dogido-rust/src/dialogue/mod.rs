@@ -7,6 +7,7 @@ mod environment_runtime;
 mod haiku_runtime;
 mod history;
 mod memory_runtime;
+mod poem_runtime;
 mod reading_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
@@ -638,6 +639,12 @@ impl Dialogue {
         Self::cancel_chat(&mut d, &session_id, "new_player_input");
         let s = d.sessions.get_mut(&session_id).unwrap();
         let workshop = Self::workshop_view(s, text);
+        let poem_input = crate::poem_input::parse(text, workshop.is_some());
+        let poem_reference = s
+            .haiku
+            .workshop
+            .as_ref()
+            .map(|w| json!({"id":w.hud_id,"version":w.version,"open":w.open}));
         if let Some(w) = s.haiku.workshop.as_mut() {
             // 一回の返答にだけ対応。取消・失敗した次のターンへ古い「うん」の対象を残さない。
             w.followup = crate::workshop_followup::Stage::Discussion;
@@ -662,9 +669,11 @@ impl Dialogue {
             s.history.replace_unanswered(&previous);
         }
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
+            "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":s.combat_digest.iter().map(|n|format!("- {n}")).collect::<Vec<_>>().join("\n"),"event":event});
         if workshop.is_none()
+            && poem_input.is_none()
             && crate::reading_correction::parse(text).is_none()
             && !crate::haiku_memory::memory_candidate(text)
         {
@@ -912,7 +921,7 @@ impl Dialogue {
         let permit = tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,"cancelled",None);return;}, p=self.serial.acquire()=>p.unwrap() };
         // An earlier authorized save may have completed while this turn waited.
         // Rebuild the read-only context before planning against that new version.
-        if input["workshop"].is_object() {
+        if input["workshop"].is_object() && input["poem_input"].is_null() {
             let mut d = self.data.lock().unwrap();
             if let Some(s) = d.sessions.get_mut(&sid)
                 && s.epoch == epoch
@@ -966,6 +975,8 @@ impl Dialogue {
         );
         let result = if let Some(correction) = correction {
             self.correct_reading(&sid, epoch, &input, correction).await
+        } else if input["poem_input"].is_object() {
+            self.save_poem_input(&sid, epoch, &input, &mut cancel).await
         } else if crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")) {
             self.clear_lessons(&sid, epoch, &input).await
         } else if input["workshop"].is_object() {

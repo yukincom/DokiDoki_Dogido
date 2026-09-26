@@ -6,7 +6,13 @@ use crate::{
 use anyhow::{Context, ensure};
 
 impl Dialogue {
-    fn memory_live(&self, sid: &str, epoch: u64, input: &Value, praise: bool) -> Result<()> {
+    pub(super) fn memory_live(
+        &self,
+        sid: &str,
+        epoch: u64,
+        input: &Value,
+        praise: bool,
+    ) -> Result<()> {
         let d = self.data.lock().unwrap();
         let s = d.sessions.get(sid).context("session_closed")?;
         ensure!(
@@ -50,7 +56,7 @@ impl Dialogue {
         }
     }
 
-    fn memory_result(input: &Value, action: &str, outcome: &str, text: String) -> Value {
+    pub(super) fn memory_result(input: &Value, action: &str, outcome: &str, text: String) -> Value {
         let mut r = json!({"text":text,"spoken_text":text,"llm_reports":[],"memory_action":action,"memory_outcome":outcome});
         if input["workshop"].is_object() {
             r["workshop_id"] = input["workshop"]["workshop_id"].clone();

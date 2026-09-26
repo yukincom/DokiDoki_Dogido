@@ -11,6 +11,7 @@ pub mod haiku_response;
 pub mod ingress;
 pub mod llm;
 pub mod planner;
+pub mod poem_input;
 pub mod reading_correction;
 pub mod server;
 pub mod threats;

@@ -23,6 +23,7 @@ from haiku_helper import handle as haiku_handle
 from dogido_server.llm.structured_contracts import validate_structured_payload
 from dogido_server.llm.character_mode import WORKSHOP_IDENTITY_PROMPT
 from dogido_server.memory_types import HaikuLine
+from dogido_server.haiku.verse import build_haiku_lines
 from dogido_server.tts_reading import prepare_text_for_tts
 from reading_overlay import apply_reading_snapshot
 from memory_query import recall_query
@@ -224,6 +225,8 @@ def details_for(frame):
 
 
 def handle(frame):
+    if frame["op"] == "whole_verse":
+        return {"lines": [asdict(line) for line in build_haiku_lines(frame["text"], provenance=frame["source"])]}
     if frame["op"] == "memory_query":
         return {"query": recall_query(frame["text"], frame.get("now"))}
     if frame["op"] == "reading_overlay":
