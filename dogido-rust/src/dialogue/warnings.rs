@@ -318,6 +318,7 @@ impl Dialogue {
         let turn = id("warning");
         let (cancel, rx) = watch::channel(false);
         let s = d.sessions.get_mut(sid).unwrap();
+        s.haiku.last_activity = Instant::now();
         s.warning = Some(Active {
             turn: turn.clone(),
             actions: actions.to_vec(),
@@ -362,6 +363,7 @@ impl Dialogue {
         if current {
             let s = d.sessions.get_mut(sid).unwrap();
             s.status = status.into();
+            s.haiku.last_activity = Instant::now();
             if matches!(status, "completed" | "failed" | "cancelled") {
                 s.warning = None;
             }

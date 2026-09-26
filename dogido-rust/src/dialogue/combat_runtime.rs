@@ -139,6 +139,7 @@ impl Dialogue {
             || decision.stop_audio
             || decision.dimension_changed
         {
+            Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
             Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
         }
         if decision.dimension_changed || decision.stop_audio {

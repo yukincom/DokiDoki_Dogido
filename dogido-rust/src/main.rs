@@ -37,7 +37,7 @@ enum Command {
         #[arg(long, default_value = "127.0.0.1:5056")]
         listen: SocketAddr,
     },
-    /// 平時の会話試験。Python補助、既存モデル、VOICEVOXを使う。
+    /// 冒険会話と自動川柳の試験。Python補助、既存モデル、VOICEVOXを使う。
     ServeDialogue {
         #[arg(long, default_value = "127.0.0.1:5056")]
         listen: SocketAddr,
@@ -58,6 +58,8 @@ enum Command {
         warning_settings: String,
         #[arg(long, default_value = "{}")]
         combat_settings: String,
+        #[arg(long, default_value = "{}")]
+        haiku_settings: String,
         #[arg(long, default_value = "/usr/bin/afplay")]
         audio_player: PathBuf,
         #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
@@ -119,6 +121,7 @@ async fn main() -> Result<()> {
             speed,
             warning_settings,
             combat_settings,
+            haiku_settings,
             audio_player,
             audio_dir,
             no_audio,
@@ -139,6 +142,7 @@ async fn main() -> Result<()> {
                 combat: dogido_rust::combat::model::Settings::merged(&serde_json::from_str(
                     &combat_settings,
                 )?)?,
+                haiku: serde_json::from_str(&haiku_settings)?,
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,
@@ -213,7 +217,7 @@ async fn serve(listen: SocketAddr, dialogue: Option<std::sync::Arc<Dialogue>>) -
     );
     std::io::stdout().flush()?;
     if enabled {
-        tracing::info!("会話入力: http://{address}/rust-chat — 平時の会話だけを試す移行モード");
+        tracing::info!("会話入力: http://{address}/rust-chat — 会話・戦闘・自動川柳の移行モード");
     }
     tracing::info!("接続画面: http://{address}/dogido — 終了は Ctrl+C");
     let shutdown = async move {

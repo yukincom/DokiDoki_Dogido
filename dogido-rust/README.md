@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。川柳の生成・検査ループは単独実装済みで、ゲーム中の発句・情景音声・保存・掛け軸への接続はこれからです。共同編集、長期記憶、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸も接続しています。句の共同編集、記憶の検索、国語・Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -77,7 +77,7 @@ python dogido-rust/scripts/check_environment_runtime.py
 
 固定警告と位置・体数回答はLLMを呼びません。既存の死亡・安堵・遮蔽された敵音・昼の水中スケルトン・燃焼・deep_dark不穏音の言い回しだけ、元のprompt・検査をPython補助で再利用し、RustのRigから生成します。失敗時は既存固定文へ戻ります。判断・優先順・状態変更はRustが所有し、安堵では観測根拠より強い撃破主張を棄却します。短期の状況メモはコード事実8件・各80字までで、未再生の発話を会話履歴へ入れません。
 
-暗所への入口、逃げるよう促す段階、呼吸、明るさ回復の安堵と、その最中の前方奇襲を接続しています。暗所の状態と再生中の音声を分け、戦闘へ移った後の反復観測で警告本文を止めません。川柳workshop中の戦闘pause／復帰はworkshop移植時に接続します。
+暗所への入口、逃げるよう促す段階、呼吸、明るさ回復の安堵と、その最中の前方奇襲を接続しています。暗所の状態と再生中の音声を分け、戦闘へ移った後の反復観測で警告本文を止めません。川柳は危険中に保持して表示と時計をpauseします。共同編集の戦闘後の再開会話は後続段階です。
 
 ```sh
 ./dogido-rust/cargo.sh build --locked --offline --examples --bin dogido-rust
@@ -176,7 +176,23 @@ python dogido-rust/scripts/check_haiku_bridge.py
 
 生成結果・要求・promptの67ケース、検査票解析4,875ケースを現行Pythonと照合します。模擬HTTPではroute、512トークン、元行の再検査、不合格行だけの再生成、通信失敗、取消・期限切れ時のhelper回収を確認します。比較基準のPythonは合否先行・番号付き材料・512トークンの修正を含む版が必要です。
 
-生成単独の接続器は`examples/generate_haiku.rs`です。要求JSONに`input`（材料・制約）、`chat`と`haiku`（各`base_url / model / max_tokens / timeout_ms`）を指定し、`--python`で既存の依存が入ったPythonを選びます。接続先の省略による自動接続はありません。これは生成部品の確認で、`serve-dialogue`の自動発句、音声、workshop、JSONL保存へはまだ接続していません。
+生成単独の接続器は`examples/generate_haiku.rs`です。要求JSONに`input`（材料・制約）、`chat`と`haiku`（各`base_url / model / max_tokens / timeout_ms`）を指定し、`--python`で既存の依存が入ったPythonを選びます。接続先の省略による自動接続はありません。このCLIは生成部品だけを確認します。ゲーム中の発句・音声・初期workshop・JSONL保存は`serve-dialogue`へ接続済みです。
+
+## ゲーム中の自動川柳
+
+通常は10分周期で、安全かつ静かなsnapshot、または会話の返答を再生し終えた境界から始めます。生成された見どころを先に話し、同じ観測・材料で句を生成・検査します。掛け軸は生成中にthinkingを示し、完成してから三行を表示してworkshopの時計を開始します。新入力・危険・観測失効・停止では未完成の発句を取り消します。
+
+起動設定は既存のchat／haiku別routeと、192トークンの生成・512トークンの検査を読みます。材料構築・辞書読み・promptは移行用Python補助、生成・採否・時計・保存・表示・音声の所有権はRustです。自動保存先は `.dogido_memory/rust-migration/sessions/<session_id>/` で、既存の記憶と分けています。完成句はその後の音声失敗でも残し、再生済みの会話とは区別します。
+
+現在のworkshopは表示・期限管理、「今の句」「終了」などの代表形だけに対応します。自然な意味質問・一行編集・採否・lesson・想起は後続段階です。未対応の句相談は受付結果に理由を返します。「終了」で通常会話に戻れます。
+
+```sh
+python dogido-rust/scripts/test_haiku_preparation.py
+python dogido-rust/scripts/compare_haiku_record.py
+python dogido-rust/scripts/check_haiku_runtime.py
+```
+
+最後の検証は空きローカルポートの模擬モデル・TTSと無音playerを使い、終了時に所有プロセスを回収します。実モデルの品質・速度とMinecraft・音声実機の確認は別途必要です。
 
 ## 通常会話plannerの単独確認
 
@@ -261,6 +277,6 @@ python dogido-rust/scripts/generate_event_types.py
 
 - RigのChat Completions経路を明示し、messages・温度・トークン上限・thinking指定を保持します。
 - messagesは既存Pythonと同じrole／文字列形式に揃えます。通信の自動再試行とリダイレクトは無効です。
-- 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerと自動川柳の生成・検査ループは移植済みです。川柳のゲーム中の発句・保存への接続はこれからです。
+- 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerと自動川柳の生成・検査ループは移植済みです。ゲーム中の自動発句・情景音声・保存・掛け軸も接続済みです。
 - 対象は現在のMLXの通常のChat Completions応答です。Rigは`id`・`model`・messageの`role`等を要求するため、旧Pythonが許容する省略形すべての互換実装ではありません。
-- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。設定全体、記憶の保存形式の互換性は、それぞれの移植時に検証します。
+- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。句の自動保存形式もPythonと照合済みです。設定全体やrevision・lesson等の記憶形式は、後続の移植時に検証します。

@@ -119,6 +119,9 @@ impl Published {
 
     pub fn workshop(&self, session_id: &str) -> Option<Value> {
         let session = self.sessions.get(session_id)?;
+        if let Some(dialogue) = &self.dialogue {
+            return dialogue.workshop_snapshot(session_id, session.last_sequence.unwrap_or(0));
+        }
         Some(json!({
             "schema_version": 1, "session_id": session_id, "revision": self.hud_revision,
             "observed_sequence": session.last_sequence.unwrap_or(0), "workshop_id": null,
@@ -156,7 +159,7 @@ impl Runtime {
         runtime.record(
             "server_ready",
             if runtime.config.dialogue.is_some() {
-                "Rust版の冒険会話試験。会話・戦闘・環境反応・剣の持ち替えに対応。川柳は移行中。"
+                "Rust版の冒険会話試験。会話・戦闘・環境反応・剣の持ち替えに対応。自動川柳・保存・掛け軸に対応。句の共同編集は移行中。"
                     .into()
             } else {
                 "Rust版の接続テスト。会話・警告・音声は未対応。外部AI接続なし。".into()

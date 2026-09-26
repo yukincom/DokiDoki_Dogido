@@ -1,10 +1,12 @@
-//! 通常会話、冒険中の判断、限定操作の配送。川柳は別の移行段階。
+//! 通常会話、冒険中の判断、限定操作と自動川柳の配送。
 mod assist_runtime;
 mod audio;
 mod bridge;
 mod combat_runtime;
 mod environment_runtime;
+mod haiku_runtime;
 mod history;
+pub use haiku_runtime::Settings as HaikuSettings;
 mod sentences;
 mod warnings;
 
@@ -43,6 +45,7 @@ pub struct DialogueConfig {
     pub audio_enabled: bool,
     pub warnings: crate::threats::Settings,
     pub combat: crate::combat::model::Settings,
+    pub haiku: HaikuSettings,
 }
 impl Default for DialogueConfig {
     fn default() -> Self {
@@ -64,6 +67,7 @@ impl Default for DialogueConfig {
             audio_enabled: true,
             warnings: crate::threats::Settings::default(),
             combat: crate::combat::model::Settings::default(),
+            haiku: HaikuSettings::default(),
         }
     }
 }
@@ -79,6 +83,7 @@ struct Session {
     mode: crate::combat::model::Mode,
     sequences: SequenceLedger,
     history: history::History,
+    haiku: haiku_runtime::State,
     combat_digest: VecDeque<String>,
     epoch: u64,
     current_turn: String,
@@ -110,6 +115,7 @@ pub struct Dialogue {
     config: DialogueConfig,
     llm: RigLlm,
     audio: audio::Audio,
+    haiku_routes: haiku_runtime::Routes,
     data: Mutex<Data>,
     serial: Semaphore,
     jobs: Mutex<Vec<tokio::task::JoinHandle<()>>>,
@@ -188,6 +194,7 @@ impl Dialogue {
                 Duration::from_millis(config.timeout_ms),
             )?,
             audio: audio::Audio::new()?,
+            haiku_routes: haiku_runtime::Routes::new(&config)?,
             config,
             data: Mutex::new(Data::default()),
             serial: Semaphore::new(1),
@@ -210,6 +217,7 @@ impl Dialogue {
                 mode: crate::combat::model::Mode::Normal,
                 sequences: SequenceLedger::default(),
                 history: history::History::default(),
+                haiku: haiku_runtime::State::default(),
                 combat_digest: VecDeque::new(),
                 epoch: 0,
                 current_turn: String::new(),
@@ -235,6 +243,7 @@ impl Dialogue {
     }
     pub fn close(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
+        Self::cancel_haiku(&mut d, session_id, "session_closed");
         Self::cancel_chat(&mut d, session_id, "session_closed");
         Self::cancel_warning(&mut d, session_id, "session_closed");
         Self::cancel_assist(&mut d, session_id);
@@ -308,7 +317,11 @@ impl Dialogue {
                             .is_some_and(|a| a.iter().any(environment_runtime::dark_audio)),
                 );
             }
+            if recent && warnings::interruption_reason(&event).is_some() {
+                Self::cancel_haiku(&mut d, session_id, "current_threat");
+            }
             if recent && !text.trim().is_empty() {
+                Self::cancel_haiku(&mut d, session_id, "new_player_input");
                 Self::cancel_assist(&mut d, session_id);
                 Self::cancel_light(&mut d, session_id);
                 let s = d.sessions.get_mut(session_id).unwrap();
@@ -367,6 +380,7 @@ impl Dialogue {
                 s.danger.finish_frame(s.mode);
             }
             self.start_pending(&mut d, &mut jobs, session_id);
+            self.tick_workshop(&mut d, session_id);
             d.revision += 1;
         }
         if let Some(feedback) = results.feedback {
@@ -374,6 +388,13 @@ impl Dialogue {
         }
         drop(d);
         drop(jobs);
+        if !duplicate
+            && recent
+            && event.event.name == EventName::StatusSnapshot
+            && text.trim().is_empty()
+        {
+            self.try_start_haiku(session_id, false);
+        }
         let input = if input_handled {
             json!({"accepted":true,"reason":"combat_input"})
         } else if !duplicate && !text.trim().is_empty() {
@@ -464,6 +485,7 @@ impl Dialogue {
         if expected_generation.is_none() {
             s.input_generation = s.input_generation.wrapping_add(1);
         }
+        Self::cancel_haiku(&mut d, &session_id, "new_player_input");
         Self::cancel_assist(&mut d, &session_id);
         Self::cancel_light(&mut d, &session_id);
         let now = self.clock.elapsed().as_millis() as u64;
@@ -537,6 +559,11 @@ impl Dialogue {
             }
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
+        self.tick_workshop(&mut d, &session_id);
+        if let Some(result) = self.workshop_input(&mut d, &mut jobs, &session_id, text) {
+            return result;
+        }
+        let s = d.sessions.get_mut(&session_id).unwrap();
         let active_turn = s.current_turn.clone();
         // 同じ進行中入力の二重配送を、割り込みやLLM再呼出しにしない。
         if let Some(last) = d
@@ -598,6 +625,7 @@ impl Dialogue {
     }
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
+        Self::cancel_haiku(&mut d, session_id, "manual_interrupt");
         Self::cancel_chat(&mut d, session_id, "manual_interrupt");
         Self::cancel_warning(&mut d, session_id, "manual_interrupt");
         Self::cancel_assist(&mut d, session_id);
@@ -637,6 +665,7 @@ impl Dialogue {
         if current {
             let s = d.sessions.get_mut(sid).unwrap();
             s.status = status.into();
+            s.haiku.last_activity = Instant::now();
             if matches!(
                 status,
                 "completed" | "cancelled" | "failed" | "unsupported" | "quiet"
@@ -652,6 +681,18 @@ impl Dialogue {
                 if status == "completed" {
                     s.history
                         .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
+                    if let Some(pair) = s
+                        .history
+                        .completed_pairs()
+                        .into_iter()
+                        .find(|p| p["turn_id"] == turn)
+                        && !s.haiku.material_turns.iter().any(|p| p["turn_id"] == turn)
+                    {
+                        if s.haiku.material_turns.len() == 3 {
+                            s.haiku.material_turns.pop_front();
+                        }
+                        s.haiku.material_turns.push_back(pair);
+                    }
                 }
             }
         }
@@ -690,6 +731,7 @@ impl Dialogue {
                 }
             }
         });
+        let mut completed = false;
         let result = bridge::render(&self.config, &self.llm, input, &mut cancel).await;
         match result {
             Ok(mut result) => {
@@ -728,7 +770,8 @@ impl Dialogue {
                             }
                         }
                     };
-                    self.update(&sid, &turn, epoch, status, Some(&result));
+                    completed = self.update(&sid, &turn, epoch, status, Some(&result))
+                        && status == "completed";
                 }
             }
             Err(error) => {
@@ -748,6 +791,9 @@ impl Dialogue {
         monitor.abort();
         let _ = monitor.await;
         drop(permit);
+        if completed {
+            self.try_start_haiku(&sid, true);
+        }
         tracing::info!(
             event = "dialogue_finished",
             session_id = sid,
@@ -767,6 +813,7 @@ impl Dialogue {
             d.stopped = true;
             let ids = d.sessions.keys().cloned().collect::<Vec<_>>();
             for sid in ids {
+                Self::cancel_haiku(&mut d, &sid, "server_shutdown");
                 Self::cancel_chat(&mut d, &sid, "server_shutdown");
                 Self::cancel_warning(&mut d, &sid, "server_shutdown");
                 Self::cancel_assist(&mut d, &sid);

@@ -146,7 +146,7 @@ pub(super) fn focus(
             settings.ms("conversation_active_ttl_ms"),
         );
     AmbientFocus {
-        foreground: casual,
+        foreground: casual || s.haiku.foreground(),
         casual_foreground: casual,
         last_player_input_at: s.last_player_input,
         player_priority: s.cancel.is_some() || s.assist_pending.is_some(),
@@ -253,6 +253,7 @@ impl Dialogue {
                 };
                 d.sessions.get_mut(sid).unwrap().deferred_input = Some(input);
             }
+            Self::cancel_haiku(d, sid, "urgent_environment");
             Self::cancel_chat(d, sid, "urgent_environment");
             let combat = d.sessions[sid]
                 .warning
@@ -264,7 +265,12 @@ impl Dialogue {
         }
         let s = d.sessions.get_mut(sid).unwrap();
         // 不急の環境音声は待ち列を奪わない。待機させるのは現在性を再照合できるurgentだけ。
-        if !urgent && (s.cancel.is_some() || s.warning.is_some() || s.pending_warning.is_some()) {
+        if !urgent
+            && (s.haiku.foreground()
+                || s.cancel.is_some()
+                || s.warning.is_some()
+                || s.pending_warning.is_some())
+        {
             return;
         }
         s.pending_warning = Some(actions);
@@ -313,7 +319,8 @@ impl Dialogue {
             return;
         }
         let s = d.sessions.get_mut(sid).unwrap();
-        let busy = s.cancel.is_some()
+        let busy = s.haiku.foreground()
+            || s.cancel.is_some()
             || s.warning.is_some()
             || s.pending_warning.is_some()
             || s.assist_pending.is_some()
@@ -407,7 +414,8 @@ impl Dialogue {
             return;
         };
         let focus = focus(s, now, &self.config.combat);
-        if s.cancel.is_some()
+        if s.haiku.foreground()
+            || s.cancel.is_some()
             || s.warning.is_some()
             || s.pending_warning.is_some()
             || s.assist_pending.is_some()

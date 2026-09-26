@@ -30,6 +30,26 @@ impl History {
                 .retain(|r| !(r["role"] == "user" && r["turn_id"] == turn));
         }
     }
+    /// 実再生完了に対応するuser/assistantの対だけ。未回答・取消入力は除く。
+    pub fn completed_pairs(&self) -> Vec<Value> {
+        let mut pairs: Vec<Value> = self
+            .rows
+            .iter()
+            .filter(|r| r["role"] == "user")
+            .filter_map(|r| {
+                let id = r["turn_id"].as_str()?;
+                let reply = self
+                    .rows
+                    .iter()
+                    .find(|p| p["turn_id"] == format!("{id}:reply"))?;
+                Some(json!({"turn_id":id,"player_text":r["text"],"dogido_text":reply["text"]}))
+            })
+            .collect();
+        if pairs.len() > 3 {
+            pairs.drain(..pairs.len() - 3);
+        }
+        pairs
+    }
     pub fn rows(&self) -> Vec<Value> {
         self.rows.iter().cloned().collect()
     }

@@ -58,7 +58,22 @@ def main():
         return
     base = settings.llm_chat_base_url or settings.llm_base_url or "http://127.0.0.1:8080/v1"
     model = settings.llm_chat_model or settings.llm_model or "default_model"
-    for url in (base, settings.voicevox_url):
+    haiku_base = settings.llm_haiku_base_url or settings.llm_base_url or base
+    haiku_model = settings.llm_haiku_model or settings.llm_model or model
+    haiku_settings = {
+        "llm_enabled": settings.llm_enabled, "interval_ms": settings.haiku_interval_ms,
+        "quiet_time_ms": settings.haiku_quiet_time_ms,
+        "structured_max_tokens": settings.haiku_structured_max_tokens,
+        "grounding_max_tokens": settings.haiku_grounding_max_tokens,
+        "generation_strategy": settings.haiku_generation_strategy,
+        "max_regeneration_rounds": settings.haiku_max_regeneration_rounds,
+        "base_url": haiku_base, "model": haiku_model,
+        "max_tokens": settings.llm_haiku_max_tokens or settings.llm_max_tokens,
+        "timeout_ms": int(1000 * (settings.llm_haiku_timeout_sec or settings.llm_timeout_sec)),
+        "memory_enabled": settings.memory_enabled,
+        "memory_dir": str(ROOT / ".dogido_memory/rust-migration"),
+    }
+    for url in (base, haiku_base, settings.voicevox_url):
         if urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("この起動ファイルは既存のlocalhostモデル・VOICEVOX専用です。")
     if settings.voicevox_output_sampling_rate is not None:
@@ -71,25 +86,29 @@ def main():
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
     print("会話材料・発話検査はPython補助を利用。戦闘・環境反応の判断、剣への持ち替え、音声配送はRustで処理します。", flush=True)
-    print("川柳・共同編集・長期記憶は後続の移行段階です。", flush=True)
+    print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
+    print("情景発話・発句・保存・掛け軸に対応。句の共同編集と過去の句の想起は次の移行段階です。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
         from dogido_server.state_machine import DogidoStateMachine
         from dialogue_helper import BridgeLLM
+        from haiku_preparation import HaikuPreparation
         print("Python補助の依存を確認しました。モデル生成・録音・サーバー起動は行っていません。")
         return
     binary = ROOT / "dogido-rust/target/release/dogido-rust"
     env = dict(os.environ)
     # 認証値は引数や端末表示へ出さない。
     for name, value in {"DOGIDO_AUTH_TOKEN": settings.auth_token,
-                        "DOGIDO_LLM_API_KEY": settings.llm_chat_api_key or settings.llm_api_key}.items():
+                        "DOGIDO_LLM_API_KEY": settings.llm_chat_api_key or settings.llm_api_key,
+                        "DOGIDO_LLM_HAIKU_API_KEY": settings.llm_haiku_api_key or settings.llm_api_key}.items():
         if value: env[name] = value
         else: env.pop(name, None)
     command = [str(binary), "serve-dialogue", "--listen", "127.0.0.1:5056", "--python", sys.executable,
         "--model", model, "--base-url", base, "--voicevox-url", settings.voicevox_url,
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
         "--combat-settings", json.dumps(combat_settings),
+        "--haiku-settings", json.dumps(haiku_settings),
         "--warning-settings", json.dumps({
             **{key: getattr(settings, key) for key in (
                 "panic_distance", "rear_warning_distance", "recent_damage_window_ms",

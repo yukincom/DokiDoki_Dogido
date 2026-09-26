@@ -82,7 +82,8 @@ def dependencies():
             status, mime = 200, "application/json"
             if self.path == "/v1/chat/completions":
                 time.sleep(controls["delay"])
-                structured = controls.get("structured", {}).get(incoming["max_tokens"])
+                structured = (controls["structured_handler"](incoming) if "structured_handler" in controls
+                              else controls.get("structured", {}).get(incoming["max_tokens"]))
                 if structured is not None:
                     text = json.dumps(structured, ensure_ascii=False)
                 elif incoming["max_tokens"] == 640:
@@ -131,10 +132,11 @@ def dependencies():
 
 
 @contextmanager
-def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None, combat_settings=None):
+def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None, combat_settings=None, haiku_settings=None):
     log_path = directory / "runtime.log"
     env = dict(os.environ)
     env.pop("DOGIDO_AUTH_TOKEN", None); env.pop("DOGIDO_LLM_API_KEY", None)
+    env.pop("DOGIDO_LLM_HAIKU_API_KEY", None)
     if player is None:
         player = directory / "player"
         player.write_text(f"#!{sys.executable}\nimport time,sys\nfrom pathlib import Path\np=Path(__file__).with_name('player_mode')\nmode=p.read_text() if p.exists() else 'ok'\ntime.sleep(4 if mode=='slow' else .15)\nsys.exit(1 if mode=='fail' else 0)\n")
@@ -144,7 +146,8 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             "--base-url", dependency + "/v1", "--voicevox-url", "http://127.0.0.1:50021" if live else dependency,
             "--audio-player", str(player), "--audio-dir", str(directory / "audio"),
             "--warning-settings", json.dumps(warning_settings or {}),
-            "--combat-settings", json.dumps(combat_settings or {})],
+            "--combat-settings", json.dumps(combat_settings or {}),
+            "--haiku-settings", json.dumps(haiku_settings or {})],
             stdout=subprocess.PIPE, stderr=log, text=True, env=env)
         try:
             with selectors.DefaultSelector() as selector:
@@ -168,7 +171,7 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             logs = log_path.read_text()
             assert "dialogue_stopped" in logs
             # 起動したhelperとplayerの実PIDが終了していることをOSへ確認。
-            pids = set(re.findall(r'event="(?:helper_started|audio_started)" pid=Some\((\d+)\)', logs))
+            pids = set(re.findall(r'event="(?:helper_started|haiku_helper_started|audio_started)" pid=Some\((\d+)\)', logs))
             assert pids, logs
             for pid in pids:
                 try: os.kill(int(pid), 0)

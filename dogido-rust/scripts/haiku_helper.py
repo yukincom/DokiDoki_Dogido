@@ -15,7 +15,7 @@ from dogido_server.llm.types import StructuredGenerationRequest
 from dogido_server.tts_reading import hiraganize_japanese_text
 from haiku_grounding_prompt import build_haiku_line_grounding_messages
 
-KINDS = {"haiku_draft", "haiku_line_grounding", "haiku_line_regeneration"}
+KINDS = {"haiku_irony", "haiku_scene", "haiku_draft", "haiku_line_grounding", "haiku_line_regeneration"}
 
 
 def signature(text):
@@ -56,12 +56,15 @@ def handle(frame):
 
 
 def main():
+    from haiku_preparation import HaikuPreparation
+    preparation = HaikuPreparation()
     # 一句の間だけ再利用。stdin EOFで終了し、子プロセスは生成しない。
     for line in sys.stdin:
         try:
             if len(line.encode("utf-8")) > 1_000_000:
                 raise ValueError("helper frame too large")
-            output = handle(json.loads(line))
+            frame = json.loads(line)
+            output = preparation.handle(frame) if frame.get("op", "").startswith("haiku_") else handle(frame)
         except Exception as exc:
             print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False), flush=True)
             return 1

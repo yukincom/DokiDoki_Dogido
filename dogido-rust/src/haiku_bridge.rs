@@ -181,7 +181,7 @@ impl Backend for LiveBackend<'_> {
     async fn generate(&mut self, request: StructuredRequest) -> Result<Value> {
         self.requests.push(serde_json::to_value(&request)?);
         let route = match (request.kind.as_str(), request.route.as_str()) {
-            ("haiku_line_grounding", "chat") => self.chat,
+            ("haiku_irony" | "haiku_scene" | "haiku_line_grounding", "chat") => self.chat,
             ("haiku_draft" | "haiku_line_regeneration", "haiku") => self.haiku,
             _ => anyhow::bail!("unexpected haiku generation route"),
         };
