@@ -13,13 +13,15 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision, _explicit_workshop_line_indices,
-    is_meaning_acknowledgement, close_confirmation_decision, combat_resume_confirmation_decision)
+    is_meaning_acknowledgement, close_confirmation_decision, combat_resume_confirmation_decision,
+    parse_player_line_replacement, mentioned_workshop_line_fragment)
 from dogido_server.haiku.workshop_agent import (build_workshop_agent_details, finalize_workshop_agent_step,
                                                _state_change_evidence_is_safe)
 from dogido_server.haiku.workshop_context import workshop_context_block, workshop_context_details
 from dogido_server.haiku.source_atoms import source_atoms_from_materials, line_source_ids_from_materials
 from haiku_helper import handle as haiku_handle
 from dogido_server.llm.structured_contracts import validate_structured_payload
+from dogido_server.llm.character_mode import WORKSHOP_IDENTITY_PROMPT
 from dogido_server.memory_types import HaikuLine
 from dogido_server.tts_reading import prepare_text_for_tts
 
@@ -57,6 +59,34 @@ def explicit_repair(text, evidence):
     return bool(re.search(r"直して|直そう|直し(?:て|たい|案)|修正(?:して|しよう|案)|書き直|言い換え|別の(?:表現|言い方)|変えて|改稿", evidence))
 
 
+def fixed_fragment_edit(frame, details):
+    """旧版の『句本文を読んで指定』の確定経路。保存・採用は行わない。"""
+    text = frame["text"]
+    if details["phase"] != "decide" or "stage_player_edit" not in details["allowed_actions"]:
+        return None
+    parsed = parse_player_line_replacement(text)
+    replacement = parsed.replacement
+    if parsed.status != "accepted" or replacement is None or not explicit_player_edit(text, text):
+        return None
+    if not replacement.text or replacement.text not in text:
+        return None
+    workshop = snapshot_for(frame)
+    fragment = mentioned_workshop_line_fragment(workshop, text)
+    if fragment is None:
+        return None
+    # 一意な現在句と元発話の置換語が両方ある場合だけ。行呼称との衝突も旧検査に通す。
+    revision = build_player_line_revision(workshop, PlayerLineReplacement(
+        text=replacement.text, explicit_line_index=replacement.explicit_line_index,
+        target_fragment=fragment))
+    if revision.text is None:
+        return None
+    return {"action": "stage_player_edit", "purpose": "improve_wording", "confidence": 1.0,
+        "evidence": text, "speech": "", "checks": [],
+        "line_reference": INACTIVE_FIELDS["line_reference"],
+        "line_proposal": {"found": True, "target_fragment": fragment,
+            "replacement_text": replacement.text, "evidence": text, "confidence": 1.0}}
+
+
 def consultation_messages(details):
     """相談に使わない編集用空欄を生成させない。文脈と既存の根拠検証は維持する。"""
     editing = "stage_player_edit" in details["allowed_actions"]
@@ -83,6 +113,10 @@ def consultation_messages(details):
             "このactionだけline_referenceとline_proposalを追加する。\n"
             'line_reference: {"found":true,"concept_id":"line_1","evidence":"上五","confidence":0.95}。'
             '概念はline_1=上五、line_2=中七、line_3=下五。行が不明ならfound:false,concept_id:"unknown"。\n'
+            '専門的な行名を要求しない。「最初」「真ん中」「最後」や句本文を読む指定も同じ対象へ対応させる。'
+            'target_fragmentは現在の編集対象三行からそのまま抜く。置換語を指定する提案はstage_player_edit、'
+            '置換語をドギドに考えてほしい依頼だけpropose_revision。対象や聞き取れた語が曖昧なら、'
+            'その句本文を引用して一つだけ確認し、同じ一般的な質問を繰り返さない。\n'
             'line_proposal: {"found":true,"target_fragment":"","replacement_text":"発話にある置換語",'
             '"evidence":"置換依頼の連続部分","confidence":0.95}。行中の語で対象を指定されたらtarget_fragmentに抜く。\n'
         )
@@ -137,7 +171,9 @@ def consultation_messages(details):
         '例: {"action":"ask","purpose":"continue_discussion","confidence":0.8,'
         '"evidence":"発話の連続部分","speech":"短い質問","checks":[]}。説明文・思考文は禁止。'
     )
-    return [{"role": "system", "content": "あなたは川柳の共同編集者ドギド。今は一句について許可された一手だけを選ぶ。指定JSONだけを返す。"},
+    return [{"role": "system", "content": "あなたは川柳の共同編集者ドギド。" + WORKSHOP_IDENTITY_PROMPT
+            + "speechは関西弁のやさしい相棒の話し声。一人称はオレ。関西弁は語尾中心で、単語は自然な日本語。"
+            "今は一句について許可された一手だけを選ぶ。指定JSONだけを返す。"},
             {"role": "user", "content": prompt}]
 
 
@@ -217,6 +253,9 @@ def handle(frame):
     details = details_for(frame)
     if frame["op"] == "prepare":
         messages = consultation_messages(details)
+        fixed_payload = fixed_fragment_edit(frame, details)
+        if fixed_payload is not None:
+            return {"messages": messages, "fixed_payload": fixed_payload}
         retry = frame.get("retry")
         if retry:
             messages.append({"role": "user", "content":

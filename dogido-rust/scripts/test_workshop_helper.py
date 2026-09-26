@@ -90,6 +90,39 @@ def test_player_edit_dictionary_surface_and_reading_are_bound_together():
     assert result["lines"][0]["surface_text"]=="桜色" and result["lines"][0]["reading_text"]=="さくらいろ"
     assert result["lines"][0]["source_atom_ids"]==() and result["lines"][0]["provenance"]=="player_explicit"
 
+
+@pytest.mark.parametrize("text", [
+    "さくらのはをさくらいろに変えて", "桜の葉を桜色に変えて",
+    "さくらのはよりさくらいろの方がいい",
+])
+def test_original_line_spoken_without_expert_name_uses_legacy_code_path(text):
+    f = frame(text); f["allowed_actions"].append("stage_player_edit"); f["op"] = "prepare"
+    prepared = handle(f)
+    assert prepared["fixed_payload"]["line_proposal"]["target_fragment"] == "さくらのは"
+    f["op"] = "validate"; f["payload"] = prepared["fixed_payload"]
+    step = handle(f)["step"]
+    assert step and step["action"] == "stage_player_edit"
+    result = handle({"op": "player_edit", "workshop": f["workshop"], "proposal": step["analysis"]["line_proposal"]})
+    assert result["target_line_index"] == 0 and result["lines"][0]["reading_text"] == "さくらいろ"
+
+
+@pytest.mark.parametrize("text", [
+    "さくらのはをさくらいろに変えないで", "『さくらのはをさくらいろに変えて』と聞いた",
+    "さくらのはをさくらいろに変えて？", "さくらのはをさくらいろにしたらどうなる",
+    "下五のさくらのはをさくらいろに変えて", "さくらのはとあさのいろをさくらいろに変えて",
+    "さくらのはをさくらに変えて", "さくらのはを", "じゃあそれで変更しましょう",
+])
+def test_fragment_recovery_does_not_invent_missing_words_or_bypass_checks(text):
+    f = frame(text); f["allowed_actions"].append("stage_player_edit"); f["op"] = "prepare"
+    assert "fixed_payload" not in handle(f)
+
+
+def test_edit_prompt_keeps_character_and_nontechnical_line_references():
+    f = frame(); f["op"] = "prepare"; f["allowed_actions"].append("stage_player_edit")
+    messages = handle(f)["messages"]
+    assert "一人称はオレ" in messages[0]["content"] and "素直な共同編集者" in messages[0]["content"]
+    assert "専門的な行名を要求しない" in messages[1]["content"] and "句本文を読む指定" in messages[1]["content"]
+
 @pytest.mark.parametrize("text,ok", [
     ("上五のさくらのはを別の表現に直して", True),
     ("上五は直さないで", False), ("上五を直したらどうなる？", False),

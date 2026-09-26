@@ -93,40 +93,46 @@ impl Dialogue {
                 for attempt in 0..2 {
                     frame["op"] = "prepare".into();
                     let prepared = helper.exchange(frame.clone()).await?;
-                    let request = GenerationRequest {
-                        schema_version: 1,
-                        kind: "haiku_workshop_agent_step".into(),
-                        model: self.config.model.clone(),
-                        messages: serde_json::from_value(prepared["messages"].clone())?,
-                        temperature: 0.25,
-                        max_tokens: 420,
-                        enable_thinking: false,
-                    };
-                    let report = match self.llm.generate(&request).await {
-                        Ok(report) => report,
-                        Err(error) => {
-                            reports.push(json!({"kind":request.kind,"error":error.to_string()}));
-                            reason = "generation_error".into();
-                            break;
-                        }
-                    };
-                    tracing::info!(kind="haiku_workshop_agent_step",phase,attempt,
+                    let payload = if let Some(fixed) = prepared.get("fixed_payload") {
+                        fixed.clone()
+                    } else {
+                        let request = GenerationRequest {
+                            schema_version: 1,
+                            kind: "haiku_workshop_agent_step".into(),
+                            model: self.config.model.clone(),
+                            messages: serde_json::from_value(prepared["messages"].clone())?,
+                            temperature: 0.25,
+                            max_tokens: 420,
+                            enable_thinking: false,
+                        };
+                        let report = match self.llm.generate(&request).await {
+                            Ok(report) => report,
+                            Err(error) => {
+                                reports
+                                    .push(json!({"kind":request.kind,"error":error.to_string()}));
+                                reason = "generation_error".into();
+                                break;
+                            }
+                        };
+                        tracing::info!(kind="haiku_workshop_agent_step",phase,attempt,
                         elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,
                         finish_reason=?report.generated.finish_reason);
-                    let truncated = matches!(
-                        report.generated.finish_reason.as_deref(),
-                        Some("length" | "max_tokens" | "MAX_TOKENS")
-                    );
-                    let payload = crate::planner::extract_object(&report.generated.text);
-                    reports.push(serde_json::to_value(report)?);
-                    let Some(payload) = payload.filter(|_| !truncated) else {
-                        reason = if truncated {
-                            "output_truncated"
-                        } else {
-                            "invalid_json"
-                        }
-                        .into();
-                        break;
+                        let truncated = matches!(
+                            report.generated.finish_reason.as_deref(),
+                            Some("length" | "max_tokens" | "MAX_TOKENS")
+                        );
+                        let payload = crate::planner::extract_object(&report.generated.text);
+                        reports.push(serde_json::to_value(report)?);
+                        let Some(payload) = payload.filter(|_| !truncated) else {
+                            reason = if truncated {
+                                "output_truncated"
+                            } else {
+                                "invalid_json"
+                            }
+                            .into();
+                            break;
+                        };
+                        payload
                     };
                     frame["op"] = "validate".into();
                     frame["payload"] = payload.clone();

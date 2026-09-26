@@ -186,6 +186,21 @@ def main():
         assert r.get("workshop_outcome")=="pending_save_failed" and hud(sid)["pending_lines"] and not revisions(folder,sid),r
         passed.append("disabled_memory_never_claims_saved_or_discards_pending")
 
+    with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
+        calls=install(control,lambda text,prompt,n:step(text,"ask",speech="どの行のことやろ？"))
+        sid=ready(base,send,rows); original=stored(sid)
+        r=finish(base,send,sid,"桜の葉を桜色に変えて")
+        assert r.get("workshop_outcome")=="player_edit_staged" and not r["llm_reports"] and not calls,r
+        assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"]==["桜色",*LINES[1:]]
+        assert not revisions(folder,sid) and stored(sid)==original
+        r=finish(base,send,sid,"さくらいろをさくらさくに変えて")
+        assert r.get("workshop_outcome")=="player_edit_staged" and not r["llm_reports"] and not calls,r
+        assert hud(sid)["pending_lines"]==["さくらさく",*LINES[1:]] and not revisions(folder,sid)
+        r=finish(base,send,sid,"採用して")
+        assert r.get("workshop_outcome")=="pending_saved" and len(revisions(folder,sid))==1,r
+        assert hud(sid)["canonical_lines"]==["さくらさく",*LINES[1:]] and stored(sid)==original
+        passed.append("spoken_current_line_resolves_kanji_then_pending_line_without_model_or_early_save")
+
     print(json.dumps({"passed":passed,"count":len(passed)},ensure_ascii=False,indent=2))
 
 
