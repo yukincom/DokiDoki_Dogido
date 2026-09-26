@@ -89,6 +89,13 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         ],
         "failure_reasons": {},
     }
+    revision_block = ""
+    if isinstance(details.get("revision_edits"), list):
+        revision_block = ("【今回の修正差分】\n" + json.dumps(details["revision_edits"], ensure_ascii=False)
+            + "\n修正前後を比べる。修正案だから合格に寄せない。"
+            "末尾に助詞・接尾語を足しただけで不自然な反復や未完の文になった場合もjapanese_fail。"
+            "かなの別の区切り方を考えれば無理に読める、という救済はしない。"
+            "三行を実際に続けて読んだ修飾関係も確認する。\n")
     user_prompt = (
         "川柳の各行を、原文材料と一行ずつ照合する。\n"
         "最初に verdicts を書き、依頼された行番号ごとの合否を先に確定する。"
@@ -118,7 +125,7 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         "似た材料が複数あるときは、行の修飾語と【発話済みの見どころ】まで比べ、"
         "最も具体的に意味が合う出典を選ぶ。たとえば色や状態を持つ対象を、"
         "単に同じ種類の一般的な物へ寄せない。逐語一致より意味の対応を優先する。\n"
-        f"【判定する行】\n{line_block}\n\n"
+        f"{revision_block}【判定する行】\n{line_block}\n\n"
         f"【原文材料】\n{atoms}\n\n"
         f"【発話済みの見どころ】\n{_grounding_scene_text(details)}\n"
         f"{workshop_context_block(details)}"

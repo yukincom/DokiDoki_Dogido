@@ -12,10 +12,13 @@ impl Dialogue {
         result: &mut Value,
     ) -> Result<()> {
         let action = result["workshop_action"].as_str().unwrap_or("").to_owned();
-        if !matches!(
-            action.as_str(),
-            "stage_player_edit" | "accept_pending" | "reject_pending"
-        ) {
+        let generated_proposal = result["workshop_proposed"]["generated_basis"].is_object();
+        if !generated_proposal
+            && !matches!(
+                action.as_str(),
+                "stage_player_edit" | "accept_pending" | "reject_pending"
+            )
+        {
             return Ok(());
         }
         let close_after = result["workshop_close_after"] == true;
@@ -35,21 +38,30 @@ impl Dialogue {
                     && result["workshop_version"] == w.version,
                 "stale_workshop"
             );
-            if action == "stage_player_edit" {
+            if action == "stage_player_edit" || generated_proposal {
                 if let Some(proposed) = result.get("workshop_proposed").filter(|p| !p.is_null()) {
                     let proposed: Pending = serde_json::from_value(proposed.clone())?;
                     proposed.validate(&w.current_lines)?;
                     // Recheck the working version as well as the canonical base.
                     let working = w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines);
-                    Pending::stage(
-                        &w.current_lines,
-                        working,
-                        proposed.lines.clone(),
-                        proposed.selected_line,
-                    )?;
+                    if generated_proposal {
+                        ensure!(w.pending.is_none(), "pending_exists");
+                    } else {
+                        Pending::stage(
+                            &w.current_lines,
+                            working,
+                            proposed.lines.clone(),
+                            proposed.selected_line,
+                        )?;
+                    }
                     w.pending = Some(proposed);
                     w.version += 1;
-                    result["workshop_outcome"] = "player_edit_staged".into();
+                    result["workshop_outcome"] = if generated_proposal {
+                        "revision_proposed"
+                    } else {
+                        "player_edit_staged"
+                    }
+                    .into();
                 } else {
                     result["workshop_outcome"] = "player_edit_rejected".into();
                 }

@@ -2,6 +2,7 @@
 //! regeneration belong to Rust. Backend owns only generation and lexical transforms.
 mod generation;
 pub mod meter;
+pub mod revision;
 #[cfg(test)]
 mod tests;
 pub use generation::generate;

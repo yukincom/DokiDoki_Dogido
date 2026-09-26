@@ -53,8 +53,8 @@ impl Default for Settings {
     }
 }
 pub(super) struct Routes {
-    chat: Route,
-    haiku: Route,
+    pub(super) chat: Route,
+    pub(super) haiku: Route,
 }
 impl Routes {
     pub fn new(c: &DialogueConfig) -> Result<Self> {

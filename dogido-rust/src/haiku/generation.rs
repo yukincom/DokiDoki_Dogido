@@ -5,15 +5,15 @@ use super::{
 use anyhow::Result;
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-type Indices = BTreeSet<usize>;
-type Failures = BTreeMap<usize, Vec<String>>;
-type Assessments = BTreeMap<usize, Assessment>;
+pub(super) type Indices = BTreeSet<usize>;
+pub(super) type Failures = BTreeMap<usize, Vec<String>>;
+pub(super) type Assessments = BTreeMap<usize, Assessment>;
 #[derive(Clone, Debug)]
-struct Assessment {
-    atom_ids: Vec<String>,
-    meaning_retained: bool,
-    natural_japanese: bool,
-    reason: String,
+pub(super) struct Assessment {
+    pub(super) atom_ids: Vec<String>,
+    pub(super) meaning_retained: bool,
+    pub(super) natural_japanese: bool,
+    pub(super) reason: String,
 }
 
 /// Pure bounded orchestration: no prompt/lexicon I/O, model calls or persistence here.
@@ -204,7 +204,7 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
 }
 
 /// Match the Python frontend's error fallback; consumer never accepts fallback as a draft/evaluation.
-async fn request<B: Backend>(backend: &mut B, request: StructuredRequest) -> Value {
+pub(super) async fn request<B: Backend>(backend: &mut B, request: StructuredRequest) -> Value {
     let fallback = request.fallback_value.clone();
     match backend.generate(request).await {
         Ok(value) => value,
@@ -218,7 +218,7 @@ async fn request<B: Backend>(backend: &mut B, request: StructuredRequest) -> Val
         }
     }
 }
-async fn transform<B: Backend>(
+pub(super) async fn transform<B: Backend>(
     backend: &mut B,
     text: String,
     line_index: usize,
@@ -246,7 +246,7 @@ fn draft_lines(payload: &Value) -> Option<Vec<String>> {
     }
     rows.iter().map(|v| clean_line(v.as_str()?)).collect()
 }
-async fn assess_lines<B: Backend>(
+pub(super) async fn assess_lines<B: Backend>(
     backend: &mut B,
     details: &Map<String, Value>,
     lines: &[LineForm],
@@ -440,7 +440,7 @@ fn parse_assessments(
     out
 }
 #[allow(clippy::too_many_arguments)]
-async fn accept_lines<B: Backend>(
+pub(super) async fn accept_lines<B: Backend>(
     backend: &mut B,
     lines: &mut [LineForm],
     indices: &Indices,
@@ -609,7 +609,10 @@ fn atom_reservations(atom: &SourceAtom) -> BTreeSet<String> {
         atom.basis_atom_ids.iter().cloned().collect()
     }
 }
-fn reservations(ids: &[String], atoms: &BTreeMap<String, SourceAtom>) -> BTreeSet<String> {
+pub(super) fn reservations(
+    ids: &[String],
+    atoms: &BTreeMap<String, SourceAtom>,
+) -> BTreeSet<String> {
     ids.iter()
         .filter_map(|id| atoms.get(id))
         .flat_map(atom_reservations)
@@ -621,14 +624,14 @@ fn used_claims(accepted: &Assessments, atoms: &BTreeMap<String, SourceAtom>) -> 
         .flat_map(|a| reservations(&a.atom_ids, atoms))
         .collect()
 }
-fn eligible_atoms(atoms: &[SourceAtom], used: &BTreeSet<String>) -> Vec<SourceAtom> {
+pub(super) fn eligible_atoms(atoms: &[SourceAtom], used: &BTreeSet<String>) -> Vec<SourceAtom> {
     atoms
         .iter()
         .filter(|a| used.is_disjoint(&atom_reservations(a)))
         .cloned()
         .collect()
 }
-fn clean_line(text: &str) -> Option<String> {
+pub(super) fn clean_line(text: &str) -> Option<String> {
     let text = text
         .trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
         .trim_matches(['「', '」', '"', '\'', ' ']);
@@ -644,7 +647,7 @@ pub(super) fn truthy(value: &Value) -> bool {
         Value::Object(m) => !m.is_empty(),
     }
 }
-fn structured_accepted(payload: &Value) -> bool {
+pub(super) fn structured_accepted(payload: &Value) -> bool {
     payload.is_object()
         && payload
             .get("__dogido_status")

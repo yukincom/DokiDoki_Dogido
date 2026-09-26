@@ -203,7 +203,7 @@ def main():
         result = wait_for(lambda: row(base, turn, {"completed"}))
         assert result["workshop_action"] == "fallback" and len(calls) == 2
         assert hud(sid)["state"] == "open" and stored(sid) == before
-        passed.append("unavailable_edit_action_cannot_change_or_save_canonical_verse")
+        passed.append("unresolved_repair_target_cannot_change_or_save_canonical_verse")
 
     with fixture(workshop_idle_ms=2500) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         entered = threading.Event(); release = threading.Event()

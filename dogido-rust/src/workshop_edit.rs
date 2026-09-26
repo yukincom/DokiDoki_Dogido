@@ -32,6 +32,8 @@ pub struct Pending {
     pub base: Vec<HaikuLine>,
     pub lines: Vec<HaikuLine>,
     pub selected_line: usize,
+    #[serde(default)]
+    pub generated_basis: Option<crate::haiku::revision::Basis>,
 }
 impl Pending {
     pub fn stage(
@@ -59,9 +61,65 @@ impl Pending {
             base: base.to_vec(),
             lines,
             selected_line: selected,
+            generated_basis: None,
         };
         pending.validate(base)?;
         Ok(pending)
+    }
+    pub fn stage_generated(
+        base: &[HaikuLine],
+        revision: crate::haiku::revision::Revision,
+        basis: crate::haiku::revision::Basis,
+    ) -> Result<Self> {
+        ensure!(
+            revision.accepted && base.len() == 3 && revision.lines.len() == 3,
+            "revision_not_validated"
+        );
+        let mut lines = base.to_vec();
+        for i in &basis.target_indices {
+            let source = revision
+                .line_sources
+                .iter()
+                .find(|s| s.line_index == *i)
+                .ok_or_else(|| anyhow::anyhow!("missing_source"))?;
+            let line = lines
+                .get_mut(*i)
+                .ok_or_else(|| anyhow::anyhow!("invalid_target"))?;
+            line.reading_text = revision.lines[*i].clone();
+            line.surface_text = line.reading_text.clone();
+            line.source_atom_ids = source.atom_ids.clone();
+            line.source_atoms = source
+                .sources
+                .iter()
+                .map(|a| {
+                    serde_json::to_value(a)
+                        .unwrap()
+                        .as_object()
+                        .unwrap()
+                        .clone()
+                })
+                .collect();
+            line.provenance = "generated_confirmed".into();
+        }
+        let p = Self {
+            id: format!("hr_{}", uuid::Uuid::new_v4().simple()),
+            base: base.to_vec(),
+            lines,
+            selected_line: *basis
+                .target_indices
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("invalid_targets"))?,
+            generated_basis: Some(basis),
+        };
+        p.validate(base)?;
+        Ok(p)
+    }
+    pub fn source(&self) -> &'static str {
+        if self.generated_basis.is_some() {
+            "generated_confirmed"
+        } else {
+            "player_line_confirmed"
+        }
     }
     pub fn validate(&self, current: &[HaikuLine]) -> Result<()> {
         ensure!(
@@ -87,24 +145,48 @@ impl Pending {
                     !new.surface_text.trim().is_empty() && !new.surface_text.contains(['\n', '\r']),
                     "invalid_surface"
                 );
-                ensure!(
-                    new.provenance == "player_explicit"
-                        && new.source_atom_ids.is_empty()
-                        && new.source_atoms.is_empty(),
-                    "invented_player_source"
-                );
-                ensure!(
-                    !new.reading_text.is_empty()
-                        && new
-                            .reading_text
-                            .chars()
-                            .all(|c| ('\u{3041}'..='\u{3096}').contains(&c) || c == 'ー'),
-                    "unresolved_reading"
-                );
-                ensure!(
-                    count_japanese_sounds(&new.reading_text) == [5, 7, 5][i],
-                    "meter_not_exact"
-                );
+                if let Some(basis) = &self.generated_basis {
+                    ensure!(
+                        basis.target_indices.contains(&i)
+                            && new.provenance == "generated_confirmed",
+                        "untargeted_line_changed"
+                    );
+                    let expected: Vec<_> = new
+                        .source_atom_ids
+                        .iter()
+                        .map(|id| {
+                            basis
+                                .source_atoms
+                                .iter()
+                                .find(|a| &a.atom_id == id)
+                                .map(|a| serde_json::to_value(a).unwrap())
+                        })
+                        .collect();
+                    ensure!(
+                        expected.iter().all(Option::is_some)
+                            && json!(new.source_atoms) == json!(expected),
+                        "source_record_mismatch"
+                    );
+                } else {
+                    ensure!(
+                        new.provenance == "player_explicit"
+                            && new.source_atom_ids.is_empty()
+                            && new.source_atoms.is_empty(),
+                        "invented_player_source"
+                    );
+                    ensure!(
+                        !new.reading_text.is_empty()
+                            && new
+                                .reading_text
+                                .chars()
+                                .all(|c| ('\u{3041}'..='\u{3096}').contains(&c) || c == 'ー'),
+                        "unresolved_reading"
+                    );
+                    ensure!(
+                        count_japanese_sounds(&new.reading_text) == [5, 7, 5][i],
+                        "meter_not_exact"
+                    );
+                }
                 ensure!(
                     !self
                         .lines
@@ -115,20 +197,44 @@ impl Pending {
                 );
             }
         }
+        if let Some(basis) = &self.generated_basis {
+            for i in &basis.target_indices {
+                ensure!(
+                    *i < 3 && current[*i].reading_text != self.lines[*i].reading_text,
+                    "target_unchanged"
+                );
+            }
+            crate::haiku::revision::validate_sources(
+                basis,
+                &self
+                    .lines
+                    .iter()
+                    .map(|l| l.reading_text.clone())
+                    .collect::<Vec<_>>(),
+                &self
+                    .lines
+                    .iter()
+                    .map(|l| l.source_atom_ids.clone())
+                    .collect::<Vec<_>>(),
+            )?;
+        }
         Ok(())
     }
     pub fn edits(&self) -> Vec<Value> {
-        self.base.iter().zip(&self.lines).enumerate().filter(|(_, (a,b))| a.reading_text!=b.reading_text).map(|(i,(a,b))| json!({
-            "line_index":i,"expected_text":a.reading_text,"replacement_text":b.reading_text,"provenance":"player_explicit"
-        })).collect()
+        self.base.iter().zip(&self.lines).enumerate().filter(|(_, (a,b))| a.reading_text!=b.reading_text).map(|(i,(a,b))| {
+            let mut edit=json!({"line_index":i,"expected_text":a.reading_text,"replacement_text":b.reading_text,"provenance":b.provenance});
+            if self.generated_basis.is_some() {edit["atom_ids"]=json!(b.source_atom_ids);}
+            edit
+        }).collect()
     }
     fn record(&self, original: &Emission, parent: Option<&str>) -> Value {
         json!({"id":self.id,"created_at":chrono::Utc::now(),"haiku_id":original.entry_id(),
-            "source":"player_line_confirmed","comment":null,
+            "source":self.source(),"comment":null,
             "original_text":surface(&original.prepared.lines),"original_reading_text":reading(&original.prepared.lines),
             "base_text":reading(&self.base),"base_surface_text":surface(&self.base),"parent_revision_id":parent,
             "revised_text":reading(&self.lines),"revised_surface_text":surface(&self.lines),"lines":self.lines,
-            "line_sources":null,"edit_contract":CONTRACT,"edits":self.edits(),
+            "line_sources":self.generated_basis.as_ref().map(|_|self.lines.iter().map(|l|json!({"line_index":l.line_index,"text":l.reading_text,"atom_ids":l.source_atom_ids,"sources":l.source_atoms})).collect::<Vec<_>>()),
+            "edit_contract":if self.generated_basis.is_some(){crate::haiku::revision::CONTRACT}else{CONTRACT},"edits":self.edits(),
             "world":{"biome":original.prepared.biome,"structure":original.prepared.structure,"time_phase":original.prepared.time_phase,"dimension":original.prepared.dimension}})
     }
 }
@@ -221,6 +327,81 @@ mod tests {
         }
         .complete(chrono::Utc::now())
         .unwrap()
+    }
+    #[test]
+    fn generated_pending_preserves_frozen_records_and_rechecks_evidence_on_adoption() {
+        use crate::haiku::{
+            LineSource, SourceAtom,
+            revision::{Basis, Revision},
+        };
+        let mut base = lines();
+        let atoms: Vec<_> = (0..3)
+            .map(|i| SourceAtom {
+                atom_id: format!("source:{i}"),
+                text: "材料".into(),
+                source_ref: "observed".into(),
+                field_path: "test".into(),
+                observation_role: "test".into(),
+                kind: "observation".into(),
+                claim_class: "factual".into(),
+                claim_scopes: vec!["observed_state".into()],
+                basis_atom_ids: vec![],
+            })
+            .collect();
+        for (i, l) in base.iter_mut().enumerate() {
+            l.source_atoms = vec![
+                serde_json::to_value(&atoms[i])
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ];
+        }
+        let changed = ["さくらいろ", "くろいおのへと", "あさひかる"];
+        let basis = Basis {
+            target_indices: std::collections::BTreeSet::from([0, 2]),
+            source_atoms: atoms.clone(),
+            details: Default::default(),
+        };
+        let revision = Revision {
+            accepted: true,
+            lines: changed.map(str::to_owned).to_vec(),
+            line_sources: (0..3)
+                .map(|i| LineSource {
+                    line_index: i,
+                    text: changed[i].into(),
+                    atom_ids: vec![atoms[i].atom_id.clone()],
+                    sources: vec![atoms[i].clone()],
+                })
+                .collect(),
+            failure_reason: None,
+            feedback: vec![],
+        };
+        let good = Pending::stage_generated(&base, revision, basis).unwrap();
+        assert_eq!(good.lines[1], base[1]);
+        assert_eq!(good.source(), "generated_confirmed");
+        assert_eq!(good.edits().len(), 2);
+        for case in 0..5 {
+            let mut bad = good.clone();
+            match case {
+                0 => bad.lines[1].surface_text = "書換え".into(),
+                1 => bad.lines[0].source_atom_ids = vec!["unknown".into()],
+                2 => bad.lines[0].source_atoms.clear(),
+                3 => bad
+                    .generated_basis
+                    .as_mut()
+                    .unwrap()
+                    .details
+                    .insert(
+                        "haiku_constraints".into(),
+                        json!({"forbidden_terms":["さくら"]}),
+                    )
+                    .map(|_| ())
+                    .unwrap_or(()),
+                _ => bad.base[0].reading_text = "別の句".into(),
+            }
+            assert!(bad.validate(&base).is_err(), "{case}");
+        }
     }
     #[test]
     fn one_then_two_edits_keep_canonical_base() {

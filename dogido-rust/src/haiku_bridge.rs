@@ -182,7 +182,9 @@ impl Backend for LiveBackend<'_> {
         self.requests.push(serde_json::to_value(&request)?);
         let route = match (request.kind.as_str(), request.route.as_str()) {
             ("haiku_irony" | "haiku_scene" | "haiku_line_grounding", "chat") => self.chat,
-            ("haiku_draft" | "haiku_line_regeneration", "haiku") => self.haiku,
+            ("haiku_draft" | "haiku_line_regeneration" | "haiku_workshop_revision", "haiku") => {
+                self.haiku
+            }
             _ => anyhow::bail!("unexpected haiku generation route"),
         };
         let messages = self.helper.prepare(&request).await?;

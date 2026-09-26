@@ -1,4 +1,4 @@
-//! Transport parsing for the five domain-validated automatic-haiku responses.
+//! Transport parsing for automatic haiku and domain-validated workshop revisions.
 //!
 //! Mirrors `DogidoLLM.generate_structured_json`, `_extract_json_object`, and
 //! `_extract_grounding_prefix`. `accepted` means an object was received, not
@@ -15,6 +15,7 @@ use serde_json::{Map, Value};
 const STATUS: &str = "__dogido_status";
 const KINDS: &[&str] = &[
     "haiku_draft",
+    "haiku_workshop_revision",
     "haiku_line_grounding",
     "haiku_line_regeneration",
     "haiku_irony",
@@ -247,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn all_five_kinds_defer_content_validation_to_the_domain() {
+    fn all_supported_kinds_defer_content_validation_to_the_domain() {
         for kind in KINDS {
             let output = parse(
                 kind,
@@ -265,12 +266,7 @@ mod tests {
     #[test]
     fn unsupported_kinds_and_non_object_fallback_are_errors() {
         let response = generated("{}", None);
-        for kind in [
-            "player_chat_plan",
-            "haiku_workshop_revision",
-            "",
-            "haiku_draft ",
-        ] {
+        for kind in ["player_chat_plan", "", "haiku_draft "] {
             assert!(parse(kind, &response, &json!({})).is_err());
         }
         for value in [Value::Null, json!([]), json!(1), json!("{}")] {

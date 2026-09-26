@@ -89,3 +89,31 @@ def test_player_edit_dictionary_surface_and_reading_are_bound_together():
     result=handle({"op":"player_edit","workshop":f["workshop"],"proposal":step["analysis"]["line_proposal"]})
     assert result["lines"][0]["surface_text"]=="桜色" and result["lines"][0]["reading_text"]=="さくらいろ"
     assert result["lines"][0]["source_atom_ids"]==() and result["lines"][0]["provenance"]=="player_explicit"
+
+@pytest.mark.parametrize("text,ok", [
+    ("上五のさくらのはを別の表現に直して", True),
+    ("上五は直さないで", False), ("上五を直したらどうなる？", False),
+    ("『上五を直して』と言っただけ", False), ("上五の意味を教えて", False),
+    ("上五を変更しないで", False), ("上五を修正するなら後で", False),
+])
+def test_generated_repair_requires_explicit_current_intent(text,ok):
+    from check_workshop_revision import proposal
+    f=frame(text);f["allowed_actions"].append("propose_revision");f["payload"]=proposal(text)
+    assert (handle(f)["step"] is not None)==ok
+
+
+def test_repair_finding_cannot_target_an_invented_fragment():
+    from check_workshop_revision import proposal
+    f=frame("上五を直して");f["allowed_actions"].append("propose_revision");f["payload"]=proposal(f["text"])
+    f["payload"]["findings"][0]["fragment"]="存在しない行"
+    result=handle(f)
+    # Legacy keeps the observation but cannot select an editable line from it.
+    assert result["step"]["analysis"]["findings"][0]["line_index"] is None
+
+
+def test_generated_repair_does_not_follow_model_to_a_different_named_line():
+    from check_workshop_revision import proposal
+    f=frame("上五を直して");f["allowed_actions"].append("propose_revision");f["payload"]=proposal(f["text"])
+    f["payload"]["findings"][0]["fragment"]="くろいおのへと"
+    result=handle(f)
+    assert result["step"] is None and result["reason"]=="repair_target_conflict"

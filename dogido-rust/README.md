@@ -188,7 +188,9 @@ python dogido-rust/scripts/check_haiku_bridge.py
 
 「上五を『さくらいろ』にして」のようなプレイヤー指定の一行編集に対応します。未採用案を掛け軸へ別表示し、他の行も続けて直せます。「採用して」で元句と修正履歴を保存して現在句へ昇格し、「却下して」で案だけを戻します。未採用案がある時の「終了」は採否を確認します。採用・却下と終了をまとめて明示することもできます。保存に失敗した場合は元句と案を残します。
 
-AIが自分で修正語を考える経路、lesson・想起、意味説明後の納得からの終了確認、戦闘後の再開意思確認は後続段階です。prompt・JSON契約と発話根拠の検査・辞書読み・既存の行制約は一時的なPython補助を残しています。未採用案、現在句との一致検査、採否、修正履歴保存はRustで処理します。
+「中七を自然な表現に直して」のような修正依頼では、ドギドが対象行の案を生成し、日本語・意味・音数・発句時のhard制約・出典の重複を検査します。最大2候補までで、同じ不合格案を再検査しません。検査の途中切れは検査だけを取り直し、判定できなければ元句を保ちます。合格案は未採用として提示し、「その案で」「採用して」で初めて保存します。AIの日本語検査は誤判定することがあり、合格は品質保証ではありません。
+
+lesson・想起、意味説明後の納得からの終了確認、戦闘後の再開意思確認は後続段階です。prompt・JSON契約と発話根拠の検査・辞書読み・既存の行制約は一時的なPython補助を残しています。未採用案、現在句との一致検査、採否、修正履歴保存はRustで処理します。
 
 相談段階の検証:
 
@@ -197,12 +199,13 @@ python dogido-rust/scripts/compare_workshop_inspection.py
 python -m pytest dogido-rust/scripts/test_workshop_helper.py -q
 python dogido-rust/scripts/check_workshop_runtime.py
 python dogido-rust/scripts/check_workshop_edits.py
+python dogido-rust/scripts/check_workshop_revision.py
 ```
 
 実モデルの相談だけを試す場合は、起動済みの接続先を明示します。観測・句・音声は模擬で、実ゲームやスピーカーは使いません。このコマンド自体はMLXを起動・停止しません。
 
 ```bash
-python dogido-rust/scripts/check_workshop_live.py --base-url http://127.0.0.1:8080/v1 --output .dogido_tmp/workshop-live.json
+python dogido-rust/scripts/check_workshop_revision_live.py --base-url http://127.0.0.1:8080/v1 --model mlx-community/Qwen3.6-35B-A3B-4bit-DWQ --output .dogido_tmp/workshop-revision-live.json
 ```
 
 ```sh

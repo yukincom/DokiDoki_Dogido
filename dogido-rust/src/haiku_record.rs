@@ -421,7 +421,7 @@ pub fn project_workshop(
         "character_state":if active.is_none() && mode=="normal" && thinking {"thinking"} else {"normal"},
         "canonical_lines":active.map(|w|w.current_lines.iter().map(|l|l.surface_text.trim()).collect::<Vec<_>>()).unwrap_or_default(),
         "pending_lines":active.and_then(|w|w.pending.as_ref()).map(|p|p.lines.iter().map(|l|l.surface_text.as_str()).collect::<Vec<_>>()).unwrap_or_default(),
-        "editing":active.is_some_and(|w|w.pending.is_some()),"selected_line":active.and_then(|w|w.pending.as_ref()).map(|p|p.selected_line),"provisional_resume":false})
+        "editing":active.is_some_and(|w|w.pending.is_some()),"selected_line":active.and_then(|w|w.pending.as_ref()).and_then(|p| if p.generated_basis.as_ref().is_some_and(|b| b.target_indices.len()!=1) {None}else{Some(p.selected_line)}),"provisional_resume":false})
 }
 
 #[cfg(test)]

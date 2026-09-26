@@ -30,6 +30,7 @@ impl Dialogue {
 
     async fn workshop_body(&self, input: &Value, helper: &mut Helper) -> Result<Value> {
         let text = input["text"].as_str().context("workshop input text")?;
+        let mut snapshot = input["workshop"].clone();
         let view = &input["workshop"];
         let current: Vec<HaikuLine> = serde_json::from_value(view["current_lines"].clone())?;
         let pending: Option<Pending> = serde_json::from_value(view["pending"].clone())?;
@@ -48,7 +49,7 @@ impl Dialogue {
         }
         if action.is_none() && pending.is_some() {
             action = match text.trim().trim_end_matches(['。', '！', '!']) {
-                "採用して" | "その案でいい" | "その案でお願い" => {
+                "採用して" | "その案で" | "その案でいい" | "その案でお願い" => {
                     Some("accept_pending".into())
                 }
                 "却下して" | "元の句に戻して" | "その案は使わない" => {
@@ -58,11 +59,11 @@ impl Dialogue {
             };
         }
         if action.is_none() {
-            // 初手 + 実検査後の一手だけ。契約再試行は各一手につき最大一回。
-            for phase in ["decide", "after_inspection"] {
-                let allowed =
-                    workshop::allowed_actions(phase == "after_inspection", pending.is_some());
-                let mut frame = json!({"workshop":view,"text":text,"phase":phase,
+            // 初手→必要時の実検査→修正検証後の返答。editorは同じturnで一度だけ。
+            let mut phase = "decide";
+            for _ in 0..3 {
+                let allowed = workshop::allowed_actions(phase, snapshot["pending"].is_object());
+                let mut frame = json!({"workshop":snapshot,"text":text,"phase":phase,
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
                 for attempt in 0..2 {
@@ -132,6 +133,7 @@ impl Dialogue {
                                 | "accept_pending"
                                 | "reject_pending"
                                 | "stage_player_edit"
+                                | "propose_revision"
                         ) {
                             let required_purpose = match a {
                                 "close_workshop" => "finish_workshop",
@@ -167,6 +169,45 @@ impl Dialogue {
                     "outcome":if a=="inspect" {"inspected"} else {"selected"},
                     "validation_codes":observation.get("validation_codes").cloned().unwrap_or(json!([])),
                     "checks":step["checks"],"evidence":step["evidence"],"close_after_action":step["close_after_action"],"close_evidence":step["close_evidence"]}));
+                if a == "inspect" {
+                    phase = "after_inspection";
+                    continue;
+                }
+                if a == "propose_revision" {
+                    ensure!(
+                        pending.is_none() && proposed.is_none() && phase != "after_validation",
+                        "editor_already_used"
+                    );
+                    let prepared=helper.exchange(json!({"op":"revision_input","workshop":view,
+                        "findings":step["analysis"]["findings"],"max_tokens":self.config.haiku.structured_max_tokens,
+                        "grounding_max_tokens":self.config.haiku.grounding_max_tokens})).await?;
+                    let prepared: crate::haiku::revision::Input = serde_json::from_value(prepared)?;
+                    let basis = prepared.basis.clone();
+                    let mut backend = crate::haiku_bridge::LiveBackend {
+                        helper,
+                        chat: &self.haiku_routes.chat,
+                        haiku: &self.haiku_routes.haiku,
+                        requests: vec![],
+                        reports: vec![],
+                    };
+                    let revision = crate::haiku::revision::generate(&mut backend, prepared).await?;
+                    reports.extend(backend.reports);
+                    observation = json!({"kind":"revision_validation","status":if revision.accepted {"proposed"}else{"rejected"},
+                        "base_text":workshop_edit::reading(&current),"proposed_verse":if revision.accepted {Some(revision.lines.join("\n"))}else{None},
+                        "target_line_indices":basis.target_indices,
+                        "validation_codes":if revision.accepted {json!(["edit_contract_passed","grounding_passed","meter_passed"])}else{json!([revision.failure_reason])},
+                        "retry_feedback":revision.feedback});
+                    if revision.accepted {
+                        let p = Pending::stage_generated(&current, revision, basis)?;
+                        snapshot["pending"] = serde_json::to_value(&p)?;
+                        proposed = Some(p);
+                    }
+                    steps.last_mut().unwrap()["outcome"] = observation["status"].clone();
+                    steps.last_mut().unwrap()["validation_codes"] =
+                        observation["validation_codes"].clone();
+                    phase = "after_validation";
+                    continue;
+                }
                 if a != "inspect" {
                     close_after = step["close_after_action"] == true;
                     if close_after {
@@ -247,6 +288,23 @@ impl Dialogue {
             }
             "unrelated" => {}
             _ => {}
+        }
+        if observation["kind"] == "revision_validation" {
+            if let Some(p) = &proposed {
+                if matches!(action.as_str(), "fallback" | "show_current") {
+                    speech = "検査に通った未採用の案はこれや。".into();
+                }
+                speech = format!(
+                    "{}\n{}\nよければ『その案で』って言ってな。",
+                    speech,
+                    workshop_edit::reading(&p.lines)
+                );
+            } else if matches!(action.as_str(), "fallback" | "show_current") {
+                speech = format!(
+                    "今回は検査に通る案を作れんかったわ。元の句はそのままやで。\n{}",
+                    workshop_edit::reading(&current)
+                );
+            }
         }
         tracing::info!(event="workshop_step",workshop_id=view["workshop_id"].as_str().unwrap_or(""),%action,%reason);
         let spoken = if action == "unrelated" {

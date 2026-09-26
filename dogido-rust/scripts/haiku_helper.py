@@ -15,7 +15,7 @@ from dogido_server.llm.types import StructuredGenerationRequest
 from dogido_server.tts_reading import hiraganize_japanese_text
 from haiku_grounding_prompt import build_haiku_line_grounding_messages
 
-KINDS = {"haiku_irony", "haiku_scene", "haiku_draft", "haiku_line_grounding", "haiku_line_regeneration"}
+KINDS = {"haiku_irony", "haiku_scene", "haiku_draft", "haiku_line_grounding", "haiku_line_regeneration", "haiku_workshop_revision"}
 
 
 def signature(text):
@@ -35,6 +35,9 @@ def handle(frame):
             raise ValueError("unsupported haiku kind")
         messages = (build_haiku_line_grounding_messages(request.details)
                     if request.kind == "haiku_line_grounding" else build_messages(request))
+        if request.kind == "haiku_workshop_revision":
+            messages[-1]["content"] += ("\nexpected_textは元行の写し、replacement_textは必ず元行と違う表現にする。"
+                "同じ行の再提出は修正にならず、検査で不合格になる。")
         return {"messages": messages}
     if frame["op"] == "transform":
         request = frame["request"]

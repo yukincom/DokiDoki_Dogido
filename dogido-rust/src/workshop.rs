@@ -3,7 +3,10 @@ use crate::haiku::meter::count_japanese_sounds;
 use crate::haiku_record::HaikuLine;
 use serde_json::{Value, json};
 
-pub fn allowed_actions(after_inspection: bool, pending: bool) -> Vec<&'static str> {
+pub fn allowed_actions(phase: &str, pending: bool) -> Vec<&'static str> {
+    if phase == "after_validation" {
+        return vec!["respond", "explain", "ask", "compare", "show_current"];
+    }
     let mut actions = vec![
         "respond",
         "explain",
@@ -11,7 +14,10 @@ pub fn allowed_actions(after_inspection: bool, pending: bool) -> Vec<&'static st
         "show_current",
         "stage_player_edit",
     ];
-    if !after_inspection {
+    if !pending {
+        actions.push("propose_revision");
+    }
+    if phase == "decide" {
         actions.extend(["inspect", "unrelated"]);
         if pending {
             actions.extend(["accept_pending", "reject_pending"]);
@@ -185,9 +191,9 @@ mod tests {
     }
     #[test]
     fn one_inspection_per_turn_and_no_unimplemented_mutations() {
-        assert!(!allowed_actions(true, false).contains(&"inspect"));
-        for a in ["propose_revision", "accept_pending", "reject_pending"] {
-            assert!(!allowed_actions(false, false).contains(&a));
+        assert!(!allowed_actions("after_inspection", false).contains(&"inspect"));
+        for a in ["accept_pending", "reject_pending"] {
+            assert!(!allowed_actions("decide", false).contains(&a));
         }
     }
 }
