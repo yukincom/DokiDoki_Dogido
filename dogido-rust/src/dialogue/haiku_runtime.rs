@@ -184,13 +184,18 @@ impl Dialogue {
             return;
         };
         let now = Instant::now();
+        let observed = observation_fresh(s);
         let h = &mut s.haiku;
         if let Some(w) = h.workshop.as_mut() {
             let before = (w.is_open(), w.combat_paused());
             if s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed {
                 w.pause(now);
-            } else {
-                w.resume(now);
+            }
+            if w.combat_paused()
+                && observed
+                && let Some(e) = &s.latest
+            {
+                w.recovery.observe(e);
             }
             w.expire(
                 now,

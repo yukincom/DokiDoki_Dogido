@@ -59,10 +59,12 @@ impl Dialogue {
                 steps.push(json!({"phase":"decide","action":a,"outcome":"selected",
                     "evidence":text,"checks":[],"validation_codes":[],
                     "purpose":match a.as_str() {"acknowledge_meaning"=>"understand_meaning",
-                        "confirm_close"=>"finish_workshop",_=>"continue_discussion"}}));
+                        "confirm_close"|"decline_resume"=>"finish_workshop",_=>"continue_discussion"}}));
             }
         }
-        if action.as_deref() == Some("close_workshop") && pending.is_some() {
+        if matches!(action.as_deref(), Some("close_workshop" | "decline_resume"))
+            && pending.is_some()
+        {
             action = Some("ask".into());
             speech = "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
         }
@@ -282,6 +284,10 @@ impl Dialogue {
                     }
                     action = Some(a.into());
                     speech = step["speech"].as_str().unwrap_or("").into();
+                    if a == "decline_resume" && pending.is_some() {
+                        action = Some("ask".into());
+                        speech = "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
+                    }
                     break;
                 }
             }

@@ -10,10 +10,14 @@ pub enum Stage {
     Discussion,
     MeaningExplained,
     CloseConfirmation,
+    CombatResumeConfirmation,
 }
 
 impl Stage {
     pub fn actions(self, pending: bool) -> &'static [&'static str] {
+        if self == Self::CombatResumeConfirmation {
+            return &["resume_workshop", "decline_resume"];
+        }
         if pending {
             return &[];
         }
@@ -21,6 +25,7 @@ impl Stage {
             Self::Discussion => &[],
             Self::MeaningExplained => &["acknowledge_meaning"],
             Self::CloseConfirmation => &["confirm_close", "continue_workshop"],
+            Self::CombatResumeConfirmation => unreachable!(),
         }
     }
 
@@ -40,7 +45,11 @@ impl Stage {
 pub fn is_action(action: &str) -> bool {
     matches!(
         action,
-        "acknowledge_meaning" | "confirm_close" | "continue_workshop"
+        "acknowledge_meaning"
+            | "confirm_close"
+            | "continue_workshop"
+            | "resume_workshop"
+            | "decline_resume"
     )
 }
 
@@ -64,7 +73,7 @@ pub fn validate(payload: &Value, text: &str, stage: Stage, pending: bool) -> Res
     );
     let purpose = match step.action.as_str() {
         "acknowledge_meaning" => "understand_meaning",
-        "confirm_close" => "finish_workshop",
+        "confirm_close" | "decline_resume" => "finish_workshop",
         _ => "continue_discussion",
     };
     ensure!(step.purpose == purpose, "followup_purpose_mismatch");
@@ -88,6 +97,8 @@ pub fn speech(action: &str) -> Option<&'static str> {
         "acknowledge_meaning" => Some("うん、伝わってよかった。この句の話はここまででええ？"),
         "confirm_close" => Some("おけ、この句の話はここまでや。"),
         "continue_workshop" => Some("おけ、まだ続けよか。気になるとこ教えてな。"),
+        "resume_workshop" => Some("おけ、続けよか。気になるとこ教えてな。"),
+        "decline_resume" => Some("おけ、句はここまでにしよか。"),
         _ => None,
     }
 }
@@ -101,7 +112,11 @@ mod tests {
         let p = json!({"action":"confirm_close","purpose":"finish_workshop","confidence":0.95,
             "evidence":"ここで区切ってよいよ","speech":"","checks":[]});
         assert!(validate(&p, "ここで区切ってよいよ", Stage::CloseConfirmation, false).is_ok());
-        for stage in [Stage::Discussion, Stage::MeaningExplained] {
+        for stage in [
+            Stage::Discussion,
+            Stage::MeaningExplained,
+            Stage::CombatResumeConfirmation,
+        ] {
             assert!(validate(&p, "ここで区切ってよいよ", stage, false).is_err());
         }
         assert!(validate(&p, "ここで区切ってよいよ", Stage::CloseConfirmation, true).is_err());
@@ -147,6 +162,33 @@ mod tests {
         );
         assert_eq!(
             Stage::after_completed("acknowledge_meaning", "understand_meaning", true),
+            Stage::Discussion
+        );
+    }
+
+    #[test]
+    fn resume_and_decline_are_distinct_from_close_assent_and_pending_adoption() {
+        for (action, purpose) in [
+            ("resume_workshop", "continue_discussion"),
+            ("decline_resume", "finish_workshop"),
+        ] {
+            let p = json!({"action":action,"purpose":purpose,"confidence":0.95,"evidence":"返事の原文","speech":"","checks":[]});
+            assert!(validate(&p, "返事の原文", Stage::CombatResumeConfirmation, true).is_ok());
+            for stage in [
+                Stage::Discussion,
+                Stage::MeaningExplained,
+                Stage::CloseConfirmation,
+            ] {
+                assert!(validate(&p, "返事の原文", stage, false).is_err());
+            }
+        }
+        assert!(
+            !Stage::CombatResumeConfirmation
+                .actions(true)
+                .contains(&"accept_pending")
+        );
+        assert_eq!(
+            Stage::after_completed("resume_workshop", "continue_discussion", true),
             Stage::Discussion
         );
     }

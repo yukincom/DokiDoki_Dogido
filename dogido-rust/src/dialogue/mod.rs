@@ -9,6 +9,7 @@ mod history;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod sentences;
 mod warnings;
+mod workshop_combat_runtime;
 mod workshop_edits;
 mod workshop_runtime;
 
@@ -383,6 +384,9 @@ impl Dialogue {
             }
             self.start_pending(&mut d, &mut jobs, session_id);
             self.tick_workshop(&mut d, session_id);
+            if recent && complete && text.trim().is_empty() {
+                self.start_workshop_recovery(&mut d, &mut jobs, session_id);
+            }
             d.revision += 1;
         }
         if let Some(feedback) = results.feedback {
@@ -543,7 +547,30 @@ impl Dialogue {
                     "turn_id":if s.pending_warning.is_some(){None}else{s.warning.as_ref().map(|w|w.turn.clone())},"queued":s.pending_warning.is_some(),"state":s.mode});
             }
         }
+        if let Some(result) = self.close_paused_workshop(&mut d, &mut jobs, &session_id, text) {
+            return result;
+        }
         let s = d.sessions.get_mut(&session_id).unwrap();
+        if s.warning
+            .as_ref()
+            .is_some_and(|w| w.actions.iter().any(|a| a.kind == "workshop_resume"))
+        {
+            Self::cancel_warning(&mut d, &session_id, "new_player_input");
+        }
+        let s = d.sessions.get_mut(&session_id).unwrap();
+        if workshop_combat_runtime::clear_for_resume(s)
+            && s.warning.is_none()
+            && s.pending_warning.is_none()
+            && let Some(w) = s
+                .haiku
+                .workshop
+                .as_mut()
+                .filter(|w| w.open && w.combat_paused())
+        {
+            // 先にplayerが話した場合は同じ入力を現在句の一手へ渡す。仮の「うん」は作らない。
+            w.resume(Instant::now());
+            w.recovery = crate::workshop_combat::Recovery::default();
+        }
         if !fresh(s) || s.warning.is_some() {
             if fresh(s)
                 && s.warning.as_ref().is_some_and(|w| {
@@ -682,9 +709,13 @@ impl Dialogue {
                 .is_some_and(|w| {
                     w.hud_id == *wid
                         && !w.combat_paused()
-                        && (result.is_none_or(|r| r["workshop_action"] != "confirm_close")
-                            || (w.pending.is_none()
-                                && result.is_some_and(|r| r["workshop_version"] == w.version)))
+                        && (result.is_none_or(|r| {
+                            !matches!(
+                                r["workshop_action"].as_str(),
+                                Some("confirm_close" | "decline_resume")
+                            )
+                        }) || (w.pending.is_none()
+                            && result.is_some_and(|r| r["workshop_version"] == w.version)))
                         && (w.is_open()
                             || ((fixed_close
                                 || result.is_some_and(|r| r["workshop_closed_by_turn"] == true))
@@ -756,6 +787,7 @@ impl Dialogue {
                         }
                         if result["workshop_action"] == "close_workshop"
                             || result["workshop_action"] == "confirm_close"
+                            || result["workshop_action"] == "decline_resume"
                         {
                             w.close("explicit_close");
                         }

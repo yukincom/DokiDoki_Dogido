@@ -297,6 +297,7 @@ pub struct Workshop {
     pub agent_steps: VecDeque<Value>,
     pub drift_count: usize,
     pub followup: crate::workshop_followup::Stage,
+    pub recovery: crate::workshop_combat::Recovery,
     completed: Instant,
     last_activity: Instant,
     paused_at: Option<Instant>,
@@ -347,6 +348,7 @@ impl Workshop {
             agent_steps: VecDeque::new(),
             drift_count: 0,
             followup: crate::workshop_followup::Stage::Discussion,
+            recovery: crate::workshop_combat::Recovery::default(),
             completed,
             last_activity: completed,
             paused_at: None,
@@ -360,6 +362,7 @@ impl Workshop {
         self.paused_at.is_some()
     }
     pub fn close(&mut self, reason: impl Into<String>) {
+        self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;
         self.open = false;
         self.close_reason = Some(reason.into());
@@ -370,6 +373,7 @@ impl Workshop {
             return false;
         }
         self.paused_at = Some(now.max(self.completed));
+        self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;
         true
     }

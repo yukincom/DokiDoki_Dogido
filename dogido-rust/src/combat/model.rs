@@ -26,6 +26,8 @@ pub enum Scope {
     Auditory(Vec<String>),
     /// 安全確認後の安堵。新しい脅威で取り消す。
     Safe,
+    /// 同じ一句・版について、安全な間だけ再開確認を配送する。
+    Workshop { id: String, version: u64 },
 }
 
 #[derive(Clone, Debug, Serialize)]

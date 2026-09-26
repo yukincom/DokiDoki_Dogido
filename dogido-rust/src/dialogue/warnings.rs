@@ -112,6 +112,9 @@ pub(super) fn applicable(
                 .is_some_and(|e| plan.applicable(e, settings));
     }
     match &action.scope {
+        Scope::Workshop { id, version } => {
+            super::workshop_combat_runtime::applicable(session, id, *version)
+        }
         Scope::Event => true,
         Scope::Safe => {
             observation_fresh(session)
@@ -290,6 +293,11 @@ impl Dialogue {
         s.pending_warning = None;
         s.pending_input = None;
         if let Some(w) = s.warning.take() {
+            for a in &w.actions {
+                if let Scope::Workshop { id, version } = &a.scope {
+                    super::workshop_combat_runtime::finish_notice(s, id, *version, reason);
+                }
+            }
             let _ = w.cancel.send(true);
             s.status = "cancelled".into();
             Self::cancel_row(d, sid, &w.turn, reason);
@@ -352,7 +360,29 @@ impl Dialogue {
                 .get(sid)
                 .and_then(|s| s.warning.as_ref())
                 .is_some_and(|w| w.turn == turn);
-        let status = if current { status } else { "cancelled" };
+        let notice = d
+            .sessions
+            .get(sid)
+            .and_then(|s| s.warning.as_ref())
+            .and_then(|w| {
+                w.actions.iter().find_map(|a| {
+                    if let Scope::Workshop { id, version } = &a.scope {
+                        Some((id.clone(), *version))
+                    } else {
+                        None
+                    }
+                })
+            });
+        let notice_valid = notice.as_ref().is_none_or(|(id, version)| {
+            d.sessions
+                .get(sid)
+                .is_some_and(|s| super::workshop_combat_runtime::applicable(s, id, *version))
+        });
+        let status = if current && (status != "completed" || notice_valid) {
+            status
+        } else {
+            "cancelled"
+        };
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
             row["playback_status"] = status.into();
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
@@ -365,6 +395,9 @@ impl Dialogue {
             s.status = status.into();
             s.haiku.last_activity = Instant::now();
             if matches!(status, "completed" | "failed" | "cancelled") {
+                if let Some((id, version)) = notice {
+                    super::workshop_combat_runtime::finish_notice(s, &id, version, status);
+                }
                 s.warning = None;
             }
         }

@@ -143,6 +143,23 @@ def test_followup_assent_must_not_be_negated_or_hypothetical(text):
     assert handle(f)["step"] is None
 
 
+@pytest.mark.parametrize("text,expected", [("うん", "resume_workshop"), ("続けよう", "resume_workshop"),
+    ("もういい", "decline_resume"), ("続けない", "decline_resume"), ("続ける？", None), ("『続けよう』と言った", None)])
+def test_combat_resume_is_a_different_question_even_with_pending(text, expected):
+    f = {"op": "fixed_followup", "stage": "combat_resume_confirmation", "text": text, "pending": True}
+    assert handle(f)["action"] == expected
+
+
+@pytest.mark.parametrize("action,text", [("resume_workshop", "続けない"), ("decline_resume", "終わらない"),
+    ("resume_workshop", "『続けよう』と言った"), ("decline_resume", "やめたらどうなる？")])
+def test_semantic_resume_or_decline_needs_current_unnegated_intent(action, text):
+    f = frame(text); f["workshop"]["followup"] = "combat_resume_confirmation"
+    f["allowed_actions"].append(action)
+    f["payload"] = {"action": action, "purpose": "finish_workshop" if action == "decline_resume" else "continue_discussion",
+        "confidence": .95, "evidence": text, "speech": "", "checks": []}
+    assert handle(f)["step"] is None
+
+
 def test_generated_repair_does_not_follow_model_to_a_different_named_line():
     from check_workshop_revision import proposal
     f=frame("上五を直して");f["allowed_actions"].append("propose_revision");f["payload"]=proposal(f["text"])

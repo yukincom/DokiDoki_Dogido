@@ -20,7 +20,7 @@ DESCRIPTION = "サクラの葉と黒い斧の対比。"
 
 
 @contextmanager
-def fixture(**settings):
+def fixture(*, combat_settings=None, **settings):
     with tempfile.TemporaryDirectory(prefix="dogido-haiku-runtime-") as temp, dependencies() as (dep, control, seen):
         folder = Path(temp)
         gate = threading.Event(); gate.set()
@@ -52,7 +52,7 @@ def fixture(**settings):
         control["structured_handler"] = structured
         h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), **settings}
         try:
-            with running(ROOT / "target/debug/dogido-rust", folder, dep, haiku_settings=h) as (base, process, log):
+            with running(ROOT / "target/debug/dogido-rust", folder, dep, haiku_settings=h, combat_settings=combat_settings) as (base, process, log):
                 state = {"sequence": 0}
                 def send(sid, **extra):
                     state["sequence"] += 1

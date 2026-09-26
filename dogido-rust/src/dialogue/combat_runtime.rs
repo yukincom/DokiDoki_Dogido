@@ -186,7 +186,7 @@ impl Dialogue {
         let input = s.pending_input.take();
         self.spawn_actions(d, jobs, sid, actions, input.as_deref());
     }
-    fn spawn_actions(
+    pub(super) fn spawn_actions(
         self: &Arc<Self>,
         d: &mut Data,
         jobs: &mut Vec<JoinHandle<()>>,

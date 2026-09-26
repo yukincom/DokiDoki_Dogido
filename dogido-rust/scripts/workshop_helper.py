@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision, _explicit_workshop_line_indices,
-    is_meaning_acknowledgement, close_confirmation_decision)
+    is_meaning_acknowledgement, close_confirmation_decision, combat_resume_confirmation_decision)
 from dogido_server.haiku.workshop_agent import (build_workshop_agent_details, finalize_workshop_agent_step,
                                                _state_change_evidence_is_safe)
 from dogido_server.haiku.workshop_context import workshop_context_block, workshop_context_details
@@ -24,7 +24,7 @@ from dogido_server.memory_types import HaikuLine
 from dogido_server.tts_reading import prepare_text_for_tts
 
 KIND = "haiku_workshop_agent_step"
-FOLLOWUP_ACTIONS = {"acknowledge_meaning", "confirm_close", "continue_workshop"}
+FOLLOWUP_ACTIONS = {"acknowledge_meaning", "confirm_close", "continue_workshop", "resume_workshop", "decline_resume"}
 CONSULTATION_KEYS = {"action", "purpose", "confidence", "evidence", "speech", "checks"}
 INACTIVE_FIELDS = {
     "close_after_action": False, "close_evidence": "", "findings": [],
@@ -69,8 +69,12 @@ def consultation_messages(details):
         extra += ("『この句の話はここまででええ？』を再生済み。その問いへの今回の同意ならconfirm_close、"
             "purposeはfinish_workshop。まだ話したい返事ならcontinue_workshop、purposeはcontinue_discussion。"
             "案の採用とは区別する。新しい句の質問は通常のexplain/inspect等で答える。\n")
+    if "resume_workshop" in details["allowed_actions"]:
+        extra += ("戦闘後に同じ句を再掲し『続ける？』まで再生済み。続ける同意はresume_workshop、purposeはcontinue_discussion。"
+            "やめる意思はdecline_resume、purposeはfinish_workshop。新しい質問や編集依頼は通常の一手で処理する。"
+            "未採用案の採用・破棄とは別。\n")
     if FOLLOWUP_ACTIONS.intersection(details["allowed_actions"]):
-        extra += ("acknowledge_meaning/confirm_close/continue_workshopは6キーだけ、speechは空、checksは空配列、"
+        extra += ("acknowledge_meaning/confirm_close/continue_workshop/resume_workshop/decline_resumeは6キーだけ、speechは空、checksは空配列、"
             "confidenceは0.85以上。原文の引用・否定・条件・伝聞・疑問を同意にしない。\n")
     if editing:
         extra += (
@@ -172,13 +176,17 @@ def details_for(frame):
     # 実行できる一手はRustが渡す。段階とpendingに応じて一手を制限する。
     details["allowed_actions"] = [a for a in details["allowed_actions"] if a in frame["allowed_actions"]]
     details["allowed_actions"] += [a for a in frame["allowed_actions"] if a in FOLLOWUP_ACTIONS]
+    if frame["workshop"].get("followup") == "combat_resume_confirmation":
+        details["conversation_stage"] = "combat_resume_confirmation"
     return details
 
 
 def handle(frame):
     if frame["op"] == "fixed_followup":
         action = None
-        if not frame["pending"]:
+        if frame["stage"] == "combat_resume_confirmation":
+            action = {"resume": "resume_workshop", "close": "decline_resume"}.get(combat_resume_confirmation_decision(frame["text"]))
+        elif not frame["pending"]:
             if frame["stage"] == "meaning_explained" and is_meaning_acknowledgement(frame["text"]):
                 action = "acknowledge_meaning"
             elif frame["stage"] == "close_confirmation":
@@ -228,13 +236,15 @@ def handle(frame):
             text = frame["text"]
             evidence = payload.get("evidence")
             safe = isinstance(evidence, str) and _state_change_evidence_is_safe(
-                "close_workshop" if action == "confirm_close" else "stage_player_edit",
+                "close_workshop" if action in {"confirm_close", "decline_resume"} else "stage_player_edit",
                 player_text=text, evidence=evidence)
             # 短い同意は「終了」のような操作語を含まない。操作語向けの旧検査だけでは
             # 「いいよとは言ってない」を見落とすため、同意の否定・仮定も照合する。
-            if action in {"confirm_close", "acknowledge_meaning"} and re.search(
+            if action in {"confirm_close", "acknowledge_meaning", "resume_workshop", "decline_resume"} and re.search(
                     r"(?:とは|って|という意味|ということ|わけ|つもり).{0,20}(?:ない|なく|ません|へん)|"
                     r"(?:言|い)(?:って|った)(?:ない|わけ|つもり)|もし|仮に|たら|なら|[?？]", text):
+                safe = False
+            if action == "resume_workshop" and re.search(r"続け(?:ない|ん|へん)|再開(?:しない|せん|せえへん)|やめ(?:る|たい|よう)", text):
                 safe = False
             if action == "acknowledge_meaning" and re.search(
                     r"わか(?:ら|り|って)ない|分か(?:ら|り|って)ない|理解(?:できない|してない)|納得(?:できない|してない)|違う|ちがう|まだ|ではない|じゃない", text):
