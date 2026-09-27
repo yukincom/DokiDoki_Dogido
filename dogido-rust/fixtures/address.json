@@ -1,0 +1,422 @@
+[
+  {
+    "text": "",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": ""
+  },
+  {
+    "text": "ドギド",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ドギド"
+  },
+  {
+    "text": "ドギド！",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ドギド"
+  },
+  {
+    "text": "ﾄﾞｷﾞﾄﾞ：家を作りたい",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ﾄﾞｷﾞﾄﾞ：家を作りたい"
+  },
+  {
+    "text": "ねえ、ドギド",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ねえ、ドギド"
+  },
+  {
+    "text": "ねぇドギドいる？",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ねぇドギドいる"
+  },
+  {
+    "text": "あれ。ドギドおる",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "あれ。ドギドおる"
+  },
+  {
+    "text": "なあドギド聞いてる",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "なあドギド聞いてる"
+  },
+  {
+    "text": "おーい！ドギドきいてますか？",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "おーい！ドギドきいてますか"
+  },
+  {
+    "text": "ドギドさん",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギドさん"
+  },
+  {
+    "text": "ドギドの話",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギドの話"
+  },
+  {
+    "text": "ドギドいるかな",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギドいるかな"
+  },
+  {
+    "text": "あれねえドギド",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "あれねえドギド"
+  },
+  {
+    "text": "ドギド、\n話そう",
+    "addressed": true,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ドギド、 話そう"
+  },
+  {
+    "text": "ドギド、話そう\n次",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギド、話そう 次"
+  },
+  {
+    "text": "『ドギド』って誰？",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギド』って誰"
+  },
+  {
+    "text": "ドギドに言った",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギドに言った"
+  },
+  {
+    "text": "ドギドに言うた",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "ドギドに言うた"
+  },
+  {
+    "text": "あなたに言った",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "あなたに言った"
+  },
+  {
+    "text": "お前に言ったんだ",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "お前に言ったんだ"
+  },
+  {
+    "text": "君に言ったよ",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "君に言ったよ"
+  },
+  {
+    "text": "聞いてる？",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "聞いてる"
+  },
+  {
+    "text": "聞いてますか？",
+    "addressed": true,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "聞いてますか"
+  },
+  {
+    "text": "聞いてるわけではない",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "聞いてるわけではない"
+  },
+  {
+    "text": "ところで家を建てたい",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "ところで家を建てたい"
+  },
+  {
+    "text": "あの、ところで",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "あの、ところで"
+  },
+  {
+    "text": "えっと。さて",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "えっと。さて"
+  },
+  {
+    "text": "そういえば",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "そういえば"
+  },
+  {
+    "text": "それはそうと",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "それはそうと"
+  },
+  {
+    "text": "話変わるけど",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "話変わるけど"
+  },
+  {
+    "text": "話は変わるけど",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "話は変わるけど"
+  },
+  {
+    "text": "話を変わるけど",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "話を変わるけど"
+  },
+  {
+    "text": "別の話やけど",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "別の話やけど"
+  },
+  {
+    "text": "別の話だけど",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "別の話だけど"
+  },
+  {
+    "text": "別の話",
+    "addressed": false,
+    "explicit_transition": true,
+    "confirmation": "uncertain",
+    "summary": "別の話"
+  },
+  {
+    "text": "さっきところでと言った",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "さっきところでと言った"
+  },
+  {
+    "text": "えっとあのところで",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "えっとあのところで"
+  },
+  {
+    "text": "うん",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "うん"
+  },
+  {
+    "text": "はい",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "はい"
+  },
+  {
+    "text": "ええで",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "ええで"
+  },
+  {
+    "text": "いいよ",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "いいよ"
+  },
+  {
+    "text": "聞いて",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "聞いて"
+  },
+  {
+    "text": "お願い",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "お願い"
+  },
+  {
+    "text": "そうして",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "そうして"
+  },
+  {
+    "text": "いや",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "decline",
+    "summary": "いや"
+  },
+  {
+    "text": "いいえ",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "decline",
+    "summary": "いいえ"
+  },
+  {
+    "text": "違う",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "decline",
+    "summary": "違う"
+  },
+  {
+    "text": "ちがう",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "decline",
+    "summary": "ちがう"
+  },
+  {
+    "text": "やめとく",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "decline",
+    "summary": "やめとく"
+  },
+  {
+    "text": "もういい",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "decline",
+    "summary": "もういい"
+  },
+  {
+    "text": "　は　い！",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "は い"
+  },
+  {
+    "text": "はいと言ったら？",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "はいと言ったら"
+  },
+  {
+    "text": "『うん』",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "うん"
+  },
+  {
+    "text": "まだわからない",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "まだわからない"
+  },
+  {
+    "text": "もういいかどうか",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "もういいかどうか"
+  },
+  {
+    "text": "は\u001eい",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "accept",
+    "summary": "は い"
+  },
+  {
+    "text": "「 家を\n\t建てたい！ 」",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "家を 建てたい"
+  },
+  {
+    "text": "桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜"
+  },
+  {
+    "text": "桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜桜…"
+  },
+  {
+    "text": "あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮",
+    "addressed": false,
+    "explicit_transition": false,
+    "confirmation": "uncertain",
+    "summary": "あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ🦮あ…"
+  }
+]

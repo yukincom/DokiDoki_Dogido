@@ -4,6 +4,7 @@ use anyhow::{Result, ensure};
 
 impl Dialogue {
     pub(super) fn tick_foreground(&self, d: &mut Data, sid: &str) {
+        self.tick_address(d, sid);
         if let Some(s) = d.sessions.get_mut(sid) {
             let now = self.clock.elapsed().as_millis() as u64;
             s.foreground

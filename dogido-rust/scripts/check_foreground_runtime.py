@@ -90,7 +90,8 @@ def main():
         assert "プレイヤーが明示的に再開した保留話題:" in prompts
         passed.append("combat_bookmark_survives_ticks_and_resumes_only_on_player_turn")
 
-        turn = submit(base, sid, "こんにちは")
+        # 学習直後の新しい話は7dの宛先保留を通るため、明示名指しで通常会話へ移す。
+        turn = submit(base, sid, "ドギド、こんにちは")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert foreground(base, sid)["route"] == "casual"
         send(sid, visual_threats=[{"type":"zombie", "entity_id":"z2", "distance":5}])

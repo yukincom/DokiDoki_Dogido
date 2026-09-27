@@ -331,6 +331,9 @@ fn named_paths(directory: &Path, text: &str) -> Option<Vec<PathBuf>> {
 }
 impl Dialogue {
     pub(super) fn cancel_chat(d: &mut Data, sid: &str, reason: &str) {
+        if reason != "new_player_input" {
+            Self::cancel_address(d, sid, "attention_interrupted");
+        }
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
@@ -339,6 +342,9 @@ impl Dialogue {
             s.status = "cancelled".into();
             let _ = c.send(true);
             let turn = s.current_turn.clone();
+            if let Some(p) = s.address.as_mut() {
+                p.playback(&turn, "cancelled");
+            }
             Self::cancel_row(d, sid, &turn, reason);
         }
     }

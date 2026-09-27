@@ -96,6 +96,10 @@ class BridgeLLM(DogidoLLM):
 
 
 def run_turn(data):
+    if isinstance(data.get("address_reply"), str):
+        emit({"op":"result", "text":data["address_reply"],
+              "spoken_text":prepare_text_for_tts(data["address_reply"], engine=data.get("reading_engine", "auto"))})
+        return
     settings = Settings(_env_file=None, llm_enabled=True, llm_backend="chat_completions",
         llm_provider="local", llm_model=data["model"], llm_max_tokens=data["max_tokens"],
         audio_enabled=False, memory_enabled=False, decision_policy="legacy",
@@ -129,7 +133,7 @@ def run_turn(data):
               "spoken_text": prepare_text_for_tts(plan["text"], engine=settings.tts_reading_engine)})
         return
     from language_helper import explicit_request, run as run_language
-    if (not data.get("workshop_fallback") and not data.get("workshop")
+    if (not data.get("host_chat_confirmed") and not data.get("workshop_fallback") and not data.get("workshop")
             and not context.asks_inventory and not context.normalized_text.startswith("/")
             and (data.get("language_active") or explicit_request(context.semantic_text))):
         outcome = run_language(exchange)
@@ -200,13 +204,25 @@ def run_assist_route(data):
     emit({"op": "result", "knowledge_query": context.knowledge_query is not None})
 
 
+def run_address_route(data):
+    # 保留の確認が、知識・所持品・保存等の既存入力を横取りしない。
+    # 入力parserだけを使い、モデル・状態機械・DB検索は実行しない。
+    c = route_player_input(data["text"])
+    general = bool(c.semantic_text.strip()) and not c.normalized_text.startswith("/") and not any((
+        c.wants_quiet, c.asks_hostile_count, c.asks_hostile_direction, c.asks_dragon_direction,
+        c.asks_save_last_haiku, c.asks_inventory, c.requests_sword, c.knowledge_query is not None,
+        c.player_haiku_text is not None, c.revised_haiku_text is not None,
+        c.reading_correction is not None, c.asks_haiku_recall))
+    emit({"op":"result", "general_conversation":general})
+
+
 if __name__ == "__main__":
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="[会話補助] %(message)s")
     try:
         data = json.loads(sys.stdin.readline())
         apply_reading_snapshot(data.get("reading_corrections", []))
         {"combat_leaf": run_combat_leaf, "light_plan": run_light_plan,
-         "assist_route": run_assist_route}.get(data.get("op"), run_turn)(data)
+         "assist_route": run_assist_route, "address_route": run_address_route}.get(data.get("op"), run_turn)(data)
     except Exception as exc:
         emit({"op": "error", "error": f"{type(exc).__name__}: {exc}"})
         raise SystemExit(1)

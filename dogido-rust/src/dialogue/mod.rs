@@ -1,4 +1,5 @@
 //! 通常会話、冒険中の判断、限定操作と自動川柳の配送。
+mod address_runtime;
 mod assist_runtime;
 mod audio;
 mod bridge;
@@ -111,6 +112,9 @@ struct Session {
     last_player_input: Option<u64>,
     foreground: crate::foreground::State,
     language: crate::language::State,
+    address: Option<crate::address::Pending>,
+    address_checked: Option<address_runtime::Checked>,
+    last_completed_conversation: Option<u64>,
     input_generation: u64,
     light_cancel: Option<watch::Sender<bool>>,
     deferred_input: Option<environment_runtime::DeferredInput>,
@@ -250,6 +254,9 @@ impl Dialogue {
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
                 language: crate::language::State::default(),
+                address: None,
+                address_checked: None,
+                last_completed_conversation: None,
                 input_generation: 0,
                 light_cancel: None,
                 deferred_input: None,
@@ -352,6 +359,7 @@ impl Dialogue {
             }
             if recent && warnings::interruption_reason(&event).is_some() {
                 Self::cancel_haiku(&mut d, session_id, "current_threat");
+                Self::cancel_address(&mut d, session_id, "attention_interrupted");
             }
             if recent && !text.trim().is_empty() {
                 Self::cancel_combat_input(&mut d, session_id);
@@ -416,6 +424,9 @@ impl Dialogue {
                     let s = d.sessions.get_mut(session_id).unwrap();
                     s.input_generation = s.input_generation.wrapping_add(1);
                     s.deferred_input = None;
+                }
+                if event.event.name == EventName::PlayerDied || decision.dimension_changed {
+                    Self::cancel_address(&mut d, session_id, "attention_interrupted");
                 }
                 self.apply_combat_decision(
                     &mut d,
@@ -505,6 +516,15 @@ impl Dialogue {
         let mut jobs = self.jobs.lock().unwrap();
         jobs.retain(|j| !j.is_finished());
         if jobs.len() >= 16 {
+            let mut d = self.data.lock().unwrap();
+            self.tick_address(&mut d, &session_id);
+            if d.sessions
+                .get(&session_id)
+                .and_then(|s| s.address.as_ref())
+                .is_some_and(|p| p.input(text) == crate::address::Action::Accept)
+            {
+                Self::cancel_address(&mut d, &session_id, "host_chat_queue_full");
+            }
             return json!({"accepted":false,"reason":"input_queue_full"});
         }
         let mut d = self.data.lock().unwrap();
@@ -642,6 +662,18 @@ impl Dialogue {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
         self.tick_workshop(&mut d, &session_id);
+        if let Some(result) = self.check_address_input(&mut d, &mut jobs, &session_id, text, source)
+        {
+            return result;
+        }
+        let (address_reply, replay) = match self.address_input(&mut d, &session_id, text, source) {
+            address_runtime::Input::Pass => (None, None),
+            address_runtime::Input::Repair(reply) => (Some(reply), None),
+            address_runtime::Input::Replay(original) => (None, Some(original)),
+            address_runtime::Input::Consumed(result) => return result,
+        };
+        let text = replay.as_ref().map_or(text, |p| p.text.as_str());
+        let source = replay.as_ref().map_or(source, |p| p.source.as_str());
         let s = d.sessions.get_mut(&session_id).unwrap();
         let active_turn = s.current_turn.clone();
         // 同じ進行中入力の二重配送を、割り込みやLLM再呼出しにしない。
@@ -679,7 +711,14 @@ impl Dialogue {
         }
         s.epoch += 1;
         let epoch = s.epoch;
-        let turn = id("turn");
+        let turn = replay
+            .as_ref()
+            .map_or_else(|| id("turn"), |p| p.turn.clone());
+        if address_reply.is_some()
+            && let Some(p) = s.address.as_mut()
+        {
+            p.repair = Some((turn.clone(), false));
+        }
         s.current_turn = turn.clone();
         s.status = "generating".into();
         let event = s
@@ -702,6 +741,8 @@ impl Dialogue {
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "source":source,"language_active":language_active,"language_state":language_state,
+            "address_reply":address_reply,"host_chat_confirmed":replay.is_some(),
+            "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":event_digest,"event":event});
         if workshop.is_none()
@@ -713,12 +754,24 @@ impl Dialogue {
         }
         let (cancel, rx) = watch::channel(false);
         s.cancel = Some(cancel);
-        if d.rows.len() == 200 {
+        if replay.is_none() && d.rows.len() == 200 {
             d.rows.pop_front();
         }
-        d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
-            "created_at":chrono::Utc::now(),"input_at_ms":now,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
-            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close}));
+        let new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
+            "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
+            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close});
+        if let Some(original) = &replay {
+            if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
+                row["playback_status"] = "generating".into();
+                row["epoch"] = epoch.into();
+                row["language_status"] = "host_chat".into();
+                row["conversation_route"] = "casual".into();
+                row["input_at_ms"] = original.input_at.into();
+                row["resumed_at"] = chrono::Utc::now().to_rfc3339().into();
+            }
+        } else {
+            d.rows.push_back(new_row);
+        }
         d.revision += 1;
         drop(d);
         tracing::info!(
@@ -765,6 +818,9 @@ impl Dialogue {
         let mut d = self.data.lock().unwrap();
         let current = !d.stopped && d.sessions.get(sid).is_some_and(|s| s.epoch == epoch);
         let row = d.rows.iter().find(|r| r["turn_id"] == turn);
+        if row.is_some_and(|r| r["epoch"].as_u64().is_some_and(|owner| owner != epoch)) {
+            return false;
+        }
         let workshop_id = row
             .and_then(|r| r["workshop_id"].as_str())
             .map(str::to_owned);
@@ -862,9 +918,12 @@ impl Dialogue {
             s.haiku.last_activity = Instant::now();
             if matches!(
                 status,
-                "completed" | "cancelled" | "failed" | "unsupported" | "quiet"
+                "completed" | "cancelled" | "failed" | "unsupported" | "quiet" | "not_selected"
             ) {
                 s.cancel = None;
+            }
+            if let Some(p) = s.address.as_mut() {
+                p.playback(turn, status);
             }
             if let Some(result) = result {
                 let workshop_reply =
@@ -938,6 +997,7 @@ impl Dialogue {
                     s.history.annotate(turn, &repair);
                 }
                 if status == "completed" && !workshop_reply && result["memory_action"].is_null() {
+                    s.last_completed_conversation = Some(now);
                     language_runtime::completed(s, result);
                     s.history
                         .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
@@ -1037,7 +1097,12 @@ impl Dialogue {
             input["text"].as_str().unwrap_or(""),
             &input["workshop"],
         );
-        let result = if let Some(correction) = correction {
+        let result = if input["address_reply"].is_string() {
+            match self.select_foreground(&sid, &turn, epoch, crate::foreground::Route::Learning) {
+                Ok(()) => bridge::render(&self.config, &self.llm, input.clone(), &mut cancel).await,
+                Err(error) => Err(error),
+            }
+        } else if let Some(correction) = correction {
             self.correct_reading(&sid, epoch, &input, correction).await
         } else if input["poem_input"].is_object() {
             self.save_poem_input(&sid, epoch, &input, &mut cancel).await
@@ -1096,6 +1161,7 @@ impl Dialogue {
                 input.clone(),
                 &mut cancel,
                 |route| self.select_foreground(&sid, &turn, epoch, route),
+                |outcome| self.hold_language_handoff(&sid, &turn, epoch, &input, outcome),
             )
             .await
         };
@@ -1108,6 +1174,10 @@ impl Dialogue {
         };
         match result {
             Ok(mut result) => {
+                if input["host_chat_confirmed"] == true {
+                    result["language_status"] = "host_chat".into();
+                    result["language_state"] = json!(crate::language::State::default());
+                }
                 self.apply_language_result(&sid, &turn, epoch, &result);
                 self.record_feedback(&sid, epoch, &input, &mut result).await;
                 if let Err(error) = self.apply_workshop_edit(&sid, epoch, &mut result).await {
@@ -1129,6 +1199,8 @@ impl Dialogue {
                 if let Some(unsupported) = result.get("unsupported").cloned() {
                     result["error"] = unsupported;
                     self.update(&sid, &turn, epoch, "unsupported", Some(&result));
+                } else if result["language_status"] == "awaiting_address" {
+                    self.update(&sid, &turn, epoch, "not_selected", Some(&result));
                 } else if result["text"].as_str().is_none_or(|s| s.is_empty()) {
                     self.update(&sid, &turn, epoch, "quiet", None);
                 } else if self.update(&sid, &turn, epoch, "queued", Some(&result)) {

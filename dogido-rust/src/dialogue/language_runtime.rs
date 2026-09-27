@@ -62,6 +62,9 @@ impl Dialogue {
                     &json!({"knowledge_status":result["language_status"],"references":sources}),
                 );
                 row["category"] = "learning".into();
+            } else {
+                row["category"] = "speech".into();
+                row.as_object_mut().unwrap().remove("knowledge_status");
             }
         }
         d.revision += 1;

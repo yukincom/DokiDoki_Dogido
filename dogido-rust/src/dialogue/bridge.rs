@@ -30,7 +30,7 @@ pub async fn render(
     input: Value,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
-    render_with_route(config, llm, input, cancel, |_| Ok(())).await
+    render_with_route(config, llm, input, cancel, |_| Ok(()), |_| Ok(false)).await
 }
 
 pub async fn render_with_route(
@@ -39,10 +39,12 @@ pub async fn render_with_route(
     mut input: Value,
     cancel: &mut watch::Receiver<bool>,
     mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
+    mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
 ) -> Result<Value> {
     input["reading_corrections"] = json!(super::reading_runtime::load_overlay(config).await?);
     let light_plan = input["op"] == "light_plan";
-    let routing_only = input["op"] == "assist_route";
+    let routing_only = matches!(input["op"].as_str(), Some("assist_route" | "address_route"));
+    let address_reply = input["address_reply"].as_str().map(str::to_owned);
     let combat_kind =
         (input["op"] == "combat_leaf").then(|| input["kind"].as_str().unwrap_or("").to_owned());
     if let Some(kind) = combat_kind.as_deref() {
@@ -96,7 +98,8 @@ pub async fn render_with_route(
             let reply = match frame["op"].as_str() {
                 Some("language") => {
                     ensure!(
-                        combat_kind.is_none()
+                        address_reply.is_none()
+                            && combat_kind.is_none()
                             && !light_plan
                             && !routing_only
                             && knowledge.is_none()
@@ -138,11 +141,22 @@ pub async fn render_with_route(
                         };
                         turn.generated(generated)?
                     } else {
-                        turn.advance(&frame)?
+                        let mut reply = turn.advance(&frame)?;
+                        if reply["command"] == "done"
+                            && reply["status"] == "host_chat"
+                            && hold_handoff(&reply)?
+                        {
+                            turn.outcome["status"] = "awaiting_address".into();
+                            reply = turn.outcome.clone();
+                        }
+                        reply
                     }
                 }
                 Some("knowledge") => {
-                    ensure!(language.is_none(), "knowledge cannot follow language");
+                    ensure!(
+                        address_reply.is_none() && language.is_none(),
+                        "unexpected knowledge operation"
+                    );
                     ensure!(
                         combat_kind.is_none()
                             && !light_plan
@@ -185,6 +199,7 @@ pub async fn render_with_route(
                             && knowledge.is_none(),
                         "reaction cannot invoke chat planner"
                     );
+                    ensure!(address_reply.is_none(), "fixed address reply cannot plan");
                     plans += 1;
                     ensure!(plans == 1, "planner step limit exceeded");
                     let request: PreparedPlan = serde_json::from_value(frame["input"].take())?;
@@ -214,6 +229,10 @@ pub async fn render_with_route(
                     ensure!(
                         !routing_only && knowledge.is_none(),
                         "input routing and knowledge cannot generate"
+                    );
+                    ensure!(
+                        address_reply.is_none(),
+                        "fixed address reply cannot generate"
                     );
                     leaves += 1;
                     ensure!(leaves <= 2, "leaf retry limit exceeded");
@@ -250,6 +269,10 @@ pub async fn render_with_route(
                     }
                 }
                 Some("result") => {
+                    if let Some(text) = &address_reply {
+                        ensure!(frame["text"] == *text, "helper changed address repair");
+                        frame["language_status"] = "address_confirmation_requested".into();
+                    }
                     if let Some(turn) = &language {
                         ensure!(turn.finished(), "unfinished language turn");
                         if turn.outcome["status"] != "host_chat" {

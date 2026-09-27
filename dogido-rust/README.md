@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索、完成句の明示直し・自作句の保存、ローカル知識回答と限定国語対話も接続済みです。旧分類器へのfallback、宛先確認・保留入力、Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索、完成句の明示直し・自作句の保存、ローカル知識回答と限定国語対話も接続済みです。国語対話中の宛先確認・保留入力の再開も接続済みです。旧分類器へのfallback、知識質問の戦闘保留・workshop接続、Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -271,14 +271,20 @@ workshop外の明示的な知識質問は正本DBから答え、参考資料を�
 
 聞き返しの状態とassistant履歴は、音声を最後まで再生した後だけ確定します。学習中は川柳時計と非敵対ambientを止め、戦闘後はプレイヤーが明示した場合に続きを扱います。Web検索とブラウザー起動はまだ接続していません。
 
+学習中に急に別の話が来た場合、直前の会話から2分未満で宛先が不明なら一件だけ無言で保留します。「ドギド」などの呼び直しには元の質問を短く引用して確認し、音声全体の再生完了後の肯定で同じ質問IDを一度だけ再開します。明示的な名指し・話題変更、2分以上空いた話は直接通常会話へ渡します。元入力から5分で失効し、呼び直しても延長しません。戦闘・接続終了・停止で破棄します。
+
+保留した質問と確認中の相槌は、回答済みの会話や川柳材料へ混ぜません。確認待ちの自由文だけは既存parserへ最大3秒の非同期照会を行い、知識・所持品・保存などの入力を元の経路へ渡します。通常雑談への追加判定や、宛先確認用のモデル呼び出しはありません。確認の途中で届いた発話を、解析中に音声が終わったという理由で後から肯定に変えません。呼びかけ等のUnicode正規化は、既存の依存グラフにあるICU4Xを直接利用します。
+
 既存の開発用Python環境で検証できます。HTTP試験は模擬モデル・模擬音声を使い、所有プロセスを終了時に回収します。
 
 ```sh
 ./dogido-rust/cargo.sh build --locked
-python -m pytest dogido-rust/scripts/test_language_helper.py tests/test_language_dialogue.py -q
+python -m pytest dogido-rust/scripts/test_address_helper.py dogido-rust/scripts/test_language_helper.py tests/test_language_dialogue.py -q
 python dogido-rust/scripts/check_knowledge.py
 python dogido-rust/scripts/check_foreground_runtime.py
 python dogido-rust/scripts/check_language_runtime.py
+python dogido-rust/scripts/generate_address_fixtures.py
+python dogido-rust/scripts/check_address_runtime.py
 ```
 
 ## 通常会話plannerの単独確認

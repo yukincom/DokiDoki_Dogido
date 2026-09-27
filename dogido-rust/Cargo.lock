@@ -430,6 +430,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap",
+ "icu_normalizer",
  "libc",
  "reqwest",
  "rig-core",
