@@ -5,6 +5,12 @@ use std::collections::VecDeque;
 #[derive(Default)]
 pub struct History {
     rows: VecDeque<Value>,
+    danger_retained: Vec<Value>,
+    danger_active: bool,
+    post_danger_turns: u64,
+    counted_player_turns: Vec<String>,
+    // 入力前に生成器へ渡した履歴。今回の訂正対象照合だけに使い、次のpromptへ戻さない。
+    repair_context: Option<(String, Vec<Value>)>,
 }
 fn clip(text: &str) -> String {
     let text = text
@@ -19,15 +25,50 @@ fn clip(text: &str) -> String {
     }
 }
 impl History {
+    /// 戦闘前の通常履歴だけを退避する。短い再戦で退避済みの会話を上書きしない。
+    pub fn begin_danger(&mut self) {
+        if !self.danger_active {
+            self.counted_player_turns.clear();
+        }
+        if !self.danger_active && self.danger_retained.is_empty() {
+            self.danger_retained = self.rows.iter().cloned().collect();
+        }
+        self.danger_active = true;
+        self.post_danger_turns = 0;
+    }
+    pub fn end_danger(&mut self, player_turns: u64) {
+        if !self.danger_active {
+            return;
+        }
+        self.danger_active = false;
+        self.post_danger_turns = player_turns;
+        if player_turns == 0 {
+            self.danger_retained.clear();
+        }
+    }
+    pub fn retention_status(&self) -> Value {
+        json!({"danger_active":self.danger_active,
+            "retained_utterances":self.danger_retained.len(),
+            "remaining_player_turns":self.post_danger_turns})
+    }
     /// 同じ実入力の再開時にだけ古い未回答turnを置き換える。診断行は保持する。
     pub fn replace_unanswered(&mut self, turn: &str) {
         if !self
-            .rows
+            .rows()
             .iter()
             .any(|r| r["turn_id"] == format!("{turn}:reply"))
         {
             self.rows
                 .retain(|r| !(r["role"] == "user" && r["turn_id"] == turn));
+            self.danger_retained
+                .retain(|r| !(r["role"] == "user" && r["turn_id"] == turn));
+            if self
+                .repair_context
+                .as_ref()
+                .is_some_and(|(id, _)| id == turn)
+            {
+                self.repair_context = None;
+            }
         }
     }
     /// 実再生完了に対応するuser/assistantの対だけ。未回答・取消入力は除く。
@@ -51,11 +92,20 @@ impl History {
         pairs
     }
     pub fn rows(&self) -> Vec<Value> {
-        self.rows.iter().cloned().collect()
+        let mut rows = self.danger_retained.clone();
+        for row in &self.rows {
+            if let Some(saved) = rows.iter_mut().find(|r| r["turn_id"] == row["turn_id"]) {
+                // 退避後に付いた訂正注記も同じ発話の一部として見せる。
+                *saved = row.clone();
+            } else {
+                rows.push(row.clone());
+            }
+        }
+        rows
     }
     pub fn lines(&self) -> String {
         let mut lines = Vec::new();
-        for row in &self.rows {
+        for row in self.rows() {
             lines.push(format!(
                 "{}: {}",
                 if row["role"] == "user" {
@@ -66,7 +116,7 @@ impl History {
                 row["text"].as_str().unwrap_or("")
             ));
             if row.get("repair_action").is_some() {
-                lines.push(format!("  [{}]", repair::note(row)));
+                lines.push(format!("  [{}]", repair::note(&row)));
             }
         }
         lines.join("\n")
@@ -83,17 +133,43 @@ impl History {
         } else {
             turn.into()
         };
-        if self.rows.iter().any(|r| r["turn_id"] == id) {
+        if self.rows().iter().any(|r| r["turn_id"] == id) {
             return;
+        }
+        if role == "user" {
+            self.repair_context = Some((turn.into(), self.rows()));
+        } else if self
+            .repair_context
+            .as_ref()
+            .is_some_and(|(id, _)| id == turn)
+        {
+            self.repair_context = None;
         }
         if self.rows.len() == 10 {
             self.rows.pop_front();
         }
         self.rows
             .push_back(json!({"turn_id":id,"role":role,"text":text}));
+        if role == "user"
+            && !self.danger_active
+            && self.post_danger_turns > 0
+            && !self.counted_player_turns.iter().any(|id| id == turn)
+        {
+            self.counted_player_turns.push(turn.into());
+            self.post_danger_turns -= 1;
+            if self.post_danger_turns == 0 {
+                self.danger_retained.clear();
+                self.counted_player_turns.clear();
+            }
+        }
     }
     pub fn annotate(&mut self, turn: &str, repair: &Repair) {
-        if !self.rows.iter().any(|r| {
+        let targets = self
+            .repair_context
+            .as_ref()
+            .filter(|(id, _)| id == turn)
+            .map_or_else(|| self.rows(), |(_, rows)| rows.clone());
+        if !targets.iter().any(|r| {
             r["turn_id"] == repair.target_turn_id
                 && r["text"]
                     .as_str()
@@ -108,6 +184,164 @@ impl History {
             row.as_object_mut()
                 .unwrap()
                 .extend(repair.prompt_fields().as_object().unwrap().clone());
+            if let Some(saved) = self
+                .danger_retained
+                .iter_mut()
+                .find(|r| r["turn_id"] == turn)
+            {
+                *saved = row.clone();
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pair(h: &mut History, turn: &str) {
+        h.push(turn, "user", &format!("話題{turn}"));
+        h.push(turn, "assistant", &format!("返事{turn}"));
+    }
+    fn seeded() -> History {
+        let mut h = History::default();
+        for i in 0..5 {
+            pair(&mut h, &format!("old-{i}"));
+        }
+        h
+    }
+    fn contains(h: &History, turn: &str) -> bool {
+        h.rows().iter().any(|r| r["turn_id"] == turn)
+    }
+
+    #[test]
+    fn precombat_history_survives_rollover_and_expires_after_three_distinct_inputs() {
+        let mut h = seeded();
+        h.begin_danger();
+        for i in 0..12 {
+            pair(&mut h, &format!("during-{i}"));
+            h.begin_danger(); // repeated threat snapshots must not overwrite the bookmark
+        }
+        assert_eq!(h.rows().len(), 20);
+        assert!(contains(&h, "old-0:reply"));
+        h.end_danger(3);
+        for i in 0..3 {
+            // Input projection precedes the push: the third response still sees the bookmark.
+            assert!(contains(&h, "old-0"));
+            let id = format!("after-{i}");
+            pair(&mut h, &id);
+            pair(&mut h, &id);
+            h.end_danger(3); // duplicate combat_ended must not extend the lifetime
+            assert_eq!(h.post_danger_turns, 2 - i);
+        }
+        assert_eq!(h.rows().len(), 10);
+        assert!(!contains(&h, "old-0"));
+    }
+
+    #[test]
+    fn short_reentry_keeps_first_bookmark_and_zero_releases_it() {
+        let mut h = seeded();
+        h.begin_danger();
+        h.end_danger(3);
+        pair(&mut h, "after-0");
+        h.begin_danger();
+        pair(&mut h, "during");
+        assert_eq!(h.danger_retained[0]["turn_id"], "old-0");
+        assert_eq!(h.post_danger_turns, 0);
+        h.end_danger(0);
+        assert!(h.danger_retained.is_empty());
+        h.begin_danger();
+        assert_ne!(h.danger_retained[0]["turn_id"], "old-0");
+    }
+
+    #[test]
+    fn empty_bookmark_does_not_capture_incombat_dialogue_on_repeated_threat() {
+        let mut h = History::default();
+        h.begin_danger();
+        pair(&mut h, "during");
+        h.begin_danger();
+        assert!(h.danger_retained.is_empty());
+        h.end_danger(3);
+        h.push("", "user", "   ");
+        assert_eq!(h.post_danger_turns, 3);
+    }
+
+    #[test]
+    fn replay_drops_unanswered_retained_row_and_counts_same_input_once() {
+        let mut h = seeded();
+        h.push("pending", "user", "未回答");
+        h.begin_danger();
+        for i in 0..6 {
+            pair(&mut h, &format!("during-{i}"));
+        }
+        h.replace_unanswered("pending");
+        assert!(!contains(&h, "pending"));
+        h.replace_unanswered("old-4");
+        assert!(contains(&h, "old-4"));
+        h.end_danger(3);
+        h.push("replay", "user", "再開");
+        h.replace_unanswered("replay");
+        h.push("replay", "user", "再開");
+        assert_eq!(h.post_danger_turns, 2);
+        assert!(!h.completed_pairs().iter().any(|p| p["turn_id"] == "old-4"));
+    }
+
+    #[test]
+    fn correction_can_reference_retained_turn_without_rewriting_original() {
+        let mut h = seeded();
+        h.push("correction", "user", "違う、材料を集めたいだけ");
+        h.begin_danger();
+        let repair = Repair {
+            action: crate::planner::Action::RepairConversation,
+            target_turn_id: "old-1:reply".into(),
+            target_quote: "返事old-1".into(),
+            signal_quote: "違う".into(),
+            replacement_quote: "材料を集めたいだけ".into(),
+            current_text: "違う、材料を集めたいだけ".into(),
+        };
+        h.annotate("correction", &repair);
+        for i in 0..6 {
+            pair(&mut h, &format!("during-{i}"));
+        }
+        let rows = h.rows();
+        let corrected = rows.iter().find(|r| r["turn_id"] == "correction").unwrap();
+        assert_eq!(corrected["repair_target_turn_id"], "old-1:reply");
+        assert_eq!(corrected["text"], repair.current_text);
+        assert!(h.lines().contains(&repair::note(corrected)));
+        h.push("new-correction", "user", &repair.current_text);
+        h.annotate("new-correction", &repair);
+        assert_eq!(
+            h.rows.back().unwrap()["repair_target_turn_id"],
+            "old-1:reply"
+        );
+        assert_eq!(h.rows()[1]["text"], "話題old-1");
+    }
+
+    #[test]
+    fn last_retained_input_can_record_repair_but_next_input_cannot_reuse_expired_target() {
+        let mut h = seeded();
+        h.begin_danger();
+        h.end_danger(3);
+        pair(&mut h, "after-0");
+        pair(&mut h, "after-1");
+        let repair = Repair {
+            action: crate::planner::Action::RepairConversation,
+            target_turn_id: "old-0:reply".into(),
+            target_quote: "返事old-0".into(),
+            signal_quote: "違う".into(),
+            replacement_quote: "材料の話".into(),
+            current_text: "違う、材料の話".into(),
+        };
+        assert!(contains(&h, "old-0:reply"));
+        h.push("third", "user", &repair.current_text);
+        assert!(!contains(&h, "old-0:reply"));
+        h.annotate("third", &repair);
+        assert_eq!(
+            h.rows.back().unwrap()["repair_target_turn_id"],
+            "old-0:reply"
+        );
+        h.push("fourth", "user", &repair.current_text);
+        h.annotate("fourth", &repair);
+        assert!(h.rows.back().unwrap().get("repair_action").is_none());
     }
 }

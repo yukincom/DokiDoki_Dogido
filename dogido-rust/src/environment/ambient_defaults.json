@@ -12,6 +12,7 @@
   "conversation_topic_fresh_ms": 120000,
   "conversation_pending_address_ttl_ms": 300000,
   "conversation_suspended_player_turns": 10,
+  "conversation_post_danger_player_turns": 3,
   "weather_sound_recent_ms": 4000,
   "special_biome_comment_cooldown_ms": 600000,
   "structure_comment_cooldown_ms": 600000

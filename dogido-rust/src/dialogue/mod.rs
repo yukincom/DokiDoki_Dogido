@@ -398,10 +398,16 @@ impl Dialogue {
                     || (event.event.name == EventName::CombatEnded && !conversation_threat)
                 {
                     s.foreground.finish_combat();
+                    s.history.end_danger(
+                        self.config
+                            .combat
+                            .ms("conversation_post_danger_player_turns"),
+                    );
                 }
                 // 暗所だけでもmodeはalertになる。敵等の根拠なしに
                 // combat_ended待ちへ入ると、明るくなっても発句が止まる。
                 if event.event.name != EventName::PlayerDied && conversation_threat {
+                    s.history.begin_danger();
                     s.foreground.start_combat(
                         now,
                         self.config.combat.ms("conversation_suspended_player_turns"),
@@ -1338,7 +1344,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {
