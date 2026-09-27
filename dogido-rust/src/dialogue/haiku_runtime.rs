@@ -266,6 +266,7 @@ impl Dialogue {
             || s.pending_warning.is_some()
             || s.assist_pending.is_some()
             || s.deferred_input.is_some()
+            || !s.knowledge_queue.is_empty()
             || s.foreground.clock.elapsed(now) < self.config.haiku.interval_ms
             || (!(casual || boundary)
                 && s.haiku.last_activity.elapsed()

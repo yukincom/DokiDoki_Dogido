@@ -9,6 +9,7 @@ mod foreground_runtime;
 mod haiku_runtime;
 mod history;
 mod knowledge_display;
+mod knowledge_queue;
 mod language_runtime;
 mod memory_runtime;
 mod poem_runtime;
@@ -112,6 +113,8 @@ struct Session {
     last_player_input: Option<u64>,
     foreground: crate::foreground::State,
     language: crate::language::State,
+    knowledge_queue: VecDeque<knowledge_queue::Pending>,
+    knowledge_checked: Option<knowledge_queue::Checked>,
     address: Option<crate::address::Pending>,
     address_checked: Option<address_runtime::Checked>,
     last_completed_conversation: Option<u64>,
@@ -254,6 +257,8 @@ impl Dialogue {
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
                 language: crate::language::State::default(),
+                knowledge_queue: VecDeque::new(),
+                knowledge_checked: None,
                 address: None,
                 address_checked: None,
                 last_completed_conversation: None,
@@ -269,6 +274,7 @@ impl Dialogue {
     }
     pub fn close(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
+        Self::cancel_knowledge_queue(&mut d, session_id, "session_closed");
         Self::cancel_haiku(&mut d, session_id, "session_closed");
         Self::cancel_chat(&mut d, session_id, "session_closed");
         Self::cancel_combat_input(&mut d, session_id);
@@ -426,6 +432,7 @@ impl Dialogue {
                     s.deferred_input = None;
                 }
                 if event.event.name == EventName::PlayerDied || decision.dimension_changed {
+                    Self::cancel_knowledge_queue(&mut d, session_id, "world_context_changed");
                     Self::cancel_address(&mut d, session_id, "attention_interrupted");
                 }
                 self.apply_combat_decision(
@@ -459,6 +466,9 @@ impl Dialogue {
         }
         drop(d);
         drop(jobs);
+        if !duplicate && recent && complete_observation(&event) && text.trim().is_empty() {
+            self.resume_knowledge_input(session_id);
+        }
         if !duplicate
             && recent
             && event.event.name == EventName::StatusSnapshot
@@ -543,6 +553,19 @@ impl Dialogue {
         if !observation_fresh(s) {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
+        if let Some(p) = s.knowledge_queue.iter().find(|p| p.request.text == text) {
+            return json!({"accepted":true,"deduplicated":true,"queued":true,
+                "turn_id":p.request.turn,"session_id":session_id});
+        }
+        let queued_knowledge = s
+            .knowledge_checked
+            .as_ref()
+            .filter(|c| {
+                expected_generation
+                    .as_ref()
+                    .is_some_and(|(g, _)| c.generation == *g)
+            })
+            .and_then(|c| c.original.clone());
         if let Some(p) = s.combat_input.as_ref().filter(|p| p.text == text) {
             return json!({"accepted":true,"deduplicated":true,"turn_id":p.turn,"session_id":session_id});
         }
@@ -630,6 +653,11 @@ impl Dialogue {
         if let Some(result) = self.close_paused_workshop(&mut d, &mut jobs, &session_id, text) {
             return result;
         }
+        if let Some(result) =
+            self.queue_knowledge_input(&mut d, &mut jobs, &session_id, text, source)
+        {
+            return result;
+        }
         let s = d.sessions.get_mut(&session_id).unwrap();
         if s.warning
             .as_ref()
@@ -672,6 +700,8 @@ impl Dialogue {
             address_runtime::Input::Replay(original) => (None, Some(original)),
             address_runtime::Input::Consumed(result) => return result,
         };
+        let host_chat_confirmed = replay.is_some();
+        let replay = replay.or(queued_knowledge);
         let text = replay.as_ref().map_or(text, |p| p.text.as_str());
         let source = replay.as_ref().map_or(source, |p| p.source.as_str());
         let s = d.sessions.get_mut(&session_id).unwrap();
@@ -699,8 +729,11 @@ impl Dialogue {
             .workshop
             .as_ref()
             .map(|w| json!({"id":w.hud_id,"version":w.version,"open":w.open}));
-        if let Some(w) = s.haiku.workshop.as_mut() {
-            // 一回の返答にだけ対応。取消・失敗した次のターンへ古い「うん」の対象を残さない。
+        if (poem_input.is_some()
+            || crate::reading_correction::for_input(text, &json!(workshop)).is_some()
+            || crate::haiku_memory::clear_requested(text))
+            && let Some(w) = s.haiku.workshop.as_mut()
+        {
             w.followup = crate::workshop_followup::Stage::Discussion;
         }
         let fixed_close = workshop.as_ref().is_some_and(|w| w["pending"].is_null())
@@ -741,7 +774,7 @@ impl Dialogue {
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "source":source,"language_active":language_active,"language_state":language_state,
-            "address_reply":address_reply,"host_chat_confirmed":replay.is_some(),
+            "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":event_digest,"event":event});
@@ -757,17 +790,32 @@ impl Dialogue {
         if replay.is_none() && d.rows.len() == 200 {
             d.rows.pop_front();
         }
-        let new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
+        let mut new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
             "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
             "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close});
         if let Some(original) = &replay {
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
                 row["playback_status"] = "generating".into();
                 row["epoch"] = epoch.into();
-                row["language_status"] = "host_chat".into();
-                row["conversation_route"] = "casual".into();
+                if host_chat_confirmed {
+                    row["language_status"] = "host_chat".into();
+                    row["conversation_route"] = "casual".into();
+                } else {
+                    row["category"] = "speech".into();
+                    row["workshop_id"] = new_row["workshop_id"].clone();
+                    row["workshop_fixed_close"] = new_row["workshop_fixed_close"].clone();
+                    row["resolution"] = "knowledge_resumed".into();
+                }
                 row["input_at_ms"] = original.input_at.into();
                 row["resumed_at"] = chrono::Utc::now().to_rfc3339().into();
+            } else {
+                // 長い戦闘で表示履歴200件から落ちても、保留質問のIDを復元する。
+                if d.rows.len() == 200 {
+                    d.rows.pop_front();
+                }
+                new_row["input_at_ms"] = original.input_at.into();
+                new_row["resumed_at"] = chrono::Utc::now().to_rfc3339().into();
+                d.rows.push_back(new_row);
             }
         } else {
             d.rows.push_back(new_row);
@@ -792,6 +840,7 @@ impl Dialogue {
     }
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
+        Self::cancel_knowledge_queue(&mut d, session_id, "manual_interrupt");
         Self::cancel_haiku(&mut d, session_id, "manual_interrupt");
         Self::cancel_chat(&mut d, session_id, "manual_interrupt");
         Self::cancel_combat_input(&mut d, session_id);
@@ -840,6 +889,10 @@ impl Dialogue {
                 .is_some_and(|w| {
                     w.hud_id == *wid
                         && !w.combat_paused()
+                        && result.is_none_or(|r| {
+                            r["workshop_action"] != "knowledge"
+                                || r["workshop_version"] == w.version
+                        })
                         && (result.is_none_or(|r| {
                             !matches!(
                                 r["workshop_action"].as_str(),
@@ -866,7 +919,11 @@ impl Dialogue {
                 if status == "queued"
                     && row["conversation_route"].is_null()
                     && result["memory_action"].is_null()
-                    && (workshop_id.is_none() || result["workshop_action"] == "unrelated")
+                    && (workshop_id.is_none()
+                        || matches!(
+                            result["workshop_action"].as_str(),
+                            Some("unrelated" | "knowledge")
+                        ))
                 {
                     row["conversation_route"] = if result["knowledge_status"].is_null() {
                         "casual"
@@ -926,14 +983,19 @@ impl Dialogue {
                 p.playback(turn, status);
             }
             if let Some(result) = result {
-                let workshop_reply =
-                    workshop_id.is_some() && result["workshop_action"] != "unrelated";
+                let knowledge_detour =
+                    workshop_id.is_some() && result["workshop_action"] == "knowledge";
+                let workshop_reply = workshop_id.is_some()
+                    && result["workshop_action"] != "unrelated"
+                    && !knowledge_detour;
                 if status == "queued" && !workshop_reply && result["memory_action"].is_null() {
                     s.history.push(turn, "user", &player_text);
-                    s.foreground
-                        .select(turn, &player_text, route, now, player_at);
+                    if !knowledge_detour {
+                        s.foreground
+                            .select(turn, &player_text, route, now, player_at);
+                    }
                 }
-                if status == "queued" && workshop_id.is_some() {
+                if status == "queued" && workshop_id.is_some() && !knowledge_detour {
                     if !workshop_reply {
                         s.history.push(turn, "user", &player_text);
                     }
@@ -959,6 +1021,7 @@ impl Dialogue {
                     }
                 }
                 if status == "completed"
+                    && !knowledge_detour
                     && let Some(w) = s
                         .haiku
                         .workshop
@@ -1284,6 +1347,7 @@ impl Dialogue {
             d.stopped = true;
             let ids = d.sessions.keys().cloned().collect::<Vec<_>>();
             for sid in ids {
+                Self::cancel_knowledge_queue(&mut d, &sid, "server_shutdown");
                 Self::cancel_haiku(&mut d, &sid, "server_shutdown");
                 Self::cancel_chat(&mut d, &sid, "server_shutdown");
                 Self::cancel_combat_input(&mut d, &sid);

@@ -321,6 +321,7 @@ impl Dialogue {
         }
         let s = d.sessions.get_mut(sid).unwrap();
         let busy = s.haiku.foreground()
+            || !s.knowledge_queue.is_empty()
             || s.cancel.is_some()
             || s.warning.is_some()
             || s.pending_warning.is_some()

@@ -239,7 +239,7 @@ async fn display_page(State(state): State<AppState>) -> Response {
             "`${environment}`",
         )
         .replace("tag.textContent = categoryLabels[item.category] || '発言';",
-            "tag.textContent = item.playback_status ? ({generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');")
+            "tag.textContent = item.playback_status ? ({routing:'内容を確認中',waiting_for_safety:'安全になるまで保留',not_selected:'発話なし',generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');")
         // heartbeatが途切れるとrevisionは止まるため、接続状態だけは毎回描画する。
         .replace(
             "const data = await response.json();",

@@ -89,6 +89,11 @@ impl Dialogue {
                 )
             }
             Submission::NeedsIntent(prepared) => {
+                // 「剣の耐久値は？」等は知識質問。危険中は抽出jobの最新一件枠に
+                // 入れる前にFIFOへ渡し、次の発話で質問を消さない。
+                if let Some(queued) = self.queue_knowledge_input(d, jobs, sid, text, source) {
+                    return Some(queued);
+                }
                 Self::cancel_chat(d, sid, "assist_intent");
                 let turn = id("assist");
                 let (cancel, rx) = watch::channel(false);

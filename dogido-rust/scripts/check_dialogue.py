@@ -63,6 +63,19 @@ def row(base, turn, statuses):
 def submit(base, sid, text="こんにちは"):
     got = request(base, "/api/v1/player-input", {"text": text, "source": "voice", "session_id": sid})
     assert got["accepted"], got
+    # 7e: 危険/警告中は既存parserの非同期振分けを先に受領する。
+    # 知識なら元IDのまま保留し、それ以外は明示された配送先を追う。
+    while got.get("reason") == "knowledge_input_routing":
+        routing = got
+        def classified():
+            item = next((r for r in snapshot(base)["utterances"] if r["turn_id"] == routing["turn_id"]), None)
+            if not item: return None
+            if "forwarded_input" in item: return item["forwarded_input"]
+            if item["playback_status"] in {"waiting_for_safety", "failed", "cancelled"}:
+                return {**routing, "reason":item["playback_status"]}
+            return None
+        got = wait_for(classified)
+        assert got["accepted"], got
     return got["turn_id"]
 
 

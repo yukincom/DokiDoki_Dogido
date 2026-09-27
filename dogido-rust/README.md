@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索、完成句の明示直し・自作句の保存、ローカル知識回答と限定国語対話も接続済みです。国語対話中の宛先確認・保留入力の再開も接続済みです。旧分類器へのfallback、知識質問の戦闘保留・workshop接続、Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料、本文prompt、発話検査、読み補正は移行用Python補助を使います。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索、完成句の明示直し・自作句の保存、ローカル知識回答と限定国語対話も接続済みです。国語対話中の宛先確認・保留入力の再開も接続済みです。知識質問の戦闘保留・workshop中の先行振分けも接続済みです。旧分類器へのfallback、戦闘前の専用履歴保持、Webは後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -267,7 +267,11 @@ python dogido-rust/scripts/check_haiku_runtime.py
 
 ## ローカル知識回答・限定国語対話
 
-workshop外の明示的な知識質問は正本DBから答え、参考資料を発話と一緒に表示します。国語の質問と学習中の続きは、問いの解釈を1回、必要な場合だけ資料に基づく説明を1回生成します。漢字の配当学年・明示かなの音数は表・計算の結果を使い、対象や読みが不明なら聞き返します。通常雑談には国語分類を追加しません。
+明示的な一般知識質問はworkshop内外とも正本DBから答え、参考資料を発話と一緒に表示します。国語の質問と学習中の続きは、問いの解釈を1回、必要な場合だけ資料に基づく説明を1回生成します。漢字の配当学年・明示かなの音数は表・計算の結果を使い、対象や読みが不明なら聞き返します。通常雑談には国語分類を追加しません。
+
+句の相談中でも「枕詞って何？」には資料から回答し、編集中の句・未採用案・終了/再開確認は保持します。「この川柳」や現在句のフレーズへの問いは句相談のままです。一般知識への回答は句相談履歴と川柳材料へ混ぜません。
+
+戦闘・警告中の明示知識質問は最大9件を先着順で保留し、安全な全観測と先行音声の終了後に一件ずつ答えます。同じ文の再送は重複させず、満杯は受付を断ります。振分け待ちは`routing`、知識保留成立は`waiting_for_safety`、再開後は同じturn IDで通常の再生状態を表示します。モデルによる追加判定はなく、既存parserへの最大3秒の照会だけです。手動停止・終了・死亡/次元変更で保留を破棄します。
 
 聞き返しの状態とassistant履歴は、音声を最後まで再生した後だけ確定します。学習中は川柳時計と非敵対ambientを止め、戦闘後はプレイヤーが明示した場合に続きを扱います。Web検索とブラウザー起動はまだ接続していません。
 
@@ -281,6 +285,8 @@ workshop外の明示的な知識質問は正本DBから答え、参考資料を�
 ./dogido-rust/cargo.sh build --locked
 python -m pytest dogido-rust/scripts/test_address_helper.py dogido-rust/scripts/test_language_helper.py tests/test_language_dialogue.py -q
 python dogido-rust/scripts/check_knowledge.py
+python -m pytest dogido-rust/scripts/test_knowledge_handoff.py -q
+python dogido-rust/scripts/check_knowledge_handoff.py
 python dogido-rust/scripts/check_foreground_runtime.py
 python dogido-rust/scripts/check_language_runtime.py
 python dogido-rust/scripts/generate_address_fixtures.py

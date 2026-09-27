@@ -35,6 +35,26 @@ impl Dialogue {
             .exchange(json!({"op":"reading_overlay", "rows":corrections}))
             .await?;
         let text = input["text"].as_str().context("workshop input text")?;
+        // 正本DBで答える一般知識を、句の相談・確認状態の消費より先に分ける。
+        let knowledge = helper
+            .exchange(json!({"op":"knowledge_route", "text":text,
+            "workshop":input["workshop"]}))
+            .await?;
+        if knowledge["lookup"].is_object() {
+            let reply = crate::knowledge::render(&knowledge["lookup"]);
+            let reading = helper
+                .exchange(json!({"op":"reading", "text":reply.text,
+                "reading_engine":self.config.reading_engine}))
+                .await?;
+            return Ok(
+                json!({"text":reply.text, "spoken_text":reading["spoken_text"],
+                "knowledge_status":reply.lookup_status, "references":reply.references,
+                "workshop_action":"knowledge", "workshop_id":input["workshop"]["workshop_id"],
+                "workshop_version":input["workshop"]["version"], "llm_reports":[]}),
+            );
+        }
+        // 一般知識の寄り道は確認・採否・時計を動かさない。本来の句入力だけ消費する。
+        self.consume_workshop_input(input)?;
         // Reuse this helper's existing catalog/date interpretation; no extra
         // model call or process for a normal workshop question.
         let recall = helper
@@ -404,12 +424,31 @@ impl Dialogue {
             .workshop
             .as_mut()
             .filter(|w| w.is_open() && !w.combat_paused())?;
-        w.record_activity(Instant::now());
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
             "entry_id":w.entry_id,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "provisional":w.provisional,"dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
+    }
+
+    fn consume_workshop_input(&self, input: &Value) -> Result<()> {
+        let mut d = self.data.lock().unwrap();
+        ensure!(!d.stopped, "server stopped");
+        let s = d
+            .sessions
+            .values_mut()
+            .find(|s| s.current_turn == input["operation_id"])
+            .context("superseded workshop input")?;
+        ensure!(s.cancel.is_some(), "cancelled workshop input");
+        let w = s.haiku.workshop.as_mut().context("missing workshop")?;
+        ensure!(
+            w.hud_id == input["workshop"]["workshop_id"]
+                && w.version == input["workshop"]["version"],
+            "changed workshop"
+        );
+        w.followup = Stage::Discussion;
+        w.record_activity(Instant::now());
+        Ok(())
     }
 }

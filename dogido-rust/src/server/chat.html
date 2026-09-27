@@ -22,7 +22,7 @@
 <script>
 const $=id=>document.getElementById(id);let snapshot=null,lastRevision=-1,lastSelection='',previewId=null,preferredSession=null;
 const modes={normal:'通常',alert:'警戒',panic:'パニック',suppressed_panic:'声を抑えて警戒',aftermath:'戦闘後'};
-const names={ready:'待機中',generating:'返答を生成中',queued:'音声を準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',unsupported:'未接続の機能',quiet:'発話なし'};
+const names={ready:'待機中',routing:'内容を確認中',waiting_for_safety:'安全になるまで保留',not_selected:'発話なし',generating:'返答を生成中',queued:'音声を準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',unsupported:'未接続の機能',quiet:'発話なし'};
 const cancelReasons={visual_hostile:'敵を視認',auditory_hostile:'敵の音を観測',recent_damage:'被弾',combat_active:'戦闘を観測',danger_darkness:'危険な暗さを観測',target_changed_or_gone:'対象や方向が変化・観測から消失',higher_priority_warning:'優先する警告へ切替',stale_observation:'現在の観測が途絶',new_player_input:'新しい発言',manual_interrupt:'停止操作',session_closed:'接続終了',server_shutdown:'サーバー終了',combat_priority:'戦闘の優先反応',combat_input:'戦闘の質問・指示',dimension_changed:'次元移動'};
 const reasons={select_one_session:'接続先を一つ選んでください。',fresh_safe_snapshot_required:'直近の安全なゲーム観測が必要です。戦闘中は敵の方角・体数への質問を受け付け、通常会話は警告を優先します。',unknown_session_id:'接続が終了しました。接続し直してください。',empty_text:'発言を入力してください。',server_stopping:'サーバーを停止中です。'};
 async function api(path,body,method){const headers={};if($('token').value)headers.Authorization='Bearer '+$('token').value;if(body!==undefined)headers['Content-Type']='application/json';const r=await fetch(path,{method:method||(body===undefined?'GET':'POST'),headers,body:body===undefined?undefined:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(r.status+' '+JSON.stringify(v.detail||v));return v;}

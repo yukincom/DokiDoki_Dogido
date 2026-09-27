@@ -118,8 +118,9 @@ def main():
                     "confidence": .95, "evidence": text, "speech": "", "checks": []}
         calls = install(control, choose)
         sid = ready(base, send, rows)
-        for text, expected in [("さっきの句についてまた話そうよ", "resume_workshop"),
-                               ("さっきの句の相談はここで切り上げよう", "decline_resume")]:
+        # 「さっきの句」は6hの想起経路が所有するため、現在句の再開を明示する。
+        for text, expected in [("この句についてまた話そうよ", "resume_workshop"),
+                               ("この句の相談はここで切り上げよう", "decline_resume")]:
             enter(send, rows, sid); end(send, rows, sid)
             returned(send, rows, sid, count=len(calls) + 1)
             r = finish(base, send, sid, text)

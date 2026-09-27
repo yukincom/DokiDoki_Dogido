@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision, _explicit_workshop_line_indices,
     is_meaning_acknowledgement, close_confirmation_decision, combat_resume_confirmation_decision,
-    parse_player_line_replacement, mentioned_workshop_line_fragment)
+    parse_player_line_replacement, mentioned_workshop_line_fragment, grounded_material_for_question)
 from dogido_server.haiku.workshop_agent import (build_workshop_agent_details, finalize_workshop_agent_step,
                                                _state_change_evidence_is_safe)
 from dogido_server.haiku.workshop_context import workshop_context_block, workshop_context_details
@@ -225,6 +225,22 @@ def details_for(frame):
 
 
 def handle(frame):
+    if frame["op"] == "knowledge_route":
+        from dogido_server.player_input import route_player_input
+        from dogido_server.knowledge_query import LocalKnowledgeProvider, validate_knowledge_lookup_result
+        context = route_player_input(frame["text"])
+        query = context.knowledge_query
+        if query is None or context.wants_quiet or context.normalized_text.startswith("/"):
+            return {"lookup": None}
+        workshop = snapshot_for(frame)
+        subject = "".join(query.subject.split())
+        whole_verse = (subject.startswith(("この", "今の", "いまの", "さっきの", "先ほどの", "今詠んだ", "いま詠んだ"))
+                       and any(term in subject for term in ("句", "川柳", "俳句", "三行")))
+        if (whole_verse or mentioned_workshop_line_fragment(workshop, frame["text"]) is not None
+                or grounded_material_for_question(workshop, frame["text"]) is not None):
+            return {"lookup": None}
+        lookup = validate_knowledge_lookup_result(LocalKnowledgeProvider().lookup(query, limit=3), expected_query=query)
+        return {"lookup": asdict(lookup)}
     if frame["op"] == "whole_verse":
         return {"lines": [asdict(line) for line in build_haiku_lines(frame["text"], provenance=frame["source"])]}
     if frame["op"] == "memory_query":
