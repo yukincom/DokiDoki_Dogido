@@ -135,7 +135,8 @@ def integration(binary, directory):
         (directory / "player_mode").write_text("ok")
         passed.append("cancelled_knowledge_stops_owned_audio_without_history")
 
-        turn = submit(base, sid, "こんにちは")
+        # 学習の続きではない別sessionの雑談に、国語分類を増やさない。
+        turn = submit(base, other, "こんにちは")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 2, seen
         passed.append("ordinary_chat_still_one_planner_one_leaf")

@@ -128,6 +128,15 @@ def run_turn(data):
         emit({"op": "result", "text": plan["text"],
               "spoken_text": prepare_text_for_tts(plan["text"], engine=settings.tts_reading_engine)})
         return
+    from language_helper import explicit_request, run as run_language
+    if (not data.get("workshop_fallback") and not data.get("workshop")
+            and not context.asks_inventory and not context.normalized_text.startswith("/")
+            and (data.get("language_active") or explicit_request(context.semantic_text))):
+        outcome = run_language(exchange)
+        if outcome["status"] != "host_chat":
+            emit({"op":"result", "text":outcome["text"],
+                  "spoken_text":prepare_text_for_tts(outcome["text"], engine=settings.tts_reading_engine)})
+            return
     event = GameEvent.model_validate(data["event"])
     llm = BridgeLLM(settings, data["model"])
     machine = DogidoStateMachine(settings, llm=llm)

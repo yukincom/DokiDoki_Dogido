@@ -89,11 +89,60 @@ pub async fn render_with_route(
         let mut reports = Vec::new();
         let mut knowledge: Option<crate::knowledge::Reply> = None;
         let mut selected = false;
+        let mut language: Option<crate::language::Turn> = None;
         while let Some(line) = stdout.next_line().await? {
             ensure!(line.len() < 1_000_000, "helper frame too large");
             let mut frame: Value = serde_json::from_str(&line).context("invalid helper JSON")?;
             let reply = match frame["op"].as_str() {
+                Some("language") => {
+                    ensure!(
+                        combat_kind.is_none()
+                            && !light_plan
+                            && !routing_only
+                            && knowledge.is_none()
+                            && input["workshop_fallback"] != true
+                            && input["workshop"].is_null()
+                            && plans == 0
+                            && leaves == 0,
+                        "language must precede ordinary chat"
+                    );
+                    if language.is_none() {
+                        ensure!(frame["stage"] == "start", "language must start once");
+                        language = Some(crate::language::Turn::new(&input)?);
+                        select_route(crate::foreground::Route::Learning)?;
+                        selected = true;
+                    }
+                    let turn = language.as_mut().unwrap();
+                    if frame["stage"] == "prompt" {
+                        let (kind, max_tokens) = turn.prompt_kind()?;
+                        let request = GenerationRequest {
+                            schema_version: 1,
+                            kind: kind.into(),
+                            model: config.model.clone(),
+                            messages: serde_json::from_value(frame["messages"].take())?,
+                            temperature: 0.0,
+                            max_tokens,
+                            enable_thinking: false,
+                        };
+                        let generated = match llm.generate(&request).await {
+                            Ok(report) => {
+                                tracing::info!(kind,elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,finish_reason=?report.generated.finish_reason);
+                                let output = serde_json::to_value(report)?;
+                                reports.push(output.clone());
+                                output["generated"].clone()
+                            }
+                            Err(error) => {
+                                reports.push(json!({"kind":kind,"error":error.to_string()}));
+                                json!({"text":"","finish_reason":"error"})
+                            }
+                        };
+                        turn.generated(generated)?
+                    } else {
+                        turn.advance(&frame)?
+                    }
+                }
                 Some("knowledge") => {
+                    ensure!(language.is_none(), "knowledge cannot follow language");
                     ensure!(
                         combat_kind.is_none()
                             && !light_plan
@@ -124,6 +173,12 @@ pub async fn render_with_route(
                 }
                 Some("plan") => {
                     ensure!(
+                        language
+                            .as_ref()
+                            .is_none_or(|t| t.finished() && t.outcome["status"] == "host_chat"),
+                        "language cannot invoke ordinary planner before handoff"
+                    );
+                    ensure!(
                         combat_kind.is_none()
                             && !light_plan
                             && !routing_only
@@ -150,6 +205,12 @@ pub async fn render_with_route(
                     output
                 }
                 Some("generate") => {
+                    ensure!(
+                        language
+                            .as_ref()
+                            .is_none_or(|t| t.finished() && t.outcome["status"] == "host_chat"),
+                        "language cannot invoke ordinary leaf before handoff"
+                    );
                     ensure!(
                         !routing_only && knowledge.is_none(),
                         "input routing and knowledge cannot generate"
@@ -189,6 +250,18 @@ pub async fn render_with_route(
                     }
                 }
                 Some("result") => {
+                    if let Some(turn) = &language {
+                        ensure!(turn.finished(), "unfinished language turn");
+                        if turn.outcome["status"] != "host_chat" {
+                            ensure!(
+                                frame["text"] == turn.outcome["text"],
+                                "helper changed language reply"
+                            );
+                        }
+                        frame["language_status"] = turn.outcome["status"].clone();
+                        frame["language_state"] = serde_json::to_value(&turn.state)?;
+                        frame["language_references"] = turn.outcome["references"].clone();
+                    }
                     if let Some(plan) = knowledge {
                         ensure!(
                             frame["text"] == plan.text,

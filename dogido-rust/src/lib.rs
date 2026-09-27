@@ -11,6 +11,7 @@ pub mod haiku_record;
 pub mod haiku_response;
 pub mod ingress;
 pub mod knowledge;
+pub mod language;
 pub mod llm;
 pub mod planner;
 pub mod poem_input;

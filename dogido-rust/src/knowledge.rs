@@ -32,7 +32,7 @@ impl Source {
         format!("ref_{:016x}", hash.finish())
     }
 
-    fn valid(&self, domain: &str) -> bool {
+    pub(crate) fn valid(&self, domain: &str) -> bool {
         if !(required(&self.source_id, 240)
             && required(&self.title_ja, 300)
             && required(&self.citation_label_ja, 120)

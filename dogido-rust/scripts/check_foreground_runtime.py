@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """会話所有権・発句時計・戦闘退避を実HTTPと模擬音声で確認する。"""
+import json
 import time
 from check_dialogue import register, request, row, snapshot, submit, wait_for
 from check_haiku_runtime import fixture
@@ -46,6 +47,26 @@ def main():
 
     with fixture(enabled=False) as f:
         base, _, log, control, seen, _, _, _, send, _, rows, _, _ = f
+        original_model = control["structured_handler"]
+        def language_model(incoming):
+            if incoming["max_tokens"] not in {850, 700}:
+                return original_model(incoming)
+            background, text = incoming["messages"][-1]["content"].split("\n以上は背景。今回応答する最新の発話はこちら：\n")
+            details, current = json.loads(background), json.loads(text)
+            if incoming["max_tokens"] == 700:
+                return {"status":"answer", "text":"枕詞は、決まった言葉の前につく言い回しやで。",
+                        "fact_ids":[details["facts"][0]["id"]], "application":"", "missing":""}
+            continuing = current["text"] == "さっきの話の続き"
+            evidence = [{"turn_id":current["turn_id"], "quote":current["text"]}]
+            if continuing:
+                previous = next(t for t in details["history"] if t["text"] == "枕詞って何？")
+                evidence.append({"turn_id":previous["turn_id"], "quote":previous["text"]})
+            return {"dialogue_act":"information_request" if continuing else "casual",
+                    "question":current["text"], "target":"枕詞" if continuing else "",
+                    "facet":"meaning" if continuing else "other", "topic":"language" if continuing else "general",
+                    "relation":"resume" if continuing else "switch", "target_status":"contextual" if continuing else "explicit",
+                    "alternatives":[], "evidence":evidence, "search_terms":["枕詞"] if continuing else [], "clarification":""}
+        control["structured_handler"] = language_model
         sid = register(base, preview=False); send(sid)
         turn = submit(base, sid, "枕詞って何？")
         wait_for(lambda: row(base, turn, {"completed"}))

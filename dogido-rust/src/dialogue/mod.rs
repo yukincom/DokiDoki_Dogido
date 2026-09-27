@@ -8,6 +8,7 @@ mod foreground_runtime;
 mod haiku_runtime;
 mod history;
 mod knowledge_display;
+mod language_runtime;
 mod memory_runtime;
 mod poem_runtime;
 mod reading_runtime;
@@ -109,6 +110,7 @@ struct Session {
     environment_latest: Option<GameEvent>,
     last_player_input: Option<u64>,
     foreground: crate::foreground::State,
+    language: crate::language::State,
     input_generation: u64,
     light_cancel: Option<watch::Sender<bool>>,
     deferred_input: Option<environment_runtime::DeferredInput>,
@@ -247,6 +249,7 @@ impl Dialogue {
                 environment_latest: None,
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
+                language: crate::language::State::default(),
                 input_generation: 0,
                 light_cancel: None,
                 deferred_input: None,
@@ -695,8 +698,10 @@ impl Dialogue {
             .chain((!resume_context.is_empty()).then_some(resume_context))
             .collect::<Vec<_>>()
             .join("\n");
+        let (language_active, language_state) = language_runtime::context(s, text);
         let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
+            "source":source,"language_active":language_active,"language_state":language_state,
             "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":event_digest,"event":event});
         if workshop.is_none()
@@ -933,6 +938,7 @@ impl Dialogue {
                     s.history.annotate(turn, &repair);
                 }
                 if status == "completed" && !workshop_reply && result["memory_action"].is_null() {
+                    language_runtime::completed(s, result);
                     s.history
                         .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
                     s.foreground.completed(
@@ -1102,6 +1108,7 @@ impl Dialogue {
         };
         match result {
             Ok(mut result) => {
+                self.apply_language_result(&sid, &turn, epoch, &result);
                 self.record_feedback(&sid, epoch, &input, &mut result).await;
                 if let Err(error) = self.apply_workshop_edit(&sid, epoch, &mut result).await {
                     result["text"] =
