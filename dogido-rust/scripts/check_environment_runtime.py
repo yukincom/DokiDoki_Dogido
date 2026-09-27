@@ -125,7 +125,10 @@ def main():
 
             sid = register(); send(sid, hotbar=bar()); before = calls()
             got = say(sid, "ダイヤモンドの剣の耐久値は？")
-            wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "unsupported"), None))
+            # assistの事前振り分けturnとは別の会話turnへ一度だけ引き渡す。
+            answer = wait_for(lambda: next((r for r in rows(sid)
+                if r.get("category") == "knowledge" and r["playback_status"] == "completed"), None))
+            assert answer["knowledge_status"] in {"found", "unavailable", "not_found"}, answer
             assert calls() == before and not send(sid)["commands"], rows(sid)
             close(sid); passed.append("knowledge_question_does_not_call_assist_model")
 

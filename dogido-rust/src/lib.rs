@@ -3,6 +3,7 @@ pub mod combat;
 pub mod dialogue;
 pub mod environment;
 pub mod events;
+pub mod foreground;
 pub mod haiku;
 pub mod haiku_bridge;
 pub mod haiku_memory;

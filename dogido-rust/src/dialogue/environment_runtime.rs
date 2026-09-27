@@ -139,15 +139,15 @@ pub(super) fn focus(
         .or(s.latest.as_ref())
         .expect("environment observation");
     let light = s.danger.light_context(e, settings);
-    let casual = s.casual_foreground
+    let casual = s.foreground.route == crate::foreground::Route::Casual
         && !crate::combat::model::elapsed(
             now,
             s.last_player_input,
             settings.ms("conversation_active_ttl_ms"),
         );
     AmbientFocus {
-        foreground: casual || s.haiku.foreground(),
-        casual_foreground: casual,
+        foreground: s.foreground.route != crate::foreground::Route::None || s.haiku.foreground(),
+        casual_foreground: casual && !s.haiku.foreground(),
         last_player_input_at: s.last_player_input,
         player_priority: s.cancel.is_some() || s.assist_pending.is_some(),
         boss_presence: boss,

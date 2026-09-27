@@ -116,7 +116,6 @@ pub(super) struct State {
     pub workshop: Option<Workshop>,
     pub last_activity: Instant,
     pub material_turns: VecDeque<Value>,
-    cycle: Option<Instant>,
     workshop_generation: String,
 }
 impl Default for State {
@@ -126,7 +125,6 @@ impl Default for State {
             workshop: None,
             last_activity: Instant::now(),
             material_turns: VecDeque::new(),
-            cycle: None,
             workshop_generation: String::new(),
         }
     }
@@ -252,25 +250,23 @@ impl Dialogue {
             return;
         }
         self.tick_workshop(&mut d, sid);
+        self.tick_foreground(&mut d, sid);
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
-        let now = Instant::now();
-        let cycle = *s.haiku.cycle.get_or_insert(now);
-        let casual = s.casual_foreground
-            && !crate::combat::model::elapsed(
-                self.clock.elapsed().as_millis() as u64,
-                s.last_player_input,
-                self.config.combat.ms("conversation_active_ttl_ms"),
-            );
+        let now = self.clock.elapsed().as_millis() as u64;
+        s.foreground.clock.start(now);
+        let casual = s.foreground.route == crate::foreground::Route::Casual;
         if !safe(s)
+            || s.foreground.combat_active
+            || s.foreground.route.blocks_haiku()
             || s.haiku.foreground()
             || s.cancel.is_some()
             || s.warning.is_some()
             || s.pending_warning.is_some()
             || s.assist_pending.is_some()
             || s.deferred_input.is_some()
-            || cycle.elapsed() < Duration::from_millis(self.config.haiku.interval_ms)
+            || s.foreground.clock.elapsed(now) < self.config.haiku.interval_ms
             || (!(casual || boundary)
                 && s.haiku.last_activity.elapsed()
                     < Duration::from_millis(self.config.haiku.quiet_time_ms))
@@ -290,6 +286,13 @@ impl Dialogue {
         };
         Self::cancel_light(&mut d, sid);
         let s = d.sessions.get_mut(sid).unwrap();
+        s.foreground.suspend(
+            now,
+            "auto_haiku",
+            self.config.combat.ms("conversation_suspended_player_turns"),
+        );
+        s.foreground
+            .activate(crate::foreground::Route::HaikuPreparation, now, None);
         let job = id("haiku");
         let (cancel, rx) = watch::channel(false);
         s.haiku.active = Some(Active {
@@ -450,8 +453,12 @@ impl Dialogue {
             let s = d.sessions.get_mut(sid).unwrap();
             s.haiku.workshop = Some(Workshop::open(emission.clone(), None, completed_clock));
             s.haiku.workshop_generation = job.into();
-            s.haiku.cycle = Some(completed_clock);
-            s.casual_foreground = false;
+            let now = completed_clock
+                .saturating_duration_since(self.clock)
+                .as_millis() as u64;
+            s.foreground.clock.reset(now);
+            s.foreground
+                .activate(crate::foreground::Route::HaikuWorkshop, now, None);
             s.haiku.material_turns.clear();
             let player_name = s.name.clone();
             d.revision += 1;
@@ -525,7 +532,9 @@ impl Dialogue {
                 let was_cancelled = s.haiku.active.as_ref().is_some_and(|a| *a.cancel.borrow());
                 s.haiku.active = None;
                 if !was_cancelled && s.haiku.workshop_generation != job {
-                    s.haiku.cycle = Some(Instant::now());
+                    s.foreground
+                        .clock
+                        .reset(self.clock.elapsed().as_millis() as u64);
                 }
                 s.haiku.last_activity = Instant::now();
                 if !was_cancelled {

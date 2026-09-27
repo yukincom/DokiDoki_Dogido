@@ -27,8 +27,18 @@ pub async fn cancelled(cancel: &mut watch::Receiver<bool>) {
 pub async fn render(
     config: &DialogueConfig,
     llm: &RigLlm,
+    input: Value,
+    cancel: &mut watch::Receiver<bool>,
+) -> Result<Value> {
+    render_with_route(config, llm, input, cancel, |_| Ok(())).await
+}
+
+pub async fn render_with_route(
+    config: &DialogueConfig,
+    llm: &RigLlm,
     mut input: Value,
     cancel: &mut watch::Receiver<bool>,
+    mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
 ) -> Result<Value> {
     input["reading_corrections"] = json!(super::reading_runtime::load_overlay(config).await?);
     let light_plan = input["op"] == "light_plan";
@@ -78,6 +88,7 @@ pub async fn render(
         let (mut plans, mut leaves) = (0, 0);
         let mut reports = Vec::new();
         let mut knowledge: Option<crate::knowledge::Reply> = None;
+        let mut selected = false;
         while let Some(line) = stdout.next_line().await? {
             ensure!(line.len() < 1_000_000, "helper frame too large");
             let mut frame: Value = serde_json::from_str(&line).context("invalid helper JSON")?;
@@ -100,6 +111,8 @@ pub async fn render(
                         "knowledge request mismatch"
                     );
                     let plan = crate::knowledge::render(&frame["lookup"]);
+                    select_route(crate::foreground::Route::Learning)?;
+                    selected = true;
                     tracing::info!(
                         event = "knowledge_reply",
                         lookup_status = plan.lookup_status,
@@ -124,6 +137,10 @@ pub async fn render(
                         request.model == config.model && !request.enable_thinking,
                         "unexpected planner model"
                     );
+                    if !selected {
+                        select_route(crate::foreground::Route::Casual)?;
+                        selected = true;
+                    }
                     let report = planner::run(llm, &request).await?;
                     for attempt in &report.attempts {
                         tracing::info!(kind="player_chat_plan", elapsed_ms=attempt.elapsed_ms as u64, completion_tokens=?attempt.generated.completion_tokens, finish_reason=?attempt.generated.finish_reason);
@@ -153,6 +170,10 @@ pub async fn render(
                             && !request.enable_thinking,
                         "unexpected helper generation"
                     );
+                    if !selected && combat_kind.is_none() && !light_plan && !routing_only {
+                        select_route(crate::foreground::Route::Casual)?;
+                        selected = true;
+                    }
                     match llm.generate(&request).await {
                         Ok(report) => {
                             tracing::info!(kind=request.kind, elapsed_ms=report.elapsed_ms as u64, completion_tokens=?report.generated.completion_tokens, finish_reason=?report.generated.finish_reason);

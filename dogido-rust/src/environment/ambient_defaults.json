@@ -9,6 +9,7 @@
   "ender_eye_comment_cooldown_ms": 8000,
   "conversation_ambient_mute_ms": 30000,
   "conversation_active_ttl_ms": 300000,
+  "conversation_suspended_player_turns": 10,
   "weather_sound_recent_ms": 4000,
   "special_biome_comment_cooldown_ms": 600000,
   "structure_comment_cooldown_ms": 600000
