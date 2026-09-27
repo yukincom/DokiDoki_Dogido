@@ -38,24 +38,48 @@ def main():
     if args.voice:
         settings = voice_settings(settings, folder)
         from dogido_server.voice_capture import echo_command
-        from dogido_server.voice_input import resolve_whisper_paths, resolve_vad_paths, main as voice_main
+        from dogido_server.voice_input import (
+            resolve_whisper_paths, resolve_vad_paths, NORMAL_STT_PROMPT, HAIKU_WORKSHOP_STT_PROMPT,
+        )
         cli, model = resolve_whisper_paths(settings)
-        echo_command(settings)
+        capture_command = echo_command(settings)
         vad = resolve_vad_paths(settings, cli)
-        print(f"音声入力: {model.name} / AECあり / VAD {'あり' if vad else 'なし'}", flush=True)
+        voice_config = {
+            "capture_command": capture_command,
+            "whisper_cli": str(cli.resolve()), "whisper_model": str(model.resolve()),
+            "vad": {"cli": str(vad[0].resolve()), "model": str(vad[1].resolve()),
+                    "threshold": settings.voice_vad_threshold} if vad else None,
+            "base_url": "http://127.0.0.1:5056",
+            "rms_threshold": settings.voice_rms_threshold,
+            "silence_ms": settings.voice_silence_ms,
+            "minimum_ms": settings.voice_min_speech_ms,
+            "maximum_ms": int(settings.voice_max_speech_sec * 1000),
+            "max_pending": settings.voice_stt_max_pending_segments,
+            "max_age_sec": settings.voice_stt_max_segment_age_sec,
+            "no_speech_threshold": settings.voice_no_speech_thold,
+            "retry_threshold": settings.voice_no_speech_retry_thold,
+            "wake_word": settings.voice_wake_word.strip(),
+            "normal_prompt": NORMAL_STT_PROMPT, "workshop_prompt": HAIKU_WORKSHOP_STT_PROMPT,
+            "use_gpu": True,
+        }
+        print(f"Rust音声入力: {model.name} / AECあり / VAD {'あり' if vad else 'なし'}", flush=True)
         print(f"発話区切り: 無音 {settings.voice_silence_ms}ms", flush=True)
         print("配送先: http://127.0.0.1:5056 / 終了はこのターミナルで Ctrl+C", flush=True)
-        if args.check:
-            print("設定・必要ファイルを確認しました。録音・サーバー起動は行っていません。")
-            return
-        with urllib.request.urlopen("http://127.0.0.1:5056/healthz", timeout=3) as r:
-            health = json.load(r)
-        if health.get("phase") != "dialogue_preview":
-            raise RuntimeError("先に start_dialogue.command でRust版の会話試験を起動してください。")
-        # echo_inputの別Pythonも移行中の同じ音声コードを読む。
-        os.environ["PYTHONPATH"] = str(ROOT)
-        voice_main(settings=settings)
-        return
+        if not args.check:
+            with urllib.request.urlopen("http://127.0.0.1:5056/healthz", timeout=3) as r:
+                health = json.load(r)
+            if health.get("phase") != "dialogue_preview":
+                raise RuntimeError("先に start_dialogue.command でRust版の会話試験を起動してください。")
+        binary = ROOT / "dogido-rust/target/release/dogido-rust"
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(ROOT)
+        if settings.auth_token: env["DOGIDO_AUTH_TOKEN"] = settings.auth_token
+        else: env.pop("DOGIDO_AUTH_TOKEN", None)
+        command = [str(binary), "voice-input", "--settings", json.dumps(voice_config)]
+        if args.check: command.append("--check")
+        os.chdir(ROOT)
+        # 起動設定だけPythonで解決し、以降の録音／STT／配送／停止はRustに渡す。
+        os.execve(binary, command, env)
     base = settings.llm_chat_base_url or settings.llm_base_url or "http://127.0.0.1:8080/v1"
     model = settings.llm_chat_model or settings.llm_model or "default_model"
     haiku_base = settings.llm_haiku_base_url or settings.llm_base_url or base

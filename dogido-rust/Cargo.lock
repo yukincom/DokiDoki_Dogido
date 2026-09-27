@@ -430,6 +430,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap",
+ "libc",
  "reqwest",
  "rig-core",
  "serde",

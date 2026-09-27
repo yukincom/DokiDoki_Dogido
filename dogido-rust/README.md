@@ -32,7 +32,7 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 ./dogido-rust/start_voice.command
 ```
 
-既存のwhisper・VAD・WebRTC AECを再利用し、無音800msで発話を区切って5056へ送ります。**終了はそれぞれのターミナルでCtrl+C**。通常Python版のサーバー・マイク入力を停止してから試験してください。共有MLXやVOICEVOXエンジンの起動・停止は行いません。準備だけの確認には両ファイルの`--check`を使えます。録音やモデル生成は行いません。
+既存のwhisper・VAD・WebRTC AECを再利用し、Rustが無音800msで発話を区切って5056へ送ります。**終了はそれぞれのターミナルでCtrl+C**。通常Python版のサーバー・マイク入力を停止してから試験してください。共有MLXやVOICEVOXエンジンの起動・停止は行いません。準備だけの確認には両ファイルの`--check`を使えます。音声側の確認には先にreleaseビルドが必要です。録音やモデル生成は行いません。
 
 起動ファイルはGitの共通ディレクトリから元チェックアウトを探し、その`.env`と`dogido-llm`を読みます。別の場所は`DOGIDO_RUST_SETTINGS_DIR`、Pythonだけは`DOGIDO_PYTHON`で指定できます。設定ファイル自体は変更しません。VOICEVOXのspeaker・平時の話速・pitch・volume・読み設定、chat routeのモデル・上限・timeoutを引き継ぎます。出力sampling rateの個別設定は未対応のため、指定時は理由を表示して停止します。
 
@@ -51,7 +51,26 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 
 文分割は[voicevox-sentence-stream](https://github.com/yukincom/voicevox-sentence-stream)の日本語即時境界・180文字上限・末尾保持をRustへ移植しています。来歴とMITライセンスは[third-party](third-party/voicevox-sentence-stream/NOTICE)に保持しています。`audio_sentence_ready`に文ごとの合成時間、`audio_first_sentence`に音声準備から最初のplayer起動までの時間を出します。実際に耳へ届く時刻の計測とは区別します。
 
-Python補助は`dialogue_helper.py`一件のstdio処理です。既存の通常雑談の材料・本文prompt・発話の採否・UniDicを再利用します。helperはgame-eventの判断、モデルHTTP、音声、保存を担当しません。これらの材料生成・検査・読みをRustへ移して同一入力比較を通した後に補助を外します。音声入力側のPython撤去は別段階です。
+Python補助は`dialogue_helper.py`一件のstdio処理です。既存の通常雑談の材料・本文prompt・発話の採否・UniDicを再利用します。helperはgame-eventの判断、モデルHTTP、音声、保存を担当しません。これらの材料生成・検査・読みをRustへ移して同一入力比較を通した後に補助を外します。音声入力は起動設定とAECのPython補助を残し、区切り・VAD/STT呼出・配送・停止処理をRustへ移しています。
+
+### マイク入力の制御
+
+`src/voice/`が録音子プロセスのPCMを受け取り、RMS判定、300msの先行音、発話区切り、待ち列、Silero VAD、whisper.cpp、認識文字列の検査とHTTP配送を担当します。待ち列は既定1件で、満杯なら古い待機入力を置き換え、8秒を過ぎた入力を捨てます。認識結果が空の場合だけ、promptを外して一度再試行します。不正UTF-8がログにある場合は本文を保ち、本文自体が壊れている場合は配送しません。
+
+Ctrl+C／SIGTERM、録音のEOFや停止時には進行中の認識を取り消し、今回起動した録音・認識プロセスを回収します。AEC起動時は最大35秒、開始後は次のフレームを最大3秒待ちます。失敗時に生マイクへ切り替えません。STT用の一時WAVはエコー除去後の音声だけで、完了・取消・失敗時に削除します。音声の参照信号は保存・送信しません。
+
+Core Audioの取得、WebRTC AEC3、Whisper、Sileroのエンジンは既存実装を使います。`launch_dialogue.py`は既存設定とパスを解決してRustへ`exec`し、AECの`echo_input.py`だけが音声処理の補助プロセスとして残ります。実マイクの認識品質・自己音の除去・体感速度は、[音声入力の実機確認](manual-dialogue-check.md#rust音声入力の確認)で別に確認します。
+
+録音・実モデルを使わない比較と通信試験:
+
+```sh
+python dogido-rust/scripts/generate_voice_fixtures.py
+./dogido-rust/cargo.sh test --locked voice::
+./dogido-rust/cargo.sh build --release --locked
+python dogido-rust/scripts/check_voice_runtime.py --binary dogido-rust/target/release/dogido-rust
+```
+
+区切り27件・Whisper出力11件をPythonと照合します。模擬試験では一時ポートと合成PCMを使い、再試行、VAD、不正UTF-8、認識待ち、受付拒否、SIGINT／SIGTERM、録音途絶、子プロセス・一時WAVの回収を検証します。結果は`reports/voice-runtime.json`です。
 
 模擬LLM／TTS／playerによる実HTTPの取消・失敗・履歴・終了確認:
 
