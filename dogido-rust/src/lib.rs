@@ -9,6 +9,7 @@ pub mod haiku_memory;
 pub mod haiku_record;
 pub mod haiku_response;
 pub mod ingress;
+pub mod knowledge;
 pub mod llm;
 pub mod planner;
 pub mod poem_input;

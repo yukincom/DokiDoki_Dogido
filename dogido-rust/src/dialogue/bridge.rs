@@ -77,13 +77,44 @@ pub async fn render(
         stdin.write_all(format!("{input}\n").as_bytes()).await?;
         let (mut plans, mut leaves) = (0, 0);
         let mut reports = Vec::new();
+        let mut knowledge: Option<crate::knowledge::Reply> = None;
         while let Some(line) = stdout.next_line().await? {
             ensure!(line.len() < 1_000_000, "helper frame too large");
             let mut frame: Value = serde_json::from_str(&line).context("invalid helper JSON")?;
             let reply = match frame["op"].as_str() {
+                Some("knowledge") => {
+                    ensure!(
+                        combat_kind.is_none()
+                            && !light_plan
+                            && !routing_only
+                            && input["workshop_fallback"] != true
+                            && input["workshop"].is_null()
+                            && plans == 0
+                            && leaves == 0
+                            && knowledge.is_none(),
+                        "knowledge must be the only ordinary reply operation"
+                    );
+                    ensure!(
+                        frame["request_text"].as_str().is_some()
+                            && frame["request_text"] == input["text"],
+                        "knowledge request mismatch"
+                    );
+                    let plan = crate::knowledge::render(&frame["lookup"]);
+                    tracing::info!(
+                        event = "knowledge_reply",
+                        lookup_status = plan.lookup_status,
+                        references = plan.references.len()
+                    );
+                    let response = serde_json::to_value(&plan)?;
+                    knowledge = Some(plan);
+                    response
+                }
                 Some("plan") => {
                     ensure!(
-                        combat_kind.is_none() && !light_plan && !routing_only,
+                        combat_kind.is_none()
+                            && !light_plan
+                            && !routing_only
+                            && knowledge.is_none(),
                         "reaction cannot invoke chat planner"
                     );
                     plans += 1;
@@ -102,7 +133,10 @@ pub async fn render(
                     output
                 }
                 Some("generate") => {
-                    ensure!(!routing_only, "input routing cannot generate");
+                    ensure!(
+                        !routing_only && knowledge.is_none(),
+                        "input routing and knowledge cannot generate"
+                    );
                     leaves += 1;
                     ensure!(leaves <= 2, "leaf retry limit exceeded");
                     let request: GenerationRequest = serde_json::from_value(frame["input"].take())?;
@@ -134,6 +168,20 @@ pub async fn render(
                     }
                 }
                 Some("result") => {
+                    if let Some(plan) = knowledge {
+                        ensure!(
+                            frame["text"] == plan.text,
+                            "helper changed canonical knowledge text"
+                        );
+                        frame["knowledge_status"] = plan.lookup_status.into();
+                        frame["references"] = serde_json::to_value(plan.references)?;
+                    } else {
+                        ensure!(
+                            frame.get("knowledge_status").is_none()
+                                && frame.get("references").is_none(),
+                            "references require a canonical knowledge reply"
+                        );
+                    }
                     frame["llm_reports"] = json!(reports);
                     return Ok(frame);
                 }

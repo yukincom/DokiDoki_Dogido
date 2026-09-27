@@ -6,6 +6,7 @@ mod combat_runtime;
 mod environment_runtime;
 mod haiku_runtime;
 mod history;
+mod knowledge_display;
 mod memory_runtime;
 mod poem_runtime;
 mod reading_runtime;
@@ -775,6 +776,7 @@ impl Dialogue {
             row["playback_status"] = status.into();
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
             if let Some(result) = result {
+                knowledge_display::attach(row, result);
                 if let Some(text) = result.get("text") {
                     row["text"] = text.clone();
                 }
@@ -890,6 +892,7 @@ impl Dialogue {
                         .completed_pairs()
                         .into_iter()
                         .find(|p| p["turn_id"] == turn)
+                        && result["knowledge_status"].is_null()
                         && !s.haiku.material_turns.iter().any(|p| p["turn_id"] == turn)
                     {
                         if s.haiku.material_turns.len() == 3 {
@@ -995,6 +998,7 @@ impl Dialogue {
                         let mut ordinary = input.clone();
                         // 対話plannerには過去の通常会話と現在入力だけを渡す。
                         ordinary["workshop"] = Value::Null;
+                        ordinary["workshop_fallback"] = true.into();
                         match bridge::render(&self.config, &self.llm, ordinary, &mut cancel).await {
                             Ok(mut result) => {
                                 let mut reports = workshop["llm_reports"]
@@ -1091,6 +1095,7 @@ impl Dialogue {
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
                         && status == "completed"
                         && result["workshop_action"].is_null()
+                        && result["knowledge_status"].is_null()
                         && result["memory_action"].is_null();
                 }
             }
@@ -1123,9 +1128,14 @@ impl Dialogue {
     }
     pub fn snapshot(&self, selected: Option<&str>) -> Value {
         let d = self.data.lock().unwrap();
+        let rows = d
+            .rows
+            .iter()
+            .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
+            .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
             "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
-            "utterances":d.rows.iter().filter(|r|selected.is_none_or(|id|r["session_id"]==id)).collect::<Vec<_>>()})
+            "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {
         {
@@ -1159,6 +1169,52 @@ impl Dialogue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn knowledge_history_requires_playback_and_never_becomes_poem_material() {
+        let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+        dialogue.register("knowledge-session", "試験", true);
+        let result = json!({"text":"定型的な言葉やで。", "knowledge_status":"found", "references":[{
+            "source_id":"src.example", "title_ja":"資料", "citation_label_ja":"文部科学省",
+            "locator":"1頁", "url":"https://example.org/reference", "source_kind":"organization_authored_or_issued"}]});
+        {
+            let mut data = dialogue.data.lock().unwrap();
+            for (sid, turn) in [("knowledge-session", "first"), ("other-session", "other")] {
+                data.rows
+                    .push_back(json!({"session_id":sid, "turn_id":turn,"utterance_id":turn,
+                    "player_input_text":"枕詞って何？", "created_at":"2026-09-27T00:00:00Z"}));
+            }
+        }
+        assert!(dialogue.update("knowledge-session", "first", 0, "queued", Some(&result)));
+        assert!(dialogue.update("knowledge-session", "first", 0, "failed", Some(&result)));
+        assert!(
+            dialogue.data.lock().unwrap().sessions["knowledge-session"]
+                .history
+                .completed_pairs()
+                .is_empty()
+        );
+        assert!(dialogue.update("knowledge-session", "first", 0, "completed", Some(&result)));
+        {
+            let data = dialogue.data.lock().unwrap();
+            let session = &data.sessions["knowledge-session"];
+            assert_eq!(session.history.completed_pairs().len(), 1);
+            assert!(session.haiku.material_turns.is_empty());
+        }
+        let view = dialogue.snapshot(Some("knowledge-session"));
+        assert_eq!(view["references"][0]["utterance_ids"], json!(["first"]));
+        assert_eq!(view["utterances"][0]["category"], "knowledge");
+        assert_eq!(
+            view["utterances"][0]["reference_ids"][0],
+            view["references"][0]["reference_id"]
+        );
+        assert_eq!(
+            dialogue.snapshot(Some("other-session"))["references"],
+            json!([])
+        );
+        dialogue.data.lock().unwrap().rows.pop_front();
+        assert_eq!(dialogue.snapshot(None)["references"], json!([]));
+        dialogue.shutdown().await;
+    }
 
     #[tokio::test]
     async fn pending_group_uses_latest_composition_after_queue_saturation() {

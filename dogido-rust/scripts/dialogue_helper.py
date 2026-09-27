@@ -100,9 +100,6 @@ def run_turn(data):
         llm_provider="local", llm_model=data["model"], llm_max_tokens=data["max_tokens"],
         audio_enabled=False, memory_enabled=False, decision_policy="legacy",
         tts_reading_engine=data.get("reading_engine", "auto"))
-    event = GameEvent.model_validate(data["event"])
-    llm = BridgeLLM(settings, data["model"])
-    machine = DogidoStateMachine(settings, llm=llm)
     context = route_player_input(data["text"])
     # 自動ASR変換を原文へ混ぜない。文脈STT補正の再移植は別段階。
     context.raw_text = data["text"]
@@ -120,8 +117,20 @@ def run_turn(data):
         emit({"op": "result", "text": "", "spoken_text": "", "repair": None})
         return
     if context.knowledge_query is not None:
-        emit({"op": "result", "unsupported": "知識検索はまだ接続していません。"})
+        if data.get("workshop_fallback"):
+            # workshop内の先行routingは別の移植単位。unrelated扱いでpinを流さない。
+            emit({"op": "result", "unsupported": "句の相談中の知識検索はまだ接続していません。"})
+            return
+        from dogido_server.knowledge_query import LocalKnowledgeProvider, validate_knowledge_lookup_result
+        lookup = LocalKnowledgeProvider().lookup(context.knowledge_query, limit=3)
+        lookup = validate_knowledge_lookup_result(lookup, expected_query=context.knowledge_query)
+        plan = exchange({"op": "knowledge", "request_text": data["text"], "lookup": asdict(lookup)})
+        emit({"op": "result", "text": plan["text"],
+              "spoken_text": prepare_text_for_tts(plan["text"], engine=settings.tts_reading_engine)})
         return
+    event = GameEvent.model_validate(data["event"])
+    llm = BridgeLLM(settings, data["model"])
+    machine = DogidoStateMachine(settings, llm=llm)
     machine.player_input = context
     history = data["history"]
     machine.dialogue_context_provider = lambda: SimpleNamespace(

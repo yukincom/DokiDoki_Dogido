@@ -24,6 +24,8 @@ struct Cli {
 // 一度だけ解析する起動引数。サーバーの反復処理・待ち列へこのenumは保持しない。
 #[allow(clippy::large_enum_variant)]
 enum Command {
+    /// ローカル知識検索結果の回答投影を確認する。ネットワーク・モデル生成なし。
+    RenderKnowledge { request: PathBuf },
     /// 通常雑談plannerだけを比較。状態機械の投影fixtureを読み、発話・操作・保存はしない。
     PlanChat {
         request: PathBuf,
@@ -93,6 +95,13 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::RenderKnowledge { request } => {
+            let value = serde_json::from_slice(&std::fs::read(request)?)?;
+            println!(
+                "{}",
+                serde_json::to_string(&dogido_rust::knowledge::render(&value))?
+            );
+        }
         Command::PlanChat {
             request,
             base_url,

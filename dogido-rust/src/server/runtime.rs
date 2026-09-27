@@ -101,7 +101,8 @@ impl Published {
             .map(|d| d.snapshot(session_id.as_deref()));
         json!({
             "schema_version": 1, "revision": dialogue.as_ref().map(|d|d["revision"].clone()).unwrap_or(json!(0)), "generated_at": now,
-            "session_id": session_id, "utterances": dialogue.as_ref().map(|d|d["utterances"].clone()).unwrap_or(json!([])), "references": [],
+            "session_id": session_id, "utterances": dialogue.as_ref().map(|d|d["utterances"].clone()).unwrap_or(json!([])),
+            "references": dialogue.as_ref().map(|d|d["references"].clone()).unwrap_or(json!([])),
             "retention": {"storage": "process_memory", "max_utterances": 200, "cleared_on_restart": true},
             "diagnostic_schema_version": 1, "diagnostic_revision": self.diagnostic_revision,
             "diagnostics": self.diagnostics,
