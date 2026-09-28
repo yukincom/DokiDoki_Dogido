@@ -147,22 +147,7 @@ pub fn compact(text: &str) -> String {
         .collect()
 }
 pub fn normalize(text: &str) -> String {
-    let mut out = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    for (from, to) in [
-        ("和行為為団", "ワ行イ段"),
-        ("和業・イダン", "ワ行イ段"),
-        ("和業イダン", "ワ行イ段"),
-        ("関圧番", "感圧板"),
-        ("管轄版", "感圧板"),
-        ("間月版", "感圧板"),
-        ("貨物板", "感圧板"),
-        ("感圧版", "感圧板"),
-        ("かんあつばん", "感圧板"),
-        ("カンアツバン", "感圧板"),
-    ] {
-        out = out.replace(from, to);
-    }
-    out
+    crate::player_text::normalize(text)
 }
 pub fn mentions_sword_target(text: &str) -> bool {
     contains_any(&compact(text), TARGETS)

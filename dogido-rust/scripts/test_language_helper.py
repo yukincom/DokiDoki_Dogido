@@ -1,19 +1,10 @@
-"""残る国語補助は入口とローカル検索だけに限定する。"""
+"""残る国語補助はローカル検索だけに限定する。"""
 from pathlib import Path
 import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from language_helper import explicit_request, handle
-from dogido_server.service import DogidoService
-
-
-@pytest.mark.parametrize("text", [
-    "", "こんにちは", "漢字が書いてあった", "ゾンビどこ？", "いい川柳だね", "川柳の話をしよう",
-    "枕詞ってどういう意味？", "3は何年生で習うの？", "音数\n を教えて", "ドギドってなんて読む？",
-])
-def test_entry_gate_matches_existing_service_without_a_model(text):
-    assert explicit_request(text) == DogidoService._looks_like_main_language_request(text)
+from language_helper import handle
 
 
 @pytest.mark.parametrize("command", ["interpretation", "reply", "prompt"])

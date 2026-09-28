@@ -6,6 +6,7 @@ import pytest
 import dialogue_helper
 from dogido_server.player_input import route_player_input
 from dogido_server.service import DogidoService
+from test_input_helper import frame
 
 
 @pytest.mark.parametrize("text", [
@@ -18,5 +19,5 @@ def test_general_input_ownership_matches_existing_service(text):
     session = SimpleNamespace(haiku_workshop=None)
     expected = DogidoService._is_general_conversation_input(None, session, route_player_input(text))
     with patch.object(dialogue_helper, "emit") as emit:
-        dialogue_helper.run_address_route({"text":text})
+        dialogue_helper.run_address_route(frame(text))
     emit.assert_called_once_with({"op":"result", "general_conversation":expected})

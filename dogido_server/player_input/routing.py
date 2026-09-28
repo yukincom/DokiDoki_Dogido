@@ -48,6 +48,19 @@ def route_player_input(
                 original[:80],
                 normalized_text[:80],
             )
+    return route_prepared_player_input(raw_text, normalized_text, normalized_interpreted)
+
+
+def route_prepared_player_input(
+    raw_text: str | None,
+    normalized_text: str,
+    normalized_interpreted: str = "",
+) -> PlayerInputContext:
+    """内部用: 正規化済みの入力を既存parserへ渡す。元本文の改行は保存用に保つ。
+
+    通常のPython入口は上のroute_player_input。Rust補助は同じ正規化を
+    済ませた値を渡し、ここではASR補正や空白正規化を重ねない。
+    """
     spoken = normalized_text if normalized_text else (raw_text or "")
     if normalized_text.startswith("/"):
         # スラッシュコマンドはドギドへの話しかけではないので、

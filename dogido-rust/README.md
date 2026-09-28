@@ -282,7 +282,9 @@ python dogido-rust/scripts/check_haiku_runtime.py
 
 明示的な一般知識質問はworkshop内外とも正本DBから答え、参考資料を発話と一緒に表示します。国語の質問と学習中の続きは、問いの解釈を1回、必要な場合だけ資料に基づく説明を1回生成します。漢字の配当学年・明示かなの音数は表・計算の結果を使い、対象や読みが不明なら聞き返します。通常雑談には国語分類を追加しません。
 
-国語の解釈・回答の外形、発話引用、文脈対象、漢字の学年の確認、確定かなの音数計算はRustで検査します。途中で上限に達した応答や資料にないfact IDは採用せず、追加生成を行いません。国語prompt・音数と漢字の学年の固定回答・入力中の同一文字比較もRustで処理します。確定かなの計算と回答では検索helperへの往復も省きます。入口parser・正本DB検索・辞書読みはPython補助を残しています。比較用fixtureは移植直前のGit checkpoint `b39e7dd`とPython正本から採取し、解釈312件・回答65件の一致を確認しています。さらに`91eb1d9`とPython正本からprompt 10件・固定回答48件・文字比較8件を採取し、指示文と返答の一致を確認しています。
+会話helperへ渡す入力は、Rustで空白と既存の誤変換表だけを正規化します。元本文と改行は別に保持し、helperで同じ正規化を重ねません。国語対話の入口候補もRustで判定します。知識・所持品・保存等の詳細parserと優先順は既存Pythonを使い、国語候補だけで振り分けを変えません。Python正本との比較310ケースで確認しています。
+
+国語の解釈・回答の外形、発話引用、文脈対象、漢字の学年の確認、確定かなの音数計算はRustで検査します。途中で上限に達した応答や資料にないfact IDは採用せず、追加生成を行いません。国語prompt・音数と漢字の学年の固定回答・入力中の同一文字比較もRustで処理します。確定かなの計算と回答では検索helperへの往復も省きます。詳細parser・正本DB検索・辞書読みはPython補助を残しています。比較用fixtureは移植直前のGit checkpoint `b39e7dd`とPython正本から採取し、解釈312件・回答65件の一致を確認しています。さらに`91eb1d9`とPython正本からprompt 10件・固定回答48件・文字比較8件を採取し、指示文と返答の一致を確認しています。
 
 句の相談中でも「枕詞って何？」には資料から回答し、編集中の句・未採用案・終了/再開確認は保持します。「この川柳」や現在句のフレーズへの問いは句相談のままです。一般知識への回答は句相談履歴と川柳材料へ混ぜません。
 
@@ -309,6 +311,8 @@ python dogido-rust/scripts/check_history_retention.py
 python dogido-rust/scripts/check_language_runtime.py
 python dogido-rust/scripts/generate_language_validation_fixtures.py
 python dogido-rust/scripts/generate_language_preparation_fixtures.py
+python dogido-rust/scripts/generate_player_text_fixtures.py
+python -m pytest dogido-rust/scripts/test_input_helper.py -q
 python dogido-rust/scripts/generate_address_fixtures.py
 python dogido-rust/scripts/check_address_runtime.py
 ```

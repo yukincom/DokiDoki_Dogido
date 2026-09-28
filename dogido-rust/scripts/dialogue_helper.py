@@ -29,7 +29,7 @@ except ImportError:
             value.prompt_tokens = prompt_tokens
             return value
 from dogido_server.models import GameEvent
-from dogido_server.player_input import route_player_input
+from input_helper import prepared_context
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.tts_reading import prepare_text_for_tts
 from reading_overlay import apply_reading_snapshot
@@ -104,8 +104,8 @@ def run_turn(data):
         llm_provider="local", llm_model=data["model"], llm_max_tokens=data["max_tokens"],
         audio_enabled=False, memory_enabled=False, decision_policy="legacy",
         tts_reading_engine=data.get("reading_engine", "auto"))
-    context = route_player_input(data["text"])
-    # 自動ASR変換を原文へ混ぜない。文脈STT補正の再移植は別段階。
+    context = prepared_context(data)
+    # この補助の固定ASR置換を、保存・操作の原文や会話の意味解釈へ混ぜない。
     context.raw_text = data["text"]
     context.interpreted_text = data["text"]
     if context.asks_haiku_recall and not (context.asks_save_last_haiku or context.revised_haiku_text or context.player_haiku_text):
@@ -132,10 +132,10 @@ def run_turn(data):
         emit({"op": "result", "text": plan["text"],
               "spoken_text": prepare_text_for_tts(plan["text"], engine=settings.tts_reading_engine)})
         return
-    from language_helper import explicit_request, run as run_language
+    from language_helper import run as run_language
     if (not data.get("host_chat_confirmed") and not data.get("workshop_fallback") and not data.get("workshop")
             and not context.asks_inventory and not context.normalized_text.startswith("/")
-            and (data.get("language_active") or explicit_request(context.semantic_text))):
+            and data["language_requested"]):
         outcome = run_language(exchange)
         if outcome["status"] != "host_chat":
             emit({"op":"result", "text":outcome["text"],
@@ -200,14 +200,14 @@ def run_light_plan(data):
 
 def run_assist_route(data):
     # 知識質問を持ち替え抽出へ回さない。モデルも状態機械も呼び出さない。
-    context = route_player_input(data["text"])
+    context = prepared_context(data)
     emit({"op": "result", "knowledge_query": context.knowledge_query is not None})
 
 
 def run_address_route(data):
     # 保留の確認が、知識・所持品・保存等の既存入力を横取りしない。
     # 入力parserだけを使い、モデル・状態機械・DB検索は実行しない。
-    c = route_player_input(data["text"])
+    c = prepared_context(data)
     general = bool(c.semantic_text.strip()) and not c.normalized_text.startswith("/") and not any((
         c.wants_quiet, c.asks_hostile_count, c.asks_hostile_direction, c.asks_dragon_direction,
         c.asks_save_last_haiku, c.asks_inventory, c.requests_sword, c.knowledge_query is not None,

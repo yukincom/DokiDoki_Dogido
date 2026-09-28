@@ -41,6 +41,12 @@ pub async fn render_with_route(
     mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
     mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
 ) -> Result<Value> {
+    if let Some(text) = input["text"].as_str() {
+        let prepared = crate::player_text::prepare(text);
+        input["language_requested"] =
+            (input["language_active"] == true || prepared.explicit_language).into();
+        input["prepared_input"] = serde_json::to_value(prepared)?;
+    }
     input["reading_corrections"] = json!(super::reading_runtime::load_overlay(config).await?);
     let light_plan = input["op"] == "light_plan";
     let routing_only = matches!(input["op"].as_str(), Some("assist_route" | "address_route"));
@@ -99,6 +105,7 @@ pub async fn render_with_route(
                 Some("language") => {
                     ensure!(
                         address_reply.is_none()
+                            && input["language_requested"] == true
                             && combat_kind.is_none()
                             && !light_plan
                             && !routing_only

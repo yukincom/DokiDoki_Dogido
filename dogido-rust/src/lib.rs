@@ -16,6 +16,7 @@ pub mod knowledge;
 pub mod language;
 pub mod llm;
 pub mod planner;
+pub mod player_text;
 pub mod poem_input;
 pub mod reading_correction;
 pub mod server;
