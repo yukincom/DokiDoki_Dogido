@@ -95,6 +95,11 @@ def consultation_messages(details):
     editing = "stage_player_edit" in details["allowed_actions"]
     pending = bool(details.get("pending_verse"))
     extra = ""
+    if details["original_player_text"] != details["player_text"]:
+        extra += (f"今回のプレイヤー発話（認識原文）: {details['original_player_text']}\n"
+            "会話理解用には現在の句や材料にある語だけの音近傍補正がある。"
+            "編集・採否・終了のevidenceと置換語は必ず認識原文から取る。"
+            "補正語だけを変更や保存の許可にしない。原文が曖昧ならaskで確認する。\n")
     if "acknowledge_meaning" in details["allowed_actions"]:
         extra += ("直前に意味の説明を再生済み。今回の発話がその説明への納得だけならacknowledge_meaning、"
             "purposeはunderstand_meaning。評価・褒め言葉・新しい質問・修正要求とは区別する。\n")
@@ -212,7 +217,7 @@ def snapshot_for(frame):
 def details_for(frame):
     workshop = snapshot_for(frame)
     details = build_workshop_agent_details(
-        workshop, frame["text"], original_player_text=frame["text"],
+        workshop, frame.get("interpreted_text") or frame["text"], original_player_text=frame["text"],
         phase=frame["phase"], observation=frame.get("observation"),
         turn_steps=frame.get("turn_steps", []),
     )
@@ -233,11 +238,14 @@ def handle(frame):
         if query is None or context.wants_quiet or context.normalized_text.startswith("/"):
             return {"lookup": None}
         workshop = snapshot_for(frame)
+        # 補正で現在句・材料に一致した問いも、一般知識へ流さず句相談へ残す。
+        # DB queryと全ての操作は認識原文のまま。
+        question_text = frame.get("interpreted_text") or frame["text"]
         subject = "".join(query.subject.split())
         whole_verse = (subject.startswith(("この", "今の", "いまの", "さっきの", "先ほどの", "今詠んだ", "いま詠んだ"))
                        and any(term in subject for term in ("句", "川柳", "俳句", "三行")))
-        if (whole_verse or mentioned_workshop_line_fragment(workshop, frame["text"]) is not None
-                or grounded_material_for_question(workshop, frame["text"]) is not None):
+        if (whole_verse or mentioned_workshop_line_fragment(workshop, question_text) is not None
+                or grounded_material_for_question(workshop, question_text) is not None):
             return {"lookup": None}
         lookup = validate_knowledge_lookup_result(LocalKnowledgeProvider().lookup(query, limit=3), expected_query=query)
         return {"lookup": asdict(lookup)}
@@ -324,6 +332,11 @@ def handle(frame):
         # 必須6項目・未知キー・採否/終了の根拠は既存契約でも検査する。
         if isinstance(payload, dict):
             payload = {**INACTIVE_FIELDS, **payload}
+        if isinstance(payload, dict) and payload.get("action") in {
+                "stage_player_edit", "propose_revision", "accept_pending", "reject_pending", "close_workshop"}:
+            # 操作の外形・根拠も原文に照合する。補正で単語が変わっても、原文から
+            # 確定できた編集をevidence不一致にせず、補正だけの許可も作らない。
+            details = {**details, "player_text": details["original_player_text"]}
         contract = validate_structured_payload(KIND, payload, details=details)
         if not contract.accepted:
             return {"contract_errors": list(contract.errors), "step": None, "reason": "schema_contract_error"}

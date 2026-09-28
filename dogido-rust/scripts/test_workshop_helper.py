@@ -2,7 +2,7 @@
 from copy import deepcopy
 import pytest
 from check_workshop_runtime import step
-from workshop_helper import CONSULTATION_KEYS, handle
+from workshop_helper import CONSULTATION_KEYS, details_for, handle
 
 
 def test_whole_verse_uses_existing_dictionary_records_without_meter_rewriting():
@@ -32,6 +32,79 @@ def test_compact_and_full_contract_have_same_validated_step():
     full["payload"] = step(short["text"], speech=short["payload"]["speech"])
     assert handle(short) == handle(full)
     assert handle(short)["step"]["action"] == "explain"
+
+
+def test_asr_interpretation_is_only_consultation_context_and_original_is_preserved():
+    f = frame("サクラノバって何？")
+    f["interpreted_text"] = "さくらのはって何？"
+    f["payload"]["evidence"] = f["interpreted_text"]
+    details = details_for(f)
+    assert details["player_text"] == f["interpreted_text"]
+    assert details["original_player_text"] == f["text"]
+    assert handle(f)["step"]["action"] == "explain"
+    f["op"] = "prepare"
+    prompt = handle(f)["messages"][1]["content"]
+    assert "今回のプレイヤー発話（認識原文）: サクラノバって何？" in prompt
+    assert "今回のプレイヤー発話（会話理解用）: さくらのはって何？" in prompt
+
+
+@pytest.mark.parametrize("action,raw,semantic", [
+    ("close_workshop", "シュウリョウにして", "終了にして"),
+    ("close_workshop", "終了しないよ、サクラノバって何？", "終了しないよ、さくらのはって何？"),
+])
+def test_corrected_words_do_not_supply_close_authority(action, raw, semantic):
+    f = frame(raw, action)
+    f["interpreted_text"] = semantic
+    f["payload"]["evidence"] = "終了"
+    assert handle(f)["step"] is None
+
+
+def test_corrected_replacement_is_not_permission_to_rewrite_original_words():
+    from check_workshop_edits import edit
+    f = frame("上五を『サクライロ』にして")
+    f["interpreted_text"] = "上五を『さくらいろ』にして"
+    f["allowed_actions"].append("stage_player_edit")
+    f["payload"] = edit("にして", replacement="さくらいろ")
+    assert handle(f)["step"] is None
+    # 行名・置換語を原文から抜いた正しい案は、補正を無効にしてはいない。
+    f["payload"] = edit("にして", replacement="サクライロ")
+    assert handle(f)["step"] is not None
+
+
+def test_corrected_current_verse_question_does_not_escape_to_dictionary():
+    f = frame("サクラノバって何？")
+    f["op"] = "knowledge_route"
+    f["interpreted_text"] = "さくらのはって何？"
+    assert handle(f) == {"lookup": None}
+
+
+def test_original_fixed_fragment_edit_still_validates_after_asr_interpretation():
+    f = frame("サクラノハをさくらいろに変えて")
+    f["interpreted_text"] = "さくらのはをさくらいろに変えて"
+    f["allowed_actions"].append("stage_player_edit")
+    f["op"] = "prepare"
+    fixed = handle(f)["fixed_payload"]
+    assert fixed["evidence"] == f["text"]
+    f["op"] = "validate"
+    f["payload"] = fixed
+    result = handle(f)
+    assert result["step"]["action"] == "stage_player_edit", result
+    assert result["step"]["analysis"]["line_proposal"]["replacement_text"] == "さくらいろ"
+
+
+def test_model_edit_and_close_validate_original_evidence_not_corrected_permission():
+    from check_workshop_edits import edit
+    f = frame("上五を『ハルノクサ』にして")
+    f["interpreted_text"] = "上五を『はるのくさ』にして"
+    f["allowed_actions"].append("stage_player_edit")
+    f["payload"] = edit(f["text"], replacement="ハルノクサ")
+    result = handle(f)
+    assert result["step"]["action"] == "stage_player_edit", result
+    f["payload"] = edit(f["interpreted_text"], replacement="はるのくさ")
+    assert handle(f)["step"] is None
+    f = frame("サクラノバの話はここでおしまいにしよう", "close_workshop")
+    f["interpreted_text"] = "さくらのはの話はここでおしまいにしよう"
+    assert handle(f)["step"]["action"] == "close_workshop"
 
 
 @pytest.mark.parametrize("key", sorted(CONSULTATION_KEYS))

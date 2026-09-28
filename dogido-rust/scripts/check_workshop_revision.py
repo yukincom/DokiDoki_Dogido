@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Owned mock HTTP: AI revision, checker failure, pending/adoption and cancellation."""
 import json
+import re
 import threading
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import install, ready, step
@@ -25,10 +26,13 @@ def wire(control, stored, sid, *, bad=False, blocked=None, replan_bad=False, ins
         return original(incoming)
     control["structured_handler"]=editor
     def select(text,prompt,n):
+        # 補正後も修正依頼の根拠は原文。相談・検査の根拠は会話理解用の文。
+        recognized=re.search(r"今回のプレイヤー発話（認識原文）: ([^\n]+)",prompt)
+        original_text=recognized.group(1) if recognized else text
         if "段階: after_validation" in prompt:
-            return proposal(text) if replan_bad else step(text,"show_current")
+            return proposal(original_text) if replan_bad else step(text,"show_current")
         if inspect and "段階: decide" in prompt: return step(text,"inspect",checks=["meter"])
-        return proposal(text)
+        return proposal(original_text)
     steps=install(control,select)
     return calls,steps
 

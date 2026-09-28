@@ -1,6 +1,7 @@
 pub mod address;
 pub mod assist;
 pub mod combat;
+pub mod contextual_asr;
 pub mod dialogue;
 pub mod environment;
 pub mod events;

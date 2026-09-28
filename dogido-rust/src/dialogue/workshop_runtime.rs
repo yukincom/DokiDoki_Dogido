@@ -38,6 +38,7 @@ impl Dialogue {
         // 正本DBで答える一般知識を、句の相談・確認状態の消費より先に分ける。
         let knowledge = helper
             .exchange(json!({"op":"knowledge_route", "text":text,
+            "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
             "workshop":input["workshop"]}))
             .await?;
         if knowledge["lookup"].is_object() {
@@ -121,6 +122,7 @@ impl Dialogue {
                     allowed.extend(stage.actions(pending.is_some()).iter().copied());
                 }
                 let mut frame = json!({"workshop":snapshot,"text":text,"phase":phase,
+                    "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
                 for attempt in 0..2 {

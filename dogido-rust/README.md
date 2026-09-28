@@ -65,6 +65,8 @@ Core Audioの取得、WebRTC AEC3、Whisper、Sileroのエンジンは既存実�
 
 音声認識へ渡す文脈も現在の句相談に連動します。単一sessionで観測が新しく、相談が開いているときだけ`haiku_workshop`、生成準備・戦闘中断・終了・観測失効・複数sessionでは`normal`です。安全復帰または明示的な暫定再開で専用文脈へ戻ります。`/api/v1/voice-input/context`は読み取りだけで、句の採否・保存・期限を操作しません。
 
+句相談中の音声入力には、現在の句・未採用案・保存済み材料の語彙だけを使う音近傍補正もあります。一意な候補だけを最大2断片まで会話理解用に補い、認識原文は残します。候補が同点なら補正せず、テキスト入力・戦闘中断中・相談終了後は対象外です。編集・採否・終了・保存の根拠と置換語は原文で検査します。追加のモデル呼び出しはありません。端末の`asr_fix_conversation`と表示APIの`asr_corrections`で、原文・解釈・候補の出典・距離を確認できます。
+
 録音・実モデルを使わない比較と通信試験:
 
 ```sh
@@ -76,6 +78,9 @@ python dogido-rust/scripts/generate_vocalization_fixtures.py
 ./dogido-rust/cargo.sh test --locked vocalization
 ./dogido-rust/cargo.sh build --locked --bin dogido-rust
 python dogido-rust/scripts/check_vocalization_runtime.py
+python dogido-rust/scripts/generate_contextual_asr_fixtures.py
+./dogido-rust/cargo.sh test --locked contextual_asr
+python dogido-rust/scripts/check_contextual_asr_runtime.py
 ```
 
 区切り27件・Whisper出力11件をPythonと照合します。模擬試験では一時ポートと合成PCMを使い、再試行、VAD、不正UTF-8、認識待ち、受付拒否、SIGINT／SIGTERM、録音途絶、子プロセス・一時WAVの回収を検証します。結果は`reports/voice-runtime.json`です。

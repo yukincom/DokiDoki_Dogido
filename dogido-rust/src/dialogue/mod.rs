@@ -739,6 +739,12 @@ impl Dialogue {
         self.tick_foreground(&mut d, &session_id);
         let s = d.sessions.get_mut(&session_id).unwrap();
         let workshop = Self::workshop_view(s, text);
+        let (interpreted_text, asr_corrections) =
+            crate::contextual_asr::for_workshop(text, source, &json!(workshop));
+        if !asr_corrections.is_empty() {
+            tracing::info!(event="asr_fix_conversation",session_id,original=text,
+                interpreted=interpreted_text,applied=?asr_corrections);
+        }
         let poem_input = crate::poem_input::parse(text, workshop.is_some());
         let poem_reference = s
             .haiku
@@ -794,7 +800,7 @@ impl Dialogue {
             "source":source,"language_active":language_active,"language_state":language_state,
             "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
-            "text":text,"history":s.history.rows(),"conversation_history":s.history.lines(),
+            "text":text,"interpreted_text":interpreted_text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":event_digest,"event":event});
         if workshop.is_none()
             && poem_input.is_none()
@@ -810,11 +816,15 @@ impl Dialogue {
         }
         let mut new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
             "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
+            "interpreted_player_input_text":interpreted_text,"asr_corrections":asr_corrections,
             "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close});
         if let Some(original) = &replay {
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
                 row["playback_status"] = "generating".into();
                 row["epoch"] = epoch.into();
+                row["interpreted_player_input_text"] =
+                    new_row["interpreted_player_input_text"].clone();
+                row["asr_corrections"] = new_row["asr_corrections"].clone();
                 if host_chat_confirmed {
                     row["language_status"] = "host_chat".into();
                     row["conversation_route"] = "casual".into();
