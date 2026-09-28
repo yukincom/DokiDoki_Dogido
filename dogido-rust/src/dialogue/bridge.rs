@@ -116,7 +116,7 @@ pub async fn render_with_route(
                         selected = true;
                     }
                     let turn = language.as_mut().unwrap();
-                    if frame["stage"] == "prompt" {
+                    let mut reply = if frame["stage"] == "prompt" {
                         let (kind, max_tokens) = turn.prompt_kind()?;
                         let request = GenerationRequest {
                             schema_version: 1,
@@ -141,16 +141,17 @@ pub async fn render_with_route(
                         };
                         turn.generated(generated)?
                     } else {
-                        let mut reply = turn.advance(&frame)?;
-                        if reply["command"] == "done"
-                            && reply["status"] == "host_chat"
-                            && hold_handoff(&reply)?
-                        {
-                            turn.outcome["status"] = "awaiting_address".into();
-                            reply = turn.outcome.clone();
-                        }
-                        reply
+                        turn.advance(&frame)?
+                    };
+                    // 解釈・回答の検査がRust内で完了しても、宛先の確認を省略しない。
+                    if reply["command"] == "done"
+                        && reply["status"] == "host_chat"
+                        && hold_handoff(&reply)?
+                    {
+                        turn.outcome["status"] = "awaiting_address".into();
+                        reply = turn.outcome.clone();
                     }
+                    reply
                 }
                 Some("knowledge") => {
                     ensure!(

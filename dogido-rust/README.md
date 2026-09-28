@@ -282,6 +282,8 @@ python dogido-rust/scripts/check_haiku_runtime.py
 
 明示的な一般知識質問はworkshop内外とも正本DBから答え、参考資料を発話と一緒に表示します。国語の質問と学習中の続きは、問いの解釈を1回、必要な場合だけ資料に基づく説明を1回生成します。漢字の配当学年・明示かなの音数は表・計算の結果を使い、対象や読みが不明なら聞き返します。通常雑談には国語分類を追加しません。
 
+国語の解釈・回答の外形、発話引用、文脈対象、漢字の学年の確認、確定かなの音数計算はRustで検査します。途中で上限に達した応答や資料にないfact IDは採用せず、追加生成を行いません。入口parser・prompt・正本DB検索・固定回答の組立て・辞書読みはPython補助を残しています。比較用fixtureは移植直前のGit checkpoint `b39e7dd`とPython正本から採取し、解釈312件・回答65件の一致を確認しています。
+
 句の相談中でも「枕詞って何？」には資料から回答し、編集中の句・未採用案・終了/再開確認は保持します。「この川柳」や現在句のフレーズへの問いは句相談のままです。一般知識への回答は句相談履歴と川柳材料へ混ぜません。
 
 戦闘・警告中の明示知識質問は最大9件を先着順で保留し、安全な全観測と先行音声の終了後に一件ずつ答えます。同じ文の再送は重複させず、満杯は受付を断ります。振分け待ちは`routing`、知識保留成立は`waiting_for_safety`、再開後は同じturn IDで通常の再生状態を表示します。モデルによる追加判定はなく、既存parserへの最大3秒の照会だけです。手動停止・終了・死亡/次元変更で保留を破棄します。
@@ -305,6 +307,7 @@ python dogido-rust/scripts/check_knowledge_handoff.py
 python dogido-rust/scripts/check_foreground_runtime.py
 python dogido-rust/scripts/check_history_retention.py
 python dogido-rust/scripts/check_language_runtime.py
+python dogido-rust/scripts/generate_language_validation_fixtures.py
 python dogido-rust/scripts/generate_address_fixtures.py
 python dogido-rust/scripts/check_address_runtime.py
 ```

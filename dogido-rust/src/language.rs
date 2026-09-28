@@ -2,6 +2,7 @@
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+mod validation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -22,10 +23,8 @@ pub struct State {
 enum Phase {
     Start,
     InterpretationPrompt,
-    Interpretation,
     Lookup,
     ReplyPrompt,
-    Reply,
     Done,
 }
 
@@ -61,19 +60,51 @@ impl Turn {
         }
     }
     pub fn generated(&mut self, generated: Value) -> Result<Value> {
-        let command = match self.phase {
-            Phase::InterpretationPrompt => {
-                self.phase = Phase::Interpretation;
-                "interpretation"
-            }
-            Phase::ReplyPrompt => {
-                self.phase = Phase::Reply;
-                "reply"
-            }
+        match self.phase {
+            Phase::InterpretationPrompt => self.interpreted(&validation::interpretation(
+                &generated,
+                &self.details,
+                &self.state,
+            )),
+            Phase::ReplyPrompt => Ok(self.reply(&validation::generated_reply(&generated))),
             _ => anyhow::bail!("unexpected language generation"),
+        }
+    }
+    fn interpreted(&mut self, frame: &Value) -> Result<Value> {
+        let i = &frame["payload"];
+        if i.is_null() {
+            if frame["invalid_normal_chat"] == true || frame["information_request"] == false {
+                return Ok(self.handoff());
+            }
+            return Ok(self.done(
+                "clarify",
+                "ごめん、何のことを聞きたいか、もうちょっと教えてくれる？",
+                vec![],
+            ));
+        }
+        ensure!(i.is_object(), "invalid interpretation frame");
+        self.interpretation = i.clone();
+        if i["dialogue_act"] != "information_request"
+            || i["relation"] == "end"
+            || !matches!(i["topic"].as_str(), Some("language" | "unclear"))
+        {
+            return Ok(self.handoff());
+        }
+        self.state.focus = Focus {
+            question: string(i, "question"),
+            target: string(i, "target"),
+            ..Focus::default()
         };
+        self.state.kanji_scope_confirmed = false;
+        if i["target_status"] == "ambiguous" || i["topic"] == "unclear" {
+            let question = nonempty(i, "clarification", "どの言葉の、どんなことが知りたいん？");
+            self.state.focus.clarification = question.clone();
+            self.state.focus.alternatives = serde_json::from_value(i["alternatives"].clone())?;
+            return Ok(self.done("clarify", &question, vec![]));
+        }
+        self.phase = Phase::Lookup;
         Ok(
-            json!({"command":command,"generated":generated,"details":self.details,"state":self.state}),
+            json!({"command":"lookup","interpretation":i,"computed_fact":frame["computed_fact"],"text":self.details["current"]["text"]}),
         )
     }
     pub fn advance(&mut self, frame: &Value) -> Result<Value> {
@@ -82,46 +113,6 @@ impl Turn {
                 self.phase = Phase::InterpretationPrompt;
                 Ok(
                     json!({"command":"prompt","kind":"language_dialogue_interpretation","details":self.details}),
-                )
-            }
-            (Phase::Interpretation, Some("interpretation")) => {
-                let i = &frame["payload"];
-                if i.is_null() {
-                    if frame["invalid_normal_chat"] == true || frame["information_request"] == false
-                    {
-                        return Ok(self.handoff());
-                    }
-                    return Ok(self.done(
-                        "clarify",
-                        "ごめん、何のことを聞きたいか、もうちょっと教えてくれる？",
-                        vec![],
-                    ));
-                }
-                ensure!(i.is_object(), "invalid interpretation frame");
-                self.interpretation = i.clone();
-                if i["dialogue_act"] != "information_request"
-                    || i["relation"] == "end"
-                    || !matches!(i["topic"].as_str(), Some("language" | "unclear"))
-                {
-                    return Ok(self.handoff());
-                }
-                self.state.focus = Focus {
-                    question: string(i, "question"),
-                    target: string(i, "target"),
-                    ..Focus::default()
-                };
-                self.state.kanji_scope_confirmed = false;
-                if i["target_status"] == "ambiguous" || i["topic"] == "unclear" {
-                    let question =
-                        nonempty(i, "clarification", "どの言葉の、どんなことが知りたいん？");
-                    self.state.focus.clarification = question.clone();
-                    self.state.focus.alternatives =
-                        serde_json::from_value(i["alternatives"].clone())?;
-                    return Ok(self.done("clarify", &question, vec![]));
-                }
-                self.phase = Phase::Lookup;
-                Ok(
-                    json!({"command":"lookup","interpretation":i,"computed_fact":frame["computed_fact"],"text":self.details["current"]["text"]}),
                 )
             }
             (Phase::Lookup, Some("lookup")) => {
@@ -149,14 +140,13 @@ impl Turn {
                 details["search_status"] = self.lookup["status"].clone();
                 Ok(json!({"command":"prompt","kind":"language_dialogue_reply","details":details}))
             }
-            (Phase::Reply, Some("reply")) => Ok(self.reply(&frame["payload"])),
             _ => anyhow::bail!("unexpected language stage"),
         }
     }
     fn reply(&mut self, reply: &Value) -> Value {
         let facts = self.lookup["facts"].as_array().cloned().unwrap_or_default();
         let ids = reply["fact_ids"].as_array().cloned().unwrap_or_default();
-        let valid = reply.is_object()
+        let valid = validation::reply_shape(reply)
             && (reply["status"] != "answer" || !ids.is_empty())
             && ids
                 .iter()

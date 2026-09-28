@@ -81,7 +81,7 @@ pub fn parse(kind: &str, generated: &GeneratedText, fallback: &Value) -> Result<
     Ok(Value::Object(object))
 }
 
-fn extract_object(text: &str, allow_nested: bool) -> Option<Map<String, Value>> {
+pub(crate) fn extract_object(text: &str, allow_nested: bool) -> Option<Map<String, Value>> {
     let normalized = strip_code_fence(text);
     if let Ok(Value::Object(object)) = serde_json::from_str(&normalized) {
         return Some(object);

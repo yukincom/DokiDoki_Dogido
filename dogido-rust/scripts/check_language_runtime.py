@@ -30,7 +30,8 @@ def main():
                     "fact_ids":["made-up-id" if flags["unknown_fact"] else details["facts"][0]["id"]],
                     "application":"資料にある説明。", "missing":"",
                     "missing_kind":"context" if flags["missing_context"] else "none",
-                    "clarification":"どんな文で使われてたん？" if flags["missing_context"] else ""}
+                    "clarification":"どんな文で使われてたん？" if flags["missing_context"] else "",
+                    **flags.get("reply_override", {})}
             text=current["text"]
             changes={}
             if "何年生" in text or "漢字の3" in text:
@@ -49,7 +50,7 @@ def main():
                 changes={"target":"がっこう"}
             if flags["invalid_evidence"]:
                 changes["evidence"]=[{"turn_id":"missing-turn","quote":"ない発話"}]
-            return interpretation(current,**changes)
+            return {**interpretation(current,**changes), **flags.get("interpretation_override", {})}
         control["structured_handler"]=model
 
         def fresh():
@@ -143,6 +144,35 @@ def main():
         assert not any(r["role"]=="assistant" for s in snapshot(base)["sessions"] if s["session_id"]==sid for r in s["history"])
         control["delay"]=0; close(sid)
         passed.append("combat_cancels_interpretation_before_second_generation")
+
+        sid=fresh()
+        for extra in [{"status":"invented"}, {"references":[{"url":"https://invented.invalid"}]}, {"text":"犬"*421}]:
+            flags["reply_override"]=extra; count=calls()
+            answer=say(sid,"枕詞ってどういう意味なのか、例で教えて")
+            assert answer["language_status"]=="unsupported" and not answer["reference_ids"],answer
+            assert calls()==count+2, "invalid shape triggered another model call"
+        flags.pop("reply_override")
+        passed.append("native_reply_contract_rejects_bad_status_extra_sources_and_oversize_without_retry")
+        flags["interpretation_override"]={"close_workshop":True}; count=calls()
+        invalid=say(sid,"枕詞ってどういう意味なのか、例で教えて")
+        assert invalid["language_status"]=="clarify" and calls()==count+1,invalid
+        flags.pop("interpretation_override")
+        passed.append("native_interpretation_contract_does_not_forward_unknown_actions_to_lookup")
+
+        def truncated(incoming):
+            if incoming["max_tokens"]!=flags.get("truncate"): return None
+            return {"id":"mock-truncated","object":"chat.completion","created":0,"model":"mock-model",
+                "choices":[{"index":0,"message":{"role":"assistant","content":json.dumps(model(incoming),ensure_ascii=False)},"finish_reason":"length"}],
+                "usage":{"prompt_tokens":100,"completion_tokens":incoming["max_tokens"],"total_tokens":100+incoming["max_tokens"]}}
+        control["completion_override"]=truncated
+        for tokens,status,num_calls in [(850,"clarify",1),(700,"unsupported",2)]:
+            flags["truncate"]=tokens; count=calls()
+            answer=say(sid,"枕詞ってどういう意味なのか、例で教えて")
+            assert answer["language_status"]==status and calls()==count+num_calls,answer
+            assert answer["llm_reports"][-1]["generated"]["finish_reason"]=="length"
+        control.pop("completion_override");flags.pop("truncate")
+        passed.append("complete_looking_but_truncated_json_is_rejected_without_retry")
+        close(sid)
     print(f"PASS {len(passed)} language checks; all owned processes stopped")
     for name in passed: print(name)
 
