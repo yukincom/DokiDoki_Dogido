@@ -153,13 +153,11 @@ fn missing_evidence_ends_without_reply_generation_and_handoff_clears_focus() {
 fn malformed_and_truncated_replies_cannot_bypass_checks_through_lookup() {
     for mut r in [reply(json!(["local:1"])), reply(json!(["made-up"]))] {
         r["status"] = "invented".into();
-        let outcome = lookup_turn()
-            .advance(
-                &json!({"stage":"lookup", "lookup":{"facts":[{"id":"local:1"}]},
+        let result = lookup_turn().advance(
+            &json!({"stage":"lookup", "lookup":{"facts":[{"id":"local:1"}]},
             "fixed_reply":r}),
-            )
-            .unwrap();
-        assert_eq!(outcome["status"], "unsupported");
+        );
+        assert!(result.is_err());
     }
     let mut g = generated(reply(json!(["local:1"])));
     g["finish_reason"] = "length".into();
@@ -169,4 +167,72 @@ fn malformed_and_truncated_replies_cannot_bypass_checks_through_lookup() {
     let mut g = generated(interpretation());
     g["finish_reason"] = "max_tokens".into();
     assert_eq!(t.generated(g).unwrap()["status"], "clarify");
+}
+
+#[test]
+fn native_prompts_cannot_be_replaced_by_helper_frames() {
+    let mut t = turn();
+    assert!(t.request("fixture").is_err());
+    assert_eq!(
+        t.advance(&json!({"stage":"start"})).unwrap()["command"],
+        "generate"
+    );
+    let request = t.request("fixture").unwrap();
+    assert_eq!(request.max_tokens, 850);
+    assert_eq!(request.temperature, 0.0);
+    assert!(!request.enable_thinking);
+    assert!(t.advance(&json!({"stage":"prompt","messages":[]})).is_err());
+    t.generated(generated(interpretation())).unwrap();
+    assert!(t.request("fixture").is_err());
+}
+
+#[test]
+fn explicit_kana_answer_needs_no_helper_lookup_or_reply_generation() {
+    let mut t = Turn::new(
+        &json!({"operation_id":"t1", "text":"音数を教えて。きょう", "source":"voice",
+        "history":[], "language_active":false,"language_state":State::default()}),
+    )
+    .unwrap();
+    t.advance(&json!({"stage":"start"})).unwrap();
+    let mut i = interpretation();
+    i["target"] = "きょう".into();
+    i["facet"] = "mora_count".into();
+    i["question"] = "音数を教えて。きょう".into();
+    i["evidence"] = json!([{"turn_id":"t1","quote":"きょう"}]);
+    let outcome = t.generated(generated(i)).unwrap();
+    assert_eq!(outcome["command"], "done");
+    assert_eq!(outcome["text"], "「きょう」は2音やで。");
+    assert_eq!(outcome["references"], json!([]));
+    assert!(t.request("fixture").is_err());
+    assert!(
+        t.advance(&json!({"stage":"lookup","lookup":{"facts":[]}}))
+            .is_err()
+    );
+}
+
+#[test]
+fn grade_answer_uses_only_matching_character_allocation_and_preserves_sources() {
+    let input = json!({"operation_id":"t1","text":"漢字の3は何年生で習う？","source":"typed",
+        "history":[],"language_active":false,"language_state":State::default()});
+    for grade in [json!(1), json!(true), json!(1.0), json!("1"), json!(7)] {
+        let mut t = Turn::new(&input).unwrap();
+        t.advance(&json!({"stage":"start"})).unwrap();
+        let mut i = interpretation();
+        i["target"] = "3".into();
+        i["facet"] = "grade".into();
+        i["evidence"] = json!([{"turn_id":"t1","quote":input["text"]}]);
+        assert_eq!(t.generated(generated(i)).unwrap()["command"], "lookup");
+        let outcome=t.advance(&json!({"stage":"lookup","lookup":{"facts":[
+            {"id":"table:three","sources":[{"source_id":"school-table"}],
+             "allocation":{"character":"三","school_grade":grade,"scope":"character_only"}}],"status":"searched"}})).unwrap();
+        if grade.as_u64() == Some(1) {
+            assert_eq!(outcome["text"], "「三」は小学1年生で習う漢字やで。");
+            assert_eq!(outcome["references"], json!([{"source_id":"school-table"}]));
+            assert!(t.state.kanji_scope_confirmed);
+            assert!(t.request("fixture").is_err());
+        } else {
+            assert_eq!(outcome["command"], "generate");
+            assert_eq!(t.request("fixture").unwrap().max_tokens, 700);
+        }
+    }
 }

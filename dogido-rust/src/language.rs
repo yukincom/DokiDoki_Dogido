@@ -2,6 +2,7 @@
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+mod preparation;
 mod validation;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -59,6 +60,24 @@ impl Turn {
             _ => anyhow::bail!("unexpected language prompt"),
         }
     }
+    pub fn request(&self, model: &str) -> Result<crate::types::GenerationRequest> {
+        let (kind, max_tokens) = self.prompt_kind()?;
+        let mut details = self.details.clone();
+        if self.phase == Phase::ReplyPrompt {
+            details["interpretation"] = self.interpretation.clone();
+            details["facts"] = self.lookup["facts"].clone();
+            details["search_status"] = self.lookup["status"].clone();
+        }
+        Ok(crate::types::GenerationRequest {
+            schema_version: 1,
+            kind: kind.into(),
+            model: model.into(),
+            messages: preparation::messages(kind, &details),
+            temperature: 0.0,
+            max_tokens,
+            enable_thinking: false,
+        })
+    }
     pub fn generated(&mut self, generated: Value) -> Result<Value> {
         match self.phase {
             Phase::InterpretationPrompt => self.interpreted(&validation::interpretation(
@@ -103,45 +122,55 @@ impl Turn {
             return Ok(self.done("clarify", &question, vec![]));
         }
         self.phase = Phase::Lookup;
-        Ok(
-            json!({"command":"lookup","interpretation":i,"computed_fact":frame["computed_fact"],"text":self.details["current"]["text"]}),
-        )
+        if frame["computed_fact"].is_object() {
+            return self.looked_up(
+                json!({"terms":[],"facts":[frame["computed_fact"]],"status":"computed","error":""}),
+            );
+        }
+        Ok(json!({"command":"lookup","interpretation":i}))
     }
     pub fn advance(&mut self, frame: &Value) -> Result<Value> {
         match (self.phase, frame["stage"].as_str()) {
             (Phase::Start, Some("start")) => {
                 self.phase = Phase::InterpretationPrompt;
-                Ok(
-                    json!({"command":"prompt","kind":"language_dialogue_interpretation","details":self.details}),
-                )
+                Ok(json!({"command":"generate"}))
             }
             (Phase::Lookup, Some("lookup")) => {
-                self.lookup = frame["lookup"].clone();
-                let facts = self.lookup["facts"]
-                    .as_array()
-                    .ok_or_else(|| anyhow::anyhow!("missing language facts"))?;
                 ensure!(
-                    facts.len() <= 11
-                        && facts
-                            .iter()
-                            .all(|f| f["id"].as_str().is_some_and(|s| !s.is_empty())),
-                    "invalid language facts"
+                    frame.get("fixed_reply").is_none(),
+                    "helper cannot supply language reply"
                 );
-                if frame["fixed_reply"].is_object() {
-                    return Ok(self.reply(&frame["fixed_reply"]));
-                }
-                if facts.is_empty() {
-                    return Ok(self.done("unsupported", "その言葉のことは、今の資料では確かめられへんかった。教科書や辞書で一緒に見てみよか。", vec![]));
-                }
-                self.phase = Phase::ReplyPrompt;
-                let mut details = self.details.clone();
-                details["interpretation"] = self.interpretation.clone();
-                details["facts"] = self.lookup["facts"].clone();
-                details["search_status"] = self.lookup["status"].clone();
-                Ok(json!({"command":"prompt","kind":"language_dialogue_reply","details":details}))
+                self.looked_up(frame["lookup"].clone())
             }
             _ => anyhow::bail!("unexpected language stage"),
         }
+    }
+    fn looked_up(&mut self, lookup: Value) -> Result<Value> {
+        self.lookup = lookup;
+        let facts = self.lookup["facts"]
+            .as_array_mut()
+            .ok_or_else(|| anyhow::anyhow!("missing language facts"))?;
+        if let Some(fact) = preparation::comparison_fact(
+            &self.interpretation,
+            self.details["current"]["text"].as_str().unwrap_or(""),
+        ) {
+            facts.push(fact);
+        }
+        ensure!(
+            facts.len() <= 11
+                && facts
+                    .iter()
+                    .all(|f| f["id"].as_str().is_some_and(|s| !s.is_empty())),
+            "invalid language facts"
+        );
+        if let Some(reply) = preparation::fixed_reply(&self.interpretation, facts) {
+            return Ok(self.reply(&reply));
+        }
+        if facts.is_empty() {
+            return Ok(self.done("unsupported", "その言葉のことは、今の資料では確かめられへんかった。教科書や辞書で一緒に見てみよか。", vec![]));
+        }
+        self.phase = Phase::ReplyPrompt;
+        Ok(json!({"command":"generate"}))
     }
     fn reply(&mut self, reply: &Value) -> Value {
         let facts = self.lookup["facts"].as_array().cloned().unwrap_or_default();

@@ -8,6 +8,7 @@ mod validation;
 
 pub use grounding::{Grounding, fixed_reply, ground};
 pub use prompts::messages;
+pub(crate) use prompts::python_json;
 pub use runner::{PlannerReport, run};
 pub use validation::{contract_errors, extract_object, parse_model_plan};
 

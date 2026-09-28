@@ -116,17 +116,10 @@ pub async fn render_with_route(
                         selected = true;
                     }
                     let turn = language.as_mut().unwrap();
-                    let mut reply = if frame["stage"] == "prompt" {
-                        let (kind, max_tokens) = turn.prompt_kind()?;
-                        let request = GenerationRequest {
-                            schema_version: 1,
-                            kind: kind.into(),
-                            model: config.model.clone(),
-                            messages: serde_json::from_value(frame["messages"].take())?,
-                            temperature: 0.0,
-                            max_tokens,
-                            enable_thinking: false,
-                        };
+                    let mut reply = turn.advance(&frame)?;
+                    while reply["command"] == "generate" {
+                        let request = turn.request(&config.model)?;
+                        let kind = request.kind.as_str();
                         let generated = match llm.generate(&request).await {
                             Ok(report) => {
                                 tracing::info!(kind,elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,finish_reason=?report.generated.finish_reason);
@@ -139,10 +132,8 @@ pub async fn render_with_route(
                                 json!({"text":"","finish_reason":"error"})
                             }
                         };
-                        turn.generated(generated)?
-                    } else {
-                        turn.advance(&frame)?
-                    };
+                        reply = turn.generated(generated)?;
+                    }
                     // 解釈・回答の検査がRust内で完了しても、宛先の確認を省略しない。
                     if reply["command"] == "done"
                         && reply["status"] == "host_chat"

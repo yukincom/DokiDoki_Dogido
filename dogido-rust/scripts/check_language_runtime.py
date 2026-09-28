@@ -26,6 +26,10 @@ def main():
             details, current=json.loads(before), json.loads(after)
             captures.append((tokens, details, current))
             if tokens == 700:
+                if details["interpretation"]["facet"] == "comparison":
+                    fact = next(f for f in details["facts"] if f.get("claim_status")=="input_character_comparison")
+                    return {"status":"answer","text":"その二つは同じ『三』という文字やで。",
+                        "fact_ids":[fact["id"]],"application":"コードで比較した入力文字。","missing":""}
                 return {"status":"answer", "text":"枕詞は、決まった言葉の前につく言い回しやで。",
                     "fact_ids":["made-up-id" if flags["unknown_fact"] else details["facts"][0]["id"]],
                     "application":"資料にある説明。", "missing":"",
@@ -48,6 +52,8 @@ def main():
                 changes={"dialogue_act":"other","target":"","facet":"other","topic":"minecraft","relation":"end"}
             elif "ゆっくり" in text:
                 changes={"target":"がっこう"}
+            elif "比較" in text:
+                changes={"target":"三","facet":"comparison","search_terms":["三"]}
             if flags["invalid_evidence"]:
                 changes["evidence"]=[{"turn_id":"missing-turn","quote":"ない発話"}]
             return {**interpretation(current,**changes), **flags.get("interpretation_override", {})}
@@ -87,6 +93,16 @@ def main():
         assert any(r["role"]=="assistant" and r["text"]==first["text"] for r in captures[-1][1]["history"])
         assert answer["reference_ids"], answer
         passed.append("played_clarification_continues_to_verified_grade_and_references")
+        close(sid)
+
+        sid=fresh(); count=calls()
+        comparison=say(sid,"この漢字の比較を教えて。三と三")
+        assert comparison["text"]=="その二つは同じ『三』という文字やで。" and calls()==count+2,comparison
+        assert not comparison["reference_ids"], comparison
+        comparison_facts=[f for f in captures[-1][1]["facts"] if f.get("claim_status")=="input_character_comparison"]
+        assert len(comparison_facts)==1 and comparison_facts[0]["id"]=="input-character:4e09"
+        assert "2回" in comparison_facts[0]["text_ja"], comparison_facts
+        passed.append("native_character_comparison_enters_grounded_reply_once_without_inventing_sources")
         close(sid)
 
         sid=fresh(); count=calls()

@@ -42,7 +42,7 @@ impl Formatter for PythonSpaces {
         CompactFormatter.write_f64(writer, value)
     }
 }
-pub(super) fn python_json(value: &Value) -> String {
+pub(crate) fn python_json(value: &Value) -> String {
     let mut output = Vec::new();
     value
         .serialize(&mut serde_json::Serializer::with_formatter(
