@@ -17,6 +17,7 @@ mod reading_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
 mod sentences;
+mod voice_input_runtime;
 mod warnings;
 mod workshop_combat_input;
 mod workshop_combat_runtime;
@@ -96,6 +97,7 @@ struct Session {
     mode: crate::combat::model::Mode,
     sequences: SequenceLedger,
     history: history::History,
+    pending_vocalization: Option<voice_input_runtime::Pending>,
     haiku: haiku_runtime::State,
     combat_digest: VecDeque<String>,
     stable_threat: crate::workshop_combat_input::StableThreat,
@@ -240,6 +242,7 @@ impl Dialogue {
                 mode: crate::combat::model::Mode::Normal,
                 sequences: SequenceLedger::default(),
                 history: history::History::default(),
+                pending_vocalization: None,
                 haiku: haiku_runtime::State::default(),
                 combat_digest: VecDeque::new(),
                 stable_threat: crate::workshop_combat_input::StableThreat::default(),
@@ -460,6 +463,7 @@ impl Dialogue {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 s.danger.finish_frame(s.mode);
             }
+            self.resolve_vocalization(d.sessions.get_mut(session_id).unwrap(), Some(&event));
             self.start_pending(&mut d, &mut jobs, session_id);
             self.tick_workshop(&mut d, session_id);
             if recent && complete && text.trim().is_empty() {
@@ -531,7 +535,9 @@ impl Dialogue {
         };
         let mut jobs = self.jobs.lock().unwrap();
         jobs.retain(|j| !j.is_finished());
-        if jobs.len() >= 16 {
+        let vocalization =
+            source.trim().eq_ignore_ascii_case("voice") && crate::vocalization::is_pure(text);
+        if jobs.len() >= 16 && !vocalization {
             let mut d = self.data.lock().unwrap();
             self.tick_address(&mut d, &session_id);
             if d.sessions
@@ -556,6 +562,10 @@ impl Dialogue {
         {
             return json!({"accepted":false,"reason":"superseded_input"});
         }
+        if vocalization {
+            return self.accept_vocalization(&mut d, &session_id, text);
+        }
+        self.resolve_vocalization(s, None);
         if !observation_fresh(s) {
             return json!({"accepted":false,"reason":"fresh_safe_snapshot_required"});
         }
@@ -770,9 +780,11 @@ impl Dialogue {
         }
         let resume_context = s.foreground.resume_prompt(text);
         let event_digest = s
-            .combat_digest
+            .history
+            .situation_lines()
             .iter()
             .map(|n| format!("- {n}"))
+            .chain(s.combat_digest.iter().map(|n| format!("- {n}")))
             .chain((!resume_context.is_empty()).then_some(resume_context))
             .collect::<Vec<_>>()
             .join("\n");
@@ -854,6 +866,14 @@ impl Dialogue {
         Self::cancel_assist(&mut d, session_id);
         Self::cancel_light(&mut d, session_id);
         if let Some(s) = d.sessions.get_mut(session_id) {
+            s.pending_vocalization = None;
+            if !s.foreground.combat_active {
+                s.history.end_danger(
+                    self.config
+                        .combat
+                        .ms("conversation_post_danger_player_turns"),
+                );
+            }
             s.deferred_input = None;
             s.input_generation = s.input_generation.wrapping_add(1);
             if let Some(w) = s.haiku.workshop.as_mut() {

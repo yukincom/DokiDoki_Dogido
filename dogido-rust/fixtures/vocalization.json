@@ -1,0 +1,637 @@
+{
+  "texts": [
+    {
+      "text": "",
+      "pure": false
+    },
+    {
+      "text": "うおおお",
+      "pure": true
+    },
+    {
+      "text": "うわあああ！",
+      "pure": true
+    },
+    {
+      "text": "ぎゃあああ",
+      "pure": true
+    },
+    {
+      "text": "ああああ",
+      "pure": true
+    },
+    {
+      "text": "ああ、そうか",
+      "pure": false
+    },
+    {
+      "text": "『うおおお』って言った",
+      "pure": false
+    },
+    {
+      "text": "うおおお、剣に持ち替えて",
+      "pure": false
+    },
+    {
+      "text": "石炭だ",
+      "pure": false
+    },
+    {
+      "text": "うわ！敵だ",
+      "pure": false
+    },
+    {
+      "text": "ウオオオ",
+      "pure": false
+    },
+    {
+      "text": "ﾜｱｱｱ",
+      "pure": false
+    },
+    {
+      "text": "ｱｱｱｱ",
+      "pure": true
+    },
+    {
+      "text": "うお\u001eおお",
+      "pure": true
+    },
+    {
+      "text": "（あぁぁぁ）",
+      "pure": true
+    },
+    {
+      "text": "(うわ ああ)",
+      "pure": true
+    },
+    {
+      "text": "「うわああ」",
+      "pure": false
+    },
+    {
+      "text": "う、わ、あ、あ！",
+      "pure": true
+    },
+    {
+      "text": "わわわ",
+      "pure": false
+    },
+    {
+      "text": "わあわ",
+      "pure": false
+    },
+    {
+      "text": "ああああ？",
+      "pure": true
+    },
+    {
+      "text": "うわああと言って",
+      "pure": false
+    },
+    {
+      "text": "うおおおお〜〜",
+      "pure": true
+    },
+    {
+      "text": "​うわああ",
+      "pure": false
+    },
+    {
+      "text": "うおおお​",
+      "pure": false
+    },
+    {
+      "text": "うお",
+      "pure": false
+    },
+    {
+      "text": "…（うお）！",
+      "pure": false
+    },
+    {
+      "text": "うおお",
+      "pure": true
+    },
+    {
+      "text": "…（うおお）！",
+      "pure": true
+    },
+    {
+      "text": "…（うおおお）！",
+      "pure": true
+    },
+    {
+      "text": "うおおおお",
+      "pure": true
+    },
+    {
+      "text": "…（うおおおお）！",
+      "pure": true
+    },
+    {
+      "text": "うおおおおお",
+      "pure": true
+    },
+    {
+      "text": "…（うおおおおお）！",
+      "pure": true
+    },
+    {
+      "text": "うわ",
+      "pure": false
+    },
+    {
+      "text": "…（うわ）！",
+      "pure": false
+    },
+    {
+      "text": "うわわ",
+      "pure": true
+    },
+    {
+      "text": "…（うわわ）！",
+      "pure": true
+    },
+    {
+      "text": "うわわわ",
+      "pure": true
+    },
+    {
+      "text": "…（うわわわ）！",
+      "pure": true
+    },
+    {
+      "text": "うわわわわ",
+      "pure": true
+    },
+    {
+      "text": "…（うわわわわ）！",
+      "pure": true
+    },
+    {
+      "text": "うわわわわわ",
+      "pure": true
+    },
+    {
+      "text": "…（うわわわわわ）！",
+      "pure": true
+    },
+    {
+      "text": "わあ",
+      "pure": false
+    },
+    {
+      "text": "…（わあ）！",
+      "pure": false
+    },
+    {
+      "text": "わああ",
+      "pure": true
+    },
+    {
+      "text": "…（わああ）！",
+      "pure": true
+    },
+    {
+      "text": "わあああ",
+      "pure": true
+    },
+    {
+      "text": "…（わあああ）！",
+      "pure": true
+    },
+    {
+      "text": "わああああ",
+      "pure": true
+    },
+    {
+      "text": "…（わああああ）！",
+      "pure": true
+    },
+    {
+      "text": "わあああああ",
+      "pure": true
+    },
+    {
+      "text": "…（わあああああ）！",
+      "pure": true
+    },
+    {
+      "text": "ぎゃ",
+      "pure": false
+    },
+    {
+      "text": "…（ぎゃ）！",
+      "pure": false
+    },
+    {
+      "text": "ぎゃゃ",
+      "pure": true
+    },
+    {
+      "text": "…（ぎゃゃ）！",
+      "pure": true
+    },
+    {
+      "text": "ぎゃゃゃ",
+      "pure": true
+    },
+    {
+      "text": "…（ぎゃゃゃ）！",
+      "pure": true
+    },
+    {
+      "text": "ぎゃゃゃゃ",
+      "pure": true
+    },
+    {
+      "text": "…（ぎゃゃゃゃ）！",
+      "pure": true
+    },
+    {
+      "text": "ぎゃゃゃゃゃ",
+      "pure": true
+    },
+    {
+      "text": "…（ぎゃゃゃゃゃ）！",
+      "pure": true
+    },
+    {
+      "text": "ひャ",
+      "pure": false
+    },
+    {
+      "text": "…（ひャ）！",
+      "pure": false
+    },
+    {
+      "text": "ひャャ",
+      "pure": true
+    },
+    {
+      "text": "…（ひャャ）！",
+      "pure": true
+    },
+    {
+      "text": "ひャャャ",
+      "pure": true
+    },
+    {
+      "text": "…（ひャャャ）！",
+      "pure": true
+    },
+    {
+      "text": "ひャャャャ",
+      "pure": true
+    },
+    {
+      "text": "…（ひャャャャ）！",
+      "pure": true
+    },
+    {
+      "text": "ひャャャャャ",
+      "pure": true
+    },
+    {
+      "text": "…（ひャャャャャ）！",
+      "pure": true
+    },
+    {
+      "text": "きぁ",
+      "pure": false
+    },
+    {
+      "text": "…（きぁ）！",
+      "pure": false
+    },
+    {
+      "text": "きぁぁ",
+      "pure": true
+    },
+    {
+      "text": "…（きぁぁ）！",
+      "pure": true
+    },
+    {
+      "text": "きぁぁぁ",
+      "pure": true
+    },
+    {
+      "text": "…（きぁぁぁ）！",
+      "pure": true
+    },
+    {
+      "text": "きぁぁぁぁ",
+      "pure": true
+    },
+    {
+      "text": "…（きぁぁぁぁ）！",
+      "pure": true
+    },
+    {
+      "text": "きぁぁぁぁぁ",
+      "pure": true
+    },
+    {
+      "text": "…（きぁぁぁぁぁ）！",
+      "pure": true
+    },
+    {
+      "text": "あア",
+      "pure": false
+    },
+    {
+      "text": "…（あア）！",
+      "pure": false
+    },
+    {
+      "text": "あアア",
+      "pure": false
+    },
+    {
+      "text": "…（あアア）！",
+      "pure": false
+    },
+    {
+      "text": "あアアア",
+      "pure": true
+    },
+    {
+      "text": "…（あアアア）！",
+      "pure": true
+    },
+    {
+      "text": "あアアアア",
+      "pure": true
+    },
+    {
+      "text": "…（あアアアア）！",
+      "pure": true
+    },
+    {
+      "text": "あアアアアア",
+      "pure": true
+    },
+    {
+      "text": "…（あアアアアア）！",
+      "pure": true
+    },
+    {
+      "text": "ぅう",
+      "pure": false
+    },
+    {
+      "text": "…（ぅう）！",
+      "pure": false
+    },
+    {
+      "text": "ぅうう",
+      "pure": false
+    },
+    {
+      "text": "…（ぅうう）！",
+      "pure": false
+    },
+    {
+      "text": "ぅううう",
+      "pure": true
+    },
+    {
+      "text": "…（ぅううう）！",
+      "pure": true
+    },
+    {
+      "text": "ぅうううう",
+      "pure": true
+    },
+    {
+      "text": "…（ぅうううう）！",
+      "pure": true
+    },
+    {
+      "text": "ぅううううう",
+      "pure": true
+    },
+    {
+      "text": "…（ぅううううう）！",
+      "pure": true
+    },
+    {
+      "text": "ァー",
+      "pure": false
+    },
+    {
+      "text": "…（ァー）！",
+      "pure": false
+    },
+    {
+      "text": "ァーー",
+      "pure": false
+    },
+    {
+      "text": "…（ァーー）！",
+      "pure": false
+    },
+    {
+      "text": "ァーーー",
+      "pure": true
+    },
+    {
+      "text": "…（ァーーー）！",
+      "pure": true
+    },
+    {
+      "text": "ァーーーー",
+      "pure": true
+    },
+    {
+      "text": "…（ァーーーー）！",
+      "pure": true
+    },
+    {
+      "text": "ァーーーーー",
+      "pure": true
+    },
+    {
+      "text": "…（ァーーーーー）！",
+      "pure": true
+    }
+  ],
+  "observations": [
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "status_snapshot",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        }
+      },
+      "note": "状況：驚いた声を検出。原因は不明。"
+    },
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "status_snapshot",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        },
+        "visual_threats": [
+          {
+            "type": "zombie",
+            "distance": 4
+          }
+        ]
+      },
+      "note": "状況：近くの敵対モブを視認。"
+    },
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "status_snapshot",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        },
+        "auditory_threats": [
+          {
+            "type": "zombie",
+            "label": "ゾンビの声",
+            "kind": "mob_idle",
+            "distance_band": "close",
+            "direction": {
+              "horizontal": "front"
+            }
+          }
+        ]
+      },
+      "note": "状況：敵らしい音を観測。具体名は未確定。"
+    },
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "player_died",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        },
+        "visual_threats": [
+          {
+            "type": "zombie",
+            "distance": 4
+          }
+        ]
+      },
+      "note": "状況：プレイヤーの死亡をコードで観測。原因の詳細は未確定。"
+    },
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "creeper_detonated",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        },
+        "visual_threats": [
+          {
+            "type": "zombie",
+            "distance": 4
+          }
+        ]
+      },
+      "note": "状況：クリーパーの爆発をコードで観測。"
+    },
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "status_snapshot",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        },
+        "combat": {
+          "hostile_outcomes": [
+            {
+              "entity_id": "c1",
+              "type": "creeper",
+              "outcome": "creeper_detonation",
+              "evidence": "explosion_packet"
+            }
+          ]
+        }
+      },
+      "note": "状況：クリーパーの爆発をコードで観測。"
+    },
+    {
+      "event": {
+        "schema_version": "2026-05-24",
+        "adapter": "fixture",
+        "sequence": 1,
+        "observed_at": "2026-09-28T00:00:00Z",
+        "event": {
+          "name": "status_snapshot",
+          "source_kind": "system",
+          "priority_hint": "background",
+          "certainty": "high"
+        },
+        "player": {
+          "name": "試験"
+        },
+        "combat": {
+          "hostile_outcomes": [
+            {
+              "entity_id": "c1",
+              "type": "zombie",
+              "outcome": "explosion_death",
+              "evidence": "server_death_event"
+            }
+          ]
+        }
+      },
+      "note": "状況：驚いた声を検出。原因は不明。"
+    }
+  ]
+}

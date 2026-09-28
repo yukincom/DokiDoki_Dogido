@@ -20,6 +20,7 @@ pub mod reading_correction;
 pub mod server;
 pub mod threats;
 pub mod types;
+pub mod vocalization;
 pub mod voice;
 pub mod workshop;
 pub mod workshop_combat;

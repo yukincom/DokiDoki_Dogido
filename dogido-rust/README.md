@@ -61,6 +61,10 @@ Ctrl+C／SIGTERM、録音のEOFや停止時には進行中の認識を取り消�
 
 Core Audioの取得、WebRTC AEC3、Whisper、Sileroのエンジンは既存実装を使います。`launch_dialogue.py`は既存設定とパスを解決してRustへ`exec`し、AECの`echo_input.py`だけが音声処理の補助プロセスとして残ります。実マイクの認識品質・自己音の除去・体感速度は、[音声入力の実機確認](manual-dialogue-check.md#rust音声入力の確認)で別に確認します。
 
+叫声だけの音声入力はコードで区別し、通常会話や川柳操作へ流さず、進行中の生成・再生を取り消して会話を一時保持します。たとえば「うわああ！」が対象で、「うわああ、びっくりした」や引用、テキスト入力は会話として扱います。叫声本文は診断にだけ残し、同時点の敵・爆発等のコード観測だけを短い状況メモへ変換します。根拠がなければ原因不明です。この入口はモデルを呼びません。状況メモは危険中と終了後の既定3入力まで使います。
+
+音声認識へ渡す文脈も現在の句相談に連動します。単一sessionで観測が新しく、相談が開いているときだけ`haiku_workshop`、生成準備・戦闘中断・終了・観測失効・複数sessionでは`normal`です。安全復帰または明示的な暫定再開で専用文脈へ戻ります。`/api/v1/voice-input/context`は読み取りだけで、句の採否・保存・期限を操作しません。
+
 録音・実モデルを使わない比較と通信試験:
 
 ```sh
@@ -68,6 +72,10 @@ python dogido-rust/scripts/generate_voice_fixtures.py
 ./dogido-rust/cargo.sh test --locked voice::
 ./dogido-rust/cargo.sh build --release --locked
 python dogido-rust/scripts/check_voice_runtime.py --binary dogido-rust/target/release/dogido-rust
+python dogido-rust/scripts/generate_vocalization_fixtures.py
+./dogido-rust/cargo.sh test --locked vocalization
+./dogido-rust/cargo.sh build --locked --bin dogido-rust
+python dogido-rust/scripts/check_vocalization_runtime.py
 ```
 
 区切り27件・Whisper出力11件をPythonと照合します。模擬試験では一時ポートと合成PCMを使い、再試行、VAD、不正UTF-8、認識待ち、受付拒否、SIGINT／SIGTERM、録音途絶、子プロセス・一時WAVの回収を検証します。結果は`reports/voice-runtime.json`です。

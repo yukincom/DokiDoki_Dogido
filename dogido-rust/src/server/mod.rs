@@ -379,7 +379,7 @@ async fn player_input(
 }
 async fn voice_context(State(state): State<AppState>) -> ApiReply {
     if let Some(d) = &state.dialogue {
-        return ApiReply::ok(json!({"prompt_mode":"normal", "session_id": d.only_session()}));
+        return ApiReply::ok(d.voice_context());
     }
     state.submit(Operation::Unsupported("voice_context")).await
 }

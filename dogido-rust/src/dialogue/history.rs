@@ -11,6 +11,7 @@ pub struct History {
     counted_player_turns: Vec<String>,
     // 入力前に生成器へ渡した履歴。今回の訂正対象照合だけに使い、次のpromptへ戻さない。
     repair_context: Option<(String, Vec<Value>)>,
+    situations: VecDeque<&'static str>,
 }
 fn clip(text: &str) -> String {
     let text = text
@@ -29,6 +30,7 @@ impl History {
     pub fn begin_danger(&mut self) {
         if !self.danger_active {
             self.counted_player_turns.clear();
+            self.situations.clear();
         }
         if !self.danger_active && self.danger_retained.is_empty() {
             self.danger_retained = self.rows.iter().cloned().collect();
@@ -50,6 +52,21 @@ impl History {
         json!({"danger_active":self.danger_active,
             "retained_utterances":self.danger_retained.len(),
             "remaining_player_turns":self.post_danger_turns})
+    }
+    pub fn note_situation(&mut self, text: &'static str) {
+        if self.situations.back() != Some(&text) {
+            if self.situations.len() == 8 {
+                self.situations.pop_front();
+            }
+            self.situations.push_back(text);
+        }
+    }
+    pub fn situation_lines(&self) -> Vec<&'static str> {
+        if self.danger_active || self.post_danger_turns > 0 {
+            self.situations.iter().copied().collect()
+        } else {
+            vec![]
+        }
     }
     /// 同じ実入力の再開時にだけ古い未回答turnを置き換える。診断行は保持する。
     pub fn replace_unanswered(&mut self, turn: &str) {
@@ -212,6 +229,31 @@ mod tests {
     }
     fn contains(h: &History, turn: &str) -> bool {
         h.rows().iter().any(|r| r["turn_id"] == turn)
+    }
+
+    #[test]
+    fn situation_notes_expire_with_retention_and_do_not_cross_danger_episodes() {
+        let mut h = seeded();
+        h.begin_danger();
+        h.note_situation("敵の観測");
+        h.begin_danger();
+        h.note_situation("敵の観測");
+        assert_eq!(h.situation_lines(), ["敵の観測"]);
+        h.end_danger(3);
+        pair(&mut h, "after-0");
+        assert_eq!(h.situation_lines(), ["敵の観測"]);
+        h.begin_danger();
+        assert!(h.situation_lines().is_empty());
+        for note in ["1", "2", "3", "4", "5", "6", "7", "8", "9"] {
+            h.note_situation(note);
+        }
+        assert_eq!(
+            h.situation_lines(),
+            ["2", "3", "4", "5", "6", "7", "8", "9"]
+        );
+        h.end_danger(1);
+        pair(&mut h, "after-1");
+        assert!(h.situation_lines().is_empty());
     }
 
     #[test]
