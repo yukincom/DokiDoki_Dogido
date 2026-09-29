@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+pub mod query;
+
 const UNAVAILABLE: &str = "手元の公式資料を今は読めへんわ。推測では答えんとくで。";
 
 #[derive(Debug, Deserialize)]

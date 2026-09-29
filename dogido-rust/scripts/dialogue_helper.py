@@ -198,12 +198,6 @@ def run_light_plan(data):
     emit({"op": "result", "payload": payload})
 
 
-def run_assist_route(data):
-    # 知識質問を持ち替え抽出へ回さない。モデルも状態機械も呼び出さない。
-    context = prepared_context(data)
-    emit({"op": "result", "knowledge_query": context.knowledge_query is not None})
-
-
 def run_address_route(data):
     # 保留の確認が、知識・所持品・保存等の既存入力を横取りしない。
     # 入力parserだけを使い、モデル・状態機械・DB検索は実行しない。
@@ -222,7 +216,7 @@ if __name__ == "__main__":
         data = json.loads(sys.stdin.readline())
         apply_reading_snapshot(data.get("reading_corrections", []))
         {"combat_leaf": run_combat_leaf, "light_plan": run_light_plan,
-         "assist_route": run_assist_route, "address_route": run_address_route}.get(data.get("op"), run_turn)(data)
+         "address_route": run_address_route}.get(data.get("op"), run_turn)(data)
     except Exception as exc:
         emit({"op": "error", "error": f"{type(exc).__name__}: {exc}"})
         raise SystemExit(1)

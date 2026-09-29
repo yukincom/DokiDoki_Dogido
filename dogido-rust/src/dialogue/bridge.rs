@@ -43,10 +43,24 @@ pub async fn render_with_route(
 ) -> Result<Value> {
     if let Some(text) = input["text"].as_str() {
         let prepared = crate::player_text::prepare(text);
+        let query = crate::knowledge::query::from_normalized(&prepared.normalized_text);
+        if input["op"] == "assist_route" {
+            ensure!(
+                !*cancel.borrow() && cancel.has_changed().is_ok(),
+                "cancelled"
+            );
+            // 質問候補の抽出だけならhelperも辞書・DBも起動しない。
+            return Ok(json!({"knowledge_query":query.is_some()}));
+        }
+        input["prepared_knowledge_query"] = serde_json::to_value(query)?;
         input["language_requested"] =
             (input["language_active"] == true || prepared.explicit_language).into();
         input["prepared_input"] = serde_json::to_value(prepared)?;
     }
+    ensure!(
+        input["op"] != "assist_route",
+        "knowledge routing needs current text"
+    );
     input["reading_corrections"] = json!(super::reading_runtime::load_overlay(config).await?);
     let light_plan = input["op"] == "light_plan";
     let routing_only = matches!(input["op"].as_str(), Some("assist_route" | "address_route"));
@@ -332,4 +346,66 @@ pub async fn render_with_route(
     }
     tracing::info!(event = "helper_stopped", ?pid);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn knowledge_classification_needs_no_python_reader_or_model() {
+        let config = DialogueConfig {
+            python: "/missing/knowledge-test-python".into(),
+            helper: "/missing/knowledge-test-helper.py".into(),
+            ..Default::default()
+        };
+        let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
+        let (cancel, mut rx) = watch::channel(false);
+        for (text, expected) in [
+            ("枕詞って何？", true),
+            ("剣の耐久値を教えて", true),
+            ("マイクラで関圧番って何？", true),
+            ("剣に持ち替えて", false),
+            ("こんにちは", false),
+            ("/say 枕詞って何？", false),
+        ] {
+            let result = render(
+                &config,
+                &llm,
+                json!({"op":"assist_route","text":text}),
+                &mut rx,
+            )
+            .await
+            .unwrap();
+            assert_eq!(result, json!({"knowledge_query":expected}));
+        }
+        assert!(
+            render(&config, &llm, json!({"op":"assist_route"}), &mut rx)
+                .await
+                .is_err()
+        );
+        cancel.send(true).unwrap();
+        assert!(
+            render(
+                &config,
+                &llm,
+                json!({"op":"assist_route","text":"枕詞って何？"}),
+                &mut rx
+            )
+            .await
+            .is_err()
+        );
+        let (owner, mut orphaned) = watch::channel(false);
+        drop(owner);
+        assert!(
+            render(
+                &config,
+                &llm,
+                json!({"op":"assist_route","text":"枕詞って何？"}),
+                &mut orphaned
+            )
+            .await
+            .is_err()
+        );
+    }
 }

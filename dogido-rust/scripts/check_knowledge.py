@@ -99,7 +99,7 @@ def integration(binary, directory):
         passed.append("references_deduplicate_and_follow_selected_session")
 
         for question in ("漢字の3は何年生で習うの？", "Minecraft 1.20.1のダイヤモンドの剣のIDは？",
-                         "国語で幻の枕詞って何？"):
+                         "国語で幻の枕詞って何？", "国語で\U0001ccd6って何？"):
             turn = submit(base, sid, question)
             reply = wait_for(lambda: row(base, turn, {"completed"}))
             assert reply["text"] == render_knowledge_reply_plan(lookup(question)).text, reply

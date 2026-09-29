@@ -108,7 +108,7 @@ impl Dialogue {
         mut cancel: watch::Receiver<bool>,
     ) {
         // Parserのみ。DB検索・モデル・音声は安全な観測まで実行しない。
-        // bridgeをdropせず取消を伝え、timeoutでも所有helperを必ずwaitする。
+        // bridge内のRust parserだけで完了する。取消・世代検査は従来どおり維持。
         let result = {
             let work = bridge::render(
                 &self.config,

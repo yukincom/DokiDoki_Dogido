@@ -10,7 +10,9 @@ from dogido_server.player_input import routing
 
 def frame(text, **extra):
     p=prepared(text)
-    return {"text":text,"prepared_input":p,"language_requested":p["explicit_language"],**extra}
+    query=route_player_input(text).knowledge_query
+    return {"text":text,"prepared_input":p,"prepared_knowledge_query":asdict(query) if query else None,
+            "language_requested":p["explicit_language"],**extra}
 
 
 @pytest.mark.parametrize("text",[
@@ -28,6 +30,7 @@ def test_prepared_projection_preserves_all_parser_fields_without_normalizing_twi
     def fail(*args,**kwargs):raise AssertionError("Rust-prepared input must not normalize again")
     monkeypatch.setattr(routing,"normalize_player_text",fail)
     monkeypatch.setattr(routing,"apply_asr_fixes",fail)
+    monkeypatch.setattr(routing,"extract_explicit_knowledge_query",fail)
     assert asdict(prepared_context(data))==expected
 
 
@@ -35,3 +38,11 @@ def test_prepared_projection_preserves_all_parser_fields_without_normalizing_twi
 def test_projection_cannot_be_attached_to_another_input(prepared_input):
     with pytest.raises(ValueError,match="prepared input"):
         prepared_context({"text":"今の入力","prepared_input":prepared_input})
+
+
+@pytest.mark.parametrize("change", [{"evidence":"別の入力"}, {"domain":"world_operation"}, {"intent":"select_sword"}, {"subject":[]}, {"unexpected":True}])
+def test_prepared_query_is_bound_to_the_current_input_and_closed_types(change):
+    data=frame("枕詞って何？")
+    data["prepared_knowledge_query"].update(change)
+    with pytest.raises(ValueError,match="prepared knowledge query"):
+        prepared_context(data)

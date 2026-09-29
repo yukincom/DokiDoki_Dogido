@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from dogido_server.assist.select_sword import is_explicit_select_sword_request
-from dogido_server.knowledge_query import extract_explicit_knowledge_query
+from dogido_server.knowledge_query import ExplicitKnowledgeQuery, extract_explicit_knowledge_query
 from dogido_server.player_input.asr_fixes import apply_asr_fixes
 from dogido_server.player_input.guardrails import (
     asks_about_sound,
@@ -55,11 +56,14 @@ def route_prepared_player_input(
     raw_text: str | None,
     normalized_text: str,
     normalized_interpreted: str = "",
+    *,
+    knowledge_query_extractor: Callable[[str], ExplicitKnowledgeQuery | None] | None = None,
 ) -> PlayerInputContext:
     """内部用: 正規化済みの入力を既存parserへ渡す。元本文の改行は保存用に保つ。
 
     通常のPython入口は上のroute_player_input。Rust補助は同じ正規化を
     済ませた値を渡し、ここではASR補正や空白正規化を重ねない。
+    Rustで抽出済みの知識質問も同じ入力に束ねて渡せる。検索は実行しない。
     """
     spoken = normalized_text if normalized_text else (raw_text or "")
     if normalized_text.startswith("/"):
@@ -75,7 +79,7 @@ def route_prepared_player_input(
     knowledge_query = (
         None
         if explicit_sword_request
-        else extract_explicit_knowledge_query(normalized_interpreted or spoken)
+        else (knowledge_query_extractor or extract_explicit_knowledge_query)(normalized_interpreted or spoken)
     )
     player_haiku_text = extract_player_haiku(raw_text)
     revised_haiku_text = extract_revised_haiku(raw_text)
