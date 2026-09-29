@@ -2,7 +2,7 @@
 use crate::haiku_memory::RecallQuery;
 use chrono::{DateTime, Datelike, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -63,6 +63,7 @@ fn contains_any(text: &str, values: &[&str]) -> bool {
 struct Place {
     biome_id: Option<String>,
     biome_ids: Vec<String>,
+    group_ids: Vec<String>,
     label: Option<String>,
 }
 fn place(text: &str, overlay: &[Value]) -> Place {
@@ -100,6 +101,7 @@ fn place(text: &str, overlay: &[Value]) -> Place {
             return Place {
                 biome_id: Some(entry.id.clone()),
                 biome_ids: vec![entry.id.clone()],
+                group_ids: vec![],
                 label: Some(entry.label.clone()),
             };
         }
@@ -116,6 +118,12 @@ fn place(text: &str, overlay: &[Value]) -> Place {
                     .iter()
                     .filter(|e| groups.contains(&e.group))
                     .map(|e| e.id.clone())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect(),
+                group_ids: groups
+                    .iter()
+                    .cloned()
                     .collect::<BTreeSet<_>>()
                     .into_iter()
                     .collect(),
@@ -242,28 +250,53 @@ pub fn parse(text: &str, overlay: &[Value], now: DateTime<Utc>) -> Option<Recall
 }
 fn parse_at(text: &str, overlay: &[Value], now: DateTime<FixedOffset>) -> Option<RecallQuery> {
     let text = crate::player_text::normalize(text);
-    let folded = fold(&text);
-    let place = place(&folded, overlay);
+    context_from_normalized(&text, overlay, now).map(|query| RecallQuery {
+        biome_id: query.biome_id,
+        biome_ids: query.biome_ids,
+        place_label: query.place_label,
+        since: query.since.map(|t| t.with_timezone(&Utc)),
+        until: query.until.map(|t| t.with_timezone(&Utc)),
+        time_label: query.time_label,
+    })
+}
+
+/// Input routing retains Python's group IDs and local date types. The storage
+/// query above deliberately uses its existing UTC/expanded-biome contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputRecall {
+    pub biome_id: Option<String>,
+    pub biome_ids: Vec<String>,
+    pub group_ids: Vec<String>,
+    pub place_label: Option<String>,
+    pub since: Option<DateTime<FixedOffset>>,
+    pub until: Option<DateTime<FixedOffset>>,
+    pub time_label: Option<String>,
+}
+pub fn context_from_normalized(
+    text: &str,
+    overlay: &[Value],
+    now: DateTime<FixedOffset>,
+) -> Option<InputRecall> {
+    let folded = fold(text);
+    let place = place(text, overlay);
     if !requested(&folded, &place) {
         return None;
     }
     let (since, until, time_label) = match range(&folded, now) {
-        Some((since, until, label)) => (
-            Some(since.with_timezone(&Utc)),
-            Some(until.with_timezone(&Utc)),
-            Some(label),
-        ),
+        Some((since, until, label)) => (Some(since), Some(until), Some(label)),
         None => (None, None, None),
     };
-    Some(RecallQuery {
+    Some(InputRecall {
         biome_id: place.biome_id,
         biome_ids: place.biome_ids,
+        group_ids: place.group_ids,
         place_label: place.label,
         since,
         until,
         time_label,
     })
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

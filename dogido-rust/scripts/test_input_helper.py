@@ -1,6 +1,8 @@
 """原文と正規化面を分けて移し、残るparserの入力所有権を維持する。"""
 from dataclasses import asdict
 from datetime import datetime, timezone
+import json
+from pathlib import Path
 import pytest
 from generate_player_text_fixtures import prepared
 from input_helper import prepared_context
@@ -10,8 +12,9 @@ from dogido_server.player_input import routing
 
 def frame(text, **extra):
     p=prepared(text)
-    query=route_player_input(text).knowledge_query
-    return {"text":text,"prepared_input":p,"prepared_knowledge_query":asdict(query) if query else None,
+    context=json.loads(json.dumps(asdict(route_player_input(text)),default=lambda v:v.isoformat()))
+    return {"text":text,"prepared_input":p,"prepared_context":context,
+            "prepared_knowledge_query":context["knowledge_query"],
             "language_requested":p["explicit_language"],**extra}
 
 
@@ -31,6 +34,12 @@ def test_prepared_projection_preserves_all_parser_fields_without_normalizing_twi
     monkeypatch.setattr(routing,"normalize_player_text",fail)
     monkeypatch.setattr(routing,"apply_asr_fixes",fail)
     monkeypatch.setattr(routing,"extract_explicit_knowledge_query",fail)
+    for name in ("route_player_input", "route_prepared_player_input", "is_explicit_select_sword_request",
+                 "asks_about_sound", "asks_dragon_direction", "asks_hostile_direction", "asks_haiku_recall",
+                 "asks_hostile_count", "asks_inventory", "asks_save_last_haiku", "extract_player_haiku",
+                 "extract_reading_correction", "extract_revised_haiku", "is_explicit_reading_correction",
+                 "parse_haiku_time_range", "should_block_ambient", "wants_quiet"):
+        monkeypatch.setattr(routing,name,fail)
     assert asdict(prepared_context(data))==expected
 
 
@@ -45,4 +54,35 @@ def test_prepared_query_is_bound_to_the_current_input_and_closed_types(change):
     data=frame("枕詞って何？")
     data["prepared_knowledge_query"].update(change)
     with pytest.raises(ValueError,match="prepared knowledge query"):
+        prepared_context(data)
+
+
+def test_all_canonical_context_fields_convert_without_parser_calls(monkeypatch):
+    def fail(*args,**kwargs):
+        raise AssertionError("native context must not be classified again")
+    monkeypatch.setattr(routing, "route_prepared_player_input", fail)
+    monkeypatch.setattr(routing, "route_player_input", fail)
+    from dogido_server import entry_catalog
+    monkeypatch.setattr(entry_catalog, "resolve_biome_place_from_text", fail)
+    cases=json.loads((Path(__file__).resolve().parents[1]/"fixtures/input-context.json").read_text())
+    for case in cases:
+        if case["interpreted"]:
+            continue  # this helper's production boundary has only the current raw input
+        expected=case["expected"]
+        data={"text":case["raw"],"prepared_input":{"raw_text":case["raw"],"normalized_text":case["normalized"]},
+              "prepared_context":expected,"prepared_knowledge_query":expected["knowledge_query"]}
+        actual=prepared_context(data)
+        assert json.loads(json.dumps(asdict(actual),default=lambda v:v.isoformat()))==expected,case["raw"]
+        if actual.haiku_recall_query:
+            assert type(actual.haiku_recall_query.biome_ids) is tuple
+            assert type(actual.haiku_recall_query.group_ids) is tuple
+            assert actual.haiku_recall_query.since is None or isinstance(actual.haiku_recall_query.since,datetime)
+
+
+@pytest.mark.parametrize("change", [{"wants_quiet":1}, {"requests_sword":True}, {"normalized_text":"別の入力"},
+                                   {"unexpected":False}, {"reading_correction":{"surface":"草地","reading":"くさち","wrong_reading":"そうち","explicit":False}}])
+def test_context_rejects_wrong_types_or_unbound_surfaces(change):
+    data=frame("草地はくさち")
+    data["prepared_context"].update(change)
+    with pytest.raises(ValueError,match="prepared context"):
         prepared_context(data)

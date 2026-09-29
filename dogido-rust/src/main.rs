@@ -88,6 +88,8 @@ enum Command {
         combat_settings: String,
         #[arg(long, default_value = "{}")]
         haiku_settings: String,
+        #[arg(long, default_value = "{}")]
+        web_settings: String,
         #[arg(long, default_value = "/usr/bin/afplay")]
         audio_player: PathBuf,
         #[arg(long, default_value = ".dogido_tmp/rust-dialogue")]
@@ -211,6 +213,7 @@ async fn main() -> Result<()> {
             warning_settings,
             combat_settings,
             haiku_settings,
+            web_settings,
             audio_player,
             audio_dir,
             no_audio,
@@ -232,6 +235,7 @@ async fn main() -> Result<()> {
                     &combat_settings,
                 )?)?,
                 haiku: serde_json::from_str(&haiku_settings)?,
+                web: serde_json::from_str(&web_settings)?,
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 mod preparation;
 mod validation;
+pub mod web;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -36,6 +37,7 @@ pub struct Turn {
     interpretation: Value,
     lookup: Value,
     pub outcome: Value,
+    web_available: bool,
 }
 impl Turn {
     pub fn new(input: &Value) -> Result<Self> {
@@ -47,6 +49,7 @@ impl Turn {
             interpretation: Value::Null,
             lookup: Value::Null,
             outcome: Value::Null,
+            web_available: input["web_available"] == true,
         };
         turn.details = json!({"current":{"turn_id":input["operation_id"], "text":input["text"], "source":input["source"]},
             "history":input["history"], "mode":if input["language_active"] == true {"language"} else {"normal"},
@@ -163,16 +166,32 @@ impl Turn {
                     .all(|f| f["id"].as_str().is_some_and(|s| !s.is_empty())),
             "invalid language facts"
         );
+        // 明示Web要求は正本どおり回答生成を挟まず、同意確認へ進む。
+        if self.web_available && self.interpretation["lookup_requested"] == true {
+            return Ok(self.propose_web("explicit_request"));
+        }
         if let Some(reply) = preparation::fixed_reply(&self.interpretation, facts) {
             return Ok(self.reply(&reply));
         }
         if facts.is_empty() {
+            if self.web_available {
+                return Ok(
+                    self.propose_web(if self.interpretation["lookup_requested"] == true {
+                        "explicit_request"
+                    } else {
+                        "no_local_facts"
+                    }),
+                );
+            }
             return Ok(self.done("unsupported", "その言葉のことは、今の資料では確かめられへんかった。教科書や辞書で一緒に見てみよか。", vec![]));
         }
         self.phase = Phase::ReplyPrompt;
         Ok(json!({"command":"generate"}))
     }
     fn reply(&mut self, reply: &Value) -> Value {
+        if self.web_available && self.interpretation["lookup_requested"] == true {
+            return self.propose_web("explicit_request");
+        }
         let facts = self.lookup["facts"].as_array().cloned().unwrap_or_default();
         let ids = reply["fact_ids"].as_array().cloned().unwrap_or_default();
         let valid = validation::reply_shape(reply)
@@ -201,7 +220,30 @@ impl Turn {
             self.state.kanji_scope_confirmed = false;
             return self.done("clarify", &question, references);
         }
+        if self.web_available {
+            let reason = if self.interpretation["lookup_requested"] == true {
+                "explicit_request"
+            } else if matches!(status.as_str(), "partial" | "unsupported")
+                && reply["missing_kind"] == "evidence"
+                && !string(reply, "missing").trim().is_empty()
+            {
+                "uncertain_reply"
+            } else {
+                ""
+            };
+            if !reason.is_empty() {
+                return self.propose_web(reason);
+            }
+        }
         self.done(&status, &string(reply, "text"), references)
+    }
+    fn propose_web(&mut self, reason: &str) -> Value {
+        let facts = self.lookup["facts"].as_array().cloned().unwrap_or_default();
+        let proposal = web::Proposal::from_interpretation(&self.interpretation, reason, &facts);
+        let mut result = self.done("web_consent_requested", web::PERMISSION, vec![]);
+        result["web_proposal"] = serde_json::to_value(proposal).unwrap();
+        self.outcome = result.clone();
+        result
     }
     fn handoff(&mut self) -> Value {
         self.state = State::default();
@@ -226,4 +268,23 @@ fn nonempty(v: &Value, key: &str, fallback: &str) -> String {
         .filter(|s| !s.trim().is_empty())
         .unwrap_or(fallback)
         .to_owned()
+}
+
+#[cfg(test)]
+mod web_tests {
+    use super::*;
+    #[test]
+    fn explicit_web_request_with_local_facts_needs_no_reply_generation() {
+        let mut turn =
+            Turn::new(&json!({"language_state":State::default(),"web_available":true})).unwrap();
+        turn.phase = Phase::Lookup;
+        turn.interpretation = json!({"dialogue_act":"information_request","target_status":"explicit",
+            "question":"狐についてウェブで調べて","target":"狐","facet":"meaning","search_terms":["狐"],"lookup_requested":true});
+        let result = turn
+            .looked_up(json!({"facts":[{"id":"local:fox","text_ja":"資料の狐"}],"status":"found"}))
+            .unwrap();
+        assert_eq!(result["command"], "done");
+        assert_eq!(result["status"], "web_consent_requested");
+        assert!(turn.prompt_kind().is_err());
+    }
 }

@@ -41,27 +41,60 @@ pub async fn render_with_route(
     mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
     mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
 ) -> Result<Value> {
-    if let Some(text) = input["text"].as_str() {
-        let prepared = crate::player_text::prepare(text);
-        let query = crate::knowledge::query::from_normalized(&prepared.normalized_text);
-        if input["op"] == "assist_route" {
+    if input["op"] == "light_plan" {
+        return crate::light_plan::run(
+            llm,
+            &config.model,
+            &input["details"],
+            &input["fallback_payload"],
+            cancel,
+        )
+        .await;
+    }
+    let prepared = input["text"].as_str().map(crate::player_text::prepare);
+    if input["op"] == "assist_route" {
+        let prepared = prepared
+            .as_ref()
+            .context("knowledge routing needs current text")?;
+        ensure!(
+            !*cancel.borrow() && cancel.has_changed().is_ok(),
+            "cancelled"
+        );
+        // The assist fast path needs neither a helper nor a reading dictionary/DB.
+        return Ok(
+            json!({"knowledge_query":crate::knowledge::query::from_normalized(&prepared.normalized_text).is_some()}),
+        );
+    }
+    let overlay = super::reading_runtime::load_overlay(config).await?;
+    input["reading_corrections"] = json!(overlay);
+    if let Some(prepared) = prepared {
+        let context = crate::input_context::Context::from_prepared(
+            &prepared,
+            &overlay,
+            chrono::Local::now().fixed_offset(),
+        );
+        if input["op"] == "address_route" {
             ensure!(
                 !*cancel.borrow() && cancel.has_changed().is_ok(),
                 "cancelled"
             );
-            // 質問候補の抽出だけならhelperも辞書・DBも起動しない。
-            return Ok(json!({"knowledge_query":query.is_some()}));
+            return Ok(
+                json!({"op":"result","general_conversation":context.general_conversation()}),
+            );
         }
-        input["prepared_knowledge_query"] = serde_json::to_value(query)?;
+        input["prepared_knowledge_query"] = serde_json::to_value(&context.knowledge_query)?;
+        input["prepared_context"] = serde_json::to_value(context)?;
         input["language_requested"] =
             (input["language_active"] == true || prepared.explicit_language).into();
         input["prepared_input"] = serde_json::to_value(prepared)?;
     }
     ensure!(
-        input["op"] != "assist_route",
-        "knowledge routing needs current text"
+        input["op"] != "address_route",
+        "address routing needs current text"
     );
-    input["reading_corrections"] = json!(super::reading_runtime::load_overlay(config).await?);
+    if input["op"] == "combat_leaf" {
+        return super::reaction_runtime::render(config, llm, &input, cancel).await;
+    }
     let light_plan = input["op"] == "light_plan";
     let routing_only = matches!(input["op"].as_str(), Some("assist_route" | "address_route"));
     let address_reply = input["address_reply"].as_str().map(str::to_owned);
@@ -256,7 +289,7 @@ pub async fn render_with_route(
                     reports.push(output.clone());
                     output
                 }
-                Some("generate") => {
+                Some("generate" | "chat_prompt") => {
                     ensure!(
                         language
                             .as_ref()
@@ -273,7 +306,18 @@ pub async fn render_with_route(
                     );
                     leaves += 1;
                     ensure!(leaves <= 2, "leaf retry limit exceeded");
-                    let request: GenerationRequest = serde_json::from_value(frame["input"].take())?;
+                    let native_prompt = frame["op"] == "chat_prompt";
+                    let request: GenerationRequest = if native_prompt {
+                        let prompt: crate::chat_prompt::Input =
+                            serde_json::from_value(frame["input"].take())?;
+                        prompt.into_request()?
+                    } else {
+                        serde_json::from_value(frame["input"].take())?
+                    };
+                    ensure!(
+                        native_prompt || request.kind != "player_chat",
+                        "ordinary chat requires a native prompt"
+                    );
                     ensure!(
                         request.kind
                             == (if light_plan {
@@ -347,6 +391,9 @@ pub async fn render_with_route(
                         frame["language_status"] = turn.outcome["status"].clone();
                         frame["language_state"] = serde_json::to_value(&turn.state)?;
                         frame["language_references"] = turn.outcome["references"].clone();
+                        if let Some(proposal) = turn.outcome.get("web_proposal") {
+                            frame["web_proposal"] = proposal.clone();
+                        }
                     }
                     if let Some(plan) = knowledge {
                         ensure!(
@@ -494,5 +541,86 @@ mod tests {
             .await
             .is_err()
         );
+    }
+    #[tokio::test]
+    async fn address_classification_needs_no_helper_or_model() {
+        let mut config = DialogueConfig {
+            python: "/missing/input-test-python".into(),
+            helper: "/missing/input-test-helper.py".into(),
+            ..Default::default()
+        };
+        config.haiku.memory_enabled = false;
+        let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
+        let (cancel, mut rx) = watch::channel(false);
+        for (text, expected) in [
+            ("", false),
+            ("\u{1c}", false),
+            ("こんにちは", true),
+            ("家を建てたいな", true),
+            ("枕詞って何？", false),
+            ("剣に持ち替えて", false),
+            ("草地はくさち", false),
+            ("そうちじゃなくてくさち", false),
+            ("今日の句", false),
+            ("松明ある？", false),
+            ("/say こんにちは", false),
+        ] {
+            let result = render(
+                &config,
+                &llm,
+                json!({"op":"address_route","text":text}),
+                &mut rx,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                result,
+                json!({"op":"result","general_conversation":expected}),
+                "{text}"
+            );
+        }
+        assert!(
+            render(&config, &llm, json!({"op":"address_route"}), &mut rx)
+                .await
+                .is_err()
+        );
+        cancel.send(true).unwrap();
+        assert!(
+            render(
+                &config,
+                &llm,
+                json!({"op":"address_route","text":"こんにちは"}),
+                &mut rx
+            )
+            .await
+            .is_err()
+        );
+        let (owner, mut orphaned) = watch::channel(false);
+        drop(owner);
+        assert!(
+            render(
+                &config,
+                &llm,
+                json!({"op":"address_route","text":"こんにちは"}),
+                &mut orphaned
+            )
+            .await
+            .is_err()
+        );
+    }
+    #[tokio::test]
+    async fn light_plan_cancellation_needs_no_python_or_overlay() {
+        let config = DialogueConfig {
+            python: "/missing/light-test-python".into(),
+            helper: "/missing/light-test-helper.py".into(),
+            ..Default::default()
+        };
+        let llm = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1)).unwrap();
+        let (_owner, mut cancel) = watch::channel(true);
+        let result = render(&config, &llm, json!({
+            "op":"light_plan", "details":{},
+            "fallback_payload":{"action":"stay_silent","basis_ids":["light_source_gain_observed"],"confidence":0.0}
+        }), &mut cancel).await;
+        assert_eq!(result.unwrap_err().to_string(), "cancelled");
     }
 }

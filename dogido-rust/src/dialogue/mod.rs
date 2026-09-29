@@ -1,5 +1,8 @@
 //! 通常会話、冒険中の判断、限定操作と自動川柳の配送。
 mod address_runtime;
+mod web_adapter;
+mod web_runtime;
+pub use web_runtime::Settings as WebSettings;
 mod assist_runtime;
 mod audio;
 mod bridge;
@@ -14,6 +17,7 @@ mod knowledge_queue;
 mod language_runtime;
 mod memory_runtime;
 mod poem_runtime;
+mod reaction_runtime;
 mod reading_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
@@ -58,6 +62,7 @@ pub struct DialogueConfig {
     pub audio_dir: PathBuf,
     pub player: PathBuf,
     pub audio_enabled: bool,
+    pub web: WebSettings,
     pub warnings: crate::threats::Settings,
     pub combat: crate::combat::model::Settings,
     pub haiku: HaikuSettings,
@@ -80,6 +85,7 @@ impl Default for DialogueConfig {
             audio_dir: PathBuf::from(".dogido_tmp/rust-dialogue"),
             player: "/usr/bin/afplay".into(),
             audio_enabled: true,
+            web: WebSettings::default(),
             warnings: crate::threats::Settings::default(),
             combat: crate::combat::model::Settings::default(),
             haiku: HaikuSettings::default(),
@@ -116,6 +122,7 @@ struct Session {
     last_player_input: Option<u64>,
     foreground: crate::foreground::State,
     language: crate::language::State,
+    web: web_runtime::State,
     knowledge_queue: VecDeque<knowledge_queue::Pending>,
     knowledge_checked: Option<knowledge_queue::Checked>,
     address: Option<crate::address::Pending>,
@@ -273,6 +280,7 @@ impl Dialogue {
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
                 language: crate::language::State::default(),
+                web: web_runtime::State::default(),
                 knowledge_queue: VecDeque::new(),
                 knowledge_checked: None,
                 address: None,
@@ -853,6 +861,7 @@ impl Dialogue {
             "text":text,"interpreted_text":interpreted_text,"history":s.history.rows(),"conversation_history":s.history.lines(),
             "event_digest":event_digest,"event":event});
         if workshop.is_none()
+            && s.web.state.research.is_none()
             && poem_input.is_none()
             && crate::reading_correction::parse(text).is_none()
             && !crate::haiku_memory::memory_candidate(text)
@@ -1074,7 +1083,11 @@ impl Dialogue {
                 let workshop_reply = workshop_id.is_some()
                     && result["workshop_action"] != "unrelated"
                     && !knowledge_detour;
-                if status == "queued" && !workshop_reply && result["memory_action"].is_null() {
+                if status == "queued"
+                    && !workshop_reply
+                    && result["memory_action"].is_null()
+                    && result["web_private"] != true
+                {
                     s.history.push(turn, "user", &player_text);
                     if !knowledge_detour {
                         s.foreground
@@ -1145,7 +1158,14 @@ impl Dialogue {
                 {
                     s.history.annotate(turn, &repair);
                 }
-                if status == "completed" && !workshop_reply && result["memory_action"].is_null() {
+                if status == "completed" {
+                    web_runtime::completed(s, turn, &player_text, result);
+                }
+                if status == "completed"
+                    && !workshop_reply
+                    && result["memory_action"].is_null()
+                    && result["web_private"] != true
+                {
                     s.last_completed_conversation = Some(now);
                     language_runtime::completed(s, result);
                     s.history
@@ -1242,11 +1262,17 @@ impl Dialogue {
             }
         });
         let mut completed = false;
+        self.prepare_web(&sid, epoch, &mut input, &cancel).await;
+        let web_result = self.web_turn(&sid, epoch, &input, &mut cancel).await;
         let correction = crate::reading_correction::for_input(
             input["text"].as_str().unwrap_or(""),
             &input["workshop"],
         );
-        let result = if input["address_reply"].is_string() {
+        let result = if let Err(error) = web_result {
+            Err(error)
+        } else if let Some(result) = web_result.unwrap() {
+            Ok(result)
+        } else if input["address_reply"].is_string() {
             match self.select_foreground(&sid, &turn, epoch, crate::foreground::Route::Learning) {
                 Ok(()) => bridge::render(&self.config, &self.llm, input.clone(), &mut cancel).await,
                 Err(error) => Err(error),
@@ -1351,7 +1377,7 @@ impl Dialogue {
                 } else if result["language_status"] == "awaiting_address" {
                     self.update(&sid, &turn, epoch, "not_selected", Some(&result));
                 } else if result["text"].as_str().is_none_or(|s| s.is_empty()) {
-                    self.update(&sid, &turn, epoch, "quiet", None);
+                    self.update(&sid, &turn, epoch, "quiet", Some(&result));
                 } else if self.update(&sid, &turn, epoch, "queued", Some(&result)) {
                     tracing::info!(
                         event = "dialogue_reply",
@@ -1382,6 +1408,8 @@ impl Dialogue {
                             }
                         }
                     };
+                    // Web開始は音声プロセスの実終了と同じepochの確認後だけ。
+                    self.web_playback(&sid, epoch, &result, status);
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
                         && status == "completed"
                         && result["workshop_action"].is_null()
@@ -1424,7 +1452,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {

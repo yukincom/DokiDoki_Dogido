@@ -1,5 +1,6 @@
 pub mod address;
 pub mod assist;
+pub mod chat_prompt;
 pub mod combat;
 pub mod contextual_asr;
 pub mod dialogue;
@@ -13,8 +14,11 @@ pub mod haiku_memory;
 pub mod haiku_record;
 pub mod haiku_response;
 pub mod ingress;
+pub mod input_context;
+pub mod input_policy;
 pub mod knowledge;
 pub mod language;
+pub mod light_plan;
 pub mod llm;
 pub mod memory_api;
 pub mod planner;
@@ -32,3 +36,5 @@ pub mod workshop_combat;
 pub mod workshop_combat_input;
 pub mod workshop_edit;
 pub mod workshop_followup;
+
+pub mod reaction_leaf;

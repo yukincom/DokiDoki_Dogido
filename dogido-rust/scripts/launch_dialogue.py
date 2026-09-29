@@ -109,12 +109,17 @@ def main():
     for file in sorted((ROOT / "dogido-rust/src/environment").glob("*_defaults.json")):
         combat_defaults.update(json.loads(file.read_text()))
     combat_settings = {key: getattr(settings, key) for key in combat_defaults}
+    from dogido_server.language_dialogue.main_web import inspect_main_web_availability
+    web_availability = inspect_main_web_availability()
+    web_settings = {"enabled": settings.main_language_web_enabled and settings.main_language_dialogue_enabled,
+                    "available": web_availability.available}
+    print(f"同意済みWeb検索: {web_availability.reason if web_settings['enabled'] else 'disabled'}（ブラウザー未起動）", flush=True)
     print(f"Rust版の冒険会話試験 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
     print("会話材料・発話検査はPython補助を利用。戦闘・環境反応の判断、剣への持ち替え、音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
-    print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、知識回答・限定国語対話に対応。Web連携は未対応です。", flush=True)
+    print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、知識回答・限定国語対話に対応。Web連携は利用前提が揃うときだけ、同意と案内音声の再生完了後に開始します。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
@@ -138,6 +143,7 @@ def main():
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
         "--combat-settings", json.dumps(combat_settings),
         "--haiku-settings", json.dumps(haiku_settings),
+        "--web-settings", json.dumps(web_settings),
         "--warning-settings", json.dumps({
             **{key: getattr(settings, key) for key in (
                 "panic_distance", "rear_warning_distance", "recent_damage_window_ms",

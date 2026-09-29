@@ -369,6 +369,7 @@ mod tests {
             ..DialogueConfig::default()
         };
         config.haiku.memory_enabled = false;
+        config.web.enabled = false; // This fixture owns only the deliberately stalled parser.
         let dialogue = Dialogue::new(config).unwrap();
         dialogue.register("s", "試験", true);
         {

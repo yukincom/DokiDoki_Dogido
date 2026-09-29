@@ -1,0 +1,1642 @@
+[
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狐の名前の由来は決まっていない",
+    "intent": {
+      "intent": "report",
+      "evidence": "狐の名前の由来は決まっていない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "どんな説があるの",
+    "intent": {
+      "intent": "discuss",
+      "evidence": "どんな説があるの"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "分からない",
+    "intent": {
+      "intent": "uncertain",
+      "evidence": "分からない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "まだ続けたい",
+    "intent": {
+      "intent": "continue",
+      "evidence": "まだ続けたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_continue",
+      "text": "ええで、もうちょっと考えてみよか。気になってること、聞かせてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "冒険に戻る",
+    "intent": {
+      "intent": "return",
+      "evidence": "冒険に戻る"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "よし、冒険にもどろか！",
+      "phase": "awaiting_report"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狸の話も聞きたい",
+    "intent": {
+      "intent": "new_question",
+      "evidence": "狸の話も聞きたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "なるほど",
+    "intent": {
+      "intent": "acknowledge",
+      "evidence": "なるほど"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "awaiting_report"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ふふふ",
+    "intent": {
+      "intent": "other",
+      "evidence": "ふふふ"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "awaiting_report"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "今の続き",
+    "intent": {
+      "intent": "other",
+      "evidence": "今の続き"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "awaiting_report"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "別の質問",
+    "intent": {
+      "intent": "other",
+      "evidence": "別の質問"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "awaiting_report"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ページ閉じて",
+    "intent": {
+      "intent": "return",
+      "evidence": "ページ閉じて"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "わかった。調べものはいったんここまでにしよか。",
+      "phase": "awaiting_report"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狐の名前の由来は決まっていない",
+    "intent": {
+      "intent": "report",
+      "evidence": "狐の名前の由来は決まっていない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "どんな説があるの",
+    "intent": {
+      "intent": "discuss",
+      "evidence": "どんな説があるの"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "分からない",
+    "intent": {
+      "intent": "uncertain",
+      "evidence": "分からない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "まだ続けたい",
+    "intent": {
+      "intent": "continue",
+      "evidence": "まだ続けたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_continue",
+      "text": "ええで、もうちょっと考えてみよか。気になってること、聞かせてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "冒険に戻る",
+    "intent": {
+      "intent": "return",
+      "evidence": "冒険に戻る"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "よし、冒険にもどろか！",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狸の話も聞きたい",
+    "intent": {
+      "intent": "new_question",
+      "evidence": "狸の話も聞きたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "なるほど",
+    "intent": {
+      "intent": "acknowledge",
+      "evidence": "なるほど"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "return_offered",
+      "text": "勉強も楽しいけど、そろそろ冒険にもどろか！",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ふふふ",
+    "intent": {
+      "intent": "other",
+      "evidence": "ふふふ"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "今の続き",
+    "intent": {
+      "intent": "other",
+      "evidence": "今の続き"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "別の質問",
+    "intent": {
+      "intent": "other",
+      "evidence": "別の質問"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "discussing",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ページ閉じて",
+    "intent": {
+      "intent": "return",
+      "evidence": "ページ閉じて"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "わかった。調べものはいったんここまでにしよか。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狐の名前の由来は決まっていない",
+    "intent": {
+      "intent": "report",
+      "evidence": "狐の名前の由来は決まっていない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "どんな説があるの",
+    "intent": {
+      "intent": "discuss",
+      "evidence": "どんな説があるの"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "分からない",
+    "intent": {
+      "intent": "uncertain",
+      "evidence": "分からない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_reflection",
+      "text": "いくつか説があるんやな。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "まだ続けたい",
+    "intent": {
+      "intent": "continue",
+      "evidence": "まだ続けたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_continue",
+      "text": "ええで、もうちょっと考えてみよか。気になってること、聞かせてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "冒険に戻る",
+    "intent": {
+      "intent": "return",
+      "evidence": "冒険に戻る"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "よし、冒険にもどろか！",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狸の話も聞きたい",
+    "intent": {
+      "intent": "new_question",
+      "evidence": "狸の話も聞きたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "なるほど",
+    "intent": {
+      "intent": "acknowledge",
+      "evidence": "なるほど"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ふふふ",
+    "intent": {
+      "intent": "other",
+      "evidence": "ふふふ"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "今の続き",
+    "intent": {
+      "intent": "other",
+      "evidence": "今の続き"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "別の質問",
+    "intent": {
+      "intent": "other",
+      "evidence": "別の質問"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "awaiting_report",
+      "text": "どうやった？ 分かったこと、オレにも教えてや。",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "return_offered",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ページ閉じて",
+    "intent": {
+      "intent": "return",
+      "evidence": "ページ閉じて"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "わかった。調べものはいったんここまでにしよか。",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狐の名前の由来は決まっていない",
+    "intent": {
+      "intent": "report",
+      "evidence": "狐の名前の由来は決まっていない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "どんな説があるの",
+    "intent": {
+      "intent": "discuss",
+      "evidence": "どんな説があるの"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "分からない",
+    "intent": {
+      "intent": "uncertain",
+      "evidence": "分からない"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "まだ続けたい",
+    "intent": {
+      "intent": "continue",
+      "evidence": "まだ続けたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "冒険に戻る",
+    "intent": {
+      "intent": "return",
+      "evidence": "冒険に戻る"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "狸の話も聞きたい",
+    "intent": {
+      "intent": "new_question",
+      "evidence": "狸の話も聞きたい"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "なるほど",
+    "intent": {
+      "intent": "acknowledge",
+      "evidence": "なるほど"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "return_offered",
+      "text": "勉強も楽しいけど、そろそろ冒険にもどろか！",
+      "phase": "return_offered"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ふふふ",
+    "intent": {
+      "intent": "other",
+      "evidence": "ふふふ"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_topic_confirmation",
+      "text": "いま見てる「狐」の続き？ それとも別の質問？",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "今の続き",
+    "intent": {
+      "intent": "other",
+      "evidence": "今の続き"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_continue",
+      "text": "わかった、今の続きやな。気になるところ、聞かせてや。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "別の質問",
+    "intent": {
+      "intent": "other",
+      "evidence": "別の質問"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "わかった。新しく聞きたいことを、もう一度聞かせてな。",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "confirming_topic_change",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "ページ閉じて",
+    "intent": {
+      "intent": "return",
+      "evidence": "ページ閉じて"
+    },
+    "reading": {
+      "perspective": "いくつか説があるんやな。",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "handoff",
+      "text": "わかった。調べものはいったんここまでにしよか。",
+      "phase": "confirming_topic_change"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "そうなの",
+    "intent": {
+      "intent": "report",
+      "evidence": "そうなの"
+    },
+    "reading": {
+      "perspective": "説明",
+      "quotes": []
+    },
+    "expected": {
+      "status": "research_uncertain",
+      "text": "そのところは、今の概要だけやとまだ分からへんな。気になる説明を一緒に見てみよか。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "そうなの",
+    "intent": {
+      "intent": "report",
+      "evidence": "そうなの"
+    },
+    "reading": {
+      "perspective": "説明",
+      "quotes": [
+        {
+          "page_id": "other",
+          "quote": "狐の由来にはいくつもの説があり"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_uncertain",
+      "text": "そのところは、今の概要だけやとまだ分からへんな。気になる説明を一緒に見てみよか。",
+      "phase": "discussing"
+    }
+  },
+  {
+    "context": {
+      "question": "狐の由来",
+      "target": "狐",
+      "pages": [
+        {
+          "id": "overview:test",
+          "text_ja": "狐の由来にはいくつもの説があり、はっきり決まっていません。",
+          "use": "google_ai_overview"
+        }
+      ],
+      "phase": "awaiting_report",
+      "search_results": [],
+      "search_url": "https://www.google.com/search?q=fox"
+    },
+    "text": "そうなの",
+    "intent": {
+      "intent": "report",
+      "evidence": "そうなの"
+    },
+    "reading": {
+      "perspective": "説明",
+      "quotes": [
+        {
+          "page_id": "overview:test",
+          "quote": "資料にはないものを引用した記録"
+        }
+      ]
+    },
+    "expected": {
+      "status": "research_uncertain",
+      "text": "そのところは、今の概要だけやとまだ分からへんな。気になる説明を一緒に見てみよか。",
+      "phase": "discussing"
+    }
+  }
+]

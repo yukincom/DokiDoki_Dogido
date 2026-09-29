@@ -3,7 +3,7 @@ use crate::{foreground::Route, language::State};
 use serde_json::{Value, json};
 
 pub(super) fn context(s: &Session, text: &str) -> (bool, State) {
-    let active = s.foreground.route == Route::Learning
+    let active = matches!(s.foreground.route, Route::Learning | Route::Web)
         || s.foreground
             .suspended
             .as_ref()
@@ -26,6 +26,9 @@ pub(super) fn completed(s: &mut Session, result: &Value) {
 impl Dialogue {
     /// 同じepochの完成した学習結果だけを、既存の会話・音声経路へ渡す。
     pub(super) fn apply_language_result(&self, sid: &str, turn: &str, epoch: u64, result: &Value) {
+        if self.apply_web_result(sid, turn, epoch, result) {
+            return;
+        }
         if result["language_status"].is_null() {
             return;
         }

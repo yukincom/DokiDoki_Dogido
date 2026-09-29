@@ -7,8 +7,12 @@ impl Dialogue {
         self.tick_address(d, sid);
         if let Some(s) = d.sessions.get_mut(sid) {
             let now = self.clock.elapsed().as_millis() as u64;
-            s.foreground
-                .tick(now, self.config.combat.ms("conversation_active_ttl_ms"));
+            let ttl = self.config.combat.ms("conversation_active_ttl_ms");
+            super::web_runtime::tick(s, now, ttl);
+            if s.foreground.route == Route::Web && !s.web.state.active() {
+                s.foreground.clear(now);
+            }
+            s.foreground.tick(now, s.web.state.ttl(ttl));
             if matches!(
                 s.foreground.route,
                 Route::HaikuPreparation | Route::HaikuWorkshop

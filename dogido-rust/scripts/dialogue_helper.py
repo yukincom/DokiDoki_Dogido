@@ -30,6 +30,7 @@ except ImportError:
             return value
 from dogido_server.models import GameEvent
 from input_helper import prepared_context
+from chat_prompt_helper import prompt_input
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.tts_reading import prepare_text_for_tts
 from reading_overlay import apply_reading_snapshot
@@ -89,9 +90,13 @@ class BridgeLLM(DogidoLLM):
     def _generate_backend_text(self, request):
         if request.kind != self.allowed_leaf:
             raise ValueError("unexpected helper leaf")
-        response = exchange({"op": "generate", "input": {"schema_version": 1, "kind": request.kind,
-            "model": self.model, "messages": build_messages(request), "temperature": request.temperature,
-            "max_tokens": request.max_tokens or self.settings.llm_max_tokens, "enable_thinking": False}})
+        if request.kind == "player_chat":
+            response = exchange({"op": "chat_prompt", "input": prompt_input(
+                request, self.model, self.settings.llm_max_tokens)})
+        else:
+            response = exchange({"op": "generate", "input": {"schema_version": 1, "kind": request.kind,
+                "model": self.model, "messages": build_messages(request), "temperature": request.temperature,
+                "max_tokens": request.max_tokens or self.settings.llm_max_tokens, "enable_thinking": False}})
         return GeneratedText(**response["generated"])
 
 

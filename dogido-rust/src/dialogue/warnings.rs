@@ -331,6 +331,7 @@ fn named_paths(directory: &Path, text: &str) -> Option<Vec<PathBuf>> {
 }
 impl Dialogue {
     pub(super) fn cancel_chat(d: &mut Data, sid: &str, reason: &str) {
+        Self::cancel_web(d, sid, reason);
         if reason != "new_player_input" {
             Self::cancel_address(d, sid, "attention_interrupted");
         }

@@ -479,13 +479,10 @@ mod tests {
         dialogue.shutdown().await;
     }
     #[tokio::test]
-    async fn shutdown_cancels_and_reaps_inflight_address_parser() {
-        let folder = std::env::temp_dir().join(format!("dogido-address-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir(&folder).unwrap();
-        let helper = folder.join("helper.py");
-        std::fs::write(&helper, "import os,sys,time\nfrom pathlib import Path\nsys.stdin.readline()\nPath(__file__).with_suffix('.pid').write_text(str(os.getpid()))\ntime.sleep(60)\n").unwrap();
+    async fn native_address_routing_finishes_without_helper_and_shutdown_clears_pending() {
         let mut config = DialogueConfig {
-            helper: helper.clone(),
+            python: "/missing/address-python".into(),
+            audio_enabled: false,
             ..DialogueConfig::default()
         };
         config.haiku.memory_enabled = false;
@@ -512,10 +509,20 @@ mod tests {
         }
         let response = dialogue.submit(Some("s"), "枕詞って何？", "voice");
         assert_eq!(response["reason"], "address_input_routing");
-        let pid_file = helper.with_extension("pid");
         tokio::time::timeout(Duration::from_secs(2), async {
-            while !pid_file.is_file() {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+            loop {
+                let finished = {
+                    let d = dialogue.data.lock().unwrap();
+                    d.rows.iter().any(|row| {
+                        row["turn_id"] == response["turn_id"]
+                            && row["playback_status"] == "not_selected"
+                            && row["forwarded_input"].is_object()
+                    })
+                };
+                if finished {
+                    break;
+                }
+                tokio::task::yield_now().await;
             }
         })
         .await
@@ -523,19 +530,10 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(2), dialogue.shutdown())
             .await
             .unwrap();
-        let pid: i32 = std::fs::read_to_string(&pid_file).unwrap().parse().unwrap();
-        assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
-        assert_eq!(
-            std::io::Error::last_os_error().raw_os_error(),
-            Some(libc::ESRCH)
-        );
         assert!(
             dialogue.data.lock().unwrap().sessions["s"]
                 .address
                 .is_none()
         );
-        std::fs::remove_file(helper).unwrap();
-        std::fs::remove_file(pid_file).unwrap();
-        std::fs::remove_dir(folder).unwrap();
     }
 }
