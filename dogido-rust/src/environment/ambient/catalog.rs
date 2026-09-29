@@ -1,4 +1,4 @@
-use crate::entry_catalog::{NEUTRAL, PASSIVE, STRUCTURES};
+use crate::entry_catalog::{BIOMES, NEUTRAL, PASSIVE, STRUCTURES};
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -9,12 +9,6 @@ static REACTIONS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/mobs/ambient_reactions.json")).unwrap()
 });
 
-static BIOMES: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/minecraft_biome.json"
-    ))
-    .unwrap()
-});
 static EXPLORATION: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!(
         "../../../../data/responses/ques/exploration.json"

@@ -2,6 +2,7 @@
 //! HTTPへ公開せず、まず既存Pythonが作る同一文脈で比較する。
 mod grounding;
 pub mod handoff;
+pub mod prepare;
 mod prompts;
 pub mod repair;
 mod runner;

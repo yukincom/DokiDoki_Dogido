@@ -1,0 +1,13 @@
+{
+  "counts": {
+    "environment-projection": 2277,
+    "precipitation": 1271,
+    "precipitation-frame": 896
+  },
+  "source_sha256": {
+    "dogido_server/environment_context.py": "f623021a41a83e126e9744e0a0a2173aaa2d069d2cd42f4a5d827f2fe69ee1c3",
+    "dogido_server/state_machine/precipitation.py": "8ab6fec16924f21468a9923868dca71d054e00ad44b09c4178c239306641a8d1",
+    "dogido_server/state_machine/mixins/world_analysis.py": "0e59185b22349a9f2852948565063b364ea24af5834dffbd8eae5621a775367c",
+    "data/catalogs/entries/minecraft_biome.json": "77efeb37de7eb39256e612b29e3d0b19872b427f40d5196977cbad29e9c1c6ce"
+  }
+}

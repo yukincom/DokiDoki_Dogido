@@ -91,6 +91,10 @@ impl Engine {
     pub fn take_notes(&mut self) -> Vec<String> {
         self.outcomes.take_notes()
     }
+    /// Call once after each accepted raw observe, before the next event.
+    pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
+        self.outcomes.take_name_updates()
+    }
     pub fn answer_query(
         &self,
         event: &GameEvent,
@@ -127,7 +131,7 @@ impl Engine {
         if dimension_changed {
             self.policy = Policy::default();
             self.auditory = Auditory::default();
-            self.outcomes = Outcomes::with_settings(s);
+            self.outcomes.reset_for_dimension(s);
             self.latest_full = None;
             self.latest_full_at = None;
             self.partial_danger = false;
@@ -179,7 +183,7 @@ impl Engine {
                     .is_some_and(|n| n <= s.ms("recent_damage_window_ms") as i64)
                 || dark_alert(event, s);
         }
-        let immediate = self.outcomes.observe(event, now);
+        let immediate = self.outcomes.observe_with_mode(event, now, previous);
         if complete && event.event.name == EventName::CombatEnded {
             self.pending_safe_at = self.outcomes.boss_defeat_confirmed(event).then_some(now);
         }
@@ -842,13 +846,19 @@ pub fn call_name(e: &GameEvent, s: &Settings) -> String {
         .to_owned()
 }
 pub fn occluded(e: &GameEvent) -> bool {
+    occluded_with_cover(
+        e,
+        e.world.overhead_cover_type.as_deref().unwrap_or("unknown"),
+    )
+}
+/// Shared geometry; callers retain their own canonical cover normalization.
+pub(crate) fn occluded_with_cover(e: &GameEvent, cover: &str) -> bool {
     let w = &e.world;
     if w.is_submerged == Some(true) {
         return false;
     }
     let enclosure = w.enclosure_score.unwrap_or(0.0);
     let ceiling = w.ceiling_height.unwrap_or(0.0);
-    let cover = w.overhead_cover_type.as_deref().unwrap_or("unknown");
     let open = if w.sky_visible == Some(true) && ceiling >= 12.0 {
         true
     } else if cover == "foliage" {

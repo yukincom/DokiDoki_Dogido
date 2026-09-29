@@ -11,6 +11,7 @@ use crate::{
     workshop, workshop_candidate,
     workshop_edit::{self, Pending},
     workshop_followup::{self, Stage},
+    workshop_projection,
 };
 use anyhow::{Context, ensure};
 
@@ -101,12 +102,7 @@ impl Dialogue {
         let mut speech = String::new();
         let stage: Stage = serde_json::from_value(view["followup"].clone())?;
         if action.is_none() {
-            let fixed = helper
-                .exchange(json!({"op":"fixed_followup", "text":text,
-                "stage":stage,"pending":pending.is_some()}))
-                .await?;
-            action = fixed["action"]
-                .as_str()
+            action = workshop_projection::fixed_followup(text, stage, pending.is_some())
                 .filter(|a| stage.actions(pending.is_some()).contains(a))
                 .map(str::to_owned);
             if let Some(a) = &action {
@@ -317,10 +313,11 @@ impl Dialogue {
                         pending.is_none() && proposed.is_none() && phase != "after_validation",
                         "editor_already_used"
                     );
-                    let prepared=helper.exchange(json!({"op":"revision_input","workshop":view,
+                    let prepared = prepare_revision(
+                        &json!({"op":"revision_input","workshop":view,
                         "findings":step["analysis"]["findings"],"max_tokens":self.config.haiku.structured_max_tokens,
-                        "grounding_max_tokens":self.config.haiku.grounding_max_tokens})).await?;
-                    let prepared: crate::haiku::revision::Input = serde_json::from_value(prepared)?;
+                        "grounding_max_tokens":self.config.haiku.grounding_max_tokens}),
+                    )?;
                     let basis = prepared.basis.clone();
                     let mut backend = crate::haiku_bridge::LiveBackend {
                         helper,
@@ -546,13 +543,62 @@ impl Dialogue {
     }
 }
 
-// Keep one projection exchange in the existing helper/turn deadline. No model
-// call, dictionary work, or new helper is introduced by prompt assembly.
+// Match the former helper request/response limits even when no IPC is needed.
+const PROJECTION_FRAME_LIMIT: usize = 1_000_000;
+fn projection_request(frame: &Value) -> Result<()> {
+    ensure!(
+        serde_json::to_vec(frame)?.len() < PROJECTION_FRAME_LIMIT,
+        "workshop projection request too large"
+    );
+    Ok(())
+}
+fn projection_response(response: &Value) -> Result<()> {
+    ensure!(
+        crate::planner::python_json(response).len() < PROJECTION_FRAME_LIMIT,
+        "workshop projection response too large"
+    );
+    Ok(())
+}
+fn prepare_revision(frame: &Value) -> Result<crate::haiku::revision::Input> {
+    projection_request(frame)?;
+    let prepared = workshop_projection::revision_input(frame)?;
+    projection_response(&prepared)?;
+    serde_json::from_value(prepared).context("workshop revision input")
+}
+
+// Only the still-dictionary-dependent fixed fragment candidate crosses the
+// existing helper pipe. Details, saved sources, prompts, and validation are Rust
+// owned; after-inspection/validation phases do not perform this exchange.
 async fn prepare_consultation(helper: &mut Helper, frame: &mut Value) -> Result<(Value, Value)> {
-    frame["op"] = "prepare_details".into();
-    let prepared = helper.exchange(frame.clone()).await?;
-    Ok((
-        prompt::prepare(&prepared, frame.get("retry"))?,
-        prepared["details"].clone(),
-    ))
+    projection_request(frame)?;
+    let details = workshop_projection::details_for(frame)?;
+    let mut prepared = json!({"details":details});
+    projection_response(&prepared)?;
+    if details["phase"] == "decide"
+        && details["allowed_actions"]
+            .as_array()
+            .is_some_and(|actions| actions.iter().any(|a| a == "stage_player_edit"))
+    {
+        let mut request = frame.clone();
+        request["op"] = "fragment_candidate".into();
+        request["allowed_actions"] = details["allowed_actions"].clone();
+        let candidate = helper.exchange(request).await?;
+        let fields = candidate
+            .as_object()
+            .context("invalid fragment candidate response")?;
+        ensure!(
+            fields.len() == 1 && fields.contains_key("fixed_payload"),
+            "invalid fragment candidate fields"
+        );
+        let fixed = &candidate["fixed_payload"];
+        ensure!(
+            fixed.is_null() || fixed.is_object(),
+            "invalid fragment candidate payload"
+        );
+        if fixed.is_object() {
+            prepared["fixed_payload"] = fixed.clone();
+        }
+    }
+    projection_response(&prepared)?;
+    Ok((prompt::prepare(&prepared, frame.get("retry"))?, details))
 }

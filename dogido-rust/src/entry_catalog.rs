@@ -26,3 +26,10 @@ pub(crate) static STRUCTURES: LazyLock<Value> = LazyLock::new(|| {
     ))
     .expect("structure catalogue")
 });
+
+pub(crate) static BIOMES: LazyLock<Value> = LazyLock::new(|| {
+    serde_json::from_str(include_str!(
+        "../../data/catalogs/entries/minecraft_biome.json"
+    ))
+    .expect("biome catalogue")
+});

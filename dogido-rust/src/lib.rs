@@ -49,3 +49,15 @@ pub mod reaction_leaf;
 pub mod chat_validation;
 
 pub mod workshop_input_guard;
+
+pub mod chat_hints;
+
+pub mod chat_world;
+
+pub mod world_catalog;
+
+pub mod chat_observation;
+
+pub mod chat_materials;
+
+pub mod workshop_projection;

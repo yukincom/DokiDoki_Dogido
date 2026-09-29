@@ -1,0 +1,18 @@
+{
+  "cases": 264,
+  "fallback_cases": 106,
+  "dialogue_cases": 6,
+  "python_hash_seed": 0,
+  "source_sha256": {
+    "dogido-rust/scripts/haiku_preparation.py": "1a460269f8dbe7499ff0771e2e1de89c880d9325ad3abdb7311f828c3e9ebc5d",
+    "dogido-rust/scripts/reading_overlay.py": "a27426f9164c03ef7d8905038de720c2b9b79ef0d0d47a45c6b7c45adf744312",
+    "dogido_server/state_machine/mixins/haiku.py": "eb6d29df58a15c357c88016a08b10db4682d26ebb762d8c5268af3c3b831947c",
+    "dogido_server/haiku/materials.py": "daa84b4e3d7d11600f09bb3110862d6bc3597dfa3fd7c861f66be0c2ad10b3e3",
+    "dogido_server/haiku/verse.py": "d8a607b7c6d02817117871f1b612a62a8659b2e54aaeea46908bf1adb2924df9",
+    "dogido_server/memory_types.py": "2fe9bcd44d8835520cb97e163fb0fb1aacdf62b5714fc862d178c04984a7b69b",
+    "dogido_server/state_machine/haiku_catalog.py": "050fae53f02bde5f9308d64f4b20c1ab6a100b3a22970cae9ee167a896795dd7",
+    "dogido_server/dialogue/foreground.py": "52fafbf06867351233cd95f503510efaab471e51e69123409df6ed0b6908b331",
+    "dogido_server/entry_catalog.py": "b77b38553b2ccc9608b54a454f4efb2e9a16fc34ca9af161132c82eb843f4230",
+    "data/fallbacks/haiku.json": "eaac9f4d70ec7baf402d644b8d0d1c7ac06ade60174f0811325589d84eee2f14"
+  }
+}

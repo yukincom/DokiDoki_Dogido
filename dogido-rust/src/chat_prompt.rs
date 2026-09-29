@@ -206,7 +206,7 @@ fn pair(key: &str, value: &str, marker: &str) -> (String, String) {
         fill(asset(&DATA[key][1]), &[(marker, value)]),
     )
 }
-fn mode(d: &Value) -> &'static str {
+pub(crate) fn mode(d: &Value) -> &'static str {
     match text(d, "character_mode", "").to_lowercase().as_str() {
         "peace" | "peaceful" | "calm" | "平和" => return "peace",
         "battle" | "combat" | "panic" | "fight" | "バトル" => return "battle",
@@ -545,6 +545,24 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         });
     }
     Ok(out)
+}
+
+/// Same closed field projection used by the transitional Python helper.
+pub(crate) fn project_details(details: &Value) -> Value {
+    Value::Object(
+        details
+            .as_object()
+            .expect("native chat details")
+            .iter()
+            .filter(|(k, _)| {
+                TEXT_FIELDS.contains(&k.as_str())
+                    || BOOL_FIELDS.contains(&k.as_str())
+                    || LIST_FIELDS.contains(&k.as_str())
+                    || matches!(k.as_str(), "conversation_repair" | "player_chat_repair")
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    )
 }
 
 #[cfg(test)]

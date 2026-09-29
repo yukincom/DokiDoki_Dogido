@@ -87,7 +87,7 @@ pub fn identity(t: &VisualThreat) -> String {
             format!("{}:{dir}", t.r#type)
         })
 }
-fn direction(t: &VisualThreat) -> &'static str {
+pub(crate) fn direction(t: &VisualThreat) -> &'static str {
     match t.direction.horizontal {
         Some(H::Front) => "前",
         Some(H::FrontRight) => "右前",

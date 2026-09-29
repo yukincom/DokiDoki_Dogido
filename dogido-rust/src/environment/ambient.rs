@@ -13,8 +13,10 @@ use crate::{
     events::{EventName, GameEvent},
 };
 pub(crate) use catalog::biome_label;
+pub(crate) use catalog::general as general_text;
 pub use light::{LightContext, LightPlanRequest};
 use serde_json::{Value, json};
+pub(crate) use smell::is_query as is_smell_query;
 use std::collections::HashMap;
 pub use surroundings::player_vehicle_fact;
 /// 配送時に明示質問の返答だけを現在観測から作り直す。状態を進めない。

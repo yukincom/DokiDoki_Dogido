@@ -68,7 +68,7 @@ impl Handoff {
         self.plan = Some(plan.clone());
         Ok(())
     }
-    pub fn resolve(&mut self, mut input: Input, active: bool) -> Result<Output> {
+    pub fn resolve(&mut self, input: Input, active: bool) -> Result<Output> {
         ensure!(active, "cancelled");
         ensure!(self.output.is_none(), "grounding already resolved");
         ensure!(
@@ -91,134 +91,7 @@ impl Handoff {
             input.plan.requests_catalog() || input.topic_hits.is_empty(),
             "nonentity plan cannot read catalog"
         );
-        let catalog = if input.native_catalog {
-            let policy = input
-                .topic_policy
-                .as_mut()
-                .ok_or_else(|| anyhow::anyhow!("native catalog needs topic context"))?;
-            ensure!(
-                input.topic_hits.is_empty() && policy.topic_hits.is_empty(),
-                "native catalog cannot accept projected hits"
-            );
-            let rows = if input.plan.requests_catalog() {
-                crate::chat_catalog::catalog()
-                    .player_chat_topics(&input.plan.entity_query, &policy.observed_ids)
-            } else {
-                vec![]
-            };
-            input.topic_hits = rows
-                .iter()
-                .map(|row| Candidate {
-                    entry_id: row.entry_id.clone(),
-                    label: row.label_ja.clone(),
-                    score: Some(row.score),
-                })
-                .collect();
-            policy.topic_hits = rows
-                .iter()
-                .map(|row| crate::chat_topics::Topic {
-                    entry_id: row.entry_id.clone(),
-                    label_ja: row.label_ja.clone(),
-                    score: row.score,
-                    matched_terms: row.matched_terms.clone(),
-                })
-                .collect();
-            Some(rows)
-        } else {
-            None
-        };
-        let selected = if let Some(policy) = &input.topic_policy {
-            ensure!(
-                policy.topic_hits.len() == input.topic_hits.len(),
-                "topic projection length mismatch"
-            );
-            for (topic, hit) in policy.topic_hits.iter().zip(&input.topic_hits) {
-                ensure!(
-                    topic.entry_id == hit.entry_id && hit.score == Some(topic.score),
-                    "topic projection mismatch"
-                );
-            }
-            crate::chat_topics::prepare(policy).usable_indices
-        } else {
-            (0..input.topic_hits.len()).collect()
-        };
-        let hits: Vec<Value> = input
-            .topic_hits
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| selected.contains(i))
-            .map(|(_, row)| row)
-            .map(|row| {
-                json!({
-                    "entry_id": row.entry_id, "label": row.label,
-                    "score": row.score.map_or_else(|| json!("NaN"), |n| json!(n)),
-                })
-            })
-            .collect();
-        let observed: Vec<Value> = input
-            .observed_entities
-            .iter()
-            .map(|row| {
-                json!({
-                    "entity_id": row.entity_id, "label": row.label,
-                })
-            })
-            .collect();
-        let grounding = ground(&input.plan, &hits, &observed);
-        let topics = input
-            .topic_policy
-            .as_ref()
-            .map(|policy| crate::chat_topics::finish(policy, &input.plan, &grounding));
-        let catalog_topic_hints = catalog.as_ref().map(|rows| {
-            crate::chat_catalog::topic_hints(
-                &topics
-                    .as_ref()
-                    .unwrap()
-                    .topic_for_identify_indices
-                    .iter()
-                    .map(|i| rows[*i].clone())
-                    .collect::<Vec<_>>(),
-            )
-        });
-        let names = if let Some(mut context) = input.name_context {
-            ensure!(
-                context.topics.is_empty(),
-                "native name context cannot select topics"
-            );
-            ensure!(
-                context.current_entity_labels
-                    == input
-                        .observed_entities
-                        .iter()
-                        .map(|r| r.label.clone())
-                        .collect::<Vec<_>>(),
-                "name context observations mismatch"
-            );
-            let rows = catalog
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("name context needs native catalog"))?;
-            context.topics = topics
-                .as_ref()
-                .unwrap()
-                .topic_for_identify_indices
-                .iter()
-                .map(|i| (&rows[*i]).into())
-                .collect();
-            Some(crate::chat_names::project(
-                crate::chat_catalog::catalog(),
-                &context,
-            ))
-        } else {
-            None
-        };
-        let result = Output {
-            names,
-            fixed_reply: fixed_reply(&input.plan, &grounding),
-            topics,
-            catalog,
-            catalog_topic_hints,
-            grounding,
-        };
+        let result = project(input)?;
         self.output = Some(result.clone());
         Ok(result)
     }
@@ -332,7 +205,7 @@ impl Handoff {
         Ok(())
     }
 }
-fn normalize_prompt_observations(rows: &[Observation]) -> Vec<Observation> {
+pub(super) fn normalize_prompt_observations(rows: &[Observation]) -> Vec<Observation> {
     let mut seen = HashSet::new();
     rows.iter()
         .take(16)
@@ -352,4 +225,136 @@ fn normalize_prompt_observations(rows: &[Observation]) -> Vec<Observation> {
             })
         })
         .collect()
+}
+
+/// Pure projection for native material assembly; lifecycle and accepted-plan checks remain in Handoff.
+pub(crate) fn project(mut input: Input) -> Result<Output> {
+    let catalog = if input.native_catalog {
+        let policy = input
+            .topic_policy
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("native catalog needs topic context"))?;
+        ensure!(
+            input.topic_hits.is_empty() && policy.topic_hits.is_empty(),
+            "native catalog cannot accept projected hits"
+        );
+        let rows = if input.plan.requests_catalog() {
+            crate::chat_catalog::catalog()
+                .player_chat_topics(&input.plan.entity_query, &policy.observed_ids)
+        } else {
+            vec![]
+        };
+        input.topic_hits = rows
+            .iter()
+            .map(|row| Candidate {
+                entry_id: row.entry_id.clone(),
+                label: row.label_ja.clone(),
+                score: Some(row.score),
+            })
+            .collect();
+        policy.topic_hits = rows
+            .iter()
+            .map(|row| crate::chat_topics::Topic {
+                entry_id: row.entry_id.clone(),
+                label_ja: row.label_ja.clone(),
+                score: row.score,
+                matched_terms: row.matched_terms.clone(),
+            })
+            .collect();
+        Some(rows)
+    } else {
+        None
+    };
+    let selected = if let Some(policy) = &input.topic_policy {
+        ensure!(
+            policy.topic_hits.len() == input.topic_hits.len(),
+            "topic projection length mismatch"
+        );
+        for (topic, hit) in policy.topic_hits.iter().zip(&input.topic_hits) {
+            ensure!(
+                topic.entry_id == hit.entry_id && hit.score == Some(topic.score),
+                "topic projection mismatch"
+            );
+        }
+        crate::chat_topics::prepare(policy).usable_indices
+    } else {
+        (0..input.topic_hits.len()).collect()
+    };
+    let hits: Vec<Value> = input
+        .topic_hits
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| selected.contains(i))
+        .map(|(_, row)| row)
+        .map(|row| {
+            json!({
+                "entry_id": row.entry_id, "label": row.label,
+                "score": row.score.map_or_else(|| json!("NaN"), |n| json!(n)),
+            })
+        })
+        .collect();
+    let observed: Vec<Value> = input
+        .observed_entities
+        .iter()
+        .map(|row| {
+            json!({
+                "entity_id": row.entity_id, "label": row.label,
+            })
+        })
+        .collect();
+    let grounding = ground(&input.plan, &hits, &observed);
+    let topics = input
+        .topic_policy
+        .as_ref()
+        .map(|policy| crate::chat_topics::finish(policy, &input.plan, &grounding));
+    let catalog_topic_hints = catalog.as_ref().map(|rows| {
+        crate::chat_catalog::topic_hints(
+            &topics
+                .as_ref()
+                .unwrap()
+                .topic_for_identify_indices
+                .iter()
+                .map(|i| rows[*i].clone())
+                .collect::<Vec<_>>(),
+        )
+    });
+    let names = if let Some(mut context) = input.name_context {
+        ensure!(
+            context.topics.is_empty(),
+            "native name context cannot select topics"
+        );
+        ensure!(
+            context.current_entity_labels
+                == input
+                    .observed_entities
+                    .iter()
+                    .map(|r| r.label.clone())
+                    .collect::<Vec<_>>(),
+            "name context observations mismatch"
+        );
+        let rows = catalog
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("name context needs native catalog"))?;
+        context.topics = topics
+            .as_ref()
+            .unwrap()
+            .topic_for_identify_indices
+            .iter()
+            .map(|i| (&rows[*i]).into())
+            .collect();
+        Some(crate::chat_names::project(
+            crate::chat_catalog::catalog(),
+            &context,
+        ))
+    } else {
+        None
+    };
+    Ok(Output {
+        names,
+        fixed_reply: fixed_reply(&input.plan, &grounding),
+        topics,
+        catalog,
+        catalog_topic_hints,
+        grounding,
+    })
 }

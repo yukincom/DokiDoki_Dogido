@@ -107,3 +107,11 @@ pub struct GroundedHaikuResult {
     pub regeneration_rounds: usize,
     pub prompt_variant: String,
 }
+
+pub mod source_atoms;
+
+pub mod context;
+
+pub mod materials;
+
+pub mod preparation;

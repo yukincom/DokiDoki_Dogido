@@ -201,6 +201,40 @@ impl Turn {
     }
 }
 
+/// Closed validation projection; acceptance remains in Turn and guard.
+pub(crate) fn project_details(details: &Value) -> Value {
+    Value::Object(
+        details
+            .as_object()
+            .expect("native chat details")
+            .iter()
+            .filter(|(k, _)| {
+                matches!(
+                    k.as_str(),
+                    "player_name"
+                        | "mode"
+                        | "character_mode"
+                        | "threat_summary"
+                        | "hearing_summary"
+                        | "event_digest"
+                        | "user_text"
+                        | "player_turn_plan"
+                        | "safety_priority"
+                        | "has_visual_threats"
+                        | "combat_active"
+                        | "speech_whitelist_enforce"
+                        | "nearby_hostile_types"
+                        | "nearby_mob_ids"
+                        | "forbidden_advice"
+                        | "allowed_speech_labels"
+                        | "speech_name_corrections"
+                )
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

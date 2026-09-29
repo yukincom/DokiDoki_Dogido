@@ -1,4 +1,4 @@
-"""Native preparation requests only details; semantic/edit validation stays canonical."""
+"""Canonical compatibility oracle and the remaining fixed-edit dictionary adapter."""
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -63,3 +63,29 @@ def test_interpretation_never_supplies_state_change_authority(raw, semantic):
     frame.update(op='validate', payload={'action':'close_workshop','purpose':'finish_workshop',
         'confidence':0.99,'evidence':'終了','speech':'','checks':[]})
     assert helper.handle(frame)['step'] is None
+
+
+@pytest.mark.parametrize('case', CASES, ids=lambda c:c['name'])
+def test_fragment_candidate_never_rebuilds_details_prompts_or_validation(case, monkeypatch):
+    frame = deepcopy(case['frame'])
+    frame['op'] = 'fragment_candidate'
+    frame['allowed_actions'] = case['prepared']['details']['allowed_actions']
+    original = deepcopy(frame)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('native runtime must not call a Python projection or validator')
+    for name in ('details_for', 'build_workshop_agent_details', 'workshop_context_details',
+                 'consultation_messages', 'validate_structured_payload', 'finalize_workshop_agent_step',
+                 'source_atoms_from_materials', 'line_source_ids_from_materials'):
+        monkeypatch.setattr(helper, name, forbidden)
+    assert helper.handle(frame) == {'fixed_payload': case['prepared'].get('fixed_payload')}
+    assert frame == original
+
+
+def test_runtime_has_no_obsolete_projection_exchange():
+    runtime = (Path(__file__).parents[1] / 'src/dialogue/workshop_runtime.rs').read_text()
+    assert '"prepare_details"' not in runtime
+    assert '.exchange(json!({"op":"fixed_followup"' not in runtime
+    assert '.exchange(json!({"op":"revision_input"' not in runtime
+    assert 'workshop_projection::fixed_followup' in runtime
+    assert 'workshop_projection::details_for' in runtime
+    assert 'workshop_projection::revision_input' in runtime

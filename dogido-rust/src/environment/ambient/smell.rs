@@ -92,7 +92,7 @@ impl Presence {
         Some(line)
     }
 }
-pub(super) fn is_query(text: &str) -> bool {
+pub(crate) fn is_query(text: &str) -> bool {
     let text = text.replace(' ', "");
     if [
         "言葉",
@@ -121,6 +121,8 @@ pub(super) fn is_query(text: &str) -> bool {
                 rest.char_indices()
                     .map(|(n, _)| n)
                     .chain(std::iter::once(rest.len()))
+                    // Python regex dot does not cross a typed newline.
+                    .take_while(|n| !rest[..*n].contains('\n'))
                     .take(width + 1)
                     .any(|n| tails.iter().any(|t| rest[n..].starts_with(t)))
             })

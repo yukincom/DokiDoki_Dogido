@@ -389,10 +389,17 @@ def handle(frame):
         return {"candidate": None}
     if frame["op"] == "discussion_candidate":
         return discussion_candidate(frame, frame.get("proposal"))
+    if frame["op"] == "fragment_candidate":
+        # Native Rust details decide whether a fixed local edit is available.
+        # Keep only the existing dictionary-dependent raw-text extraction here.
+        # Never rebuild details, prompts, validation, or saved source readers.
+        return {"fixed_payload": fixed_fragment_edit(frame, {
+            "phase": frame["phase"], "allowed_actions": frame["allowed_actions"],
+        })}
     details = details_for(frame)
     if frame["op"] == "prepare_details":
-        # The same projection and raw-text fixed edit; Rust assembles all prompt
-        # messages. Keep prepare below as the canonical compatibility oracle.
+        # Compatibility/golden oracle only. Runtime uses native details plus
+        # fragment_candidate; keep the previous full projection reproducible.
         prepared = {"details": details}
         fixed_payload = fixed_fragment_edit(frame, details)
         if fixed_payload is not None:

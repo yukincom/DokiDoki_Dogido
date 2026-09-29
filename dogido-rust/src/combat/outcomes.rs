@@ -1,8 +1,10 @@
 //! 観測根拠のある死亡・撃破・爆散と、戦闘から抜けた後の安堵。
 //! 視認消失・死亡音・経験値だけではプレイヤー撃破へ昇格させない。
+mod names;
+
 use super::{
     catalog,
-    model::{LeafRequest, Scope, Settings, Speech, label},
+    model::{LeafRequest, Mode, Scope, Settings, Speech, label},
 };
 use crate::events::{EventName, GameEvent, HostileOutcome, HostileOutcomeOutcome as Outcome};
 use serde_json::{Value, json};
@@ -30,6 +32,8 @@ pub struct Outcomes {
     announced: HashSet<String>,
     announcement_order: VecDeque<String>,
     notes: Vec<String>,
+    name_tracker: names::Tracker,
+    name_damage_window_ms: u64,
 }
 impl Default for Outcomes {
     fn default() -> Self {
@@ -105,11 +109,23 @@ impl Outcomes {
             announced: HashSet::new(),
             announcement_order: VecDeque::new(),
             notes: Vec::new(),
+            name_tracker: names::Tracker::default(),
+            name_damage_window_ms: settings.ms("recent_damage_window_ms"),
         }
     }
     /// 会話文脈への採用・保存は実行層が決める。ここではコードで確認した短い事実だけ。
     pub fn take_notes(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notes)
+    }
+    /// Drain exactly the last observe's name update, once. Not presence/death credit.
+    pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
+        self.name_tracker.take()
+    }
+    /// Existing combat reset, preserving only session-wide name replay suppression.
+    pub(super) fn reset_for_dimension(&mut self, settings: &Settings) {
+        let names = std::mem::take(&mut self.name_tracker);
+        *self = Self::with_settings(settings);
+        self.name_tracker = names;
     }
     pub fn has_boss_context(&self) -> bool {
         self.last_hostiles
@@ -179,7 +195,18 @@ impl Outcomes {
             .collect()
     }
     /// full/partialに関係なく現在の明示観測だけを受ける。空の部分イベントで記憶を消さない。
-    pub fn observe(&mut self, event: &GameEvent, _now_ms: u64) -> Option<Speech> {
+    pub fn observe(&mut self, event: &GameEvent, now_ms: u64) -> Option<Speech> {
+        self.observe_with_mode(event, now_ms, Mode::Normal)
+    }
+    /// Engine supplies its previous mode for legacy-adapter name tracking only.
+    pub fn observe_with_mode(
+        &mut self,
+        event: &GameEvent,
+        _now_ms: u64,
+        previous_mode: Mode,
+    ) -> Option<Speech> {
+        self.name_tracker
+            .observe(event, previous_mode, self.name_damage_window_ms);
         if !event.visual_threats.is_empty() {
             self.last_hostiles = event
                 .visual_threats
