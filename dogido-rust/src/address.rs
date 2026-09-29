@@ -8,6 +8,8 @@ pub struct Request {
     pub text: String,
     pub source: String,
     pub input_at: u64,
+    /// Admission privacy survives row eviction and delayed replay. Never sent to a model.
+    pub record_private: bool,
 }
 #[derive(Debug)]
 pub struct Pending {
@@ -235,6 +237,7 @@ mod tests {
     fn pending() -> Pending {
         Pending::new(
             Request {
+                record_private: false,
                 turn: "original".into(),
                 text: "家を作りたい".into(),
                 source: "voice".into(),

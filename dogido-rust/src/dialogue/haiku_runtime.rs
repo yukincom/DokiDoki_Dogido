@@ -187,6 +187,9 @@ impl Dialogue {
         );
     }
     pub(super) fn tick_workshop(&self, d: &mut Data, sid: &str) {
+        let audit_before = super::workshop_record::state(
+            d.sessions.get(sid).and_then(|s| s.haiku.workshop.as_ref()),
+        );
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
@@ -226,6 +229,19 @@ impl Dialogue {
             if before != (w.is_open(), w.combat_paused()) {
                 d.revision += 1;
             }
+        }
+        let audit_after = super::workshop_record::state(
+            d.sessions.get(sid).and_then(|s| s.haiku.workshop.as_ref()),
+        );
+        if audit_before != audit_after {
+            self.record_workshop(
+                sid,
+                "lifecycle",
+                &audit_before,
+                &audit_after,
+                &super::workshop_record::Input::default(),
+                &json!({"reason":"workshop_tick"}),
+            );
         }
     }
     pub fn workshop_snapshot(&self, sid: &str, sequence: u64) -> Option<Value> {
@@ -490,6 +506,15 @@ impl Dialogue {
                 }));
             }
         }
+        let opened = self.workshop_record_state(sid);
+        self.record_workshop(
+            sid,
+            "lifecycle",
+            &Value::Null,
+            &opened,
+            &super::workshop_record::Input::default(),
+            &json!({"reason":"workshop_opened","turn_id":format!("{job}:poem")}),
+        );
         self.haiku_speak(sid, job, "poem", &text, &spoken, cancel)
             .await
     }

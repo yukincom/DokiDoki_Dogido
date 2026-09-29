@@ -36,10 +36,31 @@ pub async fn render(
 pub async fn render_with_route(
     config: &DialogueConfig,
     llm: &RigLlm,
+    input: Value,
+    cancel: &mut watch::Receiver<bool>,
+    select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
+    hold_handoff: impl FnMut(&Value) -> Result<bool>,
+) -> Result<Value> {
+    render_with_budget(
+        config,
+        llm,
+        input,
+        cancel,
+        select_route,
+        hold_handoff,
+        Duration::from_secs(95),
+    )
+    .await
+}
+
+async fn render_with_budget(
+    config: &DialogueConfig,
+    llm: &RigLlm,
     mut input: Value,
     cancel: &mut watch::Receiver<bool>,
     mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
     mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
+    whole_turn_timeout: Duration,
 ) -> Result<Value> {
     if input["op"] == "light_plan" {
         return crate::light_plan::run(
@@ -144,6 +165,7 @@ pub async fn render_with_route(
         let (mut plans, mut leaves) = (0, 0);
         let mut reports = Vec::new();
         let mut expected_chat_final: Option<String> = None;
+        let mut grounding = planner::handoff::Handoff::default();
         let mut knowledge: Option<crate::knowledge::Reply> = None;
         let mut selected = false;
         let mut language: Option<crate::language::Turn> = None;
@@ -284,12 +306,28 @@ pub async fn render_with_route(
                         selected = true;
                     }
                     let report = planner::run(llm, &request).await?;
+                    grounding.record_plan(&request, &report.plan)?;
                     for attempt in &report.attempts {
                         tracing::info!(kind="player_chat_plan", elapsed_ms=attempt.elapsed_ms as u64, completion_tokens=?attempt.generated.completion_tokens, finish_reason=?attempt.generated.finish_reason);
                     }
                     let output = serde_json::to_value(report)?;
                     reports.push(output.clone());
                     output
+                }
+                Some("chat_ground") => {
+                    ensure!(
+                        plans == 1 && leaves == 0 && knowledge.is_none(),
+                        "grounding requires exactly one ordinary planner before leaf"
+                    );
+                    let projection = serde_json::from_value(frame["input"].take())?;
+                    let active = !*native_cancel.borrow() && native_cancel.has_changed().is_ok();
+                    let output = grounding.resolve(projection, active)?;
+                    tracing::info!(
+                        event = "chat_grounding",
+                        status = output.grounding.status,
+                        fixed_reply = !output.fixed_reply.is_empty()
+                    );
+                    serde_json::to_value(output)?
                 }
                 Some("chat_leaf") => {
                     ensure!(
@@ -309,6 +347,7 @@ pub async fn render_with_route(
                     );
                     let input: crate::chat_validation::Input =
                         serde_json::from_value(frame["input"].take())?;
+                    grounding.validate_leaf(&input.prompt.details)?;
                     let turn =
                         crate::chat_validation::Turn::new(input, &config.model, config.max_tokens)?;
                     leaves = 1;
@@ -376,6 +415,7 @@ pub async fn render_with_route(
                     }
                 }
                 Some("result") => {
+                    grounding.validate_result(&frame["text"])?;
                     if let Some(expected) = &expected_chat_final {
                         ensure!(
                             frame["text"] == *expected,
@@ -442,6 +482,23 @@ pub async fn render_with_route(
                         );
                     }
                     frame["llm_reports"] = json!(reports);
+                    // All raw-body and metadata checks above must pass before the
+                    // optional dictionary can run. Never reuse a helper-made spoken_text.
+                    ensure!(
+                        !*native_cancel.borrow() && native_cancel.has_changed().is_ok(),
+                        "cancelled"
+                    );
+                    result_reading::finish(
+                        &mut frame,
+                        &config.reading_engine,
+                        &mut stdin,
+                        &mut stdout,
+                    )
+                    .await?;
+                    ensure!(
+                        !*native_cancel.borrow() && native_cancel.has_changed().is_ok(),
+                        "cancelled"
+                    );
                     return Ok(frame);
                 }
                 Some("error") => bail!("dialogue helper: {}", frame["error"]),
@@ -453,7 +510,7 @@ pub async fn render_with_route(
     };
     let result: Result<Value> = tokio::select! {
         _ = cancelled(cancel) => Err(anyhow::anyhow!("cancelled")),
-        result = tokio::time::timeout(Duration::from_secs(95), protocol) => result.unwrap_or_else(|_| Err(anyhow::anyhow!("dialogue helper timed out"))),
+        result = tokio::time::timeout(whole_turn_timeout, protocol) => result.unwrap_or_else(|_| Err(anyhow::anyhow!("dialogue helper timed out"))),
     };
     drop(stdin);
     // 成功でも異常でも所有するhelperを回収してから返す。
@@ -656,3 +713,13 @@ mod tests {
         assert_eq!(result.unwrap_err().to_string(), "cancelled");
     }
 }
+
+#[cfg(test)]
+#[path = "grounding_bridge_tests.rs"]
+mod grounding_bridge_tests;
+
+#[path = "result_reading.rs"]
+mod result_reading;
+#[cfg(all(test, unix))]
+#[path = "result_reading_tests.rs"]
+mod result_reading_tests;

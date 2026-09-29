@@ -413,6 +413,7 @@ class MemoryStore:
         steps: list[dict[str, Any]],
         observed_at: datetime | None = None,
         session_id: str | None = None,
+        record_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """共同編集ループの行動と検査結果を保存する（思考文は保存しない）。"""
 
@@ -454,6 +455,9 @@ class MemoryStore:
             "steps": bounded_steps,
             "session_id": session_id,
         }
+        if record_context is not None:
+            row.update(record_context)
+            row["schema_version"] = "2"
         self._append_jsonl(self.haiku_workshop_turns_path, row)
         return row
 

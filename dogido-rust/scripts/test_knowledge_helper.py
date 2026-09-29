@@ -1,4 +1,5 @@
 """補助は質問だけを渡す。検索・根拠検証・回答はRust所有。"""
+import io
 import dialogue_helper as helper
 from dogido_server.knowledge_query import LocalKnowledgeProvider
 from test_input_helper import frame
@@ -15,12 +16,13 @@ def test_knowledge_requests_rust_lookup_without_reading_or_rewriting(monkeypatch
     monkeypatch.setattr(helper, "DogidoStateMachine", fail)
     monkeypatch.setattr(helper, "emit", emitted.append)
     monkeypatch.setattr(helper, "exchange", lambda value: requests.append(value) or {"text":"Rustで確定した本文。"})
+    monkeypatch.setattr(helper.sys, "stdin", io.StringIO(""))
     helper.run_turn(frame("枕詞って何？",model="unused",max_tokens=72,reading_engine="off"))
     assert len(requests) == 1 and requests[0]["op"] == "knowledge"
     assert requests[0]["request_text"] == "枕詞って何？"
     assert requests[0]["query"]["subject"] == "枕詞"
     assert "lookup" not in requests[0]
-    assert emitted == [{"op":"result", "text":"Rustで確定した本文。", "spoken_text":"Rustで確定した本文。"}]
+    assert emitted == [{"op":"result", "text":"Rustで確定した本文。"}]
 
 
 def test_workshop_fallback_does_not_read_db_or_generate(monkeypatch):

@@ -1,6 +1,7 @@
 //! 通常会話の限定planner。入力投影・catalog検索は呼出側、採否はこのコードが所有する。
 //! HTTPへ公開せず、まず既存Pythonが作る同一文脈で比較する。
 mod grounding;
+pub mod handoff;
 mod prompts;
 pub mod repair;
 mod runner;

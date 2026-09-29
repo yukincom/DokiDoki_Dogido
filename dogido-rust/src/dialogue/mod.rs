@@ -20,6 +20,7 @@ mod memory_runtime;
 mod poem_runtime;
 mod reaction_runtime;
 mod reading_runtime;
+mod tts_runtime;
 pub use haiku_runtime::Settings as HaikuSettings;
 mod combat_classifier;
 mod sentences;
@@ -28,6 +29,7 @@ mod warnings;
 mod workshop_combat_input;
 mod workshop_combat_runtime;
 mod workshop_edits;
+mod workshop_record;
 mod workshop_runtime;
 
 use crate::{
@@ -130,6 +132,8 @@ struct Session {
     address_checked: Option<address_runtime::Checked>,
     last_completed_conversation: Option<u64>,
     input_generation: u64,
+    // Privacy belongs to the admitted generation, including its internal forwards.
+    record_private_generation: Option<(u64, bool)>,
     light_cancel: Option<watch::Sender<bool>>,
     deferred_input: Option<environment_runtime::DeferredInput>,
     warning: Option<warnings::Active>,
@@ -145,6 +149,7 @@ struct Data {
 }
 pub struct Dialogue {
     config: DialogueConfig,
+    workshop_records: workshop_record::Recorder,
     llm: RigLlm,
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
@@ -241,6 +246,7 @@ impl Dialogue {
             } else {
                 None
             },
+            workshop_records: workshop_record::Recorder::new(config.haiku.memory_enabled),
             config,
             data: Mutex::new(Data::default()),
             serial: Semaphore::new(1),
@@ -288,6 +294,7 @@ impl Dialogue {
                 address_checked: None,
                 last_completed_conversation: None,
                 input_generation: 0,
+                record_private_generation: None,
                 light_cancel: None,
                 deferred_input: None,
                 warning: None,
@@ -296,10 +303,12 @@ impl Dialogue {
             },
         );
         d.revision += 1;
+        self.workshop_records.register(session_id);
     }
     pub fn close(&self, session_id: &str) {
+        let before = self.workshop_record_state(session_id);
         let mut d = self.data.lock().unwrap();
-        Self::cancel_knowledge_queue(&mut d, session_id, "session_closed");
+        self.cancel_knowledge_queue(&mut d, session_id, "session_closed");
         Self::cancel_haiku(&mut d, session_id, "session_closed");
         Self::cancel_chat(&mut d, session_id, "session_closed");
         Self::cancel_combat_input(&mut d, session_id);
@@ -308,6 +317,16 @@ impl Dialogue {
         Self::cancel_light(&mut d, session_id);
         d.sessions.remove(session_id);
         d.revision += 1;
+        drop(d);
+        self.record_workshop(
+            session_id,
+            "lifecycle",
+            &before,
+            &Value::Null,
+            &workshop_record::Input::default(),
+            &json!({"reason":"session_closed"}),
+        );
+        self.workshop_records.forget(session_id);
     }
     pub fn only_session(&self) -> Option<String> {
         let d = self.data.lock().unwrap();
@@ -322,6 +341,55 @@ impl Dialogue {
         session_id: &str,
         event: GameEvent,
         key: Option<&str>,
+    ) -> Value {
+        let before = self.workshop_record_state(session_id);
+        let text = event.meta.user_text.clone().unwrap_or_default();
+        let private = self
+            .data
+            .lock()
+            .unwrap()
+            .sessions
+            .get(session_id)
+            .is_some_and(|s| s.web.state.research.is_some());
+        let mut result = self.observe_inner(session_id, event, key, private);
+        let direct_input = result
+            .as_object_mut()
+            .and_then(|r| r.remove("_workshop_direct_input"))
+            == Some(Value::Bool(true));
+        let after = self.workshop_record_state(session_id);
+        if result["deduplicated"] != true {
+            if direct_input && !text.is_empty() {
+                self.record_workshop(
+                    session_id,
+                    "input_admission",
+                    &before,
+                    &after,
+                    &workshop_record::Input {
+                        raw: text.clone(),
+                        private,
+                        ..Default::default()
+                    },
+                    &result["player_input"],
+                );
+            } else if before != after {
+                self.record_workshop(
+                    session_id,
+                    "lifecycle",
+                    &before,
+                    &after,
+                    &workshop_record::Input::default(),
+                    &json!({"reason":"game_event"}),
+                );
+            }
+        }
+        result
+    }
+    fn observe_inner(
+        self: &Arc<Self>,
+        session_id: &str,
+        event: GameEvent,
+        key: Option<&str>,
+        private: bool,
     ) -> Value {
         let sequence = event.sequence;
         let recent = recent_observation(&event);
@@ -402,6 +470,7 @@ impl Dialogue {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 s.input_generation = s.input_generation.wrapping_add(1);
                 input_generation = Some(s.input_generation);
+                s.record_private_generation = Some((s.input_generation, private));
                 s.last_player_input = Some(now);
                 s.ambient.note_player_input(now);
             }
@@ -465,7 +534,7 @@ impl Dialogue {
                     s.deferred_input = None;
                 }
                 if event.event.name == EventName::PlayerDied || decision.dimension_changed {
-                    Self::cancel_knowledge_queue(&mut d, session_id, "world_context_changed");
+                    self.cancel_knowledge_queue(&mut d, session_id, "world_context_changed");
                     Self::cancel_address(&mut d, session_id, "attention_interrupted");
                 }
                 self.apply_combat_decision(
@@ -518,13 +587,17 @@ impl Dialogue {
         let input = if input_handled {
             json!({"accepted":true,"reason":"combat_input"})
         } else if !duplicate && !text.trim().is_empty() {
-            self.submit_inner(
+            self.submit_recorded(
                 Some(session_id),
                 &text,
                 "text",
                 false,
                 input_generation.map(|g| (g, None)),
                 false,
+                workshop_record::Admission {
+                    forwarded: false,
+                    private,
+                },
             )
         } else {
             Value::Null
@@ -568,10 +641,18 @@ impl Dialogue {
             });
         }
         json!({"accepted":true,"event_id":event_id,"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
-            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue_preview","player_input":input})
+            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue_preview","player_input":input,"_workshop_direct_input":input_handled})
     }
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
-        self.submit_inner(selected, text, source, false, None, false)
+        self.submit_recorded(
+            selected,
+            text,
+            source,
+            false,
+            None,
+            false,
+            workshop_record::Admission::default(),
+        )
     }
     fn submit_inner(
         self: &Arc<Self>,
@@ -581,6 +662,116 @@ impl Dialogue {
         skip_assist: bool,
         expected_generation: Option<(u64, Option<String>)>,
         combat_classified: bool,
+    ) -> Value {
+        self.submit_recorded(
+            selected,
+            text,
+            source,
+            skip_assist,
+            expected_generation,
+            combat_classified,
+            workshop_record::Admission {
+                forwarded: true,
+                private: false,
+            },
+        )
+    }
+    #[allow(clippy::too_many_arguments)] // The last value is recording metadata, not routing authority.
+    fn submit_recorded(
+        self: &Arc<Self>,
+        selected: Option<&str>,
+        text: &str,
+        source: &str,
+        skip_assist: bool,
+        expected_generation: Option<(u64, Option<String>)>,
+        combat_classified: bool,
+        origin: workshop_record::Admission,
+    ) -> Value {
+        let sid = selected.map(str::to_owned).or_else(|| self.only_session());
+        let (before, private) = {
+            let d = self.data.lock().unwrap();
+            let s = sid.as_deref().and_then(|sid| d.sessions.get(sid));
+            (
+                workshop_record::state(s.and_then(|s| s.haiku.workshop.as_ref())),
+                origin.private
+                    || s.is_some_and(|s| {
+                        s.web.state.research.is_some()
+                            || origin.forwarded
+                                && s.record_private_generation.is_some_and(|(g, private)| {
+                                    private
+                                        && expected_generation
+                                            .as_ref()
+                                            .is_some_and(|(expected, _)| *expected == g)
+                                })
+                    }),
+            )
+        };
+        let result = self.submit_impl(
+            sid.as_deref(),
+            text,
+            source,
+            skip_assist,
+            expected_generation,
+            combat_classified,
+            private,
+        );
+        if let Some(sid) = sid {
+            let (after, mut recorded_input) = {
+                let d = self.data.lock().unwrap();
+                let row = d
+                    .rows
+                    .iter()
+                    .find(|r| r["session_id"] == sid && r["turn_id"] == result["turn_id"]);
+                let mut input = workshop_record::Input {
+                    raw: text.into(),
+                    private,
+                    ..Default::default()
+                };
+                if let Some(row) = row {
+                    input.private |= row["workshop_record_private"] == true;
+                    input.epoch = row["epoch"].as_u64();
+                    if row["player_input_text"] == text {
+                        input.semantic = row["interpreted_player_input_text"]
+                            .as_str()
+                            .map(str::to_owned);
+                    }
+                }
+                (
+                    workshop_record::state(
+                        d.sessions.get(&sid).and_then(|s| s.haiku.workshop.as_ref()),
+                    ),
+                    input,
+                )
+            };
+            // Early rejection/classification has no semantic interpretation yet.
+            if result["deduplicated"] == true {
+                recorded_input.private = true;
+            }
+            self.record_workshop(
+                &sid,
+                if origin.forwarded {
+                    "forwarded_admission"
+                } else {
+                    "input_admission"
+                },
+                &before,
+                &after,
+                &recorded_input,
+                &result,
+            );
+        }
+        result
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn submit_impl(
+        self: &Arc<Self>,
+        selected: Option<&str>,
+        text: &str,
+        source: &str,
+        skip_assist: bool,
+        expected_generation: Option<(u64, Option<String>)>,
+        combat_classified: bool,
+        private: bool,
     ) -> Value {
         if text.trim().is_empty() {
             return json!({"accepted":false,"reason":"empty_text"});
@@ -668,6 +859,7 @@ impl Dialogue {
         if expected_generation.is_none() {
             s.input_generation = s.input_generation.wrapping_add(1);
         }
+        s.record_private_generation = Some((s.input_generation, private));
         Self::cancel_combat_input(&mut d, &session_id);
         Self::cancel_haiku(&mut d, &session_id, "new_player_input");
         Self::cancel_assist(&mut d, &session_id);
@@ -779,6 +971,7 @@ impl Dialogue {
         let replay = replay.or(queued_knowledge);
         let text = replay.as_ref().map_or(text, |p| p.text.as_str());
         let source = replay.as_ref().map_or(source, |p| p.source.as_str());
+        let private = private || replay.as_ref().is_some_and(|p| p.record_private);
         let s = d.sessions.get_mut(&session_id).unwrap();
         let active_turn = s.current_turn.clone();
         // 同じ進行中入力の二重配送を、割り込みやLLM再呼出しにしない。
@@ -817,6 +1010,7 @@ impl Dialogue {
         {
             w.followup = crate::workshop_followup::Stage::Discussion;
         }
+        let audit_before = workshop_record::state(s.haiku.workshop.as_ref());
         let fixed_close = workshop.as_ref().is_some_and(|w| w["pending"].is_null())
             && crate::workshop::fixed_action(text) == Some("close_workshop");
         if fixed_close && let Some(w) = s.haiku.workshop.as_mut() {
@@ -832,6 +1026,12 @@ impl Dialogue {
             && let Some(p) = s.address.as_mut()
         {
             p.repair = Some((turn.clone(), false));
+        }
+        if let Some(checked) = s.knowledge_checked.as_ref()
+            && checked.original.as_ref().is_some_and(|r| r.turn == turn)
+            && let Some(audit) = &checked.audit
+        {
+            audit.transferred();
         }
         s.current_turn = turn.clone();
         s.status = "generating".into();
@@ -854,7 +1054,7 @@ impl Dialogue {
             .collect::<Vec<_>>()
             .join("\n");
         let (language_active, language_state) = language_runtime::context(s, text);
-        let input = json!({"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
+        let input = json!({"audit_before":audit_before,"audit_private":private,"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "source":source,"language_active":language_active,"language_state":language_state,
             "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
@@ -877,7 +1077,7 @@ impl Dialogue {
         let mut new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
             "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
             "interpreted_player_input_text":interpreted_text,"asr_corrections":asr_corrections,
-            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close});
+            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close,"workshop_state_before":audit_before,"workshop_record_private":private});
         if let Some(original) = &replay {
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
                 row["playback_status"] = "generating".into();
@@ -885,6 +1085,8 @@ impl Dialogue {
                 row["interpreted_player_input_text"] =
                     new_row["interpreted_player_input_text"].clone();
                 row["asr_corrections"] = new_row["asr_corrections"].clone();
+                row["workshop_state_before"] = new_row["workshop_state_before"].clone();
+                row["workshop_record_private"] = new_row["workshop_record_private"].clone();
                 if host_chat_confirmed {
                     row["language_status"] = "host_chat".into();
                     row["conversation_route"] = "casual".into();
@@ -928,7 +1130,7 @@ impl Dialogue {
     }
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
-        Self::cancel_knowledge_queue(&mut d, session_id, "manual_interrupt");
+        self.cancel_knowledge_queue(&mut d, session_id, "manual_interrupt");
         Self::cancel_haiku(&mut d, session_id, "manual_interrupt");
         Self::cancel_chat(&mut d, session_id, "manual_interrupt");
         Self::cancel_combat_input(&mut d, session_id);
@@ -1106,6 +1308,24 @@ impl Dialogue {
                         .filter(|w| Some(&w.hud_id) == workshop_id.as_ref())
                     {
                         w.record_activity(Instant::now());
+                        if w.open
+                            && !w.combat_paused()
+                            && w.pending.is_none()
+                            && result["workshop_version"] == w.version
+                            && let Ok(draft) = serde_json::from_value(
+                                result["workshop_conversation_candidate"].clone(),
+                            )
+                            && let Some(candidate) =
+                                crate::workshop_candidate::Candidate::from_player(
+                                    draft,
+                                    &w.current_lines,
+                                    w.version,
+                                    &player_text,
+                                )
+                        {
+                            // Only the player's idea: independent of Dogido's reply playback.
+                            w.conversation_candidate = Some(candidate);
+                        }
                         if let Some(steps) = result["workshop_steps"].as_array() {
                             w.agent_steps.extend(steps.iter().cloned());
                             while w.agent_steps.len() > 12 {
@@ -1195,6 +1415,31 @@ impl Dialogue {
             }
         }
         d.revision += 1;
+        let record = if status == "queued" {
+            d.rows
+                .iter()
+                .find(|r| r["turn_id"] == turn)
+                .cloned()
+                .map(|row| {
+                    let after = workshop_record::state(
+                        d.sessions.get(sid).and_then(|s| s.haiku.workshop.as_ref()),
+                    );
+                    (row, after)
+                })
+        } else {
+            None
+        };
+        drop(d);
+        if let Some((row, after)) = record {
+            self.record_workshop(
+                sid,
+                "decision",
+                &row["workshop_state_before"],
+                &after,
+                &workshop_record::Input::from_row(&row),
+                &row,
+            );
+        }
         tracing::info!(
             event = "dialogue_status",
             session_id = sid,
@@ -1204,6 +1449,36 @@ impl Dialogue {
         current
     }
     async fn run_turn(
+        self: Arc<Self>,
+        sid: String,
+        turn: String,
+        epoch: u64,
+        mut input: Value,
+        cancel: watch::Receiver<bool>,
+    ) {
+        let before = input
+            .as_object_mut()
+            .and_then(|o| o.remove("audit_before"))
+            .unwrap_or(Value::Null);
+        let private = input
+            .as_object_mut()
+            .and_then(|o| o.remove("audit_private"))
+            == Some(Value::Bool(true));
+        let attempt = workshop_record::Attempt::new(
+            before,
+            workshop_record::Input {
+                raw: input["text"].as_str().unwrap_or("").into(),
+                semantic: input["interpreted_text"].as_str().map(str::to_owned),
+                private,
+                epoch: Some(epoch),
+            },
+        );
+        self.clone()
+            .run_turn_body(sid.clone(), turn.clone(), epoch, input, cancel)
+            .await;
+        self.record_workshop_turn(&sid, &turn, &attempt);
+    }
+    async fn run_turn_body(
         self: Arc<Self>,
         sid: String,
         turn: String,
@@ -1462,7 +1737,7 @@ impl Dialogue {
             d.stopped = true;
             let ids = d.sessions.keys().cloned().collect::<Vec<_>>();
             for sid in ids {
-                Self::cancel_knowledge_queue(&mut d, &sid, "server_shutdown");
+                self.cancel_knowledge_queue(&mut d, &sid, "server_shutdown");
                 Self::cancel_haiku(&mut d, &sid, "server_shutdown");
                 Self::cancel_chat(&mut d, &sid, "server_shutdown");
                 Self::cancel_combat_input(&mut d, &sid);
@@ -1478,6 +1753,31 @@ impl Dialogue {
         for job in jobs {
             let _ = job.await;
         }
+        let open_workshops: Vec<_> = {
+            let d = self.data.lock().unwrap();
+            d.sessions
+                .iter()
+                .filter_map(|(sid, s)| {
+                    s.haiku
+                        .workshop
+                        .as_ref()
+                        .filter(|w| w.open)
+                        .map(|w| (sid.clone(), workshop_record::state(Some(w))))
+                })
+                .collect()
+        };
+        for (sid, before) in open_workshops {
+            self.record_workshop(
+                &sid,
+                "lifecycle",
+                &before,
+                &Value::Null,
+                &workshop_record::Input::default(),
+                &json!({"reason":"server_shutdown"}),
+            );
+        }
+        self.workshop_records.flush().await;
+        self.workshop_records.forget_all();
         self.combat_classifier.close().await;
         if let Some(recorder) = &self.episodes {
             let recorder = recorder.clone();

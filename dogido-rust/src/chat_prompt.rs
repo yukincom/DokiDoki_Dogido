@@ -124,6 +124,16 @@ fn valid_details(d: &Value) -> Result<()> {
     }
     Ok(())
 }
+/// Canonical policy wording, shared with pure topic selection.
+pub fn reply_policy_line(stance: &str) -> &'static str {
+    let key = strip(stance).to_lowercase();
+    asset(
+        DATA["policies"]
+            .get(&key)
+            .unwrap_or(&DATA["policies"]["none"]),
+    )
+}
+
 fn space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
@@ -232,16 +242,10 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     let stance = text(d, "reply_stance", "none");
     f.insert("stance", stance.into());
     let policy = text(d, "reply_policy", "");
-    let key = stance.to_lowercase();
     f.insert(
         "policy",
         if policy.is_empty() {
-            asset(
-                DATA["policies"]
-                    .get(&key)
-                    .unwrap_or(&DATA["policies"]["none"]),
-            )
-            .into()
+            reply_policy_line(stance).into()
         } else {
             policy.into()
         },

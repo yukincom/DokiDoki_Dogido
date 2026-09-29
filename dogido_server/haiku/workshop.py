@@ -1613,6 +1613,43 @@ def mentioned_workshop_line_fragment(
     return matches[0] if len(matches) == 1 else None
 
 
+def mentioned_workshop_edit_fragment(
+    workshop: RecentHaikuWorkshop,
+    player_text: str,
+    replacement_text: str,
+) -> str | None:
+    """Find an old phrase spoken immediately before an explicit replacement.
+
+    Return the player's original wording, so the editor can also preserve the
+    unchanged surface around a kanji phrase. Ambiguous matches stay with the
+    conversation model instead of guessing a location.
+    """
+
+    whole_line = mentioned_workshop_line_fragment(workshop, player_text)
+    if whole_line is not None:
+        return whole_line
+    replacement_at = player_text.find(replacement_text)
+    if replacement_at < 0:
+        return None
+    before = player_text[:replacement_at].rstrip("「『\"' 、， ")
+    separator = next((word for word in ("より", "から", "を") if before.endswith(word)), None)
+    if separator is None:
+        return None
+    before = before[: -len(separator)].strip("「『\"' 、， ")
+    before = re.sub(
+        r"^(?:上五|中七|下五|上の句|中の句|下の句|[一二三123]行目)の?",
+        "",
+        before,
+    ).strip("「『\"' 、， ")
+    reading = normalize_player_haiku_line(before)
+    if reading is None or len(reading) < 2:
+        return None
+    lines = workshop_verse_lines(workshop.editing_line())
+    if len(lines) != 3 or sum(line.count(reading) for line in lines) != 1:
+        return None
+    return before
+
+
 def _explicit_workshop_line_indices(text: str | None) -> set[int]:
     source = str(text or "")
     return {
@@ -1763,6 +1800,7 @@ def build_player_line_revision(
     if any(normalize_player_haiku_line(line) != line for line in base_lines + draft_lines):
         return PlayerLineRevisionResult(None, base_text, failure_reasons=("verse_not_hiragana",))
     fragment_target: int | None = None
+    normalized_fragment: str | None = None
     if replacement.target_fragment:
         normalized_fragment = normalize_player_haiku_line(replacement.target_fragment)
         if normalized_fragment is None:
@@ -1771,13 +1809,19 @@ def build_player_line_revision(
                 base_text,
                 failure_reasons=("target_fragment_not_readable",),
             )
-        folded_fragment = _compact_kana(normalized_fragment)
         fragment_matches = [
             index
             for index, line in enumerate(draft_lines)
-            if folded_fragment and folded_fragment in _compact_kana(line)
+            if normalized_fragment in line
         ]
-        if len(fragment_matches) != 1:
+        if (
+            replacement.explicit_line_index is not None
+            and replacement.explicit_line_index in fragment_matches
+        ):
+            fragment_target = replacement.explicit_line_index
+        elif len(fragment_matches) == 1:
+            fragment_target = fragment_matches[0]
+        else:
             return PlayerLineRevisionResult(
                 None,
                 base_text,
@@ -1787,7 +1831,13 @@ def build_player_line_revision(
                     else "target_fragment_not_found",
                 ),
             )
-        fragment_target = fragment_matches[0]
+        fragment_offset = draft_lines[fragment_target].find(normalized_fragment)
+        if draft_lines[fragment_target].find(normalized_fragment, fragment_offset + 1) >= 0:
+            return PlayerLineRevisionResult(
+                None,
+                base_text,
+                failure_reasons=("ambiguous_target_fragment",),
+            )
     target = replacement.explicit_line_index
     if target is not None and fragment_target is not None and target != fragment_target:
         return PlayerLineRevisionResult(
@@ -1809,12 +1859,20 @@ def build_player_line_revision(
             failure_reasons=("not_hiragana",),
             target_line_index=target,
         )
-    reasons = list(haiku_line_failure_reasons(normalized, target, workshop.materials))
+    revised_reading = normalized
+    if normalized_fragment is not None and normalized_fragment != draft_lines[target]:
+        offset = draft_lines[target].index(normalized_fragment)
+        revised_reading = (
+            draft_lines[target][:offset]
+            + normalized
+            + draft_lines[target][offset + len(normalized_fragment) :]
+        )
+    reasons = list(haiku_line_failure_reasons(revised_reading, target, workshop.materials))
     # プレイヤーの明示編集は「新5-7-5」を作るため、±1ではなく対象音数に合わせる。
-    if count_japanese_sounds(normalized) != (5, 7, 5)[target]:
+    if count_japanese_sounds(revised_reading) != (5, 7, 5)[target]:
         reasons.append("meter_not_exact")
     if any(
-        index != target and _compact_kana(line) == _compact_kana(normalized)
+        index != target and _compact_kana(line) == _compact_kana(revised_reading)
         for index, line in enumerate(draft_lines)
     ):
         reasons.append("duplicate_line")
@@ -1831,14 +1889,40 @@ def build_player_line_revision(
         source_lines = workshop.current_lines
     if len(source_lines) != 3:
         source_lines = build_haiku_lines(workshop.editing_surface(), provenance="generated")
+    if len(source_lines) != 3:
+        return PlayerLineRevisionResult(
+            None,
+            base_text,
+            failure_reasons=("invalid_line_records",),
+            target_line_index=target,
+        )
     surface_candidate = str(replacement.text or "").strip().strip(
         "「」『』\"' 。．.!！?？…"
     )
+    if normalized_fragment is not None and normalized_fragment != draft_lines[target]:
+        original_surface = source_lines[target].surface_text
+        spoken_fragment = str(replacement.target_fragment).strip().strip("「」『』\"'")
+        surface_fragment = next(
+            (
+                part
+                for part in (spoken_fragment, normalized_fragment)
+                if original_surface.count(part) == 1
+            ),
+            None,
+        )
+        if surface_fragment is not None:
+            surface_candidate = original_surface.replace(surface_fragment, surface_candidate, 1)
+        else:
+            surface_candidate = revised_reading
+        # The surface and pronunciation are one record. If tokenization makes
+        # their readings disagree, use the proven all-kana form.
+        if normalize_player_haiku_line(surface_candidate) != revised_reading:
+            surface_candidate = revised_reading
     revised_line_records = replace_haiku_line(
         source_lines,
         line_index=target,
         surface_text=surface_candidate,
-        reading_text=normalized,
+        reading_text=revised_reading,
         provenance="player_explicit",
     )
     if len(revised_line_records) != 3:

@@ -3,7 +3,7 @@
 
 現在snapshotとRust所有の履歴を読み、既存の会話材料を投影する。
 通常本文のprompt・候補検査・最大一回の再考はRustが所有する。
-narrationの最終安全網と読み変換は保持し、最終本文はRustの期待値と照合する。
+narrationの最終安全網を保持し、最終本文と自由文の読みはRust側で検査・整形する。
 plannerと本文の実モデル生成はstdio越しにRustへ要求する。一入力ごとに終了する。
 """
 import json
@@ -33,13 +33,36 @@ except ImportError:
 from dogido_server.models import GameEvent
 from input_helper import prepared_context
 from chat_validation_helper import leaf_input
+from chat_grounding_helper import grounding_input, grounding_result, topics_input, topics_result
 from dogido_server.state_machine import DogidoStateMachine
-from dogido_server.tts_reading import prepare_text_for_tts
+from tts_shared_tokens import handle as shared_tts_tokens
 from reading_overlay import apply_reading_snapshot
 
 
 def emit(value):
     print(json.dumps(value, ensure_ascii=False), flush=True)
+
+
+def emit_result(value):
+    """Send raw final text, then serve at most one host-requested token lookup.
+
+    EOF is the host's normal no-dictionary path. This process keeps the same
+    optional dictionary singleton used by all earlier work during this turn.
+    """
+    if (not isinstance(value, dict) or value.get("op") != "result"
+            or not isinstance(value.get("text"), str) or "spoken_text" in value):
+        raise ValueError("final reading requires raw result text")
+    emit(value)
+    line = sys.stdin.readline(1_000_001)
+    if not line:
+        return
+    if len(line.encode("utf-8")) > 1_000_000 or not line.endswith("\n"):
+        raise ValueError("token request frame too large or incomplete")
+    request = json.loads(line)
+    if (not isinstance(request, dict) or request.get("op") != "tts_tokens"
+            or request.get("text") != value["text"].strip()):
+        raise ValueError("token request must match final raw text")
+    emit(shared_tts_tokens(request))
 
 
 def exchange(value):
@@ -89,6 +112,19 @@ class BridgeLLM(DogidoLLM):
         payload["__dogido_status"] = "accepted"
         return payload
 
+    def ground_player_chat(self, plan, *, topic_hits, observed_entities):
+        if self.allowed_leaf != "player_chat":
+            raise ValueError("unexpected grounding operation")
+        report = exchange({"op": "chat_ground", "input": grounding_input(
+            plan, topic_hits=topic_hits, observed_entities=observed_entities)})
+        return grounding_result(report)
+
+    def prepare_player_chat_topics(self, plan, **projection):
+        if self.allowed_leaf != "player_chat":
+            raise ValueError("unexpected topic operation")
+        report = exchange({"op": "chat_ground", "input": topics_input(plan, **projection)})
+        return topics_result(report, projection["topic_hits"])
+
     def generate_leaf_text(self, request):
         if request.kind != "player_chat":
             return super().generate_leaf_text(request)
@@ -116,8 +152,7 @@ class BridgeLLM(DogidoLLM):
 
 def run_turn(data):
     if isinstance(data.get("address_reply"), str):
-        emit({"op":"result", "text":data["address_reply"],
-              "spoken_text":prepare_text_for_tts(data["address_reply"], engine=data.get("reading_engine", "auto"))})
+        emit_result({"op":"result", "text":data["address_reply"]})
         return
     settings = Settings(_env_file=None, llm_enabled=True, llm_backend="chat_completions",
         llm_provider="local", llm_model=data["model"], llm_max_tokens=data["max_tokens"],
@@ -136,7 +171,7 @@ def run_turn(data):
         emit({"op": "result", "unsupported": "通常会話の試験中です。その操作・川柳の機能はまだ接続していません。"})
         return
     if context.wants_quiet:
-        emit({"op": "result", "text": "", "spoken_text": "", "repair": None})
+        emit_result({"op": "result", "text": "", "repair": None})
         return
     if context.knowledge_query is not None:
         if data.get("workshop_fallback"):
@@ -144,8 +179,7 @@ def run_turn(data):
             emit({"op": "result", "unsupported": "句の相談中の知識検索はまだ接続していません。"})
             return
         plan = exchange({"op": "knowledge", "request_text": data["text"], "query": asdict(context.knowledge_query)})
-        emit({"op": "result", "text": plan["text"],
-              "spoken_text": prepare_text_for_tts(plan["text"], engine=settings.tts_reading_engine)})
+        emit_result({"op": "result", "text": plan["text"]})
         return
     from language_helper import run as run_language
     if (not data.get("host_chat_confirmed") and not data.get("workshop_fallback") and not data.get("workshop")
@@ -153,8 +187,7 @@ def run_turn(data):
             and data["language_requested"]):
         outcome = run_language(exchange)
         if outcome["status"] != "host_chat":
-            emit({"op":"result", "text":outcome["text"],
-                  "spoken_text":prepare_text_for_tts(outcome["text"], engine=settings.tts_reading_engine)})
+            emit_result({"op":"result", "text":outcome["text"]})
             return
     event = GameEvent.model_validate(data["event"])
     llm = BridgeLLM(settings, data["model"])
@@ -166,8 +199,7 @@ def run_turn(data):
             "conversation_history": data["conversation_history"], "event_digest": str(data.get("event_digest", ""))})
     # process(event)を呼ばない。戦闘判断・発句・世界操作・記憶はこの補助の対象外。
     text = machine._render_player_chat_reply(event)
-    emit({"op": "result", "text": text,
-          "spoken_text": prepare_text_for_tts(text, engine=settings.tts_reading_engine),
+    emit_result({"op": "result", "text": text,
           "repair": asdict(machine.player_chat_repair) if machine.player_chat_repair else None})
 
 
@@ -197,8 +229,7 @@ def run_combat_leaf(data):
         if machine._invalid_light_source_gain_claim(text):
             text = fallback
     text += suffix
-    emit({"op": "result", "text": text,
-          "spoken_text": prepare_text_for_tts(text, engine=settings.tts_reading_engine)})
+    emit_result({"op": "result", "text": text})
 
 
 def run_light_plan(data):

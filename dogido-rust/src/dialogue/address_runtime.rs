@@ -227,6 +227,12 @@ impl Dialogue {
         ) {
             return Ok(false);
         }
+        // If the bounded display row is gone, privacy cannot be reconstructed safely.
+        let record_private = d
+            .rows
+            .iter()
+            .find(|r| r["turn_id"] == turn && r["epoch"] == epoch)
+            .is_none_or(|r| r["workshop_record_private"] == true);
         Self::cancel_address(&mut d, sid, "replaced_unaddressed");
         let s = d.sessions.get_mut(sid).unwrap();
         s.history.replace_unanswered(turn);
@@ -236,6 +242,7 @@ impl Dialogue {
                 text: text.into(),
                 source: input["source"].as_str().unwrap_or("text").into(),
                 input_at: submitted,
+                record_private,
             },
             self.config.combat.ms("conversation_pending_address_ttl_ms"),
         ));
@@ -348,6 +355,54 @@ mod tests {
         assert!(dialogue.hold_language_handoff("s", "original", 0,
             &json!({"text":"家を作りたい","input_at_ms":0,"previous_activity_ms":0,"source":"voice"}), &json!({})).unwrap());
         dialogue
+    }
+    #[tokio::test]
+    async fn held_request_keeps_privacy_after_row_eviction_and_unknown_origin_is_private() {
+        let dialogue = held();
+        {
+            let mut data = dialogue.data.lock().unwrap();
+            assert!(
+                !data.sessions["s"]
+                    .address
+                    .as_ref()
+                    .unwrap()
+                    .original
+                    .record_private
+            );
+            data.rows[0]["workshop_record_private"] = true.into();
+        }
+        let input = json!({"text":"家を作りたい","input_at_ms":0,"previous_activity_ms":0,"source":"voice"});
+        assert!(
+            dialogue
+                .hold_language_handoff("s", "original", 0, &input, &json!({}))
+                .unwrap()
+        );
+        {
+            let mut data = dialogue.data.lock().unwrap();
+            data.rows.clear();
+            assert!(
+                data.sessions["s"]
+                    .address
+                    .as_ref()
+                    .unwrap()
+                    .original
+                    .record_private
+            );
+        }
+        assert!(
+            dialogue
+                .hold_language_handoff("s", "evicted", 0, &input, &json!({}))
+                .unwrap()
+        );
+        assert!(
+            dialogue.data.lock().unwrap().sessions["s"]
+                .address
+                .as_ref()
+                .unwrap()
+                .original
+                .record_private
+        );
+        dialogue.shutdown().await;
     }
     #[tokio::test]
     async fn cancelled_generation_and_playback_cannot_restore_pending_or_overwrite_replay() {
@@ -492,6 +547,7 @@ mod tests {
             let mut d = dialogue.data.lock().unwrap();
             d.sessions.get_mut("s").unwrap().address = Some(Pending::new(
                 Request {
+                    record_private: false,
                     turn: "held".into(),
                     text: "家の話".into(),
                     source: "voice".into(),

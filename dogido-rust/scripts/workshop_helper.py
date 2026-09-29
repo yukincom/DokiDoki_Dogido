@@ -14,7 +14,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.haiku.workshop import (RecentHaikuWorkshop, PlayerLineReplacement, build_player_line_revision, _explicit_workshop_line_indices,
     is_meaning_acknowledgement, close_confirmation_decision, combat_resume_confirmation_decision,
-    parse_player_line_replacement, mentioned_workshop_line_fragment, grounded_material_for_question)
+    parse_player_line_replacement, mentioned_workshop_line_fragment, grounded_material_for_question,
+    mentioned_workshop_edit_fragment, explicit_workshop_line_index)
 from dogido_server.haiku.workshop_agent import (build_workshop_agent_details, finalize_workshop_agent_step,
                                                _state_change_evidence_is_safe)
 from dogido_server.haiku.workshop_context import workshop_context_block, workshop_context_details
@@ -24,7 +25,7 @@ from dogido_server.llm.structured_contracts import validate_structured_payload
 from dogido_server.llm.character_mode import WORKSHOP_IDENTITY_PROMPT
 from dogido_server.memory_types import HaikuLine
 from dogido_server.haiku.verse import build_haiku_lines
-from dogido_server.tts_reading import prepare_text_for_tts
+from tts_shared_tokens import handle as shared_tts_tokens
 from reading_overlay import apply_reading_snapshot
 
 KIND = "haiku_workshop_agent_step"
@@ -62,21 +63,36 @@ def explicit_repair(text, evidence):
 
 
 def fixed_fragment_edit(frame, details):
-    """旧版の『句本文を読んで指定』の確定経路。保存・採用は行わない。"""
+    """一意な現行句の対象箇所と差し替え案が明示された編集だけ先に確定する。"""
     text = frame["text"]
     if details["phase"] != "decide" or "stage_player_edit" not in details["allowed_actions"]:
         return None
-    parsed = parse_player_line_replacement(text)
-    replacement = parsed.replacement
-    if parsed.status != "accepted" or replacement is None or not explicit_player_edit(text, text):
-        return None
-    if not replacement.text or replacement.text not in text:
+    if not explicit_player_edit(text, text) or len(_explicit_workshop_line_indices(text)) > 1:
         return None
     workshop = snapshot_for(frame)
-    fragment = mentioned_workshop_line_fragment(workshop, text)
+    quoted_pairs = list(re.finditer(
+        r"[「『](?P<target>[^」』]+)[」』]を[「『](?P<alternative>[^」』]+)[」』]に"
+        r"(?:して|変えて|替えて|かえて|直して|置き換えて|変更して)", text,
+    ))
+    if quoted_pairs:
+        if len(quoted_pairs) != 1:
+            return None
+        replacement = PlayerLineReplacement(
+            text=quoted_pairs[0].group("alternative"),
+            explicit_line_index=explicit_workshop_line_index(text),
+        )
+        fragment = quoted_pairs[0].group("target")
+    else:
+        parsed = parse_player_line_replacement(text)
+        replacement = parsed.replacement
+        if parsed.status != "accepted" or replacement is None:
+            return None
+        fragment = mentioned_workshop_edit_fragment(workshop, text, replacement.text)
+    if not replacement.text or replacement.text not in text:
+        return None
     if fragment is None:
         return None
-    # 一意な現在句と元発話の置換語が両方ある場合だけ。行呼称との衝突も旧検査に通す。
+    # 現在句中の対象箇所と発話中の差し替え案が一意な場合だけ。行呼称との衝突も検査する。
     revision = build_player_line_revision(workshop, PlayerLineReplacement(
         text=replacement.text, explicit_line_index=replacement.explicit_line_index,
         target_fragment=fragment))
@@ -89,6 +105,38 @@ def fixed_fragment_edit(frame, details):
             "replacement_text": replacement.text, "evidence": text, "confidence": 1.0}}
 
 
+def discussion_candidate(frame, proposal):
+    """Validate an idea mentioned in conversation without staging or saving it."""
+    text = frame["text"]
+    if re.search(r"(?:と|って)(?:言われた|聞いた|書いてあった|載っていた)", text):
+        return {"candidate": None}
+    if isinstance(proposal, dict) and proposal.get("replacement_text"):
+        replacement = str(proposal.get("replacement_text") or "")
+        fragment = str(proposal.get("target_fragment") or "")
+        index = proposal.get("line_index")
+        if not replacement or replacement not in text or type(index) not in (int, type(None)):
+            return {"candidate": None}
+    else:
+        pairs = list(re.finditer(
+            r"[「『](?P<target>[^」』]+)[」』]を[「『](?P<alternative>[^」』]+)[」』]に"
+            r"(?:するのは|したら|変えるのは)(?:どう|どうかな)", text,
+        ))
+        if len(pairs) != 1 or len(_explicit_workshop_line_indices(text)) > 1:
+            return {"candidate": None}
+        replacement = pairs[0].group("alternative")
+        fragment = pairs[0].group("target")
+        index = explicit_workshop_line_index(text)
+    result = build_player_line_revision(
+        snapshot_for(frame),
+        PlayerLineReplacement(replacement, explicit_line_index=index, target_fragment=fragment or None),
+    )
+    return {"candidate": {
+        "proposal": {"line_index": result.target_line_index if result.target_line_index is not None else index,
+                     "target_fragment": fragment, "replacement_text": replacement},
+        "evidence": text, "validation_codes": list(result.failure_reasons),
+    }}
+
+
 def consultation_messages(details):
     """相談に使わない編集用空欄を生成させない。文脈と既存の根拠検証は維持する。"""
     editing = "stage_player_edit" in details["allowed_actions"]
@@ -99,6 +147,11 @@ def consultation_messages(details):
             "会話理解用には現在の句や材料にある語だけの音近傍補正がある。"
             "編集・採否・終了のevidenceと置換語は必ず認識原文から取る。"
             "補正語だけを変更や保存の許可にしない。原文が曖昧ならaskで確認する。\n")
+    if details.get("workshop_context", {}).get("current_player_idea"):
+        extra += ("今回の発話は、一つの差し替え案について『どう？』と相談している。"
+                  "対象箇所と差し替え案はcurrent_player_ideaにコードで抜き出し済み。"
+                  "編集命令ではないのでrespond/ask/explainでその案に答える。今は変更・採用・保存をしない。"
+                  "新しい句全体を書かず、指定された表現の違いを話す。\n")
     if "acknowledge_meaning" in details["allowed_actions"]:
         extra += ("直前に意味の説明を再生済み。今回の発話がその説明への納得だけならacknowledge_meaning、"
             "purposeはunderstand_meaning。評価・褒め言葉・新しい質問・修正要求とは区別する。\n")
@@ -116,16 +169,31 @@ def consultation_messages(details):
     if editing:
         extra += (
             "stage_player_edit=発話で指定された一行の置換を検査へ渡す。purposeはimprove_wording。"
-            "発話にない置換語を考えない。ドギドに修正案を求めている場合はpropose_revisionを使う。"
-            "このactionだけline_referenceとline_proposalを追加する。\n"
+            "発話にない差し替え案を考えない。ドギドに修正案を求めている場合はpropose_revisionを使う。"
+            "stage_player_editではline_referenceとline_proposalを追加する。"
+            "プレイヤーが表現案を相談しているだけならrespond/askで返し、"
+            "その案の対象箇所と差し替え案が今回の発話に実在するときだけline_proposalも添える。"
+            "この時点で句の編集や採用をしたと言わない。\n"
             'line_reference: {"found":true,"concept_id":"line_1","evidence":"上五","confidence":0.95}。'
             '概念はline_1=上五、line_2=中七、line_3=下五。行が不明ならfound:false,concept_id:"unknown"。\n'
             '専門的な行名を要求しない。「最初」「真ん中」「最後」や句本文を読む指定も同じ対象へ対応させる。'
-            'target_fragmentは現在の編集対象三行からそのまま抜く。置換語を指定する提案はstage_player_edit、'
-            '置換語をドギドに考えてほしい依頼だけpropose_revision。対象や聞き取れた語が曖昧なら、'
+            'target_fragmentは現在句中の対象箇所をそのまま抜く。発話で一行の一部分だけを指定したら、その連続部分だけをtarget_fragmentに、'
+            '発話中の差し替え案だけをreplacement_textに入れる。全行の言い換えなら現在行全体をtarget_fragmentにする。'
+            '今回すぐ差し替える指示はstage_player_edit、表現案への相談だけならrespond/ask、'
+            '差し替え案をドギドに考えてほしい依頼だけpropose_revision。対象や聞き取れた表現が曖昧なら、'
             'その句本文を引用して一つだけ確認し、同じ一般的な質問を繰り返さない。\n'
-            'line_proposal: {"found":true,"target_fragment":"","replacement_text":"発話にある置換語",'
+            'line_proposal: {"found":true,"target_fragment":"","replacement_text":"発話にある差し替え案",'
             '"evidence":"置換依頼の連続部分","confidence":0.95}。行中の語で対象を指定されたらtarget_fragmentに抜く。\n'
+        )
+    if "stage_conversation_candidate" in details["allowed_actions"]:
+        extra += (
+            "conversation_candidateは、いま相談しているプレイヤーの一案。検査不合格でも相談用に保持する。"
+            "まだ句にも未採用案にも反映していない。適用時に読み・音数・対象箇所を再検査する。今回の発話が明確にその案を使う指示なら"
+            "stage_conversation_candidateを選び、purposeはimprove_wording、speechは空にする。"
+            "新しい案の提案や単なる比較・質問では選ばない。今回の連続した発話をevidenceへ抜く。"
+            "『やっぱりXXにして』のように差し替え表現だけ訂正されたらstage_player_edit。"
+            "line_proposalには今回のXXを抜き、対象を指定していなければtarget_fragmentは空、line_referenceはfound:false。"
+            "コードが相談中の一案の対象箇所を保持して検査する。別の箇所を指定された場合はその指定を優先する。\n"
         )
     if "propose_revision" in details["allowed_actions"]:
         extra += (
@@ -223,6 +291,12 @@ def details_for(frame):
     # 実行できる一手はRustが渡す。段階とpendingに応じて一手を制限する。
     details["allowed_actions"] = [a for a in details["allowed_actions"] if a in frame["allowed_actions"]]
     details["allowed_actions"] += [a for a in frame["allowed_actions"] if a in FOLLOWUP_ACTIONS]
+    candidate = frame["workshop"].get("conversation_candidate")
+    if "stage_conversation_candidate" in frame["allowed_actions"] and isinstance(candidate, dict):
+        details["allowed_actions"].append("stage_conversation_candidate")
+        details["workshop_context"]["conversation_candidate"] = candidate
+    if frame["workshop"].get("current_player_idea"):
+        details["workshop_context"]["current_player_idea"] = frame["workshop"]["current_player_idea"]
     if frame["workshop"].get("followup") == "combat_resume_confirmation":
         details["conversation_stage"] = "combat_resume_confirmation"
     return details
@@ -273,16 +347,48 @@ def handle(frame):
             "findings": findings, "basis": {"target_indices": targets, "source_atoms": [asdict(a) for a in atoms],
             "details": {**workshop.materials, "workshop_context": workshop_context_details(workshop)}},
             "max_tokens": frame["max_tokens"], "grounding_max_tokens": frame["grounding_max_tokens"]}
+    if frame["op"] == "tts_tokens":
+        return shared_tts_tokens(frame)
     if frame["op"] == "reading":
-        return {"spoken_text": prepare_text_for_tts(frame["text"], engine=frame.get("reading_engine", "auto"))}
+        raise ValueError("free-text reading belongs to the Rust host")
     if frame["op"] == "player_edit":
         # Replacement is from a previously validated extraction. This pure helper
         # keeps the existing dictionary/hard-rule behavior; Rust owns CAS and state.
-        proposal = frame["proposal"]
+        proposal = dict(frame["proposal"])
+        # A correction can supply only the replacement. Preserve the already
+        # grounded target of this one discussion; explicit new targets win.
+        discussed = frame["workshop"].get("conversation_candidate")
+        # Do not mistake a model's omitted field for the player's omission.
+        original = frame.get("text", "")
+        explicit = _explicit_workshop_line_indices(original)
+        if len(explicit) > 1:
+            return {"text": None, "failure_reasons": ["target_conflict"]}
+        if explicit:
+            index = next(iter(explicit))
+            if proposal.get("line_index") not in (None, index):
+                return {"text": None, "failure_reasons": ["target_conflict"]}
+            proposal["line_index"] = index
+        fragment = mentioned_workshop_edit_fragment(snapshot_for(frame), original, proposal["replacement_text"])
+        if not proposal.get("target_fragment") and fragment:
+            proposal["target_fragment"] = fragment
+        if (not proposal.get("target_fragment") and proposal.get("line_index") is None
+                and isinstance(discussed, dict) and isinstance(discussed.get("proposal"), dict)):
+            target = discussed["proposal"]
+            proposal["target_fragment"] = target["target_fragment"]
+            proposal["line_index"] = target["line_index"]
         result = build_player_line_revision(snapshot_for(frame), PlayerLineReplacement(
             text=proposal["replacement_text"], explicit_line_index=proposal.get("line_index"),
             target_fragment=proposal.get("target_fragment") or None))
         return asdict(result)
+    if frame["op"] == "explicit_discussion":
+        # This is the same literal proposal form already recognized below.
+        # Require the whole utterance, so a mixed question + command is not downgraded.
+        if re.fullmatch(r"\s*[「『][^」』]+[」』]を[「『][^」』]+[」』]に"
+                        r"(?:するのは|したら|変えるのは)(?:どう|どうかな)[？?。！!]*\s*", frame["text"]):
+            return discussion_candidate(frame, None)
+        return {"candidate": None}
+    if frame["op"] == "discussion_candidate":
+        return discussion_candidate(frame, frame.get("proposal"))
     details = details_for(frame)
     if frame["op"] == "prepare":
         messages = consultation_messages(details)
@@ -338,6 +444,8 @@ def handle(frame):
         step, reason = finalize_workshop_agent_step(payload, details=details)
         if step and step.action == "stage_player_edit" and not explicit_player_edit(frame["text"], step.evidence):
             step, reason = None, "player_edit_intent_not_explicit"
+        if step and step.action == "stage_conversation_candidate" and not frame["workshop"].get("conversation_candidate"):
+            step, reason = None, "conversation_candidate_missing"
         if step and step.action == "propose_revision":
             if step.confidence < .85 or not explicit_repair(frame["text"], step.evidence):
                 step, reason = None, "repair_intent_not_explicit"

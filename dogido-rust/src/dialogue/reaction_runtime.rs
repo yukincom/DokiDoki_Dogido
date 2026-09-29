@@ -1,8 +1,7 @@
 //! Reaction wording has no Python judgement round trip. Only pronunciation uses
-//! the existing bounded helper; its child is reaped on success, failure or cancel.
+//! a minimal optional UniDic adapter; Ready text needs no child process.
 use super::{DialogueConfig, bridge};
 use crate::{
-    haiku_bridge::Helper,
     llm::RigLlm,
     reaction_leaf::Leaf,
     types::{GenerationReport, GenerationRequest},
@@ -65,11 +64,10 @@ pub(super) async fn render(
     )
     .await
     .context("reaction generation timed out")??;
-    read_speech(config, input, result, cancel, deadline).await
+    read_speech(config, result, cancel, deadline).await
 }
 async fn read_speech(
     config: &DialogueConfig,
-    input: &Value,
     mut result: Value,
     cancel: &mut watch::Receiver<bool>,
     deadline: tokio::time::Instant,
@@ -80,29 +78,15 @@ async fn read_speech(
     );
     ensure!(tokio::time::Instant::now() < deadline, "reaction timed out");
     let reading_deadline = deadline.min(tokio::time::Instant::now() + Duration::from_secs(35));
-    let script = config
-        .helper
-        .parent()
-        .context("dialogue helper directory")?
-        .join("workshop_helper.py");
-    let mut helper = Helper::start(&config.python, &script)?;
-    let body = async {
-        helper
-            .exchange(json!({"op":"reading_overlay","rows":input["reading_corrections"]}))
-            .await?;
-        let reading=helper.exchange(json!({"op":"reading","text":result["text"],"reading_engine":config.reading_engine})).await?;
-        result["spoken_text"] = reading["spoken_text"]
-            .as_str()
-            .context("reaction pronunciation result")?
-            .into();
-        Ok(result)
-    };
-    let result: Result<Value> = tokio::select! {biased;
-        _=bridge::cancelled(cancel)=>Err(anyhow::anyhow!("cancelled")),
-        result=tokio::time::timeout_at(reading_deadline,body)=>result.unwrap_or_else(|_|Err(anyhow::anyhow!("reaction reading timed out"))),
-    };
-    helper.finish(result.is_err()).await?;
-    result
+    result["spoken_text"] = super::tts_runtime::read(
+        config,
+        result["text"].as_str().context("reaction text")?,
+        cancel,
+        reading_deadline,
+    )
+    .await?
+    .into();
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -157,87 +141,26 @@ mod tests {
         assert!(task.await.unwrap().is_err());
         assert_eq!(count.load(Ordering::SeqCst), 1);
     }
-    #[cfg(unix)]
     #[tokio::test]
-    async fn pronunciation_only_helper_is_reaped_on_success_cancel_and_deadline() {
-        for mode in ["success", "cancel", "timeout"] {
-            let interrupted = mode != "success";
-            let dir =
-                std::env::temp_dir().join(format!("dogido-reaction-{}", uuid::Uuid::new_v4()));
-            std::fs::create_dir_all(&dir).unwrap();
-            let path = dir.join("workshop_helper.py");
-            let script = format!(
-                "echo $$ > '{}/pid'\nread -r line\nprintf '%s\\n' \"$line\" >> '{}/requests'\nprintf '{{\"ok\":true}}\\n'\nread -r line\nprintf '%s\\n' \"$line\" >> '{}/requests'\n{}\n",
-                dir.display(),
-                dir.display(),
-                dir.display(),
-                if interrupted {
-                    "read -r blocked"
-                } else {
-                    "printf '{\"spoken_text\":\"よみをなおしたで。\"}\\n'"
-                }
-            );
-            std::fs::write(&path, script).unwrap();
-            let config = DialogueConfig {
-                python: "/bin/sh".into(),
-                helper: dir.join("dialogue_helper.py"),
-                ..DialogueConfig::default()
-            };
-            let (tx, mut rx) = watch::channel(false);
-            let budget = if mode == "timeout" {
-                Duration::from_millis(100)
-            } else {
-                Duration::from_secs(3)
-            };
-            let task = tokio::spawn(async move {
-                read_speech(
-                    &config,
-                    &json!({"reading_corrections":[]}),
-                    json!({"text":"読みを直したで。"}),
-                    &mut rx,
-                    tokio::time::Instant::now() + budget,
-                )
-                .await
-            });
-            if mode == "cancel" {
-                for _ in 0..200 {
-                    if std::fs::read_to_string(dir.join("requests"))
-                        .unwrap_or_default()
-                        .lines()
-                        .count()
-                        == 2
-                    {
-                        break;
-                    }
-                    tokio::time::sleep(Duration::from_millis(5)).await;
-                }
-                tx.send(true).unwrap();
-            }
-            let result = task.await.unwrap();
-            if interrupted {
-                assert!(result.is_err());
-            } else {
-                assert_eq!(result.unwrap()["spoken_text"], "よみをなおしたで。");
-            }
-            let requests = std::fs::read_to_string(dir.join("requests")).unwrap();
-            let ops: Vec<Value> = requests
-                .lines()
-                .map(|s| serde_json::from_str(s).unwrap())
-                .collect();
-            assert_eq!(ops.len(), 2);
-            assert_eq!(ops[0]["op"], "reading_overlay");
-            assert_eq!(ops[1]["op"], "reading");
-            let pid: i32 = std::fs::read_to_string(dir.join("pid"))
-                .unwrap()
-                .trim()
-                .parse()
-                .unwrap();
-            assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
-            assert_eq!(
-                std::io::Error::last_os_error().raw_os_error(),
-                Some(libc::ESRCH)
-            );
-            std::fs::remove_dir_all(&dir).unwrap();
-        }
+    async fn native_reading_preserves_display_and_generation_report() {
+        let config = DialogueConfig {
+            python: "/missing/reaction-python".into(),
+            helper: "/missing/reaction-helper.py".into(),
+            reading_engine: "off".into(),
+            ..Default::default()
+        };
+        let (_owner, mut cancel) = watch::channel(false);
+        let result = read_speech(
+            &config,
+            json!({"text":" 今朝は元気や。 ","llm_reports":[{"kind":"aftermath"}]}),
+            &mut cancel,
+            tokio::time::Instant::now() + Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result["text"], " 今朝は元気や。 ");
+        // Preserve the canonical manual table order (朝は precedes 今朝).
+        assert_eq!(result["spoken_text"], "今あさは元気や。");
+        assert_eq!(result["llm_reports"], json!([{"kind":"aftermath"}]));
     }
 }

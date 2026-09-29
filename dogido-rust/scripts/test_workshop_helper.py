@@ -187,6 +187,43 @@ def test_original_line_spoken_without_expert_name_uses_legacy_code_path(text):
     assert result["target_line_index"] == 0 and result["lines"][0]["reading_text"] == "さくらいろ"
 
 
+@pytest.mark.parametrize("text,old_fragment,expected_surface", [
+    ("くろいめをひかるめに変えて", "くろいめ", "ひかるめが"),
+    ("くろいめよりひかるめの方がいい", "くろいめ", "ひかるめが"),
+    ("黒い目を光る目に変えて", "黒い目", "光る目が"),
+    ("上五の『黒い目』を『光る目』にして", "黒い目", "光る目が"),
+])
+def test_spoken_word_pair_stages_only_that_span_without_a_model_call(text, old_fragment, expected_surface):
+    f = frame(text)
+    f["allowed_actions"].append("stage_player_edit")
+    f["workshop"]["emission"]["lines"][0]["reading_text"] = "くろいめが"
+    f["workshop"]["emission"]["lines"][0]["surface_text"] = "黒い目が"
+    f["workshop"]["emission"]["reading_text"] = "くろいめが\nくろいおのへと\nあさのいろ"
+    f["op"] = "prepare"
+    prepared = handle(f)
+    assert prepared["fixed_payload"]["line_proposal"]["target_fragment"] == old_fragment
+    f["op"] = "validate"; f["payload"] = prepared["fixed_payload"]
+    proposal = handle(f)["step"]["analysis"]["line_proposal"]
+    revised = handle({"op": "player_edit", "workshop": f["workshop"], "proposal": proposal})
+    assert revised["text"].splitlines()[0] == "ひかるめが"
+    assert revised["lines"][0]["surface_text"] == expected_surface
+    assert revised["lines"][0]["reading_text"] == "ひかるめが"
+
+
+@pytest.mark.parametrize("text", [
+    "『黒い目』を『光る目』にしないで",
+    "『黒い目』を『光る目』にして？",
+    "『黒い目』を『光る目』にしてと言われた",
+    "『黒い目』を『光る目』にしたらどうなる？",
+    "上五と下五の『黒い目』を『光る目』にして",
+])
+def test_quoted_word_pair_needs_one_current_unnegated_edit(text):
+    f = frame(text)
+    f["allowed_actions"].append("stage_player_edit")
+    f["op"] = "prepare"
+    assert "fixed_payload" not in handle(f)
+
+
 @pytest.mark.parametrize("text", [
     "さくらのはをさくらいろに変えないで", "『さくらのはをさくらいろに変えて』と聞いた",
     "さくらのはをさくらいろに変えて？", "さくらのはをさくらいろにしたらどうなる",
@@ -203,6 +240,76 @@ def test_edit_prompt_keeps_character_and_nontechnical_line_references():
     messages = handle(f)["messages"]
     assert "一人称はオレ" in messages[0]["content"] and "素直な共同編集者" in messages[0]["content"]
     assert "専門的な行名を要求しない" in messages[1]["content"] and "句本文を読む指定" in messages[1]["content"]
+    assert "その連続部分だけをtarget_fragment" in messages[1]["content"]
+
+
+def test_discussed_idea_is_checked_without_becoming_pending():
+    f = frame("『さくらのは』を『さくらいろ』にするのはどう？")
+    f["op"] = "discussion_candidate"
+    candidate = handle(f)["candidate"]
+    assert candidate["proposal"]["line_index"] == 0
+    assert candidate["proposal"]["replacement_text"] == "さくらいろ"
+    assert candidate["validation_codes"] == []
+    assert f["workshop"].get("pending") is None
+
+
+@pytest.mark.parametrize("text", [
+    "『さくらのは』を『さくらいろ』にするのはどう？と言われた",
+    "『さくらのは』を『さくらいろ』にするのはどう？と聞いた",
+])
+def test_discussed_idea_rejects_reported_speech(text):
+    f = frame(text)
+    f["op"] = "discussion_candidate"
+    assert handle(f)["candidate"] is None
+
+
+def test_discussed_idea_uses_grounded_model_target_and_replacement():
+    f = frame("上の句のさくらのは、さくらいろはどうかな？")
+    f["op"] = "discussion_candidate"
+    f["proposal"] = {"target_fragment": "さくらのは", "replacement_text": "さくらいろ", "line_index": 0}
+    candidate = handle(f)["candidate"]
+    assert candidate["proposal"]["replacement_text"] == "さくらいろ"
+    assert candidate["validation_codes"] == []
+    f["proposal"]["replacement_text"] = "発話にない案"
+    assert handle(f)["candidate"] is None
+
+
+def test_discussed_idea_survives_respond_step_validation():
+    text = "上の句のさくらのは、さくらいろはどうかな？"
+    f = frame(text, "respond", "さくらいろも、やわらかい感じやな。")
+    f["payload"]["purpose"] = "improve_wording"
+    f["payload"]["line_proposal"] = {
+        "found": True, "target_fragment": "さくらのは", "replacement_text": "さくらいろ",
+        "evidence": text, "confidence": .95,
+    }
+    step_result = handle(f)["step"]
+    assert step_result and step_result["action"] == "respond"
+    f["op"] = "discussion_candidate"
+    f["proposal"] = step_result["analysis"]["line_proposal"]
+    assert handle(f)["candidate"]["proposal"]["replacement_text"] == "さくらいろ"
+
+
+def test_discussed_idea_is_visible_to_planner_and_selection_needs_evidence():
+    f = frame("その案でいこう")
+    f["workshop"]["conversation_candidate"] = {
+        "proposal": {"line_index": 0, "target_fragment": "さくらのは", "replacement_text": "さくらいろ"},
+        "validation_codes": [],
+    }
+    f["allowed_actions"].append("stage_conversation_candidate")
+    f["op"] = "prepare"
+    prompt = handle(f)["messages"][1]["content"]
+    assert '"replacement_text": "さくらいろ"' in prompt
+    assert "まだ句にも未採用案にも反映していない" in prompt
+    f["op"] = "validate"
+    f["payload"] = {"action": "stage_conversation_candidate", "purpose": "improve_wording",
+                    "confidence": .95, "evidence": f["text"], "speech": "", "checks": []}
+    assert handle(f)["step"]["action"] == "stage_conversation_candidate"
+    f["text"] = "その案でいこう？"
+    f["payload"]["evidence"] = f["text"]
+    assert handle(f)["step"] is None
+    f["text"] = "その案でいこう"
+    del f["workshop"]["conversation_candidate"]
+    assert handle(f)["step"] is None
 
 @pytest.mark.parametrize("text,ok", [
     ("上五のさくらのはを別の表現に直して", True),
@@ -280,3 +387,39 @@ def test_generated_repair_does_not_follow_model_to_a_different_named_line():
     f["payload"]["findings"][0]["fragment"]="くろいおのへと"
     result=handle(f)
     assert result["step"] is None and result["reason"]=="repair_target_conflict"
+
+
+def test_literal_question_keeps_idea_without_granting_an_edit_command():
+    f=frame("『くろい』を『あお』にするのはどう？"); f["op"]="explicit_discussion"
+    draft=handle(f)["candidate"]
+    assert draft["proposal"]["target_fragment"]=="くろい"
+    assert draft["proposal"]["line_index"]==1 and "meter_not_exact" in draft["validation_codes"]
+    f["text"] += "下五は変えて"
+    assert handle(f)["candidate"] is None
+
+
+def test_replacement_only_correction_preserves_discussed_target_and_other_characters():
+    f=frame("『くろい』を『あお』にするのはどう？"); f["op"]="explicit_discussion"
+    f["workshop"]["conversation_candidate"]=handle(f)["candidate"]
+    f["op"]="player_edit"; f["text"]="やっぱり『あおい』にして"
+    f["proposal"]={"replacement_text":"あおい", "target_fragment":"", "line_index":None}
+    result=handle(f)
+    assert [l["reading_text"] for l in result["lines"]]==["さくらのは","あおいおのへと","あさのいろ"]
+    f["proposal"]["line_index"]=0
+    result=handle(f)
+    assert result["text"] is None and result["target_line_index"]==0
+    f["proposal"]={"replacement_text":"あお", "target_fragment":"", "line_index":None}
+    assert "meter_not_exact" in handle(f)["failure_reasons"]
+
+
+def test_new_target_in_original_input_overrides_omitted_model_target():
+    f=frame("『くろい』を『あお』にするのはどう？"); f["op"]="explicit_discussion"
+    f["workshop"]["conversation_candidate"]=handle(f)["candidate"]
+    f["op"]="player_edit"; f["text"]="あさをよるにして"
+    f["proposal"]={"replacement_text":"よる", "target_fragment":"", "line_index":None}
+    result=handle(f)
+    assert [l["reading_text"] for l in result["lines"]]==["さくらのは","くろいおのへと","よるのいろ"]
+    f["text"]="上五をあおいにして"
+    f["proposal"]["replacement_text"]="あおい"
+    result=handle(f)
+    assert result["text"] is None and result["target_line_index"]==0

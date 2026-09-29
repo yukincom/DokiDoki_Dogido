@@ -229,14 +229,21 @@ open 中のプレイヤー入力
 | 「音数や読みを見て」 | `inspect(reading, meter)` → 結果を見て `explain / ask / propose_revision` | 読みと音数はコード測定。未検査の数値を発話させない |
 | 「詰め込みすぎ」「ここ海ちゃう」 | `respond / ask / propose_revision` | 指摘の行・断片・problemを検証し、critiqueとsoft lessonへ写す |
 | 「そこ直して」 | 対象が足りなければ `ask`、足りれば `propose_revision` | 既存editorの差分・意味・自然さ・出典・音数・hard制約を通す。自動保存しない |
-| 「夕暮れやに変えた方が」 | `stage_player_edit` | 発話内置換語・行概念・対象断片を検証し、対象行だけ未保存案へ置換 |
+| 「夕暮れやに変えて」 | `stage_player_edit` | 発話内の差し替え案・行概念・句中の対象箇所を検証し、対象行だけ未採用案へ差し替え |
+| 「『さくらのは』を『さくらいろ』にするのはどう？」→「それにして」 | `respond / ask` → `stage_conversation_candidate` | 相談中の一案を対象箇所・差し替え表現・検査結果として保持。次の明示指示で再検査して未採用案へ移す |
 | 「元と案を比べて」 | `compare` | 現在句と実在pendingがある場合だけ許可。採否は補わない |
 | 「どんな句になった？」 | `show_current` | 本文はモデルに復唱させずコードから返す |
 | 「この案を残して」「元へ戻して」 | `accept_pending / reject_pending` | confidence 0.85以上・音声認識原文にも行為を示す連続evidenceがあること・疑問／否定／条件／引用／伝聞でないこと・現在pending・CASを再検証して保存／破棄。同じ発話に明確な終了もあればclose evidenceの終了意思も検証して一つのtransactionにする |
 | 「今日はここまで」 | `close_workshop` | confidence 0.85以上・今回発話根拠・pendingなしの場合だけコードがclose |
 | 「こう直して」＋完成三行 / `直し:` / 明示reading / 明示praise | コードの速い経路 | 既存の決定的な保存・訂正・closeを維持 |
 
-agent stepは `respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / accept_pending / reject_pending / close_workshop / unrelated` の一つだけを返す。通常stepはconfidence 0.72以上、状態変更候補は0.85以上かつ今回発話の連続evidenceを必須にする。会話理解には音声解釈を使えるが、局所編集・採否・終了のevidenceと置換語は音声認識原文にも存在しなければならない。採否と終了を同時に明示した発話だけは、採否actionに`close_after_action`と`close_evidence`を付け、採否と終了の意味をそれぞれコード検証する。同じ短い発話断片に両方が含まれる場合、二つのevidenceは重なってよい。説明・質問・比較だけが一文のspeechを返せる。句本文、未採用案、保存、終了、lessonをモデル自身が変更する余地はない。`unrelated`は同じ入力の通常雑談返答が成立した場合だけ、既存の二回driftへ参加させる。
+Rust経路では、会話中の一案を `pending` と別に保持する。保持するのは対象箇所、プレイヤーが示した差し替え表現、基準となる現在句・版、提示時の原文根拠、検査結果。音数不合格でも対象箇所まで忘れず、相談を続けられる。プレイヤー自身の言葉は返答生成後に保持し、ドギドの返答音声の中断や直近4往復からの退出では消さない。戦闘中は適用せず、同じ句の相談を再開したときだけ参照する。句の版変更、別の未採用案、相談終了で無効にする。ドギドの未再生の案は共有済みと扱わない。
+
+「それにして」は保持中の一案を読み・音数・一意性・hard制約・CASで再検査して `pending` へ移すだけで、採用・保存はしない。「やっぱりXXにして」のように差し替え表現だけ訂正した場合は、今回の原文に新しい対象指定がないことを確認して同じ対象箇所を使う。新しい行・句中の箇所が原文に指定されていれば、モデルの抽出から抜けていてもその指定を優先する。`target_fragment` は句中の**対象箇所**、`replacement_text` はプレイヤー提示の**差し替え表現**。複数案の一覧・順位・選択機構は導入しない。
+
+明確な引用付きの「『対象』を『表現』にするのはどう？」は、従来の文字列抽出を使って一案を先に確保し、そのターンのモデルには相談への返答を任せる。これ以外の自然文は既存の有界stepで抽出する。モデル呼出しの追加はない。実装・検証範囲は[一案の部分置換試験](evaluations/workshop-player-edit-20260928.md)を参照。
+
+agent stepは `respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / stage_conversation_candidate / accept_pending / reject_pending / close_workshop / unrelated` の一つだけを返す。通常stepはconfidence 0.72以上、状態変更候補は0.85以上かつ今回発話の連続evidenceを必須にする。会話理解には音声解釈を使えるが、局所編集・採否・終了の行為evidenceは今回の音声認識原文にも必要。新たに提示された差し替え案は提示時の原文で検証し、後で一時候補を選ぶときは今回の選択意思を検証する。採否と終了を同時に明示した発話だけは、採否actionに`close_after_action`と`close_evidence`を付け、採否と終了の意味をそれぞれコード検証する。同じ短い発話断片に両方が含まれる場合、二つのevidenceは重なってよい。説明・質問・比較だけが一文のspeechを返せる。句本文、未採用案、保存、終了、lessonをモデル自身が変更する余地はない。`unrelated`は同じ入力の通常雑談返答が成立した場合だけ、既存の二回driftへ参加させる。
 
 一つのplayer turnは最大三つの計画stepに閉じる。典型形は `decide → inspect → after_inspection` または `decide → propose_revision → after_validation` である。`inspect` とeditor実行は各一回だけ。既存editor内の最大2回の再編集は維持するが、after-validation stepから同じeditorを再実行させない。schema不合格や棄権が最初に起きた場合は旧分類器へ戻し、実検査後に起きた場合は検査結果だけを使うコード固定返答へ戻す。
 
@@ -248,7 +255,7 @@ agentの直接終了は、音声認識原文中で終了行為そのものを示
 
 `ask_meaning` の返答後は、コードが一時的に「意味説明済み」を保持する。次の発話はこの状態と一緒に会話モデルへ渡し、意味として納得・理解が得られた場合は `ack` として扱う。このターンでは新しいfindingを採らず、critique／lessonにも保存せず、コード固定で「この句の話はここまででよいか」を確認する。次の肯定で `meaning_confirmed` close、続行の意思ならopenへ戻す。単独の「そうなんだ」を常にcloseへ使うのではなく、説明直後だけの文脈依存操作とする。
 
-プレイヤー自身の一行置換では、AI出力に `replacement_text`、句中の `target_fragment`、プレイヤー発話中の `evidence`、confidence を要求する。置換語と evidence が実際の発話に連続部分として存在し、target fragment が現在の三行の一行だけに一致した場合だけ、コードのひらがな化・音数・hard制約・CASへ進む。AIが発話にない句本文を補作した場合は捨てる。
+プレイヤー自身の局所編集では、AI出力に `replacement_text`（プレイヤーが提示した差し替え案）、`target_fragment`（現在句中の対象箇所）、プレイヤー発話中の `evidence`、confidence を要求する。差し替え案と evidence が実際の発話に連続部分として存在し、対象箇所が現在句の一か所に確定した場合だけ、コードでその部分を差し替える。明示行指定があるときはその行に限って照合する。同じ行で対象箇所が重複すれば採らない。差し替え後の**完成した一行**をひらがな化・音数・hard制約・CASで検査し、未変更部分を維持する。表示表記の切れ目を安全に確定できない場合は、検証済みのひらがな読みを表示にも使う。AIが発話にない差し替え案を補作した場合は捨てる。
 
 三行は本文文字列を二重管理せず、一行ごとに `line_id / line_index / position / canonical_name / surface_text / reading_text / source_atom_ids / source_atoms / provenance` を束ねる。漢字・カタカナを含む表示表記と確定ひらがな読みは同一句の二表現であり、TTS・音数・CASは読みを使う。プレイヤーの局所置換では、対象行の表示表記と読みを必ず同じ操作で更新し、未採用案から採用済み句への昇格・revision保存でも二つを分離しない。
 
@@ -294,7 +301,20 @@ OS／端末内AIの `auto` 順 **Apple Foundation Models → Foundry Local → �
 
 ### `haiku_workshop_turns.jsonl`
 
-共同編集agentが何を考えたかではなく、**何を選び、コードが何を実行・検証したか**だけを残す。
+固定規則・共同編集agent・旧分類器fallbackを含む、workshop入力の共通境界で自動記録する。何を考えたかではなく、**何を選び、コードが何を実行・検証したか**を残す。
+
+2026-09-28からschema version 2を追記する。旧version 1の記録は変更しない。Pythonは設定済み記憶ルートの`long_term/haiku_workshop_turns.jsonl`、Rustは同ルートの`sessions/<session_id>/long_term/haiku_workshop_turns.jsonl`へ保存する。記憶保存を無効にした場合は記録しない。対象セッションのworkshopが特定できる入力を対象とし、接続先未確定のエラーを別の句へ結び付けない。
+
+- `input_admission`: 入力受付、保留、受付拒否、音声を返さない即時処理。Rustの保留入力再配送は`forwarded_admission`で区別する。
+- `decision`: Rustで検査・状態反映が済んだ時点。再生開始・成功を意味しない。
+- `turn_result`: Pythonのイベント処理、Rustのworkshop入力jobの終了。成功・失敗・取消を含む。Rustは同じ`turn_id`の`decision`と対応させて、変更成功と音声失敗を分ける。
+- `lifecycle`: 発句後の開始、戦闘中断／復帰、timeout・終了・接続切断など、句の状態変化。定期観測が同じ状態のままなら追記しない。
+
+三行の正本・未採用案の前後、workshop ID、終了／中断状態、入力原文と解釈、処理経路・検査コードを残す。Rustは版番号・保持中のプレイヤー一案も記録する。`state_after`はその記録時点の状態であり、取消された古いturnが後続turnの変更を実行したという意味ではない。受付と結果は別のイベントなので、ファイルの行数を会話回数や成功回数として数えない。重複と判定されたイベント／turnは再記録しない。
+
+Pythonは`result_scope=service_decision`・`playback_status=not_observed`で、音声の実再生を断言しない。Rustの`result.playback_status`は再生処理から得た完了／失敗／取消を保持する。記録のためのLLM呼出しは追加しない。Rustの追記は容量制限付きの別スレッドへ送り、正常終了時は書き込みを待つ。書き込み失敗や満杯は端末へ警告し、元の応答・句の採否を変えない。異常終了直前の未書き込み分の保存までは保証しない。
+
+以下はversion 1から継承するstep部分の形式。version 2では上記の境界・状態・結果フィールドが加わる。
 
 ```json
 {

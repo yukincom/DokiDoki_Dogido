@@ -893,36 +893,57 @@ class NarrationMixin:
             if chat_plan.requests_catalog
             else []
         )
-        usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
-        entity_grounding = ground_player_chat_entity(
-            chat_plan,
-            topic_hits=usable_topic_hits,
-            observed_entities=observed_entities,
-        )
-        fixed_grounded_reply = fixed_grounded_player_chat_reply(
-            chat_plan,
-            entity_grounding,
-        )
-        reply_stance = resolve_reply_stance(
-            has_visual_threats=has_visual_for_chat,
-            topic_hits=raw_topic_hits,
-            threat_summary=threat_summary,
-            user_text=chat_plan.entity_query or user_text,
-            observed_ids=observed_ids,
-        )
-        reply_policy = reply_policy_line(reply_stance)
-        topic_for_identify: list[dict[str, object]] = []
-        if chat_plan.action == "identify_entity" and reply_stance == "hypothesis":
-            grounded_ids = set(entity_grounding.observed_ids)
-            topic_for_identify = (
-                [
-                    hit
-                    for hit in usable_topic_hits
-                    if str(hit.get("entry_id") or "") in grounded_ids
-                ]
-                if grounded_ids
-                else usable_topic_hits
+        native_topics = getattr(self.llm, "prepare_player_chat_topics", None)
+        if callable(native_topics):
+            entity_grounding, fixed_grounded_reply, topic_policy = native_topics(
+                chat_plan, topic_hits=raw_topic_hits, observed_entities=observed_entities,
+                has_visual_threats=has_visual_for_chat, threat_summary=threat_summary,
+                user_text=chat_plan.entity_query or user_text, observed_ids=observed_ids,
             )
+            usable_topic_hits = topic_policy["usable_topic_hits"]
+            reply_stance = topic_policy["reply_stance"]
+            reply_policy = topic_policy["reply_policy"]
+            topic_for_identify = topic_policy["topic_for_identify"]
+            identify_skeleton = topic_policy["identify_skeleton"]
+        else:
+            usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
+            native_ground = getattr(self.llm, "ground_player_chat", None)
+            if callable(native_ground):
+                # Rust移行bridge限定。候補検索と現在観測の投影はここに残す。
+                entity_grounding, fixed_grounded_reply = native_ground(
+                    chat_plan, topic_hits=usable_topic_hits,
+                    observed_entities=observed_entities,
+                )
+            else:
+                entity_grounding = ground_player_chat_entity(
+                    chat_plan,
+                    topic_hits=usable_topic_hits,
+                    observed_entities=observed_entities,
+                )
+                fixed_grounded_reply = fixed_grounded_player_chat_reply(
+                    chat_plan,
+                    entity_grounding,
+                )
+            reply_stance = resolve_reply_stance(
+                has_visual_threats=has_visual_for_chat,
+                topic_hits=raw_topic_hits,
+                threat_summary=threat_summary,
+                user_text=chat_plan.entity_query or user_text,
+                observed_ids=observed_ids,
+            )
+            reply_policy = reply_policy_line(reply_stance)
+            topic_for_identify: list[dict[str, object]] = []
+            if chat_plan.action == "identify_entity" and reply_stance == "hypothesis":
+                grounded_ids = set(entity_grounding.observed_ids)
+                topic_for_identify = (
+                    [
+                        hit
+                        for hit in usable_topic_hits
+                        if str(hit.get("entry_id") or "") in grounded_ids
+                    ]
+                    if grounded_ids
+                    else usable_topic_hits
+                )
         catalog_topic_hints = (
             self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
         )
@@ -959,14 +980,15 @@ class NarrationMixin:
         # 全通常雑談でカタログ名を検査する。許可元は現在観測、現在/過去の
         # player発話、plannerが選んだ同定候補だけ。assistant履歴だけの名は含めない。
         speech_whitelist_enforce = True
-        identify_skeleton = build_identify_skeleton(
-            stance=reply_stance,
-            topic_hits=topic_for_identify,
-        )
-        if entity_grounding.status == "observed":
-            # 従来のhypothesis骨子は「俺には見えん」を含むため、
-            # コード観測済みの同定とは同時に渡さない。
-            identify_skeleton = None
+        if not callable(native_topics):
+            identify_skeleton = build_identify_skeleton(
+                stance=reply_stance,
+                topic_hits=topic_for_identify,
+            )
+            if entity_grounding.status == "observed":
+                # 従来のhypothesis骨子は「俺には見えん」を含むため、
+                # コード観測済みの同定とは同時に渡さない。
+                identify_skeleton = None
         from dogido_server.entry_catalog import (
             build_plausibility_hint_lines,
             normalize_biome_id,

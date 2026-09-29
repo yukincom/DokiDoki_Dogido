@@ -1,6 +1,7 @@
 pub mod address;
 pub mod assist;
 pub mod chat_prompt;
+pub mod chat_topics;
 pub mod combat;
 pub mod contextual_asr;
 pub mod dialogue;
@@ -29,10 +30,12 @@ pub mod reading_correction;
 pub mod recall_query;
 pub mod server;
 pub mod threats;
+pub mod tts_reading;
 pub mod types;
 pub mod vocalization;
 pub mod voice;
 pub mod workshop;
+pub mod workshop_candidate;
 pub mod workshop_combat;
 pub mod workshop_combat_input;
 pub mod workshop_edit;
@@ -41,3 +44,5 @@ pub mod workshop_followup;
 pub mod reaction_leaf;
 
 pub mod chat_validation;
+
+pub mod workshop_input_guard;

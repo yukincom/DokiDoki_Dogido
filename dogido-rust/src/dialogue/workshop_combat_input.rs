@@ -68,6 +68,17 @@ impl Dialogue {
             .as_ref()
             .filter(|w| w.open && w.combat_paused())?;
         let turn = id("combat_input");
+        let attempt = super::workshop_record::Attempt::new(
+            super::workshop_record::state(Some(w)),
+            super::workshop_record::Input {
+                raw: text.into(),
+                semantic: None,
+                private: s.web.state.research.is_some()
+                    || s.record_private_generation
+                        .is_some_and(|(g, private)| g == s.input_generation && private),
+                epoch: Some(s.epoch),
+            },
+        );
         let input = json!({"text":text,"verse":crate::workshop_edit::reading(w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines)),
             "workshop":{"emission":w.emission,"materials":w.materials,"current_lines":w.current_lines,
                 "pending":w.pending,"dialogue":w.dialogue,"agent_steps":w.agent_steps}});
@@ -87,13 +98,15 @@ impl Dialogue {
         }
         d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"category":"workshop_input",
             "player_input_text":text,"source":source,"text":"","created_at":chrono::Utc::now(),
+            "epoch":attempt.input.epoch,"workshop_record_private":attempt.input.private,
             "reference_ids":[],"output_mode":"text","playback_status":"generating"}));
         d.revision += 1;
         let this = self.clone();
         let session = sid.to_owned();
         let tid = turn.clone();
         jobs.push(tokio::spawn(async move {
-            this.run_combat_input(session, tid, input, rx).await;
+            this.run_combat_input(session, tid, input, rx, attempt)
+                .await;
         }));
         Some(
             json!({"accepted":true,"session_id":sid,"turn_id":turn,"reason":"combat_workshop_input"}),
@@ -117,6 +130,19 @@ impl Dialogue {
         self.start_pending(d, jobs, sid);
     }
     async fn run_combat_input(
+        self: Arc<Self>,
+        sid: String,
+        turn: String,
+        input: Value,
+        cancel: watch::Receiver<bool>,
+        attempt: super::workshop_record::Attempt,
+    ) {
+        self.clone()
+            .run_combat_input_body(sid.clone(), turn.clone(), input, cancel)
+            .await;
+        self.record_workshop_turn(&sid, &turn, &attempt);
+    }
+    async fn run_combat_input_body(
         self: Arc<Self>,
         sid: String,
         turn: String,

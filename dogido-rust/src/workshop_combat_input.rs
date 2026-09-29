@@ -13,6 +13,17 @@ pub enum Action {
     #[default]
     Uncertain,
 }
+impl Action {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ResumeWorkshop => "resume_workshop",
+            Self::WorkshopInput => "workshop_input",
+            Self::CloseWorkshop => "close_workshop",
+            Self::Unrelated => "unrelated",
+            Self::Uncertain => "uncertain",
+        }
+    }
+}
 #[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Analysis {

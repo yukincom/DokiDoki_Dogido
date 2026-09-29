@@ -16,7 +16,10 @@ impl Dialogue {
         if !generated_proposal
             && !matches!(
                 action.as_str(),
-                "stage_player_edit" | "accept_pending" | "reject_pending"
+                "stage_player_edit"
+                    | "stage_conversation_candidate"
+                    | "accept_pending"
+                    | "reject_pending"
             )
         {
             return Ok(());
@@ -40,7 +43,11 @@ impl Dialogue {
                     && result["workshop_version"] == w.version,
                 "stale_workshop"
             );
-            if action == "stage_player_edit" || generated_proposal {
+            if matches!(
+                action.as_str(),
+                "stage_player_edit" | "stage_conversation_candidate"
+            ) || generated_proposal
+            {
                 if let Some(proposed) = result.get("workshop_proposed").filter(|p| !p.is_null()) {
                     let proposed: Pending = serde_json::from_value(proposed.clone())?;
                     proposed.validate(&w.current_lines)?;
@@ -57,6 +64,7 @@ impl Dialogue {
                         )?;
                     }
                     w.pending = Some(proposed);
+                    w.conversation_candidate = None;
                     w.version += 1;
                     result["workshop_outcome"] = if generated_proposal {
                         "revision_proposed"
@@ -73,6 +81,7 @@ impl Dialogue {
             let pending = w.pending.clone().context("pending_required")?;
             if action == "reject_pending" {
                 w.pending = None;
+                w.conversation_candidate = None;
                 w.version += 1;
                 if close_after {
                     w.close("explicit_close");
@@ -136,6 +145,7 @@ impl Dialogue {
                     }
                     w.revision_id = Some(revision_id.clone());
                     w.pending = None;
+                    w.conversation_candidate = None;
                     w.version += 1;
                     if close_after && w.open {
                         w.close("explicit_close");

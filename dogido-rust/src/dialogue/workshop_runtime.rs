@@ -4,7 +4,7 @@ use crate::{
     haiku_bridge::Helper,
     haiku_record::HaikuLine,
     types::GenerationRequest,
-    workshop,
+    workshop, workshop_candidate,
     workshop_edit::{self, Pending},
     workshop_followup::{self, Stage},
 };
@@ -75,8 +75,18 @@ impl Dialogue {
         let view = &input["workshop"];
         let current: Vec<HaikuLine> = serde_json::from_value(view["current_lines"].clone())?;
         let pending: Option<Pending> = serde_json::from_value(view["pending"].clone())?;
+        let discussed = &view["conversation_candidate"];
         let lines = pending.as_ref().map_or(current.as_slice(), |p| &p.lines);
         let mut proposed = None;
+        let explicit_discussion = helper
+            .exchange(json!({"op":"explicit_discussion", "workshop":view,"text":text}))
+            .await?;
+        let mut conversation_candidate: Option<workshop_candidate::Draft> = if pending.is_none() {
+            serde_json::from_value(explicit_discussion["candidate"].clone()).ok()
+        } else {
+            None
+        };
+        snapshot["current_player_idea"] = serde_json::to_value(&conversation_candidate)?;
         let mut close_after = false;
         let mut observation = Value::Null;
         let mut steps = Vec::new();
@@ -120,11 +130,36 @@ impl Dialogue {
                 _ => None,
             };
         }
+        if action.is_none()
+            && pending.is_none()
+            && discussed.is_object()
+            && workshop_candidate::fixed_selection(text)
+        {
+            action = Some("stage_conversation_candidate".into());
+            reason = "fixed_conversation_candidate".into();
+            steps.push(
+                json!({"phase":"decide","action":"stage_conversation_candidate",
+                "purpose":"improve_wording","outcome":"selected","evidence":text,
+                "checks":[],"validation_codes":[]}),
+            );
+        }
         if action.is_none() {
             // 初手→必要時の実検査→修正検証後の返答。editorは同じturnで一度だけ。
             let mut phase = "decide";
             for _ in 0..3 {
-                let mut allowed = workshop::allowed_actions(phase, snapshot["pending"].is_object());
+                let mut allowed = workshop::allowed_actions(
+                    phase,
+                    snapshot["pending"].is_object(),
+                    snapshot["conversation_candidate"].is_object(),
+                );
+                if explicit_discussion["candidate"].is_object() && pending.is_none() {
+                    allowed.retain(|a| {
+                        matches!(
+                            *a,
+                            "respond" | "ask" | "explain" | "inspect" | "show_current"
+                        )
+                    });
+                }
                 if phase == "decide" {
                     allowed.extend(stage.actions(pending.is_some()).iter().copied());
                 }
@@ -212,6 +247,7 @@ impl Dialogue {
                                 | "accept_pending"
                                 | "reject_pending"
                                 | "stage_player_edit"
+                                | "stage_conversation_candidate"
                                 | "propose_revision"
                         ) {
                             let required_purpose = match a {
@@ -250,6 +286,21 @@ impl Dialogue {
                         observation["verse_kind"] = "pending".into();
                     }
                 }
+                if phase == "decide"
+                    && pending.is_none()
+                    && matches!(a, "respond" | "ask")
+                    && step["purpose"] == "improve_wording"
+                {
+                    let validated = helper
+                        .exchange(json!({"op":"discussion_candidate",
+                        "workshop":view,"text":text,
+                        "proposal":step["analysis"]["line_proposal"]}))
+                        .await?;
+                    if let Ok(candidate) = serde_json::from_value(validated["candidate"].clone()) {
+                        conversation_candidate = Some(candidate);
+                    }
+                }
+
                 steps.push(json!({"phase":phase,"action":a,"purpose":step["purpose"],
                     "outcome":if a=="inspect" {"inspected"} else {"selected"},
                     "validation_codes":observation.get("validation_codes").cloned().unwrap_or(json!([])),
@@ -313,7 +364,7 @@ impl Dialogue {
                         );
                         let validated = helper
                             .exchange(
-                                json!({"op":"player_edit","workshop":view,"proposal":proposal}),
+                                json!({"op":"player_edit","workshop":view,"text":text,"proposal":proposal}),
                             )
                             .await?;
                         if validated["text"].is_string() {
@@ -346,6 +397,26 @@ impl Dialogue {
                 }
             }
         }
+        if action.as_deref() == Some("stage_conversation_candidate") {
+            ensure!(discussed.is_object(), "conversation_candidate_missing");
+            let validated = helper
+                .exchange(
+                    json!({"op":"player_edit","workshop":view,"proposal":discussed["proposal"]}),
+                )
+                .await?;
+            if validated["text"].is_string() {
+                let new_lines = serde_json::from_value(validated["lines"].clone())?;
+                let target = validated["target_line_index"]
+                    .as_u64()
+                    .context("candidate target")? as usize;
+                proposed = Some(Pending::stage(&current, lines, new_lines, target)?);
+            } else {
+                reason = "conversation_candidate_rejected".into();
+                if let Some(last) = steps.last_mut() {
+                    last["validation_codes"] = validated["failure_reasons"].clone();
+                }
+            }
+        }
         let action = action.unwrap_or_else(|| "fallback".into());
         if action == "close_workshop" && workshop::fixed_praise(text) {
             feedback = json!({"action":"praise","findings":[]});
@@ -363,7 +434,7 @@ impl Dialogue {
                 .into()
             }
             "show_current" => speech = workshop_edit::reading(lines),
-            "stage_player_edit" => {
+            "stage_player_edit" | "stage_conversation_candidate" => {
                 speech = proposed.as_ref().map_or_else(
                     || "その一行はまだ使えんかったわ。行の指定と読み、音数を確認してな。".into(),
                     |p| workshop_edit::reading(&p.lines),
@@ -421,6 +492,7 @@ impl Dialogue {
         Ok(
             json!({"text":speech,"spoken_text":spoken,"workshop_id":view["workshop_id"],
             "workshop_action":action,"workshop_version":view["version"],"workshop_proposed":proposed,"workshop_close_after":close_after,
+            "workshop_conversation_candidate":conversation_candidate,
             "workshop_followup":Stage::after_completed(&action, steps.last().and_then(|s|s["purpose"].as_str()).unwrap_or(""), pending.is_some() || proposed.is_some()),
             "workshop_steps":steps,"workshop_reason":reason,"workshop_feedback":feedback,"llm_reports":reports}),
         )
@@ -433,10 +505,19 @@ impl Dialogue {
             .workshop
             .as_mut()
             .filter(|w| w.is_open() && !w.combat_paused())?;
+        let candidate_is_current = w
+            .conversation_candidate
+            .as_ref()
+            .is_some_and(|c| c.is_current(&w.current_lines, w.version, w.pending.is_some()));
+        if !candidate_is_current {
+            w.conversation_candidate = None;
+        }
+        let candidate = w.conversation_candidate.as_ref().map(|c| c.view());
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
             "entry_id":w.entry_id,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
+            "conversation_candidate":candidate,
             "provisional":w.provisional,"dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }

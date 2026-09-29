@@ -1,8 +1,6 @@
 //! Memory I/O is serialized with turns, outside the real-time state mutex.
 use super::*;
-use crate::{
-    haiku_bridge::Helper, haiku_memory::RecallQuery, haiku_record::MemoryStore, workshop_edit,
-};
+use crate::{haiku_memory::RecallQuery, haiku_record::MemoryStore, workshop_edit};
 use anyhow::{Context, ensure};
 
 impl Dialogue {
@@ -138,19 +136,15 @@ impl Dialogue {
             }
         };
         let mut result = Self::memory_result(input, "haiku_recall", outcome, text);
-        let mut helper = Helper::start(
-            &self.config.python,
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/workshop_helper.py"),
-        )?;
-        let body = async {
-            helper
-                .exchange(json!({"op":"reading_overlay","rows":self.reading_overlay().await?}))
-                .await?;
-            helper.exchange(json!({"op":"reading","text":result["text"],"reading_engine":self.config.reading_engine})).await
-        };
-        let spoken = tokio::select! {_=bridge::cancelled(cancel)=>Err(anyhow::anyhow!("cancelled")), r=body=>r};
-        helper.finish(spoken.is_err()).await?;
-        result["spoken_text"] = spoken?["spoken_text"].clone();
+        result["spoken_text"] = super::tts_runtime::read(
+            &self.config,
+            result["text"].as_str().context("recall text")?,
+            cancel,
+            tokio::time::Instant::now() + Duration::from_secs(30),
+        )
+        .await?
+        .into();
+        self.memory_live(sid, epoch, input, false)?;
         Ok(result)
     }
 
@@ -197,5 +191,72 @@ impl Dialogue {
                 result["workshop_feedback_outcome"] = "save_failed".into();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn recall_reading_does_not_start_python_change_display_or_rewrite_memory() {
+        let root =
+            std::env::temp_dir().join(format!("dogido-recall-reading-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("long_term")).unwrap();
+        let entry = root.join("long_term/haiku_entries.jsonl");
+        let bytes=json!({"id":"fixture","created_at":"2026-09-29T00:00:00Z","text":"今朝の草地","world":{"biome":"plains"}}).to_string()+"\n";
+        std::fs::write(&entry, &bytes).unwrap();
+        let helper = root.join("dialogue_helper.py");
+        std::fs::write(&helper, "raise AssertionError('must not start')\n").unwrap();
+        let mut config = DialogueConfig {
+            python: "/missing/recall-python".into(),
+            helper,
+            reading_engine: "off".into(),
+            audio_enabled: false,
+            base_url: "http://127.0.0.1:9/v1".into(),
+            ..Default::default()
+        };
+        config.haiku.memory_enabled = true;
+        config.haiku.memory_dir = root.clone();
+        let dialogue = Dialogue::new(config).unwrap();
+        dialogue.register("s", "読みの試験", true);
+        let (owner, mut cancel) = watch::channel(false);
+        dialogue
+            .data
+            .lock()
+            .unwrap()
+            .sessions
+            .get_mut("s")
+            .unwrap()
+            .cancel = Some(owner.clone());
+        let query = serde_json::to_value(RecallQuery::default()).unwrap();
+        let input = json!({"text":"句を思い出して","reading_corrections":[{"surface":"草地","reading":"catalog-only"}]});
+        let result = dialogue
+            .recall_poems("s", 0, &input, &query, &mut cancel)
+            .await
+            .unwrap();
+        assert!(result["text"].as_str().unwrap().contains("今朝の草地"));
+        assert!(
+            result["spoken_text"]
+                .as_str()
+                .unwrap()
+                .contains("今あさのくさち")
+        );
+        assert!(
+            !result["spoken_text"]
+                .as_str()
+                .unwrap()
+                .contains("catalog-only")
+        );
+        assert_eq!(result["memory_action"], "haiku_recall");
+        assert_eq!(std::fs::read_to_string(&entry).unwrap(), bytes);
+        owner.send(true).unwrap();
+        assert!(
+            dialogue
+                .recall_poems("s", 0, &input, &query, &mut cancel)
+                .await
+                .is_err()
+        );
+        dialogue.shutdown().await;
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

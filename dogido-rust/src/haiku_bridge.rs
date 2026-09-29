@@ -67,31 +67,16 @@ impl Helper {
             "haiku helper request too large"
         );
         let exchange = async {
-            let stdin = self.stdin.as_mut().context("helper is closed")?;
-            stdin.write_all(&request).await?;
-            stdin.write_all(b"\n").await?;
-            stdin.flush().await?;
-            let mut bytes = Vec::new();
-            (&mut self.stdout)
-                .take(FRAME_LIMIT + 1)
-                .read_until(b'\n', &mut bytes)
-                .await?;
-            ensure!(
-                bytes.len() <= FRAME_LIMIT as usize,
-                "haiku helper response too large"
-            );
-            ensure!(
-                bytes.last() == Some(&b'\n'),
-                "haiku helper ended before a result"
-            );
-            let response: Value =
-                serde_json::from_slice(&bytes).context("invalid haiku helper JSON")?;
-            ensure!(
-                response.get("error").is_none(),
-                "haiku helper: {}",
-                response["error"]
-            );
-            Ok(response)
+            if frame["op"] == "reading" {
+                let response = self.reading(&frame, timeout).await?;
+                ensure!(
+                    serde_json::to_vec(&response)?.len() < FRAME_LIMIT as usize,
+                    "haiku helper response too large"
+                );
+                Ok(response)
+            } else {
+                self.exchange_raw(&request).await
+            }
         };
         let result = tokio::time::timeout(timeout, exchange)
             .await
@@ -104,6 +89,75 @@ impl Helper {
             let _ = self.child.wait().await;
         }
         result
+    }
+
+    /// A reading request never reaches the legacy Python formatter. The only
+    /// optional exchange is tokens from this already-owned helper's dictionary.
+    async fn reading(&mut self, frame: &Value, timeout: Duration) -> Result<Value> {
+        use crate::tts_reading::{self, Step, tokens};
+        let deadline = tokio::time::Instant::now() + timeout;
+        let text = frame["text"]
+            .as_str()
+            .context("reading text must be a string")?;
+        let engine = match frame.get("reading_engine") {
+            None => Some("auto"),
+            Some(Value::Null) => None,
+            Some(Value::String(value)) => Some(value.as_str()),
+            _ => anyhow::bail!("reading engine must be a string or null"),
+        };
+        let environment = engine
+            .is_none()
+            .then(|| std::env::var("DOGIDO_TTS_READING_ENGINE").ok())
+            .flatten();
+        let spoken = match tts_reading::prepare(text, engine, environment.as_deref()) {
+            Step::Ready(spoken) => spoken,
+            Step::NeedsUnidic { source } => {
+                let request_id = uuid::Uuid::new_v4().to_string();
+                let request = serde_json::to_vec(&json!({
+                    "op":"tts_tokens", "schema_version":1, "request_id":request_id, "text":source
+                }))?;
+                ensure!(
+                    request.len() < FRAME_LIMIT as usize,
+                    "haiku helper request too large"
+                );
+                let response = self.exchange_raw(&request).await?;
+                let dictionary = tokens::decode(response, &request_id)?;
+                tts_reading::finish(&source, dictionary.as_deref())
+            }
+        };
+        ensure!(
+            tokio::time::Instant::now() < deadline,
+            "haiku helper timed out"
+        );
+        Ok(json!({"spoken_text":spoken}))
+    }
+
+    async fn exchange_raw(&mut self, request: &[u8]) -> Result<Value> {
+        let stdin = self.stdin.as_mut().context("helper is closed")?;
+        stdin.write_all(request).await?;
+        stdin.write_all(b"\n").await?;
+        stdin.flush().await?;
+        let mut bytes = Vec::new();
+        (&mut self.stdout)
+            .take(FRAME_LIMIT + 1)
+            .read_until(b'\n', &mut bytes)
+            .await?;
+        ensure!(
+            bytes.len() <= FRAME_LIMIT as usize,
+            "haiku helper response too large"
+        );
+        ensure!(
+            bytes.last() == Some(&b'\n'),
+            "haiku helper ended before a result"
+        );
+        let response: Value =
+            serde_json::from_slice(&bytes).context("invalid haiku helper JSON")?;
+        ensure!(
+            response.get("error").is_none(),
+            "haiku helper: {}",
+            response["error"]
+        );
+        Ok(response)
     }
 
     pub async fn prepare(&mut self, request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
@@ -390,3 +444,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "haiku_bridge/reading_tests.rs"]
+mod reading_tests;

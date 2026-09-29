@@ -64,22 +64,20 @@ impl Classifier {
         cancel: &mut watch::Receiver<bool>,
     ) -> Result<Value> {
         let mut slot = tokio::select! { _=bridge::cancelled(cancel)=>anyhow::bail!("cancelled"), s=self.helper.lock()=>s };
-        if slot.is_none() {
-            *slot = Some(Helper::start(
-                &c.python,
-                &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/combat_input_helper.py"),
-            )?);
-        }
-        let helper = slot.as_mut().unwrap();
         let work = async {
             let text = input["text"].as_str().context("combat input text")?;
-            let response = helper
-                .exchange_with_timeout(
-                    json!({"op":"classify", "text":text,
+            let response = if c.haiku.platform_ai.provider == "chat" {
+                // Chat classification needs no OS SDK or Python preparation.
+                json!({"provider":"chat", "needs_chat":true, "payload":null})
+            } else {
+                Self::helper(&mut slot, c)?
+                    .exchange_with_timeout(
+                        json!({"op":"classify", "text":text,
                 "verse":input["verse"], "settings":c.haiku.platform_ai}),
-                    Duration::from_secs_f64(c.haiku.platform_ai.timeout_sec * 2.0 + 5.0),
-                )
-                .await?;
+                        Duration::from_secs_f64(c.haiku.platform_ai.timeout_sec * 2.0 + 5.0),
+                    )
+                    .await?
+            };
             let mut provider = response["provider"].clone();
             let mut payload = response["payload"].clone();
             let mut reports = vec![];
@@ -88,7 +86,10 @@ impl Classifier {
                     schema_version: 1,
                     kind: "haiku_workshop_combat_input".into(),
                     model: c.model.clone(),
-                    messages: serde_json::from_value(response["messages"].clone())?,
+                    messages: crate::workshop_input_guard::combat_messages(
+                        input["verse"].as_str().unwrap_or(""),
+                        text,
+                    ),
                     temperature: 0.0,
                     max_tokens: 120,
                     enable_thinking: false,
@@ -122,16 +123,16 @@ impl Classifier {
                 }
             }
             let mut analysis = Analysis::parse(&payload, text);
-            if analysis.action != Action::Uncertain {
-                let checked = helper
-                    .exchange(json!({"op":"validate","text":text,"payload":analysis}))
-                    .await?;
-                if checked["safe"] != true {
-                    analysis = Analysis::default();
-                }
+            if !crate::workshop_input_guard::combat_safe(
+                analysis.action.name(),
+                text,
+                &analysis.evidence,
+            ) {
+                analysis = Analysis::default();
             }
             if analysis.action == Action::Uncertain {
-                let fallback = helper
+                // The remaining fallback resolves spoken verse fragments through the dictionary.
+                let fallback = Self::helper(&mut slot, c)?
                     .exchange(json!({"op":"fallback","text":text,"workshop":input["workshop"]}))
                     .await?;
                 analysis = Analysis::parse(&fallback, text);
@@ -151,6 +152,15 @@ impl Classifier {
             let _ = helper.finish(true).await;
         }
         result
+    }
+    fn helper<'a>(slot: &'a mut Option<Helper>, c: &DialogueConfig) -> Result<&'a mut Helper> {
+        if slot.is_none() {
+            *slot = Some(Helper::start(
+                &c.python,
+                &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/combat_input_helper.py"),
+            )?);
+        }
+        Ok(slot.as_mut().unwrap())
     }
     pub async fn close(&self) {
         if let Some(helper) = self.helper.lock().await.take() {

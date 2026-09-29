@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import fcntl
+import os
 from pathlib import Path
 import re
 import signal
@@ -52,7 +53,8 @@ def fixture(*, combat_settings=None, **settings):
         control["structured_handler"] = structured
         h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), "platform_ai": {"provider": "chat"}, **settings}
         try:
-            with running(ROOT / "target/debug/dogido-rust", folder, dep, haiku_settings=h, combat_settings=combat_settings) as (base, process, log):
+            binary = Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust"))
+            with running(binary, folder, dep, haiku_settings=h, combat_settings=combat_settings) as (base, process, log):
                 state = {"sequence": 0}
                 def send(sid, **extra):
                     state["sequence"] += 1

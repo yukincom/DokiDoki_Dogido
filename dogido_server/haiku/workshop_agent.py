@@ -36,6 +36,7 @@ WORKSHOP_AGENT_ACTIONS = frozenset(
         "compare",
         "show_current",
         "stage_player_edit",
+        "stage_conversation_candidate",
         "accept_pending",
         "reject_pending",
         "close_workshop",
@@ -161,6 +162,9 @@ _STATE_CHANGE_CONTRADICTIONS = {
         r"(?:上|中|下)(?:五|七)|(?:一|二|三|1|2|3)行目"
         r")"
     ),
+    "stage_conversation_candidate": re.compile(
+        r"(?:にし(?:ない|なく)|にするな|使わない|採用しない|まだ.{0,12}(?:決めない|迷う))"
+    ),
 }
 _STATE_CHANGE_POSITIVE_MARKERS = {
     "accept_pending": re.compile(
@@ -188,12 +192,17 @@ _STATE_CHANGE_POSITIVE_MARKERS = {
         r"(?:これ|それ|この案|その案)で.{0,8}完成"
         r")"
     ),
+    "stage_conversation_candidate": re.compile(
+        r"(?:それ|その案|この案|さっき.{0,8}案|前に.{0,8}案|話した案).{0,12}"
+        r"(?:にして|でいい|でええ|でお願い|でいこう|を使って|を採用して)"
+    ),
 }
 _MUTATION_REQUIRED_PURPOSES = {
     "accept_pending": "adopt_pending",
     "reject_pending": "discard_pending",
     "close_workshop": "finish_workshop",
     "stage_player_edit": "improve_wording",
+    "stage_conversation_candidate": "improve_wording",
 }
 _INSPECTION_REQUEST_MARKERS = {
     "reading": ("読み", "よみ", "どう読む", "なんて読む", "何て読む"),
@@ -346,7 +355,7 @@ def finalize_workshop_agent_step(
         return None, "invalid_confidence"
     threshold = (
         WORKSHOP_AGENT_MUTATION_MIN_CONFIDENCE
-        if action in {"accept_pending", "reject_pending", "close_workshop", "stage_player_edit"}
+        if action in {"accept_pending", "reject_pending", "close_workshop", "stage_player_edit", "stage_conversation_candidate"}
         else WORKSHOP_AGENT_MIN_CONFIDENCE
     )
     if not 0.0 <= confidence <= 1.0 or confidence < threshold:

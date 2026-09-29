@@ -295,6 +295,8 @@ pub struct Workshop {
     /// 一句専用。実再生済みの対だけを最大4往復保持する。
     pub dialogue: VecDeque<Value>,
     pub agent_steps: VecDeque<Value>,
+    /// プレイヤーが会話で示した案。採用待ちの pending とは別に保持する。
+    pub conversation_candidate: Option<crate::workshop_candidate::Candidate>,
     pub drift_count: usize,
     pub followup: crate::workshop_followup::Stage,
     pub recovery: crate::workshop_combat::Recovery,
@@ -347,6 +349,7 @@ impl Workshop {
             close_reason: None,
             dialogue: VecDeque::new(),
             agent_steps: VecDeque::new(),
+            conversation_candidate: None,
             drift_count: 0,
             followup: crate::workshop_followup::Stage::Discussion,
             recovery: crate::workshop_combat::Recovery::default(),
@@ -364,6 +367,7 @@ impl Workshop {
         self.paused_at.is_some()
     }
     pub fn close(&mut self, reason: impl Into<String>) {
+        self.conversation_candidate = None;
         self.provisional = None;
         self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;
@@ -624,6 +628,43 @@ mod tests {
             "closed"
         );
     }
+    #[test]
+    fn current_player_idea_keeps_target_and_failures_across_history_and_pause() {
+        let now = Instant::now();
+        let mut w = Workshop::open(emission(), None, now);
+        let draft = crate::workshop_candidate::Draft {
+            proposal: crate::workshop_candidate::Proposal {
+                line_index: Some(0),
+                target_fragment: "くさち".into(),
+                replacement_text: "はる".into(),
+            },
+            evidence: "くさちをはるにするのはどう？".into(),
+            validation_codes: vec!["meter_not_exact".into()],
+        };
+        w.conversation_candidate = crate::workshop_candidate::Candidate::from_player(
+            draft,
+            &w.current_lines,
+            w.version,
+            "くさちをはるにするのはどう？",
+        );
+        assert!(w.conversation_candidate.as_ref().unwrap().is_current(
+            &w.current_lines,
+            w.version,
+            false
+        ));
+        w.dialogue.clear();
+        w.pause(now);
+        w.resume(now);
+        let c = w.conversation_candidate.as_ref().unwrap();
+        assert_eq!(c.view()["proposal"]["target_fragment"], "くさち");
+        assert_eq!(c.view()["validation_codes"][0], "meter_not_exact");
+        assert!(!c.is_current(&w.current_lines, w.version + 1, false));
+        assert!(!c.is_current(&w.current_lines, w.version, true));
+        w.close("explicit_close");
+        assert!(w.conversation_candidate.is_none());
+        assert!(!w.resume(now));
+    }
+
     #[test]
     fn pause_freezes_timeout_and_resume_excludes_combat_duration() {
         let start = Instant::now();

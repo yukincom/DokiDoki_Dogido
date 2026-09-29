@@ -2,7 +2,7 @@
 
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
-通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料と読み補正は移行用Python補助を使います。通常雑談と戦闘・環境の本文プロンプト・発話検査、照明コメント判定はRustで処理します。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索、完成句の明示直し・自作句の保存、ローカル知識回答と限定国語対話も接続済みです。国語対話中の宛先確認・保留入力の再開も接続済みです。知識質問の戦闘保留・workshop中の先行振分けと、戦闘前の会話履歴の一時保持も接続済みです。同意済みWebにも対応し、Chrome/MCPの接続部分はPythonを使います。旧分類器へのfallback等は後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
+通常会話、戦闘・環境反応の判断、明示した剣への持ち替え、音声配送をRustで接続しています。会話材料の構築と辞書トークンの取得は移行用Python補助を使い、自由文の読みの判定・整形はRustで処理します。通常雑談と戦闘・環境の本文プロンプト・発話検査、照明コメント判定はRustで処理します。自動川柳の情景音声・生成・検査・保存・掛け軸、意味相談・一行編集・検証付き修正案・採否・終了確認と、戦闘後の安全な再開、安定した単独敵が残る間の明示意思による再開も接続しています。読み訂正、指摘の参考保存、保存した句の検索、完成句の明示直し・自作句の保存、ローカル知識回答と限定国語対話も接続済みです。国語対話中の宛先確認・保留入力の再開も接続済みです。知識質問の戦闘保留・workshop中の先行振分けと、戦闘前の会話履歴の一時保持も接続済みです。同意済みWebにも対応し、Chrome/MCPの接続部分はPythonを使います。旧分類器へのfallback等は後続段階です。進行は[移行計画](../docs/rust-migration-plan.md)を参照してください。
 
 ## ビルド
 
@@ -51,7 +51,7 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 
 文分割は[voicevox-sentence-stream](https://github.com/yukincom/voicevox-sentence-stream)の日本語即時境界・180文字上限・末尾保持をRustへ移植しています。来歴とMITライセンスは[third-party](third-party/voicevox-sentence-stream/NOTICE)に保持しています。`audio_sentence_ready`に文ごとの合成時間、`audio_first_sentence`に音声準備から最初のplayer起動までの時間を出します。実際に耳へ届く時刻の計測とは区別します。
 
-通常会話のPython補助`dialogue_helper.py`は、既存の材料構築・UniDicを再利用する一件のstdio処理です。本文の初回・一度の言い直し用プロンプトと候補の検査はRustが担当します。helperの最終整形結果もRustで予測した結果へ照合します。helperはgame-eventの判断、モデルHTTP、音声、保存を担当しません。残る材料生成・読みを移した後に補助を外します。音声入力は起動設定とAECのPython補助を残し、区切り・VAD/STT呼出・配送・停止処理をRustへ移しています。川柳6種類のプロンプト組立もRustへ移行済みです。詳細は[川柳プロンプト](../docs/rust-haiku-prompts.md)を参照してください。
+通常会話のPython補助`dialogue_helper.py`は、既存の材料構築・UniDicを再利用する一件のstdio処理です。本文の初回・一度の言い直し用プロンプトと候補の検査はRustが担当します。helperの最終整形結果もRustで予測した結果へ照合します。helperはgame-eventの判断、モデルHTTP、音声、保存を担当しません。最終本文・根拠情報を検査した後、Rustが音声用の読みを作ります。辞書が必要な文だけ同じhelperへ一度問い合わせ、不要な文では読み用の通信をしません。残る材料生成等を移した後に補助を外します。音声入力は起動設定とAECのPython補助を残し、区切り・VAD/STT呼出・配送・停止処理をRustへ移しています。川柳6種類のプロンプト組立もRustへ移行済みです。詳細は[川柳プロンプト](../docs/rust-haiku-prompts.md)を参照してください。
 
 記憶の参照API三本とデバッグ用の判断記録もRustが担当します。判断記録は会話の記憶へ読み戻さず、発話の選択と実際の再生成功を区別します。[記憶APIと評価記録](../docs/rust-memory-api-and-episodes.md)を参照してください。
 
@@ -412,7 +412,7 @@ python dogido-rust/scripts/generate_event_types.py
 - messagesは既存Pythonと同じrole／文字列形式に揃えます。通信の自動再試行とリダイレクトは無効です。
 - 生成本文が不完全なJSONでも、`finish_reason=length`と本文・トークン数を上位へ返します。内容の検査・採否・再生成はドギドの処理が担当します。通常会話plannerと自動川柳の生成・検査ループは移植済みです。ゲーム中の自動発句・情景音声・保存・掛け軸も接続済みです。
 - 対象は現在のMLXの通常のChat Completions応答です。Rigは`id`・`model`・messageの`role`等を要求するため、旧Pythonが許容する省略形すべての互換実装ではありません。
-- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。句の自動保存、採用済みrevision、全文の明示直し・自作句、critique・lesson・読み訂正の形式はPythonと照合済みです。設定全体、旧分類器fallback、workshop行動記録などは引き続き移植中です。
+- LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。句の自動保存、採用済みrevision、全文の明示直し・自作句、critique・lesson・読み訂正の形式はPythonと照合済みです。workshopの全入力経路は設定済み記憶ルートの`sessions/<session_id>/long_term/haiku_workshop_turns.jsonl`へ自動記録します。受付・句の変更結果・音声結果を区別し、思考文やプロンプトは記録しません。設定全体、旧分類器fallbackなどは引き続き移植中です。
 
 ## 同意したWeb調査
 
