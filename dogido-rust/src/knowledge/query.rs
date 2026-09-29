@@ -84,10 +84,10 @@ static RESOURCE: LazyLock<Regex> = LazyLock::new(|| {
 static WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"\A{}\z", GRAMMAR.word_class)).unwrap());
 
-fn space(c: char) -> bool {
+pub(crate) fn space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
-fn normalize(text: &str) -> String {
+pub(crate) fn nfkc(text: &str) -> String {
     // Unicodeの正規化安定性を使い、Python側で未割当だった文字はそのまま保持。
     // 未割当文字の結合クラスは0なので、ここで区切っても前後の合成・順序は同じ。
     let nfkc = ComposingNormalizer::new_nfkc();
@@ -109,9 +109,15 @@ fn normalize(text: &str) -> String {
         }
     }
     result.push_str(&nfkc.normalize(&text[start..]));
-    result.replace(['～', '〜'], "~").trim_matches(space).into()
+    result
 }
-fn fold(text: &str) -> String {
+pub(crate) fn normalize(text: &str) -> String {
+    nfkc(text)
+        .replace(['～', '〜'], "~")
+        .trim_matches(space)
+        .into()
+}
+pub(crate) fn fold(text: &str) -> String {
     let mut out = String::new();
     for c in text.chars() {
         if let Some(mapped) = GRAMMAR.casefold.get(&c) {

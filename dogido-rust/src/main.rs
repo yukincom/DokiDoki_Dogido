@@ -34,6 +34,14 @@ enum Command {
     },
     /// ローカル知識検索結果の回答投影を確認する。ネットワーク・モデル生成なし。
     RenderKnowledge { request: PathBuf },
+    /// 国語資料を読み取り専用で検索する。モデル・音声・Pythonの起動なし。
+    LookupLanguage {
+        request: PathBuf,
+        #[arg(long)]
+        reference_dir: PathBuf,
+        #[arg(long)]
+        cards_path: PathBuf,
+    },
     /// 通常雑談plannerだけを比較。状態機械の投影fixtureを読み、発話・操作・保存はしない。
     PlanChat {
         request: PathBuf,
@@ -113,6 +121,25 @@ async fn main() -> Result<()> {
             } else {
                 dogido_rust::voice::run(settings).await?;
             }
+        }
+        Command::LookupLanguage {
+            request,
+            reference_dir,
+            cards_path,
+        } => {
+            let requests: Vec<dogido_rust::knowledge::retrieval::Request> =
+                serde_json::from_slice(&std::fs::read(request)?)?;
+            let paths = dogido_rust::knowledge::retrieval::Paths {
+                reference: reference_dir,
+                cards: cards_path,
+            };
+            let mut results = Vec::new();
+            for request in requests {
+                results.push(
+                    dogido_rust::knowledge::retrieval::search_async(paths.clone(), request).await?,
+                );
+            }
+            println!("{}", serde_json::to_string(&results)?);
         }
         Command::RenderKnowledge { request } => {
             let value = serde_json::from_slice(&std::fs::read(request)?)?;

@@ -1,23 +1,29 @@
-"""残る国語補助はローカル検索だけに限定する。"""
+"""国語補助は入口の一往復だけ。Pythonの資料検索へ戻さない。"""
 from pathlib import Path
 import sys
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from language_helper import handle
+from language_helper import handle, run
 
 
-@pytest.mark.parametrize("command", ["interpretation", "reply", "prompt"])
-def test_helper_no_longer_owns_model_generation_or_validation(command):
+@pytest.mark.parametrize("command", ["interpretation", "reply", "prompt", "lookup"])
+def test_helper_no_longer_owns_generation_validation_or_lookup(command):
     with pytest.raises(ValueError, match="unsupported language helper command"):
-        handle({"command":command})
+        handle({"command": command})
 
 
-def test_lookup_returns_records_without_composing_a_reply_or_comparison():
-    i={"dialogue_act":"information_request","question":"三と三は同じ？","target":"三",
-       "facet":"comparison","topic":"language","relation":"new","target_status":"explicit",
-       "evidence":[{"turn_id":"t1","quote":"三"}],"alternatives":[],"search_terms":["三"],"clarification":""}
-    result=handle({"command":"lookup","interpretation":i})
-    assert set(result) == {"stage", "lookup"}
-    assert any(f.get("allocation",{}).get("character")=="三" for f in result["lookup"]["facts"])
-    assert all(f.get("claim_status")!="input_character_comparison" for f in result["lookup"]["facts"])
+def test_language_entry_exchanges_once_without_importing_python_reader(monkeypatch):
+    import dogido_server.language_dialogue.retrieval as retrieval
+    monkeypatch.setattr(retrieval.LocalDialogueSearch, "search", lambda *a, **k: pytest.fail("Python lookup called"))
+    frames = []
+    def exchange(frame):
+        frames.append(frame)
+        return {"command": "done", "status": "answer", "text": "一学年やで。"}
+    assert run(exchange)["text"] == "一学年やで。"
+    assert frames == [{"op": "language", "stage": "start"}]
+
+
+def test_old_lookup_protocol_cannot_reintroduce_python_search():
+    with pytest.raises(ValueError, match="unsupported language helper command"):
+        run(lambda frame: {"command": "lookup", "interpretation": {}})

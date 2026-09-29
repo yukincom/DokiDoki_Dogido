@@ -1,10 +1,12 @@
 //! ローカル正本DBの回答だけを、出典境界を保って表示・音声へ投影する。
-//! 検索とDBの整合性検証は移行中のPython reader。生成モデルは介在しない。
+//! 一般知識の検索は移行中のPython reader。限定国語のreaderはcatalog/retrieval。
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+pub mod catalog;
 pub mod query;
+pub mod retrieval;
 
 const UNAVAILABLE: &str = "手元の公式資料を今は読めへんわ。推測では答えんとくで。";
 

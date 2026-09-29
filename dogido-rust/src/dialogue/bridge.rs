@@ -138,7 +138,30 @@ pub async fn render_with_route(
                     }
                     let turn = language.as_mut().unwrap();
                     let mut reply = turn.advance(&frame)?;
-                    while reply["command"] == "generate" {
+                    while matches!(reply["command"].as_str(), Some("generate" | "lookup")) {
+                        if reply["command"] == "lookup" {
+                            let interpretation = &reply["interpretation"];
+                            let request = crate::knowledge::retrieval::Request {
+                                terms: serde_json::from_value(
+                                    interpretation["search_terms"].clone(),
+                                )?,
+                                facet: interpretation["facet"]
+                                    .as_str()
+                                    .context("lookup facet")?
+                                    .into(),
+                                target: interpretation["target"]
+                                    .as_str()
+                                    .context("lookup target")?
+                                    .into(),
+                            };
+                            let paths =
+                                crate::knowledge::retrieval::Paths::from_helper(&config.helper)?;
+                            let lookup =
+                                crate::knowledge::retrieval::search_async(paths, request).await?;
+                            tracing::info!(event = "language_lookup", reader = "rust", status = ?lookup["status"]);
+                            reply = turn.advance(&json!({"stage":"lookup", "lookup":lookup}))?;
+                            continue;
+                        }
                         let request = turn.request(&config.model)?;
                         let kind = request.kind.as_str();
                         let generated = match llm.generate(&request).await {

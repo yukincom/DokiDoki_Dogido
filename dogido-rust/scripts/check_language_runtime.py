@@ -189,6 +189,8 @@ def main():
         control.pop("completion_override");flags.pop("truncate")
         passed.append("complete_looking_but_truncated_json_is_rejected_without_retry")
         close(sid)
+        assert 'event="language_lookup" reader="rust"' in log.read_text(), log.read_text()
+        passed.append("language_lookup_is_native_with_same_facts_and_no_extra_model_calls")
     print(f"PASS {len(passed)} language checks; all owned processes stopped")
     for name in passed: print(name)
 
