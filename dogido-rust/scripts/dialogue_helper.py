@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """移行途中の通常会話の純粋な補助。HTTP、音声、保存、game-event判断は実行しない。
 
-現在snapshotとRust所有の履歴を読み、既存の会話材料・prompt・発話検査を再利用する。
+現在snapshotとRust所有の履歴を読み、既存の会話材料を投影する。
+通常本文のprompt・候補検査・最大一回の再考はRustが所有する。
+narrationの最終安全網と読み変換は保持し、最終本文はRustの期待値と照合する。
 plannerと本文の実モデル生成はstdio越しにRustへ要求する。一入力ごとに終了する。
 """
 import json
@@ -30,7 +32,7 @@ except ImportError:
             return value
 from dogido_server.models import GameEvent
 from input_helper import prepared_context
-from chat_prompt_helper import prompt_input
+from chat_validation_helper import leaf_input
 from dogido_server.state_machine import DogidoStateMachine
 from dogido_server.tts_reading import prepare_text_for_tts
 from reading_overlay import apply_reading_snapshot
@@ -87,16 +89,28 @@ class BridgeLLM(DogidoLLM):
         payload["__dogido_status"] = "accepted"
         return payload
 
+    def generate_leaf_text(self, request):
+        if request.kind != "player_chat":
+            return super().generate_leaf_text(request)
+        if self.allowed_leaf != "player_chat":
+            raise ValueError("unexpected helper leaf")
+        # Rust owns cleaning, observation-name correction, acceptance and one repair.
+        # narration retains its final safety pass and authoritative fallback.
+        response = exchange({"op": "chat_leaf", "input": leaf_input(
+            request, self.model, self.settings.llm_max_tokens)})
+        text = response.get("text")
+        if not isinstance(text, str):
+            raise ValueError("invalid native chat result")
+        return text
+
     def _generate_backend_text(self, request):
         if request.kind != self.allowed_leaf:
             raise ValueError("unexpected helper leaf")
         if request.kind == "player_chat":
-            response = exchange({"op": "chat_prompt", "input": prompt_input(
-                request, self.model, self.settings.llm_max_tokens)})
-        else:
-            response = exchange({"op": "generate", "input": {"schema_version": 1, "kind": request.kind,
-                "model": self.model, "messages": build_messages(request), "temperature": request.temperature,
-                "max_tokens": request.max_tokens or self.settings.llm_max_tokens, "enable_thinking": False}})
+            raise ValueError("player_chat generation belongs to Rust")
+        response = exchange({"op": "generate", "input": {"schema_version": 1, "kind": request.kind,
+            "model": self.model, "messages": build_messages(request), "temperature": request.temperature,
+            "max_tokens": request.max_tokens or self.settings.llm_max_tokens, "enable_thinking": False}})
         return GeneratedText(**response["generated"])
 
 

@@ -7,7 +7,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-fn re(pattern: &'static str) -> Regex {
+pub(crate) fn re(pattern: &'static str) -> Regex {
     static CACHE: LazyLock<Mutex<HashMap<&'static str, Regex>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
     CACHE
@@ -20,10 +20,10 @@ fn re(pattern: &'static str) -> Regex {
 fn whitespace(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
-fn strip(s: &str) -> &str {
+pub(crate) fn strip(s: &str) -> &str {
     s.trim_matches(whitespace)
 }
-fn compact(s: &str) -> String {
+pub(crate) fn compact(s: &str) -> String {
     s.chars().filter(|c| !whitespace(*c)).collect()
 }
 fn quotes(s: &str) -> String {
@@ -55,7 +55,7 @@ fn forward(s: &str) -> bool {
         && c.iter()
             .any(|c| ('\u{3040}'..='\u{309f}').contains(c) || ('\u{4e00}'..='\u{9fff}').contains(c))
 }
-pub(super) fn clean(raw: &str) -> String {
+pub(crate) fn clean(raw: &str) -> String {
     let s = re(r"(?s)<think>.*?</think>").replace_all(raw, "");
     let s = s.replace("<|im_end|>", "").replace("<|endoftext|>", "");
     let s =
@@ -119,26 +119,36 @@ fn stripped_ascii(text: &str, d: &Value) -> String {
     s
 }
 pub(super) fn usable(text: &str, d: &Value) -> bool {
+    usability_reason(text, d).is_none()
+}
+/// Shared surface contract, including the original reason ordering.
+pub(crate) fn usability_reason(text: &str, d: &Value) -> Option<&'static str> {
+    if text.is_empty() {
+        return Some("empty_output");
+    }
     if text.chars().count() < 4 {
-        return false;
+        return Some("too_short");
     }
     let normalized = stripped_ascii(text, d);
     if re(r"[A-Za-z]{2,}").is_match(&normalized) {
-        return false;
+        return Some("non_japanese_explanation");
     }
     let chars: Vec<_> = text.chars().collect();
     if chars
         .windows(4)
         .any(|w| w[0] != '\n' && w.iter().all(|c| *c == w[0]))
     {
-        return false;
+        return Some("broken_repetition");
     }
     if re(r"(?i)^(?:ドギド|user|assistant|例\s*\d*|本番)\s*[:：]").is_match(text) {
-        return false;
+        return Some("meta_role_label");
     }
     let c: Vec<_> = normalized.chars().filter(|c| !whitespace(*c)).collect();
-    if c.is_empty() || c.iter().filter(|c| japanese(**c)).count() as f64 / (c.len() as f64) < 0.85 {
-        return false;
+    if c.is_empty() {
+        return Some("empty_output");
+    }
+    if c.iter().filter(|c| japanese(**c)).count() as f64 / (c.len() as f64) < 0.85 {
+        return Some("non_japanese_explanation");
     }
     let h = c
         .iter()
@@ -148,8 +158,15 @@ pub(super) fn usable(text: &str, d: &Value) -> bool {
         .iter()
         .filter(|c| ('\u{4e00}'..='\u{9fff}').contains(*c))
         .count();
-    h > 0 && h + k >= 3
+    if h == 0 {
+        return Some("missing_hiragana");
+    }
+    if h + k < 3 {
+        return Some("too_little_japanese");
+    }
+    None
 }
+
 fn has(s: &str, patterns: &[&str]) -> bool {
     patterns.iter().any(|p| s.contains(p))
 }
@@ -252,7 +269,7 @@ fn catalog_forbidden(d: &Value) -> Vec<String> {
         })
         .collect()
 }
-fn forbidden(text: &str, d: &Value) -> bool {
+pub(crate) fn forbidden(text: &str, d: &Value) -> bool {
     if hostile(text, d)
         && has(
             text,
@@ -284,7 +301,7 @@ fn forbidden(text: &str, d: &Value) -> bool {
 fn sep(c: char) -> bool {
     whitespace(c) || "！？!?,，．。…〜ー".contains(c)
 }
-fn repeated(text: &str) -> bool {
+pub(crate) fn repeated(text: &str) -> bool {
     let c: Vec<_> = text.chars().collect();
     // Python's (.{2,8}) separator* backreference separator* backreference.
     for start in 0..c.len() {

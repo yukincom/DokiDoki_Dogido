@@ -11,6 +11,7 @@ pub mod foreground;
 pub mod haiku;
 pub mod haiku_bridge;
 pub mod haiku_memory;
+pub mod haiku_prompt;
 pub mod haiku_record;
 pub mod haiku_response;
 pub mod ingress;
@@ -38,3 +39,5 @@ pub mod workshop_edit;
 pub mod workshop_followup;
 
 pub mod reaction_leaf;
+
+pub mod chat_validation;

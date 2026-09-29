@@ -107,10 +107,21 @@ impl Helper {
     }
 
     pub async fn prepare(&mut self, request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
-        let response = self
-            .exchange(json!({"op":"prepare", "request":request}))
-            .await?;
-        serde_json::from_value(response["messages"].clone()).context("invalid haiku prompt")
+        ensure!(
+            !self.poisoned,
+            "haiku helper protocol is closed after failure"
+        );
+        ensure!(
+            serde_json::to_vec(&json!({"op":"prepare", "request":request}))?.len()
+                < FRAME_LIMIT as usize,
+            "haiku helper request too large"
+        );
+        let messages = crate::haiku_prompt::messages(request)?;
+        ensure!(
+            crate::planner::python_json(&json!({"messages":messages})).len() < FRAME_LIMIT as usize,
+            "haiku helper response too large"
+        );
+        Ok(messages)
     }
 
     pub async fn transform(&mut self, request: TransformRequest) -> Result<LineForm> {
@@ -288,6 +299,60 @@ pub async fn run(
 mod tests {
     use super::*;
 
+    fn prompt_request() -> StructuredRequest {
+        StructuredRequest {
+            kind: "haiku_line_grounding".into(),
+            details: serde_json::Map::new(),
+            route: "chat".into(),
+            temperature: 0.0,
+            max_tokens: Some(512),
+            fallback_value: json!({}),
+        }
+    }
+
+    #[tokio::test]
+    async fn prepare_is_native_and_does_not_consume_the_dictionary_reply() {
+        let path =
+            std::env::temp_dir().join(format!("dogido-native-haiku-{}.sh", uuid::Uuid::new_v4()));
+        // This helper understands only the subsequent lexical transform, never prepare.
+        std::fs::write(
+            &path,
+            "read -r line\nprintf '{\"text\":\"かな\",\"signature\":\"かな\"}\\n'\n",
+        )
+        .unwrap();
+        let mut helper = Helper::start(Path::new("/bin/sh"), &path).unwrap();
+        let request = prompt_request();
+        let messages = helper.prepare(&request).await.unwrap();
+        assert_eq!(messages, crate::haiku_prompt::messages(&request).unwrap());
+        let mut too_large = request.clone();
+        too_large.details.insert(
+            "interpretation".into(),
+            "あ".repeat(FRAME_LIMIT as usize).into(),
+        );
+        assert!(
+            helper
+                .prepare(&too_large)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("request too large")
+        );
+        let transformed = helper
+            .transform(TransformRequest {
+                text: "仮名".into(),
+                mode: crate::haiku::TransformMode::Normalize,
+                line_index: 0,
+                atom_ids: vec![],
+                source_atoms: vec![],
+            })
+            .await
+            .unwrap();
+        assert_eq!(transformed.text, "かな");
+        assert_eq!(transformed.signature, "かな");
+        helper.finish(false).await.unwrap();
+        std::fs::remove_file(path).unwrap();
+    }
+
     #[tokio::test]
     async fn broken_or_timed_out_protocol_is_reaped_and_cannot_supply_a_late_reply() {
         for script in [
@@ -304,6 +369,14 @@ mod tests {
                 .await;
             assert!(first.is_err());
             assert!(helper.child.try_wait().unwrap().is_some());
+            assert!(
+                helper
+                    .prepare(&prompt_request())
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("closed after failure")
+            );
             assert!(
                 helper
                     .exchange(json!({"op":"test_again"}))

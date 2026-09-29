@@ -6,6 +6,7 @@ pub use web_runtime::Settings as WebSettings;
 mod assist_runtime;
 mod audio;
 mod bridge;
+mod chat_leaf_runtime;
 mod combat_runtime;
 mod environment_runtime;
 mod episode_runtime;

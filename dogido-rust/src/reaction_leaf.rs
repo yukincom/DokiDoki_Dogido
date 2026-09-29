@@ -1,7 +1,7 @@
 //! Bounded combat/environment wording. The caller owns observation and priorities.
 //! Canonical Python prompt text is frozen as data; no Python prompt or judgement runs.
 mod prompts;
-mod sanitize;
+pub(crate) mod sanitize;
 use crate::types::GenerationRequest;
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;

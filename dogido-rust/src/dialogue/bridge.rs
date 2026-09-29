@@ -138,10 +138,12 @@ pub async fn render_with_route(
     tracing::info!(event = "helper_started", ?pid);
     let mut stdin = child.stdin.take().context("helper stdin")?;
     let mut stdout = BufReader::new(child.stdout.take().context("helper stdout")?).lines();
+    let mut native_cancel = cancel.clone();
     let protocol = async {
         stdin.write_all(format!("{input}\n").as_bytes()).await?;
         let (mut plans, mut leaves) = (0, 0);
         let mut reports = Vec::new();
+        let mut expected_chat_final: Option<String> = None;
         let mut knowledge: Option<crate::knowledge::Reply> = None;
         let mut selected = false;
         let mut language: Option<crate::language::Turn> = None;
@@ -289,7 +291,38 @@ pub async fn render_with_route(
                     reports.push(output.clone());
                     output
                 }
-                Some("generate" | "chat_prompt") => {
+                Some("chat_leaf") => {
+                    ensure!(
+                        language
+                            .as_ref()
+                            .is_none_or(|t| t.finished() && t.outcome["status"] == "host_chat"),
+                        "language cannot invoke ordinary leaf before handoff"
+                    );
+                    ensure!(
+                        !routing_only
+                            && knowledge.is_none()
+                            && address_reply.is_none()
+                            && !light_plan
+                            && combat_kind.is_none()
+                            && leaves == 0,
+                        "ordinary chat leaf must be requested once after routing"
+                    );
+                    let input: crate::chat_validation::Input =
+                        serde_json::from_value(frame["input"].take())?;
+                    let turn =
+                        crate::chat_validation::Turn::new(input, &config.model, config.max_tokens)?;
+                    leaves = 1;
+                    if !selected {
+                        select_route(crate::foreground::Route::Casual)?;
+                        selected = true;
+                    }
+                    let result =
+                        super::chat_leaf_runtime::render(turn, llm, &mut native_cancel).await?;
+                    reports.extend(result.reports);
+                    expected_chat_final = Some(result.final_text);
+                    json!({"text":result.text})
+                }
+                Some("generate") => {
                     ensure!(
                         language
                             .as_ref()
@@ -306,17 +339,10 @@ pub async fn render_with_route(
                     );
                     leaves += 1;
                     ensure!(leaves <= 2, "leaf retry limit exceeded");
-                    let native_prompt = frame["op"] == "chat_prompt";
-                    let request: GenerationRequest = if native_prompt {
-                        let prompt: crate::chat_prompt::Input =
-                            serde_json::from_value(frame["input"].take())?;
-                        prompt.into_request()?
-                    } else {
-                        serde_json::from_value(frame["input"].take())?
-                    };
+                    let request: GenerationRequest = serde_json::from_value(frame["input"].take())?;
                     ensure!(
-                        native_prompt || request.kind != "player_chat",
-                        "ordinary chat requires a native prompt"
+                        request.kind != "player_chat",
+                        "ordinary chat requires Rust validation"
                     );
                     ensure!(
                         request.kind
@@ -350,6 +376,12 @@ pub async fn render_with_route(
                     }
                 }
                 Some("result") => {
+                    if let Some(expected) = &expected_chat_final {
+                        ensure!(
+                            frame["text"] == *expected,
+                            "helper changed validated chat final text"
+                        );
+                    }
                     ensure!(
                         frame.get("memory_query").is_none(),
                         "helper cannot supply recall conditions"
