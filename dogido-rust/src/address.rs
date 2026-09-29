@@ -1,4 +1,5 @@
 //! 国語対話からの話題移管。宛先不明の入力は一件だけ、元の期限・IDで保持する。
+use crate::playback::Status as PlaybackStatus;
 use icu_normalizer::ComposingNormalizer;
 use serde_json::Value;
 
@@ -74,9 +75,7 @@ pub fn plain_control(text: &str) -> bool {
         .contains(&s)
     })
 }
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn punctuation(c: char) -> bool {
     space(c) || "、,。.!！?？".contains(c)
 }
@@ -218,12 +217,14 @@ impl Pending {
             _ => Action::Wait("ambiguous_confirmation"),
         }
     }
-    pub fn playback(&mut self, turn: &str, status: &str) {
+    pub fn playback(&mut self, turn: &str, status: PlaybackStatus) {
         if let Some((id, heard)) = self.repair.as_mut().filter(|(id, _)| id == turn) {
             let _ = id;
             match status {
-                "completed" => *heard = true,
-                "failed" | "cancelled" => self.repair = None,
+                PlaybackStatus::Completed => *heard = true,
+                PlaybackStatus::Failed
+                | PlaybackStatus::Cancelled
+                | PlaybackStatus::AudioDisabled => self.repair = None,
                 _ => (),
             }
         }
@@ -286,15 +287,26 @@ mod tests {
         assert_eq!(p.input("うん"), Action::Pass);
         assert!(matches!(p.input("ねえ、ドギド"), Action::Ask(_)));
         p.repair = Some(("repair".into(), false));
-        p.playback("wrong", "completed");
+        p.playback("wrong", PlaybackStatus::Completed);
         assert_eq!(
             p.input("うん"),
             Action::Wait("confirmation_before_repair_completed")
         );
-        p.playback("repair", "failed");
-        assert!(matches!(p.input("聞いてる？"), Action::Ask(_)));
+        for status in [
+            PlaybackStatus::Failed,
+            PlaybackStatus::Cancelled,
+            PlaybackStatus::AudioDisabled,
+        ] {
+            p.repair = Some(("repair".into(), false));
+            p.playback("repair", status);
+            assert!(p.repair.is_none());
+            assert!(matches!(p.input("聞いてる？"), Action::Ask(_)));
+            // A late completion cannot turn a silent/failed repair into consent.
+            p.playback("repair", PlaybackStatus::Completed);
+            assert_eq!(p.input("うん"), Action::Pass);
+        }
         p.repair = Some(("repair2".into(), false));
-        p.playback("repair2", "completed");
+        p.playback("repair2", PlaybackStatus::Completed);
         assert_eq!(p.input("うん！"), Action::Accept);
         assert_eq!(p.input("もういい"), Action::Decline);
         assert_eq!(

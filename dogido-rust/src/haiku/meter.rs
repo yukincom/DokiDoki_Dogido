@@ -2,9 +2,7 @@
 use serde_json::{Map, Value};
 pub const TARGETS: [usize; 3] = [5, 7, 5];
 /// Python str.isspace()/re \s also includes the four C0 record separators.
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 pub fn count_japanese_sounds(text: &str) -> usize {
     text.chars()
         .filter(|c| !space(*c))

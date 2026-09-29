@@ -18,9 +18,7 @@ const FACTUAL_SCOPES: [&str; 4] = [
     "observed_state",
     "player_reported_context",
 ];
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn compact(s: &str) -> String {
     s.chars().filter(|c| !space(*c)).collect()
 }

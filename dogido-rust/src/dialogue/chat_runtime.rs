@@ -1,14 +1,10 @@
 //! Native ordinary turn: routing -> bounded plan -> materials -> bounded leaf.
 //! The Session supplies a frozen observation/history snapshot. This worker never
 //! observes events, commits history/repair, changes permissions, or opens a browser.
-use super::{
-    DialogueConfig, bridge,
-    chat_context::{CatalogLabels, Native},
-};
+use super::{DialogueConfig, bridge, chat_context::CatalogLabels};
 use crate::{
     chat_materials::{self, After, Before},
     foreground::Route,
-    input_context,
     llm::RigLlm,
     planner,
 };
@@ -28,7 +24,7 @@ fn live(cancel: &watch::Receiver<bool>) -> Result<()> {
 pub(super) async fn render(
     config: &DialogueConfig,
     llm: &RigLlm,
-    input: &Value,
+    input: &bridge::Input,
     cancel: &mut watch::Receiver<bool>,
     mut select_route: impl FnMut(Route) -> Result<()>,
     mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
@@ -61,7 +57,7 @@ pub(super) async fn render(
 async fn body(
     config: &DialogueConfig,
     llm: &RigLlm,
-    input: &Value,
+    input: &bridge::Input,
     cancel: &mut watch::Receiver<bool>,
     select_route: &mut impl FnMut(Route) -> Result<()>,
     hold_handoff: &mut impl FnMut(&Value) -> Result<bool>,
@@ -72,9 +68,7 @@ async fn body(
             json!({"op":"result","text":text,"language_status":"address_confirmation_requested","llm_reports":[]}),
         );
     }
-    let mut context: input_context::Context =
-        serde_json::from_value(input["prepared_context"].clone())
-            .context("native prepared input")?;
+    let mut context = input.context.clone().context("native prepared input")?;
     let raw = input["text"].as_str().context("native current input")?;
     // Routing/authority uses the canonical raw parser; semantic wording uses the
     // Session's separately-owned interpretation only when explicitly supplied.
@@ -159,21 +153,22 @@ async fn body(
         }
         language = Some(turn);
     }
-    // Deserialization is mandatory at the last routing boundary. Missing/stale
-    // projection is an error, never a fallback to a fresh Python state machine.
-    let mut native: Native = serde_json::from_value(input["chat_native"].clone())
+    // The Session supplies this frozen typed snapshot; missing projection is an
+    // error, never a fallback to a fresh state machine or later observation.
+    let (event, snapshot) = input
+        .snapshot
+        .as_deref()
         .context("ordinary chat needs Session chat_native snapshot")?;
+    let mut native = snapshot.clone();
     if input["workshop_fallback"] == true {
         native.context.workshop_open = false;
         native.context.workshop_details = None;
     }
-    let event =
-        serde_json::from_value(input["event"].clone()).context("native chat current event")?;
     if language.is_none() {
         select_route(Route::Casual)?;
     }
     let before = chat_materials::before_plan(
-        &event,
+        event,
         &native.settings,
         &chat_materials::PlayerInput::from(&context),
         &native.context,
@@ -333,7 +328,7 @@ mod tests {
     }
     fn input(text: &str) -> Value {
         let prepared = crate::player_text::prepare(text);
-        let context = input_context::Context::from_prepared(
+        let context = crate::input_context::Context::from_prepared(
             &prepared,
             &[],
             chrono::Local::now().fixed_offset(),
@@ -348,7 +343,7 @@ mod tests {
         let quiet = super::render(
             &c,
             &llm,
-            &input("静かにして"),
+            &input("静かにして").into(),
             &mut rx,
             |_| panic!("no route"),
             |_| panic!("no handoff"),
@@ -363,7 +358,7 @@ mod tests {
         let fixed = super::render(
             &c,
             &llm,
-            &address,
+            &address.clone().into(),
             &mut rx,
             |_| panic!("no route"),
             |_| panic!("no handoff"),
@@ -377,7 +372,7 @@ mod tests {
             let reply = super::render(
                 &c,
                 &llm,
-                &input(text),
+                &input(text).into(),
                 &mut rx,
                 |_| Ok(()),
                 |_| Ok(false),
@@ -403,7 +398,7 @@ mod tests {
             super::render(
                 &c,
                 &llm,
-                &input("静かにして"),
+                &input("静かにして").into(),
                 &mut rx,
                 |_| Ok(()),
                 |_| Ok(false),
@@ -420,7 +415,7 @@ mod tests {
             super::render(
                 &c,
                 &llm,
-                &input("静かにして"),
+                &input("静かにして").into(),
                 &mut rx,
                 |_| Ok(()),
                 |_| Ok(false),
@@ -445,10 +440,24 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        let mut job = input("こんにちは");
-        job["chat_native"] = json!({"snapshot":fixture["snapshot"],"context":fixture["context"],"settings":fixture["settings"]});
-        job["event"] = fixture["event"].clone();
-        job["language_requested"] = true.into();
+        let mut frame = input("こんにちは");
+        frame.as_object_mut().unwrap().remove("chat_native");
+        frame["event"] = fixture["event"].clone();
+        frame["language_requested"] = true.into();
+        let mut job = bridge::Input::native(
+            frame,
+            crate::events::GameEvent::parse(fixture["event"].clone()).unwrap(),
+            serde_json::from_value(json!({"snapshot":fixture["snapshot"],"context":fixture["context"],"settings":fixture["settings"]})).unwrap(),
+        );
+        job.context = Some(crate::input_context::Context::from_prepared(
+            &crate::player_text::prepare("こんにちは"),
+            &[],
+            chrono::Local::now().fixed_offset(),
+        ));
+        // The renderer consumes the frozen typed observation, not a reparsed
+        // legacy JSON frame. No chat_native JSON field is required in production.
+        job["event"] = Value::Null;
+        assert!(job.get("chat_native").is_none());
         let (_owner, mut rx) = watch::channel(false);
         let started = Instant::now();
         let result = super::render(

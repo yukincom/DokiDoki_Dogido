@@ -17,20 +17,8 @@ fn words(key: &str) -> impl Iterator<Item = &'static str> {
 fn has(text: &str, key: &str) -> bool {
     words(key).any(|word| text.contains(word))
 }
-fn fold(text: &str) -> String {
-    text.chars()
-        .map(|c| {
-            if ('ァ'..='ヶ').contains(&c) {
-                char::from_u32(c as u32 - 0x60).unwrap()
-            } else {
-                c
-            }
-        })
-        .collect()
-}
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::fold_kana as fold;
+use crate::compat::is_python_whitespace as space;
 fn compile(pattern: &str) -> Regex {
     // Pythonのstr/reに含まれるC0空白を維持する。クラス内部の置換も集合の和。
     Regex::new(&pattern.replace(r"\s", r"[\s\u001c-\u001f]")).expect("checked input regex")

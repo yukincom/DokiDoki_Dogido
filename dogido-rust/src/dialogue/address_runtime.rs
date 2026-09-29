@@ -93,7 +93,7 @@ impl Dialogue {
         let owner = self.clone();
         let monitor_sid = sid.clone();
         let generation = checked.generation;
-        let monitor = tokio::spawn(async move {
+        let monitor = super::monitor::Monitor::spawn(async move {
             let started = Instant::now();
             loop {
                 tokio::time::sleep(Duration::from_millis(25)).await;
@@ -116,8 +116,7 @@ impl Dialogue {
             &mut rx,
         )
         .await;
-        monitor.abort();
-        let _ = monitor.await;
+        monitor.finish().await;
         let forward = {
             let mut d = self.data.lock().unwrap();
             let valid = !d.stopped
@@ -339,6 +338,7 @@ impl Dialogue {
 mod tests {
     use super::*;
     use crate::dialogue::DialogueConfig;
+    use crate::playback::Status as PlaybackStatus;
 
     fn held() -> std::sync::Arc<Dialogue> {
         let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
@@ -424,7 +424,7 @@ mod tests {
             "s",
             "original",
             0,
-            "completed",
+            PlaybackStatus::Completed,
             Some(&json!({"text":"古い返答"}))
         ));
         {

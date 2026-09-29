@@ -6,16 +6,7 @@ static DATA: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("prompts.json")).expect("reaction prompt data")
 });
 
-pub(super) fn truth(v: &Value) -> bool {
-    match v {
-        Value::Null => false,
-        Value::Bool(v) => *v,
-        Value::String(v) => !v.is_empty(),
-        Value::Array(v) => !v.is_empty(),
-        Value::Object(v) => !v.is_empty(),
-        Value::Number(v) => v.as_f64() != Some(0.0),
-    }
-}
+pub(super) use crate::compat::json_truthy as truth;
 pub(super) fn pystr(v: &Value) -> String {
     match v {
         Value::Null => "None".into(),

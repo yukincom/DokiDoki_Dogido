@@ -1,4 +1,5 @@
 //! Web同意・実再生・一回だけの検索・読書期限。外部処理と状態変更を分離する。
+use crate::playback::Status as PlaybackStatus;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 pub mod model;
@@ -183,15 +184,13 @@ impl State {
         }
     }
     /// hostが同じsession epochと実際のplayer終了を確認した後だけ呼ぶ。
-    pub fn playback(&mut self, id: &str, status: &str) -> Option<Proposal> {
-        if !["completed", "failed", "cancelled", "audio_disabled"].contains(&status)
-            || self.departure.as_deref() != Some(id)
-        {
+    pub fn playback(&mut self, id: &str, status: PlaybackStatus) -> Option<Proposal> {
+        if !status.ends_playback() || self.departure.as_deref() != Some(id) {
             return None;
         }
         self.departure = None;
         let p = self.proposal.take();
-        if status == "completed" {
+        if status == PlaybackStatus::Completed {
             self.searching = Some(id.into());
             p
         } else {
@@ -246,29 +245,36 @@ mod tests {
     fn matching_completion_consumes_once_and_failed_or_revoked_never_starts() {
         let mut s = State::default();
         s.propose(proposal(), 0);
-        assert!(s.playback("invented", "completed").is_none());
+        assert!(s.playback("invented", PlaybackStatus::Completed).is_none());
         let r = s.consent("accept", 1);
         let id = r["web_departure"].as_str().unwrap();
         assert_eq!(s.consent("accept", 2)["text"], "");
-        assert!(s.playback("wrong", "completed").is_none());
-        assert!(s.playback(id, "started").is_none());
-        assert!(s.playback(id, "completed").is_some());
-        assert!(s.playback(id, "completed").is_none());
-        for status in ["failed", "cancelled", "audio_disabled"] {
+        assert!(s.playback("wrong", PlaybackStatus::Completed).is_none());
+        assert!(s.playback(id, PlaybackStatus::Started).is_none());
+        assert!(s.playback(id, PlaybackStatus::Completed).is_some());
+        assert!(s.playback(id, PlaybackStatus::Completed).is_none());
+        for status in [
+            PlaybackStatus::Failed,
+            PlaybackStatus::Cancelled,
+            PlaybackStatus::AudioDisabled,
+        ] {
             s.propose(proposal(), 0);
             let r = s.consent("accept", 1);
             let id = r["web_departure"].as_str().unwrap();
             assert!(s.playback(id, status).is_none());
             assert!(s.departure.is_none());
             assert!(s.proposal.is_none());
-            assert!(s.playback(id, "completed").is_none());
+            assert!(s.playback(id, PlaybackStatus::Completed).is_none());
         }
         s.propose(proposal(), 0);
         let r = s.consent("accept", 1);
         s.consent("uncertain", 2);
         assert!(
-            s.playback(r["web_departure"].as_str().unwrap(), "completed")
-                .is_none()
+            s.playback(
+                r["web_departure"].as_str().unwrap(),
+                PlaybackStatus::Completed
+            )
+            .is_none()
         );
     }
     #[test]
@@ -278,7 +284,7 @@ mod tests {
         s.propose(p.clone(), 0);
         let r = s.consent("accept", 1);
         let id = r["web_departure"].as_str().unwrap();
-        s.playback(id, "completed");
+        s.playback(id, PlaybackStatus::Completed);
         let result = SearchResult {
             status: "page_opened".into(),
             search_url: "https://www.google.com/search?q=fox".into(),

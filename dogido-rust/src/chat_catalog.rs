@@ -70,30 +70,13 @@ pub fn catalog() -> &'static Catalog {
     &CATALOG
 }
 pub(crate) fn strip(s: &str) -> &str {
-    s.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
+    s.trim_matches(crate::compat::is_python_whitespace)
 }
 /// Canonical kana-only folding: no NFKC, case folding or whitespace rewriting.
-pub fn fold_kana(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if ('ァ'..='ヶ').contains(&c) {
-                char::from_u32(c as u32 - 0x60).unwrap()
-            } else {
-                c
-            }
-        })
-        .collect()
+pub fn fold_kana(text: &str) -> String {
+    crate::compat::fold_kana(text)
 }
-pub(crate) fn truth(v: &Value) -> bool {
-    match v {
-        Value::Null => false,
-        Value::Bool(b) => *b,
-        Value::Number(n) => n.as_f64() != Some(0.0),
-        Value::String(s) => !s.is_empty(),
-        Value::Array(a) => !a.is_empty(),
-        Value::Object(o) => !o.is_empty(),
-    }
-}
+pub(crate) use crate::compat::json_truthy as truth;
 // Catalogue fields are strings in the shipped schema. Scalar coercion also
 // preserves the canonical legacy string-entry format and scalar aliases.
 pub(crate) fn text(v: &Value) -> String {

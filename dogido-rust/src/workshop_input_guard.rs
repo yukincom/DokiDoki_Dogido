@@ -40,9 +40,7 @@ static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
     }
     patterns
 });
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn quoted(text: &str, evidence: &str) -> bool {
     let stripped = evidence.trim_matches(space);
     if stripped.chars().count() >= 2

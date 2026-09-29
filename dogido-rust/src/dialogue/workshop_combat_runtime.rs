@@ -37,8 +37,15 @@ pub(super) fn applicable(s: &Session, id: &str, version: u64) -> bool {
         })
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum NoticeEnd {
+    Completed,
+    Consumed,
+    Retry,
+}
+
 /// 新入力・手動停止は声かけを消費する。それ以外の配送失敗は句を保持して再度待つ。
-pub(super) fn finish_notice(s: &mut Session, id: &str, version: u64, status: &str) {
+pub(super) fn finish_notice(s: &mut Session, id: &str, version: u64, status: NoticeEnd) {
     let Some(w) = s
         .haiku
         .workshop
@@ -49,10 +56,10 @@ pub(super) fn finish_notice(s: &mut Session, id: &str, version: u64, status: &st
     };
     let reason = w.recovery.reason;
     w.recovery = Recovery::default();
-    if status == "completed" {
+    if status == NoticeEnd::Completed {
         w.followup = Stage::CombatResumeConfirmation;
         w.record_activity(Instant::now());
-    } else if !matches!(status, "new_player_input" | "manual_interrupt") {
+    } else if status == NoticeEnd::Retry {
         w.pause(Instant::now());
         w.recovery.reason = reason;
         w.recovery.retry_at = Some(Instant::now() + Duration::from_secs(2));

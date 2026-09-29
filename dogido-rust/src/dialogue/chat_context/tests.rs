@@ -1,5 +1,6 @@
 use super::*;
 use crate::dialogue::{Dialogue, DialogueConfig};
+use crate::playback::Status as PlaybackStatus;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -375,7 +376,7 @@ async fn non_status_structure_player_name_and_time_domain_boundaries_are_explici
         "s",
         "unknown",
         u64::MAX,
-        "completed",
+        PlaybackStatus::Completed,
         Some(&json!({"text":"猫がいる"}))
     ));
     assert_eq!(

@@ -63,6 +63,7 @@ impl Dialogue {
 mod tests {
     use super::*;
     use crate::dialogue::DialogueConfig;
+    use crate::playback::Status as PlaybackStatus;
     use serde_json::json;
     use tokio::sync::watch;
 
@@ -76,8 +77,8 @@ mod tests {
                 "input_at_ms":0, "player_input_text":"枕詞って何？"}));
         }
         let result = json!({"text":"定型的な言葉やで。", "knowledge_status":"found"});
-        dialogue.update("s", "heard", 0, "queued", Some(&result));
-        dialogue.update("s", "heard", 0, "completed", Some(&result));
+        dialogue.update("s", "heard", 0, PlaybackStatus::Queued, Some(&result));
+        dialogue.update("s", "heard", 0, PlaybackStatus::Completed, Some(&result));
         {
             let mut d = dialogue.data.lock().unwrap();
             d.rows
@@ -96,7 +97,13 @@ mod tests {
                 .select_foreground("s", "cancelled", 0, Route::Learning)
                 .is_err()
         );
-        assert!(!dialogue.update("s", "cancelled", 0, "completed", Some(&result)));
+        assert!(!dialogue.update(
+            "s",
+            "cancelled",
+            0,
+            PlaybackStatus::Completed,
+            Some(&result)
+        ));
         {
             let d = dialogue.data.lock().unwrap();
             let foreground = &d.sessions["s"].foreground;

@@ -14,9 +14,7 @@ const REPLACEMENTS: &[(&str, &str)] = &[
     ("感圧版", "感圧板"),
 ];
 
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn whitespace(text: &str) -> String {
     text.split(space)
         .filter(|s| !s.is_empty())

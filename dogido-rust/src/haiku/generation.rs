@@ -637,16 +637,7 @@ pub(super) fn clean_line(text: &str) -> Option<String> {
         .trim_matches(['「', '」', '"', '\'', ' ']);
     (!text.is_empty() && !text.contains(['\n', '\r'])).then(|| text.to_owned())
 }
-pub(super) fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(b) => *b,
-        Value::Number(n) => n.as_f64() != Some(0.0),
-        Value::String(s) => !s.is_empty(),
-        Value::Array(a) => !a.is_empty(),
-        Value::Object(m) => !m.is_empty(),
-    }
-}
+pub(super) use crate::compat::json_truthy as truthy;
 pub(super) fn structured_accepted(payload: &Value) -> bool {
     payload.is_object()
         && payload

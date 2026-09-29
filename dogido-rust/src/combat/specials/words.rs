@@ -2,18 +2,8 @@ use super::*;
 use crate::events::EventTime;
 use std::{cmp::Ordering, sync::LazyLock};
 
-static NEUTRAL: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/mobs/neutral.json"
-    ))
-    .expect("neutral catalog")
-});
-static BIOMES: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/minecraft_biome.json"
-    ))
-    .expect("biome catalog")
-});
+use crate::entry_catalog::BIOMES;
+use crate::entry_catalog::NEUTRAL;
 static FALLBACKS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/fallbacks/general.json"))
         .expect("fallback catalog")

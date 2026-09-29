@@ -41,20 +41,8 @@ fn date_pattern(day: bool) -> Regex {
 fn number(s: &str) -> u32 {
     s.chars().fold(0, |v, c| v * 10 + POLICY.digits[&c])
 }
-fn fold(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if ('ァ'..='ヶ').contains(&c) {
-                char::from_u32(c as u32 - 0x60).unwrap()
-            } else {
-                c
-            }
-        })
-        .collect()
-}
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::fold_kana as fold;
+use crate::compat::is_python_whitespace as space;
 fn contains_any(text: &str, values: &[&str]) -> bool {
     values.iter().any(|v| text.contains(v))
 }

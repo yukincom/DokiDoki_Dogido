@@ -56,16 +56,7 @@ fn strings(v: &Value) -> BTreeSet<&str> {
         .filter(|s| !s.is_empty())
         .collect()
 }
-fn truth(v: &Value) -> bool {
-    match v {
-        Value::Null => false,
-        Value::Bool(b) => *b,
-        Value::Number(n) => n.as_f64() != Some(0.0),
-        Value::String(s) => !s.is_empty(),
-        Value::Array(a) => !a.is_empty(),
-        Value::Object(o) => !o.is_empty(),
-    }
-}
+use crate::compat::json_truthy as truth;
 fn cut(v: &Value, n: usize) -> String {
     sanitize::strip(text(v)).chars().take(n).collect()
 }

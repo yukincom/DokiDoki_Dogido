@@ -10,20 +10,7 @@ use std::io::{BufRead, BufReader};
 
 pub const CONTRACT: &str = "player_line_compare_and_swap_v1";
 
-pub fn reading(lines: &[HaikuLine]) -> String {
-    lines
-        .iter()
-        .map(|l| l.reading_text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-pub fn surface(lines: &[HaikuLine]) -> String {
-    lines
-        .iter()
-        .map(|l| l.surface_text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+pub use crate::haiku_record::verse::{reading, surface};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -183,7 +170,7 @@ impl Pending {
                         "unresolved_reading"
                     );
                     ensure!(
-                        count_japanese_sounds(&new.reading_text) == [5, 7, 5][i],
+                        count_japanese_sounds(&new.reading_text) == crate::haiku::meter::TARGETS[i],
                         "meter_not_exact"
                     );
                 }

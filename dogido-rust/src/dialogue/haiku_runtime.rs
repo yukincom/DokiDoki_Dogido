@@ -179,7 +179,7 @@ impl Dialogue {
             return;
         }
         let _ = active.cancel.send(true);
-        s.status = "cancelled".into();
+        s.status = PlaybackStatus::Cancelled;
         for row in d.rows.iter_mut().filter(|r| r["haiku_job_id"] == active.id) {
             if matches!(
                 row["playback_status"].as_str(),
@@ -331,7 +331,7 @@ impl Dialogue {
             id: job.clone(),
             cancel,
         });
-        s.status = "generating".into();
+        s.status = PlaybackStatus::Generating;
         d.revision += 1;
         let this = self.clone();
         let sid = sid.to_owned();
@@ -339,7 +339,14 @@ impl Dialogue {
             this.run_haiku(sid, job, observation, completed, rx).await;
         }));
     }
-    fn haiku_row(&self, sid: &str, job: &str, part: &str, text: &str, status: &str) -> bool {
+    fn haiku_row(
+        &self,
+        sid: &str,
+        job: &str,
+        part: &str,
+        text: &str,
+        status: PlaybackStatus,
+    ) -> bool {
         let mut d = self.data.lock().unwrap();
         if !current(&d, sid, job) {
             return false;
@@ -356,7 +363,7 @@ impl Dialogue {
             d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"haiku_job_id":job,"session_id":sid,"category":if part=="poem"{"haiku"}else{"speech"},"text":text,"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both","source":"automatic_haiku","playback_status":status}));
         }
         let s = d.sessions.get_mut(sid).unwrap();
-        s.status = status.into();
+        s.status = status;
         s.haiku.last_activity = Instant::now();
         d.revision += 1;
         tracing::info!(
@@ -364,7 +371,7 @@ impl Dialogue {
             session_id = sid,
             job_id = job,
             part,
-            status,
+            status = status.as_str(),
             text
         );
         true
@@ -379,7 +386,7 @@ impl Dialogue {
         cancel: &mut watch::Receiver<bool>,
     ) -> Result<()> {
         ensure!(
-            self.haiku_row(sid, job, part, text, "queued"),
+            self.haiku_row(sid, job, part, text, PlaybackStatus::Queued),
             "haiku superseded"
         );
         if !self.config.audio_enabled {
@@ -388,7 +395,7 @@ impl Dialogue {
                 "cancelled"
             );
             ensure!(
-                self.haiku_row(sid, job, part, text, "audio_disabled"),
+                self.haiku_row(sid, job, part, text, PlaybackStatus::AudioDisabled),
                 "haiku superseded"
             );
             return Ok(());
@@ -397,11 +404,11 @@ impl Dialogue {
         voice.speed = voice.haiku_speed;
         self.audio
             .speak(&voice, spoken, cancel, || {
-                self.haiku_row(sid, job, part, text, "started");
+                self.haiku_row(sid, job, part, text, PlaybackStatus::Started);
             })
             .await?;
         ensure!(
-            self.haiku_row(sid, job, part, text, "completed"),
+            self.haiku_row(sid, job, part, text, PlaybackStatus::Completed),
             "haiku superseded"
         );
         Ok(())
@@ -557,7 +564,7 @@ impl Dialogue {
         let monitor_job = job.clone();
         let mut monitor_cancel = cancel.clone();
         let began = Instant::now();
-        let monitor = tokio::spawn(async move {
+        let monitor = super::monitor::Monitor::spawn(async move {
             loop {
                 tokio::select! {_=bridge::cancelled(&mut monitor_cancel)=>break,_=tokio::time::sleep(Duration::from_millis(100))=>{
                     let mut d=owner.data.lock().unwrap();
@@ -574,8 +581,7 @@ impl Dialogue {
             let result=self.haiku_pipeline(&sid,&job,observation,completed,&mut helper,&mut cancel).await;
             let cleanup=helper.finish(result.is_err()).await;result?;cleanup
         }.await;
-        monitor.abort();
-        let _ = monitor.await;
+        monitor.finish().await;
         {
             let mut d = self.data.lock().unwrap();
             if let Some(s) = d.sessions.get_mut(&sid)
@@ -591,11 +597,10 @@ impl Dialogue {
                 s.haiku.last_activity = Instant::now();
                 if !was_cancelled {
                     s.status = if outcome.is_ok() {
-                        "completed"
+                        PlaybackStatus::Completed
                     } else {
-                        "failed"
-                    }
-                    .into();
+                        PlaybackStatus::Failed
+                    };
                 }
                 for row in d.rows.iter_mut().filter(|r| r["haiku_job_id"] == job) {
                     if matches!(

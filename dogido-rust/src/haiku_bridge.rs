@@ -47,6 +47,14 @@ impl Helper {
         })
     }
 
+    /// Seal the protocol before awaiting cleanup so late replies cannot be reused.
+    async fn poison_and_reap(&mut self) {
+        self.poisoned = true;
+        self.stdin.take();
+        let _ = self.child.kill().await;
+        let _ = self.child.wait().await;
+    }
+
     pub async fn exchange(&mut self, frame: Value) -> Result<Value> {
         self.exchange_with_timeout(frame, Duration::from_secs(15))
             .await
@@ -83,10 +91,7 @@ impl Helper {
             .unwrap_or_else(|_| Err(anyhow::anyhow!("haiku helper timed out")));
         if result.is_err() {
             // 遅れて届く旧要求の返答を、次の行のpromptや読みとして使わない。
-            self.poisoned = true;
-            self.stdin.take();
-            let _ = self.child.kill().await;
-            let _ = self.child.wait().await;
+            self.poison_and_reap().await;
         }
         result
     }
@@ -217,10 +222,7 @@ impl Helper {
         }
         .await;
         if result.is_err() {
-            self.poisoned = true;
-            self.stdin.take();
-            let _ = self.child.kill().await;
-            let _ = self.child.wait().await;
+            self.poison_and_reap().await;
         }
         result
     }
@@ -240,10 +242,7 @@ impl Helper {
             .await?;
         let result = tokens::decode_tokens(response, &request_id);
         if result.is_err() {
-            self.poisoned = true;
-            self.stdin.take();
-            let _ = self.child.kill().await;
-            let _ = self.child.wait().await;
+            self.poison_and_reap().await;
         }
         Ok(result?
             .map(|words| tokens::neutral(&words))

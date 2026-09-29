@@ -11,15 +11,7 @@ use std::{
 
 static KANA_RUN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[ぁ-ゖー]+|[ァ-ヺー]+").unwrap());
 pub fn hiragana(text: &str) -> String {
-    text.chars()
-        .map(|c| {
-            if ('ァ'..='ヶ').contains(&c) {
-                char::from_u32(c as u32 - 0x60).unwrap()
-            } else {
-                c
-            }
-        })
-        .collect()
+    crate::compat::fold_kana(text)
 }
 pub fn signature(text: &str) -> String {
     hiragana(&fold(&nfkc(text)))

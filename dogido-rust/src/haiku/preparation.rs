@@ -423,11 +423,7 @@ impl Preparation {
                 } else {
                     None
                 };
-                let (id, position, name) = [
-                    ("line_1", "upper", "上五"),
-                    ("line_2", "middle", "中七"),
-                    ("line_3", "lower", "下五"),
-                ][i];
+                let (id, position, name) = crate::haiku_record::LinePosition::ALL[i].metadata();
                 lines.push(HaikuLine {
                     line_id: id.into(),
                     line_index: i,
@@ -464,20 +460,12 @@ impl Preparation {
             }
         }
         let surface_text = if lines.len() == 3 {
-            lines
-                .iter()
-                .map(|l| l.surface_text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n")
+            crate::haiku_record::verse::surface(&lines)
         } else {
             stripped.into()
         };
         let reading_text = if lines.len() == 3 {
-            lines
-                .iter()
-                .map(|l| l.reading_text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n")
+            crate::haiku_record::verse::reading(&lines)
         } else {
             stripped.into()
         };

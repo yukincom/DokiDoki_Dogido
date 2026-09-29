@@ -12,9 +12,7 @@ pub(super) use crate::chat_catalog::truth;
 pub(super) fn list(v: &Value) -> &[Value] {
     v.as_array().map_or(&[], Vec::as_slice)
 }
-pub(super) fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+pub(super) use crate::compat::is_python_whitespace as space;
 pub(super) fn compact(s: &str) -> String {
     lexical::hiragana(s)
         .chars()

@@ -144,16 +144,7 @@ fn normalize(text: &str) -> String {
 fn compact(text: &str) -> String {
     normalize(text).chars().filter(|c| !space(*c)).collect()
 }
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(v) => *v,
-        Value::String(s) => !s.is_empty(),
-        Value::Number(n) => n.as_f64() != Some(0.0),
-        Value::Array(a) => !a.is_empty(),
-        Value::Object(m) => !m.is_empty(),
-    }
-}
+use crate::compat::json_truthy as truthy;
 fn python_text(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),

@@ -29,29 +29,14 @@ fn list(v: &Value) -> &[Value] {
 fn cut(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
 }
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn clean(s: &str) -> String {
     s.split(space)
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
 }
-fn join_reading(lines: &[HaikuLine]) -> String {
-    lines
-        .iter()
-        .map(|l| l.reading_text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-fn join_surface(lines: &[HaikuLine]) -> String {
-    lines
-        .iter()
-        .map(|l| l.surface_text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+use crate::haiku_record::verse::{reading as join_reading, surface as join_surface};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {

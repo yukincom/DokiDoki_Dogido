@@ -19,6 +19,7 @@ mod knowledge_display;
 mod knowledge_queue;
 mod language_runtime;
 mod memory_runtime;
+mod monitor;
 mod poem_runtime;
 mod reaction_runtime;
 mod reading_runtime;
@@ -39,6 +40,7 @@ use crate::{
     ingress::{Admission, SequenceLedger},
     llm::RigLlm,
     planner::repair::Repair,
+    playback::Status as PlaybackStatus,
 };
 use anyhow::Result;
 use serde_json::{Value, json};
@@ -126,7 +128,7 @@ struct Session {
     combat_input: Option<workshop_combat_input::Pending>,
     epoch: u64,
     current_turn: String,
-    status: String,
+    status: PlaybackStatus,
     cancel: Option<watch::Sender<bool>>,
     combat: crate::combat::core::Engine,
     assist: crate::assist::AssistState,
@@ -297,7 +299,7 @@ impl Dialogue {
                 combat_input: None,
                 epoch: 0,
                 current_turn: String::new(),
-                status: "ready".into(),
+                status: PlaybackStatus::Ready,
                 cancel: None,
                 combat: crate::combat::core::Engine::default(),
                 assist: crate::assist::AssistState::new([]),
@@ -1046,8 +1048,8 @@ impl Dialogue {
         let event = s
             .latest
             .as_ref()
-            .map(|e| serde_json::to_value(e).unwrap())
-            .unwrap_or_else(|| empty_event(&s.name));
+            .cloned()
+            .unwrap_or_else(|| GameEvent::parse(empty_event(&s.name)).expect("preview event"));
         if let Some((_, Some(previous))) = expected_generation {
             s.history.replace_unanswered(&previous);
         }
@@ -1063,10 +1065,9 @@ impl Dialogue {
             .join("\n");
         let history = s.history.rows();
         let conversation_history = s.history.lines();
-        let parsed_event = GameEvent::parse(event.clone()).expect("session observation validated");
         let chat_native = match chat_context::capture(
             s,
-            &parsed_event,
+            &event,
             &self.config.combat,
             crate::chat_materials::CompletedHistory {
                 conversation_history: conversation_history.clone(),
@@ -1112,15 +1113,16 @@ impl Dialogue {
             audit.transferred();
         }
         s.current_turn = turn.clone();
-        s.status = "generating".into();
+        s.status = PlaybackStatus::Generating;
         let (language_active, language_state) = language_runtime::context(s, text);
         let input = json!({"audit_before":audit_before,"audit_private":private,"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "source":source,"language_active":language_active,"language_state":language_state,
             "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
-            "text":text,"interpreted_text":interpreted_text,"history":history,"conversation_history":conversation_history,"chat_native":chat_native,
+            "text":text,"interpreted_text":interpreted_text,"history":history,"conversation_history":conversation_history,
             "event_digest":event_digest,"event":event});
+        let input = bridge::Input::native(input, event, chat_native);
         if workshop.is_none()
             && s.web.state.research.is_none()
             && poem_input.is_none()
@@ -1219,7 +1221,7 @@ impl Dialogue {
         sid: &str,
         turn: &str,
         epoch: u64,
-        status: &str,
+        status: PlaybackStatus,
         result: Option<&Value>,
     ) -> bool {
         let mut d = self.data.lock().unwrap();
@@ -1237,7 +1239,7 @@ impl Dialogue {
             .unwrap_or("")
             .to_owned();
         if current
-            && status == "queued"
+            && status == PlaybackStatus::Queued
             && let Some(wid) = workshop_id.as_ref()
         {
             let valid = d
@@ -1268,13 +1270,17 @@ impl Dialogue {
                 return false;
             }
         }
-        let status = if !current { "cancelled" } else { status };
+        let status = if !current {
+            PlaybackStatus::Cancelled
+        } else {
+            status
+        };
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
             row["playback_status"] = status.into();
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
             if let Some(result) = result {
                 knowledge_display::attach(row, result);
-                if status == "queued"
+                if status == PlaybackStatus::Queued
                     && row["conversation_route"].is_null()
                     && result["memory_action"].is_null()
                     && (workshop_id.is_none()
@@ -1329,18 +1335,9 @@ impl Dialogue {
             let now = self.clock.elapsed().as_millis() as u64;
             let player_at = row.and_then(|r| r["input_at_ms"].as_u64()).unwrap_or(now);
             let s = d.sessions.get_mut(sid).unwrap();
-            s.status = status.into();
+            s.status = status;
             s.haiku.last_activity = Instant::now();
-            if matches!(
-                status,
-                "completed"
-                    | "cancelled"
-                    | "failed"
-                    | "unsupported"
-                    | "quiet"
-                    | "not_selected"
-                    | "audio_disabled"
-            ) {
+            if status.is_terminal() {
                 s.cancel = None;
             }
             if let Some(p) = s.address.as_mut() {
@@ -1352,7 +1349,7 @@ impl Dialogue {
                 let workshop_reply = workshop_id.is_some()
                     && result["workshop_action"] != "unrelated"
                     && !knowledge_detour;
-                if status == "queued"
+                if status == PlaybackStatus::Queued
                     && !workshop_reply
                     && result["memory_action"].is_null()
                     && result["web_private"] != true
@@ -1363,7 +1360,7 @@ impl Dialogue {
                             .select(turn, &player_text, route, now, player_at);
                     }
                 }
-                if status == "queued" && workshop_id.is_some() && !knowledge_detour {
+                if status == PlaybackStatus::Queued && workshop_id.is_some() && !knowledge_detour {
                     if !workshop_reply {
                         s.history.push(turn, "user", &player_text);
                     }
@@ -1406,7 +1403,7 @@ impl Dialogue {
                         }
                     }
                 }
-                if status == "completed"
+                if status == PlaybackStatus::Completed
                     && !knowledge_detour
                     && let Some(w) = s
                         .haiku
@@ -1439,16 +1436,16 @@ impl Dialogue {
                         }
                     }
                 }
-                if status == "queued"
+                if status == PlaybackStatus::Queued
                     && !workshop_reply
                     && let Ok(repair) = serde_json::from_value::<Repair>(result["repair"].clone())
                 {
                     s.history.annotate(turn, &repair);
                 }
-                if status == "completed" {
+                if status == PlaybackStatus::Completed {
                     web_runtime::completed(s, turn, &player_text, result);
                 }
-                if status == "completed"
+                if status == PlaybackStatus::Completed
                     && !workshop_reply
                     && result["memory_action"].is_null()
                     && result["web_private"] != true
@@ -1481,7 +1478,7 @@ impl Dialogue {
             }
         }
         d.revision += 1;
-        let record = if status == "queued" {
+        let record = if status == PlaybackStatus::Queued {
             d.rows
                 .iter()
                 .find(|r| r["turn_id"] == turn)
@@ -1510,7 +1507,7 @@ impl Dialogue {
             event = "dialogue_status",
             session_id = sid,
             turn_id = turn,
-            playback_status = status
+            playback_status = status.as_str()
         );
         current
     }
@@ -1519,7 +1516,7 @@ impl Dialogue {
         sid: String,
         turn: String,
         epoch: u64,
-        mut input: Value,
+        mut input: bridge::Input,
         cancel: watch::Receiver<bool>,
     ) {
         let before = input
@@ -1549,11 +1546,11 @@ impl Dialogue {
         sid: String,
         turn: String,
         epoch: u64,
-        mut input: Value,
+        mut input: bridge::Input,
         mut cancel: watch::Receiver<bool>,
     ) {
         let started = Instant::now();
-        let permit = tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,"cancelled",None);return;}, p=self.serial.acquire()=>p.unwrap() };
+        let permit = tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,PlaybackStatus::Cancelled,None);return;}, p=self.serial.acquire()=>p.unwrap() };
         // An earlier authorized save may have completed while this turn waited.
         // Rebuild the read-only context before planning against that new version.
         if input["workshop"].is_object() && input["poem_input"].is_null() {
@@ -1578,7 +1575,7 @@ impl Dialogue {
         let mut monitor_cancel = cancel.clone();
         let workshop_id = input["workshop"]["workshop_id"].as_str().map(str::to_owned);
         let provisional_target = input["workshop"]["provisional"].as_str().map(str::to_owned);
-        let monitor = tokio::spawn(async move {
+        let monitor = monitor::Monitor::spawn(async move {
             loop {
                 tokio::select! {
                     _=bridge::cancelled(&mut monitor_cancel)=>break,
@@ -1715,12 +1712,24 @@ impl Dialogue {
                 }
                 if let Some(unsupported) = result.get("unsupported").cloned() {
                     result["error"] = unsupported;
-                    self.update(&sid, &turn, epoch, "unsupported", Some(&result));
+                    self.update(
+                        &sid,
+                        &turn,
+                        epoch,
+                        PlaybackStatus::Unsupported,
+                        Some(&result),
+                    );
                 } else if result["language_status"] == "awaiting_address" {
-                    self.update(&sid, &turn, epoch, "not_selected", Some(&result));
+                    self.update(
+                        &sid,
+                        &turn,
+                        epoch,
+                        PlaybackStatus::NotSelected,
+                        Some(&result),
+                    );
                 } else if result["text"].as_str().is_none_or(|s| s.is_empty()) {
-                    self.update(&sid, &turn, epoch, "quiet", Some(&result));
-                } else if self.update(&sid, &turn, epoch, "queued", Some(&result)) {
+                    self.update(&sid, &turn, epoch, PlaybackStatus::Quiet, Some(&result));
+                } else if self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&result)) {
                     tracing::info!(
                         event = "dialogue_reply",
                         session_id = sid,
@@ -1735,28 +1744,28 @@ impl Dialogue {
                             result["spoken_text"].as_str().unwrap_or(""),
                             &mut cancel,
                             || {
-                                self.update(&sid, &turn, epoch, "started", None);
+                                self.update(&sid, &turn, epoch, PlaybackStatus::Started, None);
                             },
                         )
                         .await;
                     let status = match playback {
-                        Ok(()) => "completed",
+                        Ok(()) => PlaybackStatus::Completed,
                         Err(error) => {
                             result["error"] = error.to_string().into();
                             if *cancel.borrow() {
-                                "cancelled"
+                                PlaybackStatus::Cancelled
                             } else if !self.config.audio_enabled {
                                 result.as_object_mut().unwrap().remove("error");
-                                "audio_disabled"
+                                PlaybackStatus::AudioDisabled
                             } else {
-                                "failed"
+                                PlaybackStatus::Failed
                             }
                         }
                     };
                     // Web開始は音声プロセスの実終了と同じepochの確認後だけ。
                     self.web_playback(&sid, epoch, &result, status);
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
-                        && status == "completed"
+                        && status == PlaybackStatus::Completed
                         && result["workshop_action"].is_null()
                         && result["knowledge_status"].is_null()
                         && result["memory_action"].is_null();
@@ -1768,16 +1777,15 @@ impl Dialogue {
                     &turn,
                     epoch,
                     if *cancel.borrow() {
-                        "cancelled"
+                        PlaybackStatus::Cancelled
                     } else {
-                        "failed"
+                        PlaybackStatus::Failed
                     },
                     Some(&json!({"error":error.to_string()})),
                 );
             }
         }
-        monitor.abort();
-        let _ = monitor.await;
+        monitor.finish().await;
         drop(permit);
         if completed {
             self.try_start_haiku(&sid, true);
@@ -1878,15 +1886,33 @@ mod tests {
                     "player_input_text":"枕詞って何？", "created_at":"2026-09-27T00:00:00Z"}));
             }
         }
-        assert!(dialogue.update("knowledge-session", "first", 0, "queued", Some(&result)));
-        assert!(dialogue.update("knowledge-session", "first", 0, "failed", Some(&result)));
+        assert!(dialogue.update(
+            "knowledge-session",
+            "first",
+            0,
+            PlaybackStatus::Queued,
+            Some(&result)
+        ));
+        assert!(dialogue.update(
+            "knowledge-session",
+            "first",
+            0,
+            PlaybackStatus::Failed,
+            Some(&result)
+        ));
         assert!(
             dialogue.data.lock().unwrap().sessions["knowledge-session"]
                 .history
                 .completed_pairs()
                 .is_empty()
         );
-        assert!(dialogue.update("knowledge-session", "first", 0, "completed", Some(&result)));
+        assert!(dialogue.update(
+            "knowledge-session",
+            "first",
+            0,
+            PlaybackStatus::Completed,
+            Some(&result)
+        ));
         {
             let data = dialogue.data.lock().unwrap();
             let session = &data.sessions["knowledge-session"];
@@ -2058,7 +2084,7 @@ mod tests {
             "test-session",
             "test-turn",
             0,
-            "completed",
+            PlaybackStatus::Completed,
             Some(&json!({"text":"こんにちは。"}))
         ));
         let snapshot = dialogue.snapshot(None);

@@ -162,10 +162,7 @@ pub fn validate_lines(text: &str, source: &str, lines: &[HaikuLine]) -> Result<(
     );
     for (i, l) in lines.iter().enumerate() {
         ensure!(
-            l.line_index == i
-                && l.line_id == format!("line_{}", i + 1)
-                && l.position == ["upper", "middle", "lower"][i]
-                && l.canonical_name == ["上五", "中七", "下五"][i]
+            crate::haiku_record::LinePosition::ALL[i].matches(l)
                 && l.surface_text == expected[i]
                 && l.provenance == source
                 && !l.reading_text.is_empty()

@@ -68,6 +68,16 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
 
             def reject_chat(sid):
                 got = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "こんにちは"})
+                if got.get("reason") == "knowledge_input_routing":
+                    # Danger input is first classified for deferred knowledge.
+                    # Acceptance of that classifier is not chat acceptance; the
+                    # ordinary greeting must still fail the same safety gate.
+                    routing_turn = got["turn_id"]
+                    def forwarded():
+                        item = next((r for r in snapshot(base)["utterances"]
+                                     if r["turn_id"] == routing_turn), None)
+                        return item.get("forwarded_input") if item else None
+                    got = wait_for(forwarded)
                 assert not got["accepted"] and got["reason"] == "fresh_safe_snapshot_required", got
 
             # cueの開始だけではなく、本文playerまで到達してから部分通知を割り込ませる。

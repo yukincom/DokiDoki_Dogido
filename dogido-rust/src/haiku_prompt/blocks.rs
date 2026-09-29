@@ -2,16 +2,7 @@ use super::{ASSETS, asset};
 use crate::planner::python_json;
 use serde_json::{Value, json};
 
-pub(super) fn truth(v: &Value) -> bool {
-    match v {
-        Value::Null => false,
-        Value::Bool(v) => *v,
-        Value::Number(n) => n.as_f64() != Some(0.0),
-        Value::String(s) => !s.is_empty(),
-        Value::Array(a) => !a.is_empty(),
-        Value::Object(o) => !o.is_empty(),
-    }
-}
+pub(super) use crate::compat::json_truthy as truth;
 pub(super) fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
@@ -24,9 +15,7 @@ pub(super) fn string(v: &Value) -> String {
         _ => python_json(v),
     }
 }
-pub(super) fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+pub(super) use crate::compat::is_python_whitespace as space;
 pub(super) fn clean(v: &Value) -> String {
     if truth(v) {
         string(v).trim_matches(space).into()

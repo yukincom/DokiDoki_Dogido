@@ -78,7 +78,7 @@ async fn bounded(
     render_with_budget(
         config,
         &llm(),
-        input,
+        input.into(),
         cancel,
         |_| Ok(()),
         |_| Ok(false),

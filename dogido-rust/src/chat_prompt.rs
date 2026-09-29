@@ -134,9 +134,7 @@ pub fn reply_policy_line(stance: &str) -> &'static str {
     )
 }
 
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn strip(s: &str) -> &str {
     s.trim_matches(space)
 }

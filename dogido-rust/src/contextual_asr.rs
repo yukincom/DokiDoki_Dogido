@@ -19,9 +19,7 @@ pub struct Correction {
     pub distance: usize,
 }
 
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 fn stripped(s: &str) -> &str {
     s.trim_matches(space)
 }

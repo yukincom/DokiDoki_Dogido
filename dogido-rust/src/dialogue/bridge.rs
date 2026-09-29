@@ -19,6 +19,68 @@ use tokio::{
     process::Command,
 };
 
+/// Frozen Rust-owned input. Only the flexible routing projections use JSON;
+/// observation, conversation context and parsed input stay typed in-process.
+#[derive(Clone)]
+pub(super) struct Input {
+    frame: Value,
+    pub snapshot: Option<std::sync::Arc<(crate::events::GameEvent, super::chat_context::Native)>>,
+    pub context: Option<crate::input_context::Context>,
+    #[cfg(test)]
+    legacy_fixture: bool,
+}
+
+impl Input {
+    pub fn native(
+        frame: Value,
+        event: crate::events::GameEvent,
+        context: super::chat_context::Native,
+    ) -> Self {
+        Self {
+            frame,
+            snapshot: Some(std::sync::Arc::new((event, context))),
+            context: None,
+            #[cfg(test)]
+            legacy_fixture: false,
+        }
+    }
+}
+
+impl From<Value> for Input {
+    fn from(frame: Value) -> Self {
+        Self {
+            // JSON fixtures exercise the old boundary only in tests. Production
+            // callers must explicitly supply the Session-owned typed snapshot.
+            #[cfg(test)]
+            snapshot: serde_json::from_value(frame["event"].clone())
+                .ok()
+                .zip(serde_json::from_value(frame["chat_native"].clone()).ok())
+                .map(std::sync::Arc::new),
+            #[cfg(not(test))]
+            snapshot: None,
+            #[cfg(test)]
+            context: serde_json::from_value(frame["prepared_context"].clone()).ok(),
+            #[cfg(not(test))]
+            context: None,
+            #[cfg(test)]
+            legacy_fixture: frame.get("chat_native").is_none(),
+            frame,
+        }
+    }
+}
+
+impl std::ops::Deref for Input {
+    type Target = Value;
+    fn deref(&self) -> &Self::Target {
+        &self.frame
+    }
+}
+impl std::ops::DerefMut for Input {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.frame
+    }
+}
+
 pub async fn cancelled(cancel: &mut watch::Receiver<bool>) {
     loop {
         if *cancel.borrow_and_update() {
@@ -33,7 +95,7 @@ pub async fn cancelled(cancel: &mut watch::Receiver<bool>) {
 pub async fn render(
     config: &DialogueConfig,
     llm: &RigLlm,
-    input: Value,
+    input: impl Into<Input>,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
     render_with_route(config, llm, input, cancel, |_| Ok(()), |_| Ok(false)).await
@@ -42,7 +104,7 @@ pub async fn render(
 pub async fn render_with_route(
     config: &DialogueConfig,
     llm: &RigLlm,
-    input: Value,
+    input: impl Into<Input>,
     cancel: &mut watch::Receiver<bool>,
     select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
     hold_handoff: impl FnMut(&Value) -> Result<bool>,
@@ -50,7 +112,7 @@ pub async fn render_with_route(
     render_with_budget(
         config,
         llm,
-        input,
+        input.into(),
         cancel,
         select_route,
         hold_handoff,
@@ -62,7 +124,7 @@ pub async fn render_with_route(
 async fn render_with_budget(
     config: &DialogueConfig,
     llm: &RigLlm,
-    mut input: Value,
+    mut input: Input,
     cancel: &mut watch::Receiver<bool>,
     select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
     hold_handoff: impl FnMut(&Value) -> Result<bool>,
@@ -109,12 +171,16 @@ async fn render_with_budget(
                 json!({"op":"result","general_conversation":context.general_conversation()}),
             );
         }
-        input["prepared_knowledge_query"] = serde_json::to_value(&context.knowledge_query)?;
-        input["prepared_context"] = serde_json::to_value(context)?;
+        #[cfg(test)]
+        if input.legacy_fixture {
+            input["prepared_knowledge_query"] = serde_json::to_value(&context.knowledge_query)?;
+            input["prepared_context"] = serde_json::to_value(&context)?;
+            input["prepared_input"] = serde_json::to_value(&prepared)?;
+        }
+        input.context = Some(context);
         input["language_requested"] = (config.language_enabled
             && (input["language_active"] == true || prepared.explicit_language))
             .into();
-        input["prepared_input"] = serde_json::to_value(prepared)?;
     }
     ensure!(
         input["op"] != "address_route",
@@ -126,11 +192,11 @@ async fn render_with_budget(
     // Retain the old reverse-protocol fixtures only as a test oracle. Production
     // ordinary turns never start dialogue_helper, even when chat_native is absent.
     #[cfg(test)]
-    if input.get("chat_native").is_none() {
+    if input.legacy_fixture {
         return legacy_test_render(
             config,
             llm,
-            input,
+            input.frame,
             cancel,
             select_route,
             hold_handoff,

@@ -29,16 +29,7 @@ struct Details {
     #[serde(default)]
     pending_verse: Option<String>,
 }
-fn truth(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(v) => *v,
-        Value::Number(v) => v.as_f64() != Some(0.0),
-        Value::String(v) => !v.is_empty(),
-        Value::Array(v) => !v.is_empty(),
-        Value::Object(v) => !v.is_empty(),
-    }
-}
+use crate::compat::json_truthy as truth;
 fn literal(key: &str) -> &'static str {
     ASSETS[key].as_str().expect("checked workshop literal")
 }

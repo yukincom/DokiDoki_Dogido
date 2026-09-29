@@ -1,7 +1,7 @@
 //! Completed automatic-haiku records, append-only memory, and initial workshop HUD.
 //! No generation, kana conversion, editing, world actions, or implicit lifecycle
 //! changes occur here. The caller supplies completion clocks and save ownership.
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use chrono::{DateTime, SecondsFormat, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -16,11 +16,8 @@ use std::{
 
 pub const DEFAULT_OPEN_TIMEOUT: Duration = Duration::from_secs(240);
 pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(120);
-const LINE_META: [(&str, &str, &str); 3] = [
-    ("line_1", "upper", "上五"),
-    ("line_2", "middle", "中七"),
-    ("line_3", "lower", "下五"),
-];
+pub mod verse;
+pub use verse::{LinePosition, ResolvedLines};
 pub(crate) static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -74,48 +71,9 @@ impl PreparedEmission {
     /// Match HaikuEmission.__post_init__: line records own display/readings and
     /// synchronize line_sources without inventing missing source evidence.
     pub fn complete(mut self, created_at: DateTime<Utc>) -> Result<Emission> {
-        ensure!(
-            self.lines.len() == 3,
-            "prepared haiku must contain three canonical lines"
-        );
-        for (index, (line_id, position, canonical_name)) in LINE_META.iter().enumerate() {
-            let line = &self.lines[index];
-            ensure!(
-                line.line_index == index
-                    && line.line_id == *line_id
-                    && line.position == *position
-                    && line.canonical_name == *canonical_name,
-                "invalid canonical haiku line identity at {index}"
-            );
-            for text in [&line.surface_text, &line.reading_text] {
-                ensure!(
-                    !text.trim().is_empty() && !text.contains(['\n', '\r']),
-                    "empty or multiline canonical haiku line at {index}"
-                );
-            }
-            ensure!(
-                !line.provenance.trim().is_empty(),
-                "missing line provenance at {index}"
-            );
-            ensure!(
-                line.source_atom_ids.iter().all(|id| !id.trim().is_empty()),
-                "empty source atom id at {index}"
-            );
-        }
-        self.surface_text = Some(
-            self.lines
-                .iter()
-                .map(|l| l.surface_text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-        );
-        self.reading_text = Some(
-            self.lines
-                .iter()
-                .map(|l| l.reading_text.as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
-        );
+        let resolved = ResolvedLines::try_from(self.lines.as_slice())?;
+        self.surface_text = Some(resolved.surface());
+        self.reading_text = Some(resolved.reading());
         let sources: Vec<_> = self.lines.iter().filter(|l| !l.source_atom_ids.is_empty()).map(|l| {
             json!({"line_index":l.line_index,"text":l.reading_text,"atom_ids":l.source_atom_ids,"sources":l.source_atoms})
         }).collect();
@@ -445,6 +403,12 @@ pub fn project_workshop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    const LINE_META: [(&str, &str, &str); 3] = [
+        ("line_1", "upper", "上五"),
+        ("line_2", "middle", "中七"),
+        ("line_3", "lower", "下五"),
+    ];
+
     use std::sync::Arc;
 
     fn prepared() -> PreparedEmission {

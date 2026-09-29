@@ -14,9 +14,7 @@ pub enum Engine {
     Unidic,
     Off,
 }
-fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as space;
 /// Explicit engine (including an empty/invalid string) wins over the environment.
 /// The caller supplies the environment snapshot; this pure function reads no process state.
 pub fn resolve_engine(explicit: Option<&str>, environment: Option<&str>) -> Engine {

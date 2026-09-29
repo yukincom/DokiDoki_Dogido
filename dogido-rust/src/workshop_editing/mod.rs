@@ -203,16 +203,19 @@ impl Engine {
             .into_iter()
             .zip(readings)
             .enumerate()
-            .map(|(i, (surface, reading))| HaikuLine {
-                line_id: format!("line_{}", i + 1),
-                line_index: i,
-                position: ["upper", "middle", "lower"][i].into(),
-                canonical_name: ["上五", "中七", "下五"][i].into(),
-                surface_text: surface,
-                reading_text: reading.unwrap(),
-                source_atom_ids: vec![],
-                source_atoms: vec![],
-                provenance: provenance.into(),
+            .map(|(i, (surface, reading))| {
+                let (id, position, name) = crate::haiku_record::LinePosition::ALL[i].metadata();
+                HaikuLine {
+                    line_id: id.into(),
+                    line_index: i,
+                    position: position.into(),
+                    canonical_name: name.into(),
+                    surface_text: surface,
+                    reading_text: reading.unwrap(),
+                    source_atom_ids: vec![],
+                    source_atoms: vec![],
+                    provenance: provenance.into(),
+                }
             })
             .collect())
     }

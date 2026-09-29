@@ -84,9 +84,7 @@ static RESOURCE: LazyLock<Regex> = LazyLock::new(|| {
 static WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"\A{}\z", GRAMMAR.word_class)).unwrap());
 
-pub(crate) fn space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+pub(crate) use crate::compat::is_python_whitespace as space;
 /// Python's Unicode-versioned str.isalnum; its regex word class adds only '_'.
 pub(crate) fn alphanumeric(c: char) -> bool {
     c != '_' && WORD.is_match(c.encode_utf8(&mut [0; 4]))

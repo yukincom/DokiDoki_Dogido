@@ -1,13 +1,7 @@
 use super::*;
+use crate::entry_catalog::BIOMES;
 use crate::haiku::source_atoms;
 use std::collections::{BTreeSet, HashMap};
-use std::sync::LazyLock;
-static BIOMES: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../data/catalogs/entries/minecraft_biome.json"
-    ))
-    .unwrap()
-});
 fn len(s: &str) -> usize {
     s.chars().count()
 }

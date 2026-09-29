@@ -1,4 +1,5 @@
 //! Web制御をgame-event workerから離し、実再生とsession寿命へ結ぶ。
+use super::PlaybackStatus;
 use super::{Data, Dialogue, Session, bridge, web_adapter};
 use crate::{
     foreground::Route,
@@ -306,7 +307,7 @@ impl Dialogue {
         sid: &str,
         epoch: u64,
         result: &Value,
-        status: &str,
+        status: PlaybackStatus,
     ) {
         let Some(id) = result["web_departure"].as_str() else {
             return;
@@ -322,7 +323,12 @@ impl Dialogue {
         let matched = s.web.state.departure.as_deref() == Some(id);
         let Some(proposal) = s.web.state.playback(id, status) else {
             if matched
-                && matches!(status, "failed" | "cancelled" | "audio_disabled")
+                && matches!(
+                    status,
+                    PlaybackStatus::Failed
+                        | PlaybackStatus::Cancelled
+                        | PlaybackStatus::AudioDisabled
+                )
                 && !s.foreground.combat_active
             {
                 s.foreground.activate(
@@ -403,7 +409,7 @@ impl Dialogue {
                 d.rows.push_back(json!({"turn_id":turn,"session_id":sid,"utterance_id":super::id("web-reply"),"epoch":epoch,"category":"learning","player_input_text":"","conversation_route":"learning","playback_status":"generating"}));
             }
             let permit = tokio::select! {biased;_=bridge::cancelled(&mut cancel)=>return,p=self.serial.acquire()=>p.unwrap()};
-            if self.update(&sid, &turn, epoch, "queued", Some(&outcome)) {
+            if self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&outcome)) {
                 let played = self
                     .audio
                     .speak(
@@ -411,7 +417,7 @@ impl Dialogue {
                         outcome["text"].as_str().unwrap(),
                         &mut cancel,
                         || {
-                            self.update(&sid, &turn, epoch, "started", None);
+                            self.update(&sid, &turn, epoch, PlaybackStatus::Started, None);
                         },
                     )
                     .await;
@@ -420,11 +426,11 @@ impl Dialogue {
                     &turn,
                     epoch,
                     if played.is_ok() {
-                        "completed"
+                        PlaybackStatus::Completed
                     } else if *cancel.borrow() {
-                        "cancelled"
+                        PlaybackStatus::Cancelled
                     } else {
-                        "failed"
+                        PlaybackStatus::Failed
                     },
                     Some(&outcome),
                 );
@@ -546,11 +552,11 @@ for line in sys.stdin:
             .unwrap();
         assert_eq!(response["text"], web::DEPARTURE);
         assert!(!log.exists());
-        d.web_playback("s", 0, &response, "started");
+        d.web_playback("s", 0, &response, PlaybackStatus::Started);
         assert!(!log.exists());
-        d.web_playback("s", 0, &response, "completed");
+        d.web_playback("s", 0, &response, PlaybackStatus::Completed);
         wait_reading(&d).await;
-        d.web_playback("s", 0, &response, "completed");
+        d.web_playback("s", 0, &response, PlaybackStatus::Completed);
         assert_eq!(fs::read_to_string(&log).unwrap().lines().count(), 1);
         assert_eq!(
             d.data.lock().unwrap().sessions["s"].foreground.route,
@@ -647,8 +653,8 @@ for line in sys.stdin:
         let (_tx, mut rx) = watch::channel(false);
         let input = json!({"operation_id":"yes","text":"はい","source":"text"});
         let r = d.web_turn("s", 0, &input, &mut rx).await.unwrap().unwrap();
-        d.web_playback("s", 0, &r, "failed");
-        d.web_playback("s", 0, &r, "completed");
+        d.web_playback("s", 0, &r, PlaybackStatus::Failed);
+        d.web_playback("s", 0, &r, PlaybackStatus::Completed);
         assert!(!log.exists());
         propose(&d);
         let r = d.web_turn("s", 0, &input, &mut rx).await.unwrap().unwrap();
@@ -656,11 +662,11 @@ for line in sys.stdin:
             let mut data = d.data.lock().unwrap();
             Dialogue::cancel_chat(&mut data, "s", "combat_priority");
         }
-        d.web_playback("s", 0, &r, "completed");
+        d.web_playback("s", 0, &r, PlaybackStatus::Completed);
         assert!(!log.exists());
         propose(&d);
         let r = d.web_turn("s", 0, &input, &mut rx).await.unwrap().unwrap();
-        d.web_playback("s", 0, &r, "completed");
+        d.web_playback("s", 0, &r, PlaybackStatus::Completed);
         wait_reading(&d).await;
         {
             let mut data = d.data.lock().unwrap();
@@ -685,7 +691,7 @@ for line in sys.stdin:
             .unwrap()
             .unwrap();
         d.data.lock().unwrap().sessions.get_mut("s").unwrap().epoch = 1;
-        d.web_playback("s", 0, &r, "completed");
+        d.web_playback("s", 0, &r, PlaybackStatus::Completed);
         assert!(!log.exists());
         {
             let mut data = d.data.lock().unwrap();
@@ -700,8 +706,14 @@ for line in sys.stdin:
             data.rows.push_back(json!({"turn_id":"private","session_id":"s","epoch":1,"player_input_text":"説明の質問","conversation_route":"web"}));
         }
         let reflection = json!({"text":"取得本文への反応","web_private":true,"web_turn":true,"language_status":"research_reflection"});
-        d.update("s", "private", 1, "queued", Some(&reflection));
-        d.update("s", "private", 1, "completed", Some(&reflection));
+        d.update("s", "private", 1, PlaybackStatus::Queued, Some(&reflection));
+        d.update(
+            "s",
+            "private",
+            1,
+            PlaybackStatus::Completed,
+            Some(&reflection),
+        );
         {
             let data = d.data.lock().unwrap();
             assert!(!data.sessions["s"].history.lines().contains("取得本文"));

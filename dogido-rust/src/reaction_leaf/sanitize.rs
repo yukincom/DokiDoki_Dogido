@@ -17,9 +17,7 @@ pub(crate) fn re(pattern: &'static str) -> Regex {
         .or_insert_with(|| Regex::new(pattern).expect("reaction regex"))
         .clone()
 }
-fn whitespace(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::compat::is_python_whitespace as whitespace;
 pub(crate) fn strip(s: &str) -> &str {
     s.trim_matches(whitespace)
 }
@@ -215,13 +213,12 @@ fn catalog_forbidden(d: &Value) -> Vec<String> {
     static CATALOG: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
         let mut out = HashMap::new();
         // Same build-time catalogue boundary as the existing Rust combat/ambient code.
-        for raw in [
-            include_str!("../../../data/catalogs/entries/mobs/hostile.json"),
-            include_str!("../../../data/catalogs/entries/mobs/neutral.json"),
-            include_str!("../../../data/catalogs/entries/mobs/passive.json"),
+        for value in [
+            &*crate::entry_catalog::HOSTILE,
+            &*crate::entry_catalog::NEUTRAL,
+            &*crate::entry_catalog::PASSIVE,
         ] {
-            let value: Value = serde_json::from_str(raw).expect("mob catalogue");
-            let items = value.get("items").unwrap_or(&value);
+            let items = value.get("items").unwrap_or(value);
             if let Some(items) = items.as_object() {
                 for (id, v) in items {
                     let patterns = v["dogido_tactics"]["forbidden_advice"]

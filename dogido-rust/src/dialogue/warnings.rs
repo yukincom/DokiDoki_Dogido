@@ -1,5 +1,6 @@
 //! 一つの戦闘判断から選ばれた音声を、同じ取消所有権で順に配送する。
 use super::{Data, Dialogue, Session, bridge, id, observation_fresh};
+use super::{PlaybackStatus, workshop_combat_runtime::NoticeEnd};
 use crate::{
     combat::model::{Delivery, Scope, Speech},
     events::GameEvent,
@@ -340,11 +341,11 @@ impl Dialogue {
         };
         if let Some(c) = s.cancel.take() {
             s.epoch += 1;
-            s.status = "cancelled".into();
+            s.status = PlaybackStatus::Cancelled;
             let _ = c.send(true);
             let turn = s.current_turn.clone();
             if let Some(p) = s.address.as_mut() {
-                p.playback(&turn, "cancelled");
+                p.playback(&turn, PlaybackStatus::Cancelled);
             }
             Self::cancel_row(d, sid, &turn, reason);
         }
@@ -358,11 +359,16 @@ impl Dialogue {
         if let Some(w) = s.warning.take() {
             for a in &w.actions {
                 if let Scope::Workshop { id, version } = &a.scope {
-                    super::workshop_combat_runtime::finish_notice(s, id, *version, reason);
+                    let end = if matches!(reason, "new_player_input" | "manual_interrupt") {
+                        NoticeEnd::Consumed
+                    } else {
+                        NoticeEnd::Retry
+                    };
+                    super::workshop_combat_runtime::finish_notice(s, id, *version, end);
                 }
             }
             let _ = w.cancel.send(true);
-            s.status = "cancelled".into();
+            s.status = PlaybackStatus::Cancelled;
             Self::cancel_row(d, sid, &w.turn, reason);
         }
     }
@@ -398,7 +404,7 @@ impl Dialogue {
             input: input.map(str::to_owned),
             protected_until: None,
         });
-        s.status = "queued".into();
+        s.status = PlaybackStatus::Queued;
         if d.rows.len() == 200 {
             d.rows.pop_front();
         }
@@ -416,7 +422,13 @@ impl Dialogue {
         tracing::info!(event="warning_queued",session_id=sid,turn_id=turn,actions=%json!(actions));
         (turn, rx)
     }
-    fn warning_update(&self, sid: &str, turn: &str, status: &str, error: Option<String>) -> bool {
+    fn warning_update(
+        &self,
+        sid: &str,
+        turn: &str,
+        status: PlaybackStatus,
+        error: Option<String>,
+    ) -> bool {
         let mut d = self.data.lock().unwrap();
         let current = !d.stopped
             && d.sessions
@@ -441,10 +453,10 @@ impl Dialogue {
                 .get(sid)
                 .is_some_and(|s| super::workshop_combat_runtime::applicable(s, id, *version))
         });
-        let status = if current && (status != "completed" || notice_valid) {
+        let status = if current && (status != PlaybackStatus::Completed || notice_valid) {
             status
         } else {
-            "cancelled"
+            PlaybackStatus::Cancelled
         };
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
             row["playback_status"] = status.into();
@@ -455,11 +467,16 @@ impl Dialogue {
         }
         if current {
             let s = d.sessions.get_mut(sid).unwrap();
-            s.status = status.into();
+            s.status = status;
             s.haiku.last_activity = Instant::now();
-            if matches!(status, "completed" | "failed" | "cancelled") {
+            if status.ends_playback() {
                 if let Some((id, version)) = notice {
-                    super::workshop_combat_runtime::finish_notice(s, &id, version, status);
+                    let end = if status == PlaybackStatus::Completed {
+                        NoticeEnd::Completed
+                    } else {
+                        NoticeEnd::Retry
+                    };
+                    super::workshop_combat_runtime::finish_notice(s, &id, version, end);
                 }
                 s.warning = None;
             }
@@ -469,7 +486,7 @@ impl Dialogue {
             event = "warning_status",
             session_id = sid,
             turn_id = turn,
-            playback_status = status
+            playback_status = status.as_str()
         );
         current
     }
@@ -496,7 +513,7 @@ impl Dialogue {
         let monitor_sid = sid.clone();
         let monitor_turn = turn.clone();
         let mut monitor_cancel = cancel.clone();
-        let monitor = tokio::spawn(async move {
+        let monitor = super::monitor::Monitor::spawn(async move {
             loop {
                 tokio::select! {
                     _=bridge::cancelled(&mut monitor_cancel)=>break,
@@ -536,7 +553,7 @@ impl Dialogue {
                 let action_began=AtomicBool::new(false);
                 let started=||{
                     if !action_began.swap(true,Ordering::SeqCst){self.protect_action(&sid,&turn,action.protect_ms);}
-                    if !began.swap(true,Ordering::SeqCst){self.warning_update(&sid,&turn,"started",None);}
+                    if !began.swap(true,Ordering::SeqCst){self.warning_update(&sid,&turn,PlaybackStatus::Started,None);}
                 };
                 let mut text=action.text.clone();
                 if let Some(leaf)=&action.leaf{
@@ -584,20 +601,19 @@ impl Dialogue {
             }
             Ok::<(),anyhow::Error>(())
         }.await;
-        monitor.abort();
-        let _ = monitor.await;
+        monitor.finish().await;
         match result {
             Ok(()) => {
-                self.warning_update(&sid, &turn, "completed", None);
+                self.warning_update(&sid, &turn, PlaybackStatus::Completed, None);
             }
             Err(e) => {
                 self.warning_update(
                     &sid,
                     &turn,
                     if *cancel.borrow() {
-                        "cancelled"
+                        PlaybackStatus::Cancelled
                     } else {
-                        "failed"
+                        PlaybackStatus::Failed
                     },
                     Some(e.to_string()),
                 );

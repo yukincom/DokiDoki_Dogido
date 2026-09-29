@@ -16,12 +16,7 @@ static FALLBACK: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/fallbacks/general.json"))
         .expect("fallback catalog")
 });
-static BIOMES: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/minecraft_biome.json"
-    ))
-    .expect("biome catalog")
-});
+use crate::entry_catalog::BIOMES;
 static THREATS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../threat_catalog.json")).expect("threat catalog")
 });
