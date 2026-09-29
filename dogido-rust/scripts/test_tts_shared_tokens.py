@@ -99,16 +99,15 @@ class SharedTokenTests(unittest.TestCase):
                     shared.handle(frame)
             getter.assert_not_called()
 
-    def test_workshop_dispatch_keeps_overlay_and_legacy_reading_separate(self):
+    def test_workshop_dispatch_is_token_only(self):
         import workshop_helper
-        with patch.object(workshop_helper, 'apply_reading_snapshot') as overlay, patch.object(canonical, '_get_unidic_tagger', return_value=lambda _: [word(kana='ネコ')]) as getter:
+        with patch.object(canonical, '_get_unidic_tagger', return_value=lambda _: [word(kana='ネコ')]) as getter:
             self.assertEqual(workshop_helper.handle(request())['tokens'][0]['surface'], '猫')
-            overlay.assert_not_called()
-            self.assertEqual(workshop_helper.handle({'op':'reading_overlay','rows':[{'surface':'猫','reading':'catalog-only'}]}), {'applied':True})
-            overlay.assert_called_once()
             getter.assert_called_once()
-            with self.assertRaises(ValueError):
-                workshop_helper.handle({'op':'reading','text':'猫','reading_engine':'off'})
+            for op in ('reading_overlay', 'reading', 'whole_verse', 'knowledge_route', 'player_edit', 'prepare_details', 'fragment_candidate'):
+                with self.subTest(op=op), self.assertRaises(ValueError):
+                    workshop_helper.handle({'op':op,'text':'猫','rows':[]})
+        self.assertNotIn('workshop_oracle', workshop_helper.__dict__)
 
 
 if __name__ == '__main__': unittest.main()

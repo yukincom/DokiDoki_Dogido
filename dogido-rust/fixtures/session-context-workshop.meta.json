@@ -1,0 +1,7 @@
+{
+  "cases": 136,
+  "canonical": {
+    "dogido_server/haiku/workshop.py": "ab5f411eff3aa01170329470ab5533e1f22c6eafa1ee0221bbbb571d0c639af3",
+    "dogido_server/haiku/materials.py": "daa84b4e3d7d11600f09bb3110862d6bc3597dfa3fd7c861f66be0c2ad10b3e3"
+  }
+}

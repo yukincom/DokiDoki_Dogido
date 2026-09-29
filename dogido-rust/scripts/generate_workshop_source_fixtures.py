@@ -20,7 +20,7 @@ def main():
     from dogido_server.haiku.workshop_context import workshop_context_details
     from dogido_server import tts_reading
     from dogido_server.entry_catalog import all_mob_entries,structure_entries
-    import workshop_helper as helper
+    import workshop_oracle as helper
     def forbidden():raise AssertionError('pure fixtures must not initialize a dictionary')
     tts_reading._get_unidic_tagger=forbidden
     out=args.output_root;atom_out=out/'haiku/source_atoms';projection_out=out/'workshop_projection'

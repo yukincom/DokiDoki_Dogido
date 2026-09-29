@@ -2,7 +2,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pytest
-from combat_input_helper import Worker, safe
+from combat_input_helper import Worker
+from combat_input_oracle import safe
 
 
 @pytest.mark.parametrize("action,text", [("close_workshop","句は終わりにしない"),
@@ -20,7 +21,7 @@ def test_configured_chat_does_not_probe_or_call_os(monkeypatch):
     w=Worker()
     try:
         r=w.handle({"op":"classify","text":"句の続き", "verse":"句", "settings":{"provider":"chat"}})
-        assert r["needs_chat"] and r["provider"]=="chat_fallback" and r["messages"]
+        assert r["needs_chat"] and r["provider"]=="chat_fallback" and "messages" not in r
         assert not w.router.settings.platform_ai_allow_model_download
     finally: w.close()
 

@@ -18,15 +18,23 @@
 
 workshop runtime の相談 details・短い同意・editor入力はこのAPIへ接続済み。
 `prepare_details` / `fixed_followup` / `revision_input` のPython操作は実行経路から外し、
-互換比較用に定義を残す。相談と修正の出典は保存済み materials だけから組み立てる。
+互換比較用oracleに定義を残す。相談と修正の出典は保存済み materials だけから組み立てる。
 
-局所編集が許可された `decide` 段階だけ、同じhelper子へ `fragment_candidate` を一度送り、
-既存の辞書依存の固定編集候補を得る。検査後・修正検証後・編集禁止の相談にはこのIPCが無い。
-候補は元のRust契約・原文evidence・CAS検査へ戻し、helper自身に採用権限を渡さない。
-モデル呼出数、全体95秒上限、取消、子回収は維持する。native投影にも旧IPCの100万byte上限を適用する。
+句と材料の照合、固定・自然な局所編集、三行の読み確定は `workshop_editing` が担当する。
+原文と解釈、行指定とfragmentの一意性、未採用案、保存済み出典、表示と読みを分離したまま、
+候補を既存の音数・hard制約・原文evidence・CAS検査へ戻す。採用・保存の権限はruntimeに残す。
+完成三行の持込みは従来どおり音数外の句も保管でき、読みが確定しない場合は推測しない。
 
-knowledge routeの句との照合、固定・自然な局所編集の辞書変換、三行の読み確定は今回の範囲外。
-新たなhelper子・辞書・モデル呼出は追加していない。既存の読み・音数・保存出典の `inspect` はRustで実行する。
+漢字の中立読みが必要な場合だけ、既存の同じhelper子へ `tts_tokens` を送る。
+Rust側でかな変換し、同一turnの同じ読み要求をcacheする。辞書なし・辞書内部の失敗は元表記へ戻し、
+IPC破損・schema不一致・取消・期限超過は成功へ変換せず子を回収する。漢字なしの照合・編集はIPC不要。
+`workshop_helper.py` は辞書SDKトークン取得だけを担当し、従来ロジックはオフライン比較専用の
+`workshop_oracle.py` に分けている。カタログの読み上書きはこの中立読みへ混ぜない。
+
+戦闘中断中の固定fallbackも同じRust部品へ接続し、OS AIの分類だけをSDK workerへ残す。
+モデル呼出数、workshop全体95秒・完成三行の15秒上限、取消、epochと子回収は維持する。
+native投影にも旧IPCの100万byte上限を適用し、新たなhelper子・辞書・モデル呼出は追加しない。
+読み・音数・保存出典の `inspect` もRustで実行する。
 
 Python正本由来で出典1,831例、相談投影408例、短い同意5,712例を比較する。
 相談投影は全項目に加えPython互換のJSON文字列も比較し、promptのキー順・空白を維持する。
@@ -39,8 +47,10 @@ python dogido-rust/scripts/generate_workshop_source_fixtures.py
 ./dogido-rust/cargo.sh test --offline workshop_followup --lib
 ```
 
-実配線の回帰検査は、canonical準備580例の全項目比較、固定編集アダプターのPython詳細・prompt・検査再呼出禁止、
-編集候補だけのIPC、IPC不要段階、旧helper応答の拒否、サイズ上限、取消と実子回収を含む。
+実配線の回帰検査は、canonical準備580例と編集・材料2,666例、元のprompt・検査の比較、
+同一辞書子の再利用、辞書失敗時の元表記、IPC不要の入力、旧helper応答の拒否、
+サイズ上限、取消・期限超過と実子回収を含む。
 模擬HTTPの `check_workshop_runtime.py` / `check_workshop_edits.py` /
-`check_workshop_revision.py` / `check_workshop_records.py` は一時ポートと所有プロセスだけを使い、
+`check_workshop_revision.py` / `check_workshop_records.py` / `check_poem_input.py` /
+`check_knowledge_handoff.py` / `check_workshop_provisional.py` は一時ポートと所有プロセスだけを使い、
 実モデル・実音声を使わず、終了時に子を回収する。

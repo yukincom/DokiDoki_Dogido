@@ -2,7 +2,7 @@
 from copy import deepcopy
 import pytest
 from check_workshop_runtime import step
-from workshop_helper import CONSULTATION_KEYS, details_for, handle
+from workshop_oracle import CONSULTATION_KEYS, details_for, handle
 
 
 def test_whole_verse_uses_existing_dictionary_records_without_meter_rewriting():

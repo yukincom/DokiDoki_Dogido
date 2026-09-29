@@ -184,7 +184,7 @@ impl State {
     }
     /// hostが同じsession epochと実際のplayer終了を確認した後だけ呼ぶ。
     pub fn playback(&mut self, id: &str, status: &str) -> Option<Proposal> {
-        if !["completed", "failed", "cancelled"].contains(&status)
+        if !["completed", "failed", "cancelled", "audio_disabled"].contains(&status)
             || self.departure.as_deref() != Some(id)
         {
             return None;
@@ -254,11 +254,13 @@ mod tests {
         assert!(s.playback(id, "started").is_none());
         assert!(s.playback(id, "completed").is_some());
         assert!(s.playback(id, "completed").is_none());
-        for status in ["failed", "cancelled"] {
+        for status in ["failed", "cancelled", "audio_disabled"] {
             s.propose(proposal(), 0);
             let r = s.consent("accept", 1);
             let id = r["web_departure"].as_str().unwrap();
             assert!(s.playback(id, status).is_none());
+            assert!(s.departure.is_none());
+            assert!(s.proposal.is_none());
             assert!(s.playback(id, "completed").is_none());
         }
         s.propose(proposal(), 0);

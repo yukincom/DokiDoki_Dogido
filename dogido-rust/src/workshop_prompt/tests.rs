@@ -141,59 +141,30 @@ fn pid(dir: &Path) -> u32 {
 }
 
 #[tokio::test]
-async fn runtime_requests_only_fragment_once_and_reuses_helper_after_native_validation() {
+async fn native_preparation_uses_no_helper_for_nonedit_or_kana_fragments() {
     for index in [0, 2, 579] {
         let case = &FIXTURES["projection_cases"][index];
         let dir = directory();
-        let mut helper = child(
-            &dir,
-            &json!({"fixed_payload":case["prepared"]["fixed_payload"]}),
-            false,
-        );
+        let mut helper = child(&dir, &Value::Null, true);
         let mut frame = case["frame"].clone();
-        let (prepared, details) = super::super::prepare_consultation(&mut helper, &mut frame)
-            .await
-            .unwrap();
+        let (prepared, details) = super::super::prepare_consultation(
+            &mut helper,
+            &mut crate::workshop_editing::Engine::default(),
+            &mut frame,
+        )
+        .await
+        .unwrap();
         assert_eq!(prepared, case["expected"]);
         assert_eq!(details, case["prepared"]["details"]);
-        let request: Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.join("request")).unwrap()).unwrap();
-        assert_eq!(request["op"], "fragment_candidate");
-        assert_eq!(frame, case["frame"], "native prepare mutated input");
-        let mut expected_request = frame.clone();
-        expected_request["op"] = json!("fragment_candidate");
-        expected_request["allowed_actions"] = details["allowed_actions"].clone();
-        assert_eq!(expected_request, request);
-        assert!(!request.as_object().unwrap().contains_key("messages"));
-        frame["op"] = json!("validate");
-        frame["payload"] = json!({"action":"ask","purpose":"continue_discussion","confidence":0.9,
-            "evidence":frame["text"],"speech":"気になるところを教えてな。","checks":[]});
-        let validated = super::super::validation::validate(&frame, &details).unwrap();
-        assert_eq!(validated["reason"], "accepted");
+        assert_eq!(frame, case["frame"]);
+        frame["payload"] = json!({"action":"ask","purpose":"continue_discussion","confidence":0.9,"evidence":frame["text"],"speech":"気になるところを教えてな。","checks":[]});
         assert_eq!(
-            std::fs::read_to_string(dir.join("request"))
-                .unwrap()
-                .lines()
-                .count(),
-            1
+            super::super::validation::validate(&frame, &details).unwrap()["reason"],
+            "accepted"
         );
-        assert_eq!(
-            helper
-                .exchange(json!({"op":"reading_overlay","rows":[]}))
-                .await
-                .unwrap()["reason"],
-            "mock"
-        );
-        let child_pid = pid(&dir);
         helper.finish(false).await.unwrap();
-        stopped(child_pid);
-        assert_eq!(
-            std::fs::read_to_string(dir.join("request"))
-                .unwrap()
-                .lines()
-                .count(),
-            2
-        );
+        stopped(pid(&dir));
+        assert!(!dir.join("request").exists());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
@@ -219,6 +190,8 @@ async fn incompatible_fragment_helper_errors_and_cancelled_extraction_are_reaped
         let blocked = matches!(mode, "timeout" | "cancel");
         let mut helper = child(&dir, &response, blocked);
         let mut frame = case["frame"].clone();
+        frame["text"] = json!("「桜」を「夏」にして");
+        let mut editing = crate::workshop_editing::Engine::default();
         let result = if mode == "cancel" {
             let (send, mut cancel) = tokio::sync::watch::channel(false);
             let trigger = async {
@@ -228,14 +201,14 @@ async fn incompatible_fragment_helper_errors_and_cancelled_extraction_are_reaped
             let render = async {
                 tokio::select! {
                     _ = crate::dialogue::bridge::cancelled(&mut cancel) => Err(anyhow::anyhow!("cancelled")),
-                    result = super::super::prepare_consultation(&mut helper, &mut frame) => result,
+                    result = super::super::prepare_consultation(&mut helper, &mut editing, &mut frame) => result,
                 }
             };
             tokio::join!(render, trigger).0
         } else {
             tokio::time::timeout(
                 Duration::from_millis(120),
-                super::super::prepare_consultation(&mut helper, &mut frame),
+                super::super::prepare_consultation(&mut helper, &mut editing, &mut frame),
             )
             .await
             .unwrap_or_else(|_| Err(anyhow::anyhow!("test turn deadline")))
@@ -297,9 +270,13 @@ async fn non_editing_phases_and_restricted_actions_do_not_use_helper() {
         let expected = prepare(&json!({"details":details}), frame.get("retry")).unwrap();
         let dir = directory();
         let mut helper = child(&dir, &Value::Null, true);
-        let (actual, projected) = super::super::prepare_consultation(&mut helper, &mut frame)
-            .await
-            .unwrap();
+        let (actual, projected) = super::super::prepare_consultation(
+            &mut helper,
+            &mut crate::workshop_editing::Engine::default(),
+            &mut frame,
+        )
+        .await
+        .unwrap();
         assert_eq!(actual, expected);
         assert_eq!(projected, details);
         helper.finish(false).await.unwrap();
@@ -317,7 +294,12 @@ async fn native_projection_limits_reject_before_fragment_ipc() {
         frame["interpreted_text"] = Value::Null;
         let dir = directory();
         let mut helper = child(&dir, &Value::Null, true);
-        let result = super::super::prepare_consultation(&mut helper, &mut frame).await;
+        let result = super::super::prepare_consultation(
+            &mut helper,
+            &mut crate::workshop_editing::Engine::default(),
+            &mut frame,
+        )
+        .await;
         assert!(result.unwrap_err().to_string().contains("too large"));
         helper.finish(false).await.unwrap();
         stopped(pid(&dir));

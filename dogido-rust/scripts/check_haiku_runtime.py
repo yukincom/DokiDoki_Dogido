@@ -21,7 +21,7 @@ DESCRIPTION = "サクラの葉と黒い斧の対比。"
 
 
 @contextmanager
-def fixture(*, combat_settings=None, **settings):
+def fixture(*, combat_settings=None, extra_args=(), **settings):
     with tempfile.TemporaryDirectory(prefix="dogido-haiku-runtime-") as temp, dependencies() as (dep, control, seen):
         folder = Path(temp)
         gate = threading.Event(); gate.set()
@@ -54,7 +54,7 @@ def fixture(*, combat_settings=None, **settings):
         h = {"interval_ms": 0, "quiet_time_ms": 0, "memory_dir": str(folder / "memory"), "platform_ai": {"provider": "chat"}, **settings}
         try:
             binary = Path(os.environ.get("DOGIDO_RUST_BINARY", ROOT / "target/debug/dogido-rust"))
-            with running(binary, folder, dep, haiku_settings=h, combat_settings=combat_settings) as (base, process, log):
+            with running(binary, folder, dep, haiku_settings=h, combat_settings=combat_settings, extra_args=extra_args) as (base, process, log):
                 state = {"sequence": 0}
                 def send(sid, **extra):
                     state["sequence"] += 1

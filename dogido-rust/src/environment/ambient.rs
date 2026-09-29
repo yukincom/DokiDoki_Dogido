@@ -63,6 +63,11 @@ pub fn defaults() -> Settings {
     s
 }
 impl Ambient {
+    /// Code-owned structure state: changed only by status snapshots or dimension resets.
+    pub fn current_structure(&self) -> Option<&str> {
+        self.places.current_structure()
+    }
+
     pub fn update(&mut self, e: &GameEvent, now: u64, complete: bool, s: &Settings) {
         let dimension = e
             .player

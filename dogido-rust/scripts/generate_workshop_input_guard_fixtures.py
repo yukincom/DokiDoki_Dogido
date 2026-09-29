@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.haiku import workshop_agent as w
 from dogido_server.llm.workshop_prompts import build_haiku_workshop_combat_input_messages
-from combat_input_helper import safe, ACTIONS
+from combat_input_oracle import safe, ACTIONS
 ROOT=Path(__file__).resolve().parents[1]/'src/workshop_input_guard'
 ROOT.mkdir(exist_ok=True)
 patterns={k:getattr(w, '_STATE_CHANGE_'+k.upper()).pattern for k in ('report','conditional','uncertain')}

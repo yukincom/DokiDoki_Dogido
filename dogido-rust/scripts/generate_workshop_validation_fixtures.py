@@ -4,7 +4,7 @@ import ast, copy, dataclasses, inspect, itertools, json, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 sys.path[:0]=[str(ROOT),str(Path(__file__).parent)]
-import workshop_helper as helper
+import workshop_oracle as helper
 from dogido_server.haiku import workshop as w, workshop_agent as a
 from dogido_server.llm.structured_contracts import _WorkshopAgentStep
 from dogido_server import tts_reading

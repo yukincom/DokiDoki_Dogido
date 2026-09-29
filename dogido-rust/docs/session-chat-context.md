@@ -1,0 +1,19 @@
+# 会話と川柳へ渡すSession観測
+
+Sessionは会話用の `ChatObservationMemory` と川柳用の `RuntimeSnapshot` を所有する。SequenceLedgerを通過した生イベントだけで会話記憶を更新する。現在の戦闘判定が実行されるフレームでは `Engine.observe → take_name_updates → ChatObservationMemory.observe` を一度だけ行い、時刻が古く戦闘判定を動かさないフレームでは空の名前更新を添えて観測記憶だけを更新する。古いsequence、重複key、閉鎖済みsession、停止済みruntimeでは更新しない。合成した環境フレームやsnapshotを再観測として書き戻さない。
+
+死亡名の再配送防止は既存のsession単位の戦闘hookが所有する。snapshot読取、本文生成、再考、再生結果、epoch変更では名前の期限を延ばさない。session終了でこの記憶を解放し、同じIDで登録し直したsessionにも継承しない。観測時刻のaware/naive混在は元の純粋memoryと同じく更新しない。投影に失敗した会話は `chat_context_unavailable` として拒否し、句のcloseや新epochへの移行より前に戻る。
+
+通常会話jobには、従来のtext、原文/解釈、history、event_digest、workshopに加えて `chat_native: {snapshot, context, settings}` を渡す。履歴は従来と同じHistory読取結果を共有する。assistantの新規履歴は従来どおり実再生completed後にだけ確定する。訂正注記、危険前の保持履歴、復帰話題のdigestも同じ原本から取り出し、会話job開始後に変更されない所有値として渡す。page本文やURLなど別経路の情報を新たに加えない。
+
+構造物はAmbientが保持するstatus_snapshot時の更新値を読む。これはPython `_update_special_biome_context` と同じタイミングで、敵死亡など他のcomplete通知に構造物が含まれても保持値を更新しない。構造物IDの正規化はPythonと同じ「最後のnamespace成分→前後空白除去→小文字化」で、未知IDも維持する。既存Rustのminecraft接頭辞だけを除去する処理との差をこの箇所で解消した。
+
+川柳用のsnapshotは新しいcomplete観測時だけ更新する。持ち物の順序は `GameEvent::parse` が型付きBTreeMapへ変換する前のJSON key順を別の非serializeフィールドへ保持し、その順を使う。部分音やambient通知はこの順序、呼称、構造物snapshotを上書きしない。観測の型・外部JSONフィールド・既存inventoryの値は変わらない。呼称は正本と同じ `meta.call_name → default_call_name → player.name → プレイヤー` の順で空白を除く。
+
+Labelsは共通カタログの読取adapterに限る。通常Mobは正規化済みlookup、MOB_LABELS fallbackとHOSTILE_LABELSはraw IDの完全一致、環境音のblock名はraw block entryのlabel-or-japaneseを使う。別の長いitem名優先処理や観測の補作はしない。
+
+workshopの短い発話材料は共通 `workshop_editing::materials` の候補生成と正本順位を使用する。現在三行と未採用三行の区別を保ち、未採用案があるときだけediting readingをそちらへ向ける。可視性で除外したbiome/skyをmetadata fallbackで復活させない。
+
+追加設定は、Pythonに既存の `player_chat_visual_retention_ms=12000`、`player_chat_hearing_retention_ms=20000`、`player_chat_name_correction_retention_ms=10000` の3項目をcombat設定Mapへ登録するだけ。閾値、呼称、weather音期限、home距離は既存設定を共用する。
+
+検証は正本label 1,365件、workshop投影136件、実EngineとSessionを結合した重複・TTL・部分通知・終了/新session・epoch・時刻混在の純粋試験。実Minecraft、実LLM、マイク、TTSはこの検証に含まない。

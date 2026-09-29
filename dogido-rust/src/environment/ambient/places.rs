@@ -9,6 +9,10 @@ pub(super) struct Places {
     structure_comments: HashMap<String, u64>,
 }
 impl Places {
+    pub fn current_structure(&self) -> Option<&str> {
+        self.structure.as_deref()
+    }
+
     pub fn update(&mut self, e: &GameEvent, now: u64, s: &Settings) {
         if e.event.name != EventName::StatusSnapshot {
             return;
@@ -17,7 +21,9 @@ impl Places {
             .world
             .structure
             .as_deref()
-            .map(catalog::norm)
+            .map(|id| {
+                crate::chat_catalog::strip(id.rsplit(':').next().unwrap_or("")).to_lowercase()
+            })
             .filter(|s| !s.is_empty());
         if structure != self.structure {
             self.structure = structure.clone();

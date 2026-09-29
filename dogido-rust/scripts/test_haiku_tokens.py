@@ -7,8 +7,14 @@ import unittest
 import haiku_tokens
 class TokenBoundary(unittest.TestCase):
     def test_import_does_not_load_preparation_or_machine(self):
-        self.assertNotIn('haiku_preparation', sys.modules)
-        self.assertNotIn('dogido_server.state_machine.machine', sys.modules)
+        # Other compatibility tests intentionally import the old engine. Inspect
+        # the production adapter in a clean interpreter, not pytest's module pool.
+        run = subprocess.run([sys.executable, "-c",
+            "import sys; import haiku_tokens; "
+            "assert 'haiku_preparation' not in sys.modules; "
+            "assert 'dogido_server.state_machine.machine' not in sys.modules"],
+            cwd=Path(haiku_tokens.__file__).parent, capture_output=True, text=True, timeout=5)
+        self.assertEqual(run.returncode, 0, run.stderr)
     def test_policy_operation_rejected_and_owned_process_exits(self):
         run = subprocess.run([sys.executable,str(Path(haiku_tokens.__file__))],input='{"op":"haiku_context"}\n',capture_output=True,text=True,timeout=5)
         self.assertEqual(run.returncode,1)

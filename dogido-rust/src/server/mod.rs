@@ -217,7 +217,7 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
     let enabled = state.dialogue.is_some();
     Json(
         json!({"ok": true, "service": "dogido-server", "version": env!("CARGO_PKG_VERSION"),
-        "runtime": "rust", "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": enabled, "llm_enabled": enabled}),
+        "runtime": "rust", "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": enabled, "llm_enabled": state.dialogue.as_ref().is_some_and(|d| d.llm_enabled())}),
     )
 }
 

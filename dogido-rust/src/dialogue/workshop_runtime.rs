@@ -21,7 +21,7 @@ impl Dialogue {
         input: &Value,
         cancel: &mut watch::Receiver<bool>,
     ) -> Result<Value> {
-        let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/workshop_helper.py");
+        let script = self.config.helper.with_file_name("workshop_helper.py");
         let mut helper = Helper::start(&self.config.python, &script)?;
         let body = self.workshop_body(input, &mut helper);
         let result = tokio::select! {
@@ -36,15 +36,16 @@ impl Dialogue {
 
     async fn workshop_body(&self, input: &Value, helper: &mut Helper) -> Result<Value> {
         let corrections = self.reading_overlay().await?;
-        helper
-            .exchange(json!({"op":"reading_overlay", "rows":corrections}))
-            .await?;
+        let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
         // 正本DBで答える一般知識を、句の相談・確認状態の消費より先に分ける。
-        let knowledge = helper
-            .exchange(json!({"op":"knowledge_route", "text":text,
+        let knowledge = editing
+            .run(
+                helper,
+                &json!({"op":"knowledge_route", "text":text,
             "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
-            "workshop":input["workshop"]}))
+            "workshop":input["workshop"]}),
+            )
             .await?;
         if knowledge["query"].is_object() {
             let prepared = crate::player_text::prepare(text);
@@ -83,8 +84,11 @@ impl Dialogue {
         let discussed = &view["conversation_candidate"];
         let lines = pending.as_ref().map_or(current.as_slice(), |p| &p.lines);
         let mut proposed = None;
-        let explicit_discussion = helper
-            .exchange(json!({"op":"explicit_discussion", "workshop":view,"text":text}))
+        let explicit_discussion = editing
+            .run(
+                helper,
+                &json!({"op":"explicit_discussion", "workshop":view,"text":text}),
+            )
             .await?;
         let mut conversation_candidate: Option<workshop_candidate::Draft> = if pending.is_none() {
             serde_json::from_value(explicit_discussion["candidate"].clone()).ok()
@@ -168,7 +172,8 @@ impl Dialogue {
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
                 for attempt in 0..2 {
-                    let (prepared, details) = prepare_consultation(helper, &mut frame).await?;
+                    let (prepared, details) =
+                        prepare_consultation(helper, &mut editing, &mut frame).await?;
                     let payload = if let Some(fixed) = prepared.get("fixed_payload") {
                         fixed.clone()
                     } else {
@@ -290,10 +295,13 @@ impl Dialogue {
                     && matches!(a, "respond" | "ask")
                     && step["purpose"] == "improve_wording"
                 {
-                    let validated = helper
-                        .exchange(json!({"op":"discussion_candidate",
+                    let validated = editing
+                        .run(
+                            helper,
+                            &json!({"op":"discussion_candidate",
                         "workshop":view,"text":text,
-                        "proposal":step["analysis"]["line_proposal"]}))
+                        "proposal":step["analysis"]["line_proposal"]}),
+                        )
                         .await?;
                     if let Ok(candidate) = serde_json::from_value(validated["candidate"].clone()) {
                         conversation_candidate = Some(candidate);
@@ -362,9 +370,9 @@ impl Dialogue {
                                 .is_some_and(|t| !t.is_empty() && text.contains(t)),
                             "replacement not in original input"
                         );
-                        let validated = helper
-                            .exchange(
-                                json!({"op":"player_edit","workshop":view,"text":text,"proposal":proposal}),
+                        let validated = editing
+                            .run(helper,
+                                &json!({"op":"player_edit","workshop":view,"text":text,"proposal":proposal}),
                             )
                             .await?;
                         if validated["text"].is_string() {
@@ -399,9 +407,10 @@ impl Dialogue {
         }
         if action.as_deref() == Some("stage_conversation_candidate") {
             ensure!(discussed.is_object(), "conversation_candidate_missing");
-            let validated = helper
-                .exchange(
-                    json!({"op":"player_edit","workshop":view,"proposal":discussed["proposal"]}),
+            let validated = editing
+                .run(
+                    helper,
+                    &json!({"op":"player_edit","workshop":view,"proposal":discussed["proposal"]}),
                 )
                 .await?;
             if validated["text"].is_string() {
@@ -566,10 +575,13 @@ fn prepare_revision(frame: &Value) -> Result<crate::haiku::revision::Input> {
     serde_json::from_value(prepared).context("workshop revision input")
 }
 
-// Only the still-dictionary-dependent fixed fragment candidate crosses the
-// existing helper pipe. Details, saved sources, prompts, and validation are Rust
-// owned; after-inspection/validation phases do not perform this exchange.
-async fn prepare_consultation(helper: &mut Helper, frame: &mut Value) -> Result<(Value, Value)> {
+// Details, saved sources, fixed edit extraction, prompts and validation are Rust
+// owned. Only unresolved kanji requests neutral tokens from the existing child.
+async fn prepare_consultation(
+    helper: &mut Helper,
+    editing: &mut crate::workshop_editing::Engine,
+    frame: &mut Value,
+) -> Result<(Value, Value)> {
     projection_request(frame)?;
     let details = workshop_projection::details_for(frame)?;
     let mut prepared = json!({"details":details});
@@ -582,7 +594,7 @@ async fn prepare_consultation(helper: &mut Helper, frame: &mut Value) -> Result<
         let mut request = frame.clone();
         request["op"] = "fragment_candidate".into();
         request["allowed_actions"] = details["allowed_actions"].clone();
-        let candidate = helper.exchange(request).await?;
+        let candidate = editing.run(helper, &request).await?;
         let fields = candidate
             .as_object()
             .context("invalid fragment candidate response")?;

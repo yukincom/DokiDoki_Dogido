@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import pytest
-import workshop_helper as helper
+import workshop_oracle as helper
 from dogido_server import tts_reading
 
 FIXTURES = json.loads((Path(__file__).parents[1] / 'src/workshop_prompt/fixtures.json').read_text())

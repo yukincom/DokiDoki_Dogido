@@ -61,3 +61,5 @@ pub mod chat_observation;
 pub mod chat_materials;
 
 pub mod workshop_projection;
+
+pub mod workshop_editing;

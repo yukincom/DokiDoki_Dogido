@@ -181,7 +181,7 @@ impl Helper {
     pub async fn transform(&mut self, request: TransformRequest) -> Result<LineForm> {
         use crate::{
             haiku::{TransformMode, lexical},
-            tts_reading::{has_kanji, tokens},
+            tts_reading::has_kanji,
         };
         ensure!(
             !self.poisoned,
@@ -202,13 +202,7 @@ impl Helper {
                 }
                 TransformMode::Normalize => {
                     let dictionary = if has_kanji(&request.text) {
-                        let request_id = uuid::Uuid::new_v4().to_string();
-                        let response = self
-                            .exchange(json!({"op":"tts_tokens","schema_version":1,
-                        "request_id":request_id,"text":request.text}))
-                            .await?;
-                        tokens::decode_tokens(response, &request_id)?
-                            .map(|words| tokens::neutral(&words))
+                        Some(self.neutral_reading(&request.text).await?)
                     } else {
                         None
                     };
@@ -229,6 +223,31 @@ impl Helper {
             let _ = self.child.wait().await;
         }
         result
+    }
+
+    /// Raw neutral reading: no line/quote trimming, same token correlation and
+    /// singleton as Normalize. Optional dictionary failure preserves the source;
+    /// IPC errors remain errors and the owned helper is reaped by exchange.
+    pub async fn neutral_reading(&mut self, source: &str) -> Result<String> {
+        use crate::tts_reading::{has_kanji, tokens};
+        if !has_kanji(source) {
+            return Ok(source.to_owned());
+        }
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let response = self
+            .exchange(json!({"op":"tts_tokens","schema_version":1,
+            "request_id":request_id,"text":source}))
+            .await?;
+        let result = tokens::decode_tokens(response, &request_id);
+        if result.is_err() {
+            self.poisoned = true;
+            self.stdin.take();
+            let _ = self.child.kill().await;
+            let _ = self.child.wait().await;
+        }
+        Ok(result?
+            .map(|words| tokens::neutral(&words))
+            .unwrap_or_else(|| source.into()))
     }
 
     /// 成否や取消を問わず所有するhelperを回収する。共有モデルは触らない。

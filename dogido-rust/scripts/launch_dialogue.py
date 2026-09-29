@@ -10,7 +10,33 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from dogido_server.config import Settings
+from dogido_server.config import get_settings
+
+
+def check_runtime_files(root):
+    binary = root / "dogido-rust/target/release/dogido-rust"
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        raise RuntimeError("Rust本体が未準備です。先にreleaseビルドを行ってください。")
+    for relative in (
+        "dogido-rust/scripts/dialogue_helper.py",
+        "dogido-rust/scripts/tts_unidic_adapter.py",
+        "dogido-rust/scripts/haiku_tokens.py",
+        "dogido-rust/scripts/workshop_helper.py",
+        "dogido-rust/scripts/combat_input_helper.py",
+        "dogido_server/language_dialogue/source_cards.json",
+        "reference/language_education_and_poetry",
+    ):
+        if not (root / relative).exists():
+            raise RuntimeError(f"起動用の資料が不足しています: {relative}")
+    return binary
+
+
+def model_enabled(settings):
+    routes = [settings.llm_route_settings(route) for route in ("chat", "haiku")]
+    active = [route.llm_effective_backend != "noop" for route in routes]
+    if settings.llm_enabled and active[0] != active[1]:
+        raise ValueError("Rust起動ではchat／haikuの片方だけをnoopにする設定は未対応です。")
+    return settings.llm_enabled and all(active)
 
 
 def voice_settings(settings, folder):
@@ -34,7 +60,7 @@ def main():
     args = p.parse_args()
     folder = args.settings_dir.resolve()
     os.chdir(folder)
-    settings = Settings(_env_file=folder / ".env")
+    settings = get_settings()
     if args.voice:
         settings = voice_settings(settings, folder)
         from dogido_server.voice_capture import echo_command
@@ -82,10 +108,11 @@ def main():
         os.execve(binary, command, env)
     base = settings.llm_chat_base_url or settings.llm_base_url or "http://127.0.0.1:8080/v1"
     model = settings.llm_chat_model or settings.llm_model or "default_model"
+    use_model = model_enabled(settings)
     haiku_base = settings.llm_haiku_base_url or settings.llm_base_url or base
     haiku_model = settings.llm_haiku_model or settings.llm_model or model
     haiku_settings = {
-        "llm_enabled": settings.llm_enabled, "interval_ms": settings.haiku_interval_ms,
+        "llm_enabled": use_model, "interval_ms": settings.haiku_interval_ms,
         "quiet_time_ms": settings.haiku_quiet_time_ms,
         "structured_max_tokens": settings.haiku_structured_max_tokens,
         "grounding_max_tokens": settings.haiku_grounding_max_tokens,
@@ -103,8 +130,6 @@ def main():
     for url in (base, haiku_base, settings.voicevox_url):
         if urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("この起動ファイルは既存のlocalhostモデル・VOICEVOX専用です。")
-    if settings.voicevox_output_sampling_rate is not None:
-        raise ValueError("音声のsampling rate個別設定は未移植です。変更せずに終了します。")
     combat_defaults = json.loads((ROOT / "dogido-rust/src/combat/defaults.json").read_text())
     for file in sorted((ROOT / "dogido-rust/src/environment").glob("*_defaults.json")):
         combat_defaults.update(json.loads(file.read_text()))
@@ -117,18 +142,16 @@ def main():
     print(f"Rust版の冒険会話試験 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
     print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
-    print("会話材料・発話検査はPython補助を利用。戦闘・環境反応の判断、剣への持ち替え、音声配送はRustで処理します。", flush=True)
+    print("会話・川柳・戦闘・環境反応の判断と音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
     print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、知識回答・限定国語対話に対応。Web連携は利用前提が揃うときだけ、同意と案内音声の再生完了後に開始します。", flush=True)
     print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
-        from dogido_server.state_machine import DogidoStateMachine
-        from dialogue_helper import BridgeLLM
-        from haiku_preparation import HaikuPreparation
-        from workshop_helper import handle as workshop_handle
+        check_runtime_files(ROOT)
+        from tts_shared_tokens import handle as tokens_handle
         from combat_input_helper import Worker as CombatInputWorker
-        print("Python補助の依存を確認しました。モデル生成・録音・サーバー起動は行っていません。")
+        print("Rust本体・資料・辞書と端末AIの接続補助を確認しました。モデル生成・録音・サーバー起動は行っていません。")
         return
     binary = ROOT / "dogido-rust/target/release/dogido-rust"
     env = dict(os.environ)
@@ -139,8 +162,10 @@ def main():
         if value: env[name] = value
         else: env.pop(name, None)
     command = [str(binary), "serve-dialogue", "--listen", "127.0.0.1:5056", "--python", sys.executable,
+        "--helper", str(ROOT / "dogido-rust/scripts/dialogue_helper.py"),
         "--model", model, "--base-url", base, "--voicevox-url", settings.voicevox_url,
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
+        "--haiku-speed", str(settings.voicevox_speed_scale_haiku),
         "--combat-settings", json.dumps(combat_settings),
         "--haiku-settings", json.dumps(haiku_settings),
         "--web-settings", json.dumps(web_settings),
@@ -150,14 +175,22 @@ def main():
                 "hostile_comment_cooldown_ms", "multi_hostile_comment_cooldown_ms", "panic_scream_cooldown_ms",
                 "hostile_mass_callout_threshold", "hostile_query_distance",
                 "other_realm_swarm_visual_threshold", "other_realm_audio_generic_threshold")},
-            "battle_speed": settings.voicevox_speed_scale,
-            "cue_dir": str(settings.cue_audio_dir.resolve()),
+            "battle_speed": settings.tts_speed_for_profile("battle"),
+            "cue_dir": str(settings.cue_audio_dir.resolve()) if settings.cue_audio_dir is not None else None,
         }),
         "--pitch", str(settings.voicevox_pitch_scale), "--volume", str(settings.voicevox_volume_scale),
         "--max-tokens", str(settings.llm_chat_max_tokens or settings.llm_max_tokens),
         "--timeout-ms", str(int(1000 * (settings.llm_chat_timeout_sec or settings.llm_timeout_sec))),
         "--reading-engine", settings.tts_reading_engine,
         "--audio-dir", str(ROOT / ".dogido_tmp/rust-dialogue")]
+    if settings.voicevox_output_sampling_rate is not None:
+        command.extend(["--output-sampling-rate", str(settings.voicevox_output_sampling_rate)])
+    if not settings.audio_enabled or settings.tts_backend == "noop":
+        command.append("--no-audio")
+    if not use_model:
+        command.append("--no-llm")
+    if not settings.main_language_dialogue_enabled:
+        command.append("--no-language")
     os.chdir(ROOT)
     os.execve(binary, command, env)
 

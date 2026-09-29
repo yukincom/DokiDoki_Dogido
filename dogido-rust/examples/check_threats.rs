@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
                     actions.push(json!({"text":c.text,"cue_id":c.id,"cue_sequence":[]}));
                 }
                 if !plan.text.is_empty() {
-                    actions.push(json!({"text":plan.text,"cue_id":null,"cue_sequence":if plan.fragment_paths(&settings.cue_dir).is_some() {plan.cue_sequence.clone()} else {vec![]}}));
+                    actions.push(json!({"text":plan.text,"cue_id":null,"cue_sequence":if settings.cue_dir.as_deref().and_then(|dir|plan.fragment_paths(dir)).is_some() {plan.cue_sequence.clone()} else {vec![]}}));
                 }
             }
             rows.push(actions);

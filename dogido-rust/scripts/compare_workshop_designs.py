@@ -23,7 +23,7 @@ EDIT_KEYS = {"line_id", "target_fragment", "replacement_text"}
 
 def load_helpers(repo):
     sys.path.insert(0, str(repo / "dogido-rust/scripts"))
-    from workshop_helper import handle, explicit_player_edit
+    from workshop_oracle import handle, explicit_player_edit
     return handle, explicit_player_edit
 
 

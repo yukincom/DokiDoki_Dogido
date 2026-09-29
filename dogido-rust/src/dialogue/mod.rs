@@ -6,7 +6,9 @@ pub use web_runtime::Settings as WebSettings;
 mod assist_runtime;
 mod audio;
 mod bridge;
+mod chat_context;
 mod chat_leaf_runtime;
+mod chat_runtime;
 mod combat_runtime;
 mod environment_runtime;
 mod episode_runtime;
@@ -60,11 +62,15 @@ pub struct DialogueConfig {
     pub voicevox_url: String,
     pub speaker: u32,
     pub speed: f64,
+    pub haiku_speed: f64,
     pub pitch: f64,
     pub volume: f64,
+    pub output_sampling_rate: Option<u32>,
     pub audio_dir: PathBuf,
     pub player: PathBuf,
     pub audio_enabled: bool,
+    pub llm_enabled: bool,
+    pub language_enabled: bool,
     pub web: WebSettings,
     pub warnings: crate::threats::Settings,
     pub combat: crate::combat::model::Settings,
@@ -83,11 +89,15 @@ impl Default for DialogueConfig {
             voicevox_url: "http://127.0.0.1:50021".into(),
             speaker: 21,
             speed: 0.88,
+            haiku_speed: 0.80,
             pitch: 0.0,
             volume: 1.0,
+            output_sampling_rate: None,
             audio_dir: PathBuf::from(".dogido_tmp/rust-dialogue"),
             player: "/usr/bin/afplay".into(),
             audio_enabled: true,
+            llm_enabled: true,
+            language_enabled: true,
             web: WebSettings::default(),
             warnings: crate::threats::Settings::default(),
             combat: crate::combat::model::Settings::default(),
@@ -107,6 +117,8 @@ struct Session {
     mode: crate::combat::model::Mode,
     sequences: SequenceLedger,
     history: history::History,
+    chat_observation: crate::chat_observation::ChatObservationMemory,
+    haiku_context: crate::haiku::preparation::RuntimeSnapshot,
     pending_vocalization: Option<voice_input_runtime::Pending>,
     haiku: haiku_runtime::State,
     combat_digest: VecDeque<String>,
@@ -209,6 +221,10 @@ fn empty_event(name: &str) -> Value {
 }
 
 impl Dialogue {
+    pub fn llm_enabled(&self) -> bool {
+        self.config.llm_enabled
+    }
+
     pub fn new(mut config: DialogueConfig) -> Result<Arc<Self>> {
         config.warnings.validate()?;
         config.combat = crate::combat::model::Settings::merged(&config.combat.0)?;
@@ -220,6 +236,8 @@ impl Dialogue {
         anyhow::ensure!(
             config.speed.is_finite()
                 && config.speed > 0.0
+                && config.haiku_speed.is_finite()
+                && config.haiku_speed > 0.0
                 && config.volume.is_finite()
                 && config.volume >= 0.0
                 && config.pitch.is_finite(),
@@ -231,7 +249,8 @@ impl Dialogue {
                 &config.base_url,
                 key.as_deref(),
                 Duration::from_millis(config.timeout_ms),
-            )?,
+            )?
+            .with_enabled(config.llm_enabled),
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
             combat_classifier: combat_classifier::Classifier::default(),
@@ -269,6 +288,8 @@ impl Dialogue {
                 mode: crate::combat::model::Mode::Normal,
                 sequences: SequenceLedger::default(),
                 history: history::History::default(),
+                chat_observation: chat_context::memory(&self.config.combat),
+                haiku_context: crate::haiku::preparation::RuntimeSnapshot::default(),
                 pending_vocalization: None,
                 haiku: haiku_runtime::State::default(),
                 combat_digest: VecDeque::new(),
@@ -448,6 +469,9 @@ impl Dialogue {
                 s.danger.set_presence(boss, ominous);
                 s.danger.update(&event, now, complete, &self.config.combat);
                 s.ambient.update(&event, now, complete, &self.config.combat);
+                if complete {
+                    chat_context::update_haiku(s, &event, &self.config.combat);
+                }
                 s.combat.set_dark_push_context(
                     s.danger.dark_push_active(),
                     s.warning
@@ -488,6 +512,13 @@ impl Dialogue {
                     &self.config.combat,
                     &self.config.warnings,
                 );
+                let names = s.combat.take_name_updates();
+                if let Err(error) =
+                    s.chat_observation
+                        .observe(&event, &names, &chat_context::CatalogLabels)
+                {
+                    tracing::warn!(event="chat_observation_rejected", session_id, %error);
+                }
                 let conversation_threat = warnings::interruption_reason(&event).is_some();
                 if event.event.name == EventName::PlayerDied
                     || decision.dimension_changed
@@ -555,6 +586,15 @@ impl Dialogue {
                 );
                 let s = d.sessions.get_mut(session_id).unwrap();
                 s.danger.finish_frame(s.mode);
+            } else {
+                let s = d.sessions.get_mut(session_id).unwrap();
+                if let Err(error) = s.chat_observation.observe(
+                    &event,
+                    &Default::default(),
+                    &chat_context::CatalogLabels,
+                ) {
+                    tracing::warn!(event="chat_observation_rejected", session_id, %error);
+                }
             }
             self.resolve_vocalization(d.sessions.get_mut(session_id).unwrap(), Some(&event));
             self.start_pending(&mut d, &mut jobs, session_id);
@@ -1003,6 +1043,44 @@ impl Dialogue {
             .workshop
             .as_ref()
             .map(|w| json!({"id":w.hud_id,"version":w.version,"open":w.open}));
+        let event = s
+            .latest
+            .as_ref()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .unwrap_or_else(|| empty_event(&s.name));
+        if let Some((_, Some(previous))) = expected_generation {
+            s.history.replace_unanswered(&previous);
+        }
+        let resume_context = s.foreground.resume_prompt(text);
+        let event_digest = s
+            .history
+            .situation_lines()
+            .iter()
+            .map(|n| format!("- {n}"))
+            .chain(s.combat_digest.iter().map(|n| format!("- {n}")))
+            .chain((!resume_context.is_empty()).then_some(resume_context))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let history = s.history.rows();
+        let conversation_history = s.history.lines();
+        let parsed_event = GameEvent::parse(event.clone()).expect("session observation validated");
+        let chat_native = match chat_context::capture(
+            s,
+            &parsed_event,
+            &self.config.combat,
+            crate::chat_materials::CompletedHistory {
+                conversation_history: conversation_history.clone(),
+                conversation_turns: history.clone(),
+                event_digest: event_digest.clone(),
+            },
+            workshop.as_ref(),
+        ) {
+            Ok(native) => native,
+            Err(error) => {
+                tracing::warn!(event="chat_snapshot_rejected", session_id, %error);
+                return json!({"accepted":false,"reason":"chat_context_unavailable"});
+            }
+        };
         if (poem_input.is_some()
             || crate::reading_correction::for_input(text, &json!(workshop)).is_some()
             || crate::haiku_memory::clear_requested(text))
@@ -1035,31 +1113,13 @@ impl Dialogue {
         }
         s.current_turn = turn.clone();
         s.status = "generating".into();
-        let event = s
-            .latest
-            .as_ref()
-            .map(|e| serde_json::to_value(e).unwrap())
-            .unwrap_or_else(|| empty_event(&s.name));
-        if let Some((_, Some(previous))) = expected_generation {
-            s.history.replace_unanswered(&previous);
-        }
-        let resume_context = s.foreground.resume_prompt(text);
-        let event_digest = s
-            .history
-            .situation_lines()
-            .iter()
-            .map(|n| format!("- {n}"))
-            .chain(s.combat_digest.iter().map(|n| format!("- {n}")))
-            .chain((!resume_context.is_empty()).then_some(resume_context))
-            .collect::<Vec<_>>()
-            .join("\n");
         let (language_active, language_state) = language_runtime::context(s, text);
         let input = json!({"audit_before":audit_before,"audit_private":private,"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
             "source":source,"language_active":language_active,"language_state":language_state,
             "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
-            "text":text,"interpreted_text":interpreted_text,"history":s.history.rows(),"conversation_history":s.history.lines(),
+            "text":text,"interpreted_text":interpreted_text,"history":history,"conversation_history":conversation_history,"chat_native":chat_native,
             "event_digest":event_digest,"event":event});
         if workshop.is_none()
             && s.web.state.research.is_none()
@@ -1273,7 +1333,13 @@ impl Dialogue {
             s.haiku.last_activity = Instant::now();
             if matches!(
                 status,
-                "completed" | "cancelled" | "failed" | "unsupported" | "quiet" | "not_selected"
+                "completed"
+                    | "cancelled"
+                    | "failed"
+                    | "unsupported"
+                    | "quiet"
+                    | "not_selected"
+                    | "audio_disabled"
             ) {
                 s.cancel = None;
             }
@@ -1679,6 +1745,9 @@ impl Dialogue {
                             result["error"] = error.to_string().into();
                             if *cancel.borrow() {
                                 "cancelled"
+                            } else if !self.config.audio_enabled {
+                                result.as_object_mut().unwrap().remove("error");
+                                "audio_disabled"
                             } else {
                                 "failed"
                             }
@@ -1727,7 +1796,7 @@ impl Dialogue {
             .iter()
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
-        json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,
+        json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
             "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }

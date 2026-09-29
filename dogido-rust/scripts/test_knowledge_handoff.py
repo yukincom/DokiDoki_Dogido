@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 import pytest
 from test_workshop_helper import frame
-from workshop_helper import handle, snapshot_for
+from workshop_oracle import handle, snapshot_for
 from dogido_server.state_machine import AudioAction
 from dogido_server.player_input import route_player_input
 from dogido_server.service import DogidoService

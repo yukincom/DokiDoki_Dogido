@@ -118,8 +118,14 @@ impl Audio {
     ) -> Result<Arc<Vec<u8>>> {
         let began = Instant::now();
         let key = format!(
-            "{}|{}|{}|{}|{}|{}",
-            config.voicevox_url, config.speaker, config.speed, config.pitch, config.volume, spoken
+            "{}|{}|{}|{}|{}|{:?}|{}",
+            config.voicevox_url,
+            config.speaker,
+            config.speed,
+            config.pitch,
+            config.volume,
+            config.output_sampling_rate,
+            spoken
         );
         let cached = self
             .cache
@@ -155,6 +161,9 @@ impl Audio {
         query["speedScale"] = config.speed.into();
         query["pitchScale"] = config.pitch.into();
         query["volumeScale"] = config.volume.into();
+        if let Some(rate) = config.output_sampling_rate {
+            query["outputSamplingRate"] = rate.into();
+        }
         let mut response = self
             .http
             .post(format!("{base}/synthesis"))

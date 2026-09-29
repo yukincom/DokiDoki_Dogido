@@ -32,9 +32,15 @@ fn ensure(condition: bool, message: &str) -> Result<(), String> {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(transparent)]
-pub struct GameEvent(EventData);
+pub struct GameEvent(EventData, #[serde(skip)] Vec<String>);
 
 impl GameEvent {
+    /// Original validated wire inventory key order, before the typed BTreeMap.
+    /// Internal observation metadata; never serialized into the adapter schema.
+    pub fn inventory_order(&self) -> &[String] {
+        &self.1
+    }
+
     pub fn parse(mut value: Value) -> Result<Self, String> {
         // 旧名をextraにも残すPythonのbefore-validatorと同じ優先順。
         if let Some(object) = value.as_object_mut()
@@ -43,9 +49,14 @@ impl GameEvent {
         {
             object.insert("passive_mobs".into(), legacy);
         }
+        let inventory_order = value
+            .get("inventory")
+            .and_then(Value::as_object)
+            .map(|items| items.keys().cloned().collect())
+            .unwrap_or_default();
         let data: EventData = serde_json::from_value(value).map_err(|e| e.to_string())?;
         data.validate()?;
-        Ok(Self(data))
+        Ok(Self(data, inventory_order))
     }
 }
 impl Deref for GameEvent {

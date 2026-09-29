@@ -132,8 +132,11 @@ impl Classifier {
             }
             if analysis.action == Action::Uncertain {
                 // The remaining fallback resolves spoken verse fragments through the dictionary.
-                let fallback = Self::helper(&mut slot, c)?
-                    .exchange(json!({"op":"fallback","text":text,"workshop":input["workshop"]}))
+                let fallback = crate::workshop_editing::Engine::default()
+                    .run(
+                        Self::helper(&mut slot, c)?,
+                        &json!({"op":"combat_fallback","text":text,"workshop":input["workshop"]}),
+                    )
                     .await?;
                 analysis = Analysis::parse(&fallback, text);
                 if analysis.action != Action::Uncertain {
@@ -157,7 +160,7 @@ impl Classifier {
         if slot.is_none() {
             *slot = Some(Helper::start(
                 &c.python,
-                &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/combat_input_helper.py"),
+                &c.helper.with_file_name("combat_input_helper.py"),
             )?);
         }
         Ok(slot.as_mut().unwrap())

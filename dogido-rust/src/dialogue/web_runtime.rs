@@ -321,7 +321,10 @@ impl Dialogue {
         };
         let matched = s.web.state.departure.as_deref() == Some(id);
         let Some(proposal) = s.web.state.playback(id, status) else {
-            if matched && matches!(status, "failed" | "cancelled") && !s.foreground.combat_active {
+            if matched
+                && matches!(status, "failed" | "cancelled" | "audio_disabled")
+                && !s.foreground.combat_active
+            {
                 s.foreground.activate(
                     Route::Learning,
                     self.clock.elapsed().as_millis() as u64,

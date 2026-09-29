@@ -561,10 +561,10 @@ impl Dialogue {
                 }
                 if let Some(plan)=&action.visual_plan{
                     if let Some(cue)=&plan.cue{
-                        if let Some(path)=cue_path(&config.warnings.cue_dir,cue.id){self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;}
+                        if let Some(path)=config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,cue.id)){self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;}
                         else{tracing::warn!(event="warning_cue_fallback",cue_id=cue.id,reason="file_missing");self.audio.speak(&config,cue.text,&mut cancel,&started).await?;}
                     }
-                    if let Some(paths)=plan.fragment_paths(&config.warnings.cue_dir){
+                    if let Some(paths)=config.warnings.cue_dir.as_deref().and_then(|dir|plan.fragment_paths(dir)){
                         tracing::info!(event="warning_fragments",fragments=paths.len());
                         for (i,path) in paths.iter().enumerate(){self.audio.play_file(&config,path,&mut cancel,i,&started).await?;}
                     }else if !text.is_empty(){
@@ -573,12 +573,12 @@ impl Dialogue {
                     }
                     continue;
                 }
-                let paths=if action.kind=="ushiro_named"{named_paths(&config.warnings.cue_dir,&text)}
-                    else if !action.cue_sequence.is_empty(){action.cue_sequence.iter().map(|id|cue_path(&config.warnings.cue_dir,id)).collect::<Option<Vec<_>>>()}
+                let paths=if action.kind=="ushiro_named"{config.warnings.cue_dir.as_deref().and_then(|dir|named_paths(dir,&text))}
+                    else if !action.cue_sequence.is_empty(){action.cue_sequence.iter().map(|id|config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,id))).collect::<Option<Vec<_>>>()}
                     else{None};
                 if let Some(paths)=paths{
                     for (i,path) in paths.iter().enumerate(){self.audio.play_file(&config,path,&mut cancel,i,&started).await?;}
-                }else if let Some(path)=action.cue_id.and_then(|id|cue_path(&config.warnings.cue_dir,id)){
+                }else if let Some(path)=action.cue_id.and_then(|id|config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,id))){
                     self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;
                 }else if !text.is_empty(){self.audio.speak(&config,&text,&mut cancel,&started).await?;}
             }

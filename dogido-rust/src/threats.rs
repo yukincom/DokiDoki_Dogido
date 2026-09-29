@@ -21,7 +21,7 @@ pub struct Settings {
     pub other_realm_swarm_visual_threshold: usize,
     pub other_realm_audio_generic_threshold: usize,
     pub battle_speed: f64,
-    pub cue_dir: PathBuf,
+    pub cue_dir: Option<PathBuf>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -37,7 +37,7 @@ impl Default for Settings {
             other_realm_swarm_visual_threshold: 4,
             other_realm_audio_generic_threshold: 2,
             battle_speed: 1.0,
-            cue_dir: "cue_voice".into(),
+            cue_dir: Some("cue_voice".into()),
         }
     }
 }

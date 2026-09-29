@@ -1,11 +1,14 @@
-//! 発句の開始・取消・再生・保存・表示の所有者。材料と辞書だけPythonへ委譲する。
+//! 発句の開始・取消・文脈・再生・保存・表示の所有者。Pythonは既存UniDic tokenだけ。
 use super::*;
 use crate::{
-    haiku::{self, Backend},
+    haiku::{
+        self, Backend,
+        preparation::{Preparation, RuntimeSnapshot},
+    },
     haiku_bridge::{Helper, LiveBackend, Route, RouteConfig},
     haiku_record::{MemoryStore, PreparedEmission, Workshop, project_workshop},
 };
-use anyhow::ensure;
+use anyhow::{Context, ensure};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -85,7 +88,7 @@ impl Routes {
         let haiku_key = std::env::var("DOGIDO_LLM_HAIKU_API_KEY")
             .ok()
             .or_else(|| key.clone());
-        Ok(Self {
+        let mut routes = Self {
             chat: Route::new(
                 RouteConfig {
                     base_url: c.base_url.clone(),
@@ -104,9 +107,17 @@ impl Routes {
                 },
                 haiku_key.as_deref(),
             )?,
-        })
+        };
+        routes.chat.llm.set_enabled(c.llm_enabled && h.llm_enabled);
+        routes.haiku.llm.set_enabled(c.llm_enabled && h.llm_enabled);
+        Ok(routes)
     }
 }
+struct Observation {
+    event: GameEvent,
+    runtime: RuntimeSnapshot,
+}
+
 pub(super) struct Active {
     id: String,
     cancel: watch::Sender<bool>,
@@ -296,6 +307,10 @@ impl Dialogue {
             .or(s.latest.as_ref())
             .unwrap()
             .clone();
+        let observation = Observation {
+            event,
+            runtime: s.haiku_context.clone(),
+        };
         let completed = if casual {
             s.haiku.material_turns.iter().cloned().collect()
         } else {
@@ -321,7 +336,7 @@ impl Dialogue {
         let this = self.clone();
         let sid = sid.to_owned();
         jobs.push(tokio::spawn(async move {
-            this.run_haiku(sid, job, event, completed, rx).await;
+            this.run_haiku(sid, job, observation, completed, rx).await;
         }));
     }
     fn haiku_row(&self, sid: &str, job: &str, part: &str, text: &str, status: &str) -> bool {
@@ -367,8 +382,21 @@ impl Dialogue {
             self.haiku_row(sid, job, part, text, "queued"),
             "haiku superseded"
         );
+        if !self.config.audio_enabled {
+            ensure!(
+                !*cancel.borrow() && cancel.has_changed().is_ok(),
+                "cancelled"
+            );
+            ensure!(
+                self.haiku_row(sid, job, part, text, "audio_disabled"),
+                "haiku superseded"
+            );
+            return Ok(());
+        }
+        let mut voice = self.config.clone();
+        voice.speed = voice.haiku_speed;
         self.audio
-            .speak(&self.config, spoken, cancel, || {
+            .speak(&voice, spoken, cancel, || {
                 self.haiku_row(sid, job, part, text, "started");
             })
             .await?;
@@ -382,7 +410,7 @@ impl Dialogue {
         self: &Arc<Self>,
         sid: &str,
         job: &str,
-        event: GameEvent,
+        observation: Observation,
         completed: Vec<Value>,
         helper: &mut Helper,
         cancel: &mut watch::Receiver<bool>,
@@ -393,9 +421,21 @@ impl Dialogue {
         let h = &self.config.haiku;
         let corrections = step!(self.reading_overlay());
         let lessons = step!(self.active_lessons());
-        let context=step!(helper.exchange(json!({"op":"haiku_context","event":event,"completed_turns":completed,
-            "reading_corrections":corrections,"lessons":lessons,
-            "settings":{"llm_enabled":h.llm_enabled,"haiku_structured_max_tokens":h.structured_max_tokens,"haiku_grounding_max_tokens":h.grounding_max_tokens,"haiku_generation_strategy":h.generation_strategy,"haiku_max_regeneration_rounds":h.max_regeneration_rounds}})));
+        let (mut preparation, context) = Preparation::capture(haiku::preparation::Start {
+            event: observation.event,
+            runtime: observation.runtime,
+            settings: haiku::preparation::Settings {
+                llm_enabled: self.config.llm_enabled && h.llm_enabled,
+                structured_max_tokens: h.structured_max_tokens,
+                grounding_max_tokens: h.grounding_max_tokens,
+                generation_strategy: h.generation_strategy.clone(),
+                max_regeneration_rounds: h.max_regeneration_rounds,
+            },
+            reading_corrections: corrections,
+            lessons,
+            completed_turns: completed,
+            dialogue_material: None,
+        })?;
         let mut backend = LiveBackend {
             helper,
             chat: &self.haiku_routes.chat,
@@ -403,7 +443,7 @@ impl Dialogue {
             requests: vec![],
             reports: vec![],
         };
-        let generated = if let Some(fixed) = context["fixed_text"].as_str() {
+        let generated = if let Some(fixed) = context.fixed_text.as_deref() {
             haiku::GroundedHaikuResult {
                 text: fixed.into(),
                 accepted: true,
@@ -414,24 +454,15 @@ impl Dialogue {
                 prompt_variant: haiku::PROMPT_VARIANT.into(),
             }
         } else {
-            let request = serde_json::from_value(context["request"].clone())?;
+            let request = context.request.context("missing haiku irony request")?;
             let irony = step!(backend.generate(request));
-            let inspiration = step!(
-                backend
-                    .helper
-                    .exchange(json!({"op":"haiku_inspiration","payload":irony}))
-            );
-            let spoken = inspiration["spoken_text"].as_str().unwrap_or("");
+            let inspiration = preparation.inspiration(&irony)?;
+            let spoken = inspiration.spoken_text.as_str();
             self.haiku_speak(sid, job, "inspiration", spoken, spoken, cancel)
                 .await?;
-            let request = serde_json::from_value(inspiration["request"].clone())?;
+            let request = inspiration.request;
             let scene = step!(backend.generate(request));
-            let materials = step!(
-                backend
-                    .helper
-                    .exchange(json!({"op":"haiku_materials","payload":scene}))
-            );
-            let input = serde_json::from_value(materials["input"].clone())?;
+            let input = preparation.materials(&scene)?.input;
             step!(haiku::generate(&mut backend, input))
         };
         let completed_at = chrono::Utc::now();
@@ -449,12 +480,7 @@ impl Dialogue {
             .await?;
             return Ok(());
         }
-        let projection = step!(
-            backend
-                .helper
-                .exchange(json!({"op":"haiku_emission","result":generated}))
-        );
-        let prepared: PreparedEmission = serde_json::from_value(projection)?;
+        let prepared: PreparedEmission = step!(preparation.emission(&generated, backend.helper));
         let emission = prepared.complete(completed_at)?;
         let text = emission.prepared.surface_text.clone().unwrap_or_default();
         let spoken = format!(
@@ -522,7 +548,7 @@ impl Dialogue {
         self: Arc<Self>,
         sid: String,
         job: String,
-        event: GameEvent,
+        observation: Observation,
         completed: Vec<Value>,
         mut cancel: watch::Receiver<bool>,
     ) {
@@ -543,9 +569,9 @@ impl Dialogue {
         });
         let outcome:Result<()>=async {
             let _permit=tokio::select!{biased;_=bridge::cancelled(&mut cancel)=>anyhow::bail!("haiku cancelled"),p=self.serial.acquire()=>p?};
-            let script=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/haiku_helper.py");
+            let script=self.config.helper.with_file_name("haiku_tokens.py");
             let mut helper=Helper::start(&self.config.python,&script)?;
-            let result=self.haiku_pipeline(&sid,&job,event,completed,&mut helper,&mut cancel).await;
+            let result=self.haiku_pipeline(&sid,&job,observation,completed,&mut helper,&mut cancel).await;
             let cleanup=helper.finish(result.is_err()).await;result?;cleanup
         }.await;
         monitor.abort();

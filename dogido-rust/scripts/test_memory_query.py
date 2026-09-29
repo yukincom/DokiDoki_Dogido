@@ -7,7 +7,7 @@ import pytest
 from memory_query import recall_query
 from dogido_server.player_input.routing import route_player_input
 from test_workshop_helper import frame
-from workshop_helper import handle
+from workshop_oracle import handle
 
 
 @pytest.mark.parametrize("text", ["雪原の句を思い出して", "寒いところの句", "覚えてる句", "海の川柳", "7月の句"])

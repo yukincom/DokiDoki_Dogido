@@ -149,7 +149,7 @@ def dependencies():
 
 
 @contextmanager
-def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None, combat_settings=None, haiku_settings=None, web_settings=None):
+def running(binary, directory, dependency, *, live=False, player=None, warning_settings=None, combat_settings=None, haiku_settings=None, web_settings=None, output_sampling_rate=None, extra_args=()):
     log_path = directory / "runtime.log"
     env = dict(os.environ)
     env.pop("DOGIDO_AUTH_TOKEN", None); env.pop("DOGIDO_LLM_API_KEY", None)
@@ -165,7 +165,8 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             "--warning-settings", json.dumps(warning_settings or {}),
             "--combat-settings", json.dumps(combat_settings or {}),
             "--haiku-settings", json.dumps(haiku_settings or {}),
-            "--web-settings", json.dumps(web_settings if web_settings is not None else {"enabled": False})],
+            "--web-settings", json.dumps(web_settings if web_settings is not None else {"enabled": False}),
+            *(["--output-sampling-rate", str(output_sampling_rate)] if output_sampling_rate is not None else []), *extra_args],
             stdout=subprocess.PIPE, stderr=log, text=True, env=env)
         try:
             with selectors.DefaultSelector() as selector:
@@ -190,7 +191,7 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             assert "dialogue_stopped" in logs
             # 起動したhelperとplayerの実PIDが終了していることをOSへ確認。
             pids = set(re.findall(r'event="(?:helper_started|haiku_helper_started|audio_started|web_adapter_started)" pid=Some\((\d+)\)', logs))
-            assert pids, logs
+            # Native fixed/disabled turns may own no child at all.
             for pid in pids:
                 try: os.kill(int(pid), 0)
                 except ProcessLookupError: continue

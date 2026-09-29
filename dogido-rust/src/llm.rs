@@ -14,6 +14,7 @@ use crate::types::{GeneratedText, GenerationReport, GenerationRequest, Role};
 pub struct RigLlm {
     client: openai::CompletionsClient,
     timeout: Duration,
+    enabled: bool,
 }
 
 impl RigLlm {
@@ -40,10 +41,24 @@ impl RigLlm {
             .http_client(http)
             .build()?
             .completions_api();
-        Ok(Self { client, timeout })
+        Ok(Self {
+            client,
+            timeout,
+            enabled: true,
+        })
+    }
+
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
     }
 
     pub async fn generate(&self, input: &GenerationRequest) -> Result<GenerationReport> {
+        ensure!(self.enabled, "LLM disabled by configuration");
         input.validate()?;
         let request = to_rig_request(input);
         let model = self.client.completion_model(&input.model);
@@ -144,6 +159,29 @@ pub fn decode_response(body: &Value) -> Result<GeneratedText> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn disabled_provider_returns_before_network_access() {
+        let client = RigLlm::new("http://127.0.0.1:9/v1", None, Duration::from_secs(1))
+            .unwrap()
+            .with_enabled(false);
+        let request = GenerationRequest {
+            schema_version: 1,
+            kind: "disabled-check".into(),
+            model: "fixture".into(),
+            messages: vec![crate::types::ChatMessage {
+                role: Role::User,
+                content: "こんにちは".into(),
+            }],
+            temperature: 0.0,
+            max_tokens: 8,
+            enable_thinking: false,
+        };
+        assert_eq!(
+            client.generate(&request).await.unwrap_err().to_string(),
+            "LLM disabled by configuration"
+        );
+    }
 
     #[test]
     fn truncated_json_keeps_finish_reason_and_token_count() {

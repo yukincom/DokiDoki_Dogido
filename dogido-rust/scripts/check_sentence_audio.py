@@ -25,7 +25,7 @@ def started_count(log):
 
 
 @contextmanager
-def scenario(binary, *, player_fails=False):
+def scenario(binary, *, player_fails=False, output_sampling_rate=None):
     with tempfile.TemporaryDirectory(prefix="dogido-sentence-") as temp, dependencies() as (dep, control, seen):
         directory = Path(temp)
         hold = directory / "hold"
@@ -40,7 +40,7 @@ def scenario(binary, *, player_fails=False):
         second = threading.Event()
         control["tts_gates"][SENTENCES[1]] = second
         # runningのfinallyでサーバー・全player・helper・WAVの回収も検査する。
-        with running(binary, directory, dep, player=player) as (base, process, log):
+        with running(binary, directory, dep, player=player, output_sampling_rate=output_sampling_rate) as (base, process, log):
             sid = register(base)
             turn = submit(base, sid)
             wait_for(lambda: row(base, turn, {"started"}))
@@ -79,7 +79,16 @@ def main():
             if r["path"].startswith("/synthesis?"):
                 assert "speaker=21" in r["path"]
                 assert (r["body"]["speedScale"], r["body"]["pitchScale"], r["body"]["volumeScale"]) == (.88, 0, 1)
+                assert "outputSamplingRate" not in r["body"]
         passed.append("early_first_sentence_bounded_prefetch_order_one_turn_completion")
+
+    with scenario(binary, output_sampling_rate=48000) as (base, sid, turn, hold, second, control, seen, log):
+        second.set()
+        hold.unlink()
+        wait_for(lambda: row(base, turn, {"completed"}))
+        assert syntheses(seen) == SENTENCES
+        assert all(r["body"]["outputSamplingRate"] == 48000 for r in seen if r["path"].startswith("/synthesis?"))
+        passed.append("explicit_output_sampling_rate_applies_to_every_sentence")
 
     with scenario(binary) as (base, sid, turn, hold, second, control, seen, log):
         control["fail_sentence"] = SENTENCES[1]

@@ -62,6 +62,20 @@ for line in sys.stdin:
             (folder/'player_mode').write_text('ok');sid=propose();(folder/'player_mode').write_text('slow')
             t=submit(base,sid,'はい');wait_for(lambda:row(base,t,{'started'}))
             request(base,'/api/v1/adapter-sessions/'+sid,method='DELETE');assert count()==1
-    print('web HTTP: 3 sequences passed; own server, adapter, player and WAV cleaned up')
+        with running(args.binary.resolve(),folder,dep,haiku_settings={'llm_enabled':False},
+                     web_settings={'enabled':True,'available':True,'adapter':str(adapter)},
+                     extra_args=('--no-audio',)) as (base,process,log):
+            sid=register(base)
+            t=submit(base,sid,'知らないことわざを教えて')
+            r=wait_for(lambda:row(base,t,{'audio_disabled'}))
+            assert r['language_status']=='web_consent_requested',r
+            t=submit(base,sid,'はい')
+            wait_for(lambda:row(base,t,{'audio_disabled'}))
+            state=next(s for s in snapshot(base)['sessions'] if s['session_id']==sid)
+            assert state['web']['phase']=='none',state
+            assert state['foreground']['route']=='learning',state
+            assert count()==1
+            assert 'event="audio_started"' not in log.read_text()
+    print('web HTTP: 4 sequences passed; own server, adapter, player and WAV cleaned up')
 
 if __name__=='__main__':main()

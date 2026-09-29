@@ -114,7 +114,7 @@ impl Published {
                 "last_seen_at": game_sessions.iter().map(|s| s.last_seen).max(),
                 "freshness_seconds": freshness,
             },
-            "migration": {"phase": if dialogue.is_some() {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": dialogue.is_some(), "llm_enabled": dialogue.is_some()},
+            "migration": {"phase": if dialogue.is_some() {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": dialogue.is_some(), "llm_enabled": dialogue.as_ref().is_some_and(|d| d["llm_enabled"] == true)},
         })
     }
 

@@ -288,89 +288,6 @@ fn compact(s: &str) -> String {
         })
         .collect()
 }
-fn shorten(s: &str, limit: usize) -> String {
-    let s = strip(s);
-    if s.chars().count() <= limit {
-        return s.into();
-    }
-    for sep in ['の', '、', '，', ' '] {
-        if s.contains(sep) {
-            let parts: Vec<_> = s.split(sep).collect();
-            for p in parts.iter().rev() {
-                let p = strip(p);
-                if (2..=limit).contains(&p.chars().count()) {
-                    return p.into();
-                }
-            }
-        }
-    }
-    format!("{}…", take(s, limit - 1))
-}
-fn noun(s: &str) -> bool {
-    let n = s.chars().count();
-    if n < 2 {
-        return false;
-    }
-    if !s.contains('\n')
-        && ["ている", "でいる", "ていた", "である"]
-            .iter()
-            .any(|end| s.ends_with(end))
-        && n <= 12
-        && (!s.chars().any(|c| ('一'..='鿿').contains(&c)) || n <= 8)
-    {
-        return false;
-    }
-    !matches!(
-        s,
-        "いる" | "ただ" | "して" | "ある" | "する" | "なる" | "よう"
-    )
-}
-fn short_entries(m: &Map<String, Value>) -> Vec<(String, String)> {
-    let mut out = vec![];
-    let mut add = |s: &str, source: &str, max| {
-        let s = shorten(&label(s), max);
-        if noun(&s) && !out.iter().any(|(v, _)| v == &s) {
-            out.push((s, source.into()));
-        }
-    };
-    for (key, source) in [
-        ("motifs", "motif"),
-        ("held_item", "held_item"),
-        ("inventory_items", "inventory_item"),
-        ("nearby_blocks", "nearby_block"),
-        ("dropped_items", "dropped_item"),
-        ("passive_mobs", "passive_mob"),
-        ("biome_ja", "biome"),
-        ("structure_ja", "structure"),
-        ("place_ja", "place"),
-    ] {
-        if let Some(v) = m.get(key) {
-            if let Some(rows) = v.as_array() {
-                for row in rows {
-                    add(&crate::chat_catalog::text(row), source, 18);
-                }
-            } else {
-                add(&crate::chat_catalog::text(v), source, 18);
-            }
-        }
-    }
-    let phase = match m.get("time_phase").and_then(Value::as_str) {
-        Some("morning") => "朝",
-        Some("day") => "昼",
-        Some("evening") => "夕方",
-        Some("night") => "夜",
-        _ => "",
-    };
-    add(phase, "time_phase", 18);
-    if let Some(s) = m.get("interpretation").and_then(Value::as_str) {
-        for chunk in s.split(['、', '，', '。', '・', '/', '／', 'と']) {
-            if strip(chunk).chars().count() >= 2 {
-                add(strip(chunk), "interpretation", 16);
-            }
-        }
-    }
-    out
-}
 pub(super) fn attach_links(materials: &mut Map<String, Value>, verse: &str) {
     let verse_h = compact(strip(verse));
     if verse_h.chars().count() < 2 {
@@ -382,7 +299,9 @@ pub(super) fn attach_links(materials: &mut Map<String, Value>, verse: &str) {
         .collect();
     let mut links = vec![];
     let mut seen = std::collections::HashSet::new();
-    for (label, source) in short_entries(materials) {
+    for (label, source) in crate::workshop_editing::materials::short_material_entries(
+        &Value::Object(materials.clone()),
+    ) {
         let mh = compact(&label);
         let chars: Vec<_> = mh.chars().collect();
         if chars.len() < 2 {

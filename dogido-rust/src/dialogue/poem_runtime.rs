@@ -44,9 +44,13 @@ impl Dialogue {
         let lines: Vec<HaikuLine> = if let Input::Revision { text, source } = &request {
             let mut helper = Helper::start(
                 &self.config.python,
-                &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/workshop_helper.py"),
+                &self.config.helper.with_file_name("workshop_helper.py"),
             )?;
-            let result = tokio::select! {_=bridge::cancelled(cancel)=>Err(anyhow::anyhow!("cancelled")), r=helper.exchange(json!({"op":"whole_verse","text":text,"source":source}))=>r};
+            let mut editing = crate::workshop_editing::Engine::default();
+            let frame = json!({"op":"whole_verse","text":text,"source":source});
+            let result = tokio::select! {_=bridge::cancelled(cancel)=>Err(anyhow::anyhow!("cancelled")),
+            r=tokio::time::timeout(Duration::from_secs(15), editing.run(&mut helper, &frame))=>
+                r.unwrap_or_else(|_|Err(anyhow::anyhow!("whole verse timed out")))};
             helper.finish(result.is_err()).await?;
             let lines: Vec<HaikuLine> = serde_json::from_value(result?["lines"].clone())?;
             poem_input::validate_lines(text, source, &lines)?;

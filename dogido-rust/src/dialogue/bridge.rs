@@ -1,16 +1,22 @@
 use super::DialogueConfig;
+use crate::llm::RigLlm;
+#[cfg(test)]
 use crate::{
-    llm::RigLlm,
     planner::{self, PreparedPlan},
     types::GenerationRequest,
 };
-use anyhow::{Context, Result, bail, ensure};
+#[cfg(test)]
+use anyhow::bail;
+use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
-use std::{process::Stdio, time::Duration};
+#[cfg(test)]
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::sync::watch;
+#[cfg(test)]
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Command,
-    sync::watch,
 };
 
 pub async fn cancelled(cancel: &mut watch::Receiver<bool>) {
@@ -58,8 +64,8 @@ async fn render_with_budget(
     llm: &RigLlm,
     mut input: Value,
     cancel: &mut watch::Receiver<bool>,
-    mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
-    mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
+    select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
+    hold_handoff: impl FnMut(&Value) -> Result<bool>,
     whole_turn_timeout: Duration,
 ) -> Result<Value> {
     if input["op"] == "light_plan" {
@@ -105,8 +111,9 @@ async fn render_with_budget(
         }
         input["prepared_knowledge_query"] = serde_json::to_value(&context.knowledge_query)?;
         input["prepared_context"] = serde_json::to_value(context)?;
-        input["language_requested"] =
-            (input["language_active"] == true || prepared.explicit_language).into();
+        input["language_requested"] = (config.language_enabled
+            && (input["language_active"] == true || prepared.explicit_language))
+            .into();
         input["prepared_input"] = serde_json::to_value(prepared)?;
     }
     ensure!(
@@ -116,6 +123,43 @@ async fn render_with_budget(
     if input["op"] == "combat_leaf" {
         return super::reaction_runtime::render(config, llm, &input, cancel).await;
     }
+    // Retain the old reverse-protocol fixtures only as a test oracle. Production
+    // ordinary turns never start dialogue_helper, even when chat_native is absent.
+    #[cfg(test)]
+    if input.get("chat_native").is_none() {
+        return legacy_test_render(
+            config,
+            llm,
+            input,
+            cancel,
+            select_route,
+            hold_handoff,
+            whole_turn_timeout,
+        )
+        .await;
+    }
+    super::chat_runtime::render(
+        config,
+        llm,
+        &input,
+        cancel,
+        select_route,
+        hold_handoff,
+        whole_turn_timeout,
+    )
+    .await
+}
+
+#[cfg(test)]
+async fn legacy_test_render(
+    config: &DialogueConfig,
+    llm: &RigLlm,
+    input: Value,
+    cancel: &mut watch::Receiver<bool>,
+    mut select_route: impl FnMut(crate::foreground::Route) -> Result<()>,
+    mut hold_handoff: impl FnMut(&Value) -> Result<bool>,
+    whole_turn_timeout: Duration,
+) -> Result<Value> {
     let light_plan = input["op"] == "light_plan";
     let routing_only = matches!(input["op"].as_str(), Some("assist_route" | "address_route"));
     let address_reply = input["address_reply"].as_str().map(str::to_owned);
@@ -554,6 +598,7 @@ async fn render_with_budget(
     result
 }
 
+#[cfg(test)]
 fn knowledge_request(frame: &Value, input: &Value) -> Result<crate::knowledge::query::Query> {
     ensure!(
         frame["request_text"].as_str().is_some() && frame["request_text"] == input["text"],
@@ -738,6 +783,7 @@ mod tests {
 #[path = "grounding_bridge_tests.rs"]
 mod grounding_bridge_tests;
 
+#[cfg(test)]
 #[path = "result_reading.rs"]
 mod result_reading;
 #[cfg(all(test, unix))]

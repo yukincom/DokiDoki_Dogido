@@ -71,6 +71,9 @@ enum Command {
         listen: SocketAddr,
         #[arg(long, default_value = "python3")]
         python: PathBuf,
+        /// 配布先に置いた接続補助と資料の起点。
+        #[arg(long)]
+        helper: Option<PathBuf>,
         #[arg(long, default_value = "default_model")]
         model: String,
         #[arg(long, default_value = "http://127.0.0.1:8080/v1")]
@@ -81,6 +84,8 @@ enum Command {
         speaker: u32,
         #[arg(long, default_value_t = 0.88)]
         speed: f64,
+        #[arg(long, default_value_t = 0.80)]
+        haiku_speed: f64,
         /// 既存設定から移植済み警告に必要な値だけを受け取るJSON。
         #[arg(long, default_value = "{}")]
         warning_settings: String,
@@ -105,7 +110,13 @@ enum Command {
         #[arg(long, default_value_t = 1.0)]
         volume: f64,
         #[arg(long)]
+        output_sampling_rate: Option<u32>,
+        #[arg(long)]
         no_audio: bool,
+        #[arg(long)]
+        no_llm: bool,
+        #[arg(long)]
+        no_language: bool,
     },
     /// 要求の型だけを確認する。ネットワーク・モデル生成なし。
     Check { request: PathBuf },
@@ -205,11 +216,13 @@ async fn main() -> Result<()> {
         Command::ServeDialogue {
             listen,
             python,
+            helper,
             model,
             base_url,
             voicevox_url,
             speaker,
             speed,
+            haiku_speed,
             warning_settings,
             combat_settings,
             haiku_settings,
@@ -217,19 +230,24 @@ async fn main() -> Result<()> {
             audio_player,
             audio_dir,
             no_audio,
+            no_llm,
+            no_language,
             max_tokens,
             timeout_ms,
             reading_engine,
             pitch,
             volume,
+            output_sampling_rate,
         } => {
             let dialogue = Dialogue::new(DialogueConfig {
                 python,
+                helper: helper.unwrap_or_else(|| DialogueConfig::default().helper),
                 model,
                 base_url,
                 voicevox_url,
                 speaker,
                 speed,
+                haiku_speed,
                 warnings: serde_json::from_str(&warning_settings)?,
                 combat: dogido_rust::combat::model::Settings::merged(&serde_json::from_str(
                     &combat_settings,
@@ -239,12 +257,14 @@ async fn main() -> Result<()> {
                 player: audio_player,
                 audio_dir,
                 audio_enabled: !no_audio,
+                llm_enabled: !no_llm,
+                language_enabled: !no_language,
                 max_tokens,
                 timeout_ms,
                 reading_engine,
                 pitch,
                 volume,
-                ..DialogueConfig::default()
+                output_sampling_rate,
             })?;
             serve(listen, Some(dialogue)).await?;
         }
@@ -298,6 +318,7 @@ async fn serve(listen: SocketAddr, dialogue: Option<std::sync::Arc<Dialogue>>) -
         .context("cannot bind Rust server")?;
     let address = listener.local_addr()?;
     let enabled = dialogue.is_some();
+    let llm_enabled = dialogue.as_ref().is_some_and(|d| d.llm_enabled());
     let app = Application::new(ServerConfig {
         dialogue,
         auth_token: std::env::var("DOGIDO_AUTH_TOKEN").ok(),
@@ -306,7 +327,7 @@ async fn serve(listen: SocketAddr, dialogue: Option<std::sync::Arc<Dialogue>>) -
     println!(
         "{}",
         serde_json::json!({"event": "server_listening", "address": address.to_string(),
-        "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "llm_enabled": enabled})
+        "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "llm_enabled": llm_enabled})
     );
     std::io::stdout().flush()?;
     if enabled {

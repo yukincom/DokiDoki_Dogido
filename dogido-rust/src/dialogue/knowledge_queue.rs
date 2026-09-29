@@ -410,18 +410,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn row_eviction_does_not_lose_a_queued_turn_and_shutdown_reaps_parser() {
+    async fn row_eviction_does_not_lose_a_queued_turn_and_shutdown_reaps_reading_adapter() {
         let folder =
             std::env::temp_dir().join(format!("dogido-knowledge-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&folder).unwrap();
         let helper = folder.join("helper.py");
-        std::fs::write(&helper,"import os,sys,time\nfrom pathlib import Path\nsys.stdin.readline()\nPath(__file__).with_suffix('.pid').write_text(str(os.getpid()))\ntime.sleep(60)\n").unwrap();
+        std::fs::write(
+            &helper,
+            "raise AssertionError('ordinary helper must not start')\n",
+        )
+        .unwrap();
+        let adapter = folder.join("tts_unidic_adapter.py");
+        std::fs::write(&adapter,"import os,sys,time\nfrom pathlib import Path\nsys.stdin.readline()\nPath(__file__).with_suffix('.pid').write_text(str(os.getpid()))\ntime.sleep(60)\n").unwrap();
         let mut config = DialogueConfig {
             helper: helper.clone(),
             ..DialogueConfig::default()
         };
         config.haiku.memory_enabled = false;
-        config.web.enabled = false; // This fixture owns only the deliberately stalled parser.
+        config.web.enabled = false; // Only the deliberately stalled dictionary adapter is owned.
         let dialogue = Dialogue::new(config).unwrap();
         dialogue.register("s", "試験", true);
         {
@@ -444,7 +450,7 @@ mod tests {
             assert_eq!(row["source"], "voice");
             assert_eq!(row["player_input_text"], "枕詞って何？");
         }
-        let pid_file = helper.with_extension("pid");
+        let pid_file = adapter.with_extension("pid");
         let pid: i32 = tokio::time::timeout(Duration::from_secs(2), async {
             loop {
                 if let Ok(pid) = std::fs::read_to_string(&pid_file)
@@ -469,6 +475,7 @@ mod tests {
             Some(libc::ESRCH)
         );
         std::fs::remove_file(helper).unwrap();
+        std::fs::remove_file(adapter).unwrap();
         std::fs::remove_file(pid_file).unwrap();
         std::fs::remove_dir(folder).unwrap();
     }

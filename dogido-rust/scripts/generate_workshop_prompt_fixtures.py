@@ -11,7 +11,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path[:0]=[str(ROOT),str(Path(__file__).resolve().parent)]
-import workshop_helper as helper
+import workshop_oracle as helper
 from dogido_server.haiku.workshop_context import workshop_context_block
 from dogido_server import tts_reading
 
