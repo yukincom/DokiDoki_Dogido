@@ -4,6 +4,7 @@
 mod guard;
 use crate::{chat_prompt, reaction_leaf::sanitize, types::GenerationRequest};
 use anyhow::{Context, Result, ensure};
+pub(crate) use guard::mentioned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

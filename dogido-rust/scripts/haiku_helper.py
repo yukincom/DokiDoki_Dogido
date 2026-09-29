@@ -14,6 +14,7 @@ from dogido_server.llm.prompts import build_messages
 from dogido_server.llm.types import StructuredGenerationRequest
 from dogido_server.tts_reading import hiraganize_japanese_text
 from haiku_grounding_prompt import build_haiku_line_grounding_messages
+from tts_shared_tokens import handle as shared_tts_tokens
 
 KINDS = {"haiku_irony", "haiku_scene", "haiku_draft", "haiku_line_grounding", "haiku_line_regeneration", "haiku_workshop_revision"}
 
@@ -29,6 +30,8 @@ def signature(text):
 
 
 def handle(frame):
+    if frame["op"] == "tts_tokens":
+        return shared_tts_tokens(frame)
     if frame["op"] == "prepare":
         request = StructuredGenerationRequest(**frame["request"])
         if request.kind not in KINDS:

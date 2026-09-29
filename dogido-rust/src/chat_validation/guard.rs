@@ -23,8 +23,7 @@ fn matches(text: &str) -> Vec<(usize, usize, &'static str)> {
     }
     found
 }
-#[cfg(test)]
-pub(super) fn mentioned(text: &str) -> Vec<String> {
+pub(crate) fn mentioned(text: &str) -> Vec<String> {
     matches(text)
         .iter()
         .map(|(_, _, s)| (*s).to_owned())

@@ -209,7 +209,8 @@ def main():
             sid = register(base)
             assert request(base, "/api/v1/voice-input/context")["session_id"] == sid
             turn = submit(base, sid)
-            reply = wait_for(lambda: row(base, turn, {"completed"}))
+            reply = wait_for(lambda: row(base, turn, {"completed", "failed"}))
+            assert reply["playback_status"] == "completed", (reply, log.read_text())
             assert reply["text"] == control["leaf"], (reply, log.read_text())
             assert reply["llm_reports"][0]["result"] == "accepted", reply
             assert [r["role"] for r in snapshot(base)["sessions"][0]["history"]] == ["user", "assistant"]

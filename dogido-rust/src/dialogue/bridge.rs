@@ -119,6 +119,7 @@ async fn render_with_budget(
     let light_plan = input["op"] == "light_plan";
     let routing_only = matches!(input["op"].as_str(), Some("assist_route" | "address_route"));
     let address_reply = input["address_reply"].as_str().map(str::to_owned);
+    let workshop_open = input["workshop"].is_object();
     let combat_kind =
         (input["op"] == "combat_leaf").then(|| input["kind"].as_str().unwrap_or("").to_owned());
     if let Some(kind) = combat_kind.as_deref() {
@@ -319,7 +320,21 @@ async fn render_with_budget(
                         plans == 1 && leaves == 0 && knowledge.is_none(),
                         "grounding requires exactly one ordinary planner before leaf"
                     );
-                    let projection = serde_json::from_value(frame["input"].take())?;
+                    let mut projection: planner::handoff::Input =
+                        serde_json::from_value(frame["input"].take())?;
+                    if let Some(names) = &mut projection.name_context {
+                        // Reported names come only from the Rust-owned turn and completed history.
+                        names.user_text = input["text"].as_str().unwrap_or_default().into();
+                        names.history = input["history"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .map(|row| crate::chat_names::HistoryRow {
+                                role: row["role"].as_str().unwrap_or_default().into(),
+                                text: row["text"].as_str().unwrap_or_default().into(),
+                            })
+                            .collect();
+                    }
                     let active = !*native_cancel.borrow() && native_cancel.has_changed().is_ok();
                     let output = grounding.resolve(projection, active)?;
                     tracing::info!(
@@ -348,6 +363,11 @@ async fn render_with_budget(
                     let input: crate::chat_validation::Input =
                         serde_json::from_value(frame["input"].take())?;
                     grounding.validate_leaf(&input.prompt.details)?;
+                    grounding.validate_materials(
+                        &input.prompt.details,
+                        &input.validation,
+                        workshop_open,
+                    )?;
                     let turn =
                         crate::chat_validation::Turn::new(input, &config.model, config.max_tokens)?;
                     leaves = 1;

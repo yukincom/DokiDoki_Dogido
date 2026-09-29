@@ -23,7 +23,12 @@ async fn shared_ready_never_consumes_ipc_or_reformats_a_dictionary_reply() {
     let path = script(
         &dir,
         &format!(
-            "read -r line\nprintf '%s\\n' \"$line\" > '{}/requests'\nprintf '{{\"text\":\"かな\",\"signature\":\"かな\"}}\\n'\n",
+            r#"read -r line
+printf '%s\n' "$line" > '{}/requests'
+request_id=${{line#*\"request_id\":\"}}
+request_id=${{request_id%%\"*}}
+printf '{{"schema_version":1,"request_id":"%s","status":"ok","tokens":[{{"surface":"仮名","goshu":"漢","pos1":"名詞","kana":"カナ","pron":"カナ"}}]}}\n' "$request_id"
+"#,
             dir.display()
         ),
     );
@@ -58,7 +63,7 @@ async fn shared_ready_never_consumes_ipc_or_reformats_a_dictionary_reply() {
     assert_eq!(transformed.text, "かな");
     let frame: Value =
         serde_json::from_str(&std::fs::read_to_string(dir.join("requests")).unwrap()).unwrap();
-    assert_eq!(frame["op"], "transform");
+    assert_eq!(frame["op"], "tts_tokens");
     helper.finish(false).await.unwrap();
     stopped(pid);
     std::fs::remove_dir_all(dir).unwrap();
@@ -212,6 +217,107 @@ async fn shared_native_reading_preserves_deadline_and_output_bound() {
                 .await
                 .is_err()
         );
+        helper.finish(true).await.unwrap();
+        stopped(pid);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+fn normalize(text: &str) -> TransformRequest {
+    TransformRequest {
+        text: text.into(),
+        mode: crate::haiku::TransformMode::Normalize,
+        line_index: 0,
+        atom_ids: vec![],
+        source_atoms: vec![],
+    }
+}
+#[tokio::test]
+async fn lexical_transforms_use_only_one_neutral_dictionary_query_when_needed() {
+    for status in ["ok", "unavailable", "parse_error"] {
+        let dir = directory();
+        let tokens = if status == "ok" {
+            r#"[{"surface":"情報","goshu":"漢","pos1":"記号","kana":"ジョウホウ","pron":"ジョーホー"}]"#
+        } else {
+            "[]"
+        };
+        let path = script(
+            &dir,
+            &format!(
+                r#"count=0
+while read -r line; do
+count=$((count+1))
+printf '%s\n' "$line" >> '{}/requests'
+request_id=${{line#*\"request_id\":\"}}
+request_id=${{request_id%%\"*}}
+if [ "$count" -eq 1 ]; then
+printf '{{"schema_version":1,"request_id":"%s","status":"{status}","tokens":{tokens}}}\n' "$request_id"
+else
+printf '{{"applied":true}}\n'
+fi
+done
+"#,
+                dir.display()
+            ),
+        );
+        let mut helper = Helper::start(Path::new("/bin/sh"), &path).unwrap();
+        let pid = helper.child.id().unwrap();
+        assert_eq!(
+            helper.transform(normalize("「カナ」")).await.unwrap().text,
+            "カナ"
+        );
+        let mut correction = normalize("「カナ」");
+        correction.mode = crate::haiku::TransformMode::Correct;
+        assert_eq!(helper.transform(correction).await.unwrap().text, "「カナ」");
+        assert!(!dir.join("requests").exists());
+        let result = helper.transform(normalize("情報")).await.unwrap();
+        // Neutral reading includes Sino-Japanese and symbol tokens; no TTS manual replacement.
+        assert_eq!(
+            result.text,
+            if status == "ok" {
+                "じょうほう"
+            } else {
+                "情報"
+            }
+        );
+        assert_eq!(
+            helper
+                .exchange(json!({"op":"reading_overlay","rows":[]}))
+                .await
+                .unwrap(),
+            json!({"applied":true})
+        );
+        helper.finish(false).await.unwrap();
+        stopped(pid);
+        let rows: Vec<Value> = std::fs::read_to_string(dir.join("requests"))
+            .unwrap()
+            .lines()
+            .map(|s| serde_json::from_str(s).unwrap())
+            .collect();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["op"], "tts_tokens");
+        assert_eq!(rows[0]["text"], "情報");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+#[tokio::test]
+async fn lexical_invalid_sdk_reply_cannot_be_reused_as_a_later_line() {
+    for response in [
+        "not-json",
+        r#"{"schema_version":1,"request_id":"old","status":"ok","tokens":[]}"#,
+        r#"{"text":"かな","signature":"かな"}"#,
+    ] {
+        let dir = directory();
+        let path = script(
+            &dir,
+            &format!("read -r line\nprintf '%s\\n' '{response}'\nread -r blocked\n"),
+        );
+        let mut helper = Helper::start(Path::new("/bin/sh"), &path).unwrap();
+        let pid = helper.child.id().unwrap();
+        assert!(helper.transform(normalize("情報")).await.is_err());
+        assert!(helper.poisoned);
+        assert!(helper.child.try_wait().unwrap().is_some());
+        assert!(helper.transform(normalize("かな")).await.is_err());
         helper.finish(true).await.unwrap();
         stopped(pid);
         std::fs::remove_dir_all(dir).unwrap();

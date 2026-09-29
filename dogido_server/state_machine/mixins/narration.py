@@ -890,7 +890,7 @@ class NarrationMixin:
         # 全カタログのvisual_tagsへ流さない。
         raw_topic_hits = (
             self._player_chat_topic_hits(chat_plan.entity_query, observed_ids)
-            if chat_plan.requests_catalog
+            if chat_plan.requests_catalog and not getattr(self.llm, "native_topic_catalog", False)
             else []
         )
         native_topics = getattr(self.llm, "prepare_player_chat_topics", None)
@@ -899,8 +899,17 @@ class NarrationMixin:
                 chat_plan, topic_hits=raw_topic_hits, observed_entities=observed_entities,
                 has_visual_threats=has_visual_for_chat, threat_summary=threat_summary,
                 user_text=chat_plan.entity_query or user_text, observed_ids=observed_ids,
+                name_context={
+                    "visual_types": effective_visual_types,
+                    "passive_types": self._merge_unique_types(passive_types, list(getattr(self, "_player_chat_recent_passive_sightings", lambda _: {})(event))),
+                    "hearing_named_mobs": [*hearing_named_mobs, *hearing_source_labels],
+                    "recent_mob_types": recent_name_context_types,
+                    "current_entity_labels": [row["label"] for row in observed_entities],
+                    "look_label": look_for_observation,
+                },
             )
             usable_topic_hits = topic_policy["usable_topic_hits"]
+            raw_topic_hits = topic_policy.get("raw_topic_hits", raw_topic_hits)
             reply_stance = topic_policy["reply_stance"]
             reply_policy = topic_policy["reply_policy"]
             topic_for_identify = topic_policy["topic_for_identify"]
@@ -944,42 +953,51 @@ class NarrationMixin:
                     if grounded_ids
                     else usable_topic_hits
                 )
-        catalog_topic_hints = (
-            self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
-        )
-        allowed_speech_labels = build_allowed_speech_labels(
-            topic_hits=topic_for_identify,
-            visual_types=effective_visual_types,
-            passive_types=passive_types,
-            hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
-            recent_mob_types=recent_name_context_types,
-        )
-        reported_texts = [user_text]
-        conversation_turns = history_details.get("conversation_turns")
-        if isinstance(conversation_turns, list):
-            reported_texts.extend(
-                str(row.get("text") or "")
-                for row in conversation_turns
-                if isinstance(row, dict) and row.get("role") == "user"
+        if callable(native_topics) and "catalog_topic_hints" in topic_policy:
+            catalog_topic_hints = topic_policy["catalog_topic_hints"]
+        else:
+            catalog_topic_hints = (
+                self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
             )
-        additional_labels = [
-            *(row["label"] for row in observed_entities),
-            *(
-                label
-                for text in reported_texts
-                for label in catalog_labels_mentioned_in_text(text)
-            ),
-            *catalog_labels_mentioned_in_text(look_for_observation),
-        ]
-        for label in additional_labels:
-            if label and label not in allowed_speech_labels:
-                allowed_speech_labels.append(label)
-        speech_name_corrections = build_observed_speech_name_corrections(
-            recent_name_context_types
-        )
-        # 全通常雑談でカタログ名を検査する。許可元は現在観測、現在/過去の
-        # player発話、plannerが選んだ同定候補だけ。assistant履歴だけの名は含めない。
-        speech_whitelist_enforce = True
+        native_names = topic_policy.get("names") if callable(native_topics) else None
+        if native_names is not None:
+            allowed_speech_labels = native_names["allowed_speech_labels"]
+            speech_name_corrections = native_names["speech_name_corrections"]
+            speech_whitelist_enforce = native_names["speech_whitelist_enforce"]
+        else:
+            allowed_speech_labels = build_allowed_speech_labels(
+                topic_hits=topic_for_identify,
+                visual_types=effective_visual_types,
+                passive_types=passive_types,
+                hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
+                recent_mob_types=recent_name_context_types,
+            )
+            reported_texts = [user_text]
+            conversation_turns = history_details.get("conversation_turns")
+            if isinstance(conversation_turns, list):
+                reported_texts.extend(
+                    str(row.get("text") or "")
+                    for row in conversation_turns
+                    if isinstance(row, dict) and row.get("role") == "user"
+                )
+            additional_labels = [
+                *(row["label"] for row in observed_entities),
+                *(
+                    label
+                    for text in reported_texts
+                    for label in catalog_labels_mentioned_in_text(text)
+                ),
+                *catalog_labels_mentioned_in_text(look_for_observation),
+            ]
+            for label in additional_labels:
+                if label and label not in allowed_speech_labels:
+                    allowed_speech_labels.append(label)
+            speech_name_corrections = build_observed_speech_name_corrections(
+                recent_name_context_types
+            )
+            # 全通常雑談でカタログ名を検査する。許可元は現在観測、現在/過去の
+            # player発話、plannerが選んだ同定候補だけ。assistant履歴だけの名は含めない。
+            speech_whitelist_enforce = True
         if not callable(native_topics):
             identify_skeleton = build_identify_skeleton(
                 stance=reply_stance,

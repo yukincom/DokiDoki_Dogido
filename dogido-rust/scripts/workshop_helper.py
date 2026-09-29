@@ -390,6 +390,14 @@ def handle(frame):
     if frame["op"] == "discussion_candidate":
         return discussion_candidate(frame, frame.get("proposal"))
     details = details_for(frame)
+    if frame["op"] == "prepare_details":
+        # The same projection and raw-text fixed edit; Rust assembles all prompt
+        # messages. Keep prepare below as the canonical compatibility oracle.
+        prepared = {"details": details}
+        fixed_payload = fixed_fragment_edit(frame, details)
+        if fixed_payload is not None:
+            prepared["fixed_payload"] = fixed_payload
+        return prepared
     if frame["op"] == "prepare":
         messages = consultation_messages(details)
         fixed_payload = fixed_fragment_edit(frame, details)
@@ -404,6 +412,7 @@ def handle(frame):
                 + "この6キーをすべて含め、許可actionとpurposeを守る。"})
         return {"messages": messages}
     if frame["op"] == "validate":
+        # Compatibility/golden oracle. Rust validates the prepared details locally.
         payload = frame["payload"]
         if isinstance(payload, dict) and payload.get("action") in FOLLOWUP_ACTIONS:
             if payload["action"] not in details["allowed_actions"]:

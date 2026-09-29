@@ -1,4 +1,8 @@
 //! 共同編集の相談段階。Rustがモデルの上限、実検査、取消と状態反映を所有する。
+#[path = "../workshop_prompt/mod.rs"]
+mod prompt;
+#[path = "../workshop_validation/mod.rs"]
+mod validation;
 use super::*;
 use crate::{
     haiku_bridge::Helper,
@@ -168,8 +172,7 @@ impl Dialogue {
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
                 for attempt in 0..2 {
-                    frame["op"] = "prepare".into();
-                    let prepared = helper.exchange(frame.clone()).await?;
+                    let (prepared, details) = prepare_consultation(helper, &mut frame).await?;
                     let payload = if let Some(fixed) = prepared.get("fixed_payload") {
                         fixed.clone()
                     } else {
@@ -213,7 +216,7 @@ impl Dialogue {
                     };
                     frame["op"] = "validate".into();
                     frame["payload"] = payload.clone();
-                    let validation = helper.exchange(frame.clone()).await?;
+                    let validation = validation::validate(&frame, &details)?;
                     reason = validation["reason"]
                         .as_str()
                         .unwrap_or("invalid_validation")
@@ -541,4 +544,15 @@ impl Dialogue {
         w.record_activity(Instant::now());
         Ok(())
     }
+}
+
+// Keep one projection exchange in the existing helper/turn deadline. No model
+// call, dictionary work, or new helper is introduced by prompt assembly.
+async fn prepare_consultation(helper: &mut Helper, frame: &mut Value) -> Result<(Value, Value)> {
+    frame["op"] = "prepare_details".into();
+    let prepared = helper.exchange(frame.clone()).await?;
+    Ok((
+        prompt::prepare(&prepared, frame.get("retry"))?,
+        prepared["details"].clone(),
+    ))
 }

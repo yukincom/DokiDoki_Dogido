@@ -131,3 +131,64 @@ fn chat_grounding_filters_raw_topics_before_matching_and_keeps_original_indices(
     assert_eq!(topics.topic_for_identify_indices, vec![1]);
     assert!(topics.identify_skeleton.unwrap().contains("ヤギ"));
 }
+
+#[test]
+fn chat_grounding_native_catalog_uses_accepted_plan_and_binds_later_materials() {
+    let f = fixture();
+    let case = &f["cases"][0];
+    for action in [
+        planner::Action::IdentifyEntity,
+        planner::Action::ContinueConversation,
+    ] {
+        let mut input: Input = serde_json::from_value(case["input"].clone()).unwrap();
+        input.plan.action = action;
+        input.plan.entity_query = "ヤギ".into();
+        input.native_catalog = true;
+        input.topic_hits.clear();
+        input.topic_policy = Some(
+            serde_json::from_value(json!({"has_visual_threats":false,
+            "topic_hits":[],"threat_summary":"","user_text":"ヤギ","observed_ids":[]}))
+            .unwrap(),
+        );
+        let mut state = Handoff::default();
+        state.record_plan(&prepared(case), &input.plan).unwrap();
+        let actual = state.resolve(input, true).unwrap();
+        let rows = actual.catalog.as_ref().unwrap();
+        let topics = actual.topics.as_ref().unwrap();
+        assert_eq!(
+            rows.is_empty(),
+            action == planner::Action::ContinueConversation
+        );
+        if action == planner::Action::IdentifyEntity {
+            assert_eq!(rows[0].entry_id, "goat");
+            assert!(
+                actual
+                    .catalog_topic_hints
+                    .as_ref()
+                    .unwrap()
+                    .contains("ヤギ")
+            );
+        }
+        for workshop in [false, true] {
+            let stance = if workshop {
+                "none"
+            } else {
+                topics.policy.reply_stance.as_str()
+            };
+            let mut details = json!({"reply_stance":stance,
+                "reply_policy":dogido_rust::chat_prompt::reply_policy_line(stance),
+                "identify_skeleton":if workshop {json!("")} else {json!(topics.identify_skeleton)},
+                "catalog_topic_hints":if workshop {""} else {actual.catalog_topic_hints.as_deref().unwrap()},
+                "catalog_topic_ids":if workshop {vec![]} else {topics.topic_for_identify_indices.iter().map(|i| rows[*i].entry_id.as_str()).collect::<Vec<_>>()}});
+            state
+                .validate_materials(&details, &json!({}), workshop)
+                .unwrap();
+            details["catalog_topic_hints"] = "勝手な候補".into();
+            assert!(
+                state
+                    .validate_materials(&details, &json!({}), workshop)
+                    .is_err()
+            );
+        }
+    }
+}

@@ -84,6 +84,7 @@ ENVIRONMENT_LEAVES = frozenset({"ambient", "weather_transition", "ender_eye_thro
 
 
 class BridgeLLM(DogidoLLM):
+    native_topic_catalog = True
     def __init__(self, settings, model, allowed_leaf="player_chat"):
         super().__init__(settings)
         self.model = model
@@ -122,7 +123,7 @@ class BridgeLLM(DogidoLLM):
     def prepare_player_chat_topics(self, plan, **projection):
         if self.allowed_leaf != "player_chat":
             raise ValueError("unexpected topic operation")
-        report = exchange({"op": "chat_ground", "input": topics_input(plan, **projection)})
+        report = exchange({"op": "chat_ground", "input": topics_input(plan, native_catalog=True, **projection)})
         return topics_result(report, projection["topic_hits"])
 
     def generate_leaf_text(self, request):

@@ -45,7 +45,7 @@ def grounding_result(report):
 
 
 def topics_input(plan, *, topic_hits, observed_entities, has_visual_threats,
-                 threat_summary, user_text, observed_ids):
+                 threat_summary, user_text, observed_ids, native_catalog=False, name_context=None):
     """Project raw hits; filtering and policy belong to the same native exchange."""
     frame = grounding_input(plan, topic_hits=topic_hits, observed_entities=observed_entities)
     if len(topic_hits) > 8:
@@ -59,12 +59,37 @@ def topics_input(plan, *, topic_hits, observed_entities, has_visual_threats,
                         "matched_terms": list(row.get("matched_terms") or []),
                         "score": float(row.get("score") or 0.0)} for row in topic_hits],
     }
+    if native_catalog:
+        if topic_hits:
+            raise ValueError("native catalog cannot accept Python hits")
+        frame["native_catalog"] = True
+    if name_context is not None:
+        frame["name_context"] = name_context
     return frame
 
 
 def topics_result(report, topic_hits):
-    if not isinstance(report, dict) or set(report) != {"grounding", "fixed_reply", "topics"}:
+    base_keys = {"grounding", "fixed_reply", "topics"}
+    if not isinstance(report, dict) or set(report) not in (base_keys, base_keys | {"catalog", "catalog_topic_hints"}, base_keys | {"catalog", "catalog_topic_hints", "names"}):
         raise ValueError("invalid native topics result")
+    if "catalog" in report:
+        if not isinstance(report["catalog"], list) or not isinstance(report["catalog_topic_hints"], str):
+            raise ValueError("invalid native catalog projection")
+        topic_hits = report["catalog"]
+        for row in topic_hits:
+            if (not isinstance(row, dict) or set(row) != {"entry_id", "kind", "label_ja", "score", "matched_terms", "observed"}
+                    or any(not isinstance(row[k], str) for k in ("entry_id", "label_ja"))
+                    or row["kind"] not in {"mob", "structure"} or type(row["observed"]) is not bool
+                    or type(row["score"]) not in (float, int) or not math.isfinite(row["score"])
+                    or not isinstance(row["matched_terms"], list) or any(not isinstance(s, str) for s in row["matched_terms"])):
+                raise ValueError("invalid native catalog row")
+    names = report.get("names")
+    if names is not None:
+        if (not isinstance(names, dict) or set(names) != {"allowed_speech_labels", "speech_name_corrections", "speech_whitelist_enforce"}
+                or not isinstance(names["allowed_speech_labels"], list) or any(not isinstance(s, str) for s in names["allowed_speech_labels"])
+                or not isinstance(names["speech_name_corrections"], dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in names["speech_name_corrections"].items())
+                or names["speech_whitelist_enforce"] is not True):
+            raise ValueError("invalid native speech names")
     grounding, fixed = grounding_result({k: report[k] for k in ("grounding", "fixed_reply")})
     policy = report["topics"]
     if not isinstance(policy, dict) or set(policy) != {
@@ -81,7 +106,10 @@ def topics_result(report, topic_hits):
             or policy["identify_skeleton"] is not None and not isinstance(policy["identify_skeleton"], str)):
         raise ValueError("invalid native topic text")
     return grounding, fixed, {
+        **({"names": names} if names is not None else {}),
+        "raw_topic_hits": topic_hits,
         "usable_topic_hits": [topic_hits[i] for i in policy["usable_indices"]],
         "topic_for_identify": [topic_hits[i] for i in policy["topic_for_identify_indices"]],
+        **({"catalog_topic_hints": report["catalog_topic_hints"]} if "catalog_topic_hints" in report else {}),
         **{k: policy[k] for k in ("reply_stance", "reply_policy", "identify_skeleton")},
     }

@@ -179,10 +179,56 @@ impl Helper {
     }
 
     pub async fn transform(&mut self, request: TransformRequest) -> Result<LineForm> {
-        let response = self
-            .exchange(json!({"op":"transform", "request":request}))
-            .await?;
-        serde_json::from_value(response).context("invalid haiku transform")
+        use crate::{
+            haiku::{TransformMode, lexical},
+            tts_reading::{has_kanji, tokens},
+        };
+        ensure!(
+            !self.poisoned,
+            "haiku helper protocol is closed after failure"
+        );
+        ensure!(
+            serde_json::to_vec(&json!({"op":"transform","request":request}))?.len()
+                < FRAME_LIMIT as usize,
+            "haiku helper request too large"
+        );
+        let result = async {
+            let result = match request.mode {
+                TransformMode::Correct => {
+                    let text =
+                        lexical::correct(&request.text, &request.atom_ids, &request.source_atoms)
+                            .map_or(request.text, |c| c.corrected);
+                    lexical::form(text)
+                }
+                TransformMode::Normalize => {
+                    let dictionary = if has_kanji(&request.text) {
+                        let request_id = uuid::Uuid::new_v4().to_string();
+                        let response = self
+                            .exchange(json!({"op":"tts_tokens","schema_version":1,
+                        "request_id":request_id,"text":request.text}))
+                            .await?;
+                        tokens::decode_tokens(response, &request_id)?
+                            .map(|words| tokens::neutral(&words))
+                    } else {
+                        None
+                    };
+                    lexical::normalized_form(&request.text, dictionary.as_deref())
+                }
+            };
+            ensure!(
+                serde_json::to_vec(&result)?.len() < FRAME_LIMIT as usize,
+                "haiku helper response too large"
+            );
+            Ok(result)
+        }
+        .await;
+        if result.is_err() {
+            self.poisoned = true;
+            self.stdin.take();
+            let _ = self.child.kill().await;
+            let _ = self.child.wait().await;
+        }
+        result
     }
 
     /// 成否や取消を問わず所有するhelperを回収する。共有モデルは触らない。
@@ -371,7 +417,11 @@ mod tests {
         // This helper understands only the subsequent lexical transform, never prepare.
         std::fs::write(
             &path,
-            "read -r line\nprintf '{\"text\":\"かな\",\"signature\":\"かな\"}\\n'\n",
+            r#"read -r line
+request_id=${line#*\"request_id\":\"}
+request_id=${request_id%%\"*}
+printf '{"schema_version":1,"request_id":"%s","status":"ok","tokens":[{"surface":"仮名","goshu":"漢","pos1":"名詞","kana":"カナ","pron":"カナ"}]}\n' "$request_id"
+"#,
         )
         .unwrap();
         let mut helper = Helper::start(Path::new("/bin/sh"), &path).unwrap();

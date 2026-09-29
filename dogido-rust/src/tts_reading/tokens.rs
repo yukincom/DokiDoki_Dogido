@@ -16,6 +16,45 @@ pub struct Token {
     pub kana: Option<String>,
     pub pron: Option<String>,
 }
+/// Full dictionary reading also used for neutral poem normalization. This does
+/// not apply TTS residual replacements or change words without kanji.
+pub fn neutral(tokens: &[Token]) -> String {
+    tokens
+        .iter()
+        .map(|token| {
+            if !has_kanji(&token.surface) {
+                return token.surface.clone();
+            }
+            let reading = token_reading(token);
+            if reading.is_empty() {
+                token.surface.clone()
+            } else {
+                reading
+            }
+        })
+        .collect()
+}
+fn token_reading(token: &Token) -> String {
+    if let Some(preferred) = PREFERRED.get(&token.surface) {
+        return preferred.clone();
+    }
+    token
+        .kana
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .or(token.pron.as_deref())
+        .unwrap_or("")
+        .trim_matches(space)
+        .chars()
+        .map(|c| {
+            if ('ァ'..='ヶ').contains(&c) {
+                char::from_u32(c as u32 - 0x60).unwrap()
+            } else {
+                c
+            }
+        })
+        .collect()
+}
 /// The optional dictionary owns segmentation. Never reconstruct spaces it omitted.
 pub fn apply(tokens: &[Token]) -> String {
     tokens
@@ -73,6 +112,9 @@ struct Response {
 }
 /// Only explicit SDK failure becomes None. Malformed/mismatched IPC is an error.
 pub fn decode(frame: Value, request_id: &str) -> Result<Option<String>> {
+    Ok(decode_tokens(frame, request_id)?.map(|tokens| apply(&tokens)))
+}
+pub fn decode_tokens(frame: Value, request_id: &str) -> Result<Option<Vec<Token>>> {
     if let Some(rows) = frame["tokens"].as_array() {
         ensure!(
             rows.iter()
@@ -89,7 +131,7 @@ pub fn decode(frame: Value, request_id: &str) -> Result<Option<String>> {
         "unidic response identity mismatch"
     );
     match response.status {
-        Status::Ok => Ok(Some(apply(&response.tokens))),
+        Status::Ok => Ok(Some(response.tokens)),
         Status::Unavailable | Status::ParseError => {
             ensure!(
                 response.tokens.is_empty(),

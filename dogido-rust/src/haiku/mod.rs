@@ -1,6 +1,7 @@
 //! Automatic source-grounded haiku. State, reservations, validation and bounded
 //! regeneration belong to Rust. Backend owns only generation and lexical transforms.
 mod generation;
+pub mod lexical;
 pub mod meter;
 pub mod revision;
 #[cfg(test)]

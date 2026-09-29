@@ -1,3 +1,4 @@
+use crate::entry_catalog::{NEUTRAL, PASSIVE, STRUCTURES};
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -7,18 +8,7 @@ static GENERAL: LazyLock<Value> = LazyLock::new(|| {
 static REACTIONS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/mobs/ambient_reactions.json")).unwrap()
 });
-static PASSIVE: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/mobs/passive.json"
-    ))
-    .unwrap()
-});
-static NEUTRAL: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/mobs/neutral.json"
-    ))
-    .unwrap()
-});
+
 static BIOMES: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!(
         "../../../../data/catalogs/entries/minecraft_biome.json"
@@ -137,12 +127,7 @@ pub fn tags(entry: &Value) -> Vec<String> {
 static BIOME_REACTIONS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/responses/ques/biome.json")).unwrap()
 });
-static STRUCTURES: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../data/catalogs/entries/minecraft_structure.json"
-    ))
-    .unwrap()
-});
+
 pub fn biome_lines(biome: &str, phase: &str) -> Vec<String> {
     let r = &BIOME_REACTIONS["reactions"][biome];
     let payload = if r[phase].is_object() {

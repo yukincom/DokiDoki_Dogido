@@ -87,6 +87,10 @@ static WORD: LazyLock<Regex> =
 pub(crate) fn space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
+/// Python's Unicode-versioned str.isalnum; its regex word class adds only '_'.
+pub(crate) fn alphanumeric(c: char) -> bool {
+    c != '_' && WORD.is_match(c.encode_utf8(&mut [0; 4]))
+}
 pub(crate) fn nfkc(text: &str) -> String {
     // Unicodeの正規化安定性を使い、Python側で未割当だった文字はそのまま保持。
     // 未割当文字の結合クラスは0なので、ここで区切っても前後の合成・順序は同じ。

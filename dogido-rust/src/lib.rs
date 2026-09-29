@@ -1,10 +1,13 @@
 pub mod address;
 pub mod assist;
+pub mod chat_catalog;
+pub mod chat_names;
 pub mod chat_prompt;
 pub mod chat_topics;
 pub mod combat;
 pub mod contextual_asr;
 pub mod dialogue;
+mod entry_catalog;
 pub mod environment;
 pub mod episode_log;
 pub mod events;

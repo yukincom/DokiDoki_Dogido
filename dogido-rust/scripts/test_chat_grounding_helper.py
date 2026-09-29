@@ -57,15 +57,20 @@ def test_narration_native_hook_bypasses_old_grounding_but_python_default_remains
     original_filter = chat_policy.filter_usable_topic_hits
     original_stance = chat_policy.resolve_reply_stance
     original_policy = chat_policy.reply_policy_line
+    native_hits = DogidoStateMachine(settings)._player_chat_topic_hits("ヤギ", [])
     class Native:
+        native_topic_catalog = True
         def __init__(self): self.calls=[]
         def prepare_player_chat_topics(self,plan,**kw):
             self.calls.append((plan,kw))
+            assert kw["topic_hits"] == []
+            kw = {**kw, "topic_hits": native_hits}
             usable = original_filter(kw["topic_hits"])
             g=original_ground(plan,topic_hits=usable,observed_entities=kw["observed_entities"])
-            stance=original_stance(**{k:v for k,v in kw.items() if k!="observed_entities"})
+            stance=original_stance(**{k:v for k,v in kw.items() if k not in {"observed_entities", "name_context"}})
             return g,original_fixed(plan,g), {"usable_topic_hits":usable,"reply_stance":stance,
-                "reply_policy":original_policy(stance),"topic_for_identify":[],"identify_skeleton":None}
+                "reply_policy":original_policy(stance),"topic_for_identify":[],"identify_skeleton":None,
+                "raw_topic_hits":native_hits, "catalog_topic_hints":""}
     def run(llm):
         machine=DogidoStateMachine(settings,llm=llm)
         machine.player_input=route_player_input('ヤギいる？')
@@ -75,6 +80,8 @@ def test_narration_native_hook_bypasses_old_grounding_but_python_default_remains
     monkeypatch.setattr(planner,'ground_player_chat_entity',forbidden)
     monkeypatch.setattr(planner,'fixed_grounded_player_chat_reply',forbidden)
     monkeypatch.setattr(chat_policy,'build_identify_skeleton',forbidden)
+    monkeypatch.setattr(DogidoStateMachine,'_player_chat_topic_hits',forbidden)
+    monkeypatch.setattr(DogidoStateMachine,'_format_player_chat_topic_hints',forbidden)
     native=Native()
     assert run(native)==default=='今の観測では、ヤギは確認できてへんわ。'
     assert len(native.calls)==1
