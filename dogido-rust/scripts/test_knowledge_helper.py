@@ -1,5 +1,4 @@
-"""知識のreaderは固定の正本だけを読む。workshop振り分けは後続段階。"""
-import pytest
+"""補助は質問だけを渡す。検索・根拠検証・回答はRust所有。"""
 import dialogue_helper as helper
 from dogido_server.knowledge_query import LocalKnowledgeProvider
 from test_input_helper import frame
@@ -9,8 +8,9 @@ def fail(*args, **kwargs):
     raise AssertionError("knowledge must not construct a model or advance a state machine")
 
 
-def test_knowledge_reads_once_and_returns_rust_text_without_rewriting(monkeypatch):
+def test_knowledge_requests_rust_lookup_without_reading_or_rewriting(monkeypatch):
     emitted, requests = [], []
+    monkeypatch.setattr(LocalKnowledgeProvider, "lookup", fail)
     monkeypatch.setattr(helper, "BridgeLLM", fail)
     monkeypatch.setattr(helper, "DogidoStateMachine", fail)
     monkeypatch.setattr(helper, "emit", emitted.append)
@@ -18,7 +18,8 @@ def test_knowledge_reads_once_and_returns_rust_text_without_rewriting(monkeypatc
     helper.run_turn(frame("枕詞って何？",model="unused",max_tokens=72,reading_engine="off"))
     assert len(requests) == 1 and requests[0]["op"] == "knowledge"
     assert requests[0]["request_text"] == "枕詞って何？"
-    assert requests[0]["lookup"]["facts"][0]["record_id"] == "knowledge.rhetoric.makurakotoba"
+    assert requests[0]["query"]["subject"] == "枕詞"
+    assert "lookup" not in requests[0]
     assert emitted == [{"op":"result", "text":"Rustで確定した本文。", "spoken_text":"Rustで確定した本文。"}]
 
 
@@ -30,14 +31,3 @@ def test_workshop_fallback_does_not_read_db_or_generate(monkeypatch):
     monkeypatch.setattr(helper, "emit", emitted.append)
     helper.run_turn(frame("枕詞って何？",model="unused",max_tokens=72,workshop_fallback=True))
     assert emitted[0]["unsupported"] == "句の相談中の知識検索はまだ接続していません。"
-
-
-def test_reader_cannot_bind_facts_to_another_question(monkeypatch):
-    from dataclasses import replace
-    from dogido_server.knowledge_query import extract_explicit_knowledge_query
-    wrong_query = extract_explicit_knowledge_query("ソネットとは？")
-    record = LocalKnowledgeProvider().lookup(wrong_query)
-    monkeypatch.setattr(LocalKnowledgeProvider, "lookup", lambda *args, **kwargs: replace(record, query=wrong_query))
-    monkeypatch.setattr(helper, "exchange", fail)
-    with pytest.raises(ValueError, match="another query"):
-        helper.run_turn(frame("枕詞って何？",model="unused",max_tokens=72))

@@ -38,7 +38,7 @@ static GRAMMAR: LazyLock<Grammar> = LazyLock::new(|| {
 });
 
 // Python re.IGNORECASEのASCII IとUnicode I二種、str.splitのC0空白も維持。
-fn compile(pattern: &str, full: bool) -> Regex {
+pub(super) fn compile(pattern: &str, full: bool) -> Regex {
     let pattern = pattern
         .replace("Minecraft", "M[iİı]necraft")
         .replace("Edition", "Ed[iİı]t[iİı]on")

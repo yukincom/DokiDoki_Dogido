@@ -507,3 +507,110 @@ async fn event_validation_precedes_mutation_and_validates_the_whole_batch() {
     assert_eq!(before["diagnostic_revision"], after["diagnostic_revision"]);
     app.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn memory_reads_are_authorized_read_only_and_use_the_configured_store() {
+    let root = std::env::temp_dir().join(format!("dogido-memory-router-{}", uuid::Uuid::new_v4()));
+    let mut config = crate::dialogue::DialogueConfig {
+        audio_enabled: false,
+        ..Default::default()
+    };
+    config.haiku.enabled = false;
+    config.haiku.memory_dir = root.clone();
+    let dialogue = crate::dialogue::Dialogue::new(config).unwrap();
+    let app = Application::new(ServerConfig {
+        auth_token: Some("read-test".into()),
+        dialogue: Some(dialogue),
+        ..Default::default()
+    });
+    let router = app.router();
+    let auth = [("authorization", "Bearer read-test")];
+    let before = call(&router, "GET", "/api/v1/display/snapshot", None, &auth)
+        .await
+        .1;
+    for (name, expected) in [
+        ("haiku", json!([])),
+        (
+            "summary",
+            json!({"updated_at":null,"startup_summary":"","open_topics":[],"recent_tone":""}),
+        ),
+    ] {
+        let path = format!("/api/v1/memory/{name}");
+        assert_eq!(
+            call(&router, "GET", &path, None, &[]).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+        let (status, value) = call(&router, "GET", &path, None, &auth).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(value, expected);
+    }
+    assert_eq!(
+        call(&router, "GET", "/api/v1/memory/profile", None, &auth)
+            .await
+            .1["player_name"],
+        "main_player"
+    );
+    assert!(!root.exists());
+    std::fs::create_dir_all(root.join("sessions/one/long_term")).unwrap();
+    std::fs::create_dir_all(root.join("long_term")).unwrap();
+    std::fs::write(
+        root.join("sessions/one/long_term/haiku_entries.jsonl"),
+        "{\"id\":\"one\",\"text\":\"保存した句\"}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("long_term/player_profile.json"),
+        "{\"player_name\":\"本人\"}",
+    )
+    .unwrap();
+    assert_eq!(
+        call(&router, "GET", "/api/v1/memory/haiku", None, &auth)
+            .await
+            .1,
+        json!([{"id":"one","text":"保存した句"}])
+    );
+    assert_eq!(
+        call(&router, "GET", "/api/v1/memory/profile", None, &auth)
+            .await
+            .1["player_name"],
+        "本人"
+    );
+    let after = call(&router, "GET", "/api/v1/display/snapshot", None, &auth)
+        .await
+        .1;
+    assert_eq!(before["runtime_revision"], after["runtime_revision"]);
+    assert_eq!(before["utterances"], after["utterances"]);
+    assert!(!root.join("eval").exists());
+    app.shutdown().await.unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn disabled_memory_returns_empty_shapes_without_reading_files() {
+    let root =
+        std::env::temp_dir().join(format!("dogido-memory-disabled-{}", uuid::Uuid::new_v4()));
+    let mut config = crate::dialogue::DialogueConfig {
+        audio_enabled: false,
+        ..Default::default()
+    };
+    config.haiku.memory_enabled = false;
+    config.haiku.enabled = false;
+    config.haiku.memory_dir = root.clone();
+    let app = Application::new(ServerConfig {
+        dialogue: Some(crate::dialogue::Dialogue::new(config).unwrap()),
+        ..Default::default()
+    });
+    let router = app.router();
+    for (name, expected) in [
+        ("haiku", json!([])),
+        ("profile", json!({})),
+        ("summary", json!({})),
+    ] {
+        assert_eq!(
+            call(&router, "GET", &format!("/api/v1/memory/{name}"), None, &[]).await,
+            (StatusCode::OK, expected)
+        );
+    }
+    assert!(!root.exists());
+    app.shutdown().await.unwrap();
+}

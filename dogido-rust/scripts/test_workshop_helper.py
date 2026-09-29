@@ -75,7 +75,7 @@ def test_corrected_current_verse_question_does_not_escape_to_dictionary():
     f = frame("サクラノバって何？")
     f["op"] = "knowledge_route"
     f["interpreted_text"] = "さくらのはって何？"
-    assert handle(f) == {"lookup": None}
+    assert handle(f) == {"query": None}
 
 
 def test_original_fixed_fragment_edit_still_validates_after_asr_interpretation():

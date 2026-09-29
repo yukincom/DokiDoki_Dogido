@@ -41,8 +41,20 @@ impl Dialogue {
             "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
             "workshop":input["workshop"]}))
             .await?;
-        if knowledge["lookup"].is_object() {
-            let reply = crate::knowledge::render(&knowledge["lookup"]);
+        if knowledge["query"].is_object() {
+            let prepared = crate::player_text::prepare(text);
+            let query = crate::knowledge::query::from_normalized(&prepared.normalized_text)
+                .context("workshop knowledge query missing from original input")?;
+            ensure!(
+                knowledge["query"] == serde_json::to_value(&query)?,
+                "workshop knowledge query mismatch"
+            );
+            let lookup = crate::knowledge::provider::lookup_async(
+                crate::knowledge::provider::Paths::from_helper(&self.config.helper)?,
+                query,
+            )
+            .await?;
+            let reply = crate::knowledge::render(&lookup);
             let reading = helper
                 .exchange(json!({"op":"reading", "text":reply.text,
                 "reading_engine":self.config.reading_engine}))
@@ -56,13 +68,8 @@ impl Dialogue {
         }
         // 一般知識の寄り道は確認・採否・時計を動かさない。本来の句入力だけ消費する。
         self.consume_workshop_input(input)?;
-        // Reuse this helper's existing catalog/date interpretation; no extra
-        // model call or process for a normal workshop question.
-        let recall = helper
-            .exchange(json!({"op":"memory_query","text":text,"now":chrono::Utc::now()}))
-            .await?;
-        if recall["query"].is_object() {
-            return Ok(json!({"memory_query":recall["query"],"llm_reports":[]}));
+        if let Some(recall) = crate::recall_query::parse(text, &corrections, chrono::Utc::now()) {
+            return Ok(json!({"memory_query":recall,"llm_reports":[]}));
         }
         let mut snapshot = input["workshop"].clone();
         let view = &input["workshop"];

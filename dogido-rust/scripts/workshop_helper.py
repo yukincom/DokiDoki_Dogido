@@ -26,7 +26,6 @@ from dogido_server.memory_types import HaikuLine
 from dogido_server.haiku.verse import build_haiku_lines
 from dogido_server.tts_reading import prepare_text_for_tts
 from reading_overlay import apply_reading_snapshot
-from memory_query import recall_query
 
 KIND = "haiku_workshop_agent_step"
 FOLLOWUP_ACTIONS = {"acknowledge_meaning", "confirm_close", "continue_workshop", "resume_workshop", "decline_resume"}
@@ -232,11 +231,10 @@ def details_for(frame):
 def handle(frame):
     if frame["op"] == "knowledge_route":
         from dogido_server.player_input import route_player_input
-        from dogido_server.knowledge_query import LocalKnowledgeProvider, validate_knowledge_lookup_result
         context = route_player_input(frame["text"])
         query = context.knowledge_query
         if query is None or context.wants_quiet or context.normalized_text.startswith("/"):
-            return {"lookup": None}
+            return {"query": None}
         workshop = snapshot_for(frame)
         # 補正で現在句・材料に一致した問いも、一般知識へ流さず句相談へ残す。
         # DB queryと全ての操作は認識原文のまま。
@@ -246,13 +244,10 @@ def handle(frame):
                        and any(term in subject for term in ("句", "川柳", "俳句", "三行")))
         if (whole_verse or mentioned_workshop_line_fragment(workshop, question_text) is not None
                 or grounded_material_for_question(workshop, question_text) is not None):
-            return {"lookup": None}
-        lookup = validate_knowledge_lookup_result(LocalKnowledgeProvider().lookup(query, limit=3), expected_query=query)
-        return {"lookup": asdict(lookup)}
+            return {"query": None}
+        return {"query": asdict(query)}
     if frame["op"] == "whole_verse":
         return {"lines": [asdict(line) for line in build_haiku_lines(frame["text"], provenance=frame["source"])]}
-    if frame["op"] == "memory_query":
-        return {"query": recall_query(frame["text"], frame.get("now"))}
     if frame["op"] == "reading_overlay":
         apply_reading_snapshot(frame["rows"])
         return {"applied": True}

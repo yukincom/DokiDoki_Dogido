@@ -26,7 +26,7 @@ def test_routing_matches_python_service_before_any_workshop_change(text):
     session = SimpleNamespace(machine=machine, haiku_workshop=workshop)
     service = SimpleNamespace(_respond_to_workshop_input=lambda *args:[AudioAction(layer="speech",interrupt=False,text="workshop")])
     actions = DogidoService._haiku_workshop_actions(service,session,SimpleNamespace(observed_at=datetime.now(timezone.utc)))
-    assert (route["lookup"] is not None) == any(a.text=="knowledge" for a in actions)
+    assert (route["query"] is not None) == any(a.text=="knowledge" for a in actions)
     assert f == unchanged
 
 
@@ -35,18 +35,18 @@ def test_pending_phrase_keeps_its_workshop_owner():
     lines=deepcopy(f["workshop"]["emission"]["lines"])
     lines[0]["reading_text"]="さくらいろ"; lines[0]["surface_text"]="桜色"
     f["workshop"]["pending"]={"lines":lines,"base":f["workshop"]["emission"]["lines"]}
-    assert handle(f)["lookup"] is None
+    assert handle(f)["query"] is None
 
 
 @pytest.mark.parametrize("pending", [False, True])
 def test_known_dictionary_word_is_still_workshop_owned_when_in_the_verse(pending):
     f=frame("枕詞って何？"); f["op"]="knowledge_route"
     assert route_player_input(f["text"]).knowledge_query is not None
-    assert handle(f)["lookup"] is not None
+    assert handle(f)["query"] is not None
     lines=deepcopy(f["workshop"]["emission"]["lines"])
     lines[0]["surface_text"]="枕詞"; lines[0]["reading_text"]="まくらことば"
     if pending:
         f["workshop"]["pending"]={"lines":lines,"base":f["workshop"]["emission"]["lines"]}
     else:
         f["workshop"]["current_lines"]=lines
-    assert handle(f)["lookup"] is None
+    assert handle(f)["query"] is None

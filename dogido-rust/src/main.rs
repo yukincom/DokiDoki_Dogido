@@ -42,6 +42,16 @@ enum Command {
         #[arg(long)]
         cards_path: PathBuf,
     },
+    /// 正本資料への一般知識質問を検索する。ネットワーク・モデル・Python起動なし。
+    LookupKnowledge {
+        request: PathBuf,
+        #[arg(long)]
+        reference_dir: PathBuf,
+        #[arg(long)]
+        minecraft_cache: PathBuf,
+        #[arg(long)]
+        source_lock: PathBuf,
+    },
     /// 通常雑談plannerだけを比較。状態機械の投影fixtureを読み、発話・操作・保存はしない。
     PlanChat {
         request: PathBuf,
@@ -137,6 +147,30 @@ async fn main() -> Result<()> {
             for request in requests {
                 results.push(
                     dogido_rust::knowledge::retrieval::search_async(paths.clone(), request).await?,
+                );
+            }
+            println!("{}", serde_json::to_string(&results)?);
+        }
+        Command::LookupKnowledge {
+            request,
+            reference_dir,
+            minecraft_cache,
+            source_lock,
+        } => {
+            let requests: Vec<dogido_rust::knowledge::query::Query> =
+                serde_json::from_slice(&std::fs::read(request)?)?;
+            let paths = dogido_rust::knowledge::provider::Paths {
+                language: dogido_rust::knowledge::retrieval::Paths {
+                    reference: reference_dir,
+                    cards: PathBuf::new(),
+                },
+                minecraft: minecraft_cache,
+                source_lock,
+            };
+            let mut results = Vec::new();
+            for query in requests {
+                results.push(
+                    dogido_rust::knowledge::provider::lookup_async(paths.clone(), query).await?,
                 );
             }
             println!("{}", serde_json::to_string(&results)?);

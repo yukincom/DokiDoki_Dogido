@@ -140,9 +140,9 @@ impl Application {
             .route("/api/v1/player-input", post(player_input))
             .route("/api/v1/voice-input/context", get(voice_context))
             .route("/api/v1/voice-input/diagnostics", post(voice_diagnostic))
-            .route("/api/v1/memory/haiku", get(memory))
-            .route("/api/v1/memory/profile", get(memory))
-            .route("/api/v1/memory/summary", get(memory))
+            .route("/api/v1/memory/haiku", get(memory_haiku))
+            .route("/api/v1/memory/profile", get(memory_profile))
+            .route("/api/v1/memory/summary", get(memory_summary))
             .fallback(|| async { ApiReply::error(StatusCode::NOT_FOUND, json!("Not Found")) })
             .layer(middleware::from_fn_with_state(state.clone(), access))
             .with_state(state.clone());
@@ -399,8 +399,29 @@ async fn voice_diagnostic(
         .submit(Operation::Unsupported("voice_diagnostics"))
         .await
 }
-async fn memory(State(state): State<AppState>) -> ApiReply {
-    state.submit(Operation::Unsupported("memory")).await
+async fn memory_view(state: AppState, view: crate::memory_api::View) -> ApiReply {
+    let Some(dialogue) = state.dialogue else {
+        return ApiReply::ok(view.disabled());
+    };
+    match dialogue.memory_view(view).await {
+        Ok(value) => ApiReply::ok(value),
+        Err(error) => {
+            tracing::warn!(event="memory_view_failed", %error);
+            ApiReply::error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!("memory_read_failed"),
+            )
+        }
+    }
+}
+async fn memory_haiku(State(state): State<AppState>) -> ApiReply {
+    memory_view(state, crate::memory_api::View::Haiku).await
+}
+async fn memory_profile(State(state): State<AppState>) -> ApiReply {
+    memory_view(state, crate::memory_api::View::Profile).await
+}
+async fn memory_summary(State(state): State<AppState>) -> ApiReply {
+    memory_view(state, crate::memory_api::View::Summary).await
 }
 
 #[cfg(test)]

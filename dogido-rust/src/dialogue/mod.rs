@@ -5,6 +5,7 @@ mod audio;
 mod bridge;
 mod combat_runtime;
 mod environment_runtime;
+mod episode_runtime;
 mod foreground_runtime;
 mod haiku_runtime;
 mod history;
@@ -140,6 +141,7 @@ pub struct Dialogue {
     audio: audio::Audio,
     haiku_routes: haiku_runtime::Routes,
     combat_classifier: combat_classifier::Classifier,
+    episodes: Option<Arc<crate::episode_log::Recorder>>,
     data: Mutex<Data>,
     serial: Semaphore,
     jobs: Mutex<Vec<tokio::task::JoinHandle<()>>>,
@@ -220,6 +222,17 @@ impl Dialogue {
             audio: audio::Audio::new()?,
             haiku_routes: haiku_runtime::Routes::new(&config)?,
             combat_classifier: combat_classifier::Classifier::default(),
+            episodes: if config.haiku.memory_enabled {
+                match crate::episode_log::Recorder::new(config.haiku.memory_dir.clone()) {
+                    Ok(recorder) => Some(Arc::new(recorder)),
+                    Err(error) => {
+                        tracing::warn!(event="episode_writer_start_failed", %error);
+                        None
+                    }
+                }
+            } else {
+                None
+            },
             config,
             data: Mutex::new(Data::default()),
             serial: Semaphore::new(1),
@@ -323,6 +336,8 @@ impl Dialogue {
         for observed in &results.observed {
             tracing::info!(event="assist_result",session_id=session_id,result=%json!(observed));
         }
+        let episode_before = (!duplicate && self.episodes.is_some())
+            .then(|| episode_runtime::Before::capture(&d, session_id));
         let mut input_handled = false;
         let mut input_generation = None;
         if !duplicate {
@@ -471,9 +486,14 @@ impl Dialogue {
             }
             d.revision += 1;
         }
-        if let Some(feedback) = results.feedback {
+        if let Some(feedback) = results.feedback.clone() {
             self.queue_fixed_reply(&mut d, &mut jobs, session_id, feedback, None);
         }
+        let mut episode_snapshot = episode_before.map(|mut before| {
+            let actions = before.actions(&d, session_id);
+            let s = &d.sessions[session_id];
+            (before, json!(s.mode), s.foreground.combat_active, actions)
+        });
         drop(d);
         drop(jobs);
         if !duplicate && recent && complete_observation(&event) && text.trim().is_empty() {
@@ -500,16 +520,46 @@ impl Dialogue {
         } else {
             Value::Null
         };
-        let commands = self
-            .data
-            .lock()
-            .unwrap()
-            .sessions
-            .get(session_id)
-            .map(|s| s.assist.pending_commands(chrono::Utc::now()))
-            .unwrap_or_default();
-        json!({"accepted":true,"event_id":id("evt"),"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
-            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":chrono::Utc::now(),"phase":"dialogue_preview","player_input":input})
+        let commands = {
+            let d = self.data.lock().unwrap();
+            if let Some((before, _, _, actions)) = episode_snapshot.as_mut() {
+                actions.extend(before.input_actions(&d, session_id, &text));
+            }
+            d.sessions
+                .get(session_id)
+                .map(|s| s.assist.pending_commands(chrono::Utc::now()))
+                .unwrap_or_default()
+        };
+        let event_id = id("evt");
+        let recorded_at = chrono::Utc::now();
+        if let Some((before, mode_after, combat_active, actions)) = episode_snapshot {
+            // ACKs may repeat. Only newly consumed real receipts establish execution evidence.
+            let command_results = results
+                .observed
+                .iter()
+                .filter(|o| {
+                    event
+                        .command_results
+                        .iter()
+                        .any(|r| r.command_id == o.result.command_id)
+                })
+                .map(|o| json!(o.result))
+                .collect();
+            self.record_episode(crate::episode_log::Record {
+                event: event.clone(),
+                event_id: event_id.clone(),
+                session_id: session_id.into(),
+                recorded_at: recorded_at.to_rfc3339(),
+                state_before: before.state,
+                mode_after,
+                combat_active,
+                actions,
+                adapter_commands: commands.iter().map(|c| json!(c)).collect(),
+                command_results,
+            });
+        }
+        json!({"accepted":true,"event_id":event_id,"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
+            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue_preview","player_input":input})
     }
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
         self.submit_inner(selected, text, source, false, None, false)
@@ -1400,6 +1450,10 @@ impl Dialogue {
             let _ = job.await;
         }
         self.combat_classifier.close().await;
+        if let Some(recorder) = &self.episodes {
+            let recorder = recorder.clone();
+            let _ = tokio::task::spawn_blocking(move || recorder.close()).await;
+        }
         tracing::info!(
             event = "dialogue_stopped",
             message = "会話補助・音声の終了を確認しました"

@@ -1,0 +1,4574 @@
+[
+  {
+    "text": "雪原の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_plains",
+      "biome_ids": [
+        "snowy_plains"
+      ],
+      "place_label": "雪原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowy_plainsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_plains",
+      "biome_ids": [
+        "snowy_plains"
+      ],
+      "place_label": "雪原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowyplainsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_plains",
+      "biome_ids": [
+        "snowy_plains"
+      ],
+      "place_label": "雪原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "氷樹の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "ice_spikes",
+      "biome_ids": [
+        "ice_spikes"
+      ],
+      "place_label": "氷樹",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ice_spikesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "ice_spikes",
+      "biome_ids": [
+        "ice_spikes"
+      ],
+      "place_label": "氷樹",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "icespikesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "ice_spikes",
+      "biome_ids": [
+        "ice_spikes"
+      ],
+      "place_label": "氷樹",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "雪のタイガの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_taiga",
+      "biome_ids": [
+        "snowy_taiga"
+      ],
+      "place_label": "雪のタイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowy_taigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_taiga",
+      "biome_ids": [
+        "snowy_taiga"
+      ],
+      "place_label": "雪のタイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowytaigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_taiga",
+      "biome_ids": [
+        "snowy_taiga"
+      ],
+      "place_label": "雪のタイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "groveの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "grove",
+      "biome_ids": [
+        "grove"
+      ],
+      "place_label": "林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "groveの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "grove",
+      "biome_ids": [
+        "grove"
+      ],
+      "place_label": "林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "雪の斜面の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_slopes",
+      "biome_ids": [
+        "snowy_slopes"
+      ],
+      "place_label": "雪の斜面",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowy_slopesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_slopes",
+      "biome_ids": [
+        "snowy_slopes"
+      ],
+      "place_label": "雪の斜面",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowyslopesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_slopes",
+      "biome_ids": [
+        "snowy_slopes"
+      ],
+      "place_label": "雪の斜面",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "尖った山頂の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "jagged_peaks",
+      "biome_ids": [
+        "jagged_peaks"
+      ],
+      "place_label": "尖った山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "jagged_peaksの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "jagged_peaks",
+      "biome_ids": [
+        "jagged_peaks"
+      ],
+      "place_label": "尖った山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "jaggedpeaksの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "jagged_peaks",
+      "biome_ids": [
+        "jagged_peaks"
+      ],
+      "place_label": "尖った山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "凍った山頂の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_peaks",
+      "biome_ids": [
+        "frozen_peaks"
+      ],
+      "place_label": "凍った山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "frozen_peaksの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_peaks",
+      "biome_ids": [
+        "frozen_peaks"
+      ],
+      "place_label": "凍った山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "frozenpeaksの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_peaks",
+      "biome_ids": [
+        "frozen_peaks"
+      ],
+      "place_label": "凍った山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "吹きさらしの丘の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_hills",
+      "biome_ids": [
+        "windswept_hills"
+      ],
+      "place_label": "吹きさらしの丘",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windswept_hillsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_hills",
+      "biome_ids": [
+        "windswept_hills"
+      ],
+      "place_label": "吹きさらしの丘",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windswepthillsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_hills",
+      "biome_ids": [
+        "windswept_hills"
+      ],
+      "place_label": "吹きさらしの丘",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "吹きさらしの砂利の丘の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_gravelly_hills",
+      "biome_ids": [
+        "windswept_gravelly_hills"
+      ],
+      "place_label": "吹きさらしの砂利の丘",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windswept_gravelly_hillsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_gravelly_hills",
+      "biome_ids": [
+        "windswept_gravelly_hills"
+      ],
+      "place_label": "吹きさらしの砂利の丘",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windsweptgravellyhillsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_gravelly_hills",
+      "biome_ids": [
+        "windswept_gravelly_hills"
+      ],
+      "place_label": "吹きさらしの砂利の丘",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "吹きさらしの森の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_forest",
+      "biome_ids": [
+        "windswept_forest"
+      ],
+      "place_label": "吹きさらしの森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windswept_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_forest",
+      "biome_ids": [
+        "windswept_forest"
+      ],
+      "place_label": "吹きさらしの森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windsweptforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_forest",
+      "biome_ids": [
+        "windswept_forest"
+      ],
+      "place_label": "吹きさらしの森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "タイガの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "taiga",
+      "biome_ids": [
+        "taiga"
+      ],
+      "place_label": "タイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "taigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "taiga",
+      "biome_ids": [
+        "taiga"
+      ],
+      "place_label": "タイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "taigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "taiga",
+      "biome_ids": [
+        "taiga"
+      ],
+      "place_label": "タイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "マツの原生林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_pine_taiga",
+      "biome_ids": [
+        "old_growth_pine_taiga"
+      ],
+      "place_label": "マツの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "old_growth_pine_taigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_pine_taiga",
+      "biome_ids": [
+        "old_growth_pine_taiga"
+      ],
+      "place_label": "マツの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "oldgrowthpinetaigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_pine_taiga",
+      "biome_ids": [
+        "old_growth_pine_taiga"
+      ],
+      "place_label": "マツの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "トウヒの原生林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_spruce_taiga",
+      "biome_ids": [
+        "old_growth_spruce_taiga"
+      ],
+      "place_label": "トウヒの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "old_growth_spruce_taigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_spruce_taiga",
+      "biome_ids": [
+        "old_growth_spruce_taiga"
+      ],
+      "place_label": "トウヒの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "oldgrowthsprucetaigaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_spruce_taiga",
+      "biome_ids": [
+        "old_growth_spruce_taiga"
+      ],
+      "place_label": "トウヒの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "石だらけの海岸の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "stony_shore",
+      "biome_ids": [
+        "stony_shore"
+      ],
+      "place_label": "石だらけの海岸",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "stony_shoreの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "stony_shore",
+      "biome_ids": [
+        "stony_shore"
+      ],
+      "place_label": "石だらけの海岸",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "stonyshoreの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "stony_shore",
+      "biome_ids": [
+        "stony_shore"
+      ],
+      "place_label": "石だらけの海岸",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "平原の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "plains",
+      "biome_ids": [
+        "plains"
+      ],
+      "place_label": "平原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "plainsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "plains",
+      "biome_ids": [
+        "plains"
+      ],
+      "place_label": "平原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "plainsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "plains",
+      "biome_ids": [
+        "plains"
+      ],
+      "place_label": "平原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ヒマワリ平原の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "sunflower_plains",
+      "biome_ids": [
+        "sunflower_plains"
+      ],
+      "place_label": "ヒマワリ平原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "sunflower_plainsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "sunflower_plains",
+      "biome_ids": [
+        "sunflower_plains"
+      ],
+      "place_label": "ヒマワリ平原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "sunflowerplainsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "sunflower_plains",
+      "biome_ids": [
+        "sunflower_plains"
+      ],
+      "place_label": "ヒマワリ平原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "森林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "forest",
+      "biome_ids": [
+        "forest"
+      ],
+      "place_label": "森林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "forest",
+      "biome_ids": [
+        "forest"
+      ],
+      "place_label": "森林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "forest",
+      "biome_ids": [
+        "forest"
+      ],
+      "place_label": "森林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "花の森の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "flower_forest",
+      "biome_ids": [
+        "flower_forest"
+      ],
+      "place_label": "花の森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "flower_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "flower_forest",
+      "biome_ids": [
+        "flower_forest"
+      ],
+      "place_label": "花の森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "flowerforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "flower_forest",
+      "biome_ids": [
+        "flower_forest"
+      ],
+      "place_label": "花の森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "シラカバの森の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "birch_forest",
+      "biome_ids": [
+        "birch_forest"
+      ],
+      "place_label": "シラカバの森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "birch_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "birch_forest",
+      "biome_ids": [
+        "birch_forest"
+      ],
+      "place_label": "シラカバの森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "birchforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "birch_forest",
+      "biome_ids": [
+        "birch_forest"
+      ],
+      "place_label": "シラカバの森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "シラカバの原生林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_birch_forest",
+      "biome_ids": [
+        "old_growth_birch_forest"
+      ],
+      "place_label": "シラカバの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "old_growth_birch_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_birch_forest",
+      "biome_ids": [
+        "old_growth_birch_forest"
+      ],
+      "place_label": "シラカバの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "oldgrowthbirchforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "old_growth_birch_forest",
+      "biome_ids": [
+        "old_growth_birch_forest"
+      ],
+      "place_label": "シラカバの原生林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "暗い森の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "dark_forest",
+      "biome_ids": [
+        "dark_forest"
+      ],
+      "place_label": "暗い森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "dark_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "dark_forest",
+      "biome_ids": [
+        "dark_forest"
+      ],
+      "place_label": "暗い森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "darkforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "dark_forest",
+      "biome_ids": [
+        "dark_forest"
+      ],
+      "place_label": "暗い森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "沼地の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "swamp",
+      "biome_ids": [
+        "swamp"
+      ],
+      "place_label": "沼地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "swampの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "swamp",
+      "biome_ids": [
+        "swamp"
+      ],
+      "place_label": "沼地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "swampの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "swamp",
+      "biome_ids": [
+        "swamp"
+      ],
+      "place_label": "沼地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "マングローブの沼地の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "mangrove_swamp",
+      "biome_ids": [
+        "mangrove_swamp"
+      ],
+      "place_label": "マングローブの沼地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "mangrove_swampの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "mangrove_swamp",
+      "biome_ids": [
+        "mangrove_swamp"
+      ],
+      "place_label": "マングローブの沼地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "mangroveswampの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "mangrove_swamp",
+      "biome_ids": [
+        "mangrove_swamp"
+      ],
+      "place_label": "マングローブの沼地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ジャングルの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "jungle",
+      "biome_ids": [
+        "jungle"
+      ],
+      "place_label": "ジャングル",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "jungleの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "jungle",
+      "biome_ids": [
+        "jungle"
+      ],
+      "place_label": "ジャングル",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "jungleの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "jungle",
+      "biome_ids": [
+        "jungle"
+      ],
+      "place_label": "ジャングル",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "まばらなジャングルの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "sparse_jungle",
+      "biome_ids": [
+        "sparse_jungle"
+      ],
+      "place_label": "まばらなジャングル",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "sparse_jungleの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "sparse_jungle",
+      "biome_ids": [
+        "sparse_jungle"
+      ],
+      "place_label": "まばらなジャングル",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "sparsejungleの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "sparse_jungle",
+      "biome_ids": [
+        "sparse_jungle"
+      ],
+      "place_label": "まばらなジャングル",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "竹林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "bamboo_jungle",
+      "biome_ids": [
+        "bamboo_jungle"
+      ],
+      "place_label": "竹林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "bamboo_jungleの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "bamboo_jungle",
+      "biome_ids": [
+        "bamboo_jungle"
+      ],
+      "place_label": "竹林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "bamboojungleの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "bamboo_jungle",
+      "biome_ids": [
+        "bamboo_jungle"
+      ],
+      "place_label": "竹林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ペールガーデンの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "pale_garden",
+      "biome_ids": [
+        "pale_garden"
+      ],
+      "place_label": "ペールガーデン",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "pale_gardenの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "pale_garden",
+      "biome_ids": [
+        "pale_garden"
+      ],
+      "place_label": "ペールガーデン",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "palegardenの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "pale_garden",
+      "biome_ids": [
+        "pale_garden"
+      ],
+      "place_label": "ペールガーデン",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "砂浜の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "beach",
+      "biome_ids": [
+        "beach"
+      ],
+      "place_label": "砂浜",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "beachの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "beach",
+      "biome_ids": [
+        "beach"
+      ],
+      "place_label": "砂浜",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "beachの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "beach",
+      "biome_ids": [
+        "beach"
+      ],
+      "place_label": "砂浜",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "キノコ島の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "mushroom_fields",
+      "biome_ids": [
+        "mushroom_fields"
+      ],
+      "place_label": "キノコ島",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "mushroom_fieldsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "mushroom_fields",
+      "biome_ids": [
+        "mushroom_fields"
+      ],
+      "place_label": "キノコ島",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "mushroomfieldsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "mushroom_fields",
+      "biome_ids": [
+        "mushroom_fields"
+      ],
+      "place_label": "キノコ島",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "草地の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "meadow",
+      "biome_ids": [
+        "meadow"
+      ],
+      "place_label": "草地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "くさちの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "meadow",
+      "biome_ids": [
+        "meadow"
+      ],
+      "place_label": "草地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "meadowの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "meadow",
+      "biome_ids": [
+        "meadow"
+      ],
+      "place_label": "草地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "meadowの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "meadow",
+      "biome_ids": [
+        "meadow"
+      ],
+      "place_label": "草地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "サクラの林の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "cherry_grove",
+      "biome_ids": [
+        "cherry_grove"
+      ],
+      "place_label": "サクラの林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "cherry_groveの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "cherry_grove",
+      "biome_ids": [
+        "cherry_grove"
+      ],
+      "place_label": "サクラの林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "cherrygroveの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "cherry_grove",
+      "biome_ids": [
+        "cherry_grove"
+      ],
+      "place_label": "サクラの林",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "石だらけの山頂の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "stony_peaks",
+      "biome_ids": [
+        "stony_peaks"
+      ],
+      "place_label": "石だらけの山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "stony_peaksの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "stony_peaks",
+      "biome_ids": [
+        "stony_peaks"
+      ],
+      "place_label": "石だらけの山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "stonypeaksの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "stony_peaks",
+      "biome_ids": [
+        "stony_peaks"
+      ],
+      "place_label": "石だらけの山頂",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "砂漠の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "desert",
+      "biome_ids": [
+        "desert"
+      ],
+      "place_label": "砂漠",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "desertの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "desert",
+      "biome_ids": [
+        "desert"
+      ],
+      "place_label": "砂漠",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "desertの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "desert",
+      "biome_ids": [
+        "desert"
+      ],
+      "place_label": "砂漠",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "サバンナの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "savanna",
+      "biome_ids": [
+        "savanna"
+      ],
+      "place_label": "サバンナ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "savannaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "savanna",
+      "biome_ids": [
+        "savanna"
+      ],
+      "place_label": "サバンナ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "savannaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "savanna",
+      "biome_ids": [
+        "savanna"
+      ],
+      "place_label": "サバンナ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "サバンナの高原の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "savanna_plateau",
+      "biome_ids": [
+        "savanna_plateau"
+      ],
+      "place_label": "サバンナの高原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "savanna_plateauの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "savanna_plateau",
+      "biome_ids": [
+        "savanna_plateau"
+      ],
+      "place_label": "サバンナの高原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "savannaplateauの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "savanna_plateau",
+      "biome_ids": [
+        "savanna_plateau"
+      ],
+      "place_label": "サバンナの高原",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "吹きさらしのサバンナの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_savanna",
+      "biome_ids": [
+        "windswept_savanna"
+      ],
+      "place_label": "吹きさらしのサバンナ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windswept_savannaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_savanna",
+      "biome_ids": [
+        "windswept_savanna"
+      ],
+      "place_label": "吹きさらしのサバンナ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "windsweptsavannaの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "windswept_savanna",
+      "biome_ids": [
+        "windswept_savanna"
+      ],
+      "place_label": "吹きさらしのサバンナ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "荒野の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "badlands",
+      "biome_ids": [
+        "badlands"
+      ],
+      "place_label": "荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "badlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "badlands",
+      "biome_ids": [
+        "badlands"
+      ],
+      "place_label": "荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "badlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "badlands",
+      "biome_ids": [
+        "badlands"
+      ],
+      "place_label": "荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "侵食された荒野の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "eroded_badlands",
+      "biome_ids": [
+        "eroded_badlands"
+      ],
+      "place_label": "侵食された荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "eroded_badlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "eroded_badlands",
+      "biome_ids": [
+        "eroded_badlands"
+      ],
+      "place_label": "侵食された荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "erodedbadlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "eroded_badlands",
+      "biome_ids": [
+        "eroded_badlands"
+      ],
+      "place_label": "侵食された荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "森のある荒野の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "wooded_badlands",
+      "biome_ids": [
+        "wooded_badlands"
+      ],
+      "place_label": "森のある荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "wooded_badlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "wooded_badlands",
+      "biome_ids": [
+        "wooded_badlands"
+      ],
+      "place_label": "森のある荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "woodedbadlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "wooded_badlands",
+      "biome_ids": [
+        "wooded_badlands"
+      ],
+      "place_label": "森のある荒野",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "凍った川の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_river",
+      "biome_ids": [
+        "frozen_river"
+      ],
+      "place_label": "凍った川",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "frozen_riverの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_river",
+      "biome_ids": [
+        "frozen_river"
+      ],
+      "place_label": "凍った川",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "frozenriverの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_river",
+      "biome_ids": [
+        "frozen_river"
+      ],
+      "place_label": "凍った川",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "河川の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "river",
+      "biome_ids": [
+        "river"
+      ],
+      "place_label": "河川",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "riverの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "river",
+      "biome_ids": [
+        "river"
+      ],
+      "place_label": "河川",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "riverの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "river",
+      "biome_ids": [
+        "river"
+      ],
+      "place_label": "河川",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "雪の砂浜の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_beach",
+      "biome_ids": [
+        "snowy_beach"
+      ],
+      "place_label": "雪の砂浜",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowy_beachの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_beach",
+      "biome_ids": [
+        "snowy_beach"
+      ],
+      "place_label": "雪の砂浜",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "snowybeachの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_beach",
+      "biome_ids": [
+        "snowy_beach"
+      ],
+      "place_label": "雪の砂浜",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "暖かい海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "warm_ocean",
+      "biome_ids": [
+        "warm_ocean"
+      ],
+      "place_label": "暖かい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "warm_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "warm_ocean",
+      "biome_ids": [
+        "warm_ocean"
+      ],
+      "place_label": "暖かい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "warmoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "warm_ocean",
+      "biome_ids": [
+        "warm_ocean"
+      ],
+      "place_label": "暖かい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ぬるい海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "lukewarm_ocean",
+      "biome_ids": [
+        "lukewarm_ocean"
+      ],
+      "place_label": "ぬるい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "lukewarm_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "lukewarm_ocean",
+      "biome_ids": [
+        "lukewarm_ocean"
+      ],
+      "place_label": "ぬるい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "lukewarmoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "lukewarm_ocean",
+      "biome_ids": [
+        "lukewarm_ocean"
+      ],
+      "place_label": "ぬるい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ぬるい深海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_lukewarm_ocean",
+      "biome_ids": [
+        "deep_lukewarm_ocean"
+      ],
+      "place_label": "ぬるい深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deep_lukewarm_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_lukewarm_ocean",
+      "biome_ids": [
+        "deep_lukewarm_ocean"
+      ],
+      "place_label": "ぬるい深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deeplukewarmoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_lukewarm_ocean",
+      "biome_ids": [
+        "deep_lukewarm_ocean"
+      ],
+      "place_label": "ぬるい深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "海洋の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "ocean",
+      "biome_ids": [
+        "ocean"
+      ],
+      "place_label": "海洋",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "ocean",
+      "biome_ids": [
+        "ocean"
+      ],
+      "place_label": "海洋",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "ocean",
+      "biome_ids": [
+        "ocean"
+      ],
+      "place_label": "海洋",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "深海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_ocean",
+      "biome_ids": [
+        "deep_ocean"
+      ],
+      "place_label": "深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deep_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_ocean",
+      "biome_ids": [
+        "deep_ocean"
+      ],
+      "place_label": "深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deepoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_ocean",
+      "biome_ids": [
+        "deep_ocean"
+      ],
+      "place_label": "深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "冷たい海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "cold_ocean",
+      "biome_ids": [
+        "cold_ocean"
+      ],
+      "place_label": "冷たい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "cold_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "cold_ocean",
+      "biome_ids": [
+        "cold_ocean"
+      ],
+      "place_label": "冷たい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "coldoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "cold_ocean",
+      "biome_ids": [
+        "cold_ocean"
+      ],
+      "place_label": "冷たい海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "冷たい深海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_cold_ocean",
+      "biome_ids": [
+        "deep_cold_ocean"
+      ],
+      "place_label": "冷たい深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deep_cold_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_cold_ocean",
+      "biome_ids": [
+        "deep_cold_ocean"
+      ],
+      "place_label": "冷たい深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deepcoldoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_cold_ocean",
+      "biome_ids": [
+        "deep_cold_ocean"
+      ],
+      "place_label": "冷たい深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "凍った海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_ocean",
+      "biome_ids": [
+        "frozen_ocean"
+      ],
+      "place_label": "凍った海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "frozen_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_ocean",
+      "biome_ids": [
+        "frozen_ocean"
+      ],
+      "place_label": "凍った海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "frozenoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "frozen_ocean",
+      "biome_ids": [
+        "frozen_ocean"
+      ],
+      "place_label": "凍った海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "凍った深海の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_frozen_ocean",
+      "biome_ids": [
+        "deep_frozen_ocean"
+      ],
+      "place_label": "凍った深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deep_frozen_oceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_frozen_ocean",
+      "biome_ids": [
+        "deep_frozen_ocean"
+      ],
+      "place_label": "凍った深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deepfrozenoceanの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_frozen_ocean",
+      "biome_ids": [
+        "deep_frozen_ocean"
+      ],
+      "place_label": "凍った深海",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ディープダークの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_dark",
+      "biome_ids": [
+        "deep_dark"
+      ],
+      "place_label": "ディープダーク",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deep_darkの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_dark",
+      "biome_ids": [
+        "deep_dark"
+      ],
+      "place_label": "ディープダーク",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "deepdarkの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "deep_dark",
+      "biome_ids": [
+        "deep_dark"
+      ],
+      "place_label": "ディープダーク",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "鍾乳洞の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "dripstone_caves",
+      "biome_ids": [
+        "dripstone_caves"
+      ],
+      "place_label": "鍾乳洞",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "dripstone_cavesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "dripstone_caves",
+      "biome_ids": [
+        "dripstone_caves"
+      ],
+      "place_label": "鍾乳洞",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "dripstonecavesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "dripstone_caves",
+      "biome_ids": [
+        "dripstone_caves"
+      ],
+      "place_label": "鍾乳洞",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "繁茂した洞窟の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "lush_caves",
+      "biome_ids": [
+        "lush_caves"
+      ],
+      "place_label": "繁茂した洞窟",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "lush_cavesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "lush_caves",
+      "biome_ids": [
+        "lush_caves"
+      ],
+      "place_label": "繁茂した洞窟",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "lushcavesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "lush_caves",
+      "biome_ids": [
+        "lush_caves"
+      ],
+      "place_label": "繁茂した洞窟",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "奈落の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_void",
+      "biome_ids": [
+        "the_void"
+      ],
+      "place_label": "奈落",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "the_voidの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_void",
+      "biome_ids": [
+        "the_void"
+      ],
+      "place_label": "奈落",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "thevoidの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_void",
+      "biome_ids": [
+        "the_void"
+      ],
+      "place_label": "奈落",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ネザーの荒地の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "nether_wastes",
+      "biome_ids": [
+        "nether_wastes"
+      ],
+      "place_label": "ネザーの荒地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "nether_wastesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "nether_wastes",
+      "biome_ids": [
+        "nether_wastes"
+      ],
+      "place_label": "ネザーの荒地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "netherwastesの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "nether_wastes",
+      "biome_ids": [
+        "nether_wastes"
+      ],
+      "place_label": "ネザーの荒地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ソウルサンドの谷の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "soul_sand_valley",
+      "biome_ids": [
+        "soul_sand_valley"
+      ],
+      "place_label": "ソウルサンドの谷",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "soul_sand_valleyの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "soul_sand_valley",
+      "biome_ids": [
+        "soul_sand_valley"
+      ],
+      "place_label": "ソウルサンドの谷",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "soulsandvalleyの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "soul_sand_valley",
+      "biome_ids": [
+        "soul_sand_valley"
+      ],
+      "place_label": "ソウルサンドの谷",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "真紅の森の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "crimson_forest",
+      "biome_ids": [
+        "crimson_forest"
+      ],
+      "place_label": "真紅の森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "crimson_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "crimson_forest",
+      "biome_ids": [
+        "crimson_forest"
+      ],
+      "place_label": "真紅の森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "crimsonforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "crimson_forest",
+      "biome_ids": [
+        "crimson_forest"
+      ],
+      "place_label": "真紅の森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "歪んだ森の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "warped_forest",
+      "biome_ids": [
+        "warped_forest"
+      ],
+      "place_label": "歪んだ森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "warped_forestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "warped_forest",
+      "biome_ids": [
+        "warped_forest"
+      ],
+      "place_label": "歪んだ森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "warpedforestの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "warped_forest",
+      "biome_ids": [
+        "warped_forest"
+      ],
+      "place_label": "歪んだ森",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "玄武岩の三角州の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "basalt_deltas",
+      "biome_ids": [
+        "basalt_deltas"
+      ],
+      "place_label": "玄武岩の三角州",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "basalt_deltasの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "basalt_deltas",
+      "biome_ids": [
+        "basalt_deltas"
+      ],
+      "place_label": "玄武岩の三角州",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "basaltdeltasの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "basalt_deltas",
+      "biome_ids": [
+        "basalt_deltas"
+      ],
+      "place_label": "玄武岩の三角州",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ジ・エンドの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_end",
+      "biome_ids": [
+        "the_end"
+      ],
+      "place_label": "ジ・エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "the_endの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_end",
+      "biome_ids": [
+        "the_end"
+      ],
+      "place_label": "ジ・エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "theendの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_end",
+      "biome_ids": [
+        "the_end"
+      ],
+      "place_label": "ジ・エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "小さなエンド島の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "small_end_islands",
+      "biome_ids": [
+        "small_end_islands"
+      ],
+      "place_label": "小さなエンド島",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "small_end_islandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "small_end_islands",
+      "biome_ids": [
+        "small_end_islands"
+      ],
+      "place_label": "小さなエンド島",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "smallendislandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "small_end_islands",
+      "biome_ids": [
+        "small_end_islands"
+      ],
+      "place_label": "小さなエンド島",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "エンドの内陸部の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_midlands",
+      "biome_ids": [
+        "end_midlands"
+      ],
+      "place_label": "エンドの内陸部",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "end_midlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_midlands",
+      "biome_ids": [
+        "end_midlands"
+      ],
+      "place_label": "エンドの内陸部",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "endmidlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_midlands",
+      "biome_ids": [
+        "end_midlands"
+      ],
+      "place_label": "エンドの内陸部",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "エンドの高地の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_highlands",
+      "biome_ids": [
+        "end_highlands"
+      ],
+      "place_label": "エンドの高地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "end_highlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_highlands",
+      "biome_ids": [
+        "end_highlands"
+      ],
+      "place_label": "エンドの高地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "endhighlandsの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_highlands",
+      "biome_ids": [
+        "end_highlands"
+      ],
+      "place_label": "エンドの高地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "エンドのやせ地の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_barrens",
+      "biome_ids": [
+        "end_barrens"
+      ],
+      "place_label": "エンドのやせ地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "end_barrensの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_barrens",
+      "biome_ids": [
+        "end_barrens"
+      ],
+      "place_label": "エンドのやせ地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "endbarrensの句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "end_barrens",
+      "biome_ids": [
+        "end_barrens"
+      ],
+      "place_label": "エンドのやせ地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "氷雪の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga"
+      ],
+      "place_label": "氷雪バイオーム",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "雪のとこの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga"
+      ],
+      "place_label": "氷雪バイオーム",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "雪のところの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga"
+      ],
+      "place_label": "氷雪バイオーム",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "雪国の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga"
+      ],
+      "place_label": "氷雪バイオーム",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "冷帯の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "寒いとこの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "寒いところの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "寒い場所の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "寒いの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "冷たいとこの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "冷たいの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "frozen_peaks",
+        "grove",
+        "ice_spikes",
+        "jagged_peaks",
+        "old_growth_pine_taiga",
+        "old_growth_spruce_taiga",
+        "snowy_plains",
+        "snowy_slopes",
+        "snowy_taiga",
+        "stony_shore",
+        "taiga",
+        "windswept_forest",
+        "windswept_gravelly_hills",
+        "windswept_hills"
+      ],
+      "place_label": "寒いところ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "温帯の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "bamboo_jungle",
+        "beach",
+        "birch_forest",
+        "cherry_grove",
+        "dark_forest",
+        "flower_forest",
+        "forest",
+        "jungle",
+        "mangrove_swamp",
+        "meadow",
+        "mushroom_fields",
+        "old_growth_birch_forest",
+        "pale_garden",
+        "plains",
+        "sparse_jungle",
+        "stony_peaks",
+        "sunflower_plains",
+        "swamp"
+      ],
+      "place_label": "温帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "暖地の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "bamboo_jungle",
+        "beach",
+        "birch_forest",
+        "cherry_grove",
+        "dark_forest",
+        "flower_forest",
+        "forest",
+        "jungle",
+        "mangrove_swamp",
+        "meadow",
+        "mushroom_fields",
+        "old_growth_birch_forest",
+        "pale_garden",
+        "plains",
+        "sparse_jungle",
+        "stony_peaks",
+        "sunflower_plains",
+        "swamp"
+      ],
+      "place_label": "温帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "暖かいとこの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "bamboo_jungle",
+        "beach",
+        "birch_forest",
+        "cherry_grove",
+        "dark_forest",
+        "flower_forest",
+        "forest",
+        "jungle",
+        "mangrove_swamp",
+        "meadow",
+        "mushroom_fields",
+        "old_growth_birch_forest",
+        "pale_garden",
+        "plains",
+        "sparse_jungle",
+        "stony_peaks",
+        "sunflower_plains",
+        "swamp"
+      ],
+      "place_label": "温帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "あたたかいとこの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "bamboo_jungle",
+        "beach",
+        "birch_forest",
+        "cherry_grove",
+        "dark_forest",
+        "flower_forest",
+        "forest",
+        "jungle",
+        "mangrove_swamp",
+        "meadow",
+        "mushroom_fields",
+        "old_growth_birch_forest",
+        "pale_garden",
+        "plains",
+        "sparse_jungle",
+        "stony_peaks",
+        "sunflower_plains",
+        "swamp"
+      ],
+      "place_label": "温帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "温暖の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "bamboo_jungle",
+        "beach",
+        "birch_forest",
+        "cherry_grove",
+        "dark_forest",
+        "flower_forest",
+        "forest",
+        "jungle",
+        "mangrove_swamp",
+        "meadow",
+        "mushroom_fields",
+        "old_growth_birch_forest",
+        "pale_garden",
+        "plains",
+        "sparse_jungle",
+        "stony_peaks",
+        "sunflower_plains",
+        "swamp"
+      ],
+      "place_label": "温帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "乾燥の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "badlands",
+        "desert",
+        "eroded_badlands",
+        "savanna",
+        "savanna_plateau",
+        "windswept_savanna",
+        "wooded_badlands"
+      ],
+      "place_label": "乾燥帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "乾燥帯の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "badlands",
+        "desert",
+        "eroded_badlands",
+        "savanna",
+        "savanna_plateau",
+        "windswept_savanna",
+        "wooded_badlands"
+      ],
+      "place_label": "乾燥帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "乾いたとこの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "badlands",
+        "desert",
+        "eroded_badlands",
+        "savanna",
+        "savanna_plateau",
+        "windswept_savanna",
+        "wooded_badlands"
+      ],
+      "place_label": "乾燥帯",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "砂漠っぽの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "desert",
+      "biome_ids": [
+        "desert"
+      ],
+      "place_label": "砂漠",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "水性の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "cold_ocean",
+        "deep_cold_ocean",
+        "deep_frozen_ocean",
+        "deep_lukewarm_ocean",
+        "deep_ocean",
+        "frozen_ocean",
+        "frozen_river",
+        "lukewarm_ocean",
+        "ocean",
+        "river",
+        "snowy_beach",
+        "warm_ocean"
+      ],
+      "place_label": "水辺",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "海のの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "cold_ocean",
+        "deep_cold_ocean",
+        "deep_frozen_ocean",
+        "deep_lukewarm_ocean",
+        "deep_ocean",
+        "frozen_ocean",
+        "frozen_river",
+        "lukewarm_ocean",
+        "ocean",
+        "river",
+        "snowy_beach",
+        "warm_ocean"
+      ],
+      "place_label": "水辺",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "海辺の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "cold_ocean",
+        "deep_cold_ocean",
+        "deep_frozen_ocean",
+        "deep_lukewarm_ocean",
+        "deep_ocean",
+        "frozen_ocean",
+        "frozen_river",
+        "lukewarm_ocean",
+        "ocean",
+        "river",
+        "snowy_beach",
+        "warm_ocean"
+      ],
+      "place_label": "水辺",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "水辺の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "cold_ocean",
+        "deep_cold_ocean",
+        "deep_frozen_ocean",
+        "deep_lukewarm_ocean",
+        "deep_ocean",
+        "frozen_ocean",
+        "frozen_river",
+        "lukewarm_ocean",
+        "ocean",
+        "river",
+        "snowy_beach",
+        "warm_ocean"
+      ],
+      "place_label": "水辺",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "海での川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "cold_ocean",
+        "deep_cold_ocean",
+        "deep_frozen_ocean",
+        "deep_lukewarm_ocean",
+        "deep_ocean",
+        "frozen_ocean",
+        "frozen_river",
+        "lukewarm_ocean",
+        "ocean",
+        "river",
+        "snowy_beach",
+        "warm_ocean"
+      ],
+      "place_label": "水辺",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "海にの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "cold_ocean",
+        "deep_cold_ocean",
+        "deep_frozen_ocean",
+        "deep_lukewarm_ocean",
+        "deep_ocean",
+        "frozen_ocean",
+        "frozen_river",
+        "lukewarm_ocean",
+        "ocean",
+        "river",
+        "snowy_beach",
+        "warm_ocean"
+      ],
+      "place_label": "水辺",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "洞窟の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "deep_dark",
+        "dripstone_caves",
+        "lush_caves"
+      ],
+      "place_label": "洞窟",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "地下のバイオームの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "deep_dark",
+        "dripstone_caves",
+        "lush_caves"
+      ],
+      "place_label": "洞窟",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "洞窟バイオームの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "deep_dark",
+        "dripstone_caves",
+        "lush_caves"
+      ],
+      "place_label": "洞窟",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ネザーの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "basalt_deltas",
+        "crimson_forest",
+        "nether_wastes",
+        "soul_sand_valley",
+        "warped_forest"
+      ],
+      "place_label": "ネザー",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ねざーの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "basalt_deltas",
+        "crimson_forest",
+        "nether_wastes",
+        "soul_sand_valley",
+        "warped_forest"
+      ],
+      "place_label": "ネザー",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "地獄の川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "basalt_deltas",
+        "crimson_forest",
+        "nether_wastes",
+        "soul_sand_valley",
+        "warped_forest"
+      ],
+      "place_label": "ネザー",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "エンドの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "end_barrens",
+        "end_highlands",
+        "end_midlands",
+        "small_end_islands",
+        "the_end"
+      ],
+      "place_label": "エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "えんどの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "end_barrens",
+        "end_highlands",
+        "end_midlands",
+        "small_end_islands",
+        "the_end"
+      ],
+      "place_label": "エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ジ・エンドの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "the_end",
+      "biome_ids": [
+        "the_end"
+      ],
+      "place_label": "ジ・エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "ジエンドの川柳",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [
+        "end_barrens",
+        "end_highlands",
+        "end_midlands",
+        "small_end_islands",
+        "the_end"
+      ],
+      "place_label": "エンド",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "こんにちは",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": null
+  },
+  {
+    "text": "この句はどういう意味？",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": null
+  },
+  {
+    "text": "句思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "今日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-09-28T15:00:00Z",
+      "until": "2026-09-29T06:16:17.123456Z",
+      "time_label": "今日"
+    }
+  },
+  {
+    "text": "昨日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-09-27T15:00:00Z",
+      "until": "2026-09-28T15:00:00Z",
+      "time_label": "昨日"
+    }
+  },
+  {
+    "text": "今月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-08-31T15:00:00Z",
+      "until": "2026-09-29T06:16:17.123456Z",
+      "time_label": "今月"
+    }
+  },
+  {
+    "text": "ここひと月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-08-30T06:16:17.123456Z",
+      "until": "2026-09-29T06:16:17.123456Z",
+      "time_label": "ここひと月"
+    }
+  },
+  {
+    "text": "ここ一カ月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": null
+  },
+  {
+    "text": "先週の句を思い出して",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-09-22T06:16:17.123456Z",
+      "until": "2026-09-29T06:16:17.123456Z",
+      "time_label": "先週"
+    }
+  },
+  {
+    "text": "7月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-06-30T15:00:00Z",
+      "until": "2026-07-31T15:00:00Z",
+      "time_label": "7月"
+    }
+  },
+  {
+    "text": "１２月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2025-11-30T15:00:00Z",
+      "until": "2025-12-31T15:00:00Z",
+      "time_label": "12月"
+    }
+  },
+  {
+    "text": "2月29日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "13月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "0月の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "9月31日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "10月1日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2025-09-30T15:00:00Z",
+      "until": "2025-10-01T15:00:00Z",
+      "time_label": "10月1日"
+    }
+  },
+  {
+    "text": "2026年9月1日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-08-31T15:00:00Z",
+      "until": "2026-09-01T15:00:00Z",
+      "time_label": "9月1日"
+    }
+  },
+  {
+    "text": "１月２日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-01-01T15:00:00Z",
+      "until": "2026-01-02T15:00:00Z",
+      "time_label": "1月2日"
+    }
+  },
+  {
+    "text": "١月٢日の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-01-01T15:00:00Z",
+      "until": "2026-01-02T15:00:00Z",
+      "time_label": "1月2日"
+    }
+  },
+  {
+    "text": "\u001c雪のタイガの句\u001f",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "snowy_taiga",
+      "biome_ids": [
+        "snowy_taiga"
+      ],
+      "place_label": "雪のタイガ",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "草地と森の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": "meadow",
+      "biome_ids": [
+        "meadow"
+      ],
+      "place_label": "草地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "暖かい所の句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "どこで詠んだ",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "昨日の句",
+    "now": "2024-03-01T01:02:03+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-02-28T15:00:00Z",
+      "until": "2024-02-29T15:00:00Z",
+      "time_label": "昨日"
+    }
+  },
+  {
+    "text": "今月の句",
+    "now": "2024-03-01T01:02:03+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-02-29T15:00:00Z",
+      "until": "2024-02-29T16:02:03Z",
+      "time_label": "今月"
+    }
+  },
+  {
+    "text": "ここひと月の句",
+    "now": "2024-03-01T01:02:03+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-01-30T16:02:03Z",
+      "until": "2024-02-29T16:02:03Z",
+      "time_label": "ここひと月"
+    }
+  },
+  {
+    "text": "12月の句",
+    "now": "2024-03-01T01:02:03+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2023-11-30T15:00:00Z",
+      "until": "2023-12-31T15:00:00Z",
+      "time_label": "12月"
+    }
+  },
+  {
+    "text": "1月1日の句",
+    "now": "2024-03-01T01:02:03+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2023-12-31T15:00:00Z",
+      "until": "2024-01-01T15:00:00Z",
+      "time_label": "1月1日"
+    }
+  },
+  {
+    "text": "昨日の句",
+    "now": "2025-01-01T00:00:00+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-12-30T15:00:00Z",
+      "until": "2024-12-31T15:00:00Z",
+      "time_label": "昨日"
+    }
+  },
+  {
+    "text": "今月の句",
+    "now": "2025-01-01T00:00:00+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-12-31T15:00:00Z",
+      "until": "2024-12-31T15:00:00Z",
+      "time_label": "今月"
+    }
+  },
+  {
+    "text": "ここひと月の句",
+    "now": "2025-01-01T00:00:00+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-12-01T15:00:00Z",
+      "until": "2024-12-31T15:00:00Z",
+      "time_label": "ここひと月"
+    }
+  },
+  {
+    "text": "12月の句",
+    "now": "2025-01-01T00:00:00+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-11-30T15:00:00Z",
+      "until": "2024-12-31T15:00:00Z",
+      "time_label": "12月"
+    }
+  },
+  {
+    "text": "1月1日の句",
+    "now": "2025-01-01T00:00:00+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2024-12-31T15:00:00Z",
+      "until": "2025-01-01T15:00:00Z",
+      "time_label": "1月1日"
+    }
+  },
+  {
+    "text": "昨日の句",
+    "now": "2026-12-31T23:59:59.999999+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-12-29T15:00:00Z",
+      "until": "2026-12-30T15:00:00Z",
+      "time_label": "昨日"
+    }
+  },
+  {
+    "text": "今月の句",
+    "now": "2026-12-31T23:59:59.999999+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-11-30T15:00:00Z",
+      "until": "2026-12-31T14:59:59.999999Z",
+      "time_label": "今月"
+    }
+  },
+  {
+    "text": "ここひと月の句",
+    "now": "2026-12-31T23:59:59.999999+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-12-01T14:59:59.999999Z",
+      "until": "2026-12-31T14:59:59.999999Z",
+      "time_label": "ここひと月"
+    }
+  },
+  {
+    "text": "12月の句",
+    "now": "2026-12-31T23:59:59.999999+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2026-11-30T15:00:00Z",
+      "until": "2026-12-31T15:00:00Z",
+      "time_label": "12月"
+    }
+  },
+  {
+    "text": "1月1日の句",
+    "now": "2026-12-31T23:59:59.999999+09:00",
+    "offset_seconds": 32400,
+    "overlay": [],
+    "expected": {
+      "biome_id": null,
+      "biome_ids": [],
+      "place_label": null,
+      "since": "2025-12-31T15:00:00Z",
+      "until": "2026-01-01T15:00:00Z",
+      "time_label": "1月1日"
+    }
+  },
+  {
+    "text": "すばらしそうちの句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [
+      {
+        "surface": "草地",
+        "reading": "すばらしそうち"
+      }
+    ],
+    "expected": {
+      "biome_id": "meadow",
+      "biome_ids": [
+        "meadow"
+      ],
+      "place_label": "草地",
+      "since": null,
+      "until": null,
+      "time_label": null
+    }
+  },
+  {
+    "text": "くさちの句",
+    "now": "2026-09-29T15:16:17.123456+09:00",
+    "offset_seconds": 32400,
+    "overlay": [
+      {
+        "surface": "草地",
+        "reading": "すばらしそうち"
+      }
+    ],
+    "expected": null
+  }
+]

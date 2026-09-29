@@ -1,10 +1,12 @@
 //! ローカル正本DBの回答だけを、出典境界を保って表示・音声へ投影する。
-//! 一般知識の検索は移行中のPython reader。限定国語のreaderはcatalog/retrieval。
+//! 一般知識と限定国語の検索・出典照合もRust readerが担当する。
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 pub mod catalog;
+pub mod minecraft;
+pub mod provider;
 pub mod query;
 pub mod retrieval;
 

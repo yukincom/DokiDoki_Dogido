@@ -204,12 +204,13 @@ pub async fn render_with_route(
                             && knowledge.is_none(),
                         "knowledge must be the only ordinary reply operation"
                     );
-                    ensure!(
-                        frame["request_text"].as_str().is_some()
-                            && frame["request_text"] == input["text"],
-                        "knowledge request mismatch"
-                    );
-                    let plan = crate::knowledge::render(&frame["lookup"]);
+                    let query = knowledge_request(&frame, &input)?;
+                    let lookup = crate::knowledge::provider::lookup_async(
+                        crate::knowledge::provider::Paths::from_helper(&config.helper)?,
+                        query,
+                    )
+                    .await?;
+                    let plan = crate::knowledge::render(&lookup);
                     select_route(crate::foreground::Route::Learning)?;
                     selected = true;
                     tracing::info!(
@@ -305,6 +306,32 @@ pub async fn render_with_route(
                     }
                 }
                 Some("result") => {
+                    ensure!(
+                        frame.get("memory_query").is_none(),
+                        "helper cannot supply recall conditions"
+                    );
+                    if frame["memory_query_requested"] == true {
+                        ensure!(
+                            address_reply.is_none()
+                                && language.is_none()
+                                && knowledge.is_none()
+                                && combat_kind.is_none()
+                                && !light_plan
+                                && !routing_only
+                                && plans == 0
+                                && leaves == 0,
+                            "recall must be the only ordinary reply operation"
+                        );
+                        let query = crate::recall_query::parse(
+                            input["text"].as_str().context("recall input")?,
+                            input["reading_corrections"]
+                                .as_array()
+                                .context("recall reading snapshot")?,
+                            chrono::Utc::now(),
+                        )
+                        .context("recall request missing from current input")?;
+                        frame["memory_query"] = serde_json::to_value(query)?;
+                    }
                     if let Some(text) = &address_reply {
                         ensure!(frame["text"] == *text, "helper changed address repair");
                         frame["language_status"] = "address_confirmation_requested".into();
@@ -371,9 +398,46 @@ pub async fn render_with_route(
     result
 }
 
+fn knowledge_request(frame: &Value, input: &Value) -> Result<crate::knowledge::query::Query> {
+    ensure!(
+        frame["request_text"].as_str().is_some() && frame["request_text"] == input["text"],
+        "knowledge request mismatch"
+    );
+    ensure!(
+        frame["query"].is_object() && frame["query"] == input["prepared_knowledge_query"],
+        "knowledge query mismatch"
+    );
+    ensure!(
+        frame.get("lookup").is_none(),
+        "helper cannot supply knowledge facts"
+    );
+    Ok(serde_json::from_value(frame["query"].clone())?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn helper_query_is_bound_to_current_input_and_cannot_supply_facts() {
+        let text = "枕詞って何？";
+        let query = crate::knowledge::query::from_normalized(text).unwrap();
+        let input = json!({"text":text,"prepared_knowledge_query":query});
+        let frame = json!({"request_text":text,"query":query});
+        assert_eq!(knowledge_request(&frame, &input).unwrap(), query);
+        let mut wrong = frame.clone();
+        wrong["query"]["subject"] = "ソネット".into();
+        assert!(knowledge_request(&wrong, &input).is_err());
+        wrong = frame.clone();
+        wrong["request_text"] = "ソネットとは？".into();
+        assert!(knowledge_request(&wrong, &input).is_err());
+        wrong = frame.clone();
+        wrong["lookup"] = json!({"status":"found","facts":["invented"]});
+        assert!(knowledge_request(&wrong, &input).is_err());
+        wrong = frame;
+        wrong["query"] = Value::Null;
+        assert!(knowledge_request(&wrong, &input).is_err());
+    }
 
     #[tokio::test]
     async fn knowledge_classification_needs_no_python_reader_or_model() {

@@ -70,7 +70,7 @@ fn compact(text: &str) -> String {
 fn kanji(c: char) -> bool {
     ('一'..='鿿').contains(&c)
 }
-fn shorten(text: &str, max: usize) -> String {
+pub(super) fn shorten(text: &str, max: usize) -> String {
     let text = text
         .split(space)
         .filter(|s| !s.is_empty())
@@ -118,26 +118,34 @@ static LABELS: LazyLock<Map<String, Value>> = LazyLock::new(|| {
         .expect("checked organization labels")
 });
 
-struct Reader<'a> {
+pub(super) struct Reader<'a> {
     paths: &'a Paths,
     stop: Stop,
     catalog: Option<Catalog>,
     bulk: Option<Bulk>,
 }
-impl Reader<'_> {
-    fn catalog(&mut self) -> Result<&Catalog> {
+impl<'a> Reader<'a> {
+    pub(super) fn new(paths: &'a Paths, stop: Stop) -> Self {
+        Self {
+            paths,
+            stop,
+            catalog: None,
+            bulk: None,
+        }
+    }
+    pub(super) fn catalog(&mut self) -> Result<&Catalog> {
         if self.catalog.is_none() {
             self.catalog = Some(Catalog::open(&self.paths.reference, self.stop.clone())?);
         }
         Ok(self.catalog.as_ref().unwrap())
     }
-    fn bulk(&mut self) -> Result<&Bulk> {
+    pub(super) fn bulk(&mut self) -> Result<&Bulk> {
         if self.bulk.is_none() {
             self.bulk = Some(Bulk::open(&self.paths.reference, self.stop.clone())?);
         }
         Ok(self.bulk.as_ref().unwrap())
     }
-    fn sources(&mut self, record: &Value) -> Result<Vec<Value>> {
+    pub(super) fn sources(&mut self, record: &Value) -> Result<Vec<Value>> {
         let mut refs = Vec::new();
         if let Some(rows) = record["source_refs"].as_array() {
             for row in rows {
@@ -177,6 +185,49 @@ impl Reader<'_> {
         }
         sources.truncate(3);
         Ok(sources)
+    }
+    pub(super) fn japanese(
+        &mut self,
+        query: &str,
+        datasets: &[&str],
+        limit: usize,
+    ) -> Result<Vec<Value>> {
+        let core: Vec<_> = if datasets.is_empty() {
+            catalog::CORE.to_vec()
+        } else {
+            datasets
+                .iter()
+                .copied()
+                .filter(|s| catalog::CORE.contains(s))
+                .collect()
+        };
+        let mut records = if core.is_empty() {
+            vec![]
+        } else {
+            self.catalog()?.search_records(query, &core, &[], limit)?
+        };
+        if !datasets.is_empty() && datasets.iter().all(|s| catalog::CORE.contains(s)) {
+            return catalog::rank_records(records, query, limit);
+        }
+        let available = self
+            .bulk()?
+            .dataset_ids()?
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let selected = if datasets.is_empty() {
+            available.iter().map(String::as_str).collect::<Vec<_>>()
+        } else {
+            datasets
+                .iter()
+                .copied()
+                .filter(|s| available.iter().any(|x| x == s))
+                .collect()
+        };
+        if !selected.is_empty() {
+            records.extend(self.bulk()?.search(query, &selected, &[], limit)?);
+        }
+        catalog::rank_records(records, query, limit)
     }
     fn fact(&mut self, record: &Value, text: &str, status: &str) -> Result<Value> {
         let mut fact = json!({"id":string(&record["id"])?,"title_ja":string(&record["title_ja"])?,
@@ -355,7 +406,7 @@ pub fn search(paths: &Paths, request: &Request, stop: Stop) -> SearchResult {
     }
 }
 
-async fn lookup_worker<T: Send + 'static>(
+pub(super) async fn lookup_worker<T: Send + 'static>(
     work: impl FnOnce(Stop) -> T + Send + 'static,
 ) -> Result<T> {
     struct Guard(Stop);

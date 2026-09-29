@@ -330,10 +330,25 @@ impl Catalog {
         Ok(ranked.into_iter().take(limit).map(|(_, _, v)| v).collect())
     }
     pub fn search_core(&self, query: &str, limit: usize) -> Result<Vec<Value>> {
-        let filters = vec![(
-            "by_dataset".into(),
-            CORE.iter().map(|s| (*s).into()).collect(),
-        )];
+        self.search_records(query, CORE, &[], limit)
+    }
+    pub fn search_records(
+        &self,
+        query: &str,
+        datasets: &[&str],
+        kinds: &[&str],
+        limit: usize,
+    ) -> Result<Vec<Value>> {
+        let filters = vec![
+            (
+                "by_dataset".into(),
+                datasets.iter().map(|s| (*s).into()).collect(),
+            ),
+            (
+                "by_kind".into(),
+                kinds.iter().map(|s| (*s).into()).collect(),
+            ),
+        ];
         let mut hits = self.search(query, &filters, limit)?;
         let query = normalized(query);
         hits.sort_by_key(|e| {
@@ -352,30 +367,51 @@ impl Catalog {
                 records.insert(string(&record["id"])?.to_owned(), record);
             }
         }
-        let mut ranked = Vec::new();
-        for (id, record) in records {
-            let score = if query.is_empty() {
-                4
-            } else if normalized(string(&record["title_ja"])?) == query {
-                0
-            } else if strings(&record["aliases"])?
-                .iter()
-                .any(|s| normalized(s) == query)
-            {
-                1
-            } else if strings(&record["search_terms"])?
-                .iter()
-                .any(|s| normalized(s) == query)
-            {
-                2
-            } else {
-                3
-            };
-            ranked.push((score, id, record));
-        }
-        ranked.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
-        Ok(ranked.into_iter().take(limit).map(|(_, _, v)| v).collect())
+        rank_records(records.into_values(), &query, limit)
     }
+}
+
+pub(super) fn rank_records(
+    records: impl IntoIterator<Item = Value>,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<Value>> {
+    let query = normalized(query);
+    let mut by_id = HashMap::new();
+    for record in records {
+        by_id.insert(string(&record["id"])?.to_owned(), record);
+    }
+    let mut ranked = Vec::new();
+    for (id, record) in by_id {
+        let score = if query.is_empty() {
+            4
+        } else if normalized(string(&record["title_ja"])?) == query {
+            0
+        } else if record
+            .get("aliases")
+            .map(strings)
+            .transpose()?
+            .unwrap_or_default()
+            .iter()
+            .any(|s| normalized(s) == query)
+        {
+            1
+        } else if record
+            .get("search_terms")
+            .map(strings)
+            .transpose()?
+            .unwrap_or_default()
+            .iter()
+            .any(|s| normalized(s) == query)
+        {
+            2
+        } else {
+            3
+        };
+        ranked.push((score, id, record));
+    }
+    ranked.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    Ok(ranked.into_iter().take(limit).map(|(_, _, v)| v).collect())
 }
 
 /// 大きなJSONLは索引を順に読み、必要な行だけをbyte位置から読む。
@@ -441,6 +477,139 @@ impl Bulk {
         }
         Ok(None)
     }
+}
+
+impl Bulk {
+    pub(super) fn dataset_ids(&self) -> Result<Vec<&str>> {
+        array(&self.index["datasets"])?
+            .iter()
+            .map(|r| string(&r["id"]))
+            .collect()
+    }
+    pub fn search(
+        &self,
+        query: &str,
+        datasets: &[&str],
+        kinds: &[&str],
+        limit: usize,
+    ) -> Result<Vec<Value>> {
+        if limit == 0 {
+            return Ok(vec![]);
+        }
+        let query = normalized(query);
+        let wanted: Vec<_> = datasets
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| normalized(s))
+            .collect();
+        let kinds: HashSet<_> = kinds
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| normalized(s))
+            .collect();
+        let mut candidates: Vec<(u8, String, Value)> = Vec::new();
+        let mut seen = HashSet::new();
+        let all = array(&self.index["datasets"])?;
+        let mut visited = HashSet::new();
+        let ordered: Vec<_> = if wanted.is_empty() {
+            all.iter().collect()
+        } else {
+            wanted
+                .iter()
+                .filter(|id| visited.insert((*id).clone()))
+                .filter_map(|id| all.iter().find(|row| row["id"] == *id))
+                .collect()
+        };
+        for dataset in ordered {
+            let mut file = File::open(safe_path(
+                &self.base,
+                string(&dataset["index_path"])?,
+                ".index.jsonl",
+            )?)?;
+            digest(&mut file, string(&dataset["index_sha256"])?, &self.stop)?;
+            file.seek(SeekFrom::Start(0))?;
+            for line in BufReader::new(file).lines() {
+                self.stop.check()?;
+                let mut entry: Value = serde_json::from_str(&line?)?;
+                valid(
+                    entry["dataset_id"] == dataset["id"]
+                        && entry["dataset_path"] == dataset["path"],
+                )?;
+                if !kinds.is_empty()
+                    && !kinds.contains(&normalized(entry["kind"].as_str().unwrap_or("")))
+                {
+                    continue;
+                }
+                let Some(score) = bulk_score(&entry, &query)? else {
+                    continue;
+                };
+                let id = string(&entry["id"])?.to_owned();
+                if !seen.insert(id.clone()) {
+                    continue;
+                }
+                entry["_dataset_sha256"] = dataset["sha256"].clone();
+                candidates.push((score, id, entry));
+                candidates.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+                candidates.truncate(limit);
+            }
+        }
+        let mut files: HashMap<String, (File, u64)> = HashMap::new();
+        let mut result = Vec::new();
+        for (_, _, entry) in candidates {
+            self.stop.check()?;
+            let path = string(&entry["dataset_path"])?;
+            if !files.contains_key(path) {
+                let mut file = File::open(safe_path(&self.base, path, ".jsonl")?)?;
+                digest(&mut file, string(&entry["_dataset_sha256"])?, &self.stop)?;
+                let size = file.stream_position()?;
+                files.insert(path.into(), (file, size));
+            }
+            let (file, size) = files.get_mut(path).unwrap();
+            let offset = entry["byte_offset"].as_u64().context(Invalid)?;
+            let length = entry["byte_length"].as_u64().context(Invalid)?;
+            valid(length >= 2 && offset.checked_add(length).is_some_and(|end| end <= *size))?;
+            file.seek(SeekFrom::Start(offset))?;
+            let mut bytes = vec![0; usize::try_from(length)?];
+            file.read_exact(&mut bytes)?;
+            let mut record: Value = serde_json::from_slice(&bytes)?;
+            valid(record["id"] == entry["id"])?;
+            if record.get("dataset_id").is_none() {
+                record["dataset_id"] = entry["dataset_id"].clone();
+            }
+            result.push(record);
+        }
+        Ok(result)
+    }
+}
+fn bulk_score(entry: &Value, query: &str) -> Result<Option<u8>> {
+    if query.is_empty() {
+        return Ok(Some(3));
+    }
+    if normalized(entry["title_ja"].as_str().unwrap_or("")) == query {
+        return Ok(Some(0));
+    }
+    let terms: Vec<_> = strings(&entry["search_terms"])?
+        .iter()
+        .filter(|s| !s.is_empty())
+        .map(|s| normalized(s))
+        .collect();
+    if terms.iter().any(|s| s == query) {
+        return Ok(Some(1));
+    }
+    let compact_query = compact(query);
+    if !compact_query.is_empty() && terms.iter().any(|s| compact(s).contains(&compact_query)) {
+        return Ok(Some(2));
+    }
+    let tokens: Vec<_> = query
+        .split(space)
+        .map(compact)
+        .filter(|s| !s.is_empty())
+        .collect();
+    Ok((!tokens.is_empty()
+        && tokens
+            .iter()
+            .all(|t| terms.iter().any(|s| compact(s).contains(t))))
+    .then_some(3))
 }
 
 #[cfg(test)]

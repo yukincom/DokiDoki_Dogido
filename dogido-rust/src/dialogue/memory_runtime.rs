@@ -6,6 +6,14 @@ use crate::{
 use anyhow::{Context, ensure};
 
 impl Dialogue {
+    pub async fn memory_view(&self, view: crate::memory_api::View) -> Result<Value> {
+        if !self.config.haiku.memory_enabled {
+            return Ok(view.disabled());
+        }
+        let root = self.config.haiku.memory_dir.clone();
+        tokio::task::spawn_blocking(move || crate::memory_api::read(&root, view)).await?
+    }
+
     pub(super) fn memory_live(
         &self,
         sid: &str,

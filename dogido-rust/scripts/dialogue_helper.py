@@ -109,8 +109,7 @@ def run_turn(data):
     context.raw_text = data["text"]
     context.interpreted_text = data["text"]
     if context.asks_haiku_recall and not (context.asks_save_last_haiku or context.revised_haiku_text or context.player_haiku_text):
-        from memory_query import recall_query
-        emit({"op": "result", "memory_query": recall_query(data["text"])})
+        emit({"op": "result", "memory_query_requested": True})
         return
     if any((context.requests_sword, context.asks_save_last_haiku,
             context.revised_haiku_text, context.player_haiku_text,
@@ -125,10 +124,7 @@ def run_turn(data):
             # workshop内の先行routingは別の移植単位。unrelated扱いでpinを流さない。
             emit({"op": "result", "unsupported": "句の相談中の知識検索はまだ接続していません。"})
             return
-        from dogido_server.knowledge_query import LocalKnowledgeProvider, validate_knowledge_lookup_result
-        lookup = LocalKnowledgeProvider().lookup(context.knowledge_query, limit=3)
-        lookup = validate_knowledge_lookup_result(lookup, expected_query=context.knowledge_query)
-        plan = exchange({"op": "knowledge", "request_text": data["text"], "lookup": asdict(lookup)})
+        plan = exchange({"op": "knowledge", "request_text": data["text"], "query": asdict(context.knowledge_query)})
         emit({"op": "result", "text": plan["text"],
               "spoken_text": prepare_text_for_tts(plan["text"], engine=settings.tts_reading_engine)})
         return

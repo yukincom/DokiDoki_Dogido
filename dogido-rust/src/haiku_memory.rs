@@ -99,7 +99,7 @@ pub fn clear_requested(raw: &str) -> bool {
 }
 
 /// Avoid adding memory-only inputs to ordinary conversation history. Final
-/// Japanese place/time interpretation remains in the existing pure helper.
+/// Japanese place/time interpretation is owned by recall_query.
 pub fn memory_candidate(text: &str) -> bool {
     clear_requested(text)
         || text.contains('句')
@@ -212,7 +212,7 @@ impl RecallQuery {
 impl MemoryStore {
     /// Old root records plus migration session records, never evaluation logs,
     /// other checkout roots, or symbolic session directories.
-    fn poem_rows(&self, filename: &str) -> Result<Vec<Value>> {
+    pub(crate) fn poem_rows(&self, filename: &str) -> Result<Vec<Value>> {
         let mut out = rows(&self.root().join("long_term").join(filename))?;
         let entries = match fs::read_dir(self.root().join("sessions")) {
             Ok(e) => Some(e),
