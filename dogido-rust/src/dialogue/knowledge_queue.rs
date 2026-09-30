@@ -60,9 +60,10 @@ impl Dialogue {
         source: &str,
     ) -> Option<Value> {
         let s = d.sessions.get_mut(sid)?;
-        if s.knowledge_checked
-            .as_ref()
-            .is_some_and(|c| c.generation == s.input_generation)
+        if super::workshop_focus::quiet(s)
+            || s.knowledge_checked
+                .as_ref()
+                .is_some_and(|c| c.generation == s.input_generation)
             || (safe(s) && s.warning.is_none() && s.knowledge_queue.is_empty())
         {
             return None;

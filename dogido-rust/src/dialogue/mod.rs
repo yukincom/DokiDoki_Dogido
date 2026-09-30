@@ -32,6 +32,7 @@ mod warnings;
 mod workshop_combat_input;
 mod workshop_combat_runtime;
 mod workshop_edits;
+mod workshop_focus;
 mod workshop_record;
 mod workshop_runtime;
 
@@ -488,7 +489,10 @@ impl Dialogue {
                             .is_some_and(|a| a.iter().any(environment_runtime::dark_audio)),
                 );
             }
-            if recent && warnings::interruption_reason(&event).is_some() {
+            if recent
+                && warnings::interruption_reason(&event).is_some()
+                && !workshop_focus::owns_input(&d.sessions[session_id])
+            {
                 Self::cancel_haiku(&mut d, session_id, "current_threat");
                 Self::cancel_address(&mut d, session_id, "attention_interrupted");
             }
@@ -510,8 +514,10 @@ impl Dialogue {
             if recent {
                 let s = d.sessions.get_mut(session_id).unwrap();
                 let busy = s.warning.is_some() || s.pending_warning.is_some() || jobs.len() >= 16;
+                let workshop_event = (!text.trim().is_empty() && workshop_focus::quiet(s))
+                    .then(|| event.without_player_input());
                 let decision = s.combat.observe(
-                    &event,
+                    workshop_event.as_ref().unwrap_or(&event),
                     now,
                     complete,
                     busy,
@@ -525,7 +531,8 @@ impl Dialogue {
                 {
                     tracing::warn!(event="chat_observation_rejected", session_id, %error);
                 }
-                let conversation_threat = warnings::interruption_reason(&event).is_some();
+                let conversation_threat = warnings::interruption_reason(&event).is_some()
+                    && !workshop_focus::owns_input(s);
                 if event.event.name == EventName::PlayerDied
                     || decision.dimension_changed
                     || (event.event.name == EventName::CombatEnded && !conversation_threat)
@@ -922,6 +929,7 @@ impl Dialogue {
             Self::cancel_warning(&mut d, &session_id, "new_player_input");
         }
         if !skip_assist
+            && !workshop_focus::quiet(&d.sessions[&session_id])
             && let Some(result) = self.assist_input(&mut d, &mut jobs, &session_id, text, source)
         {
             return result;
@@ -929,6 +937,7 @@ impl Dialogue {
         let s = d.sessions.get_mut(&session_id).unwrap();
         if let Some(event) = s.environment_latest.as_ref().or(s.latest.as_ref())
             && s.chat_allowed
+            && !workshop_focus::active(s)
             && let Some(mut speech) = s.ambient.smell_query(event, text, now)
         {
             speech.delivery = crate::combat::model::Delivery::PlayerReply;
@@ -939,7 +948,9 @@ impl Dialogue {
             return json!({"accepted":true,"session_id":session_id,"reason":"smell_query"});
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
-        if let Some(event) = s.latest.clone() {
+        if !workshop_focus::quiet(s)
+            && let Some(event) = s.latest.clone()
+        {
             let decision = s.combat.input(
                 &event,
                 text,
@@ -1589,7 +1600,8 @@ impl Dialogue {
                                 workshop_combat_input::ready(s, owner.clock.elapsed().as_millis() as u64, &owner.config).as_ref() == Some(key)
                             });
                             let workshop_allowed = workshop_id.is_some()
-                                && (workshop_combat_input::provisional(s) || same_threat);
+                                && (workshop_focus::quiet_observation(s)
+                                    || workshop_combat_input::provisional(s) || same_threat);
                             s.epoch == epoch && !(fresh(s) || workshop_allowed)
                         });
                         if stale {Self::cancel_chat(&mut d,&monitor_sid,"stale_observation");break;}

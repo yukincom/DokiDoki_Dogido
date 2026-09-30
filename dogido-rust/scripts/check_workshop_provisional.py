@@ -76,10 +76,13 @@ def main():
         follow=r["forwarded_input"]["turn_id"]
         r=done(base,send,sid,follow)
         assert r["workshop_action"]=="stage_player_edit" and len(calls)==1 and len(edits)==1,r
-        assert hud(sid)["pending_lines"][0]=="さくらいろ" and not revisions(folder,sid)
+        assert r["workshop_outcome"]=="player_edit_saved",r
+        assert hud(sid)["canonical_lines"]==["さくらいろ",*LINES[1:]] and not hud(sid)["pending_lines"]
+        assert len(revisions(folder,sid))==1
         send(sid,visual_threats=[MOB],combat={"recent_damage_ms":0,"combat_active_hint":True})
-        assert hud(sid)["state"]=="danger" and hud(sid)["pending_lines"][0]=="さくらいろ"
-        passed.append("substantive_input_forwarded_once_and_damage_keeps_unsaved_edit")
+        assert hud(sid)["state"]=="danger" and hud(sid)["canonical_lines"]==["さくらいろ",*LINES[1:]]
+        assert len(revisions(folder,sid))==1
+        passed.append("substantive_input_forwarded_once_and_damage_keeps_saved_explicit_edit")
 
     with fixture(combat_settings=SETTINGS,low_threat_resume_delay_ms=8000) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         classifier(control,lambda text:intent(text))

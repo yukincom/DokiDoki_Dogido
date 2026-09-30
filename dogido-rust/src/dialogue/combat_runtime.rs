@@ -116,7 +116,7 @@ impl Dialogue {
         d: &mut Data,
         jobs: &mut Vec<JoinHandle<()>>,
         sid: &str,
-        decision: Decision,
+        mut decision: Decision,
         input: Option<&str>,
         reason: Option<&str>,
     ) {
@@ -132,6 +132,19 @@ impl Dialogue {
         }
         s.mode = decision.mode;
         s.chat_allowed = decision.chat_allowed;
+        if super::workshop_focus::quiet(s) && !decision.dimension_changed {
+            // mode/観測は更新し続けるが、環境由来のpanicや予兆では相談を奪わない。
+            // 敵離脱後のpause中も同じ。撃破・爆散・安堵の実結果は復帰の前に配送する。
+            decision
+                .actions
+                .retain(|a| super::workshop_focus::combat_completion(a.kind));
+            if decision.actions.is_empty() {
+                decision.stop_audio = false;
+                if super::workshop_focus::owns_input(s) {
+                    decision.chat_allowed = true;
+                }
+            }
+        }
         // 戦闘後の安堵は緊急警告ではない。始めた台詞の後へ回す。
         let defer_relief = s.warning.as_ref().is_some_and(warnings::Active::finishing)
             && !decision.actions.is_empty()

@@ -230,6 +230,9 @@ impl Dialogue {
         if actions.is_empty() {
             return;
         }
+        if super::workshop_focus::active(&d.sessions[sid]) {
+            return;
+        }
         if reserved_reply(&d.sessions[sid]) {
             return;
         }
@@ -288,6 +291,11 @@ impl Dialogue {
         combat_priority: CombatPriority,
     ) {
         let s = d.sessions.get_mut(sid).unwrap();
+        if super::workshop_focus::active(s) {
+            // update済みの現在観測は保持し、発話候補やCDは消費しない。
+            Self::cancel_light(d, sid);
+            return;
+        }
         let Some(event) = s.environment_latest.clone() else {
             return;
         };

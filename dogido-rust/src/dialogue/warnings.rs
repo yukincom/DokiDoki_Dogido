@@ -52,6 +52,12 @@ pub(super) fn active_applicable(
     environment_settings: &crate::combat::model::Settings,
 ) -> bool {
     active.actions.iter().all(|action| {
+        // 実際の敵に対して開始した警告は、その後の対象消失だけでは切らない。
+        if workshop_blocked(action, session)
+            && !(active.started && action.delivery == Delivery::Combat)
+        {
+            return false;
+        }
         if !active.started || !can_finish(action) {
             return applicable(action, session, settings, environment_settings);
         }
@@ -79,6 +85,17 @@ pub(super) fn active_applicable(
                         .as_ref()
                         .is_none_or(|e| interruption_reason(e).is_none()))
     })
+}
+
+fn workshop_blocked(action: &Speech, session: &Session) -> bool {
+    super::workshop_focus::active(session)
+        && (matches!(
+            action.delivery,
+            Delivery::Ambient | Delivery::UrgentEnvironment
+        ) || action.kind == "smell"
+            || super::workshop_focus::quiet(session)
+                && action.delivery == Delivery::Combat
+                && !super::workshop_focus::combat_completion(action.kind))
 }
 
 pub(super) fn interruption_reason(e: &GameEvent) -> Option<&'static str> {
@@ -126,6 +143,9 @@ pub(super) fn applicable(
     settings: &crate::threats::Settings,
     environment_settings: &crate::combat::model::Settings,
 ) -> bool {
+    if workshop_blocked(action, session) {
+        return false;
+    }
     if matches!(
         action.delivery,
         Delivery::Ambient | Delivery::UrgentEnvironment

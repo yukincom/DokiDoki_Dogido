@@ -40,7 +40,7 @@ pub(super) fn provisional(s: &Session) -> bool {
             .is_some_and(|w| w.open && !w.combat_paused() && w.provisional.is_some())
 }
 pub(super) fn allowed(s: &Session) -> bool {
-    fresh(s) || provisional(s)
+    fresh(s) || provisional(s) || super::workshop_focus::owns_input(s)
 }
 
 impl Dialogue {

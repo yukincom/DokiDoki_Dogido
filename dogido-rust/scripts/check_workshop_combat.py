@@ -90,7 +90,12 @@ def main():
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         install(control, lambda text, prompt, n: edit(text))
         sid = ready(base, send, rows)
-        finish(base, send, sid, "上五を『さくらいろ』にして")
+        # 明示編集は現在は即保存。保存失敗で保持された未採用案を戦闘へ持ち越す。
+        revision_path = folder / "memory/sessions" / sid / "long_term/haiku_revisions.jsonl"
+        revision_path.mkdir()
+        r = finish(base, send, sid, "上五を『さくらいろ』にして")
+        assert r["workshop_outcome"] == "pending_save_failed", r
+        revision_path.rmdir()
         enter(send, rows, sid); end(send, rows, sid)
         r = returned(send, rows, sid)
         assert "離れられた" in r["text"] and "さくらいろ" in r["text"] and "倒" not in r["text"], r

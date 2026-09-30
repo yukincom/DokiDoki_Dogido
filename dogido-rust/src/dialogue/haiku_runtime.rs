@@ -213,6 +213,7 @@ impl Dialogue {
             &self.config,
         );
         let clear = super::workshop_combat_runtime::clear_for_resume(s);
+        let workshop_quiet = super::workshop_focus::quiet(s);
         let h = &mut s.haiku;
         if let Some(w) = h.workshop.as_mut() {
             let before = (w.is_open(), w.combat_paused());
@@ -222,8 +223,8 @@ impl Dialogue {
             let provisional = w.provisional.is_some() && w.provisional == ready;
             if !provisional
                 && (w.provisional.is_some()
-                    || s.mode != crate::combat::model::Mode::Normal
-                    || !s.chat_allowed)
+                    || !workshop_quiet
+                        && (s.mode != crate::combat::model::Mode::Normal || !s.chat_allowed))
             {
                 w.pause(now);
             }
@@ -260,11 +261,17 @@ impl Dialogue {
         let d = self.data.lock().unwrap();
         let s = d.sessions.get(sid)?;
         let mode = serde_json::to_value(s.mode).unwrap();
+        // HUDのdangerは句の中断表示。環境だけのalert/panicを持ち込まない。
+        let workshop_mode = if super::workshop_focus::owns_input(s) {
+            "normal"
+        } else {
+            mode.as_str().unwrap_or("normal")
+        };
         let mut hud = project_workshop(
             s.haiku.workshop.as_ref(),
             sid,
             i64::try_from(sequence).ok(),
-            mode.as_str().unwrap_or("normal"),
+            workshop_mode,
             s.haiku.active.is_some(),
         );
         hud["revision"] = d.revision.into();

@@ -48,6 +48,13 @@ impl GameEvent {
         Self(data, self.1.clone())
     }
 
+    /// Keep world observations while another conversation owner handles this input.
+    pub(crate) fn without_player_input(&self) -> Self {
+        let mut data = self.0.clone();
+        data.meta.user_text = None;
+        Self(data, self.1.clone())
+    }
+
     pub fn parse(mut value: Value) -> Result<Self, String> {
         // 旧名をextraにも残すPythonのbefore-validatorと同じ優先順。
         if let Some(object) = value.as_object_mut()

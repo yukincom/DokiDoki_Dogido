@@ -254,6 +254,7 @@ python dogido-rust/scripts/check_haiku_bridge.py
 python dogido-rust/scripts/compare_workshop_inspection.py
 python -m pytest dogido-rust/scripts/test_workshop_helper.py -q
 python dogido-rust/scripts/check_workshop_runtime.py
+python dogido-rust/scripts/check_workshop_focus.py
 python dogido-rust/scripts/check_workshop_edits.py
 python dogido-rust/scripts/check_workshop_revision.py
 python dogido-rust/scripts/check_workshop_followup.py

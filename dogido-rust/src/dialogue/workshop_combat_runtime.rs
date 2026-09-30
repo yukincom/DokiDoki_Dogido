@@ -7,6 +7,10 @@ use crate::{
 };
 
 pub(super) fn clear_for_resume(s: &Session) -> bool {
+    if !s.preview && super::workshop_focus::quiet(s) {
+        // 敵との戦闘後の安堵は待つ。暗さだけのalertには句の復帰を妨げさせない。
+        return s.mode != Mode::Aftermath;
+    }
     !s.preview
         && fresh(s)
         && s.mode == Mode::Normal
