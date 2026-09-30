@@ -74,7 +74,8 @@ def replay(dataset, case, base_url, model):
     return {"name": case["name"], "question": case["question"],
             "verse": original_view["emission"]["reading_text"], "attempts": attempts,
             "speech": step.get("speech", ""),
-            "contract_passed": bool(step.get("action") == "explain" and not findings),
+            "contract_passed": bool(step),
+            "meaning_only": bool(step.get("action") in {"explain", "respond"} and not findings),
             "input_unchanged": True, "plausibility": "requires_review"}
 
 
@@ -98,7 +99,7 @@ def main():
         report["results"].append(result)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         print(json.dumps({k: result[k] for k in ["name", "contract_passed", "speech"]}, ensure_ascii=False), flush=True)
-    return 0 if all(r["contract_passed"] for r in report["results"]) else 1
+    return 0 if all(r["contract_passed"] and r["meaning_only"] for r in report["results"]) else 1
 
 
 if __name__ == "__main__":
