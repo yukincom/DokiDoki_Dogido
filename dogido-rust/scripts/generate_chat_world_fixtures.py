@@ -54,6 +54,8 @@ for items in sets:
 places=[]
 def place(data,structure=None,limit=12.):
  e=parsed(data);fake.state.current_structure=structure;fake.settings.home_bed_prompt_distance=limit
+ # Glass is retained on the wire but is no longer interior evidence in Rust.
+ e=e.model_copy(update={"world":e.world.model_copy(update={"nearby_window_present":None})})
  places.append([intern(data),intern(structure),intern(limit),intern(fake._player_chat_place_context(e))])
 for sky,cover,y,ceiling in itertools.product([None,False,True],[None,'unknown','foliage','FOLIAGE','fluid','stone'],[None,-0.5,0.5,48,49,51,100],[None,2.5,3.,8.,12.]):
  place(frame(world={'sky_visible':sky,'overhead_cover_type':cover,'ceiling_height':ceiling,'biome':'forest','local_light':8,'danger_darkness_score':.58},player={'position':{'y':y}}))

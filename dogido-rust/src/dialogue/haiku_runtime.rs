@@ -147,6 +147,7 @@ impl State {
 }
 fn safe(s: &Session) -> bool {
     !s.preview
+        && !s.foreground.game_paused
         && fresh(s)
         && s.mode == crate::combat::model::Mode::Normal
         && s.latest

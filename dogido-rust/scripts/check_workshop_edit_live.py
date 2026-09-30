@@ -17,7 +17,7 @@ from check_workshop_runtime import ready
 
 CASES = [
     ("partial_direct", ["くろいをしろいに変えて"], [LINES[0], "しろいおのへと", LINES[2]]),
-    ("one_idea", ["『くろい』を『しろい』にするのはどう？", "明るい感じがするね", "それにして"],
+    ("one_idea", ["『くろい』を『しろい』にするのはどう？", "明るい感じがするね", "そうしましょう"],
         [LINES[0], "しろいおのへと", LINES[2]]),
     ("correct_replacement", ["『くろい』を『あお』にするのはどう？", "それにして", "やっぱり『あおい』にして"],
         [LINES[0], "あおいおのへと", LINES[2]]),
@@ -29,10 +29,13 @@ def main():
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--case", choices=[case[0] for case in CASES], action="append")
     args = parser.parse_args()
     # Do not overwrite an earlier measurement.
     with args.output.open("x") as output:
-        for name, texts, expected_pending in CASES:
+        for name, texts, expected_current in CASES:
+            if args.case and name not in args.case:
+                continue
             with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
                 calls = []
                 def actual(incoming):
@@ -69,7 +72,7 @@ def main():
                         print(json.dumps({"case": name, "input": text, "action": result.get("workshop_action"),
                             "reason": result.get("workshop_reason"), "status": result["playback_status"],
                             "calls": len(calls)-count, "reply": result.get("text"), "pending": view["pending_lines"]}, ensure_ascii=False), flush=True)
-                    passed = (hud(sid)["pending_lines"] == expected_pending and hud(sid)["canonical_lines"] == LINES)
+                    passed = (not hud(sid)["pending_lines"] and hud(sid)["canonical_lines"] == expected_current)
                     if name == "correct_replacement":
                         passed = passed and results[-2]["result"].get("workshop_outcome") == "player_edit_rejected"
                     summary = {"case": name, "passed": passed, "saved_entries": len(stored(sid)),

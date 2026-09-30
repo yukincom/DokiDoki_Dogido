@@ -73,6 +73,7 @@ pub struct State {
     pub started_at: Option<u64>,
     pub last_player_at: Option<u64>,
     pub combat_active: bool,
+    pub game_paused: bool,
     pub suspended: Option<SuspendedTopic>,
     pub clock: IntervalClock,
     completed: VecDeque<Completed>,
@@ -80,8 +81,16 @@ pub struct State {
 }
 
 impl State {
+    pub fn set_game_paused(&mut self, now: u64, paused: bool) {
+        self.clock.sync(now, paused || self.route.blocks_haiku());
+        self.game_paused = paused;
+    }
+    pub fn haiku_clock_paused(&self) -> bool {
+        self.game_paused || self.route.blocks_haiku()
+    }
     pub fn activate(&mut self, route: Route, now: u64, player_at: Option<u64>) {
-        self.clock.sync(now, route.blocks_haiku());
+        self.clock
+            .sync(now, self.game_paused || route.blocks_haiku());
         if self.route != route {
             self.route = route;
             self.started_at = Some(now);
@@ -94,7 +103,7 @@ impl State {
         }
     }
     pub fn clear(&mut self, now: u64) {
-        self.clock.sync(now, false);
+        self.clock.sync(now, self.game_paused);
         self.route = Route::None;
         self.started_at = None;
         self.last_player_at = None;
@@ -108,7 +117,7 @@ impl State {
             // 観測が途切れていても、期限後まで学習していたことにしない。
             self.clear(at.saturating_add(ttl));
         }
-        self.clock.sync(now, self.route.blocks_haiku());
+        self.clock.sync(now, self.haiku_clock_paused());
     }
     /// 生成前のrouting成立時に一度だけ数える。再試行・再生通知では延長しない。
     pub fn select(
@@ -187,7 +196,7 @@ impl State {
             remaining_player_turns: hold.max(1),
             reason: reason.to_owned(),
         });
-        self.clock.sync(now, false);
+        self.clock.sync(now, self.game_paused);
         self.route = Route::None;
         self.started_at = None;
     }
@@ -210,7 +219,7 @@ impl State {
     }
     pub fn snapshot(&self, now: u64) -> serde_json::Value {
         serde_json::json!({"route":self.route,"combat_active":self.combat_active,
-            "blocks_new_haiku":self.route.blocks_haiku(),"suspended":self.suspended,
+            "blocks_new_haiku":self.haiku_clock_paused(),"suspended":self.suspended,
             "last_player_at_ms":self.last_player_at,"haiku_elapsed_ms":self.clock.elapsed(now)})
     }
 }
@@ -241,6 +250,39 @@ pub fn looks_like_resume(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn game_pause_freezes_remaining_time_across_route_changes_without_resume_burst() {
+        let mut s = State::default();
+        s.clock.start(0);
+        s.set_game_paused(300_000, true);
+        s.activate(Route::Learning, 400_000, Some(400_000));
+        s.tick(800_000, 300_000); // learning expires while Minecraft remains paused
+        assert_eq!(s.route, Route::None);
+        s.activate(Route::Casual, 900_000, Some(900_000));
+        s.suspend(1_000_000, "combat", 10);
+        s.clear(1_200_000);
+        s.tick(1_400_000, 300_000);
+        assert!(s.game_paused);
+        assert_eq!(s.clock.elapsed(1_500_000), 300_000);
+        assert_eq!(s.snapshot(1_500_000)["haiku_elapsed_ms"], 300_000);
+        s.set_game_paused(1_500_000, false);
+        assert_eq!(s.clock.elapsed(1_500_000), 300_000);
+        assert_eq!(s.clock.elapsed(1_799_999), 599_999);
+        assert_eq!(s.clock.elapsed(1_800_000), 600_000);
+    }
+    #[test]
+    fn unpausing_game_does_not_unpause_learning_or_web() {
+        for route in [Route::Learning, Route::Web] {
+            let mut s = State::default();
+            s.clock.start(0);
+            s.activate(route, 100_000, Some(100_000));
+            s.set_game_paused(200_000, true);
+            s.set_game_paused(900_000, false);
+            assert_eq!(s.clock.elapsed(1_000_000), 100_000);
+            s.clear(1_000_000);
+            assert_eq!(s.clock.elapsed(1_500_000), 600_000);
+        }
+    }
     #[test]
     fn learning_freezes_remaining_interval_and_expires_at_the_deadline() {
         let mut s = State::default();

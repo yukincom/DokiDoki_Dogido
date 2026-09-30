@@ -586,14 +586,6 @@ fn features(
     if !vehicle.is_empty() {
         add("乗車", "vehicle_activity".into(), vehicle, vec![]);
     }
-    if event.world.nearby_window_present == Some(true) {
-        add(
-            "空間",
-            "nearby_window".into(),
-            "近くに窓がある".into(),
-            ["屋内", "窓", "外", "眺め"].map(str::to_owned).to_vec(),
-        );
-    }
     if !environment.mining_label.is_empty() {
         add(
             if environment.mining_state == MiningState::Active {

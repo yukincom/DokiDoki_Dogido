@@ -236,7 +236,7 @@ impl ChatObservationMemory {
                 label_ja: sound.label,
                 direction: sound.direction,
                 distance_band: sound.band,
-                heard_at_us: now,
+                heard_at_us: now.saturating_sub(sound.heard_ago_ms.saturating_mul(1000)),
                 dedupe_key: sound.key,
             };
             put_hearing(&mut self.hearing, memo);
@@ -741,6 +741,7 @@ struct Sound {
     direction: String,
     band: String,
     key: String,
+    heard_ago_ms: i64,
 }
 fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
     let mut result = vec![];
@@ -767,6 +768,7 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             direction,
             band,
             key,
+            heard_ago_ms: audio.heard_ago_ms.unwrap_or(0),
         });
     }
     for (index, sound) in event.ambient_sounds.iter().enumerate() {
@@ -781,10 +783,13 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
         .to_owned();
         let direction = direction(&sound.direction).to_owned();
         let band = band(sound.distance_band).to_owned();
-        let key = format!(
-            "{kind}:{}:{direction}:{band}",
-            mob_type.as_deref().unwrap_or(&sound.r#type)
-        );
+        let key = match sound.source_id.as_deref().filter(|id| !id.is_empty()) {
+            Some(id) => format!("{kind}:{id}"),
+            None => format!(
+                "{kind}:{}:{direction}:{band}",
+                mob_type.as_deref().unwrap_or(&sound.r#type)
+            ),
+        };
         result.push(Sound {
             index,
             kind,
@@ -796,6 +801,7 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             direction,
             band,
             key,
+            heard_ago_ms: sound.heard_ago_ms.unwrap_or(0),
         });
     }
     result

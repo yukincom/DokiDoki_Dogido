@@ -297,6 +297,20 @@ mod tests {
     }
 
     #[test]
+    fn structured_reason_truncation_keeps_verdicts_without_salvaging_inner_reasons() {
+        let raw = format!(
+            r#"{PREFIX},"failure_reasons":{{"1":[{{"kind":"meaning","fragment":"つるぎ","reason":"途中"#
+        );
+        let result = grounding(&raw, Some("length"));
+        assert_eq!(result[STATUS], "accepted");
+        assert_eq!(result["verdicts"]["1"], "meaning_fail");
+        assert_eq!(result["assessments"].as_array().unwrap().len(), 3);
+        assert!(result.get("failure_reasons").is_none());
+        assert!(result.get("kind").is_none());
+        assert!(result.get("fragment").is_none());
+    }
+
+    #[test]
     fn incomplete_evidence_never_becomes_an_inner_assessment() {
         for raw in [
             r#"{"verdicts":{"0":"pass","1":"pass","2":"pass"},"assessments":["#,

@@ -252,6 +252,160 @@ async fn negative_with_empty_evidence_regenerates_and_eligible_ids_are_renumbere
         1
     );
 }
+
+#[tokio::test]
+async fn grounded_reason_array_keeps_up_to_three_actual_failures_and_both_verdict_axes() {
+    let mut bad = negative(&[1]);
+    bad["verdicts"]["1"] = json!("both_fail");
+    bad["failure_reasons"]["1"] = json!([
+        {"kind":"meaning","fragment":"つるぎ","reason":"材料との意味の対応がない"},
+        {"kind":"japanese","fragment":"くろき","reason":"この用例では修飾先が不明"},
+        {"kind":"japanese","fragment":"の","reason":"この用例では後ろの言葉につながらない"},
+        {"kind":"japanese","fragment":"の","reason":"第四の理由は伝えない"}
+    ]);
+    let mut b = Scripted::new(vec![draft(), bad, json!({"lines":[]})]);
+    let mut i = input();
+    i.max_regeneration_rounds = 1;
+    let r = generate(&mut b, i).await.unwrap();
+    assert_eq!(r.failure_reason.as_deref(), Some("max_regeneration_rounds"));
+    let row = &b.requests[2].details["current_lines"][1];
+    assert_eq!(
+        row["failure_reasons"],
+        json!(["meaning_not_retained", "unnatural_japanese"])
+    );
+    assert_eq!(
+        row["assessment_comment"],
+        "意味「つるぎ」:材料との意味の対応がない、日本語「くろき」:この用例では修飾先が不明、日本語「の」:この用例では後ろの言葉につながらない"
+    );
+    assert!(row["assessment_comment"].as_str().unwrap().chars().count() <= 240);
+    assert_eq!(
+        b.requests.len(),
+        3,
+        "diagnostics do not add an assessment call"
+    );
+}
+
+#[tokio::test]
+async fn malformed_or_absent_reasons_do_not_change_a_valid_negative_verdict() {
+    for reason in [
+        Value::Null,
+        json!([]),
+        json!([null, true, "旧文字列は配列内では受けない"]),
+        json!([{"kind":"meaning","fragment":"つるぎ","reason":"合格した軸への指摘"}]),
+        json!([{"kind":"japanese","fragment":"存在しない語","reason":"その断片は句にない"}]),
+        json!([{"kind":"japanese","fragment":"","reason":"空の断片"}]),
+        json!([{"kind":"japanese","fragment":"つるぎ","reason":""}]),
+        json!([{"kind":"japanese","fragment":"つるぎ","reason":"長".repeat(49)}]),
+        json!([{"kind":"japanese","fragment":"つるぎ","reason":"一行\n二行"}]),
+        json!([{"kind":"unknown","fragment":"つるぎ","reason":"未知の軸"}]),
+        json!([{"kind":"japanese","fragment":"つるぎ"}]),
+        json!([{"kind":"japanese","fragment":"つるぎ","reason":"理由","extra":true}]),
+    ] {
+        let mut bad = full();
+        bad["verdicts"]["1"] = json!("japanese_fail");
+        bad["failure_reasons"]["1"] = reason.clone();
+        let mut b = Scripted::new(vec![draft(), bad, json!({"lines":[]})]);
+        let mut i = input();
+        i.max_regeneration_rounds = 1;
+        let r = generate(&mut b, i).await.unwrap();
+        assert_eq!(
+            r.failure_reason.as_deref(),
+            Some("max_regeneration_rounds"),
+            "{reason}"
+        );
+        let row = &b.requests[2].details["current_lines"][1];
+        assert_eq!(
+            row["failure_reasons"],
+            json!(["unnatural_japanese"]),
+            "{reason}"
+        );
+        assert_eq!(row["assessment_comment"], "", "{reason}");
+        assert_eq!(b.requests.len(), 3, "{reason}");
+    }
+}
+
+#[tokio::test]
+async fn duplicate_reasons_are_not_extra_failures_and_pass_reasons_remain_ignored() {
+    let reason = json!({"kind":"japanese","fragment":"つるぎ","reason":"この断片の使い方が不自然"});
+    let mut bad = full();
+    bad["verdicts"]["1"] = json!("japanese_fail");
+    bad["failure_reasons"]["1"] = json!([reason, reason, reason]);
+    let mut b = Scripted::new(vec![draft(), bad, json!({"lines":[]})]);
+    let mut i = input();
+    i.max_regeneration_rounds = 1;
+    generate(&mut b, i).await.unwrap();
+    assert_eq!(
+        b.requests[2].details["current_lines"][1]["assessment_comment"],
+        "日本語「つるぎ」:この断片の使い方が不自然"
+    );
+
+    let mut pass = full();
+    pass["failure_reasons"]["1"] = json!([reason]);
+    let mut b = Scripted::new(vec![draft(), pass]);
+    assert!(generate(&mut b, input()).await.unwrap().accepted);
+    assert_eq!(b.requests.len(), 2);
+}
+
+#[tokio::test]
+async fn a_new_candidate_replaces_old_feedback_before_a_repeated_rewrite() {
+    let mut first = negative(&[1]);
+    first["failure_reasons"]["1"] =
+        json!([{"kind":"meaning","fragment":"くろき","reason":"最初の候補だけへの指摘"}]);
+    let second = "くろいつるぎの";
+    let check_second = json!({"verdicts":{"1":"japanese_fail"},"assessments":[{"line_index":1,"atom_ids":[1]}],
+        "failure_reasons":{"1":[{"kind":"japanese","fragment":"くろい","reason":"二つ目の候補だけへの指摘"}]}});
+    let mut b = Scripted::new(vec![
+        draft(),
+        first,
+        json!({"lines":[{"line_index":1,"text":second}]}),
+        check_second,
+        json!({"lines":[{"line_index":1,"text":second}]}),
+        json!({"lines":[{"line_index":1,"text":"つるぎひかるよ"}]}),
+        json!({"verdicts":{"1":"pass"},"assessments":[{"line_index":1,"atom_ids":[1]}]}),
+    ]);
+    let r = generate(&mut b, input()).await.unwrap();
+    assert!(r.accepted);
+    let repeated = &b.requests[5].details["current_lines"][1];
+    assert_eq!(repeated["text"], second);
+    assert_eq!(
+        repeated["failure_reasons"],
+        json!(["unnatural_japanese", "duplicate_candidate"])
+    );
+    assert_eq!(
+        repeated["assessment_comment"],
+        "日本語「くろい」:二つ目の候補だけへの指摘"
+    );
+    assert!(!repeated.to_string().contains("最初の候補"));
+    assert_eq!(
+        b.requests
+            .iter()
+            .filter(|r| r.kind == "haiku_line_grounding")
+            .count(),
+        3
+    );
+}
+
+#[tokio::test]
+async fn correction_does_not_attach_a_reason_quote_to_different_displayed_text() {
+    let mut bad = full();
+    bad["verdicts"]["1"] = json!("japanese_fail");
+    bad["failure_reasons"]["1"] =
+        json!([{"kind":"japanese","fragment":"くろき","reason":"補正前の断片への指摘"}]);
+    let mut b = Scripted::new(vec![draft(), bad, json!({"lines":[]})]);
+    b.preset(
+        TransformMode::Correct,
+        LINES[1],
+        "くろいつるぎの",
+        "くろいつるぎの",
+    );
+    let mut i = input();
+    i.max_regeneration_rounds = 1;
+    generate(&mut b, i).await.unwrap();
+    let row = &b.requests[2].details["current_lines"][1];
+    assert_eq!(row["text"], "くろいつるぎの");
+    assert_eq!(row["failure_reasons"], json!(["unnatural_japanese"]));
+    assert_eq!(row["assessment_comment"], "");
+}
 #[tokio::test]
 async fn legacy_and_top_level_single_assessments_are_accepted_with_exact_ids() {
     let legacy = json!({"assessments":[{"line_index":0,"atom_ids":[atoms()[0].atom_id],"meaning_retained":true,"natural_japanese":true},{"line_index":2,"atom_ids":[atoms()[2].atom_id],"meaning_retained":true,"natural_japanese":true}]});
@@ -374,7 +528,15 @@ async fn duplicate_candidates_skip_grounding_and_cannot_move_between_lines() {
     );
     assert_eq!(
         b.requests[3].details["current_lines"][1]["failure_reasons"],
-        json!(["duplicate_candidate"])
+        json!(["meaning_not_retained", "duplicate_candidate"])
+    );
+    assert_eq!(
+        b.requests[3].details["current_lines"][1]["assessment_comment"],
+        "材料の意味と合っていない。"
+    );
+    assert_eq!(
+        b.requests[4].details["current_lines"][1]["assessment_comment"],
+        "材料の意味と合っていない。"
     );
     assert_eq!(b.requests[4].details["current_lines"][1]["text"], LINES[1]);
 }
@@ -424,7 +586,7 @@ async fn regeneration_is_atomic_when_frozen_extra_missing_duplicate_or_malformed
         assert_eq!(r.regeneration_rounds, 2);
         assert_eq!(
             b.requests[3].details["current_lines"][1]["failure_reasons"],
-            json!(["missing_regenerated_line"])
+            json!(["meaning_not_retained", "missing_regenerated_line"])
         );
         assert_eq!(b.requests[3].details["current_lines"][1]["text"], LINES[1]);
         assert_eq!(
@@ -502,7 +664,7 @@ async fn same_natural_candidate_after_correction_is_also_already_seen() {
     assert!(!r.accepted);
     assert_eq!(
         b.requests[3].details["current_lines"][1]["failure_reasons"],
-        json!(["duplicate_candidate"])
+        json!(["meaning_not_retained", "duplicate_candidate"])
     );
     assert_eq!(
         b.requests

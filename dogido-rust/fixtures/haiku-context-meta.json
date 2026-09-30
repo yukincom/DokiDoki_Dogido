@@ -11,7 +11,7 @@
     "dogido_server/state_machine/mixins/haiku.py": "eb6d29df58a15c357c88016a08b10db4682d26ebb762d8c5268af3c3b831947c",
     "dogido_server/state_machine/haiku_context.py": "c1dfa2633dceb7050569779864158cfdcee40c79e67f02b2c7300e665fb262b2",
     "dogido_server/haiku/source_atoms.py": "b451a145ca89703179ecaae1a9268b9128f18f73e452ea0ed162e3b125d7f7b0",
-    "dogido_server/catalog_readings.py": "3554532adfc5731b1ba3e28b8758a5c38e98c7cb790dc64799e578cafb1e92e3",
+    "dogido_server/catalog_readings.py": "dadcd2078572e67a56046b5720c817121bab041c9e109573fd78cd2318f710f6",
     "dogido_server/entity_voice_catalog.py": "368916bfcfb0a607b735070037ea72c71e94c57279ff5d3621b361f9aa03e6ca",
     "dogido_server/entry_catalog.py": "b77b38553b2ccc9608b54a454f4efb2e9a16fc34ca9af161132c82eb843f4230",
     "dogido_server/minecraft_ids.py": "f0e9fcc9e170cddaab883e64ca5fc7d192b0a27ed996b470df3b1aede172a080",

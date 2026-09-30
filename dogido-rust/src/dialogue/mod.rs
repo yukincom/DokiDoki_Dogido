@@ -448,6 +448,10 @@ impl Dialogue {
                 s.latest = Some(event.clone());
                 s.received = recent.then(Instant::now);
             }
+            if complete && recent {
+                s.foreground
+                    .set_game_paused(now, event.world.game_paused.unwrap_or(false));
+            }
             if complete || recent && event.event.source_kind == SourceKind::Auditory {
                 s.audio_latest = Some(event.clone());
                 s.audio_received = recent.then(Instant::now);
@@ -1861,6 +1865,62 @@ impl Dialogue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn only_fresh_complete_nonduplicate_observations_change_game_pause() {
+        let mut config = DialogueConfig {
+            audio_enabled: false,
+            llm_enabled: false,
+            ..Default::default()
+        };
+        config.haiku.enabled = false;
+        let d = Dialogue::new(config).unwrap();
+        d.register("pause", "試験", false);
+        let frame = |seq, paused: Option<bool>, partial: bool, stale: bool| {
+            let mut e = empty_event("試験");
+            e["sequence"] = json!(seq);
+            e["observed_at"] =
+                json!(chrono::Utc::now() - chrono::Duration::seconds(if stale { 30 } else { 0 }));
+            e["world"]["time_of_day"] = json!(13713);
+            e["player"]["dimension"] = json!("minecraft:the_nether");
+            if let Some(p) = paused {
+                e["world"]["game_paused"] = json!(p);
+            }
+            if partial {
+                e["event"]["name"] = json!("ambient_mob_detected");
+                e["event"]["source_kind"] = json!("auditory");
+            }
+            GameEvent::parse(e).unwrap()
+        };
+        let paused = || {
+            d.data.lock().unwrap().sessions["pause"]
+                .foreground
+                .game_paused
+        };
+        d.observe("pause", frame(1, Some(true), false, false), None);
+        assert!(paused());
+        for e in [
+            frame(2, Some(false), true, false),
+            frame(3, Some(false), false, true),
+            frame(1, Some(false), false, false),
+        ] {
+            d.observe("pause", e, None);
+            assert!(
+                paused(),
+                "partial, stale and duplicate observations cannot unpause"
+            );
+        }
+        d.observe("pause", frame(4, None, false, false), None);
+        assert!(
+            !paused(),
+            "legacy complete snapshots keep the former behavior"
+        );
+        d.observe("pause", frame(5, Some(true), false, false), None);
+        assert!(paused());
+        d.observe("pause", frame(6, Some(false), false, false), None);
+        assert!(!paused(), "fixed world time and Nether do not imply pause");
+        d.shutdown().await;
+    }
 
     #[tokio::test]
     async fn knowledge_history_requires_playback_and_never_becomes_poem_material() {

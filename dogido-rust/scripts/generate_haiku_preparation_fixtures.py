@@ -33,6 +33,9 @@ def main():
           lessons=[{'note':'言葉の響きを大切に','forbidden_fragments':['かぜ']},{'note':'言葉の響きを大切に'},{'note':'解除','polarity':'loosen'}]
           start={'event':row['event'],'runtime':{'current_structure':row['current_structure'],'inventory_order':list(row['event']['inventory']),'player_name':row['player_name']},'settings':settings,'completed_turns':turns,'reading_corrections':corrections,'lessons':lessons,'dialogue_material':None}
           frames={'op':'haiku_context','event':row['event'],'completed_turns':turns,'reading_corrections':corrections,'lessons':lessons,'settings':{'llm_enabled':settings['llm_enabled'],'haiku_structured_max_tokens':192,'haiku_grounding_max_tokens':512,'haiku_generation_strategy':settings['generation_strategy'],'haiku_max_regeneration_rounds':6}}
+          # Preserve the actual input in start, but omit unreliable window evidence from the oracle.
+          frames=copy.deepcopy(frames)
+          frames["event"]["world"]["nearby_window_present"]=None
           prep=canonical.HaikuPreparation();context=prep.handle(frames)
           result={'accepted':True,'text':context['fixed_text'] or ['','はなのかげ\nゆれるこもれび\nかぜをきく','ここで一句。\nしろいはな　くさちのうえで　かぜをきく','白い花\n草地の上で\n風を聞く'][variant],'line_sources':[],'failure_reason':None,'generation_strategy':'fixed_catalog' if variant==0 else settings['generation_strategy'],'regeneration_rounds':0,'prompt_variant':'source_atoms_slots_v2_kana_normalize'}
           payload={'found':False} if variant==1 else {'found':True,'description':'石のそばに花がある','elements':['石','花'],'focus':['光'],'confidence':.8}

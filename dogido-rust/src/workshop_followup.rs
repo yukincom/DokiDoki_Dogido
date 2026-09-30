@@ -94,7 +94,7 @@ pub fn validate(payload: &Value, text: &str, stage: Stage, pending: bool) -> Res
 
 pub fn speech(action: &str) -> Option<&'static str> {
     match action {
-        "acknowledge_meaning" => Some("うん、伝わってよかった。この句の話はここまででええ？"),
+        "acknowledge_meaning" => Some("うん。この句の話はここまででええ？"),
         "confirm_close" => Some("おけ、この句の話はここまでや。"),
         "continue_workshop" => Some("おけ、まだ続けよか。気になるとこ教えてな。"),
         "resume_workshop" => Some("おけ、続けよか。気になるとこ教えてな。"),

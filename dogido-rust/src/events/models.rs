@@ -403,6 +403,10 @@ pub struct AmbientSound {
     pub source_id: Option<String>,
     #[serde(default)]
     pub sound_event: Option<String>,
+    /// Elapsed real milliseconds since the sound actually played, not since this snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub heard_ago_ms: Option<i64>,
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
@@ -419,6 +423,10 @@ pub struct AuditoryThreat {
     pub source_id: Option<String>,
     #[serde(default)]
     pub sound_event: Option<String>,
+    /// Elapsed real milliseconds since the sound actually played, not since this snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub heard_ago_ms: Option<i64>,
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
@@ -828,6 +836,10 @@ pub struct WorldState {
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub sky_visible: Option<bool>,
+    /// Actual client game pause; missing on legacy adapters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub game_paused: Option<bool>,
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub surface_y: Option<i64>,
@@ -1070,12 +1082,18 @@ impl Validate for AdapterCommandResult {
 impl Validate for AmbientSound {
     fn validate(&self) -> Result<(), String> {
         self.direction.validate()?;
+        if let Some(value) = self.heard_ago_ms {
+            ensure(value >= 0, "AmbientSound.heard_ago_ms: minimum 0")?;
+        }
         Ok(())
     }
 }
 impl Validate for AuditoryThreat {
     fn validate(&self) -> Result<(), String> {
         self.direction.validate()?;
+        if let Some(value) = self.heard_ago_ms {
+            ensure(value >= 0, "AuditoryThreat.heard_ago_ms: minimum 0")?;
+        }
         Ok(())
     }
 }

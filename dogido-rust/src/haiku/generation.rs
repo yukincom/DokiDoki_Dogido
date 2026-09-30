@@ -13,6 +13,7 @@ pub(super) struct Assessment {
     pub(super) atom_ids: Vec<String>,
     pub(super) meaning_retained: bool,
     pub(super) natural_japanese: bool,
+    pub(super) assessed_text: String,
     pub(super) reason: String,
 }
 
@@ -82,6 +83,9 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
     let mut failed_indices: Indices = (0..3).collect();
     let mut candidates: BTreeSet<_> = lines.iter().map(|l| l.signature.clone()).collect();
     let mut forced = duplicate_failures(&lines);
+    // A repeated/missing rewrite leaves the displayed candidate unchanged. Keep
+    // its diagnostic, never a different candidate's verdict or source evidence.
+    let mut last_feedback: BTreeMap<usize, (LineForm, Vec<String>, String)> = BTreeMap::new();
     for round in 0..=limit {
         let used = used_claims(&accepted, &atom_by_id);
         let eligible = eligible_atoms(&input.source_atoms, &used);
@@ -117,7 +121,28 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
             frozen,
         )
         .await?;
-        failures.extend(forced);
+        let mut comments: BTreeMap<_, _> = assessments
+            .iter()
+            .filter(|(i, a)| !a.reason.is_empty() && a.assessed_text == lines[**i].text)
+            .map(|(i, a)| (*i, a.reason.clone()))
+            .collect();
+        for (index, codes) in forced {
+            let mut reasons = Vec::new();
+            if let Some((line, previous, comment)) = last_feedback.get(&index)
+                && line == &lines[index]
+            {
+                reasons.extend(previous.iter().cloned());
+                if !comment.is_empty() {
+                    comments.insert(index, comment.clone());
+                }
+            }
+            for code in codes {
+                if !reasons.contains(&code) {
+                    reasons.push(code);
+                }
+            }
+            failures.insert(index, reasons);
+        }
         let expanded = expand_failures(&failures, groups);
         failed_indices = expanded.keys().copied().collect();
         accepted.extend(
@@ -161,10 +186,18 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
             return Ok(failed(&input, "insufficient_unused_atoms", round));
         }
         candidates.extend(lines.iter().map(|l| l.signature.clone()));
-        let comments: BTreeMap<_, _> = assessments
+        last_feedback = expanded
             .iter()
-            .filter(|(i, a)| failed_indices.contains(i) && !a.reason.is_empty())
-            .map(|(i, a)| (*i, a.reason.clone()))
+            .map(|(i, reasons)| {
+                (
+                    *i,
+                    (
+                        lines[*i].clone(),
+                        reasons.clone(),
+                        comments.get(i).cloned().unwrap_or_default(),
+                    ),
+                )
+            })
             .collect();
         let regenerated = regenerate(
             backend,
@@ -197,6 +230,7 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
                 continue;
             }
             candidates.insert(form.signature.clone());
+            last_feedback.remove(index);
             lines[*index] = form;
         }
     }
@@ -332,10 +366,11 @@ async fn request_assessments<B: Backend>(
         },
     )
     .await;
-    parse_assessments(&value, indices, atoms, &numbers)
+    parse_assessments(&value, lines, indices, atoms, &numbers)
 }
 fn parse_assessments(
     payload: &Value,
+    lines: &[LineForm],
     indices: &Indices,
     atoms: &[SourceAtom],
     numbers: &Map<String, Value>,
@@ -419,25 +454,70 @@ fn parse_assessments(
             .and_then(Value::as_object)
             .and_then(|m| m.get(&index.to_string()))
             .or_else(|| row.get("reason"));
-        let reason = if meaning && natural {
-            String::new()
-        } else {
-            reason
-                .and_then(Value::as_str)
-                .map(|s| s.trim().chars().take(240).collect())
-                .unwrap_or_default()
-        };
+        let reason = assessment_reason(reason, &lines[index].text, meaning, natural);
         out.insert(
             index,
             Assessment {
                 atom_ids: ids,
                 meaning_retained: meaning,
                 natural_japanese: natural,
+                assessed_text: lines[index].text.clone(),
                 reason,
             },
         );
     }
     out
+}
+
+/// Reasons explain an already validated verdict; absent or malformed reasons
+/// never turn a valid verdict into a pass or an unavailable assessment. Legacy
+/// strings remain compatible with completed-prefix recovery and older models.
+fn assessment_reason(value: Option<&Value>, line: &str, meaning: bool, natural: bool) -> String {
+    if meaning && natural {
+        return String::new();
+    }
+    let Some(value) = value else {
+        return String::new();
+    };
+    if let Some(reason) = value.as_str() {
+        return reason.trim().chars().take(240).collect();
+    }
+    let Some(rows) = value.as_array() else {
+        return String::new();
+    };
+    let mut reasons = Vec::new();
+    for row in rows.iter().take(3) {
+        let Some(row) = row.as_object().filter(|r| r.len() == 3) else {
+            continue;
+        };
+        let label = match row.get("kind").and_then(Value::as_str) {
+            Some("meaning") if !meaning => "意味",
+            Some("japanese") if !natural => "日本語",
+            _ => continue,
+        };
+        let Some(fragment) = row.get("fragment").and_then(Value::as_str).map(str::trim) else {
+            continue;
+        };
+        let Some(reason) = row.get("reason").and_then(Value::as_str).map(str::trim) else {
+            continue;
+        };
+        if fragment.is_empty()
+            || fragment.chars().count() > 24
+            || !line.contains(fragment)
+            || reason.is_empty()
+            || reason.chars().count() > 48
+            || fragment.chars().chain(reason.chars()).any(char::is_control)
+        {
+            continue;
+        }
+        // Three fully rendered reasons fit the existing 240-character feedback
+        // limit, so no valid third reason disappears in prompt truncation.
+        let reason = format!("{label}「{fragment}」:{reason}");
+        if !reasons.contains(&reason) {
+            reasons.push(reason);
+        }
+    }
+    reasons.join("、")
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn accept_lines<B: Backend>(

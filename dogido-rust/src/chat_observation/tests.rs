@@ -173,3 +173,54 @@ fn explicit_empty_outcome_update_does_not_manufacture_a_death() {
         vec!["zombie"]
     );
 }
+
+#[test]
+fn repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_identity() {
+    let labels = labels();
+    let mut memory = ChatObservationMemory::default();
+    let first = frame(
+        "2026-09-30T01:00:00Z",
+        json!({"ambient_sounds":[{
+            "type":"enderman", "source_id":"heard-entity", "heard_ago_ms":0,
+            "sound_event":"entity.enderman.ambient", "direction":{"horizontal":"front"}
+        }]}),
+    );
+    memory
+        .observe(&first, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    let heard = memory.hearing[0].heard_at_us;
+    let repeated = frame(
+        "2026-09-30T01:00:15Z",
+        json!({"ambient_sounds":[{
+            "type":"enderman", "source_id":"heard-entity", "heard_ago_ms":15000,
+            "sound_event":"entity.enderman.ambient", "direction":{"horizontal":"back"}
+        }]}),
+    );
+    memory
+        .observe(&repeated, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert_eq!(memory.hearing.len(), 1);
+    assert_eq!(memory.hearing[0].heard_at_us, heard);
+    assert_eq!(memory.hearing[0].direction, "後ろ");
+    let gone = frame("2026-09-30T01:00:21Z", json!({}));
+    memory
+        .observe(&gone, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert!(
+        memory.hearing.is_empty(),
+        "20 seconds from the actual sound, not its last resend"
+    );
+    let newer = frame(
+        "2026-09-30T01:00:22Z",
+        json!({"auditory_threats":[{
+            "label":"zombie","source_id":"new-sound","heard_ago_ms":2000
+        }]}),
+    );
+    memory
+        .observe(&newer, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert_eq!(memory.hearing[0].heard_at_us, heard + 20_000_000);
+    let mut invalid = json!(newer);
+    invalid["auditory_threats"][0]["heard_ago_ms"] = json!(-1);
+    assert!(GameEvent::parse(invalid).is_err());
+}

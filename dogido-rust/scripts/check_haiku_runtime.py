@@ -77,6 +77,38 @@ def fixture(*, combat_settings=None, extra_args=(), **settings):
 
 def main():
     passed = []
+    with fixture(interval_ms=1800) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        sid = register(base, preview=False); send(sid)
+        time.sleep(.45)
+        send(sid, world={"game_paused": True})
+        def clock():
+            return next(s["foreground"] for s in snapshot(base)["sessions"] if s["session_id"] == sid)
+        paused = clock()["haiku_elapsed_ms"]
+        assert 350 <= paused < 1000, paused
+        for _ in range(8):
+            time.sleep(.25); send(sid, world={"game_paused": True})
+            assert clock()["haiku_elapsed_ms"] == paused and clock()["blocks_new_haiku"]
+            assert not rows(sid) and not stored(sid) and checks["drafts"] == 0
+        send(sid)
+        time.sleep(.45); send(sid)
+        assert checks["drafts"] == 0, "pause time counted toward the interval"
+        wait_for(lambda: (send(sid), stored(sid))[1], timeout=4)
+        assert len(stored(sid)) == 1
+        passed.append("actual_pause_freezes_clock_across_snapshots_and_resumes_remaining_interval")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+        send(sid, world={"game_paused": True})
+        wait_for(lambda: "haiku_helper_stopped" in log.read_text())
+        gate.set()
+        for _ in range(3):
+            time.sleep(.2); send(sid, world={"game_paused": True})
+        assert not stored(sid) and hud(sid)["state"] == "closed" and checks["drafts"] == 1
+        send(sid)
+        wait_for(lambda: stored(sid))
+        assert len(stored(sid)) == 1 and checks["drafts"] == 2
+        passed.append("pause_cancels_unfinished_generation_and_resume_can_retry_without_saved_partial")
+
     with fixture(workshop_idle_ms=1800) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         gate.clear()
         sid = register(base, preview=False); send(sid)

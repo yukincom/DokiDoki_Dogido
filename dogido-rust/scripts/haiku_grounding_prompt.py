@@ -102,7 +102,11 @@ def build_haiku_line_grounding_messages(details: dict[str, object]) -> list[dict
         "値は pass=意味保持も日本語も合格、meaning_fail=意味保持だけ不合格、"
         "japanese_fail=日本語だけ不合格、both_fail=両方不合格の4種類。"
         "その後 assessments に各行の材料番号を返す。最後に failure_reasons を書き、"
-        "不合格行の番号だけをキーに短い具体的な理由を一文で書く。"
+        "不合格行の番号だけをキーに、実際に確認できた理由を0〜3件の配列で書く。"
+        '各理由は {"kind":"meaning または japanese","fragment":"その行にある連続した断片","reason":"短い具体的な理由"}。'
+        "kindは不合格にした軸だけを選び、fragmentは24字以内、reasonは48字以内にする。"
+        "同じ問題を言い換えて増やさず、3件を埋めるためにミスを探さない。"
+        "具体的な根拠がない指摘は加えない。"
         "合格理由は書かず、全行合格なら failure_reasons は空のオブジェクト。"
         "meaning_retained と natural_japanese の項目は返さない。\n"
         "音や名前から説明にない性質を推測しない。遠い連想や、意味のない造語は不合格。\n"

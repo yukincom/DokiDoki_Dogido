@@ -107,8 +107,7 @@ pub fn project_environment(event: &GameEvent) -> EnvironmentProjection {
     }
     let interior_signal = event.world.safe_zone_with_door == Some(true)
         || event.world.nearby_door_count.unwrap_or(0) > 0
-        || event.world.nearby_bed_count.unwrap_or(0) > 0
-        || event.world.nearby_window_present == Some(true);
+        || event.world.nearby_bed_count.unwrap_or(0) > 0;
     if interior_signal {
         result.evidence.push("interior_fixture_observed".into());
     }

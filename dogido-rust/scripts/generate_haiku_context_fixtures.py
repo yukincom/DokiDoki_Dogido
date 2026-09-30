@@ -85,7 +85,11 @@ def main():
             for surface,correction in reading_values.items():
                 catalog_readings.apply_overlay_correction(surface=surface,reading=correction['reading'],wrong_reading=(correction['forbidden_readings'] or [None])[0])
             e=GameEvent.model_validate(raw);machine.state.current_structure=current
-            context=machine._haiku_context(e)
+            # Rust intentionally ignores nearby windows: this does not prove an
+            # indoor viewpoint. Keep the raw observation in the case to verify
+            # it cannot affect materials, including the 14-feature truncation.
+            projection=e.model_copy(update={"world":e.world.model_copy(update={"nearby_window_present":None})})
+            context=machine._haiku_context(projection)
             irony=IronyContext(found=True,kind='contrast',description='石のそばに宝がある',elements=('石','ダイヤモンド'),focus=('持ち物',),confidence=.85)
             scene=SceneContext()
             lifted=machine._scene_for_spoken_irony(irony,scene,source_atoms=context.source_atoms)

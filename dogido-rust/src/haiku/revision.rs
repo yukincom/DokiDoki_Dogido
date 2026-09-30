@@ -151,6 +151,7 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
     details.insert("edit_contract".into(), json!(CONTRACT));
     let mut seen = BTreeSet::new();
     let mut feedback = Vec::new();
+    let mut last_rejected: Option<(Vec<LineForm>, Failures, BTreeMap<usize, String>)> = None;
     // Exactly two editor attempts; assessment transport recovery is independent.
     for attempt in 1..=2 {
         let payload = request(
@@ -258,6 +259,12 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
         if failures.is_empty() {
             if !seen.insert(signature) {
                 failures.push("duplicate_candidate".into());
+                if let Some((candidate, previous, previous_comments)) = &last_rejected
+                    && candidate == &lines
+                {
+                    line_failures = previous.clone();
+                    comments = previous_comments.clone();
+                }
             } else {
                 let mut check_details = input.basis.details.clone();
                 check_details.insert("revision_edits".into(),json!(targets.iter().map(|i|json!({"line_index":i,"expected_text":input.lines[*i],"replacement_text":lines[*i].text})).collect::<Vec<_>>()));
@@ -293,6 +300,7 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
                 )
                 .await?;
                 line_failures = failed;
+                comments.retain(|i, _| assessments[i].assessed_text == lines[*i].text);
                 // Lexical correction must not accidentally turn the edit into a no-op.
                 for i in targets {
                     if lines[*i].signature == original[*i].signature {
@@ -301,6 +309,9 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Revis
                             .or_default()
                             .push("unchanged_replacement".into());
                     }
+                }
+                if !line_failures.is_empty() {
+                    last_rejected = Some((lines.clone(), line_failures.clone(), comments.clone()));
                 }
                 if line_failures.is_empty() {
                     let line_sources: Vec<_> = (0..3)
@@ -411,12 +422,14 @@ mod tests {
     struct Mock {
         responses: VecDeque<Value>,
         requests: Vec<StructuredRequest>,
+        corrected_text: Option<String>,
     }
     impl Mock {
         fn new(rows: Vec<Value>) -> Self {
             Self {
                 responses: rows.into(),
                 requests: vec![],
+                corrected_text: None,
             }
         }
     }
@@ -426,9 +439,14 @@ mod tests {
             Ok(self.responses.pop_front().expect("unexpected model call"))
         }
         async fn transform(&mut self, r: TransformRequest) -> Result<LineForm> {
+            let text = if r.mode == TransformMode::Correct {
+                self.corrected_text.clone().unwrap_or(r.text)
+            } else {
+                r.text
+            };
             Ok(LineForm {
-                text: r.text.clone(),
-                signature: r.text,
+                text: text.clone(),
+                signature: text,
             })
         }
     }
@@ -505,6 +523,53 @@ mod tests {
         assert!(!out.accepted);
         assert_eq!(mock.requests.len(), 3);
         assert!(out.feedback[1].to_string().contains("duplicate_candidate"));
+        assert_eq!(
+            out.feedback[1]["line_failures"],
+            out.feedback[0]["line_failures"]
+        );
+        assert_eq!(
+            out.feedback[1]["line_failures"][0]["assessment_comment"],
+            "日本語が不自然"
+        );
+    }
+    #[tokio::test]
+    async fn repeated_uncorrected_edit_does_not_inherit_a_different_displayed_candidate() {
+        let mut mock = Mock::new(vec![edit(), verdict(false), edit()]);
+        mock.corrected_text = Some("さくらのは".into());
+        let out = generate(&mut mock, input()).await.unwrap();
+        assert!(!out.accepted);
+        assert!(
+            out.feedback[0]
+                .to_string()
+                .contains("unchanged_replacement")
+        );
+        assert!(out.feedback[1].to_string().contains("duplicate_candidate"));
+        assert_eq!(out.feedback[1]["line_failures"], json!([]));
+        assert!(
+            !out.feedback[1]
+                .to_string()
+                .contains("unchanged_replacement")
+        );
+        assert!(!out.feedback[1].to_string().contains("日本語が不自然"));
+        assert_eq!(mock.requests.len(), 3);
+    }
+    #[tokio::test]
+    async fn a_different_failed_edit_does_not_inherit_the_previous_reason() {
+        let mut second = edit();
+        second["lines"][0]["replacement_text"] = json!("はるのいろ");
+        let mut new_verdict = verdict(false);
+        new_verdict["failure_reasons"]["0"] = json!([
+            {"kind":"japanese","fragment":"はる","reason":"二つ目の候補への指摘"}
+        ]);
+        let mut mock = Mock::new(vec![edit(), verdict(false), second, new_verdict]);
+        let out = generate(&mut mock, input()).await.unwrap();
+        assert!(!out.accepted);
+        assert_eq!(
+            out.feedback[1]["line_failures"][0]["assessment_comment"],
+            "日本語「はる」:二つ目の候補への指摘"
+        );
+        assert!(!out.feedback[1].to_string().contains("日本語が不自然"));
+        assert_eq!(mock.requests.len(), 4);
     }
     #[tokio::test]
     async fn incomplete_grounding_retries_only_checker_then_keeps_original() {

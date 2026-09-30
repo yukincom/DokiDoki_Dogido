@@ -132,7 +132,13 @@ def main():
     def precipitation_result(context):
         return {"context":asdict(context),"snow_can_be_scene_material":context.snow_can_be_scene_material,
                 "prompt_line":context.prompt_line(),"prompt_details":context.to_prompt_details()}
-    env_rows=[{"event":raw,"expected":asdict(project_environment(GameEvent.model_validate(raw)))} for raw in unique(environment_cases())]
+    env_rows=[]
+    for raw in unique(environment_cases()):
+        parsed=GameEvent.model_validate(raw)
+        # Rust no longer infers an interior fixture from nearby glass. Retain
+        # window input in the case while the independent oracle ignores it.
+        parsed=parsed.model_copy(update={"world":parsed.world.model_copy(update={"nearby_window_present":None})})
+        env_rows.append({"event":raw,"expected":asdict(project_environment(parsed))})
     rain_rows=[{"input":raw,"expected":precipitation_result(resolve_precipitation_context(**raw))} for raw in unique(precipitation_cases())]
     frame_rows=[]
     for biome,weather,y,resources in itertools.product(
