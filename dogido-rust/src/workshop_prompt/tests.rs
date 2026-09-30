@@ -60,6 +60,42 @@ fn all_python_consultation_prompts_match_exactly() {
 }
 
 #[test]
+fn editable_templates_preserve_every_default_and_apply_only_requested_instructions() {
+    let mut settings = editable_defaults();
+    let assets = editable_assets(&settings).unwrap();
+    for group in ["projection_cases", "pure_cases"] {
+        for case in FIXTURES[group].as_array().unwrap() {
+            assert_eq!(
+                prepare_with_assets(&case["prepared"], Some(&case["retry"]), &assets).unwrap(),
+                case["expected"]
+            );
+        }
+    }
+    settings["system"] = "変更した指示".into();
+    settings["main"] = format!(
+        "{}\n分からないことは分からないと答えて。",
+        settings["main"].as_str().unwrap()
+    )
+    .into();
+    let changed = editable_assets(&settings).unwrap();
+    let case = &FIXTURES["projection_cases"][0];
+    let result = prepare_with_assets(&case["prepared"], None, &changed).unwrap();
+    assert_eq!(result["messages"][0]["content"], "変更した指示");
+    assert!(
+        result["messages"][1]["content"]
+            .as_str()
+            .unwrap()
+            .ends_with("分からないことは分からないと答えて。")
+    );
+    settings["main"] = settings["main"]
+        .as_str()
+        .unwrap()
+        .replace("{{player}}", "")
+        .into();
+    assert!(editable_assets(&settings).is_err());
+}
+
+#[test]
 fn malformed_projection_is_not_a_legacy_prompt_or_model_fallback() {
     let good = FIXTURES["projection_cases"][0]["prepared"].clone();
     for invalid in [

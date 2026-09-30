@@ -30,9 +30,6 @@ struct Details {
     pending_verse: Option<String>,
 }
 use crate::compat::json_truthy as truth;
-fn literal(key: &str) -> &'static str {
-    ASSETS[key].as_str().expect("checked workshop literal")
-}
 fn render(parts: &Value, slots: &BTreeMap<&str, String>) -> Result<String> {
     parts
         .as_array()
@@ -59,6 +56,14 @@ fn render(parts: &Value, slots: &BTreeMap<&str, String>) -> Result<String> {
 /// messages-only response is rejected rather than silently bypassing Rust.
 /// Fixed edits still pass through the existing validation, and skip retry prose.
 pub(super) fn prepare(prepared: &Value, retry: Option<&Value>) -> Result<Value> {
+    prepare_with_assets(prepared, retry, &ASSETS)
+}
+
+pub(super) fn prepare_with_assets(
+    prepared: &Value,
+    retry: Option<&Value>,
+    assets: &Value,
+) -> Result<Value> {
     let projection = prepared.as_object().context("workshop prepared object")?;
     ensure!(
         projection
@@ -77,9 +82,13 @@ pub(super) fn prepare(prepared: &Value, retry: Option<&Value>) -> Result<Value> 
     } else {
         format!(
             "{}{}{}",
-            literal("context_prefix"),
+            assets["context_prefix"]
+                .as_str()
+                .context("context prefix")?,
             python_json(&Value::Object(details.workshop_context.clone())),
-            literal("context_suffix")
+            assets["context_suffix"]
+                .as_str()
+                .context("context suffix")?
         )
     };
     let mut slots = BTreeMap::from([
@@ -143,19 +152,19 @@ pub(super) fn prepare(prepared: &Value, retry: Option<&Value>) -> Result<Value> 
     let mut extra = String::new();
     for (key, include) in conditions {
         if include {
-            extra.push_str(&render(&ASSETS["extras"][key], &slots)?);
+            extra.push_str(&render(&assets["extras"][key], &slots)?);
         }
     }
     slots.insert("extra", extra);
     let mut messages = vec![
-        json!({"role":"system", "content":literal("system")}),
-        json!({"role":"user", "content":render(&ASSETS["main"], &slots)?}),
+        json!({"role":"system", "content":assets["system"].as_str().context("system prompt")?}),
+        json!({"role":"user", "content":render(&assets["main"], &slots)?}),
     ];
     if projection.get("fixed_payload").is_none()
         && let Some(retry) = retry.filter(|v| truth(v))
     {
         slots.insert("retry", python_json(retry));
-        messages.push(json!({"role":"user", "content":render(&ASSETS["retry"], &slots)?}));
+        messages.push(json!({"role":"user", "content":render(&assets["retry"], &slots)?}));
     }
     let mut output = json!({"messages":messages});
     if let Some(fixed) = projection.get("fixed_payload") {
@@ -167,4 +176,102 @@ pub(super) fn prepare(prepared: &Value, retry: Option<&Value>) -> Result<Value> 
         "workshop prompt too large"
     );
     Ok(output)
+}
+
+/// Editable text templates preserve code-owned placeholders and routing data.
+pub(in crate::dialogue) fn editable_defaults() -> Value {
+    fn flatten(parts: &Value) -> String {
+        parts
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| {
+                p["literal"]
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("{{{{{}}}}}", p["slot"].as_str().unwrap()))
+            })
+            .collect()
+    }
+    json!({"system":ASSETS["system"],"main":flatten(&ASSETS["main"]),
+        "extras":ASSETS["extras"].as_object().unwrap().iter().map(|(k,v)|(k.clone(),Value::String(flatten(v)))).collect::<Map<_,_>>(),
+        "context_prefix":ASSETS["context_prefix"],"context_suffix":ASSETS["context_suffix"],"retry":flatten(&ASSETS["retry"])})
+}
+
+pub(in crate::dialogue) fn editable_assets(settings: &Value) -> Result<Value> {
+    fn parts(text: &str, reference: &Value) -> Result<Value> {
+        let mut out = vec![];
+        let mut rest = text;
+        while let Some(start) = rest.find("{{") {
+            if start > 0 {
+                out.push(json!({"literal":&rest[..start]}));
+            }
+            let tail = &rest[start + 2..];
+            let end = tail
+                .find("}}")
+                .context("閉じていないプレースホルダーがあります")?;
+            out.push(json!({"slot":&tail[..end]}));
+            rest = &tail[end + 2..];
+        }
+        if !rest.is_empty() {
+            out.push(json!({"literal":rest}));
+        }
+        let slots = |v: &Value| {
+            let mut names = v
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|p| p["slot"].as_str().map(str::to_owned))
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        };
+        let out = Value::Array(out);
+        ensure!(
+            slots(&out) == slots(reference),
+            "{{{{...}}}} のプレースホルダーを保ってください"
+        );
+        Ok(out)
+    }
+    let defaults = editable_defaults();
+    ensure!(
+        settings
+            .as_object()
+            .is_some_and(|o| o.len() == defaults.as_object().unwrap().len()),
+        "プロンプト設定の項目が不正です"
+    );
+    ensure!(
+        serde_json::to_vec(settings)?.len() <= 256_000,
+        "プロンプト設定が長すぎます"
+    );
+    let mut assets = ASSETS.clone();
+    for name in ["system", "context_prefix", "context_suffix"] {
+        assets[name] = settings[name]
+            .as_str()
+            .context("プロンプトは文字列で指定してください")?
+            .into();
+    }
+    for name in ["main", "retry"] {
+        assets[name] = parts(
+            settings[name]
+                .as_str()
+                .context("テンプレートは文字列で指定してください")?,
+            &ASSETS[name],
+        )?;
+    }
+    let extra = settings["extras"].as_object().context("extrasが不正です")?;
+    ensure!(
+        extra.len() == ASSETS["extras"].as_object().unwrap().len(),
+        "行動別の指示が不足しています"
+    );
+    for (name, original) in ASSETS["extras"].as_object().unwrap() {
+        assets["extras"][name] = parts(
+            extra
+                .get(name)
+                .and_then(Value::as_str)
+                .context("行動別の指示が不足しています")?,
+            original,
+        )?;
+    }
+    Ok(assets)
 }

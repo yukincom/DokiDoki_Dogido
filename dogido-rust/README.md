@@ -1,5 +1,7 @@
 # ドギド Rust版
 
+保存済みの句をMinecraftなしで相談し、プロンプトを調整する場合は、[川柳のテキスト相談室](workshop-text.md)を使えます。AntigravityからのMCP操作にも対応しています。
+
 ドギド本体を段階的に移植するための実装です。通常会話の試験、接続専用HTTPサーバー、RigのLLM接続試験、Python版との通信比較が動きます。
 
 通常会話の観測・材料・プロンプト・検査、戦闘と環境の判断、川柳の生成・共同編集・記憶、知識検索・限定国語対話、音声入力と配送をRustで接続しています。Pythonは起動設定、UniDicの辞書トークン、端末AI、Chrome/MCP、AECの接続補助に残ります。全体の実Minecraft確認とMac miniでの速度・メモリ測定は別途必要です。[移行計画](../docs/rust-migration-plan.md)と[実機チェック](manual-dialogue-check.md)を参照してください。

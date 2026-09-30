@@ -35,6 +35,7 @@ mod workshop_edits;
 mod workshop_focus;
 mod workshop_record;
 mod workshop_runtime;
+mod workshop_text;
 
 use crate::{
     events::{EventName, GameEvent, SourceKind},
@@ -111,6 +112,9 @@ impl Default for DialogueConfig {
 struct Session {
     name: String,
     preview: bool,
+    text_workshop: bool,
+    text_reply: Option<(String, u64, Value)>,
+    text_last_request: Option<Value>,
     // 全視認を含む観測とその受信時刻。部分通知で消去・延命しない。
     latest: Option<GameEvent>,
     received: Option<Instant>,
@@ -161,6 +165,9 @@ struct Data {
     rows: VecDeque<Value>,
     revision: u64,
     stopped: bool,
+    text_prompts: Option<Value>,
+    text_prompt_settings: Option<Value>,
+    text_prompt_version: u64,
 }
 pub struct Dialogue {
     config: DialogueConfig,
@@ -283,6 +290,9 @@ impl Dialogue {
             Session {
                 name: name.into(),
                 preview,
+                text_workshop: false,
+                text_reply: None,
+                text_last_request: None,
                 latest: None,
                 received: None,
                 audio_latest: None,
@@ -1046,6 +1056,8 @@ impl Dialogue {
         }
         Self::cancel_chat(&mut d, &session_id, "new_player_input");
         self.tick_foreground(&mut d, &session_id);
+        let text_prompt = d.text_prompts.clone();
+        let text_prompt_version = d.text_prompt_version;
         let s = d.sessions.get_mut(&session_id).unwrap();
         let workshop = Self::workshop_view(s, text);
         let (interpreted_text, asr_corrections) =
@@ -1135,6 +1147,11 @@ impl Dialogue {
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
             "text":text,"interpreted_text":interpreted_text,"history":history,"conversation_history":conversation_history,
             "event_digest":event_digest,"event":event});
+        let mut input = input;
+        if s.text_workshop {
+            input["text_workshop_prompt"] = text_prompt.unwrap_or(Value::Null);
+            input["text_prompt_version"] = text_prompt_version.into();
+        }
         let input = bridge::Input::native(input, event, chat_native);
         if workshop.is_none()
             && s.web.state.research.is_none()
@@ -1246,12 +1263,15 @@ impl Dialogue {
             .and_then(|r| r["workshop_id"].as_str())
             .map(str::to_owned);
         let fixed_close = row.is_some_and(|r| r["workshop_fixed_close"] == true);
+        let text_displayed = status == PlaybackStatus::AudioDisabled
+            && result.is_some_and(|r| r["text_displayed"] == true)
+            && d.sessions.get(sid).is_some_and(|s| s.text_workshop);
         let player_text = row
             .and_then(|r| r["player_input_text"].as_str())
             .unwrap_or("")
             .to_owned();
         if current
-            && status == PlaybackStatus::Queued
+            && (status == PlaybackStatus::Queued || text_displayed)
             && let Some(wid) = workshop_id.as_ref()
         {
             let valid = d
@@ -1291,6 +1311,10 @@ impl Dialogue {
             row["playback_status"] = status.into();
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
             if let Some(result) = result {
+                if text_displayed {
+                    row["text_displayed"] = true.into();
+                    row["output_mode"] = "text".into();
+                }
                 knowledge_display::attach(row, result);
                 if status == PlaybackStatus::Queued
                     && row["conversation_route"].is_null()
@@ -1356,6 +1380,9 @@ impl Dialogue {
                 p.playback(turn, status);
             }
             if let Some(result) = result {
+                if s.text_workshop && status == PlaybackStatus::AudioDisabled && !text_displayed {
+                    s.text_reply = Some((turn.into(), epoch, result.clone()));
+                }
                 let knowledge_detour =
                     workshop_id.is_some() && result["workshop_action"] == "knowledge";
                 let workshop_reply = workshop_id.is_some()
@@ -1415,7 +1442,7 @@ impl Dialogue {
                         }
                     }
                 }
-                if status == PlaybackStatus::Completed
+                if (status == PlaybackStatus::Completed || text_displayed)
                     && !knowledge_detour
                     && let Some(w) = s
                         .haiku
@@ -1457,7 +1484,7 @@ impl Dialogue {
                 if status == PlaybackStatus::Completed {
                     web_runtime::completed(s, turn, &player_text, result);
                 }
-                if status == PlaybackStatus::Completed
+                if (status == PlaybackStatus::Completed || text_displayed)
                     && !workshop_reply
                     && result["memory_action"].is_null()
                     && result["web_private"] != true

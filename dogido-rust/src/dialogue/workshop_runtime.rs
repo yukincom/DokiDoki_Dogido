@@ -1,6 +1,6 @@
 //! 共同編集の相談段階。Rustがモデルの上限、実検査、取消と状態反映を所有する。
 #[path = "../workshop_prompt/mod.rs"]
-mod prompt;
+pub(super) mod prompt;
 #[path = "../workshop_validation/mod.rs"]
 mod validation;
 use super::*;
@@ -172,8 +172,18 @@ impl Dialogue {
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
                 for attempt in 0..2 {
-                    let (prepared, details) =
+                    let (mut prepared, details) =
                         prepare_consultation(helper, &mut editing, &mut frame).await?;
+                    if let Some(assets) =
+                        input.get("text_workshop_prompt").filter(|v| v.is_object())
+                    {
+                        let mut projection = json!({"details":details});
+                        if let Some(fixed) = prepared.get("fixed_payload") {
+                            projection["fixed_payload"] = fixed.clone();
+                        }
+                        prepared =
+                            prompt::prepare_with_assets(&projection, frame.get("retry"), assets)?;
+                    }
                     let payload = if let Some(fixed) = prepared.get("fixed_payload") {
                         fixed.clone()
                     } else {
@@ -186,6 +196,7 @@ impl Dialogue {
                             max_tokens: 420,
                             enable_thinking: false,
                         };
+                        self.record_text_workshop_request(input, &request, phase);
                         let report = match self.llm.generate(&request).await {
                             Ok(report) => report,
                             Err(error) => {
