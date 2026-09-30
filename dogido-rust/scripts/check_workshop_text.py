@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Exercise the native text window, prompt changes and stdio MCP with a local fake model."""
-import asyncio
+"""Exercise the native text window, prompt changes and persistence with a local fake model."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -115,23 +113,6 @@ def main():
                 assert source.read_text() == original
                 assert json.loads((folder / 'prompts.json').read_text()) == prompts['settings']
 
-                async def mcp_check():
-                    from mcp import ClientSession, StdioServerParameters
-                    from mcp.client.stdio import stdio_client
-                    parameters = StdioServerParameters(command=sys.executable,
-                        args=[str(ROOT / 'dogido-rust/scripts/workshop_text_mcp.py')],
-                        env={**os.environ, 'DOGIDO_WORKSHOP_URL': base})
-                    async with stdio_client(parameters) as (read, write):
-                        async with ClientSession(read, write) as session:
-                            await session.initialize()
-                            listed = await session.list_tools()
-                            assert len(listed.tools) == 10
-                            result = await session.call_tool('list_poems', {})
-                            assert not result.isError
-                            result = await session.call_tool('inspect_last_prompt', {'session_id': sid})
-                            assert not result.isError
-                            assert 'テキスト検査の識別用指示。' in str(result)
-                asyncio.run(mcp_check())
                 discussed = speak(sid, proposal_text, base)
                 assert discussed['turn']['workshop_action'] == 'ask', discussed
                 assert discussed['workshop']['canonical_lines'][-1] == 'のくさふゆむ'
@@ -202,7 +183,7 @@ def main():
                 print(json.dumps({'passed': ['native_workshop_reply', 'displayed_reply_history',
                     'saved_source_unchanged', 'prompt_applied_and_exact_request_visible',
                     'prompt_persistence', 'stale_version_rejected', 'missing_context_rejected',
-                    'stdio_mcp_ten_tools_and_readback', 'question_retains_player_candidate', 'restore_recovers_discussed_candidate_without_editing',
+                    'question_retains_player_candidate', 'restore_recovers_discussed_candidate_without_editing',
                     'short_refusal_keeps_original', 'confirmed_revision_saved_once', 'poem_book_reads_latest', 'stale_window_preserves_pending',
                     'closed_conversation_restored', 'unsaved_pending_restored', 'adopted_poem_reopened_after_restart',
                     'model_close_display_acknowledged', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))

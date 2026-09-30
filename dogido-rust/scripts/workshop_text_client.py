@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local API client for the text workshop; also shared by the stdio MCP adapter."""
+"""Local API client for text-workshop maintenance and verification."""
 import argparse
 import json
 from pathlib import Path

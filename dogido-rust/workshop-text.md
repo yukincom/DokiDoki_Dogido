@@ -29,32 +29,9 @@
 versionを照合して上書きを拒否する。初期値を読み込んで保存すれば既定の指示に戻せる。
 コード側の音数・採否・保存・構造検証はプロンプト編集の対象外。
 
-## Antigravity / Geminiから使う
+## CLIでの確認・保守
 
-`scripts/workshop_text_mcp.py` はstdio MCP接続。既存のPython環境にあるMCP SDKを使い、
-起動済みの相談室だけを操作する。サーバー起動・モデル起動・OS操作は行わない。
-MCP設定の `command` に既存Python実行ファイル、`args` にこのスクリプトの絶対パスを指定する。
-`DOGIDO_WORKSHOP_URL` は既定で `http://127.0.0.1:5057`。接続先はlocalhostに限る。
-
-利用できるツール:
-
-- `list_poems` / `list_workshops`: 保存句・会話の一覧
-- `open_workshop`: 選んだ句で独立した会話を開始
-- `talk_to_dogido` / `inspect_workshop`: 発言・返答待ち・現在の句と履歴の確認
-- `get_prompts` / `set_prompts`: 現在値・初期値・versionの取得と編集
-- `inspect_last_prompt`: 直近の実送信要求と適用versionの確認
-- `interrupt_reply`: 指定した会話の返答を停止
-- `close_workshop_session`: 自分の検査用に開いた会話を解放
-
-調整を頼むときの例:
-
-> dogido-workshopのツールで、現在のプロンプトと保存句を確認して。
-> 私の画面の会話を中断せず、同じ句の別会話で返答を試してほしい。
-> 意味のない言葉を無理に辞書的に説明する癖を調整したい。
-> プロンプトを変える前の設定とversionを取得しておき、変更後は実送信内容と返答を確認して。
-> プロンプトの変更だけを試して、句の変更や採用はしないで。ゲーム用のコード・モデル設定も変えないで。
-
-MCPが使えない場合は、既存Pythonで `scripts/workshop_text_client.py` を実行できる。
+既存Pythonで `scripts/workshop_text_client.py` を実行できる。
 以下の `PYTHON` は環境のPython、`CLIENT` はスクリプトのパスを表す。
 
 ```sh
@@ -72,4 +49,4 @@ POSTはJSONで `/api/open`（`key`）、`/api/input`（`session_id,text`）、
 `/api/snapshot`・`/api/last-prompt`・`/api/interrupt`（`session_id`）、
 `/api/prompts`（`settings,expected_version`）。返答を受け取ったクライアントは
 `/api/displayed`（`session_id,turn_id`）で受領を通知し、次の会話へ引き継ぐ。
-CLIとMCPの発言コマンドは待機・受領通知まで行う。
+CLIの発言コマンドは待機・受領通知まで行う。
