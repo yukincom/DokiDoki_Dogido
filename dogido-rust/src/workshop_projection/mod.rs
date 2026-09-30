@@ -329,6 +329,14 @@ pub fn details_for(frame: &Value) -> Result<Value> {
     if truth(&view["current_player_idea"]) {
         details["workshop_context"]["current_player_idea"] = view["current_player_idea"].clone();
     }
+    let lines = if workshop.pending_revision_lines.len() == 3 {
+        &workshop.pending_revision_lines
+    } else {
+        &workshop.current_lines
+    };
+    if let Some(target) = crate::workshop_target::Target::from_view(view, lines) {
+        details["workshop_context"]["discussion_target"] = target.context(lines);
+    }
     details["allowed_actions"] = actions.into();
     if view["followup"] == "combat_resume_confirmation" {
         details["conversation_stage"] = json!("combat_resume_confirmation");

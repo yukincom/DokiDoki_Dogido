@@ -111,6 +111,23 @@ impl Engine {
             }
             p.insert("line_index".into(), json!(index));
         }
+        // The player-selected target survives the short history window. A model
+        // cannot silently redirect an edit; only a new player reference moves it.
+        if crate::workshop_target::Target::explicit(input, editing_records(s)).is_none()
+            && let Some(target) =
+                crate::workshop_target::Target::from_view(&f["workshop"], editing_records(s))
+        {
+            if p.get("line_index")
+                .and_then(Value::as_u64)
+                .is_some_and(|i| i != target.line_index as u64)
+            {
+                return Ok(json!({"text":null,"failure_reasons":["retained_target_conflict"]}));
+            }
+            p.insert("line_index".into(), json!(target.line_index));
+            if !p.get("target_fragment").is_some_and(truth) {
+                p.insert("target_fragment".into(), json!(target.fragment));
+            }
+        }
         let fragment = self.mentioned_fragment(s, input, text(&p["replacement_text"]))?;
         if !p.get("target_fragment").is_some_and(truth) && fragment.is_some() {
             p.insert("target_fragment".into(), json!(fragment));
@@ -125,6 +142,14 @@ impl Engine {
                 discussed["target_fragment"].clone(),
             );
             p.insert("line_index".into(), discussed["line_index"].clone());
+        }
+        if !p.get("target_fragment").is_some_and(truth)
+            && p.get("line_index").is_none_or(Value::is_null)
+            && let Some(target) =
+                crate::workshop_target::Target::from_view(&f["workshop"], editing_records(s))
+        {
+            p.insert("line_index".into(), json!(target.line_index));
+            p.insert("target_fragment".into(), json!(target.fragment));
         }
         self.revise(
             &f["workshop"],

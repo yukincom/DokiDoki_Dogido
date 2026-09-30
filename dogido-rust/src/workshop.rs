@@ -118,7 +118,7 @@ pub fn inspect(lines: &[HaikuLine], checks: &[String]) -> Value {
 
 pub fn fallback(observation: Option<&Value>) -> String {
     let Some(o) = observation else {
-        return "どこを一緒に見たらええか、もう少し教えてな。".into();
+        return "ごめん、今の返事をうまくまとめられんかったわ。".into();
     };
     let rows = o["lines"].as_array().map(Vec::as_slice).unwrap_or(&[]);
     let has = |s: &str| {
@@ -159,6 +159,27 @@ pub fn fallback(observation: Option<&Value>) -> String {
         .into();
     }
     "検査結果は確認できたで。どこを一緒に見よか？".into()
+}
+
+pub fn fallback_for(observation: Option<&Value>, view: &Value, lines: &[HaikuLine]) -> String {
+    let reply = fallback(observation);
+    let Some(target) = crate::workshop_target::Target::from_view(view, lines) else {
+        return reply;
+    };
+    let label = target.label(lines);
+    if observation.is_none() {
+        return format!("{label}の話やな。{reply}");
+    }
+    reply
+        .replace(
+            "どの行を一緒に見よか？",
+            &format!("{label}の話を続けよか。"),
+        )
+        .replace(
+            "どの言葉を一緒に見よか？",
+            &format!("{label}の話を続けよか。"),
+        )
+        .replace("どこを一緒に見よか？", &format!("{label}の話を続けよか。"))
 }
 
 /// 原文が代表形に完全一致するときだけ、モデルを使わず一手を確定する。

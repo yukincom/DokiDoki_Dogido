@@ -76,13 +76,14 @@ def main():
         assert stored(sid) == before
         passed.append("native_inspection_then_one_reply_with_recorded_sources")
 
-        calls3 = install(control, lambda text, prompt, n: step(text, speech="保存したで。"))
+        natural = "『ふゆむ』は『冬む』やなくて、『草を踏む』の『ふむ』やと思うてな。雪もないのに、なぜ『冬』って響きが出たんやろうか？"
+        calls3 = install(control, lambda text, prompt, n: step(text, speech=natural))
         send(sid)
         turn = submit(base, sid, "どういう意味なの？")
         result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["workshop_reason"] == "false_persistence_claim" and len(calls3) == 1, result
-        assert "保存した" not in result["text"] and stored(sid) == before
-        passed.append("false_save_claim_rejected_without_extra_model_loop")
+        assert result["workshop_reason"] == "accepted" and len(calls3) == 1, result
+        assert result["text"] == natural and stored(sid) == before
+        passed.append("quoted_natural_explanation_passes_without_prose_screening")
 
         calls4 = install(control, lambda text, prompt, n: step("相談はここでおしまい", "close_workshop"))
         send(sid)
@@ -93,21 +94,30 @@ def main():
         passed.append("natural_close_applied_once_after_original_evidence_check")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        calls = install(control, lambda text, prompt, n: step("終了", "close_workshop"))
+        def mistaken_close(text, prompt, n):
+            if n % 2 == 0:
+                assert "前の一手は実行していない" in prompt
+                return step(text, speech="うん、まだこの句の話を続けよか。")
+            result = step("終了", "close_workshop")
+            result["speech"] = "ほな今日はここまでや。また話そな。"
+            return result
+        calls = install(control, mistaken_close)
         sid = ready(base, send, rows)
         for text in ["終了しないよ", "『終了』ってどういう意味？", "終了したらどうなる？", "終了かな？"]:
             send(sid)
             turn = submit(base, sid, text)
             result = wait_for(lambda: row(base, turn, {"completed"}))
-            assert result["workshop_action"] == "fallback" and hud(sid)["state"] == "open", (text, result)
-        assert len(calls) == 4
+            assert result["workshop_action"] == "explain" and hud(sid)["state"] == "open", (text, result)
+            assert result["text"] == "うん、まだこの句の話を続けよか。"
+        assert len(calls) == 8
         passed.append("negation_quotation_condition_question_never_close")
         send(sid)
         turn = submit(base, sid, "終了でいいよ")
         result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["workshop_action"] == "close_workshop" and len(calls) == 4
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 9
         assert hud(sid)["state"] == "closed"
-        passed.append("fixed_close_uses_no_model")
+        assert result["text"] == "ほな今日はここまでや。また話そな。"
+        passed.append("short_close_uses_model_decision_and_model_speech")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: {"action": "explain"} if n == 1 else step(text))

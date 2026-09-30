@@ -96,6 +96,10 @@ impl Dialogue {
         }
         w.followup =
             serde_json::from_value(original["workshop_followup"].clone()).unwrap_or_default();
+        w.discussion_target = crate::workshop_target::Target::from_view(
+            &json!({"discussion_target":original["workshop_discussion_target"]}),
+            &w.current_lines,
+        );
         if snapshot["workshop"]["state"] == "closed" {
             w.close("restored_closed");
         }
@@ -129,7 +133,18 @@ impl Dialogue {
                 )),
             "wait for current reply before upgrade"
         );
+        let restore_target_from_rows = w.discussion_target.is_none();
         for row in rows {
+            if restore_target_from_rows
+                && w.open
+                && let Some(text) = row["player_input_text"].as_str()
+            {
+                crate::workshop_target::Target::observe(
+                    &mut w.discussion_target,
+                    text,
+                    &w.current_lines,
+                );
+            }
             if let Some(steps) = row["workshop_steps"].as_array() {
                 w.agent_steps.extend(steps.iter().cloned());
             }

@@ -255,6 +255,8 @@ pub struct Workshop {
     pub agent_steps: VecDeque<Value>,
     /// プレイヤーが会話で示した案。採用待ちの pending とは別に保持する。
     pub conversation_candidate: Option<crate::workshop_candidate::Candidate>,
+    /// 一度示された相談・編集対象。短期対話の押し出しや返答不成立では消さない。
+    pub discussion_target: Option<crate::workshop_target::Target>,
     pub drift_count: usize,
     pub followup: crate::workshop_followup::Stage,
     pub recovery: crate::workshop_combat::Recovery,
@@ -308,6 +310,7 @@ impl Workshop {
             dialogue: VecDeque::new(),
             agent_steps: VecDeque::new(),
             conversation_candidate: None,
+            discussion_target: None,
             drift_count: 0,
             followup: crate::workshop_followup::Stage::Discussion,
             recovery: crate::workshop_combat::Recovery::default(),
@@ -326,6 +329,7 @@ impl Workshop {
     }
     pub fn close(&mut self, reason: impl Into<String>) {
         self.conversation_candidate = None;
+        self.discussion_target = None;
         self.provisional = None;
         self.recovery = crate::workshop_combat::Recovery::default();
         self.followup = crate::workshop_followup::Stage::Discussion;

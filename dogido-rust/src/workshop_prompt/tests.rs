@@ -1,6 +1,6 @@
 use super::*;
 use crate::haiku_bridge::Helper;
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 static FIXTURES: LazyLock<Value> = LazyLock::new(|| {
     let mut fixture: Value =
@@ -190,7 +190,13 @@ async fn native_preparation_uses_no_helper_for_nonedit_or_kana_fragments() {
         )
         .await
         .unwrap();
-        assert_eq!(prepared, case["expected"]);
+        let expected = prepare(
+            &json!({"details":case["prepared"]["details"]}),
+            frame.get("retry"),
+        )
+        .unwrap();
+        assert_eq!(prepared, expected);
+        assert!(prepared.get("fixed_payload").is_none());
         assert_eq!(details, case["prepared"]["details"]);
         assert_eq!(frame, case["frame"]);
         frame["payload"] = json!({"action":"ask","purpose":"continue_discussion","confidence":0.9,"evidence":frame["text"],"speech":"気になるところを教えてな。","checks":[]});
@@ -206,62 +212,23 @@ async fn native_preparation_uses_no_helper_for_nonedit_or_kana_fragments() {
 }
 
 #[tokio::test]
-async fn incompatible_fragment_helper_errors_and_cancelled_extraction_are_reaped() {
-    for mode in [
-        "legacy_messages",
-        "legacy_details",
-        "bad_candidate",
-        "timeout",
-        "cancel",
-    ] {
-        let case = &FIXTURES["projection_cases"][0];
-        let dir = directory();
-        let response = if mode == "legacy_messages" {
-            case["expected"].clone()
-        } else if mode == "legacy_details" {
-            case["prepared"].clone()
-        } else {
-            json!({"fixed_payload":"invalid"})
-        };
-        let blocked = matches!(mode, "timeout" | "cancel");
-        let mut helper = child(&dir, &response, blocked);
-        let mut frame = case["frame"].clone();
-        frame["text"] = json!("「桜」を「夏」にして");
-        let mut editing = crate::workshop_editing::Engine::default();
-        let result = if mode == "cancel" {
-            let (send, mut cancel) = tokio::sync::watch::channel(false);
-            let trigger = async {
-                tokio::time::sleep(Duration::from_millis(80)).await;
-                send.send(true).unwrap();
-            };
-            let render = async {
-                tokio::select! {
-                    _ = crate::dialogue::bridge::cancelled(&mut cancel) => Err(anyhow::anyhow!("cancelled")),
-                    result = super::super::prepare_consultation(&mut helper, &mut editing, &mut frame) => result,
-                }
-            };
-            tokio::join!(render, trigger).0
-        } else {
-            tokio::time::timeout(
-                Duration::from_millis(120),
-                super::super::prepare_consultation(&mut helper, &mut editing, &mut frame),
-            )
-            .await
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("test turn deadline")))
-        };
-        assert!(result.is_err(), "{mode}");
-        let child_pid = pid(&dir);
-        helper.finish(true).await.unwrap();
-        stopped(child_pid);
-        assert_eq!(
-            std::fs::read_to_string(dir.join("request"))
-                .unwrap()
-                .lines()
-                .count(),
-            1
-        );
-        std::fs::remove_dir_all(dir).unwrap();
-    }
+async fn preparing_even_kanji_edits_never_asks_helper_to_select_an_action() {
+    let dir = directory();
+    let mut helper = child(&dir, &json!({"fixed_payload":"must not be read"}), true);
+    let mut frame = FIXTURES["projection_cases"][0]["frame"].clone();
+    frame["text"] = "「桜」を「夏」にして".into();
+    let (prepared, _) = super::super::prepare_consultation(
+        &mut helper,
+        &mut crate::workshop_editing::Engine::default(),
+        &mut frame,
+    )
+    .await
+    .unwrap();
+    assert!(prepared.get("fixed_payload").is_none());
+    helper.finish(false).await.unwrap();
+    stopped(pid(&dir));
+    assert!(!dir.join("request").exists());
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

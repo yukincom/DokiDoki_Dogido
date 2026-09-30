@@ -1115,12 +1115,6 @@ impl Dialogue {
             w.followup = crate::workshop_followup::Stage::Discussion;
         }
         let audit_before = workshop_record::state(s.haiku.workshop.as_ref());
-        let fixed_close = workshop.as_ref().is_some_and(|w| w["pending"].is_null())
-            && crate::workshop::fixed_action(text) == Some("close_workshop");
-        if fixed_close && let Some(w) = s.haiku.workshop.as_mut() {
-            // 完全一致の明示終了は既存と同じ同期経路。音声準備を待ってpinを延命しない。
-            w.close("explicit_close");
-        }
         s.epoch += 1;
         let epoch = s.epoch;
         let turn = replay
@@ -1168,7 +1162,7 @@ impl Dialogue {
         let mut new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
             "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
             "interpreted_player_input_text":interpreted_text,"asr_corrections":asr_corrections,
-            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":fixed_close,"workshop_state_before":audit_before,"workshop_record_private":private});
+            "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":false,"workshop_state_before":audit_before,"workshop_record_private":private});
         if let Some(original) = &replay {
             if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
                 row["playback_status"] = "generating".into();
@@ -1263,6 +1257,7 @@ impl Dialogue {
             .and_then(|r| r["workshop_id"].as_str())
             .map(str::to_owned);
         let fixed_close = row.is_some_and(|r| r["workshop_fixed_close"] == true);
+        let closed_by_turn = row.is_some_and(|r| r["workshop_closed_by_turn"] == true);
         let text_displayed = status == PlaybackStatus::AudioDisabled
             && result.is_some_and(|r| r["text_displayed"] == true)
             && d.sessions.get(sid).is_some_and(|s| s.text_workshop);
@@ -1294,6 +1289,7 @@ impl Dialogue {
                             && result.is_some_and(|r| r["workshop_version"] == w.version)))
                         && (w.is_open()
                             || ((fixed_close
+                                || closed_by_turn
                                 || result.is_some_and(|r| r["workshop_closed_by_turn"] == true))
                                 && w.close_reason.as_deref() == Some("explicit_close")))
                 });
@@ -1311,6 +1307,17 @@ impl Dialogue {
             row["playback_status"] = status.into();
             row[format!("{status}_at")] = chrono::Utc::now().to_rfc3339().into();
             if let Some(result) = result {
+                if status == PlaybackStatus::Queued
+                    && workshop_id.is_some()
+                    && matches!(
+                        result["workshop_action"].as_str(),
+                        Some("close_workshop" | "confirm_close" | "decline_resume")
+                    )
+                {
+                    // This validated queued transition closes the pin below.
+                    // Preserve ownership for its later text-display acknowledgement.
+                    row["workshop_closed_by_turn"] = true.into();
+                }
                 if text_displayed {
                     row["text_displayed"] = true.into();
                     row["output_mode"] = "text".into();
@@ -1451,6 +1458,19 @@ impl Dialogue {
                         .filter(|w| Some(&w.hud_id) == workshop_id.as_ref())
                 {
                     if workshop_reply {
+                        let lines = w
+                            .pending
+                            .as_ref()
+                            .map_or(w.current_lines.as_slice(), |p| &p.lines);
+                        if w.open
+                            && !w.combat_paused()
+                            && let Some(target) = crate::workshop_target::Target::from_view(
+                                &json!({"discussion_target":result["workshop_discussion_target"]}),
+                                lines,
+                            )
+                        {
+                            w.discussion_target = Some(target);
+                        }
                         if w.open
                             && !w.combat_paused()
                             && result["workshop_version"] == w.version
@@ -1839,7 +1859,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {

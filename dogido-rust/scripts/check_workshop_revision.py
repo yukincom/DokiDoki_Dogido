@@ -29,6 +29,11 @@ def wire(control, stored, sid, *, bad=False, blocked=None, replan_bad=False, ins
         # 補正後も修正依頼の根拠は原文。相談・検査の根拠は会話理解用の文。
         recognized=re.search(r"今回のプレイヤー発話（認識原文）: ([^\n]+)",prompt)
         original_text=recognized.group(1) if recognized else text
+        if text == "その案で":
+            from check_workshop_edits import adoption
+            return adoption(original_text)
+        if text == "今の句":
+            return step(text, "show_current")
         if "段階: after_validation" in prompt:
             return proposal(original_text) if replan_bad else step(text,"show_current")
         if inspect and "段階: decide" in prompt: return step(text,"inspect",checks=["meter"])

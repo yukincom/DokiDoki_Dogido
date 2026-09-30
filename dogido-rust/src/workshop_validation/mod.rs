@@ -70,47 +70,22 @@ fn compact(s: &str) -> String {
         .collect::<String>()
         .to_lowercase()
 }
-fn has_markers(s: &str, v: &Value) -> bool {
-    array(v).iter().any(|x| s.contains(text(x)))
-}
 fn explicit_lines(s: &str) -> BTreeSet<usize> {
     (0..3)
         .filter(|i| PATTERNS[&format!("line_{i}")].is_match(s))
         .collect()
 }
-fn explicit(action: &str, source: &str, evidence: &str) -> bool {
-    if !workshop_input_guard::state_change_safe("stage_player_edit", source, evidence) {
-        return false;
-    }
+fn edit_is_negated(action: &str, source: &str) -> bool {
     let key = if action == "stage_player_edit" {
         "edit"
     } else {
         "repair"
     };
-    let outside = PATTERNS[&format!("{key}_quote")]
-        .replace_all(source, if key == "edit" { "候補" } else { "対象" });
-    !PATTERNS[&format!("{key}_negative")].is_match(&outside)
-        && PATTERNS[&format!("{key}_positive")].is_match(if key == "edit" {
-            &outside
-        } else {
-            evidence
-        })
-}
-fn positive(action: &str, evidence: &str) -> bool {
-    let pending = match action {
-        "accept_pending" => Some("pending_accept"),
-        "reject_pending" => Some("pending_reject"),
-        _ => None,
-    };
-    if let Some(key) = pending
-        && !evidence.contains(['?', '？'])
-        && PATTERNS[key]
-            .find(sanitize::strip(evidence))
-            .is_some_and(|m| m.start() == 0 && m.end() == sanitize::strip(evidence).len())
-    {
-        return true;
-    }
-    PATTERNS.get(action).is_some_and(|p| p.is_match(evidence))
+    // Quoted replacement words can themselves contain a negative expression.
+    // Reject only the player's negated operation, without requiring fixed verbs
+    // for a positive request that the model has understood.
+    let outside = PATTERNS[&format!("{key}_quote")].replace_all(source, "対象");
+    PATTERNS[&format!("{key}_negative")].is_match(&outside)
 }
 fn reject(reason: &str) -> Value {
     json!({"contract_errors":[],"step":null,"reason":reason})
@@ -158,22 +133,10 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
         if !strings(&details["allowed_actions"]).contains(action) {
             return Ok(reject("action_not_allowed"));
         }
-        let safe = raw["evidence"].as_str().is_some_and(|e| {
-            workshop_input_guard::state_change_safe(
-                if matches!(action, "confirm_close" | "decline_resume") {
-                    "close_workshop"
-                } else {
-                    "stage_player_edit"
-                },
-                source,
-                e,
-            )
-        }) && !(matches!(
-            action,
-            "confirm_close" | "acknowledge_meaning" | "resume_workshop" | "decline_resume"
-        ) && PATTERNS["followup_negative"].is_match(source))
-            && !(action == "resume_workshop" && PATTERNS["resume_negative"].is_match(source))
-            && !(action == "acknowledge_meaning" && PATTERNS["ack_negative"].is_match(source));
+        let safe = !matches!(action, "confirm_close" | "decline_resume")
+            || raw["evidence"].as_str().is_some_and(|e| {
+                workshop_input_guard::state_change_safe("close_workshop", source, e)
+            });
         return Ok(if safe {
             json!({"contract_errors":[],"step":raw,"reason":"accepted"})
         } else {
@@ -204,19 +167,30 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
     if let Some(step) = outcome["step"].as_object() {
         let action = text(&step["action"]);
         let evidence = text(&step["evidence"]);
-        if action == "stage_player_edit" && !explicit(action, source, evidence) {
-            outcome = reject("player_edit_intent_not_explicit");
+        if matches!(action, "stage_player_edit" | "propose_revision")
+            && edit_is_negated(action, source)
+        {
+            outcome = reject("unsafe_state_change_evidence");
         } else if action == "stage_conversation_candidate"
             && !truth(&frame["workshop"]["conversation_candidate"])
         {
             outcome = reject("conversation_candidate_missing");
         } else if action == "propose_revision" {
             if step["confidence"].as_f64().unwrap_or(0.) < 0.85
-                || !explicit(action, source, evidence)
+                || !workshop_input_guard::state_change_safe(action, source, evidence)
             {
                 outcome = reject("repair_intent_not_explicit");
             } else {
-                let explicit = explicit_lines(source);
+                let mut explicit = explicit_lines(source);
+                if explicit.is_empty() {
+                    let reference = &step["analysis"]["line_reference"];
+                    let selected = reference["line_index"].as_u64().or_else(|| {
+                        details["workshop_context"]["discussion_target"]["line_index"].as_u64()
+                    });
+                    if let Some(index) = selected.filter(|i| *i < 3) {
+                        explicit.insert(index as usize);
+                    }
+                }
                 let targets: BTreeSet<usize> = array(&step["analysis"]["findings"])
                     .iter()
                     .filter_map(|f| f["line_index"].as_u64().map(|n| n as usize))
@@ -275,7 +249,7 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     if compact(&evidence).chars().count() < 2 || !compact(player).contains(&compact(&evidence)) {
         return reject("ungrounded_evidence");
     }
-    if strings(&ASSETS["contradiction_actions"]).contains(action)
+    if (ASSETS["mutation_purposes"].get(action).is_some() || action == "propose_revision")
         && !workshop_input_guard::state_change_safe(action, original, &evidence)
     {
         return reject("unsafe_state_change_evidence");
@@ -284,14 +258,6 @@ fn finalize(payload: &Value, d: &Value) -> Value {
         && !compact(original).contains(&compact(&evidence))
     {
         return reject("mutation_evidence_not_in_original");
-    }
-    let contextual_assent = matches!(action, "stage_conversation_candidate" | "accept_pending")
-        && crate::workshop_candidate::contextual_assent(original);
-    if ASSETS["positive"].get(action).is_some()
-        && !positive(action, &evidence)
-        && !contextual_assent
-    {
-        return reject("state_change_intent_not_explicit");
     }
     let close = payload["close_after_action"].as_bool().unwrap_or(false);
     let close_evidence = cut(&payload["close_evidence"], 120);
@@ -309,9 +275,6 @@ fn finalize(payload: &Value, d: &Value) -> Value {
         }
         if !compact(original).contains(&compact(&close_evidence)) {
             return reject("close_evidence_not_in_original");
-        }
-        if !positive("close_workshop", &close_evidence) {
-            return reject("close_intent_not_explicit");
         }
     } else if !close_evidence.is_empty() {
         return reject("close_evidence_without_action");
@@ -335,49 +298,17 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     if action != "inspect" && !checks.is_empty() {
         return reject("checks_without_inspection");
     }
-    let speech = sanitize::clean(text(&payload["speech"]));
+    // A structured speech field is ordinary conversation, not a reaction leaf.
+    // Quotation marks, mixed script, length and line breaks do not decide its meaning.
+    let speech = sanitize::strip(text(&payload["speech"]));
     if strings(&ASSETS["direct"]).contains(action) {
-        if speech.is_empty()
-            || speech.contains('\n')
-            || speech.chars().count() > 120
-            || sanitize::usability_reason(&speech, &json!({})).is_some()
-        {
+        if speech.is_empty() {
             return reject("invalid_speech");
         }
-        if has_markers(&speech, &ASSETS["unsaved"]) {
-            return reject("false_persistence_claim");
-        }
-        let observation = &d["tool_observation"];
-        if !(observation["kind"] == "revision_validation" && observation["status"] == "proposed")
-            && has_markers(&speech, &ASSETS["unfinished"])
-        {
-            return reject("false_revision_claim");
-        }
-        let completed =
-            if observation["kind"] == "inspection" && observation["status"] == "completed" {
-                strings(&observation["checks"])
-            } else {
-                BTreeSet::new()
-            };
-        for (check, markers) in ASSETS["inspection_claims"].as_object().unwrap() {
-            if !completed.contains(check.as_str()) && has_markers(&speech, markers) {
-                return reject(&format!("unverified_{check}_claim"));
-            }
-        }
-        if action != "ask"
-            && ASSETS["inspection_requests"]
-                .as_object()
-                .unwrap()
-                .iter()
-                .any(|(check, markers)| {
-                    !completed.contains(check.as_str()) && has_markers(player, markers)
-                })
-        {
-            return reject("requested_inspection_not_completed");
-        }
-    } else if !speech.is_empty() {
-        return reject("speech_not_allowed_for_action");
     }
+    // Prose does not execute an action. The model chooses wording and whether a
+    // recorded reading/meter/source inspection is useful; code validates only
+    // the selected operation and its concrete inputs.
     let analysis = analysis::finalize(payload, d, action, confidence, player);
     if action == "propose_revision"
         && array(&analysis["findings"]).is_empty()

@@ -36,7 +36,8 @@ impl Stage {
         }
         match (action, purpose) {
             ("explain", "understand_meaning") => Self::MeaningExplained,
-            ("acknowledge_meaning", _) => Self::CloseConfirmation,
+            // Understanding a meaning does not ask permission to end the conversation.
+            ("acknowledge_meaning", _) => Self::Discussion,
             _ => Self::Discussion,
         }
     }
@@ -54,13 +55,13 @@ pub fn is_action(action: &str) -> bool {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Step {
     action: String,
     purpose: String,
     confidence: f64,
     evidence: String,
-    speech: String,
+    #[serde(rename = "speech")]
+    _speech: String,
     checks: Vec<String>,
 }
 
@@ -85,16 +86,19 @@ pub fn validate(payload: &Value, text: &str, stage: Stage, pending: bool) -> Res
         step.evidence.trim().chars().count() >= 2 && text.contains(&step.evidence),
         "followup_ungrounded_evidence"
     );
-    ensure!(
-        step.speech.is_empty() && step.checks.is_empty(),
-        "followup_requires_fixed_speech"
-    );
+    if matches!(step.action.as_str(), "confirm_close" | "decline_resume") {
+        ensure!(
+            crate::workshop_input_guard::state_change_safe("close_workshop", text, &step.evidence),
+            "unsafe_close_evidence"
+        );
+    }
+    ensure!(step.checks.is_empty(), "followup_cannot_inspect");
     Ok(())
 }
 
 pub fn speech(action: &str) -> Option<&'static str> {
     match action {
-        "acknowledge_meaning" => Some("うん。この句の話はここまででええ？"),
+        "acknowledge_meaning" => Some("うん。"),
         "confirm_close" => Some("おけ、この句の話はここまでや。"),
         "continue_workshop" => Some("おけ、まだ続けよか。気になるとこ教えてな。"),
         "resume_workshop" => Some("おけ、続けよか。気になるとこ教えてな。"),
@@ -107,6 +111,27 @@ pub fn speech(action: &str) -> Option<&'static str> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn acknowledgement_never_arms_close_and_hiragana_negation_never_closes() {
+        let ack = json!({"action":"acknowledge_meaning","purpose":"understand_meaning","confidence":0.95,
+            "evidence":"おーいループしてるぞい","speech":"","checks":[]});
+        assert!(
+            validate(
+                &ack,
+                "おーいループしてるぞい",
+                Stage::MeaningExplained,
+                false
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            Stage::after_completed("acknowledge_meaning", "understand_meaning", false),
+            Stage::Discussion
+        );
+        let close = json!({"action":"confirm_close","purpose":"finish_workshop","confidence":0.95,
+            "evidence":"おわらんわ。","speech":"","checks":[]});
+        assert!(validate(&close, "おわらんわ。", Stage::CloseConfirmation, false).is_err());
+    }
     #[test]
     fn contextual_yes_requires_completed_confirmation_and_no_pending() {
         let p = json!({"action":"confirm_close","purpose":"finish_workshop","confidence":0.95,
@@ -124,10 +149,8 @@ mod tests {
             ("confidence", json!(true)),
             ("confidence", json!(0.84)),
             ("evidence", json!("別の発話")),
-            ("speech", json!("採用したで。")),
             ("checks", json!(["source"])),
             ("purpose", json!("adopt_pending")),
-            ("close_after_action", json!(true)),
         ] {
             let mut bad = p.clone();
             bad[key] = value;
@@ -158,7 +181,7 @@ mod tests {
         );
         assert_eq!(
             Stage::after_completed("acknowledge_meaning", "understand_meaning", false),
-            Stage::CloseConfirmation
+            Stage::Discussion
         );
         assert_eq!(
             Stage::after_completed("acknowledge_meaning", "understand_meaning", true),

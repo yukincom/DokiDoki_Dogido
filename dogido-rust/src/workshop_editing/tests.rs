@@ -158,3 +158,38 @@ async fn dictionary_protocol_errors_deadline_and_cancel_do_not_become_success() 
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
+
+#[test]
+fn retained_target_applies_omitted_location_but_blocks_silent_redirection() {
+    let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["op"] == "player_edit" && c["expected"]["text"].is_string())
+        .unwrap();
+    let mut frame = case["input"].clone();
+    frame["op"] = "player_edit".into();
+    let engine = Engine {
+        readings: serde_json::from_value(case["readings"].clone()).unwrap(),
+    };
+    let snapshot = Snapshot::from_view(&frame["workshop"]).unwrap();
+    let records = editing_records(&snapshot);
+    let target = crate::workshop_target::Target {
+        line_index: 0,
+        line_id: records[0].line_id.clone(),
+        fragment: String::new(),
+    };
+    frame["workshop"]["discussion_target"] = serde_json::to_value(target).unwrap();
+    frame["text"] = "それをさくらいろにして".into();
+    frame["proposal"] =
+        json!({"replacement_text":"さくらいろ","line_index":null,"target_fragment":""});
+    let applied = engine.project(&frame).unwrap();
+    assert!(applied["text"].is_string(), "{applied}");
+    assert_eq!(applied["target_line_index"], 0);
+    frame["proposal"]["line_index"] = 2.into();
+    assert_eq!(
+        engine.project(&frame).unwrap()["failure_reasons"],
+        json!(["retained_target_conflict"])
+    );
+}

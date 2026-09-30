@@ -145,9 +145,6 @@ pub(super) fn errors(payload: &Value, details: &Value) -> Vec<String> {
     if direct && speech.is_empty() {
         errors.push("speech:required".into());
     }
-    if !direct && !speech.is_empty() {
-        errors.push("speech:not_allowed".into());
-    }
     let close = payload["close_after_action"].as_bool().unwrap();
     let close_evidence = text(&payload["close_evidence"]);
     if close && !matches!(action, "accept_pending" | "reject_pending") {

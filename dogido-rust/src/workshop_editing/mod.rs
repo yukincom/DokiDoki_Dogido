@@ -13,6 +13,10 @@ use parse::{compact, list, space, text, truth};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 
+pub(crate) fn explicit_line_indices(text: &str) -> std::collections::BTreeSet<usize> {
+    parse::explicit_lines(text)
+}
+
 #[derive(Debug)]
 struct NeedsReading(String);
 impl std::fmt::Display for NeedsReading {

@@ -15,6 +15,8 @@ use crate::{
 };
 use anyhow::{Context, ensure};
 
+const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル（上の古い固定応答指示より優先）: 現在句・未採用案・直近対話・discussion_targetを読み、次のactionをあなたが選ぶ。編集、案の採用と保存、破棄、終了も、本人の意思を文脈から理解して選んでよい。コードが対象・元句一致・音数・保存結果を確定する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話し、検査を必須にしない。記録された読み・音数・出典を確かめたいときはinspectを選ぶ。inspectとunrelated以外は、操作actionでもspeechに自然な返事を入れる（空にするという以前の指示は無効）。編集・採用はコードが実行に成功してからこの返事を再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。実行できない理由が返ってきたら同じ対象について説明・相談を続ける。";
+
 impl Dialogue {
     pub(super) async fn render_workshop(
         &self,
@@ -84,6 +86,7 @@ impl Dialogue {
         let discussed = &view["conversation_candidate"];
         let lines = pending.as_ref().map_or(current.as_slice(), |p| &p.lines);
         let mut proposed = None;
+        let mut discussion_target = crate::workshop_target::Target::from_view(view, lines);
         let explicit_discussion = editing
             .run(
                 helper,
@@ -102,51 +105,9 @@ impl Dialogue {
         let mut feedback = Value::Null;
         let mut reports = Vec::new();
         let mut reason = "accepted".to_owned();
-        let mut action = workshop::fixed_action(text).map(str::to_owned);
+        let mut action: Option<String> = None;
         let mut speech = String::new();
         let stage: Stage = serde_json::from_value(view["followup"].clone())?;
-        if action.is_none() {
-            action = workshop_projection::fixed_followup(text, stage, pending.is_some())
-                .filter(|a| stage.actions(pending.is_some()).contains(a))
-                .map(str::to_owned);
-            if let Some(a) = &action {
-                reason = "fixed_followup".into();
-                steps.push(json!({"phase":"decide","action":a,"outcome":"selected",
-                    "evidence":text,"checks":[],"validation_codes":[],
-                    "purpose":match a.as_str() {"acknowledge_meaning"=>"understand_meaning",
-                        "confirm_close"|"decline_resume"=>"finish_workshop",_=>"continue_discussion"}}));
-            }
-        }
-        if matches!(action.as_deref(), Some("close_workshop" | "decline_resume"))
-            && pending.is_some()
-        {
-            action = Some("ask".into());
-            speech = "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
-        }
-        if action.is_none() && pending.is_some() {
-            action = match text.trim().trim_end_matches(['。', '！', '!']) {
-                "採用して" | "その案で" | "その案でいい" | "その案でお願い" => {
-                    Some("accept_pending".into())
-                }
-                "却下して" | "元の句に戻して" | "その案は使わない" => {
-                    Some("reject_pending".into())
-                }
-                _ => None,
-            };
-        }
-        if action.is_none()
-            && pending.is_none()
-            && discussed.is_object()
-            && workshop_candidate::fixed_selection(text)
-        {
-            action = Some("stage_conversation_candidate".into());
-            reason = "fixed_conversation_candidate".into();
-            steps.push(
-                json!({"phase":"decide","action":"stage_conversation_candidate",
-                "purpose":"improve_wording","outcome":"selected","evidence":text,
-                "checks":[],"validation_codes":[]}),
-            );
-        }
         if action.is_none() {
             // 初手→必要時の実検査→修正検証後の返答。editorは同じturnで一度だけ。
             let mut phase = "decide";
@@ -184,6 +145,11 @@ impl Dialogue {
                         prepared =
                             prompt::prepare_with_assets(&projection, frame.get("retry"), assets)?;
                     }
+                    prepared["messages"]
+                        .as_array_mut()
+                        .context("workshop messages")?
+                        .push(json!({
+                        "role":"user", "content":CONVERSATION_PROTOCOL}));
                     let payload = if let Some(fixed) = prepared.get("fixed_payload") {
                         fixed.clone()
                     } else {
@@ -222,6 +188,11 @@ impl Dialogue {
                                 "invalid_json"
                             }
                             .into();
+                            if attempt == 0 {
+                                frame["retry"] = json!({"reason":reason,
+                                    "instruction":"同じ会話の返答を指定JSONにまとめ直してな。必須6キーを入れ、speechを短めにして完成させてな。"});
+                                continue;
+                            }
                             break;
                         };
                         payload
@@ -253,6 +224,15 @@ impl Dialogue {
                                 workshop_followup::validate(step, text, stage, pending.is_some())
                         {
                             reason = error.to_string();
+                            if attempt == 0 {
+                                prepare_conversation_retry(
+                                    &mut frame,
+                                    &mut allowed,
+                                    &reason,
+                                    &payload,
+                                );
+                                continue;
+                            }
                             break;
                         }
                         // 状態変更は補助の検査後にも原文・信頼度をRustで確認する。
@@ -281,6 +261,11 @@ impl Dialogue {
                             );
                         }
                         selected = Some(step.clone());
+                    } else if attempt == 0 {
+                        // A rejected action is not a missing topic. Use the existing
+                        // second attempt to answer the player, without mutation rights.
+                        prepare_conversation_retry(&mut frame, &mut allowed, &reason, &payload);
+                        continue;
                     }
                     break;
                 }
@@ -288,6 +273,19 @@ impl Dialogue {
                     break;
                 };
                 let a = step["action"].as_str().unwrap();
+                if let Some(target) = crate::workshop_target::Target::from_reference(
+                    &step["analysis"]["line_reference"],
+                    text,
+                    lines,
+                ) {
+                    if discussion_target
+                        .as_ref()
+                        .is_none_or(|t| t.line_index != target.line_index)
+                    {
+                        discussion_target = Some(target);
+                        snapshot["discussion_target"] = serde_json::to_value(&discussion_target)?;
+                    }
+                }
                 let candidate = json!({"action":a,"purpose":step["purpose"],"findings":step["analysis"]["findings"]});
                 if (feedback.is_null() || a == "propose_revision")
                     && crate::haiku_memory::feedback_kind(&candidate).is_some()
@@ -373,17 +371,32 @@ impl Dialogue {
                             "close evidence absent"
                         );
                     }
-                    if a == "stage_player_edit" {
-                        let proposal = &step["analysis"]["line_proposal"];
-                        ensure!(
-                            proposal["replacement_text"]
-                                .as_str()
-                                .is_some_and(|t| !t.is_empty() && text.contains(t)),
-                            "replacement not in original input"
-                        );
+                    if matches!(a, "stage_player_edit" | "stage_conversation_candidate") {
+                        let proposal = if a == "stage_conversation_candidate" {
+                            &discussed["proposal"]
+                        } else {
+                            &step["analysis"]["line_proposal"]
+                        };
+                        if a == "stage_player_edit" {
+                            ensure!(
+                                proposal["replacement_text"]
+                                    .as_str()
+                                    .is_some_and(|t| !t.is_empty() && text.contains(t)),
+                                "replacement not in original input"
+                            );
+                        }
+                        let mut edit_view = snapshot.clone();
+                        if a == "stage_conversation_candidate" {
+                            // Selecting the validated candidate explicitly selects its
+                            // own target, even after a question about another line.
+                            edit_view["discussion_target"] = Value::Null;
+                        }
                         let validated = editing
-                            .run(helper,
-                                &json!({"op":"player_edit","workshop":view,"text":text,"proposal":proposal}),
+                            .run(
+                                helper,
+                                &json!({"op":"player_edit",
+                            "workshop":edit_view,"text":if a=="stage_player_edit" {text} else {""},
+                            "proposal":proposal}),
                             )
                             .await?;
                         if validated["text"].is_string() {
@@ -393,7 +406,16 @@ impl Dialogue {
                                 .context("missing edit target")?
                                 as usize;
                             match Pending::stage(&current, lines, new_lines, target) {
-                                Ok(p) => proposed = Some(p),
+                                Ok(p) => {
+                                    if a == "stage_conversation_candidate" {
+                                        discussion_target = Some(crate::workshop_target::Target {
+                                            line_index: target,
+                                            line_id: lines[target].line_id.clone(),
+                                            fragment: String::new(),
+                                        });
+                                    }
+                                    proposed = Some(p);
+                                }
                                 Err(error) => {
                                     reason = "player_edit_rejected".into();
                                     steps.last_mut().unwrap()["validation_codes"] =
@@ -406,6 +428,15 @@ impl Dialogue {
                                 validated["failure_reasons"].clone();
                         }
                     }
+                    if matches!(a, "stage_player_edit" | "stage_conversation_candidate")
+                        && proposed.is_none()
+                    {
+                        observation = json!({"kind":"player_edit_validation","status":"rejected",
+                            "validation_codes":steps.last().unwrap()["validation_codes"],
+                            "canonical_unchanged":true,"discussion_target":view["discussion_target"]});
+                        phase = "after_validation";
+                        continue;
+                    }
                     action = Some(a.into());
                     speech = step["speech"].as_str().unwrap_or("").into();
                     if a == "decline_resume" && pending.is_some() {
@@ -416,36 +447,22 @@ impl Dialogue {
                 }
             }
         }
-        if action.as_deref() == Some("stage_conversation_candidate") {
-            ensure!(discussed.is_object(), "conversation_candidate_missing");
-            let validated = editing
-                .run(
-                    helper,
-                    &json!({"op":"player_edit","workshop":view,"proposal":discussed["proposal"]}),
-                )
-                .await?;
-            if validated["text"].is_string() {
-                let new_lines = serde_json::from_value(validated["lines"].clone())?;
-                let target = validated["target_line_index"]
-                    .as_u64()
-                    .context("candidate target")? as usize;
-                proposed = Some(Pending::stage(&current, lines, new_lines, target)?);
-            } else {
-                reason = "conversation_candidate_rejected".into();
-                if let Some(last) = steps.last_mut() {
-                    last["validation_codes"] = validated["failure_reasons"].clone();
-                }
-            }
-        }
         let action = action.unwrap_or_else(|| "fallback".into());
         if action == "close_workshop" && workshop::fixed_praise(text) {
             feedback = json!({"action":"praise","findings":[]});
         }
-        if let Some(fixed_speech) = workshop_followup::speech(&action) {
+        if speech.is_empty()
+            && let Some(fixed_speech) = workshop_followup::speech(&action)
+        {
             speech = fixed_speech.into();
+            if matches!(action.as_str(), "continue_workshop" | "resume_workshop")
+                && let Some(target) = crate::workshop_target::Target::from_view(view, lines)
+            {
+                speech = format!("おけ、{}の話を続けよか。", target.label(lines));
+            }
         }
         match action.as_str() {
-            "close_workshop" => {
+            "close_workshop" if speech.is_empty() => {
                 speech = if workshop::fixed_praise(text) {
                     "気にいってもらえてうれしいわ。"
                 } else {
@@ -454,7 +471,12 @@ impl Dialogue {
                 .into()
             }
             "show_current" => {
-                speech = workshop_edit::reading(lines);
+                let verse = workshop_edit::reading(lines);
+                speech = if speech.is_empty() {
+                    verse
+                } else {
+                    format!("{speech}\n{verse}")
+                };
                 if matches!(
                     text,
                     "直った？" | "直った?" | "修正できた？" | "修正できた?"
@@ -470,12 +492,18 @@ impl Dialogue {
                 }
             }
             "stage_player_edit" | "stage_conversation_candidate" => {
-                speech = proposed.as_ref().map_or_else(
-                    || "その一行はまだ使えんかったわ。行の指定と読み、音数を確認してな。".into(),
-                    |p| workshop_edit::reading(&p.lines),
-                )
+                if let Some(p) = &proposed {
+                    let verse = workshop_edit::reading(&p.lines);
+                    speech = if speech.is_empty() {
+                        verse
+                    } else {
+                        format!("{speech}\n{verse}")
+                    };
+                } else if speech.is_empty() {
+                    speech = workshop::fallback_for(None, view, lines);
+                }
             }
-            "accept_pending" => {
+            "accept_pending" if speech.is_empty() => {
                 speech = if close_after {
                     "元の句と直し、覚えといたで。この句の話はここまでや。"
                 } else {
@@ -483,7 +511,7 @@ impl Dialogue {
                 }
                 .into()
             }
-            "reject_pending" => {
+            "reject_pending" if speech.is_empty() => {
                 speech = if close_after {
                     "おけ、案は使わず、この句の話はここまでや。"
                 } else {
@@ -492,7 +520,11 @@ impl Dialogue {
                 .into()
             }
             "fallback" => {
-                speech = workshop::fallback((!observation.is_null()).then_some(&observation))
+                speech = workshop::fallback_for(
+                    (!observation.is_null()).then_some(&observation),
+                    view,
+                    lines,
+                )
             }
             "unrelated" => {}
             _ => {}
@@ -528,6 +560,7 @@ impl Dialogue {
             json!({"text":speech,"spoken_text":spoken,"workshop_id":view["workshop_id"],
             "workshop_action":action,"workshop_version":view["version"],"workshop_proposed":proposed,"workshop_close_after":close_after,
             "workshop_conversation_candidate":conversation_candidate,
+            "workshop_discussion_target":discussion_target,
             "workshop_followup":Stage::after_completed(&action, steps.last().and_then(|s|s["purpose"].as_str()).unwrap_or(""), pending.is_some() || proposed.is_some()),
             "workshop_steps":steps,"workshop_reason":reason,"workshop_feedback":feedback,"llm_reports":reports}),
         )
@@ -548,11 +581,17 @@ impl Dialogue {
             w.conversation_candidate = None;
         }
         let candidate = w.conversation_candidate.as_ref().map(|c| c.view());
+        let lines = w
+            .pending
+            .as_ref()
+            .map_or(w.current_lines.as_slice(), |p| &p.lines);
+        crate::workshop_target::Target::observe(&mut w.discussion_target, text, lines);
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
             "entry_id":w.entry_id,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "conversation_candidate":candidate,
+            "discussion_target":w.discussion_target,
             "provisional":w.provisional,"dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }
@@ -576,6 +615,23 @@ impl Dialogue {
         w.record_activity(Instant::now());
         Ok(())
     }
+}
+
+fn prepare_conversation_retry(
+    frame: &mut Value,
+    allowed: &mut Vec<&str>,
+    reason: &str,
+    payload: &Value,
+) {
+    allowed.retain(|a| {
+        matches!(
+            *a,
+            "respond" | "explain" | "ask" | "inspect" | "compare" | "show_current"
+        )
+    });
+    frame["allowed_actions"] = json!(allowed);
+    frame["retry"] = json!({"reason":reason,"payload":payload,
+        "instruction":"前の一手は実行していない。相談対象と直近の会話を引き継いで、今回の発言に返答してな。対象をもう一度聞き直さず、終了や採否には進まないでな。実際の検査が必要なら許可されたinspectを選んでな。"});
 }
 
 // Match the former helper request/response limits even when no IPC is needed.
@@ -604,39 +660,13 @@ fn prepare_revision(frame: &Value) -> Result<crate::haiku::revision::Input> {
 // Details, saved sources, fixed edit extraction, prompts and validation are Rust
 // owned. Only unresolved kanji requests neutral tokens from the existing child.
 async fn prepare_consultation(
-    helper: &mut Helper,
-    editing: &mut crate::workshop_editing::Engine,
+    _helper: &mut Helper,
+    _editing: &mut crate::workshop_editing::Engine,
     frame: &mut Value,
 ) -> Result<(Value, Value)> {
     projection_request(frame)?;
     let details = workshop_projection::details_for(frame)?;
-    let mut prepared = json!({"details":details});
-    projection_response(&prepared)?;
-    if details["phase"] == "decide"
-        && details["allowed_actions"]
-            .as_array()
-            .is_some_and(|actions| actions.iter().any(|a| a == "stage_player_edit"))
-    {
-        let mut request = frame.clone();
-        request["op"] = "fragment_candidate".into();
-        request["allowed_actions"] = details["allowed_actions"].clone();
-        let candidate = editing.run(helper, &request).await?;
-        let fields = candidate
-            .as_object()
-            .context("invalid fragment candidate response")?;
-        ensure!(
-            fields.len() == 1 && fields.contains_key("fixed_payload"),
-            "invalid fragment candidate fields"
-        );
-        let fixed = &candidate["fixed_payload"];
-        ensure!(
-            fixed.is_null() || fixed.is_object(),
-            "invalid fragment candidate payload"
-        );
-        if fixed.is_object() {
-            prepared["fixed_payload"] = fixed.clone();
-        }
-    }
+    let prepared = json!({"details":details});
     projection_response(&prepared)?;
     Ok((prompt::prepare(&prepared, frame.get("retry"))?, details))
 }

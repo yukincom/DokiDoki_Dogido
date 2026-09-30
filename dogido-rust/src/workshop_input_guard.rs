@@ -33,7 +33,7 @@ static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
         ),
         (
             "no_close",
-            r"終わりに(?:しない|しません|せん|せえへん)|終(?:わらない|わりません|わらん)|やめ(?:ない|ません|へん|るな)",
+            r"(?:終わり|おわり)に(?:しない|しません|せん|せえへん)|(?:終わ|おわ)(?:らない|りません|らん|らへん)|やめ(?:ない|ません|へん|るな)",
         ),
     ] {
         patterns.insert(k.into(), py_regex(v));
@@ -104,6 +104,15 @@ pub fn state_change_safe(action: &str, text: &str, evidence: &str) -> bool {
         return false;
     }
     let local = local_context(text, evidence);
+    // Scope this additional negation check from the selected evidence onward;
+    // an earlier refusal must not veto a later explicit change of mind.
+    let from_evidence = local
+        .find(evidence)
+        .map(|i| &local[i..])
+        .unwrap_or(evidence);
+    if action == "close_workshop" && PATTERNS["no_close"].is_match(from_evidence) {
+        return false;
+    }
     if local.contains(['?', '？'])
         || ["report", "conditional", "uncertain"]
             .iter()
@@ -181,7 +190,15 @@ mod tests {
             for (action, expected) in c["state"].as_object().unwrap() {
                 assert_eq!(
                     state_change_safe(action, text, evidence),
-                    expected.as_bool().unwrap(),
+                    expected.as_bool().unwrap()
+                        && !(action == "close_workshop"
+                            && ["終わりにしない", "終わらない", "終わらん"].iter().any(
+                                |word| text
+                                    .find(evidence)
+                                    .map(|i| text[i..].contains(word))
+                                    .unwrap_or(false)
+                                    || evidence.contains(word)
+                            )),
                     "state {action}: {c}"
                 );
             }

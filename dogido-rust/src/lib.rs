@@ -47,6 +47,7 @@ pub mod workshop_combat;
 pub mod workshop_combat_input;
 pub mod workshop_edit;
 pub mod workshop_followup;
+pub mod workshop_target;
 
 pub mod reaction_leaf;
 

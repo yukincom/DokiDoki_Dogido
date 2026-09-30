@@ -25,8 +25,12 @@ def main():
             seen.append(body)
             prompt = '\n'.join(m['content'] for m in body['messages'])
             question = re.search(r'今回のプレイヤー発話（会話理解用）: ([^\n]+)', prompt).group(1)
+            reply = step(question, speech='静かな夜の草を思い浮かべた読みやな。')
+            if question == '終了でいいよ':
+                reply = step(question, 'close_workshop')
+                reply['speech'] = 'うん、ここまでにしよか。また話そな。'
             response = {'id': 'test-reply', 'object': 'chat.completion', 'model': 'mock',
-                        'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(step(question, speech='静かな夜の草を思い浮かべた読みやな。'), ensure_ascii=False)}, 'finish_reason': 'stop'}],
+                        'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(reply, ensure_ascii=False)}, 'finish_reason': 'stop'}],
                         'usage': {'prompt_tokens': 100, 'completion_tokens': 30, 'total_tokens': 130}}
             encoded = json.dumps(response).encode()
             self.send_response(200)
@@ -114,13 +118,20 @@ def main():
                             assert not result.isError
                             assert 'テキスト検査の識別用指示。' in str(result)
                 asyncio.run(mcp_check())
+                close = speak(sid, '終了でいいよ', base)
+                assert close['turn']['workshop_action'] == 'close_workshop', close
+                assert close['turn']['text_delivery_acknowledged'], close
+                closed = call('snapshot', {'session_id': sid}, base)
+                assert closed['workshop']['state'] == 'closed'
+                assert closed['dialogue']['utterances'][-1]['playback_status'] == 'audio_disabled'
+                assert closed['dialogue']['utterances'][-1]['text_displayed']
                 call('shutdown', {}, base)
                 process.wait(timeout=10)
                 assert process.returncode == 0
                 print(json.dumps({'passed': ['native_workshop_reply', 'displayed_reply_history',
                     'saved_source_unchanged', 'prompt_applied_and_exact_request_visible',
                     'prompt_persistence', 'stale_version_rejected', 'missing_context_rejected',
-                    'stdio_mcp_ten_tools_and_readback', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
+                    'stdio_mcp_ten_tools_and_readback', 'model_close_display_acknowledged', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
             finally:
                 if process.poll() is None:
                     process.terminate()
