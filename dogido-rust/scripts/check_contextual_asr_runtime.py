@@ -37,33 +37,32 @@ def main():
 
         install(control, lambda text, prompt, n: edit(text, replacement="はるのくさ"))
         result = finish(base, send, sid, "上五を『はるのくさ』にして")
-        assert result.get("workshop_outcome") == "player_edit_staged", result
-        pending = hud(sid)["pending_lines"]
+        assert result.get("workshop_outcome") == "player_edit_saved", result
+        current = hud(sid)["canonical_lines"]
         calls = install(control, lambda text, prompt, n: step(text))
         result = finish(base, send, sid, "ハルノクザって何？")
         assert result["workshop_action"] == "explain" and calls[-1][0] == "はるのくさって何？", result
         assert result["asr_corrections"][0]["candidate_source"] == "verse:0"
-        assert hud(sid)["pending_lines"] == pending and not revisions(folder, sid)
-        passed.append("pending_is_current_candidate_source_without_implicit_adoption")
+        assert hud(sid)["canonical_lines"] == current and len(revisions(folder, sid)) == 1
+        passed.append("saved_canonical_is_current_candidate_source")
 
         install(control, lambda text, prompt, n: edit("にして", replacement="はるのくさ"))
         result = finish(base, send, sid, "上五を『ハルノクザ』にして")
         assert result["asr_corrections"] and result["workshop_action"] == "fallback", result
-        assert hud(sid)["pending_lines"] == pending and not revisions(folder, sid)
+        assert hud(sid)["canonical_lines"] == current and len(revisions(folder, sid)) == 1
         assert stored(sid) == original
         passed.append("corrected_replacement_cannot_authorize_edit_or_save")
 
         calls = install(control, lambda text, prompt, n: step(text))
         result = finish(base, send, sid, "ハルノクサをあおいくさに変えて")
-        assert result["asr_corrections"] and result.get("workshop_outcome") == "player_edit_staged", result
-        assert not calls and hud(sid)["pending_lines"][0] == "あおいくさ" and not revisions(folder, sid)
-        passed.append("original_fixed_edit_survives_correction_without_model_or_save")
+        assert result["asr_corrections"] and result.get("workshop_outcome") == "player_edit_saved", result
+        assert not calls and hud(sid)["canonical_lines"][0] == "あおいくさ" and len(revisions(folder, sid)) == 2
+        passed.append("original_fixed_edit_survives_correction_and_saves_once_without_model")
 
-        finish(base, send, sid, "却下して")
         result = finish(base, send, sid, "ハルノクザって何？")
         assert result["interpreted_player_input_text"] == "ハルノクザって何？" and not result["asr_corrections"]
         assert not hud(sid)["pending_lines"]
-        passed.append("discarded_pending_candidates_do_not_leak_to_next_turn")
+        passed.append("superseded_canonical_candidate_does_not_leak_to_next_turn")
 
         calls = install(control, lambda text, prompt, n: step(text))
         classifications = classifier(control, lambda text: intent(text, "uncertain"))

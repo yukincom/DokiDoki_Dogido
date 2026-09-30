@@ -167,10 +167,20 @@ pub fn fixed_action(text: &str) -> Option<&'static str> {
         return Some("close_workshop");
     }
     match text.trim().trim_end_matches(['。', '！', '!']) {
-        "終了" | "終わり" | "川柳は終了" | "川柳終わり" | "句はここまで" | "終了でいいよ" => {
-            Some("close_workshop")
-        }
-        "今の句" | "今の川柳" | "もう一度読んで" => Some("show_current"),
+        "終了"
+        | "終わり"
+        | "川柳は終了"
+        | "川柳終わり"
+        | "句はここまで"
+        | "終了でいいよ"
+        | "終了でお願いします" => Some("close_workshop"),
+        "今の句"
+        | "今の川柳"
+        | "もう一度読んで"
+        | "直った？"
+        | "直った?"
+        | "修正できた？"
+        | "修正できた?" => Some("show_current"),
         _ => None,
     }
 }

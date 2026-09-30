@@ -38,170 +38,129 @@ def finish(base,send,sid,text):
 def main():
     passed=[]
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        calls=install(control,lambda text,prompt,n:edit(text))
-        sid=ready(base,send,rows)
-        original=wait_for(lambda:stored(sid))
-        r=finish(base,send,sid,"上五を『さくらいろ』にして")
-        assert r.get("workshop_outcome")=="player_edit_staged",(r,log.read_text())
-        assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"]==["さくらいろ",*LINES[1:]]
-        assert hud(sid)["editing"] and hud(sid)["selected_line"]==0
-        assert not revisions(folder,sid) and stored(sid)==original
-        passed.append("stage_displays_pending_without_saving_or_changing_canonical")
-        calls=install(control,lambda text,prompt,n:edit(text,2,"あさひかる","下五"))
+        install(control,lambda text,prompt,n:edit(text))
+        sid=ready(base,send,rows); original=stored(sid)
+        (folder/"player_mode").write_text("slow")
+        turn=submit(base,sid,"上五を『さくらいろ』にして")
+        wait_for(lambda:row(base,turn,{"started"}))
+        assert hud(sid)["canonical_lines"]==["さくらいろ",*LINES[1:]] and not hud(sid)["pending_lines"]
+        first=revisions(folder,sid)
+        assert len(first)==1 and first[0]["parent_revision_id"] is None and stored(sid)==original
+        assert first[0]["lines"][0]["source_atom_ids"]==[] and first[0]["source"]=="player_line_confirmed"
+        passed.append("explicit_edit_saved_and_displayed_before_speech_finishes_preserving_original")
+        (folder/"player_mode").write_text("ok")
+        r=finish(base,send,sid,"直った？")
+        assert r["workshop_action"]=="show_current" and "さくらいろ" in r["text"]
+        assert row(base,turn,{"cancelled"}) and len(revisions(folder,sid))==1
+        passed.append("confirmation_reads_current_without_reapplying_after_cancelled_speech")
+        install(control,lambda text,prompt,n:edit(text,2,"あさひかる","下五"))
         r=finish(base,send,sid,"下五を『あさひかる』にして")
-        assert r.get("workshop_outcome")=="player_edit_staged",r
-        assert hud(sid)["pending_lines"]==["さくらいろ",LINES[1],"あさひかる"]
-        assert not revisions(folder,sid)
-        passed.append("second_edit_uses_pending_and_preserves_first_edit")
-        r=finish(base,send,sid,"今の句")
-        assert r["text"]=="さくらいろ\nくろいおのへと\nあさひかる",r
-        r=finish(base,send,sid,"終了")
-        assert r["workshop_action"]=="ask" and hud(sid)["state"]=="open" and hud(sid)["pending_lines"]
-        assert len(calls)==1
-        passed.append("show_pending_and_close_requires_explicit_adoption_or_rejection")
-        r=finish(base,send,sid,"いい句だね")
-        assert r["workshop_action"]=="ask" and hud(sid)["state"]=="open" and hud(sid)["pending_lines"]
-        assert not revisions(folder,sid) and stored(sid)==original and len(calls)==1
-        passed.append("praise_does_not_adopt_or_discard_pending_edit")
-        r=finish(base,send,sid,"採用して")
-        assert r.get("workshop_outcome")=="pending_saved",r
+        assert r["workshop_outcome"]=="player_edit_saved" and not hud(sid)["pending_lines"],r
         rs=revisions(folder,sid)
-        assert len(rs)==1 and len(rs[0]["edits"])==2 and rs[0]["parent_revision_id"] is None
-        assert rs[0]["original_reading_text"]=="\n".join(LINES) and rs[0]["source"]=="player_line_confirmed"
-        assert rs[0]["lines"][0]["source_atom_ids"]==[] and rs[0]["lines"][0]["provenance"]=="player_explicit"
-        assert hud(sid)["canonical_lines"]==["さくらいろ",LINES[1],"あさひかる"] and not hud(sid)["pending_lines"]
-        assert stored(sid)==original
-        passed.append("explicit_accept_appends_once_promotes_and_keeps_original")
-        calls=install(control,lambda text,prompt,n: edit(text,1,"くろいおのもつ","中七"))
-        r=finish(base,send,sid,"中七を『くろいおのもつ』にして")
-        assert r.get("workshop_outcome")=="player_edit_staged",r
-        calls=install(control,lambda text,prompt,n:adoption(text,close=True))
-        r=finish(base,send,sid,"その案を採用して、ここでおしまいにしよう")
-        assert r.get("workshop_outcome")=="pending_saved" and hud(sid)["state"]=="closed",r
-        rs2=revisions(folder,sid)
-        assert len(rs2)==2 and rs2[1]["parent_revision_id"]==rs[0]["id"] and rs2[1]["base_text"]==rs[0]["revised_text"]
-        passed.append("continued_adoption_links_parent_then_closes_after_save")
+        assert len(rs)==2 and rs[1]["parent_revision_id"]==first[0]["id"]
+        assert rs[1]["base_text"]==first[0]["revised_text"] and len(rs[1]["edits"])==1
+        assert hud(sid)["canonical_lines"]==["さくらいろ",LINES[1],"あさひかる"]
+        passed.append("next_edit_uses_new_canonical_and_links_revision_parent")
+        r=finish(base,send,sid,"終了でお願いします")
+        assert r["workshop_action"]=="close_workshop" and hud(sid)["state"]=="closed"
+        passed.append("polite_explicit_close_needs_no_second_adoption")
 
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        calls=install(control,lambda text,prompt,n:edit(text))
         sid=ready(base,send,rows)
-        finish(base,send,sid,"上五を『さくらいろ』にして")
-        calls=install(control,lambda text,prompt,n:adoption("採用"))
-        for text in ["採用しないよ","『採用』って言っただけ","採用したらどうなる？","採用かな？"]:
-            r=finish(base,send,sid,text)
-            assert r["workshop_action"]=="fallback" and not revisions(folder,sid),r
-            assert hud(sid)["pending_lines"]
-        assert len(calls)==4
-        passed.append("negative_quoted_conditional_question_do_not_adopt")
-        r=finish(base,send,sid,"却下して")
-        assert r.get("workshop_outcome")=="pending_rejected" and not hud(sid)["pending_lines"],r
-        assert hud(sid)["canonical_lines"]==LINES and not revisions(folder,sid)
-        passed.append("explicit_rejection_drops_only_pending_without_model")
         for text,payload in [
             ("上五を『さくら』にして",edit("上五を『さくら』にして",replacement="さくら")),
             ("上五を『さくらいろ』にしないで",edit("上五を『さくらいろ』にしないで")),
             ("上五を直して",edit("上五を直して")),
             ("上五を『あさのいろ』にして",edit("上五を『あさのいろ』にして",replacement="あさのいろ")),
+            ("『上五をさくらいろにして』って言っただけ",edit("上五をさくらいろにして")),
+            ("上五をさくらいろにしたらどうなる？",edit("上五をさくらいろにしたらどうなる？")),
         ]:
             install(control,lambda text,prompt,n,p=payload:p)
             r=finish(base,send,sid,text)
-            assert not hud(sid)["pending_lines"] and not revisions(folder,sid),(text,r)
-        passed.append("bad_meter_negated_edit_invented_replacement_duplicate_line_rejected")
+            assert hud(sid)["canonical_lines"]==LINES and not hud(sid)["pending_lines"] and not revisions(folder,sid),(text,r)
+        passed.append("bad_meter_negation_invented_word_duplicate_quote_and_question_never_save")
 
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        install(control,lambda text,prompt,n:edit(text))
-        sid=ready(base,send,rows)
-        finish(base,send,sid,"上五を『さくらいろ』にして")
-        path=folder/"memory/sessions"/sid/"long_term/haiku_revisions.jsonl"
-        path.mkdir() # deterministic write failure, not an unrelated service failure
-        r=finish(base,send,sid,"採用して")
-        assert r.get("workshop_outcome")=="pending_save_failed",r
-        assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"] and hud(sid)["state"]=="open"
-        assert "覚えといた" not in r["text"]
+        install(control,lambda text,prompt,n:edit(text));sid=ready(base,send,rows)
+        path=folder/"memory/sessions"/sid/"long_term/haiku_revisions.jsonl";path.mkdir()
+        r=finish(base,send,sid,"上五を『さくらいろ』にして")
+        assert r["workshop_outcome"]=="pending_save_failed",r
+        assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"] and "保存できん" in r["text"]
         path.rmdir()
         r=finish(base,send,sid,"採用して")
-        assert r.get("workshop_outcome")=="pending_saved" and len(revisions(folder,sid))==1,r
-        passed.append("save_failure_preserves_both_versions_and_retry_saves_once")
+        assert r["workshop_outcome"]=="pending_saved" and len(revisions(folder,sid))==1,r
+        passed.append("save_failure_keeps_original_and_validated_proposal_for_explicit_retry")
 
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        entered=threading.Event(); release=threading.Event()
+        entered=threading.Event();release=threading.Event()
         def blocked(text,prompt,n):
-            entered.set(); release.wait(8)
-            return edit(text)
-        install(control,blocked)
-        sid=ready(base,send,rows)
+            entered.set();release.wait(8);return edit(text)
+        install(control,blocked);sid=ready(base,send,rows)
         try:
-            old=submit(base,sid,"上五を『さくらいろ』にして")
-            wait_for(entered.is_set)
-            new=submit(base,sid,"今の句")
-            release.set()
-            wait_for(lambda:row(base,new,{"completed"}))
-            assert row(base,old,{"cancelled"}) and not hud(sid)["pending_lines"] and not revisions(folder,sid)
-            passed.append("cancelled_extraction_cannot_stage_late_result")
-        finally: release.set()
+            old=submit(base,sid,"上五を『さくらいろ』にして");wait_for(entered.is_set)
+            newer=submit(base,sid,"今の句");release.set();wait_for(lambda:row(base,newer,{"completed"}))
+            assert row(base,old,{"cancelled"}) and hud(sid)["canonical_lines"]==LINES and not revisions(folder,sid)
+            passed.append("cancelled_extraction_cannot_apply_late_result")
+        finally:release.set()
 
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        install(control,lambda text,prompt,n:edit(text))
-        sid=ready(base,send,rows)
-        finish(base,send,sid,"上五を『さくらいろ』にして")
-        def inspection(text,prompt,n):
-            if "段階: decide" in prompt:
-                return step(text,"inspect",checks=["source","meter"])
-            assert '"verse_kind": "pending"' in prompt and '"source_status": "unavailable"' in prompt
-            return step(text,speech="出典の記録がない行があるで。")
-        install(control,inspection)
-        r=finish(base,send,sid,"出典と音数を確認して")
-        assert r["workshop_action"]=="explain" and not revisions(folder,sid),r
-        passed.append("inspection_uses_pending_reading_without_borrowing_original_source")
-        install(control,lambda text,prompt,n:adoption(text,"reject_pending",close=True))
-        r=finish(base,send,sid,"その案を却下して、ここでおしまいにしよう")
-        assert r.get("workshop_outcome")=="pending_rejected" and hud(sid)["state"]=="closed" and not revisions(folder,sid),r
-        passed.append("reject_and_close_preserves_original_without_saving")
-
-    with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        install(control,lambda text,prompt,n:edit(text))
-        sid=ready(base,send,rows)
-        finish(base,send,sid,"上五を『さくらいろ』にして")
+        install(control,lambda text,prompt,n:edit(text));sid=ready(base,send,rows)
         path=folder/"memory/sessions"/sid/"long_term/haiku_revisions.jsonl"
         with path.open("a+") as locked:
             fcntl.flock(locked,fcntl.LOCK_EX)
             try:
-                turn=submit(base,sid,"採用して")
+                turn=submit(base,sid,"上五を『さくらいろ』にして")
                 wait_for(lambda:'event="workshop_revision_save_started"' in log.read_text())
-                assert hud(sid)["pending_lines"] # state lock must not be held by disk I/O
-                newer=submit(base,sid,"今の句")
-                wait_for(lambda:row(base,turn,{"cancelled"}))
-            finally: fcntl.flock(locked,fcntl.LOCK_UN)
+                assert hud(sid)["canonical_lines"]==LINES
+                newer=submit(base,sid,"今の句");wait_for(lambda:row(base,turn,{"cancelled"}))
+            finally:fcntl.flock(locked,fcntl.LOCK_UN)
         r=wait_for(lambda:row(base,newer,{"completed"}))
-        assert r["text"]=="さくらいろ\nくろいおのへと\nあさのいろ",r
-        assert len(revisions(folder,sid))==1 and not hud(sid)["pending_lines"]
+        assert r["text"]=="さくらいろ\nくろいおのへと\nあさのいろ" and len(revisions(folder,sid))==1,r
         assert not any(p["turn_id"]==turn for p in session(base,sid)["workshop_history"])
-        passed.append("authorized_save_finishes_through_speech_cancel_without_blocking_snapshot")
+        passed.append("authorized_save_finishes_through_cancellation_without_blocking_snapshot")
 
     with fixture(memory_enabled=False) as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
-        install(control,lambda text,prompt,n:edit(text))
-        sid=ready(base,send,rows)
-        finish(base,send,sid,"上五を『さくらいろ』にして")
-        r=finish(base,send,sid,"採用して")
-        assert r.get("workshop_outcome")=="pending_save_failed" and hud(sid)["pending_lines"] and not revisions(folder,sid),r
-        passed.append("disabled_memory_never_claims_saved_or_discards_pending")
+        install(control,lambda text,prompt,n:edit(text));sid=ready(base,send,rows)
+        r=finish(base,send,sid,"上五を『さくらいろ』にして")
+        assert r["workshop_outcome"]=="pending_save_failed" and hud(sid)["canonical_lines"]==LINES
+        assert hud(sid)["pending_lines"] and not revisions(folder,sid)
+        passed.append("disabled_memory_keeps_canonical_and_never_claims_saved")
 
     with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
         calls=install(control,lambda text,prompt,n:step(text,"ask",speech="どの行のことやろ？"))
-        sid=ready(base,send,rows); original=stored(sid)
-        r=finish(base,send,sid,"桜の葉を桜色に変えて")
-        assert r.get("workshop_outcome")=="player_edit_staged" and not r["llm_reports"] and not calls,r
-        assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"]==["桜色",*LINES[1:]]
-        assert not revisions(folder,sid) and stored(sid)==original
-        r=finish(base,send,sid,"さくらいろをさくらさくに変えて")
-        assert r.get("workshop_outcome")=="player_edit_staged" and not r["llm_reports"] and not calls,r
-        assert hud(sid)["pending_lines"]==["さくらさく",*LINES[1:]] and not revisions(folder,sid)
-        r=finish(base,send,sid,"採用して")
-        assert r.get("workshop_outcome")=="pending_saved" and len(revisions(folder,sid))==1,r
-        assert hud(sid)["canonical_lines"]==["さくらさく",*LINES[1:]] and stored(sid)==original
-        passed.append("spoken_current_line_resolves_kanji_then_pending_line_without_model_or_early_save")
+        sid=ready(base,send,rows);original=stored(sid)
+        for text,want in [("桜の葉を桜色に変えて","桜色"),("さくらいろをさくらさくに変えて","さくらさく")]:
+            r=finish(base,send,sid,text)
+            assert r["workshop_outcome"]=="player_edit_saved" and not r["llm_reports"] and not calls,r
+            assert hud(sid)["canonical_lines"]==[want,*LINES[1:]] and not hud(sid)["pending_lines"]
+        assert len(revisions(folder,sid))==2 and stored(sid)==original
+        passed.append("spoken_current_fragment_and_kanji_edit_apply_once_without_model")
+        def inspection(text,prompt,n):
+            if "段階: decide" in prompt:return step(text,"inspect",checks=["source","meter"])
+            assert '\"verse_kind\": \"canonical\"' in prompt and '\"source_status\": \"unavailable\"' in prompt
+            return step(text,speech="出典の記録がない行があるで。")
+        install(control,inspection)
+        r=finish(base,send,sid,"出典と音数を確認して")
+        assert r["workshop_action"]=="explain" and len(revisions(folder,sid))==2,r
+        passed.append("inspection_reads_new_canonical_without_borrowing_old_source")
 
+    # Model-generated suggestions remain unadopted until the player decides.
+    from check_workshop_revision import wire
+    with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
+        sid=ready(base,send,rows);wire(control,stored,sid)
+        finish(base,send,sid,"上五のさくらのはを別の表現に直して")
+        install(control,lambda text,prompt,n:adoption("採用"))
+        for text in ["採用しないよ","『採用』って言っただけ","採用したらどうなる？","採用かな？"]:
+            r=finish(base,send,sid,text)
+            assert r["workshop_action"]=="fallback" and hud(sid)["pending_lines"] and not revisions(folder,sid),r
+        for text in ["終了","いい句だね"]:
+            r=finish(base,send,sid,text)
+            assert r["workshop_action"]=="ask" and hud(sid)["state"]=="open" and not revisions(folder,sid),r
+        install(control,lambda text,prompt,n:adoption(text,"reject_pending",close=True))
+        r=finish(base,send,sid,"その案を却下して、ここでおしまいにしよう")
+        assert r["workshop_outcome"]=="pending_rejected" and hud(sid)["state"]=="closed" and not revisions(folder,sid),r
+        passed.append("generated_proposal_requires_adoption_and_reject_close_preserves_original")
     print(json.dumps({"passed":passed,"count":len(passed)},ensure_ascii=False,indent=2))
 
 
-if __name__=="__main__": main()
+if __name__=="__main__":main()

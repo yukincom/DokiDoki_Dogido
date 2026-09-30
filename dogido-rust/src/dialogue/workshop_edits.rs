@@ -25,7 +25,7 @@ impl Dialogue {
             return Ok(());
         }
         let close_after = result["workshop_close_after"] == true;
-        let (original, pending, parent, version, player_name) = {
+        let (original, pending, previous_pending, parent, version, player_name) = {
             let mut d = self.data.lock().unwrap();
             ensure!(!d.stopped, "shutdown");
             let s = d.sessions.get_mut(sid).context("session_closed")?;
@@ -43,26 +43,32 @@ impl Dialogue {
                     && result["workshop_version"] == w.version,
                 "stale_workshop"
             );
-            if matches!(
+            let player_edit = matches!(
                 action.as_str(),
                 "stage_player_edit" | "stage_conversation_candidate"
-            ) || generated_proposal
-            {
-                if let Some(proposed) = result.get("workshop_proposed").filter(|p| !p.is_null()) {
-                    let proposed: Pending = serde_json::from_value(proposed.clone())?;
-                    proposed.validate(&w.current_lines)?;
-                    // Recheck the working version as well as the canonical base.
-                    let working = w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines);
-                    if generated_proposal {
-                        ensure!(w.pending.is_none(), "pending_exists");
-                    } else {
-                        Pending::stage(
-                            &w.current_lines,
-                            working,
-                            proposed.lines.clone(),
-                            proposed.selected_line,
-                        )?;
-                    }
+            );
+            let pending = if player_edit || generated_proposal {
+                let Some(proposed) = result.get("workshop_proposed").filter(|p| !p.is_null())
+                else {
+                    result["workshop_outcome"] = "player_edit_rejected".into();
+                    return Ok(());
+                };
+                let proposed: Pending = serde_json::from_value(proposed.clone())?;
+                proposed.validate(&w.current_lines)?;
+                let working = w.pending.as_ref().map_or(&w.current_lines, |p| &p.lines);
+                if generated_proposal {
+                    ensure!(w.pending.is_none(), "pending_exists");
+                } else {
+                    Pending::stage(
+                        &w.current_lines,
+                        working,
+                        proposed.lines.clone(),
+                        proposed.selected_line,
+                    )?;
+                }
+                // A generated proposal still awaits adoption. Editing such a
+                // proposal alone does not adopt its other, unapproved changes.
+                if generated_proposal || w.pending.is_some() {
                     w.pending = Some(proposed);
                     w.conversation_candidate = None;
                     w.version += 1;
@@ -72,13 +78,13 @@ impl Dialogue {
                         "player_edit_staged"
                     }
                     .into();
-                } else {
-                    result["workshop_outcome"] = "player_edit_rejected".into();
+                    d.revision += 1;
+                    return Ok(());
                 }
-                d.revision += 1;
-                return Ok(());
-            }
-            let pending = w.pending.clone().context("pending_required")?;
+                proposed
+            } else {
+                w.pending.clone().context("pending_required")?
+            };
             if action == "reject_pending" {
                 w.pending = None;
                 w.conversation_candidate = None;
@@ -95,6 +101,7 @@ impl Dialogue {
             (
                 w.emission.clone(),
                 pending,
+                w.pending.clone(),
                 w.revision_id.clone(),
                 w.version,
                 s.name.clone(),
@@ -133,7 +140,7 @@ impl Dialogue {
                     .filter(|w| {
                         result["workshop_id"] == w.hud_id
                             && w.version == version
-                            && w.pending.as_ref() == Some(&pending)
+                            && w.pending == previous_pending
                     })
                 {
                     w.current_lines = pending.lines;
@@ -153,11 +160,34 @@ impl Dialogue {
                     }
                     d.revision += 1;
                 }
-                result["workshop_outcome"] = "pending_saved".into();
+                result["workshop_outcome"] = if action == "accept_pending" {
+                    "pending_saved"
+                } else {
+                    "player_edit_saved"
+                }
+                .into();
                 result["workshop_revision_id"] = revision_id.into();
             }
             Err(error) => {
                 tracing::error!(event="workshop_revision_save_failed",session_id=sid,%error);
+                // Preserve the validated proposal for an explicit retry; a
+                // failed save must never claim that the canonical verse changed.
+                let mut d = self.data.lock().unwrap();
+                if let Some(w) = d
+                    .sessions
+                    .get_mut(sid)
+                    .and_then(|s| s.haiku.workshop.as_mut())
+                    .filter(|w| {
+                        result["workshop_id"] == w.hud_id
+                            && w.version == version
+                            && w.pending == previous_pending
+                    })
+                {
+                    w.pending = Some(pending);
+                    w.conversation_candidate = None;
+                    w.version += 1;
+                    d.revision += 1;
+                }
                 result["workshop_outcome"] = "pending_save_failed".into();
                 result["workshop_reason"] = error.to_string().into();
                 result["text"] = "保存できんかったわ。元の句と案は残してあるで。".into();

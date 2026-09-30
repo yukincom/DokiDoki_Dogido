@@ -442,7 +442,22 @@ impl Dialogue {
                 }
                 .into()
             }
-            "show_current" => speech = workshop_edit::reading(lines),
+            "show_current" => {
+                speech = workshop_edit::reading(lines);
+                if matches!(
+                    text,
+                    "直った？" | "直った?" | "修正できた？" | "修正できた?"
+                ) {
+                    speech = format!(
+                        "{}\n{speech}",
+                        if pending.is_some() {
+                            "まだ採用前の案やで。"
+                        } else {
+                            "今の確定した句はこれやで。"
+                        }
+                    );
+                }
+            }
             "stage_player_edit" | "stage_conversation_candidate" => {
                 speech = proposed.as_ref().map_or_else(
                     || "その一行はまだ使えんかったわ。行の指定と読み、音数を確認してな。".into(),

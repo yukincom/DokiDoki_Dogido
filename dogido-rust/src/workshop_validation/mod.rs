@@ -285,7 +285,12 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     {
         return reject("mutation_evidence_not_in_original");
     }
-    if ASSETS["positive"].get(action).is_some() && !positive(action, &evidence) {
+    let contextual_assent = matches!(action, "stage_conversation_candidate" | "accept_pending")
+        && crate::workshop_candidate::contextual_assent(original);
+    if ASSETS["positive"].get(action).is_some()
+        && !positive(action, &evidence)
+        && !contextual_assent
+    {
         return reject("state_change_intent_not_explicit");
     }
     let close = payload["close_after_action"].as_bool().unwrap_or(false);

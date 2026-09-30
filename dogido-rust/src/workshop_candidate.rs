@@ -67,9 +67,48 @@ pub fn fixed_selection(text: &str) -> bool {
     )
 }
 
+/// A model may resolve a short assent only against the one current candidate
+/// (or pending proposal). The whole original utterance must be affirmative.
+pub fn contextual_assent(text: &str) -> bool {
+    use std::sync::LazyLock;
+    static ASSENT: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+        r"\A(?:うん[、,\s]*)?(?:はい|そう(?:しよう|しましょう|して(?:ください)?)|それで(?:お願い(?:します)?|いい(?:です)?|ええ))[。！!\s]*\z"
+    ).unwrap()
+    });
+    ASSENT.is_match(text.trim())
+        && crate::workshop_input_guard::state_change_safe(
+            "stage_conversation_candidate",
+            text,
+            text,
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn contextual_assent_requires_the_whole_original_utterance() {
+        for text in [
+            "そうしましょう",
+            "そうしよう。",
+            "うん、それでお願いします",
+            "はい",
+        ] {
+            assert!(contextual_assent(text), "{text}");
+        }
+        for text in [
+            "そうしましょう？",
+            "そうしましょうとは言ってない",
+            "『そうしましょう』",
+            "そうしないで",
+            "はい、でもまだ変えないで",
+            "もしそうしましょうと言ったら",
+            "そうしましょうと彼が言った",
+        ] {
+            assert!(!contextual_assent(text), "{text}");
+        }
+    }
     #[test]
     fn raw_words_are_required_even_when_an_idea_is_only_discussed() {
         let draft = Draft {

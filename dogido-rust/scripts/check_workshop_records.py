@@ -64,10 +64,8 @@ def main():
             ("この句はどういう意味？", "explain"),
             ("上五を『さくら』にして", "stage_player_edit"),
             ("くろいをしろいに変えて", "stage_player_edit"),
-            ("却下して", "reject_pending"),
-            ("くろいをしろいに変えて", "stage_player_edit"),
-            ("採用して", "accept_pending"),
-            ("読み: 草地=くさち", "explain"),  # Reading registration is a separate typed form.
+            ("しろいをくろいに変えて", "stage_player_edit"),
+            ("読み: 草地=くさち", "fallback"),  # Reading registration is a separate typed form.
         ]:
             send(sid)
             turn = submit(base, sid, text)
@@ -90,11 +88,10 @@ def main():
             )
             if text == "上五を『さくら』にして":
                 assert "meter_not_exact" in str(r["steps"]), r
-            if expected == "accept_pending":
-                assert (
-                    r["base_verse"] == "\n".join(LINES)
-                    and r["canonical_after"].splitlines()[1] == "しろいおのへと"
-                ), r
+            if text == "くろいをしろいに変えて":
+                assert r["result"]["workshop_outcome"] == "player_edit_saved", r
+                assert r["base_verse"] == "\n".join(LINES) and r["canonical_after"].splitlines()[1] == "しろいおのへと", r
+                assert not r["pending_after"], r
             count += 1
         install(control, lambda text, prompt, n: step(text, speech="保存したで。"))
         send(sid)
@@ -106,24 +103,32 @@ def main():
         ), r
         count += 1
         install(control, lambda text, prompt, n: edit(text))
-        send(sid)
-        turn = submit(base, sid, "上五を『さくらいろ』にして")
-        assert finished(folder, sid, turn)["pending_after"]
         revision_path = folder / "memory/sessions" / sid / "long_term/haiku_revisions.jsonl"
         revision_path.rename(revision_path.with_suffix(".backup"))
         revision_path.mkdir()
         send(sid)
-        turn = submit(base, sid, "採用して")
+        turn = submit(base, sid, "上五を『さくらいろ』にして")
         r = finished(folder, sid, turn)
         assert r["result"]["workshop_outcome"] == "pending_save_failed", r
-        assert (
-            r["base_verse"] == r["canonical_after"] and r["pending_before"] == r["pending_after"]
-        ), r
+        assert r["base_verse"] == r["canonical_after"] and not r["pending_before"] and r["pending_after"],r
         revision_path.rmdir()
         revision_path.with_suffix(".backup").rename(revision_path)
         send(sid)
         turn = submit(base, sid, "却下して")
-        finished(folder, sid, turn)
+        r = finished(folder, sid, turn)
+        assert r["result"]["workshop_action"] == "reject_pending" and not r["pending_after"],r
+        # Retrying a failed explicit edit records adoption independently of speech.
+        revision_path.rename(revision_path.with_suffix(".backup"))
+        revision_path.mkdir()
+        send(sid)
+        turn=submit(base,sid,"上五を『さくらいろ』にして")
+        assert finished(folder,sid,turn)["pending_after"]
+        revision_path.rmdir()
+        revision_path.with_suffix(".backup").rename(revision_path)
+        send(sid)
+        turn=submit(base,sid,"採用して")
+        r=finished(folder,sid,turn)
+        assert r["result"]["workshop_action"]=="accept_pending" and r["result"]["workshop_outcome"]=="pending_saved",r
         install(control, lambda text, prompt, n: step(text))
         count += 1
         # Failed speech is not a failed edit: decision and playback have separate records.
