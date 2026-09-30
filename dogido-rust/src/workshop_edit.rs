@@ -233,6 +233,24 @@ impl MemoryStore {
         pending: &Pending,
         parent: Option<&str>,
     ) -> Result<String> {
+        self.save_revision(original, pending, parent, false)
+    }
+    /// Text windows share the source poem; reject an edit based on an older head.
+    pub fn save_current_revision(
+        &self,
+        original: &Emission,
+        pending: &Pending,
+        parent: Option<&str>,
+    ) -> Result<String> {
+        self.save_revision(original, pending, parent, true)
+    }
+    fn save_revision(
+        &self,
+        original: &Emission,
+        pending: &Pending,
+        parent: Option<&str>,
+        require_latest: bool,
+    ) -> Result<String> {
         pending.validate(&pending.base)?;
         let _guard = SAVE_LOCK
             .lock()
@@ -248,7 +266,32 @@ impl MemoryStore {
             let mut expected = record.clone();
             expected["created_at"] = existing["created_at"].clone();
             ensure!(expected == *existing, "revision_id_conflict");
+            if require_latest {
+                ensure!(
+                    rows.iter()
+                        .rev()
+                        .find(|r| r["haiku_id"] == original.entry_id())
+                        .is_some_and(|r| r["id"] == pending.id),
+                    "saved_poem_changed"
+                );
+            }
             return Ok(pending.id.clone());
+        }
+        if require_latest {
+            let latest = rows
+                .iter()
+                .rev()
+                .find(|r| r["haiku_id"] == original.entry_id());
+            ensure!(
+                latest.and_then(|r| r["id"].as_str()) == parent,
+                "saved_poem_changed"
+            );
+            let entries = self.local_poem_rows("haiku_entries.jsonl")?;
+            ensure!(
+                entries.iter().any(|r| r["id"] == original.entry_id()
+                    && r["lines"] == json!(original.prepared.lines)),
+                "source_poem_changed"
+            );
         }
         if let Some(parent) = parent {
             ensure!(
@@ -484,5 +527,71 @@ mod tests {
                 .is_err()
         );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn shared_poem_head_is_locked_and_original_is_preserved() {
+        let root = std::env::temp_dir().join(format!("dogido-book-{}", uuid::Uuid::new_v4()));
+        let store = MemoryStore::new(&root);
+        let original = emission();
+        store
+            .save_agent_haiku("saved", "player", &original)
+            .unwrap();
+        let before = std::fs::read(store.entries_path()).unwrap();
+        let first =
+            Pending::stage(&lines(), &lines(), replace(lines(), 2, "あさひかる"), 2).unwrap();
+        let id = store
+            .save_current_revision(&original, &first, None)
+            .unwrap();
+        assert_eq!(
+            store
+                .save_current_revision(&original, &first, None)
+                .unwrap(),
+            id
+        );
+        let stale =
+            Pending::stage(&lines(), &lines(), replace(lines(), 0, "さくらいろ"), 0).unwrap();
+        assert_eq!(
+            store
+                .save_current_revision(&original, &stale, None)
+                .unwrap_err()
+                .to_string(),
+            "saved_poem_changed"
+        );
+        let second = Pending::stage(
+            &first.lines,
+            &first.lines,
+            replace(first.lines.clone(), 0, "さくらいろ"),
+            0,
+        )
+        .unwrap();
+        let second_id = store
+            .save_current_revision(&original, &second, Some(&id))
+            .unwrap();
+        assert_eq!(
+            store
+                .save_current_revision(&original, &first, None)
+                .unwrap_err()
+                .to_string(),
+            "saved_poem_changed"
+        );
+        assert_eq!(std::fs::read(store.entries_path()).unwrap(), before);
+        let loaded = crate::poem_book::load(&root).unwrap();
+        let poem = loaded.values().next().unwrap();
+        assert_eq!(poem.lines, second.lines);
+        assert_eq!(poem.revision_id.as_deref(), Some(second_id.as_str()));
+        assert_eq!(poem.lines_at(Some(&id)).unwrap(), first.lines);
+        assert_eq!(poem.revisions.len(), 2);
+        let book = crate::memory_api::read(&root, crate::memory_api::View::Haiku).unwrap();
+        assert_eq!(book[0]["text"], surface(&second.lines));
+        assert_eq!(book[0]["original_text"], surface(&original.prepared.lines));
+        // The same original ID in a different source directory remains independent.
+        let other = MemoryStore::new(root.join("sessions/other"));
+        other
+            .save_agent_haiku("other", "player", &original)
+            .unwrap();
+        let book = crate::poem_book::rows(&root).unwrap();
+        assert_eq!(book.len(), 2);
+        assert_eq!(book[1]["text"], surface(&original.prepared.lines));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

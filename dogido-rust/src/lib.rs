@@ -32,6 +32,7 @@ pub mod mob_identity;
 pub mod planner;
 pub mod playback;
 pub mod player_text;
+pub mod poem_book;
 pub mod poem_input;
 pub mod reading_correction;
 pub mod recall_query;

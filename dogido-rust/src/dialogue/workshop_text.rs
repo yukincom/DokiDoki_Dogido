@@ -3,7 +3,45 @@ use super::*;
 use crate::haiku_record::{Emission, Workshop};
 use anyhow::ensure;
 
+fn refresh_line_sources(w: &mut Workshop) {
+    w.materials.remove("line_sources");
+    let sources: Vec<_> = w.current_lines.iter().filter(|l| !l.source_atom_ids.is_empty()).map(|l| json!({"line_index":l.line_index,"text":l.reading_text,"atom_ids":l.source_atom_ids,"sources":l.source_atoms})).collect();
+    if !sources.is_empty() {
+        w.materials.insert("line_sources".into(), json!(sources));
+    }
+}
+
 impl Dialogue {
+    /// The source binding comes only from the server's poem-book reader.
+    pub fn open_saved_text_workshop(
+        &self,
+        sid: &str,
+        poem: crate::poem_book::SavedPoem,
+    ) -> Result<()> {
+        self.open_text_workshop(sid, poem.original.clone(), poem.original.entry_id())?;
+        let mut d = self.data.lock().unwrap();
+        let s = d.sessions.get_mut(sid).unwrap();
+        let w = s.haiku.workshop.as_mut().unwrap();
+        w.current_lines = poem.lines.clone();
+        w.revision_id = poem.revision_id.clone();
+        refresh_line_sources(w);
+        s.text_poem = Some(poem);
+        Ok(())
+    }
+    /// Full canonical records for an explicit restart handoff, even after close.
+    pub fn text_workshop_state(&self, sid: &str) -> Value {
+        let d = self.data.lock().unwrap();
+        let Some(s) = d.sessions.get(sid).filter(|s| s.text_workshop) else {
+            return Value::Null;
+        };
+        let Some(w) = &s.haiku.workshop else {
+            return Value::Null;
+        };
+        json!({"key":s.text_poem.as_ref().map(|p| &p.key),"lines":w.current_lines,
+            "revision_id":w.revision_id,"pending":w.pending,"version":w.version,
+            "workshop_id":w.hud_id,"open":w.open,"candidate":w.conversation_candidate})
+    }
+
     pub fn text_workshop_prompts(&self) -> Value {
         let d = self.data.lock().unwrap();
         json!({"version":d.text_prompt_version,
@@ -58,7 +96,8 @@ impl Dialogue {
         }
     }
 
-    /// Upgrade handoff for an unchanged saved verse; never guesses edited line sources.
+    /// Restore a handoff by resolving its revision in the bound source poem.
+    /// Legacy handoffs can restore only an unchanged original.
     pub fn restore_text_conversation(&self, sid: &str, snapshot: &Value) -> Result<()> {
         let original = snapshot["dialogue"]["sessions"]
             .as_array()
@@ -73,17 +112,42 @@ impl Dialogue {
             s.text_workshop && s.current_turn.is_empty(),
             "new text session required"
         );
+        let saved = &snapshot["text_state"];
         let w = s.haiku.workshop.as_mut().unwrap();
+        if saved.is_object() {
+            let poem = s
+                .text_poem
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("missing source binding"))?;
+            ensure!(saved["key"] == poem.key, "recovery poem mismatch");
+            let lines = poem.lines_at(saved["revision_id"].as_str())?;
+            ensure!(saved["lines"] == json!(lines), "recovery lines mismatch");
+            w.current_lines = lines;
+            w.revision_id = saved["revision_id"].as_str().map(str::to_owned);
+            w.pending = serde_json::from_value(saved["pending"].clone())?;
+            if let Some(pending) = &w.pending {
+                pending.validate(&w.current_lines)?;
+            }
+            w.version = saved["version"].as_u64().unwrap_or(0);
+            w.hud_id = saved["workshop_id"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("missing recovery workshop"))?
+                .into();
+            w.conversation_candidate =
+                serde_json::from_value(saved["candidate"].clone()).unwrap_or_default();
+        }
+        refresh_line_sources(w);
         let canonical = w
             .current_lines
             .iter()
             .map(|l| l.surface_text.clone())
             .collect::<Vec<_>>();
         ensure!(
-            snapshot["workshop"]["canonical_lines"] == json!(canonical)
-                && snapshot["workshop"]["pending_lines"]
-                    .as_array()
-                    .is_some_and(Vec::is_empty),
+            saved.is_object()
+                || (snapshot["workshop"]["canonical_lines"] == json!(canonical)
+                    && snapshot["workshop"]["pending_lines"]
+                        .as_array()
+                        .is_some_and(Vec::is_empty)),
             "edited verse requires its original line records; cannot restore from HUD"
         );
         if let Some(wid) = snapshot["workshop"]["workshop_id"].as_str() {
@@ -100,7 +164,7 @@ impl Dialogue {
             &json!({"discussion_target":original["workshop_discussion_target"]}),
             &w.current_lines,
         );
-        if snapshot["workshop"]["state"] == "closed" {
+        if snapshot["workshop"]["state"] == "closed" || saved["open"] == false {
             w.close("restored_closed");
         }
         if let Some(history) = original["history"].as_array() {
@@ -138,7 +202,8 @@ impl Dialogue {
             // Recover a player-grounded idea from an unchanged verse's recent
             // transcript, including older versions that dropped a question's
             // rejected edit step. Reconstruct discussion only, never execute it.
-            if w.open
+            if saved.is_null()
+                && w.open
                 && w.dialogue.iter().any(|t| row["turn_id"] == t["turn_id"])
                 && row["workshop_id"] == w.hud_id
                 && row["workshop_state_before"]["canonical"] == canonical.join("\n")

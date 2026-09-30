@@ -11,10 +11,10 @@ use axum::{
 use clap::Parser;
 use dogido_rust::{
     dialogue::{Dialogue, DialogueConfig, HaikuSettings, WebSettings},
-    haiku_record::{Emission, PreparedEmission},
+    poem_book,
 };
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::sync::Notify;
 
 #[derive(Parser)]
@@ -45,54 +45,11 @@ struct Args {
 #[derive(Clone)]
 struct Window {
     dialogue: Arc<Dialogue>,
-    entries: Arc<BTreeMap<String, (Value, Emission)>>,
+    memory_dir: PathBuf,
     stop: Arc<Notify>,
     port: u16,
     prompt_file: PathBuf,
     prompt_lock: Arc<std::sync::Mutex<()>>,
-}
-
-fn load_entries(root: &std::path::Path) -> Result<BTreeMap<String, (Value, Emission)>> {
-    let mut entries = BTreeMap::new();
-    for session in std::fs::read_dir(root.join("sessions"))? {
-        let session = session?;
-        if !session.file_type()?.is_dir() {
-            continue;
-        }
-        let path = session.path().join("long_term/haiku_entries.jsonl");
-        if !path.exists() {
-            continue;
-        }
-        ensure!(path.metadata()?.len() <= 16_000_000, "haiku file too large");
-        for line in std::fs::read_to_string(&path)?.lines() {
-            let r: Value = serde_json::from_str(line).context("invalid saved haiku")?;
-            if r["kind"] != "agent_haiku" || !r["lines"].is_array() {
-                continue;
-            }
-            let prepared: PreparedEmission = serde_json::from_value(json!({
-                "text":r["text"],"surface_text":r["surface_text"],"reading_text":r["reading_text"],
-                "lines":r["lines"],"materials":r["materials_snapshot"],"interpretation":r["interpretation"],
-                "preface":r["preface"],"biome":r["world"]["biome"],"structure":r["world"]["structure"],
-                "time_phase":r["world"]["time_phase"],"dimension":r["world"]["dimension"],
-                "event_sequence":r["trigger"]["event_sequence"],"route":r["trigger"]["route"]
-            }))?;
-            let at = chrono::DateTime::parse_from_rfc3339(
-                r["created_at"].as_str().context("missing timestamp")?,
-            )?
-            .to_utc();
-            let emission = prepared.complete(at)?;
-            let key = format!(
-                "{}:{}",
-                session.file_name().to_string_lossy(),
-                r["id"].as_str().context("missing id")?
-            );
-            let public = json!({"key":key,"id":r["id"],"created_at":r["created_at"],
-                "text":emission.prepared.surface_text,"interpretation":r["interpretation"]});
-            entries.insert(key, (public, emission));
-        }
-    }
-    ensure!(!entries.is_empty(), "no saved poems with line records");
-    Ok(entries)
 }
 
 async fn access(State(w): State<Window>, request: Request, next: Next) -> Response {
@@ -128,7 +85,8 @@ async fn access(State(w): State<Window>, request: Request, next: Next) -> Respon
 
 async fn open(State(w): State<Window>, Json(body): Json<Value>) -> Result<Json<Value>, StatusCode> {
     let key = body["key"].as_str().ok_or(StatusCode::BAD_REQUEST)?;
-    let (record, emission) = w.entries.get(key).ok_or(StatusCode::NOT_FOUND)?;
+    let poems = poem_book::load(&w.memory_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let poem = poems.get(key).ok_or(StatusCode::NOT_FOUND)?;
     if let Some(previous) = body["previous_session"].as_str() {
         w.dialogue.close(previous);
     }
@@ -141,11 +99,7 @@ async fn open(State(w): State<Window>, Json(body): Json<Value>) -> Result<Json<V
     let sid = format!("text_{}", uuid::Uuid::new_v4().simple());
     w.dialogue.register(&sid, "プレイヤー", true);
     if w.dialogue
-        .open_text_workshop(
-            &sid,
-            emission.clone(),
-            record["id"].as_str().unwrap().into(),
-        )
+        .open_saved_text_workshop(&sid, poem.clone())
         .is_err()
     {
         w.dialogue.close(&sid);
@@ -157,7 +111,7 @@ async fn open(State(w): State<Window>, Json(body): Json<Value>) -> Result<Json<V
 async fn snapshot(State(w): State<Window>, Json(body): Json<Value>) -> Json<Value> {
     let sid = body["session_id"].as_str().unwrap_or("");
     Json(
-        json!({"dialogue":w.dialogue.snapshot(Some(sid)),"workshop":w.dialogue.workshop_snapshot(sid,0)}),
+        json!({"dialogue":w.dialogue.snapshot(Some(sid)),"workshop":w.dialogue.workshop_snapshot(sid,0),"text_state":w.dialogue.text_workshop_state(sid)}),
     )
 }
 
@@ -220,7 +174,8 @@ async fn main() -> Result<()> {
         args.listen.ip().is_loopback(),
         "text window is localhost only"
     );
-    let entries = Arc::new(load_entries(&args.memory_dir)?);
+    let entries = poem_book::load(&args.memory_dir)?;
+    ensure!(!entries.is_empty(), "no saved poems with line records");
     let listener = tokio::net::TcpListener::bind(args.listen).await?;
     let addr = listener.local_addr()?;
     let temporary =
@@ -259,20 +214,24 @@ async fn main() -> Result<()> {
                 .as_str()
                 .context("missing recovery session")?;
             let key = record["key"].as_str().context("missing recovery poem")?;
-            let (source, emission) = entries.get(key).context("recovery poem no longer exists")?;
+            let mut poem = entries
+                .get(key)
+                .context("recovery poem no longer exists")?
+                .clone();
+            // Legacy handoffs predate persistent edits and refer to the original.
+            if record["snapshot"]["text_state"].is_null() {
+                poem.lines = poem.original.prepared.lines.clone();
+                poem.revision_id = None;
+            }
             dialogue.register(sid, "プレイヤー", true);
-            dialogue.open_text_workshop(
-                sid,
-                emission.clone(),
-                source["id"].as_str().unwrap().into(),
-            )?;
+            dialogue.open_saved_text_workshop(sid, poem)?;
             dialogue.restore_text_conversation(sid, &record["snapshot"])?;
         }
     }
     let stop = Arc::new(Notify::new());
     let window = Window {
         dialogue: dialogue.clone(),
-        entries,
+        memory_dir: args.memory_dir,
         stop: stop.clone(),
         port: addr.port(),
         prompt_file: args.prompt_file,
@@ -286,12 +245,9 @@ async fn main() -> Result<()> {
         .route(
             "/api/poems",
             get(|State(w): State<Window>| async move {
-                Json(
-                    w.entries
-                        .values()
-                        .map(|(r, _)| r.clone())
-                        .collect::<Vec<_>>(),
-                )
+                poem_book::load(&w.memory_dir)
+                    .map(|poems| Json(poems.values().map(|p| p.public()).collect::<Vec<_>>()))
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
             }),
         )
         .route("/api/open", post(open))

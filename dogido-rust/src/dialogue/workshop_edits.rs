@@ -25,7 +25,16 @@ impl Dialogue {
             return Ok(());
         }
         let close_after = result["workshop_close_after"] == true;
-        let (original, pending, previous_pending, parent, version, player_name, text_workshop) = {
+        let (
+            original,
+            pending,
+            previous_pending,
+            parent,
+            version,
+            player_name,
+            text_workshop,
+            text_poem,
+        ) = {
             let mut d = self.data.lock().unwrap();
             ensure!(!d.stopped, "shutdown");
             let s = d.sessions.get_mut(sid).context("session_closed")?;
@@ -106,6 +115,7 @@ impl Dialogue {
                 w.version,
                 s.name.clone(),
                 s.text_workshop,
+                s.text_poem.clone(),
             )
         };
         tracing::info!(
@@ -113,9 +123,18 @@ impl Dialogue {
             session_id = sid,
             revision_id = pending.id
         );
-        let saved = if text_workshop {
-            // The standalone room edits its session copy, never the source
-            // poem or long-term memory. It still uses the same live CAS below.
+        let persistent_text = text_poem.is_some();
+        let saved = if let Some(poem) = text_poem {
+            let write_pending = pending.clone();
+            tokio::task::spawn_blocking(move || {
+                MemoryStore::new(poem.root).save_current_revision(
+                    &original,
+                    &write_pending,
+                    parent.as_deref(),
+                )
+            })
+            .await?
+        } else if text_workshop {
             Ok(format!("text_{}", pending.id))
         } else if self.config.haiku.memory_enabled {
             let root = self.config.haiku.memory_dir.join("sessions").join(sid);
@@ -165,7 +184,7 @@ impl Dialogue {
                     }
                     d.revision += 1;
                 }
-                result["workshop_outcome"] = if text_workshop {
+                result["workshop_outcome"] = if text_workshop && !persistent_text {
                     "text_edit_applied"
                 } else if action == "accept_pending" {
                     "pending_saved"
@@ -197,7 +216,12 @@ impl Dialogue {
                 }
                 result["workshop_outcome"] = "pending_save_failed".into();
                 result["workshop_reason"] = error.to_string().into();
-                result["text"] = "保存できんかったわ。元の句と案は残してあるで。".into();
+                result["text"] = if error.to_string() == "saved_poem_changed" {
+                    "別の相談で句が更新されてるわ。案は残したで。句集の最新版を開き直してな。"
+                } else {
+                    "保存できんかったわ。元の句と案は残してあるで。"
+                }
+                .into();
                 result["spoken_text"] = result["text"].clone();
             }
         }

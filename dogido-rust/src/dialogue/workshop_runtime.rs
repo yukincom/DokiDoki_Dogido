@@ -154,7 +154,7 @@ impl Dialogue {
                         "content":"差し替え案を相談するrespond/askでも、本人が今回言った置換語と対象をline_proposalへ入れてな。確認のあと『うん、変えて』のように案を省略した返事は、現在のconversation_candidateをstage_conversation_candidateで選んでな。行為のevidenceは今回の返事、置換語は保持された一案から使う。以前の発話を今回のevidenceへコピーしないでな。"}));
                     if input.get("text_workshop_prompt").is_some() {
                         prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
-                            "content":"ここはテキスト相談室。編集と採用はこの相談内の現在句に反映する。原本や長期記憶には書き込まないので、永続保存したとは言わず、句を変更したと返してな。"}));
+                            "content":"ここはテキスト相談室。採用した変更はコードが句集へ保存する。保存や採用の成否を先回りして言わず、コードの実行結果に従ってな。"}));
                     }
                     let payload = if let Some(fixed) = prepared.get("fixed_payload") {
                         fixed.clone()

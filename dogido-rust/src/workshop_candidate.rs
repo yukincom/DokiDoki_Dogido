@@ -20,7 +20,8 @@ pub struct Draft {
     pub validation_codes: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Candidate {
     pub draft: Draft,
     base: Vec<HaikuLine>,

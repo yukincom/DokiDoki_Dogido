@@ -1,5 +1,4 @@
 //! Read-only projections of the configured memory store. Never creates files.
-use crate::haiku_record::MemoryStore;
 use serde_json::{Value, json};
 use std::{fs, path::Path};
 
@@ -35,7 +34,7 @@ fn document(path: &Path) -> Option<Value> {
 }
 pub fn read(root: &Path, view: View) -> anyhow::Result<Value> {
     Ok(match view {
-        View::Haiku => json!(MemoryStore::new(root).poem_rows("haiku_entries.jsonl")?),
+        View::Haiku => json!(crate::poem_book::rows(root)?),
         View::Profile => {
             let loaded = document(&root.join("long_term/player_profile.json"))
                 .filter(Value::is_object)

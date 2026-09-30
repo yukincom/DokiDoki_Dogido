@@ -113,6 +113,7 @@ struct Session {
     name: String,
     preview: bool,
     text_workshop: bool,
+    text_poem: Option<crate::poem_book::SavedPoem>,
     text_reply: Option<(String, u64, Value)>,
     text_last_request: Option<Value>,
     // 全視認を含む観測とその受信時刻。部分通知で消去・延命しない。
@@ -291,6 +292,7 @@ impl Dialogue {
                 name: name.into(),
                 preview,
                 text_workshop: false,
+                text_poem: None,
                 text_reply: None,
                 text_last_request: None,
                 latest: None,

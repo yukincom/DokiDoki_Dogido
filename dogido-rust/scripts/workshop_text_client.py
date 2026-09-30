@@ -82,10 +82,11 @@ def main():
             sid = session['session_id']
             snapshot = call('snapshot', {'session_id': sid}, base)
             workshop = snapshot['workshop']
-            candidates = [p for p in poems if p['text'].splitlines() == workshop['canonical_lines']]
-            if len(candidates) != 1 or workshop['pending_lines']:
+            state = snapshot.get('text_state') or {}
+            candidates = [p for p in poems if p['key'] == state.get('key')] if state else [p for p in poems if p['text'].splitlines() == workshop['canonical_lines']]
+            if len(candidates) != 1 or (not state and workshop['pending_lines']):
                 raise RuntimeError('編集済み・未採用案・重複句があるため、会話を自動移行できません。')
-            if any(r['playback_status'] in {'generating', 'queued', 'started'} for r in snapshot['dialogue']['utterances']):
+            if any(r['playback_status'] in {'routing', 'waiting_for_safety', 'generating', 'queued', 'started'} for r in snapshot['dialogue']['utterances']):
                 raise RuntimeError('返答を待ってから移行してください。')
             records.append({'key': candidates[0]['key'], 'session_id': sid, 'snapshot': snapshot})
         args.file.parent.mkdir(parents=True, exist_ok=True)

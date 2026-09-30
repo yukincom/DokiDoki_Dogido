@@ -210,6 +210,10 @@ impl RecallQuery {
 }
 
 impl MemoryStore {
+    pub(crate) fn local_poem_rows(&self, filename: &str) -> Result<Vec<Value>> {
+        rows(&self.root().join("long_term").join(filename))
+    }
+
     /// Old root records plus migration session records, never evaluation logs,
     /// other checkout roots, or symbolic session directories.
     pub(crate) fn poem_rows(&self, filename: &str) -> Result<Vec<Value>> {

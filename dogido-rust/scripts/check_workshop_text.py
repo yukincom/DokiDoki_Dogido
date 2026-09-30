@@ -60,7 +60,7 @@ def main():
         source.parent.mkdir(parents=True)
         view = json.loads((ROOT / 'dogido-rust/scripts/fixtures/workshop_meaning_cases.json').read_text())['contexts']['grass']
         e = view['emission']
-        original = json.dumps({'id': 'saved-test', 'kind': 'agent_haiku', 'author': 'dogido',
+        original = json.dumps({'id': 'hk_20260930_014310_000000', 'kind': 'agent_haiku', 'author': 'dogido',
                               'created_at': '2026-09-30T01:43:10+00:00', 'text': e['reading_text'],
                               'surface_text': e['reading_text'], 'reading_text': e['reading_text'],
                               'lines': e['lines'], 'materials_snapshot': view['materials'],
@@ -83,6 +83,7 @@ def main():
                 poems = call('poems', base=base)
                 assert len(poems) == 1
                 sid = call('open', {'key': poems[0]['key']}, base)['session_id']
+                stale_sid = call('open', {'key': poems[0]['key']}, base)['session_id']
                 prompts = call('prompts', base=base)
                 prompts['settings']['system'] += '\nテキスト検査の識別用指示。'
                 result = call('prompts', {'settings': prompts['settings'], 'expected_version': 0}, base)
@@ -145,14 +146,27 @@ def main():
                 found = re.search(r'http://127.0.0.1:\d+', ready)
                 assert found, (ready, (folder / 'stderr.log').read_text())
                 base = found.group()
+                stale_sid = call('open', {'key': poems[0]['key']}, base)['session_id']
                 refused = speak(sid, '変えないで！', base)
                 assert refused['workshop']['canonical_lines'][-1] == 'のくさふゆむ', refused
                 changed = speak(sid, 'うん！変えて！', base)
-                assert changed['turn']['workshop_outcome'] == 'text_edit_applied', changed
+                assert changed['turn']['workshop_outcome'] == 'player_edit_saved', changed
                 assert changed['turn']['text_delivery_acknowledged'], changed
                 assert changed['workshop']['canonical_lines'][-1] == 'くささむし', changed
                 assert source.read_text() == original
-                assert list((folder / 'memory').rglob('*.jsonl')) == [source]
+                revision_file = source.with_name('haiku_revisions.jsonl')
+                saved_rows = [json.loads(line) for line in revision_file.read_text().splitlines()]
+                assert len(saved_rows) == 1 and saved_rows[0]['haiku_id'] == poems[0]['id']
+                assert saved_rows[0]['revised_text'].splitlines()[-1] == 'くささむし'
+                assert call('poems', base=base)[0]['text'].splitlines()[-1] == 'くささむし'
+                assert call('poems', base=base)[0]['original_text'].splitlines()[-1] == 'のくさふゆむ'
+                speak(stale_sid, proposal_text, base)
+                stale = speak(stale_sid, 'うん！変えて！', base)
+                assert stale['turn']['workshop_outcome'] == 'pending_save_failed', stale
+                assert stale['turn']['workshop_reason'] == 'saved_poem_changed', stale
+                assert stale['workshop']['canonical_lines'][-1] == 'のくさふゆむ', stale
+                assert stale['workshop']['pending_lines'][-1] == 'くささむし', stale
+                assert len(revision_file.read_text().splitlines()) == 1
                 close = speak(sid, '終了でいいよ', base)
                 assert close['turn']['workshop_action'] == 'close_workshop', close
                 assert close['turn']['text_delivery_acknowledged'], close
@@ -160,6 +174,28 @@ def main():
                 assert closed['workshop']['state'] == 'closed'
                 assert closed['dialogue']['utterances'][-1]['playback_status'] == 'audio_disabled'
                 assert closed['dialogue']['utterances'][-1]['text_displayed']
+                handoff.write_text(json.dumps([{'key': poems[0]['key'], 'session_id': sid, 'snapshot': closed}, {'key': poems[0]['key'], 'session_id': stale_sid, 'snapshot': call('snapshot', {'session_id': stale_sid}, base)}], ensure_ascii=False))
+                call('shutdown', {}, base)
+                process.wait(timeout=10)
+                process = subprocess.Popen(command + ['--resume', str(handoff)], cwd=ROOT,
+                    stdout=subprocess.PIPE, stderr=error, text=True)
+                ready = process.stdout.readline()
+                found = re.search(r'http://127.0.0.1:\d+', ready)
+                assert found, (ready, (folder / 'stderr.log').read_text())
+                base = found.group()
+                restored = call('snapshot', {'session_id': sid}, base)
+                assert restored['workshop']['state'] == 'closed'
+                assert restored['text_state']['lines'][-1]['reading_text'] == 'くささむし'
+                restored_pending = call('snapshot', {'session_id': stale_sid}, base)
+                assert restored_pending['workshop']['canonical_lines'][-1] == 'のくさふゆむ'
+                assert restored_pending['workshop']['pending_lines'][-1] == 'くささむし'
+                assert len(restored['dialogue']['utterances']) == len(closed['dialogue']['utterances'])
+                reopened = call('open', {'key': poems[0]['key']}, base)['session_id']
+                current = call('snapshot', {'session_id': reopened}, base)
+                assert current['workshop']['canonical_lines'][-1] == 'くささむし'
+                assert current['text_state']['revision_id'] == saved_rows[0]['id']
+                assert source.read_text() == original
+                assert len(revision_file.read_text().splitlines()) == 1
                 call('shutdown', {}, base)
                 process.wait(timeout=10)
                 assert process.returncode == 0
@@ -167,7 +203,8 @@ def main():
                     'saved_source_unchanged', 'prompt_applied_and_exact_request_visible',
                     'prompt_persistence', 'stale_version_rejected', 'missing_context_rejected',
                     'stdio_mcp_ten_tools_and_readback', 'question_retains_player_candidate', 'restore_recovers_discussed_candidate_without_editing',
-                    'short_refusal_keeps_original', 'short_confirmation_edits_text_session_without_disk_save',
+                    'short_refusal_keeps_original', 'confirmed_revision_saved_once', 'poem_book_reads_latest', 'stale_window_preserves_pending',
+                    'closed_conversation_restored', 'unsaved_pending_restored', 'adopted_poem_reopened_after_restart',
                     'model_close_display_acknowledged', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
             finally:
                 if process.poll() is None:
