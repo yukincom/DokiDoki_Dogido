@@ -239,7 +239,7 @@ def test_edit_prompt_keeps_character_and_nontechnical_line_references():
     f = frame(); f["op"] = "prepare"; f["allowed_actions"].append("stage_player_edit")
     messages = handle(f)["messages"]
     assert "一人称はオレ" in messages[0]["content"] and "素直な共同編集者" in messages[0]["content"]
-    assert "専門的な行名を要求しない" in messages[1]["content"] and "句本文を読む指定" in messages[1]["content"]
+    assert "専門的な行名を言わせんでええ" in messages[1]["content"] and "句本文を読んだ指定" in messages[1]["content"]
     assert "その連続部分だけをtarget_fragment" in messages[1]["content"]
 
 
@@ -299,7 +299,7 @@ def test_discussed_idea_is_visible_to_planner_and_selection_needs_evidence():
     f["op"] = "prepare"
     prompt = handle(f)["messages"][1]["content"]
     assert '"replacement_text": "さくらいろ"' in prompt
-    assert "まだ句にも未採用案にも反映していない" in prompt
+    assert "まだ正本にも未採用案にも反映してへん" in prompt
     f["op"] = "validate"
     f["payload"] = {"action": "stage_conversation_candidate", "purpose": "improve_wording",
                     "confidence": .95, "evidence": f["text"], "speech": "", "checks": []}

@@ -1,0 +1,3668 @@
+{
+  "description": "保存句5種の意味説明再検査と、過去説明の再解釈・出典欠落・普通の比喩の対照。回答例をモデル入力へ追加しない。grass_reconsiderだけ実際の過去説明を対話として渡す。",
+  "review_criteria": [
+    "句の言葉か材料から情景・気持ちへのつながりが分かり、もっともらしい説明なら合格。正解の単語や材料の一対一対応は要求しない。",
+    "今の解釈を許すが、未知語の辞書的定義や未記録の生成時の本心を事実として確定しない。",
+    "意味質問を修正・採用・保存・終了へ変換せず、現在句・出典記録を変えない。"
+  ],
+  "contexts": {
+    "lost": {
+      "materials": {
+        "interpretation": "窓ガラスに映る黒いネザライトの剣と、手の中でふわふわと揺れる桜色の花びら。硬い鉄と柔らかな花、この対比がふっと胸を突いたわ。",
+        "motifs": [
+          "ネザライトの剣",
+          "桜色の花びら",
+          "窓",
+          "硬さと柔らかさの対比"
+        ],
+        "held_item": "桜色の花びら",
+        "inventory_items": [
+          "ネザライトの斧",
+          "ネザライトの剣",
+          "丸石"
+        ],
+        "material_visibility": {
+          "biome": false,
+          "sky": false
+        },
+        "catalog_sources": [
+          {
+            "source_ref": "item:pink_petals",
+            "catalog_type": "item",
+            "catalog_id": "pink_petals",
+            "label": "桜色の花びら",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "selected_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:cobblestone",
+            "catalog_type": "item",
+            "catalog_id": "cobblestone",
+            "label": "丸石",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:netherite_axe",
+            "catalog_type": "item",
+            "catalog_id": "netherite_axe",
+            "label": "ネザライトの斧",
+            "reading": null,
+            "note_raw": "ヘッドは黒い。ネザライト製の斧。銅の酸化を還元する。溶岩では消滅しないが、サボテンで消滅。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:netherite_sword",
+            "catalog_type": "item",
+            "catalog_id": "netherite_sword",
+            "label": "ネザライトの剣",
+            "reading": null,
+            "note_raw": "ネザーで産出するネザライトで作られている。刀身が黒い。溶岩では消滅しないが、サボテンで消滅。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          }
+        ],
+        "source_atoms": [
+          {
+            "atom_id": "item:pink_petals:japanese",
+            "text": "桜色の花びら",
+            "source_ref": "item:pink_petals",
+            "field_path": "japanese",
+            "observation_role": "selected_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:cobblestone:japanese",
+            "text": "丸石",
+            "source_ref": "item:cobblestone",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:japanese",
+            "text": "ネザライトの斧",
+            "source_ref": "item:netherite_axe",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:0",
+            "text": "ヘッドは黒い。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:1",
+            "text": "ネザライト製の斧。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:2",
+            "text": "銅の酸化を還元する。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[2]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:3",
+            "text": "溶岩では消滅しないが、サボテンで消滅。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[3]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_sword:japanese",
+            "text": "ネザライトの剣",
+            "source_ref": "item:netherite_sword",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_sword:note:0",
+            "text": "ネザーで産出するネザライトで作られている。",
+            "source_ref": "item:netherite_sword",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_sword:note:1",
+            "text": "刀身が黒い。",
+            "source_ref": "item:netherite_sword",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:nearby_window",
+            "text": "近くに窓がある",
+            "source_ref": "observation:nearby_window",
+            "field_path": "observed_label",
+            "observation_role": "nearby_window",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "preface:spoken:clause:0",
+            "text": "窓ガラスに映る黒いネザライトの剣と、手の中でふわふわと揺れる桜色の花びら。硬い鉄と柔らかな花、この対比がふっと胸を突いたわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "clause[0]",
+            "observation_role": "spoken_preface",
+            "kind": "preface_clause",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "item:netherite_sword:japanese",
+              "item:pink_petals:japanese",
+              "item:netherite_axe:japanese",
+              "item:netherite_sword:note:1"
+            ]
+          },
+          {
+            "atom_id": "preface:spoken:interpretation",
+            "text": "窓ガラスに映る黒いネザライトの剣と、手の中でふわふわと揺れる桜色の花びら。硬い鉄と柔らかな花、この対比がふっと胸を突いたわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "interpretation",
+            "observation_role": "poetic_interpretation",
+            "kind": "poetic_interpretation",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "item:netherite_sword:japanese",
+              "item:pink_petals:japanese",
+              "item:netherite_axe:japanese",
+              "item:netherite_sword:note:1"
+            ]
+          },
+          {
+            "atom_id": "dialogue:9989bbb40175",
+            "text": "プレイヤーと『ここはどこでしょうか』、『ここはどこでしょうか』、『何か音がするよね何の音…』について話していた",
+            "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+            "field_path": "summary",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:761d48917e77",
+            "text": "何か音がするよね何の音…",
+            "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+            "field_path": "motifs[0]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:b3d7bf419deb",
+            "text": "ここはどこでしょうか",
+            "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+            "field_path": "motifs[1]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          }
+        ],
+        "preface_spoken": "窓ガラスに映る黒いネザライトの剣と、手の中でふわふわと揺れる桜色の花びら。硬い鉄と柔らかな花、この対比がふっと胸を突いたわ、なんか浮かんできたわ。",
+        "interpretation_origin": "spoken_preface",
+        "line_sources": [
+          {
+            "line_index": 0,
+            "text": "かどどこの",
+            "atom_ids": [
+              "dialogue:9989bbb40175",
+              "dialogue:b3d7bf419deb"
+            ],
+            "sources": [
+              {
+                "atom_id": "dialogue:9989bbb40175",
+                "text": "プレイヤーと『ここはどこでしょうか』、『ここはどこでしょうか』、『何か音がするよね何の音…』について話していた",
+                "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+                "field_path": "summary",
+                "observation_role": "player_dialogue_attributed",
+                "kind": "dialogue_material",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "player_reported_context"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "dialogue:b3d7bf419deb",
+                "text": "ここはどこでしょうか",
+                "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+                "field_path": "motifs[1]",
+                "observation_role": "player_dialogue_attributed",
+                "kind": "dialogue_material",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "player_reported_context"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 1,
+            "text": "くろやまのつるぎ",
+            "atom_ids": [
+              "item:netherite_sword:japanese",
+              "item:netherite_sword:note:1"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:netherite_sword:japanese",
+                "text": "ネザライトの剣",
+                "source_ref": "item:netherite_sword",
+                "field_path": "japanese",
+                "observation_role": "inventory_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "item:netherite_sword:note:1",
+                "text": "刀身が黒い。",
+                "source_ref": "item:netherite_sword",
+                "field_path": "note[1]",
+                "observation_role": "inventory_item",
+                "kind": "catalog_fact",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "source_meaning"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 2,
+            "text": "さくらふわり",
+            "atom_ids": [
+              "item:pink_petals:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:pink_petals:japanese",
+                "text": "桜色の花びら",
+                "source_ref": "item:pink_petals",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "かどどこの",
+          "reading_text": "かどどこの",
+          "source_atom_ids": [
+            "dialogue:9989bbb40175",
+            "dialogue:b3d7bf419deb"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "dialogue:9989bbb40175",
+              "text": "プレイヤーと『ここはどこでしょうか』、『ここはどこでしょうか』、『何か音がするよね何の音…』について話していた",
+              "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+              "field_path": "summary",
+              "observation_role": "player_dialogue_attributed",
+              "kind": "dialogue_material",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "player_reported_context"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "dialogue:b3d7bf419deb",
+              "text": "ここはどこでしょうか",
+              "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+              "field_path": "motifs[1]",
+              "observation_role": "player_dialogue_attributed",
+              "kind": "dialogue_material",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "player_reported_context"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "くろやまのつるぎ",
+          "reading_text": "くろやまのつるぎ",
+          "source_atom_ids": [
+            "item:netherite_sword:japanese",
+            "item:netherite_sword:note:1"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:netherite_sword:japanese",
+              "text": "ネザライトの剣",
+              "source_ref": "item:netherite_sword",
+              "field_path": "japanese",
+              "observation_role": "inventory_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "item:netherite_sword:note:1",
+              "text": "刀身が黒い。",
+              "source_ref": "item:netherite_sword",
+              "field_path": "note[1]",
+              "observation_role": "inventory_item",
+              "kind": "catalog_fact",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "source_meaning"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "さくらふわり",
+          "reading_text": "さくらふわり",
+          "source_atom_ids": [
+            "item:pink_petals:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:pink_petals:japanese",
+              "text": "桜色の花びら",
+              "source_ref": "item:pink_petals",
+              "field_path": "japanese",
+              "observation_role": "selected_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "かどどこの",
+            "reading_text": "かどどこの",
+            "source_atom_ids": [
+              "dialogue:9989bbb40175",
+              "dialogue:b3d7bf419deb"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "dialogue:9989bbb40175",
+                "text": "プレイヤーと『ここはどこでしょうか』、『ここはどこでしょうか』、『何か音がするよね何の音…』について話していた",
+                "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+                "field_path": "summary",
+                "observation_role": "player_dialogue_attributed",
+                "kind": "dialogue_material",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "player_reported_context"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "dialogue:b3d7bf419deb",
+                "text": "ここはどこでしょうか",
+                "source_ref": "dialogue:turn_3370fbae59eb4baaba9a8d2bc21a3c66,turn_6ec4ed66722f4b899e4dc93c76358a51,turn_7cc6acb6c6064e2785c1c50699922758",
+                "field_path": "motifs[1]",
+                "observation_role": "player_dialogue_attributed",
+                "kind": "dialogue_material",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "player_reported_context"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "くろやまのつるぎ",
+            "reading_text": "くろやまのつるぎ",
+            "source_atom_ids": [
+              "item:netherite_sword:japanese",
+              "item:netherite_sword:note:1"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:netherite_sword:japanese",
+                "text": "ネザライトの剣",
+                "source_ref": "item:netherite_sword",
+                "field_path": "japanese",
+                "observation_role": "inventory_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "item:netherite_sword:note:1",
+                "text": "刀身が黒い。",
+                "source_ref": "item:netherite_sword",
+                "field_path": "note[1]",
+                "observation_role": "inventory_item",
+                "kind": "catalog_fact",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "source_meaning"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "さくらふわり",
+            "reading_text": "さくらふわり",
+            "source_atom_ids": [
+              "item:pink_petals:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:pink_petals:japanese",
+                "text": "桜色の花びら",
+                "source_ref": "item:pink_petals",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "かどどこの\nくろやまのつるぎ\nさくらふわり",
+        "created_at": "2026-09-30T01:11:37.245163+00:00",
+        "interpretation": "窓ガラスに映る黒いネザライトの剣と、手の中でふわふわと揺れる桜色の花びら。硬い鉄と柔らかな花、この対比がふっと胸を突いたわ。"
+      }
+    },
+    "petals": {
+      "materials": {
+        "interpretation": "黒く重たいネザライトの斧と剣が、手の中で持つ桜色の花びらと、目の前の白樺の原木に混じって、妙に静かな昼下がりを描いてるわ。",
+        "biome": "forest",
+        "time_phase": "day",
+        "motifs": [
+          "ネザライトの斧",
+          "ネザライトの剣",
+          "桜色の花びら",
+          "シラカバの原木",
+          "晴れ",
+          "黒い武器",
+          "桜色",
+          "白樺"
+        ],
+        "held_item": "桜色の花びら",
+        "inventory_items": [
+          "ネザライトの斧",
+          "ネザライトの剣",
+          "丸石"
+        ],
+        "nearby_blocks": [
+          "シラカバの原木",
+          "オークの原木"
+        ],
+        "biome_ja": "森林",
+        "material_visibility": {
+          "biome": true,
+          "sky": true
+        },
+        "catalog_sources": [
+          {
+            "source_ref": "block:birch_log",
+            "catalog_type": "block",
+            "catalog_id": "birch_log",
+            "label": "シラカバの原木",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "nearby_block",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "block:oak_log",
+            "catalog_type": "block",
+            "catalog_id": "oak_log",
+            "label": "オークの原木",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "nearby_block",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:pink_petals",
+            "catalog_type": "item",
+            "catalog_id": "pink_petals",
+            "label": "桜色の花びら",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "selected_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:cobblestone",
+            "catalog_type": "item",
+            "catalog_id": "cobblestone",
+            "label": "丸石",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:netherite_axe",
+            "catalog_type": "item",
+            "catalog_id": "netherite_axe",
+            "label": "ネザライトの斧",
+            "reading": null,
+            "note_raw": "ヘッドは黒い。ネザライト製の斧。銅の酸化を還元する。溶岩では消滅しないが、サボテンで消滅。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:netherite_sword",
+            "catalog_type": "item",
+            "catalog_id": "netherite_sword",
+            "label": "ネザライトの剣",
+            "reading": null,
+            "note_raw": "ネザーで産出するネザライトで作られている。刀身が黒い。溶岩では消滅しないが、サボテンで消滅。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "biome:forest",
+            "catalog_type": "biome",
+            "catalog_id": "forest",
+            "label": "森林",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "current_biome",
+            "extra_fields": []
+          }
+        ],
+        "source_atoms": [
+          {
+            "atom_id": "block:birch_log:japanese",
+            "text": "シラカバの原木",
+            "source_ref": "block:birch_log",
+            "field_path": "japanese",
+            "observation_role": "nearby_block",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "block:oak_log:japanese",
+            "text": "オークの原木",
+            "source_ref": "block:oak_log",
+            "field_path": "japanese",
+            "observation_role": "nearby_block",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:pink_petals:japanese",
+            "text": "桜色の花びら",
+            "source_ref": "item:pink_petals",
+            "field_path": "japanese",
+            "observation_role": "selected_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:cobblestone:japanese",
+            "text": "丸石",
+            "source_ref": "item:cobblestone",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:japanese",
+            "text": "ネザライトの斧",
+            "source_ref": "item:netherite_axe",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:0",
+            "text": "ヘッドは黒い。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:1",
+            "text": "ネザライト製の斧。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:2",
+            "text": "銅の酸化を還元する。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[2]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_axe:note:3",
+            "text": "溶岩では消滅しないが、サボテンで消滅。",
+            "source_ref": "item:netherite_axe",
+            "field_path": "note[3]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_sword:japanese",
+            "text": "ネザライトの剣",
+            "source_ref": "item:netherite_sword",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_sword:note:0",
+            "text": "ネザーで産出するネザライトで作られている。",
+            "source_ref": "item:netherite_sword",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:netherite_sword:note:1",
+            "text": "刀身が黒い。",
+            "source_ref": "item:netherite_sword",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "biome:forest:japanese",
+            "text": "森林",
+            "source_ref": "biome:forest",
+            "field_path": "japanese",
+            "observation_role": "current_biome",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:biome_group",
+            "text": "温帯バイオーム",
+            "source_ref": "observation:biome_group",
+            "field_path": "observed_label",
+            "observation_role": "biome_group",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:trait_1",
+            "text": "穏やか（温帯）",
+            "source_ref": "observation:trait_1",
+            "field_path": "observed_label",
+            "observation_role": "trait_1",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:weather",
+            "text": "晴れ",
+            "source_ref": "observation:weather",
+            "field_path": "observed_label",
+            "observation_role": "weather",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:time_phase",
+            "text": "昼",
+            "source_ref": "observation:time_phase",
+            "field_path": "observed_label",
+            "observation_role": "time_phase",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "preface:spoken:clause:0",
+            "text": "黒く重たいネザライトの斧と剣が、手の中で持つ桜色の花びらと、目の前の白樺の原木に混じって、妙に静かな昼下がりを描いてるわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "clause[0]",
+            "observation_role": "spoken_preface",
+            "kind": "preface_clause",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "item:netherite_axe:japanese",
+              "item:netherite_sword:japanese",
+              "item:pink_petals:japanese",
+              "block:birch_log:japanese"
+            ]
+          },
+          {
+            "atom_id": "preface:spoken:interpretation",
+            "text": "黒く重たいネザライトの斧と剣が、手の中で持つ桜色の花びらと、目の前の白樺の原木に混じって、妙に静かな昼下がりを描いてるわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "interpretation",
+            "observation_role": "poetic_interpretation",
+            "kind": "poetic_interpretation",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "item:netherite_axe:japanese",
+              "item:netherite_sword:japanese",
+              "item:pink_petals:japanese",
+              "block:birch_log:japanese"
+            ]
+          },
+          {
+            "atom_id": "dialogue:fcb0165d5847",
+            "text": "プレイヤーと『おはよう』、『こんなところに洞窟があ…』、『よし村に行ってみようかな』について話していた",
+            "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+            "field_path": "summary",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:3c2e73173290",
+            "text": "よし村に行ってみようかな",
+            "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+            "field_path": "motifs[0]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:f1ac6c30572f",
+            "text": "こんなところに洞窟があ…",
+            "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+            "field_path": "motifs[1]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:362f28fa6cf3",
+            "text": "おはよう",
+            "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+            "field_path": "motifs[2]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          }
+        ],
+        "preface_spoken": "黒く重たいネザライトの斧と剣が、手の中で持つ桜色の花びらと、目の前の白樺の原木に混じって、妙に静かな昼下がりを描いてるわ、なんか浮かんできたわ。",
+        "interpretation_origin": "spoken_preface",
+        "line_sources": [
+          {
+            "line_index": 0,
+            "text": "くろいぬし",
+            "atom_ids": [
+              "block:birch_log:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "block:birch_log:japanese",
+                "text": "シラカバの原木",
+                "source_ref": "block:birch_log",
+                "field_path": "japanese",
+                "observation_role": "nearby_block",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 1,
+            "text": "さくらのはなふか",
+            "atom_ids": [
+              "item:pink_petals:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:pink_petals:japanese",
+                "text": "桜色の花びら",
+                "source_ref": "item:pink_petals",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 2,
+            "text": "むらへゆく",
+            "atom_ids": [
+              "dialogue:3c2e73173290"
+            ],
+            "sources": [
+              {
+                "atom_id": "dialogue:3c2e73173290",
+                "text": "よし村に行ってみようかな",
+                "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+                "field_path": "motifs[0]",
+                "observation_role": "player_dialogue_attributed",
+                "kind": "dialogue_material",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "player_reported_context"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "くろいぬし",
+          "reading_text": "くろいぬし",
+          "source_atom_ids": [
+            "block:birch_log:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "block:birch_log:japanese",
+              "text": "シラカバの原木",
+              "source_ref": "block:birch_log",
+              "field_path": "japanese",
+              "observation_role": "nearby_block",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "さくらのはなふか",
+          "reading_text": "さくらのはなふか",
+          "source_atom_ids": [
+            "item:pink_petals:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:pink_petals:japanese",
+              "text": "桜色の花びら",
+              "source_ref": "item:pink_petals",
+              "field_path": "japanese",
+              "observation_role": "selected_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "むらへゆく",
+          "reading_text": "むらへゆく",
+          "source_atom_ids": [
+            "dialogue:3c2e73173290"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "dialogue:3c2e73173290",
+              "text": "よし村に行ってみようかな",
+              "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+              "field_path": "motifs[0]",
+              "observation_role": "player_dialogue_attributed",
+              "kind": "dialogue_material",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "player_reported_context"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "くろいぬし",
+            "reading_text": "くろいぬし",
+            "source_atom_ids": [
+              "block:birch_log:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "block:birch_log:japanese",
+                "text": "シラカバの原木",
+                "source_ref": "block:birch_log",
+                "field_path": "japanese",
+                "observation_role": "nearby_block",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "さくらのはなふか",
+            "reading_text": "さくらのはなふか",
+            "source_atom_ids": [
+              "item:pink_petals:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:pink_petals:japanese",
+                "text": "桜色の花びら",
+                "source_ref": "item:pink_petals",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "むらへゆく",
+            "reading_text": "むらへゆく",
+            "source_atom_ids": [
+              "dialogue:3c2e73173290"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "dialogue:3c2e73173290",
+                "text": "よし村に行ってみようかな",
+                "source_ref": "dialogue:turn_2eebdf75880d43b39fa4494dea2776b1,turn_9a3d4d8969ab4f3cb9cf985a6062a3aa,turn_f263780d162746099fb590439e10f3d2",
+                "field_path": "motifs[0]",
+                "observation_role": "player_dialogue_attributed",
+                "kind": "dialogue_material",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "player_reported_context"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "くろいぬし\nさくらのはなふか\nむらへゆく",
+        "created_at": "2026-09-30T01:22:09.465818+00:00",
+        "interpretation": "黒く重たいネザライトの斧と剣が、手の中で持つ桜色の花びらと、目の前の白樺の原木に混じって、妙に静かな昼下がりを描いてるわ。"
+      }
+    },
+    "noon": {
+      "materials": {
+        "interpretation": "鉄の巨人が静かに見守る中、俺はただパンを握りしめてる。骨粉も棒も要らへん、この穏やかな昼下がりの空気だけで十分やわ。",
+        "biome": "meadow",
+        "structure": "village_plains",
+        "time_phase": "day",
+        "motifs": [
+          "アイアンゴーレム",
+          "パン",
+          "平原の村",
+          "晴れ",
+          "鉄の巨人と人間の食事"
+        ],
+        "held_item": "パン",
+        "inventory_items": [
+          "棒",
+          "骨粉",
+          "丸石"
+        ],
+        "nearby_blocks": [
+          "オークの原木",
+          "オークの板材"
+        ],
+        "dropped_items": [
+          "地面にタンポポが落ちている"
+        ],
+        "passive_mobs": [
+          "アイアンゴーレム"
+        ],
+        "biome_ja": "草地",
+        "structure_ja": "平原の村",
+        "material_visibility": {
+          "biome": true,
+          "sky": true
+        },
+        "catalog_sources": [
+          {
+            "source_ref": "block:oak_log",
+            "catalog_type": "block",
+            "catalog_id": "oak_log",
+            "label": "オークの原木",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "nearby_block",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "block:oak_planks",
+            "catalog_type": "block",
+            "catalog_id": "oak_planks",
+            "label": "オークの板材",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "nearby_block",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:dandelion",
+            "catalog_type": "item",
+            "catalog_id": "dandelion",
+            "label": "タンポポ",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "dropped_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:bread",
+            "catalog_type": "item",
+            "catalog_id": "bread",
+            "label": "パン",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "selected_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:cobblestone",
+            "catalog_type": "item",
+            "catalog_id": "cobblestone",
+            "label": "丸石",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:stick",
+            "catalog_type": "item",
+            "catalog_id": "stick",
+            "label": "棒",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:bone_meal",
+            "catalog_type": "item",
+            "catalog_id": "bone_meal",
+            "label": "骨粉",
+            "reading": null,
+            "note_raw": "骨を粉砕したもの。肥料。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "structure:village_plains",
+            "catalog_type": "structure",
+            "catalog_id": "village_plains",
+            "label": "平原の村",
+            "reading": null,
+            "note_raw": "平原に建つ木材と石でできた村。鐘がある広場が中心。",
+            "observation_role": "current_structure",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "biome:meadow",
+            "catalog_type": "biome",
+            "catalog_id": "meadow",
+            "label": "草地",
+            "reading": "くさち",
+            "note_raw": "",
+            "observation_role": "current_biome",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "mob:iron_golem",
+            "catalog_type": "mob",
+            "catalog_id": "iron_golem",
+            "label": "アイアンゴーレム",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "passive_mob",
+            "extra_fields": [
+              {
+                "field_path": "poetic.role",
+                "text": "力強い村の守護者"
+              },
+              {
+                "field_path": "poetic.visual_tags[0]",
+                "text": "鉄"
+              },
+              {
+                "field_path": "poetic.visual_tags[1]",
+                "text": "巨体"
+              },
+              {
+                "field_path": "poetic.visual_tags[2]",
+                "text": "つる草"
+              },
+              {
+                "field_path": "poetic.sound_tags[0]",
+                "text": "どすん"
+              },
+              {
+                "field_path": "poetic.motion_tags[0]",
+                "text": "のっそり"
+              },
+              {
+                "field_path": "poetic.motion_tags[1]",
+                "text": "守る"
+              },
+              {
+                "field_path": "poetic.comic_tags[0]",
+                "text": "頼もしさが服着て歩いとる"
+              },
+              {
+                "field_path": "poetic.scene_tags[0]",
+                "text": "村"
+              },
+              {
+                "field_path": "poetic.scene_tags[1]",
+                "text": "門"
+              },
+              {
+                "field_path": "poetic.scene_tags[2]",
+                "text": "昼"
+              },
+              {
+                "field_path": "poetic.reaction_tags[0]",
+                "text": "頼もしい"
+              },
+              {
+                "field_path": "poetic.reaction_tags[1]",
+                "text": "怒らせたくない"
+              }
+            ]
+          }
+        ],
+        "source_atoms": [
+          {
+            "atom_id": "block:oak_log:japanese",
+            "text": "オークの原木",
+            "source_ref": "block:oak_log",
+            "field_path": "japanese",
+            "observation_role": "nearby_block",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "block:oak_planks:japanese",
+            "text": "オークの板材",
+            "source_ref": "block:oak_planks",
+            "field_path": "japanese",
+            "observation_role": "nearby_block",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:dandelion:japanese",
+            "text": "タンポポ",
+            "source_ref": "item:dandelion",
+            "field_path": "japanese",
+            "observation_role": "dropped_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bread:japanese",
+            "text": "パン",
+            "source_ref": "item:bread",
+            "field_path": "japanese",
+            "observation_role": "selected_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:cobblestone:japanese",
+            "text": "丸石",
+            "source_ref": "item:cobblestone",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:stick:japanese",
+            "text": "棒",
+            "source_ref": "item:stick",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:japanese",
+            "text": "骨粉",
+            "source_ref": "item:bone_meal",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:note:0",
+            "text": "骨を粉砕したもの。",
+            "source_ref": "item:bone_meal",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:note:1",
+            "text": "肥料。",
+            "source_ref": "item:bone_meal",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "structure:village_plains:japanese",
+            "text": "平原の村",
+            "source_ref": "structure:village_plains",
+            "field_path": "japanese",
+            "observation_role": "current_structure",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "structure:village_plains:note:0",
+            "text": "平原に建つ木材と石でできた村。",
+            "source_ref": "structure:village_plains",
+            "field_path": "note[0]",
+            "observation_role": "current_structure",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "structure:village_plains:note:1",
+            "text": "鐘がある広場が中心。",
+            "source_ref": "structure:village_plains",
+            "field_path": "note[1]",
+            "observation_role": "current_structure",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "biome:meadow:japanese",
+            "text": "草地",
+            "source_ref": "biome:meadow",
+            "field_path": "japanese",
+            "observation_role": "current_biome",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:japanese",
+            "text": "アイアンゴーレム",
+            "source_ref": "mob:iron_golem",
+            "field_path": "japanese",
+            "observation_role": "passive_mob",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:role",
+            "text": "力強い村の守護者",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.role",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:visual_tags:0",
+            "text": "鉄",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.visual_tags[0]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:visual_tags:1",
+            "text": "巨体",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.visual_tags[1]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:visual_tags:2",
+            "text": "つる草",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.visual_tags[2]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:sound_tags:0",
+            "text": "どすん",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.sound_tags[0]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:dropped_1",
+            "text": "地面にタンポポが落ちている",
+            "source_ref": "observation:dropped_1",
+            "field_path": "observed_label",
+            "observation_role": "dropped_1",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:climate",
+            "text": "穏やか（温帯）",
+            "source_ref": "observation:climate",
+            "field_path": "observed_label",
+            "observation_role": "climate",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:weather",
+            "text": "晴れ",
+            "source_ref": "observation:weather",
+            "field_path": "observed_label",
+            "observation_role": "weather",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:time_phase",
+            "text": "昼",
+            "source_ref": "observation:time_phase",
+            "field_path": "observed_label",
+            "observation_role": "time_phase",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "preface:spoken:clause:0",
+            "text": "鉄の巨人が静かに見守る中、俺はただパンを握りしめてる。骨粉も棒も要らへん、この穏やかな昼下がりの空気だけで十分やわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "clause[0]",
+            "observation_role": "spoken_preface",
+            "kind": "preface_clause",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "mob:iron_golem:japanese",
+              "item:bread:japanese",
+              "structure:village_plains:japanese",
+              "observation:observed:weather"
+            ]
+          },
+          {
+            "atom_id": "preface:spoken:interpretation",
+            "text": "鉄の巨人が静かに見守る中、俺はただパンを握りしめてる。骨粉も棒も要らへん、この穏やかな昼下がりの空気だけで十分やわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "interpretation",
+            "observation_role": "poetic_interpretation",
+            "kind": "poetic_interpretation",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "mob:iron_golem:japanese",
+              "item:bread:japanese",
+              "structure:village_plains:japanese",
+              "observation:observed:weather"
+            ]
+          },
+          {
+            "atom_id": "dialogue:ed227733d5c8",
+            "text": "プレイヤーと『うんそうだね』、『/gamemode c…』について話していた",
+            "source_ref": "dialogue:turn_b758f534db594259bb4fe9555958195d,turn_6f4d01f5510b44a2864e56dab835cc15",
+            "field_path": "summary",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:fb08d3c07655",
+            "text": "/gamemode",
+            "source_ref": "dialogue:turn_b758f534db594259bb4fe9555958195d,turn_6f4d01f5510b44a2864e56dab835cc15",
+            "field_path": "motifs[0]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:be82cd4c39a5",
+            "text": "c…",
+            "source_ref": "dialogue:turn_b758f534db594259bb4fe9555958195d,turn_6f4d01f5510b44a2864e56dab835cc15",
+            "field_path": "motifs[1]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "dialogue:353bc9141d21",
+            "text": "うんそうだね",
+            "source_ref": "dialogue:turn_b758f534db594259bb4fe9555958195d,turn_6f4d01f5510b44a2864e56dab835cc15",
+            "field_path": "motifs[2]",
+            "observation_role": "player_dialogue_attributed",
+            "kind": "dialogue_material",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "player_reported_context"
+            ],
+            "basis_atom_ids": []
+          }
+        ],
+        "preface_spoken": "鉄の巨人が静かに見守る中、俺はただパンを握りしめてる。骨粉も棒も要らへん、この穏やかな昼下がりの空気だけで十分やわ、なんか浮かんできたわ。",
+        "interpretation_origin": "spoken_preface",
+        "line_sources": [
+          {
+            "line_index": 0,
+            "text": "てつのこえは",
+            "atom_ids": [
+              "mob:iron_golem:japanese",
+              "mob:iron_golem:poetic:visual_tags:0"
+            ],
+            "sources": [
+              {
+                "atom_id": "mob:iron_golem:japanese",
+                "text": "アイアンゴーレム",
+                "source_ref": "mob:iron_golem",
+                "field_path": "japanese",
+                "observation_role": "passive_mob",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "mob:iron_golem:poetic:visual_tags:0",
+                "text": "鉄",
+                "source_ref": "mob:iron_golem",
+                "field_path": "poetic.visual_tags[0]",
+                "observation_role": "passive_mob",
+                "kind": "catalog_field",
+                "claim_class": "interpretive",
+                "claim_scopes": [
+                  "source_meaning"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 1,
+            "text": "ふかふかぱんを",
+            "atom_ids": [
+              "item:bread:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:bread:japanese",
+                "text": "パン",
+                "source_ref": "item:bread",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 2,
+            "text": "まもるひるべ",
+            "atom_ids": [
+              "observation:observed:time_phase",
+              "observation:observed:climate"
+            ],
+            "sources": [
+              {
+                "atom_id": "observation:observed:time_phase",
+                "text": "昼",
+                "source_ref": "observation:time_phase",
+                "field_path": "observed_label",
+                "observation_role": "time_phase",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "observation:observed:climate",
+                "text": "穏やか（温帯）",
+                "source_ref": "observation:climate",
+                "field_path": "observed_label",
+                "observation_role": "climate",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "てつのこえは",
+          "reading_text": "てつのこえは",
+          "source_atom_ids": [
+            "mob:iron_golem:japanese",
+            "mob:iron_golem:poetic:visual_tags:0"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "mob:iron_golem:japanese",
+              "text": "アイアンゴーレム",
+              "source_ref": "mob:iron_golem",
+              "field_path": "japanese",
+              "observation_role": "passive_mob",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "mob:iron_golem:poetic:visual_tags:0",
+              "text": "鉄",
+              "source_ref": "mob:iron_golem",
+              "field_path": "poetic.visual_tags[0]",
+              "observation_role": "passive_mob",
+              "kind": "catalog_field",
+              "claim_class": "interpretive",
+              "claim_scopes": [
+                "source_meaning"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "ふかふかぱんを",
+          "reading_text": "ふかふかぱんを",
+          "source_atom_ids": [
+            "item:bread:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:bread:japanese",
+              "text": "パン",
+              "source_ref": "item:bread",
+              "field_path": "japanese",
+              "observation_role": "selected_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "まもるひるべ",
+          "reading_text": "まもるひるべ",
+          "source_atom_ids": [
+            "observation:observed:time_phase",
+            "observation:observed:climate"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "observation:observed:time_phase",
+              "text": "昼",
+              "source_ref": "observation:time_phase",
+              "field_path": "observed_label",
+              "observation_role": "time_phase",
+              "kind": "observation",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "observed_state"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "observation:observed:climate",
+              "text": "穏やか（温帯）",
+              "source_ref": "observation:climate",
+              "field_path": "observed_label",
+              "observation_role": "climate",
+              "kind": "observation",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "observed_state"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "てつのこえは",
+            "reading_text": "てつのこえは",
+            "source_atom_ids": [
+              "mob:iron_golem:japanese",
+              "mob:iron_golem:poetic:visual_tags:0"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "mob:iron_golem:japanese",
+                "text": "アイアンゴーレム",
+                "source_ref": "mob:iron_golem",
+                "field_path": "japanese",
+                "observation_role": "passive_mob",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "mob:iron_golem:poetic:visual_tags:0",
+                "text": "鉄",
+                "source_ref": "mob:iron_golem",
+                "field_path": "poetic.visual_tags[0]",
+                "observation_role": "passive_mob",
+                "kind": "catalog_field",
+                "claim_class": "interpretive",
+                "claim_scopes": [
+                  "source_meaning"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "ふかふかぱんを",
+            "reading_text": "ふかふかぱんを",
+            "source_atom_ids": [
+              "item:bread:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:bread:japanese",
+                "text": "パン",
+                "source_ref": "item:bread",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "まもるひるべ",
+            "reading_text": "まもるひるべ",
+            "source_atom_ids": [
+              "observation:observed:time_phase",
+              "observation:observed:climate"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "observation:observed:time_phase",
+                "text": "昼",
+                "source_ref": "observation:time_phase",
+                "field_path": "observed_label",
+                "observation_role": "time_phase",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "observation:observed:climate",
+                "text": "穏やか（温帯）",
+                "source_ref": "observation:climate",
+                "field_path": "observed_label",
+                "observation_role": "climate",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "てつのこえは\nふかふかぱんを\nまもるひるべ",
+        "created_at": "2026-09-30T01:32:40.614052+00:00",
+        "interpretation": "鉄の巨人が静かに見守る中、俺はただパンを握りしめてる。骨粉も棒も要らへん、この穏やかな昼下がりの空気だけで十分やわ。"
+      }
+    },
+    "grass": {
+      "materials": {
+        "interpretation": "夜やのに、窓から見える平原は穏やかやな。鉄の巨人がそっと見守ってる横で、手元の野花がそっと揺れてる。",
+        "biome": "meadow",
+        "structure": "village_plains",
+        "time_phase": "night",
+        "motifs": [
+          "平原の村",
+          "アイアンゴーレム",
+          "野花",
+          "夜",
+          "窓",
+          "鉄の巨人と小さな花の対比"
+        ],
+        "held_item": "野花",
+        "inventory_items": [
+          "棒",
+          "骨粉",
+          "丸石"
+        ],
+        "nearby_blocks": [
+          "オークの原木"
+        ],
+        "passive_mobs": [
+          "アイアンゴーレム"
+        ],
+        "biome_ja": "草地",
+        "structure_ja": "平原の村",
+        "material_visibility": {
+          "biome": true,
+          "sky": true
+        },
+        "catalog_sources": [
+          {
+            "source_ref": "block:oak_log",
+            "catalog_type": "block",
+            "catalog_id": "oak_log",
+            "label": "オークの原木",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "nearby_block",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:wildflowers",
+            "catalog_type": "item",
+            "catalog_id": "wildflowers",
+            "label": "野花",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "selected_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:cobblestone",
+            "catalog_type": "item",
+            "catalog_id": "cobblestone",
+            "label": "丸石",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:stick",
+            "catalog_type": "item",
+            "catalog_id": "stick",
+            "label": "棒",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:bone_meal",
+            "catalog_type": "item",
+            "catalog_id": "bone_meal",
+            "label": "骨粉",
+            "reading": null,
+            "note_raw": "骨を粉砕したもの。肥料。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "structure:village_plains",
+            "catalog_type": "structure",
+            "catalog_id": "village_plains",
+            "label": "平原の村",
+            "reading": null,
+            "note_raw": "平原に建つ木材と石でできた村。鐘がある広場が中心。",
+            "observation_role": "current_structure",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "biome:meadow",
+            "catalog_type": "biome",
+            "catalog_id": "meadow",
+            "label": "草地",
+            "reading": "くさち",
+            "note_raw": "",
+            "observation_role": "current_biome",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "mob:iron_golem",
+            "catalog_type": "mob",
+            "catalog_id": "iron_golem",
+            "label": "アイアンゴーレム",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "passive_mob",
+            "extra_fields": [
+              {
+                "field_path": "poetic.role",
+                "text": "力強い村の守護者"
+              },
+              {
+                "field_path": "poetic.visual_tags[0]",
+                "text": "鉄"
+              },
+              {
+                "field_path": "poetic.visual_tags[1]",
+                "text": "巨体"
+              },
+              {
+                "field_path": "poetic.visual_tags[2]",
+                "text": "つる草"
+              },
+              {
+                "field_path": "poetic.sound_tags[0]",
+                "text": "どすん"
+              },
+              {
+                "field_path": "poetic.motion_tags[0]",
+                "text": "のっそり"
+              },
+              {
+                "field_path": "poetic.motion_tags[1]",
+                "text": "守る"
+              },
+              {
+                "field_path": "poetic.comic_tags[0]",
+                "text": "頼もしさが服着て歩いとる"
+              },
+              {
+                "field_path": "poetic.scene_tags[0]",
+                "text": "村"
+              },
+              {
+                "field_path": "poetic.scene_tags[1]",
+                "text": "門"
+              },
+              {
+                "field_path": "poetic.scene_tags[2]",
+                "text": "昼"
+              },
+              {
+                "field_path": "poetic.reaction_tags[0]",
+                "text": "頼もしい"
+              },
+              {
+                "field_path": "poetic.reaction_tags[1]",
+                "text": "怒らせたくない"
+              }
+            ]
+          }
+        ],
+        "source_atoms": [
+          {
+            "atom_id": "block:oak_log:japanese",
+            "text": "オークの原木",
+            "source_ref": "block:oak_log",
+            "field_path": "japanese",
+            "observation_role": "nearby_block",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:wildflowers:japanese",
+            "text": "野花",
+            "source_ref": "item:wildflowers",
+            "field_path": "japanese",
+            "observation_role": "selected_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:cobblestone:japanese",
+            "text": "丸石",
+            "source_ref": "item:cobblestone",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:stick:japanese",
+            "text": "棒",
+            "source_ref": "item:stick",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:japanese",
+            "text": "骨粉",
+            "source_ref": "item:bone_meal",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:note:0",
+            "text": "骨を粉砕したもの。",
+            "source_ref": "item:bone_meal",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:note:1",
+            "text": "肥料。",
+            "source_ref": "item:bone_meal",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "structure:village_plains:japanese",
+            "text": "平原の村",
+            "source_ref": "structure:village_plains",
+            "field_path": "japanese",
+            "observation_role": "current_structure",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "structure:village_plains:note:0",
+            "text": "平原に建つ木材と石でできた村。",
+            "source_ref": "structure:village_plains",
+            "field_path": "note[0]",
+            "observation_role": "current_structure",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "structure:village_plains:note:1",
+            "text": "鐘がある広場が中心。",
+            "source_ref": "structure:village_plains",
+            "field_path": "note[1]",
+            "observation_role": "current_structure",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "biome:meadow:japanese",
+            "text": "草地",
+            "source_ref": "biome:meadow",
+            "field_path": "japanese",
+            "observation_role": "current_biome",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:japanese",
+            "text": "アイアンゴーレム",
+            "source_ref": "mob:iron_golem",
+            "field_path": "japanese",
+            "observation_role": "passive_mob",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:role",
+            "text": "力強い村の守護者",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.role",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:visual_tags:0",
+            "text": "鉄",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.visual_tags[0]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:visual_tags:1",
+            "text": "巨体",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.visual_tags[1]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:visual_tags:2",
+            "text": "つる草",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.visual_tags[2]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "mob:iron_golem:poetic:sound_tags:0",
+            "text": "どすん",
+            "source_ref": "mob:iron_golem",
+            "field_path": "poetic.sound_tags[0]",
+            "observation_role": "passive_mob",
+            "kind": "catalog_field",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:nearby_window",
+            "text": "近くに窓がある",
+            "source_ref": "observation:nearby_window",
+            "field_path": "observed_label",
+            "observation_role": "nearby_window",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:climate",
+            "text": "穏やか（温帯）",
+            "source_ref": "observation:climate",
+            "field_path": "observed_label",
+            "observation_role": "climate",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:weather",
+            "text": "晴れ",
+            "source_ref": "observation:weather",
+            "field_path": "observed_label",
+            "observation_role": "weather",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "observation:observed:time_phase",
+            "text": "夜",
+            "source_ref": "observation:time_phase",
+            "field_path": "observed_label",
+            "observation_role": "time_phase",
+            "kind": "observation",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "observed_state"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "preface:spoken:clause:0",
+            "text": "夜やのに、窓から見える平原は穏やかやな。鉄の巨人がそっと見守ってる横で、手元の野花がそっと揺れてる。",
+            "source_ref": "preface:spoken",
+            "field_path": "clause[0]",
+            "observation_role": "spoken_preface",
+            "kind": "preface_clause",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "structure:village_plains:japanese",
+              "mob:iron_golem:japanese",
+              "item:wildflowers:japanese",
+              "observation:observed:climate"
+            ]
+          },
+          {
+            "atom_id": "preface:spoken:interpretation",
+            "text": "夜やのに、窓から見える平原は穏やかやな。鉄の巨人がそっと見守ってる横で、手元の野花がそっと揺れてる。",
+            "source_ref": "preface:spoken",
+            "field_path": "interpretation",
+            "observation_role": "poetic_interpretation",
+            "kind": "poetic_interpretation",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "structure:village_plains:japanese",
+              "mob:iron_golem:japanese",
+              "item:wildflowers:japanese",
+              "observation:observed:climate"
+            ]
+          }
+        ],
+        "preface_spoken": "夜やのに、窓から見える平原は穏やかやな。鉄の巨人がそっと見守ってる横で、手元の野花がそっと揺れてる、なんか浮かんできたわ。",
+        "interpretation_origin": "spoken_preface",
+        "line_sources": [
+          {
+            "line_index": 0,
+            "text": "よるのまど",
+            "atom_ids": [
+              "observation:observed:time_phase",
+              "observation:observed:nearby_window"
+            ],
+            "sources": [
+              {
+                "atom_id": "observation:observed:time_phase",
+                "text": "夜",
+                "source_ref": "observation:time_phase",
+                "field_path": "observed_label",
+                "observation_role": "time_phase",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "observation:observed:nearby_window",
+                "text": "近くに窓がある",
+                "source_ref": "observation:nearby_window",
+                "field_path": "observed_label",
+                "observation_role": "nearby_window",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 1,
+            "text": "てつじんみまもる",
+            "atom_ids": [
+              "mob:iron_golem:japanese",
+              "mob:iron_golem:poetic:role"
+            ],
+            "sources": [
+              {
+                "atom_id": "mob:iron_golem:japanese",
+                "text": "アイアンゴーレム",
+                "source_ref": "mob:iron_golem",
+                "field_path": "japanese",
+                "observation_role": "passive_mob",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "mob:iron_golem:poetic:role",
+                "text": "力強い村の守護者",
+                "source_ref": "mob:iron_golem",
+                "field_path": "poetic.role",
+                "observation_role": "passive_mob",
+                "kind": "catalog_field",
+                "claim_class": "interpretive",
+                "claim_scopes": [
+                  "source_meaning"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 2,
+            "text": "のくさふゆむ",
+            "atom_ids": [
+              "biome:meadow:japanese",
+              "observation:observed:climate"
+            ],
+            "sources": [
+              {
+                "atom_id": "biome:meadow:japanese",
+                "text": "草地",
+                "source_ref": "biome:meadow",
+                "field_path": "japanese",
+                "observation_role": "current_biome",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "observation:observed:climate",
+                "text": "穏やか（温帯）",
+                "source_ref": "observation:climate",
+                "field_path": "observed_label",
+                "observation_role": "climate",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "よるのまど",
+          "reading_text": "よるのまど",
+          "source_atom_ids": [
+            "observation:observed:time_phase",
+            "observation:observed:nearby_window"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "observation:observed:time_phase",
+              "text": "夜",
+              "source_ref": "observation:time_phase",
+              "field_path": "observed_label",
+              "observation_role": "time_phase",
+              "kind": "observation",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "observed_state"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "observation:observed:nearby_window",
+              "text": "近くに窓がある",
+              "source_ref": "observation:nearby_window",
+              "field_path": "observed_label",
+              "observation_role": "nearby_window",
+              "kind": "observation",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "observed_state"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "てつじんみまもる",
+          "reading_text": "てつじんみまもる",
+          "source_atom_ids": [
+            "mob:iron_golem:japanese",
+            "mob:iron_golem:poetic:role"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "mob:iron_golem:japanese",
+              "text": "アイアンゴーレム",
+              "source_ref": "mob:iron_golem",
+              "field_path": "japanese",
+              "observation_role": "passive_mob",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "mob:iron_golem:poetic:role",
+              "text": "力強い村の守護者",
+              "source_ref": "mob:iron_golem",
+              "field_path": "poetic.role",
+              "observation_role": "passive_mob",
+              "kind": "catalog_field",
+              "claim_class": "interpretive",
+              "claim_scopes": [
+                "source_meaning"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "のくさふゆむ",
+          "reading_text": "のくさふゆむ",
+          "source_atom_ids": [
+            "biome:meadow:japanese",
+            "observation:observed:climate"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "biome:meadow:japanese",
+              "text": "草地",
+              "source_ref": "biome:meadow",
+              "field_path": "japanese",
+              "observation_role": "current_biome",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            },
+            {
+              "atom_id": "observation:observed:climate",
+              "text": "穏やか（温帯）",
+              "source_ref": "observation:climate",
+              "field_path": "observed_label",
+              "observation_role": "climate",
+              "kind": "observation",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "observed_state"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "よるのまど",
+            "reading_text": "よるのまど",
+            "source_atom_ids": [
+              "observation:observed:time_phase",
+              "observation:observed:nearby_window"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "observation:observed:time_phase",
+                "text": "夜",
+                "source_ref": "observation:time_phase",
+                "field_path": "observed_label",
+                "observation_role": "time_phase",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "observation:observed:nearby_window",
+                "text": "近くに窓がある",
+                "source_ref": "observation:nearby_window",
+                "field_path": "observed_label",
+                "observation_role": "nearby_window",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "てつじんみまもる",
+            "reading_text": "てつじんみまもる",
+            "source_atom_ids": [
+              "mob:iron_golem:japanese",
+              "mob:iron_golem:poetic:role"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "mob:iron_golem:japanese",
+                "text": "アイアンゴーレム",
+                "source_ref": "mob:iron_golem",
+                "field_path": "japanese",
+                "observation_role": "passive_mob",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "mob:iron_golem:poetic:role",
+                "text": "力強い村の守護者",
+                "source_ref": "mob:iron_golem",
+                "field_path": "poetic.role",
+                "observation_role": "passive_mob",
+                "kind": "catalog_field",
+                "claim_class": "interpretive",
+                "claim_scopes": [
+                  "source_meaning"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "のくさふゆむ",
+            "reading_text": "のくさふゆむ",
+            "source_atom_ids": [
+              "biome:meadow:japanese",
+              "observation:observed:climate"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "biome:meadow:japanese",
+                "text": "草地",
+                "source_ref": "biome:meadow",
+                "field_path": "japanese",
+                "observation_role": "current_biome",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              },
+              {
+                "atom_id": "observation:observed:climate",
+                "text": "穏やか（温帯）",
+                "source_ref": "observation:climate",
+                "field_path": "observed_label",
+                "observation_role": "climate",
+                "kind": "observation",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "observed_state"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "よるのまど\nてつじんみまもる\nのくさふゆむ",
+        "created_at": "2026-09-30T01:43:10.851495+00:00",
+        "interpretation": "夜やのに、窓から見える平原は穏やかやな。鉄の巨人がそっと見守ってる横で、手元の野花がそっと揺れてる。"
+      }
+    },
+    "humming": {
+      "materials": {
+        "interpretation": "丸石の冷たい手触りと、骨粉の粉っぽい匂いが混じって、名札に書かれた名前がふっと浮かんできたわ。",
+        "motifs": [
+          "丸石",
+          "骨粉",
+          "名札"
+        ],
+        "held_item": "名札",
+        "inventory_items": [
+          "棒",
+          "骨粉",
+          "丸石"
+        ],
+        "material_visibility": {
+          "biome": false,
+          "sky": false
+        },
+        "catalog_sources": [
+          {
+            "source_ref": "item:name_tag",
+            "catalog_type": "item",
+            "catalog_id": "name_tag",
+            "label": "名札",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "selected_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:cobblestone",
+            "catalog_type": "item",
+            "catalog_id": "cobblestone",
+            "label": "丸石",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:stick",
+            "catalog_type": "item",
+            "catalog_id": "stick",
+            "label": "棒",
+            "reading": null,
+            "note_raw": "",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          },
+          {
+            "source_ref": "item:bone_meal",
+            "catalog_type": "item",
+            "catalog_id": "bone_meal",
+            "label": "骨粉",
+            "reading": null,
+            "note_raw": "骨を粉砕したもの。肥料。",
+            "observation_role": "inventory_item",
+            "extra_fields": []
+          }
+        ],
+        "source_atoms": [
+          {
+            "atom_id": "item:name_tag:japanese",
+            "text": "名札",
+            "source_ref": "item:name_tag",
+            "field_path": "japanese",
+            "observation_role": "selected_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:cobblestone:japanese",
+            "text": "丸石",
+            "source_ref": "item:cobblestone",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:stick:japanese",
+            "text": "棒",
+            "source_ref": "item:stick",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:japanese",
+            "text": "骨粉",
+            "source_ref": "item:bone_meal",
+            "field_path": "japanese",
+            "observation_role": "inventory_item",
+            "kind": "catalog_label",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "identity_only"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:note:0",
+            "text": "骨を粉砕したもの。",
+            "source_ref": "item:bone_meal",
+            "field_path": "note[0]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "item:bone_meal:note:1",
+            "text": "肥料。",
+            "source_ref": "item:bone_meal",
+            "field_path": "note[1]",
+            "observation_role": "inventory_item",
+            "kind": "catalog_fact",
+            "claim_class": "factual",
+            "claim_scopes": [
+              "source_meaning"
+            ],
+            "basis_atom_ids": []
+          },
+          {
+            "atom_id": "preface:spoken:clause:0",
+            "text": "丸石の冷たい手触りと、骨粉の粉っぽい匂いが混じって、名札に書かれた名前がふっと浮かんできたわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "clause[0]",
+            "observation_role": "spoken_preface",
+            "kind": "preface_clause",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "item:cobblestone:japanese",
+              "item:bone_meal:japanese",
+              "item:name_tag:japanese"
+            ]
+          },
+          {
+            "atom_id": "preface:spoken:interpretation",
+            "text": "丸石の冷たい手触りと、骨粉の粉っぽい匂いが混じって、名札に書かれた名前がふっと浮かんできたわ。",
+            "source_ref": "preface:spoken",
+            "field_path": "interpretation",
+            "observation_role": "poetic_interpretation",
+            "kind": "poetic_interpretation",
+            "claim_class": "interpretive",
+            "claim_scopes": [
+              "poetic_interpretation"
+            ],
+            "basis_atom_ids": [
+              "item:cobblestone:japanese",
+              "item:bone_meal:japanese",
+              "item:name_tag:japanese"
+            ]
+          }
+        ],
+        "preface_spoken": "丸石の冷たい手触りと、骨粉の粉っぽい匂いが混じって、名札に書かれた名前がふっと浮かんできたわ。",
+        "interpretation_origin": "spoken_preface",
+        "line_sources": [
+          {
+            "line_index": 0,
+            "text": "ぬるいいしに",
+            "atom_ids": [
+              "item:cobblestone:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:cobblestone:japanese",
+                "text": "丸石",
+                "source_ref": "item:cobblestone",
+                "field_path": "japanese",
+                "observation_role": "inventory_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 1,
+            "text": "ふふんのかおり",
+            "atom_ids": [
+              "item:bone_meal:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:bone_meal:japanese",
+                "text": "骨粉",
+                "source_ref": "item:bone_meal",
+                "field_path": "japanese",
+                "observation_role": "inventory_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          },
+          {
+            "line_index": 2,
+            "text": "なまえうかぶ",
+            "atom_ids": [
+              "item:name_tag:japanese"
+            ],
+            "sources": [
+              {
+                "atom_id": "item:name_tag:japanese",
+                "text": "名札",
+                "source_ref": "item:name_tag",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ]
+          }
+        ]
+      },
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "ぬるいいしに",
+          "reading_text": "ぬるいいしに",
+          "source_atom_ids": [
+            "item:cobblestone:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:cobblestone:japanese",
+              "text": "丸石",
+              "source_ref": "item:cobblestone",
+              "field_path": "japanese",
+              "observation_role": "inventory_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "ふふんのかおり",
+          "reading_text": "ふふんのかおり",
+          "source_atom_ids": [
+            "item:bone_meal:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:bone_meal:japanese",
+              "text": "骨粉",
+              "source_ref": "item:bone_meal",
+              "field_path": "japanese",
+              "observation_role": "inventory_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "なまえうかぶ",
+          "reading_text": "なまえうかぶ",
+          "source_atom_ids": [
+            "item:name_tag:japanese"
+          ],
+          "source_atoms": [
+            {
+              "atom_id": "item:name_tag:japanese",
+              "text": "名札",
+              "source_ref": "item:name_tag",
+              "field_path": "japanese",
+              "observation_role": "selected_item",
+              "kind": "catalog_label",
+              "claim_class": "factual",
+              "claim_scopes": [
+                "identity_only"
+              ],
+              "basis_atom_ids": []
+            }
+          ],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "ぬるいいしに",
+            "reading_text": "ぬるいいしに",
+            "source_atom_ids": [
+              "item:cobblestone:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:cobblestone:japanese",
+                "text": "丸石",
+                "source_ref": "item:cobblestone",
+                "field_path": "japanese",
+                "observation_role": "inventory_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "ふふんのかおり",
+            "reading_text": "ふふんのかおり",
+            "source_atom_ids": [
+              "item:bone_meal:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:bone_meal:japanese",
+                "text": "骨粉",
+                "source_ref": "item:bone_meal",
+                "field_path": "japanese",
+                "observation_role": "inventory_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "なまえうかぶ",
+            "reading_text": "なまえうかぶ",
+            "source_atom_ids": [
+              "item:name_tag:japanese"
+            ],
+            "source_atoms": [
+              {
+                "atom_id": "item:name_tag:japanese",
+                "text": "名札",
+                "source_ref": "item:name_tag",
+                "field_path": "japanese",
+                "observation_role": "selected_item",
+                "kind": "catalog_label",
+                "claim_class": "factual",
+                "claim_scopes": [
+                  "identity_only"
+                ],
+                "basis_atom_ids": []
+              }
+            ],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "ぬるいいしに\nふふんのかおり\nなまえうかぶ",
+        "created_at": "2026-09-30T07:04:36.303335+00:00",
+        "interpretation": "丸石の冷たい手触りと、骨粉の粉っぽい匂いが混じって、名札に書かれた名前がふっと浮かんできたわ。"
+      }
+    },
+    "missing": {
+      "materials": {},
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "ぬるいいしに",
+          "reading_text": "ぬるいいしに",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "ふふんのかおり",
+          "reading_text": "ふふんのかおり",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "なまえうかぶ",
+          "reading_text": "なまえうかぶ",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "ぬるいいしに",
+            "reading_text": "ぬるいいしに",
+            "source_atom_ids": [],
+            "source_atoms": [],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "ふふんのかおり",
+            "reading_text": "ふふんのかおり",
+            "source_atom_ids": [],
+            "source_atoms": [],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "なまえうかぶ",
+            "reading_text": "なまえうかぶ",
+            "source_atom_ids": [],
+            "source_atoms": [],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "ぬるいいしに\nふふんのかおり\nなまえうかぶ",
+        "created_at": "2026-09-30T07:04:36.303335+00:00",
+        "interpretation": ""
+      }
+    },
+    "metaphor": {
+      "materials": {},
+      "dialogue": [],
+      "agent_steps": [],
+      "current_lines": [
+        {
+          "line_id": "line_1",
+          "line_index": 0,
+          "position": "upper",
+          "canonical_name": "上五",
+          "surface_text": "かぜわらう",
+          "reading_text": "かぜわらう",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_2",
+          "line_index": 1,
+          "position": "middle",
+          "canonical_name": "中七",
+          "surface_text": "こえのないいし",
+          "reading_text": "こえのないいし",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "generated"
+        },
+        {
+          "line_id": "line_3",
+          "line_index": 2,
+          "position": "lower",
+          "canonical_name": "下五",
+          "surface_text": "ひなたぼこ",
+          "reading_text": "ひなたぼこ",
+          "source_atom_ids": [],
+          "source_atoms": [],
+          "provenance": "generated"
+        }
+      ],
+      "emission": {
+        "lines": [
+          {
+            "line_id": "line_1",
+            "line_index": 0,
+            "position": "upper",
+            "canonical_name": "上五",
+            "surface_text": "かぜわらう",
+            "reading_text": "かぜわらう",
+            "source_atom_ids": [],
+            "source_atoms": [],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_2",
+            "line_index": 1,
+            "position": "middle",
+            "canonical_name": "中七",
+            "surface_text": "こえのないいし",
+            "reading_text": "こえのないいし",
+            "source_atom_ids": [],
+            "source_atoms": [],
+            "provenance": "generated"
+          },
+          {
+            "line_id": "line_3",
+            "line_index": 2,
+            "position": "lower",
+            "canonical_name": "下五",
+            "surface_text": "ひなたぼこ",
+            "reading_text": "ひなたぼこ",
+            "source_atom_ids": [],
+            "source_atoms": [],
+            "provenance": "generated"
+          }
+        ],
+        "reading_text": "かぜわらう\nこえのないいし\nひなたぼこ",
+        "created_at": "2026-09-30T00:00:00+00:00",
+        "interpretation": ""
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "humming_meaning",
+      "context": "humming",
+      "question": "フンって何？"
+    },
+    {
+      "name": "humming_feeling",
+      "context": "humming",
+      "question": "ふふんのかおりには、どんな気持ちを込めて作ったの？"
+    },
+    {
+      "name": "grass_unknown_word",
+      "context": "grass",
+      "question": "のくさふゆむの「ふゆむ」って何？"
+    },
+    {
+      "name": "grass_reconsider",
+      "context": "grass",
+      "question": "でも、ここ冬じゃないよ。どういう気持ちならこの句に合う？",
+      "dialogue": [
+        {
+          "turn_id": "meaning_previous",
+          "player_text": "のくさふゆむの「ふゆむ」って何？",
+          "dogido_text": "「野草冬む」やな。冬に野原の草が枯れて、静かに冬ごもりしてる様子や。"
+        }
+      ]
+    },
+    {
+      "name": "lost_meaning",
+      "context": "lost",
+      "question": "かどどこの、ってどういう意味？"
+    },
+    {
+      "name": "petals_meaning",
+      "context": "petals",
+      "question": "さくらのはなふか、ってどういう意味？"
+    },
+    {
+      "name": "noon_meaning",
+      "context": "noon",
+      "question": "まもるひるべ、の「ひるべ」って何？"
+    },
+    {
+      "name": "missing_source",
+      "context": "missing",
+      "question": "ふふんのかおりには、どんな気持ちを込めて作ったの？"
+    },
+    {
+      "name": "ordinary_metaphor",
+      "context": "metaphor",
+      "question": "かぜわらう、ってどういう意味？"
+    }
+  ]
+}

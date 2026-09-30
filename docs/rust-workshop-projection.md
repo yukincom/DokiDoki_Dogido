@@ -20,6 +20,29 @@ workshop runtime の相談 details・短い同意・editor入力はこのAPIへ�
 `prepare_details` / `fixed_followup` / `revision_input` のPython操作は実行経路から外し、
 互換比較用oracleに定義を残す。相談と修正の出典は保存済み materials だけから組み立てる。
 
+意味説明では、句の言葉・響きと当時の材料を手がかりに、情景や感情へつながる解釈を返す。
+材料と語句の一対一対応は要求せず、比喩や連想を膨らませてよい。なじみのない語も
+意味質問だけで失敗扱いせず、今の読みとしてもっともらしい説明ができれば受け入れる。
+未知語の辞書的定義や、記録にない生成時の本心は事実として断言しない。
+説明から句本文・出典・採否を変更せず、発句時の日本語・音数・意味保持の検査も変更しない。
+
+`scripts/check_workshop_meaning_live.py` は保存句5種類と、過去説明の再解釈・材料記録なし・
+普通の比喩を含む9ケースを、指定した既存モデルへ送る任意の独立テキスト検査。
+Rustとgolden比較しているPythonのprompt・validatorを使い、ゲームのsessionや記憶は変更しない。
+回答例は入力せず、外形の通過と意味内容の合否を分ける。報告の `contract_passed` は前者だけで、
+後者は `review_criteria` に従い、言葉や材料から情景・気持ちへのつながりが納得できるか確認する。
+
+```sh
+python dogido-rust/scripts/check_workshop_meaning_live.py \
+  --model MODEL_ID --output /tmp/workshop-meaning.json
+```
+
+2026-09-30のQwen3.6-35B-A3B-4bit-DWQによる検査では、9件とも初回で `explain` として
+契約を通過し、findingと状態変更はなかった。内容評価は7件合格、2件未合格。
+「ふゆむ」の漢字表記の断定と、「ひるべ」を夕暮れへ取り違える説明が残った。
+Pythonの関連1,863件とRustの相談prompt・validation10件を確認済み。
+少数の独立テキスト検査であり、実Minecraft・実音声の検証や説明品質全般の保証ではない。
+
 句と材料の照合、固定・自然な局所編集、三行の読み確定は `workshop_editing` が担当する。
 原文と解釈、行指定とfragmentの一意性、未採用案、保存済み出典、表示と読みを分離したまま、
 候補を既存の音数・hard制約・原文evidence・CAS検査へ戻す。採用・保存の権限はruntimeに残す。
