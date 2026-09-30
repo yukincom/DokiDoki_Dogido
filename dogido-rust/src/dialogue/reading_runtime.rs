@@ -1,8 +1,7 @@
-//! Pronunciation is saved before acknowledgement; an interrupted voice reply
-//! cannot undo an authorized write. The canonical poem and pending edit stay put.
+//! Pronunciation edits are explicit typed catalogue operations, not dialogue turns.
 use super::*;
-use crate::{haiku_record::MemoryStore, reading_correction::Correction};
-use anyhow::{Context, ensure};
+use crate::{catalog_editor, haiku_record::MemoryStore};
+use anyhow::ensure;
 
 pub(super) async fn load_overlay(config: &DialogueConfig) -> Result<Vec<Value>> {
     if !config.haiku.memory_enabled {
@@ -17,99 +16,48 @@ pub(super) async fn load_overlay(config: &DialogueConfig) -> Result<Vec<Value>> 
         }
     }
 }
-
 impl Dialogue {
     pub(super) async fn reading_overlay(&self) -> Result<Vec<Value>> {
         load_overlay(&self.config).await
     }
 
-    pub(super) async fn correct_reading(
-        &self,
-        sid: &str,
-        epoch: u64,
-        input: &Value,
-        mut c: Correction,
-    ) -> Result<Value> {
-        {
-            let d = self.data.lock().unwrap();
-            let s = d.sessions.get(sid).context("session_closed")?;
-            ensure!(
-                !d.stopped
-                    && s.epoch == epoch
-                    && workshop_combat_input::allowed(s)
-                    && s.cancel.as_ref().is_some_and(|c| !*c.borrow()),
-                "cancelled_reading_correction"
-            );
-            if input["workshop"].is_object() {
-                ensure!(
-                    s.haiku.workshop.as_ref().is_some_and(|w| w.open
-                        && !w.combat_paused()
-                        && input["workshop"]["workshop_id"] == w.hud_id
-                        && input["workshop"]["version"] == w.version),
-                    "stale_workshop"
-                );
-            }
-        }
-        let source = c.resolve_biome(input["event"]["world"]["biome"].as_str());
-        let (text, outcome) = if !self.config.haiku.memory_enabled {
-            ("記憶機能は今止まっとるで。".to_owned(), "memory_disabled")
-        } else if c.needs_surface() {
-            (
-                "どの言葉の読みか、言葉と読みを一緒に教えてくれへん？".to_owned(),
-                "surface_required",
-            )
+    pub async fn catalog_view(&self) -> Result<Value> {
+        let enabled = self.config.haiku.memory_enabled;
+        let root = self.config.haiku.memory_dir.clone();
+        let rows = if enabled {
+            tokio::task::spawn_blocking(move || MemoryStore::new(root).reading_corrections())
+                .await??
         } else {
-            let root = self.config.haiku.memory_dir.clone();
-            let write_c = c.clone();
-            let write_sid = sid.to_owned();
-            tracing::info!(event = "reading_correction_save_started", session_id = sid);
-            // Await the write even if cancellation arrives while I/O is in flight.
-            // The existing serial permit keeps later turns behind this transaction.
-            let saved = tokio::task::spawn_blocking(move || {
-                MemoryStore::new(root).save_reading_correction(
-                    &write_c,
-                    source.as_deref(),
-                    chrono::Utc::now(),
-                    &write_sid,
-                )
-            })
-            .await?;
-            match saved {
-                Ok(_) => (
-                    format!("{}は「{}」やね。覚え直したで。", c.surface, c.reading),
-                    "saved",
-                ),
-                Err(error) => {
-                    tracing::error!(event="reading_correction_save_failed",session_id=sid,%error);
-                    (
-                        "読みの保存ができんかったわ。もう一度教えてな。".into(),
-                        "save_failed",
-                    )
-                }
-            }
+            vec![]
         };
-        tracing::info!(
-            event = "reading_correction",
-            session_id = sid,
-            surface = c.surface,
-            reading = c.reading,
-            outcome
-        );
-        // Use the supplied pronunciation in this confirmation without asking the
-        // dictionary to read the very surface the player just corrected.
-        let spoken = if outcome == "saved" {
-            format!("{}は「{}」やね。覚え直したで。", c.reading, c.reading)
-        } else {
-            text.clone()
-        };
-        let mut result = json!({"op":"result","text":text,"spoken_text":spoken,"llm_reports":[],
-            "memory_action":"reading_correction","memory_outcome":outcome});
-        if input["workshop"].is_object() {
-            result["workshop_id"] = input["workshop"]["workshop_id"].clone();
-            result["workshop_version"] = input["workshop"]["version"].clone();
-            result["workshop_action"] = "reading_correction".into();
-            result["workshop_steps"] = json!([]);
-        }
-        Ok(result)
+        Ok(json!({"enabled":enabled,"entries":catalog_editor::entries(),"corrections":rows}))
+    }
+
+    pub async fn edit_catalog_reading(&self, edit: catalog_editor::Edit) -> Result<Value> {
+        edit.validate()?;
+        let _serial = self.serial.acquire().await?;
+        ensure!(!self.data.lock().unwrap().stopped, "server_stopping");
+        ensure!(self.config.haiku.memory_enabled, "memory_disabled");
+        let root = self.config.haiku.memory_dir.clone();
+        // An accepted write finishes even if the browser disconnects. No session,
+        // model or speech is involved; disk I/O never holds the state mutex.
+        let row = tokio::task::spawn_blocking(move || {
+            MemoryStore::new(root).edit_catalog_reading(&edit, chrono::Utc::now())
+        })
+        .await??;
+        Ok(json!({"saved":true,"correction":row}))
+    }
+
+    pub async fn remove_catalog_reading(&self, edit: catalog_editor::Remove) -> Result<Value> {
+        catalog_editor::validate_surface(&edit.surface)?;
+        let _serial = self.serial.acquire().await?;
+        ensure!(!self.data.lock().unwrap().stopped, "server_stopping");
+        ensure!(self.config.haiku.memory_enabled, "memory_disabled");
+        let root = self.config.haiku.memory_dir.clone();
+        tokio::task::spawn_blocking(move || {
+            MemoryStore::new(root).remove_catalog_reading(&edit, chrono::Utc::now())
+        })
+        .await??;
+        Ok(json!({"removed":true}))
     }
 }

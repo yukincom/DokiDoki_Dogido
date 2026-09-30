@@ -1,5 +1,6 @@
 pub mod address;
 pub mod assist;
+pub mod catalog_editor;
 pub mod chat_catalog;
 pub mod chat_names;
 pub mod chat_prompt;

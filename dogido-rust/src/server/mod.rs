@@ -1,4 +1,5 @@
 //! 接続専用と、明示選択した平時会話preview。記憶store・世界操作は未接続。
+mod catalog;
 pub mod contracts;
 mod runtime;
 
@@ -128,6 +129,12 @@ impl Application {
             .route("/healthz", get(health))
             .route("/dogido", get(display_page))
             .route("/rust-chat", get(chat_page))
+            .route("/catalog", get(catalog::page))
+            .route("/api/v1/catalog", get(catalog::snapshot))
+            .route(
+                "/api/v1/catalog/readings",
+                axum::routing::put(catalog::save).delete(catalog::remove),
+            )
             .route("/api/v1/rust-dialogue/snapshot", get(chat_snapshot))
             .route("/api/v1/rust-dialogue/interrupt", post(chat_interrupt))
             .route("/api/v1/adapter-sessions", post(create_session))

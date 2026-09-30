@@ -113,7 +113,8 @@ impl Context {
         context.asks_about_sound = p.asks_about_sound;
         context.player_haiku_text = p.player_haiku_text;
         context.revised_haiku_text = p.revised_haiku_text;
-        context.reading_correction = p.reading_correction;
+        // Pronunciation registration belongs to the typed catalogue form, never
+        // to an utterance (including text chat). Keep the wire field for helpers.
         context.haiku_recall_query =
             recall_query::context_from_normalized(normalized, overlay, now);
         context.asks_haiku_recall = context.haiku_recall_query.is_some();
@@ -148,6 +149,24 @@ impl Context {
 mod tests {
     use super::*;
     #[test]
+    fn conversation_cannot_register_pronunciation_even_with_explicit_reading_words() {
+        for raw in [
+            "何か音はするね",
+            "読み: 草地=くさち",
+            "草地の読みはくさち",
+            "そうちじゃなくてくさち",
+        ] {
+            let c = Context::from_surfaces(
+                raw,
+                raw,
+                "",
+                &[],
+                DateTime::parse_from_rfc3339("2026-09-30T00:00:00Z").unwrap(),
+            );
+            assert!(c.reading_correction.is_none(), "{raw}");
+        }
+    }
+    #[test]
     fn all_context_fields_and_address_ownership_match_python() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/input-context.json")).unwrap();
@@ -159,15 +178,20 @@ mod tests {
                 case["overlay"].as_array().unwrap(),
                 DateTime::parse_from_rfc3339(case["now"].as_str().unwrap()).unwrap(),
             );
+            let mut expected = case["expected"].clone();
+            expected["reading_correction"] = Value::Null;
             assert_eq!(
                 serde_json::to_value(&actual).unwrap(),
-                case["expected"],
+                expected,
                 "raw={:?}, normalized={:?}",
                 case["raw"],
                 case["normalized"]
             );
+            let mut legacy = actual.clone();
+            legacy.reading_correction =
+                serde_json::from_value(case["expected"]["reading_correction"].clone()).unwrap();
             assert_eq!(
-                actual.general_conversation(),
+                legacy.general_conversation(),
                 case["general"].as_bool().unwrap(),
                 "raw={:?}",
                 case["raw"]

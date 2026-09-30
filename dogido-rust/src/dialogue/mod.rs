@@ -1082,9 +1082,7 @@ impl Dialogue {
                 return json!({"accepted":false,"reason":"chat_context_unavailable"});
             }
         };
-        if (poem_input.is_some()
-            || crate::reading_correction::for_input(text, &json!(workshop)).is_some()
-            || crate::haiku_memory::clear_requested(text))
+        if (poem_input.is_some() || crate::haiku_memory::clear_requested(text))
             && let Some(w) = s.haiku.workshop.as_mut()
         {
             w.followup = crate::workshop_followup::Stage::Discussion;
@@ -1126,7 +1124,6 @@ impl Dialogue {
         if workshop.is_none()
             && s.web.state.research.is_none()
             && poem_input.is_none()
-            && crate::reading_correction::parse(text).is_none()
             && !crate::haiku_memory::memory_candidate(text)
         {
             s.history.push(&turn, "user", text);
@@ -1603,10 +1600,6 @@ impl Dialogue {
         let mut completed = false;
         self.prepare_web(&sid, epoch, &mut input, &cancel).await;
         let web_result = self.web_turn(&sid, epoch, &input, &mut cancel).await;
-        let correction = crate::reading_correction::for_input(
-            input["text"].as_str().unwrap_or(""),
-            &input["workshop"],
-        );
         let result = if let Err(error) = web_result {
             Err(error)
         } else if let Some(result) = web_result.unwrap() {
@@ -1616,8 +1609,6 @@ impl Dialogue {
                 Ok(()) => bridge::render(&self.config, &self.llm, input.clone(), &mut cancel).await,
                 Err(error) => Err(error),
             }
-        } else if let Some(correction) = correction {
-            self.correct_reading(&sid, epoch, &input, correction).await
         } else if input["poem_input"].is_object() {
             self.save_poem_input(&sid, epoch, &input, &mut cancel).await
         } else if crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")) {

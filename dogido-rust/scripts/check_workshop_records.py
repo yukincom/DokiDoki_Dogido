@@ -67,7 +67,7 @@ def main():
             ("却下して", "reject_pending"),
             ("くろいをしろいに変えて", "stage_player_edit"),
             ("採用して", "accept_pending"),
-            ("読み: 草地=くさち", "reading_correction"),
+            ("読み: 草地=くさち", "explain"),  # Reading registration is a separate typed form.
         ]:
             send(sid)
             turn = submit(base, sid, text)

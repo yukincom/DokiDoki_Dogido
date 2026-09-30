@@ -57,6 +57,140 @@ async fn create(router: &Router) -> String {
 }
 
 #[tokio::test]
+async fn catalog_form_is_authenticated_explicit_and_reversible_without_a_dialogue_turn() {
+    let root = std::env::temp_dir().join(format!("dogido-catalog-{}", uuid::Uuid::new_v4()));
+    let mut config = crate::dialogue::DialogueConfig {
+        audio_enabled: false,
+        llm_enabled: false,
+        language_enabled: false,
+        ..Default::default()
+    };
+    config.haiku.enabled = false;
+    config.haiku.memory_dir = root.clone();
+    let d = crate::dialogue::Dialogue::new(config).unwrap();
+    let app = Application::new(ServerConfig {
+        auth_token: Some("catalog-test".into()),
+        dialogue: Some(d.clone()),
+        ..Default::default()
+    });
+    let router = app.router();
+    let auth = [("authorization", "Bearer catalog-test")];
+    let before = d.snapshot(None);
+    let (status, view) = call(&router, "GET", "/api/v1/catalog", None, &auth).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        view["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == "biome:meadow" && r["surface"] == "草地")
+    );
+    assert!(!root.exists(), "read-only catalogue creates no storage");
+    let edit = json!({"surface":"草地","reading":"くさち","entry_id":"biome:meadow","wrong_reading":"そうち","expected_id":null});
+    assert_eq!(
+        call(
+            &router,
+            "PUT",
+            "/api/v1/catalog/readings",
+            Some(edit.clone()),
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    for bad in [
+        json!({"reading":"草地"}),
+        json!({"entry_id":"mob:zombie"}),
+        json!({"source":"voice"}),
+        json!({"wrong_reading":"くさち"}),
+    ] {
+        let mut body = edit.clone();
+        body.as_object_mut()
+            .unwrap()
+            .extend(bad.as_object().unwrap().clone());
+        assert_eq!(
+            call(
+                &router,
+                "PUT",
+                "/api/v1/catalog/readings",
+                Some(body),
+                &auth
+            )
+            .await
+            .0,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+    assert!(!root.exists());
+    let (status, saved) = call(
+        &router,
+        "PUT",
+        "/api/v1/catalog/readings",
+        Some(edit.clone()),
+        &auth,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(saved["correction"]["source"], "biome:meadow");
+    assert_eq!(saved["correction"]["origin"], "catalog_form");
+    assert!(saved["correction"]["session_id"].is_null());
+    assert_eq!(
+        call(
+            &router,
+            "PUT",
+            "/api/v1/catalog/readings",
+            Some(edit),
+            &auth
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    let remove = json!({"surface":"草地","expected_id":saved["correction"]["id"]});
+    assert_eq!(
+        call(
+            &router,
+            "DELETE",
+            "/api/v1/catalog/readings",
+            Some(remove.clone()),
+            &auth
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        call(
+            &router,
+            "DELETE",
+            "/api/v1/catalog/readings",
+            Some(remove),
+            &auth
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    let store = crate::haiku_record::MemoryStore::new(&root);
+    assert!(store.reading_corrections().unwrap().is_empty());
+    assert_eq!(
+        std::fs::read_to_string(store.corrections_path())
+            .unwrap()
+            .lines()
+            .count(),
+        2
+    );
+    assert_eq!(
+        d.snapshot(None),
+        before,
+        "dictionary form cannot create turns or mutate workshop"
+    );
+    app.shutdown().await.unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn sessions_heartbeat_close_and_reconnect_keep_existing_contracts() {
     let app = Application::new(ServerConfig::default());
     let router = app.router();

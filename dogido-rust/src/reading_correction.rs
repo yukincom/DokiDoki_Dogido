@@ -1,6 +1,6 @@
 //! Explicit catalog pronunciation corrections. No model, verse edit or lesson.
 use crate::haiku_record::{MemoryStore, SAVE_LOCK, append_line, locked_file};
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -170,6 +170,57 @@ impl Correction {
 }
 
 impl MemoryStore {
+    /// The form supplies an explicit target and the version it displayed. Check
+    /// under the same process/file locks as the append, including cross-process writers.
+    pub fn edit_catalog_reading(
+        &self,
+        edit: &crate::catalog_editor::Edit,
+        at: DateTime<Utc>,
+    ) -> Result<Value> {
+        let c = edit.validate()?;
+        let _guard = SAVE_LOCK
+            .lock()
+            .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        let mut file = locked_file(&self.corrections_path())?;
+        let rows = self.reading_corrections()?;
+        let current = rows.iter().find(|row| row["surface"] == c.surface);
+        ensure!(
+            current.and_then(|row| row["id"].as_str()) == edit.expected_id.as_deref(),
+            "reading_changed"
+        );
+        let row = json!({"id":format!("corr_{}", uuid::Uuid::new_v4()),
+            "created_at":at.to_rfc3339(),"surface":c.surface,"reading":c.reading,
+            "wrong_reading":c.wrong_reading,"forbidden_readings":c.wrong_reading.iter().collect::<Vec<_>>(),
+            "source":edit.entry_id,"session_id":null,"origin":"catalog_form"});
+        append_line(&mut file, &row)?;
+        Ok(row)
+    }
+
+    /// Append a reversible removal, retaining the original record for audit.
+    pub fn remove_catalog_reading(
+        &self,
+        edit: &crate::catalog_editor::Remove,
+        at: DateTime<Utc>,
+    ) -> Result<()> {
+        crate::catalog_editor::validate_surface(&edit.surface)?;
+        let _guard = SAVE_LOCK
+            .lock()
+            .map_err(|_| anyhow::anyhow!("haiku save mutex poisoned"))?;
+        let mut file = locked_file(&self.corrections_path())?;
+        let rows = self.reading_corrections()?;
+        let current = rows.iter().find(|row| row["surface"] == edit.surface);
+        ensure!(
+            current.and_then(|row| row["id"].as_str()) == Some(edit.expected_id.as_str()),
+            "reading_changed"
+        );
+        append_line(
+            &mut file,
+            &json!({"id":format!("corr_{}", uuid::Uuid::new_v4()),
+            "created_at":at.to_rfc3339(),"surface":edit.surface,"operation":"remove",
+            "previous_id":edit.expected_id,"origin":"catalog_form"}),
+        )?;
+        Ok(())
+    }
     pub fn corrections_path(&self) -> PathBuf {
         self.root().join("long_term/catalog_corrections.jsonl")
     }
@@ -201,9 +252,17 @@ impl MemoryStore {
         };
         let mut latest = std::collections::BTreeMap::new();
         for line in BufReader::new(file).lines() {
-            if let Ok(row) = serde_json::from_str::<Value>(&line?)
-                && let (Some(surface), Some(reading)) =
-                    (row["surface"].as_str(), row["reading"].as_str())
+            let Ok(row) = serde_json::from_str::<Value>(&line?) else {
+                continue;
+            };
+            if row["operation"] == "remove" {
+                if let Some(surface) = row["surface"].as_str() {
+                    latest.remove(surface);
+                }
+                continue;
+            }
+            if let (Some(surface), Some(reading)) =
+                (row["surface"].as_str(), row["reading"].as_str())
                 && !surface.trim().is_empty()
                 && kana(reading)
             {

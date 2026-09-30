@@ -202,7 +202,6 @@ impl Dialogue {
         if input["workshop"].is_object()
             || input["poem_input"].is_object()
             || input["address_reply"].is_string()
-            || crate::reading_correction::for_input(text, &input["workshop"]).is_some()
             || crate::haiku_memory::clear_requested(text)
         {
             return Ok(None);
