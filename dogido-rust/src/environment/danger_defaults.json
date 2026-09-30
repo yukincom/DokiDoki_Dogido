@@ -15,7 +15,7 @@
   "portal_frame_comment_cooldown_ms": 600000,
   "damaging_light_warning_cooldown_ms": 600000,
   "magma_block_comment_cooldown_ms": 1200000,
-  "damaging_light_warning_max_distance": 2.0,
+  "damaging_light_warning_max_distance": 5.0,
   "thunder_reaction_message_cooldown_ms": 180000,
   "thunder_reaction_panic_cue_cooldown_ms": 600000
 }

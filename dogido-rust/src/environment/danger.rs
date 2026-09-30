@@ -261,6 +261,13 @@ impl Danger {
         if !thunder.is_empty() {
             return thunder;
         }
+        // Nearby heat can hurt before a casual reply finishes. Use the current
+        // geometric observation, not damage, and keep combat/thunder priority.
+        if self.complete
+            && let Some(warning) = self.damaging_light(e, now, s)
+        {
+            return vec![warning];
+        }
         if self.complete && !focus && self.surface_evening(e) {
             return self.night_action(e, true);
         }
@@ -426,20 +433,8 @@ impl Danger {
                 "………しゃがめば大丈夫なんが不思議やな……",
             )];
         }
-        if e.world.standing_on_magma_block != Some(true)
-            && e.world.nearby_damaging_light_source_count.unwrap_or(0) > 0
-            && e.world
-                .nearest_damaging_light_source_distance
-                .is_some_and(|d| d <= n(s, "damaging_light_warning_max_distance"))
-            && ready(
-                now,
-                self.last_damaging_light,
-                s,
-                "damaging_light_warning_cooldown_ms",
-            )
-        {
-            self.last_damaging_light = Some(now);
-            return vec![Speech::new("damaging_light", "触るとあちちやで！")];
+        if let Some(warning) = self.damaging_light(e, now, s) {
+            return vec![warning];
         }
         if self.shelter_advice(e, s) {
             self.shelter_advised = true;
@@ -503,6 +498,25 @@ impl Danger {
             return vec![a];
         }
         vec![]
+    }
+    fn damaging_light(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Speech> {
+        if e.world.standing_on_magma_block == Some(true)
+            || e.world.nearby_damaging_light_source_count.unwrap_or(0) <= 0
+            || !e
+                .world
+                .nearest_damaging_light_source_distance
+                .is_some_and(|d| d <= n(s, "damaging_light_warning_max_distance"))
+            || !ready(
+                now,
+                self.last_damaging_light,
+                s,
+                "damaging_light_warning_cooldown_ms",
+            )
+        {
+            return None;
+        }
+        self.last_damaging_light = Some(now);
+        Some(Speech::new("damaging_light", "触るとあちちやで！"))
     }
     /// While combat owns speech, retain the relief transition from leaving the dark area.
     pub fn combat_recovery(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Vec<Speech> {

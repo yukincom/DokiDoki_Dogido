@@ -139,17 +139,24 @@ pub fn place_context(
     let y = event.player.position.y;
     let sky = w.sky_visible;
     let ceiling = w.ceiling_height;
-    let biome_label = if environment.include_biome_context {
-        catalog.biome_label(w.biome.as_deref())
-    } else {
-        String::new()
-    };
     let cover = w
         .overhead_cover_type
         .as_deref()
         .filter(|s| !s.is_empty())
         .unwrap_or("unknown")
         .to_lowercase();
+    // Leaves at the measured surface are a canopy even when they are just
+    // above the player's head. A low ceiling alone is not underground evidence.
+    let surface_canopy = cover == "foliage"
+        && w.depth_below_surface == Some(0)
+        && w.is_submerged != Some(true)
+        && !environment.cave_biome
+        && environment.mining_state == MiningState::None;
+    let biome_label = if environment.include_biome_context || surface_canopy {
+        catalog.biome_label(w.biome.as_deref())
+    } else {
+        String::new()
+    };
     let occluded = crate::combat::core::occluded_with_cover(event, &cover);
     let home = home_evidence(event, home_bed_prompt_distance);
     let (kind, ja) = if w.is_submerged == Some(true) {
@@ -171,6 +178,8 @@ pub fn place_context(
         ("cave_biome", "洞窟バイオームの中".into())
     } else if environment.mining_state == MiningState::LikelyPlace {
         ("mine_like", "坑道らしい地下空間".into())
+    } else if surface_canopy {
+        ("canopy", "地表の木陰（頭上は木の葉）".into())
     } else if sky == Some(false)
         && (ceiling.is_some_and(|v| v <= 8.0)
             || w.enclosure_score.unwrap_or(0.0) >= 0.35

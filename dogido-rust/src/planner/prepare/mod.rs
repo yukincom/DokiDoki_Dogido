@@ -23,6 +23,9 @@ pub struct Input {
     pub observed_entities: Vec<Map<String, Value>>,
     #[serde(default)]
     pub look_target_label: String,
+    /// Frozen crosshair observation, supplied by code only for a look question.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look_target: Option<handoff::Observation>,
     #[serde(default)]
     pub hearing_summary: String,
     #[serde(default)]
@@ -92,7 +95,7 @@ pub fn prepare(model: Option<&str>, input: &Input) -> PreparedInput {
     .into_iter()
     .filter(|action| may_repair || !action.is_repair())
     .collect();
-    let details = Details {
+    let mut details = Details {
         allowed_actions,
         history,
         pending_repair: pending,
@@ -110,6 +113,9 @@ pub fn prepare(model: Option<&str>, input: &Input) -> PreparedInput {
         }),
         current: json!({"turn_id":"current", "role":"user", "text":current, "raw_text":raw}),
     };
+    if let Some(target) = &input.look_target {
+        details.observations["look_target"] = json!(target);
+    }
     let request = PreparedPlan {
         schema_version: 1,
         model: model.into(),

@@ -512,3 +512,30 @@ fn light_result_must_be_in_the_original_offered_actions() {
             .is_none()
     );
 }
+
+#[test]
+fn forest_entry_resumes_after_player_priority_without_waiting_for_casual_to_end() {
+    let s = defaults();
+    let f = AmbientFocus {
+        foreground: true,
+        casual_foreground: true,
+        last_player_input_at: Some(0),
+        ..Default::default()
+    };
+    for biome in ["forest", "taiga"] {
+        let mut a = Ambient::default();
+        let e = event(
+            json!({"world":{"biome":biome,"time_phase":"day"},"passive_mobs":[{"type":"cat"}]}),
+        );
+        a.update(&e, 1000, true, &s);
+        assert!(a.actions(&e, 19999, Mode::Normal, false, &f, &s).is_empty());
+        let actions = a.actions(&e, 20000, Mode::Normal, false, &f, &s);
+        assert_eq!(actions[0].kind, "special_biome_entry");
+        assert!(actions[0].text.contains("敵") || actions[0].text.contains("夜にわいた"));
+        assert!(a.actions(&e, 29999, Mode::Normal, false, &f, &s).is_empty());
+        assert_eq!(
+            a.actions(&e, 30000, Mode::Normal, false, &f, &s)[0].kind,
+            "ambient"
+        );
+    }
+}

@@ -29,6 +29,8 @@ pub struct Input {
     pub topic_hits: Vec<Candidate>,
     pub observed_entities: Vec<Observation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look_target: Option<Observation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic_policy: Option<crate::chat_topics::Input>,
     #[serde(default)]
     pub native_catalog: bool,
@@ -54,6 +56,7 @@ pub struct Output {
 pub struct Handoff {
     plan: Option<Plan>,
     prompt_observations: Vec<Observation>,
+    prompt_look_target: Option<Observation>,
     output: Option<Output>,
 }
 impl Handoff {
@@ -65,6 +68,8 @@ impl Handoff {
             serde_json::from_value(request.details.observations["observed_entities"].clone())?;
         ensure!(rows.len() <= 16, "invalid planner observation projection");
         self.prompt_observations = rows;
+        self.prompt_look_target =
+            serde_json::from_value(request.details.observations["look_target"].clone())?;
         self.plan = Some(plan.clone());
         Ok(())
     }
@@ -86,6 +91,10 @@ impl Handoff {
         ensure!(
             normalize_prompt_observations(&input.observed_entities) == self.prompt_observations,
             "grounding current observations changed after planner"
+        );
+        ensure!(
+            input.look_target == self.prompt_look_target,
+            "grounding crosshair observation changed after planner"
         );
         ensure!(
             input.plan.requests_catalog() || input.topic_hits.is_empty(),
@@ -238,7 +247,9 @@ pub(crate) fn project(mut input: Input) -> Result<Output> {
             input.topic_hits.is_empty() && policy.topic_hits.is_empty(),
             "native catalog cannot accept projected hits"
         );
-        let rows = if input.plan.requests_catalog() {
+        let rows = if input.plan.requests_catalog()
+            && !(input.look_target.is_some() && is_look_reference(&input.plan.entity_query))
+        {
             crate::chat_catalog::catalog()
                 .player_chat_topics(&input.plan.entity_query, &policy.observed_ids)
         } else {
@@ -302,7 +313,24 @@ pub(crate) fn project(mut input: Input) -> Result<Output> {
             })
         })
         .collect();
-    let grounding = ground(&input.plan, &hits, &observed);
+    let grounding = if input.plan.action == Action::IdentifyEntity
+        && is_look_reference(&input.plan.entity_query)
+        && let Some(target) = input
+            .look_target
+            .as_ref()
+            .filter(|target| !target.entity_id.is_empty() && !target.label.is_empty())
+    {
+        Grounding {
+            status: "observed".into(),
+            query: input.plan.entity_query.clone(),
+            candidate_ids: vec![target.entity_id.clone()],
+            candidate_labels: vec![target.label.clone()],
+            observed_ids: vec![target.entity_id.clone()],
+            observed_labels: vec![target.label.clone()],
+        }
+    } else {
+        ground(&input.plan, &hits, &observed)
+    };
     let topics = input
         .topic_policy
         .as_ref()
@@ -356,5 +384,45 @@ pub(crate) fn project(mut input: Input) -> Result<Output> {
         catalog,
         catalog_topic_hints,
         grounding,
+    })
+}
+
+/// A named query must never be replaced by whatever happens to be under the crosshair.
+fn is_look_reference(query: &str) -> bool {
+    let query = query.trim().trim_end_matches(['?', '？', '。']);
+    ["これ", "それ", "あれ"].iter().any(|pronoun| {
+        query.strip_prefix(pronoun).is_some_and(|tail| {
+            matches!(
+                tail,
+                "" | "何"
+                    | "なに"
+                    | "は何"
+                    | "はなに"
+                    | "何かな"
+                    | "なにかな"
+                    | "は何かな"
+                    | "はなにかな"
+                    | "何ですか"
+                    | "なにですか"
+                    | "は何ですか"
+                    | "はなにですか"
+            )
+        })
+    }) || ["この", "その", "あの"].iter().any(|prefix| {
+        query.trim().strip_prefix(prefix).is_some_and(|noun| {
+            matches!(
+                noun,
+                "ブロック"
+                    | "花"
+                    | "石"
+                    | "木"
+                    | "モブ"
+                    | "動物"
+                    | "敵"
+                    | "生き物"
+                    | "もの"
+                    | "物"
+            )
+        })
     })
 }

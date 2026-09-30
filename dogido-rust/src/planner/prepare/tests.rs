@@ -65,6 +65,7 @@ fn preparation_reuses_handoff_current_rows_and_does_not_infer_presence_from_hist
                     },
                 ],
                 topic_policy: None,
+                look_target: None,
                 native_catalog: false,
                 name_context: None,
             },

@@ -316,6 +316,45 @@ def main():
             assert [r["role"] for r in session["history"]] == ["user", "assistant"], session
             close(sid); control["delay"] = 0
             passed.append("thunder_resumes_accepted_chat_without_duplicate_history")
+
+            # Heat must warn before damage while casual generation owns speech.
+            heat = {"nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 4.12}
+            sid = register(); send(sid)
+            control["delay"] = .3
+            old = say(sid, "火のそばでも話を続けよう")["turn_id"]
+            wait_for(lambda: row(base, old, {"generating"}))
+            send(sid, world=heat, player_state={"health": 20}, combat={"recent_damage_ms": 60000})
+            warning = wait_for(lambda: match(sid, "damaging_light", "completed"))
+            assert warning["text"] == "触るとあちちやで！", warning
+            new = wait_for(lambda: next((r for r in rows(sid) if r.get("player_input_text") == "火のそばでも話を続けよう"
+                and r["playback_status"] == "completed"), None))
+            assert old != new["turn_id"] and row(base, old, {"cancelled"}), rows(sid)
+            send(sid, world=heat)
+            assert len([r for r in rows(sid) if any(a["kind"] == "damaging_light" for a in r.get("combat_actions", []))]) == 1
+            close(sid); control["delay"] = 0
+            passed.append("heat_warns_at_four_blocks_before_damage_and_resumes_casual_chat")
+
+            sid = register(); send(sid)
+            (folder / "delay").write_text(".4")
+            send(sid, world={"thunder_sound_recent_ms": 0, "weather": "thunder"})
+            thunder = wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "started"), None))
+            send(sid, world=heat)
+            assert not any(any(a["kind"] == "damaging_light" for a in r.get("combat_actions", [])) for r in rows(sid))
+            wait_for(lambda: row(base, thunder["turn_id"], {"completed"}))
+            send(sid, world=heat)
+            wait_for(lambda: match(sid, "damaging_light", "completed"))
+            assert not row(base, thunder["turn_id"], {"cancelled"})
+            close(sid); (folder / "delay").write_text(".04")
+            passed.append("heat_waits_for_thunder_without_consuming_its_cooldown")
+
+            sid = register(); send(sid)
+            turn = say(sid, "こんにちは")["turn_id"]
+            wait_for(lambda: row(base, turn, {"completed"}))
+            time.sleep(.12)
+            send(sid, world={"biome": "taiga"})
+            wait_for(lambda: match(sid, "special_biome_entry", "completed"))
+            close(sid)
+            passed.append("taiga_entry_is_delivered_during_casual_foreground")
         report = {"passed": len(passed), "scenarios": passed, "all_owned_processes_stopped": True}
     (ROOT / "reports").mkdir(exist_ok=True)
     (ROOT / "reports/environment-runtime.json").write_text(json.dumps(report, ensure_ascii=False, indent=2)+"\n")

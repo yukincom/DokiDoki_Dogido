@@ -312,9 +312,22 @@ impl Dialogue {
         if reserved_reply(s) {
             return;
         }
-        let urgent = s
-            .danger
-            .urgent(&event, now, s.mode, false, &self.config.combat);
+        let mut danger = s.danger.clone();
+        let urgent = danger.urgent(&event, now, s.mode, false, &self.config.combat);
+        // Do not cut off an already selected thunder/evening warning on the
+        // next snapshot, or consume the heat cooldown before it can be queued.
+        if urgent.iter().any(|a| a.kind == "damaging_light")
+            && s.warning
+                .as_ref()
+                .map(|w| w.actions.as_slice())
+                .into_iter()
+                .chain(s.pending_warning.as_deref())
+                .flatten()
+                .any(|a| a.delivery == Delivery::UrgentEnvironment)
+        {
+            return;
+        }
+        s.danger = danger;
         if !urgent.is_empty() {
             self.queue_environment(d, jobs, sid, urgent, true);
             return;

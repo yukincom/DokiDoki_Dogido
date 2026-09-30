@@ -33,12 +33,15 @@ const TEXT_FIELDS: &[&str] = &[
     "observation_summary",
     "look_target_label",
     "catalog_topic_hints",
+    "named_entity_description_hints",
     "plausibility_hints",
     "conversation_history",
     "event_digest",
     "player_chat_plan_action",
+    "player_chat_plan_focus",
     "entity_query",
     "entity_grounding_status",
+    "required_identification_label",
     "haiku_workshop_open",
     "haiku_workshop_text",
     "haiku_workshop_materials",
@@ -505,10 +508,34 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             );
         }
     }
+    let descriptions = text(d, "named_entity_description_hints", "");
+    if !descriptions.is_empty() {
+        user.push_str(&format!("\n【今回名前が出た種類の辞書描写ヒント】\n{descriptions}\n種類の描写の参考。現在の存在・視認・行動の証拠にはしない。会話履歴の別の対象の描写を引き継がず、この対象に沿って返す。\n"));
+    }
+    let identification = text(d, "required_identification_label", "");
+    if !identification.is_empty() {
+        user.push_str(&format!(
+            "\n名前を尋ねられた照準先の対象は「{identification}」。まずこの名前を答える。\n"
+        ));
+    }
+    let focus = text(d, "player_chat_plan_focus", "");
+    if !focus.is_empty() {
+        user.push_str(&format!(
+            "\n今回の返答の焦点: {focus}\n最新のプレイヤー発言「{}」へ答える一言だけ。\n",
+            text(d, "user_text", "")
+        ));
+    }
     let mut out = vec![
         ChatMessage {
             role: Role::System,
-            content: asset(&DATA["systems"][character]).into(),
+            content: if descriptions.is_empty() {
+                asset(&DATA["systems"][character]).into()
+            } else {
+                format!(
+                    "{}\n今回の話題の種類と辞書描写: {descriptions}。特徴を話す場合はこの描写に沿うこと。前の返答にあった別対象の描写を繰り返さない。これは種類の一般的な描写の参考であり、現在の視認・存在・行動は観測欄だけで判断する。",
+                    asset(&DATA["systems"][character])
+                )
+            },
         },
         ChatMessage {
             role: Role::User,
@@ -528,11 +555,15 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
             .unwrap_or("surface_style_mismatch");
-        let feedback = asset(
-            DATA["repair_feedback"]
-                .get(reason)
-                .unwrap_or(&DATA["repair_feedback"]["surface_style_mismatch"]),
-        );
+        let feedback = if reason == "missing_identification_name" {
+            "対象の名前を答えていません。材料にある照準先の名前を先に答えてください。"
+        } else {
+            asset(
+                DATA["repair_feedback"]
+                    .get(reason)
+                    .unwrap_or(&DATA["repair_feedback"]["surface_style_mismatch"]),
+            )
+        };
         out.push(ChatMessage {
             role: Role::Assistant,
             content: candidate.into(),

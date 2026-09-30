@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 static DATA: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("prompts.json")).expect("reaction prompt data")
 });
+pub(super) const FIRST_PERSON: &str = "\n一人称は「オレ」。自分を名前の「ドギド」で呼ばない。";
 
 pub(super) use crate::compat::json_truthy as truth;
 pub(super) fn pystr(v: &Value) -> String {
@@ -260,7 +261,8 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
             content: DATA["systems"][mode(kind, d)]
                 .as_str()
                 .context("reaction mode")?
-                .into(),
+                .to_owned()
+                + FIRST_PERSON,
         },
         ChatMessage {
             role: Role::User,

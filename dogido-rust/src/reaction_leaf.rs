@@ -123,8 +123,12 @@ mod tests {
     fn prompts_match_python_for_all_kinds_and_branches() {
         for row in fixture()["prompts"].as_array().unwrap() {
             let kind = row["kind"].as_str().unwrap();
-            let actual =
+            let mut actual =
                 serde_json::to_value(prompts::messages(kind, &row["details"]).unwrap()).unwrap();
+            // Native reactions now explicitly share the established first person.
+            let system = actual[0]["content"].as_str().unwrap();
+            assert!(system.ends_with("一人称は「オレ」。自分を名前の「ドギド」で呼ばない。"));
+            actual[0]["content"] = json!(system.strip_suffix(prompts::FIRST_PERSON).unwrap());
             assert_eq!(actual, row["messages"], "{kind} {}", row["details"]);
         }
     }
@@ -160,7 +164,14 @@ mod tests {
             .unwrap();
             let calls = row["calls"].as_array().unwrap();
             assert_eq!(calls.len(), 1);
-            let req = serde_json::to_value(&leaf.request).unwrap();
+            let mut req = serde_json::to_value(&leaf.request).unwrap();
+            req["messages"][0]["content"] = json!(
+                req["messages"][0]["content"]
+                    .as_str()
+                    .unwrap()
+                    .strip_suffix(prompts::FIRST_PERSON)
+                    .unwrap()
+            );
             for field in [
                 "kind",
                 "temperature",

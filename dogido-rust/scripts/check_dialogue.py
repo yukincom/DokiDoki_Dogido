@@ -286,8 +286,25 @@ def main():
             request(base, "/api/v1/game-events", event(3, danger=True), sid=sid)
             wait_for(lambda: row(base, turn, {"cancelled"}))
             passed.append("fresh_observation_required_and_danger_cancels")
-            request(base, "/api/v1/game-events", event(4), sid=sid)
+            request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+            sid = register(base, preview=False)
             control["delay"] = 0
+            focused = event(1)
+            focused["world"] = {"biome":"desert", "sky_visible":True, "local_light":15, "time_phase":"day"}
+            focused["look_target"] = {"kind":"block", "name":"cactus", "distance":2.0}
+            request(base, "/api/v1/game-events", focused, sid=sid)
+            control["structured"] = {640:{"action":"identify_entity", "focus":"照準先の名前を答える",
+                "entity_query":"これ", "evidence":[{"turn_id":"current", "quote":"これは何かな"}], "confidence":.95}}
+            control["leaf"] = "尖っていて緑色やな。"
+            before = len([r for r in seen if r["path"] == "/v1/chat/completions"])
+            turn = submit(base, sid, "これは何かな")
+            reply = wait_for(lambda: row(base, turn, {"completed", "failed"}))
+            assert reply["playback_status"] == "completed" and reply["text"] == "それはサボテンやで。", reply
+            assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) - before == 3
+            assert snapshot(base)["sessions"][0]["history"][-1]["text"] == "それはサボテンやで。"
+            passed.append("crosshair_name_survives_planner_and_two_nonanswers_without_false_history")
+            control.pop("structured")
+            control["leaf"] = "そうやな。また話しかけてな。"
             (directory / "player_mode").write_text("slow")
             stopping_turn = submit(base, sid, "停止を確認するよ")
             wait_for(lambda: row(base, stopping_turn, {"started"}))

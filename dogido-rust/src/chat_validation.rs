@@ -33,7 +33,12 @@ pub fn validate(raw: &str, d: &Value) -> Validation {
         };
     }
     let (cleaned, corrections) = guard::rewrite(&cleaned, d);
-    let issue = guard::style_issue(&cleaned, d);
+    let issue = guard::style_issue(&cleaned, d).or_else(|| {
+        d["required_identification_label"]
+            .as_str()
+            .filter(|label| !label.is_empty() && !cleaned.contains(label))
+            .map(|_| "missing_identification_name")
+    });
     Validation {
         cleaned,
         reason: issue.map(|_| "style_mismatch"),
@@ -44,10 +49,16 @@ pub fn validate(raw: &str, d: &Value) -> Validation {
 fn valid_validation(d: &Value) -> Result<()> {
     for (key, value) in d.as_object().context("chat validation details")? {
         let valid = match key.as_str() {
-            "player_name" | "mode" | "character_mode" | "threat_summary" | "hearing_summary"
-            | "event_digest" | "user_text" | "player_turn_plan" | "safety_priority" => {
-                value.is_null() || value.is_string()
-            }
+            "player_name"
+            | "mode"
+            | "character_mode"
+            | "threat_summary"
+            | "hearing_summary"
+            | "event_digest"
+            | "user_text"
+            | "player_turn_plan"
+            | "safety_priority"
+            | "required_identification_label" => value.is_null() || value.is_string(),
             "has_visual_threats" | "combat_active" | "speech_whitelist_enforce" => {
                 value.is_null() || value.is_boolean()
             }
@@ -220,6 +231,7 @@ pub(crate) fn project_details(details: &Value) -> Value {
                         | "user_text"
                         | "player_turn_plan"
                         | "safety_priority"
+                        | "required_identification_label"
                         | "has_visual_threats"
                         | "combat_active"
                         | "speech_whitelist_enforce"

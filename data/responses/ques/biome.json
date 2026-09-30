@@ -29,6 +29,11 @@
         "line_group": "forest_shade"
       }
     },
+    "taiga": {
+      "day": {
+        "line_group": "forest_shade"
+      }
+    },
     "old_growth_birch_forest": {
       "day": {
         "line_group": "forest_shade"

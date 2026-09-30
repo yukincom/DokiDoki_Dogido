@@ -1,6 +1,7 @@
 //! A frozen ordinary turn's pure materials, split before and after the bounded planner.
 //! No Session mutation, model run, history writes, clock reads, or playback success claims.
 mod current;
+mod descriptions;
 mod travel;
 use crate::{
     chat_catalog, chat_hints, chat_names,
@@ -216,6 +217,14 @@ pub fn before_plan(
             .map(|r| json!(r).as_object().unwrap().clone())
             .collect(),
         look_target_label: look.clone(),
+        look_target: event
+            .look_target
+            .as_ref()
+            .filter(|_| !look.is_empty() && !context.workshop_open)
+            .map(|target| handoff::Observation {
+                entity_id: chat_catalog::normalized_observation_id(&target.name),
+                label: look.clone(),
+            }),
         hearing_summary: snapshot.hearing.summary.clone(),
         inventory_question: input.asks_inventory,
         sound_question: input.asks_about_sound,
@@ -372,6 +381,7 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
         plan: plan.clone(),
         topic_hits: vec![],
         observed_entities: turn.observed_entities.clone(),
+        look_target: turn.planner_input.look_target.clone(),
         native_catalog: true,
         topic_policy: Some(chat_topics::Input {
             has_visual_threats: !event.visual_threats.is_empty()
@@ -453,6 +463,20 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
     d.as_object_mut()
         .unwrap()
         .extend(generated.as_object().unwrap().clone());
+    if !turn.context.workshop_open
+        && let Some(hints) = descriptions::named_mob(user)
+    {
+        d["named_entity_description_hints"] = json!(hints);
+    }
+    if !turn.context.workshop_open
+        && plan.action == Action::IdentifyEntity
+        && g.status == "observed"
+        && let [label] = g.observed_labels.as_slice()
+        && !turn.look.is_empty()
+        && label == &turn.look
+    {
+        d["required_identification_label"] = json!(label);
+    }
     if turn.context.workshop_open {
         for key in [
             "look_target_label",
@@ -499,7 +523,12 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
         .repair
         .as_ref()
         .map(|r| r.fallback())
-        .unwrap_or_else(|| turn.fallback.clone());
+        .unwrap_or_else(|| {
+            d["required_identification_label"]
+                .as_str()
+                .map(|label| format!("それは{label}やで。"))
+                .unwrap_or_else(|| turn.fallback.clone())
+        });
     ensure!(d.is_object(), "chat details lost shape");
     Ok(After::Leaf(Box::new(Leaf {
         details: d,

@@ -4351,9 +4351,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private int countNearbyDamagingLightSources(ClientWorld world, BlockPos origin) {
         int count = 0;
-        for (int dx = -2; dx <= 2; dx += 1) {
+        for (int dx = -5; dx <= 5; dx += 1) {
             for (int dy = -1; dy <= 2; dy += 1) {
-                for (int dz = -2; dz <= 2; dz += 1) {
+                for (int dz = -5; dz <= 5; dz += 1) {
                     BlockPos sample = origin.add(dx, dy, dz);
                     if (isDamagingLightSource(world.getBlockState(sample))) {
                         count += 1;
@@ -4366,9 +4366,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private double estimateNearestDamagingLightSourceDistance(ClientWorld world, BlockPos origin) {
         double nearest = 999.0;
-        for (int dx = -2; dx <= 2; dx += 1) {
+        for (int dx = -5; dx <= 5; dx += 1) {
             for (int dy = -1; dy <= 2; dy += 1) {
-                for (int dz = -2; dz <= 2; dz += 1) {
+                for (int dz = -5; dz <= 5; dz += 1) {
                     BlockPos sample = origin.add(dx, dy, dz);
                     if (!isDamagingLightSource(world.getBlockState(sample))) {
                         continue;

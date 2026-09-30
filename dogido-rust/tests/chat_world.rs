@@ -134,9 +134,32 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
             value(row, 2).as_f64().unwrap(),
         )
         .unwrap();
+        let mut expected = value(row, 3).clone();
+        // Intentional correction to the frozen Python baseline: a measured
+        // surface canopy retains its biome even below low leaves.
+        if event.world.overhead_cover_type.as_deref() == Some("foliage")
+            && event.world.depth_below_surface == Some(0)
+            && matches!(
+                expected["space_kind"].as_str(),
+                Some("canopy" | "underground_or_roofed")
+            )
+        {
+            let biome = c.biome_label(event.world.biome.as_deref());
+            expected["space_kind"] = json!("canopy");
+            expected["biome_label"] = json!(biome);
+            let line = expected["place_line"]
+                .as_str()
+                .unwrap()
+                .replace("木陰っぽい空間", "地表の木陰（頭上は木の葉）")
+                .replace(
+                    "地下っぽい／屋根のある空間（空は見えない）",
+                    "地表の木陰（頭上は木の葉）",
+                );
+            expected["place_line"] = json!(format!("地表バイオーム: {biome} / {line}"));
+        }
         assert_eq!(
             serde_json::to_value(out).unwrap(),
-            *value(row, 3),
+            expected,
             "place {i} {:?}",
             value(row, 0)
         );
@@ -155,5 +178,41 @@ fn chat_world_place_and_weather_match_canonical_complete_event_projection() {
             value(row, 2).as_str().unwrap(),
             "weather fact {i}"
         );
+    }
+}
+
+#[test]
+fn measured_surface_leaves_keep_taiga_instead_of_inventing_underground() {
+    let base = value(&FIXTURE["places"][0], 0).clone();
+    for (cover, depth, expected) in [
+        ("foliage", 0, "canopy"),
+        ("solid", 0, "underground_or_roofed"),
+        ("stone", 12, "mine_like"),
+    ] {
+        let mut raw = base.clone();
+        raw["player"]["position"]["y"] = json!(111.0);
+        raw["player"]["held_item"] = json!("pink_petals");
+        raw["world"] = json!({"biome":"taiga","sky_visible":false,"overhead_cover_type":cover,
+            "depth_below_surface":depth,"ceiling_height":2.0,"enclosure_score":0.4,
+            "local_light":13,"danger_darkness_score":0.3});
+        raw["recent_block_breaks"] = json!([]);
+        raw["dropped_items"] = json!([]);
+        let e = GameEvent::parse(raw).unwrap();
+        let p = chat_world::place_context(
+            world_catalog::catalog(),
+            chat_catalog::catalog(),
+            &e,
+            None,
+            10.,
+        )
+        .unwrap();
+        assert_eq!(p.space_kind, expected);
+        if cover == "foliage" {
+            assert_eq!(p.biome_label, "タイガ");
+            assert!(p.place_line.contains("タイガ"));
+            assert!(p.place_line.contains("木陰"));
+            assert!(!p.place_line.contains("地下"));
+            assert_eq!(p.sky_visible, Some(false));
+        }
     }
 }

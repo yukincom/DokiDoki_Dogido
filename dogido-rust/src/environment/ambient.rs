@@ -158,16 +158,7 @@ impl Ambient {
         {
             return vec![];
         }
-        if focus.foreground {
-            if focus.casual_foreground
-                && elapsed(now, input_at, s.ms("conversation_ambient_mute_ms"))
-                && input_at.is_some()
-            {
-                return self
-                    .mob_action_if_allowed(e, now, mode, focus, s)
-                    .into_iter()
-                    .collect();
-            }
+        if focus.foreground && !focus.casual_foreground {
             return vec![];
         }
         if self.light_request(e, now, focus, s) {
@@ -193,6 +184,11 @@ impl Ambient {
             return vec![speech];
         }
         if focus.ominous_presence {
+            return vec![];
+        }
+        if focus.casual_foreground
+            && (input_at.is_none() || !elapsed(now, input_at, s.ms("conversation_ambient_mute_ms")))
+        {
             return vec![];
         }
         self.mob_action_if_allowed(e, now, mode, focus, s)

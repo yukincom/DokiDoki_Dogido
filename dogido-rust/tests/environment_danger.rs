@@ -331,3 +331,36 @@ fn full_non_snapshot_invalidates_deferred_water_entry() {
     });
     assert!(tick(&mut d, &clear, 1000, true, false, false).is_empty());
 }
+
+#[test]
+fn heat_warns_before_contact_even_during_conversation_and_keeps_cooldown() {
+    let mut d = Danger::default();
+    let mut e = event(
+        json!({"biome":"plains","time_phase":"day","sky_visible":true,
+        "local_light":15,"nearby_damaging_light_source_count":1,"nearest_damaging_light_source_distance":5.01}),
+    );
+    edit(&mut e, |e| {
+        e.player.health = Some(20.0);
+        e.combat.recent_damage_ms = Some(60000);
+    });
+    assert!(tick(&mut d, &e, 0, true, true, false).is_empty());
+    edit(&mut e, |e| {
+        e.world.nearest_damaging_light_source_distance = Some(4.12)
+    });
+    let warning = tick(&mut d, &e, 1000, true, true, false);
+    assert_eq!(warning[0].kind, "damaging_light");
+    assert!(still_applicable(&warning[0], &e, &Settings::default()));
+    assert!(tick(&mut d, &e, 2000, true, true, false).is_empty());
+    edit(&mut e, |e| {
+        e.world.nearest_damaging_light_source_distance = Some(5.01)
+    });
+    assert!(!still_applicable(&warning[0], &e, &Settings::default()));
+    edit(&mut e, |e| {
+        e.world.nearest_damaging_light_source_distance = Some(0.0)
+    });
+    assert!(tick(&mut d, &e, 600999, true, true, false).is_empty());
+    assert_eq!(
+        tick(&mut d, &e, 601000, true, true, false)[0].kind,
+        "damaging_light"
+    );
+}
