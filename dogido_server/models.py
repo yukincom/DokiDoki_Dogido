@@ -296,6 +296,14 @@ class WorldState(DogidoModel):
 
 # ---- 脅威情報 ----
 
+class MobIdentity(DogidoModel):
+    """実際に照合した個体。名前の有無と飼いならし状態は独立。"""
+
+    entity_id: str = Field(min_length=1, max_length=64)
+    custom_name: str | None = Field(default=None, max_length=64)
+    tamed: bool = False
+
+
 class VisualThreat(DogidoModel):
     """視認できている敵エンティティ（仕様 §11）。
 
@@ -307,6 +315,7 @@ class VisualThreat(DogidoModel):
     """
     type: str
     entity_id: str | None = None  # 同一エンティティの追跡用 ID（省略可）
+    identity: MobIdentity | None = None
     distance: float | None = None  # プレイヤーとの距離（ブロック数）
     direction: Direction = Field(default_factory=Direction)
     approaching: bool = False  # プレイヤーに近づいているか
@@ -552,6 +561,7 @@ class AmbientSound(DogidoModel):
     """
     type: str  # 例: villager / block:campfire / weather:thunder / unknown
     source_id: str | None = None
+    identity: MobIdentity | None = None
     sound_event: str | None = None
     direction: Direction = Field(default_factory=Direction)
     distance_band: DistanceBand | None = None
@@ -570,6 +580,7 @@ class PassiveMob(DogidoModel):
       profession: none=求職者, nitwit=ニート（緑）, farmer 等=就職者
     """
     type: str
+    identity: MobIdentity | None = None
     distance: float | None = None
     direction: Direction = Field(default_factory=Direction)
     certainty: Certainty = Certainty.HIGH
@@ -621,6 +632,7 @@ class LookTarget(DogidoModel):
     """
     kind: str = "block"
     name: str
+    identity: MobIdentity | None = None
     distance: float | None = None
 
 

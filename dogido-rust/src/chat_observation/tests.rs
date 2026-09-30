@@ -224,3 +224,147 @@ fn repeated_sound_snapshots_preserve_actual_hearing_time_and_current_source_iden
     invalid["auditory_threats"][0]["heard_ago_ms"] = json!(-1);
     assert!(GameEvent::parse(invalid).is_err());
 }
+
+#[test]
+fn named_individual_memory_keeps_presence_rename_and_sound_age_separate() {
+    let labels = labels();
+    let mut memory = ChatObservationMemory::default();
+    let named = frame(
+        "2026-09-30T01:00:00Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"c","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    memory
+        .observe(&named, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    let empty = frame("2026-09-30T01:00:15Z", json!({}));
+    memory
+        .observe(&empty, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    let snap = memory.snapshot(&empty, &labels).unwrap();
+    assert_eq!(snap.named_mobs[0].custom_name, "クロちゃん");
+    assert!(!snap.named_mobs[0].current);
+    assert!(snap.current.passive_types.is_empty());
+    let renamed = frame(
+        "2026-09-30T01:00:16Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"c","custom_name":"シロ","tamed":true}}]}),
+    );
+    memory
+        .observe(&renamed, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert_eq!(
+        memory.snapshot(&renamed, &labels).unwrap().named_mobs.len(),
+        1
+    );
+    assert_eq!(
+        memory.snapshot(&renamed, &labels).unwrap().named_mobs[0].custom_name,
+        "シロ"
+    );
+    let unnamed = frame(
+        "2026-09-30T01:00:17Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"c","tamed":true}}]}),
+    );
+    memory
+        .observe(&unnamed, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert!(
+        memory
+            .snapshot(&unnamed, &labels)
+            .unwrap()
+            .named_mobs
+            .is_empty()
+    );
+    let sound = frame(
+        "2026-09-30T01:00:30Z",
+        json!({"ambient_sounds":[{"type":"cat","source_id":"c","heard_ago_ms":10000,
+        "identity":{"entity_id":"c","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    memory
+        .observe(&sound, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert_eq!(
+        memory.named_mobs[0].observed_at_us,
+        memory.hearing[0].heard_at_us
+    );
+    let after_sound = frame("2026-09-30T01:00:41Z", json!({}));
+    memory
+        .observe(&after_sound, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert!(
+        memory
+            .snapshot(&after_sound, &labels)
+            .unwrap()
+            .hearing
+            .candidates
+            .is_empty()
+    );
+    let dimension = frame(
+        "2026-09-30T01:00:42Z",
+        json!({"player":{"dimension":"minecraft:the_nether"}}),
+    );
+    memory
+        .observe(&dimension, &NameOutcomeUpdate::default(), &labels)
+        .unwrap();
+    assert!(
+        memory
+            .snapshot(&dimension, &labels)
+            .unwrap()
+            .named_mobs
+            .is_empty()
+    );
+}
+
+#[test]
+fn retained_old_audio_never_reverts_a_newer_name_or_name_removal() {
+    let labels = labels();
+    let mut memory = ChatObservationMemory::default();
+    let visual = frame(
+        "2026-09-30T01:00:10Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"c","custom_name":"シロ","tamed":true}}]}),
+    );
+    memory
+        .observe(&visual, &Default::default(), &labels)
+        .unwrap();
+    let old_audio = frame(
+        "2026-09-30T01:00:15Z",
+        json!({"ambient_sounds":[
+        {"type":"cat","source_id":"c","heard_ago_ms":15000,"identity":{"entity_id":"c","custom_name":"クロ","tamed":true}}]}),
+    );
+    memory
+        .observe(&old_audio, &Default::default(), &labels)
+        .unwrap();
+    let snap = memory.snapshot(&old_audio, &labels).unwrap();
+    assert_eq!(snap.named_mobs[0].custom_name, "シロ");
+    assert!(!snap.named_mobs[0].current);
+    let unnamed = frame(
+        "2026-09-30T01:00:16Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"c","tamed":true}}]}),
+    );
+    memory
+        .observe(&unnamed, &Default::default(), &labels)
+        .unwrap();
+    let old_audio = frame(
+        "2026-09-30T01:00:17Z",
+        json!({"ambient_sounds":[
+        {"type":"cat","source_id":"c","heard_ago_ms":17000,"identity":{"entity_id":"c","custom_name":"クロ","tamed":true}}]}),
+    );
+    memory
+        .observe(&old_audio, &Default::default(), &labels)
+        .unwrap();
+    assert!(
+        memory
+            .snapshot(&old_audio, &labels)
+            .unwrap()
+            .named_mobs
+            .is_empty()
+    );
+    let mut fresh = ChatObservationMemory::default();
+    fresh
+        .observe(&old_audio, &Default::default(), &labels)
+        .unwrap();
+    assert!(!fresh.snapshot(&old_audio, &labels).unwrap().named_mobs[0].current);
+}

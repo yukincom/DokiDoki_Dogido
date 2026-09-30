@@ -257,6 +257,10 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
         if let Some(kind) = g["mob_type"].as_str() {
             return e.passive_mobs.iter().any(|m| {
                 m.r#type == kind
+                    && !m.identity.as_ref().is_some_and(|i| i.tamed)
+                    && g["entity_id"]
+                        .as_str()
+                        .is_none_or(|id| m.identity.as_ref().is_some_and(|i| i.entity_id == id))
                     && (g["crowd"] == true
                         || g["baby"].as_bool().unwrap_or(false) == m.is_baby.unwrap_or(false))
                     && g["profession"].as_str().is_none_or(|p| {

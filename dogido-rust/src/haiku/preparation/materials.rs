@@ -12,7 +12,7 @@ fn clean(text: &str, limit: usize) -> String {
         format!("{}…", take(&s, limit.saturating_sub(1)))
     }
 }
-pub fn dialogue_material(turns: &[Value]) -> Result<Value> {
+pub(super) fn completed_player_turns(turns: &[Value]) -> Result<Vec<(String, String)>> {
     let mut completed: Vec<(String, String)> = vec![];
     for turn in turns {
         ensure!(turn.is_object(), "completed turn must be an object");
@@ -38,7 +38,10 @@ pub fn dialogue_material(turns: &[Value]) -> Result<Value> {
             completed.remove(0);
         }
     }
-    let turns = &completed[completed.len().saturating_sub(3)..];
+    Ok(completed[completed.len().saturating_sub(3)..].to_vec())
+}
+pub fn dialogue_material(turns: &[Value]) -> Result<Value> {
+    let turns = completed_player_turns(turns)?;
     let phrases: Vec<_> = turns
         .iter()
         .map(|(_, s)| clean(s, 12))

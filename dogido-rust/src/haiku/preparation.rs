@@ -96,6 +96,7 @@ pub struct Preparation {
     atoms: Vec<SourceAtom>,
     materials: Map<String, Value>,
     fixed_text: Option<String>,
+    background_companions: Vec<CatalogSourceSnapshot>,
 }
 fn take(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
@@ -176,9 +177,42 @@ impl Preparation {
             "invalid haiku preparation settings"
         );
         let readings = reading_snapshot(&start.reading_corrections)?;
+        let dialogue = match &start.dialogue_material {
+            Some(v) if !truth(v) => json!({}),
+            Some(v) => {
+                ensure!(v.is_object(), "dialogue_material must be an object");
+                v.clone()
+            }
+            None => dialogue_material(&start.completed_turns)?,
+        };
+        // Only the existing completed player-turn material promotes a follower.
+        let mut topics = dialogue
+            .get("summary")
+            .and_then(Value::as_str)
+            .into_iter()
+            .map(str::to_owned)
+            .chain(
+                dialogue["motifs"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned),
+            )
+            .collect::<Vec<_>>();
+        if start.dialogue_material.is_none() {
+            topics.extend(
+                materials::completed_player_turns(&start.completed_turns)?
+                    .into_iter()
+                    .map(|(_, text)| text),
+            );
+        }
+        let primary_event = super::companions::primary_event(&start.event, &topics);
+        let background_companions =
+            super::companions::background(&start.event, &primary_event, &readings);
         let world = crate::world_catalog::catalog();
         let context = selection::capture(
-            &start.event,
+            &primary_event,
             RuntimeRead {
                 current_structure: start.runtime.current_structure.as_deref(),
                 player_name: &start.runtime.player_name,
@@ -189,17 +223,9 @@ impl Preparation {
             world,
             &readings,
         )?;
-        let dialogue = match start.dialogue_material {
-            Some(v) if !truth(&v) => json!({}),
-            Some(v) => {
-                ensure!(v.is_object(), "dialogue_material must be an object");
-                v
-            }
-            None => dialogue_material(&start.completed_turns)?,
-        };
         let mut job = Self {
             stage: Stage::Context,
-            event: start.event,
+            event: primary_event,
             settings: start.settings,
             context,
             readings,
@@ -210,6 +236,7 @@ impl Preparation {
             atoms: vec![],
             materials: Map::new(),
             fixed_text: None,
+            background_companions,
         };
         let request = if job.settings.llm_enabled {
             Some(job.request("haiku_irony", job.context.irony_details()))
@@ -314,6 +341,7 @@ impl Preparation {
                 .into_iter()
                 .collect(),
             materials::conversation_atoms(&self.dialogue),
+            atoms_from_catalog_sources(&self.background_companions, 0, 1),
         ]);
         self.materials = materials::seed(
             &self.event,
@@ -343,6 +371,17 @@ impl Preparation {
             self.materials.insert("haiku_constraints".into(), c.clone());
         }
         let mut details = self.context.prompt_details(Some(&self.irony), Some(&scene));
+        if !self.background_companions.is_empty() {
+            let companions = json!(
+                self.background_companions
+                    .iter()
+                    .map(CatalogSourceSnapshot::to_dict)
+                    .collect::<Vec<_>>()
+            );
+            details.insert("background_companions".into(), companions.clone());
+            self.materials
+                .insert("background_companions".into(), companions);
+        }
         if truth(&self.dialogue) {
             details.insert("player_dialogue_material".into(), self.dialogue.clone());
         }

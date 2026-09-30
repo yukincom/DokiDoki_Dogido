@@ -50,6 +50,7 @@ fn preparation_reuses_handoff_current_rows_and_does_not_infer_presence_from_hist
     let result = handoff
         .resolve(
             handoff::Input {
+                individual_names: vec![],
                 schema_version: 1,
                 source: "current_observation".into(),
                 plan: output.fallback,

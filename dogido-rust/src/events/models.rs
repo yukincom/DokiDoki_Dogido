@@ -402,17 +402,20 @@ pub struct AmbientSound {
     #[serde(default)]
     pub source_id: Option<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<MobIdentity>,
+    #[serde(default)]
     pub sound_event: Option<String>,
-    /// Elapsed real milliseconds since the sound actually played, not since this snapshot.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "wire::deserialize")]
-    pub heard_ago_ms: Option<i64>,
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
     pub distance_band: Option<DistanceBand>,
     #[serde(default = "default_ambientsound_certainty")]
     pub certainty: Certainty,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heard_ago_ms: Option<i64>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
@@ -423,10 +426,6 @@ pub struct AuditoryThreat {
     pub source_id: Option<String>,
     #[serde(default)]
     pub sound_event: Option<String>,
-    /// Elapsed real milliseconds since the sound actually played, not since this snapshot.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "wire::deserialize")]
-    pub heard_ago_ms: Option<i64>,
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
@@ -436,6 +435,10 @@ pub struct AuditoryThreat {
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub spoken_name_allowed: bool,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heard_ago_ms: Option<i64>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
@@ -616,6 +619,9 @@ pub struct LookTarget {
     pub kind: String,
     pub name: String,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<MobIdentity>,
+    #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(flatten)]
@@ -646,6 +652,17 @@ impl Default for MetaState {
         serde_json::from_str("{}").expect("model defaults")
     }
 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MobIdentity {
+    pub entity_id: String,
+    #[serde(default)]
+    pub custom_name: Option<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub tamed: bool,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NearbyResource {
     pub r#type: String,
@@ -661,6 +678,9 @@ pub struct NearbyResource {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PassiveMob {
     pub r#type: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<MobIdentity>,
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
@@ -796,6 +816,9 @@ pub struct VisualThreat {
     #[serde(default)]
     pub entity_id: Option<String>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<MobIdentity>,
+    #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(default)]
@@ -836,10 +859,6 @@ pub struct WorldState {
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub sky_visible: Option<bool>,
-    /// Actual client game pause; missing on legacy adapters.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "wire::deserialize")]
-    pub game_paused: Option<bool>,
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub surface_y: Option<i64>,
@@ -953,6 +972,10 @@ pub struct WorldState {
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_end_portal_frame_distance: Option<f64>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_paused: Option<bool>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
@@ -1081,9 +1104,10 @@ impl Validate for AdapterCommandResult {
 }
 impl Validate for AmbientSound {
     fn validate(&self) -> Result<(), String> {
+        self.identity.validate()?;
         self.direction.validate()?;
-        if let Some(value) = self.heard_ago_ms {
-            ensure(value >= 0, "AmbientSound.heard_ago_ms: minimum 0")?;
+        if let Some(value) = &self.heard_ago_ms {
+            ensure(*value >= 0, "AmbientSound.heard_ago_ms: minimum 0")?;
         }
         Ok(())
     }
@@ -1091,8 +1115,8 @@ impl Validate for AmbientSound {
 impl Validate for AuditoryThreat {
     fn validate(&self) -> Result<(), String> {
         self.direction.validate()?;
-        if let Some(value) = self.heard_ago_ms {
-            ensure(value >= 0, "AuditoryThreat.heard_ago_ms: minimum 0")?;
+        if let Some(value) = &self.heard_ago_ms {
+            ensure(*value >= 0, "AuditoryThreat.heard_ago_ms: minimum 0")?;
         }
         Ok(())
     }
@@ -1231,11 +1255,31 @@ impl Validate for HotbarState {
 }
 impl Validate for LookTarget {
     fn validate(&self) -> Result<(), String> {
+        self.identity.validate()?;
         Ok(())
     }
 }
 impl Validate for MetaState {
     fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
+}
+impl Validate for MobIdentity {
+    fn validate(&self) -> Result<(), String> {
+        ensure(
+            (self.entity_id).chars().count() >= 1,
+            "MobIdentity.entity_id: minLength 1",
+        )?;
+        ensure(
+            (self.entity_id).chars().count() <= 64,
+            "MobIdentity.entity_id: maxLength 64",
+        )?;
+        if let Some(value) = &self.custom_name {
+            ensure(
+                (value).chars().count() <= 64,
+                "MobIdentity.custom_name: maxLength 64",
+            )?;
+        }
         Ok(())
     }
 }
@@ -1247,6 +1291,7 @@ impl Validate for NearbyResource {
 }
 impl Validate for PassiveMob {
     fn validate(&self) -> Result<(), String> {
+        self.identity.validate()?;
         self.direction.validate()?;
         Ok(())
     }
@@ -1305,6 +1350,7 @@ impl Validate for VehicleState {
 }
 impl Validate for VisualThreat {
     fn validate(&self) -> Result<(), String> {
+        self.identity.validate()?;
         self.direction.validate()?;
         Ok(())
     }

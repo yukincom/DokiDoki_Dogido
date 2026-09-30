@@ -1,6 +1,7 @@
 package dogido.fabric;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -13,6 +14,47 @@ final class SoundObservationPolicy {
     private SoundObservationPolicy() {}
 
     record Point(double x, double y, double z) {}
+
+    record MobSource(UUID id, String type, Point position) {}
+
+    /** Sound event IDs name the emitter: a parrot's imitation is still a parrot. */
+    static String mobSoundEmitter(String soundEvent) {
+        if (soundEvent == null) return null;
+        String id = soundEvent.toLowerCase(java.util.Locale.ROOT);
+        if (id.startsWith("minecraft:")) id = id.substring("minecraft:".length());
+        if (!id.startsWith("entity.")) return null;
+        int end = id.indexOf('.', "entity.".length());
+        if (end < 0) return null;
+        String emitter = id.substring("entity.".length(), end);
+        return switch (emitter) {
+            case "wolf_puglin", "wolf_sad", "wolf_angry", "wolf_grumpy", "wolf_big", "wolf_cute" -> "wolf";
+            default -> emitter;
+        };
+    }
+
+    /** Positional packets have no UUID. Require a unique same-species close match. */
+    static UUID uniqueAmbientSource(String emitter, Point sound, List<MobSource> candidates) {
+        if (emitter == null) return null;
+        UUID result = null;
+        for (MobSource candidate : candidates) {
+            if (!matchesMobSound(emitter, candidate.type())) continue;
+            Point point = candidate.position();
+            double dx = sound.x() - point.x(), dy = sound.y() - point.y(), dz = sound.z() - point.z();
+            // Covers packet coordinate quantization and a small client movement offset.
+            if (dx * dx + dy * dy + dz * dz > 0.5 * 0.5) continue;
+            if (result != null) return null;
+            result = candidate.id();
+        }
+        return result;
+    }
+
+    static String customName(String raw) {
+        if (raw == null) return null;
+        String clean = raw.codePoints().filter(c -> !Character.isISOControl(c))
+            .limit(64).collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+            .toString().strip();
+        return clean.isEmpty() ? null : clean;
+    }
 
     static UUID entityUuid(String sourceId) {
         if (sourceId == null) return null;

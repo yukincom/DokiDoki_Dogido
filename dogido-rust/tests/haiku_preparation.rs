@@ -178,3 +178,120 @@ fn preparation_retains_settings_domain_validation() {
     invalid.settings.generation_strategy = "unknown".into();
     assert!(Preparation::capture(invalid).is_err());
 }
+
+fn companion_start(turns: Value, name: &str) -> Start {
+    let mut row: Value = serde_json::from_str(
+        include_str!("../fixtures/haiku-preparation.jsonl")
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    row["start"]["settings"]["llm_enabled"] = json!(true);
+    row["start"]["event"]["passive_mobs"] = json!([
+        {"type":"wolf","identity":{"entity_id":"wolf","custom_name":"ハク","tamed":true}},
+        {"type":"cat","identity":{"entity_id":"cat","custom_name":name,"tamed":true}}]);
+    row["start"]["dialogue_material"] = Value::Null;
+    row["start"]["completed_turns"] = turns;
+    serde_json::from_value(row["start"].clone()).unwrap()
+}
+#[test]
+fn routine_cat_and_wolf_do_not_drive_the_scene_but_one_can_supply_background() {
+    let start = companion_start(json!([]), "クロちゃん");
+    let original = json!(start.event);
+    let (mut prep, context) = Preparation::capture(start.clone()).unwrap();
+    let request = json!(context.request.unwrap().details);
+    assert_eq!(request["passive_mobs"], json!([]));
+    assert!(!request.to_string().contains("クロちゃん"));
+    assert!(!request.to_string().contains("wolf"));
+    let inspiration = prep.inspiration(&json!({"found":false})).unwrap();
+    assert!(
+        !json!(inspiration.request.details)
+            .to_string()
+            .contains("クロちゃん")
+    );
+    let result = prep.materials(&json!({"found":false})).unwrap();
+    assert_eq!(
+        result.materials["background_companions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let references: std::collections::HashSet<_> = result
+        .input
+        .source_atoms
+        .iter()
+        .filter(|a| a.observation_role == "background_companion")
+        .map(|a| a.source_ref.clone())
+        .collect();
+    assert_eq!(
+        references.len(),
+        1,
+        "routine followers cannot make a two-pet contrast"
+    );
+    assert_eq!(
+        json!(start.event),
+        original,
+        "material projection cannot erase observations"
+    );
+}
+#[test]
+fn completed_pet_topic_can_be_primary_and_name_and_species_share_a_source() {
+    let turns = json!([{"turn_id":"pet-turn","player_text":"クロちゃんがクリーパーを追い払った","dogido_text":"頼もしいな。"}]);
+    let (mut prep, context) = Preparation::capture(companion_start(turns, "クロちゃん")).unwrap();
+    let request = json!(context.request.unwrap().details);
+    assert!(request["passive_mobs"].to_string().contains("クロちゃん"));
+    assert!(!request["passive_mobs"].to_string().contains("ハク"));
+    let sources = request["catalog_sources"].as_array().unwrap();
+    let cat = sources
+        .iter()
+        .find(|s| s["source_ref"] == "mob_individual:cat")
+        .unwrap();
+    assert!(
+        cat["label"].as_str().unwrap().contains("クロちゃん")
+            && cat["label"].as_str().unwrap().contains("ネコ")
+    );
+    assert!(cat["extra_fields"].to_string().contains("くろちゃん"));
+    prep.inspiration(&json!({"found":false})).unwrap();
+    let result = prep.materials(&json!({"found":false})).unwrap();
+    assert!(result.input.source_atoms.iter().any(|a|a.claim_scopes==["player_reported_context"] && a.text.contains("クロちゃん")));
+    assert!(
+        !result
+            .input
+            .source_atoms
+            .iter()
+            .any(|a| a.observation_role == "passive_mob" && a.text.contains("追い払"))
+    );
+}
+#[test]
+fn pet_name_needs_kana_or_a_registered_reading_and_assistant_cannot_promote_it() {
+    let turns = json!([{"turn_id":"pet-turn","player_text":"日差しがいいね","dogido_text":"クロちゃんはかわいいな。"}]);
+    let (_, context) = Preparation::capture(companion_start(turns, "クロちゃん")).unwrap();
+    assert_eq!(context.request.unwrap().details["passive_mobs"], json!([]));
+    let turns =
+        json!([{"turn_id":"pet-turn","player_text":"漆黒が頑張った","dogido_text":"頼もしいな。"}]);
+    let mut start = companion_start(turns, "漆黒");
+    let (_, context) = Preparation::capture(start.clone()).unwrap();
+    assert!(
+        !json!(context.request.unwrap().details)
+            .to_string()
+            .contains("漆黒")
+    );
+    start
+        .reading_corrections
+        .push(json!({"surface":"漆黒","reading":"くろ","forbidden_readings":[]}));
+    let (_, context) = Preparation::capture(start).unwrap();
+    let details = json!(context.request.unwrap().details);
+    assert!(details["catalog_sources"].to_string().contains("漆黒"));
+    assert!(details["catalog_sources"].to_string().contains("くろ"));
+}
+
+#[test]
+fn pet_topic_after_the_short_summary_still_promotes_only_that_pet() {
+    let turns = json!([{"turn_id":"pet-turn","player_text":"さっきクリーパーが近づいたときにクロちゃんが追い払った","dogido_text":"頼もしいな。"}]);
+    let (_, context) = Preparation::capture(companion_start(turns, "クロちゃん")).unwrap();
+    let details = context.request.unwrap().details;
+    assert!(details["passive_mobs"].to_string().contains("クロちゃん"));
+    assert!(!details["passive_mobs"].to_string().contains("ハク"));
+}

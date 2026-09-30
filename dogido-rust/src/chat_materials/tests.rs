@@ -447,3 +447,324 @@ fn named_mob_hints_reach_leaf_without_becoming_presence_or_catalog_lookup() {
         }
     }
 }
+
+fn individual_event(at: &str, fields: Value) -> GameEvent {
+    let mut value = json!({"schema_version":"2026-05-24","adapter":"test","observed_at":at,
+        "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+        "player":{"dimension":"minecraft:overworld"},"world":{"biome":"plains","sky_visible":true,"time_phase":"day"}});
+    value
+        .as_object_mut()
+        .unwrap()
+        .extend(fields.as_object().unwrap().clone());
+    GameEvent::parse(value).unwrap()
+}
+fn individual_turn(
+    event: &GameEvent,
+    snapshot: &Snapshot,
+    user: &str,
+    sound: bool,
+    action: Action,
+    query: &str,
+) -> After {
+    let input = PlayerInput {
+        raw_text: user.into(),
+        semantic_text: user.into(),
+        asks_about_sound: sound,
+        ..Default::default()
+    };
+    let Before::Plan(prepared) = before_plan(
+        event,
+        &Settings::default(),
+        &input,
+        &Context::default(),
+        snapshot,
+        &labels(),
+        Some("mock"),
+    )
+    .unwrap() else {
+        panic!()
+    };
+    let plan = Plan {
+        action,
+        entity_query: query.into(),
+        ..prepared.planner.fallback.clone()
+    };
+    after_plan(&prepared, &plan).unwrap()
+}
+fn heard_pet() -> Value {
+    json!({"type":"cat","source_id":"cat-1","sound_event":"entity.cat.ambient","direction":{"horizontal":"right"},"heard_ago_ms":0,
+        "identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}})
+}
+fn individual_snapshot(event: &GameEvent) -> Snapshot {
+    let mut memory = crate::chat_observation::ChatObservationMemory::default();
+    memory
+        .observe(event, &Default::default(), &labels())
+        .unwrap();
+    memory.snapshot(event, &labels()).unwrap()
+}
+#[test]
+fn pet_sounds_are_secondary_except_for_an_explicit_name_or_species() {
+    let mixed = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"ambient_sounds":[heard_pet(),
+        {"type":"block:campfire","source_id":"fire","sound_event":"block.campfire.crackle","direction":{"horizontal":"left"}}]}),
+    );
+    let snapshot = individual_snapshot(&mixed);
+    assert!(
+        snapshot.current.hearing_types.contains(&"cat".to_owned()),
+        "answer ranking never changes presence evidence"
+    );
+    for (user, pet) in [
+        ("何の音？", false),
+        ("クロちゃんの声？", true),
+        ("猫の声？", true),
+    ] {
+        let After::Leaf(leaf) =
+            individual_turn(&mixed, &snapshot, user, true, Action::AnswerObservation, "")
+        else {
+            panic!("{user}")
+        };
+        let summary = leaf.details["hearing_summary"].as_str().unwrap();
+        assert_eq!(summary.contains("クロちゃんの声"), pet, "{user}: {summary}");
+        assert_eq!(summary.contains("焚き火"), !pet, "{user}: {summary}");
+    }
+    let alone = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"ambient_sounds":[heard_pet()]}),
+    );
+    let After::Leaf(leaf) = individual_turn(
+        &alone,
+        &individual_snapshot(&alone),
+        "何の音？",
+        true,
+        Action::AnswerObservation,
+        "",
+    ) else {
+        panic!()
+    };
+    assert!(
+        leaf.details["hearing_summary"]
+            .as_str()
+            .unwrap()
+            .contains("クロちゃんの声")
+    );
+}
+#[test]
+fn explicit_pet_sound_never_borrows_another_cats_voice() {
+    let event = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}}],
+        "ambient_sounds":[{"type":"cat","source_id":"cat-2","identity":{"entity_id":"cat-2","custom_name":"シロ","tamed":false}}]}),
+    );
+    let After::Fixed(reply) = individual_turn(
+        &event,
+        &individual_snapshot(&event),
+        "クロちゃんの声？",
+        true,
+        Action::AnswerObservation,
+        "",
+    ) else {
+        panic!()
+    };
+    assert_eq!(reply.reason, "no_hearing_evidence");
+    let duplicate = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"passive_mobs":[
+        {"type":"wolf","identity":{"entity_id":"wolf-1","custom_name":"クロちゃん","tamed":true}}],"ambient_sounds":[heard_pet()]}),
+    );
+    let After::Fixed(reply) = individual_turn(
+        &duplicate,
+        &individual_snapshot(&duplicate),
+        "クロちゃんの声？",
+        true,
+        Action::AnswerObservation,
+        "",
+    ) else {
+        panic!()
+    };
+    assert_eq!(reply.reason, "ambiguous_named_sound");
+}
+
+#[test]
+fn named_sound_uses_latest_name_normalized_longest_match_and_actual_sound_kind() {
+    let original = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"ambient_sounds":[heard_pet()]}),
+    );
+    let mut memory = crate::chat_observation::ChatObservationMemory::default();
+    memory
+        .observe(&original, &Default::default(), &labels())
+        .unwrap();
+    let renamed = individual_event(
+        "2026-09-30T01:00:01Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"シロ","tamed":true}}]}),
+    );
+    memory
+        .observe(&renamed, &Default::default(), &labels())
+        .unwrap();
+    let snap = memory.snapshot(&renamed, &labels()).unwrap();
+    let answer = individuals::hearing(&snap, "シロの声？");
+    assert!(answer.summary.contains("シロの声") && !answer.summary.contains("クロちゃん"));
+    let removed = individual_event(
+        "2026-09-30T01:00:02Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"cat-1","tamed":true}}]}),
+    );
+    memory
+        .observe(&removed, &Default::default(), &labels())
+        .unwrap();
+    let snap = memory.snapshot(&removed, &labels()).unwrap();
+    assert!(
+        !individuals::hearing(&snap, "何の音？")
+            .summary
+            .contains("クロちゃん")
+    );
+
+    let mixed = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"ambient_sounds":[heard_pet(),
+        {"type":"wolf","source_id":"wolf-1","sound_event":"entity.wolf.step",
+        "identity":{"entity_id":"wolf-1","custom_name":"くろ","tamed":true}}]}),
+    );
+    let snap = individual_snapshot(&mixed);
+    let answer = individuals::hearing(&snap, "クロちゃんの声？");
+    assert!(answer.summary.contains("クロちゃんの声") && !answer.summary.contains("くろの"));
+    let context = individuals::context(&snap, "クロちゃんが助けてくれた", "", false);
+    assert!(context.contains("クロちゃん") && !context.contains("オオカミ"));
+    let answer = individuals::hearing(&snap, "くろの音？");
+    assert!(answer.summary.contains("くろの音") && !answer.summary.contains("くろの声"));
+    let duplicate = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"ambient_sounds":[heard_pet(),
+        {"type":"wolf","source_id":"wolf-1","sound_event":"entity.wolf.ambient",
+        "identity":{"entity_id":"wolf-1","custom_name":"くろちゃん","tamed":true}}]}),
+    );
+    assert!(individuals::hearing(&individual_snapshot(&duplicate), "クロちゃんの声？").ambiguous);
+}
+#[test]
+fn pet_report_uses_observed_name_species_mapping_without_inventing_an_event() {
+    let cat = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    let user = "クロちゃんがクリーパーを追い払ってくれたー";
+    let snapshot = individual_snapshot(&cat);
+    let After::Leaf(leaf) = individual_turn(
+        &cat,
+        &snapshot,
+        user,
+        false,
+        Action::ContinueConversation,
+        "",
+    ) else {
+        panic!()
+    };
+    let facts = leaf.details["named_mob_context"].as_str().unwrap();
+    assert!(facts.contains("クロちゃん") && facts.contains("ネコ"));
+    assert!(!facts.contains("クリーパー") && !facts.contains("追い払"));
+    assert!(
+        leaf.details["allowed_speech_labels"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("ネコ"))
+    );
+    assert_eq!(leaf.details["entity_grounding_status"], "not_applicable");
+    let messages = leaf
+        .input("mock", 128)
+        .prompt
+        .into_request()
+        .unwrap()
+        .messages;
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.content.contains("名前と種類") && m.content.contains("クロちゃん"))
+    );
+    assert!(leaf.handoff.catalog.unwrap().is_empty());
+}
+#[test]
+fn named_presence_is_individual_and_remembered_names_do_not_assert_current_presence() {
+    let cat = individual_event(
+        "2026-09-30T01:00:00Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    let mut memory = crate::chat_observation::ChatObservationMemory::default();
+    memory
+        .observe(&cat, &Default::default(), &labels())
+        .unwrap();
+    let snap = memory.snapshot(&cat, &labels()).unwrap();
+    let After::Leaf(leaf) = individual_turn(
+        &cat,
+        &snap,
+        "クロちゃんいる？",
+        false,
+        Action::CheckEntityPresence,
+        "クロちゃん",
+    ) else {
+        panic!()
+    };
+    assert_eq!(
+        leaf.details["entity_observed_ids"],
+        json!(["individual:cat-1"])
+    );
+    let gone = individual_event(
+        "2026-09-30T01:00:15Z",
+        json!({"passive_mobs":[{"type":"cat"}]}),
+    );
+    memory
+        .observe(&gone, &Default::default(), &labels())
+        .unwrap();
+    let snap = memory.snapshot(&gone, &labels()).unwrap();
+    let After::Fixed(reply) = individual_turn(
+        &gone,
+        &snap,
+        "クロちゃんいる？",
+        false,
+        Action::CheckEntityPresence,
+        "クロちゃん",
+    ) else {
+        panic!()
+    };
+    assert!(
+        reply.text.contains("クロちゃんは確認できてへん"),
+        "{}",
+        reply.text
+    );
+    let After::Leaf(leaf) = individual_turn(
+        &gone,
+        &snap,
+        "クロちゃん頑張ったね",
+        false,
+        Action::ContinueConversation,
+        "",
+    ) else {
+        panic!()
+    };
+    assert!(
+        leaf.details["named_mob_context"]
+            .as_str()
+            .unwrap()
+            .contains("\"current_observation\":false")
+    );
+    let duplicate = individual_event(
+        "2026-09-30T01:00:16Z",
+        json!({"passive_mobs":[
+        {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}},
+        {"type":"wolf","identity":{"entity_id":"wolf-1","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    let After::Fixed(reply) = individual_turn(
+        &duplicate,
+        &individual_snapshot(&duplicate),
+        "クロちゃんいる？",
+        false,
+        Action::CheckEntityPresence,
+        "クロちゃん",
+    ) else {
+        panic!()
+    };
+    assert!(reply.text.contains("どれのことか"));
+}

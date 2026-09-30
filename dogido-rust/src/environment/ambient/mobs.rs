@@ -162,6 +162,7 @@ pub(super) fn fallback_candidates(e: &GameEvent, m: &PassiveMob) -> Vec<String> 
 }
 impl Ambient {
     pub(super) fn mob_action(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Speech> {
+        let commentable = |mob: &&PassiveMob| !mob.identity.as_ref().is_some_and(|i| i.tamed);
         let ready = |key: &str| {
             elapsed(
                 now,
@@ -186,10 +187,11 @@ impl Ambient {
             } else {
                 e.passive_mobs
                     .iter()
+                    .filter(commentable)
                     .find(|m| !villager(m) && !mob_key(m).is_empty() && ready(&mob_key(m)))
             }
         } else {
-            e.passive_mobs.iter().find(|m| {
+            e.passive_mobs.iter().filter(commentable).find(|m| {
                 !mob_key(m).is_empty()
                     && (!villager(m) || schedule(e, m) != "sleep")
                     && ready(&mob_key(m))
@@ -212,11 +214,11 @@ impl Ambient {
                 .unwrap_or_else(|| catalog::mob_label(&target.r#type))
         };
         let mut details = common_details(e, s);
-        let fields = json!({"mob":label,"direction":direction(target),"mob_count":if crowd{1}else{e.passive_mobs.len()},"distance":target.distance,
+        let fields = json!({"mob":label,"direction":direction(target),"mob_count":if crowd{1}else{e.passive_mobs.iter().filter(commentable).count()},"distance":target.distance,
             "mob_tags":catalog::tags(&entry),"mob_role":entry["poetic"]["role"].as_str().unwrap_or(""),
             "mob_temperament":target.temperament.as_deref().filter(|t|!t.is_empty()).unwrap_or("friendly"),"mob_caution_reason":target.caution_reason.as_deref().unwrap_or(""),
             "fallback_candidates":candidates,"variation_slot":e.sequence.unwrap_or(0)%4,
-            "__ambient_guard":{"mob_type":target.r#type,"profession":if crowd{None}else{prof},"baby":baby,"crowd":crowd}});
+            "__ambient_guard":{"mob_type":target.r#type,"entity_id":target.identity.as_ref().map(|i|&i.entity_id),"profession":if crowd{None}else{prof},"baby":baby,"crowd":crowd}});
         details.as_object_mut()?.extend(fields.as_object()?.clone());
         if villager(target) {
             let activity = schedule(e, target);

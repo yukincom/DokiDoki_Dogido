@@ -28,6 +28,9 @@ pub struct Input {
     pub plan: Plan,
     pub topic_hits: Vec<Candidate>,
     pub observed_entities: Vec<Observation>,
+    /// Remembered name mappings are candidates only, never current presence.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub individual_names: Vec<Observation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub look_target: Option<Observation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -238,6 +241,21 @@ pub(super) fn normalize_prompt_observations(rows: &[Observation]) -> Vec<Observa
 
 /// Pure projection for native material assembly; lifecycle and accepted-plan checks remain in Handoff.
 pub(crate) fn project(mut input: Input) -> Result<Output> {
+    let mut individuals = input
+        .individual_names
+        .iter()
+        .filter(|row| {
+            input.plan.requests_catalog()
+                && row.entity_id.starts_with("individual:")
+                && crate::mob_identity::named_in(&input.plan.entity_query, &row.label)
+        })
+        .collect::<Vec<_>>();
+    individuals.retain(|row| {
+        !input.individual_names.iter().any(|other| {
+            crate::mob_identity::longer_name(&other.label, &row.label)
+                && crate::mob_identity::named_in(&input.plan.entity_query, &other.label)
+        })
+    });
     let catalog = if input.native_catalog {
         let policy = input
             .topic_policy
@@ -248,6 +266,7 @@ pub(crate) fn project(mut input: Input) -> Result<Output> {
             "native catalog cannot accept projected hits"
         );
         let rows = if input.plan.requests_catalog()
+            && individuals.is_empty()
             && !(input.look_target.is_some() && is_look_reference(&input.plan.entity_query))
         {
             crate::chat_catalog::catalog()
@@ -327,6 +346,33 @@ pub(crate) fn project(mut input: Input) -> Result<Output> {
             candidate_labels: vec![target.label.clone()],
             observed_ids: vec![target.entity_id.clone()],
             observed_labels: vec![target.label.clone()],
+        }
+    } else if !individuals.is_empty() {
+        let unique = individuals.len() == 1;
+        let present = individuals
+            .iter()
+            .filter(|candidate| {
+                unique
+                    && input
+                        .observed_entities
+                        .iter()
+                        .any(|row| row.entity_id == candidate.entity_id)
+            })
+            .collect::<Vec<_>>();
+        Grounding {
+            status: if !unique {
+                "ambiguous"
+            } else if present.is_empty() {
+                "not_observed"
+            } else {
+                "observed"
+            }
+            .into(),
+            query: input.plan.entity_query.clone(),
+            candidate_ids: individuals.iter().map(|r| r.entity_id.clone()).collect(),
+            candidate_labels: individuals.iter().map(|r| r.label.clone()).collect(),
+            observed_ids: present.iter().map(|r| r.entity_id.clone()).collect(),
+            observed_labels: present.iter().map(|r| r.label.clone()).collect(),
         }
     } else {
         ground(&input.plan, &hits, &observed)

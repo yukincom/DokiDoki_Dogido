@@ -28,6 +28,7 @@ pub mod language;
 pub mod light_plan;
 pub mod llm;
 pub mod memory_api;
+pub mod mob_identity;
 pub mod planner;
 pub mod playback;
 pub mod player_text;

@@ -220,6 +220,29 @@ fn mob_cooldown_per_species_and_villager_crowd_sleep() {
         "ネコ"
     );
 }
+
+#[test]
+fn pets_are_observed_but_do_not_comment_or_consume_species_cooldown() {
+    let mut ambient = Ambient::default();
+    let pet = event(
+        json!({"passive_mobs":[{"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    assert!(actions(&mut ambient, &pet, 0).is_empty());
+    let wild = event(
+        json!({"passive_mobs":[{"type":"cat","identity":{"entity_id":"cat-2","custom_name":"シロ","tamed":false}}]}),
+    );
+    let speech = actions(&mut ambient, &wild, 1).remove(0);
+    assert!(!still_applicable(&speech, &pet));
+    let now_tamed = event(
+        json!({"passive_mobs":[{"type":"cat","identity":{"entity_id":"cat-2","tamed":true}}]}),
+    );
+    assert!(!still_applicable(&speech, &now_tamed));
+    let mixed = event(json!({"passive_mobs":[
+        {"type":"wolf","identity":{"entity_id":"wolf","tamed":true}},
+        {"type":"cow","identity":{"entity_id":"cow","tamed":false}}]}));
+    let line = actions(&mut ambient, &mixed, 2).remove(0);
+    assert_eq!(line.leaf.unwrap().details["mob"], "ウシ");
+}
 #[test]
 fn mobs_do_not_use_recent_absent_species_and_thunder_surface_is_quiet() {
     let mut a = Ambient::default();

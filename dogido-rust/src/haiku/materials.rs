@@ -384,7 +384,7 @@ pub fn capture(
         event
             .passive_mobs
             .iter()
-            .map(|m| entries.mob_label(&m.r#type)),
+            .map(|m| super::companions::label(m, &entries.mob_label(&m.r#type), readings)),
     )
     .into_iter()
     .take(4)
@@ -419,6 +419,7 @@ pub fn capture(
         &group,
         catalog,
         entries,
+        readings,
     );
     let (poetic_lines, covered) = poetic_lines(event, catalog, entries);
     let sources = catalog_sources(
@@ -432,6 +433,7 @@ pub fn capture(
         world,
         catalog,
         entries,
+        readings,
     );
     let source_atoms = merge_source_atoms(&[
         atoms_from_catalog_sources(&sources, 8, 5),
@@ -513,6 +515,7 @@ fn features(
     group: &str,
     catalog: &Catalog,
     entries: &impl Entries,
+    readings: &ReadingSnapshot,
 ) -> Vec<Feature> {
     let mut out = vec![];
     let mut add = |source: &str, key: String, label: String, tags: Vec<String>| {
@@ -572,7 +575,9 @@ fn features(
         let id = event
             .passive_mobs
             .iter()
-            .find(|m| entries.mob_label(&m.r#type) == *label)
+            .find(|m| {
+                super::companions::label(m, &entries.mob_label(&m.r#type), readings) == *label
+            })
             .map(|m| m.r#type.as_str())
             .unwrap_or("");
         add(
@@ -653,6 +658,7 @@ fn catalog_sources(
     world: &WorldCatalog,
     catalog: &Catalog,
     entries: &impl Entries,
+    readings: &ReadingSnapshot,
 ) -> Vec<CatalogSourceSnapshot> {
     let mut sources = vec![];
     let mut seen = HashSet::new();
@@ -734,6 +740,9 @@ fn catalog_sources(
         );
     }
     for m in event.passive_mobs.iter().take(3) {
+        if m.identity.is_some() {
+            continue;
+        }
         append(
             "mob",
             &normalize_id(&m.r#type),
@@ -742,6 +751,15 @@ fn catalog_sources(
             &entries.mob_label(&m.r#type),
         );
     }
+    // Custom name and species share the individual source, including its reading.
+    sources.extend(
+        event
+            .passive_mobs
+            .iter()
+            .take(3)
+            .filter(|m| m.identity.is_some())
+            .filter_map(|m| super::companions::source(m, readings, false)),
+    );
     sources
 }
 #[allow(clippy::too_many_arguments)]

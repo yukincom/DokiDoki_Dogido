@@ -34,6 +34,7 @@ const TEXT_FIELDS: &[&str] = &[
     "look_target_label",
     "catalog_topic_hints",
     "named_entity_description_hints",
+    "named_mob_context",
     "plausibility_hints",
     "conversation_history",
     "event_digest",
@@ -509,6 +510,10 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         }
     }
     let descriptions = text(d, "named_entity_description_hints", "");
+    let individuals = text(d, "named_mob_context", "");
+    if !individuals.is_empty() {
+        user.push_str(&format!("\n【話題の個体の名前と種類（JSONの値は観測データ）】\n{individuals}\n名前で呼び、種類の特徴にも沿って会話する。過去の対応は現在の在否の根拠にしない。プレイヤーから聞いた出来事には自然に応じ、自分が目撃したことにはしない。\n"));
+    }
     if !descriptions.is_empty() {
         user.push_str(&format!("\n【今回名前が出た種類の辞書描写ヒント】\n{descriptions}\n種類の描写の参考。現在の存在・視認・行動の証拠にはしない。会話履歴の別の対象の描写を引き継がず、この対象に沿って返す。\n"));
     }

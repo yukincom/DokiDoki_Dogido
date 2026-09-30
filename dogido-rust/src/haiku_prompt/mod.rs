@@ -294,5 +294,12 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             .content
             .push_str(asset("revision_suffix"));
     }
+    if matches!(kind, "haiku_draft" | "haiku_line_regeneration")
+        && truth(&d["background_companions"])
+    {
+        result.last_mut().unwrap().content.push_str(&format!(
+            "\n同行ペットの補助材料: {}\n主題は今回選んだ情景を優先。この個体は必要なら添景に使える。名前と種名は同じ個体の別表現。\n",
+            python_json(&d["background_companions"])));
+    }
     Ok(result)
 }

@@ -2,6 +2,7 @@
 //! No Session mutation, model run, history writes, clock reads, or playback success claims.
 mod current;
 mod descriptions;
+mod individuals;
 mod travel;
 use crate::{
     chat_catalog, chat_hints, chat_names,
@@ -188,14 +189,24 @@ pub fn before_plan(
             .chain(snapshot.current.passive_types.iter().map(String::as_str))
             .chain(snapshot.current.hearing_types.iter().map(String::as_str)),
     );
-    let observed_entities =
+    let mut observed_entities =
         current::observed(event, &observed_ids, context.current_structure.as_deref());
-    let look = if crate::chat_world::wants_look_answer(user) {
+    observed_entities.splice(0..0, individuals::current_observations(snapshot));
+    let mut look = if crate::chat_world::wants_look_answer(user) {
         crate::world_catalog::catalog()
             .look_target_label(chat_catalog::catalog(), event.look_target.as_ref())
     } else {
         String::new()
     };
+    if !look.is_empty()
+        && let Some(identity) = event
+            .look_target
+            .as_ref()
+            .and_then(|target| target.identity.as_ref())
+        && let Some(name) = crate::mob_identity::name(identity)
+    {
+        look = name.into();
+    }
     let audio_fallback = current::audio_fallback(event, labels);
     let visual_summary = current::threat(event, snapshot, audio_fallback.as_deref(), None);
     let (passive, recent_passive) = if travel.action == "return_home" {
@@ -206,8 +217,13 @@ pub fn before_plan(
             snapshot.recent.passive_sightings.clone(),
         )
     };
-    let summary =
+    let mut summary =
         current::observation(event, &visual_summary, "", &passive, &look, &recent_passive);
+    let individual_summary = individuals::context(snapshot, user, &look, true);
+    if !individual_summary.is_empty() {
+        summary.push_str(&format!(" / 個体の名前と種類: {individual_summary}"));
+    }
+    let sound_answer = individuals::hearing(snapshot, user);
     let planner_input = planner::prepare::Input {
         user_text: user.into(),
         conversation_turns: json!(context.history.conversation_turns),
@@ -222,10 +238,19 @@ pub fn before_plan(
             .as_ref()
             .filter(|_| !look.is_empty() && !context.workshop_open)
             .map(|target| handoff::Observation {
-                entity_id: chat_catalog::normalized_observation_id(&target.name),
+                entity_id: target
+                    .identity
+                    .as_ref()
+                    .filter(|i| crate::mob_identity::name(i).is_some())
+                    .map(|i| format!("individual:{}", i.entity_id))
+                    .unwrap_or_else(|| chat_catalog::normalized_observation_id(&target.name)),
                 label: look.clone(),
             }),
-        hearing_summary: snapshot.hearing.summary.clone(),
+        hearing_summary: if input.asks_about_sound {
+            sound_answer.summary
+        } else {
+            snapshot.hearing.summary.clone()
+        },
         inventory_question: input.asks_inventory,
         sound_question: input.asks_about_sound,
         raw_user_text: Some(input.raw_text.clone()),
@@ -303,17 +328,32 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
             plan.action,
             Action::CheckEntityPresence | Action::CorrectPreviousReply
         );
-    let hearing = if use_hearing {
+    let sound_answer = individuals::hearing(snapshot, user);
+    if turn.input.asks_about_sound && sound_answer.ambiguous {
+        return Ok(After::Fixed(Fixed {
+            text: "同じ名前の子が複数おるから、どの子の声かは分からへんわ。".into(),
+            reason: "ambiguous_named_sound",
+            announce_smell: false,
+            repair: plan.repair.clone(),
+        }));
+    }
+    let hearing = if turn.input.asks_about_sound {
+        sound_answer.summary
+    } else if use_hearing {
         snapshot.hearing.summary.clone()
     } else {
         String::new()
     };
-    let named = if use_hearing {
+    let named = if turn.input.asks_about_sound {
+        sound_answer.named
+    } else if use_hearing {
         snapshot.hearing.named_mobs.clone()
     } else {
         vec![]
     };
-    let sources = if use_hearing {
+    let sources = if turn.input.asks_about_sound {
+        sound_answer.sources
+    } else if use_hearing {
         snapshot.hearing.source_labels.clone()
     } else {
         vec![]
@@ -350,7 +390,17 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
                 ),
         ),
         hearing_named_mobs: named.iter().chain(sources.iter()).cloned().collect(),
-        recent_mob_types: snapshot.name_context.types.clone(),
+        recent_mob_types: snapshot
+            .name_context
+            .types
+            .iter()
+            .cloned()
+            .chain(
+                crate::mob_identity::mentioned(&snapshot.named_mobs, user)
+                    .iter()
+                    .map(|r| r.mob_type.clone()),
+            )
+            .collect(),
         current_entity_labels: turn
             .observed_entities
             .iter()
@@ -381,6 +431,14 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
         plan: plan.clone(),
         topic_hits: vec![],
         observed_entities: turn.observed_entities.clone(),
+        individual_names: snapshot
+            .named_mobs
+            .iter()
+            .map(|row| handoff::Observation {
+                entity_id: format!("individual:{}", row.entity_id),
+                label: row.custom_name.clone(),
+            })
+            .collect(),
         look_target: turn.planner_input.look_target.clone(),
         native_catalog: true,
         topic_policy: Some(chat_topics::Input {
@@ -423,6 +481,12 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
         }));
     }
     let mut d = turn.base_details.clone();
+    if !turn.context.workshop_open {
+        let context = individuals::context(snapshot, user, &turn.look, false);
+        if !context.is_empty() {
+            d["named_mob_context"] = json!(context);
+        }
+    }
     let g = &handoff.grounding;
     let generated = json!({
         "threat_summary": threat,

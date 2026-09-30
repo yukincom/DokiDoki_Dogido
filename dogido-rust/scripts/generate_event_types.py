@@ -21,6 +21,18 @@ def generate():
     schema = GameEvent.model_json_schema()
     definitions = dict(schema.pop("$defs"))
     definitions["EventData"] = schema
+    # Rust/Fabric observations already in production; keep them when regenerating
+    # declarations from the Python compatibility schema.
+    extensions = {
+        "AmbientSound": {"heard_ago_ms": {"type": "integer", "minimum": 0}},
+        "AuditoryThreat": {"heard_ago_ms": {"type": "integer", "minimum": 0}},
+        "WorldState": {"game_paused": {"type": "boolean"}},
+    }
+    for name, fields in extensions.items():
+        for field, spec in fields.items():
+            definitions[name]["properties"][field] = {
+                "anyOf": [spec, {"type": "null"}], "default": None,
+            }
     # JSON Schemaへ出ない意味検査を、宣言の再生成だけで落とさない。
     tree = ast.parse((ROOT.parent / "dogido_server/models.py").read_text())
     validators = {}
@@ -67,7 +79,8 @@ def generate():
             continue
         assert spec["type"] == "object", (name, spec)
         required = set(spec.get("required", []))
-        lines = ["#[derive(Clone, Debug, Serialize, Deserialize)]"]
+        derives = "Clone, Debug, PartialEq, Serialize, Deserialize" if name == "MobIdentity" else "Clone, Debug, Serialize, Deserialize"
+        lines = [f"#[derive({derives})]"]
         if spec.get("additionalProperties") is False:
             lines += ["#[serde(deny_unknown_fields)]"]
         lines += [f"pub struct {name} {{"]
@@ -92,6 +105,8 @@ def generate():
             # Pydantic既定の数値/真偽値変換。構造物とenumはSerdeの型検査を使う。
             if any(t in ty for t in ("i64", "f64", "bool")):
                 lines += ['    #[serde(deserialize_with = "wire::deserialize")]']
+            if field == "identity" or field in extensions.get(name, {}):
+                lines += ['    #[serde(skip_serializing_if = "Option::is_none")]']
             lines += [f"    pub {ident}: {ty},"]
             path = f"{name}.{field}"
             nullable = ty.startswith("Option<")

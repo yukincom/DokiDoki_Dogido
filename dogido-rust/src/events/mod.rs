@@ -41,6 +41,13 @@ impl GameEvent {
         &self.1
     }
 
+    /// A read projection for material selection; the accepted observation stays intact.
+    pub(crate) fn retaining_passive_mobs(&self, predicate: impl Fn(&PassiveMob) -> bool) -> Self {
+        let mut data = self.0.clone();
+        data.passive_mobs.retain(predicate);
+        Self(data, self.1.clone())
+    }
+
     pub fn parse(mut value: Value) -> Result<Self, String> {
         // 旧名をextraにも残すPythonのbefore-validatorと同じ優先順。
         if let Some(object) = value.as_object_mut()

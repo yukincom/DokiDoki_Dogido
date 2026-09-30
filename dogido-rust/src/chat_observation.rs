@@ -67,6 +67,10 @@ pub struct HearingMemo {
     pub distance_band: String,
     pub heard_at_us: i64,
     pub dedupe_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<crate::events::MobIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound_event: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CurrentObservation {
@@ -99,6 +103,14 @@ pub struct HearingContext {
     pub named_mobs: Vec<String>,
     pub source_labels: Vec<String>,
     pub summary: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub candidates: Vec<SoundCandidate>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SoundCandidate {
+    pub memo: HearingMemo,
+    pub current: bool,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DistanceSample {
@@ -125,6 +137,8 @@ pub struct Snapshot {
     pub name_context: NameContext,
     pub hearing: HearingContext,
     pub home: HomeContext,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub named_mobs: Vec<crate::mob_identity::NamedMob>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MixedTimeDomains;
@@ -147,6 +161,7 @@ pub struct ChatObservationMemory {
     passive: Vec<(String, i64)>,
     killed_names: Vec<(String, i64)>,
     home: Vec<DistanceSample>,
+    named_mobs: Vec<crate::mob_identity::NamedMob>,
 }
 impl Default for ChatObservationMemory {
     fn default() -> Self {
@@ -165,6 +180,7 @@ impl ChatObservationMemory {
             passive: vec![],
             killed_names: vec![],
             home: vec![],
+            named_mobs: vec![],
         }
     }
     fn time(&self, event: &GameEvent) -> Result<(i64, bool), MixedTimeDomains> {
@@ -204,6 +220,7 @@ impl ChatObservationMemory {
             }
             if previous.is_some() && dimension.is_some() {
                 self.killed_names.clear();
+                self.named_mobs.clear();
             }
         }
         for mob in &event.passive_mobs {
@@ -212,6 +229,13 @@ impl ChatObservationMemory {
                 put_time(&mut self.passive, id, now);
             }
         }
+        let (_, observed_names) = crate::mob_identity::observed(event, now);
+        self.named_mobs = crate::mob_identity::merge_names(
+            &self.named_mobs,
+            observed_names,
+            now,
+            self.settings.player_chat_visual_retention_ms.max(60000),
+        );
         self.update_home(event, now);
         self.killed_names.retain(|(_, at)| {
             age(now, *at) <= self.settings.player_chat_name_correction_retention_ms
@@ -238,6 +262,8 @@ impl ChatObservationMemory {
                 distance_band: sound.band,
                 heard_at_us: now.saturating_sub(sound.heard_ago_ms.saturating_mul(1000)),
                 dedupe_key: sound.key,
+                identity: sound.identity,
+                sound_event: sound.sound_event,
             };
             put_hearing(&mut self.hearing, memo);
         }
@@ -262,6 +288,8 @@ impl ChatObservationMemory {
                         distance_band: String::new(),
                         heard_at_us: now,
                         dedupe_key: format!("environment:{raw}:周囲:"),
+                        identity: None,
+                        sound_event: None,
                     },
                 );
             }
@@ -401,6 +429,16 @@ impl ChatObservationMemory {
     ) -> Result<Snapshot, MixedTimeDomains> {
         let (now, _) = self.time(event)?;
         let sounds = sounds(event, labels);
+        let (_, observed_names) = crate::mob_identity::observed(event, now);
+        let individuals = crate::mob_identity::merge_names(
+            &self.named_mobs,
+            observed_names,
+            now,
+            self.settings.player_chat_visual_retention_ms.max(60000),
+        )
+        .into_iter()
+        .filter(|row| !row.custom_name.is_empty())
+        .collect();
         let current = CurrentObservation {
             visual_types: unique(event.visual_threats.iter().map(|v| normalize(&v.r#type))),
             passive_types: unique(event.passive_mobs.iter().map(|v| normalize(&v.r#type))),
@@ -528,6 +566,41 @@ impl ChatObservationMemory {
                 ),
         );
         let mut summary = Vec::<String>::new();
+        let candidates = if sounds.iter().any(|sound| sound.identity.is_some())
+            || hearing.iter().any(|memo| memo.identity.is_some())
+        {
+            let mut candidates = sounds
+                .iter()
+                .map(|sound| SoundCandidate {
+                    current: true,
+                    memo: HearingMemo {
+                        kind: sound.kind.clone(),
+                        mob_type: sound.mob_type.clone(),
+                        label_ja: sound.label.clone(),
+                        direction: sound.direction.clone(),
+                        distance_band: sound.band.clone(),
+                        heard_at_us: now.saturating_sub(sound.heard_ago_ms.saturating_mul(1000)),
+                        dedupe_key: sound.key.clone(),
+                        identity: sound.identity.clone(),
+                        sound_event: sound.sound_event.clone(),
+                    },
+                })
+                .collect::<Vec<_>>();
+            for memo in &hearing {
+                if !candidates
+                    .iter()
+                    .any(|candidate| candidate.memo.dedupe_key == memo.dedupe_key)
+                {
+                    candidates.push(SoundCandidate {
+                        current: false,
+                        memo: memo.clone(),
+                    });
+                }
+            }
+            candidates
+        } else {
+            vec![]
+        };
         let mut seen = Vec::<String>::new();
         for sound in sounds.iter().filter(|s| s.index < 4) {
             let key = format!(
@@ -591,11 +664,13 @@ impl ChatObservationMemory {
                 named_mobs,
                 source_labels,
                 summary: summary.join("、"),
+                candidates,
             },
             home: HomeContext {
                 progress: self.home_progress(event),
                 samples: self.home.clone(),
             },
+            named_mobs: individuals,
         })
     }
 }
@@ -742,6 +817,8 @@ struct Sound {
     band: String,
     key: String,
     heard_ago_ms: i64,
+    identity: Option<crate::events::MobIdentity>,
+    sound_event: Option<String>,
 }
 fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
     let mut result = vec![];
@@ -769,6 +846,8 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             band,
             key,
             heard_ago_ms: audio.heard_ago_ms.unwrap_or(0),
+            identity: None,
+            sound_event: None,
         });
     }
     for (index, sound) in event.ambient_sounds.iter().enumerate() {
@@ -802,11 +881,22 @@ fn sounds(event: &GameEvent, labels: &impl Labels) -> Vec<Sound> {
             band,
             key,
             heard_ago_ms: sound.heard_ago_ms.unwrap_or(0),
+            identity: sound
+                .identity
+                .clone()
+                .filter(|identity| sound.source_id.as_deref() == Some(identity.entity_id.as_str())),
+            sound_event: sound.identity.as_ref().and(sound.sound_event.clone()),
         });
     }
     result
 }
-fn line(label: Option<&str>, kind: &str, direction: &str, band: &str, recent: bool) -> String {
+pub(crate) fn line(
+    label: Option<&str>,
+    kind: &str,
+    direction: &str,
+    band: &str,
+    recent: bool,
+) -> String {
     let prefix = match label {
         Some(label) if kind == "ambient" => format!("{label}っぽい声"),
         Some(label) => format!("{label}の音"),
