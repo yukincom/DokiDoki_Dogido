@@ -25,7 +25,7 @@ impl Dialogue {
             return Ok(());
         }
         let close_after = result["workshop_close_after"] == true;
-        let (original, pending, previous_pending, parent, version, player_name) = {
+        let (original, pending, previous_pending, parent, version, player_name, text_workshop) = {
             let mut d = self.data.lock().unwrap();
             ensure!(!d.stopped, "shutdown");
             let s = d.sessions.get_mut(sid).context("session_closed")?;
@@ -105,6 +105,7 @@ impl Dialogue {
                 w.revision_id.clone(),
                 w.version,
                 s.name.clone(),
+                s.text_workshop,
             )
         };
         tracing::info!(
@@ -112,7 +113,11 @@ impl Dialogue {
             session_id = sid,
             revision_id = pending.id
         );
-        let saved = if self.config.haiku.memory_enabled {
+        let saved = if text_workshop {
+            // The standalone room edits its session copy, never the source
+            // poem or long-term memory. It still uses the same live CAS below.
+            Ok(format!("text_{}", pending.id))
+        } else if self.config.haiku.memory_enabled {
             let root = self.config.haiku.memory_dir.join("sessions").join(sid);
             let write_sid = sid.to_owned();
             let write_pending = pending.clone();
@@ -160,7 +165,9 @@ impl Dialogue {
                     }
                     d.revision += 1;
                 }
-                result["workshop_outcome"] = if action == "accept_pending" {
+                result["workshop_outcome"] = if text_workshop {
+                    "text_edit_applied"
+                } else if action == "accept_pending" {
                     "pending_saved"
                 } else {
                     "player_edit_saved"

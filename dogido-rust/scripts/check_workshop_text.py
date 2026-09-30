@@ -13,12 +13,14 @@ import threading
 
 from workshop_text_client import call, speak
 from check_workshop_runtime import step
+from check_workshop_edits import edit
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
     seen = []
+    proposal_text = 'じゃあ、のくさふゆむをくささむしに変更しよう！どう？'
     class Model(BaseHTTPRequestHandler):
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -26,6 +28,17 @@ def main():
             prompt = '\n'.join(m['content'] for m in body['messages'])
             question = re.search(r'今回のプレイヤー発話（会話理解用）: ([^\n]+)', prompt).group(1)
             reply = step(question, speech='静かな夜の草を思い浮かべた読みやな。')
+            if question == proposal_text:
+                reply = edit(question, index=2, replacement='くささむし', reference='のくさふゆむ', fragment='のくさふゆむ')
+                reply['speech'] = '下五をその言葉に変えるんやな？'
+                if '前の一手は実行していない' in prompt:
+                    reply = step(question, 'ask', '下五をその言葉に変えるんやな？')
+            if question in {'うん！変えて！', '変えないで！'}:
+                evidence = question if 'evidenceは今回の発話から' in prompt or question == '変えないで！' else proposal_text
+                reply = edit(evidence, index=2, replacement='くささむし', reference='のくさふゆむ', fragment='のくさふゆむ')
+                reply['speech'] = 'うん、下五をくささむしに変えたで。'
+                if '前の一手は実行していない' in prompt:
+                    reply = step(question, 'respond', 'うん、まだ元の句のままにしとくな。')
             if question == '終了でいいよ':
                 reply = step(question, 'close_workshop')
                 reply['speech'] = 'うん、ここまでにしよか。また話そな。'
@@ -118,6 +131,28 @@ def main():
                             assert not result.isError
                             assert 'テキスト検査の識別用指示。' in str(result)
                 asyncio.run(mcp_check())
+                discussed = speak(sid, proposal_text, base)
+                assert discussed['turn']['workshop_action'] == 'ask', discussed
+                assert discussed['workshop']['canonical_lines'][-1] == 'のくさふゆむ'
+                handoff = folder / 'conversation.json'
+                handoff.write_text(json.dumps([{'key': poems[0]['key'], 'session_id': sid,
+                    'snapshot': call('snapshot', {'session_id': sid}, base)}], ensure_ascii=False))
+                call('shutdown', {}, base)
+                process.wait(timeout=10)
+                process = subprocess.Popen(command + ['--resume', str(handoff)], cwd=ROOT,
+                    stdout=subprocess.PIPE, stderr=error, text=True)
+                ready = process.stdout.readline()
+                found = re.search(r'http://127.0.0.1:\d+', ready)
+                assert found, (ready, (folder / 'stderr.log').read_text())
+                base = found.group()
+                refused = speak(sid, '変えないで！', base)
+                assert refused['workshop']['canonical_lines'][-1] == 'のくさふゆむ', refused
+                changed = speak(sid, 'うん！変えて！', base)
+                assert changed['turn']['workshop_outcome'] == 'text_edit_applied', changed
+                assert changed['turn']['text_delivery_acknowledged'], changed
+                assert changed['workshop']['canonical_lines'][-1] == 'くささむし', changed
+                assert source.read_text() == original
+                assert list((folder / 'memory').rglob('*.jsonl')) == [source]
                 close = speak(sid, '終了でいいよ', base)
                 assert close['turn']['workshop_action'] == 'close_workshop', close
                 assert close['turn']['text_delivery_acknowledged'], close
@@ -131,7 +166,9 @@ def main():
                 print(json.dumps({'passed': ['native_workshop_reply', 'displayed_reply_history',
                     'saved_source_unchanged', 'prompt_applied_and_exact_request_visible',
                     'prompt_persistence', 'stale_version_rejected', 'missing_context_rejected',
-                    'stdio_mcp_ten_tools_and_readback', 'model_close_display_acknowledged', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
+                    'stdio_mcp_ten_tools_and_readback', 'question_retains_player_candidate', 'restore_recovers_discussed_candidate_without_editing',
+                    'short_refusal_keeps_original', 'short_confirmation_edits_text_session_without_disk_save',
+                    'model_close_display_acknowledged', 'owned_server_shutdown']}, ensure_ascii=False, indent=2))
             finally:
                 if process.poll() is None:
                     process.terminate()

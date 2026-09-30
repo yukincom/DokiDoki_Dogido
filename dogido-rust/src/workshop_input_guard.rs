@@ -35,6 +35,14 @@ static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
             "no_close",
             r"(?:終わり|おわり)に(?:しない|しません|せん|せえへん)|(?:終わ|おわ)(?:らない|りません|らん|らへん)|やめ(?:ない|ません|へん|るな)",
         ),
+        (
+            "no_edit",
+            r"(?:変え|直さ|置き換え|変更し|修正し|使わ|採用し)(?:ない|なく|ん|へん)|(?:変える|直す|置き換える|変更する|修正する|使う)な|(?:に|へ)(?:は)?(?:しない|しなく|するな|せん|せえへん)",
+        ),
+        (
+            "edit_question",
+            r"(?:変え|直さ|置き換え|変更し|修正し|使わ|採用し|(?:に|へ)(?:は)?し)ない(?:かな|か|ですか|でしょうか)?[?？][。！!\s]*\z",
+        ),
     ] {
         patterns.insert(k.into(), py_regex(v));
     }
@@ -123,6 +131,19 @@ pub fn state_change_safe(action: &str, text: &str, evidence: &str) -> bool {
     PATTERNS
         .get(action)
         .is_none_or(|r| !r.is_match(source.trim_matches(space)))
+}
+pub(crate) fn edit_negated(text: &str) -> bool {
+    let outside =
+        crate::reaction_leaf::sanitize::re(r"「[^「」]*」|『[^『』]*』").replace_all(text, "候補");
+    PATTERNS["no_edit"].is_match(&outside)
+}
+/// Questions may introduce a candidate, but a refusal or reported instruction
+/// must not replace the player's current candidate.
+pub fn discussion_idea_safe(text: &str) -> bool {
+    (!edit_negated(text) || PATTERNS["edit_question"].is_match(text))
+        && !quoted(text, text)
+        && !PATTERNS["report"].is_match(text)
+        && !PATTERNS["disavow"].is_match(text)
 }
 pub fn combat_safe(action: &str, text: &str, evidence: &str) -> bool {
     if matches!(action, "unrelated" | "uncertain") {

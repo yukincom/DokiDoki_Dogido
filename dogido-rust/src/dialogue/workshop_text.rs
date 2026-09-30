@@ -135,6 +135,33 @@ impl Dialogue {
         );
         let restore_target_from_rows = w.discussion_target.is_none();
         for row in rows {
+            // Recover a player-grounded idea from an unchanged verse's recent
+            // transcript, including older versions that dropped a question's
+            // rejected edit step. Reconstruct discussion only, never execute it.
+            if w.open
+                && w.dialogue.iter().any(|t| row["turn_id"] == t["turn_id"])
+                && row["workshop_id"] == w.hud_id
+                && row["workshop_state_before"]["canonical"] == canonical.join("\n")
+                && let Some(player) = row["player_input_text"].as_str()
+                && let Some(reports) = row["llm_reports"].as_array()
+            {
+                for report in reports {
+                    if report["kind"] == "haiku_workshop_agent_step"
+                        && let Some(payload) = report["generated"]["text"]
+                            .as_str()
+                            .and_then(crate::planner::extract_object)
+                        && let Some(candidate) = crate::workshop_candidate::Candidate::from_model(
+                            &payload,
+                            &w.current_lines,
+                            w.version,
+                            player,
+                            w.discussion_target.as_ref(),
+                        )
+                    {
+                        w.conversation_candidate = Some(candidate);
+                    }
+                }
+            }
             if restore_target_from_rows
                 && w.open
                 && let Some(text) = row["player_input_text"].as_str()

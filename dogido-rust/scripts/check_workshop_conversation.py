@@ -96,6 +96,29 @@ def main():
 
     from check_workshop_revision import wire
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        proposal_text = 'あさのいろをくささむしに変更しよう！どう？'
+        def confirmed_edit(text, prompt, n):
+            if '前の一手は実行していない' in prompt:
+                return step(text, 'ask', '下五をその言葉に変えるんやな？')
+            p = edit(text, index=2, replacement='くささむし', reference='', fragment=LINES[2])
+            p['line_reference']['found'] = False
+            p['line_reference']['concept_id'] = 'unknown'
+            p['line_proposal']['evidence'] = proposal_text
+            p['speech'] = 'うん、相談していた言葉に変えたで。'
+            return p
+        install(control, confirmed_edit)
+        sid = ready(base, send, rows)
+        original = stored(sid)
+        r = finish(base, send, sid, proposal_text)
+        assert r['workshop_action'] == 'ask' and hud(sid)['canonical_lines'] == LINES, r
+        r = finish(base, send, sid, 'うん！変えて！')
+        assert r['workshop_action'] == 'stage_conversation_candidate', r
+        assert r['workshop_outcome'] == 'player_edit_saved', r
+        assert hud(sid)['canonical_lines'] == [*LINES[:2], 'くささむし']
+        assert len(revisions(folder, sid)) == 1 and stored(sid) == original
+        passed.append('question_then_short_confirmation_applies_exact_candidate_and_saves_once')
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         wire(control, stored, sid)
         finish(base, send, sid, "上五のさくらのはを別の表現に直して")

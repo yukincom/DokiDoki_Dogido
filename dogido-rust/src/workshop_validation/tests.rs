@@ -31,7 +31,19 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
             accepted += 1;
             let step = &actual["step"];
             let action = text(&step["action"]);
-            assert_eq!(step["action"], frame["payload"]["action"]);
+            if step["action"] != frame["payload"]["action"] {
+                assert_eq!(frame["payload"]["action"], "stage_player_edit");
+                assert_eq!(step["action"], "stage_conversation_candidate");
+                let p = &frame["workshop"]["conversation_candidate"]["proposal"];
+                assert_eq!(
+                    frame["payload"]["line_proposal"]["replacement_text"],
+                    p["replacement_text"]
+                );
+                assert_eq!(
+                    frame["payload"]["line_proposal"]["target_fragment"],
+                    p["target_fragment"]
+                );
+            }
             assert!(strings(&context["details"]["allowed_actions"]).contains(action));
             assert_eq!(
                 step["speech"],
@@ -161,4 +173,56 @@ fn generated_repair_must_keep_the_retained_line_until_player_selects_another() {
     frame["payload"]["findings"][0]["line_index"] = 2.into();
     frame["payload"]["findings"][0]["fragment"] = lines[2].clone().into();
     assert_eq!(validate(&frame, &details).unwrap()["reason"], "accepted");
+}
+
+#[test]
+fn short_edit_selects_only_the_exact_current_candidate_with_current_evidence() {
+    let (mut frame, mut details) =
+        conversation("うん！変えて！", "その案に変えたで。", "stage_player_edit");
+    details["allowed_actions"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("stage_conversation_candidate"));
+    frame["payload"]["purpose"] = "improve_wording".into();
+    frame["payload"]["line_proposal"] = json!({"found":true,"replacement_text":"くささむし",
+        "target_fragment":"のくさふゆむ","evidence":"のくさふゆむをくささむしに変更しよう","confidence":0.95});
+    frame["workshop"]["conversation_candidate"] = json!({"proposal":{"line_index":2,
+        "target_fragment":"のくさふゆむ","replacement_text":"くささむし"},"validation_codes":[]});
+    let result = validate(&frame, &details).unwrap();
+    assert_eq!(
+        result["step"]["action"], "stage_conversation_candidate",
+        "{result}"
+    );
+    for (key, value) in [
+        ("replacement_text", "くさむしり"),
+        ("target_fragment", "てつじんみまもる"),
+    ] {
+        let mut wrong = frame.clone();
+        wrong["payload"]["line_proposal"][key] = value.into();
+        assert!(validate(&wrong, &details).unwrap()["step"].is_null());
+    }
+    let mut wrong = frame.clone();
+    wrong["payload"]["evidence"] = "のくさふゆむをくささむしに変更しよう".into();
+    assert!(validate(&wrong, &details).unwrap()["step"].is_null());
+    wrong = frame.clone();
+    wrong["workshop"]["conversation_candidate"] = Value::Null;
+    assert!(validate(&wrong, &details).unwrap()["step"].is_null());
+    for input in [
+        "今度は上五をそれに変えて",
+        "変えないで！",
+        "『変えて』って言っただけ",
+        "変えていい？",
+        "変えたらどうなる？",
+    ] {
+        let mut negative = frame.clone();
+        let mut d = details.clone();
+        negative["text"] = input.into();
+        negative["payload"]["evidence"] = input.into();
+        d["player_text"] = input.into();
+        d["original_player_text"] = input.into();
+        assert!(
+            validate(&negative, &d).unwrap()["step"].is_null(),
+            "{input}"
+        );
+    }
 }

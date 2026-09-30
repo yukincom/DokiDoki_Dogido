@@ -150,6 +150,12 @@ impl Dialogue {
                         .context("workshop messages")?
                         .push(json!({
                         "role":"user", "content":CONVERSATION_PROTOCOL}));
+                    prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
+                        "content":"差し替え案を相談するrespond/askでも、本人が今回言った置換語と対象をline_proposalへ入れてな。確認のあと『うん、変えて』のように案を省略した返事は、現在のconversation_candidateをstage_conversation_candidateで選んでな。行為のevidenceは今回の返事、置換語は保持された一案から使う。以前の発話を今回のevidenceへコピーしないでな。"}));
+                    if input.get("text_workshop_prompt").is_some() {
+                        prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
+                            "content":"ここはテキスト相談室。編集と採用はこの相談内の現在句に反映する。原本や長期記憶には書き込まないので、永続保存したとは言わず、句を変更したと返してな。"}));
+                    }
                     let payload = if let Some(fixed) = prepared.get("fixed_payload") {
                         fixed.clone()
                     } else {
@@ -199,6 +205,22 @@ impl Dialogue {
                     };
                     frame["op"] = "validate".into();
                     frame["payload"] = payload.clone();
+                    if phase == "decide"
+                        && pending.is_none()
+                        && let Some(candidate) = workshop_candidate::Candidate::from_model(
+                            &payload,
+                            &current,
+                            view["version"].as_u64().unwrap_or(0),
+                            text,
+                            discussion_target.as_ref(),
+                        )
+                    {
+                        // The question/confirmation may prevent immediate execution,
+                        // but must not erase the player's concrete replacement idea.
+                        conversation_candidate = Some(candidate.draft);
+                        frame["workshop"]["current_player_idea"] =
+                            serde_json::to_value(&conversation_candidate)?;
+                    }
                     let validation = validation::validate(&frame, &details)?;
                     reason = validation["reason"]
                         .as_str()
@@ -210,6 +232,15 @@ impl Dialogue {
                     {
                         frame["retry"] =
                             json!({"errors":validation["contract_errors"],"payload":payload});
+                        if frame["workshop"]["conversation_candidate"].is_object()
+                            && validation["contract_errors"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .any(|e| e.as_str().is_some_and(|e| e.starts_with("evidence:")))
+                        {
+                            frame["retry"]["instruction"] = "evidenceは今回の発話から抜いてな。直前の相談案を選ぶ返事ならstage_conversation_candidate。置換語を今回もう一度言わせる必要はないで。".into();
+                        }
                         continue;
                     }
                     if validation["step"].is_object() {
@@ -262,6 +293,13 @@ impl Dialogue {
                         }
                         selected = Some(step.clone());
                     } else if attempt == 0 {
+                        if reason == "ungrounded_evidence"
+                            && frame["workshop"]["conversation_candidate"].is_object()
+                        {
+                            frame["retry"] = json!({"reason":reason,"payload":payload,
+                                "instruction":"evidenceは今回の発話から抜いてな。直前の相談案を今回の返事で選ぶならstage_conversation_candidate。前の置換語や根拠を今回の発話にある扱いにしないでな。"});
+                            continue;
+                        }
                         // A rejected action is not a missing topic. Use the existing
                         // second attempt to answer the player, without mutation rights.
                         prepare_conversation_retry(&mut frame, &mut allowed, &reason, &payload);

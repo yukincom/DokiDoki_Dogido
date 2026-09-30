@@ -52,7 +52,9 @@ impl Engine {
     }
     pub(super) fn discussion(&self, f: &Value, s: &Snapshot, proposal: &Value) -> Result<Value> {
         let input = text(&f["text"]);
-        if parse::pattern("discussion_report").is_match(input) {
+        if parse::pattern("discussion_report").is_match(input)
+            || !crate::workshop_input_guard::discussion_idea_safe(input)
+        {
             return Ok(Value::Null);
         }
         let r = if proposal.is_object() && truth(&proposal["replacement_text"]) {

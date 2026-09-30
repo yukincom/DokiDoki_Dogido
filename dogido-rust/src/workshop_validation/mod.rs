@@ -86,6 +86,7 @@ fn edit_is_negated(action: &str, source: &str) -> bool {
     // for a positive request that the model has understood.
     let outside = PATTERNS[&format!("{key}_quote")].replace_all(source, "対象");
     PATTERNS[&format!("{key}_negative")].is_match(&outside)
+        || (key == "edit" && workshop_input_guard::edit_negated(source))
 }
 fn reject(reason: &str) -> Value {
     json!({"contract_errors":[],"step":null,"reason":reason})
@@ -148,6 +149,33 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
         payload = ASSETS["inactive"].clone();
         payload.as_object_mut().unwrap().extend(object.clone());
     }
+    // The model can express a contextual selection as an edit. Resolve only
+    // the exact current, player-grounded candidate; current assent is still
+    // checked below and the edit is revalidated against the live verse/CAS.
+    let candidate = &frame["workshop"]["conversation_candidate"]["proposal"];
+    let proposal = &payload["line_proposal"];
+    if action == "stage_player_edit"
+        && candidate.is_object()
+        && proposal["found"] == true
+        && proposal["confidence"]
+            .as_f64()
+            .is_some_and(|c| (0.85..=1.0).contains(&c))
+        && proposal["replacement_text"] == candidate["replacement_text"]
+        && proposal["target_fragment"] == candidate["target_fragment"]
+        && explicit_lines(source)
+            .iter()
+            .all(|i| candidate["line_index"].as_u64() == Some(*i as u64))
+        && (payload["line_reference"]["found"] != true
+            || candidate["line_index"].as_u64().is_some_and(|i| {
+                payload["line_reference"]["concept_id"] == format!("line_{}", i + 1)
+            }))
+        && !source.contains(text(&proposal["replacement_text"]))
+        && strings(&details["allowed_actions"]).contains("stage_conversation_candidate")
+    {
+        payload["action"] = "stage_conversation_candidate".into();
+        payload["line_reference"] = ASSETS["inactive"]["line_reference"].clone();
+        payload["line_proposal"] = ASSETS["inactive"]["line_proposal"].clone();
+    }
     let mut details = details.clone();
     if matches!(
         action,
@@ -167,14 +195,28 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
     if let Some(step) = outcome["step"].as_object() {
         let action = text(&step["action"]);
         let evidence = text(&step["evidence"]);
-        if matches!(action, "stage_player_edit" | "propose_revision")
-            && edit_is_negated(action, source)
-        {
+        if matches!(
+            action,
+            "stage_player_edit" | "stage_conversation_candidate" | "propose_revision"
+        ) && edit_is_negated(
+            if action == "stage_conversation_candidate" {
+                "stage_player_edit"
+            } else {
+                action
+            },
+            source,
+        ) {
             outcome = reject("unsafe_state_change_evidence");
         } else if action == "stage_conversation_candidate"
             && !truth(&frame["workshop"]["conversation_candidate"])
         {
             outcome = reject("conversation_candidate_missing");
+        } else if action == "stage_conversation_candidate"
+            && explicit_lines(source)
+                .iter()
+                .any(|i| candidate["line_index"].as_u64() != Some(*i as u64))
+        {
+            outcome = reject("conversation_candidate_target_conflict");
         } else if action == "propose_revision" {
             if step["confidence"].as_f64().unwrap_or(0.) < 0.85
                 || !workshop_input_guard::state_change_safe(action, source, evidence)
