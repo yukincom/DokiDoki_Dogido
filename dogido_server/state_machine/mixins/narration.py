@@ -890,83 +890,123 @@ class NarrationMixin:
         # 全カタログのvisual_tagsへ流さない。
         raw_topic_hits = (
             self._player_chat_topic_hits(chat_plan.entity_query, observed_ids)
-            if chat_plan.requests_catalog
+            if chat_plan.requests_catalog and not getattr(self.llm, "native_topic_catalog", False)
             else []
         )
-        usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
-        entity_grounding = ground_player_chat_entity(
-            chat_plan,
-            topic_hits=usable_topic_hits,
-            observed_entities=observed_entities,
-        )
-        fixed_grounded_reply = fixed_grounded_player_chat_reply(
-            chat_plan,
-            entity_grounding,
-        )
-        reply_stance = resolve_reply_stance(
-            has_visual_threats=has_visual_for_chat,
-            topic_hits=raw_topic_hits,
-            threat_summary=threat_summary,
-            user_text=chat_plan.entity_query or user_text,
-            observed_ids=observed_ids,
-        )
-        reply_policy = reply_policy_line(reply_stance)
-        topic_for_identify: list[dict[str, object]] = []
-        if chat_plan.action == "identify_entity" and reply_stance == "hypothesis":
-            grounded_ids = set(entity_grounding.observed_ids)
-            topic_for_identify = (
-                [
-                    hit
-                    for hit in usable_topic_hits
-                    if str(hit.get("entry_id") or "") in grounded_ids
-                ]
-                if grounded_ids
-                else usable_topic_hits
+        native_topics = getattr(self.llm, "prepare_player_chat_topics", None)
+        if callable(native_topics):
+            entity_grounding, fixed_grounded_reply, topic_policy = native_topics(
+                chat_plan, topic_hits=raw_topic_hits, observed_entities=observed_entities,
+                has_visual_threats=has_visual_for_chat, threat_summary=threat_summary,
+                user_text=chat_plan.entity_query or user_text, observed_ids=observed_ids,
+                name_context={
+                    "visual_types": effective_visual_types,
+                    "passive_types": self._merge_unique_types(passive_types, list(getattr(self, "_player_chat_recent_passive_sightings", lambda _: {})(event))),
+                    "hearing_named_mobs": [*hearing_named_mobs, *hearing_source_labels],
+                    "recent_mob_types": recent_name_context_types,
+                    "current_entity_labels": [row["label"] for row in observed_entities],
+                    "look_label": look_for_observation,
+                },
             )
-        catalog_topic_hints = (
-            self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
-        )
-        allowed_speech_labels = build_allowed_speech_labels(
-            topic_hits=topic_for_identify,
-            visual_types=effective_visual_types,
-            passive_types=passive_types,
-            hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
-            recent_mob_types=recent_name_context_types,
-        )
-        reported_texts = [user_text]
-        conversation_turns = history_details.get("conversation_turns")
-        if isinstance(conversation_turns, list):
-            reported_texts.extend(
-                str(row.get("text") or "")
-                for row in conversation_turns
-                if isinstance(row, dict) and row.get("role") == "user"
+            usable_topic_hits = topic_policy["usable_topic_hits"]
+            raw_topic_hits = topic_policy.get("raw_topic_hits", raw_topic_hits)
+            reply_stance = topic_policy["reply_stance"]
+            reply_policy = topic_policy["reply_policy"]
+            topic_for_identify = topic_policy["topic_for_identify"]
+            identify_skeleton = topic_policy["identify_skeleton"]
+        else:
+            usable_topic_hits = filter_usable_topic_hits(raw_topic_hits)
+            native_ground = getattr(self.llm, "ground_player_chat", None)
+            if callable(native_ground):
+                # Rust移行bridge限定。候補検索と現在観測の投影はここに残す。
+                entity_grounding, fixed_grounded_reply = native_ground(
+                    chat_plan, topic_hits=usable_topic_hits,
+                    observed_entities=observed_entities,
+                )
+            else:
+                entity_grounding = ground_player_chat_entity(
+                    chat_plan,
+                    topic_hits=usable_topic_hits,
+                    observed_entities=observed_entities,
+                )
+                fixed_grounded_reply = fixed_grounded_player_chat_reply(
+                    chat_plan,
+                    entity_grounding,
+                )
+            reply_stance = resolve_reply_stance(
+                has_visual_threats=has_visual_for_chat,
+                topic_hits=raw_topic_hits,
+                threat_summary=threat_summary,
+                user_text=chat_plan.entity_query or user_text,
+                observed_ids=observed_ids,
             )
-        additional_labels = [
-            *(row["label"] for row in observed_entities),
-            *(
-                label
-                for text in reported_texts
-                for label in catalog_labels_mentioned_in_text(text)
-            ),
-            *catalog_labels_mentioned_in_text(look_for_observation),
-        ]
-        for label in additional_labels:
-            if label and label not in allowed_speech_labels:
-                allowed_speech_labels.append(label)
-        speech_name_corrections = build_observed_speech_name_corrections(
-            recent_name_context_types
-        )
-        # 全通常雑談でカタログ名を検査する。許可元は現在観測、現在/過去の
-        # player発話、plannerが選んだ同定候補だけ。assistant履歴だけの名は含めない。
-        speech_whitelist_enforce = True
-        identify_skeleton = build_identify_skeleton(
-            stance=reply_stance,
-            topic_hits=topic_for_identify,
-        )
-        if entity_grounding.status == "observed":
-            # 従来のhypothesis骨子は「俺には見えん」を含むため、
-            # コード観測済みの同定とは同時に渡さない。
-            identify_skeleton = None
+            reply_policy = reply_policy_line(reply_stance)
+            topic_for_identify: list[dict[str, object]] = []
+            if chat_plan.action == "identify_entity" and reply_stance == "hypothesis":
+                grounded_ids = set(entity_grounding.observed_ids)
+                topic_for_identify = (
+                    [
+                        hit
+                        for hit in usable_topic_hits
+                        if str(hit.get("entry_id") or "") in grounded_ids
+                    ]
+                    if grounded_ids
+                    else usable_topic_hits
+                )
+        if callable(native_topics) and "catalog_topic_hints" in topic_policy:
+            catalog_topic_hints = topic_policy["catalog_topic_hints"]
+        else:
+            catalog_topic_hints = (
+                self._format_player_chat_topic_hints(topic_for_identify) if topic_for_identify else ""
+            )
+        native_names = topic_policy.get("names") if callable(native_topics) else None
+        if native_names is not None:
+            allowed_speech_labels = native_names["allowed_speech_labels"]
+            speech_name_corrections = native_names["speech_name_corrections"]
+            speech_whitelist_enforce = native_names["speech_whitelist_enforce"]
+        else:
+            allowed_speech_labels = build_allowed_speech_labels(
+                topic_hits=topic_for_identify,
+                visual_types=effective_visual_types,
+                passive_types=passive_types,
+                hearing_named_mobs=[*hearing_named_mobs, *hearing_source_labels],
+                recent_mob_types=recent_name_context_types,
+            )
+            reported_texts = [user_text]
+            conversation_turns = history_details.get("conversation_turns")
+            if isinstance(conversation_turns, list):
+                reported_texts.extend(
+                    str(row.get("text") or "")
+                    for row in conversation_turns
+                    if isinstance(row, dict) and row.get("role") == "user"
+                )
+            additional_labels = [
+                *(row["label"] for row in observed_entities),
+                *(
+                    label
+                    for text in reported_texts
+                    for label in catalog_labels_mentioned_in_text(text)
+                ),
+                *catalog_labels_mentioned_in_text(look_for_observation),
+            ]
+            for label in additional_labels:
+                if label and label not in allowed_speech_labels:
+                    allowed_speech_labels.append(label)
+            speech_name_corrections = build_observed_speech_name_corrections(
+                recent_name_context_types
+            )
+            # 全通常雑談でカタログ名を検査する。許可元は現在観測、現在/過去の
+            # player発話、plannerが選んだ同定候補だけ。assistant履歴だけの名は含めない。
+            speech_whitelist_enforce = True
+        if not callable(native_topics):
+            identify_skeleton = build_identify_skeleton(
+                stance=reply_stance,
+                topic_hits=topic_for_identify,
+            )
+            if entity_grounding.status == "observed":
+                # 従来のhypothesis骨子は「俺には見えん」を含むため、
+                # コード観測済みの同定とは同時に渡さない。
+                identify_skeleton = None
         from dogido_server.entry_catalog import (
             build_plausibility_hint_lines,
             normalize_biome_id,

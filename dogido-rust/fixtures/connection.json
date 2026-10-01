@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "kind": "migration_connection_probe",
+  "model": "default_model",
+  "messages": [
+    {"role": "system", "content": "これはローカル接続の確認です。日本語で短く一文だけ返してください。"},
+    {"role": "user", "content": "ドギドのRust版から接続できたよ。短く返事して。"}
+  ],
+  "temperature": 0.2,
+  "max_tokens": 72,
+  "enable_thinking": false
+}

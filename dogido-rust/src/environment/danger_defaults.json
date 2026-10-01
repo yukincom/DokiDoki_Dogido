@@ -1,0 +1,21 @@
+{
+  "darkness_advice_cooldown_ms": 60000,
+  "darkness_llm_comment_cooldown_ms": 300000,
+  "foliage_darkness_comment_cooldown_ms": 600000,
+  "submerged_darkness_comment_cooldown_ms": 600000,
+  "dark_push_comment_cooldown_ms": 20000,
+  "dark_push_breath_loop_ms": 3800,
+  "dark_push_breath_delay_ms": 5000,
+  "dark_push_progress_distance": 1.0,
+  "dark_push_escalation_light_threshold": 1,
+  "dark_push_escalation_darkness_threshold": 0.7,
+  "dark_push_worse_light_delta": 2,
+  "dark_push_worse_darkness_delta": 0.12,
+  "dark_push_recover_darkness_margin": 0.02,
+  "portal_frame_comment_cooldown_ms": 600000,
+  "damaging_light_warning_cooldown_ms": 600000,
+  "magma_block_comment_cooldown_ms": 1200000,
+  "damaging_light_warning_max_distance": 5.0,
+  "thunder_reaction_message_cooldown_ms": 180000,
+  "thunder_reaction_panic_cue_cooldown_ms": 600000
+}

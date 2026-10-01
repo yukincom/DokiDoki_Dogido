@@ -30,6 +30,17 @@ from dogido_server.dialogue_context import DialogueContext
 from dogido_server.dialogue.foreground import ForegroundDialogue
 from dogido_server.dialogue.main_runtime import MainLanguageRuntime
 from dogido_server.episode_log import EpisodeRecorder
+from dogido_server.haiku.turn_record import (
+    note_input,
+    note_operation,
+    note_route,
+    note_steps,
+    note_validation,
+    record_boundary,
+    record_workshop_admission,
+    record_workshop_event,
+    snapshot as workshop_record_state,
+)
 from dogido_server.haiku.combat_pause import (
     CombatWorkshopInputAnalysis,
     build_combat_workshop_input_details,
@@ -316,6 +327,10 @@ class DogidoService:
         """端末内モデルの worker / loaded model を解放する。"""
 
         for session in tuple(self.sessions.values()):
+            record_boundary(
+                self, session, before=workshop_record_state(session.haiku_workshop), after=None,
+                kind="lifecycle", result={"reason": "server_shutdown"},
+            )
             if session.language_runtime is not None:
                 session.language_runtime.close()
         self.audio.close()
@@ -471,6 +486,7 @@ class DogidoService:
             max_batch_size=self.settings.max_batch_size,
         )
 
+    @record_workshop_event
     def process_event(
         self,
         event: GameEvent,
@@ -757,6 +773,12 @@ class DogidoService:
             interpreted_player_text=interpreted_player_text,
             input_source=attached_player_source,
         )
+        if event.meta.user_text:
+            note_input(
+                attached_player_display_text or routed_player_input.raw_text,
+                routed_player_input.semantic_text, turn_id=attached_player_turn_id,
+                source=attached_player_source,
+            )
         if direct_player_text and self.settings.audio_enabled:
             # adapter chatも、すでに受理済みの本人発話なら再生中の返答へ
             # barge-inできる。requeueされた保留入力では二度止めない。
@@ -1687,6 +1709,11 @@ class DogidoService:
         session = self.sessions.pop(session_id, None)
         if session is not None and session.language_runtime is not None:
             session.language_runtime.close()
+        if session is not None:
+            record_boundary(
+                self, session, before=workshop_record_state(session.haiku_workshop), after=None,
+                kind="lifecycle", result={"reason": "session_closed"},
+            )
         self.runtime_status.adapter_closed(session_id)
         return CloseSessionResponse(ok=True, session_id=session_id)
 
@@ -1818,6 +1845,7 @@ class DogidoService:
             session_id=session.session_id,
         )
 
+    @record_workshop_admission
     def push_player_input(self, text: str, *, source: str = "text") -> dict[str, object]:
         """音声入力などゲーム外からのプレイヤー発話を、直近のアクティブセッションへ届ける。"""
         from dogido_server.player_input.normalize import (
@@ -3027,6 +3055,10 @@ class DogidoService:
         elif is_open(session.haiku_workshop):
             close_workshop(session.haiku_workshop, reason="revise")
             session.haiku_workshop = None
+        note_operation(
+            "save_revision", "saved", canonical_after=revised_text,
+            revision_id=str(revision.get("id") or ""),
+        )
         LOGGER.warning(
             "haiku_revision_saved session_id=%s source=%s text=%s",
             session.session_id,
@@ -3231,6 +3263,11 @@ class DogidoService:
             )
             if agent_actions is not None:
                 return agent_actions
+
+        if not agent_fast_path and (
+            not self.settings.llm_enabled or not self.settings.haiku_workshop_agent_enabled
+        ):
+            note_route("legacy")
 
         # AI生成案は自動保存しない。自然文の意味は常駐する chat LLM で
         # 閉じた action に変換し、現在pendingとの整合と保存・破棄はコードで扱う。
@@ -4091,6 +4128,7 @@ class DogidoService:
     ) -> list[AudioAction] | None:
         """自然な相談を、最大三手の検証付き共同編集ループで処理する。"""
 
+        note_route("agent")
         workshop = session.haiku_workshop
         assert workshop is not None
         base_verse = workshop.display_line()
@@ -4113,6 +4151,8 @@ class DogidoService:
             )
             if step is None:
                 if not turn_steps:
+                    note_route("legacy_fallback")
+                    note_validation((f"agent_step_{path}",))
                     LOGGER.warning(
                         "haiku_workshop_agent result=legacy_fallback reason=%s player=%s",
                         path,
@@ -4689,6 +4729,7 @@ class DogidoService:
     ) -> None:
         """改善記録を保存する。保存失敗はリアルタイム応答へ伝播させない。"""
 
+        captured = note_steps(turn_steps)
         if self.memory is None:
             return
         try:
@@ -4736,6 +4777,8 @@ class DogidoService:
                             polarity=str(lesson.get("polarity") or "tighten"),
                             strength=float(lesson.get("strength") or 0.3),
                         )
+            if captured:
+                return
             self.memory.save_haiku_workshop_turn(
                 entry_id=workshop.entry_id,
                 player_text=raw_player_text,
@@ -4758,6 +4801,7 @@ class DogidoService:
     def _player_line_revision_failure_reply(reasons: tuple[str, ...]) -> str:
         """局所置換の失敗理由を、本文を創作せず短く返す。"""
 
+        note_validation(reasons)
         reason_set = set(reasons)
         if "missing_target" in reason_set:
             return "『くさちのねよりくさちかな』みたいに、元の一行と新しい一行を教えてな。"

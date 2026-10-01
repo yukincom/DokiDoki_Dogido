@@ -1,0 +1,18 @@
+{
+  "field_weights": {
+    "label": 10.0,
+    "spoken_aliases": 10.0,
+    "visual_tags": 6.0,
+    "role": 5.0,
+    "scene_tags": 4.0,
+    "motion_tags": 4.0,
+    "sound_tags": 4.0,
+    "reaction_tags": 2.0,
+    "comic_tags": 2.0,
+    "structure_label": 8.0,
+    "note": 3.0
+  },
+  "min_term_len": 1,
+  "min_score": 5.0,
+  "top_k": 3
+}

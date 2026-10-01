@@ -1,0 +1,62 @@
+[
+  {
+    "role": "system",
+    "segments": [
+      {
+        "literal": "あなたは照明器具の所持数変化への発話要否だけを決める限定planner。指定されたJSON以外は返さない。"
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "segments": [
+      {
+        "literal": "inventory snapshotで照明器具の所持数が増えた。ひと言が本当に必要かを判断する。\nこの観測だけでは、クラフトした、置いた、拾った、持ち替えた、のどれかは分からない。発話文は生成せず、暗所状態の解除・ゲーム操作・保存も行わない。\nactions:\n- stay_silent: 情報価値が低い、重複、周囲が十分明るい、または安全反応を優先する\n- acknowledge_supply_gain: 初めて明かりを得た、または少ない備えが増えた節目にだけ短く触れる\n- relief_after_darkness: 暗所押し込み中だった状態が、現在観測で実際に回復したときだけ安堵する\n許可されていないactionを選ばない。基本はstay_silentで、話す理由が明確なときだけ別actionを選ぶ。supply_after=abundantかつsurroundings_light=reasonably_litなら必ずstay_silent。recent_light_comment=trueでも必ずstay_silent。\nbasis_idsはfactsにあるIDから、判断に直接使ったものを重複なく1〜3件だけ選ぶ。relief_after_darknessならdark_push_recoveredを必ず含める。acknowledge_supply_gainならfirst_light_supply、supply_before、surroundings_lightのどれかを必ず含める。数値やfactsにない出来事を補作しない。\n許可actions: "
+      },
+      {
+        "slot": "actions"
+      },
+      {
+        "literal": "\nfacts: "
+      },
+      {
+        "slot": "facts"
+      },
+      {
+        "literal": "\n返答はJSONオブジェクトのみ。形式: {\"action\":\"stay_silent\",\"basis_ids\":[\"supply_after\"],\"confidence\":0.0}"
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "segments": [
+      {
+        "literal": "前回の返答は、内容の採否以前に現行JSON契約へ一致しなかった。\n契約不一致: "
+      },
+      {
+        "slot": "errors"
+      },
+      {
+        "literal": "\n前回のJSON: "
+      },
+      {
+        "slot": "previous"
+      },
+      {
+        "literal": "\n現行JSON Schema:\n{\"additionalProperties\":false,\"properties\":{\"action\":{\"enum\":[\"stay_silent\",\"acknowledge_supply_gain\",\"relief_after_darkness\"],\"title\":\"Action\",\"type\":\"string\"},\"basis_ids\":{\"items\":{\"minLength\":1,\"type\":\"string\"},\"maxItems\":3,\"minItems\":1,\"title\":\"Basis Ids\",\"type\":\"array\"},\"confidence\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"integer\"}],\"ge\":0.0,\"le\":1.0,\"title\":\"Confidence\"}},\"required\":[\"action\",\"basis_ids\",\"confidence\"],\"title\":\"_LightSourceCommentPlan\",\"type\":\"object\"}\nリクエスト固有制約:\nactionは次から選ぶ: "
+      },
+      {
+        "slot": "sorted_actions"
+      },
+      {
+        "literal": "\nbasis_idsは次の文字列から判断に使ったものだけを重複なく1〜3件返す: "
+      },
+      {
+        "slot": "sorted_basis"
+      },
+      {
+        "literal": "\nrelief_after_darknessはdark_push_recoveredをbasis_idsへ含める。acknowledge_supply_gainはfirst_light_supply、supply_before、surroundings_lightのどれかを含める\n最初に示した同じ入力をもう一度判定し、プロンプトに記載された現行の形で、JSONオブジェクトを1つだけ返す。旧形式、説明文、コードフェンスは禁止。候補にないIDや値を補作しない。"
+      }
+    ]
+  }
+]

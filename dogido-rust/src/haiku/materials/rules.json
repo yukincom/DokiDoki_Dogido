@@ -1,0 +1,87 @@
+{
+  "portal_tags": [
+    "異世界",
+    "ワープ",
+    "不思議",
+    "光"
+  ],
+  "noun_families": [
+    {
+      "key": "shovel",
+      "category": "tool",
+      "item_suffixes": [
+        "shovel"
+      ],
+      "label_markers": [
+        "シャベル",
+        "しゃべる"
+      ],
+      "allowed_terms": [
+        "しゃべる"
+      ],
+      "forbidden_terms": [
+        "つるはし",
+        "おの",
+        "くわ"
+      ]
+    },
+    {
+      "key": "pickaxe",
+      "category": "tool",
+      "item_suffixes": [
+        "pickaxe"
+      ],
+      "label_markers": [
+        "ツルハシ",
+        "つるはし"
+      ],
+      "allowed_terms": [
+        "つるはし"
+      ],
+      "forbidden_terms": [
+        "しゃべる",
+        "おの",
+        "くわ"
+      ]
+    },
+    {
+      "key": "axe",
+      "category": "tool",
+      "item_suffixes": [
+        "axe"
+      ],
+      "label_markers": [
+        "斧",
+        "オノ",
+        "おの"
+      ],
+      "allowed_terms": [
+        "おの"
+      ],
+      "forbidden_terms": [
+        "しゃべる",
+        "つるはし",
+        "くわ"
+      ]
+    },
+    {
+      "key": "hoe",
+      "category": "tool",
+      "item_suffixes": [
+        "hoe"
+      ],
+      "label_markers": [
+        "クワ",
+        "くわ"
+      ],
+      "allowed_terms": [
+        "くわ"
+      ],
+      "forbidden_terms": [
+        "しゃべる",
+        "つるはし",
+        "おの"
+      ]
+    }
+  ]
+}

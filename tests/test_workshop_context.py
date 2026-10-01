@@ -163,7 +163,7 @@ def test_each_workshop_prompt_receives_the_same_scene_and_previous_reply(worksho
     assert SCENE in prompt
     assert "前の説明から一緒に確かめよか。" in prompt
     assert "まだ分からない" in prompt or kind in {"haiku_workshop_revision", "haiku_line_grounding"}
-    assert "今の操作の根拠にしない" in prompt
+    assert "今の操作の根拠にしたらあかんで" in prompt
 
 
 def test_normal_chat_reuses_its_existing_history_without_treating_it_as_observation():

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; base-uri 'none'; form-action 'none'">
+<title>ドギド · Rust会話テスト</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#171b21;color:#eef1f4}body{max-width:850px;margin:32px auto;padding:0 20px}h1{font-size:1.5rem;margin-bottom:10px}p{line-height:1.7;color:#bac4ce}a{color:#91dcd2}section{background:#222a34;border:1px solid #3d4c5b;border-radius:14px;padding:20px;margin:20px 0}label{display:block;margin:12px 0 6px}input,textarea,select,button{font:inherit;border-radius:8px;border:1px solid #607183;padding:10px;background:#171b21;color:inherit}textarea{box-sizing:border-box;width:100%;resize:vertical}button{cursor:pointer;background:#315a59;margin:8px 8px 0 0}button:disabled{opacity:.5;cursor:wait}.entry{border-top:1px solid #42505f;padding:16px 0;white-space:pre-wrap;overflow-wrap:anywhere}.speaker{font-size:.8rem;color:#a9b7c8;margin:6px 0}.status{color:#94dfcf;font-size:.85rem}.error{color:#ffc08c;white-space:pre-wrap}#log:empty:before{content:'まだ会話はありません。接続先を選んで話しかけてください。';color:#a9b7c8}small{color:#a9b7c8}details input{width:75%}
+</style>
+<h1>ドギド · Rust会話テスト</h1>
+<p>会話・戦闘・暗所や天候への反応を確認できます。敵の方角・体数や今の匂いを尋ねたり、剣への持ち替えを頼めます。<br>音声が最後まで再生された会話の返答を、次の会話へ引き継ぎます。</p>
+<details><summary>API認証を設定している場合</summary><label for="token">認証トークン（この画面のメモリ内だけで使用）</label><input id="token" type="password" autocomplete="off"></details>
+<section>
+<label for="session">会話する接続</label><select id="session"><option value="">接続を確認中…</option></select>
+<div><button id="preview">ゲームなしで会話を試す</button><button id="close">この接続を終了</button></div>
+<p id="connection">接続を確認しています。</p>
+<label for="input">プレイヤーの発言</label><textarea id="input" rows="3" maxlength="1000" placeholder="こんにちは、ドギド。"></textarea>
+<button id="send">話しかける</button><button id="stop">返答・音声を止める</button>
+<p id="notice" class="error" role="status"></p>
+<small>新しい発言を送ると、処理中の返答・音声を取り消します。マイク入力は起動用ターミナルで有効にします。</small>
+</section>
+<section><h2 style="font-size:1.1rem">会話と再生結果</h2><div id="log" aria-live="polite"></div></section>
+<p><a href="/catalog">あんちょこ・読みの訂正</a> · <a href="/dogido">ドギドの表示画面を開く</a> · サーバー終了はターミナルで Ctrl+C</p>
+<script>
+const $=id=>document.getElementById(id);let snapshot=null,lastRevision=-1,lastSelection='',previewId=null,preferredSession=null;
+const modes={normal:'通常',alert:'警戒',panic:'パニック',suppressed_panic:'声を抑えて警戒',aftermath:'戦闘後'};
+const names={ready:'待機中',routing:'内容を確認中',waiting_for_safety:'安全になるまで保留',not_selected:'発話なし',generating:'返答を生成中',queued:'音声を準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',unsupported:'未接続の機能',quiet:'発話なし',audio_disabled:'音声なし'};
+const cancelReasons={visual_hostile:'敵を視認',auditory_hostile:'敵の音を観測',recent_damage:'被弾',combat_active:'戦闘を観測',danger_darkness:'危険な暗さを観測',target_changed_or_gone:'対象や方向が変化・観測から消失',higher_priority_warning:'優先する警告へ切替',stale_observation:'現在の観測が途絶',new_player_input:'新しい発言',manual_interrupt:'停止操作',session_closed:'接続終了',server_shutdown:'サーバー終了',combat_priority:'戦闘の優先反応',combat_input:'戦闘の質問・指示',dimension_changed:'次元移動'};
+const reasons={select_one_session:'接続先を一つ選んでください。',fresh_safe_snapshot_required:'直近の安全なゲーム観測が必要です。戦闘中は敵の方角・体数への質問を受け付け、通常会話は警告を優先します。',unknown_session_id:'接続が終了しました。接続し直してください。',empty_text:'発言を入力してください。',server_stopping:'サーバーを停止中です。'};
+async function api(path,body,method){const headers={};if($('token').value)headers.Authorization='Bearer '+$('token').value;if(body!==undefined)headers['Content-Type']='application/json';const r=await fetch(path,{method:method||(body===undefined?'GET':'POST'),headers,body:body===undefined?undefined:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(r.status+' '+JSON.stringify(v.detail||v));return v;}
+function note(e){$('notice').textContent=e instanceof Error?e.message:e;}
+function render(){if(!snapshot)return;const selected=$('session').value;const s=snapshot.sessions.find(s=>s.session_id===selected);$('connection').textContent=s?`${s.name} · ${s.observation_mode==='none'?'ゲーム観測なし':'Minecraftの現在観測'} · ${modes[s.state]||''} · ${names[s.status]||s.status}`:'ゲームを接続するか「ゲームなしで会話を試す」を押してください。';$('send').disabled=!s;$('stop').disabled=!s;$('close').disabled=!s;
+if(lastRevision===snapshot.revision&&lastSelection===selected)return;lastRevision=snapshot.revision;lastSelection=selected;$('log').replaceChildren();for(const r of snapshot.utterances.filter(r=>r.session_id===selected)){const el=document.createElement('div');el.className='entry';for(const [label,text] of [...(r.player_input_text?[['プレイヤー',r.player_input_text]]:[]),[r.category==='callout'?'ドギド（警告）':'ドギド',r.text]]){const h=document.createElement('div');h.className='speaker';h.textContent=label;el.append(h,document.createTextNode(text||'…'));}const status=document.createElement('p');status.className='status';status.textContent=names[r.playback_status]||r.playback_status;el.append(status);if(r.cancel_reason){const reason=document.createElement('p');reason.className='status';reason.textContent='中断理由：'+(cancelReasons[r.cancel_reason]||r.cancel_reason);el.append(reason);}if(r.error){const error=document.createElement('p');error.className='error';error.textContent=r.error;el.append(error);}$('log').append(el);}}
+async function poll(){try{snapshot=await api('/api/v1/rust-dialogue/snapshot');const previous=$('session').value;const ids=snapshot.sessions.map(s=>s.session_id);if([...$('session').options].map(o=>o.value).join()!==ids.join()){$('session').replaceChildren(...snapshot.sessions.map(s=>{const o=document.createElement('option');o.value=s.session_id;o.textContent=s.name+' · '+s.session_id;return o;}));if(ids.includes(preferredSession)){$('session').value=preferredSession;preferredSession=null;}else if(ids.includes(previous))$('session').value=previous;}render();}catch(e){note(e);$('send').disabled=true;}setTimeout(poll,500);}
+$('session').onchange=render;
+$('preview').onclick=async()=>{try{if(previewId&&snapshot?.sessions.some(s=>s.session_id===previewId)){$('session').value=previewId;render();return;}const v=await api('/api/v1/adapter-sessions',{adapter_name:'rust-conversation-preview',adapter_version:'1',game:'none',schema_version:'2026-05-24',player_name:'プレイヤー'});previewId=v.session_id;preferredSession=previewId;note('ゲーム観測なしの会話を開始しました。');}catch(e){note(e);}};
+$('send').onclick=async()=>{try{const v=await api('/api/v1/player-input',{session_id:$('session').value,text:$('input').value,source:'text'});if(!v.accepted)throw Error(reasons[v.reason]||v.reason);$('input').value='';note('');}catch(e){note(e);}};
+$('stop').onclick=async()=>{try{await api('/api/v1/rust-dialogue/interrupt',{session_id:$('session').value});}catch(e){note(e);}};
+$('close').onclick=async()=>{try{await api('/api/v1/adapter-sessions/'+encodeURIComponent($('session').value),undefined,'DELETE');}catch(e){note(e);}};
+$('input').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('send').click();}};
+poll();
+</script></html>

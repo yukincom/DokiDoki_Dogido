@@ -156,6 +156,7 @@ class _WorkshopAgentStep(_StrictModel):
         "compare",
         "show_current",
         "stage_player_edit",
+        "stage_conversation_candidate",
         "accept_pending",
         "reject_pending",
         "close_workshop",
@@ -429,7 +430,7 @@ def structured_contract_retry_instruction(
         )
         constraints.append(
             "speechはrespond/explain/ask/compareだけ非空にし、"
-            "inspect/propose_revision/show_current/stage_player_edit/"
+            "inspect/propose_revision/show_current/stage_player_edit/stage_conversation_candidate/"
             "accept_pending/reject_pending/close_workshop/unrelated/"
             "defer_to_legacyでは必ず空文字にする"
         )
@@ -630,6 +631,7 @@ def _validate_dynamic_contract(
             "reject_pending": "discard_pending",
             "close_workshop": "finish_workshop",
             "stage_player_edit": "improve_wording",
+            "stage_conversation_candidate": "improve_wording",
         }
         required_purpose = required_purposes.get(payload["action"])
         if required_purpose is not None and payload["purpose"] != required_purpose:
@@ -674,6 +676,7 @@ def _validate_dynamic_contract(
             "reject_pending",
             "close_workshop",
             "stage_player_edit",
+            "stage_conversation_candidate",
         }
         if payload["action"] in mutation_actions and evidence not in original_player_text:
             errors.append("evidence:not_in_original")

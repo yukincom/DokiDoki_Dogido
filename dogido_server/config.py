@@ -306,7 +306,7 @@ class Settings(BaseSettings):
     player_input_ambient_mute_ms: int = 20000
     damaging_light_warning_cooldown_ms: int = 600000
     magma_block_comment_cooldown_ms: int = 1200000
-    damaging_light_warning_max_distance: float = 2.0
+    damaging_light_warning_max_distance: float = 5.0
     ominous_sound_comment_cooldown_ms: int = 120000
     sculk_ominous_sound_comment_cooldown_ms: int = 120000
     ominous_sound_reset_ms: int = 30000

@@ -46,6 +46,9 @@ def reload_overlay() -> None:
                         if not isinstance(row, dict):
                             continue
                         surface = str(row.get("surface") or "").strip()
+                        if row.get("operation") == "remove":
+                            loaded.pop(surface, None)
+                            continue
                         reading = str(row.get("reading") or "").strip()
                         if not surface or not reading:
                             continue

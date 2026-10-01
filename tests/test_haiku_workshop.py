@@ -814,6 +814,57 @@ class WorkshopIntentTests(unittest.TestCase):
         self.assertTrue(is_open(ws))
         self.assertIsNone(ws.pending_revision)
 
+    def test_player_word_replacement_preserves_rest_of_line_and_checks_result(self) -> None:
+        ws = open_from_emission(
+            _emission(text="くろいめが\nてのなかのくさ\nあめふりや")
+        )
+        revised = build_player_line_revision(
+            ws, PlayerLineReplacement("ひかるめ", target_fragment="くろいめ")
+        )
+        self.assertEqual(revised.text, "ひかるめが\nてのなかのくさ\nあめふりや")
+        self.assertEqual(revised.lines[0].surface_text, "ひかるめが")
+        self.assertEqual(revised.lines[0].reading_text, "ひかるめが")
+        self.assertEqual(revised.edits[0]["expected_text"], "くろいめが")
+        self.assertEqual(revised.edits[0]["replacement_text"], "ひかるめが")
+
+        too_long = build_player_line_revision(
+            ws, PlayerLineReplacement("ひかりのめ", target_fragment="くろいめ")
+        )
+        self.assertIsNone(too_long.text)
+        self.assertIn("meter_not_exact", too_long.failure_reasons)
+
+    def test_word_replacement_requires_one_location_within_selected_line(self) -> None:
+        repeated = open_from_emission(
+            _emission(text="めがめがめ\nてのなかのくさ\nあめふりや")
+        )
+        result = build_player_line_revision(
+            repeated,
+            PlayerLineReplacement("はな", explicit_line_index=0, target_fragment="めが"),
+        )
+        self.assertIsNone(result.text)
+        self.assertIn("ambiguous_target_fragment", result.failure_reasons)
+
+        overlapping = open_from_emission(
+            _emission(text="あああああ\nてのなかのくさ\nあめふりや")
+        )
+        overlapping_result = build_player_line_revision(
+            overlapping, PlayerLineReplacement("いいい", target_fragment="あああ")
+        )
+        self.assertIn("ambiguous_target_fragment", overlapping_result.failure_reasons)
+
+        two_lines = open_from_emission(
+            _emission(text="くろいめが\nくろいめがある\nあめふりや")
+        )
+        ambiguous = build_player_line_revision(
+            two_lines, PlayerLineReplacement("ひかるめ", target_fragment="くろいめ")
+        )
+        self.assertIn("ambiguous_target_fragment", ambiguous.failure_reasons)
+        disambiguated = build_player_line_revision(
+            two_lines,
+            PlayerLineReplacement("ひかるめ", explicit_line_index=0, target_fragment="くろいめ"),
+        )
+        self.assertEqual(disambiguated.text, "ひかるめが\nくろいめがある\nあめふりや")
+
     def test_validated_finding_marks_the_next_player_replacement_line(self) -> None:
         ws = open_from_emission(
             _emission(text="ゆうぐれの\nてのなかのくさ\nあめふりや")

@@ -1,0 +1,507 @@
+{
+  "schema": {
+    "$defs": {
+      "_WorkshopFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "line_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Line Index"
+          },
+          "fragment": {
+            "title": "Fragment",
+            "type": "string"
+          },
+          "problem": {
+            "title": "Problem",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "ge": 0.0,
+            "le": 1.0,
+            "title": "Confidence"
+          }
+        },
+        "required": [
+          "fragment",
+          "problem",
+          "note",
+          "confidence"
+        ],
+        "title": "_WorkshopFinding",
+        "type": "object"
+      },
+      "_WorkshopLineProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "target_fragment": {
+            "title": "Target Fragment",
+            "type": "string"
+          },
+          "replacement_text": {
+            "title": "Replacement Text",
+            "type": "string"
+          },
+          "evidence": {
+            "title": "Evidence",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "ge": 0.0,
+            "le": 1.0,
+            "title": "Confidence"
+          }
+        },
+        "required": [
+          "found",
+          "target_fragment",
+          "replacement_text",
+          "evidence",
+          "confidence"
+        ],
+        "title": "_WorkshopLineProposal",
+        "type": "object"
+      },
+      "_WorkshopLineReference": {
+        "additionalProperties": false,
+        "properties": {
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "concept_id": {
+            "enum": [
+              "line_1",
+              "line_2",
+              "line_3",
+              "unknown"
+            ],
+            "title": "Concept Id",
+            "type": "string"
+          },
+          "evidence": {
+            "title": "Evidence",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "ge": 0.0,
+            "le": 1.0,
+            "title": "Confidence"
+          }
+        },
+        "required": [
+          "found",
+          "concept_id",
+          "evidence",
+          "confidence"
+        ],
+        "title": "_WorkshopLineReference",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "enum": [
+          "respond",
+          "explain",
+          "ask",
+          "inspect",
+          "propose_revision",
+          "compare",
+          "show_current",
+          "stage_player_edit",
+          "stage_conversation_candidate",
+          "accept_pending",
+          "reject_pending",
+          "close_workshop",
+          "unrelated",
+          "defer_to_legacy"
+        ],
+        "title": "Action",
+        "type": "string"
+      },
+      "purpose": {
+        "enum": [
+          "understand_meaning",
+          "improve_wording",
+          "evaluate_verse",
+          "review_pending",
+          "adopt_pending",
+          "discard_pending",
+          "show_verse",
+          "finish_workshop",
+          "continue_discussion",
+          "other"
+        ],
+        "title": "Purpose",
+        "type": "string"
+      },
+      "confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer"
+          }
+        ],
+        "ge": 0.0,
+        "le": 1.0,
+        "title": "Confidence"
+      },
+      "evidence": {
+        "title": "Evidence",
+        "type": "string"
+      },
+      "speech": {
+        "title": "Speech",
+        "type": "string"
+      },
+      "checks": {
+        "items": {
+          "enum": [
+            "reading",
+            "meter",
+            "source"
+          ],
+          "type": "string"
+        },
+        "maxItems": 3,
+        "title": "Checks",
+        "type": "array"
+      },
+      "close_after_action": {
+        "title": "Close After Action",
+        "type": "boolean"
+      },
+      "close_evidence": {
+        "title": "Close Evidence",
+        "type": "string"
+      },
+      "findings": {
+        "items": {
+          "$ref": "#/$defs/_WorkshopFinding"
+        },
+        "maxItems": 3,
+        "title": "Findings",
+        "type": "array"
+      },
+      "line_reference": {
+        "$ref": "#/$defs/_WorkshopLineReference"
+      },
+      "line_proposal": {
+        "$ref": "#/$defs/_WorkshopLineProposal"
+      }
+    },
+    "required": [
+      "action",
+      "purpose",
+      "confidence",
+      "evidence",
+      "speech",
+      "checks",
+      "close_after_action",
+      "close_evidence",
+      "findings",
+      "line_reference",
+      "line_proposal"
+    ],
+    "title": "_WorkshopAgentStep",
+    "type": "object"
+  },
+  "inactive": {
+    "close_after_action": false,
+    "close_evidence": "",
+    "findings": [],
+    "line_reference": {
+      "found": false,
+      "concept_id": "unknown",
+      "evidence": "",
+      "confidence": 0.0
+    },
+    "line_proposal": {
+      "found": false,
+      "target_fragment": "",
+      "replacement_text": "",
+      "evidence": "",
+      "confidence": 0.0
+    }
+  },
+  "followups": [
+    "acknowledge_meaning",
+    "confirm_close",
+    "continue_workshop",
+    "decline_resume",
+    "resume_workshop"
+  ],
+  "actions": [
+    "accept_pending",
+    "ask",
+    "close_workshop",
+    "compare",
+    "defer_to_legacy",
+    "explain",
+    "inspect",
+    "propose_revision",
+    "reject_pending",
+    "respond",
+    "show_current",
+    "stage_conversation_candidate",
+    "stage_player_edit",
+    "unrelated"
+  ],
+  "purposes": [
+    "adopt_pending",
+    "continue_discussion",
+    "discard_pending",
+    "evaluate_verse",
+    "finish_workshop",
+    "improve_wording",
+    "other",
+    "review_pending",
+    "show_verse",
+    "understand_meaning"
+  ],
+  "problems": [
+    "forced_compression",
+    "meter",
+    "off_scene",
+    "other",
+    "preference",
+    "reading",
+    "repetition",
+    "unnatural_japanese",
+    "unreadable"
+  ],
+  "intents": [
+    "ack",
+    "ask_meaning",
+    "critique_forced",
+    "critique_gibberish",
+    "critique_offscene",
+    "other_haiku",
+    "praise",
+    "propose_line_edit",
+    "request_repair",
+    "show_current",
+    "soft_default"
+  ],
+  "direct": [
+    "ask",
+    "compare",
+    "explain",
+    "respond"
+  ],
+  "mutation_purposes": {
+    "accept_pending": "adopt_pending",
+    "reject_pending": "discard_pending",
+    "close_workshop": "finish_workshop",
+    "stage_player_edit": "improve_wording",
+    "stage_conversation_candidate": "improve_wording"
+  },
+  "unsaved": [
+    "保存した",
+    "保存しといた",
+    "保存できた",
+    "覚えた",
+    "覚えといた",
+    "採用した",
+    "採用しといた",
+    "採用できた",
+    "残したで",
+    "残しといた",
+    "確定したで",
+    "これで決まり"
+  ],
+  "unfinished": [
+    "直したで",
+    "修正したで",
+    "案ができた",
+    "案できた",
+    "直せた"
+  ],
+  "inspection_claims": {
+    "reading": [
+      "読みは",
+      "読み方は",
+      "よみは",
+      "よみかたは",
+      "と読む",
+      "って読む",
+      "と読ん",
+      "って読ん"
+    ],
+    "meter": [
+      "音数は",
+      "モーラ",
+      "五・七・五",
+      "5・7・5",
+      "五七五",
+      "575",
+      "五音",
+      "七音"
+    ],
+    "source": [
+      "出典は",
+      "出典の",
+      "根拠は",
+      "材料の記録",
+      "出典の記録",
+      "記録がある",
+      "記録もある",
+      "記録はある"
+    ]
+  },
+  "inspection_requests": {
+    "reading": [
+      "読み",
+      "よみ",
+      "どう読む",
+      "なんて読む",
+      "何て読む"
+    ],
+    "meter": [
+      "音数",
+      "モーラ",
+      "五・七・五",
+      "5・7・5",
+      "五七五",
+      "575",
+      "字余り",
+      "字足らず"
+    ],
+    "source": [
+      "出典",
+      "由来",
+      "元ネタ",
+      "材料の記録",
+      "どこから取",
+      "何を見て"
+    ]
+  },
+  "positive": {
+    "accept_pending": "(?:採用|保存|覚え(?:て|といて|とく)|残(?:して|しといて|しとく|そう)|(?:この|その|いまの|今の|新しい|直した)(?:案|句|直し).{0,10}(?:使って|使おう|決まり|確定)|(?:これ|それ|この案|その案)で(?:いこう|行こう|いい|ええ|お願い|決まり)|(?:これ|それ|この案|その案)で.{0,8}(?:完成|終わ|終え|おしまい|ここまで|区切))",
+    "reject_pending": "(?:捨て|破棄|却下|戻(?:して|そう|す)|やめと(?:く|こう)|(?:元|もと|前)の(?:句|案|まま|方|ほう)|(?:この|その|いまの|今の)(?:案|直し).{0,8}(?:なし|使わない|使わん))",
+    "close_workshop": "(?:終わ|終え|終了|おしまい|お開き|ここまで|やめ|閉じ|区切|次の句|次へ|完成(?:に|で)(?:し|する|しよう|いい|ええ)|(?:これ|それ|この案|その案)で.{0,8}完成)",
+    "stage_conversation_candidate": "(?:それ|その案|この案|さっき.{0,8}案|前に.{0,8}案|話した案).{0,12}(?:にして|でいい|でええ|でお願い|でいこう|を使って|を採用して)"
+  },
+  "contradiction_actions": [
+    "accept_pending",
+    "reject_pending",
+    "close_workshop",
+    "stage_conversation_candidate"
+  ],
+  "explicit_lines": [
+    [
+      0,
+      "(?:一|1)行目|上五|上の句|最初の行|最初の句|最初のパート|前の行|前のパート"
+    ],
+    [
+      1,
+      "(?:二|2)行目|中七|中の句|二の句|真ん中の行|真ん中の句|真ん中のパート|中央の行|中央のパート"
+    ],
+    [
+      2,
+      "(?:三|3)行目|下五|下の句|最後の行|最後の句|最後のパート|後ろの行|後ろの句|後ろのパート"
+    ]
+  ],
+  "concepts": [
+    {
+      "concept_id": "line_1",
+      "concept_number": 1,
+      "line_index": 0,
+      "position": "upper",
+      "canonical_name": "上五",
+      "reference_examples": [
+        "一行目",
+        "上五",
+        "上の句",
+        "最初の句",
+        "最初のパート",
+        "前のパート"
+      ]
+    },
+    {
+      "concept_id": "line_2",
+      "concept_number": 2,
+      "line_index": 1,
+      "position": "middle",
+      "canonical_name": "中七",
+      "reference_examples": [
+        "二行目",
+        "中七",
+        "中の句",
+        "二の句",
+        "真ん中",
+        "真ん中のパート"
+      ]
+    },
+    {
+      "concept_id": "line_3",
+      "concept_number": 3,
+      "line_index": 2,
+      "position": "lower",
+      "canonical_name": "下五",
+      "reference_examples": [
+        "三行目",
+        "下五",
+        "下の句",
+        "最後の句",
+        "後ろのパート",
+        "終わりのパート"
+      ]
+    }
+  ],
+  "pending_accept": "^(?:うん[、, ]*)?(?:それでいこう|それで行こう|それでいい|それでええ|その案で(?:いこう|行こう|いい|ええ|お願い(?:します)?)?|採用(?:する|で)?)[。！!]*$",
+  "pending_reject": "^(?:うん[、, ]*)?(?:やっぱり[、, ]*)?(?:やめとく|やめておく|(?:元|もと|前)のまま(?:で(?:いい|ええ)?|に(?:する|しとく))?|その案(?:は)?なし)[。！!]*$",
+  "edit_quote": "「[^「」]*」|『[^『』]*』",
+  "edit_negative": "(?:に|へ)(?:しない|しなく|するな|せん|せえへん|変えない|変えるな|変えん|変えへん)|(?:置き換え|変更し|修正し|直さ)(?:ない|ん|へん)|(?:に|へ)(?:したら|するなら|変えたら)|もし|(?:とは|わけでは|わけじゃ).{0,12}(?:ない|へん)",
+  "edit_positive": "(?:に|へ)(?:して|変えて|かえて|替えて|直して|置き換えて|変更して)|(?:に|へ)(?:変えた|した)(?:方|ほう)が(?:いい|ええ|良い|よい)|(?:の方|のほう)が(?:いい|ええ|良い|よい)|で(?:いい|ええ|良い|よい)",
+  "repair_quote": "「[^「」]*」|『[^『』]*』",
+  "repair_negative": "直(?:さない|さん|さへん|すな)|(?:修正|変更|改稿)(?:は|を)?(?:しない|せん|せえへん|するな)|変え(?:ない|ん|へん|るな)|直す(?:必要はない|つもりはない)",
+  "repair_positive": "直して|直そう|直し(?:て|たい|案)|修正(?:して|しよう|案)|書き直|言い換え|別の(?:表現|言い方)|変えて|改稿",
+  "followup_negative": "(?:とは|って|という意味|ということ|わけ|つもり).{0,20}(?:ない|なく|ません|へん)|(?:言|い)(?:って|った)(?:ない|わけ|つもり)|もし|仮に|たら|なら|[?？]",
+  "resume_negative": "続け(?:ない|ん|へん)|再開(?:しない|せん|せえへん)|やめ(?:る|たい|よう)",
+  "ack_negative": "わか(?:ら|り|って)ない|分か(?:ら|り|って)ない|理解(?:できない|してない)|納得(?:できない|してない)|違う|ちがう|まだ|ではない|じゃない"
+}
