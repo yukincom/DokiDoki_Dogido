@@ -8,10 +8,12 @@ pub(super) struct Presence {
     active: Option<String>,
     pending: Option<String>,
     count: u8,
-    announced: Option<String>,
+    // A handled opportunity includes an eventual model choice to stay silent.
+    // Actual speech is recorded only by the delivery runtime.
+    considered: Option<String>,
     last: Option<u64>,
 }
-fn observation(e: &GameEvent) -> Option<SmellObservation> {
+pub(super) fn observation(e: &GameEvent) -> Option<SmellObservation> {
     e.smell_observation.clone().or_else(||(!e.zombie_scent_clues.is_empty()).then(||serde_json::from_value(json!({"status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","specificity":"source","effective_strength":8,"temperature_modifier":0})).unwrap()))
 }
 fn signature(e: &GameEvent) -> Option<String> {
@@ -36,7 +38,7 @@ impl Presence {
             self.active = None;
             self.pending = None;
             self.count = 0;
-            self.announced = None;
+            self.considered = None;
             return;
         }
         if signature == self.active {
@@ -60,13 +62,13 @@ impl Presence {
             self.active = signature;
             self.pending = None;
             self.count = 0;
-            self.announced = None;
+            self.considered = None;
         }
     }
     pub fn mark(&mut self, e: &GameEvent, now: u64) {
         if let Some(signature) = signature(e) {
             self.active = Some(signature.clone());
-            self.announced = Some(signature);
+            self.considered = Some(signature);
             self.pending = None;
             self.count = 0;
             self.last = Some(now);
@@ -80,7 +82,7 @@ impl Presence {
             "smell_comment_cooldown_ms"
         };
         if self.active.as_ref() != Some(&sig)
-            || self.announced.as_ref() == Some(&sig)
+            || self.considered.as_ref() == Some(&sig)
             || !elapsed(now, self.last, s.ms(key))
         {
             return None;

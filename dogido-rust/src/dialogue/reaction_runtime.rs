@@ -55,6 +55,21 @@ pub(super) async fn render(
 ) -> Result<Value> {
     // Keep the former bridge's whole-turn budget even though wording is now native.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(95);
+    if input["kind"] == crate::environment::reaction::KIND {
+        let prepared = crate::environment::reaction::Prepared::new(input, &config.model)?;
+        let result = tokio::time::timeout_at(
+            deadline,
+            generate_environment_once(&prepared, cancel, |request| async move {
+                llm.generate(&request).await
+            }),
+        )
+        .await
+        .context("environment reaction timed out")??;
+        if result["environment_reaction_outcome"] == "silent" {
+            return Ok(result);
+        }
+        return read_speech(config, result, cancel, deadline).await;
+    }
     let leaf = Leaf::prepare(input, &config.model, config.max_tokens)?;
     let result = tokio::time::timeout_at(
         deadline,
@@ -65,6 +80,34 @@ pub(super) async fn render(
     .await
     .context("reaction generation timed out")??;
     read_speech(config, result, cancel, deadline).await
+}
+
+async fn generate_environment_once<F: Future<Output = Result<GenerationReport>>>(
+    prepared: &crate::environment::reaction::Prepared,
+    cancel: &mut watch::Receiver<bool>,
+    generate: impl FnOnce(GenerationRequest) -> F,
+) -> Result<Value> {
+    ensure!(
+        !*cancel.borrow() && cancel.has_changed().is_ok(),
+        "cancelled"
+    );
+    let response = tokio::select! {biased;
+        _=bridge::cancelled(cancel)=>anyhow::bail!("cancelled"),
+        result=generate(prepared.request.clone())=>result,
+    };
+    ensure!(
+        !*cancel.borrow() && cancel.has_changed().is_ok(),
+        "cancelled"
+    );
+    let (text, outcome) = prepared.finish(response.as_ref().ok().map(|r| &r.generated));
+    let report = match response {
+        Ok(report) => serde_json::to_value(report)?,
+        Err(error) => json!({"kind":crate::environment::reaction::KIND,"error":error.to_string()}),
+    };
+    tracing::info!(event = "environment_reaction", outcome);
+    Ok(
+        json!({"op":"result","text":text,"spoken_text":text,"llm_reports":[report],"environment_reaction_outcome":outcome}),
+    )
 }
 async fn read_speech(
     config: &DialogueConfig,

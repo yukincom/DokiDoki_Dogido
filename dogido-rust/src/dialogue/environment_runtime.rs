@@ -243,6 +243,29 @@ impl Dialogue {
                 Delivery::Ambient
             };
         }
+        // One existing opportunity, one model decision. Only completed dialogue
+        // and completed reactions are conversational context, not observations.
+        let mut reactions: Vec<_> = d
+            .rows
+            .iter()
+            .rev()
+            .filter(|r| {
+                r["session_id"] == sid
+                    && r["source"] == "game_observation"
+                    && r["playback_status"] == "completed"
+                    && r["text"].as_str().is_some_and(|s| !s.is_empty())
+            })
+            .take(3)
+            .map(|r| r["text"].clone())
+            .collect();
+        reactions.reverse();
+        let s = &d.sessions[sid];
+        let recent = json!({"completed_conversation":s.history.completed_pairs(),"spoken_reactions":reactions});
+        if let Some(event) = s.environment_latest.as_ref() {
+            for action in &mut actions {
+                crate::environment::reaction::attach(action, event, &recent, &self.config.combat);
+            }
+        }
         if urgent {
             let s = &d.sessions[sid];
             if s.cancel.is_some()

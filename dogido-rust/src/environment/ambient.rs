@@ -24,6 +24,19 @@ pub fn current_smell_reply(event: &GameEvent) -> Speech {
     smell::speech(event)
 }
 
+/// Only the stable semantic identity of the winning smell, never location,
+/// intensity, object IDs or hidden nearby-source observations.
+pub(crate) fn smell_context(event: &GameEvent) -> Option<Value> {
+    let observation = smell::observation(event)?;
+    if observation.status != crate::events::SmellObservationStatus::Present {
+        return None;
+    }
+    Some(
+        json!({"specificity":observation.specificity,"smell_id":observation.smell_id,
+        "category":observation.category,"valence":observation.valence}),
+    )
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct AmbientFocus {
     pub foreground: bool,
@@ -229,6 +242,9 @@ fn common_details(e: &GameEvent, s: &Settings) -> Value {
 /// Recheck immediately before and during rendering against the current environment notification.
 /// The host separately verifies observation freshness, focus, and authoritative hostile lists.
 pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
+    if !super::reaction::still_applicable(speech, e) {
+        return false;
+    }
     // 天候leafのうち、実雷鳴への反応はDanger側の担当。
     // 暗所や雷の許可条件をambientの「敵なし」で上書きしない。
     if !matches!(
@@ -284,11 +300,13 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
         }
     }
     match speech.kind {
+        "smell" if super::reaction::is_model_reaction(speech) => true,
         "smell" => smell::speech(e).text == speech.text,
         "firefly" | "firefly_cue" => {
             surroundings::phase(e) == Some("night")
                 && e.world.nearby_firefly_bush_count.unwrap_or(0) > 0
         }
+        "special_biome_entry" if super::reaction::is_model_reaction(speech) => true,
         "special_biome_entry" => ["day", "night", "ominous"].iter().any(|phase| {
             catalog::biome_lines(e.world.biome.as_deref().unwrap_or(""), phase)
                 .contains(&speech.text)

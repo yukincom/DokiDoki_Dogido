@@ -74,6 +74,9 @@ def main():
         passed.append("hostile_approach_pauses_and_recovers_in_darkness_without_omen_interruption")
 
         send(sid)
+        # Natural completion goes through the workshop model. End the preceding
+        # always-explain fixture before checking that environment speech resumes.
+        install(control, lambda text, prompt, n: step(text, "close_workshop"))
         turn = submit(base, sid, "終了でお願いします")
         wait_for(lambda: row(base, turn, {"completed"}))
         assert hud(sid)["state"] == "closed"

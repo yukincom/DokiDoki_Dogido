@@ -64,6 +64,8 @@ adapter/minecraft-fabric  →  dogido_server (FastAPI + 状態機械 + LLM leaf)
 
 - panic / 警告の優先、発話抑制、いつ川柳かは **状態機械側**
 - LLM に「今パニックすべきか」を委ねない
+- Rust本体の環境対話は `dogido-rust/src/environment/reaction.rs`。モブ・雷鳴・天候変化・匂い・バイオーム／木陰／遮蔽入口について、既存会話モデルが実観測・一般的性質・再生完了した会話から「話す／黙る」と内容を選ぶ。候補・優先順位・間隔・観測の現在性・取消・状態／操作／保存はコード。無言は生成失敗と区別し、再生履歴や川柳前の静穏時間を更新しない。戦闘経路は変えず、雷の悲鳴cueもモデルを待たない。小型モデル専用経路や新規の語句による意味判定は設けず、出力予算は既存会話設定を使う
+- 環境対話のモデル向け指示文も関西弁で書く。語句・方言・短い相槌で出力を棄却せず、fallbackは生成失敗・空出力・形式不正・明確なループや生成崩れに限る
 - leaf 失敗時はカタログ fallback がある前提を壊さない
 - AI 出力から直接 close / lesson解除 / revision保存しない。評価極性・評価範囲・終了scope・enum・行概念ID・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
 - 通常workshopの自然な相談は、一つの有界stepが現在句・pending・直近対話から `respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / accept_pending / reject_pending / close_workshop / unrelated` の次手を選べる。読み・音数・出典はコードの実検査後だけ断言し、修正検証後の再判断は一度だけ。句正本・編集対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード所有を維持する。局所編集・採否・終了は音声認識原文にも行為を示す連続evidenceがあることを必須とし、疑問・否定・条件・引用・伝聞をコードで棄却する。同じ発話の採否＋終了は各意思をそれぞれ検証して一つのtransactionとして実行する

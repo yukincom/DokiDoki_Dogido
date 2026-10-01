@@ -3,3 +3,4 @@ pub mod ambient;
 pub mod danger;
 pub mod precipitation;
 pub mod projection;
+pub(crate) mod reaction;
