@@ -62,7 +62,7 @@ F1、メニュー、インベントリ、チャット入力中は両方隠れる
 掛け軸の表示・音・フェード切替は、このMinecraft起動中だけ有効。
 `./gradlew test build` 後にjarを導入し、同じ版のサーバーを起動する。
 **サーバー・Java自動テストとビルド済み。実Minecraft表示・音声編集・危険割り込みの一連の確認は未完了。**
-通常時の配置案は [`tools/character-placement/index.html`](../../tools/character-placement/index.html)。
+通常時の配置案は [`dev_tools/character-placement/index.html`](../../dev_tools/character-placement/index.html)。
 
 ## 音まわり（現状）
 

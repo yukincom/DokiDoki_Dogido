@@ -16,9 +16,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-# ``python scripts/diagnose_voice_capture.py`` でも、editable install の別checkout
+# ``python dev_tools/voice/diagnose_voice_capture.py`` でも、editable install の別checkout
 # ではなく、このスクリプトが属する作業ツリーを必ず診断する。
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 

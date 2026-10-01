@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from experiments.composite_structure_recognition import (
+from dev_tools.composite_structure_recognition import (
     BlockCell,
     BlockGroupMeaningConverter,
     Direction,
@@ -9,7 +9,7 @@ from experiments.composite_structure_recognition import (
     VoxelSnapshot,
     split_face_connected_components,
 )
-from experiments.composite_structure_recognition.model import DIRECTIONS, Position, moved
+from dev_tools.composite_structure_recognition.model import DIRECTIONS, Position, moved
 
 
 def _solid_group_snapshot(

@@ -2,7 +2,7 @@
 # User-operated real voice test. No fixture autoplay or environment installation.
 set -eu
 SCRIPT_DIR="${0:A:h}"
-PROJECT_ROOT="${SCRIPT_DIR:h}"
+PROJECT_ROOT="${SCRIPT_DIR:h:h}"
 PYTHON_BIN="${PROJECT_ROOT}/dogido-llm/bin/python"
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   MAIN_ROOT="$({

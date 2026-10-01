@@ -3,7 +3,7 @@
 **実マイク・STT・ドギド音声の手動試験は [独立音声テスト](language-dialogue-voice-test.md)。このページのランチャーは文字入力専用。**
 
 **文字だけを手動で試す場合:** [入力台本と実Chrome用ランチャー](language-dialogue-manual-test.md)（2026-09-09）。
-`zsh scripts/start_language_web_test.command` で対話待ちへ入り、台本は1行ずつ入力する。会話の自動実行はしない。
+`zsh dev_tools/language_dialogue/start_language_web_test.command` で対話待ちへ入り、台本は1行ずつ入力する。会話の自動実行はしない。
 
 状態：独立コンポーネントを維持しつつ、2026-09-12に本体serviceへ国語・語句の限定対話、非同期worker、再生完了台帳、同意済みの専用Chrome検索まで接続。workshopへの統合、統合後の実Minecraft／TTS／Chromeを重ねた本体E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み。
 

@@ -6,6 +6,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 |---|---|
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
+| [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
 | 本ページ | 仕様・設計ドキュメントの索引 |
 
 ---

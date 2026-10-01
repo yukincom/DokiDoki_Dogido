@@ -152,9 +152,9 @@ A/Bの回答生成速度はほぼ同じ。共通の解釈＋検索＋回答を�
 
 ## 再現用成果物と検証範囲
 
-- [比較ハーネス](../../scripts/compare_language_retrieval.py)
-- [匿名化・集計スクリプト](../../scripts/summarize_language_retrieval.py)
-- [事後の規則投影診断](../../scripts/probe_language_rule_projection.py)
+- [比較ハーネス](../../dev_tools/language_dialogue/compare_language_retrieval.py)
+- [匿名化・集計スクリプト](../../dev_tools/language_dialogue/summarize_language_retrieval.py)
+- [事後の規則投影診断](../../dev_tools/language_dialogue/probe_language_rule_projection.py)
 - [新規30問と採点観点](../../tests/fixtures/language_dialogue/retrieval_comparison_cases.json)
 - 実行記録：`logs/language-dialogue/retrieval-compare-20260907-v1/`。`run.json`、`results.jsonl`、`analysis.json`、`dispatch_review.json`、`blind_review/`、`rule_projection_diagnostic.json`。ログは既存方針どおりGit対象外。
 - 方針ハッシュ：`54666546a02635a64712893cb0a932bc5c0c55234d3597535e48e9ec01fdd98b`。

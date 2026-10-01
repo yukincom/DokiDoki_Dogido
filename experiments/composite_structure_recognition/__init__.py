@@ -1,29 +1,4 @@
-"""複合構造物認識の独立試作。
+"""互換用の入口。実装は dev_tools.composite_structure_recognition。"""
 
-dogido_server と Fabric アダプターからは import しない。
-"""
-
-from .model import (
-    BlockCell,
-    ComponentExtraction,
-    Direction,
-    Medium,
-    ObservedStructure,
-    RecognitionLimits,
-    RecognitionResult,
-    VoxelSnapshot,
-)
-from .recognizer import BlockGroupMeaningConverter, split_face_connected_components
-
-__all__ = [
-    "BlockCell",
-    "BlockGroupMeaningConverter",
-    "ComponentExtraction",
-    "Direction",
-    "Medium",
-    "ObservedStructure",
-    "RecognitionLimits",
-    "RecognitionResult",
-    "VoxelSnapshot",
-    "split_face_connected_components",
-]
+from dev_tools.composite_structure_recognition import *  # noqa: F401,F403
+from dev_tools.composite_structure_recognition import __all__ as __all__

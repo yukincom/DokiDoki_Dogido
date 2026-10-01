@@ -84,4 +84,4 @@ minecraft:clock が額縁や展示に実在するなら、柱時計などの建�
 
 ## 実行
 
-    python -m pytest experiments/composite_structure_recognition/test_recognizer.py -q
+    python -m pytest dev_tools/composite_structure_recognition/test_recognizer.py -q

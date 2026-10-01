@@ -10,7 +10,7 @@
 リポジトリのルートから、ターミナルで実行する。
 
 ```bash
-zsh scripts/start_language_web_test.command
+zsh dev_tools/language_dialogue/start_language_web_test.command
 ```
 
 既存のローカル会話モデルを使い、実際のGoogle Chromeにつながる `--web --interactive` で起動する。
@@ -18,7 +18,7 @@ zsh scripts/start_language_web_test.command
 普段のChromeとは別の専用プロフィール。ログイン状態も共有しない。
 モデル・依存の自動導入、サーバー起動、Minecraft起動、録音・TTS再生はしない。
 
-準備だけ見る場合は `zsh scripts/start_language_web_test.command --check`。
+準備だけ見る場合は `zsh dev_tools/language_dialogue/start_language_web_test.command --check`。
 これはローカルの依存・設定・実行ファイルの確認であり、モデルの実ロードやChrome実接続を検証するものではない。
 
 今回手動で試すのは**国語・言葉の理解、Webへの同意、Google AI概要の取得と対話への引き継ぎ、中断・復帰**。

@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 from dogido_server.echo_input import FRAME_SAMPLES, RATE, WebRTCEchoProcessor
 

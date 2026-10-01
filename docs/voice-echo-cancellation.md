@@ -100,9 +100,9 @@ Ctrl+CでAEC入力とその子プロセスを終了する。従来へ戻す場�
 
 - native自己検査: 機器を開かずリング境界・順序、時計不連続、stereo逆相維持、欠落/NaN/滞留停止、16/48kHz変換、表示rateが異なる場合でもaggregate I/O周期内の合成インパルス位置、buffer間frame不一致の停止を確認。
 - 関連自動試験: `test_voice_echo` / `test_voice_input` / `test_app` / `test_player_chat` / `test_audio_segmented_speech` が88件＋49 subtests成功。
-- `scripts/check_echo_offline.py`: 自前合成の4条件。漏れ音のみ -18.75dB、逆相stereo -17.95dB。
+- `dev_tools/voice/check_echo_offline.py`: 自前合成の4条件。漏れ音のみ -18.75dB、逆相stereo -17.95dB。
   **重ねた疑似音声の射影gainは -19.79dBで検査不合格のまま**。疑似信号が減衰する限界を残し、合格値へ緩めていない。
-- `scripts/check_echo_speech_offline.py`: 架空の日本語TTS＋合成ゲーム音の3条件。漏れ音のみ -41.93dB。
+- `dev_tools/voice/check_echo_speech_offline.py`: 架空の日本語TTS＋合成ゲーム音の3条件。漏れ音のみ -41.93dB。
   再生なしの近端TTSは全体RMS -0.82dB、近端成分射影 -4.38dB。重なり近端成分射影は -8.48dB。
   位置合わせは採点だけ（127〜128 samples）で、実処理に後付け補正していない。
   近端減衰は残る。これは人間の発話・STT正答率・室内での除去率を測った結果ではない。
@@ -112,8 +112,8 @@ Ctrl+CでAEC入力とその子プロセスを終了する。従来へ戻す場�
 再現コマンド（後者は架空TTSを一時ファイルに生成し、終了時に削除。録音・再生なし）:
 
 ```bash
-.dogido_tools/echo-cancel/.venv/bin/python scripts/check_echo_offline.py
-.dogido_tools/echo-cancel/.venv/bin/python scripts/check_echo_speech_offline.py
+.dogido_tools/echo-cancel/.venv/bin/python dev_tools/voice/check_echo_offline.py
+.dogido_tools/echo-cancel/.venv/bin/python dev_tools/voice/check_echo_speech_offline.py
 ```
 
 ## OSSと参照

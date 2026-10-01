@@ -25,7 +25,7 @@ Minecraft本体、workshop、保存記憶、世界操作には接続しない。
 VOICEVOXは普段のものを起動しておく。声・速度・モデル・VAD・音量しきい値は設定を引き継ぐ。AECだけこのランチャーで明示有効化し、`.env` や本体の既定offは変えない。
 
 ```bash
-zsh scripts/start_language_voice_test.command
+zsh dev_tools/language_dialogue/start_language_voice_test.command
 ```
 
 最初の案内を読んでEnter。モデルの読込後、**「マイク入力中。声で話しかけてください」**を待つ。
