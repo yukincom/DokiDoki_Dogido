@@ -16,6 +16,16 @@ Rustの版は `rust-toolchain.toml`、依存は `Cargo.lock` で固定してい�
 
 `cargo.sh` は通常のRust環境に加え、`DOGIDO_RUST_TOOLCHAIN_DIR` で指定した `cargo/`・`rustup/` を使えます。家庭用配布は準備済みのRust本体を同梱し、利用先でのRustビルドを前提にしません。
 
+## 設定の正本
+
+戦闘・環境の99項目とHTTPの4項目の既定値は、共有する `dogido_server/runtime_defaults.json` 一つにあります。Rustは `src/runtime_settings.rs`、Python起動補助は `dogido_server/runtime_settings.py` から読みます。`config.py` は型・入力制約と `.env` の上書きを担当し、同じ数値を再定義しません。Python単独導入と家庭用配布にも同じJSONを含めます。
+
+`max_batch_size`、`max_body_kb`、`heartbeat_interval_ms`、`accepted_schema_version` はRustのHTTP設定へ渡ります。待受は `127.0.0.1` / `::1` / `localhost` に限定します。旧Python本体用の廃止設定が `.env` / `.env.shared` / 環境変数に残る場合は、設定名だけを起動時に知らせます。既存ファイルや設定値は自動変更しません。
+
+`voice_vad_cli` は現役です。`voice_settings.resolve_vad_paths()` が明示したVAD実行ファイルを解決し、`launch_dialogue.py --voice` の `vad.cli` を通じてRustの音声入力へ渡します。通常の本体起動だけでは、この音声入力経路の確認を代用できません。
+
+ソースのある作業フォルダでは、起動時と `--check` にCargoが記録したrelease依存ファイルの更新時刻を確認します。実行ファイルより新しいソース・埋込資料や、ビルド後に削除した依存があれば再ビルドを案内して停止します。releaseに含まれないテスト専用ファイルは対象外です。これは更新時刻による確認で、内容ハッシュやGit版の証明ではありません。ソースを持たない家庭用セットは作成元で同じ確認を済ませてから同梱します。
+
 ## 起動と停止
 
 ### 標準の起動（5055）
@@ -82,7 +92,8 @@ python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
 | `dogido-rust/scripts/tts_shared_tokens.py` · `dogido-rust/scripts/tts_unidic_adapter.py` | UniDic token取得。`tts_shared_tokens._reader = Unidic()` をworker内で共有し、辞書は初回利用時に初期化 |
 | `dogido_server/language_dialogue/source_cards.json` | Rustの国語検索が読む資料カード |
 | `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有プロンプト・状況文の正本データ |
-| `dogido_server/static/*.html` | Rustから提供する既存画面のデータ |
+| `dogido-rust/src/server/dogido.html` | Rust本体に埋め込む表示画面 |
+| `dogido_server/runtime_settings.py` · `runtime_defaults.json` | RustとPython起動設定で共有する既定値 |
 
 旧 `dogido_server/tts_reading.py` は廃止しました。読みの判定・整形は `src/tts_reading.rs`、辞書tokenの取得だけが上記のPython補助です。`.[tts-reading]` はこの補助に必要な任意のUniDic依存であり、旧Python本体を起動するものではありません。
 

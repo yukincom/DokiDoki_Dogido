@@ -423,10 +423,10 @@ async fn obsolete_assessment_shapes_do_not_skip_missing_line_rechecks() {
         );
         assert_eq!(result.regeneration_rounds, 0);
         assert_eq!(b.requests.len(), 5);
-        for index in 0..3 {
+        for (index, line) in LINES.iter().enumerate() {
             assert_eq!(
                 b.requests[index + 2].details["grounding_lines"],
-                json!([{"line_index":index,"text":LINES[index]}])
+                json!([{"line_index":index,"text":line}])
             );
         }
     }

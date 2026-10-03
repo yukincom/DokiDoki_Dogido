@@ -51,6 +51,8 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 | `dogido-rust/tests/` · `dogido-rust/scripts/check_*.py` | Rust単体検証と模擬通信。実機確認とは区別する |
 | `dev_tools/` | 表示・音声診断・ラボ・独立試作。本体接続の有無は各READMEで区別 |
 
+設定の既定値は `dogido_server/runtime_defaults.json` に集約する。Pythonの型・制約とRustの検証処理を、既定値の別定義と数えない。設定を撤去する前に、本体起動・`--voice`・配布の消費先まで追う。`voice_vad_cli` は `voice_settings.py` → 音声起動JSON → Rust STTで使う。
+
 旧Python本体・比較oracleの運用は終了。移植時のfixtureはRustの回帰資産として保持し、旧本体を再導入して再生成しない。Python補助へ会話判断・状態管理・保存判断を戻さない。
 
 残すPythonモジュールと資料の一覧は [Rust本体の補助一覧](dogido-rust/README.md#残すpython補助と資料) を正とする。旧 `dogido_server/tts_reading.py` は廃止し、UniDic取得は `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()` に限定する。読みの判定・整形はRust。データ整備用補助は `dev_tools/catalog_tools/` へ分離する。

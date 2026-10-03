@@ -63,6 +63,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 6 | [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md) | 支援アクション・マイクラ句集UI・あんちょこ・OS 連携の将来構想 |
 | 7 | [assist-action-architecture.md](assist-action-architecture.md) | 支援アクションの実装箱、episode決定ログ、実装済み `select_sword` 縦切り |
 | 8 | [rust-migration-plan.md](rust-migration-plan.md) | Rust移行の到達点と過去の段階・検証記録 |
+| 9 | [rust-review-followup-2026-10-04.md](rust-review-followup-2026-10-04.md) | 移行後レビューの照合・設定統合・検証範囲 |
 
 **つながり:** `concept` → 体験の核 · `project-overview` / `current-spec` → 何を作るか · `companion-maturity` → 次に何を厚くするか。
 

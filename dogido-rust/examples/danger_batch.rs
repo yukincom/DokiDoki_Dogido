@@ -11,7 +11,6 @@ fn main() -> anyhow::Result<()> {
     for line in io::stdin().lock().lines() {
         let case: Value = serde_json::from_str(&line?)?;
         let mut s = Settings::default();
-        s.0.extend(dogido_rust::environment::danger::defaults().clone());
         if let Some(overrides) = case["settings"].as_object() {
             s.0.extend(overrides.clone());
         }

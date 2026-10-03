@@ -721,7 +721,7 @@ impl Dialogue {
             });
         }
         json!({"accepted":true,"event_id":event_id,"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
-            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue_preview","player_input":input,"_workshop_direct_input":input_handled})
+            "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue","player_input":input,"_workshop_direct_input":input_handled})
     }
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
         self.submit_recorded(
@@ -1920,7 +1920,7 @@ impl Dialogue {
             .iter()
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
-        json!({"revision":d.revision,"phase":"dialogue_preview","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
+        json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
             "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }

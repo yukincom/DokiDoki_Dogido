@@ -18,7 +18,7 @@ fn scent(status: &str, id: &str) -> GameEvent {
     event(json!({"smell_observation":obs}))
 }
 fn actions(a: &mut Ambient, e: &GameEvent, now: u64) -> Vec<Speech> {
-    let s = defaults();
+    let s = Settings::default();
     a.update(e, now, true, &s);
     a.actions(e, now, Mode::Normal, false, &AmbientFocus::default(), &s)
 }
@@ -113,7 +113,7 @@ fn smell_winner_change_global_cooldown_and_query_consumes_pending() {
     assert!(actions(&mut a, &cake, 3000).is_empty());
     assert_eq!(actions(&mut a, &cake, 121000)[0].cue_id, Some("smell_cake"));
     let mut a = Ambient::default();
-    a.update(&bread, 0, true, &defaults());
+    a.update(&bread, 0, true, &Settings::default());
     let reply = a.smell_query(&bread, "この匂いなに？", 1).unwrap();
     assert_eq!(reply.cue_id, Some("smell_bread"));
     assert!(actions(&mut a, &bread, 150000).is_empty());
@@ -121,7 +121,7 @@ fn smell_winner_change_global_cooldown_and_query_consumes_pending() {
 #[test]
 fn partial_absence_does_not_reset_smell() {
     let mut a = Ambient::default();
-    let s = defaults();
+    let s = Settings::default();
     let bread = scent("present", "bread");
     a.update(&bread, 0, true, &s);
     a.update(&event(json!({"event":{"name":"ambient_mob_detected","source_kind":"visual","priority_hint":"background","certainty":"high"}})),1,false,&s);
@@ -147,7 +147,7 @@ fn explicit_zombie_observation_requires_two_samples() {
 }
 #[test]
 fn no_ambient_during_threat_busy_or_foreground() {
-    let s = defaults();
+    let s = Settings::default();
     let mut a = Ambient::default();
     let e = event(json!({"passive_mobs":[{"type":"cat"}]}));
     a.update(&e, 0, true, &s);
@@ -172,7 +172,7 @@ fn no_ambient_during_threat_busy_or_foreground() {
 }
 #[test]
 fn casual_foreground_mutes_mobs_for_thirty_seconds_only() {
-    let s = defaults();
+    let s = Settings::default();
     let mut a = Ambient::default();
     let e = event(json!({"passive_mobs":[{"type":"cat"}]}));
     let f = AmbientFocus {
@@ -260,7 +260,7 @@ fn mobs_do_not_use_recent_absent_species_and_thunder_surface_is_quiet() {
     assert_eq!(actions(&mut a, &cave, 2000)[0].kind, "ambient");
 }
 fn light_request(a: &mut Ambient, f: &AmbientFocus) -> (GameEvent, LightPlanRequest) {
-    let s = defaults();
+    let s = Settings::default();
     let e = event(json!({"inventory":{"torch":1}}));
     a.update(&event(json!({})), 0, true, &s);
     a.update(&e, 1, true, &s);
@@ -286,15 +286,15 @@ fn light_planner_is_bounded_and_does_not_choose_speech_itself() {
     assert!(!r.details.to_string().contains("previous_count"));
     let payload = json!({"action":"acknowledge_supply_gain","basis_ids":["first_light_supply"],"confidence":0.85});
     assert!(
-        a.resolve_light_plan(r.request_id + 1, &payload, &e, 2, &f, &defaults())
+        a.resolve_light_plan(r.request_id + 1, &payload, &e, 2, &f, &Settings::default())
             .is_none()
     );
     let line = a
-        .resolve_light_plan(r.request_id, &payload, &e, 2, &f, &defaults())
+        .resolve_light_plan(r.request_id, &payload, &e, 2, &f, &Settings::default())
         .unwrap();
     assert_eq!(line.kind, "light_source_gain");
     assert!(
-        a.resolve_light_plan(r.request_id, &payload, &e, 3, &f, &defaults())
+        a.resolve_light_plan(r.request_id, &payload, &e, 3, &f, &Settings::default())
             .is_none()
     );
 }
@@ -317,7 +317,7 @@ fn light_invalid_none_low_confidence_and_unobserved_basis_are_silent() {
         let mut a = Ambient::default();
         let (e, r) = light_request(&mut a, &f);
         assert!(
-            a.resolve_light_plan(r.request_id, &payload, &e, 2, &f, &defaults())
+            a.resolve_light_plan(r.request_id, &payload, &e, 2, &f, &Settings::default())
                 .is_none()
         );
     }
@@ -344,8 +344,15 @@ fn light_recovery_is_past_fact_but_new_darkness_or_input_cancels() {
         ..Default::default()
     };
     assert!(
-        a.resolve_light_plan(r.request_id, &payload, &e, 3000, &later, &defaults())
-            .is_some()
+        a.resolve_light_plan(
+            r.request_id,
+            &payload,
+            &e,
+            3000,
+            &later,
+            &Settings::default()
+        )
+        .is_some()
     );
     let mut a = Ambient::default();
     let (e, r) = light_request(&mut a, &f);
@@ -357,21 +364,35 @@ fn light_recovery_is_past_fact_but_new_darkness_or_input_cancels() {
         ..Default::default()
     };
     assert!(
-        a.resolve_light_plan(r.request_id, &payload, &e, 3000, &dark, &defaults())
-            .is_none()
+        a.resolve_light_plan(
+            r.request_id,
+            &payload,
+            &e,
+            3000,
+            &dark,
+            &Settings::default()
+        )
+        .is_none()
     );
     let mut a = Ambient::default();
     let (e, r) = light_request(&mut a, &f);
     a.note_player_input(2);
     assert!(
-        a.resolve_light_plan(r.request_id, &payload, &e, 3000, &later, &defaults())
-            .is_none()
+        a.resolve_light_plan(
+            r.request_id,
+            &payload,
+            &e,
+            3000,
+            &later,
+            &Settings::default()
+        )
+        .is_none()
     );
 }
 #[test]
 fn initial_inventory_and_abundant_safe_supply_do_not_request_model() {
     let mut a = Ambient::default();
-    let s = defaults();
+    let s = Settings::default();
     let f = AmbientFocus {
         light: LightContext {
             surroundings_reasonably_lit: true,
@@ -430,7 +451,7 @@ fn weather_transition_uses_sky_or_recent_sound_and_can_be_cleared_by_thunder() {
         "rain_suspected"
     );
     let mut a = Ambient::default();
-    let s = defaults();
+    let s = Settings::default();
     a.update(&event(json!({"world":{"weather":"clear"}})), 0, true, &s);
     a.update(&rain, 1, true, &s);
     a.clear_weather_transition();
@@ -442,7 +463,7 @@ fn weather_transition_uses_sky_or_recent_sound_and_can_be_cleared_by_thunder() {
 #[test]
 fn losing_clone_does_not_consume_mob_or_light_decision() {
     let mut a = Ambient::default();
-    let s = defaults();
+    let s = Settings::default();
     let e = event(json!({"passive_mobs":[{"type":"cat"}]}));
     a.update(&e, 0, true, &s);
     let mut losing = a.clone();
@@ -480,7 +501,7 @@ fn priority_zombie_scent_is_shared_with_ambient_without_mode_change() {
         json!({"smell_observation":{"status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","specificity":"source","effective_strength":8}}),
     );
     let mut a = Ambient::default();
-    let s = defaults();
+    let s = Settings::default();
     a.update(&e, 0, true, &s);
     assert!(a.priority_smell(&e, 0, Mode::Normal, false, &s).is_none());
     a.update(&e, 1, true, &s);
@@ -530,14 +551,21 @@ fn light_result_must_be_in_the_original_offered_actions() {
         ..Default::default()
     };
     assert!(
-        a.resolve_light_plan(r.request_id, &payload, &e, 2000, &later, &defaults())
-            .is_none()
+        a.resolve_light_plan(
+            r.request_id,
+            &payload,
+            &e,
+            2000,
+            &later,
+            &Settings::default()
+        )
+        .is_none()
     );
 }
 
 #[test]
 fn forest_entry_resumes_after_player_priority_without_waiting_for_casual_to_end() {
-    let s = defaults();
+    let s = Settings::default();
     let f = AmbientFocus {
         foreground: true,
         casual_foreground: true,

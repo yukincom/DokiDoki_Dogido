@@ -10,18 +10,12 @@ use crate::{
 use geometry::*;
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::{collections::BTreeSet, sync::LazyLock};
+use std::collections::BTreeSet;
 use words::*;
 
-static DEFAULTS: LazyLock<serde_json::Map<String, Value>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("danger_defaults.json")).expect("danger defaults")
-});
-pub fn defaults() -> &'static serde_json::Map<String, Value> {
-    &DEFAULTS
-}
 fn n(s: &Settings, k: &str) -> f64 {
     s.0.get(k)
-        .or_else(|| DEFAULTS.get(k))
+        .or_else(|| crate::runtime_settings::defaults("combat").get(k))
         .and_then(Value::as_f64)
         .expect("environment setting")
 }

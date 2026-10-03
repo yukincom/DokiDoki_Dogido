@@ -1,4 +1,4 @@
-//! 通常敵の単体・群れ視認警告。ボス・聴覚・戦闘後の判断は未移植。
+//! 通常敵の単体・群れ視認警告。ボス・聴覚・戦闘後の判断はcombat側が所有する。
 //! 記憶の時刻は呼び手の単調時計。AI、音声、履歴への書込みはここでは行わない。
 mod groups;
 use crate::events::{GameEvent, HorizontalDirection as H, VisualThreat};
@@ -25,17 +25,41 @@ pub struct Settings {
 }
 impl Default for Settings {
     fn default() -> Self {
+        let defaults = crate::runtime_settings::defaults("combat");
         Self {
-            panic_distance: 7.0,
-            rear_warning_distance: 3.0,
-            recent_damage_window_ms: 3000,
-            hostile_comment_cooldown_ms: 60_000,
-            multi_hostile_comment_cooldown_ms: 30_000,
-            panic_scream_cooldown_ms: 1200,
-            hostile_mass_callout_threshold: 4,
-            hostile_query_distance: 16.0,
-            other_realm_swarm_visual_threshold: 4,
-            other_realm_audio_generic_threshold: 2,
+            panic_distance: defaults["panic_distance"]
+                .as_f64()
+                .expect("checked warning default"),
+            rear_warning_distance: defaults["rear_warning_distance"]
+                .as_f64()
+                .expect("checked warning default"),
+            recent_damage_window_ms: defaults["recent_damage_window_ms"]
+                .as_u64()
+                .expect("checked warning default"),
+            hostile_comment_cooldown_ms: defaults["hostile_comment_cooldown_ms"]
+                .as_u64()
+                .expect("checked warning default"),
+            multi_hostile_comment_cooldown_ms: defaults["multi_hostile_comment_cooldown_ms"]
+                .as_u64()
+                .expect("checked warning default"),
+            panic_scream_cooldown_ms: defaults["panic_scream_cooldown_ms"]
+                .as_u64()
+                .expect("checked warning default"),
+            hostile_mass_callout_threshold: defaults["hostile_mass_callout_threshold"]
+                .as_u64()
+                .expect("checked warning default")
+                as usize,
+            hostile_query_distance: defaults["hostile_query_distance"]
+                .as_f64()
+                .expect("checked warning default"),
+            other_realm_swarm_visual_threshold: defaults["other_realm_swarm_visual_threshold"]
+                .as_u64()
+                .expect("checked warning default")
+                as usize,
+            other_realm_audio_generic_threshold: defaults["other_realm_audio_generic_threshold"]
+                .as_u64()
+                .expect("checked warning default")
+                as usize,
             battle_speed: 1.0,
             cue_dir: Some("cue_voice".into()),
         }

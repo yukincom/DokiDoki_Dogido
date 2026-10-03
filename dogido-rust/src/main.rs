@@ -6,7 +6,7 @@ use dogido_rust::{
     dialogue::{Dialogue, DialogueConfig},
     llm::RigLlm,
     planner::{self, PreparedPlan},
-    server::{Application, ServerConfig},
+    server::{Application, ServerConfig, Settings as ServerSettings},
     types::GenerationRequest,
 };
 
@@ -66,6 +66,8 @@ enum Command {
     Serve {
         #[arg(long, default_value = "127.0.0.1:5055")]
         listen: SocketAddr,
+        #[arg(long, default_value = "{}")]
+        server_settings: String,
     },
     /// 冒険会話と自動川柳の本体。既存モデル・VOICEVOXと任意SDK補助を使う。
     ServeDialogue {
@@ -91,6 +93,8 @@ enum Command {
         /// 既存設定から移植済み警告に必要な値だけを受け取るJSON。
         #[arg(long, default_value = "{}")]
         warning_settings: String,
+        #[arg(long, default_value = "{}")]
+        server_settings: String,
         #[arg(long, default_value = "{}")]
         combat_settings: String,
         #[arg(long, default_value = "{}")]
@@ -221,7 +225,17 @@ async fn main() -> Result<()> {
             let report = planner::run(&client, &input).await?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
-        Command::Serve { listen } => serve(listen, None).await?,
+        Command::Serve {
+            listen,
+            server_settings,
+        } => {
+            serve(
+                listen,
+                None,
+                ServerSettings::merged(&serde_json::from_str(&server_settings)?)?,
+            )
+            .await?
+        }
         Command::ServeDialogue {
             listen,
             python,
@@ -233,6 +247,7 @@ async fn main() -> Result<()> {
             speed,
             haiku_speed,
             warning_settings,
+            server_settings,
             combat_settings,
             haiku_settings,
             web_settings,
@@ -248,6 +263,7 @@ async fn main() -> Result<()> {
             volume,
             output_sampling_rate,
         } => {
+            let server_settings = ServerSettings::merged(&serde_json::from_str(&server_settings)?)?;
             let dialogue = Dialogue::new(DialogueConfig {
                 python,
                 helper: helper.unwrap_or_else(|| DialogueConfig::default().helper),
@@ -275,7 +291,7 @@ async fn main() -> Result<()> {
                 volume,
                 output_sampling_rate,
             })?;
-            serve(listen, Some(dialogue)).await?;
+            serve(listen, Some(dialogue), server_settings).await?;
         }
         Command::Check { request } => {
             let input = read_request(&request)?;
@@ -305,10 +321,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn serve(listen: SocketAddr, dialogue: Option<std::sync::Arc<Dialogue>>) -> Result<()> {
+async fn serve(
+    listen: SocketAddr,
+    dialogue: Option<std::sync::Arc<Dialogue>>,
+    settings: ServerSettings,
+) -> Result<()> {
     ensure!(
         listen.ip().is_loopback(),
-        "connection-test server requires a loopback address"
+        "ドギドの待受はloopback専用です。127.0.0.1 または ::1 を指定してください"
     );
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -330,17 +350,17 @@ async fn serve(listen: SocketAddr, dialogue: Option<std::sync::Arc<Dialogue>>) -
     let llm_enabled = dialogue.as_ref().is_some_and(|d| d.llm_enabled());
     let app = Application::new(ServerConfig {
         dialogue,
+        settings,
         auth_token: std::env::var("DOGIDO_AUTH_TOKEN").ok(),
-        ..ServerConfig::default()
     });
     println!(
         "{}",
         serde_json::json!({"event": "server_listening", "address": address.to_string(),
-        "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "llm_enabled": llm_enabled})
+        "phase": if enabled {"dialogue"} else {"connection_only"}, "llm_enabled": llm_enabled})
     );
     std::io::stdout().flush()?;
     if enabled {
-        tracing::info!("会話入力: http://{address}/rust-chat — 会話・戦闘・自動川柳の移行モード");
+        tracing::info!("会話入力: http://{address}/rust-chat — 会話・戦闘・自動川柳・共同編集");
     }
     tracing::info!("接続画面: http://{address}/dogido — 終了は Ctrl+C");
     let shutdown = async move {

@@ -8,6 +8,9 @@ import tempfile
 import time
 from check_dialogue import dependencies, running, request, snapshot, wait_for, row
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from dogido_server.runtime_settings import COMBAT_DEFAULTS
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -23,10 +26,7 @@ def main():
                     "conversation_ambient_mute_ms": 300, "conversation_active_ttl_ms": 1200,
                     "dark_push_after_breath_protect_ms": 0}
         # 存在する設定だけを使い、所要時間の長いCDはこの模擬試験内に限り短縮。
-        defaults = {}
-        for file in [ROOT / "src/combat/defaults.json", *sorted((ROOT / "src/environment").glob("*_defaults.json"))]:
-            defaults.update(json.loads(file.read_text()))
-        settings = {k: v for k, v in settings.items() if k in defaults}
+        settings = {k: v for k, v in settings.items() if k in COMBAT_DEFAULTS}
         with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, combat_settings=settings) as (base, process, log):
             seq = 0
             def register(capable=True):
@@ -313,7 +313,21 @@ def main():
                 and r["playback_status"] == "completed"), None))
             assert old != new["turn_id"] and row(base, old, {"cancelled"}), rows(sid)
             session = next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
-            assert [r["role"] for r in session["history"]] == ["user", "assistant"], session
+            # 再生済みの雷反応も共有履歴へ入る。再開した会話だけをturn IDで検査する。
+            history = session["history"]
+            resumed_id = new["turn_id"]
+            assert not any(r["turn_id"] in {old, old + ":reply"} for r in history), session
+            users = [r for r in history if r["role"] == "user"]
+            assert len(users) == 1 and users[0]["turn_id"] == resumed_id, session
+            assert users[0]["text"] == "続きの話をしよう", session
+            replies = [r for r in history if r["turn_id"] == resumed_id + ":reply"]
+            assert len(replies) == 1 and replies[0]["role"] == "assistant", session
+            completed_thunder = {r["turn_id"] + ":reply" for r in rows(sid)
+                if r["playback_status"] == "completed" and
+                any(a["kind"] == "thunder_reaction" for a in r.get("combat_actions", []))}
+            reactions = [r for r in history if r["turn_id"] not in {resumed_id, resumed_id + ":reply"}]
+            assert all(r["role"] == "assistant" and r["turn_id"] in completed_thunder for r in reactions), session
+            assert len(reactions) == len({r["turn_id"] for r in reactions}), session
             close(sid); control["delay"] = 0
             passed.append("thunder_resumes_accepted_chat_without_duplicate_history")
 

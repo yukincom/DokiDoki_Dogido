@@ -181,7 +181,7 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
                 assert selector.select(timeout=8), "no server startup"
                 line = p.stdout.readline(); assert line, log_path.read_text()
             ready = json.loads(line)
-            assert ready["phase"] == "dialogue_preview"
+            assert ready["phase"] == "dialogue"
             yield "http://" + ready["address"], p, log_path
         except BaseException:
             print(log_path.read_text()[-6000:], file=sys.stderr)

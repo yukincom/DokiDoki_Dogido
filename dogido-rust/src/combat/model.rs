@@ -95,24 +95,13 @@ impl Speech {
     }
 }
 
-/// Python既定値から抽出した閉じた設定。起動時にキー・型を検査する。
+/// 共有JSONを読む閉じた戦闘・環境設定。起動時に上書きのキー・型を検査する。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Settings(pub Map<String, Value>);
 impl Default for Settings {
     fn default() -> Self {
-        let mut values: Map<String, Value> =
-            serde_json::from_str(include_str!("defaults.json")).expect("checked combat defaults");
-        for file in [
-            include_str!("../environment/danger_defaults.json"),
-            include_str!("../environment/ambient_defaults.json"),
-        ] {
-            values.extend(
-                serde_json::from_str::<Map<String, Value>>(file)
-                    .expect("checked environment defaults"),
-            );
-        }
-        Self(values)
+        Self(crate::runtime_settings::defaults("combat").clone())
     }
 }
 impl Settings {

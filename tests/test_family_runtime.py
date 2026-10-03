@@ -71,3 +71,11 @@ def test_missing_normalized_dataset_is_detected_before_update(tmp_path):
     data.unlink()
     with pytest.raises(ValueError, match='fixture.jsonl'):
         runtime.validate_runtime(tmp_path)
+
+
+
+def test_missing_shared_runtime_defaults_is_detected_before_update(tmp_path):
+    prepared(tmp_path)
+    (tmp_path / 'dogido_server/runtime_defaults.json').unlink()
+    with pytest.raises(ValueError, match='runtime_defaults.json'):
+        runtime.validate_runtime(tmp_path)

@@ -21,6 +21,7 @@ def command(monkeypatch, tmp_path, settings):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["launch", "--settings-dir", str(tmp_path)])
     monkeypatch.setattr(launch, "get_settings", lambda: settings)
+    monkeypatch.setattr(launch, "check_runtime_files", lambda root: root / "dogido-rust/target/release/dogido-rust")
     monkeypatch.setattr(main_web, "inspect_main_web_availability",
                         lambda: SimpleNamespace(available=False, reason="test"))
     captured = {}
@@ -114,6 +115,7 @@ def test_voice_check_uses_same_endpoint_and_does_not_contact_or_capture(monkeypa
     monkeypatch.setattr(sys, "argv", ["launch", "--settings-dir", str(tmp_path), "--voice", "--check"])
     monkeypatch.setattr(launch, "get_settings", lambda: Settings(_env_file=None, bind_port=5111,
                         voice_silence_ms=1450, voice_echo_cancellation="off"))
+    monkeypatch.setattr(launch, "check_runtime_files", lambda root: root / "dogido-rust/target/release/dogido-rust")
     monkeypatch.setattr(voice_capture, "capture_command", lambda _: ["/fixture/capture"])
     monkeypatch.setattr(voice_settings, "resolve_whisper_paths", lambda _: (tmp_path / "whisper", tmp_path / "model"))
     monkeypatch.setattr(voice_settings, "resolve_vad_paths", lambda *_: None)
@@ -172,3 +174,131 @@ def test_text_workshop_reads_configured_memory_and_resolves_resume_before_chdir(
     assert value(captured["argv"], "--memory-dir") == str(memory)
     assert value(captured["argv"], "--resume") == str(tmp_path / "conversation.json")
     assert not (repo / ".dogido_memory").exists()
+
+
+
+def test_shared_defaults_and_env_overrides_reach_both_rust_consumers(monkeypatch, tmp_path):
+    from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS
+    monkeypatch.chdir(tmp_path)
+    # Exercise the actual environment boundary, including a float and both HTTP limits.
+    (tmp_path / ".env").write_text("DOGIDO_PANIC_DISTANCE=9.25\nDOGIDO_MAX_BATCH_SIZE=3\n"
+                                   "DOGIDO_MAX_BODY_KB=7\nDOGIDO_HEARTBEAT_INTERVAL_MS=900\n"
+                                   "DOGIDO_ACCEPTED_SCHEMA_VERSION=fixture-version\n")
+    settings = Settings()
+    args, _ = command(monkeypatch, tmp_path, settings)
+    combat = json.loads(value(args, "--combat-settings"))
+    warning = json.loads(value(args, "--warning-settings"))
+    server = json.loads(value(args, "--server-settings"))
+    assert combat["panic_distance"] == warning["panic_distance"] == 9.25
+    assert server == {"max_batch_size": 3, "max_body_kb": 7, "heartbeat_interval_ms": 900,
+                      "accepted_schema_version": "fixture-version"}
+    assert combat.keys() == COMBAT_DEFAULTS.keys()
+    for key, expected in (COMBAT_DEFAULTS | SERVER_DEFAULTS).items():
+        assert Settings.model_fields[key].default == expected, key
+
+
+def test_explicit_vad_path_from_env_reaches_rust_voice_settings(monkeypatch, tmp_path):
+    from dogido_server import voice_capture
+    monkeypatch.chdir(tmp_path)
+    for name in ("whisper", "model.bin", "chosen-vad", "vad.bin"):
+        (tmp_path / name).touch()
+    (tmp_path / ".env").write_text("DOGIDO_VOICE_WHISPER_CLI=whisper\n"
+        "DOGIDO_VOICE_WHISPER_MODEL=model.bin\nDOGIDO_VOICE_VAD_ENABLED=true\n"
+        "DOGIDO_VOICE_VAD_CLI=chosen-vad\nDOGIDO_VOICE_VAD_MODEL=vad.bin\n"
+        "DOGIDO_VOICE_VAD_THRESHOLD=0.67\n")
+    monkeypatch.setattr(sys, "argv", ["launch", "--settings-dir", str(tmp_path), "--voice", "--check"])
+    monkeypatch.setattr(launch, "get_settings", lambda: Settings())
+    monkeypatch.setattr(launch, "check_runtime_files", lambda root: root / "dogido-rust/target/release/dogido-rust")
+    monkeypatch.setattr(voice_capture, "capture_command", lambda _: ["/fixture/capture"])
+    def forbidden(*a, **k): raise AssertionError("voice check must not contact any server")
+    monkeypatch.setattr(launch.urllib.request, "urlopen", forbidden)
+    captured = {}
+    def execute(binary, argv, env):
+        captured["settings"] = json.loads(value(argv, "--settings"))
+        raise Executed()
+    monkeypatch.setattr(os, "execve", execute)
+    with pytest.raises(Executed):
+        launch.main()
+    assert captured["settings"]["vad"] == {"cli": str(tmp_path / "chosen-vad"),
+        "model": str(tmp_path / "vad.bin"), "threshold": 0.67}
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.0.2.10"])
+def test_non_loopback_is_rejected_before_launch(monkeypatch, tmp_path, host):
+    with pytest.raises(ValueError, match="loopback専用"):
+        command(monkeypatch, tmp_path, Settings(_env_file=None, bind_host=host))
+
+
+def test_retired_env_settings_warn_by_name_without_values(monkeypatch, tmp_path):
+    from dogido_server.runtime_settings import warn_retired_settings
+    monkeypatch.setattr(os, "environ", {})
+    env = tmp_path / ".env"
+    env.write_text("DOGIDO_SAY_VOICE=PRIVATE_VALUE\nDOGIDO_ALLOW_NON_LOCAL_BIND=true\n"
+                   "DOGIDO_VOICE_VAD_CLI=still-used\nDOGIDO_AUTH_TOKEN=SECRET\n")
+    with pytest.warns(UserWarning) as records:
+        warn_retired_settings((env,))
+    message = str(records[0].message)
+    assert "DOGIDO_SAY_VOICE" in message and "DOGIDO_ALLOW_NON_LOCAL_BIND" in message
+    assert all(word not in message for word in ("PRIVATE_VALUE", "SECRET", "DOGIDO_AUTH_TOKEN", "DOGIDO_VOICE_VAD_CLI"))
+
+
+def test_settings_package_does_not_need_rust_source_tree(tmp_path):
+    import shutil
+    import subprocess
+    package = tmp_path / "dogido_server"
+    package.mkdir()
+    for name in ("__init__.py", "config.py", "runtime_settings.py", "runtime_defaults.json"):
+        shutil.copyfile(launch.ROOT / "dogido_server" / name, package / name)
+    run = subprocess.run([sys.executable, "-c",
+        "from dogido_server.config import Settings; "
+        "from dogido_server.runtime_settings import COMBAT_DEFAULTS; "
+        "s=Settings(_env_file=None); assert s.panic_distance==COMBAT_DEFAULTS['panic_distance']"],
+        cwd=tmp_path, env={"PATH": os.environ.get("PATH", "")}, capture_output=True, text=True, timeout=10)
+    assert run.returncode == 0, run.stderr
+
+
+def test_source_and_embedded_assets_require_a_newer_binary(tmp_path):
+    source = tmp_path / "dogido-rust/src"
+    source.mkdir(parents=True)
+    main = source / "main.rs"
+    main.write_text('const PAGE: &str = include_str!("page.html");')
+    page = source / "page with spaces.html"
+    page.write_text("page")
+    binary = tmp_path / "dogido-rust/target/release/dogido-rust"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    encoded_page = str(page).replace(" ", "\\ ")
+    binary.with_suffix(".d").write_text(f"{binary}: {main} {encoded_page}\n")
+    # cargo build --release does not compile a cfg(test)-only module.
+    test_module = source / "tests.rs"
+    test_module.write_text("test only")
+    os.utime(test_module, ns=(99, 99))
+    for path in (main, page): os.utime(path, ns=(10, 10))
+    os.utime(binary, ns=(20, 20))
+    launch.check_binary_freshness(tmp_path, binary)
+    os.utime(page, ns=(30, 30))
+    with pytest.raises(RuntimeError, match="page with spaces.html"):
+        launch.check_binary_freshness(tmp_path, binary)
+    os.utime(page, ns=(10, 10))
+    os.utime(main, ns=(30, 30))
+    with pytest.raises(RuntimeError, match="main.rs"):
+        launch.check_binary_freshness(tmp_path, binary)
+
+
+def test_family_bundle_without_local_rust_source_skips_source_freshness(tmp_path):
+    binary = tmp_path / "dogido-rust/target/release/dogido-rust"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    launch.check_binary_freshness(tmp_path, binary)
+
+
+
+def test_source_checkout_requires_cargo_dependency_record(tmp_path):
+    source = tmp_path / "dogido-rust/src"
+    source.mkdir(parents=True)
+    (source / "main.rs").touch()
+    binary = tmp_path / "dogido-rust/target/release/dogido-rust"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    with pytest.raises(RuntimeError, match="ビルド依存情報がありません"):
+        launch.check_binary_freshness(tmp_path, binary)

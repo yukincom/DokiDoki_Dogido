@@ -114,7 +114,7 @@ impl Published {
                 "last_seen_at": game_sessions.iter().map(|s| s.last_seen).max(),
                 "freshness_seconds": freshness,
             },
-            "migration": {"phase": if dialogue.is_some() {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": dialogue.is_some(), "llm_enabled": dialogue.as_ref().is_some_and(|d| d["llm_enabled"] == true)},
+            "migration": {"phase": if dialogue.is_some() {"dialogue"} else {"connection_only"}, "dialogue_ready": dialogue.is_some(), "llm_enabled": dialogue.as_ref().is_some_and(|d| d["llm_enabled"] == true)},
         })
     }
 
@@ -144,7 +144,7 @@ impl Runtime {
                 dialogue: config.dialogue.clone(),
                 runtime: json!({
                     "instance_id": new_id("run"), "started_at": Utc::now(),
-                    "source_kind": "rust_migration", "source_label_ja": if config.dialogue.is_some() {"Rust版・冒険会話試験"} else {"Rust版・接続テスト"},
+                    "source_kind": "rust", "source_label_ja": if config.dialogue.is_some() {"ドギド本体"} else {"Rust版・接続テスト"},
                     "runtime_environment": "Rust", "python_environment": null,
                     "virtual_environment": false, "process_id": std::process::id(),
                 }),
@@ -153,14 +153,14 @@ impl Runtime {
                 hud_revision: 0,
                 diagnostics: VecDeque::new(),
                 diagnostic_revision: 0,
-                heartbeat_interval_ms: config.heartbeat_interval_ms,
+                heartbeat_interval_ms: config.settings.heartbeat_interval_ms,
             },
             config,
         };
         runtime.record(
             "server_ready",
             if runtime.config.dialogue.is_some() {
-                "Rust版の冒険会話試験。会話・戦闘・環境反応・剣の持ち替えに対応。自動川柳・保存・掛け軸に対応。句の共同編集は移行中。"
+                "ドギド本体。会話・戦闘・環境反応・剣の持ち替え、自動川柳・共同編集・保存・掛け軸に対応。"
                     .into()
             } else {
                 "Rust版の接続テスト。会話・警告・音声は未対応。外部AI接続なし。".into()
@@ -235,10 +235,10 @@ impl Runtime {
                 ApiReply::new(
                     StatusCode::CREATED,
                     json!({
-                        "session_id": id, "accepted_schema_version": self.config.accepted_schema_version,
+                        "session_id": id, "accepted_schema_version": self.config.settings.accepted_schema_version,
                         "server_time": now, "event_endpoint": "/api/v1/game-events",
-                        "batch_endpoint": "/api/v1/game-events/batch", "heartbeat_interval_ms": self.config.heartbeat_interval_ms,
-                        "max_batch_size": self.config.max_batch_size,
+                        "batch_endpoint": "/api/v1/game-events/batch", "heartbeat_interval_ms": self.config.settings.heartbeat_interval_ms,
+                        "max_batch_size": self.config.settings.max_batch_size,
                     }),
                 )
             }
@@ -274,12 +274,12 @@ impl Runtime {
                 session_id,
                 batch_size,
             } => {
-                if batch_size.is_some_and(|size| size > self.config.max_batch_size) {
+                if batch_size.is_some_and(|size| size > self.config.settings.max_batch_size) {
                     return ApiReply::error(
                         StatusCode::BAD_REQUEST,
                         json!(format!(
                             "events exceeds max_batch_size={}",
-                            self.config.max_batch_size
+                            self.config.settings.max_batch_size
                         )),
                     );
                 }
@@ -303,7 +303,7 @@ impl Runtime {
                 batch,
                 key,
             } => {
-                if events.len() > self.config.max_batch_size {
+                if events.len() > self.config.settings.max_batch_size {
                     return ApiReply::error(
                         StatusCode::BAD_REQUEST,
                         json!("events exceeds max_batch_size"),

@@ -589,7 +589,15 @@ async fn existing_display_is_embedded_with_rust_status_and_no_external_assets() 
     assert!(html.contains("会話・警告・音声はまだ使えません"));
     assert!(html.contains("実行環境:"));
     assert!(!html.contains("Python環境:"));
-    assert!(html.contains("runtime.runtime_environment || runtime.python_environment"));
+    assert!(html.contains("runtime.runtime_environment"));
+    assert_eq!(
+        include_str!("dogido.html")
+            .matches("<!--runtime-status-->")
+            .count(),
+        1
+    );
+    assert!(!html.contains("<!--runtime-status-->"));
+    assert!(html.contains("item.playback_status"));
     assert!(html.contains("const data = await response.json();\n          renderRuntime(data);"));
     assert!(html.contains("/api/v1/display/snapshot"));
     app.shutdown().await.unwrap();
@@ -746,5 +754,114 @@ async fn disabled_memory_returns_empty_shapes_without_reading_files() {
         );
     }
     assert!(!root.exists());
+    app.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn configured_http_limits_and_session_contract_are_applied() {
+    let settings = Settings::merged(&json!({
+        "accepted_schema_version": "fixture-version", "heartbeat_interval_ms": 900,
+        "max_batch_size": 1, "max_body_kb": 1
+    }))
+    .unwrap();
+    let app = Application::new(ServerConfig {
+        settings,
+        ..Default::default()
+    });
+    let router = app.router();
+    let (status, registered) = call(
+        &router,
+        "POST",
+        "/api/v1/adapter-sessions",
+        Some(registration()),
+        &[],
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(registered["accepted_schema_version"], "fixture-version");
+    assert_eq!(registered["heartbeat_interval_ms"], 900);
+    assert_eq!(registered["max_batch_size"], 1);
+    let id = registered["session_id"].as_str().unwrap();
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/game-events/batch",
+            Some(json!({"events":[event(), event()]})),
+            &[("x-dogido-session-id", id)]
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    let mut oversized = registration();
+    oversized["player_name"] = "a".repeat(1500).into();
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/adapter-sessions",
+            Some(oversized),
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
+    app.shutdown().await.unwrap();
+}
+
+#[test]
+fn http_settings_reject_invalid_limits_and_unknown_keys() {
+    for invalid in [
+        json!({"max_batch_size":0}),
+        json!({"max_body_kb":0}),
+        json!({"max_body_kb":u64::MAX}),
+        json!({"heartbeat_interval_ms":0}),
+        json!({"accepted_schema_version":" "}),
+        json!({"typo":3}),
+        json!([]),
+    ] {
+        assert!(Settings::merged(&invalid).is_err(), "{invalid}");
+    }
+}
+
+#[tokio::test]
+async fn dialogue_display_describes_connected_features() {
+    let mut config = crate::dialogue::DialogueConfig {
+        audio_enabled: false,
+        llm_enabled: false,
+        language_enabled: false,
+        ..Default::default()
+    };
+    config.haiku.enabled = false;
+    let dialogue = crate::dialogue::Dialogue::new(config).unwrap();
+    let app = Application::new(ServerConfig {
+        dialogue: Some(dialogue),
+        ..Default::default()
+    });
+    let router = app.router();
+    let health = call(&router, "GET", "/healthz", None, &[]).await.1;
+    assert_eq!(health["phase"], "dialogue");
+    assert_eq!(health["dialogue_ready"], true);
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/dogido")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let html = String::from_utf8(
+        to_bytes(response.into_body(), 1_000_000)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(html.contains("川柳の共同編集・剣の持ち替えに対応"));
+    assert!(!html.contains("戦闘・川柳・世界操作は未接続"));
+    assert!(!html.contains("<!--runtime-status-->"));
     app.shutdown().await.unwrap();
 }

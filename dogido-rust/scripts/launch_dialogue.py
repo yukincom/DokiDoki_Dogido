@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Rust本体・音声入力の共通起動。設定を読み、準備済み実行ファイルへ引き渡す。"""
 import argparse
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -10,7 +11,9 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from runtime_build import check_binary_freshness
 from dogido_server.config import get_settings
+from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS
 
 
 def check_runtime_files(root):
@@ -21,7 +24,7 @@ def check_runtime_files(root):
         "dogido-rust/scripts/tts_unidic_adapter.py",
         "dogido-rust/scripts/tts_shared_tokens.py",
         "dogido-rust/scripts/web_adapter.py",
-        "dogido-rust/src/combat/defaults.json",
+        "dogido_server/runtime_defaults.json",
         "dogido-rust/scripts/haiku_tokens.py",
         "dogido-rust/scripts/workshop_helper.py",
         "dogido-rust/scripts/combat_input_helper.py",
@@ -30,6 +33,7 @@ def check_runtime_files(root):
     ):
         if not (root / relative).exists():
             raise RuntimeError(f"起動用の資料が不足しています: {relative}")
+    check_binary_freshness(root, binary)
     return binary
 
 
@@ -79,8 +83,9 @@ def main():
             raise ValueError("無音区切りは正のミリ秒で指定してください。")
         settings.voice_silence_ms = args.silence_ms
     host = "127.0.0.1" if settings.bind_host == "localhost" else settings.bind_host
-    # A wildcard is a listening address, never a client destination.
-    client_host = "127.0.0.1" if host == "0.0.0.0" else "::1" if host == "::" else host
+    if not ipaddress.ip_address(host).is_loopback:
+        raise ValueError("ドギドの待受はloopback専用です。DOGIDO_BIND_HOSTに127.0.0.1 または ::1 を指定してください。")
+    client_host = host
     url_host = f"[{client_host}]" if ":" in client_host else client_host
     listen_host = f"[{host}]" if ":" in host else host
     base_url = f"http://{url_host}:{settings.bind_port}"
@@ -155,10 +160,8 @@ def main():
     for url in (base, haiku_base, settings.voicevox_url):
         if urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("この起動ファイルは既存のlocalhostモデル・VOICEVOX専用です。")
-    combat_defaults = json.loads((ROOT / "dogido-rust/src/combat/defaults.json").read_text())
-    for file in sorted((ROOT / "dogido-rust/src/environment").glob("*_defaults.json")):
-        combat_defaults.update(json.loads(file.read_text()))
-    combat_settings = {key: getattr(settings, key) for key in combat_defaults}
+    combat_settings = {key: getattr(settings, key) for key in COMBAT_DEFAULTS}
+    server_settings = {key: getattr(settings, key) for key in SERVER_DEFAULTS}
     from dogido_server.language_dialogue.main_web import inspect_main_web_availability
     web_availability = inspect_main_web_availability()
     web_settings = {"enabled": settings.main_language_web_enabled and settings.main_language_dialogue_enabled,
@@ -191,6 +194,7 @@ def main():
         "--model", model, "--base-url", base, "--voicevox-url", settings.voicevox_url,
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
         "--haiku-speed", str(settings.voicevox_speed_scale_haiku),
+        "--server-settings", json.dumps(server_settings),
         "--combat-settings", json.dumps(combat_settings),
         "--haiku-settings", json.dumps(haiku_settings),
         "--web-settings", json.dumps(web_settings),

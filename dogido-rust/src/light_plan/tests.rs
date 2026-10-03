@@ -89,7 +89,7 @@ async fn canonical_runtime_retry_and_abstention() {
         );
         assert!(requests.len() <= 2);
         // Compare the unchanged native event consumer with Python's domain decision.
-        use crate::environment::ambient::{self, Ambient, AmbientFocus};
+        use crate::environment::ambient::{Ambient, AmbientFocus};
         use crate::{combat::model::Mode, events::GameEvent};
         let event = |inventory| {
             GameEvent::parse(json!({
@@ -99,7 +99,7 @@ async fn canonical_runtime_retry_and_abstention() {
             "world":{"biome":"plains","time_phase":"day"}, "inventory":inventory
         })).unwrap()
         };
-        let settings = ambient::defaults();
+        let settings = crate::combat::model::Settings::default();
         let focus = AmbientFocus::default();
         let mut ambient = Ambient::default();
         ambient.update(&event(json!({})), 0, true, &settings);

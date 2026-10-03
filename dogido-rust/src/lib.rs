@@ -38,6 +38,7 @@ pub mod poem_book;
 pub mod poem_input;
 pub mod reading_correction;
 pub mod recall_query;
+mod runtime_settings;
 pub mod server;
 pub mod speech_choice;
 pub mod threats;

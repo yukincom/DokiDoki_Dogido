@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import tempfile
+from urllib.error import HTTPError
 
 from check_dialogue import ROOT, dependencies, register, request, row, running, snapshot, submit, wait_for
 from check_haiku_runtime import fixture
@@ -10,6 +11,31 @@ from check_haiku_runtime import fixture
 
 def main():
     passed = []
+    with tempfile.TemporaryDirectory(prefix="dogido-http-settings-") as temp, dependencies() as (dep, _, _):
+        settings = {"max_batch_size": 1, "max_body_kb": 1,
+                    "heartbeat_interval_ms": 900, "accepted_schema_version": "fixture-version"}
+        with running(ROOT / "target/debug/dogido-rust", Path(temp), dep,
+                     extra_args=("--server-settings", json.dumps(settings), "--no-llm", "--no-audio")) as (base, _, _):
+            registration = {"adapter_name": "fixture", "adapter_version": "fixture", "game": "minecraft-java",
+                            "schema_version": "fixture-version", "player_name": "fixture"}
+            session = request(base, "/api/v1/adapter-sessions", registration)
+            for key in ("max_batch_size", "heartbeat_interval_ms", "accepted_schema_version"):
+                assert session[key] == settings[key], session
+            event = {"schema_version": "fixture-version", "adapter": "fixture", "sequence": 1,
+                     "observed_at": "2026-10-04T00:00:00Z", "event": {"name": "status_snapshot",
+                     "source_kind": "system", "priority_hint": "background", "certainty": "high"}}
+            for path, body, expected in [
+                ("/api/v1/game-events/batch", {"events": [event, event]}, 400),
+                ("/api/v1/adapter-sessions", registration | {"player_name": "x" * 1500}, 413),
+            ]:
+                try:
+                    request(base, path, body, sid=session["session_id"])
+                except HTTPError as error:
+                    assert error.code == expected, error
+                    error.close()
+                else:
+                    raise AssertionError("configured HTTP limit was not applied")
+    passed.append("configured_http_contract_and_limits_reach_the_running_rust_server")
     with tempfile.TemporaryDirectory(prefix="dogido-settings-") as temp, dependencies() as (dep, control, seen):
         with running(ROOT / "target/debug/dogido-rust", Path(temp), dep,
                      extra_args=("--no-llm", "--no-language", "--no-audio")) as (base, _, log):

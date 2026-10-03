@@ -315,14 +315,12 @@ impl Dialogue {
                     &step["analysis"]["line_reference"],
                     text,
                     lines,
-                ) {
-                    if discussion_target
-                        .as_ref()
-                        .is_none_or(|t| t.line_index != target.line_index)
-                    {
-                        discussion_target = Some(target);
-                        snapshot["discussion_target"] = serde_json::to_value(&discussion_target)?;
-                    }
+                ) && discussion_target
+                    .as_ref()
+                    .is_none_or(|t| t.line_index != target.line_index)
+                {
+                    discussion_target = Some(target);
+                    snapshot["discussion_target"] = serde_json::to_value(&discussion_target)?;
                 }
                 let candidate = json!({"action":a,"purpose":step["purpose"],"findings":step["analysis"]["findings"]});
                 if (feedback.is_null() || a == "propose_revision")

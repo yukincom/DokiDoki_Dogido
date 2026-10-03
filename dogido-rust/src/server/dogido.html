@@ -277,7 +277,7 @@
   </style>
 </head>
 <body>
-  <main class="page">
+  <main class="page"><p role="status"><!--runtime-status--></p>
     <header>
       <div>
         <h1>ドギド発言履歴</h1>
@@ -297,7 +297,7 @@
 
     <div class="runtime-info" aria-label="実行中のドギドサーバー情報">
       <span>実行元: <strong id="runtime-source">確認中</strong></span>
-      <span>Python環境: <strong id="runtime-python">確認中</strong></span>
+      <span>実行環境: <strong id="runtime-python">確認中</strong></span>
       <span>PID: <strong id="runtime-pid">確認中</strong></span>
       <span>起動識別子: <strong id="runtime-instance">確認中</strong></span>
     </div>
@@ -406,10 +406,10 @@
         const runtime = data.runtime || {};
         const minecraft = data.minecraft || {};
         runtimeSource.textContent = runtime.source_label_ja || '不明';
-        const environment = runtime.python_environment || '不明';
+        const environment = runtime.runtime_environment || '不明';
         runtimePython.textContent = runtime.virtual_environment
           ? `${environment}（仮想環境）`
-          : `${environment}（仮想環境ではありません）`;
+          : `${environment}`;
         runtimePid.textContent = runtime.process_id == null ? '不明' : String(runtime.process_id);
         runtimeInstance.textContent = runtime.instance_id || '不明';
 
@@ -493,7 +493,7 @@
 
           const tag = document.createElement('span');
           tag.className = `tag ${item.category === 'knowledge' ? 'knowledge' : ''}`;
-          tag.textContent = categoryLabels[item.category] || '発言';
+          tag.textContent = item.playback_status ? ({routing:'内容を確認中',waiting_for_safety:'安全になるまで保留',not_selected:'発話なし',generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');
           meta.appendChild(tag);
 
           if (Array.isArray(item.reference_ids) && item.reference_ids.length) {
@@ -676,6 +676,7 @@
           }
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
+          renderRuntime(data);
           authForm.classList.remove('visible');
           setConnection('connected', 'サーバー: 接続中');
           const revisionKey = `${data.revision || 0}:${data.diagnostic_revision || 0}:${data.runtime_revision || 0}`;

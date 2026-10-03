@@ -1,14 +1,16 @@
-//! 接続専用と、明示選択した平時会話preview。記憶store・世界操作は未接続。
+//! Rust本体のHTTP APIと表示画面。接続試験モードは会話・音声・保存を開始しない。
 mod catalog;
 pub mod contracts;
 mod runtime;
+mod settings;
+pub use settings::Settings;
 
 use std::sync::Arc;
 
 use axum::{
     Json, Router,
     extract::{
-        Path, Query, Request, State,
+        DefaultBodyLimit, Path, Query, Request, State,
         rejection::{JsonRejection, QueryRejection},
     },
     http::{HeaderMap, HeaderValue, StatusCode, header},
@@ -26,25 +28,11 @@ use contracts::{
 };
 use runtime::{Command, Operation, Published};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ServerConfig {
     pub auth_token: Option<String>,
-    pub accepted_schema_version: String,
-    pub heartbeat_interval_ms: u64,
-    pub max_batch_size: usize,
+    pub settings: Settings,
     pub dialogue: Option<Arc<crate::dialogue::Dialogue>>,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            auth_token: None,
-            accepted_schema_version: "2026-05-24".into(),
-            heartbeat_interval_ms: 5000,
-            max_batch_size: 25,
-            dialogue: None,
-        }
-    }
 }
 
 pub(super) struct ApiReply {
@@ -112,6 +100,7 @@ pub struct Application {
 
 impl Application {
     pub fn new(config: ServerConfig) -> Self {
+        let max_body_bytes = config.settings.max_body_kb * 1024;
         let auth_token = config
             .auth_token
             .as_deref()
@@ -151,6 +140,7 @@ impl Application {
             .route("/api/v1/memory/profile", get(memory_profile))
             .route("/api/v1/memory/summary", get(memory_summary))
             .fallback(|| async { ApiReply::error(StatusCode::NOT_FOUND, json!("Not Found")) })
+            .layer(DefaultBodyLimit::max(max_body_bytes))
             .layer(middleware::from_fn_with_state(state.clone(), access))
             .with_state(state.clone());
         Self {
@@ -224,38 +214,20 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
     let enabled = state.dialogue.is_some();
     Json(
         json!({"ok": true, "service": "dogido-server", "version": env!("CARGO_PKG_VERSION"),
-        "runtime": "rust", "phase": if enabled {"dialogue_preview"} else {"connection_only"}, "dialogue_ready": enabled, "llm_enabled": state.dialogue.as_ref().is_some_and(|d| d.llm_enabled())}),
+        "runtime": "rust", "phase": if enabled {"dialogue"} else {"connection_only"}, "dialogue_ready": enabled, "llm_enabled": state.dialogue.as_ref().is_some_and(|d| d.llm_enabled())}),
     )
 }
 
 async fn display_page(State(state): State<AppState>) -> Response {
     let banner = if state.dialogue.is_some() {
-        "Rust版・平時の会話試験。戦闘・川柳・世界操作は未接続。<a href=\"/rust-chat\">会話入力を開く</a>"
+        "ドギド本体。会話・戦闘・川柳の共同編集・剣の持ち替えに対応。<a href=\"/rust-chat\">会話入力を開く</a>"
     } else {
         "接続テスト用です。会話・警告・音声はまだ使えません。"
     };
-    // Python版の画面は変更せず、同じHTMLを埋め込んで実行環境の表示だけ合わせる。
-    let html = include_str!("../../../dogido_server/static/dogido.html")
-        .replace("Python環境:", "実行環境:")
-        .replace(
-            "runtime.python_environment || '不明'",
-            "runtime.runtime_environment || runtime.python_environment || '不明'",
-        )
-        .replace(
-            "`${environment}（仮想環境ではありません）`",
-            "`${environment}`",
-        )
-        .replace("tag.textContent = categoryLabels[item.category] || '発言';",
-            "tag.textContent = item.playback_status ? ({routing:'内容を確認中',waiting_for_safety:'安全になるまで保留',not_selected:'発話なし',generating:'生成中',queued:'音声準備中',started:'再生中',completed:'再生完了',cancelled:'取消',failed:'失敗',quiet:'発話なし',unsupported:'未接続'}[item.playback_status] || item.playback_status) : (categoryLabels[item.category] || '発言');")
-        // heartbeatが途切れるとrevisionは止まるため、接続状態だけは毎回描画する。
-        .replace(
-            "const data = await response.json();",
-            "const data = await response.json();\n          renderRuntime(data);",
-        )
-        .replace(
-            "<main class=\"page\">",
-            &format!("<main class=\"page\"><p role=\"status\">{banner}</p>"),
-        );
+    let (before, after) = include_str!("dogido.html")
+        .split_once("<!--runtime-status-->")
+        .expect("display page requires a runtime status slot");
+    let html = format!("{before}{banner}{after}");
     let mut response = Html(html).into_response();
     response.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
         "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"));

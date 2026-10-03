@@ -98,18 +98,18 @@ fn selected(d: &Value, fields: &[&str]) -> serde_json::Map<String, Value> {
 
 pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
     let mut context = json!({"event":kind,"situation":situation(kind, d)?});
-    if kind == "thunder_reaction" {
-        if let Some(status) = d["scream_status"].as_str() {
-            let state = SITUATIONS
-                .as_object()
-                .unwrap()
-                .values()
-                .flat_map(|group| group.as_array().unwrap())
-                .find(|row| row["event"] == kind)
-                .and_then(|row| row["self_states"][status].as_str());
-            if let Some(state) = state {
-                context["self_state"] = json!({"scream_status":status,"situation":state});
-            }
+    if kind == "thunder_reaction"
+        && let Some(status) = d["scream_status"].as_str()
+    {
+        let state = SITUATIONS
+            .as_object()
+            .unwrap()
+            .values()
+            .flat_map(|group| group.as_array().unwrap())
+            .find(|row| row["event"] == kind)
+            .and_then(|row| row["self_states"][status].as_str());
+        if let Some(state) = state {
+            context["self_state"] = json!({"scream_status":status,"situation":state});
         }
     }
     let mut observations = selected(d, &["biome", "time_phase"]);

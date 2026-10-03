@@ -74,13 +74,7 @@ pub struct Ambient {
     weather: Option<String>,
     weather_pending: Option<(String, String)>,
 }
-pub fn defaults() -> Settings {
-    let mut s = Settings::default();
-    let extra: serde_json::Map<String, Value> =
-        serde_json::from_str(include_str!("ambient_defaults.json")).expect("ambient defaults");
-    s.0.extend(extra);
-    s
-}
+
 impl Ambient {
     /// Code-owned structure state: changed only by status snapshots or dimension resets.
     pub fn current_structure(&self) -> Option<&str> {

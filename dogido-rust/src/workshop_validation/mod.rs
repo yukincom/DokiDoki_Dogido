@@ -340,10 +340,8 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     // A structured speech field is ordinary conversation, not a reaction leaf.
     // Quotation marks, mixed script, length and line breaks do not decide its meaning.
     let speech = sanitize::strip(text(&payload["speech"]));
-    if strings(&ASSETS["direct"]).contains(action) {
-        if speech.is_empty() {
-            return reject("invalid_speech");
-        }
+    if strings(&ASSETS["direct"]).contains(action) && speech.is_empty() {
+        return reject("invalid_speech");
     }
     // Prose does not execute an action. The model chooses wording and whether a
     // recorded reading/meter/source inspection is useful; code validates only

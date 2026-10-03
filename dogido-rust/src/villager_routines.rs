@@ -32,7 +32,7 @@ fn normalized(raw: &str) -> String {
 // Job availability still gates whether an adult has a work activity.
 pub fn activity(time: i64, baby: bool, profession: Option<&str>) -> &'static str {
     let t = time.rem_euclid(24000);
-    if t < 10 || t >= 12000 {
+    if !(10..12000).contains(&t) {
         return "sleep";
     }
     if baby {

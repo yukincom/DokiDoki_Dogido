@@ -21,22 +21,22 @@ impl Tracker {
     }
     pub fn observe(&mut self, event: &GameEvent) {
         self.pending = NameOutcomeUpdate::default();
-        if let Some(outcomes) = &event.combat.hostile_outcomes {
-            if matches!(
+        if let Some(outcomes) = &event.combat.hostile_outcomes
+            && matches!(
                 event.event.name,
                 EventName::HostileDefeated | EventName::CreeperDetonated | EventName::CombatEnded
-            ) {
-                // Immediate Python memory accepts all outcome kinds; only speech
-                // dispatch filters by event kind. Preserve that distinction.
-                let fresh: Vec<_> = outcomes
-                    .iter()
-                    .filter(|v| !self.seen.contains(&outcome_key(v)))
-                    .collect();
-                for outcome in &fresh {
-                    add(&mut self.pending.confirmed_types, &outcome.r#type);
-                }
-                self.seen.extend(fresh.into_iter().map(outcome_key));
+            )
+        {
+            // Immediate Python memory accepts all outcome kinds; only speech
+            // dispatch filters by event kind. Preserve that distinction.
+            let fresh: Vec<_> = outcomes
+                .iter()
+                .filter(|v| !self.seen.contains(&outcome_key(v)))
+                .collect();
+            for outcome in &fresh {
+                add(&mut self.pending.confirmed_types, &outcome.r#type);
             }
+            self.seen.extend(fresh.into_iter().map(outcome_key));
         }
     }
 }

@@ -97,7 +97,6 @@ fn snapshot_is_read_only_and_current_never_contains_recent_or_death_names() {
             &start,
             &NameOutcomeUpdate {
                 confirmed_types: vec!["witch".into()],
-                ..Default::default()
             },
             &labels,
         )

@@ -1,5 +1,6 @@
-//! Narrow compatibility primitives shared by the migrated Python contracts.
-//! Callers still own normalization order, punctuation, lookup and coercion policy.
+//! ドギドの文字・JSON解釈の共通仕様。Python移植時の回帰資産で境界を維持する。
+//! 現在の仕様であり、旧Python本体を呼ぶ互換層ではない。
+//! 正規化順序・句読点・照合・型変換の判断は呼出側が所有する。
 use serde_json::Value;
 
 /// Python str.isspace()/re \s includes these four C0 separators in addition to

@@ -43,7 +43,7 @@ os-ai-foundry = [
 include = ["dogido_server*"]
 
 [tool.setuptools.package-data]
-dogido_server = ["static/*.html", "llm/companion_prompts.json", "llm/reaction_situations.json", "language_dialogue/source_cards.json"]
+dogido_server = ["runtime_defaults.json", "llm/companion_prompts.json", "llm/reaction_situations.json", "language_dialogue/source_cards.json"]
 
 [tool.ruff]
 target-version = "py311"

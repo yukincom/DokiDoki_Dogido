@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from dogido_server import __version__
+from dogido_server.runtime_settings import COMBAT_DEFAULTS, SERVER_DEFAULTS, warn_retired_settings
 
 LLM_PROVIDER = Literal["local", "openai", "openrouter", "claude", "grok", "gemini", "custom"]
 LLM_BACKEND = Literal["mlx", "openai_compatible", "chat_completions", "noop"]
@@ -72,59 +72,44 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    service_name: str = "dogido-server"
-    service_version: str = __version__
-
     bind_host: str = "127.0.0.1"
     bind_port: int = 5055
-    allow_non_local_bind: bool = False
     auth_token: str | None = None
 
-    accepted_schema_version: str = "2026-05-24"
-    max_batch_size: int = 25
-    max_body_kb: int = 256
-    heartbeat_interval_ms: int = 5000
-    default_call_name: str = "プレイヤー"
+    accepted_schema_version: str = SERVER_DEFAULTS["accepted_schema_version"]
+    max_batch_size: int = Field(default=SERVER_DEFAULTS["max_batch_size"], ge=1)
+    max_body_kb: int = Field(default=SERVER_DEFAULTS["max_body_kb"], ge=1)
+    heartbeat_interval_ms: int = Field(default=SERVER_DEFAULTS["heartbeat_interval_ms"], ge=1)
+    default_call_name: str = COMBAT_DEFAULTS["default_call_name"]
 
     audio_enabled: bool = True
-    # 無制限に古い発話をためない。上限到達時はAudioDispatcherが優先度を見て
-    # 明示的に置換・破棄し、必ずログへ残す。
-    audio_max_pending_batches: int = Field(default=8, ge=1, le=128)
-    # 別画面へ残す発言数。プロセス内だけの上限付き履歴で、入力やゲーム状態は保存しない。
-    display_history_max_entries: int = Field(default=200, ge=20, le=2000)
-    # ゲーム外の診断欄へ残す非アクセスログ。永続化せず、再起動で消去する。
-    diagnostic_history_max_entries: int = Field(default=1000, ge=100, le=10000)
     # 本体の国語・語句質問を、ゲームイベントworker外の限定対話へ渡す。
     # 世界操作・戦況・川柳workshopは従来どおり状態機械が所有する。
     main_language_dialogue_enabled: bool = True
     # 既存の専用ChromeとMCP SDKが揃う端末だけ、同意済みのWeb調査を有効にする。
     # 起動時にはブラウザーもMCPも開始せず、案内音声の実再生完了後まで待つ。
     main_language_web_enabled: bool = True
-    conversation_active_ttl_ms: int = Field(default=300000, ge=30000, le=3600000)
+    conversation_active_ttl_ms: int = Field(default=COMBAT_DEFAULTS["conversation_active_ttl_ms"], ge=30000, le=3600000)
     # 雑談後の非敵対モブコメント抑止。会話の文脈保持期限とは分ける。
-    conversation_ambient_mute_ms: int = Field(default=30000, ge=0, le=3600000)
+    conversation_ambient_mute_ms: int = Field(default=COMBAT_DEFAULTS["conversation_ambient_mute_ms"], ge=0, le=3600000)
     # learning中の無関係な発話を「新しい話」と即扱う無会話時間。
-    conversation_topic_fresh_ms: int = Field(default=120000, ge=0, le=3600000)
+    conversation_topic_fresh_ms: int = Field(default=COMBAT_DEFAULTS["conversation_topic_fresh_ms"], ge=0, le=3600000)
     # 宛先不明で保留した元入力の期限。呼び直しでは延長しない。
     conversation_pending_address_ttl_ms: int = Field(
-        default=300000,
+        default=COMBAT_DEFAULTS["conversation_pending_address_ttl_ms"],
         ge=1000,
         le=3600000,
     )
-    conversation_suspended_player_turns: int = Field(default=10, ge=1, le=50)
-    conversation_post_danger_player_turns: int = Field(default=3, ge=0, le=20)
-    combat_chat_ack_cooldown_ms: int = Field(default=30000, ge=1000, le=300000)
+    conversation_suspended_player_turns: int = Field(default=COMBAT_DEFAULTS["conversation_suspended_player_turns"], ge=1, le=50)
+    conversation_post_danger_player_turns: int = Field(default=COMBAT_DEFAULTS["conversation_post_danger_player_turns"], ge=0, le=20)
     llm_enabled: bool = True
     llm_backend: LLM_BACKEND = "mlx"
     llm_provider: LLM_PROVIDER = "local"
     tts_backend: Literal["voicevox", "say", "noop"] = "voicevox"
-    cue_backend: Literal["afplay", "say", "noop"] = "afplay"
     cue_audio_dir: Path | None = Path("cue_voice")
-    say_voice: str | None = None
 
     voicevox_url: str = "http://127.0.0.1:50021"
     voicevox_speaker: int = 21
-    voicevox_prewarm_enabled: bool = True
     # 既定・battle の話速（callout / 緊急 speech）。cue mp3 には効かない
     voicevox_speed_scale: float = 1.0
     # プロファイル別（None の battle は voicevox_speed_scale を使う）
@@ -134,17 +119,13 @@ class Settings(BaseSettings):
     voicevox_pitch_scale: float = 0.0
     voicevox_volume_scale: float = 1.0
     voicevox_output_sampling_rate: int | None = None
-    voicevox_temp_dir: Path = Field(default_factory=lambda: Path(".dogido_tmp") / "voicevox")
-    # TTS キャッシュ肥大化防止（.dogido_tmp は gitignore。上限超過 or 古い順で削除）
-    voicevox_cache_max_mb: float = 256.0
-    voicevox_cache_max_age_days: float = 7.0
     # TTS 読み補正: auto=UniDic あれば使う / unidic=試す / off=例外表のみ
     # optional: pip install -e ".[tts-reading]"（fugashi + unidic-lite）
     tts_reading_engine: Literal["auto", "unidic", "off"] = "auto"
     memory_enabled: bool = True
     memory_dir: Path = Path(".dogido_memory")
 
-    # 音声入力（dogido_server.voice_input プロセス）。
+    # Rust音声入力の起動設定。voice_settings.pyで解決しlaunch_dialogue.py --voiceから渡す。
     # whisper のパスは未設定なら ~/AI_assistant/whisper.cpp/ などから自動検出する
     voice_whisper_cli: Path | None = None
     voice_whisper_model: Path | None = None
@@ -222,108 +203,104 @@ class Settings(BaseSettings):
     llm_haiku_timeout_sec: float | None = None
     llm_haiku_max_tokens: int | None = None
 
-    rear_warning_distance: float = 3.0
-    panic_distance: float = 7.0
-    multi_hostile_distance: float = 10.0
-    hostile_query_distance: float = 16.0
-    hostile_mass_callout_threshold: int = 4
+    rear_warning_distance: float = COMBAT_DEFAULTS["rear_warning_distance"]
+    panic_distance: float = COMBAT_DEFAULTS["panic_distance"]
+    hostile_query_distance: float = COMBAT_DEFAULTS["hostile_query_distance"]
+    hostile_mass_callout_threshold: int = COMBAT_DEFAULTS["hostile_mass_callout_threshold"]
     # 「ぎょうさん」一括コールアウトはディメンション移動直後の群れ限定
-    mass_callout_warp_window_ms: int = 90000
-    overworld_return_line_delay_ms: int = 3500
-    combat_clear_distance: float = 10.0
-    combat_clear_time_ms: int = 5000
-    suppression_time_ms: int = 7000
-    aftermath_time_ms: int = 8000
-    pending_safe_aftermath_window_ms: int = 20000
-    panic_scream_cooldown_ms: int = 1200
-    recent_damage_window_ms: int = 3000
-    low_health_warning_threshold: float = 5.0
-    darkness_advice_light_threshold: int = 3
-    darkness_alert_threshold: float = 0.72
-    darkness_advice_cooldown_ms: int = 60000
-    occluded_entry_darkness_threshold: float = 0.9
-    occluded_entry_light_threshold: int = 3
-    lit_interior_safe_light_threshold: int = 9
-    lit_interior_safe_max_connected_volume: int = 24
-    lit_interior_safe_min_spawn_distance: float = 4.0
-    lit_interior_safe_max_ceiling_height: float = 5.0
-    lit_interior_safe_light_source_distance: float = 4.0
-    cramped_dark_burrow_max_connected_volume: int = 12
-    cramped_dark_burrow_max_ceiling_height: float = 3.0
-    cramped_dark_burrow_min_wall_count: int = 3
-    cramped_dark_burrow_min_enclosure_score: float = 0.85
-    darkness_llm_comment_cooldown_ms: int = 300000
-    foliage_darkness_comment_cooldown_ms: int = 600000
-    submerged_darkness_comment_cooldown_ms: int = 600000
-    submerged_darkness_depth_threshold: int = 5
-    dark_push_comment_cooldown_ms: int = 20000
-    dark_push_breath_loop_ms: int = 3800
-    dark_push_breath_delay_ms: int = 5000
-    dark_push_after_breath_defer_ms: int = 8000
-    dark_push_progress_distance: float = 1.0
-    dark_push_escalation_light_threshold: int = 1
-    dark_push_escalation_darkness_threshold: float = 0.7
-    dark_push_worse_light_delta: int = 2
-    dark_push_worse_darkness_delta: float = 0.12
-    dark_push_recover_darkness_margin: float = 0.02
-    emergency_shelter_night_start: int = 13000
-    emergency_shelter_morning_cutoff: int = 2000
-    emergency_shelter_respawn_distance: float = 50.0
-    emergency_shelter_max_ceiling_height: float = 3.0
-    home_bed_prompt_distance: float = 10.0
-    sleep_prompt_cooldown_ms: int = 60000
-    sleeping_neighbor_comment_cooldown_ms: int = 60000
-    special_biome_comment_cooldown_ms: int = 600000
-    structure_comment_cooldown_ms: int = 600000
-    portal_frame_comment_cooldown_ms: int = 600000
+    mass_callout_warp_window_ms: int = COMBAT_DEFAULTS["mass_callout_warp_window_ms"]
+    overworld_return_line_delay_ms: int = COMBAT_DEFAULTS["overworld_return_line_delay_ms"]
+    combat_clear_time_ms: int = COMBAT_DEFAULTS["combat_clear_time_ms"]
+    suppression_time_ms: int = COMBAT_DEFAULTS["suppression_time_ms"]
+    aftermath_time_ms: int = COMBAT_DEFAULTS["aftermath_time_ms"]
+    pending_safe_aftermath_window_ms: int = COMBAT_DEFAULTS["pending_safe_aftermath_window_ms"]
+    panic_scream_cooldown_ms: int = COMBAT_DEFAULTS["panic_scream_cooldown_ms"]
+    recent_damage_window_ms: int = COMBAT_DEFAULTS["recent_damage_window_ms"]
+    low_health_warning_threshold: float = COMBAT_DEFAULTS["low_health_warning_threshold"]
+    darkness_advice_light_threshold: int = COMBAT_DEFAULTS["darkness_advice_light_threshold"]
+    darkness_alert_threshold: float = COMBAT_DEFAULTS["darkness_alert_threshold"]
+    darkness_advice_cooldown_ms: int = COMBAT_DEFAULTS["darkness_advice_cooldown_ms"]
+    occluded_entry_darkness_threshold: float = COMBAT_DEFAULTS["occluded_entry_darkness_threshold"]
+    occluded_entry_light_threshold: int = COMBAT_DEFAULTS["occluded_entry_light_threshold"]
+    lit_interior_safe_light_threshold: int = COMBAT_DEFAULTS["lit_interior_safe_light_threshold"]
+    lit_interior_safe_max_connected_volume: int = COMBAT_DEFAULTS["lit_interior_safe_max_connected_volume"]
+    lit_interior_safe_min_spawn_distance: float = COMBAT_DEFAULTS["lit_interior_safe_min_spawn_distance"]
+    lit_interior_safe_max_ceiling_height: float = COMBAT_DEFAULTS["lit_interior_safe_max_ceiling_height"]
+    lit_interior_safe_light_source_distance: float = COMBAT_DEFAULTS["lit_interior_safe_light_source_distance"]
+    cramped_dark_burrow_max_connected_volume: int = COMBAT_DEFAULTS["cramped_dark_burrow_max_connected_volume"]
+    cramped_dark_burrow_max_ceiling_height: float = COMBAT_DEFAULTS["cramped_dark_burrow_max_ceiling_height"]
+    cramped_dark_burrow_min_wall_count: int = COMBAT_DEFAULTS["cramped_dark_burrow_min_wall_count"]
+    cramped_dark_burrow_min_enclosure_score: float = COMBAT_DEFAULTS["cramped_dark_burrow_min_enclosure_score"]
+    darkness_llm_comment_cooldown_ms: int = COMBAT_DEFAULTS["darkness_llm_comment_cooldown_ms"]
+    foliage_darkness_comment_cooldown_ms: int = COMBAT_DEFAULTS["foliage_darkness_comment_cooldown_ms"]
+    submerged_darkness_comment_cooldown_ms: int = COMBAT_DEFAULTS["submerged_darkness_comment_cooldown_ms"]
+    submerged_darkness_depth_threshold: int = COMBAT_DEFAULTS["submerged_darkness_depth_threshold"]
+    dark_push_comment_cooldown_ms: int = COMBAT_DEFAULTS["dark_push_comment_cooldown_ms"]
+    dark_push_breath_loop_ms: int = COMBAT_DEFAULTS["dark_push_breath_loop_ms"]
+    dark_push_breath_delay_ms: int = COMBAT_DEFAULTS["dark_push_breath_delay_ms"]
+    dark_push_after_breath_defer_ms: int = COMBAT_DEFAULTS["dark_push_after_breath_defer_ms"]
+    dark_push_progress_distance: float = COMBAT_DEFAULTS["dark_push_progress_distance"]
+    dark_push_escalation_light_threshold: int = COMBAT_DEFAULTS["dark_push_escalation_light_threshold"]
+    dark_push_escalation_darkness_threshold: float = COMBAT_DEFAULTS["dark_push_escalation_darkness_threshold"]
+    dark_push_worse_light_delta: int = COMBAT_DEFAULTS["dark_push_worse_light_delta"]
+    dark_push_worse_darkness_delta: float = COMBAT_DEFAULTS["dark_push_worse_darkness_delta"]
+    dark_push_recover_darkness_margin: float = COMBAT_DEFAULTS["dark_push_recover_darkness_margin"]
+    emergency_shelter_night_start: int = COMBAT_DEFAULTS["emergency_shelter_night_start"]
+    emergency_shelter_morning_cutoff: int = COMBAT_DEFAULTS["emergency_shelter_morning_cutoff"]
+    emergency_shelter_respawn_distance: float = COMBAT_DEFAULTS["emergency_shelter_respawn_distance"]
+    emergency_shelter_max_ceiling_height: float = COMBAT_DEFAULTS["emergency_shelter_max_ceiling_height"]
+    home_bed_prompt_distance: float = COMBAT_DEFAULTS["home_bed_prompt_distance"]
+    special_biome_comment_cooldown_ms: int = COMBAT_DEFAULTS["special_biome_comment_cooldown_ms"]
+    structure_comment_cooldown_ms: int = COMBAT_DEFAULTS["structure_comment_cooldown_ms"]
+    portal_frame_comment_cooldown_ms: int = COMBAT_DEFAULTS["portal_frame_comment_cooldown_ms"]
     # 設置済みエンドポータルフレームへの接近反応（この距離以内で一言）
-    end_portal_frame_comment_distance: float = 5.0
+    end_portal_frame_comment_distance: float = COMBAT_DEFAULTS["end_portal_frame_comment_distance"]
     # エンダーアイ投擲: 鮮度ウィンドウ（スナップショット間隔より長く）と連投時の発話間隔
-    ender_eye_recent_ms: int = 2000
-    ender_eye_comment_cooldown_ms: int = 8000
+    ender_eye_recent_ms: int = COMBAT_DEFAULTS["ender_eye_recent_ms"]
+    ender_eye_comment_cooldown_ms: int = COMBAT_DEFAULTS["ender_eye_comment_cooldown_ms"]
     # 種ごと（村人は villager:職 で別 key → 別職は即出し可、同職は下の秒数）
-    ambient_mob_comment_cooldown_ms: int = 120000
+    ambient_mob_comment_cooldown_ms: int = COMBAT_DEFAULTS["ambient_mob_comment_cooldown_ms"]
     # この人数以上の非睡眠村人がいると汎用村人1発 + villager:crowd 共有 CD（職連発渋滞防止）
-    ambient_villager_crowd_threshold: int = 3
+    ambient_villager_crowd_threshold: int = COMBAT_DEFAULTS["ambient_villager_crowd_threshold"]
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
     # 人間の「…？ → 今の音なに？」ラグ用。adapter 音 TTL（約15s）より少し長く
-    player_chat_hearing_retention_ms: int = 20000
+    player_chat_hearing_retention_ms: int = COMBAT_DEFAULTS["player_chat_hearing_retention_ms"]
     # player_chat: 今フレーム visual が空でも、この時間内の視認を会話に残す
-    player_chat_visual_retention_ms: int = 12000
+    player_chat_visual_retention_ms: int = COMBAT_DEFAULTS["player_chat_visual_retention_ms"]
     # player_chat: 危険な一般名を正式 mob 名へ戻すための視認・聴取・討伐履歴
-    player_chat_name_correction_retention_ms: int = 10000
+    player_chat_name_correction_retention_ms: int = COMBAT_DEFAULTS["player_chat_name_correction_retention_ms"]
     # 解決済みの匂いは同じ優勢状態で一度だけ知らせ、再侵入・勝者変更にも
     # この全体クールダウンを掛ける。
-    smell_comment_cooldown_ms: int = 120000
+    smell_comment_cooldown_ms: int = COMBAT_DEFAULTS["smell_comment_cooldown_ms"]
     # 話しかけたあと、自発発話（バイオーム・川柳・友好/中立 ambient など）を少し黙る時間。
     # 旧 120s だと「たまに話しただけ」でも友好モブ反応がほぼ死んでいた。
     # ambient 専用の短い mute は廃止し、この秒数に統一（プレイヤー入力優先）。
-    player_input_priority_cooldown_ms: int = 20000
-    damaging_light_warning_cooldown_ms: int = 600000
-    magma_block_comment_cooldown_ms: int = 1200000
-    damaging_light_warning_max_distance: float = 5.0
-    ominous_sound_comment_cooldown_ms: int = 120000
-    sculk_ominous_sound_comment_cooldown_ms: int = 120000
-    ominous_sound_reset_ms: int = 30000
-    boss_omen_comment_cooldown_ms: int = 30000
+    player_input_priority_cooldown_ms: int = COMBAT_DEFAULTS["player_input_priority_cooldown_ms"]
+    damaging_light_warning_cooldown_ms: int = COMBAT_DEFAULTS["damaging_light_warning_cooldown_ms"]
+    magma_block_comment_cooldown_ms: int = COMBAT_DEFAULTS["magma_block_comment_cooldown_ms"]
+    damaging_light_warning_max_distance: float = COMBAT_DEFAULTS["damaging_light_warning_max_distance"]
+    ominous_sound_comment_cooldown_ms: int = COMBAT_DEFAULTS["ominous_sound_comment_cooldown_ms"]
+    sculk_ominous_sound_comment_cooldown_ms: int = COMBAT_DEFAULTS["sculk_ominous_sound_comment_cooldown_ms"]
+    ominous_sound_reset_ms: int = COMBAT_DEFAULTS["ominous_sound_reset_ms"]
+    boss_omen_comment_cooldown_ms: int = COMBAT_DEFAULTS["boss_omen_comment_cooldown_ms"]
     # ドラゴン戦: 突進警告の再発話間隔と、クリスタル残数コールの最小間隔
-    dragon_approach_callout_cooldown_ms: int = 8000
-    dragon_crystal_callout_cooldown_ms: int = 4000
-    mining_fatigue_comment_cooldown_ms: int = 120000
-    boss_recent_visual_window_ms: int = 10000
-    warden_chasing_comment_cooldown_ms: int = 60000
+    dragon_approach_callout_cooldown_ms: int = COMBAT_DEFAULTS["dragon_approach_callout_cooldown_ms"]
+    dragon_crystal_callout_cooldown_ms: int = COMBAT_DEFAULTS["dragon_crystal_callout_cooldown_ms"]
+    mining_fatigue_comment_cooldown_ms: int = COMBAT_DEFAULTS["mining_fatigue_comment_cooldown_ms"]
+    boss_recent_visual_window_ms: int = COMBAT_DEFAULTS["boss_recent_visual_window_ms"]
+    warden_chasing_comment_cooldown_ms: int = COMBAT_DEFAULTS["warden_chasing_comment_cooldown_ms"]
     # ウォーデンのビーム（sonic boom）は鮮度内なら必ず悲鳴を上げる
-    warden_sonic_boom_fresh_ms: int = 2500
-    warden_sonic_boom_scream_cooldown_ms: int = 4000
+    warden_sonic_boom_fresh_ms: int = COMBAT_DEFAULTS["warden_sonic_boom_fresh_ms"]
+    warden_sonic_boom_scream_cooldown_ms: int = COMBAT_DEFAULTS["warden_sonic_boom_scream_cooldown_ms"]
     # 「さっきまで平和だった中立モブ」が敵対化したとみなす記憶ウィンドウ
-    neutral_hostility_memory_ms: int = 120000
-    neutral_turned_hostile_comment_cooldown_ms: int = 60000
-    ushiro_comment_cooldown_ms: int = 60000
-    weather_sound_recent_ms: int = 4000
+    neutral_hostility_memory_ms: int = COMBAT_DEFAULTS["neutral_hostility_memory_ms"]
+    neutral_turned_hostile_comment_cooldown_ms: int = COMBAT_DEFAULTS["neutral_turned_hostile_comment_cooldown_ms"]
+    ushiro_comment_cooldown_ms: int = COMBAT_DEFAULTS["ushiro_comment_cooldown_ms"]
+    weather_sound_recent_ms: int = COMBAT_DEFAULTS["weather_sound_recent_ms"]
     # 雷鳴は天候遷移とは別に実音へ反応する。発話と cue は別クールダウン。
-    thunder_reaction_message_cooldown_ms: int = 180000
-    thunder_reaction_panic_cue_cooldown_ms: int = 600000
-    nearby_lightning_recent_ms: int = 2000
+    thunder_reaction_message_cooldown_ms: int = COMBAT_DEFAULTS["thunder_reaction_message_cooldown_ms"]
+    thunder_reaction_panic_cue_cooldown_ms: int = COMBAT_DEFAULTS["thunder_reaction_panic_cue_cooldown_ms"]
+    nearby_lightning_recent_ms: int = COMBAT_DEFAULTS["nearby_lightning_recent_ms"]
     # 通常は10分。短期の生成比較で一時変更するときは環境変数だけで上書きする。
     # 優先イベント（脅威・モブ反応・入力・発話）の後は30秒の静けさを待つ。
     haiku_interval_ms: int = 600000
@@ -337,22 +314,18 @@ class Settings(BaseSettings):
     # 動けない敵を無視して句へ戻る場合も、同じ敵がこの時間以上静止し、
     # プレイヤーの再開意思をOS AI／fallback規則から確定できたときだけ暫定許可する。
     workshop_low_threat_resume_delay_ms: int = Field(default=8000, ge=1000)
-    hostile_comment_cooldown_ms: int = 60000
-    occluded_hostile_presence_comment_cooldown_ms: int = 180000
-    other_realm_swarm_visual_threshold: int = 4
-    other_realm_audio_generic_threshold: int = 2
-    daylight_water_comment_cooldown_ms: int = 120000
-    burning_visual_comment_cooldown_ms: int = 10000
-    multi_hostile_comment_cooldown_ms: int = 30000
-    stalled_visual_comment_delay_ms: int = 60000
-    stalled_visual_comment_cooldown_ms: int = 60000
-    hostile_count_surge_threshold: int = 3
-    hostile_count_surge_min_total: int = 4
-    auditory_ignore_distance: float = 4.5
-
-    @property
-    def is_local_only(self) -> bool:
-        return not self.allow_non_local_bind
+    hostile_comment_cooldown_ms: int = COMBAT_DEFAULTS["hostile_comment_cooldown_ms"]
+    occluded_hostile_presence_comment_cooldown_ms: int = COMBAT_DEFAULTS["occluded_hostile_presence_comment_cooldown_ms"]
+    other_realm_swarm_visual_threshold: int = COMBAT_DEFAULTS["other_realm_swarm_visual_threshold"]
+    other_realm_audio_generic_threshold: int = COMBAT_DEFAULTS["other_realm_audio_generic_threshold"]
+    daylight_water_comment_cooldown_ms: int = COMBAT_DEFAULTS["daylight_water_comment_cooldown_ms"]
+    burning_visual_comment_cooldown_ms: int = COMBAT_DEFAULTS["burning_visual_comment_cooldown_ms"]
+    multi_hostile_comment_cooldown_ms: int = COMBAT_DEFAULTS["multi_hostile_comment_cooldown_ms"]
+    stalled_visual_comment_delay_ms: int = COMBAT_DEFAULTS["stalled_visual_comment_delay_ms"]
+    stalled_visual_comment_cooldown_ms: int = COMBAT_DEFAULTS["stalled_visual_comment_cooldown_ms"]
+    hostile_count_surge_threshold: int = COMBAT_DEFAULTS["hostile_count_surge_threshold"]
+    hostile_count_surge_min_total: int = COMBAT_DEFAULTS["hostile_count_surge_min_total"]
+    auditory_ignore_distance: float = COMBAT_DEFAULTS["auditory_ignore_distance"]
 
     def tts_speed_for_profile(self, profile: str | None) -> float:
         """speech_profile → VOICEVOX speedScale。
@@ -518,6 +491,7 @@ def _validate_shared_profile(settings: Settings) -> None:
 def get_settings() -> Settings:
     profile = _runtime_profile()
     if profile == RUNTIME_PROFILE_STANDALONE:
+        warn_retired_settings((Path(".env"),))
         return Settings()
 
     shared_env_file = Path.cwd() / SHARED_PROFILE_ENV_FILE
@@ -526,6 +500,7 @@ def get_settings() -> Settings:
             f"shared runtime profile requires {shared_env_file}; "
             "copy .env.shared.example to .env.shared first"
         )
+    warn_retired_settings((Path(".env"), shared_env_file))
     settings = Settings(_env_file=(Path(".env"), shared_env_file))
     _validate_shared_profile(settings)
     return settings

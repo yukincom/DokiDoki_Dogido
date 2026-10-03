@@ -15,6 +15,8 @@ VERSION = "fabric-loader-0.18.4-1.21.11"
 TEMPLATES = Path(__file__).resolve().parent / "family-client"
 sys.path.insert(0, str(TEMPLATES))
 from family_runtime import RUST_BINARY, RUNTIME_SCRIPTS, validate_runtime
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dogido-rust/scripts"))
+from runtime_build import check_binary_freshness
 ENV = """# このフォルダ専用。個人の .env はコピーしない。
 DOGIDO_BIND_HOST=127.0.0.1
 DOGIDO_BIND_PORT=5055
@@ -96,6 +98,7 @@ def build(args: argparse.Namespace) -> None:
     validate_runtime(source)
     # A prepared Apple Silicon release is shipped; the receiving Mac needs no Rust compiler.
     binary = source / RUST_BINARY
+    check_binary_freshness(source, binary)
     with binary.open("rb") as handle:
         header = handle.read(8)
     if header != b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01":
@@ -104,10 +107,6 @@ def build(args: argparse.Namespace) -> None:
     copy_file(binary, target / RUST_BINARY)
     for name in RUNTIME_SCRIPTS:
         relative = "dogido-rust/scripts/" + name
-        copy_file(source / relative, target / relative)
-    for relative in ("dogido-rust/src/combat/defaults.json",
-                     "dogido-rust/src/environment/ambient_defaults.json",
-                     "dogido-rust/src/environment/danger_defaults.json"):
         copy_file(source / relative, target / relative)
     shutil.copytree(source / "reference/language_education_and_poetry",
                     target / "reference/language_education_and_poetry",

@@ -3,17 +3,28 @@
 use crate::events::{GameEvent, MobEnvironment, MobIdentity, VisualThreat};
 use serde_json::{Value, json};
 
-fn add(
-    rows: &mut Vec<Value>,
-    species: &str,
-    identity: Option<&MobIdentity>,
-    fallback_id: Option<&str>,
-    environment: Option<&MobEnvironment>,
+struct Observation<'a> {
+    species: &'a str,
+    identity: Option<&'a MobIdentity>,
+    fallback_id: Option<&'a str>,
+    environment: Option<&'a MobEnvironment>,
     legacy_water: bool,
     legacy_fire: bool,
-    basis: &str,
+    basis: &'a str,
     approaching: Option<bool>,
-) {
+}
+
+fn add(rows: &mut Vec<Value>, observation: Observation<'_>) {
+    let Observation {
+        species,
+        identity,
+        fallback_id,
+        environment,
+        legacy_water,
+        legacy_fire,
+        basis,
+        approaching,
+    } = observation;
     let Some(catalog) = crate::catalog_knowledge::mob(species, None, false, basis) else {
         return;
     };
@@ -81,27 +92,31 @@ pub fn project(event: &GameEvent) -> Value {
     for target in &event.visual_threats {
         add(
             &mut rows,
-            &target.r#type,
-            target.identity.as_ref(),
-            target.entity_id.as_deref(),
-            target.environment.as_ref(),
-            target.in_water,
-            target.on_fire,
-            "visual",
-            Some(target.approaching),
+            Observation {
+                species: &target.r#type,
+                identity: target.identity.as_ref(),
+                fallback_id: target.entity_id.as_deref(),
+                environment: target.environment.as_ref(),
+                legacy_water: target.in_water,
+                legacy_fire: target.on_fire,
+                basis: "visual",
+                approaching: Some(target.approaching),
+            },
         );
     }
     for target in &event.passive_mobs {
         add(
             &mut rows,
-            &target.r#type,
-            target.identity.as_ref(),
-            None,
-            target.environment.as_ref(),
-            false,
-            false,
-            "passive_observation",
-            None,
+            Observation {
+                species: &target.r#type,
+                identity: target.identity.as_ref(),
+                fallback_id: None,
+                environment: target.environment.as_ref(),
+                legacy_water: false,
+                legacy_fire: false,
+                basis: "passive_observation",
+                approaching: None,
+            },
         );
     }
     if let Some(target) = &event.look_target
@@ -109,14 +124,16 @@ pub fn project(event: &GameEvent) -> Value {
     {
         add(
             &mut rows,
-            &target.name,
-            target.identity.as_ref(),
-            None,
-            target.environment.as_ref(),
-            false,
-            false,
-            "look_target",
-            None,
+            Observation {
+                species: &target.name,
+                identity: target.identity.as_ref(),
+                fallback_id: None,
+                environment: target.environment.as_ref(),
+                legacy_water: false,
+                legacy_fire: false,
+                basis: "look_target",
+                approaching: None,
+            },
         );
     }
     rows.into()
@@ -126,14 +143,16 @@ pub fn visual(target: &VisualThreat) -> Option<Value> {
     let mut rows = vec![];
     add(
         &mut rows,
-        &target.r#type,
-        target.identity.as_ref(),
-        target.entity_id.as_deref(),
-        target.environment.as_ref(),
-        target.in_water,
-        target.on_fire,
-        "visual",
-        Some(target.approaching),
+        Observation {
+            species: &target.r#type,
+            identity: target.identity.as_ref(),
+            fallback_id: target.entity_id.as_deref(),
+            environment: target.environment.as_ref(),
+            legacy_water: target.in_water,
+            legacy_fire: target.on_fire,
+            basis: "visual",
+            approaching: Some(target.approaching),
+        },
     );
     rows.pop()
 }

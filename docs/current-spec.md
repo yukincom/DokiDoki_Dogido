@@ -62,6 +62,8 @@ Minecraft Java Edition
 - `memory_dir` は起動経路ごとに維持し、移行を理由に記憶を自動移動・上書きしない。
 - `dogido_server/language_dialogue/source_cards.json` と `reference/` はRustが読む現役資料。Python本体の終了と一緒に削除しない。
 - 共有プロンプトと状況文は人が編集する正本からRustへ取り込む。ラボの比較候補を自動反映しない。
+- 戦闘・環境とHTTPの既定値は `dogido_server/runtime_defaults.json` 一つをRustとPython起動補助で共有する。`.env` の上書きは明示的にRustへ渡し、廃止した設定は名前だけを通知する。VADの実行ファイル指定は音声起動経路で有効。
+- 本体稼働時のAPI `phase` は `dialogue`、会話を開始しない接続試験は `connection_only`。`/dogido` の画面資産はRustが所有する。
 
 ### 将来構成（対話設計が固まってから）
 
