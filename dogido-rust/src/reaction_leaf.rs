@@ -1,20 +1,22 @@
-//! Bounded combat/environment wording. The caller owns observation and priorities.
-//! Canonical Python prompt text is frozen as data; no Python prompt or judgement runs.
+//! Optional reactions use shared dialogue and observed situations.
+//! Code still owns event detection, immediate warnings, priorities and fallback.
 mod prompts;
 pub(crate) mod sanitize;
-use crate::types::GenerationRequest;
+use crate::types::{GeneratedText, GenerationRequest};
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 
-pub const KINDS: [&str; 18] = [
+pub const KINDS: [&str; 20] = [
     "death",
     "aftermath",
+    "daylight_water",
     "daylight_water_skeleton",
     "newly_burning_visual",
     "deep_dark_ominous_sound",
     "occluded_hostile_presence",
     "ambient",
     "weather_transition",
+    "thunder_reaction",
     "ender_eye_throw",
     "structure_entry",
     "light_source_gain",
@@ -26,6 +28,18 @@ pub const KINDS: [&str; 18] = [
     "emergency_shelter_relief",
     "portal_appearance",
 ];
+
+/// The environment renderer shares the same editable situation source.
+pub(crate) fn context(kind: &str, details: &Value) -> Result<Value> {
+    prompts::context(kind, details)
+}
+
+/// Model speech may intentionally be silent; fixed cues remain separate actions.
+pub(crate) fn is_model_reaction(action: &crate::combat::model::Speech) -> bool {
+    action.leaf.as_ref().is_some_and(|leaf| {
+        KINDS.contains(&leaf.kind.as_str()) || leaf.kind == crate::environment::reaction::KIND
+    })
+}
 
 pub struct Leaf {
     pub request: GenerationRequest,
@@ -78,34 +92,28 @@ impl Leaf {
             suffix,
         })
     }
-    /// No repair loop for these leaves: one failed/invalid candidate uses the fixed fallback.
-    pub fn finish(&self, raw: Option<&str>) -> (String, &'static str) {
-        let (text, reason) = match raw {
-            None => (self.fallback.clone(), "generation_error"),
-            Some(raw) => {
-                let cleaned = sanitize::clean(raw);
-                let reason = if !sanitize::usable(&cleaned, &self.details) {
-                    "unusable_output"
-                } else if !sanitize::style(&self.request.kind, &cleaned, &self.details) {
-                    "style_mismatch"
-                } else if sanitize::final_guard(&self.request.kind, &cleaned, &self.details) {
-                    "claim_conflict"
-                } else {
-                    "accepted"
-                };
-                // The final guard also runs on the fallback, as in the Python facade;
-                // a conflicting fallback remains the same authoritative fallback.
-                (
-                    if reason == "accepted" {
-                        cleaned
-                    } else {
-                        self.fallback.clone()
-                    },
-                    reason,
-                )
-            }
+    /// One generation only. Explicit silence is a successful choice, not fallback.
+    pub fn finish(&self, generated: Option<&GeneratedText>) -> (String, &'static str) {
+        let fallback = |reason| (self.fallback.clone() + &self.suffix, reason);
+        let Some(generated) = generated else {
+            return fallback("generation_error");
         };
-        (text + &self.suffix, reason)
+        if generated.finish_reason.as_deref() == Some("length") {
+            return fallback("truncated_output");
+        }
+        match crate::speech_choice::parse(&generated.text) {
+            Ok(crate::speech_choice::Choice::Silent) => (String::new(), "silent"),
+            Ok(crate::speech_choice::Choice::Speak(text)) => {
+                if sanitize::forbidden(&text, &self.details) {
+                    fallback("unsafe_advice")
+                } else if sanitize::final_guard(&self.request.kind, &text, &self.details) {
+                    fallback("claim_conflict")
+                } else {
+                    (text + &self.suffix, "speak")
+                }
+            }
+            Err(reason) => fallback(reason),
+        }
     }
 }
 
@@ -117,18 +125,14 @@ mod tests {
         let v: Value = serde_json::from_str(include_str!("reaction_leaf/fixtures.json")).unwrap();
         let get = |i: &Value| v["pool"][i.as_u64().unwrap() as usize].clone();
         json!({"prompts":v["prompts"].as_array().unwrap().iter().map(|r|json!({"kind":r[0],"details":get(&r[1]),"messages":get(&r[2])})).collect::<Vec<_>>(),
-            "sanitizers":v["sanitizers"].as_array().unwrap().iter().map(|r|json!({"kind":r[0],"details":get(&r[1]),"raw":get(&r[2]),"cleaned":get(&r[3]),"usable":r[4],"style":r[5],"guard":r[6],"selected":get(&r[7])})).collect::<Vec<_>>(),"attempts":v["attempts"]})
+            "sanitizers":v["sanitizers"].as_array().unwrap().iter().map(|r|json!({"kind":r[0],"details":get(&r[1]),"raw":get(&r[2]),"cleaned":get(&r[3]),"usable":r[4],"style":r[5],"guard":r[6],"selected":get(&r[7])})).collect::<Vec<_>>()})
     }
     #[test]
     fn prompts_match_python_for_all_kinds_and_branches() {
         for row in fixture()["prompts"].as_array().unwrap() {
             let kind = row["kind"].as_str().unwrap();
-            let mut actual =
+            let actual =
                 serde_json::to_value(prompts::messages(kind, &row["details"]).unwrap()).unwrap();
-            // Native reactions now explicitly share the established first person.
-            let system = actual[0]["content"].as_str().unwrap();
-            assert!(system.ends_with("一人称は「オレ」。自分を名前の「ドギド」で呼ばない。"));
-            actual[0]["content"] = json!(system.strip_suffix(prompts::FIRST_PERSON).unwrap());
             assert_eq!(actual, row["messages"], "{kind} {}", row["details"]);
         }
     }
@@ -147,49 +151,61 @@ mod tests {
                 row["guard"],
                 "guard {row}"
             );
-            let input = json!({"kind":kind,"details":d,"temperature":0.65,"model":"fixture-model","max_tokens":72,"fallback_text":"ひとまず落ち着いたな。"});
-            let leaf = Leaf::prepare(&input, "fixture-model", 72).unwrap();
-            assert_eq!(leaf.finish(Some(raw)).0, row["selected"], "finish {row}");
         }
     }
+    fn leaf(kind: &str, details: Value) -> Leaf {
+        Leaf::prepare(&json!({"kind":kind,"details":details,"temperature":0.65,
+            "model":"fixture-model","max_tokens":72,"fallback_text":"ひとまず落ち着いたな。 後ろも気になるわ。"}), "fixture-model",72).unwrap()
+    }
+    fn generated(raw: &str) -> GeneratedText {
+        serde_json::from_value(json!({"text":raw,"finish_reason":"stop"})).unwrap()
+    }
     #[test]
-    fn generation_contract_matches_python_single_attempt_and_suffix_is_once() {
-        for row in fixture()["attempts"].as_array().unwrap() {
-            let input = json!({"kind":row["kind"],"details":{"combat_outcome":"disengaged","__ambient_guard":{"do_not_prompt":true},"__speech_suffix":" 後ろも気になるわ。"},"temperature":row["calls"][0]["temperature"],"model":"fixture-model","max_tokens":row["calls"][0]["max_tokens"],"fallback_text":"ひとまず落ち着いたな。 後ろも気になるわ。"});
-            let leaf = Leaf::prepare(
-                &input,
-                "fixture-model",
-                input["max_tokens"].as_u64().unwrap(),
-            )
-            .unwrap();
-            let calls = row["calls"].as_array().unwrap();
-            assert_eq!(calls.len(), 1);
-            let mut req = serde_json::to_value(&leaf.request).unwrap();
-            req["messages"][0]["content"] = json!(
-                req["messages"][0]["content"]
-                    .as_str()
-                    .unwrap()
-                    .strip_suffix(prompts::FIRST_PERSON)
-                    .unwrap()
-            );
-            for field in [
-                "kind",
-                "temperature",
-                "max_tokens",
-                "enable_thinking",
-                "messages",
-            ] {
-                assert_eq!(req[field], calls[0][field], "{field} {row}");
-            }
-            let raw = if row["error"] == true {
-                None
-            } else {
-                row["raw"].as_str()
-            };
-            assert_eq!(
-                leaf.finish(raw).0,
-                format!("{} 後ろも気になるわ。", row["expected"].as_str().unwrap())
-            );
+    fn explicit_silence_bypasses_suffix_and_invalid_contracts_keep_fallback() {
+        let leaf = leaf(
+            "aftermath",
+            json!({"combat_outcome":"disengaged","__speech_suffix":" 後ろも気になるわ。"}),
+        );
+        let silent = generated(r#"{"action":"silent","speech":""}"#);
+        assert_eq!(leaf.finish(Some(&silent)), (String::new(), "silent"));
+        for raw in [
+            "",
+            "助かったわ。",
+            r#"{"action":"silent","speech":"話すで"}"#,
+            r#"{"action":"silent","speech":"","extra":1}"#,
+            r#"{"action":"silent","speech":"""#,
+        ] {
+            let result = leaf.finish(Some(&generated(raw)));
+            assert_eq!(result.0, "ひとまず落ち着いたな。 後ろも気になるわ。");
+            assert_ne!(result.1, "silent");
         }
+        let mut truncated = silent;
+        truncated.finish_reason = Some("length".into());
+        assert_eq!(leaf.finish(Some(&truncated)).1, "truncated_output");
+        assert_eq!(leaf.finish(None).1, "generation_error");
+        let spoken = generated(r#"{"action":"speak","speech":"ひと息つこか。"}"#);
+        assert_eq!(
+            leaf.finish(Some(&spoken)),
+            ("ひと息つこか。 後ろも気になるわ。".into(), "speak")
+        );
+    }
+    #[test]
+    fn reactions_do_not_impose_old_emotions_or_vocabulary_but_keep_observed_outcomes() {
+        for (kind, text) in [
+            ("newly_burning_visual", "めっちゃ燃えてるな。"),
+            ("darkness_escape", "明るい場所へ戻ろか。"),
+            (
+                "daylight_water_skeleton",
+                "水辺は涼しそうやけど、こっちは落ち着かんな。",
+            ),
+            ("aftermath", "ちょっと回復しよか。"),
+        ] {
+            let leaf = leaf(kind, json!({"combat_outcome":"disengaged"}));
+            let reply = generated(&json!({"action":"speak","speech":text}).to_string());
+            assert_eq!(leaf.finish(Some(&reply)), (text.into(), "speak"), "{kind}");
+        }
+        let leaf = leaf("aftermath", json!({"combat_outcome":"disengaged"}));
+        let reply = generated(r#"{"action":"speak","speech":"敵を倒したで！"}"#);
+        assert_eq!(leaf.finish(Some(&reply)).1, "claim_conflict");
     }
 }

@@ -53,18 +53,27 @@ pub(super) fn rewrite(text: &str, d: &Value) -> (String, Vec<(String, String)>) 
     (corrected, applied)
 }
 fn unlisted(text: &str, d: &Value) -> bool {
-    let labels = d["allowed_speech_labels"]
+    let mut labels = d["allowed_speech_labels"]
         .as_array()
         .map(|v| {
             v.iter()
                 .filter_map(Value::as_str)
-                .map(strip)
+                .map(|s| strip(s).to_owned())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    // The smell source may be named as a smell, but is never a visual entity.
+    let smell = &d["world_context"]["observations"]["smell"];
+    if smell["status"] == "present" && has(text, SMELL) {
+        labels.extend(
+            mentioned(smell["description"].as_str().unwrap_or(""))
+                .iter()
+                .map(|s| strip(s).to_owned()),
+        );
+    }
     matches(text)
         .iter()
-        .any(|(_, _, label)| !labels.contains(label))
+        .any(|(_, _, label)| !labels.iter().any(|s| s == label))
 }
 const SMELL: &[&str] = &[
     "匂",
@@ -122,6 +131,9 @@ fn smell_question(text: &str) -> bool {
         ||re(r"(?:匂う|におう|臭う|香る|くさい|生臭い|臭い)(?:ん|の|か|と思う)?[？?]$").is_match(text))
 }
 fn olfactory(text: &str, d: &Value) -> bool {
+    if d["world_context"]["observations"]["smell"]["status"] == "present" {
+        return false;
+    }
     let text = compact(text);
     if text.is_empty() || !has(&text, SMELL) {
         return false;

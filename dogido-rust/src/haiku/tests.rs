@@ -407,11 +407,29 @@ async fn correction_does_not_attach_a_reason_quote_to_different_displayed_text()
     assert_eq!(row["assessment_comment"], "");
 }
 #[tokio::test]
-async fn legacy_and_top_level_single_assessments_are_accepted_with_exact_ids() {
-    let legacy = json!({"assessments":[{"line_index":0,"atom_ids":[atoms()[0].atom_id],"meaning_retained":true,"natural_japanese":true},{"line_index":2,"atom_ids":[atoms()[2].atom_id],"meaning_retained":true,"natural_japanese":true}]});
-    let single = json!({"line_index":1,"atom_ids":[atoms()[1].atom_id],"meaning_retained":true,"natural_japanese":true});
-    let mut b = Scripted::new(vec![draft(), legacy, single]);
-    assert!(generate(&mut b, input()).await.unwrap().accepted);
+async fn obsolete_assessment_shapes_do_not_skip_missing_line_rechecks() {
+    for invalid in [
+        json!({"verdicts":{"0":"pass"},"line_index":0,"atom_ids":[1]}),
+        json!({"assessments":[{"line_index":0,"atom_ids":[1],"meaning_retained":true,"natural_japanese":true}]}),
+        json!({"verdicts":{"0":"pass"},"assessments":[{"line_index":0,"atom_ids":[atoms()[0].atom_id]}]}),
+    ] {
+        let mut replies = vec![draft()];
+        replies.extend(vec![invalid; 4]);
+        let mut b = Scripted::new(replies);
+        let result = generate(&mut b, input()).await.unwrap();
+        assert_eq!(
+            result.failure_reason.as_deref(),
+            Some("grounding_unavailable")
+        );
+        assert_eq!(result.regeneration_rounds, 0);
+        assert_eq!(b.requests.len(), 5);
+        for index in 0..3 {
+            assert_eq!(
+                b.requests[index + 2].details["grounding_lines"],
+                json!([{"line_index":index,"text":LINES[index]}])
+            );
+        }
+    }
 }
 #[tokio::test]
 async fn four_strategies_expand_only_dependencies_and_freeze_the_other_slots() {

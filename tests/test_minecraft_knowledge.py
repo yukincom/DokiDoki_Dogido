@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from jsonschema import Draft202012Validator
 
-from dogido_server.minecraft_knowledge import (
+from dev_tools.catalog_tools.minecraft_knowledge import (
     DEFAULT_CACHE_ROOT,
     _safe_artifact_path,
     get_minecraft_knowledge,

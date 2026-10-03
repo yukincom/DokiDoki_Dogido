@@ -149,7 +149,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         // 具体名を先に置く。entity 付き packet は実体から解決するが、座標だけの
         // hostile sound packet でも主要な敵を取りこぼさないための fallback。
         {"zombified_piglin", "zombified_piglin"},
-        {"zombie_pigman", "zombified_piglin"},
         {"zombie_villager", "zombie_villager"},
         {"wither_skeleton", "wither_skeleton"},
         {"elder_guardian", "elder_guardian"},
@@ -208,14 +207,15 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     /** 非敵対 Mob + 実再生されたブロック・天候・環境音。戦闘判定には使わない。 */
     private final Deque<SoundObservation> recentAmbientSoundObservations = new ArrayDeque<>();
     private final Deque<BlockBreakObservation> recentBlockBreakObservations = new ArrayDeque<>();
-    private List<ThreatObservation> currentZombieScentClues = List.of();
-    private List<SmellPolicy.Candidate> currentBlockSmellCandidates = List.of();
+    private List<SmellSpatialEstimate.LocatedCandidate> currentBlockSmellCandidates = List.of();
     private SmellPolicy.Observation currentSmellObservation = SmellPolicy.resolve(List.of(), 0, false, null);
+    private SmellSpatialEstimate.Estimate currentSmellSpatialEstimate;
     private long lastBlockSmellScanTick = -1000;
     private long rainAfterSmellUntilTick = -1;
     private String previousLocalSmellWeather = null;
 
     private long tickCounter = 0;
+    private final PortalObservationTracker portalObservationTracker = new PortalObservationTracker();
     private long lastSnapshotTick = -1;
     private long lastThreatTick = -1;
     private long lastAudioEventTick = -1;
@@ -440,6 +440,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.workshopHud.reset();
             this.characterHud.reset();
             this.displayConnection = null;
+            this.portalObservationTracker.reset();
         }
         if (player == null || world == null) {
             if (this.displayWorld != null) this.eventClient.invalidateDisplayRequests();
@@ -450,6 +451,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         if (this.displayWorld != world) {
+            this.portalObservationTracker.reset();
             this.eventClient.invalidateDisplayRequests();
             this.workshopHud.reset();
             this.workshopHud.synchronizeAfter(this.eventClient.currentSequence() + 1);
@@ -520,11 +522,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             audioThreats
         );
         updateSmellObservation(player, world, rawZombieScentClues);
-        this.currentZombieScentClues = this.currentSmellObservation.isSpecificZombie()
-            ? rawZombieScentClues.stream()
-                .filter(clue -> clue.distance() <= 8.0)
-                .toList()
-            : List.of();
         List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
@@ -616,6 +613,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void resetTransientState() {
+        this.portalObservationTracker.reset();
         this.tickCounter = 0;
         this.lastSnapshotTick = -1;
         this.lastThreatTick = -1;
@@ -674,11 +672,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
         this.recentBlockBreakObservations.clear();
-        this.currentZombieScentClues = List.of();
         resetSmellState();
     }
 
     private void resetThreatStateForDimensionChange() {
+        this.portalObservationTracker.reset();
         this.lastThreatTick = -1;
         this.lastAudioEventTick = -1;
         this.lastAmbientMobEventTick = -1;
@@ -727,13 +725,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
         this.recentBlockBreakObservations.clear();
-        this.currentZombieScentClues = List.of();
         resetSmellState();
     }
 
     private void resetSmellState() {
         this.currentBlockSmellCandidates = List.of();
         this.currentSmellObservation = SmellPolicy.resolve(List.of(), 0, false, null);
+        this.currentSmellSpatialEstimate = null;
         this.lastBlockSmellScanTick = -1000;
         this.rainAfterSmellUntilTick = -1;
         this.previousLocalSmellWeather = null;
@@ -910,7 +908,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.lastBlockSmellScanTick = this.tickCounter;
         }
 
-        List<SmellPolicy.Candidate> candidates = new ArrayList<>(this.currentBlockSmellCandidates);
+        SmellSpatialEstimate.Point blockObserver = new SmellSpatialEstimate.Point(origin.getX(), origin.getY(), origin.getZ());
+        SmellSpatialEstimate.Point playerObserver = new SmellSpatialEstimate.Point(player.getX(), player.getY(), player.getZ());
+        Map<String, SmellSpatialEstimate.Point> sourcePositions = new HashMap<>();
+        List<SmellPolicy.Candidate> candidates = new ArrayList<>();
+        for (SmellSpatialEstimate.LocatedCandidate located : this.currentBlockSmellCandidates) {
+            candidates.add(located.observedFrom(blockObserver));
+            sourcePositions.put(located.candidate().sourceId(), located.position());
+        }
         for (ThreatObservation clue : zombieClues) {
             candidates.add(
                 SmellPolicy.zombieCandidate(
@@ -919,9 +924,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     clue.distance()
                 )
             );
+            sourcePositions.put(clue.uuid().toString(), new SmellSpatialEstimate.Point(clue.x(), clue.y(), clue.z()));
         }
         collectHotbarSmellCandidates(player, candidates);
-        collectDroppedItemSmellCandidates(player, world, candidates);
+        collectDroppedItemSmellCandidates(player, world, candidates, sourcePositions);
         String biomeId = world.getBiome(origin).getKey()
             .map(key -> key.getValue().toString())
             .orElse("unknown");
@@ -935,6 +941,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             temperatureModifier,
             rainAfterActive,
             smellSuppressionReason(player, localWeather)
+        );
+        SmellPolicy.ResolvedSource source = this.currentSmellObservation.resolvedSource();
+        this.currentSmellSpatialEstimate = SmellSpatialEstimate.resolve(
+            this.currentSmellObservation,
+            source != null && "block".equals(source.sourceKind()) ? blockObserver : playerObserver,
+            source == null ? null : sourcePositions.get(source.sourceId())
         );
     }
 
@@ -1006,7 +1018,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private void collectDroppedItemSmellCandidates(
         ClientPlayerEntity player,
         ClientWorld world,
-        List<SmellPolicy.Candidate> candidates
+        List<SmellPolicy.Candidate> candidates,
+        Map<String, SmellSpatialEstimate.Point> sourcePositions
     ) {
         double radius = SmellPolicy.MAX_SCAN_DISTANCE;
         for (Entity entity : world.getOtherEntities(player, player.getBoundingBox().expand(radius))) {
@@ -1024,16 +1037,19 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
             if (candidate != null) {
                 candidates.add(candidate);
+                sourcePositions.put(candidate.sourceId(), new SmellSpatialEstimate.Point(
+                    itemEntity.getX(), itemEntity.getY(), itemEntity.getZ()
+                ));
             }
         }
     }
 
-    private List<SmellPolicy.Candidate> scanBlockSmellCandidates(
+    private List<SmellSpatialEstimate.LocatedCandidate> scanBlockSmellCandidates(
         ClientWorld world,
         BlockPos origin,
         int radius
     ) {
-        List<SmellPolicy.Candidate> candidates = new ArrayList<>();
+        List<SmellSpatialEstimate.LocatedCandidate> candidates = new ArrayList<>();
         double radiusSquared = radius * radius;
         for (int dx = -radius; dx <= radius; dx += 1) {
             for (int dy = -radius; dy <= radius; dy += 1) {
@@ -1066,22 +1082,25 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     }
                     SmellPolicy.Candidate blockCandidate = SmellPolicy.blockCandidate(
                         blockId,
-                        "block:" + Registries.BLOCK.getId(state.getBlock()).getPath(),
+                        "block:" + Registries.BLOCK.getId(state.getBlock()).getPath() + "@" + sample.asLong(),
                         distance,
                         composterFilled,
                         brewingOccupied
                     );
+                    SmellSpatialEstimate.Point sourcePosition = new SmellSpatialEstimate.Point(sample.getX(), sample.getY(), sample.getZ());
                     if (blockCandidate != null) {
-                        candidates.add(blockCandidate);
+                        candidates.add(new SmellSpatialEstimate.LocatedCandidate(blockCandidate, sourcePosition));
                     }
                     collectCampfireCookingCandidates(world, sample, state, distance, candidates);
                     if (isRainAfterEarthBlock(state)) {
-                        candidates.add(SmellPolicy.rainAfterCandidate("rain_after:earth", distance));
+                        candidates.add(new SmellSpatialEstimate.LocatedCandidate(
+                            SmellPolicy.rainAfterCandidate("rain_after:earth@" + sample.asLong(), distance), sourcePosition
+                        ));
                     }
                 }
             }
         }
-        return SmellPolicy.compact(candidates);
+        return List.copyOf(candidates);
     }
 
     private void collectCampfireCookingCandidates(
@@ -1089,7 +1108,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         BlockPos pos,
         BlockState state,
         double distance,
-        List<SmellPolicy.Candidate> candidates
+        List<SmellSpatialEstimate.LocatedCandidate> candidates
     ) {
         String blockId = Registries.BLOCK.getId(state.getBlock()).getPath();
         if (!isLitCampfire(state, blockId)) {
@@ -1104,11 +1123,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
             SmellPolicy.Candidate candidate = SmellPolicy.cookingCandidate(
                 itemId(cooking),
-                "block:" + blockId,
+                "block:" + blockId + "@" + pos.asLong(),
                 distance
             );
             if (candidate != null) {
-                candidates.add(candidate);
+                candidates.add(new SmellSpatialEstimate.LocatedCandidate(candidate,
+                    new SmellSpatialEstimate.Point(pos.getX(), pos.getY(), pos.getZ())));
             }
         }
     }
@@ -1221,7 +1241,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 currentHealth,
                 recentlyHurt,
                 fuseActive,
-                mobIdentity(entity)
+                mobIdentity(entity),
+                MobEnvironmentObservation.capture(entity)
             );
             threats.add(observation);
             this.lastThreatDistances.put(entity.getUuid(), distance);
@@ -1496,7 +1517,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     isBaby,
                     profession,
                     villagerType,
-                    mobIdentity(entity)
+                    mobIdentity(entity),
+                    MobEnvironmentObservation.capture(entity)
                 )
             );
         }
@@ -1558,7 +1580,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
 
         if (entity instanceof FoxEntity) {
-            return new MobDisposition(type, true, false, "friendly", null);
+            return new MobDisposition(type, true, false, "passive", null);
         }
         if (entity instanceof GoatEntity) {
             return new MobDisposition(type, true, false, "neutral", "charge");
@@ -1580,7 +1602,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
         }
 
-        return new MobDisposition(type, true, false, "friendly", null);
+        return new MobDisposition(type, true, false, "passive", null);
     }
 
     private boolean isShulkerAwakened(ShulkerEntity shulker) {
@@ -2059,12 +2081,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         event.addProperty("priority_hint", priorityHint);
         event.addProperty("certainty", certainty);
         root.add("event", event);
-        root.add("smell_observation", buildSmellObservation(this.currentSmellObservation));
-        root.add("zombie_scent_clues", buildZombieScentClues(this.currentZombieScentClues));
+        root.add("smell_observation", buildSmellObservation(this.currentSmellObservation, this.currentSmellSpatialEstimate));
         return root;
     }
 
-    private JsonObject buildSmellObservation(SmellPolicy.Observation observation) {
+    private JsonObject buildSmellObservation(SmellPolicy.Observation observation, SmellSpatialEstimate.Estimate estimate) {
         JsonObject json = new JsonObject();
         json.addProperty("status", observation.status());
         addOptionalProperty(json, "smell_id", observation.smellId());
@@ -2079,6 +2100,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("rain_after_active", observation.rainAfterActive());
         addOptionalProperty(json, "suppression_reason", observation.suppressionReason());
         json.addProperty("basis", "smell_policy_v1");
+        if (estimate != null) {
+            JsonObject direction = new JsonObject();
+            addOptionalProperty(direction, "cardinal", estimate.cardinal());
+            addOptionalProperty(direction, "vertical", estimate.vertical());
+            direction.addProperty("basis", "source_bearing");
+            json.add("direction_estimate", direction);
+        }
         return json;
     }
 
@@ -2091,6 +2119,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildPlayer(ClientPlayerEntity player, ClientWorld world) {
         JsonObject json = new JsonObject();
         json.addProperty("name", resolvePlayerName(player));
+        json.add("environment", MobEnvironmentObservation.capture(player).toJson());
 
         JsonObject position = new JsonObject();
         position.addProperty("x", round(player.getX()));
@@ -2291,10 +2320,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         json.addProperty("nearest_damaging_light_source_distance", round(nearestDamagingLightSourceDistance));
         json.addProperty("danger_darkness_score", round(darknessScore));
 
-        String[] portalInfo = scanNearbyPortals(world, pos);
+        PortalObservation portalInfo = scanNearbyPortals(player, world, pos);
         if (portalInfo != null) {
-            json.addProperty("nearby_portal_type", portalInfo[0]);
-            json.addProperty("nearby_portal_distance", round(Double.parseDouble(portalInfo[1])));
+            json.addProperty("nearby_portal_type", portalInfo.type());
+            json.addProperty("nearby_portal_distance", round(portalInfo.distance()));
+            json.addProperty("nearby_portal_encounter", portalInfo.encounter());
         }
 
         double frameDistance = scanNearbyEndPortalFrame(world, pos);
@@ -2324,6 +2354,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             entry.addProperty("fuse_active", threat.fuseActive());
             entry.addProperty("on_fire", threat.onFire());
             entry.addProperty("in_water", threat.inWater());
+            // A held warning target may be occluded now. An explicit empty
+            // environment withholds fresh measurements without removing the threat.
+            entry.add("environment", threat.lineOfSight() ? threat.environment().toJson() : new JsonObject());
             entry.addProperty("certainty", "high");
             array.add(entry);
         }
@@ -2347,20 +2380,6 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             entry.addProperty("distance_band", threat.distanceBand());
             entry.addProperty("certainty", threat.certainty());
             entry.addProperty("spoken_name_allowed", threat.spokenNameAllowed());
-            array.add(entry);
-        }
-        return array;
-    }
-
-    private JsonArray buildZombieScentClues(List<ThreatObservation> threats) {
-        JsonArray array = new JsonArray();
-        for (ThreatObservation threat : threats) {
-            JsonObject entry = new JsonObject();
-            entry.addProperty("type", threat.type());
-            entry.addProperty("entity_id", threat.uuid().toString());
-            entry.addProperty("distance_band", bucketDistance(threat.distance()));
-            entry.addProperty("certainty", "medium");
-            entry.addProperty("basis", "nearby_without_visual_or_audio");
             array.add(entry);
         }
         return array;
@@ -2398,6 +2417,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             JsonObject entry = new JsonObject();
             entry.addProperty("type", mob.type());
             entry.add("identity", mob.identity().toJson());
+            entry.add("environment", mob.environment().toJson());
             entry.addProperty("distance", round(mob.distance()));
 
             JsonObject direction = new JsonObject();
@@ -2429,7 +2449,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private void attachPassiveMobs(JsonObject root, List<AmbientMobObservation> ambientMobs) {
         JsonArray passiveMobs = buildPassiveMobs(ambientMobs);
         root.add("passive_mobs", passiveMobs);
-        root.add("peaceful_mobs", passiveMobs.deepCopy());
+        // Count before buildPassiveMobs limits all species together to four entries.
+        long villagers = ambientMobs.stream().filter(mob -> "villager".equals(mob.type())).count();
+        root.getAsJsonObject("world").addProperty("visible_villager_count", villagers);
     }
 
     private JsonObject buildInventory(ClientPlayerEntity player) {
@@ -2564,6 +2586,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             json.addProperty("kind", "entity");
             json.addProperty("name", entityId.getPath());
             json.add("identity", mobIdentity(entity).toJson());
+            if (entity instanceof LivingEntity) {
+                json.add("environment", MobEnvironmentObservation.capture(entity).toJson());
+            }
             json.addProperty("distance", round(Math.sqrt(player.squaredDistanceTo(entity))));
             return json;
         }
@@ -3837,7 +3862,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private String hostileLabelFromSoundEvent(String soundEventId) {
-        // Match specific identifiers and legacy aliases before generic ones like "zombie".
+        // Match specific identifiers before generic ones like "zombie".
         for (String[] pattern : HOSTILE_SOUND_LABEL_PATTERNS) {
             if (soundEventId.contains(pattern[0])) {
                 return pattern[1];
@@ -3850,11 +3875,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (soundEventId == null || soundEventId.isBlank()) {
             return null;
         }
-        if (soundEventId.contains("sculk_shrieker") || soundEventId.contains("shriek")) {
-            return "sculk_shrieker";
-        }
-        if (soundEventId.contains("sculk_sensor")) {
-            return "sculk_sensor";
+        String sculkKind = SoundObservationPolicy.sculkActivationKind(soundEventId);
+        if (sculkKind != null) {
+            return sculkKind;
         }
         if (soundEventId.contains("sonic_boom") || soundEventId.contains("sonic_charge")) {
             // ビームは専用 kind で送る（チャージ音=予兆の段階で送れば悲鳴が間に合う）。
@@ -3896,6 +3919,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void recordOminousSoundObservation(String kind) {
+        if (!SoundObservationPolicy.replaceOminous(this.lastOminousSoundKind,
+                this.tickCounter - this.lastOminousSoundObservedTick, kind, OMINOUS_SOUND_TTL_TICKS)) {
+            return;
+        }
         this.lastOminousSoundObservedTick = this.tickCounter;
         this.lastOminousSoundKind = kind;
     }
@@ -4394,44 +4421,52 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return best == Double.MAX_VALUE ? -1 : best;
     }
 
-    private String[] scanNearbyPortals(ClientWorld world, BlockPos origin) {
+    private record PortalObservation(String type, double distance, String encounter) {}
+
+    private PortalObservation scanNearbyPortals(ClientPlayerEntity player, ClientWorld world, BlockPos origin) {
         String bestType = null;
+        BlockPos bestPosition = null;
         double bestDistance = Double.MAX_VALUE;
+        Map<Long, String> loadedBlocks = new HashMap<>();
+        Map<Long, String> nearbyPortals = new HashMap<>();
         for (int dx = -GATEWAY_SCAN_RADIUS; dx <= GATEWAY_SCAN_RADIUS; dx += 1) {
             for (int dy = -8; dy <= 8; dy += 1) {
                 for (int dz = -GATEWAY_SCAN_RADIUS; dz <= GATEWAY_SCAN_RADIUS; dz += 1) {
                     BlockPos sample = origin.add(dx, dy, dz);
+                    // ClientWorld.isChunkLoaded always returns true; query the actual client cache.
+                    if (!world.getChunkManager().isChunkLoaded(sample.getX() >> 4, sample.getZ() >> 4)) {
+                        continue;
+                    }
                     String blockId = Registries.BLOCK.getId(world.getBlockState(sample).getBlock()).getPath();
-                    String portalType = null;
-                    double maxRange = 0;
-                    if ("nether_portal".equals(blockId)) {
-                        portalType = "nether_portal";
-                        maxRange = PORTAL_SCAN_RADIUS;
-                    } else if ("end_portal".equals(blockId)) {
-                        portalType = "end_portal";
-                        maxRange = PORTAL_SCAN_RADIUS;
-                    } else if ("end_gateway".equals(blockId)) {
-                        portalType = "end_gateway";
-                        maxRange = GATEWAY_SCAN_RADIUS;
-                    }
-                    if (portalType == null) {
-                        continue;
-                    }
+                    String portalType = switch (blockId) {
+                        case "nether_portal", "end_portal", "end_gateway" -> blockId;
+                        default -> "";
+                    };
+                    // Include portals outside their reaction radius to distinguish later approach.
+                    loadedBlocks.put(sample.asLong(), portalType);
+                    if (portalType.isEmpty()) continue;
+                    double maxRange = "end_gateway".equals(portalType) ? GATEWAY_SCAN_RADIUS : PORTAL_SCAN_RADIUS;
                     double distance = Math.sqrt(sample.getSquaredDistance(origin));
-                    if (distance > maxRange) {
-                        continue;
-                    }
-                    if (distance < bestDistance) {
+                    if (distance <= maxRange) nearbyPortals.put(sample.asLong(), portalType);
+                    if (distance <= maxRange && distance < bestDistance) {
                         bestType = portalType;
                         bestDistance = distance;
+                        bestPosition = sample;
                     }
                 }
             }
         }
-        if (bestType == null) {
-            return null;
+        boolean inFrontAndVisible = false;
+        if (bestPosition != null) {
+            Vec3d target = Vec3d.ofCenter(bestPosition);
+            inFrontAndVisible = player.getRotationVec(1.0F).dotProduct(target.subtract(player.getEyePos())) > 0
+                && hasDirectLineOfSight(player, world, target);
         }
-        return new String[]{bestType, String.valueOf(bestDistance)};
+        String encounter = this.portalObservationTracker.observe(
+            loadedBlocks, nearbyPortals, bestPosition == null ? null : bestPosition.asLong(),
+            inFrontAndVisible, this.tickCounter, Math.max(40L, 2L * this.config.snapshotIntervalTicks)
+        );
+        return bestType == null ? null : new PortalObservation(bestType, bestDistance, encounter);
     }
 
     private int countNearbyFireflyBushes(ClientWorld world, BlockPos origin) {
@@ -5041,7 +5076,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         float health,
         boolean recentlyHurt,
         boolean fuseActive,
-        MobIdentityObservation identity
+        MobIdentityObservation identity,
+        MobEnvironmentObservation environment
     ) {
     }
 
@@ -5094,7 +5130,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         Boolean isBaby,
         String profession,
         String villagerType,
-        MobIdentityObservation identity
+        MobIdentityObservation identity,
+        MobEnvironmentObservation environment
     ) {
     }
 

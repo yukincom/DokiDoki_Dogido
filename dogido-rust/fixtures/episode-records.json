@@ -81,7 +81,6 @@
       "visual_threats": [],
       "auditory_threats": [],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -97,7 +96,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -208,11 +206,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -234,7 +227,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -352,7 +344,6 @@
       "visual_threats": [],
       "auditory_threats": [],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -368,7 +359,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -479,11 +469,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -505,7 +490,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -642,7 +626,6 @@
       "visual_threats": [],
       "auditory_threats": [],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -658,7 +641,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -769,11 +751,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -795,7 +772,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -923,7 +899,6 @@
       "visual_threats": [],
       "auditory_threats": [],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -939,7 +914,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -1053,11 +1027,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -1079,7 +1048,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -1197,7 +1165,6 @@
       "visual_threats": [],
       "auditory_threats": [],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -1213,7 +1180,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -1327,11 +1293,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -1353,7 +1314,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -1490,7 +1450,6 @@
       "visual_threats": [],
       "auditory_threats": [],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -1506,7 +1465,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -1620,11 +1578,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -1646,7 +1599,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -1775,6 +1727,7 @@
         {
           "type": "zombie",
           "entity_id": "z1",
+          "identity": null,
           "distance": 7.0,
           "direction": {
             "horizontal": null,
@@ -1790,6 +1743,7 @@
         {
           "type": "creeper",
           "entity_id": "c1",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -1805,6 +1759,7 @@
         {
           "type": "spider",
           "entity_id": "s1",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -1830,9 +1785,9 @@
         "temperature_modifier": 0,
         "rain_after_active": false,
         "suppression_reason": null,
+        "direction_estimate": null,
         "basis": "smell_policy_v1"
       },
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -1848,7 +1803,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -2023,11 +1977,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": {
           "status": "none",
           "smell_id": null,
@@ -2039,6 +1988,7 @@
           "temperature_modifier": 0,
           "rain_after_active": false,
           "suppression_reason": null,
+          "direction_estimate": null,
           "basis": "smell_policy_v1"
         },
         "ambient_sounds": [],
@@ -2061,7 +2011,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -2180,6 +2129,7 @@
         {
           "type": "zombie",
           "entity_id": "z1",
+          "identity": null,
           "distance": 7.0,
           "direction": {
             "horizontal": null,
@@ -2195,6 +2145,7 @@
         {
           "type": "creeper",
           "entity_id": "c1",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -2210,6 +2161,7 @@
         {
           "type": "spider",
           "entity_id": "s1",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -2235,9 +2187,9 @@
         "temperature_modifier": 0,
         "rain_after_active": false,
         "suppression_reason": null,
+        "direction_estimate": null,
         "basis": "smell_policy_v1"
       },
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -2253,7 +2205,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -2428,11 +2379,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": {
           "status": "none",
           "smell_id": null,
@@ -2444,6 +2390,7 @@
           "temperature_modifier": 0,
           "rain_after_active": false,
           "suppression_reason": null,
+          "direction_estimate": null,
           "basis": "smell_policy_v1"
         },
         "ambient_sounds": [],
@@ -2466,7 +2413,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -2604,6 +2550,7 @@
         {
           "type": "zombie",
           "entity_id": "z1",
+          "identity": null,
           "distance": 7.0,
           "direction": {
             "horizontal": null,
@@ -2619,6 +2566,7 @@
         {
           "type": "creeper",
           "entity_id": "c1",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -2634,6 +2582,7 @@
         {
           "type": "spider",
           "entity_id": "s1",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -2659,9 +2608,9 @@
         "temperature_modifier": 0,
         "rain_after_active": false,
         "suppression_reason": null,
+        "direction_estimate": null,
         "basis": "smell_policy_v1"
       },
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [],
       "inventory": {},
@@ -2677,7 +2626,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -2852,11 +2800,6 @@
           "distance_bands": [],
           "items": []
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": {
           "status": "none",
           "smell_id": null,
@@ -2868,6 +2811,7 @@
           "temperature_modifier": 0,
           "rain_after_active": false,
           "suppression_reason": null,
+          "direction_estimate": null,
           "basis": "smell_policy_v1"
         },
         "ambient_sounds": [],
@@ -2890,7 +2834,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -3032,11 +2975,11 @@
         }
       ],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [
         {
           "type": "cat",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -3058,6 +3001,7 @@
       "look_target": {
         "kind": "entity",
         "name": "cat",
+        "identity": null,
         "distance": 2.0
       },
       "combat": {
@@ -3068,7 +3012,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -3197,11 +3140,6 @@
             }
           ]
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -3245,7 +3183,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -3377,11 +3314,11 @@
         }
       ],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [
         {
           "type": "cat",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -3403,6 +3340,7 @@
       "look_target": {
         "kind": "entity",
         "name": "cat",
+        "identity": null,
         "distance": 2.0
       },
       "combat": {
@@ -3413,7 +3351,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -3542,11 +3479,6 @@
             }
           ]
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -3590,7 +3522,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },
@@ -3741,11 +3672,11 @@
         }
       ],
       "smell_observation": null,
-      "zombie_scent_clues": [],
       "ambient_sounds": [],
       "passive_mobs": [
         {
           "type": "cat",
+          "identity": null,
           "distance": 2.0,
           "direction": {
             "horizontal": null,
@@ -3767,6 +3698,7 @@
       "look_target": {
         "kind": "entity",
         "name": "cat",
+        "identity": null,
         "distance": 2.0
       },
       "combat": {
@@ -3777,7 +3709,6 @@
         "hostiles_within_10": null,
         "hostile_scan_distance": null,
         "hostiles_within_scan_ground": null,
-        "hostiles_within_30_ground": null,
         "combat_active_hint": null,
         "hostile_outcomes": null,
         "warden_recently_hurt": null,
@@ -3906,11 +3837,6 @@
             }
           ]
         },
-        "zombie_scent_clues": {
-          "count": 0,
-          "types": [],
-          "items": []
-        },
         "smell_observation": null,
         "ambient_sounds": [],
         "passive_mobs": {
@@ -3954,7 +3880,6 @@
           "hostiles_within_10": null,
           "hostile_scan_distance": null,
           "hostiles_within_scan_ground": null,
-          "hostiles_within_30_ground": null,
           "hostile_outcomes": null
         }
       },

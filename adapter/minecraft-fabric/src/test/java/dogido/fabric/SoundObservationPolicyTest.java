@@ -13,6 +13,17 @@ final class SoundObservationPolicyTest {
     private static final SoundObservationPolicy.Point OLD = new SoundObservationPolicy.Point(3, 0, 0);
 
     @Test
+    void sculkWarningsRequireActivationRatherThanAnyBlockSound() {
+        assertEquals("sculk_sensor", SoundObservationPolicy.sculkActivationKind("block.sculk_sensor.clicking"));
+        assertEquals("sculk_shrieker", SoundObservationPolicy.sculkActivationKind("minecraft:block.sculk_shrieker.shriek"));
+        for (String id : List.of("block.sculk_sensor.clicking_stop", "block.sculk_sensor.place", "block.sculk_sensor.break",
+                "block.sculk_sensor.step", "block.sculk_shrieker.place", "block.sculk_shrieker.break", "entity.warden.heartbeat")) {
+            assertNull(SoundObservationPolicy.sculkActivationKind(id), id);
+        }
+        assertNull(SoundObservationPolicy.sculkActivationKind(null));
+    }
+
+    @Test
     void followsOnlyTheHeardEntityAndDropsItWhenItLeavesHearingRange() {
         var current = new SoundObservationPolicy.Point(0, 0, 11);
         assertEquals(current, SoundObservationPolicy.retainedPosition(SOURCE, OLD, Map.of(SOURCE, current), LISTENER, 12));
@@ -85,4 +96,26 @@ final class SoundObservationPolicyTest {
         assertNull(SoundObservationPolicy.customName(" \r\n "));
         assertEquals(64, SoundObservationPolicy.customName("猫".repeat(100)).length());
     }
+    @Test
+    void strongerOminousSoundsSurviveLaterLowerSoundsAndSonicStaysImmediate() {
+        var kinds = List.of("sculk_sensor", "sculk_shrieker", "warden_heartbeat", "warden_presence", "warden_sonic_boom");
+        for (int current = 0; current < kinds.size(); current++) {
+            for (int incoming = 0; incoming < kinds.size(); incoming++) {
+                assertEquals(incoming >= current,
+                    SoundObservationPolicy.replaceOminous(kinds.get(current), 20, kinds.get(incoming), 80),
+                    kinds.get(current) + " -> " + kinds.get(incoming));
+            }
+        }
+        assertTrue(SoundObservationPolicy.replaceOminous("", 0, "sculk_sensor", 80));
+        assertFalse(SoundObservationPolicy.replaceOminous("sculk_sensor", 0, "unknown", 80));
+        assertFalse(SoundObservationPolicy.replaceOminous("sculk_sensor", 0, null, 80));
+    }
+
+    @Test
+    void aLowerSoundCanReplaceOnlyAfterTheRetainedSoundExpires() {
+        assertFalse(SoundObservationPolicy.replaceOminous("sculk_shrieker", 80, "sculk_sensor", 80));
+        assertTrue(SoundObservationPolicy.replaceOminous("sculk_shrieker", 81, "sculk_sensor", 80));
+        assertTrue(SoundObservationPolicy.replaceOminous("sculk_sensor", 20, "sculk_shrieker", 80));
+    }
+
 }

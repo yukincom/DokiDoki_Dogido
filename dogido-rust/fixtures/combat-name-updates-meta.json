@@ -1,14 +1,14 @@
 {
-  "traces": 47,
-  "steps": 199,
+  "traces": 43,
+  "steps": 175,
   "comparison": {
-    "canonical_equal": 168,
-    "session_replay_suppression": 31
+    "canonical_equal": 152,
+    "session_replay_suppression": 23
   },
   "source_sha256": {
-    "dogido_server/state_machine/machine.py": "e3328cbe75a477a93c80d49e6f75d3dba4d20e6f63e74bef2c53852d5bba9517",
-    "dogido_server/state_machine/mixins/state_updates.py": "5d5194f368904ae4d459d83aa4a09c7c022a6dda0b127a9d81ea4b9209741600",
-    "dogido_server/state_machine/mixins/common.py": "38df7f55aa91d8d46212f597e254b6a81e0658eb02d4c305cf8589e7e799c5eb",
-    "dogido_server/state_machine/mixins/narration.py": "be2e54c302214a9d9bd13b3a05f8b3fd2ef4551e73644450ebc3410e36b73259"
+    "dogido_server/state_machine/machine.py": "9c98a74d62bcde4a42213a81548619a59447f1d147120d3de5417b9620a4afe2",
+    "dogido_server/state_machine/mixins/state_updates.py": "5d9bfc68c3e8a043b7354157eaaf41597e67dc16795ec4453b54af44177f6289",
+    "dogido_server/state_machine/mixins/common.py": "751475132975e45185829bcc53de7261c253ac95d1ecf84b0f775d4d95257ce5",
+    "dogido_server/state_machine/mixins/narration.py": "516d84d5c125b20a969a3b337070f08d9be2e6e4feeb454c7db014bace90f115"
   }
 }

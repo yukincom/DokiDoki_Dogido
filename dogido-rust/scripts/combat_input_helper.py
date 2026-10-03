@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OS SDKだけを保持する移行用worker。chat生成・状態・発声・保存はRust所有。"""
+"""OS SDKだけを保持するworker。chat生成・状態・発声・保存はRust所有。"""
 import json
 import logging
 import sys
@@ -7,9 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.config import Settings
 from dogido_server.platform_ai import PlatformStructuredAIRouter
-from dogido_server.llm.types import StructuredGenerationRequest
+from dogido_server.combat_input_contract import CombatInputRequest, ACTIONS
 
-ACTIONS = ["resume_workshop", "workshop_input", "close_workshop", "unrelated", "uncertain"]
 
 
 class ChatFallback:
@@ -32,10 +31,9 @@ class Worker:
             if self.router is None:
                 self.router = PlatformStructuredAIRouter(Settings(_env_file=None,
                     **{"platform_ai_" + k: v for k, v in frame["settings"].items()}))
-            request = StructuredGenerationRequest(kind="haiku_workshop_combat_input",
-                fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+            request = CombatInputRequest(messages=frame["messages"],
                 details={"verse": frame["verse"], "player_text": text, "allowed_actions": ACTIONS},
-                temperature=0.0, route="chat", max_tokens=120)
+                temperature=0.0, max_tokens=120)
             result = self.router.generate_structured_json(request, fallback=ChatFallback())
             return {"payload": {k: result[k] for k in ("action", "confidence", "evidence") if k in result},
                     "needs_chat": result.get("__needs_chat", False),

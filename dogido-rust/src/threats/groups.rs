@@ -366,7 +366,6 @@ pub(super) fn has_report(e: &GameEvent, s: &Settings) -> bool {
 pub(super) fn ground_count(e: &GameEvent, s: &Settings) -> usize {
     e.combat
         .hostiles_within_scan_ground
-        .or(e.combat.hostiles_within_30_ground)
         .map(|n| n as usize)
         .unwrap_or_else(|| {
             e.visual_threats

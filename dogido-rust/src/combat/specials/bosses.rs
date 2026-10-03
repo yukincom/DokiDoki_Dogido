@@ -242,12 +242,24 @@ impl Specials {
             return None;
         }
         let kind = fresh_ominous(e, s)?;
-        let cd = if matches!(kind.as_str(), "sculk_sensor" | "sculk_shrieker") {
+        let priority = severity(&kind);
+        // Sonic charge/boom already owns an immediate deterministic warning.
+        // Wait through the full one-second sensor/shrieker pairing window before generating.
+        if priority == 0
+            || kind == "warden_sonic_boom"
+            || kind == "sculk_sensor" && e.world.ominous_sound_recent_ms.unwrap_or(0) <= 1000
+        {
+            return None;
+        }
+        // The selected reaction owns its cooldown, even if a lower sound uses a shorter one.
+        let cd = if self.ominous_comment_priority <= 2 {
             "sculk_ominous_sound_comment_cooldown_ms"
         } else {
             "ominous_sound_comment_cooldown_ms"
         };
-        if !elapsed(now, self.ominous_comment_at, s.ms(cd)) {
+        if !elapsed(now, self.ominous_comment_at, s.ms(cd))
+            && priority <= self.ominous_comment_priority
+        {
             return None;
         }
         let stage = if self.ominous_stage >= 1 && severity(&kind) >= self.ominous_severity.max(2) {
@@ -256,6 +268,7 @@ impl Specials {
             1
         };
         self.ominous_comment_at = Some(now);
+        self.ominous_comment_priority = priority;
         self.ominous_stage = self.ominous_stage.max(stage);
         let text = match kind.as_str() {
             "warden_heartbeat" => catalog::text(

@@ -7,6 +7,7 @@
     "burns_in_daylight",
     "observed_speech_aliases",
     "observed_speech_rewrite_from_ids",
+    "environment_notes",
     "poetic"
   ],
   "items": {
@@ -102,6 +103,9 @@
       "label": "ウーパールーパー",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水にも雨にも触れない状態が約5分続くと乾燥ダメージを受ける。水またはその個体に降る雨で乾燥を防げる。雨天でも屋根の下など雨に触れない場所は別。"
+      ],
       "poetic": {
         "visual_tags": [
           "ひらひら",
@@ -253,6 +257,9 @@
       "label": "タラ",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "大きい魚",
@@ -283,6 +290,9 @@
     "copper_golem": {
       "label": "銅のゴーレム",
       "note": "銅のチェスト内のアイテムを仕分ける。",
+      "environment_notes": [
+        "時間経過で酸化し、完全に酸化すると像になる。落雷が命中すると酸化が一段階戻る。水や雨に触れることを酸化の進行条件とはしない。"
+      ],
       "poetic": {
         "visual_tags": [
           "銅",
@@ -344,6 +354,9 @@
     "frog": {
       "label": "カエル",
       "note": "温帯種オレンジ色、熱帯種白色、冷帯種緑色。ドロップリーフの上で遊ぶ。スライムボールが好物。",
+      "environment_notes": [
+        "水中で呼吸でき、陸上でも乾燥や窒息はしない。"
+      ],
       "poetic": {
         "visual_tags": [
           "ぴょこ",
@@ -378,6 +391,9 @@
       ],
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "青い光",
@@ -497,6 +513,9 @@
     },
     "mooshroom": {
       "label": "ムーシュルーム",
+      "environment_notes": [
+        "落雷が実際に命中すると赤い種類と茶色い種類が切り替わる。雷雨や雷鳴だけでは切り替わったことにならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "赤いキノコ",
@@ -647,6 +666,9 @@
     },
     "pig": {
       "label": "ブタ",
+      "environment_notes": [
+        "ピースフル以外では、落雷が実際に命中するとゾンビピグリンになる。雷雨や雷鳴だけでは変身したことにならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "桃色",
@@ -678,6 +700,9 @@
       "label": "フグ",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "まるい",
@@ -739,6 +764,9 @@
       "label": "サケ",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "紅色",
@@ -799,6 +827,9 @@
       "label": "スケルトンホース",
       "burns_in_daylight": false,
       "undead": true,
+      "environment_notes": [
+        "アンデッドだが日光では燃えない。"
+      ],
       "poetic": {
         "visual_tags": [
           "骨馬",
@@ -860,6 +891,10 @@
     },
     "snow_golem": {
       "label": "スノウゴーレム",
+      "environment_notes": [
+        "水やその個体に降る雨に触れるとダメージを受ける。雨天でも屋根の下など雨に触れていない個体まで被害中とはいえない。",
+        "砂漠・サバンナ・荒野やネザーなど、融解を起こす環境ではダメージを受ける。実際に融けているかは現在の個体の観測とは別。"
+      ],
       "poetic": {
         "visual_tags": [
           "雪だるま",
@@ -894,6 +929,9 @@
       "label": "イカ",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "墨",
@@ -926,6 +964,10 @@
     },
     "strider": {
       "label": "ストライダー",
+      "environment_notes": [
+        "水やその個体に降る雨に触れるとダメージを受ける。雨天でも屋根の下など雨に触れていない個体まで被害中とはいえない。",
+        "溶岩による暖かさがなくなると冷えて動きが遅くなる。陸上にいるだけでは死なない。"
+      ],
       "poetic": {
         "visual_tags": [
           "毛なびく",
@@ -957,6 +999,9 @@
       "label": "オタマジャクシ",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "しっぽ",
@@ -988,6 +1033,9 @@
       "label": "熱帯魚",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水に触れていない状態が続くと窒息ダメージを受け、やがて死ぬ。陸に出た直後に即死するわけではなく、雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "色とりどり",
@@ -1019,6 +1067,9 @@
       "label": "カメ",
       "aquatic": true,
       "dies_on_land": false,
+      "environment_notes": [
+        "水中で呼吸でき、陸上でも乾燥や窒息はしない。"
+      ],
       "poetic": {
         "visual_tags": [
           "甲羅",
@@ -1048,6 +1099,9 @@
     },
     "villager": {
       "label": "村人",
+      "environment_notes": [
+        "ピースフル以外では、落雷が実際に命中するとウィッチになる。雷雨や雷鳴だけでは変身したことにならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "日常",
@@ -1375,6 +1429,10 @@
       "label": "ゾンビホース",
       "burns_in_daylight": true,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "馬鎧を装備している間は日光による燃焼を防げる。"
+      ],
       "poetic": {
         "visual_tags": [
           "腐敗",

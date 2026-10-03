@@ -17,7 +17,9 @@ pub(super) fn messages(kind: &str, details: &Value) -> Vec<ChatMessage> {
     vec![
         ChatMessage {
             role: Role::System,
-            content: SYSTEMS[kind].as_str().expect("language kind").into(),
+            content: crate::companion_prompt::expand(
+                SYSTEMS[kind].as_str().expect("language kind"),
+            ),
         },
         ChatMessage {
             role: Role::User,

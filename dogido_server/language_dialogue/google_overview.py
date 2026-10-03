@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from .web_research import FACET_LABELS, SEARCH_NOTICE, WebResult
+from .web_types import FACET_LABELS, SEARCH_NOTICE, WebResult
 
 
 HANDOFF_TEMPLATE = (

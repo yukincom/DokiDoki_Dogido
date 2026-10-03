@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
-"""戦闘前履歴をPython正本と照合し、実HTTP・模擬音声で生成への配送を確認する。"""
+"""戦闘前の合成会話と保持期限を、実HTTP・模擬音声の配送で確認する。"""
 import json
-import sys
-from pathlib import Path
-
 from check_dialogue import register, request, row, snapshot, submit, wait_for
 from check_haiku_runtime import fixture
 from check_language_runtime import interpretation
 from check_workshop_combat import SETTINGS, MOB, drive, end, enter, event
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from dogido_server.dialogue_context import DialogueContext
-
 
 def session(base, sid):
     return next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
@@ -22,54 +15,70 @@ def main():
     with fixture(enabled=False, combat_settings=SETTINGS) as f:
         base, _, log, control, seen, _, _, _, send, _, rows, _, folder = f
         sid = register(base, preview=False)
-        oracle = DialogueContext()
+        completed_rows = []
         comparisons = 0
 
-        def compare():
+        def compare(expected, *, danger=False, retained=0, remaining=0):
             nonlocal comparisons
             actual = session(base, sid)
-            assert actual["history"] == oracle.prompt_turns(), (actual, oracle.prompt_turns())
+            assert actual["history"] == expected, (actual, expected)
             assert actual["history_retention"] == {
-                "danger_active": oracle._danger_active,
-                "retained_utterances": len(oracle._danger_retained),
-                "remaining_player_turns": oracle._post_danger_player_turns_remaining}, actual
+                "danger_active": danger, "retained_utterances": retained,
+                "remaining_player_turns": remaining}, actual
             comparisons += 1
 
-        def say(text):
+        def say(text, *, retain_seed=False, remaining=0):
             send(sid)
             before = len(seen)
-            expected_planner_history = oracle.prompt_turns()[-10:]
+            expected_planner_history = session(base, sid)["history"][-10:]
             turn = submit(base, sid, text)
             reply = wait_for(lambda: row(base, turn, {"completed"}))
-            oracle.add_player(text, turn_id=turn)
-            oracle.add_dogido(reply["text"], turn_id=turn)
-            compare()
+            # These short synthetic utterances need no normalization oracle.
+            assert len(text) < 80 and len(reply["text"]) < 80
+            completed_rows.extend([
+                {"turn_id": turn, "role": "user", "text": text},
+                {"turn_id": turn + ":reply", "role": "assistant", "text": reply["text"]},
+            ])
+            expected = completed_rows if retain_seed else completed_rows[-10:]
+            compare(expected, retained=10 if retain_seed else 0, remaining=remaining)
             prompts = [r["body"] for r in seen[before:] if r["path"] == "/v1/chat/completions"]
             assert len(prompts) == 2, prompts
             planner = next(p for p in prompts if p["max_tokens"] == 640)
-            assert all(r["turn_id"] in json.dumps(planner) for r in expected_planner_history), planner
+            # Current input has its own field. It must not displace a completed
+            # history row or expire this input's pre-combat bookmark early.
+            planner_text = next(m["content"] for m in planner["messages"] if m["role"] == "user")
+            actual_history, _ = json.JSONDecoder().raw_decode(planner_text.split("\nhistory: ", 1)[1])
+            assert actual_history == expected_planner_history, planner
             return turn, prompts
 
         seed = [say(f"ドギド、今日の話その{i}だよ")[0] for i in range(5)]
+        seed_rows = list(completed_rows)
+        assert len(seed_rows) == 10
         enter(send, rows, sid)
-        oracle.begin_danger_retention()
-        compare()
+        compare(seed_rows, danger=True, retained=10)
         for _ in range(12):
             send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
-        compare()
-        end(send, rows, sid)
-        oracle.end_danger_retention(player_turns=3)
-        compare()
+        compare(seed_rows, danger=True, retained=10)
+        aftermath = end(send, rows, sid)
+        # The delivered aftermath is current conversation material, not a user/reply pair.
+        assert aftermath["playback_status"] == "completed" and aftermath["text"]
+        completed_rows.append({"turn_id": aftermath["turn_id"] + ":reply",
+                               "role": "assistant", "text": aftermath["text"]})
+        compare(completed_rows, retained=10, remaining=3)
         for i, text in enumerate(["ドギド、一段落したね", "ドギド、落ち着いたね", "さっきの話の続き"]):
-            _, prompts = say(text)
+            _, prompts = say(text, retain_seed=i < 2, remaining=2 - i)
             # 既存plannerは直近10件に限定。本文生成には退避分も渡す。
             leaf = next(p for p in prompts if p["max_tokens"] != 640)
             assert "今日の話その0だよ" in json.dumps(leaf, ensure_ascii=False), leaf
             assert session(base, sid)["history_retention"]["remaining_player_turns"] == 2 - i
         _, prompts = say("ドギド、次の話をしよう")
         assert seed[0] not in json.dumps(prompts, ensure_ascii=False), prompts
-        passed.append(f"python_parity_{comparisons}_snapshots_and_three_turn_prompt_lifetime")
-        assert not list((folder / "memory").rglob("*.jsonl"))
+        passed.append(f"synthetic_history_{comparisons}_snapshots_and_three_turn_prompt_lifetime")
+        # Evaluation episodes are intentionally written separately from memory.
+        # Ordinary conversation must not create a short/long-term memory file.
+        persisted = {p.relative_to(folder / "memory").as_posix()
+                     for p in (folder / "memory").rglob("*.jsonl")}
+        assert persisted <= {"eval/episodes.jsonl"}, persisted
         passed.append("no_added_model_calls_or_conversation_persistence")
 
         # 実際に始まった音声を敵が中断しても、全文を会話済みにはしない。

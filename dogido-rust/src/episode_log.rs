@@ -80,10 +80,6 @@ pub fn observation(event: &GameEvent) -> Value {
         &e["auditory_threats"],
         "label source_id sound_event direction distance_band certainty spoken_name_allowed",
     );
-    let scent = rows(
-        &e["zombie_scent_clues"],
-        "type entity_id distance_band certainty basis",
-    );
     let mut passive = rows(
         &e["passive_mobs"],
         "type distance direction certainty temperament caution_reason is_baby profession villager_type",
@@ -117,12 +113,11 @@ pub fn observation(event: &GameEvent) -> Value {
         "world":pick(&e["world"],"biome structure time_of_day time_phase weather local_light sky_visible surface_y depth_below_surface ceiling_height overhead_cover_type is_submerged submerged_depth_blocks air_supply cardinal_wall_count double_height_open_side_count drafty_opening_count enclosure_score connected_dark_volume nearest_dark_spawn_distance danger_darkness_score nearby_light_source_count nearest_light_source_distance nearby_damaging_light_source_count nearest_damaging_light_source_distance standing_on_magma_block nearby_door_count open_door_count nearby_window_present nearby_bed_count nearby_sleeping_people_count safe_zone_with_door respawn_point_set respawn_distance"),
         "visual_threats":{"count":visual.len(),"types":unique(&visual,"type"),"nearest":nearest,"items":visual},
         "auditory_threats":{"count":auditory.len(),"labels":unique(&auditory,"label"),"distance_bands":unique(&auditory,"distance_band"),"items":auditory},
-        "zombie_scent_clues":{"count":scent.len(),"types":unique(&scent,"type"),"items":scent},
         "smell_observation":e["smell_observation"],"ambient_sounds":ambient,
         "passive_mobs":{"count":passive.len(),"types":unique(&passive,"type"),"items":passive},
         "inventory":e["inventory"],"nearby_resources":resources,"dropped_items":e["dropped_items"],"recent_block_breaks":e["recent_block_breaks"],
         "look_target":if e["look_target"].is_null(){Value::Null}else{pick(&e["look_target"],"kind name distance")},
-        "combat":pick(&e["combat"],"combat_active_hint recent_damage_ms recent_hostile_visual_ms recent_hostile_audio_ms hostiles_within_7 hostiles_within_10 hostile_scan_distance hostiles_within_scan_ground hostiles_within_30_ground hostile_outcomes")})
+        "combat":pick(&e["combat"],"combat_active_hint recent_damage_ms recent_hostile_visual_ms recent_hostile_audio_ms hostiles_within_7 hostiles_within_10 hostile_scan_distance hostiles_within_scan_ground hostile_outcomes")})
 }
 impl Record {
     pub fn payload(&self) -> Value {

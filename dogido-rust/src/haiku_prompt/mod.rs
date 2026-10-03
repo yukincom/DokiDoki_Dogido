@@ -251,7 +251,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
                 } else {
                     Role::User
                 },
-                content: render(&t["segments"], &slots)?,
+                content: crate::companion_prompt::expand(&render(&t["segments"], &slots)?),
             })
         })
         .collect::<Result<_>>()?;

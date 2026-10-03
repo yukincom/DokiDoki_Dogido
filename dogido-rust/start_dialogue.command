@@ -15,7 +15,7 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   exit 1
 fi
 if [[ "${1:-}" == '--check' ]]; then
-  exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --check
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --port 5056 --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration" --check
 fi
 if [[ $# -gt 0 ]]; then
   print -u2 -- '使い方: start_dialogue.command [--check]'
@@ -27,4 +27,4 @@ elif [[ ! -x "$SCRIPT_DIR/target/release/dogido-rust" ]]; then
   print -u2 -- '準備済みRust本体が見つかりません。移動先でreleaseビルドを行ってください。'
   exit 1
 fi
-exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT"
+exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --port 5056 --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration"

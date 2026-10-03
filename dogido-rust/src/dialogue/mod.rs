@@ -57,6 +57,7 @@ use tokio::sync::{Semaphore, watch};
 #[derive(Clone)]
 pub struct DialogueConfig {
     pub python: PathBuf,
+    /// Dictionary worker path; sibling SDK adapters use this directory.
     pub helper: PathBuf,
     pub model: String,
     pub base_url: String,
@@ -84,7 +85,7 @@ impl Default for DialogueConfig {
     fn default() -> Self {
         Self {
             python: "python3".into(),
-            helper: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/dialogue_helper.py"),
+            helper: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/haiku_tokens.py"),
             model: "default_model".into(),
             base_url: "http://127.0.0.1:8080/v1".into(),
             max_tokens: 72,
@@ -142,6 +143,7 @@ struct Session {
     danger: crate::environment::danger::Danger,
     ambient: crate::environment::ambient::Ambient,
     environment_latest: Option<GameEvent>,
+    conversation_observation: crate::conversation_observation::State,
     last_player_input: Option<u64>,
     foreground: crate::foreground::State,
     language: crate::language::State,
@@ -196,13 +198,7 @@ fn complete_observation(event: &GameEvent) -> bool {
         | EventName::HostileDefeated
         | EventName::CreeperDetonated
         | EventName::CombatEnded => true,
-        // レガシーのthreat_detectedは視認と聴覚の両方を受け付ける。
-        EventName::ThreatDetected => event.event.source_kind == SourceKind::Visual,
-        EventName::HostileAudioDetected
-        | EventName::AmbientMobDetected
-        | EventName::DangerDarknessChanged
-        | EventName::ResourceOptionFound
-        | EventName::TimePhaseChanged => false,
+        EventName::HostileAudioDetected | EventName::AmbientMobDetected => false,
     }
 }
 fn recent_observation(event: &GameEvent) -> bool {
@@ -239,7 +235,7 @@ impl Dialogue {
     pub fn new(mut config: DialogueConfig) -> Result<Arc<Self>> {
         config.warnings.validate()?;
         config.combat = crate::combat::model::Settings::merged(&config.combat.0)?;
-        anyhow::ensure!(config.helper.is_file(), "dialogue helper missing");
+        anyhow::ensure!(config.helper.is_file(), "dictionary helper missing");
         anyhow::ensure!(
             config.max_tokens > 0 && config.max_tokens <= 512,
             "invalid reply token budget"
@@ -320,6 +316,7 @@ impl Dialogue {
                 danger: crate::environment::danger::Danger::default(),
                 ambient: crate::environment::ambient::Ambient::default(),
                 environment_latest: None,
+                conversation_observation: crate::conversation_observation::State::default(),
                 last_player_input: None,
                 foreground: crate::foreground::State::default(),
                 language: crate::language::State::default(),
@@ -488,6 +485,20 @@ impl Dialogue {
                 s.danger.set_presence(boss, ominous);
                 s.danger.update(&event, now, complete, &self.config.combat);
                 s.ambient.update(&event, now, complete, &self.config.combat);
+                if let Some(current) = &s.environment_latest {
+                    match crate::conversation_observation::project(
+                        current,
+                        s.ambient.current_structure(),
+                        self.config.combat.number("home_bed_prompt_distance"),
+                        self.config.combat.number("darkness_advice_light_threshold"),
+                        self.config.combat.ms("weather_sound_recent_ms"),
+                    ) {
+                        Ok(context) => s.conversation_observation.observe(context),
+                        Err(error) => {
+                            tracing::warn!(event="conversation_observation_rejected",session_id,%error)
+                        }
+                    }
+                }
                 if complete {
                     chat_context::update_haiku(s, &event, &self.config.combat);
                 }
@@ -522,6 +533,10 @@ impl Dialogue {
             }
             self.tick_workshop(&mut d, session_id);
             self.tick_foreground(&mut d, session_id);
+            if recent {
+                // Clear a superseded deep-dark reaction before busy is computed below.
+                self.preempt_ominous_reaction(&mut d, session_id, &event);
+            }
             self.refresh_combat_audio(&mut d, session_id);
             if recent {
                 let s = d.sessions.get_mut(session_id).unwrap();
@@ -1148,7 +1163,8 @@ impl Dialogue {
             input["text_workshop_prompt"] = text_prompt.unwrap_or(Value::Null);
             input["text_prompt_version"] = text_prompt_version.into();
         }
-        let input = bridge::Input::native(input, event, chat_native);
+        let mut input = bridge::Input::native(input, event, chat_native);
+        input.retained_history_count = s.history.retained_count();
         if workshop.is_none()
             && s.web.state.research.is_none()
             && poem_input.is_none()
@@ -1360,6 +1376,8 @@ impl Dialogue {
                     "workshop_revision_id",
                     "workshop_followup",
                     "workshop_feedback_outcome",
+                    "dialogue_action",
+                    "observation_revision",
                 ] {
                     if let Some(value) = result.get(key) {
                         row[key] = value.clone();
@@ -1397,6 +1415,19 @@ impl Dialogue {
                 let workshop_reply = workshop_id.is_some()
                     && result["workshop_action"] != "unrelated"
                     && !knowledge_detour;
+                if status == PlaybackStatus::Quiet
+                    && result["dialogue_action"] == "silent"
+                    && !workshop_reply
+                {
+                    s.history.push(turn, "user", &player_text);
+                    s.history.silent(turn);
+                }
+                if (status == PlaybackStatus::Completed
+                    || status == PlaybackStatus::Quiet && result["dialogue_action"] == "silent")
+                    && let Some(revision) = result["observation_revision"].as_u64()
+                {
+                    s.conversation_observation.considered(revision);
+                }
                 if status == PlaybackStatus::Queued
                     && !workshop_reply
                     && result["memory_action"].is_null()
@@ -1612,6 +1643,35 @@ impl Dialogue {
     ) {
         let started = Instant::now();
         let permit = tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,PlaybackStatus::Cancelled,None);return;}, p=self.serial.acquire()=>p.unwrap() };
+        // Pick up rain/smell changes and reactions completed while waiting for
+        // the preceding turn. The resulting snapshot is fixed for this decision.
+        {
+            let d = self.data.lock().unwrap();
+            if let Some(s) = d.sessions.get(&sid).filter(|s| s.epoch == epoch)
+                && let Some((event, previous)) = input.snapshot.as_deref()
+            {
+                let event = s.latest.as_ref().unwrap_or(event);
+                let mut history = previous.context.history.clone();
+                history.conversation_turns = s.history.refresh_before_input(
+                    &turn,
+                    &history.conversation_turns,
+                    input.retained_history_count,
+                );
+                history.conversation_history =
+                    history::History::lines_for(&history.conversation_turns);
+                let workshop = input["workshop"].is_object().then_some(&input["workshop"]);
+                if let Ok(native) =
+                    chat_context::capture(s, event, &self.config.combat, history, workshop)
+                {
+                    let event = event.clone();
+                    input["history"] = json!(native.context.history.conversation_turns);
+                    input["conversation_turns"] = input["history"].clone();
+                    input["conversation_history"] =
+                        native.context.history.conversation_history.clone().into();
+                    input.snapshot = Some(std::sync::Arc::new((event, native)));
+                }
+            }
+        }
         // An earlier authorized save may have completed while this turn waited.
         // Rebuild the read-only context before planning against that new version.
         if input["workshop"].is_object() && input["poem_input"].is_null() {
@@ -2206,5 +2266,35 @@ mod tests {
         );
         assert_eq!(snapshot["sessions"][0]["history"][0]["role"], "user");
         dialogue.shutdown().await;
+    }
+    #[test]
+    fn only_explicit_current_silence_records_reaction_without_spoken_material() {
+        for (status, action, epoch, expect_silent) in [
+            (PlaybackStatus::Quiet, "silent", 0, true),
+            (PlaybackStatus::Failed, "silent", 0, false),
+            (PlaybackStatus::Cancelled, "silent", 0, false),
+            (PlaybackStatus::Quiet, "speak", 0, false),
+            (PlaybackStatus::Quiet, "silent", 9, false),
+        ] {
+            let d = Dialogue::new(DialogueConfig::default()).unwrap();
+            d.register("s", "試験", true);
+            d.data.lock().unwrap().rows.push_back(
+                json!({"session_id":"s","turn_id":"t","epoch":0,"player_input_text":"そうなんだ"}),
+            );
+            d.update(
+                "s",
+                "t",
+                epoch,
+                status,
+                Some(&json!({"text":"","dialogue_action":action,"observation_revision":0})),
+            );
+            let data = d.data.lock().unwrap();
+            let h = &data.sessions["s"].history;
+            assert_eq!(
+                h.rows().iter().any(|r| r["reaction"] == "silent"),
+                expect_silent
+            );
+            assert!(h.completed_pairs().is_empty());
+        }
     }
 }

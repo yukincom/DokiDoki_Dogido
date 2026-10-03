@@ -33,28 +33,7 @@ pub(super) fn schedule(e: &GameEvent, m: &PassiveMob) -> &'static str {
     else {
         return "wander";
     };
-    let t = time.rem_euclid(24000);
-    if t >= 12000 {
-        return "sleep";
-    }
-    if t >= 11000 {
-        return "wander";
-    }
-    if m.is_baby == Some(true) {
-        if t >= 10000 || (2000..6000).contains(&t) {
-            "play"
-        } else {
-            "wander"
-        }
-    } else if t >= 9000 {
-        "gather"
-    } else if t >= 2000
-        && !["", "unknown", "unregistered", "-", "none", "nitwit"].contains(&profession(m).as_str())
-    {
-        "work"
-    } else {
-        "wander"
-    }
+    crate::villager_routines::activity(time, m.is_baby == Some(true), m.profession.as_deref())
 }
 fn mob_key(m: &PassiveMob) -> String {
     if !villager(m) {
@@ -98,7 +77,12 @@ pub(super) fn fallback_candidates(e: &GameEvent, m: &PassiveMob) -> Vec<String> 
                 .trim()
                 .to_lowercase();
             if !temper.is_empty()
-                && temper != m.temperament.as_deref().unwrap_or("").trim().to_lowercase()
+                && temper
+                    != m.temperament
+                        .map(|t| t.as_str())
+                        .unwrap_or("")
+                        .trim()
+                        .to_lowercase()
             {
                 continue;
             }
@@ -132,7 +116,7 @@ pub(super) fn fallback_candidates(e: &GameEvent, m: &PassiveMob) -> Vec<String> 
     }
     let generic = if m
         .temperament
-        .as_deref()
+        .map(|t| t.as_str())
         .unwrap_or("")
         .trim()
         .eq_ignore_ascii_case("neutral")
@@ -214,9 +198,17 @@ impl Ambient {
                 .unwrap_or_else(|| catalog::mob_label(&target.r#type))
         };
         let mut details = common_details(e, s);
+        let temperament = match target
+            .temperament
+            .map(|t| t.as_str())
+            .filter(|t| !t.is_empty())
+        {
+            None => "passive",
+            Some(value) => value,
+        };
         let fields = json!({"mob":label,"direction":direction(target),"mob_count":if crowd{1}else{e.passive_mobs.iter().filter(commentable).count()},"distance":target.distance,
             "mob_tags":catalog::tags(&entry),"mob_role":entry["poetic"]["role"].as_str().unwrap_or(""),
-            "mob_temperament":target.temperament.as_deref().filter(|t|!t.is_empty()).unwrap_or("friendly"),"mob_caution_reason":target.caution_reason.as_deref().unwrap_or(""),
+            "mob_temperament":temperament,"mob_caution_reason":target.caution_reason.as_deref().unwrap_or(""),
             "fallback_candidates":candidates,"variation_slot":e.sequence.unwrap_or(0)%4,
             "__ambient_guard":{"mob_type":target.r#type,"entity_id":target.identity.as_ref().map(|i|&i.entity_id),"profession":if crowd{None}else{prof},"baby":baby,"crowd":crowd}});
         details.as_object_mut()?.extend(fields.as_object()?.clone());

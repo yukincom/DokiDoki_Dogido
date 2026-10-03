@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dogido_server.language_knowledge import (
+from dev_tools.catalog_tools.language_knowledge import (
     _safe_dataset_path,
     get_bulk_knowledge,
     get_kanji_profile,
@@ -347,7 +347,7 @@ class LanguageKnowledgeTests(unittest.TestCase):
         self.assertTrue(all("敬語" in row["curriculum_text"] for row in rows))
 
     def test_bulk_data_file_is_hashed_once_per_search(self) -> None:
-        from dogido_server import language_knowledge
+        from dev_tools.catalog_tools import language_knowledge
 
         with mock.patch.object(
             language_knowledge,
@@ -493,7 +493,7 @@ class LanguageKnowledgeTests(unittest.TestCase):
 
     def test_core_only_search_does_not_load_bulk_index(self) -> None:
         with mock.patch(
-            "dogido_server.language_knowledge.load_bulk_index",
+            "dev_tools.catalog_tools.language_knowledge.load_bulk_index",
             side_effect=AssertionError("bulk index must not be loaded"),
         ):
             rows = search_japanese_knowledge(

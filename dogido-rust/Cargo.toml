@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
 publish = false
-description = "ドギドのRust移植: Rig/MLX接続と比較の足場"
+description = "ドギドの会話・観測・川柳・音声を所有するRust本体"
 
 [dependencies]
 anyhow = "1"

@@ -116,6 +116,7 @@ fn stripped_ascii(text: &str, d: &Value) -> String {
     }
     s
 }
+#[cfg(test)]
 pub(super) fn usable(text: &str, d: &Value) -> bool {
     usability_reason(text, d).is_none()
 }
@@ -336,128 +337,9 @@ pub(crate) fn repeated(text: &str) -> bool {
     let tokens: Vec<_> = text.split(sep).filter(|s| !s.is_empty()).collect();
     tokens.windows(3).any(|w| w[0] == w[1] && w[1] == w[2])
 }
-pub(super) fn style(kind: &str, text: &str, d: &Value) -> bool {
-    if forbidden(text, d) {
-        return false;
-    }
-    if !matches!(
-        kind,
-        "aftermath"
-            | "darkness_escape"
-            | "occluded_hostile_presence"
-            | "occluded_entry_no_light"
-            | "dark_push_no_light"
-            | "dark_push_after_breath"
-            | "newly_burning_visual"
-            | "daylight_water_skeleton"
-    ) {
-        return true;
-    }
-    if has(
-        text,
-        &[
-            "だよ",
-            "だよね",
-            "なんだよ",
-            "なんだよね",
-            "なんだが",
-            "なんだけど",
-            "みたいだ",
-            "しかたない",
-            "闇が深い",
-            "凍りつく",
-        ],
-    ) {
-        return false;
-    }
-    let bad = match kind {
-        "aftermath" => {
-            has(
-                text,
-                &[
-                    "爆発音",
-                    "体力",
-                    "HP",
-                    "ｈｐ",
-                    "次は",
-                    "絶対",
-                    "逃げよう",
-                    "逃げたほう",
-                    "回復",
-                    "油断するな",
-                ],
-            ) || re(r"\d").is_match(text)
-        }
-        "darkness_escape" => {
-            has(
-                text,
-                &[
-                    "闇夜",
-                    "漆黒",
-                    "奈落",
-                    "私",
-                    "荷が重",
-                    "どうすれば",
-                    "仕方ない",
-                    "戻って",
-                    "帰って",
-                    "帰れ",
-                    "逃げよう",
-                    "逃げて",
-                    "落ち着いて",
-                    "無理しなくていい",
-                    "ほしくて",
-                    "やめて",
-                    "したほうがいい",
-                    "してほしい",
-                ],
-            ) || !has(
-                text,
-                &[
-                    "やで",
-                    "やわ",
-                    "やん",
-                    "やろ",
-                    "やねん",
-                    "へん",
-                    "せん",
-                    "やから",
-                    "やった",
-                    "やな",
-                    "やんか",
-                    "やろか",
-                ],
-            )
-        }
-        "newly_burning_visual" => has(
-            text,
-            &[
-                "やばい",
-                "ほんと",
-                "ほんとう",
-                "助かったね",
-                "めっちゃ燃えてる",
-            ],
-        ),
-        "occluded_hostile_presence" => has(
-            text,
-            &[
-                "きゃー",
-                "ぎゃー",
-                "うわあ",
-                "見えた",
-                "見えてる",
-                "目の前",
-                "逃げろ",
-                "逃げよう",
-                "来てる",
-                "来よる",
-            ],
-        ),
-        "daylight_water_skeleton" => has(text, &["火つけ", "火をつけ"]),
-        _ => false,
-    };
-    !bad && !repeated(text) && !text.contains("んかやんか") && !re(r"(やわ|やん|やろ|やんか)(?:[！？!?,，．。…〜ー\s]{0,3})(やわ|やん|やろ|やんか)(?:[！？!?,，．。…〜ー\s]{0,3})(やわ|やん|やろ|やんか)").is_match(text)
+#[cfg(test)]
+pub(super) fn style(_kind: &str, text: &str, d: &Value) -> bool {
+    !forbidden(text, d)
 }
 pub(super) fn final_guard(kind: &str, text: &str, d: &Value) -> bool {
     if kind == "light_source_gain" {

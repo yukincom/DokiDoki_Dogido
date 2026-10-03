@@ -293,6 +293,9 @@ pub(super) fn frame_details(
         "event_digest": ctx.history.event_digest
     });
     out["character_mode"] = json!(crate::chat_prompt::mode(&out));
+    if let Some(world) = &ctx.world_context {
+        out["world_context"] = json!(world);
+    }
     if env.include_sky_context {
         out.as_object_mut().unwrap().extend(
             serde_json::to_value(precipitation.to_prompt_details())?

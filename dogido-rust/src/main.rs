@@ -13,7 +13,7 @@ use dogido_rust::{
 #[derive(Parser)]
 #[command(
     version,
-    about = "ドギドRust移植用。接続専用サーバー、LLM接続試験、要求検査。"
+    about = "ドギド本体。会話・観測・音声入力と読み取り専用の確認コマンド。"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -34,6 +34,8 @@ enum Command {
     },
     /// ローカル知識検索結果の回答投影を確認する。ネットワーク・モデル生成なし。
     RenderKnowledge { request: PathBuf },
+    /// 通常会話の現行要求を組み立てる。モデル・音声・通信なし。
+    BuildChatPrompt { request: PathBuf },
     /// 国語資料を読み取り専用で検索する。モデル・音声・Pythonの起動なし。
     LookupLanguage {
         request: PathBuf,
@@ -62,12 +64,12 @@ enum Command {
     },
     /// 接続専用HTTPサーバー。AI・音声・記憶には接続しない。
     Serve {
-        #[arg(long, default_value = "127.0.0.1:5056")]
+        #[arg(long, default_value = "127.0.0.1:5055")]
         listen: SocketAddr,
     },
-    /// 冒険会話と自動川柳の試験。Python補助、既存モデル、VOICEVOXを使う。
+    /// 冒険会話と自動川柳の本体。既存モデル・VOICEVOXと任意SDK補助を使う。
     ServeDialogue {
-        #[arg(long, default_value = "127.0.0.1:5056")]
+        #[arg(long, default_value = "127.0.0.1:5055")]
         listen: SocketAddr,
         #[arg(long, default_value = "python3")]
         python: PathBuf,
@@ -134,6 +136,13 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
+        Command::BuildChatPrompt { request } => {
+            let details = serde_json::from_str(&std::fs::read_to_string(request)?)?;
+            println!(
+                "{}",
+                serde_json::to_string(&dogido_rust::chat_prompt::messages(&details)?)?
+            );
+        }
         Command::VoiceInput { settings, check } => {
             let settings: dogido_rust::voice::Settings = serde_json::from_str(&settings)?;
             settings.validate()?;

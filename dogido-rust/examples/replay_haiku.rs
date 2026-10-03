@@ -1,4 +1,4 @@
-//! Scripted payloadsと既存辞書でPythonとの同一入力比較を行う。モデルHTTPは使わない。
+//! Scripted payloadsと既存辞書で生成器の回帰確認を行う。モデルHTTPは使わない。
 use anyhow::{Context, Result};
 use dogido_rust::{
     haiku::{self, Backend, Input, LineForm, StructuredRequest, TransformRequest},
@@ -53,7 +53,7 @@ impl Backend for Replay<'_> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let python = std::env::args().nth(1).context("pass Python executable")?;
-    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/haiku_helper.py");
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/haiku_tokens.py");
     let mut helper = Helper::start(&PathBuf::from(python), &script)?;
     let result: Result<()> = async {
         for line in io::stdin().lock().lines() {

@@ -111,6 +111,10 @@ impl Places {
             let text = template.replace("{label}", entry["label"].as_str().unwrap_or(&key));
             let mut details = common_details(e, s);
             details.as_object_mut()?.extend(json!({"structure":key,"structure_label":entry["label"],"structure_note":entry["note"],"group_label":entry["group_label"],"__ambient_guard":{"structure":key}}).as_object()?.clone());
+            details["group_id"] = group.into();
+            if group == "village" {
+                details["visible_villager_count"] = json!(e.world.visible_villager_count);
+            }
             if group == "overworld_underground" {
                 details["biome"] = "地下".into();
             }

@@ -18,6 +18,9 @@
       "label": "ブレイズ",
       "threat_class": "ranged",
       "priority": "high",
+      "environment_notes": [
+        "水やその個体に降る雨に触れるとダメージを受ける。雨天でも屋根の下など雨に触れていない個体まで被害中とはいえない。"
+      ],
       "poetic": {
         "visual_tags": [
           "炎",
@@ -53,6 +56,10 @@
       "priority": "high",
       "undead": true,
       "burns_in_daylight": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "頭に装備がある間は日光による燃焼を防げるが、装備が傷む場合がある。"
+      ],
       "poetic": {
         "visual_tags": [
           "骨",
@@ -192,6 +199,9 @@
       "label": "クリーパー",
       "threat_class": "explosive",
       "priority": "critical",
+      "environment_notes": [
+        "落雷が実際に命中すると帯電クリーパーになる。雷雨や雷鳴だけでは帯電したことにならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "緑",
@@ -236,6 +246,10 @@
       "priority": "critical",
       "aquatic": true,
       "dies_on_land": false,
+      "environment_notes": [
+        "水中で呼吸でき、陸上でも乾燥や窒息はしない。",
+        "陸に上がっても攻撃できるため、陸上にいることは無害の根拠にならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "棘",
@@ -404,6 +418,10 @@
       "priority": "high",
       "aquatic": true,
       "dies_on_land": false,
+      "environment_notes": [
+        "水中で呼吸でき、陸上でも乾燥や窒息はしない。",
+        "陸に上がっても攻撃できるため、陸上にいることは無害の根拠にならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "棘",
@@ -437,6 +455,9 @@
       "label": "ホグリン",
       "threat_class": "melee",
       "priority": "high",
+      "environment_notes": [
+        "通常のオーバーワールドやジ・エンドでは、約15秒いるとゾグリンへ変化する。現在地の環境がゾンビ化を起こす条件であり、ネザーでは変化しない。免疫など特殊な個体は例外。"
+      ],
       "poetic": {
         "visual_tags": [
           "牙",
@@ -472,6 +493,10 @@
       "priority": "high",
       "burns_in_daylight": false,
       "undead": true,
+      "environment_notes": [
+        "日光では燃えない。水にいるために日光を免れているわけではない。",
+        "頭まで水に沈んだ状態が約30秒続くとゾンビへの変身が始まり、約15秒後に完了する。変身開始後は水から出ても進む。ゾンビになった後、さらに長い水没条件を満たすとドラウンドになり得る。"
+      ],
       "poetic": {
         "visual_tags": [
           "乾いた",
@@ -572,6 +597,9 @@
       "priority": "high",
       "burns_in_daylight": true,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。"
+      ],
       "poetic": {
         "visual_tags": [
           "夜空",
@@ -605,6 +633,9 @@
       "label": "ピグリンブルート",
       "threat_class": "melee",
       "priority": "critical",
+      "environment_notes": [
+        "通常のオーバーワールドやジ・エンドでは、約15秒いるとゾンビピグリンへ変化する。現在地の環境がゾンビ化を起こす条件であり、ネザーでは変化しない。免疫など特殊な個体は例外。"
+      ],
       "poetic": {
         "visual_tags": [
           "金",
@@ -770,6 +801,12 @@
       "priority": "high",
       "burns_in_daylight": true,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "頭に装備がある間は日光による燃焼を防げるが、装備が傷む場合がある。",
+        "弓の射程内で見通しが続くと立ち止まって射撃する。射程や見通しが足りなければ接近するため、水から絶対に出ないわけではない。",
+        "粉雪内に約7秒いるとストレイへの変身が始まり、さらに約15秒で完了する。途中で粉雪から出ると解除される。水ではストレイにならない。"
+      ],
       "poetic": {
         "visual_tags": [
           "骨",
@@ -835,6 +872,10 @@
       "priority": "high",
       "burns_in_daylight": true,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "頭に装備がある間は日光による燃焼を防げるが、装備が傷む場合がある。"
+      ],
       "poetic": {
         "visual_tags": [
           "骨",
@@ -963,6 +1004,10 @@
       "label": "ウォーデン",
       "threat_class": "tank",
       "priority": "critical",
+      "behavior_notes": [
+        "目が見えず、振動や匂いを手がかりに相手を探す。心音やうなり、足音を立てる。",
+        "心音や動作音が聞こえるだけで、プレイヤーを発見した、怒った、追跡中、攻撃中とは限らない。"
+      ],
       "poetic": {
         "visual_tags": [
           "闇",
@@ -1032,6 +1077,9 @@
       "threat_class": "tank",
       "priority": "critical",
       "undead": true,
+      "environment_notes": [
+        "アンデッドだが日光では燃えない。"
+      ],
       "poetic": {
         "visual_tags": [
           "黒",
@@ -1067,6 +1115,9 @@
       "priority": "high",
       "burns_in_daylight": false,
       "undead": true,
+      "environment_notes": [
+        "アンデッドだが日光では燃えない。"
+      ],
       "poetic": {
         "visual_tags": [
           "黒い骨",
@@ -1098,6 +1149,9 @@
       "label": "ゾグリン",
       "threat_class": "melee",
       "priority": "high",
+      "environment_notes": [
+        "アンデッドだが日光では燃えない。"
+      ],
       "poetic": {
         "visual_tags": [
           "牙",
@@ -1131,6 +1185,11 @@
       "priority": "high",
       "burns_in_daylight": true,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "頭に装備がある間は日光による燃焼を防げるが、装備が傷む場合がある。",
+        "頭まで水に沈んだ状態が約30秒続くとドラウンドへの変身が始まり、約15秒後に完了する。変身開始後は水から出ても進む。現在水中にいることだけでは変身開始や完了は分からない。"
+      ],
       "poetic": {
         "visual_tags": [
           "腐敗",
@@ -1167,6 +1226,11 @@
       "priority": "high",
       "burns_in_daylight": true,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "頭に装備がある間は日光による燃焼を防げるが、装備が傷む場合がある。",
+        "水没してもドラウンドには変化しない。"
+      ],
       "poetic": {
         "visual_tags": [
           "村人",

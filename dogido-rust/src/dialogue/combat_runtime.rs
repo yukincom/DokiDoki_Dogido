@@ -4,6 +4,51 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 impl Dialogue {
+    pub(super) fn preempt_ominous_reaction(
+        &self,
+        d: &mut Data,
+        sid: &str,
+        event: &crate::events::GameEvent,
+    ) {
+        let incoming =
+            crate::combat::specials::incoming_ominous_priority(event, &self.config.combat);
+        if incoming == 0 {
+            return;
+        }
+        let lower = |actions: &[Speech]| {
+            !actions.is_empty()
+                && actions.iter().all(|action| {
+                    let rank = crate::combat::specials::ominous_reaction_priority(action);
+                    rank > 0 && rank < incoming
+                })
+        };
+        let s = &d.sessions[sid];
+        let active_lower = s
+            .warning
+            .as_ref()
+            .is_some_and(|active| active.input.is_none() && lower(&active.actions));
+        let pending_lower = s.pending_input.is_none()
+            && s.pending_warning
+                .as_ref()
+                .is_some_and(|actions| lower(actions));
+        if active_lower {
+            // cancel_warning also clears pending work. Keep unrelated questions or warnings.
+            let s = d.sessions.get_mut(sid).unwrap();
+            let pending =
+                (!pending_lower).then(|| (s.pending_warning.take(), s.pending_input.take()));
+            Self::cancel_warning(d, sid, "higher_priority_ominous_sound");
+            if let Some((actions, input)) = pending {
+                let s = d.sessions.get_mut(sid).unwrap();
+                s.pending_warning = actions;
+                s.pending_input = input;
+            }
+        } else if pending_lower {
+            let s = d.sessions.get_mut(sid).unwrap();
+            s.pending_warning = None;
+            s.pending_input = None;
+        }
+    }
+
     pub(super) fn refresh_combat_audio(&self, d: &mut Data, sid: &str) {
         let s = &d.sessions[sid];
         let query = s
@@ -217,3 +262,7 @@ impl Dialogue {
         }));
     }
 }
+
+#[cfg(test)]
+#[path = "ominous_priority_tests.rs"]
+mod ominous_priority_tests;

@@ -164,7 +164,7 @@ pub fn request(kind: &str, model: &str, details: &Value) -> GenerationRequest {
         messages: vec![
             ChatMessage {
                 role: Role::System,
-                content: PROMPTS[kind].as_str().expect("web kind").into(),
+                content: crate::companion_prompt::expand(PROMPTS[kind].as_str().expect("web kind")),
             },
             ChatMessage {
                 role: Role::User,

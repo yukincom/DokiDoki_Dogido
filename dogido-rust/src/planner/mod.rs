@@ -122,7 +122,8 @@ impl PreparedPlan {
                 && self.details.history.iter().all(|row| row.is_object()
                     && row["turn_id"].is_string()
                     && row["text"].is_string()
-                    && matches!(row["role"].as_str(), Some("user" | "assistant"))),
+                    && (matches!(row["role"].as_str(), Some("user" | "assistant"))
+                        || row["role"] == "event" && row["reaction"] == "silent")),
             "invalid completed history projection"
         );
         anyhow::ensure!(

@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 
-from compare_haiku import base, LINES, ALTERNATIVES
+from test_support import base, LINES, ALTERNATIVES
 
 ROOT = Path(__file__).resolve().parents[1]
 

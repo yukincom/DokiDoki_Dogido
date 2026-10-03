@@ -21,12 +21,11 @@ import time
 from typing import Any, Protocol
 
 from dogido_server.config import Settings
-from dogido_server.llm.client import STRUCTURED_STATUS_KEY
-from dogido_server.llm.prompts import build_messages
-from dogido_server.llm.structured_contracts import validate_structured_payload
-from dogido_server.llm.types import LLMFrontend, StructuredGenerationRequest
+from dogido_server.combat_input_contract import (
+    STRUCTURED_STATUS_KEY, CombatInputRequest, ChatFallback, validate_payload,
+)
 
-LOGGER = logging.getLogger("uvicorn.error")
+LOGGER = logging.getLogger(__name__)
 
 PLATFORM_AI_PROVIDER_KEY = "__dogido_platform_ai_provider"
 
@@ -49,7 +48,7 @@ class _StructuredProvider(Protocol):
     def probe(self) -> PlatformAIProbe:
         ...
 
-    def generate(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    def generate(self, request: CombatInputRequest) -> dict[str, Any]:
         ...
 
     def close(self) -> None:
@@ -81,7 +80,7 @@ def _reason_text(value: object | None) -> str:
     return str(name or value)
 
 
-def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
+def _json_schema_for(request: CombatInputRequest) -> dict[str, object]:
     """戦闘中断中の小分類にだけ使う、端末内 guided generation schema。"""
 
     if request.kind == "haiku_workshop_combat_input":
@@ -111,8 +110,8 @@ def _json_schema_for(request: StructuredGenerationRequest) -> dict[str, object]:
     raise ValueError(f"unsupported platform AI task: {request.kind}")
 
 
-def _prompt_parts(request: StructuredGenerationRequest) -> tuple[str, str]:
-    messages = build_messages(request)
+def _prompt_parts(request: CombatInputRequest) -> tuple[str, str]:
+    messages = request.messages
     if not messages:
         raise ValueError(f"empty platform AI prompt: {request.kind}")
     system = "\n".join(
@@ -163,7 +162,7 @@ class AppleFoundationModelsProvider:
             reason_text,
         )
 
-    def generate(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    def generate(self, request: CombatInputRequest) -> dict[str, Any]:
         if not self._busy.acquire(blocking=False):
             raise ProviderBusyError("Apple Foundation Models is still handling the previous request")
         try:
@@ -177,21 +176,21 @@ class AppleFoundationModelsProvider:
             future.cancel()
             raise TimeoutError(f"Apple Foundation Models timeout ({self.timeout_sec:.1f}s)") from exc
 
-    def _generate_and_release(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    def _generate_and_release(self, request: CombatInputRequest) -> dict[str, Any]:
         try:
             return self._generate_in_thread(request)
         finally:
             self._busy.release()
 
-    def _generate_in_thread(self, request: StructuredGenerationRequest) -> dict[str, Any]:
-        # FastAPI の event loop 上から呼ばれるため、Apple の async API は専用 thread
+    def _generate_in_thread(self, request: CombatInputRequest) -> dict[str, Any]:
+        # Rust所有の同期IPC workerから呼ぶAppleのasync APIは専用thread
         # 内の短命 loop で実行する。モデル実行自体は同時に一件だけ。
         return asyncio.run(asyncio.wait_for(self._generate_async(request), timeout=self.timeout_sec))
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-    async def _generate_async(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    async def _generate_async(self, request: CombatInputRequest) -> dict[str, Any]:
         fm = importlib.import_module("apple_fm_sdk")
         model = fm.SystemLanguageModel()
         available, reason = model.is_available()
@@ -267,7 +266,7 @@ class FoundryLocalProvider:
             reason if available else "model_not_cached",
         )
 
-    def generate(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    def generate(self, request: CombatInputRequest) -> dict[str, Any]:
         if self._closing.is_set():
             raise RuntimeError("Foundry Local provider is closed")
         if not self._busy.acquire(blocking=False):
@@ -288,13 +287,13 @@ class FoundryLocalProvider:
             future.cancel()
             raise TimeoutError(f"Foundry Local timeout ({self.timeout_sec:.1f}s)") from exc
 
-    def _generate_and_release(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    def _generate_and_release(self, request: CombatInputRequest) -> dict[str, Any]:
         try:
             return self._generate_sync(request)
         finally:
             self._busy.release()
 
-    def _generate_sync(self, request: StructuredGenerationRequest) -> dict[str, Any]:
+    def _generate_sync(self, request: CombatInputRequest) -> dict[str, Any]:
         with self._runtime_lock:
             self._activate_pending_model()
             model = self._get_model()
@@ -494,9 +493,9 @@ class PlatformStructuredAIRouter:
 
     def generate_structured_json(
         self,
-        request: StructuredGenerationRequest,
+        request: CombatInputRequest,
         *,
-        fallback: LLMFrontend,
+        fallback: ChatFallback,
     ) -> dict[str, Any]:
         provider = self._select_provider()
         attempted: set[str] = set()
@@ -505,15 +504,7 @@ class PlatformStructuredAIRouter:
             try:
                 payload = provider.generate(request)
                 if isinstance(payload, dict):
-                    contract = validate_structured_payload(
-                        request.kind,
-                        payload,
-                        details=request.details,
-                    )
-                    if not contract.accepted:
-                        raise ValueError(
-                            f"schema_contract_error:{contract.summary}"
-                        )
+                    validate_payload(request, payload)
                     result = dict(payload)
                     result[STRUCTURED_STATUS_KEY] = "accepted"
                     result[PLATFORM_AI_PROVIDER_KEY] = provider.name

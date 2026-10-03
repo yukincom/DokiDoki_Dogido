@@ -14,6 +14,7 @@ pub(super) struct Run {
     pub text: String,
     pub final_text: String,
     pub reports: Vec<Value>,
+    pub action: &'static str,
 }
 pub(super) async fn render(
     turn: Turn,
@@ -41,9 +42,10 @@ async fn render_with<F: Future<Output = Result<GenerationReport>>>(
         let raw = match response {
             Ok(report) => {
                 tracing::info!(kind="player_chat",elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,finish_reason=?report.generated.finish_reason);
-                let text = report.generated.text.clone();
+                let text = (report.generated.finish_reason.as_deref() != Some("length"))
+                    .then(|| report.generated.text.clone());
                 reports.push(serde_json::to_value(report)?);
-                Some(text)
+                text
             }
             Err(error) => {
                 reports.push(json!({"kind":"player_chat","error":error.to_string()}));
@@ -73,6 +75,11 @@ async fn render_with<F: Future<Output = Result<GenerationReport>>>(
         text: outcome.text,
         final_text: outcome.final_text,
         reports,
+        action: if outcome.status == "silent" {
+            "silent"
+        } else {
+            "speak"
+        },
     })
 }
 #[cfg(test)]

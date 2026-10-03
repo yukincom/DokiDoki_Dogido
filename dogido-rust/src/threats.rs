@@ -639,10 +639,7 @@ fn daylight_water_survivor(t: &VisualThreat, e: &GameEvent) -> bool {
     ) && e.world.sky_visible == Some(true)
         && t.in_water
         && !t.on_fire
-        && matches!(
-            t.r#type.as_str(),
-            "skeleton" | "zombie" | "drowned" | "zombie_villager" | "zombified_piglin" | "phantom"
-        )
+        && crate::mob_environment::burns_in_daylight(&t.r#type)
 }
 
 pub fn ground_count(e: &GameEvent, s: &Settings) -> usize {

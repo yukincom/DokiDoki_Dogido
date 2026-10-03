@@ -237,7 +237,6 @@ fn allowed_actions(workshop: &Snapshot, phase: &str) -> Vec<String> {
             "stage_player_edit",
             "close_workshop",
             "unrelated",
-            "defer_to_legacy",
         ],
     };
     let mut actions = actions.into_iter().collect::<BTreeSet<_>>();

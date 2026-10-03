@@ -28,7 +28,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from dogido_server.config import Settings
-from dogido_server.entity_voice_catalog import (
+from dev_tools.catalog_tools.entity_voice_catalog import (
     CALLOUT_MOB_VOICE_LABELS,
     COUNT_FRAGMENT_TEXTS,
     PHRASE_FRAGMENT_TEXTS,

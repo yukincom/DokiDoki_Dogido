@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "schema": {
     "entry_fields": {
       "label": "日本語表示名",
@@ -9,6 +9,9 @@
       "aquatic": "bool",
       "dies_on_land": "bool",
       "undead": "bool",
+      "environment_notes": [
+        "Java 1.21.11の水・雨・日光・温度・次元などによる性質と、条件付きの変化。一般知識であり、現在の被害・変身・死亡の観測ではない。"
+      ],
       "provoked_only": "bool",
       "dogido_tactics": {
         "notes": "ドギドが戦況で守るべき性質（短い日本語）",

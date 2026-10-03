@@ -6,7 +6,17 @@
       "end_portal": "うぉぉっ、開いてしもうた……！中、宇宙みたいやん！",
       "end_gateway": "んっ？なんか空中にちっこいワープゾーンみたいなの出たでぇ？"
     },
-    "frame_nearby": "なんか、空気違うな・・・"
+    "frame_nearby": "なんか、空気違うな・・・",
+    "arrival_fallbacks": {
+      "nether_portal": "ネザーポータルのとこまで来たなぁ。",
+      "end_portal": "エンドポータルのとこまで来たなぁ。",
+      "end_gateway": "エンドゲートウェイのとこまで来たなぁ。"
+    },
+    "observed_fallbacks": {
+      "nether_portal": "あ、ネザーポータルや。",
+      "end_portal": "あ、エンドポータルや。",
+      "end_gateway": "あ、エンドゲートウェイや。"
+    }
   },
   "ender_eye": {
     "throw": {
@@ -21,7 +31,7 @@
   },
   "structure": {
     "entry_fallbacks": {
-      "village": "お、{label}や。人の気配があるとほっとするわぁ。",
+      "village": "お、{label}や。ちょっとほっとするわぁ。",
       "overworld_surface": "お、{label}や。なんかありそうやなぁ。",
       "overworld_ocean": "{label}や。ええもん残っとるとええなぁ。",
       "overworld_underground": "ここ、{label}やんか……静かに行こな。",

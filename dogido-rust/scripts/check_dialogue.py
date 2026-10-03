@@ -113,6 +113,8 @@ def dependencies():
                         "confidence": .95}, ensure_ascii=False)
                 else:
                     text = controls["leaf"]
+                    if any('"action":"silent"' in m["content"] for m in incoming["messages"] if m["role"] == "system"):
+                        text = json.dumps({"action":"speak","speech":text}, ensure_ascii=False)
                 raw = json.dumps({"id": "mock", "object": "chat.completion", "created": 0,
                     "model": "mock-model", "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}).encode()
@@ -128,6 +130,11 @@ def dependencies():
                 raw, mime = wav.getvalue(), "audio/wav"
                 text = incoming["test_text"]
                 gate = controls["tts_gates"].get(text)
+                if gate is None and controls.get("tts_gate_selector") is not None:
+                    gate = controls["tts_gate_selector"](text)
+                    if gate is not None:
+                        # Preserve finalizer release even if the selecting test fails.
+                        controls["tts_gates"][text] = gate
                 if gate is not None and not gate.wait(timeout=12):
                     status = 504
                 if text == controls["fail_sentence"]:

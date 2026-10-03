@@ -112,7 +112,6 @@ final class DogidoEventClient {
         capabilities.add("visual_threats");
         capabilities.add("auditory_threats");
         capabilities.add("smell_observation");
-        capabilities.add("zombie_scent_clues");
         capabilities.add("ambient_sounds");
         capabilities.add("played_world_sounds");
         capabilities.add("danger_darkness");

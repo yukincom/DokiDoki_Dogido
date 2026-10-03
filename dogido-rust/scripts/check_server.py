@@ -14,17 +14,13 @@ import signal
 import subprocess
 import sys
 import tempfile
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent))
 
-# app/serviceはimportしない。型検査と副作用のないHUD投影だけを比較する。
-from dogido_server.models import (
-    AdapterSessionCreateRequest, AdapterSessionCreateResponse,
-    CloseSessionResponse, HeartbeatResponse, HealthResponse,
+from test_support import (
+    assert_closed_hud, assert_health, assert_session_ack, assert_session_created,
 )
-from dogido_server.haiku.hud import project_workshop
 
 TOKEN = "connection-test-only"
 
@@ -93,24 +89,15 @@ def register(address):
         "capabilities": ["player_state", "workshop_display.v1"],
         "execution_capabilities": ["client.hotbar.select.v1"], "adapter_build": "extra-field",
     }
-    AdapterSessionCreateRequest.model_validate(payload)
     status, body = request(address, "POST", "/api/v1/adapter-sessions", payload)
     assert status == 201
-    parsed = AdapterSessionCreateResponse.model_validate(body)
-    assert parsed.heartbeat_interval_ms == 5000 and parsed.max_batch_size == 25
-    assert parsed.accepted_schema_version == "2026-05-24"
-    return parsed.session_id
+    return assert_session_created(body)
 
 
 def hud(address, session_id, sequence):
     status, body = request(address, "GET", f"/api/v1/haiku-workshop/snapshot?session_id={session_id}")
     assert status == 200
-    expected = project_workshop(SimpleNamespace(
-        session_id=session_id, last_sequence=sequence, haiku_workshop=None,
-        machine=SimpleNamespace(haiku_thinking_depth=0, state=SimpleNamespace(mode="normal")),
-    ))
-    assert {key: value for key, value in body.items() if key != "revision"} == expected
-    assert type(body["revision"]) is int
+    assert_closed_hud(body, session_id, sequence)
     return body
 
 
@@ -124,8 +111,8 @@ def main():
         log1, log2 = (Path(directory) / name for name in ("server1.log", "server2.log"))
         with server(binary, log1) as address:
             status, body = request(address, "GET", "/healthz", authorized=False)
-            assert status == 200 and HealthResponse.model_validate(body).ok
-            assert body["dialogue_ready"] is False and body["llm_enabled"] is False
+            assert status == 200
+            assert_health(body)
             passed.append("health_reports_connection_only")
             assert request(address, "GET", "/api/v1/display/snapshot", authorized=False)[0] == 401
             passed.append("bearer_auth")
@@ -133,13 +120,14 @@ def main():
             assert status == 200 and "会話・警告・音声はまだ使えません" in html
             passed.append("existing_display_page")
             old_id = register(address)
-            passed.append("python_session_response_contract")
+            passed.append("current_session_response_contract")
             before = hud(address, old_id, 0)
             assert hud(address, old_id, 0) == before
-            passed.append("python_closed_hud_and_read_only_revision")
+            passed.append("current_closed_hud_and_read_only_revision")
             status, heartbeat = request(address, "POST", f"/api/v1/adapter-sessions/{old_id}/heartbeat",
                 {"last_sequence": 17, "sent_at": datetime.now(timezone.utc).isoformat()})
-            assert status == 200 and HeartbeatResponse.model_validate(heartbeat).ok
+            assert status == 200
+            assert_session_ack(heartbeat, old_id, timestamp=True)
             assert hud(address, old_id, 17)["revision"] > before["revision"]
             passed.append("heartbeat_updates_sequence")
             status, snapshot = request(address, "GET", "/api/v1/display/snapshot")
@@ -169,7 +157,8 @@ def main():
             hud(address, current_id, 0)
             passed.append("fabric_style_reregistration")
             status, body = request(address, "DELETE", f"/api/v1/adapter-sessions/{current_id}")
-            assert status == 200 and CloseSessionResponse.model_validate(body).ok
+            assert status == 200
+            assert_session_ack(body, current_id)
             assert request(address, "GET", f"/api/v1/haiku-workshop/snapshot?session_id={current_id}")[0] == 404
             passed.append("close_removes_snapshot")
         assert "adapter_session_created" in log1.read_text()

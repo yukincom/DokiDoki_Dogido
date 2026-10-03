@@ -156,10 +156,17 @@ pub fn normalize_history(value: &Value) -> Vec<Value> {
                 .map(chat_catalog::text)
                 .unwrap_or_else(|| format!("history:{index}:{role}"));
             let turn = clean(&turn, 180);
-            if !matches!(role, "user" | "assistant") || text.is_empty() || turn.is_empty() {
+            let silent = role == "event" && raw.get("reaction").is_some_and(|v| v == "silent");
+            if !(matches!(role, "user" | "assistant") || silent)
+                || text.is_empty()
+                || turn.is_empty()
+            {
                 return None;
             }
             let mut row = json!({"turn_id":turn,"role":role,"text":text});
+            if silent {
+                row["reaction"] = "silent".into();
+            }
             for key in repair::FIELDS {
                 if let Some(value) = raw.get(key) {
                     row[key] = Value::String(chat_catalog::text(value));

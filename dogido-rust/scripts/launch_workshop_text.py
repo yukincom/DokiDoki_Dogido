@@ -16,18 +16,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--settings-dir', type=Path, required=True)
     parser.add_argument('--port', type=int, default=5057)
+    parser.add_argument('--memory-dir', type=Path)
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--resume', type=Path)
     args = parser.parse_args()
-    os.chdir(args.settings_dir)
+    settings_dir = args.settings_dir.resolve()
+    resume = args.resume.resolve() if args.resume else None
+    os.chdir(settings_dir)
     settings = get_settings()
     base = settings.llm_chat_base_url or settings.llm_base_url or 'http://127.0.0.1:8080/v1'
     model = settings.llm_chat_model or settings.llm_model or 'default_model'
     if urlsplit(base).hostname not in {'127.0.0.1', 'localhost', '::1'}:
         parser.error('既存のローカルモデルを指定してください。')
     binary = ROOT / 'dogido-rust/target/release/examples/workshop_text'
-    memory = ROOT / '.dogido_memory/rust-migration'
-    if not binary.is_file() or not (memory / 'sessions').is_dir():
+    memory = (args.memory_dir or settings.memory_dir).resolve()
+    if not binary.is_file() or not any((memory / child).is_dir() for child in ('long_term', 'sessions')):
         parser.error('Rust本体のビルドと保存句が必要です。')
     print(f'川柳の相談室: http://127.0.0.1:{args.port} / モデル: {model}', flush=True)
     if args.check:
@@ -59,8 +62,8 @@ def main():
                       '--max-tokens', str(settings.llm_chat_max_tokens or settings.llm_max_tokens),
                       '--timeout-ms', str(int(1000 * (settings.llm_chat_timeout_sec or settings.llm_timeout_sec))),
                       '--haiku-settings', json.dumps(haiku)]
-    if args.resume:
-        command.extend(['--resume', str(args.resume.resolve())])
+    if resume:
+        command.extend(['--resume', str(resume)])
     os.execve(binary, command, env)
 
 

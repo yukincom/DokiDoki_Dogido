@@ -4,7 +4,7 @@ mod names;
 
 use super::{
     catalog,
-    model::{LeafRequest, Mode, Scope, Settings, Speech, label},
+    model::{LeafRequest, Scope, Settings, Speech, label},
 };
 use crate::events::{EventName, GameEvent, HostileOutcome, HostileOutcomeOutcome as Outcome};
 use serde_json::{Value, json};
@@ -33,7 +33,6 @@ pub struct Outcomes {
     announcement_order: VecDeque<String>,
     notes: Vec<String>,
     name_tracker: names::Tracker,
-    name_damage_window_ms: u64,
 }
 impl Default for Outcomes {
     fn default() -> Self {
@@ -45,18 +44,7 @@ fn normalized(value: &str) -> &str {
     value.strip_prefix("minecraft:").unwrap_or(value).trim()
 }
 fn outcome_key(outcome: &HostileOutcome) -> String {
-    outcome
-        .entity_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
-            format!(
-                "legacy:{}:{:?}:{:?}",
-                outcome.r#type, outcome.outcome, outcome.evidence
-            )
-        })
+    outcome.entity_id.trim().to_owned()
 }
 fn labels(outcomes: &[HostileOutcome], kind: Outcome) -> String {
     let mut result = Vec::new();
@@ -79,7 +67,6 @@ fn remaining(event: &GameEvent) -> bool {
             event.combat.hostiles_within_7,
             event.combat.hostiles_within_10,
             event.combat.hostiles_within_scan_ground,
-            event.combat.hostiles_within_30_ground,
         ]
         .iter()
         .any(|count| count.is_some_and(|count| count > 0))
@@ -110,7 +97,6 @@ impl Outcomes {
             announcement_order: VecDeque::new(),
             notes: Vec::new(),
             name_tracker: names::Tracker::default(),
-            name_damage_window_ms: settings.ms("recent_damage_window_ms"),
         }
     }
     /// 会話文脈への採用・保存は実行層が決める。ここではコードで確認した短い事実だけ。
@@ -164,19 +150,9 @@ impl Outcomes {
             if !self.notes.contains(&note) {
                 self.notes.push(note);
             }
-            // 同種の生存個体がいれば残す。個体IDなしの旧通知では種だけで除去する。
-            self.last_hostiles.retain(|hostile| {
-                if let Some(id) = outcome
-                    .entity_id
-                    .as_ref()
-                    .filter(|id| !id.trim().is_empty())
-                {
-                    hostile.id.as_ref().is_some_and(|known| known != id)
-                        || hostile.kind != normalized(&outcome.r#type)
-                } else {
-                    hostile.kind != normalized(&outcome.r#type)
-                }
-            });
+            // 確認された個体IDだけを除去し、同種・ID不明の観測は残す。
+            self.last_hostiles
+                .retain(|hostile| hostile.id.as_deref() != Some(outcome.entity_id.as_str()));
         }
     }
     fn fresh_outcomes(&self, event: &GameEvent) -> Vec<HostileOutcome> {
@@ -195,18 +171,8 @@ impl Outcomes {
             .collect()
     }
     /// full/partialに関係なく現在の明示観測だけを受ける。空の部分イベントで記憶を消さない。
-    pub fn observe(&mut self, event: &GameEvent, now_ms: u64) -> Option<Speech> {
-        self.observe_with_mode(event, now_ms, Mode::Normal)
-    }
-    /// Engine supplies its previous mode for legacy-adapter name tracking only.
-    pub fn observe_with_mode(
-        &mut self,
-        event: &GameEvent,
-        _now_ms: u64,
-        previous_mode: Mode,
-    ) -> Option<Speech> {
-        self.name_tracker
-            .observe(event, previous_mode, self.name_damage_window_ms);
+    pub fn observe(&mut self, event: &GameEvent, _now_ms: u64) -> Option<Speech> {
+        self.name_tracker.observe(event);
         if !event.visual_threats.is_empty() {
             self.last_hostiles = event
                 .visual_threats
@@ -533,6 +499,34 @@ mod tests {
         assert_eq!(
             speech.leaf.unwrap().details["hostiles"],
             json!(["エンダーマン"])
+        );
+    }
+    #[test]
+    fn death_removes_only_the_matching_id_and_keeps_unidentified_same_species() {
+        let mut state = Outcomes::default();
+        state.observe(
+            &event(
+                "status_snapshot",
+                json!([mob("zombie", "dead"), mob("zombie", "live"), {"type":"zombie"}]),
+                json!([]),
+                json!({}),
+                json!({}),
+            ),
+            0,
+        );
+        state.observe(
+            &event(
+                "hostile_defeated",
+                json!([]),
+                json!([]),
+                json!({"hostile_outcomes":[outcome("zombie", "dead", "player_kill")]}),
+                json!({}),
+            ),
+            1,
+        );
+        assert_eq!(
+            state.last_hostiles.iter().map(|h| h.id.as_deref()).collect::<Vec<_>>(),
+            [Some("live"), None]
         );
     }
     #[test]

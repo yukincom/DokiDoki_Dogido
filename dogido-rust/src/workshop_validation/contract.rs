@@ -155,9 +155,7 @@ pub(super) fn errors(payload: &Value, details: &Value) -> Vec<String> {
     }
     let evidence = text(&payload["evidence"]);
     let player = text(&details["player_text"]);
-    if action != "defer_to_legacy"
-        && (sanitize::strip(evidence).chars().count() < 2 || !player.contains(evidence))
-    {
+    if sanitize::strip(evidence).chars().count() < 2 || !player.contains(evidence) {
         errors.push("evidence:not_exact".into());
     }
     if close

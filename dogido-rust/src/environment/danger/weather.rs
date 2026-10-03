@@ -118,13 +118,12 @@ impl Danger {
             let mut details = context(e, s);
             details["scene"] = json!(scene);
             details["thunder_reaction"] = json!(true);
+            details["scream_status"] = json!(if cue { "scheduled" } else { "not_scheduled" });
             details["nearby_lightning"] = json!(lightning);
-            details["weather_from"] = json!("thunder");
-            details["weather_to"] = json!("thunder");
             details["cold_biome"] = json!(cold(e));
             details["dry_biome"] = json!(dry(e));
             let mut line = leaf(
-                "weather_transition",
+                "thunder_reaction",
                 text("fallback", &["weather_transition", scene]),
                 details,
                 0.72,
@@ -137,16 +136,24 @@ impl Danger {
     }
     pub(super) fn portal(&mut self, e: &GameEvent, _now: u64, s: &Settings) -> Option<Speech> {
         let portal = self.pending_portal.take()?;
+        let encounter = self.pending_portal_encounter.take();
         if e.world.nearby_portal_type.as_deref() != Some(portal.as_str()) {
             return None;
         }
-        let fallback = text("exploration", &["portal", "appearance_fallbacks", &portal]);
+        use crate::events::WorldStateNearbyPortalEncounter;
+        let fallback_key = match encounter {
+            Some(WorldStateNearbyPortalEncounter::Appeared) => "appearance_fallbacks",
+            Some(WorldStateNearbyPortalEncounter::Arrived) => "arrival_fallbacks",
+            _ => "observed_fallbacks",
+        };
+        let fallback = text("exploration", &["portal", fallback_key, &portal]);
         if fallback.is_empty() {
             return None;
         }
         self.portal_seen.insert(portal.clone());
         let mut details = context(e, s);
         details["portal_type"] = json!(portal);
+        details["portal_encounter"] = json!(encounter);
         details["portal_label"] = json!(match portal.as_str() {
             "nether_portal" => "ネザーポータル",
             "end_portal" => "エンドポータル",

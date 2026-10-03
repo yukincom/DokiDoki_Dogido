@@ -75,6 +75,10 @@ fn valid_validation(d: &Value) -> Result<()> {
                         .as_array()
                         .is_some_and(|a| a.iter().all(Value::is_string))
             }
+            "world_context" => {
+                serde_json::from_value::<crate::conversation_observation::Context>(value.clone())
+                    .is_ok()
+            }
             "speech_name_corrections" => {
                 value.is_null()
                     || value
@@ -105,6 +109,7 @@ pub struct Turn {
     processed: usize,
     checks: Vec<Validation>,
     outcome: Option<Outcome>,
+    choice_enabled: bool,
 }
 impl Turn {
     pub fn new(input: Input, model: &str, max_tokens: u64) -> Result<Self> {
@@ -126,6 +131,7 @@ impl Turn {
             }
         }
         let prompt_details = input.prompt.details.clone();
+        let choice_enabled = prompt_details["dialogue_choice"] == true;
         let base = input.prompt.into_request()?;
         Ok(Self {
             base,
@@ -136,6 +142,7 @@ impl Turn {
             processed: 0,
             checks: vec![],
             outcome: None,
+            choice_enabled,
         })
     }
     pub fn request(&mut self) -> Result<GenerationRequest> {
@@ -171,7 +178,33 @@ impl Turn {
             );
             return Ok(true);
         };
-        let v = validate(raw, &self.validation);
+        let decoded;
+        let v = if self.choice_enabled {
+            match crate::speech_choice::parse(raw) {
+                Ok(crate::speech_choice::Choice::Silent) => {
+                    self.outcome = Some(Outcome {
+                        text: String::new(),
+                        final_text: String::new(),
+                        status: "silent",
+                        attempts: self.attempts,
+                        validations: std::mem::take(&mut self.checks),
+                    });
+                    return Ok(true);
+                }
+                Ok(crate::speech_choice::Choice::Speak(text)) => {
+                    decoded = text;
+                    validate(&decoded, &self.validation)
+                }
+                Err(reason) => Validation {
+                    cleaned: raw.into(),
+                    reason: Some("unusable_output"),
+                    issue: Some(reason),
+                    corrections: vec![],
+                },
+            }
+        } else {
+            validate(raw, &self.validation)
+        };
         let accepted = v.reason.is_none();
         let text = v.cleaned.clone();
         self.checks.push(v);
@@ -240,6 +273,7 @@ pub(crate) fn project_details(details: &Value) -> Value {
                         | "forbidden_advice"
                         | "allowed_speech_labels"
                         | "speech_name_corrections"
+                        | "world_context"
                 )
             })
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -353,5 +387,93 @@ mod tests {
         v["prompt"]["details"]["user_text"] = "帰る".into();
         v["validation"]["user_text"] = "遊ぶ".into();
         assert!(Turn::new(serde_json::from_value(v).unwrap(), "fixture", 72).is_err());
+    }
+    fn choice_turn(smell: Value) -> Turn {
+        let d = json!({"dialogue_choice":true,"user_text":"一緒に帰ろう",
+            "speech_whitelist_enforce":true,"allowed_speech_labels":[],
+            "world_context":{"observations":{"weather":{"label":"雨"},"smell":smell},"changes":[],"revision":2}});
+        let input = Input {
+            prompt: chat_prompt::Input {
+                schema_version: 1,
+                kind: "player_chat".into(),
+                model: "fixture".into(),
+                details: chat_prompt::project_details(&d),
+                temperature: 0.65,
+                max_tokens: 192,
+                enable_thinking: false,
+            },
+            validation: project_details(&d),
+            fallback_text: "そばにおるで。".into(),
+        };
+        Turn::new(input, "fixture", 192).unwrap()
+    }
+    #[test]
+    fn normal_reply_can_include_observed_smell_and_weather_or_choose_silence() {
+        let mut turn = choice_turn(json!({"status":"present","description":"パンの匂いや。"}));
+        let req = turn.request().unwrap();
+        assert!(
+            req.messages[0]
+                .content
+                .contains(crate::companion_prompt::base())
+        );
+        assert!(req.messages[1].content.contains("パンの匂いや"));
+        let speech = "そやな、一緒に帰ろか。雨も降ってきたし、パンの匂いでお腹もすいたわ。";
+        assert!(
+            turn.complete(Some(&json!({"action":"speak","speech":speech}).to_string()))
+                .unwrap()
+        );
+        assert_eq!(turn.take_outcome().unwrap().final_text, speech);
+        let mut turn = choice_turn(json!({"status":"none"}));
+        turn.request().unwrap();
+        assert!(
+            turn.complete(Some(r#"{"action":"silent","speech":""}"#))
+                .unwrap()
+        );
+        let out = turn.take_outcome().unwrap();
+        assert_eq!(out.status, "silent");
+        assert_eq!(out.attempts, 1);
+        assert!(out.final_text.is_empty());
+    }
+    #[test]
+    fn no_observation_and_broken_contract_require_repair_not_silent_history() {
+        for smell in [
+            json!({"status":"none"}),
+            json!({"status":"unknown"}),
+            json!({"status":"suppressed"}),
+        ] {
+            let mut turn = choice_turn(smell);
+            turn.request().unwrap();
+            assert!(
+                !turn
+                    .complete(Some(r#"{"action":"speak","speech":"土の匂いがするわ。"}"#))
+                    .unwrap()
+            );
+            let repair = turn.request().unwrap();
+            assert!(
+                repair
+                    .messages
+                    .last()
+                    .unwrap()
+                    .content
+                    .contains("unsupported_olfactory_claim")
+            );
+            assert!(repair.messages.last().unwrap().content.contains("JSON"));
+            assert!(turn.complete(Some("{}")).unwrap());
+            let out = turn.take_outcome().unwrap();
+            assert_ne!(out.status, "silent");
+            assert!(!out.final_text.is_empty());
+        }
+        for raw in [
+            "",
+            r#"{"action":"silent","speech":"""#,
+            r#"{"action":"silent","speech":"話した"}"#,
+        ] {
+            let mut turn = choice_turn(json!({"status":"none"}));
+            turn.request().unwrap();
+            assert!(!turn.complete(Some(raw)).unwrap());
+            turn.request().unwrap();
+            assert!(turn.complete(None).unwrap());
+            assert_ne!(turn.take_outcome().unwrap().status, "silent");
+        }
     }
 }

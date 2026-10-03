@@ -1,18 +1,14 @@
-"""AI概要と検索紹介文の受取・対話配線。意味の品質は実モデルで別途読む。"""
+"""専用Chrome補助からのAI概要・検索紹介文の受取。会話状態と採否はRustが所有する。"""
 
 from copy import deepcopy
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from dogido_server.language_dialogue.controller import LanguageDialogue
 from dogido_server.language_dialogue.google_overview import GoogleOverviewResearch, HANDOFF_TEMPLATE, same_search
-from dogido_server.language_dialogue.prompts import build_research_reading_messages
-from test_language_web_research import LLM, Search, interpretation, local_reply, research_turn, turn_with_web_permission
 
 
 SUMMARY = "試験用のAI概要。金属をたたいて形を整えるための台を金床と呼び、かなとこと読みます。"
-QUOTE = "金属をたたいて形を整えるための台を金床と呼び"
 SNIPPET = "これは紹介文だけで、実ページ本文ではありません。"
 
 
@@ -38,12 +34,6 @@ class OverviewClient:
                        if self.results else [],
             },
         }
-
-
-def reading(request):
-    page = request.details["research"]["pages"][0]
-    return {"perspective": "金属をたたくときに使う台のことやね。",
-            "quotes": [{"page_id": page["id"], "quote": QUOTE}]}
 
 
 def test_normal_search_only_once_without_prefetch_or_full_utterance():
@@ -132,95 +122,16 @@ def test_redirected_payload_does_not_become_summary():
     assert result.status == "unavailable" and not result.pages
 
 
-@pytest.mark.parametrize("intent", ["report", "discuss", "uncertain"])
-def test_exact_summary_reaches_followup_without_forced_quiz_or_return(intent):
-    first = interpretation("金床を調べて")
-    first.update(target="金床", search_terms=["金床"], lookup_requested=True)
-    llm = LLM(first, research_turn(intent, "鉄をたたく台ってこと？"), reading,
-              research_turn("return", "冒険に戻ろう"))
-    client = OverviewClient()
-    dialogue = LanguageDialogue(llm, Search(), web=GoogleOverviewResearch(client))
-    row = turn_with_web_permission(dialogue, "金床を調べて", turn_id="t1")
-    assert row["status"] == "awaiting_report" and len(llm.requests) == 1
-    assert row["reply"] == ""  # 読み始めた本人へ追加音声を重ねない。
-    row = dialogue.turn("鉄をたたく台ってこと？", turn_id="t2")
-    assert row["status"] == "research_reflection" and row["quote_validation"] == "matched"
-    assert "どう思う" not in row["reply"] and "先生" not in row["reply"]
-    assert "pages" not in llm.requests[-2].details["research"]
-    passed = llm.requests[-1].details["research"]
-    assert passed["pages"][0]["text_ja"] == SUMMARY
-    assert passed["search_results"][0]["description"] == SNIPPET
-    messages = build_research_reading_messages(llm.requests[-1])
-    assert "生成できません" not in str(messages)
-    assert "公式資料・検証済み事実ではなく" in messages[0]["content"]
-    row = dialogue.turn("冒険に戻ろう", turn_id="t3")
-    assert row["status"] == "handoff" and dialogue.research is None
-    assert SUMMARY not in str(dialogue.history) and SNIPPET not in str(dialogue.history)
+def test_hidden_search_is_reported_as_not_visible():
+    client = OverviewClient(visible=False)
+    result = GoogleOverviewResearch(client).search("金床", [], "meaning")
+    assert result.child_status == "not_visible"
+    assert result.pages[0]["claim_status"] == "retrieved_ai_summary_not_verified_fact"
     assert len(client.calls) == 1
-
-
-def test_research_topic_switch_requires_confirmation_and_never_researches_twice():
-    llm = LLM(
-        interpretation(),
-        research_turn("new_question", "大のことを、とこっていうの？"),
-    )
-    client = OverviewClient()
-    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(client))
-    turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")
-    row = dialogue.turn("大のことを、とこっていうの？", turn_id="t2")
-    assert row["status"] == "research_topic_confirmation"
-    assert row["research_interpretation"]["intent"] == "new_question"
-    assert dialogue.research.phase == "confirming_topic_change"
-    assert len(client.calls) == 1
-    row = dialogue.turn("今の続き", turn_id="t3")
-    assert row["status"] == "research_continue" and dialogue.research is not None
-    assert len(client.calls) == 1
-
-
-def test_research_web_close_is_truthful_and_does_not_call_intent_or_web():
-    llm = LLM(interpretation())
-    client = OverviewClient()
-    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(client))
-    turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")
-    used = len(llm.requests)
-    row = dialogue.turn("ウェブはもう閉じていいよ、分かったよ", turn_id="t2")
-    assert row["status"] == "handoff" and "開いてへん" not in row["reply"]
-    assert "閉じた" not in row["reply"] and dialogue.research is None
-    assert len(llm.requests) == used and len(client.calls) == 1
-
-
-def test_results_only_not_promoted_to_page_evidence():
-    def fabricated(request):
-        assert request.details["research"]["pages"] == []
-        return {"perspective": "本文に載ってたで。", "quotes": [{"page_id": "invented", "quote": SNIPPET}]}
-
-    llm = LLM(interpretation(), research_turn("discuss", "どういうこと？"), fabricated)
-    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(OverviewClient("not_found")))
-    assert turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")["status"] == "awaiting_report"
-    row = dialogue.turn("どういうこと？", turn_id="t2")
-    assert row["status"] == "research_uncertain"
-    assert "本文はまだ読めてへん" in row["reply"] and not row["references"]
-
-
-def test_hidden_search_does_not_claim_visible_page():
-    llm = LLM(interpretation())
-    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(OverviewClient(visible=False)))
-    row = turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")
-    assert row["status"] == "reference_only" and "開いた" not in row["reply"]
-
-
-def test_local_answer_stays_local_but_needed_explanation_hands_off():
-    for reply, expected in [(local_reply(), False),
-                            (local_reply("partial", missing_kind="evidence", missing="読みの由来"), True)]:
-        client = OverviewClient()
-        dialogue = LanguageDialogue(LLM(interpretation(), reply), Search(), web=GoogleOverviewResearch(client))
-        row = turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")
-        assert bool(client.calls) is expected
-        assert ("web" in row) is expected
 
 
 @pytest.mark.parametrize("results", [True, False])
-def test_incomplete_initial_overview_is_never_fetched_again_on_followup(results):
+def test_incomplete_overview_keeps_visible_tab_without_second_fetch(results):
     class Delayed(OverviewClient):
         def call(self, *args, **kwargs):
             self.status = "timeout"
@@ -229,20 +140,11 @@ def test_incomplete_initial_overview_is_never_fetched_again_on_followup(results)
             payload["success"] = bool(self.results)
             return payload
 
-    def respond(request):
-        assert not request.details["research"]["pages"]
-        return {"perspective": "", "quotes": []}
-
-    llm = LLM(interpretation(), research_turn("discuss", "どういう台なの？"), respond,
-              research_turn("discuss", "まだ気になる"), respond)
     client = Delayed(results=results)
-    dialogue = LanguageDialogue(llm, Search(found=False), web=GoogleOverviewResearch(client))
-    assert turn_with_web_permission(dialogue, "擬声語って何？", turn_id="t1")["status"] == "awaiting_report"
-    row = dialogue.turn("どういう台なの？", turn_id="t2")
-    assert "web_refresh" not in row and row["status"] == "research_uncertain"
-    if not results:
-        assert "紹介文までは受け取れた" not in row["reply"]
-    assert "existing_tab_id" not in client.calls[0][1]
-    dialogue.turn("まだ気になる", turn_id="t3")
+    result = GoogleOverviewResearch(client).search("金床", [], "meaning")
+    assert result.status == ("results_only" if results else "page_opened")
+    assert result.child_status == "opened" and not result.pages
+    assert bool(result.search_results) is results
+    assert "エラー本文" not in str(result)
     assert len(client.calls) == 1
-    assert "エラー本文" not in str(llm.requests)
+    assert "existing_tab_id" not in client.calls[0][1]

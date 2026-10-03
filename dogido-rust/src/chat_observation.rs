@@ -40,14 +40,11 @@ pub trait Labels {
 /// Names selected by the existing combat outcome owner at its memory-update phase.
 /// Only the synchronous code-owned combat update may construct these values;
 /// never derive them from a chat/model reply, or resend them during snapshot reads.
-/// Neither list asserts current presence. Legacy disappearances remain separately
-/// marked; they are not promoted to an actual death or a victory claim here.
+/// Confirmed outcome names do not assert current presence or player-kill credit.
 #[derive(Default, Clone, Debug, Deserialize, Serialize)]
 pub struct NameOutcomeUpdate {
     #[serde(default)]
     pub confirmed_types: Vec<String>,
-    #[serde(default)]
-    pub legacy_disappeared_types: Vec<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VisualMemo {
@@ -240,11 +237,7 @@ impl ChatObservationMemory {
         self.killed_names.retain(|(_, at)| {
             age(now, *at) <= self.settings.player_chat_name_correction_retention_ms
         });
-        for raw in outcomes
-            .confirmed_types
-            .iter()
-            .chain(&outcomes.legacy_disappeared_types)
-        {
+        for raw in &outcomes.confirmed_types {
             let id = normalize(raw);
             if !id.is_empty() {
                 put_time(&mut self.killed_names, id, now);
@@ -332,7 +325,7 @@ impl ChatObservationMemory {
             .sort_by_key(|memo| std::cmp::Reverse(memo.seen_at_us));
         self.visual.truncate(12);
         // machine.process removes all consumed IDs even on a repeated outcome delivery.
-        // Without IDs it removes matching types; with any IDs, type removal is disabled.
+        // Other or unidentified entities of the same species remain in memory.
         if matches!(
             event.event.name,
             EventName::HostileDefeated | EventName::CreeperDetonated
@@ -340,23 +333,21 @@ impl ChatObservationMemory {
             let all = event.combat.hostile_outcomes.as_deref().unwrap_or_default();
             let ids: Vec<_> = all
                 .iter()
-                .filter_map(|o| o.entity_id.as_deref().filter(|v| !v.is_empty()))
-                .map(strip)
+                .map(|o| strip(&o.entity_id))
                 .collect();
-            let types: Vec<_> = all.iter().map(|o| normalize(&o.r#type)).collect();
             self.visual.retain(|v| {
                 !ids.contains(
                     &v.dedupe_key
                         .strip_prefix("visual:")
                         .unwrap_or(&v.dedupe_key),
-                ) && !(ids.is_empty() && types.contains(&v.mob_type))
+                )
             });
             self.hearing.retain(|v| {
                 !ids.contains(
                     &v.dedupe_key
                         .strip_prefix("hostile:")
                         .unwrap_or(&v.dedupe_key),
-                ) && !(ids.is_empty() && v.mob_type.as_ref().is_some_and(|id| types.contains(id)))
+                )
             });
         }
         Ok(())

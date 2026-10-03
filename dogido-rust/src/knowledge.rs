@@ -148,7 +148,7 @@ impl Lookup {
                     && required(&fact.dataset_id, 160)
                     && required(&fact.title_ja, 300)
                     && required(&fact.text_ja, 1000)
-                    && length(&fact.dialogue_text_ja) <= 1000
+                    && (fact.dialogue_text_ja.is_empty() || required(&fact.dialogue_text_ja, 1000))
                     && matches!(
                         fact.claim_status.as_str(),
                         "source_stated"
@@ -317,6 +317,14 @@ mod tests {
             let r = render(&value);
             assert_eq!(r.text, UNAVAILABLE);
             assert!(r.references.is_empty());
+        }
+        for text in ["  ", "\n\t", "説明\0"] {
+            let mut value = lookup();
+            value["facts"][0]["dialogue_text_ja"] = text.into();
+            let reply = render(&value);
+            assert_eq!(reply.lookup_status, "invalid");
+            assert_eq!(reply.text, UNAVAILABLE);
+            assert!(reply.references.is_empty());
         }
         let mut value = lookup();
         value["facts"] = json!([]);

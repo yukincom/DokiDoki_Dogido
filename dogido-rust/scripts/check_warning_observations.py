@@ -8,7 +8,7 @@ import tempfile
 import time
 
 from check_dialogue import dependencies, running, register, request, snapshot, wait_for, row, submit
-from compare_threats import event
+from test_support import event
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -92,7 +92,7 @@ time.sleep(.04 if '/panic/' in sys.argv[1] else delay)
                 current = row(base, wt, {"started", "cancelled"})
                 assert current and current["playback_status"] == "started", current
                 send(sid, name="ambient_mob_detected")
-                send(sid, name="threat_detected", audio_only=True)
+                send(sid, name="hostile_audio_detected", audio_only=True)
                 send(sid, name="hostile_audio_detected", stale=True)
                 send(sid, **kw)
                 wait_for(lambda: row(base, wt, {"completed"}))

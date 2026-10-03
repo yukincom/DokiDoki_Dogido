@@ -62,7 +62,7 @@ fn canonical_corpus_preserves_structural_and_execution_boundaries() {
         assert_eq!(frame["payload"], case["payload"]);
     }
     assert!(accepted > 100 && structural_rejections > 100);
-    assert_eq!(array(&FIXTURES["cases"]).len(), 3429);
+    assert_eq!(array(&FIXTURES["cases"]).len(), 3330);
 }
 
 fn conversation(input: &str, speech: &str, action: &str) -> (Value, Value) {

@@ -80,7 +80,6 @@ pub fn answer(
         let count = event
             .combat
             .hostiles_within_scan_ground
-            .or(event.combat.hostiles_within_30_ground)
             .unwrap_or_else(|| {
                 event
                     .visual_threats
@@ -92,15 +91,10 @@ pub fn answer(
                     })
                     .count() as i64
             });
-        let range = event.combat.hostile_scan_distance.unwrap_or_else(|| {
-            if event.combat.hostiles_within_scan_ground.is_none()
-                && event.combat.hostiles_within_30_ground.is_some()
-            {
-                30.0
-            } else {
-                settings.number("hostile_query_distance")
-            }
-        }) as u64;
+        let range = event
+            .combat
+            .hostile_scan_distance
+            .unwrap_or_else(|| settings.number("hostile_query_distance")) as u64;
         let text = if count <= 0 {
             format!("{range}ブロック以内には今はおらんかな。")
         } else {
@@ -352,8 +346,8 @@ mod tests {
                 "16ブロック以内には今は3体おるで。",
             ),
             (
-                json!({"hostiles_within_30_ground":3}),
-                "30ブロック以内には今は3体おるで。",
+                json!({"hostile_scan_distance":24,"hostiles_within_scan_ground":3}),
+                "24ブロック以内には今は3体おるで。",
             ),
             (json!({}), "16ブロック以内には今は1体おるで。"),
         ] {

@@ -264,7 +264,8 @@ final class SmellPolicy {
                 winningScore,
                 boundedTemperatureModifier,
                 rainAfterActive,
-                null
+                null,
+                resolvedSource(winners.get(0))
             );
         }
 
@@ -374,6 +375,22 @@ final class SmellPolicy {
         return id.substring(separator + 1);
     }
 
+    private static ResolvedSource resolvedSource(Evaluated winner) {
+        Candidate candidate = winner.candidate();
+        if (
+            !List.of("block", "entity", "dropped_item").contains(candidate.sourceKind())
+                || "rain_after".equals(candidate.smellId())
+                || candidate.sourceId() == null || candidate.sourceId().isBlank()
+        ) {
+            return null;
+        }
+        return new ResolvedSource(candidate.sourceId(), candidate.sourceKind());
+    }
+
+    /** Private winner metadata for coarse bearing; never serialized to the server. */
+    record ResolvedSource(String sourceId, String sourceKind) {
+    }
+
     record Spec(
         String smellId,
         String category,
@@ -409,6 +426,10 @@ final class SmellPolicy {
         boolean heated,
         boolean rainBoostEligible
     ) {
+        Candidate atDistance(double currentDistance) {
+            return new Candidate(smellId, category, valence, sourceKind, sourceId,
+                basePropagation, currentDistance, heated, rainBoostEligible);
+        }
     }
 
     record Observation(
@@ -421,13 +442,17 @@ final class SmellPolicy {
         Integer effectiveStrength,
         int temperatureModifier,
         boolean rainAfterActive,
-        String suppressionReason
+        String suppressionReason,
+        ResolvedSource resolvedSource
     ) {
-        boolean isSpecificZombie() {
-            return "present".equals(status)
-                && "source".equals(specificity)
-                && "zombie".equals(smellId);
+        Observation(String status, String smellId, String category, String valence,
+                    String sourceKind, String specificity, Integer effectiveStrength,
+                    int temperatureModifier, boolean rainAfterActive, String suppressionReason) {
+            this(status, smellId, category, valence, sourceKind, specificity, effectiveStrength,
+                temperatureModifier, rainAfterActive, suppressionReason, null);
         }
+
+
     }
 
     private record Evaluated(Candidate candidate, int score) {

@@ -134,12 +134,6 @@ pub(crate) fn normalized_observation_id(s: &str) -> String {
     // Namespace removal intentionally precedes strip and lowercase, as in Python.
     strip(s.strip_prefix("minecraft:").unwrap_or(s)).to_lowercase()
 }
-fn observed_set(ids: &[String]) -> HashSet<String> {
-    ids.iter()
-        .map(|s| normalized_observation_id(s))
-        .filter(|s| !s.is_empty())
-        .collect()
-}
 impl Catalog {
     /// Trusted source documents in hostile/neutral/passive precedence. This is
     /// also the pure seam for canonical fixture tests; no runtime file scanning.
@@ -288,21 +282,12 @@ impl Catalog {
             })
             .collect()
     }
-    /// General legacy lookup. Normal chat must use `player_chat_topics` instead
-    /// because this API intentionally supports the canonical observed x3 boost.
-    pub fn find_topics(
-        &self,
-        query: &str,
-        observed_ids: &[String],
-        top_k: i64,
-        min_score: f64,
-    ) -> Vec<Hit> {
+    pub fn find_topics(&self, query: &str, top_k: i64, min_score: f64) -> Vec<Hit> {
         let raw = strip(query);
         if raw.is_empty() {
             return vec![];
         }
         let folded = fold_kana(raw);
-        let observed = observed_set(observed_ids);
         let mut hits: Vec<Hit> = vec![];
         let mut positions = HashMap::new();
         for term in &self.terms {
@@ -329,7 +314,7 @@ impl Catalog {
                     label_ja: label(entry, &term.entry_id),
                     score: 0.0,
                     matched_terms: vec![],
-                    observed: observed.contains(&term.entry_id),
+                    observed: false,
                 });
                 pos
             });
@@ -340,16 +325,10 @@ impl Catalog {
                 hit.matched_terms.push(term.text.clone());
             }
         }
-        for hit in &mut hits {
-            if hit.observed {
-                hit.score *= 3.0;
-            }
-        }
         hits.retain(|h| h.score >= min_score);
         hits.sort_by(|a, b| {
             b.score
                 .total_cmp(&a.score)
-                .then_with(|| b.observed.cmp(&a.observed))
                 .then_with(|| a.entry_id.cmp(&b.entry_id))
         });
         hits.truncate(top_k.max(0) as usize);
@@ -363,7 +342,7 @@ impl Catalog {
             .filter(|s| !strip(s).is_empty())
             .map(|s| normalized_observation_id(s))
             .collect();
-        let mut hits = self.find_topics(query, &[], RULES.top_k, RULES.min_score);
+        let mut hits = self.find_topics(query, RULES.top_k, RULES.min_score);
         for hit in &mut hits {
             hit.observed = observed.contains(&strip(&hit.entry_id).to_lowercase());
         }

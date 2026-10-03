@@ -29,8 +29,8 @@ final class DogidoCharacterHud {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-character-hud");
     private static final Identifier TEXTURE = Identifier.of("dogido", "textures/gui/character.png");
     private static final Identifier CLOSED_TEXTURE = Identifier.of("dogido", "textures/gui/character_closed.png");
-    private static final Identifier THINKING_TEXTURE = Identifier.of("dogido", "textures/gui/character_thinking.png");
     private final CharacterDisplayState state = new CharacterDisplayState();
+    private long thinkingStartedMs = -1;
     private final long animationStartedNanos = System.nanoTime();
     private final Path configPath = FabricLoader.getInstance().getConfigDir().resolve("dogido-character.properties");
     private boolean visible = true;
@@ -76,7 +76,7 @@ final class DogidoCharacterHud {
         return hud;
     }
 
-    void reset() { state.reset(); }
+    void reset() { state.reset(); thinkingStartedMs = -1; }
     void synchronizeAfter(long sequence) { state.synchronizeAfter(sequence); }
     void danger(boolean danger, boolean changed, long sequence) { state.danger(danger, changed, sequence); }
     void receive(WorkshopDisplayState.Snapshot snapshot) { state.receive(snapshot, DogidoWorkshopHud.now()); }
@@ -87,23 +87,31 @@ final class DogidoCharacterHud {
                 || client.currentScreen != null) {
             return;
         }
-        boolean thinking = state.thinking(DogidoWorkshopHud.now());
-        int tw = thinking ? ThinkingMesh.WIDTH : CharacterPlacement.TEXTURE_WIDTH;
-        int th = thinking ? ThinkingMesh.HEIGHT : CharacterPlacement.TEXTURE_HEIGHT;
+        long now = DogidoWorkshopHud.now();
+        boolean thinking = state.thinking(now);
+        if (!thinking) thinkingStartedMs = -1;
+        else if (thinkingStartedMs < 0) thinkingStartedMs = now;
+        int tw = thinking ? ThinkingAnimation.WIDTH : CharacterPlacement.TEXTURE_WIDTH;
+        int th = thinking ? ThinkingAnimation.HEIGHT : CharacterPlacement.TEXTURE_HEIGHT;
         CharacterPlacement.Bounds bounds = autoLayout
             ? CharacterPlacement.approved(context.getScaledWindowWidth(), context.getScaledWindowHeight(), tw, th)
             : CharacterPlacement.lowerLeft(context.getScaledWindowWidth(), context.getScaledWindowHeight(), width, right, bottom, tw, th);
-        float floatOffset = motion ? (float) ((1 - Math.cos(System.nanoTime() / 1_000_000_000.0 * Math.PI * 2 / 3.8))
+        double floatPeriod = thinking ? ThinkingAnimation.FLOAT_PERIOD_SECONDS : 3.8;
+        float floatOffset = motion ? (float) ((1 - Math.cos(System.nanoTime() / 1_000_000_000.0 * Math.PI * 2 / floatPeriod))
             * context.getScaledWindowWidth() * -.0025) : 0;
         // Use the author's right-facing artwork as-is: never mirror geometry or UVs.
         context.getMatrices().pushMatrix();
         context.getMatrices().translate(0, floatOffset);
-        if (thinking && motion) {
-            ThinkingCharacterRenderState.draw(context, THINKING_TEXTURE, bounds, DogidoWorkshopHud.now());
+        if (thinking) {
+            var frame = ThinkingAnimation.frame(now - thinkingStartedMs, motion);
+            for (String layer : ThinkingAnimation.layers(frame)) {
+                context.drawTexture(RenderPipelines.GUI_TEXTURED,
+                    Identifier.of("dogido", "textures/gui/thinking/" + layer), bounds.x(), bounds.y(),
+                    0, 0, bounds.width(), bounds.height(), tw, th, tw, th);
+            }
         } else {
-            Identifier texture = thinking ? THINKING_TEXTURE
-                : CharacterBlink.closed((System.nanoTime() - animationStartedNanos) / 1_000_000, motion)
-                    ? CLOSED_TEXTURE : TEXTURE;
+            Identifier texture = CharacterBlink.closed((System.nanoTime() - animationStartedNanos) / 1_000_000, motion)
+                ? CLOSED_TEXTURE : TEXTURE;
             context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, bounds.x(), bounds.y(),
                 0, 0, bounds.width(), bounds.height(), tw, th, tw, th);
         }

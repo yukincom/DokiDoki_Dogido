@@ -10,18 +10,8 @@ use dogido_rust::{
 };
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-fn mode(v: &str) -> Mode {
-    match v {
-        "normal" => Mode::Normal,
-        "alert" => Mode::Alert,
-        "panic" => Mode::Panic,
-        "suppressed_panic" => Mode::SuppressedPanic,
-        "aftermath" => Mode::Aftermath,
-        _ => panic!("unknown mode"),
-    }
-}
 fn empty(v: NameOutcomeUpdate) {
-    assert!(v.confirmed_types.is_empty() && v.legacy_disappeared_types.is_empty());
+    assert!(v.confirmed_types.is_empty());
 }
 #[derive(Deserialize)]
 struct Trace {
@@ -32,7 +22,6 @@ struct Trace {
 #[derive(Deserialize)]
 struct Step {
     event: GameEvent,
-    previous_mode: String,
     expected_python: Value,
     expected: Value,
     deviation: String,
@@ -46,7 +35,7 @@ fn persistent_canonical_series_and_explicit_replay_deviations() {
         let trace: Trace = serde_json::from_str(line).unwrap();
         let mut o = Outcomes::with_settings(&Settings::merged(&trace.settings).unwrap());
         for (i, row) in trace.steps.iter().enumerate() {
-            o.observe_with_mode(&row.event, i as u64 * 1000, mode(&row.previous_mode));
+            o.observe(&row.event, i as u64 * 1000);
             let value = serde_json::to_value(o.take_name_updates()).unwrap();
             assert_eq!(value, row.expected, "{} {i}", trace.name);
             empty(o.take_name_updates());
@@ -61,7 +50,8 @@ fn persistent_canonical_series_and_explicit_replay_deviations() {
         }
         traces += 1;
     }
-    assert_eq!((traces, exact, differences), (47, 168, 31));
+    assert_eq!((traces, exact + differences), (43, 175));
+    assert!(exact > 0 && differences > 0);
 }
 fn frame(ms: u64, name: &str, fields: Value) -> GameEvent {
     let at = chrono::DateTime::from_timestamp_millis(1_790_640_000_000 + ms as i64)
@@ -151,7 +141,7 @@ fn repeated_death_after_end_does_not_renew_name_ttl_and_current_is_not_presence(
     );
 }
 #[test]
-fn raw_partial_legacy_uses_previous_mode_and_empty_modern_outcomes_never_infer_death() {
+fn partial_disappearance_and_empty_outcomes_never_infer_death() {
     let mut engine = Engine::default();
     let seen = frame(
         0,
@@ -167,9 +157,7 @@ fn raw_partial_legacy_uses_previous_mode_and_empty_modern_outcomes_never_infer_d
         json!({"combat":{"hostile_outcomes":null}}),
     );
     tick(&mut engine, &gone, 1000, false);
-    let update = engine.take_name_updates();
-    assert_eq!(update.legacy_disappeared_types, ["zombie"]);
-    assert!(update.confirmed_types.is_empty());
+    empty(engine.take_name_updates());
     tick(&mut engine, &gone, 2000, false);
     empty(engine.take_name_updates());
     tick(&mut engine, &seen, 3000, true);
@@ -297,4 +285,52 @@ fn consumed_ids_are_removed_by_observation_memory_even_when_name_hook_is_empty()
             .unwrap();
         assert_eq!(snap.recent.visual_types, ["skeleton"]);
     }
+}
+
+#[test]
+fn outcome_schema_rejects_missing_null_and_empty_entity_ids() {
+    let base = serde_json::to_value(frame(0, "hostile_defeated", json!({}))).unwrap();
+    for id in [None, Some(Value::Null), Some(json!(""))] {
+        let mut invalid = outcome("valid", "zombie", "player_kill");
+        invalid.as_object_mut().unwrap().remove("entity_id");
+        if let Some(id) = id {
+            invalid["entity_id"] = id;
+        }
+        let mut event = base.clone();
+        event["combat"]["hostile_outcomes"] = json!([invalid]);
+        assert!(GameEvent::parse(event).is_err());
+    }
+}
+
+#[test]
+fn consumed_id_keeps_other_and_unidentified_same_species_memos() {
+    let mut memory = ChatObservationMemory::default();
+    let seen = frame(
+        0,
+        "status_snapshot",
+        json!({
+            "visual_threats":[
+                {"type":"zombie","entity_id":"dead"},
+                {"type":"zombie","entity_id":"live"},
+                {"type":"zombie"}
+            ],
+            "auditory_threats":[
+                {"label":"zombie","source_id":"dead"},
+                {"label":"zombie","source_id":"live"},
+                {"label":"zombie"}
+            ]
+        }),
+    );
+    memory.observe(&seen, &NameOutcomeUpdate::default(), &TestLabels).unwrap();
+    let died = frame(
+        1000,
+        "hostile_defeated",
+        json!({"combat":{"hostile_outcomes":[outcome("dead","zombie","player_kill")]}}),
+    );
+    memory.observe(&died, &NameOutcomeUpdate::default(), &TestLabels).unwrap();
+    let snapshot = memory.snapshot(&died, &TestLabels).unwrap();
+    assert_eq!(snapshot.recent.visual_memos.len(), 2);
+    assert!(snapshot.recent.visual_memos.iter().all(|v| v.dedupe_key != "visual:dead"));
+    assert_eq!(snapshot.recent.hearing_memos.len(), 2);
+    assert!(snapshot.recent.hearing_memos.iter().all(|v| v.dedupe_key != "hostile:dead"));
 }

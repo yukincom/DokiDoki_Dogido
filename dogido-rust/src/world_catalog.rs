@@ -35,6 +35,14 @@ impl WorldCatalog {
             biomes: flatten_biomes(biomes),
         }
     }
+    pub fn item_entry(&self, id: &str) -> Option<&Value> {
+        self.raw_items
+            .get(&strip(id.rsplit(':').next().unwrap_or("")).to_lowercase())
+    }
+    pub fn block_entry(&self, id: &str) -> Option<&Value> {
+        self.raw_blocks
+            .get(&strip(id.rsplit(':').next().unwrap_or("")).to_lowercase())
+    }
     pub fn item_labels(&self) -> &Map<String, Value> {
         &self.items
     }
@@ -277,12 +285,10 @@ fn flatten_biomes(doc: &Value) -> Map<String, Value> {
 
 impl crate::haiku::materials::Entries for WorldCatalog {
     fn item_entry(&self, id: &str) -> Option<&Value> {
-        self.raw_items
-            .get(&strip(id.rsplit(':').next().unwrap_or("")).to_lowercase())
+        WorldCatalog::item_entry(self, id)
     }
     fn block_entry(&self, id: &str) -> Option<&Value> {
-        self.raw_blocks
-            .get(&strip(id.rsplit(':').next().unwrap_or("")).to_lowercase())
+        WorldCatalog::block_entry(self, id)
     }
     fn mob_label(&self, id: &str) -> String {
         VOICE_CATALOG

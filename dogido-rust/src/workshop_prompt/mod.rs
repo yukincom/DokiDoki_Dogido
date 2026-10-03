@@ -157,7 +157,7 @@ pub(super) fn prepare_with_assets(
     }
     slots.insert("extra", extra);
     let mut messages = vec![
-        json!({"role":"system", "content":assets["system"].as_str().context("system prompt")?}),
+        json!({"role":"system", "content":crate::companion_prompt::expand(assets["system"].as_str().context("system prompt")?)}),
         json!({"role":"user", "content":render(&assets["main"], &slots)?}),
     ];
     if projection.get("fixed_payload").is_none()
@@ -193,7 +193,7 @@ pub(in crate::dialogue) fn editable_defaults() -> Value {
             })
             .collect()
     }
-    json!({"system":ASSETS["system"],"main":flatten(&ASSETS["main"]),
+    json!({"system":crate::companion_prompt::expand(ASSETS["system"].as_str().unwrap()),"main":flatten(&ASSETS["main"]),
         "extras":ASSETS["extras"].as_object().unwrap().iter().map(|(k,v)|(k.clone(),Value::String(flatten(v)))).collect::<Map<_,_>>(),
         "context_prefix":ASSETS["context_prefix"],"context_suffix":ASSETS["context_suffix"],"retry":flatten(&ASSETS["retry"])})
 }

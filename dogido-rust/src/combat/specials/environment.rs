@@ -57,12 +57,7 @@ impl Specials {
         for t in &survivors {
             self.water_handled.insert(identity(t));
         }
-        let skeleton = survivors.iter().any(|t| norm(&t.r#type) == "skeleton");
-        let mut text = if skeleton {
-            fallback("daylight_water_skeleton")
-        } else {
-            catalog::text("combat", &["daylight", "water_generic"])
-        };
+        let mut text = catalog::text("combat", &["daylight", "water_generic"]);
         // Pythonは水中の文に現在の敵全体の個数を添える。過去の視認は混ぜない。
         let mut suffix = String::new();
         if e.visual_threats.len() >= 2 {
@@ -96,13 +91,12 @@ impl Specials {
             e.visual_threats.iter().map(identity).collect(),
         );
         speech.protect_ms = 5000;
-        if skeleton {
-            let details = json!({"player_name":call_name(e,s),"biome":biome_label(e),"time_phase":time_phase(e),
-                "hostiles":e.visual_threats.iter().map(|t|label(&t.r#type)).collect::<Vec<_>>(),"count":e.visual_threats.len(),
-                "__speech_suffix":suffix});
-            // 実行層は__speech_suffixをモデルへ渡さず、検査後の文へ一度だけ追記する。
-            speech = self.leaf_speech(speech, "daylight_water_skeleton", details, 0.6);
-        }
+        let details = json!({"player_name":call_name(e,s),"biome":biome_label(e),"time_phase":time_phase(e),
+            "hostiles":survivors.iter().map(|t|label(&t.r#type)).collect::<Vec<_>>(),"count":survivors.len(),
+            "mob_states":survivors.iter().filter_map(|t|crate::mob_environment::visual(t)).collect::<Vec<_>>(),
+            "__speech_suffix":suffix});
+        // The shared leaf receives species knowledge plus actual per-target state.
+        speech = self.leaf_speech(speech, "daylight_water", details, 0.6);
         Some(speech)
     }
 

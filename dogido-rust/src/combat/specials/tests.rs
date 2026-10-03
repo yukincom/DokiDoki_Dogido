@@ -227,22 +227,27 @@ fn ominous_context_shared_cooldown_stage_and_leaf_metadata() {
     observe(&mut p, &surface, 0);
     assert!(p.ominous(&surface, 0, &s).is_none());
     assert!(!p.ominous_presence(0, &s));
-    let deep = change(&surface, |v| v["world"]["biome"] = "deep_dark".into());
-    observe(&mut p, &deep, 1);
-    let first = p.ominous(&deep, 1, &s).unwrap();
+    let deep = change(&surface, |v| {
+        v["world"]["biome"] = "deep_dark".into();
+        v["world"]["ominous_sound_recent_ms"] = 1001.into();
+    });
+    observe(&mut p, &deep, 1001);
+    let first = p.ominous(&deep, 1001, &s).unwrap();
     let leaf = first.leaf.unwrap();
     assert_eq!(leaf.kind, "deep_dark_ominous_sound");
     assert_eq!(leaf.details["ominous_stage"], 1);
     let shriek = change(&deep, |v| {
         v["world"]["ominous_sound_kind"] = "sculk_shrieker".into()
     });
+    observe(&mut p, &shriek, 2000);
+    assert!(p.ominous(&shriek, 2000, &s).is_some());
     for now in [20000, 40000, 60000, 80000, 100000, 120000] {
         observe(&mut p, &shriek, now);
         assert!(p.ominous(&shriek, now, &s).is_none());
     }
-    observe(&mut p, &shriek, 120001);
+    observe(&mut p, &shriek, 122000);
     assert_eq!(
-        p.ominous(&shriek, 120001, &s)
+        p.ominous(&shriek, 122000, &s)
             .unwrap()
             .leaf
             .unwrap()
@@ -457,8 +462,13 @@ fn rain_water_fire_order_metadata_and_count_suffix() {
     assert_eq!(water.protect_ms, 5000);
     assert!(water.text.contains("スケルトン1体、ゾンビ1体おるで。"));
     let leaf = water.leaf.unwrap();
-    assert_eq!(leaf.kind, "daylight_water_skeleton");
-    assert_eq!(leaf.details["count"], 2);
+    assert_eq!(leaf.kind, "daylight_water");
+    assert_eq!(leaf.details["count"], 1);
+    assert_eq!(leaf.details["hostiles"], json!(["スケルトン"]));
+    assert_eq!(
+        leaf.details["mob_states"][0]["environment"]["touching_water"],
+        true
+    );
     assert_eq!(leaf.temperature, 0.6);
     assert_eq!(
         leaf.details["__speech_suffix"],
@@ -480,6 +490,37 @@ fn rain_water_fire_order_metadata_and_count_suffix() {
     observe(&mut p, &e, 140001);
     observe(&mut p, &fire, 140002);
     assert!(p.burning(&fire, 140002, &s).is_some());
+}
+
+#[test]
+fn daylight_water_zombie_uses_shared_leaf_and_occluded_measurements_are_withheld() {
+    let settings = Settings::default();
+    let event = change(&event(&["zombie"]), |value| {
+        value["world"] = json!({"time_phase":"day","sky_visible":true});
+        value["visual_threats"][0]["in_water"] = true.into();
+        value["visual_threats"][0]["environment"] =
+            json!({"touching_water":true,"submerged_in_water":false});
+    });
+    let mut specials = Specials::default();
+    let leaf = specials
+        .daylight_water(&event, 0, &settings)
+        .unwrap()
+        .leaf
+        .unwrap();
+    assert_eq!(leaf.kind, "daylight_water");
+    assert_eq!(leaf.details["hostiles"], json!(["ゾンビ"]));
+    assert_eq!(
+        leaf.details["mob_states"][0]["environment"]["submerged_in_water"],
+        false
+    );
+    let occluded = change(&event, |value| {
+        value["visual_threats"][0]["environment"] = json!({})
+    });
+    assert!(
+        Specials::default()
+            .daylight_water(&occluded, 0, &settings)
+            .is_none()
+    );
 }
 
 #[test]
@@ -569,4 +610,111 @@ fn initial_nether_is_warp_but_initial_overworld_and_expired_window_are_not() {
     let mut p = Specials::default();
     observe(&mut p, &nether, 0);
     assert!(p.warp_mass(&nether, 90000, Mode::Panic, &s).is_none());
+}
+
+#[test]
+fn sensor_waits_through_one_second_and_shrieker_replaces_it_without_spending_cooldown() {
+    let settings = Settings::default();
+    let make = |kind: &str, age: i64| {
+        change(&event(&[]), |v| {
+            v["world"] = json!({"biome":"deep_dark","ominous_sound_kind":kind,"ominous_sound_recent_ms":age});
+        })
+    };
+    for shriek_delay in [999, 1000] {
+        let mut p = Specials::default();
+        for age in [0, 500, shriek_delay] {
+            let sensor = make("sculk_sensor", age);
+            observe(&mut p, &sensor, age as u64);
+            assert!(p.ominous(&sensor, age as u64, &settings).is_none());
+            assert!(p.ominous_comment_at.is_none());
+        }
+        let shriek = make("sculk_shrieker", 0);
+        observe(&mut p, &shriek, shriek_delay as u64);
+        let chosen = p.ominous(&shriek, shriek_delay as u64, &settings).unwrap();
+        assert_eq!(
+            chosen.leaf.unwrap().details["ominous_kind"],
+            "sculk_shrieker"
+        );
+        let old_sensor = make("sculk_sensor", 1001);
+        observe(&mut p, &old_sensor, 1001);
+        assert!(p.ominous(&old_sensor, 1001, &settings).is_none());
+    }
+    let mut p = Specials::default();
+    let sensor = make("sculk_sensor", 1001);
+    observe(&mut p, &sensor, 1001);
+    assert!(p.ominous(&sensor, 1001, &settings).is_some());
+}
+
+#[test]
+fn ominous_priority_escalates_once_per_level_and_never_duplicates_the_sonic_warning() {
+    let settings = Settings::default();
+    let mut p = Specials::default();
+    let kinds = [
+        "sculk_sensor",
+        "sculk_shrieker",
+        "warden_heartbeat",
+        "warden_presence",
+    ];
+    for (index, kind) in kinds.iter().enumerate() {
+        let e = change(&event(&[]), |v| {
+            v["world"] = json!({"biome":"deep_dark","ominous_sound_kind":kind,"ominous_sound_recent_ms":1001});
+        });
+        let now = 2000 + index as u64;
+        observe(&mut p, &e, now);
+        assert_eq!(
+            p.ominous(&e, now, &settings).unwrap().leaf.unwrap().details["ominous_kind"],
+            *kind
+        );
+        assert!(p.ominous(&e, now + 1, &settings).is_none());
+        for lower in &kinds[..index] {
+            let lower = change(&e, |v| v["world"]["ominous_sound_kind"] = (*lower).into());
+            observe(&mut p, &lower, now + 1);
+            assert!(p.ominous(&lower, now + 1, &settings).is_none());
+        }
+    }
+    let sonic = change(&event(&[]), |v| {
+        v["world"] = json!({"biome":"deep_dark","ominous_sound_kind":"warden_sonic_boom","ominous_sound_recent_ms":0});
+    });
+    let mut fresh = Specials::default();
+    observe(&mut fresh, &sonic, 0);
+    assert_eq!(
+        fresh.sonic_boom(&sonic, 0, &settings).unwrap().kind,
+        "warden_sonic_boom"
+    );
+    assert!(fresh.ominous(&sonic, 0, &settings).is_none());
+}
+
+#[test]
+fn ominous_priority_preserves_the_selected_reactions_configured_cooldown() {
+    let settings = Settings::merged(
+        json!({
+            "sculk_ominous_sound_comment_cooldown_ms": 5000,
+            "ominous_sound_comment_cooldown_ms": 120000
+        })
+        .as_object()
+        .unwrap(),
+    )
+    .unwrap();
+    for high in ["warden_heartbeat", "warden_presence"] {
+        for low in ["sculk_sensor", "sculk_shrieker"] {
+            let mut p = Specials::default();
+            let make = |kind| {
+                change(&event(&[]), |v| {
+                    v["world"] = json!({"biome":"deep_dark","ominous_sound_kind":kind,"ominous_sound_recent_ms":1001});
+                })
+            };
+            let higher = make(high);
+            p.observe(&higher, 1000, true, &settings);
+            assert!(p.ominous(&higher, 1000, &settings).is_some());
+            let lower = make(low);
+            for now in [6000, 120999] {
+                p.observe(&lower, now, true, &settings);
+                assert!(p.ominous(&lower, now, &settings).is_none());
+            }
+            p.observe(&lower, 121000, true, &settings);
+            assert!(p.ominous(&lower, 121000, &settings).is_some());
+            p.observe(&higher, 121001, true, &settings);
+            assert!(p.ominous(&higher, 121001, &settings).is_some());
+        }
+    }
 }

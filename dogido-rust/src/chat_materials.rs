@@ -74,6 +74,7 @@ pub struct Context {
     pub history: CompletedHistory,
     pub workshop_open: bool,
     pub workshop_details: Option<WorkshopFields>,
+    pub world_context: Option<crate::conversation_observation::Context>,
 }
 impl Default for Context {
     fn default() -> Self {
@@ -83,6 +84,7 @@ impl Default for Context {
             history: CompletedHistory::default(),
             workshop_open: false,
             workshop_details: None,
+            world_context: None,
         }
     }
 }
@@ -135,7 +137,7 @@ pub fn before_plan(
     let user = chat_catalog::strip(&input.semantic_text);
     if crate::environment::ambient::is_smell_query(user) {
         return Ok(Before::Fixed(Fixed {
-            text: crate::environment::ambient::current_smell_reply(event).text,
+            text: crate::environment::ambient::current_smell_query_reply(event, user).text,
             reason: "current_smell",
             announce_smell: true,
             repair: None,
@@ -292,12 +294,14 @@ pub struct Leaf {
 impl Leaf {
     /// Run the existing bounded Turn/runner with this payload, never a second retry loop.
     pub fn input(&self, model: &str, max_tokens: u64) -> chat_validation::Input {
+        let mut details = self.details.clone();
+        details["dialogue_choice"] = true.into();
         chat_validation::Input {
             prompt: chat_prompt::Input {
                 schema_version: 1,
                 kind: "player_chat".into(),
                 model: model.into(),
-                details: chat_prompt::project_details(&self.details),
+                details: chat_prompt::project_details(&details),
                 temperature: 0.65,
                 max_tokens,
                 enable_thinking: false,

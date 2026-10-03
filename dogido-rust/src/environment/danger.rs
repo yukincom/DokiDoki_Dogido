@@ -103,6 +103,7 @@ pub struct Danger {
     portal_initialized: bool,
     portal_seen: BTreeSet<String>,
     pending_portal: Option<String>,
+    pending_portal_encounter: Option<crate::events::WorldStateNearbyPortalEncounter>,
     boss_presence: bool,
     ominous_presence: bool,
     last_mode: Mode,
@@ -175,6 +176,7 @@ impl Danger {
             self.portal_initialized = false;
             self.portal_seen.clear();
             self.pending_portal = None;
+            self.pending_portal_encounter = None;
         }
         self.dimension = dimension;
         let (z, w, h, f) = (zone(e, s), water_dark(e, s), shelter(e, s), foliage(e));
@@ -208,11 +210,14 @@ impl Danger {
             } else if let Some(p) = portal.clone()
                 && !self.portal_seen.contains(&p)
             {
+                // The adapter retains one encounter; a changed full snapshot may be another portal.
+                self.pending_portal_encounter = e.world.nearby_portal_encounter;
                 self.pending_portal = Some(p);
             }
             // A pending present-tense announcement must remain observable when delivered.
             if self.pending_portal.as_ref() != portal.as_ref() {
                 self.pending_portal = None;
+                self.pending_portal_encounter = None;
             }
         }
         if matches!(phase(e), Some(TimePhase::Morning | TimePhase::Day)) {
@@ -488,11 +493,7 @@ impl Danger {
                 text("exploration", &["portal", "frame_nearby"]),
             )];
         }
-        if (previous_mode != Mode::Alert
-            || matches!(
-                e.event.name,
-                EventName::DangerDarknessChanged | EventName::TimePhaseChanged
-            ))
+        if previous_mode != Mode::Alert
             && let Some(a) = self.advice(e, now, s)
         {
             return vec![a];

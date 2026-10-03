@@ -205,7 +205,7 @@ mod tests {
         let entry = root.join("long_term/haiku_entries.jsonl");
         let bytes=json!({"id":"fixture","created_at":"2026-09-29T00:00:00Z","text":"今朝の草地","world":{"biome":"plains"}}).to_string()+"\n";
         std::fs::write(&entry, &bytes).unwrap();
-        let helper = root.join("dialogue_helper.py");
+        let helper = root.join("haiku_tokens.py");
         std::fs::write(&helper, "raise AssertionError('must not start')\n").unwrap();
         let mut config = DialogueConfig {
             python: "/missing/recall-python".into(),

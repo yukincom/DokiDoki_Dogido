@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from dogido_server import minecraft_knowledge
+from dev_tools.catalog_tools import minecraft_knowledge
 
 
 REFERENCE_DIR = ROOT / "reference" / "minecraft_technical"

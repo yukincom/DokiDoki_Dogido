@@ -6,11 +6,12 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from dogido_server.memory import MemoryStore
+from test_support import read_jsonl
 from check_dialogue import register, row, submit, wait_for
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import ready, install, step, session
 from check_workshop_edits import edit, finish, revisions
+from check_workshop_revision import wire
 
 TEXT = "はるのいろ/さくらのはみる/あさひかる"
 
@@ -25,24 +26,29 @@ def main():
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         original = wait_for(lambda: stored(sid))
-        calls = install(control, lambda text, prompt, n: edit(text))
-        finish(base, send, sid, "上五を『さくらいろ』にして")
+        # Only a generated proposal awaits adoption; a direct player edit is
+        # already persisted by the current workshop contract.
+        editor_calls, proposal_steps = wire(control, stored, sid)
+        r = finish(base, send, sid, "上五のさくらのはを別の表現に直して")
+        assert r.get("workshop_outcome") == "revision_proposed", r
         pending = hud(sid)["pending_lines"]
+        assert pending == ["さくらいろ", *LINES[1:]] and hud(sid)["canonical_lines"] == LINES
+        assert len(editor_calls) == 1 and len(proposal_steps) == 2 and not revisions(folder, sid)
         r = finish(base, send, sid, "今の句を保存して")
         assert r.get("memory_outcome") == "already_saved" and not r["llm_reports"], r
         assert stored(sid) == original and not revisions(folder, sid)
         assert hud(sid)["pending_lines"] == pending and hud(sid)["state"] == "open"
         passed.append("save_last_deduplicates_original_without_adopting_pending")
         r = finish(base, send, sid, "直し: " + TEXT)
-        assert r.get("memory_outcome") == "saved" and not r["llm_reports"] and len(calls) == 1, (r, log.read_text())
+        assert r.get("memory_outcome") == "saved" and not r["llm_reports"], (r, log.read_text())
+        assert len(editor_calls) == 1 and len(proposal_steps) == 2
         saved = revisions(folder, sid)
         assert len(saved) == 1 and saved[0]["source"] == "formal" and saved[0]["parent_revision_id"] is None
         assert saved[0]["revised_text"] == TEXT.replace("/", "\n") and saved[0]["base_text"] == "\n".join(LINES)
         assert all(line["provenance"] == "formal" and not line["source_atom_ids"] for line in saved[0]["lines"])
         assert stored(sid) == original and hud(sid)["state"] == "closed" and not session(base, sid)["history"]
-        old = MemoryStore(folder / "memory/sessions" / sid)
-        assert old._read_jsonl(old.haiku_revisions_path) == saved
-        passed.append("formal_full_replacement_saves_literal_input_then_closes_and_python_reads_it")
+        assert read_jsonl(folder / "memory/sessions" / sid / "long_term/haiku_revisions.jsonl") == saved
+        passed.append("formal_full_replacement_persists_literal_input_then_closes")
         r = direct(base, sid, "直し: はる/さくら/あさ")
         latest = revisions(folder, sid)[-1]
         assert r.get("memory_outcome") == "saved" and latest["parent_revision_id"] == saved[0]["id"], r
@@ -52,22 +58,35 @@ def main():
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
-        install(control, lambda text, prompt, n: edit(text))
-        finish(base, send, sid, "上五を『さくらいろ』にして")
-        finish(base, send, sid, "採用して")
-        first = revisions(folder, sid)[0]
+        original = wait_for(lambda: stored(sid))
+        calls = install(control, lambda text, prompt, n: edit(text))
+        r = finish(base, send, sid, "上五を『さくらいろ』にして")
+        first_saved = revisions(folder, sid)
+        assert r.get("workshop_outcome") == "player_edit_saved" and len(first_saved) == 1, r
+        first = first_saved[0]
+        assert first["source"] == "player_line_confirmed" and first["parent_revision_id"] is None
+        assert first["revised_text"] == "\n".join(["さくらいろ", *LINES[1:]])
+        assert hud(sid)["canonical_lines"] == ["さくらいろ", *LINES[1:]] and not hud(sid)["pending_lines"]
+        assert stored(sid) == original
         r = finish(base, send, sid, "こう直して: " + TEXT)
-        saved = revisions(folder, sid)[-1]
-        assert r.get("memory_outcome") == "saved" and not r["llm_reports"], r
+        saved_revisions = revisions(folder, sid)
+        assert len(saved_revisions) == 2 and saved_revisions[0] == first
+        saved = saved_revisions[-1]
+        assert r.get("memory_outcome") == "saved" and not r["llm_reports"] and len(calls) == 1, r
         assert saved["source"] == "conversational" and saved["base_text"] == first["revised_text"] and saved["parent_revision_id"] == first["id"]
-        assert hud(sid)["state"] == "closed"
+        assert saved["revised_text"] == TEXT.replace("/", "\n")
+        assert hud(sid)["state"] == "closed" and stored(sid) == original
         passed.append("conversational_full_verse_follows_last_accepted_revision")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
-        calls = install(control, lambda text, prompt, n: edit(text))
-        finish(base, send, sid, "上五を『さくらいろ』にして")
+        original = wait_for(lambda: stored(sid))
+        editor_calls, proposal_steps = wire(control, stored, sid)
+        r = finish(base, send, sid, "上五のさくらのはを別の表現に直して")
+        assert r.get("workshop_outcome") == "revision_proposed", r
         pending = hud(sid)["pending_lines"]
+        assert pending == ["さくらいろ", *LINES[1:]] and hud(sid)["canonical_lines"] == LINES
+        assert stored(sid) == original and not revisions(folder, sid)
         path = folder / "memory/sessions" / sid / "long_term/haiku_revisions.jsonl"
         path.mkdir()
         r = finish(base, send, sid, "直し: " + TEXT)
@@ -75,8 +94,10 @@ def main():
         assert hud(sid)["pending_lines"] == pending and hud(sid)["canonical_lines"] == LINES and hud(sid)["state"] == "open"
         path.rmdir()
         r = finish(base, send, sid, "直し: 一/二/三/四")
-        assert r.get("memory_outcome") == "invalid_input" and not revisions(folder, sid) and len(calls) == 1, r
-        assert hud(sid)["pending_lines"] == pending
+        assert r.get("memory_outcome") == "invalid_input" and not r["llm_reports"] and not revisions(folder, sid), r
+        assert len(editor_calls) == 1 and len(proposal_steps) == 2
+        assert hud(sid)["pending_lines"] == pending and hud(sid)["canonical_lines"] == LINES
+        assert hud(sid)["state"] == "open" and stored(sid) == original
         passed.append("failed_or_malformed_save_preserves_canonical_and_pending")
 
     with fixture(memory_enabled=False) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
@@ -99,8 +120,7 @@ def main():
         assert len(entries) == 2 and all(e["author"] == "player" for e in entries)
         assert entries[0]["trigger"] == entries[1]["trigger"] and entries[0]["id"] != entries[1]["id"]
         assert not session(base, sid)["history"] and hud(sid)["state"] == "closed"
-        old = MemoryStore(folder / "memory/sessions" / sid)
-        assert old._read_jsonl(old.haiku_entries_path) == entries
+        assert read_jsonl(folder / "memory/sessions" / sid / "long_term/haiku_entries.jsonl") == entries
         r = direct(base, sid, "覚えてる句を教えて")
         assert "私の二つめの句" in r["text"] and "はるのいろ" in r["text"], r
         passed.append("player_poems_save_without_original_using_distinct_turn_ids_and_are_recalled")

@@ -116,6 +116,11 @@ fn check(row: &Row, labels: &FixtureLabels) {
                         .as_object_mut()
                         .unwrap()
                         .remove("player_chat_plan_focus");
+                    assert_eq!(input["prompt"]["details"]["dialogue_choice"], true);
+                    input["prompt"]["details"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("dialogue_choice");
                     eq(
                         &input,
                         &row.expected["input"],
@@ -284,7 +289,13 @@ fn deictic_identification_uses_frozen_crosshair_and_not_catalog_search() {
         let mut reply =
             chat_validation::Turn::new(leaf.input("mock-chat", 72), "mock-chat", 72).unwrap();
         reply.request().unwrap();
-        assert!(!reply.complete(Some("尖ってるし緑色やな。")).unwrap());
+        assert!(
+            !reply
+                .complete(Some(
+                    r#"{"action":"speak","speech":"尖ってるし緑色やな。"}"#
+                ))
+                .unwrap()
+        );
         let retry = reply.request().unwrap();
         assert!(
             retry
@@ -294,7 +305,11 @@ fn deictic_identification_uses_frozen_crosshair_and_not_catalog_search() {
                 .content
                 .contains("名前を先に")
         );
-        assert!(reply.complete(Some("よう見えへんな。")).unwrap());
+        assert!(
+            reply
+                .complete(Some(r#"{"action":"speak","speech":"よう見えへんな。"}"#))
+                .unwrap()
+        );
         assert_eq!(
             reply.take_outcome().unwrap().final_text,
             format!("それは{label}やで。")
@@ -439,11 +454,13 @@ fn named_mob_hints_reach_leaf_without_becoming_presence_or_catalog_lookup() {
                 .into_request()
                 .unwrap()
                 .messages;
-            assert!(
-                messages
-                    .iter()
-                    .any(|m| m.content.contains("エンダーマン：黒い、長身、紫の目"))
-            );
+            assert!(messages.iter().any(|m| {
+                m.content.contains(
+                    leaf.details["named_entity_description_hints"]
+                        .as_str()
+                        .unwrap(),
+                )
+            }));
         }
     }
 }

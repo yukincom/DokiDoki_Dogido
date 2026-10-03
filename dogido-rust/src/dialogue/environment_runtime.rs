@@ -60,9 +60,6 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
     if event.smell_observation.is_some() {
         data["smell_observation"] = incoming["smell_observation"].clone();
     }
-    if !event.zombie_scent_clues.is_empty() {
-        data["zombie_scent_clues"] = incoming["zombie_scent_clues"].clone();
-    }
     if !event.ambient_sounds.is_empty() {
         data["ambient_sounds"] = incoming["ambient_sounds"].clone();
     }
@@ -86,6 +83,12 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
         && event.player.position.x.is_some()
         && event.player.position.y.is_some()
         && event.player.position.z.is_some();
+    if fabric_sections && world_complete && player_complete {
+        // These producer events sample both sections even when no mob/crosshair
+        // target exists. Do not let an old target overwrite newer measurements.
+        data["passive_mobs"] = incoming["passive_mobs"].clone();
+        data["look_target"] = incoming["look_target"].clone();
+    }
     for section in ["world", "player"] {
         for (key, value) in incoming[section].as_object().unwrap() {
             let current_absence = section == "player" && player_complete && key == "vehicle"
@@ -96,6 +99,8 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
                         "structure"
                             | "nearby_portal_type"
                             | "nearby_portal_distance"
+                            | "nearby_portal_encounter"
+                            | "visible_villager_count"
                             | "nearby_end_portal_frame_distance"
                             | "respawn_distance"
                             | "boss_omen_kind"
@@ -161,6 +166,36 @@ pub(super) fn focus(
             dark_push_context_before: light.dark_push_before,
             dark_push_recovered: light.recovered,
         },
+    }
+}
+
+/// Reuse one factual/history context when a queued decision is about to run.
+pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) {
+    for action in actions {
+        if !crate::reaction_leaf::is_model_reaction(action) {
+            continue;
+        }
+        let leaf = action.leaf.as_mut().unwrap();
+        let kind = if leaf.kind == crate::environment::reaction::KIND {
+            action.kind
+        } else {
+            leaf.kind.as_str()
+        };
+        let key = if leaf.kind == crate::environment::reaction::KIND {
+            "reaction_context"
+        } else {
+            "conversation_context"
+        };
+        if !leaf.details[key].is_object() {
+            leaf.details[key] = json!({});
+        }
+        let context = s
+            .conversation_observation
+            .context()
+            .unwrap_or_default()
+            .for_reaction(kind, &leaf.details);
+        leaf.details[key]["world_context"] = json!(context);
+        leaf.details[key]["recent"] = json!({"conversation":s.history.rows()});
     }
 }
 
@@ -243,29 +278,16 @@ impl Dialogue {
                 Delivery::Ambient
             };
         }
-        // One existing opportunity, one model decision. Only completed dialogue
-        // and completed reactions are conversational context, not observations.
-        let mut reactions: Vec<_> = d
-            .rows
-            .iter()
-            .rev()
-            .filter(|r| {
-                r["session_id"] == sid
-                    && r["source"] == "game_observation"
-                    && r["playback_status"] == "completed"
-                    && r["text"].as_str().is_some_and(|s| !s.is_empty())
-            })
-            .take(3)
-            .map(|r| r["text"].clone())
-            .collect();
-        reactions.reverse();
+        // Player replies and environmental opportunities share the same history
+        // (including chosen silence) and the same code-owned world projection.
         let s = &d.sessions[sid];
-        let recent = json!({"completed_conversation":s.history.completed_pairs(),"spoken_reactions":reactions});
+        let recent = json!({"conversation":s.history.rows()});
         if let Some(event) = s.environment_latest.as_ref() {
             for action in &mut actions {
                 crate::environment::reaction::attach(action, event, &recent, &self.config.combat);
             }
         }
+        refresh_dialogue_context(s, &mut actions);
         if urgent {
             let s = &d.sessions[sid];
             if s.cancel.is_some()
@@ -494,7 +516,7 @@ fn priority(actions: &[Speech]) -> u8 {
             "dark_push_no_light" => 7,
             "dark_push_stop" | "dark_push_after_breath" | "dark_push_breath" => 8,
             "night_warning_surface" | "night_warning_cave" => 9,
-            "weather_transition" => 10,
+            "weather_transition" | "thunder_reaction" => 10,
             "smell" => 11,
             "ender_eye_throw" => 12,
             "portal_appearance" => 13,
@@ -521,6 +543,264 @@ mod tests {
     use std::time::Instant;
 
     #[test]
+    fn villager_routine_reaches_chat_and_both_reaction_routes_then_disappears() {
+        let d = Dialogue::new(DialogueConfig::default()).unwrap();
+        d.register("routine", "試験", false);
+        let mut value = empty_event("試験");
+        value["player"] = json!({"dimension":"minecraft:overworld"});
+        value["world"] = json!({"time_of_day":11000,"sky_visible":false});
+        value["passive_mobs"] = json!([{"type":"villager","is_baby":true}]);
+        let mut data = d.data.lock().unwrap();
+        let s = data.sessions.get_mut("routine").unwrap();
+        for (time, expected) in [(11000, "play"), (12000, "sleep")] {
+            value["world"]["time_of_day"] = time.into();
+            let event = GameEvent::parse(value.clone()).unwrap();
+            s.conversation_observation.observe(
+                crate::conversation_observation::project(&event, None, 32.0, 7.0, 5000).unwrap(),
+            );
+            for kind in ["ambient", "portal_appearance"] {
+                let mut action = Speech::new(kind, "気になるな。");
+                action.delivery = crate::combat::model::Delivery::Ambient;
+                action.leaf = Some(crate::combat::model::LeafRequest {
+                    kind: kind.into(),
+                    temperature: 0.65,
+                    details: json!({"mob":"子供","mob_is_baby":true,"__ambient_guard":{"mob_type":"villager"},"portal_type":"nether_portal","portal_encounter":"arrived","dimension":"minecraft:overworld"}),
+                });
+                if kind == "ambient" {
+                    crate::environment::reaction::attach(
+                        &mut action,
+                        &event,
+                        &json!({}),
+                        &crate::combat::model::Settings::default(),
+                    );
+                }
+                refresh_dialogue_context(s, std::slice::from_mut(&mut action));
+                let leaf = action.leaf.unwrap();
+                let input = json!({"kind":leaf.kind,"details":leaf.details,"model":"test","max_tokens":72,"temperature":0.65,"fallback_text":action.text});
+                let request = if kind == "ambient" {
+                    crate::environment::reaction::Prepared::new(&input, "test")
+                        .unwrap()
+                        .request
+                } else {
+                    crate::reaction_leaf::Leaf::prepare(&input, "test", 72)
+                        .unwrap()
+                        .request
+                };
+                let body: serde_json::Value =
+                    serde_json::from_str(&request.messages[1].content).unwrap();
+                assert_eq!(
+                    body["villager_routines"]["villagers"][0]["activity"],
+                    expected
+                );
+                assert!(body["world_context"].get("villager_routines").is_none());
+                if expected == "sleep" {
+                    assert_eq!(
+                        body["world_context"]["changes"][0]["now"]["villagers"][0]["activity"],
+                        "sleep"
+                    );
+                }
+            }
+            let input = json!({"user_text":"子供たち、元気だね。","world_context":s.conversation_observation.context(),"dialogue_choice":true});
+            let original = input.clone();
+            let messages = crate::chat_prompt::messages(&input).unwrap();
+            assert!(
+                messages[1]
+                    .content
+                    .contains("【観測範囲の村人の日課（時刻からの予定）】")
+            );
+            assert!(messages[1].content.contains(if expected == "sleep" {
+                "休息・睡眠の時間"
+            } else {
+                "遊びの時間"
+            }));
+            assert_eq!(input, original);
+        }
+        value["passive_mobs"] = json!([]);
+        let event = GameEvent::parse(value).unwrap();
+        s.conversation_observation.observe(
+            crate::conversation_observation::project(&event, None, 32.0, 7.0, 5000).unwrap(),
+        );
+        let messages=crate::chat_prompt::messages(&json!({"user_text":"戻ろう。","world_context":s.conversation_observation.context(),"dialogue_choice":true})).unwrap();
+        assert!(!messages[1].content.contains("villager_routines"));
+        assert!(!messages[1].content.contains("休息・睡眠の時間"));
+    }
+
+    #[test]
+    fn authored_catalogue_survives_session_refresh_and_real_model_request_builders() {
+        let d = Dialogue::new(DialogueConfig::default()).unwrap();
+        d.register("catalogue", "試験", false);
+        let mut value = empty_event("試験");
+        value["player"] = json!({"dimension":"minecraft:the_nether"});
+        value["world"] =
+            json!({"nearby_portal_type":"nether_portal","ominous_sound_kind":"sculk_shrieker"});
+        value["passive_mobs"] = json!([{"type":"cow"}]);
+        let event = GameEvent::parse(value).unwrap();
+        let context =
+            crate::conversation_observation::project(&event, None, 32.0, 7.0, 5000).unwrap();
+        let mut data = d.data.lock().unwrap();
+        let s = data.sessions.get_mut("catalogue").unwrap();
+        s.conversation_observation.observe(context);
+        let original = s.conversation_observation.context().unwrap();
+        for (kind, details) in [
+            (
+                "portal_appearance",
+                json!({"portal_type":"nether_portal","dimension":"minecraft:the_nether","portal_encounter":"arrived"}),
+            ),
+            (
+                "deep_dark_ominous_sound",
+                json!({"ominous_kind":"sculk_shrieker","ominous_stage":2}),
+            ),
+            ("ambient", json!({"mob":"cow","mob_temperament":"passive"})),
+            ("daylight_water", json!({"hostiles":["スケルトン"]})),
+        ] {
+            let mut action = Speech::new(kind, "気になるな。");
+            action.delivery = crate::combat::model::Delivery::Ambient;
+            action.leaf = Some(crate::combat::model::LeafRequest {
+                kind: if kind == "daylight_water" {
+                    "daylight_water_skeleton"
+                } else {
+                    kind
+                }
+                .into(),
+                details,
+                temperature: 0.65,
+            });
+            if kind == "ambient" {
+                crate::environment::reaction::attach(
+                    &mut action,
+                    &event,
+                    &json!({}),
+                    &crate::combat::model::Settings::default(),
+                );
+            }
+            refresh_dialogue_context(s, std::slice::from_mut(&mut action));
+            let leaf = action.leaf.unwrap();
+            let input = json!({"kind":leaf.kind,"details":leaf.details,"model":"test","temperature":0.65,"max_tokens":72,"fallback_text":action.text});
+            let request = if kind == "ambient" {
+                crate::environment::reaction::Prepared::new(&input, "test")
+                    .unwrap()
+                    .request
+            } else {
+                crate::reaction_leaf::Leaf::prepare(&input, "test", 72)
+                    .unwrap()
+                    .request
+            };
+            let model_context: serde_json::Value =
+                serde_json::from_str(&request.messages[1].content).unwrap();
+            assert!(
+                model_context["world_context"]
+                    .get("catalog_knowledge")
+                    .is_none()
+            );
+            let rows = model_context["catalog_knowledge"]["entries"]
+                .as_array()
+                .unwrap();
+            let shrieker = rows.iter().find(|r| r["id"] == "sculk_shrieker").unwrap();
+            assert_eq!(
+                shrieker["general"]["note"],
+                "角のような飾りがついている。スカルクセンサーが反応を受信し、叫び声をあげ、ウォーデンを喚ぶ。"
+            );
+            assert_eq!(shrieker["basis"], json!(["heard"]));
+            assert!(!rows.iter().any(|r| r["id"] == "warden"));
+            let cow = rows.iter().find(|r| r["id"] == "cow").unwrap();
+            assert_eq!(
+                cow["general"]["poetic"],
+                crate::chat_catalog::catalog().all_mob_entries()["cow"]["poetic"]
+            );
+            if kind == "daylight_water" {
+                assert_eq!(
+                    rows.iter().find(|r| r["id"] == "skeleton").unwrap()["basis"],
+                    json!(["reaction_target"])
+                );
+            }
+            if kind == "portal_appearance" {
+                assert_eq!(
+                    model_context["properties"]["portal_role"],
+                    "オーバーワールドへの帰り道（出口）。"
+                );
+                assert_eq!(
+                    rows.iter().find(|r| r["id"] == "nether_portal").unwrap()["general"]["note"],
+                    "ネザーへ誘う不思議なポータル。紫色の光が渦巻く"
+                );
+            }
+            assert_eq!(s.conversation_observation.context().unwrap(), original);
+        }
+        let input = json!({"user_text":"今の音、気になるな。","world_context":original,"dialogue_choice":true});
+        let before = input.clone();
+        let messages = crate::chat_prompt::messages(&input).unwrap();
+        let text = &messages[1].content;
+        let (_, knowledge) = text
+            .split_once("【対象のカタログ情報（一般的特徴・表現材料）】")
+            .unwrap();
+        assert!(knowledge.contains("角のような飾りがついている。"));
+        assert_eq!(input, before);
+    }
+
+    #[test]
+    fn partial_fabric_refreshes_crosshair_and_passive_environment_together() {
+        let d = Dialogue::new(DialogueConfig::default()).unwrap();
+        d.register("s", "試験", false);
+        let mut value = empty_event("試験");
+        value["adapter"] = "dogido-fabric-client".into();
+        value["world"] =
+            json!({"weather":"rain","biome":"plains","local_light":15,"sky_visible":true});
+        value["player"] = json!({"dimension":"minecraft:overworld","held_item":"minecraft:air",
+            "position":{"x":0,"y":64,"z":0},"hotbar":{"selected_slot":0,"slots":[]}});
+        value["passive_mobs"] = json!([{"type":"salmon","identity":{"entity_id":"fish"},
+            "environment":{"touching_water":true,"on_ground":false}}]);
+        value["look_target"] = json!({"kind":"entity","name":"salmon","identity":{"entity_id":"fish"},
+            "environment":{"touching_water":true,"on_ground":false}});
+        let full = GameEvent::parse(value.clone()).unwrap();
+        let mut data = d.data.lock().unwrap();
+        let session = data.sessions.get_mut("s").unwrap();
+        session.received = Some(Instant::now());
+        session.latest = Some(full.clone());
+        session.environment_latest = Some(full.clone());
+        session.conversation_observation.observe(
+            crate::conversation_observation::project(&full, None, 24.0, 7.0, 10000).unwrap(),
+        );
+        value["event"]["name"] = "ambient_mob_detected".into();
+        value["passive_mobs"][0]["environment"] = json!({"touching_water":false,"on_ground":true});
+        value.as_object_mut().unwrap().remove("look_target");
+        let partial = GameEvent::parse(value.clone()).unwrap();
+        let merged = context(session, &partial, false);
+        assert!(merged.look_target.is_none());
+        let projected =
+            crate::conversation_observation::project(&merged, None, 24.0, 7.0, 10000).unwrap();
+        assert_eq!(
+            projected.observations["mob_states"][0]["medium"],
+            "水に触れず地面にいる"
+        );
+        session.conversation_observation.observe(projected);
+        assert!(
+            session
+                .conversation_observation
+                .context()
+                .unwrap()
+                .changes
+                .iter()
+                .any(|c| c.kind == "mob_environment")
+        );
+        session.environment_latest = Some(merged);
+        value["event"]["name"] = "hostile_audio_detected".into();
+        value["passive_mobs"] = json!([]);
+        let gone = context(session, &GameEvent::parse(value).unwrap(), false);
+        assert!(gone.passive_mobs.is_empty() && gone.look_target.is_none());
+        session.conversation_observation.observe(
+            crate::conversation_observation::project(&gone, None, 24.0, 7.0, 10000).unwrap(),
+        );
+        assert!(
+            !session
+                .conversation_observation
+                .context()
+                .unwrap()
+                .changes
+                .iter()
+                .any(|c| c.kind == "mob_environment")
+        );
+    }
+
+    #[test]
     fn fabric_partial_clears_absent_environment_without_clearing_visuals_or_freshness() {
         let d = Dialogue::new(DialogueConfig::default()).unwrap();
         d.register("s", "試験", false);
@@ -528,6 +808,7 @@ mod tests {
         value["adapter"] = "dogido-fabric-client".into();
         value["world"] = json!({"weather":"clear","biome":"plains","local_light":15,"sky_visible":true,
             "structure":"village","nearby_portal_type":"nether_portal","nearby_portal_distance":2,
+            "nearby_portal_encounter":"appeared","visible_villager_count":10,
             "nearby_end_portal_frame_distance":3,"thunder_sound_recent_ms":0});
         value["player"] = json!({"dimension":"minecraft:overworld","held_item":"minecraft:air",
             "position":{"x":0,"y":64,"z":0},"hotbar":{"selected_slot":0,"slots":[]},
@@ -547,6 +828,8 @@ mod tests {
             "structure",
             "nearby_portal_type",
             "nearby_portal_distance",
+            "nearby_portal_encounter",
+            "visible_villager_count",
             "nearby_end_portal_frame_distance",
             "thunder_sound_recent_ms",
         ] {
@@ -557,6 +840,8 @@ mod tests {
         assert!(!crate::dialogue::complete_observation(&partial));
         let merged = context(s, &partial, false);
         assert!(merged.world.structure.is_none() && merged.world.nearby_portal_type.is_none());
+        assert!(merged.world.nearby_portal_encounter.is_none());
+        assert!(merged.world.visible_villager_count.is_none());
         assert!(
             merged.world.nearby_portal_distance.is_none()
                 && merged.world.nearby_end_portal_frame_distance.is_none()

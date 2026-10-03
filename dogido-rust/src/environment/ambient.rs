@@ -24,17 +24,23 @@ pub fn current_smell_reply(event: &GameEvent) -> Speech {
     smell::speech(event)
 }
 
-/// Only the stable semantic identity of the winning smell, never location,
-/// intensity, object IDs or hidden nearby-source observations.
+pub fn current_smell_query_reply(event: &GameEvent, text: &str) -> Speech {
+    smell::query_reply(event, text)
+}
+
+/// Resolved smell and bounded estimates, never exact positions, object IDs,
+/// raw intensity/history or hidden nearby-source observations.
 pub(crate) fn smell_context(event: &GameEvent) -> Option<Value> {
     let observation = smell::observation(event)?;
     if observation.status != crate::events::SmellObservationStatus::Present {
         return None;
     }
-    Some(
-        json!({"specificity":observation.specificity,"smell_id":observation.smell_id,
-        "category":observation.category,"valence":observation.valence}),
-    )
+    let mut context = json!({"specificity":observation.specificity,"smell_id":observation.smell_id,
+        "category":observation.category,"valence":observation.valence});
+    if let Some(direction) = observation.direction_estimate {
+        context["direction_estimate"] = json!(direction);
+    }
+    Some(context)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -111,7 +117,7 @@ impl Ambient {
             self.note_player_input(now);
         }
         // Missing fields in partial audio/mob events are not absence observations.
-        if complete || e.smell_observation.is_some() || !e.zombie_scent_clues.is_empty() {
+        if complete || e.smell_observation.is_some() {
             self.smell.update(e);
         }
         if !e.visual_threats.is_empty()
@@ -213,7 +219,10 @@ impl Ambient {
             return None;
         }
         self.smell.mark(e, now);
-        Some(smell::speech(e))
+        Some(smell::query_reply(e, text))
+    }
+    pub(crate) fn reconsider_smell_spatial(&mut self, e: &GameEvent) {
+        self.smell.reconsider_spatial(e);
     }
     pub fn smell_answer(&mut self, e: &GameEvent, now: u64) -> Speech {
         self.smell.mark(e, now);
@@ -301,7 +310,7 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     }
     match speech.kind {
         "smell" if super::reaction::is_model_reaction(speech) => true,
-        "smell" => smell::speech(e).text == speech.text,
+        "smell" => smell::still_applicable(speech, e),
         "firefly" | "firefly_cue" => {
             surroundings::phase(e) == Some("night")
                 && e.world.nearby_firefly_bush_count.unwrap_or(0) > 0
@@ -336,8 +345,7 @@ impl Ambient {
         let zombie = e
             .smell_observation
             .as_ref()
-            .is_some_and(|o| o.smell_id == Some(Zombie) && o.specificity == Some(Source))
-            || e.smell_observation.is_none() && !e.zombie_scent_clues.is_empty();
+            .is_some_and(|o| o.smell_id == Some(Zombie) && o.specificity == Some(Source));
         if zombie {
             self.smell.action(e, now, s)
         } else {

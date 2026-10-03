@@ -155,8 +155,7 @@
           "accept_pending",
           "reject_pending",
           "close_workshop",
-          "unrelated",
-          "defer_to_legacy"
+          "unrelated"
         ],
         "title": "Action",
         "type": "string"
@@ -280,7 +279,6 @@
     "ask",
     "close_workshop",
     "compare",
-    "defer_to_legacy",
     "explain",
     "inspect",
     "propose_revision",

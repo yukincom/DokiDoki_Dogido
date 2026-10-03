@@ -36,7 +36,7 @@ def main():
         def candidate(incoming):
             if incoming['max_tokens']!=72:return None
             return {'id':'mock','object':'chat.completion','created':0,'model':'mock-model',
-                'choices':[{'index':0,'message':{'role':'assistant','content':next(sequence)},'finish_reason':'stop'}]}
+                'choices':[{'index':0,'message':{'role':'assistant','content':json.dumps({'action':'speak','speech':next(sequence)},ensure_ascii=False)},'finish_reason':'stop'}]}
         control['completion_override']=candidate
         reconsider=say('今日はのんびり歩こう')
         assert reconsider['text']=='せやな、いっしょに歩こうか。',reconsider
@@ -69,7 +69,7 @@ def main():
         # Keep the prior target above stable while supplying separate leaf wording.
         def repair_reply(incoming):
             if incoming['max_tokens']!=72:return None
-            return {'id':'mock','object':'chat.completion','created':0,'model':'mock-model','choices':[{'index':0,'message':{'role':'assistant','content':'仲間になる話やったんやな。取り違えてすまん。'},'finish_reason':'stop'}]}
+            return {'id':'mock','object':'chat.completion','created':0,'model':'mock-model','choices':[{'index':0,'message':{'role':'assistant','content':json.dumps({'action':'speak','speech':'仲間になる話やったんやな。取り違えてすまん。'},ensure_ascii=False)},'finish_reason':'stop'}]}
         control['completion_override']=repair_reply
         repaired=say('違う、仲間になるのは無理ってこと')
         assert repaired['llm_reports'][0]['plan']['action']=='repair_conversation',repaired

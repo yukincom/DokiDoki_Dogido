@@ -7,6 +7,7 @@ from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import install, ready, step
 from check_workshop_edits import finish, revisions
 from check_dialogue import submit, row, wait_for
+from test_support import read_jsonl
 
 
 def proposal(text):
@@ -61,11 +62,9 @@ def main():
             assert len(saved[0]["line_sources"])==3 and saved[0]["lines"][0]["provenance"]=="generated_confirmed"
             assert saved[0]["lines"][1:]==original[0]["lines"][1:]
             assert stored(sid)==original and hud(sid)["canonical_lines"]==["さくらいろ",*LINES[1:]]
-            # Legacy Python reader sees the canonical original + generated revision.
-            from dogido_server.memory import MemoryStore
-            memory=MemoryStore(folder/"memory/sessions"/sid)
-            assert memory.list_haiku_revisions()[0]["source"]=="generated_confirmed"
-            passed.append("inspect_then_propose_accept" if inspect else "propose_pending_then_explicit_accept_and_python_read")
+            persisted = read_jsonl(folder/"memory/sessions"/sid/"long_term/haiku_revisions.jsonl")
+            assert persisted == saved and persisted[0]["source"] == "generated_confirmed"
+            passed.append("inspect_then_propose_accept" if inspect else "propose_pending_then_explicit_accept_and_persist")
     for mode in ["bad_cas","checker_missing","replan_illegal"]:
         with fixture() as (base,process,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
             sid=ready(base,send,rows);wait_for(lambda:stored(sid))

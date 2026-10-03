@@ -48,12 +48,7 @@ fn cases_match(catalog: &Catalog, cases: &Value) {
         let get = |n: usize| &pool[row[n].as_u64().unwrap() as usize];
         let query = get(0).as_str().unwrap();
         let observed: Vec<String> = serde_json::from_value(get(1).clone()).unwrap();
-        let hits = catalog.find_topics(
-            query,
-            &observed,
-            row[2].as_i64().unwrap(),
-            row[3].as_f64().unwrap(),
-        );
+        let hits = catalog.find_topics(query, row[2].as_i64().unwrap(), row[3].as_f64().unwrap());
         assert_eq!(
             serde_json::to_value(&hits).unwrap(),
             *get(4),
@@ -118,12 +113,6 @@ fn chat_catalog_observation_cannot_replace_the_players_query_target() {
         }
         assert_eq!(base.len(), observed.len());
     }
-    let general = c.find_topics("前哨基地", &["pillager".into()], 3, 5.0);
-    let chat = c.player_chat_topics("前哨基地", &["pillager".into()]);
-    assert_ne!(
-        general, chat,
-        "fixture must distinguish observed boost from chat policy"
-    );
 }
 #[test]
 fn chat_catalog_kana_short_name_and_mob_read_normalization_boundaries() {

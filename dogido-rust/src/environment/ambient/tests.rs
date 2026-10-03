@@ -132,18 +132,17 @@ fn partial_absence_does_not_reset_smell() {
     ));
 }
 #[test]
-fn explicit_none_overrides_legacy_and_old_adapter_is_immediate() {
+fn explicit_zombie_observation_requires_two_samples() {
     let mut a = Ambient::default();
     let e = event(
-        json!({"zombie_scent_clues":[{"type":"zombie","entity_id":"z1","distance_band":"close","certainty":"medium"}]}),
+        json!({"smell_observation":{"status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","specificity":"source","effective_strength":8}}),
     );
+    assert!(actions(&mut a, &e, 0).is_empty());
     assert_eq!(
-        actions(&mut a, &e, 0)[0].cue_id,
+        actions(&mut a, &e, 1000)[0].cue_id,
         Some("zombie_scent_warning")
     );
-    let e = event(
-        json!({"smell_observation":{"status":"none"},"zombie_scent_clues":[{"type":"zombie","entity_id":"z1","distance_band":"close","certainty":"medium"}]}),
-    );
+    let e = event(json!({"smell_observation":{"status":"none"}}));
     assert_eq!(smell::speech(&e).cue_id, Some("smell_none"));
 }
 #[test]
@@ -561,4 +560,29 @@ fn forest_entry_resumes_after_player_priority_without_waiting_for_casual_to_end(
             "ambient"
         );
     }
+}
+
+#[test]
+fn village_leaf_uses_full_observed_count_not_four_mob_entries() {
+    for count in [Value::Null, json!(0), json!(9), json!(10)] {
+        let mut a = Ambient::default();
+        let e = event(
+            json!({"world":{"structure":"village_plains","visible_villager_count":count},"passive_mobs":[]}),
+        );
+        let line = actions(&mut a, &e, 0).remove(0);
+        let details = &line.leaf.unwrap().details;
+        assert_eq!(details["group_id"], "village");
+        assert_eq!(details["visible_villager_count"], count);
+    }
+    let mut a = Ambient::default();
+    let e = event(json!({"world":{"structure":"stronghold","visible_villager_count":10}}));
+    assert!(
+        actions(&mut a, &e, 0)[0]
+            .leaf
+            .as_ref()
+            .unwrap()
+            .details
+            .get("visible_villager_count")
+            .is_none()
+    );
 }

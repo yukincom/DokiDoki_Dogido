@@ -6,21 +6,9 @@ use crate::{
     types::{ChatMessage, GeneratedText, GenerationRequest, Role},
 };
 use anyhow::{Context, Result, ensure};
-use serde::Deserialize;
 use serde_json::{Value, json};
 
 pub(crate) const KIND: &str = "environment_reaction";
-const SYSTEM: &str = "あんたはMinecraftの怖がりな相棒、ドギドや。一人称は『オレ』。親しみのある自然な関西弁で話してな。\n\
-今は環境の変化に気づいた場面や。ここでひとこと話すか、黙って一緒におるか、自分で選んでな。\
-話すんやったら、何に心が動いたかを選んで、感想・気遣い・問いかけなど自然な反応を返してな。長さも会話の流れに合わせてええし、毎回実況や注意をせんでもええで。\
-直近の会話に自然につながるなら、つなげてええで。会話履歴は前に話したことで、今の世界を見た証拠にはせんといてな。\n\
-observationsが今回観測できたことや。propertiesは種類や場所の一般的な性質で、今そこで起きた出来事とは分けて考えてな。\
-観測してへん敵の存在・不在、位置・個数、動作、匂いの発生源を勝手に足さんといてな。\
-友好的な動物に『触るな』と行動を禁止せんといてな。中立の動物には、優しく接しよか、くらいでええで。\
-雷の驚き声は別に出るから、悲鳴を繰り返さんといてな。操作や保存を実行したことにもせんといてな。\n\
-JSONを一つだけ返してな。話すときは {\"action\":\"speak\",\"speech\":\"自然なひとこと\"}、\
-黙るときは {\"action\":\"silent\",\"speech\":\"\"} や。ほかのキーや説明文は付けんといてな。";
-
 fn normalized(value: Option<&str>) -> String {
     value
         .unwrap_or("")
@@ -44,14 +32,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     }
     let topic = match action.kind {
         "ambient" => "mob",
-        "weather_transition"
-            if action
-                .leaf
-                .as_ref()
-                .is_some_and(|l| l.details["thunder_reaction"] == true) =>
-        {
-            "thunder"
-        }
+        "thunder_reaction" => "thunder",
         "weather_transition" => "weather",
         "smell" => "smell",
         "special_biome_entry"
@@ -84,14 +65,14 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
                     observations[key] = value.clone();
                 }
             }
-            properties["temperament"] = details["mob_temperament"].clone();
+            properties["temperament"] = observations["mob_temperament"].clone();
         }
         "thunder" => {
             let heard = event.world.thunder_sound_recent_ms.is_some_and(|age| {
                 age >= 0 && age as u64 <= settings.ms("weather_sound_recent_ms")
             });
             observations = json!({"thunder_heard":heard,"nearby_lightning_observed":details["nearby_lightning"] == true});
-            properties["note"] = "雷鳴だけやと、落ちた場所や距離は分からへんで。".into();
+            properties["note"] = "雷鳴だけでは落雷地点や距離は未確認。".into();
         }
         "weather" => {
             let sky = event.world.sky_visible == Some(true);
@@ -101,11 +82,26 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
             observations["thunder_heard"] = (scene == "thunder_suspected").into();
             if sky {
                 let precipitation = precipitation_kind(event);
+                if details["weather_to"] == "rain" {
+                    // The game weather enum covers both rain and snowfall; use
+                    // the same current-altitude fact as the model observation.
+                    let after_thunder = details["weather_from"] == "thunder";
+                    details["scene"] = match (precipitation.as_str(), after_thunder) {
+                        (Some("rain"), false) => "rain_started",
+                        (Some("rain"), true) => "rain_after_thunder",
+                        (Some("snow"), false) => "snow_started",
+                        (Some("snow"), true) => "snow_after_thunder",
+                        (Some("none"), false) => "overcast_started",
+                        (Some("none"), true) => "overcast_after_thunder",
+                        _ => "weather_changed",
+                    }
+                    .into();
+                }
                 observations["local_precipitation"] = precipitation.clone();
                 guard["precipitation"] = precipitation;
             }
             guard["sky_visible"] = json!(event.world.sky_visible);
-            properties["note"] = "weatherはゲームの天候区分や。実際の雨・雪はlocal_precipitationを見てな。空が見えへんときは、音から気づいたことまでにしといてな。天候が雷雨というだけで、雷鳴や落雷を見聞きしたことにはせんといてな。".into();
+            properties["note"] = "weatherはゲームの天候区分。local_precipitationは現在地で確認した降水。空が見えない場合は音からの観測。雷雨区分だけでは雷鳴や落雷の観測根拠にならない。".into();
         }
         "smell" => {
             let Some(smell) = super::ambient::smell_context(event) else {
@@ -113,7 +109,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
             };
             guard["smell"] = smell.clone();
             observations["smell"] = smell.clone();
-            properties["note"] = "匂いの観測が一件あるで。specificityがcategoryやmixedやったら、特定の花・食べ物・モブの匂いやと決めんといてな。方向・距離・個数・姿は分からへんで。".into();
+            properties["note"] = "specificityは匂いの識別範囲。categoryは種類まで、mixedは混合。direction_estimateは最も強く匂う大まかな方角。姿・距離・個数は匂いからは未確認。".into();
             // The fixed smell cue would otherwise replace the generated words.
             // Explicit player questions bypass this function and retain the cue.
             action.cue_id = None;
@@ -136,7 +132,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
             guard["overhead_cover"] = json!(event.world.overhead_cover_type);
             guard["biome_scene_visible"] = json!(projection.include_biome_context);
             properties["note"] = if projection.cave_biome || action.kind.starts_with("occluded_entry") {
-                "地上の昼夜と、日光の届かへん場所の明るさは別やで。昼でも暗い場所は気になるけど、それだけで今そこに敵がおるとは分からへんで。"
+                "地上の昼夜と、日光の届かへん場所の明るさは別やで。昼でも暗い場所があるが、それだけでは現在の敵の在否は未確認。"
             } else if action.kind == "foliage_shade" || ["forest", "taiga", "jungle", "grove", "pale_garden"].iter().any(|s| biome.contains(s)) {
                 "木陰には昼でも日光が届かへん場所があるで。所在地のバイオームだけやと、見える木々や今の敵の在否までは分からへんで。"
             } else {
@@ -171,6 +167,38 @@ fn precipitation_kind(event: &GameEvent) -> Value {
         .and_then(|climate| super::precipitation::from_event(event, &climate))
         .map(|p| json!(p.precipitation_kind))
         .unwrap_or_else(|_| json!("unknown"))
+}
+
+/// A new estimate of the same smell may replace an unplayed estimate once.
+/// Absence, changed smell identity or other stale guards are not this case.
+pub(crate) fn only_smell_spatial_changed(action: &Speech, event: &GameEvent) -> bool {
+    let Some(leaf) = action
+        .leaf
+        .as_ref()
+        .filter(|l| l.kind == KIND && action.kind == "smell")
+    else {
+        return false;
+    };
+    let Some(current) = super::ambient::smell_context(event) else {
+        return false;
+    };
+    let Some(old) = leaf.details["__reaction_guard"].get("smell") else {
+        return false;
+    };
+    let mut before = old.clone();
+    let mut after = current.clone();
+    for value in [&mut before, &mut after] {
+        let Some(object) = value.as_object_mut() else {
+            return false;
+        };
+        object.remove("direction_estimate");
+    }
+    if old == &current || before != after {
+        return false;
+    }
+    let mut updated = action.clone();
+    updated.leaf.as_mut().unwrap().details["__reaction_guard"]["smell"] = current;
+    still_applicable(&updated, event)
 }
 
 /// These guards never use generated wording as observation identity.
@@ -210,19 +238,6 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
     true
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum Action {
-    Speak,
-    Silent,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Reply {
-    action: Action,
-    speech: String,
-}
-
 pub(crate) struct Prepared {
     pub request: GenerationRequest,
     fallback: String,
@@ -235,7 +250,23 @@ impl Prepared {
         );
         let context = input["details"]["reaction_context"]
             .as_object()
-            .context("reaction context")?;
+            .context("reaction context")?
+            .clone();
+        let mut context = context;
+        crate::catalog_knowledge::separate(&mut context);
+        crate::villager_routines::separate(&mut context);
+        if let Some(kind) = match context.get("topic").and_then(Value::as_str) {
+            Some("weather") => Some("weather_transition"),
+            Some("thunder") => Some("thunder_reaction"),
+            _ => None,
+        } {
+            let shared = crate::reaction_leaf::context(kind, &input["details"])?;
+            for key in ["event", "situation", "self_state"] {
+                if let Some(value) = shared.get(key) {
+                    context.insert(key.into(), value.clone());
+                }
+            }
+        }
         ensure!(
             matches!(
                 context.get("topic").and_then(Value::as_str),
@@ -250,11 +281,11 @@ impl Prepared {
             messages: vec![
                 ChatMessage {
                     role: Role::System,
-                    content: SYSTEM.into(),
+                    content: crate::companion_prompt::dialogue("normal"),
                 },
                 ChatMessage {
                     role: Role::User,
-                    content: serde_json::to_string(context)?,
+                    content: serde_json::to_string(&context)?,
                 },
             ],
             temperature: 0.65,
@@ -279,54 +310,12 @@ impl Prepared {
         if generated.finish_reason.as_deref() == Some("length") {
             return (self.fallback.clone(), "truncated_output");
         }
-        // Parse the whole response: never salvage a child object from cut-off JSON.
-        let Ok(reply) = serde_json::from_str::<Reply>(generated.text.trim()) else {
-            return (self.fallback.clone(), "invalid_contract");
-        };
-        match reply.action {
-            Action::Silent if reply.speech.is_empty() => (String::new(), "silent"),
-            Action::Speak => {
-                let text = reply.speech.trim();
-                if broken_output(text) {
-                    return (self.fallback.clone(), "broken_output");
-                }
-                (text.to_owned(), "speak")
-            }
-            _ => (self.fallback.clone(), "invalid_contract"),
+        match crate::speech_choice::parse(&generated.text) {
+            Ok(crate::speech_choice::Choice::Silent) => (String::new(), "silent"),
+            Ok(crate::speech_choice::Choice::Speak(text)) => (text, "speak"),
+            Err(reason) => (self.fallback.clone(), reason),
         }
     }
-}
-
-// Check transport/decoding damage and unmistakable loops, not vocabulary,
-// length, dialect, language choice, or the meaning of the model's reaction.
-fn broken_output(text: &str) -> bool {
-    if text.is_empty()
-        || text
-            .chars()
-            .any(|c| c == '\u{fffd}' || c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
-        || ["<|im_start|>", "<|im_end|>", "<|endoftext|>"]
-            .iter()
-            .any(|p| text.contains(p))
-    {
-        return true;
-    }
-    let sentences: Vec<_> = text
-        .split(['。', '！', '？', '\n'])
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .collect();
-    if sentences.len() >= 3 && sentences.iter().all(|s| *s == sentences[0]) {
-        return true;
-    }
-    let chars: Vec<_> = text.chars().filter(|c| !c.is_whitespace()).collect();
-    chars.len() >= 24
-        && (1..=chars.len() / 4).any(|width| {
-            chars.len().is_multiple_of(width)
-                && chars
-                    .iter()
-                    .enumerate()
-                    .all(|(i, c)| *c == chars[i % width])
-        })
 }
 
 #[cfg(test)]

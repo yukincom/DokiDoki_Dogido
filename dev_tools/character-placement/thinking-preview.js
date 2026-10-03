@@ -1,71 +1,72 @@
-// Authored texture stays byte-for-byte intact. The overlay protects ALL facial
-// features and both hands from displacement. Fixed artwork overlaps the moving
-// layer by more than the maximum displacement (32 source pixels per axis).
+// Ten authored PNGs, composited at exactly the same canvas origin.
+// Body, tail and pupils swap independently; face/hands are never deformed.
 (() => {
   const byId = id => document.getElementById(id);
   const ns = 'http://www.w3.org/2000/svg';
+  const {WIDTH, HEIGHT, LAYER_NAMES: names, frameAt} = window.DogidoThinkingAnimation;
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 1210 1249');
+  svg.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', '川柳を考えるドギド。外周だけがゆっくりもこもこ動く');
+  svg.setAttribute('aria-label', '川柳を考えるドギド。描き分けた体と尻尾、左右の目線が別々に動く');
   svg.id = 'thinking-pose';
   svg.setAttribute('hidden', '');
-  // Only original artwork is composited: no repainting, symmetry or mirroring.
-  // Clip boundaries run through flat body color, away from the outer ink line.
-  svg.innerHTML = `
-    <defs>
-      <filter id="thinking-outline" x="-3%" y="-3%" width="106%" height="106%" color-interpolation-filters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.0025 0.0035" numOctaves="1" seed="8" result="soft-noise"/>
-        <feComponentTransfer in="soft-noise" result="visible-noise">
-          <feFuncR type="linear" slope="2" intercept="-0.5"/>
-          <feFuncG type="linear" slope="2" intercept="-0.5"/>
-        </feComponentTransfer>
-        <feDisplacementMap in="SourceGraphic" in2="visible-noise" scale="64" xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-      <clipPath id="thinking-fixed-interior" clipPathUnits="userSpaceOnUse">
-        <path d="M310 70 L815 80 L885 275 L935 445 L940 890 L130 900 L110 590 L180 400 L265 275 Z"/>
-        <rect x="880" y="1000" width="350" height="270"/>
-      </clipPath>
-    </defs>
-    <image id="thinking-edge" href="thinking2.png" width="1210" height="1249"/>
-    <image href="thinking2.png" width="1210" height="1249" clip-path="url(#thinking-fixed-interior)"/>
-  `;
+  const base = '../../adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/';
+  const layers = Object.fromEntries(names.map(name => {
+    const layer = document.createElementNS(ns, 'image');
+    layer.id = `thinking-${name}`;
+    layer.setAttribute('href', `${base}thinking_${name}.png`);
+    layer.setAttribute('width', String(WIDTH));
+    layer.setAttribute('height', String(HEIGHT));
+    svg.append(layer);
+    return [name, layer];
+  }));
   byId('character').append(svg);
-  const noise = svg.querySelector('feTurbulence');
-  const edge = svg.querySelector('#thinking-edge');
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let active = false;
   let frame = 0;
   let enlarged = false;
   let previousSize = byId('size').value;
+  let started = 0;
+  let ready = false;
+  let lastFrame = '';
+
+  function showFrame(time, motion) {
+    const {body, tail, eyes} = frameAt(time, motion);
+    const key = `${body}/${tail}/${eyes}`;
+    if (key === lastFrame) return;
+    lastFrame = key;
+    const visible = new Set(['face', `body_${body}`, `tail_${tail}`, `eye_${eyes}`]);
+    for (const [name, layer] of Object.entries(layers)) layer.setAttribute('display', visible.has(name) ? 'inline' : 'none');
+    svg.dataset.frame = key;
+  }
 
   function animate(time) {
-    // Continuous, deterministic drift; no random per-frame jumps or blinking.
-    const wave = Math.sin(time / 1000 * 2 * Math.PI / 5.2);
-    noise.setAttribute('baseFrequency', `${0.0025 + wave * 0.0011} ${0.0035 + wave * 0.0015}`);
+    showFrame(time - started, true);
     frame = requestAnimationFrame(animate);
   }
 
   function updateThinking() {
     cancelAnimationFrame(frame);
-    const moving = active && byId('motion').checked && !reduceMotion.matches && !document.hidden;
+    const moving = active && ready && byId('motion').checked && !reduceMotion.matches && !document.hidden;
     svg.toggleAttribute('hidden', !active);
     byId('pose').hidden = active;
     svg.classList.toggle('float', moving);
     if (moving) {
-      edge.setAttribute('filter', 'url(#thinking-outline)');
+      started = performance.now();
+      showFrame(0, true);
       frame = requestAnimationFrame(animate);
     } else {
-      edge.removeAttribute('filter');
+      showFrame(0, false);
     }
     byId('thinking-toggle').setAttribute('aria-pressed', String(active));
     byId('thinking-toggle').textContent = active ? 'いつもの顔へ戻す' : '考え顔を試す';
-    byId('thinking-status').textContent = active ? 'thinking2.png：作者の原画・反転なし' : '';
-    byId('artwork-note').textContent = `絵：${active ? 'thinking2.png' : 'Dogido_nomal.png'} ／ 作者制作の原画・反転なし`;
+    byId('thinking-status').textContent = active ? 'thinking：体5枚・尻尾2枚・目線2枚＋固定の顔と手' : '';
+    byId('artwork-note').textContent = `絵：${active ? 'thinking 原画10枚' : 'Dogido_nomal.png'} ／ 作者制作の原画・反転なし`;
     if (active) byId('mode-label').textContent = '川柳を考え中：動きのプレビュー';
   }
 
   byId('thinking-toggle').addEventListener('click', () => {
+    if (!ready) return;
     active = !active;
     setMode('normal');
     updateThinking();
@@ -91,4 +92,20 @@
     if (event.detail !== 'normal') { active = false; updateThinking(); }
   });
   updateThinking();
+  byId('thinking-toggle').disabled = true;
+  const preloads = names.map(name => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth === WIDTH && img.naturalHeight === HEIGHT) resolve();
+      else reject(new Error(`Unexpected canvas: thinking_${name}.png`));
+    };
+    img.onerror = reject;
+    img.src = `${base}thinking_${name}.png`;
+  }));
+  Promise.all(preloads).then(() => {
+    ready = true;
+    byId('thinking-toggle').disabled = false;
+  }).catch(() => {
+    byId('thinking-status').textContent = '考え顔の素材を読み込めませんでした。ページを再読み込みしてください。';
+  });
 })();

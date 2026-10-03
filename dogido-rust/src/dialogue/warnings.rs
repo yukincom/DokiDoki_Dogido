@@ -351,6 +351,30 @@ fn named_paths(directory: &Path, text: &str) -> Option<Vec<PathBuf>> {
     tail.is_file().then_some(vec![path, tail])
 }
 impl Dialogue {
+    fn remember_environment_outcome(d: &mut Data, turn: &str, result: Option<&Value>) {
+        let Some(result) = result else {
+            return;
+        };
+        let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) else {
+            return;
+        };
+        for key in ["environment_reaction_outcome", "reaction_leaf_outcome"] {
+            if let Some(outcome) = result.get(key) {
+                row[key] = outcome.clone();
+                if !row["model_reaction_outcomes"].is_array() {
+                    row["model_reaction_outcomes"] = json!([]);
+                }
+                row["model_reaction_outcomes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(outcome.clone());
+            }
+        }
+        if let Some(revision) = result.get("observation_revision") {
+            row["observation_revision"] = revision.clone();
+        }
+    }
+
     pub(super) fn cancel_chat(d: &mut Data, sid: &str, reason: &str) {
         Self::cancel_web(d, sid, reason);
         if reason != "new_player_input" {
@@ -377,6 +401,23 @@ impl Dialogue {
         s.pending_warning = None;
         s.pending_input = None;
         if let Some(w) = s.warning.take() {
+            if !w.started
+                && matches!(
+                    reason,
+                    "stale_observation" | "stale_environment_reaction" | "target_changed_or_gone"
+                )
+                && observation_fresh(s)
+                && !d.rows.iter().any(|r| {
+                    r["turn_id"] == w.turn && r["environment_reaction_outcome"] == "silent"
+                })
+                && let Some(event) = s.environment_latest.as_ref().or(s.latest.as_ref())
+                && interruption_reason(event).is_none()
+                && w.actions
+                    .iter()
+                    .any(|a| crate::environment::reaction::only_smell_spatial_changed(a, event))
+            {
+                s.ambient.reconsider_smell_spatial(event);
+            }
             for a in &w.actions {
                 if let Scope::Workshop { id, version } = &a.scope {
                     let end = if matches!(reason, "new_player_input" | "manual_interrupt") {
@@ -415,10 +456,7 @@ impl Dialogue {
         let turn = id("warning");
         let (cancel, rx) = watch::channel(false);
         let s = d.sessions.get_mut(sid).unwrap();
-        if !actions
-            .iter()
-            .all(crate::environment::reaction::is_model_reaction)
-        {
+        if !actions.iter().all(crate::reaction_leaf::is_model_reaction) {
             s.haiku.last_activity = Instant::now();
         }
         s.warning = Some(Active {
@@ -441,7 +479,7 @@ impl Dialogue {
         };
         let mut pending_display = actions.to_vec();
         for action in &mut pending_display {
-            if crate::environment::reaction::is_model_reaction(action) {
+            if crate::reaction_leaf::is_model_reaction(action) {
                 action.text.clear();
             }
         }
@@ -497,12 +535,34 @@ impl Dialogue {
             }
         }
         if current {
+            let reaction = d.rows.iter().find(|r| r["turn_id"] == turn).cloned();
             let s = d.sessions.get_mut(sid).unwrap();
+            if let Some(row) = reaction {
+                let outcomes = row["model_reaction_outcomes"].as_array();
+                let has_model = outcomes.is_some_and(|items| !items.is_empty());
+                let all_silent = has_model && outcomes.unwrap().iter().all(|v| v == "silent");
+                if matches!(
+                    status,
+                    PlaybackStatus::NotSelected | PlaybackStatus::Completed
+                ) && all_silent
+                {
+                    s.history.silent(turn);
+                } else if status == PlaybackStatus::Completed && has_model {
+                    s.history
+                        .push(turn, "assistant", row["text"].as_str().unwrap_or(""));
+                }
+                if (status == PlaybackStatus::NotSelected && all_silent
+                    || status == PlaybackStatus::Completed)
+                    && let Some(revision) = row["observation_revision"].as_u64()
+                {
+                    s.conversation_observation.considered(revision);
+                }
+            }
             s.status = status;
             let model_only = s.warning.as_ref().is_some_and(|w| {
                 w.actions
                     .iter()
-                    .all(crate::environment::reaction::is_model_reaction)
+                    .all(crate::reaction_leaf::is_model_reaction)
             });
             if !model_only || matches!(status, PlaybackStatus::Started | PlaybackStatus::Completed)
             {
@@ -579,6 +639,9 @@ impl Dialogue {
                     s.warning.as_mut().unwrap().actions=resolved.clone();
                     if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){row["text"]=display_text(&resolved).into();row["combat_actions"]=json!(resolved);}
                 }
+                let s=&d.sessions[&sid];
+                super::environment_runtime::refresh_dialogue_context(s,&mut resolved);
+                d.sessions.get_mut(&sid).unwrap().warning.as_mut().unwrap().actions=resolved.clone();
                 resolved
             };
             let mut config=self.config.clone();
@@ -588,9 +651,10 @@ impl Dialogue {
             let began=AtomicBool::new(false);
             let mut rendered=actions.clone();
             for action in &mut rendered {
-                if crate::environment::reaction::is_model_reaction(action) { action.text.clear(); }
+                if crate::reaction_leaf::is_model_reaction(action) { action.text.clear(); }
             }
             let mut silent_only=true;
+            let mut thunder_scream_completed=false;
             for (index,action) in actions.iter().enumerate(){
                 anyhow::ensure!(!*cancel.borrow(),"cancelled");
                 let action_began=AtomicBool::new(false);
@@ -600,13 +664,17 @@ impl Dialogue {
                 };
                 let mut text=action.text.clone();
                 if let Some(leaf)=&action.leaf{
+                    let details=leaf_details_after_cue(action, thunder_scream_completed);
                     let input=json!({"op":"combat_leaf","model":config.model,"max_tokens":config.max_tokens,
-                        "reading_engine":config.reading_engine,"kind":leaf.kind,"details":leaf.details,
+                        "reading_engine":config.reading_engine,"kind":leaf.kind,"details":details,
                         "temperature":leaf.temperature,"fallback_text":text});
                     let result=bridge::render(&config,&self.llm,input,&mut cancel).await;
-                    if crate::environment::reaction::is_model_reaction(action) {
+                    if crate::reaction_leaf::is_model_reaction(action) {
                         anyhow::ensure!(!*cancel.borrow(),"cancelled");
                         let mut d=self.data.lock().unwrap();
+                        // An already returned silent choice consumes this opportunity
+                        // even if its old bearing fails the check below.
+                        Self::remember_environment_outcome(&mut d,&turn,result.as_ref().ok());
                         let valid=d.sessions.get(&sid).is_some_and(|s| s.warning.as_ref().is_some_and(|w|w.turn==turn)
                             && applicable(action,s,&config.warnings,&config.combat));
                         if !valid {
@@ -624,22 +692,20 @@ impl Dialogue {
                                 row["text"]=display_text(&rendered).into();
                                 if !row["llm_reports"].is_array(){row["llm_reports"]=json!([]);}
                                 if let Some(reports)=result["llm_reports"].as_array(){row["llm_reports"].as_array_mut().unwrap().extend(reports.iter().cloned());}
-                                if let Some(outcome)=result.get("environment_reaction_outcome") {
-                                    row["environment_reaction_outcome"]=outcome.clone();
-                                }
                             }
                             d.revision+=1;
-                            if result["environment_reaction_outcome"] == "silent" { continue; }
+                            if result["environment_reaction_outcome"] == "silent" || result["reaction_leaf_outcome"] == "silent" { continue; }
                         }
                         Err(e) if *cancel.borrow()=>return Err(e),
                         Err(e)=>{
                             tracing::warn!(event="combat_leaf_fallback",kind=leaf.kind,error=%e);
-                            if crate::environment::reaction::is_model_reaction(action) {
+                            if crate::reaction_leaf::is_model_reaction(action) {
                                 rendered[index].text=action.text.clone();
                                 let mut d=self.data.lock().unwrap();
+                                let key=if leaf.kind == crate::environment::reaction::KIND { "environment_reaction_outcome" } else { "reaction_leaf_outcome" };
+                                Self::remember_environment_outcome(&mut d,&turn,Some(&json!({key:"generation_error"})));
                                 if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn) {
                                     row["text"]=display_text(&rendered).into();
-                                    row["environment_reaction_outcome"]="generation_error".into();
                                 }
                                 d.revision+=1;
                             }
@@ -669,6 +735,7 @@ impl Dialogue {
                 }else if let Some(path)=action.cue_id.and_then(|id|config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,id))){
                     self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;
                 }else if !text.is_empty(){self.audio.speak(&config,&text,&mut cancel,&started).await?;}
+                if action.kind=="thunder_cue" && action_began.load(Ordering::SeqCst) { thunder_scream_completed=true; }
             }
             Ok::<PlaybackStatus,anyhow::Error>(if silent_only { PlaybackStatus::NotSelected } else { PlaybackStatus::Completed })
         }.await;
@@ -703,6 +770,18 @@ impl Dialogue {
     }
 }
 
+fn leaf_details_after_cue(action: &Speech, thunder_scream_completed: bool) -> Value {
+    let mut details = action
+        .leaf
+        .as_ref()
+        .map(|leaf| leaf.details.clone())
+        .unwrap_or(Value::Null);
+    if action.kind == "thunder_reaction" && thunder_scream_completed {
+        details["scream_status"] = "completed".into();
+    }
+    details
+}
+
 pub(super) fn is_query(actions: &[Speech]) -> bool {
     actions.len() == 1
         && matches!(
@@ -719,12 +798,13 @@ pub(super) fn answer_fixed_query(
     settings: &crate::combat::model::Settings,
 ) -> Speech {
     if kind == "smell" {
-        let mut reply = crate::environment::ambient::current_smell_reply(
+        let mut reply = crate::environment::ambient::current_smell_query_reply(
             session
                 .environment_latest
                 .as_ref()
                 .or(session.latest.as_ref())
                 .expect("fresh query"),
+            text,
         );
         reply.delivery = Delivery::PlayerReply;
         return reply;
@@ -744,45 +824,120 @@ pub(super) fn answer_fixed_query(
 mod tests {
     use super::*;
     #[test]
-    fn silent_model_consideration_preserves_haiku_quiet_time_but_speech_and_cue_do_not() {
-        let d = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
-        d.register("s", "試験", false);
-        let mut action = Speech::new("ambient", "まだ発話しない");
+    fn thunder_generation_does_not_promote_a_queued_cue_to_completed() {
+        let mut action = Speech::new("thunder_reaction", "雷の一言");
         action.leaf = Some(crate::combat::model::LeafRequest {
             kind: crate::environment::reaction::KIND.into(),
-            details: json!({}),
-            temperature: 0.5,
+            details: json!({"scream_status":"scheduled"}),
+            temperature: 0.65,
         });
-        let original = Instant::now() - Duration::from_secs(60);
-        let (turn, _rx) = {
+        assert_eq!(
+            leaf_details_after_cue(&action, false)["scream_status"],
+            "scheduled"
+        );
+        assert_eq!(
+            leaf_details_after_cue(&action, true)["scream_status"],
+            "completed"
+        );
+        action.leaf.as_mut().unwrap().details["scream_status"] = "not_scheduled".into();
+        assert_eq!(
+            leaf_details_after_cue(&action, false)["scream_status"],
+            "not_scheduled"
+        );
+        assert_eq!(
+            action.leaf.as_ref().unwrap().details["scream_status"],
+            "not_scheduled"
+        );
+    }
+
+    #[test]
+    fn returned_silent_choice_is_consumed_before_spatial_invalidation() {
+        use crate::combat::model::Mode;
+        fn smell(cardinal: &str) -> GameEvent {
+            GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture","sequence":1,
+                "observed_at":chrono::Utc::now(),"event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+                "smell_observation":{"status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant",
+                    "source_kind":"entity","specificity":"source","effective_strength":5,
+                    "direction_estimate":{"cardinal":cardinal}}})).unwrap()
+        }
+        for outcome in ["silent", "speak"] {
+            let dialogue = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
+            dialogue.register("s", "試験", false);
+            let old = smell("east");
+            let current = smell("west");
+            let settings = &dialogue.config.combat;
+            let mut data = dialogue.data.lock().unwrap();
+            let session = data.sessions.get_mut("s").unwrap();
+            session.ambient.update(&old, 1000, true, settings);
+            session.ambient.update(&old, 1100, true, settings);
+            let mut action = session
+                .ambient
+                .priority_smell(&old, 1100, Mode::Normal, false, settings)
+                .unwrap();
+            action.delivery = Delivery::Ambient;
+            crate::environment::reaction::attach(&mut action, &old, &json!({}), settings);
+            session.latest = Some(current.clone());
+            session.environment_latest = Some(current.clone());
+            session.received = Some(Instant::now());
+            session.ambient.update(&current, 1200, true, settings);
+            let (turn, _rx) = Dialogue::queue_actions(&mut data, "s", &[action], None);
+            Dialogue::remember_environment_outcome(
+                &mut data,
+                &turn,
+                Some(&json!({"environment_reaction_outcome":outcome})),
+            );
+            Dialogue::cancel_warning(&mut data, "s", "stale_environment_reaction");
+            let session = data.sessions.get_mut("s").unwrap();
+            session.ambient.update(&current, 1300, true, settings);
+            let retry =
+                session
+                    .ambient
+                    .priority_smell(&current, 1300, Mode::Normal, false, settings);
+            assert_eq!(retry.is_some(), outcome == "speak", "{outcome}");
+        }
+    }
+    #[test]
+    fn silent_model_consideration_preserves_haiku_quiet_time_but_speech_and_cue_do_not() {
+        for kind in [crate::environment::reaction::KIND, "newly_burning_visual"] {
+            let d = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
+            d.register("s", "試験", false);
+            let mut action = Speech::new("ambient", "まだ発話しない");
+            action.leaf = Some(crate::combat::model::LeafRequest {
+                kind: kind.into(),
+                details: json!({}),
+                temperature: 0.5,
+            });
+            let original = Instant::now() - Duration::from_secs(60);
+            let (turn, _rx) = {
+                let mut data = d.data.lock().unwrap();
+                data.sessions.get_mut("s").unwrap().haiku.last_activity = original;
+                Dialogue::queue_actions(&mut data, "s", &[action.clone()], None)
+            };
+            assert_eq!(
+                d.data.lock().unwrap().sessions["s"].haiku.last_activity,
+                original
+            );
+            d.warning_update("s", &turn, PlaybackStatus::NotSelected, None);
+            {
+                let data = d.data.lock().unwrap();
+                assert_eq!(data.sessions["s"].haiku.last_activity, original);
+                assert!(data.sessions["s"].warning.is_none());
+            }
+            let (turn, _rx) =
+                Dialogue::queue_actions(&mut d.data.lock().unwrap(), "s", &[action.clone()], None);
+            d.warning_update("s", &turn, PlaybackStatus::Started, None);
+            assert!(d.data.lock().unwrap().sessions["s"].haiku.last_activity > original);
+            d.warning_update("s", &turn, PlaybackStatus::Completed, None);
             let mut data = d.data.lock().unwrap();
             data.sessions.get_mut("s").unwrap().haiku.last_activity = original;
-            Dialogue::queue_actions(&mut data, "s", &[action.clone()], None)
-        };
-        assert_eq!(
-            d.data.lock().unwrap().sessions["s"].haiku.last_activity,
-            original
-        );
-        d.warning_update("s", &turn, PlaybackStatus::NotSelected, None);
-        {
-            let data = d.data.lock().unwrap();
-            assert_eq!(data.sessions["s"].haiku.last_activity, original);
-            assert!(data.sessions["s"].warning.is_none());
+            let _ = Dialogue::queue_actions(
+                &mut data,
+                "s",
+                &[Speech::new("thunder_cue", "ひいっ！"), action],
+                None,
+            );
+            assert!(data.sessions["s"].haiku.last_activity > original);
         }
-        let (turn, _rx) =
-            Dialogue::queue_actions(&mut d.data.lock().unwrap(), "s", &[action.clone()], None);
-        d.warning_update("s", &turn, PlaybackStatus::Started, None);
-        assert!(d.data.lock().unwrap().sessions["s"].haiku.last_activity > original);
-        d.warning_update("s", &turn, PlaybackStatus::Completed, None);
-        let mut data = d.data.lock().unwrap();
-        data.sessions.get_mut("s").unwrap().haiku.last_activity = original;
-        let _ = Dialogue::queue_actions(
-            &mut data,
-            "s",
-            &[Speech::new("thunder_cue", "ひいっ！"), action],
-            None,
-        );
-        assert!(data.sessions["s"].haiku.last_activity > original);
     }
     #[test]
     fn named_ushiro_uses_manifest_and_requires_both_fragments() {
@@ -802,5 +957,57 @@ mod tests {
             vec![names.join("voice.mp3"), names.join("ushiro_tail.mp3")]
         );
         std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn environmental_speech_and_silence_share_history_only_after_delivery_decision() {
+        for (kind, key) in [
+            (
+                crate::environment::reaction::KIND,
+                "environment_reaction_outcome",
+            ),
+            ("newly_burning_visual", "reaction_leaf_outcome"),
+        ] {
+            for (status, outcome, expected) in [
+                (PlaybackStatus::NotSelected, "silent", "event"),
+                (PlaybackStatus::Completed, "silent", "event"),
+                (PlaybackStatus::Completed, "speak", "assistant"),
+                (PlaybackStatus::Failed, "silent", ""),
+                (PlaybackStatus::Cancelled, "speak", ""),
+            ] {
+                let d = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
+                d.register("s", "試験", false);
+                let mut a = Speech::new("smell", "パンの匂いやな。");
+                a.leaf = Some(crate::combat::model::LeafRequest {
+                    kind: kind.into(),
+                    details: json!({}),
+                    temperature: 0.65,
+                });
+                let (turn, _rx) = {
+                    let mut data = d.data.lock().unwrap();
+                    let (t, rx) = Dialogue::queue_actions(&mut data, "s", &[a], None);
+                    Dialogue::remember_environment_outcome(
+                        &mut data,
+                        &t,
+                        Some(&json!({key:outcome})),
+                    );
+                    if outcome == "speak" {
+                        data.rows.iter_mut().find(|r| r["turn_id"] == t).unwrap()["text"] =
+                            "パンの匂いやな。".into();
+                    }
+                    (t, rx)
+                };
+                d.warning_update("s", &turn, status, None);
+                let data = d.data.lock().unwrap();
+                let h = &data.sessions["s"].history;
+                assert_eq!(
+                    h.rows()
+                        .first()
+                        .and_then(|r| r["role"].as_str())
+                        .unwrap_or(""),
+                    expected
+                );
+                assert!(h.completed_pairs().is_empty());
+            }
+        }
     }
 }

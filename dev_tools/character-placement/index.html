@@ -33,6 +33,7 @@
   .verse-input{display:block;width:100%;font:inherit;font-size:14px;border:1px solid #d9d5c5;border-radius:5px;background:#fffdf7;color:inherit;padding:7px}
   .float{animation:float 3.8s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
   .character svg{display:block;width:100%;height:auto;overflow:visible}.thinking-controls{border-bottom:1px solid #ded9c9;padding-bottom:14px;margin-bottom:18px}.thinking-controls p{font-size:12px}.thinking-controls .buttons{margin-bottom:8px}
+  #thinking-pose.float{animation-duration:7.6s}
   @media(prefers-reduced-motion:reduce){.float{animation:none}.scroll{transition:none}}
   aside{background:#fffcf4;border:1px solid #ded9c9;padding:20px;border-radius:12px}h2{font-size:15px;margin:0 0 20px}
   label{display:block;font-size:13px;margin:20px 0 8px}.value{float:right;color:#797663;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#758260}
@@ -51,7 +52,7 @@
       <footer><p id="background-note">背景：9/12の実プレイ録画。体力・満腹度・ホットバーを含むゲーム画面全体。<br>録画の3〜60秒をループ。現在のゲームとの連動はありません。</p><p id="artwork-note">絵：Dogido_nomal.png ／ 作者制作の太線原画・反転なし</p></footer>
     </section>
     <aside>
-      <section class="thinking-controls"><h2>川柳を考えるドギド</h2><div class="buttons"><button id="thinking-toggle" aria-pressed="false">考え顔を試す</button><button id="thinking-large" aria-pressed="false">動きを大きく見る</button></div><p>ふわふわ＋外周だけ、もこもこ。顔と手、小さな丸は原画のまま。ゲームの生成状態とは未連動です。</p><p id="thinking-status" role="status"></p></section>
+      <section class="thinking-controls"><h2>川柳を考えるドギド</h2><div class="buttons"><button id="thinking-toggle" aria-pressed="false">考え顔を試す</button><button id="thinking-large" aria-pressed="false">動きを大きく見る</button></div><p>作者の原画10枚。顔と手は固定し、5種類の体・尻尾・左右の目線を別々の間隔で切り替えます。この確認画面はゲームとは未連動です。</p><p id="thinking-status" role="status"></p></section>
       <div class="buttons mode-switch" aria-label="表示モード"><button data-mode="workshop" aria-pressed="true">掛け軸あり</button><button data-mode="normal" aria-pressed="false">終了・じわっと</button><button data-mode="danger" aria-pressed="false">危険・パッと</button></div>
       <div id="scroll-settings"><section class="edit-demo" aria-label="編集の表示を試す"><h2>句を直すとき</h2><button class="edit-intent" id="edit-intent" aria-pressed="false" aria-controls="edit-targets">句を直す</button><p class="note">音声指定の代わりに、掛け軸の「上・中・下」を押して試せます。</p><label class="check"><input id="edit-sound" type="checkbox" checked>操作音「ピッ」</label><form id="edit-form" hidden><label for="edit-replacement" id="replacement-label">置き換える言葉</label><input class="verse-input" id="edit-replacement" maxlength="7" autocomplete="off" disabled><div class="buttons"><button id="edit-apply" type="submit" disabled>表示に反映（仮）</button></div></form><p class="edit-feedback" id="edit-feedback" role="status"></p></section>
       <h2>掛け軸の置き場所</h2><button id="reveal">もう一度、浮かび上がる</button>
@@ -111,6 +112,7 @@ $('playback').addEventListener('click',()=>{if(video.paused)play();else video.pa
 document.querySelectorAll('[data-scene]').forEach(b=>b.addEventListener('click',()=>{const scene=b.dataset.scene;const isVideo=scene==='video'||scene==='cave';video.hidden=!isVideo;$('world').hidden=isVideo;$('playback').hidden=!isVideo;if(isVideo){const src=scene==='cave'?'cave.mp4':'gameplay.mp4';if(video.getAttribute('src')!==src)video.src=src;play();$('background-note').textContent=scene==='cave'?'背景：9/12の洞窟録画。体力・満腹度・ホットバーを含む画面全体。録画の2〜42秒をループ。':'背景：9/12の地上録画。体力・満腹度・ホットバーを含む画面全体。録画の3〜60秒をループ。';}else{video.pause();$('world').src=scene+'-full.png';$('world').alt=scene==='day'?'ホットバー全体とシャベルが写った昼の画面':'ホットバー全体と盾が写った夜の画面';$('background-note').textContent='背景：過去のスクリーンショット全体。こちらはクリエイティブ時のため体力・満腹度は表示されていません。'}document.querySelectorAll('[data-scene]').forEach(e=>e.setAttribute('aria-pressed',String(e===b)))}));
 </script>
 <script src="edit-preview.js"></script>
+<script src="thinking-animation.js"></script>
 <script src="thinking-preview.js"></script>
 <script src="blink-preview.js"></script>
 </html>

@@ -51,10 +51,7 @@ pub(super) fn is_neutral(k: &str) -> bool {
     NEUTRAL["items"].get(norm(k)).is_some()
 }
 pub(super) fn burns_in_daylight(k: &str) -> bool {
-    matches!(
-        norm(k).as_str(),
-        "skeleton" | "zombie" | "drowned" | "zombie_villager" | "zombified_piglin" | "phantom"
-    )
+    crate::mob_environment::burns_in_daylight(k)
 }
 pub(super) fn daylight(e: &GameEvent) -> bool {
     matches!(
@@ -87,7 +84,6 @@ pub(super) fn dragon_seen(e: &GameEvent) -> bool {
 pub(super) fn ground_count(e: &GameEvent, s: &Settings) -> usize {
     e.combat
         .hostiles_within_scan_ground
-        .or(e.combat.hostiles_within_30_ground)
         .map(|n| n.max(0) as usize)
         .unwrap_or_else(|| {
             e.visual_threats

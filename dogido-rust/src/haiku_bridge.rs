@@ -1,4 +1,4 @@
-//! 移行中の辞書・prompt補助。Rustがモデル呼出、検査、再試行とhelper寿命を所有する。
+//! 辞書tokenのIPC。Rustが準備・生成・検査・再試行とhelper寿命を所有する。
 use crate::{
     haiku::{
         self, Backend, GroundedHaikuResult, Input, LineForm, StructuredRequest, TransformRequest,

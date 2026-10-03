@@ -6,7 +6,7 @@ import sys
 from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from dogido_server.catalog_readings import configure_corrections_path, resolve_reading
+from test_support import read_jsonl
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import ready, install, step, session
 from check_dialogue import request, register, row, wait_for
@@ -35,10 +35,11 @@ def main():
         assert saved["source"]=="biome:meadow" and saved["session_id"] is None
         assert hud(sid)==before and session(base,sid)["workshop_history"]==history
         path=folder/"memory/long_term/catalog_corrections.jsonl"
-        configure_corrections_path(path)
-        try: assert resolve_reading("草地")=="くさち"
-        finally: configure_corrections_path(None)
-        passed.append("catalog_form_saves_without_model_turn_speech_or_workshop_change_and_python_reads_it")
+        persisted = read_jsonl(path)
+        assert len(persisted) == 1 and persisted[0] == saved, persisted
+        assert persisted[0]["surface"] == "草地" and persisted[0]["reading"] == "くさち", persisted
+        assert request(base,"/api/v1/catalog")["corrections"] == [saved]
+        passed.append("catalog_form_persists_without_model_turn_speech_or_workshop_change")
         request(base,"/api/v1/adapter-sessions/"+sid,method="DELETE")
         next_sid=register(base,preview=False)
         send(next_sid,world={"biome":"minecraft:meadow","time_phase":"morning","weather":"clear","sky_visible":True})
@@ -48,11 +49,10 @@ def main():
         passed.append("next_poem_uses_saved_reading_and_forbidden_misreading")
         request(base,"/api/v1/catalog/readings",{"surface":"草地","expected_id":saved["id"]},method="DELETE")
         assert request(base,"/api/v1/catalog")["corrections"]==[]
-        configure_corrections_path(path)
-        try: assert resolve_reading("草地") is None
-        finally: configure_corrections_path(None)
-        assert len(path.read_text().splitlines())==2
-        passed.append("removal_retains_audit_record_and_both_runtimes_drop_overlay")
+        audit = read_jsonl(path)
+        assert len(audit) == 2 and audit[0] == saved, audit
+        assert audit[1]["surface"] == "草地" and audit[1]["operation"] == "remove", audit
+        passed.append("removal_retains_audit_record_and_current_api_drops_overlay")
     with fixture(memory_enabled=False) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         assert request(base,"/api/v1/catalog")["enabled"] is False
         try: save(base); raise AssertionError("disabled save succeeded")

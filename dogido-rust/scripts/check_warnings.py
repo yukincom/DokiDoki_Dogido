@@ -9,7 +9,7 @@ import tempfile
 import threading
 import time
 from check_dialogue import dependencies, running, register, request, snapshot, wait_for, row, submit
-from compare_threats import event
+from test_support import event
 
 ROOT=Path(__file__).resolve().parents[1]
 

@@ -1,5 +1,5 @@
 //! Typed catalogue edits only. A conversation or model cannot submit this operation.
-use crate::{haiku::materials::Entries, reading_correction::Correction};
+use crate::reading_correction::Correction;
 use anyhow::{Result, ensure};
 use serde::Deserialize;
 use serde_json::{Value, json};

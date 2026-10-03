@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dogido_server.reference_catalog import (
+from dev_tools.catalog_tools.reference_catalog import (
     get_reference,
     load_reference_index,
     search_references,

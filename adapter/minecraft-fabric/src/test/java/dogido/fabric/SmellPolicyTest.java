@@ -119,7 +119,6 @@ final class SmellPolicyTest {
         );
         assertEquals("decay", touchingTie.smellId());
         assertEquals("category", touchingTie.specificity());
-        assertFalse(touchingTie.isSpecificZombie());
     }
 
     @Test

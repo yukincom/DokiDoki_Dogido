@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from dogido_server.entry_catalog import (
+from dev_tools.catalog_tools.entry_catalog import (
     biome_entries,
     biome_labels,
     block_entry,

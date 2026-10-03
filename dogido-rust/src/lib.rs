@@ -6,8 +6,10 @@ pub mod chat_names;
 pub mod chat_prompt;
 pub mod chat_topics;
 pub mod combat;
+pub mod companion_prompt;
 mod compat;
 pub mod contextual_asr;
+pub mod conversation_observation;
 pub mod dialogue;
 mod entry_catalog;
 pub mod environment;
@@ -37,9 +39,11 @@ pub mod poem_input;
 pub mod reading_correction;
 pub mod recall_query;
 pub mod server;
+pub mod speech_choice;
 pub mod threats;
 pub mod tts_reading;
 pub mod types;
+pub mod villager_routines;
 pub mod vocalization;
 pub mod voice;
 pub mod workshop;
@@ -60,6 +64,8 @@ pub mod chat_hints;
 
 pub mod chat_world;
 
+pub mod catalog_knowledge;
+pub mod mob_environment;
 pub mod world_catalog;
 
 pub mod chat_observation;

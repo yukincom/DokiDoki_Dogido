@@ -11,18 +11,11 @@ impl HotbarState {
         )
     }
 }
-impl ZombieScentClue {
+impl SmellDirectionEstimate {
     pub(super) fn validate_semantics(&self) -> Result<(), String> {
         ensure(
-            matches!(
-                self.distance_band,
-                DistanceBand::Touching | DistanceBand::VeryClose | DistanceBand::Close
-            ),
-            "zombie scent clue must be within the close distance band",
-        )?;
-        ensure(
-            self.certainty == Certainty::Medium,
-            "zombie scent clue certainty must be medium",
+            self.cardinal.is_some() || self.vertical.is_some(),
+            "smell direction estimate requires a direction",
         )
     }
 }
@@ -35,6 +28,18 @@ impl SmellObservation {
         use SmellObservationSpecificity as Specificity;
         use SmellObservationStatus as Status;
         use SmellObservationValence as Valence;
+        if self.direction_estimate.is_some() {
+            ensure(
+                self.status == Status::Present
+                    && self.specificity == Some(Specificity::Source)
+                    && matches!(
+                        self.source_kind,
+                        Some(Source::Block | Source::Entity | Source::DroppedItem)
+                    )
+                    && self.smell_id != Some(Id::RainAfter),
+                "smell spatial estimate requires a resolved external source",
+            )?;
+        }
         let resolved = [
             self.smell_id.is_some(),
             self.category.is_some(),
@@ -134,5 +139,11 @@ impl SmellObservation {
                 )
             }
         }
+    }
+}
+
+impl PassiveMobTemperament {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self { Self::Passive => "passive", Self::Neutral => "neutral" }
     }
 }

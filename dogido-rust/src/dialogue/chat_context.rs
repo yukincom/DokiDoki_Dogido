@@ -4,7 +4,6 @@ use crate::{
     chat_materials::{CompletedHistory, Context, Settings},
     chat_observation::{self, ChatObservationMemory, Labels, Snapshot},
     events::GameEvent,
-    haiku::materials::Entries,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -116,6 +115,7 @@ pub(super) fn capture(
             history,
             workshop_open: workshop.is_some(),
             workshop_details: workshop.map(workshop_details).transpose()?,
+            world_context: s.conversation_observation.context(),
         },
         settings: Settings {
             darkness_alert_threshold: settings.number("darkness_alert_threshold"),

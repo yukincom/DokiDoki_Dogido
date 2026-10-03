@@ -66,8 +66,35 @@ pub struct Specials {
     ominous_kind: Option<String>,
     ominous_seen_at: Option<u64>,
     ominous_comment_at: Option<u64>,
+    // Observation severity changes each frame; cooldown priority belongs to the selected speech.
+    ominous_comment_priority: u8,
     ominous_severity: u8,
     ominous_stage: u8,
+}
+
+/// Only accepted, fresh ominous observations can preempt an already selected lower reaction.
+pub(crate) fn incoming_ominous_priority(event: &GameEvent, settings: &Settings) -> u8 {
+    fresh_ominous(event, settings).map_or(0, |kind| {
+        if kind == "warden_sonic_boom"
+            && event.world.ominous_sound_recent_ms.unwrap_or(i64::MAX) as u64
+                > settings.ms("warden_sonic_boom_fresh_ms")
+        {
+            0
+        } else {
+            severity(&kind)
+        }
+    })
+}
+
+pub(crate) fn ominous_reaction_priority(action: &Speech) -> u8 {
+    action
+        .leaf
+        .as_ref()
+        .filter(|leaf| {
+            action.kind == "deep_dark_ominous_sound" && leaf.kind == "deep_dark_ominous_sound"
+        })
+        .and_then(|leaf| leaf.details["ominous_kind"].as_str())
+        .map_or(0, severity)
 }
 
 impl Specials {
@@ -268,7 +295,13 @@ impl Specials {
     }
     /// 通常の新規近接悲鳴も、水中生存の文脈では止める。
     pub fn water_survivor(e: &GameEvent, t: &VisualThreat) -> bool {
-        daylight(e) && burns_in_daylight(&t.r#type) && t.in_water && !t.on_fire
+        daylight(e)
+            && burns_in_daylight(&t.r#type)
+            && t.in_water
+            && !t.on_fire
+            && t.environment
+                .as_ref()
+                .is_none_or(|state| state.touching_water == Some(true))
     }
 }
 

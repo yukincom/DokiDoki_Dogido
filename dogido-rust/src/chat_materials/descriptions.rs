@@ -16,13 +16,9 @@ pub(super) fn named_mob(user: &str) -> Option<String> {
     if entries.next().is_some() {
         return None;
     }
-    let hints = entry["poetic"]["visual_tags"]
-        .as_array()?
-        .iter()
-        .filter_map(|v| v.as_str())
-        .take(3)
-        .collect::<Vec<_>>();
-    (!hints.is_empty()).then(|| format!("{name}：{}", hints.join("、")))
+    let material =
+        crate::catalog_knowledge::mob(entry["label"].as_str()?, None, false, "player_named")?;
+    serde_json::to_string(&material).ok()
 }
 
 #[cfg(test)]
@@ -30,10 +26,13 @@ mod tests {
     use super::*;
     #[test]
     fn only_one_explicit_name_reads_description_tags() {
+        let material: serde_json::Value =
+            serde_json::from_str(&named_mob("エンダーマン").unwrap()).unwrap();
         assert_eq!(
-            named_mob("エンダーマン"),
-            Some("エンダーマン：黒い、長身、紫の目".into())
+            material["general"]["poetic"],
+            chat_catalog::catalog().mob_entry("enderman").unwrap()["poetic"]
         );
+        assert_eq!(material["basis"], serde_json::json!(["player_named"]));
         assert_eq!(
             named_mob("エンダーマン、エンダーマンだよ"),
             named_mob("エンダーマン")

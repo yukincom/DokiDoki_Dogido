@@ -15,11 +15,11 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   exit 1
 fi
 if [[ "${1:-}" == '--check' ]]; then
-  exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_workshop_text.py" --settings-dir "$CONFIG_ROOT" --check
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_workshop_text.py" --settings-dir "$CONFIG_ROOT" --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration" --check
 fi
 if [[ $# -gt 0 ]]; then
   print -u2 -- '使い方: start_workshop_text.command [--check]'
   exit 2
 fi
 "$SCRIPT_DIR/cargo.sh" build --release --offline --locked --example workshop_text
-exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_workshop_text.py" --settings-dir "$CONFIG_ROOT"
+exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_workshop_text.py" --settings-dir "$CONFIG_ROOT" --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration"

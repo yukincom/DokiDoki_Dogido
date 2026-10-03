@@ -90,19 +90,18 @@ impl History {
     }
     /// 実再生完了に対応するuser/assistantの対だけ。未回答・取消入力は除く。
     pub fn completed_pairs(&self) -> Vec<Value> {
-        let mut pairs: Vec<Value> = self
-            .rows
-            .iter()
-            .filter(|r| r["role"] == "user")
-            .filter_map(|r| {
-                let id = r["turn_id"].as_str()?;
-                let reply = self
-                    .rows
-                    .iter()
-                    .find(|p| p["turn_id"] == format!("{id}:reply"))?;
-                Some(json!({"turn_id":id,"player_text":r["text"],"dogido_text":reply["text"]}))
-            })
-            .collect();
+        let mut pairs: Vec<Value> =
+            self.rows
+                .iter()
+                .filter(|r| r["role"] == "user")
+                .filter_map(|r| {
+                    let id = r["turn_id"].as_str()?;
+                    let reply = self.rows.iter().find(|p| {
+                        p["turn_id"] == format!("{id}:reply") && p["role"] == "assistant"
+                    })?;
+                    Some(json!({"turn_id":id,"player_text":r["text"],"dogido_text":reply["text"]}))
+                })
+                .collect();
         if pairs.len() > 3 {
             pairs.drain(..pairs.len() - 3);
         }
@@ -120,9 +119,46 @@ impl History {
         }
         rows
     }
-    pub fn lines(&self) -> String {
-        let mut lines = Vec::new();
+    pub fn retained_count(&self) -> usize {
+        self.danger_retained.len()
+    }
+    /// Refresh completed reactions without consuming this input's frozen bookmark.
+    pub fn refresh_before_input(
+        &self,
+        turn: &str,
+        captured: &[Value],
+        retained: usize,
+    ) -> Vec<Value> {
+        let mut rows = captured.to_vec();
         for row in self.rows() {
+            if row["turn_id"] == turn {
+                continue;
+            }
+            if let Some(saved) = rows
+                .iter_mut()
+                .find(|saved| saved["turn_id"] == row["turn_id"])
+            {
+                *saved = row;
+            } else if row["role"] == "assistant" || row["role"] == "event" {
+                rows.push(row);
+            }
+        }
+        let retained = retained.min(captured.len());
+        if rows.len() > retained + 10 {
+            rows.drain(retained..rows.len() - 10);
+        }
+        rows
+    }
+    pub fn lines(&self) -> String {
+        Self::lines_for(&self.rows())
+    }
+    pub fn lines_for(rows: &[Value]) -> String {
+        let mut lines = Vec::new();
+        for row in rows {
+            if row["role"] == "event" && row["reaction"] == "silent" {
+                lines.push("ドギドの反応: 黙って受け止めた（沈黙を選択。発話なし）".into());
+                continue;
+            }
             lines.push(format!(
                 "{}: {}",
                 if row["role"] == "user" {
@@ -133,7 +169,7 @@ impl History {
                 row["text"].as_str().unwrap_or("")
             ));
             if row.get("repair_action").is_some() {
-                lines.push(format!("  [{}]", repair::note(&row)));
+                lines.push(format!("  [{}]", repair::note(row)));
             }
         }
         lines.join("\n")
@@ -178,6 +214,26 @@ impl History {
                 self.danger_retained.clear();
                 self.counted_player_turns.clear();
             }
+        }
+    }
+    /// A chosen response, never a fabricated spoken assistant message.
+    pub fn silent(&mut self, turn: &str) {
+        let id = format!("{turn}:reply");
+        if self.rows().iter().any(|r| r["turn_id"] == id) {
+            return;
+        }
+        if self.rows.len() == 10 {
+            self.rows.pop_front();
+        }
+        self.rows
+            .push_back(json!({"turn_id":id,"role":"event","reaction":"silent",
+            "text":"ドギドは黙って受け止めた（沈黙を選択。発話なし）"}));
+        if self
+            .repair_context
+            .as_ref()
+            .is_some_and(|(id, _)| id == turn)
+        {
+            self.repair_context = None;
         }
     }
     pub fn annotate(&mut self, turn: &str, repair: &Repair) {
@@ -278,6 +334,56 @@ mod tests {
         }
         assert_eq!(h.rows().len(), 10);
         assert!(!contains(&h, "old-0"));
+    }
+
+    #[test]
+    fn refresh_preserves_third_input_bookmark_and_adds_delivered_reactions() {
+        let mut h = seeded();
+        h.begin_danger();
+        h.end_danger(3);
+        pair(&mut h, "after-0");
+        pair(&mut h, "after-1");
+        let before = h.rows();
+        let retained = h.retained_count();
+        h.push("third", "user", "さっきの続き");
+        assert_eq!(h.retained_count(), 0);
+        h.push("rain", "assistant", "雨やな。");
+        h.silent("smell");
+        let projected = h.refresh_before_input("third", &before, retained);
+        assert!(projected.iter().any(|r| r["turn_id"] == "old-0"));
+        assert!(!projected.iter().any(|r| r["turn_id"] == "third"));
+        assert_eq!(projected[projected.len() - 2]["turn_id"], "rain:reply");
+        assert_eq!(projected.last().unwrap()["reaction"], "silent");
+        assert!(History::lines_for(&projected).contains("雨やな。"));
+        assert!(History::lines_for(&projected).contains("沈黙を選択"));
+        assert_eq!(h.retained_count(), 0);
+    }
+
+    #[test]
+    fn refresh_keeps_normal_and_retained_history_bounded_without_restarting_lifetime() {
+        for retain in [false, true] {
+            let mut h = seeded();
+            if retain {
+                h.begin_danger();
+                h.end_danger(1);
+            }
+            let before = h.rows();
+            let retained = h.retained_count();
+            h.push("current", "user", "今の話");
+            for i in 0..15 {
+                h.push(&format!("reaction-{i}"), "assistant", "雨やな。");
+            }
+            let projected = h.refresh_before_input("current", &before, retained);
+            assert_eq!(projected.len(), retained + 10);
+            assert_eq!(projected.iter().any(|r| r["turn_id"] == "old-0"), retain);
+            assert_eq!(projected.last().unwrap()["turn_id"], "reaction-14:reply");
+            assert_eq!(h.retained_count(), 0);
+            assert!(
+                !h.refresh_before_input("next", &h.rows(), 0)
+                    .iter()
+                    .any(|r| r["turn_id"] == "old-0")
+            );
+        }
     }
 
     #[test]
@@ -385,5 +491,24 @@ mod tests {
         h.push("fourth", "user", &repair.current_text);
         h.annotate("fourth", &repair);
         assert!(h.rows.back().unwrap().get("repair_action").is_none());
+    }
+    #[test]
+    fn chosen_silence_is_a_reaction_visible_next_turn_but_never_a_spoken_pair() {
+        let mut h = History::default();
+        h.push("a", "user", "今日は静かやな");
+        h.silent("a");
+        h.silent("a");
+        h.replace_unanswered("a");
+        assert_eq!(h.rows().len(), 2);
+        assert_eq!(h.rows()[1]["role"], "event");
+        assert!(h.lines().contains("黙って受け止めた"));
+        assert!(h.completed_pairs().is_empty());
+        let normalized = crate::planner::prepare::normalize_history(&json!(h.rows()));
+        assert_eq!(normalized[1]["reaction"], "silent");
+        h.push("rain", "assistant", "雨が降ってきたな。");
+        assert!(h.lines().contains("雨が降ってきたな"));
+        assert!(h.completed_pairs().is_empty());
+        pair(&mut h, "b");
+        assert_eq!(h.completed_pairs().len(), 1);
     }
 }

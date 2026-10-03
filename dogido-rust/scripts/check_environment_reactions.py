@@ -61,7 +61,7 @@ def main():
             sequence = 0
             normal = {"weather": "clear", "biome": "plains", "sky_visible": True,
                       "ceiling_height": 20, "local_light": 15, "time_phase": "day"}
-            cow = {"type": "cow", "distance": 3, "temperament": "friendly",
+            cow = {"type": "cow", "distance": 3, "temperament": "passive",
                    "direction": {"horizontal": "right"}}
             zombie = {"type": "zombie", "entity_id": "z", "distance": 2,
                       "direction": {"horizontal": "front", "cardinal": "north"}}
@@ -148,6 +148,81 @@ def main():
                     passed.append(f"{topic}_{decision}_one_call_and_consideration_consumed")
 
             control["environment_action"] = "speak"
+            spatial_smell = {"status": "present", "smell_id": "zombie", "category": "decay", "valence": "unpleasant",
+                             "specificity": "source", "source_kind": "entity", "effective_strength": 5,
+                             "direction_estimate": {"cardinal": "east"}}
+            sid = register(base, preview=False)
+            before_calls = len(calls())
+            control["environment_payload"] = {"action": "speak", "speech": "東のほうからゾンビの匂いがするで。"}
+            send(sid, smell_observation=spatial_smell)
+            send(sid, smell_observation=spatial_smell)
+            result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
+            assert len(calls()) == before_calls + 1, calls()[before_calls:]
+            context = reaction_context(calls()[-1]["body"])["observations"]["smell"]
+            assert "distance_estimate" not in context, context
+            assert context["direction_estimate"]["cardinal"] == "east", context
+            assert not {"source_id", "entity_id", "position", "effective_strength"}.intersection(context), context
+            query_calls = len(calls())
+            before_query_rows = {r["turn_id"] for r in rows(sid)}
+            query = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "匂いはどっちから？"})
+            assert query["accepted"] and query["reason"] == "smell_query", query
+            answer = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] not in before_query_rows and r["playback_status"] == "completed"), None))
+            assert "東のほうから来とるみたいや" in answer["text"] and "ブロック" not in answer["text"], answer
+            send(sid, smell_observation={**spatial_smell, "direction_estimate": None})
+            before_query_rows = {r["turn_id"] for r in rows(sid)}
+            query = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "匂いはどっちから？"})
+            assert query["accepted"] and query["reason"] == "smell_query", query
+            answer = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] not in before_query_rows and r["playback_status"] == "completed"), None))
+            assert "方向はまだ絞れてへん" in answer["text"] and "東" not in answer["text"], answer
+            assert len(calls()) == query_calls
+            close(sid)
+            control.pop("environment_payload")
+            passed.append("smell_estimates_reach_model_and_fixed_questions_use_current_direction")
+
+            # Strength changes during approach do not cancel the same bearing.
+            sid = register(base, preview=False)
+            before_calls = len(calls())
+            control["delay"] = .6
+            send(sid, smell_observation=spatial_smell)
+            send(sid, smell_observation=spatial_smell)
+            wait_for(lambda: len(calls()) > before_calls)
+            pending = reactions(sid)[-1]
+            send(sid, smell_observation={**spatial_smell, "effective_strength": 7})
+            completed = wait_for(lambda: row(base, pending["turn_id"], {"completed"}))
+            assert len(calls()) == before_calls + 1 and "cancel_reason" not in completed, completed
+            close(sid)
+            control["delay"] = 0
+            passed.append("approaching_smell_strength_does_not_cancel_current_bearing")
+
+            for retry_decision in ("speak", "silent"):
+                sid = register(base, preview=False)
+                before_calls = len(calls())
+                control["delay"] = .6
+                send(sid, smell_observation=spatial_smell)
+                send(sid, smell_observation=spatial_smell)
+                wait_for(lambda: len(calls()) > before_calls)
+                pending = reactions(sid)[-1]
+                update = {**spatial_smell, "direction_estimate": {"cardinal": "west"}}
+                send(sid, smell_observation=update)
+                cancelled = wait_for(lambda: row(base, pending["turn_id"], {"cancelled"}))
+                assert "started_at" not in cancelled and not cancelled["text"], cancelled
+                control["delay"] = 0
+                control["environment_action"] = retry_decision
+                send(sid, smell_observation=update)
+                expected = "not_selected" if retry_decision == "silent" else "completed"
+                wait_for(lambda: next((r for r in reactions(sid) if r["turn_id"] != pending["turn_id"]
+                                       and r["playback_status"] == expected), None))
+                assert len(calls()) == before_calls + 2, calls()[before_calls:]
+                latest_context = reaction_context(calls()[-1]["body"])["observations"]["smell"]
+                assert latest_context["direction_estimate"]["cardinal"] == "west", latest_context
+                for _ in range(3):
+                    send(sid, smell_observation=spatial_smell)
+                time.sleep(.12)
+                assert len(calls()) == before_calls + 2, calls()[before_calls:]
+                close(sid)
+                control["environment_action"] = "speak"
+                passed.append(f"changed_smell_bearing_retries_once_and_consumes_{retry_decision}")
+
             for payload in ({"action": "silent", "speech": "勝手に話すで。"}, {"action": "move", "speech": "移動したで。"}):
                 control["environment_payload"] = payload
                 sid = register(base, preview=False)
@@ -261,13 +336,14 @@ def main():
             trigger(sid, "smell")
             result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
             context = reaction_context(calls()[-1]["body"])
-            assert not context["recent"]["spoken_reactions"], context
+            assert [r["reaction"] for r in context["recent"]["conversation"] if r["role"] == "event"] == ["silent"], context
+            assert not [r for r in context["recent"]["conversation"] if r["role"] == "assistant"], context
             trigger(sid, "weather")
             wait_for(lambda: len([r for r in reactions(sid) if r["playback_status"] == "completed"]) == 2)
             context = reaction_context(calls()[-1]["body"])
-            assert context["recent"]["spoken_reactions"] == [result["text"]], context
+            assert [r["text"] for r in context["recent"]["conversation"] if r["role"] == "assistant"] == [result["text"]], context
             close(sid)
-            passed.append("only_completed_reactions_become_recent_context")
+            passed.append("completed_speech_and_chosen_silence_share_recent_context")
 
     report = {"passed": passed, "count": len(passed), "live_model": False, "real_microphone": False, "real_minecraft": False}
     output = ROOT / "reports/environment-reactions.json"

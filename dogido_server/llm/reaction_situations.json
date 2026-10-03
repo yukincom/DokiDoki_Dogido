@@ -1,0 +1,136 @@
+{
+  "プレイヤー・敵の出来事": [
+    {
+      "event": "death",
+      "situation": "プレイヤーが死亡した。"
+    },
+    {
+      "event": "aftermath",
+      "situation": "戦闘が一段落した。敵がどうなったかと、現在の周囲の確認結果が観測にある。"
+    },
+    {
+      "event": "daylight_water",
+      "situation": "日中、水にいるモブが見える。今は燃えていない。"
+    },
+    {
+      "event": "newly_burning_visual",
+      "situation": "目の前の敵に火がついて燃え始めた。これで倒れてくれそうで助かるわ。"
+    },
+    {
+      "event": "deep_dark_ominous_sound",
+      "situation": "スカルクかウォーデンの音が聞こえた。",
+      "situation_key": "ominous_kind",
+      "situations": {
+        "sculk_sensor": "スカルクセンサーの作動音が聞こえた。",
+        "sculk_shrieker": "スカルクシュリーカーの叫び声が聞こえた。",
+        "warden_heartbeat": "ウォーデンの心音が聞こえた。",
+        "warden_presence": "ウォーデンの音が聞こえた。"
+      }
+    },
+    {
+      "event": "occluded_hostile_presence",
+      "situation": "遮蔽物の向こうから敵対モブの気配や音（声・足音など）が聞こえる。そのモブに合った自然な表現で話してな。姿はまだ確認できてへん。"
+    }
+  ],
+  "周囲・探索の出来事": [
+    {
+      "event": "ambient",
+      "situation": "周囲の生き物の姿が見えている。"
+    },
+    {
+      "event": "weather_transition",
+      "situation": "天候が変わった。",
+      "situation_key": "scene",
+      "situations": {
+        "clear_after_bad_weather": "荒れていた天候が回復した。",
+        "overcast_after_thunder": "荒れていた天候が落ち着き、曇り空になった。",
+        "overcast_started": "空が曇ってきた。",
+        "snow_after_thunder": "荒れていた天候が落ち着き、雪が降っている。",
+        "snow_started": "雪がしんしんと降り始めた。あたりが静かに白くなってきとる。",
+        "rain_after_thunder": "荒れていた天候が落ち着き、雨が降っている。",
+        "rain_started": "雨が降り始めた。",
+        "dry_thunder_after_overcast": "空がさらに暗く曇ってきた。",
+        "dry_thunder_started": "空が暗く曇ってきた。",
+        "blizzard_after_snow": "天候が荒れてきた。",
+        "blizzard_started": "天候が荒れてきた。",
+        "thunder_after_rain": "天候が荒れてきた。",
+        "thunder_started": "空が一気に暗くなって、嵐の気配がしてきた。",
+        "rain_suspected": "雨音が聞こえた。外の空は見えていない。",
+        "thunder_suspected": "雷鳴が聞こえた。外の空は見えていない。"
+      }
+    },
+    {
+      "event": "thunder_reaction",
+      "situation": "雷鳴または近くの落雷を確認した。",
+      "situation_key": "scene",
+      "situations": {
+        "thunder_heard": "雷鳴が聞こえた。",
+        "nearby_lightning_strike": "近くに雷が落ちた。"
+      },
+      "self_states": {
+        "completed": "あなたは別の音声ですでに絶叫した直後。息を整えながら話す。『うわっ』『ぎゃっ』などの悲鳴はセリフ冒頭に重ねず、『……っ、心臓止まるかと思ったわ』『いまの音、近すぎやろ…』のように余韻や本音を絞り出すように話してな。",
+        "scheduled": "このセリフの直前に、別の悲鳴音声が流れる予定。セリフの冒頭で『うわっ』などの悲鳴を重複させず、叫んだ後に続く言葉として話してな。",
+        "not_scheduled": "今回は別の悲鳴音声はない。驚きつつも言葉で反応してな。"
+      }
+    },
+    {
+      "event": "ender_eye_throw",
+      "situation": "プレイヤーがエンダーアイを投げた。"
+    },
+    {
+      "event": "structure_entry",
+      "situation": "プレイヤーが構造物に入った。"
+    },
+    {
+      "event": "light_source_gain",
+      "situation": "プレイヤーの照明器具の所持数が前回より増えた。入手方法は観測されてへん。"
+    },
+    {
+      "event": "darkness_escape",
+      "situation": "手持ちに照明器具も武器もなく、周囲に危険がある。"
+    },
+    {
+      "event": "occluded_entry_with_light",
+      "situation": "照明器具を持って、日光の届かない場所へ入った。"
+    },
+    {
+      "event": "occluded_entry_no_light",
+      "situation": "照明器具を持たずに、日光の届かない場所へ入った。"
+    },
+    {
+      "event": "dark_push_no_light",
+      "situation": "照明器具がないまま、暗い遮蔽環境へ進んでいる。"
+    },
+    {
+      "event": "dark_push_after_breath",
+      "situation": "暗い遮蔽環境にいる状態が続いている。"
+    },
+    {
+      "event": "emergency_shelter_relief",
+      "situation": "夜に、天井と囲いのある場所が確認できた。"
+    },
+    {
+      "event": "portal_appearance",
+      "situation": "ポータルが観測された。",
+      "situation_key": "portal_encounter",
+      "situations": {
+        "appeared": "ポータルが目の前に出現した。",
+        "arrived": "ポータルのある場所まで着いた。"
+      },
+      "roles": {
+        "overworld": {
+          "nether_portal": "オーバーワールドからネザーへ通じる、起動済みの入口。",
+          "end_portal": "オーバーワールドからエンドへ通じる、起動済みの入口。"
+        },
+        "the_nether": {
+          "nether_portal": "オーバーワールドへの帰り道（出口）。"
+        },
+        "the_end": {
+          "end_portal": "エンドからオーバーワールドへ帰還するための、起動済みの出口。",
+          "end_gateway": "エンド内の離れた場所へ移動するための、起動済みの通路。"
+        }
+      },
+      "unknown_role": "この観測だけでは移動先は未確認。"
+    }
+  ]
+}

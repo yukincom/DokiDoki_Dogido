@@ -48,6 +48,7 @@ const TEXT_FIELDS: &[&str] = &[
     "haiku_workshop_materials",
 ];
 const BOOL_FIELDS: &[&str] = &[
+    "dialogue_choice",
     "combat_active",
     "has_visual_threats",
     "danger_darkness_high",
@@ -109,6 +110,9 @@ fn valid_details(d: &Value) -> Result<()> {
                 || value
                     .as_array()
                     .is_some_and(|rows| rows.iter().all(Value::is_string))
+        } else if key == "world_context" {
+            serde_json::from_value::<crate::conversation_observation::Context>(value.clone())
+                .is_ok()
         } else if matches!(key.as_str(), "conversation_repair" | "player_chat_repair") {
             value.is_null()
                 || value.as_object().is_some_and(|obj| {
@@ -210,10 +214,10 @@ fn pair(key: &str, value: &str, marker: &str) -> (String, String) {
 }
 pub(crate) fn mode(d: &Value) -> &'static str {
     match text(d, "character_mode", "").to_lowercase().as_str() {
-        "peace" | "peaceful" | "calm" | "平和" => return "peace",
-        "battle" | "combat" | "panic" | "fight" | "バトル" => return "battle",
-        "tension" | "alert" | "caution" | "緊張" => return "tension",
-        "workshop" | "haiku_workshop" | "ワークショップ" | "共同編集者" => {
+        "normal" => return "normal",
+        "base" => return "base",
+        "tension" => return "tension",
+        "workshop" => {
             return "workshop";
         }
         _ => {}
@@ -223,11 +227,11 @@ pub(crate) fn mode(d: &Value) -> &'static str {
         || flag(d, "combat_active")
         || flag(d, "has_visual_threats")
     {
-        "battle"
+        "base"
     } else if state == "alert" || flag(d, "danger_darkness_high") {
         "tension"
     } else {
-        "peace"
+        "normal"
     }
 }
 /// The input is a closed projection of already selected prompt material, not a world snapshot.
@@ -235,7 +239,6 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     valid_details(d)?;
     let character = mode(d);
     let mut f: HashMap<&str, String> = HashMap::new();
-    f.insert("dogido_chat_spirit", asset(&DATA["spirit"]).into());
     f.insert(
         "user_text",
         text(d, "user_text", "（聞き取れなかった）").into(),
@@ -335,12 +338,9 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         );
     }
     let observation = text(d, "observation_summary", "");
-    let threat = text(d, "threat_summary", "とくになし");
     let look = text(d, "look_target_label", "");
     let mut block = if !observation.is_empty() {
         section("observation", &[("summary", observation)])
-    } else if threat != "とくになし" {
-        section("threat", &[("threat", threat)])
     } else {
         String::new()
     };
@@ -449,6 +449,37 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     };
     f.insert("weather_block", weather);
     f.insert("time_block", time);
+    let world_block = if d["world_context"].is_object() {
+        let mut world = d["world_context"].clone();
+        let knowledge = world
+            .as_object_mut()
+            .unwrap()
+            .shift_remove("catalog_knowledge");
+        let routines = world
+            .as_object_mut()
+            .unwrap()
+            .shift_remove("villager_routines");
+        let mut block = format!(
+            "【現在の環境観測と変化（会話履歴とは別）】\n{}\n",
+            crate::planner::python_json(&world)
+        );
+        if let Some(knowledge) = knowledge.filter(|value| !value.is_null()) {
+            block.push_str(&format!(
+                "【対象のカタログ情報（一般的特徴・表現材料）】\n{}\n",
+                crate::planner::python_json(&knowledge)
+            ));
+        }
+        if let Some(routines) = routines.filter(|value| !value.is_null()) {
+            block.push_str(&format!(
+                "【観測範囲の村人の日課（時刻からの予定）】\n{}\n",
+                crate::planner::python_json(&routines)
+            ));
+        }
+        block
+    } else {
+        format!("場所: {place}\n{}{}", f["time_block"], f["weather_block"])
+    };
+    f.insert("world_context_block", world_block);
     let block = if text(d, "haiku_workshop_open", "").is_empty() {
         String::new()
     } else {
@@ -466,8 +497,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     };
     f.insert("haiku_workshop_block", block);
     let nearby = strings(d, "nearby_hostile_types");
-    let in_hostile = character == "battle"
-        || flag(d, "has_visual_threats")
+    let in_hostile = flag(d, "has_visual_threats")
         || flag(d, "combat_active")
         || !nearby.is_empty()
         || stance == "saw";
@@ -526,19 +556,24 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     let focus = text(d, "player_chat_plan_focus", "");
     if !focus.is_empty() {
         user.push_str(&format!(
-            "\n今回の返答の焦点: {focus}\n最新のプレイヤー発言「{}」へ答える一言だけ。\n",
+            "\n今回の発言の焦点: {focus}\n最新のプレイヤー発言:「{}」。周囲の観測も会話につなげてええで。\n",
             text(d, "user_text", "")
         ));
     }
+    let system = if flag(d, "dialogue_choice") {
+        crate::companion_prompt::dialogue(character)
+    } else {
+        crate::companion_prompt::speech(character)
+    };
     let mut out = vec![
         ChatMessage {
             role: Role::System,
             content: if descriptions.is_empty() {
-                asset(&DATA["systems"][character]).into()
+                system
             } else {
                 format!(
                     "{}\n今回の話題の種類と辞書描写: {descriptions}。特徴を話す場合はこの描写に沿うこと。前の返答にあった別対象の描写を繰り返さない。これは種類の一般的な描写の参考であり、現在の視認・存在・行動は観測欄だけで判断する。",
-                    asset(&DATA["systems"][character])
+                    system
                 )
             },
         },
@@ -575,7 +610,9 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         });
         out.push(ChatMessage {
             role: Role::User,
-            content: section("repair_user", &[("feedback", feedback)]),
+            content: if flag(d, "dialogue_choice") {
+                format!("いまの出力にコードの検査結果が返ったで: {reason}。{feedback}。元の会話・観測を踏まえて一度だけ考え直してな。話すか黙るかを、最初と同じ action/speech のJSON一個で返す。")
+            } else { section("repair_user", &[("feedback", feedback)]) },
         });
     }
     Ok(out)
@@ -592,7 +629,10 @@ pub(crate) fn project_details(details: &Value) -> Value {
                 TEXT_FIELDS.contains(&k.as_str())
                     || BOOL_FIELDS.contains(&k.as_str())
                     || LIST_FIELDS.contains(&k.as_str())
-                    || matches!(k.as_str(), "conversation_repair" | "player_chat_repair")
+                    || matches!(
+                        k.as_str(),
+                        "conversation_repair" | "player_chat_repair" | "world_context"
+                    )
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),

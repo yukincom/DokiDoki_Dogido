@@ -6,7 +6,6 @@ import time
 from check_dialogue import register, request, row, snapshot, submit as direct_submit, wait_for
 from check_haiku_runtime import fixture
 from check_language_runtime import interpretation
-from dogido_server.tts_reading import prepare_text_for_tts
 
 
 def main():
@@ -63,14 +62,22 @@ def main():
         sid = fresh(); held = hold(sid, "明日は家を作りたい")
         gate = threading.Event()
         # 初めての引用部分を止める。cache済みの冒頭二文を再利用しても全文completedにはならない。
-        tail = prepare_text_for_tts("さっきの『明日は家を作りたい』のこと、今から聞いてええ？", engine="auto")
-        control["tts_gates"][tail] = gate
+        quoted_tts = []
+        def gate_quoted_sentence(text):
+            if text.startswith("さっきの『"):
+                quoted_tts.append(text)
+                return gate
+            return None
+        control["tts_gate_selector"] = gate_quoted_sentence
         repair_id = submit(base, sid, "ドギド")
-        wait_for(lambda: any(r["path"].startswith("/synthesis") and r["body"]["test_text"] == tail for r in seen))
+        wait_for(lambda: quoted_tts)
+        assert len(quoted_tts) == 1
+        assert "『" in quoted_tts[0] and "』" in quoted_tts[0], quoted_tts
         n = calls(); early = submit(base, sid, "うん")
         assert row(base, early, {"not_selected"})["resolution"] == "confirmation_before_repair_completed"
         assert calls() == n and row(base, held["turn_id"], {"not_selected"})
         gate.set()
+        control.pop("tts_gate_selector", None)
         wait_for(lambda: row(base, repair_id, {"completed"}))
         assert say(sid, "はい")["turn_id"] == held["turn_id"]
         close(sid); passed.append("early_confirmation_does_not_interrupt_or_release_before_full_playback")

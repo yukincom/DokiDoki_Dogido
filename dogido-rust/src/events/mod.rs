@@ -55,14 +55,7 @@ impl GameEvent {
         Self(data, self.1.clone())
     }
 
-    pub fn parse(mut value: Value) -> Result<Self, String> {
-        // 旧名をextraにも残すPythonのbefore-validatorと同じ優先順。
-        if let Some(object) = value.as_object_mut()
-            && !object.contains_key("passive_mobs")
-            && let Some(legacy) = object.get("peaceful_mobs").cloned()
-        {
-            object.insert("passive_mobs".into(), legacy);
-        }
+    pub fn parse(value: Value) -> Result<Self, String> {
         let inventory_order = value
             .get("inventory")
             .and_then(Value::as_object)

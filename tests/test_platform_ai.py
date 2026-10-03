@@ -7,8 +7,8 @@ import time
 from unittest.mock import patch
 
 from dogido_server.config import Settings
-from dogido_server.llm.client import STRUCTURED_STATUS_KEY
-from dogido_server.llm.types import StructuredGenerationRequest
+from dogido_server.combat_input_contract import STRUCTURED_STATUS_KEY
+from dogido_server.combat_input_contract import CombatInputRequest
 from dogido_server.platform_ai import (
     FoundryLocalProvider,
     PLATFORM_AI_PROVIDER_KEY,
@@ -87,7 +87,7 @@ class _Provider:
     def probe(self) -> PlatformAIProbe:
         return PlatformAIProbe(self.name, True, f"{self.name}:v1")
 
-    def generate(self, request: StructuredGenerationRequest) -> dict[str, object]:
+    def generate(self, request: CombatInputRequest) -> dict[str, object]:
         self.calls += 1
         if self.busy:
             raise ProviderBusyError("still working")
@@ -115,17 +115,18 @@ class _Fallback:
         return {"action": "uncertain", "confidence": 0.0, "evidence": ""}
 
 
-def _request() -> StructuredGenerationRequest:
-    return StructuredGenerationRequest(
+def _request() -> CombatInputRequest:
+    return CombatInputRequest(
         kind="haiku_workshop_combat_input",
-        fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+        messages=[{"role": "system", "content": "分類のみ"}, {"role": "user", "content": "句に戻ろう"}],
+
         details={
             "verse": "はるのかぜ\nひつじがあるく\nよるのつき",
             "player_text": "句に戻ろう",
             "allowed_actions": ["resume_workshop", "uncertain"],
         },
         temperature=0.0,
-        route="chat",
+
         max_tokens=64,
     )
 
@@ -168,7 +169,7 @@ class PlatformAIRouterTests(unittest.TestCase):
 
     def test_provider_schema_error_falls_back_instead_of_being_marked_accepted(self) -> None:
         class _LegacyProvider(_Provider):
-            def generate(self, request: StructuredGenerationRequest) -> dict[str, object]:
+            def generate(self, request: CombatInputRequest) -> dict[str, object]:
                 self.calls += 1
                 return {"action": "resume_workshop"}
 
@@ -232,25 +233,26 @@ class PlatformAIRouterTests(unittest.TestCase):
 
     def test_normal_workshop_tasks_are_not_platform_ai_tasks(self) -> None:
         for kind in (
-            "haiku_workshop_intent",
-            "haiku_workshop_pending_decision",
+            "haiku_workshop_agent_step",
+            "haiku_workshop_revision",
         ):
             with self.subTest(kind=kind):
-                request = StructuredGenerationRequest(
+                request = CombatInputRequest(
                     kind=kind,
-                    fallback_value={},
+
                     details={},
                     temperature=0.0,
-                    route="chat",
+
                     max_tokens=96,
                 )
                 with self.assertRaisesRegex(ValueError, "unsupported platform AI task"):
                     _json_schema_for(request)
 
     def test_combat_workshop_input_has_a_separate_closed_schema(self) -> None:
-        request = StructuredGenerationRequest(
+        request = CombatInputRequest(
             kind="haiku_workshop_combat_input",
-            fallback_value={"action": "uncertain", "confidence": 0.0, "evidence": ""},
+        messages=[{"role": "system", "content": "分類のみ"}, {"role": "user", "content": "句に戻ろう"}],
+
             details={
                 "verse": "はるのかぜ\nひつじがあるく\nよるのつき",
                 "player_text": "さっき話してたやつに戻ろうか",
@@ -263,7 +265,7 @@ class PlatformAIRouterTests(unittest.TestCase):
                 ],
             },
             temperature=0.0,
-            route="chat",
+
             max_tokens=96,
         )
 

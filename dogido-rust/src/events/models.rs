@@ -62,22 +62,14 @@ pub enum DistanceBand {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventName {
-    #[serde(rename = "threat_detected")]
-    ThreatDetected,
     #[serde(rename = "threat_approaching")]
     ThreatApproaching,
     #[serde(rename = "hostile_audio_detected")]
     HostileAudioDetected,
-    #[serde(rename = "danger_darkness_changed")]
-    DangerDarknessChanged,
-    #[serde(rename = "resource_option_found")]
-    ResourceOptionFound,
     #[serde(rename = "ambient_mob_detected")]
     AmbientMobDetected,
     #[serde(rename = "player_died")]
     PlayerDied,
-    #[serde(rename = "time_phase_changed")]
-    TimePhaseChanged,
     #[serde(rename = "hostile_defeated")]
     HostileDefeated,
     #[serde(rename = "creeper_detonated")]
@@ -144,6 +136,13 @@ pub enum HotbarSlotWeaponKind {
     Other,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PassiveMobTemperament {
+    #[serde(rename = "passive")]
+    Passive,
+    #[serde(rename = "neutral")]
+    Neutral,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PriorityHint {
     #[serde(rename = "critical")]
     Critical,
@@ -164,6 +163,18 @@ pub enum RecentBlockBreakMaterial {
     Ore,
     #[serde(rename = "other")]
     Other,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SmellDirectionEstimateBasis {
+    #[serde(rename = "source_bearing")]
+    SourceBearing,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SmellDirectionEstimateVertical {
+    #[serde(rename = "above")]
+    Above,
+    #[serde(rename = "below")]
+    Below,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SmellObservationBasis {
@@ -365,20 +376,13 @@ pub enum Weather {
     Thunder,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ZombieScentClueBasis {
-    #[serde(rename = "nearby_without_visual_or_audio")]
-    NearbyWithoutVisualOrAudio,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ZombieScentClueType {
-    #[serde(rename = "zombie")]
-    Zombie,
-    #[serde(rename = "zombie_villager")]
-    ZombieVillager,
-    #[serde(rename = "husk")]
-    Husk,
-    #[serde(rename = "drowned")]
-    Drowned,
+pub enum WorldStateNearbyPortalEncounter {
+    #[serde(rename = "appeared")]
+    Appeared,
+    #[serde(rename = "arrived")]
+    Arrived,
+    #[serde(rename = "observed")]
+    Observed,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdapterCommandResult {
@@ -465,9 +469,6 @@ pub struct CombatState {
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub hostiles_within_scan_ground: Option<i64>,
-    #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
-    pub hostiles_within_30_ground: Option<i64>,
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub combat_active_hint: Option<bool>,
@@ -574,8 +575,7 @@ pub struct EventDescriptor {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HostileOutcome {
     pub r#type: String,
-    #[serde(default)]
-    pub entity_id: Option<String>,
+    pub entity_id: String,
     pub outcome: HostileOutcomeOutcome,
     pub evidence: HostileOutcomeEvidence,
     #[serde(flatten)]
@@ -622,6 +622,9 @@ pub struct LookTarget {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity: Option<MobIdentity>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<MobEnvironment>,
+    #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(flatten)]
@@ -648,6 +651,31 @@ pub struct MetaState {
     pub extra: BTreeMap<String, Value>,
 }
 impl Default for MetaState {
+    fn default() -> Self {
+        serde_json::from_str("{}").expect("model defaults")
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MobEnvironment {
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub touching_water: Option<bool>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub submerged_in_water: Option<bool>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub touching_water_or_rain: Option<bool>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub on_ground: Option<bool>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub on_fire: Option<bool>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
+}
+impl Default for MobEnvironment {
     fn default() -> Self {
         serde_json::from_str("{}").expect("model defaults")
     }
@@ -682,6 +710,9 @@ pub struct PassiveMob {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity: Option<MobIdentity>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<MobEnvironment>,
+    #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
     #[serde(default)]
@@ -689,7 +720,7 @@ pub struct PassiveMob {
     #[serde(default = "default_passivemob_certainty")]
     pub certainty: Certainty,
     #[serde(default)]
-    pub temperament: Option<String>,
+    pub temperament: Option<PassiveMobTemperament>,
     #[serde(default)]
     pub caution_reason: Option<String>,
     #[serde(default)]
@@ -706,6 +737,9 @@ pub struct PassiveMob {
 pub struct PlayerState {
     #[serde(default)]
     pub name: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<MobEnvironment>,
     #[serde(default)]
     pub position: Position,
     #[serde(default)]
@@ -773,6 +807,21 @@ pub struct RecentBlockBreak {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct SmellDirectionEstimate {
+    #[serde(default)]
+    pub cardinal: Option<CardinalDirection>,
+    #[serde(default)]
+    pub vertical: Option<SmellDirectionEstimateVertical>,
+    #[serde(default = "default_smelldirectionestimate_basis")]
+    pub basis: SmellDirectionEstimateBasis,
+}
+impl Default for SmellDirectionEstimate {
+    fn default() -> Self {
+        serde_json::from_str("{}").expect("model defaults")
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SmellObservation {
     pub status: SmellObservationStatus,
     #[serde(default)]
@@ -796,6 +845,8 @@ pub struct SmellObservation {
     pub rain_after_active: bool,
     #[serde(default)]
     pub suppression_reason: Option<SmellObservationSuppressionReason>,
+    #[serde(default)]
+    pub direction_estimate: Option<SmellDirectionEstimate>,
     #[serde(default = "default_smellobservation_basis")]
     pub basis: SmellObservationBasis,
 }
@@ -818,6 +869,9 @@ pub struct VisualThreat {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity: Option<MobIdentity>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<MobEnvironment>,
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub distance: Option<f64>,
@@ -970,6 +1024,11 @@ pub struct WorldState {
     #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_portal_distance: Option<f64>,
     #[serde(default)]
+    pub nearby_portal_encounter: Option<WorldStateNearbyPortalEncounter>,
+    #[serde(default)]
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub visible_villager_count: Option<i64>,
+    #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub nearby_end_portal_frame_distance: Option<f64>,
     #[serde(default)]
@@ -983,18 +1042,6 @@ impl Default for WorldState {
     fn default() -> Self {
         serde_json::from_str("{}").expect("model defaults")
     }
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ZombieScentClue {
-    pub r#type: ZombieScentClueType,
-    pub entity_id: String,
-    pub distance_band: DistanceBand,
-    #[serde(default = "default_zombiescentclue_certainty")]
-    pub certainty: Certainty,
-    #[serde(default = "default_zombiescentclue_basis")]
-    pub basis: ZombieScentClueBasis,
-    #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EventData {
@@ -1017,8 +1064,6 @@ pub struct EventData {
     pub auditory_threats: Vec<AuditoryThreat>,
     #[serde(default)]
     pub smell_observation: Option<SmellObservation>,
-    #[serde(default)]
-    pub zombie_scent_clues: Vec<ZombieScentClue>,
     #[serde(default)]
     pub ambient_sounds: Vec<AmbientSound>,
     #[serde(default)]
@@ -1067,6 +1112,9 @@ fn default_passivemob_certainty() -> Certainty {
 fn default_recentblockbreak_material() -> RecentBlockBreakMaterial {
     RecentBlockBreakMaterial::Other
 }
+fn default_smelldirectionestimate_basis() -> SmellDirectionEstimateBasis {
+    SmellDirectionEstimateBasis::SourceBearing
+}
 fn default_smellobservation_basis() -> SmellObservationBasis {
     SmellObservationBasis::SmellPolicyV1
 }
@@ -1075,12 +1123,6 @@ fn default_vehiclestate_activity() -> VehicleStateActivity {
 }
 fn default_visualthreat_certainty() -> Certainty {
     Certainty::High
-}
-fn default_zombiescentclue_certainty() -> Certainty {
-    Certainty::Medium
-}
-fn default_zombiescentclue_basis() -> ZombieScentClueBasis {
-    ZombieScentClueBasis::NearbyWithoutVisualOrAudio
 }
 fn default_eventdata_game() -> String {
     "minecraft-java".into()
@@ -1156,12 +1198,6 @@ impl Validate for CombatState {
                 "CombatState.hostiles_within_scan_ground: minimum 0",
             )?;
         }
-        if let Some(value) = &self.hostiles_within_30_ground {
-            ensure(
-                *value >= 0,
-                "CombatState.hostiles_within_30_ground: minimum 0",
-            )?;
-        }
         self.hostile_outcomes.validate()?;
         if let Some(value) = &self.warden_nearby_iron_golem_count {
             ensure(
@@ -1221,6 +1257,14 @@ impl Validate for EventDescriptor {
 }
 impl Validate for HostileOutcome {
     fn validate(&self) -> Result<(), String> {
+        ensure(
+            (self.entity_id).chars().count() >= 1,
+            "HostileOutcome.entity_id: minLength 1",
+        )?;
+        ensure(
+            (self.entity_id).chars().count() <= 80,
+            "HostileOutcome.entity_id: maxLength 80",
+        )?;
         Ok(())
     }
 }
@@ -1256,10 +1300,16 @@ impl Validate for HotbarState {
 impl Validate for LookTarget {
     fn validate(&self) -> Result<(), String> {
         self.identity.validate()?;
+        self.environment.validate()?;
         Ok(())
     }
 }
 impl Validate for MetaState {
+    fn validate(&self) -> Result<(), String> {
+        Ok(())
+    }
+}
+impl Validate for MobEnvironment {
     fn validate(&self) -> Result<(), String> {
         Ok(())
     }
@@ -1292,12 +1342,14 @@ impl Validate for NearbyResource {
 impl Validate for PassiveMob {
     fn validate(&self) -> Result<(), String> {
         self.identity.validate()?;
+        self.environment.validate()?;
         self.direction.validate()?;
         Ok(())
     }
 }
 impl Validate for PlayerState {
     fn validate(&self) -> Result<(), String> {
+        self.environment.validate()?;
         self.position.validate()?;
         self.hotbar.validate()?;
         self.vehicle.validate()?;
@@ -1312,6 +1364,12 @@ impl Validate for Position {
 impl Validate for RecentBlockBreak {
     fn validate(&self) -> Result<(), String> {
         ensure(self.age_ms >= 0, "RecentBlockBreak.age_ms: minimum 0")?;
+        Ok(())
+    }
+}
+impl Validate for SmellDirectionEstimate {
+    fn validate(&self) -> Result<(), String> {
+        self.validate_semantics()?;
         Ok(())
     }
 }
@@ -1335,6 +1393,7 @@ impl Validate for SmellObservation {
             self.temperature_modifier <= 2,
             "SmellObservation.temperature_modifier: maximum 2",
         )?;
+        self.direction_estimate.validate()?;
         self.validate_semantics()?;
         Ok(())
     }
@@ -1351,6 +1410,7 @@ impl Validate for VehicleState {
 impl Validate for VisualThreat {
     fn validate(&self) -> Result<(), String> {
         self.identity.validate()?;
+        self.environment.validate()?;
         self.direction.validate()?;
         Ok(())
     }
@@ -1360,20 +1420,9 @@ impl Validate for WorldState {
         if let Some(value) = &self.depth_below_surface {
             ensure(*value >= 0, "WorldState.depth_below_surface: minimum 0")?;
         }
-        Ok(())
-    }
-}
-impl Validate for ZombieScentClue {
-    fn validate(&self) -> Result<(), String> {
-        ensure(
-            (self.entity_id).chars().count() >= 1,
-            "ZombieScentClue.entity_id: minLength 1",
-        )?;
-        ensure(
-            (self.entity_id).chars().count() <= 80,
-            "ZombieScentClue.entity_id: maxLength 80",
-        )?;
-        self.validate_semantics()?;
+        if let Some(value) = &self.visible_villager_count {
+            ensure(*value >= 0, "WorldState.visible_villager_count: minimum 0")?;
+        }
         Ok(())
     }
 }
@@ -1388,11 +1437,6 @@ impl Validate for EventData {
         self.visual_threats.validate()?;
         self.auditory_threats.validate()?;
         self.smell_observation.validate()?;
-        ensure(
-            (self.zombie_scent_clues).len() <= 8,
-            "EventData.zombie_scent_clues: maxItems 8",
-        )?;
-        self.zombie_scent_clues.validate()?;
         self.ambient_sounds.validate()?;
         self.passive_mobs.validate()?;
         self.nearby_resources.validate()?;

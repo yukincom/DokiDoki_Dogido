@@ -14,4 +14,4 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   print -u2 -- '既存のPython環境が見つかりません。DOGIDO_PYTHONで指定してください。'
   exit 1
 fi
-exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --voice "$@"
+exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --port 5056 --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration" --aec --silence-ms 800 --voice "$@"

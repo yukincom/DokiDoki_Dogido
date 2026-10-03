@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""専用ポートの会話試験。既存設定を読むだけで、モデル・OS・Fabric設定を変更しない。"""
+"""Rust本体・音声入力の共通起動。設定を読み、準備済み実行ファイルへ引き渡す。"""
 import argparse
 import json
 import os
@@ -18,8 +18,10 @@ def check_runtime_files(root):
     if not binary.is_file() or not os.access(binary, os.X_OK):
         raise RuntimeError("Rust本体が未準備です。先にreleaseビルドを行ってください。")
     for relative in (
-        "dogido-rust/scripts/dialogue_helper.py",
         "dogido-rust/scripts/tts_unidic_adapter.py",
+        "dogido-rust/scripts/tts_shared_tokens.py",
+        "dogido-rust/scripts/web_adapter.py",
+        "dogido-rust/src/combat/defaults.json",
         "dogido-rust/scripts/haiku_tokens.py",
         "dogido-rust/scripts/workshop_helper.py",
         "dogido-rust/scripts/combat_input_helper.py",
@@ -45,10 +47,9 @@ def voice_settings(settings, folder):
         settings.voice_echo_python = folder / ".dogido_tools/echo-cancel/.venv/bin/python"
     if settings.voice_echo_helper is None:
         settings.voice_echo_helper = folder / ".dogido_tools/echo-cancel/bin/dogido-audio-capture"
-    settings.voice_echo_cancellation = "webrtc"
-    # Rust会話試験の発話区切り。共有Python版の設定ファイルは変更しない。
-    settings.voice_silence_ms = 800
-    settings.bind_host, settings.bind_port = "127.0.0.1", 5056
+    for key in ("voice_echo_python", "voice_echo_helper"):
+        path = Path(getattr(settings, key))
+        setattr(settings, key, path if path.is_absolute() else folder / path)
     return settings
 
 
@@ -57,25 +58,49 @@ def main():
     p.add_argument("--settings-dir", type=Path, required=True)
     p.add_argument("--voice", action="store_true")
     p.add_argument("--check", action="store_true")
+    p.add_argument("--port", type=int, help="この起動だけの待受ポート")
+    p.add_argument("--memory-dir", type=Path, help="この起動だけの記憶保存先")
+    p.add_argument("--aec", action="store_true", help="既存AECキャプチャを使用")
+    p.add_argument("--silence-ms", type=int, help="この音声起動だけの無音区切り")
     args = p.parse_args()
     folder = args.settings_dir.resolve()
     os.chdir(folder)
     settings = get_settings()
+    if args.port is not None:
+        if not 1 <= args.port <= 65535:
+            raise ValueError("ポートは1〜65535で指定してください。")
+        settings.bind_port = args.port
+    if args.memory_dir is not None:
+        settings.memory_dir = args.memory_dir
+    if args.aec:
+        settings.voice_echo_cancellation = "webrtc"
+    if args.silence_ms is not None:
+        if args.silence_ms <= 0:
+            raise ValueError("無音区切りは正のミリ秒で指定してください。")
+        settings.voice_silence_ms = args.silence_ms
+    host = "127.0.0.1" if settings.bind_host == "localhost" else settings.bind_host
+    # A wildcard is a listening address, never a client destination.
+    client_host = "127.0.0.1" if host == "0.0.0.0" else "::1" if host == "::" else host
+    url_host = f"[{client_host}]" if ":" in client_host else client_host
+    listen_host = f"[{host}]" if ":" in host else host
+    base_url = f"http://{url_host}:{settings.bind_port}"
+    listen = f"{listen_host}:{settings.bind_port}"
+
     if args.voice:
         settings = voice_settings(settings, folder)
-        from dogido_server.voice_capture import echo_command
-        from dogido_server.voice_input import (
+        from dogido_server.voice_capture import capture_command as resolve_capture_command
+        from dogido_server.voice_settings import (
             resolve_whisper_paths, resolve_vad_paths, NORMAL_STT_PROMPT, HAIKU_WORKSHOP_STT_PROMPT,
         )
         cli, model = resolve_whisper_paths(settings)
-        capture_command = echo_command(settings)
+        capture_command = resolve_capture_command(settings)
         vad = resolve_vad_paths(settings, cli)
         voice_config = {
             "capture_command": capture_command,
             "whisper_cli": str(cli.resolve()), "whisper_model": str(model.resolve()),
             "vad": {"cli": str(vad[0].resolve()), "model": str(vad[1].resolve()),
                     "threshold": settings.voice_vad_threshold} if vad else None,
-            "base_url": "http://127.0.0.1:5056",
+            "base_url": base_url,
             "rms_threshold": settings.voice_rms_threshold,
             "silence_ms": settings.voice_silence_ms,
             "minimum_ms": settings.voice_min_speech_ms,
@@ -88,15 +113,15 @@ def main():
             "normal_prompt": NORMAL_STT_PROMPT, "workshop_prompt": HAIKU_WORKSHOP_STT_PROMPT,
             "use_gpu": True,
         }
-        print(f"Rust音声入力: {model.name} / AECあり / VAD {'あり' if vad else 'なし'}", flush=True)
+        print(f"Rust音声入力: {model.name} / AEC {settings.voice_echo_cancellation} / VAD {'あり' if vad else 'なし'}", flush=True)
         print(f"発話区切り: 無音 {settings.voice_silence_ms}ms", flush=True)
-        print("配送先: http://127.0.0.1:5056 / 終了はこのターミナルで Ctrl+C", flush=True)
+        print(f"配送先: {base_url} / 終了はこのターミナルで Ctrl+C", flush=True)
         if not args.check:
-            with urllib.request.urlopen("http://127.0.0.1:5056/healthz", timeout=3) as r:
+            with urllib.request.urlopen(base_url + "/healthz", timeout=3) as r:
                 health = json.load(r)
-            if health.get("phase") != "dialogue_preview":
-                raise RuntimeError("先に start_dialogue.command でRust版の会話試験を起動してください。")
-        binary = ROOT / "dogido-rust/target/release/dogido-rust"
+            if health.get("runtime") != "rust" or health.get("dialogue_ready") is not True:
+                raise RuntimeError("先に同じ設定でRust本体を起動してください。")
+        binary = check_runtime_files(ROOT)
         env = dict(os.environ)
         env["PYTHONPATH"] = str(ROOT)
         if settings.auth_token: env["DOGIDO_AUTH_TOKEN"] = settings.auth_token
@@ -125,7 +150,7 @@ def main():
         "low_threat_resume_delay_ms": settings.workshop_low_threat_resume_delay_ms,
         "platform_ai": {k: getattr(settings, "platform_ai_" + k) for k in (
             "provider", "timeout_sec", "refresh_sec", "failure_cooldown_sec", "foundry_model_alias", "allow_model_download")},
-        "memory_dir": str(ROOT / ".dogido_memory/rust-migration"),
+        "memory_dir": str(settings.memory_dir.resolve()),
     }
     for url in (base, haiku_base, settings.voicevox_url):
         if urlsplit(url).hostname not in {"127.0.0.1", "localhost", "::1"}:
@@ -139,21 +164,21 @@ def main():
     web_settings = {"enabled": settings.main_language_web_enabled and settings.main_language_dialogue_enabled,
                     "available": web_availability.available}
     print(f"同意済みWeb検索: {web_availability.reason if web_settings['enabled'] else 'disabled'}（ブラウザー未起動）", flush=True)
-    print(f"Rust版の冒険会話試験 / 実行元: {ROOT}", flush=True)
+    print(f"Rust本体 / 実行元: {ROOT}", flush=True)
     print(f"設定の読込元: {folder} / モデル: {model}", flush=True)
-    print("表示: http://127.0.0.1:5056/rust-chat", flush=True)
+    print(f"表示: {base_url}/rust-chat", flush=True)
     print("会話・川柳・戦闘・環境反応の判断と音声配送はRustで処理します。", flush=True)
     print(f"自動川柳: {haiku_model} / 保存先: {haiku_settings['memory_dir']}（セッションごと）", flush=True)
     print("情景発話・発句・保存・掛け軸、句の共同編集・採否・読み訂正・保存した句の検索、知識回答・限定国語対話に対応。Web連携は利用前提が揃うときだけ、同意と案内音声の再生完了後に開始します。", flush=True)
-    print("マイクを使う場合は、起動完了後に start_voice.command を開いてください。", flush=True)
+    print(f"マイクは同じ設定・ポート {settings.bind_port} の起動指定に --voice を付け、別のターミナルで開始してください。", flush=True)
     print("終了はこのターミナルで Ctrl+C。共有MLXとVOICEVOX本体は停止しません。", flush=True)
     if args.check:
         check_runtime_files(ROOT)
         from tts_shared_tokens import handle as tokens_handle
         from combat_input_helper import Worker as CombatInputWorker
-        print("Rust本体・資料・辞書と端末AIの接続補助を確認しました。モデル生成・録音・サーバー起動は行っていません。")
+        print("Rust本体・資料・補助のimportを確認しました。辞書・端末AIの初期化はしていません。モデル生成・録音・サーバー起動は行っていません。")
         return
-    binary = ROOT / "dogido-rust/target/release/dogido-rust"
+    binary = check_runtime_files(ROOT)
     env = dict(os.environ)
     # 認証値は引数や端末表示へ出さない。
     for name, value in {"DOGIDO_AUTH_TOKEN": settings.auth_token,
@@ -161,8 +186,8 @@ def main():
                         "DOGIDO_LLM_HAIKU_API_KEY": settings.llm_haiku_api_key or settings.llm_api_key}.items():
         if value: env[name] = value
         else: env.pop(name, None)
-    command = [str(binary), "serve-dialogue", "--listen", "127.0.0.1:5056", "--python", sys.executable,
-        "--helper", str(ROOT / "dogido-rust/scripts/dialogue_helper.py"),
+    command = [str(binary), "serve-dialogue", "--listen", listen, "--python", sys.executable,
+        "--helper", str(ROOT / "dogido-rust/scripts/haiku_tokens.py"),
         "--model", model, "--base-url", base, "--voicevox-url", settings.voicevox_url,
         "--speaker", str(settings.voicevox_speaker), "--speed", str(settings.voicevox_speed_scale_peace),
         "--haiku-speed", str(settings.voicevox_speed_scale_haiku),
@@ -182,7 +207,7 @@ def main():
         "--max-tokens", str(settings.llm_chat_max_tokens or settings.llm_max_tokens),
         "--timeout-ms", str(int(1000 * (settings.llm_chat_timeout_sec or settings.llm_timeout_sec))),
         "--reading-engine", settings.tts_reading_engine,
-        "--audio-dir", str(ROOT / ".dogido_tmp/rust-dialogue")]
+        "--audio-dir", str(folder / ".dogido_tmp/rust-dialogue")]
     if settings.voicevox_output_sampling_rate is not None:
         command.extend(["--output-sampling-rate", str(settings.voicevox_output_sampling_rate)])
     if not settings.audio_enabled or settings.tts_backend == "noop":

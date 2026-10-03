@@ -35,7 +35,7 @@ pub(super) async fn read(
     let script = config
         .helper
         .parent()
-        .context("dialogue helper directory")?
+        .context("dictionary helper directory")?
         .join("tts_unidic_adapter.py");
     live(cancel, deadline)?;
     let mut helper = Helper::start(&config.python, &script)?;
@@ -68,7 +68,7 @@ mod tests {
     async fn ready_needs_no_helper_and_cancelled_ready_is_not_spoken() {
         let mut config = DialogueConfig {
             python: "/missing/tts-python".into(),
-            helper: "/missing/dialogue_helper.py".into(),
+            helper: "/missing/haiku_tokens.py".into(),
             ..Default::default()
         };
         let (tx, mut rx) = watch::channel(false);
@@ -163,14 +163,16 @@ mod tests {
                 }
             };
             let script = format!(
-                "echo $$ > '{}/pid'\nread -r line\nprintf '%s\\n' \"$line\" > '{}/request'\nrequest_id=${{line#*\\\"request_id\\\":\\\"}}\nrequest_id=${{request_id%%\\\"*}}\n{response}\n",
+                "echo $$ > '{}/pid'\nread -r line\nprintf '%s\\n' \"$line\" > '{}/request.pending'\nmv '{}/request.pending' '{}/request'\nrequest_id=${{line#*\\\"request_id\\\":\\\"}}\nrequest_id=${{request_id%%\\\"*}}\n{response}\n",
+                dir.display(),
+                dir.display(),
                 dir.display(),
                 dir.display()
             );
             std::fs::write(dir.join("tts_unidic_adapter.py"), script).unwrap();
             let config = DialogueConfig {
                 python: "/bin/sh".into(),
-                helper: dir.join("dialogue_helper.py"),
+                helper: dir.join("haiku_tokens.py"),
                 ..Default::default()
             };
             let (tx, mut rx) = watch::channel(false);

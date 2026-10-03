@@ -253,9 +253,6 @@ fn finalize(payload: &Value, d: &Value) -> Value {
     {
         return reject("action_not_allowed");
     }
-    if action == "defer_to_legacy" {
-        return reject("deferred");
-    }
     let purpose = sanitize::strip(text(&payload["purpose"]));
     if !strings(&ASSETS["purposes"]).contains(purpose) {
         return reject("purpose_not_allowed");

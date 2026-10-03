@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
         .or_else(|| chat_key.clone());
     let chat = Route::new(request.chat, chat_key.as_deref())?;
     let haiku = Route::new(request.haiku, haiku_key.as_deref())?;
-    let helper = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/haiku_helper.py");
+    let helper = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/haiku_tokens.py");
     let (tx, mut cancel) = watch::channel(false);
     let cancellation = tokio::spawn(async move {
         if let Some(ms) = args.cancel_after_ms {

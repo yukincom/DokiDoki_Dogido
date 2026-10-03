@@ -3,8 +3,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import subprocess
-import sys
 import threading
 import unittest
 from types import SimpleNamespace
@@ -16,13 +14,12 @@ except ImportError:
     np = None
 
 from dogido_server.config import Settings
-from dogido_server.models import VoiceInputDiagnosticRequest
 from dogido_server.echo_input import (
     FRAME_SAMPLES, HEADER, INPUT_BYTES, MAGIC, RATE, WebRTCEchoProcessor,
     read_exact, validate_header,
     main as echo_main,
 )
-from dogido_server.voice_capture import CaptureProcess, echo_command, spawn_capture
+from dogido_server.voice_capture import capture_command, echo_command
 
 
 @unittest.skipUnless(np is not None, 'optional echo DSP tests require NumPy')
@@ -103,58 +100,32 @@ class EchoTransportTests(unittest.TestCase):
         finally:
             os.close(writer)
 
-    def test_capture_combines_ten_ms_into_thirty_ms(self):
-        capture = CaptureProcess.__new__(CaptureProcess)
-        capture.stdout = Mock(read=Mock(side_effect=[b'a' * 320, b'b' * 320, b'c' * 320]))
-        self.assertEqual(b'a' * 320 + b'b' * 320 + b'c' * 320, capture.read_frame(960))
-        capture.stdout.read.side_effect = [b'd' * 320, b'']
-        self.assertEqual(b'', capture.read_frame(960))
-
-    def test_stderr_is_drained_bounded_and_uses_existing_diagnostic_event(self):
-        events = []
-        process = subprocess.Popen([sys.executable, '-c',
-            'import os; os.write(2, b"x"*10000+b"\\n"); '
-            'os.write(2, b\'{"reason":"aec_started"}\\n\'); os.write(1,b"abc")'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        capture = CaptureProcess(process, diagnostic=lambda **event: events.append(event))
-        try:
-            self.assertEqual(b'abc', capture.read_frame(3))
-            process.wait(timeout=3)
-            self.assertLessEqual(len(capture.error_tail()), 800)
-            VoiceInputDiagnosticRequest(event='capture', level='error',
-                                        reason='microphone_stopped', detail=capture.error_tail())
-            self.assertEqual('capture', events[-1]['event'])
-        finally:
-            capture.close()
-
-    def test_exited_sidecar_group_is_still_reaped(self):
-        capture = CaptureProcess.__new__(CaptureProcess)
-        capture.process = Mock(pid=123, poll=Mock(return_value=2))
-        capture.stdout = io.BytesIO()
-        capture.own_group = True
-        capture._reader = Mock()
-        with patch('dogido_server.voice_capture.os.killpg') as kill:
-            capture.close()
-        self.assertEqual(123, kill.call_args.args[0])
-
 
 class EchoSelectionTests(unittest.TestCase):
-    def test_opt_in_default_and_off_does_not_load_aec(self):
-        settings = Settings(_env_file=None)
-        self.assertEqual('off', settings.voice_echo_cancellation)
-        raw = Mock(return_value=SimpleNamespace())
-        with patch('dogido_server.voice_capture.CaptureProcess') as wrapped:
-            spawn_capture(settings, raw_factory=raw)
-        raw.assert_called_once_with(settings.voice_input_device)
-        wrapped.assert_called_once()
+    def test_off_selects_existing_ffmpeg_without_loading_aec(self):
+        settings = Settings(_env_file=None, voice_echo_cancellation='off', voice_input_device=':7')
+        with patch('dogido_server.voice_capture.shutil.which', return_value='/fixture/ffmpeg'), \
+             patch('dogido_server.voice_capture.echo_command') as aec:
+            command = capture_command(settings)
+        aec.assert_not_called()
+        self.assertEqual('/fixture/ffmpeg', command[0])
+        self.assertEqual(':7', command[command.index('-i') + 1])
+        self.assertEqual(['-ac', '1', '-ar', '16000', '-f', 's16le', '-'], command[-7:])
 
-    def test_unprepared_aec_never_calls_raw_factory(self):
+    def test_unprepared_aec_never_selects_raw_capture(self):
         settings = Settings(_env_file=None, voice_echo_cancellation='webrtc',
                             voice_echo_helper='/nonexistent/dogido-helper')
-        raw = Mock()
-        with self.assertRaises(RuntimeError):
-            spawn_capture(settings, raw_factory=raw)
+        with patch('dogido_server.voice_capture.shutil.which') as raw:
+            with self.assertRaises(RuntimeError):
+                capture_command(settings)
         raw.assert_not_called()
+
+    def test_missing_ffmpeg_is_reported_without_installing(self):
+        settings = Settings(_env_file=None, voice_echo_cancellation='off')
+        with patch('dogido_server.voice_capture.shutil.which', return_value=None):
+            with self.assertRaisesRegex(RuntimeError, 'ffmpeg'):
+                capture_command(settings)
+
 
     def test_aec_passes_uid_not_ffmpeg_device_index(self):
         settings = Settings(_env_file=None, voice_echo_cancellation='webrtc',

@@ -25,11 +25,11 @@ async fn generate_once<F: Future<Output = Result<GenerationReport>>>(
         _=bridge::cancelled(cancel)=>anyhow::bail!("cancelled"),
         result=generate(leaf.request.clone())=>result,
     };
-    let (raw, report) = match response {
+    let (generated, report) = match response {
         Ok(report) => {
             tracing::info!(kind=leaf.request.kind,elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,finish_reason=?report.generated.finish_reason);
             (
-                Some(report.generated.text.clone()),
+                Some(report.generated.clone()),
                 serde_json::to_value(report)?,
             )
         }
@@ -38,14 +38,20 @@ async fn generate_once<F: Future<Output = Result<GenerationReport>>>(
             json!({"kind":leaf.request.kind,"error":error.to_string()}),
         ),
     };
-    let (text, outcome) = leaf.finish(raw.as_deref());
+    ensure!(
+        !*cancel.borrow() && cancel.has_changed().is_ok(),
+        "cancelled"
+    );
+    let (text, outcome) = leaf.finish(generated.as_ref());
     tracing::info!(
         event = "reaction_leaf",
         kind = leaf.request.kind,
         implementation = "rust",
         outcome
     );
-    Ok(json!({"op":"result","text":text,"llm_reports":[report],"reaction_leaf_outcome":outcome}))
+    Ok(
+        json!({"op":"result","text":text,"spoken_text":text,"llm_reports":[report],"reaction_leaf_outcome":outcome}),
+    )
 }
 pub(super) async fn render(
     config: &DialogueConfig,
@@ -57,7 +63,7 @@ pub(super) async fn render(
     let deadline = tokio::time::Instant::now() + Duration::from_secs(95);
     if input["kind"] == crate::environment::reaction::KIND {
         let prepared = crate::environment::reaction::Prepared::new(input, &config.model)?;
-        let result = tokio::time::timeout_at(
+        let mut result = tokio::time::timeout_at(
             deadline,
             generate_environment_once(&prepared, cancel, |request| async move {
                 llm.generate(&request).await
@@ -65,13 +71,15 @@ pub(super) async fn render(
         )
         .await
         .context("environment reaction timed out")??;
+        result["observation_revision"] =
+            input["details"]["reaction_context"]["world_context"]["revision"].clone();
         if result["environment_reaction_outcome"] == "silent" {
             return Ok(result);
         }
         return read_speech(config, result, cancel, deadline).await;
     }
     let leaf = Leaf::prepare(input, &config.model, config.max_tokens)?;
-    let result = tokio::time::timeout_at(
+    let mut result = tokio::time::timeout_at(
         deadline,
         generate_once(&leaf, cancel, |request| async move {
             llm.generate(&request).await
@@ -79,6 +87,11 @@ pub(super) async fn render(
     )
     .await
     .context("reaction generation timed out")??;
+    result["observation_revision"] =
+        input["details"]["conversation_context"]["world_context"]["revision"].clone();
+    if result["reaction_leaf_outcome"] == "silent" {
+        return Ok(result);
+    }
     read_speech(config, result, cancel, deadline).await
 }
 
@@ -183,6 +196,31 @@ mod tests {
         tx.send(true).unwrap();
         assert!(task.await.unwrap().is_err());
         assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+    fn report(text: &str) -> GenerationReport {
+        serde_json::from_value(json!({"schema_version":1,"provider":"fixture","kind":"aftermath",
+            "requested_model":"fixture","response_model":"fixture","response_id":"fixture","elapsed_ms":0,
+            "generated":{"text":text,"finish_reason":"stop"}})).unwrap()
+    }
+    #[tokio::test]
+    async fn explicit_silence_is_empty_and_late_cancel_is_not_silence() {
+        let (tx, mut rx) = watch::channel(false);
+        let result = generate_once(&leaf(), &mut rx, |_| async {
+            Ok(report(r#"{"action":"silent","speech":""}"#))
+        })
+        .await
+        .unwrap();
+        assert_eq!(result["reaction_leaf_outcome"], "silent");
+        assert_eq!(result["text"], "");
+        assert_eq!(result["spoken_text"], "");
+        assert!(
+            generate_once(&leaf(), &mut rx, |_| async {
+                tx.send(true).unwrap();
+                Ok(report(r#"{"action":"silent","speech":""}"#))
+            })
+            .await
+            .is_err()
+        );
     }
     #[tokio::test]
     async fn native_reading_preserves_display_and_generation_report() {

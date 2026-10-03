@@ -11,6 +11,7 @@
     "undead",
     "observed_speech_aliases",
     "observed_speech_rewrite_from_ids",
+    "environment_notes",
     "poetic"
   ],
   "items": {
@@ -19,6 +20,9 @@
       "threat_class": "swarm",
       "priority": "low",
       "provoked_only": true,
+      "environment_notes": [
+        "水への接触が約1秒を超えて続くと溺水ダメージを受ける。"
+      ],
       "poetic": {
         "visual_tags": [
           "黄色",
@@ -88,6 +92,10 @@
       "priority": "low",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水にも雨にも触れない状態が約2分続くと乾燥ダメージを受ける。水またはその個体に降る雨で乾燥を防げる。雨天でも屋根の下など雨に触れない場所は別。",
+        "空気呼吸も必要。水中に閉じ込められて空気を吸えない状態が約4分続くと溺れる。水中にいることだけでは安全とも溺水中とも決められない。"
+      ],
       "poetic": {
         "visual_tags": [
           "青",
@@ -119,10 +127,15 @@
       "label": "ドラウンド",
       "threat_class": "melee",
       "priority": "high",
-      "burns_in_daylight": false,
+      "burns_in_daylight": true,
       "aquatic": true,
       "dies_on_land": false,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "水中でも陸上でも呼吸は不要で、陸上で乾燥や窒息はしない。",
+        "通常は昼の水に触れていないプレイヤーを新たな攻撃対象にしないが、相手が水に触れていると昼でも攻撃対象になる。夜や反撃・交戦中も含め、昼というだけで安全とはいえない。"
+      ],
       "poetic": {
         "visual_tags": [
           "水死体",
@@ -157,6 +170,9 @@
       "threat_class": "teleport",
       "priority": "high",
       "provoked_only": true,
+      "environment_notes": [
+        "水やその個体に降る雨に触れるとダメージを受ける。雨天でも屋根の下など雨に触れていない個体まで被害中とはいえない。"
+      ],
       "poetic": {
         "visual_tags": [
           "黒い",
@@ -320,6 +336,9 @@
       "label": "オウムガイ",
       "aquatic": true,
       "dies_on_land": true,
+      "environment_notes": [
+        "水から離れた状態が続くと乾燥ダメージを受ける。雨だけでは防げない。"
+      ],
       "poetic": {
         "visual_tags": [
           "うずまき",
@@ -387,6 +406,9 @@
       "threat_class": "ranged",
       "priority": "medium",
       "provoked_only": true,
+      "environment_notes": [
+        "通常のオーバーワールドやジ・エンドでは、約15秒いるとゾンビピグリンへ変化する。現在地の環境がゾンビ化を起こす条件であり、ネザーでは変化しない。免疫など特殊な個体は例外。"
+      ],
       "poetic": {
         "visual_tags": [
           "金",
@@ -554,8 +576,12 @@
       "label": "ゾンビオウムガイ",
       "burns_in_daylight": true,
       "aquatic": true,
-      "dies_on_land": true,
+      "dies_on_land": false,
       "undead": true,
+      "environment_notes": [
+        "日中、日光が届く場所では燃えることがある。水やその個体に降る雨、遮蔽などで日光による燃焼を免れる。昼という時刻だけでは、今燃えているかは分からない。",
+        "通常のオウムガイと異なり、水の外でも乾燥や窒息はしない。オウムガイの鎧を装備している間は日光による燃焼を防げる。"
+      ],
       "poetic": {
         "visual_tags": [
           "腐った殻",
@@ -591,6 +617,9 @@
       "burns_in_daylight": false,
       "undead": true,
       "provoked_only": true,
+      "environment_notes": [
+        "アンデッドだが日光では燃えない。"
+      ],
       "poetic": {
         "visual_tags": [
           "腐敗",

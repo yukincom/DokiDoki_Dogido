@@ -7,13 +7,13 @@
     "fixed_after": 104
   },
   "source_sha256": {
-    "dogido_server/state_machine/mixins/narration.py": "be2e54c302214a9d9bd13b3a05f8b3fd2ef4551e73644450ebc3410e36b73259",
-    "dogido_server/state_machine/mixins/common.py": "38df7f55aa91d8d46212f597e254b6a81e0658eb02d4c305cf8589e7e799c5eb",
+    "dogido_server/state_machine/mixins/narration.py": "516d84d5c125b20a969a3b337070f08d9be2e6e4feeb454c7db014bace90f115",
+    "dogido_server/state_machine/mixins/common.py": "751475132975e45185829bcc53de7261c253ac95d1ecf84b0f775d4d95257ce5",
     "dogido_server/dialogue/player_plan.py": "9649e5a83ec81c7ac1afda949c23f63ff7793f1b67fc46891eb9e4e88d00db6a",
-    "dogido_server/dialogue/player_chat_planner.py": "7bd3c9b9c262773602920b0df2a4e707ab0f50308e2586c72909c408808dd7d4",
-    "dogido_server/dialogue/chat_policy.py": "714ff061a7b34ecae2779adb1e16a4648188200a41b26cf8f57b3ca76f821e6a",
-    "dogido_server/entry_catalog.py": "b77b38553b2ccc9608b54a454f4efb2e9a16fc34ca9af161132c82eb843f4230",
-    "dogido-rust/scripts/chat_prompt_helper.py": "7caea046f0f2daef2ad1eeaa9d35cd340e9365c98252f1f782ae571b88c76915",
+    "dogido_server/dialogue/player_chat_planner.py": "7258db60d538530444c019e2e5018339c6b2fd0299b5c4c146f27cd87e141378",
+    "dogido_server/dialogue/chat_policy.py": "70db94647b72f15ae473f5fc00f7e2b911761f6bfa571bdee4d1723ad59d6de6",
+    "dogido_server/entry_catalog.py": "9d47149445aa55f7ea7590ec8ce0bee615b64eeecf9ed7a5901a247865df37b5",
+    "dogido-rust/scripts/chat_prompt_helper.py": "72962d1fe1f010ff44e87edd7a1c6a7376252d951e0ba7ea7349c4c059e2e256",
     "dogido-rust/scripts/chat_validation_helper.py": "9311e306f30712e6636c6f6964aa4b866580fc9356e03549acf7572332a2a88a"
   },
   "oracle": "canonical full _render_player_chat_reply with mock planner and capture leaf; persistent process before temporal snapshot; no model/service"

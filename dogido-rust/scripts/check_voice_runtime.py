@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from dogido_server.models import VoiceInputDiagnosticRequest
+from test_support import assert_voice_diagnostic
 
 
 def wait(predicate, description, timeout=8):
@@ -55,7 +55,7 @@ class Harness:
                 value = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 parent.requests.append((self.path, value, self.headers.get("Authorization")))
                 if self.path.endswith("diagnostics"):
-                    try: VoiceInputDiagnosticRequest.model_validate(value)
+                    try: assert_voice_diagnostic(value)
                     except Exception as error:
                         parent.errors.append(str(error))
                         return self.response({"error": "invalid diagnostic"}, 400)

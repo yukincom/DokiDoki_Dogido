@@ -40,7 +40,10 @@ pub(super) async fn render(
     };
     live(cancel)?;
     ensure!(Instant::now() < deadline, "chat timed out");
-    if let Some(text) = result.get("text") {
+    if let Some(text) = result
+        .get("text")
+        .filter(|_| result["dialogue_action"] != "silent")
+    {
         let text = text.as_str().context("native chat result text")?;
         // Do not wrap this owned adapter in an outer cancellation select: read()
         // waits for its own child cleanup before returning cancellation/timeout.
@@ -221,6 +224,11 @@ async fn body(
                             text: outcome.text,
                             final_text: outcome.final_text,
                             reports: vec![],
+                            action: if outcome.status == "silent" {
+                                "silent"
+                            } else {
+                                "speak"
+                            },
                         }
                     };
                     tracing::info!(
@@ -229,7 +237,8 @@ async fn body(
                     );
                     reports.extend(reply.reports);
                     handoff.validate_result(&json!(reply.final_text))?;
-                    json!({"op":"result","text":reply.final_text,"repair":leaf.repair})
+                    json!({"op":"result","text":reply.final_text,"repair":leaf.repair,
+                        "dialogue_action":reply.action,"observation_revision":leaf.details["world_context"]["revision"]})
                 }
             }
         }
@@ -326,14 +335,16 @@ mod tests {
         c.haiku.memory_enabled = false;
         c
     }
-    fn input(text: &str) -> Value {
+    fn input(text: &str) -> bridge::Input {
         let prepared = crate::player_text::prepare(text);
         let context = crate::input_context::Context::from_prepared(
             &prepared,
             &[],
             chrono::Local::now().fixed_offset(),
         );
-        json!({"text":text,"prepared_context":context,"reading_corrections":[],"chat_native":null})
+        let mut input: bridge::Input = json!({"text":text,"reading_corrections":[]}).into();
+        input.context = Some(context);
+        input
     }
     #[tokio::test]
     async fn fixed_routes_need_neither_python_nor_model_nor_snapshot() {
@@ -343,7 +354,7 @@ mod tests {
         let quiet = super::render(
             &c,
             &llm,
-            &input("静かにして").into(),
+            &input("静かにして"),
             &mut rx,
             |_| panic!("no route"),
             |_| panic!("no handoff"),
@@ -358,7 +369,7 @@ mod tests {
         let fixed = super::render(
             &c,
             &llm,
-            &address.clone().into(),
+            &address,
             &mut rx,
             |_| panic!("no route"),
             |_| panic!("no handoff"),
@@ -372,7 +383,7 @@ mod tests {
             let reply = super::render(
                 &c,
                 &llm,
-                &input(text).into(),
+                &input(text),
                 &mut rx,
                 |_| Ok(()),
                 |_| Ok(false),
@@ -398,7 +409,7 @@ mod tests {
             super::render(
                 &c,
                 &llm,
-                &input("静かにして").into(),
+                &input("静かにして"),
                 &mut rx,
                 |_| Ok(()),
                 |_| Ok(false),
@@ -415,7 +426,7 @@ mod tests {
             super::render(
                 &c,
                 &llm,
-                &input("静かにして").into(),
+                &input("静かにして"),
                 &mut rx,
                 |_| Ok(()),
                 |_| Ok(false),
@@ -440,8 +451,7 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        let mut frame = input("こんにちは");
-        frame.as_object_mut().unwrap().remove("chat_native");
+        let mut frame = json!({"text":"こんにちは","reading_corrections":[]});
         frame["event"] = fixture["event"].clone();
         frame["language_requested"] = true.into();
         let mut job = bridge::Input::native(

@@ -54,16 +54,16 @@ fi
 mode="${1:-}"
 case "${mode}" in
   server)
-    module="dogido_server"
+    launch_args=()
     label="Dogido Server"
     ;;
   voice)
-    module="dogido_server.voice_input"
+    launch_args=(--voice)
     label="Dogido Voice Input"
     ;;
   voice-aec)
     export DOGIDO_VOICE_ECHO_CANCELLATION=webrtc
-    module="dogido_server.voice_input"
+    launch_args=(--voice)
     label="Dogido Voice Input (WebRTC AEC3)"
     print -- "Macの再生音全体をAEC参照として一時取得します（参照音の保存・送信なし）。"
     ;;
@@ -88,4 +88,4 @@ esac
 print -- "========== ${label} =========="
 
 cd "${PROJECT_ROOT}"
-"${PYTHON_BIN}" -m "${module}"
+exec "${PYTHON_BIN}" "${PROJECT_ROOT}/dogido-rust/scripts/launch_dialogue.py" --settings-dir "${PROJECT_ROOT}" "${launch_args[@]}"

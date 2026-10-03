@@ -157,10 +157,19 @@ fn thunder_message_and_cue_have_independent_timers() {
     let first = tick(&mut d, &e, 0, false, true, true);
     assert_eq!(first.len(), 2);
     assert!(first[0].interrupt);
+    assert_eq!(first[1].kind, "thunder_reaction");
+    assert_eq!(
+        first[1].leaf.as_ref().unwrap().details["scream_status"],
+        "scheduled"
+    );
     assert!(tick(&mut d, &e, 179999, false, true, true).is_empty());
     let a = tick(&mut d, &e, 180000, false, true, true);
     assert_eq!(a.len(), 1);
     assert!(!a[0].interrupt);
+    assert_eq!(
+        a[0].leaf.as_ref().unwrap().details["scream_status"],
+        "not_scheduled"
+    );
     assert_eq!(tick(&mut d, &e, 600000, false, true, true).len(), 2);
 }
 #[test]
@@ -363,4 +372,42 @@ fn heat_warns_before_contact_even_during_conversation_and_keeps_cooldown() {
         tick(&mut d, &e, 601000, true, true, false)[0].kind,
         "damaging_light"
     );
+}
+
+#[test]
+fn portal_encounter_survives_deferral_and_selects_matching_fallback() {
+    for (encounter, fragment) in [
+        (json!("appeared"), "出てきた"),
+        (json!("arrived"), "来た"),
+        (json!("observed"), "あ、"),
+        (Value::Null, "あ、"),
+    ] {
+        let mut d = Danger::default();
+        tick(&mut d, &event(json!({})), 0, true, false, false);
+        let e = event(
+            json!({"nearby_portal_type":"nether_portal","nearby_portal_encounter":encounter}),
+        );
+        assert!(tick(&mut d, &e, 1000, true, true, false).is_empty());
+        // Repeated snapshots of the same encounter retain its original classification.
+        let line = tick(&mut d, &e, 2000, true, false, false).remove(0);
+        assert_eq!(
+            line.leaf.as_ref().unwrap().details["portal_encounter"],
+            encounter
+        );
+        assert!(line.text.contains(fragment), "{}", line.text);
+    }
+}
+
+#[test]
+fn deferred_portal_uses_changed_encounter_from_full_snapshot() {
+    let mut d = Danger::default();
+    tick(&mut d, &event(json!({})), 0, true, false, false);
+    let appeared =
+        event(json!({"nearby_portal_type":"nether_portal","nearby_portal_encounter":"appeared"}));
+    assert!(tick(&mut d, &appeared, 1000, true, true, false).is_empty());
+    let arrived =
+        event(json!({"nearby_portal_type":"nether_portal","nearby_portal_encounter":"arrived"}));
+    let line = tick(&mut d, &arrived, 2000, true, false, false).remove(0);
+    assert_eq!(line.leaf.unwrap().details["portal_encounter"], "arrived");
+    assert!(line.text.contains("来た"));
 }

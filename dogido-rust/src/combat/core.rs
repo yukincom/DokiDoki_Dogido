@@ -183,7 +183,7 @@ impl Engine {
                     .is_some_and(|n| n <= s.ms("recent_damage_window_ms") as i64)
                 || dark_alert(event, s);
         }
-        let immediate = self.outcomes.observe_with_mode(event, now, previous);
+        let immediate = self.outcomes.observe(event, now);
         if complete && event.event.name == EventName::CombatEnded {
             self.pending_safe_at = self.outcomes.boss_defeat_confirmed(event).then_some(now);
         }
@@ -349,7 +349,6 @@ impl Engine {
             "hostiles_within_7",
             "hostiles_within_10",
             "hostiles_within_scan_ground",
-            "hostiles_within_30_ground",
             "hostile_scan_distance",
         ] {
             v["combat"][name] = serde_json::to_value(&full.combat).unwrap()[name].clone();

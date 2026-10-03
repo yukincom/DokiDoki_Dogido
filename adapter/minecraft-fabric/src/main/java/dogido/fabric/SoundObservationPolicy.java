@@ -17,6 +17,36 @@ final class SoundObservationPolicy {
 
     record MobSource(UUID id, String type, Point position) {}
 
+    /** Activation is distinct from stopping, stepping on, placing or breaking the block. */
+    static String sculkActivationKind(String soundEvent) {
+        if (soundEvent == null) return null;
+        String id = soundEvent.startsWith("minecraft:") ? soundEvent.substring(10) : soundEvent;
+        return switch (id) {
+            case "block.sculk_sensor.clicking" -> "sculk_sensor";
+            case "block.sculk_shrieker.shriek" -> "sculk_shrieker";
+            default -> null;
+        };
+    }
+
+    /** Keep the strongest recent deep-dark sound; lower sounds do not renew its age. */
+    static int ominousPriority(String kind) {
+        if (kind == null) return 0;
+        return switch (kind) {
+            case "sculk_sensor" -> 1;
+            case "sculk_shrieker" -> 2;
+            case "warden_heartbeat" -> 3;
+            case "warden_presence" -> 4;
+            case "warden_sonic_boom" -> 5;
+            default -> 0;
+        };
+    }
+
+    static boolean replaceOminous(String current, long currentAgeTicks, String incoming, long ttlTicks) {
+        int next = ominousPriority(incoming);
+        return next > 0 && (ominousPriority(current) == 0 || currentAgeTicks > ttlTicks
+            || next >= ominousPriority(current));
+    }
+
     /** Sound event IDs name the emitter: a parrot's imitation is still a parrot. */
     static String mobSoundEmitter(String soundEvent) {
         if (soundEvent == null) return null;

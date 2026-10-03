@@ -379,13 +379,10 @@ fn parse_assessments(
     if !structured_accepted(payload) {
         return out;
     }
-    let single;
-    let rows = if let Some(rows) = payload.get("assessments").and_then(Value::as_array) {
-        rows
-    } else if payload.get("line_index").and_then(Value::as_i64).is_some() {
-        single = vec![payload.clone()];
-        &single
-    } else {
+    let Some(rows) = payload.get("assessments").and_then(Value::as_array) else {
+        return out;
+    };
+    let Some(verdicts) = payload.get("verdicts").and_then(Value::as_object) else {
         return out;
     };
     let eligible: BTreeSet<_> = atoms.iter().map(|a| a.atom_id.as_str()).collect();
@@ -393,40 +390,24 @@ fn parse_assessments(
         .iter()
         .filter_map(|id| numbers.get(*id).and_then(Value::as_u64).map(|n| (n, *id)))
         .collect();
-    let verdicts = payload.get("verdicts").filter(|v| !v.is_null());
     for row in rows {
+        if !row.as_object().is_some_and(|row| {
+            row.len() == 2 && row.contains_key("line_index") && row.contains_key("atom_ids")
+        }) {
+            continue;
+        }
         let Some(index) = line_index(row.get("line_index")) else {
             continue;
         };
         if !indices.contains(&index) || out.contains_key(&index) {
             continue;
         }
-        let (meaning, natural) = if let Some(verdicts) = verdicts {
-            let pair = match verdicts.get(index.to_string()).and_then(Value::as_str) {
-                Some("pass") => (true, true),
-                Some("meaning_fail") => (false, true),
-                Some("japanese_fail") => (true, false),
-                Some("both_fail") => (false, false),
-                _ => continue,
-            };
-            if row
-                .get("meaning_retained")
-                .is_some_and(|v| v.as_bool() != Some(pair.0))
-                || row
-                    .get("natural_japanese")
-                    .is_some_and(|v| v.as_bool() != Some(pair.1))
-            {
-                continue;
-            }
-            pair
-        } else {
-            let Some(meaning) = row.get("meaning_retained").and_then(Value::as_bool) else {
-                continue;
-            };
-            let Some(natural) = row.get("natural_japanese").and_then(Value::as_bool) else {
-                continue;
-            };
-            (meaning, natural)
+        let (meaning, natural) = match verdicts.get(&index.to_string()).and_then(Value::as_str) {
+            Some("pass") => (true, true),
+            Some("meaning_fail") => (false, true),
+            Some("japanese_fail") => (true, false),
+            Some("both_fail") => (false, false),
+            _ => continue,
         };
         let Some(raw_ids) = row.get("atom_ids").and_then(Value::as_array) else {
             continue;
@@ -434,13 +415,9 @@ fn parse_assessments(
         let ids: Option<Vec<String>> = raw_ids
             .iter()
             .map(|v| {
-                if let Some(n) = v.as_u64() {
-                    by_number.get(&n).map(|id| (*id).to_owned())
-                } else {
-                    v.as_str()
-                        .filter(|id| eligible.contains(id))
-                        .map(str::to_owned)
-                }
+                v.as_u64()
+                    .and_then(|n| by_number.get(&n))
+                    .map(|id| (*id).to_owned())
             })
             .collect();
         let Some(ids) = ids else {
@@ -452,8 +429,7 @@ fn parse_assessments(
         let reason = payload
             .get("failure_reasons")
             .and_then(Value::as_object)
-            .and_then(|m| m.get(&index.to_string()))
-            .or_else(|| row.get("reason"));
+            .and_then(|m| m.get(&index.to_string()));
         let reason = assessment_reason(reason, &lines[index].text, meaning, natural);
         out.insert(
             index,
@@ -470,8 +446,7 @@ fn parse_assessments(
 }
 
 /// Reasons explain an already validated verdict; absent or malformed reasons
-/// never turn a valid verdict into a pass or an unavailable assessment. Legacy
-/// strings remain compatible with completed-prefix recovery and older models.
+/// never turn a valid verdict into a pass or an unavailable assessment.
 fn assessment_reason(value: Option<&Value>, line: &str, meaning: bool, natural: bool) -> String {
     if meaning && natural {
         return String::new();
