@@ -9,7 +9,9 @@
 - 川柳workshopの検証付き共同編集agent: 2026-09-12（コード・自動テストとローカルQwen独立step確認済み、実Minecraft／TTS／editor E2E未確認）
 - 本体の同意済み専用Chrome検索: 2026-09-12（コード・自動テスト・利用前提の非起動確認済み、統合後の実Minecraft／TTS／Chrome E2Eは別途確認。Minecraft自動ポーズと川柳カウント停止は2026-09-14にユーザー確認済み）
 
-既存のメモより優先して参照する前提です。
+- 本体の実行時正本: Rust。旧Python本体・比較oracleの運用は終了。Pythonは設定・UniDic token・音声機器／AEC・端末AI・Chrome/MCP接続の補助として残す。残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を正とし、読みの判定・整形を旧Pythonへ戻さない。
+
+既存のメモより優先して参照する前提です。移植前の検証日付は当時の記録であり、Rust変更後の実Minecraft・実音声の完了を意味しません。起動方法は [Rust本体の案内](../dogido-rust/README.md)、過去の移行段階は [移行記録](rust-migration-plan.md) を参照してください。
 
 ## 1. 目的とスコープ
 
@@ -22,7 +24,7 @@
 
 | 優先 | 対象 | メモ |
 |---|---|---|
-| **今** | ゲーム状況に反応する対話（警告・実況・雑談・川柳） | 状態機械 + py_trees + LLM leaf |
+| **今** | ゲーム状況に反応する対話（警告・実況・雑談・川柳） | Rustの状態機械・優先規則 + LLM leaf |
 | **今** | PC 上の音声出力 | VOICEVOX / say / afplay |
 | **後回し** | M5Stack Push Avatar | 出力デバイス差し替え。対話設計が固まってから |
 | **後回し** | LINE / Discord・定時お知らせ等の外部メッセージ | 入力チャネル追加。対話設計が固まってから |
@@ -32,7 +34,7 @@
 
 ### 基本方針
 
-- サーバーは本リポジトリの `dogido_server` として実装する
+- 本体は本リポジトリの `dogido-rust`。HTTP受付、状態、会話、川柳、記憶、音声入力制御と配送をRustが所有する
 - `yuno-chan-api` は音声入力（whisper 周り）の参考にはするが、定時お知らせや LINE / Discord 受信の取り込みは**対話設計完成後**に再検討する
 - `mindcraft` はそのまま使うのではなく、取得できる情報やコード構成の参考に使う
 - Minecraft 側は AI bot ではなく、プレイヤー本人を観測するクライアントアダプタとして実装する
@@ -42,17 +44,24 @@
 ```text
 Minecraft Java Edition
   <-> Minecraft client adapter (Fabric client mod: 観測 / 選択slot変更)
-       -- game events --> dogido-server (Python / FastAPI)
+       -- game events --> dogido-rust (Rust / Axum)
        <-- typed assist command --
      -> event normalizer
      -> state machine
-     -> py_trees action policy
+     -> Rustのコードによる発話優先・採否検証
      -> LLM response generator（必要なときだけ）
      -> optional visible Chrome research（国語・語句の同意済み調査だけ）
      -> episode decision log（評価用。会話・川柳記憶とは分離）
      -> audio router
   -> PC 音声 (VOICEVOX / say / afplay)
 ```
+
+### 起動と資料の境界
+
+- 一般起動は `launch_dialogue.py --settings-dir .` と `--voice`、または `scripts/start_dogido.command server|voice` でRustを起動する。一般設定のbindポートとFabric既定は5055。`dogido-rust/start_dialogue.command` / `start_voice.command` は5056と従来の記憶保存先を明示する専用経路として残す。
+- `memory_dir` は起動経路ごとに維持し、移行を理由に記憶を自動移動・上書きしない。
+- `dogido_server/language_dialogue/source_cards.json` と `reference/` はRustが読む現役資料。Python本体の終了と一緒に削除しない。
+- 共有プロンプトと状況文は人が編集する正本からRustへ取り込む。ラボの比較候補を自動反映しない。
 
 ### 将来構成（対話設計が固まってから）
 
@@ -73,7 +82,7 @@ Minecraft Java Edition
 - `player.hotbar` を0〜8の実測として送り、型付き `select_hotbar` commandだけを受ける
 - command ID・期限・期待item IDを再検証し、Minecraftメインスレッドで選択slotだけを変更する
 
-#### dogido-server
+#### dogido-rust
 
 - イベントを正規化する
 - ドギドの内部状態を管理する
@@ -239,11 +248,12 @@ Minecraft Java Edition
 - Fabric adapterが実近接源、hotbar 9slot、現在バイオーム、温度、天候をコードで競わせ、解決済みの `smell_observation` 一件だけをserverへ渡す
 - ゾンビ／腐った肉、実状態のあるコンポスター・醸造台・焚き火調理、沼、指定食品・イカ墨・花を対象にし、同種は合算しない。実IDがない硫黄ブロック・金のタンポポは保留
 - activeな雨・雪・雷と水中は `suppressed`。晴れた寒冷地はhard offでなく温度減衰し、雨から晴れた後180秒は草木・土を `雨上がりの匂い` に統合する
-- 対応済みで候補なしは明示的な `status=none`。field自体がない旧adapterとは区別する
-- serverは同じ勝者を2観測で安定化し、同状態一度＋全体2分クールダウンで固定発話する。方向・正確な距離・個数・entity IDはserverへ渡さない
+- 対応済みで候補なしは明示的な `status=none`。field自体がない観測未提供とは区別する
+- serverは同じ勝者を2観測で安定化し、同状態一度＋全体2分クールダウン。Rust本体では環境対話モデルが発話／無言を選び、明示質問はコード固定で答える
+- 外部源の単独勝者だけ勝者の実方角を丸めた粗い方向を送る。正確な位置・距離・個数・entity IDは送らない。動く源も現在方角へ更新し、未知の方向を補わない
 - 匂い単独では戦闘状態、panic／alert、川柳workshopの戦闘中断へ入れない。現在の匂いへの問いはコード固定で即答し、通常雑談モデルへ観測を渡さない。通常生成の嗅覚断言も棄却する
 
-計算、対象ID、温度帯、雨上がり、旧adapter互換の正本は[スメルバトル仕様](smell-policy.md)。
+計算、対象ID、温度帯、雨上がりの正本は[スメルバトル仕様](smell-policy.md)。
 
 ### 通常雑談の一回再考
 
@@ -275,7 +285,6 @@ Minecraft Java Edition
 そのため現行は次の方針に寄せている。
 
 - **正**: adapter が `status_snapshot` 等に `danger_darkness_score` や関連フィールドを載せ、server 内で継続判定する
-- **副**: `danger_darkness_changed` はスキーマ互換・テスト用に残してよいが、本番 adapter の主経路にはしない
 
 ### 判定に使う要素
 
@@ -440,7 +449,6 @@ Minecraft Java Edition
 - `visual_threats`
 - `auditory_threats`
 - `smell_observation`
-- `zombie_scent_clues`
 - `ambient_sounds`
 - `inventory`
 - `combat`
@@ -457,10 +465,10 @@ adapter から `dogido-server` へ送る endpoint の正本は [受信 API 仕�
 
 ### 抽象イベントの例
 
-- `threat_detected`
+- `hostile_audio_detected`
 - `threat_approaching`
 - `visibility_low`
-- `resource_option_found`
+- `status_snapshot`
 - `player_died`
 
 ### Minecraft 固有情報の例

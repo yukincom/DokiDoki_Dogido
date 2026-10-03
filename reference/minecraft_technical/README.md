@@ -43,20 +43,20 @@ Minecraftの配布物と利用については、公式の [Minecraft EULA](https
 
 ## 検索
 
-生成済みのローカルDBは次のように検索できます。
+資料整備時に、生成済みのローカルDBを `dev_tools.catalog_tools.minecraft_knowledge` のCLI/APIから検索できます。以下はリポジトリのルートから実行します。ドギド本体の実行時検索はRustの `dogido-rust/src/knowledge/` が担当し、このPython補助は呼びません。
 
 ```bash
-python -m dogido_server.minecraft_knowledge ダイヤモンドの剣
-python -m dogido_server.minecraft_knowledge minecraft:diamond_sword
-python -m dogido_server.minecraft_knowledge minecraft:swords --record-type tag_definition
-python -m dogido_server.minecraft_knowledge doMobSpawning --record-type official_change
-python -m dogido_server.minecraft_knowledge minecraft:diamond_sword --dataset datapack_entries --registry minecraft:recipe
+python -m dev_tools.catalog_tools.minecraft_knowledge ダイヤモンドの剣
+python -m dev_tools.catalog_tools.minecraft_knowledge minecraft:diamond_sword
+python -m dev_tools.catalog_tools.minecraft_knowledge minecraft:swords --record-type tag_definition
+python -m dev_tools.catalog_tools.minecraft_knowledge doMobSpawning --record-type official_change
+python -m dev_tools.catalog_tools.minecraft_knowledge minecraft:diamond_sword --dataset datapack_entries --registry minecraft:recipe
 ```
 
 Pythonからは次の入口を使います。
 
 ```python
-from dogido_server.minecraft_knowledge import (
+from dev_tools.catalog_tools.minecraft_knowledge import (
     get_minecraft_knowledge,
     load_minecraft_manifest,
     search_minecraft_knowledge,
@@ -89,7 +89,8 @@ python scripts/build_minecraft_technical_data.py \
   --locale-json /path/to/ja_jp.json
 
 python scripts/validate_minecraft_technical_data.py
-python -m pytest tests/test_minecraft_knowledge.py tests/test_knowledge_query.py tests/test_knowledge_chat.py -q
+python -m pytest tests/test_minecraft_knowledge.py -q
+./dogido-rust/cargo.sh test --locked knowledge::
 ```
 
 生成器は入力ファイルのサイズとSHA-1、manifestからversion JSON、version JSONからserver JAR・asset index、asset indexから日本語言語ファイルまでの連鎖を検査します。さらに、FabricアダプターのMinecraft・Yarn・Fabric Loader・Fabric API各版、server JAR内のMinecraft版・Java版、正規化スキーマ・変更事項・生成器のSHA-256も照合します。
@@ -105,7 +106,7 @@ python -m pytest tests/test_minecraft_knowledge.py tests/test_knowledge_query.py
 - Mod、サーバー独自レジストリ、追加データパックはバニラ1.21.11の資料外です。資料外であることを不正または危険とみなしません。
 - 既存の手整備カタログや安全方針を上書きしません。必要なレコードをコード側から明示取得し、LLMへ全量を自動注入しません。
 - 実際のゲーム操作は従来どおり、型付きcommand、現在snapshot、capability、確認、期限、実行結果のコード検証を通します。このDBは操作権限を与えません。
-- 現在ターンの明示質問だけを `dogido_server.knowledge_query` が分類し、player chatまたはworkshopの発話枝へ到達した時点で一回だけ検索します。通常tick、警戒・戦闘・死亡時、支援操作では検索しません。
+- 現在ターンの明示質問をRustの `dogido-rust/src/knowledge/query.rs` が分類し、通常会話またはworkshopの専用経路で一回だけ検索します。危険中に受けた知識質問は安全になるまで保留し、通常tick・戦闘判断・支援操作へ検索を混ぜません。
 - 返答は最大3事実と出典名に限定し、Java Edition 1.21.11、識別子、公式ウェブページ／公式配布物の別をコードで保持します。明示された別のJava Edition版はfail-closedにし、Data Pack 94.1、Resource Pack 75.0、管理プロトコル2.0.0を本体版と誤認しません。
 - 縮約レシピは質問対象と `entry_id` が完全一致するレコードの種別と参照素材だけを答えます。参照IDには入力・出力の方向がないため、素材側からの逆引きや未保存の配置は補作しません。0件・データ欠落・検証失敗時は推測しません。詳細は [出典付き知識質問の統合](../../docs/knowledge-query-integration.md) を参照してください。
 

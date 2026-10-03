@@ -185,7 +185,6 @@
 ### 期待する主イベント
 
 - `status_snapshot`（暗所の本流）
-- （互換）`danger_darkness_changed` でも server は受理してよいが、本番 adapter の主経路ではない
 
 ### 期待する反応
 
@@ -289,7 +288,6 @@
 ### 期待する主イベント
 
 - `status_snapshot`（`nearby_resources` 同梱）
-- （互換）`resource_option_found` は主経路にしない
 
 ### 期待する反応
 
@@ -315,7 +313,6 @@
 ### 期待する主イベント
 
 - `status_snapshot`（`world.time_phase` 継続更新）
-- （互換）`time_phase_changed` は主経路にしない
 
 ### 期待する反応
 
@@ -388,7 +385,7 @@
 
 ### 期待する主イベント
 
-- `threat_detected` または将来の `block_break_toward_hostile`
+- `threat_approaching`
 
 ### 期待する反応
 
@@ -475,7 +472,7 @@
 
 ### 最低限ほしい項目
 
-- `passive_mobs`（旧 `peaceful_mobs` から改名済み。旧名も受信互換あり）
+- `passive_mobs`
 - `world.time_phase = day`
 - 敵脅威が空
 
@@ -627,7 +624,7 @@
 
 ### 期待する主イベント
 
-- `threat_detected`
+- `threat_approaching`
 - または将来の `hostile_revealed`
 
 ### 期待する反応

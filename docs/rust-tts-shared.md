@@ -1,4 +1,16 @@
-# 既存helperを使う自由文読み
+# 共有workerによる自由文読みの辞書token取得
+
+**現行実装（2026-10-03）:** 読みの判定・token選択・整形・例外表はRust、UniDicのtoken取得はPython補助が担当する。旧 `dogido_server/tts_reading.py` と `_get_unidic_tagger` は廃止した。
+
+- `dogido-rust/scripts/tts_shared_tokens.py` の `_reader = Unidic()` を、そのworker内の取得要求で共有する。
+- `Unidic` は `tts_unidic_adapter.py` に置く。最初にtokenが必要になったときだけfugashiを初期化して一度warmupし、初期化失敗も同じインスタンス内で保持する。
+- `tts_shared_tokens.handle` は `op="tts_tokens"`・`schema_version=1`・空でない `request_id`・文字列 `text` を受ける。応答は `schema_version`・`request_id`・`status`・`tokens`。Pythonは変換済み発話や会話状態を返さない。
+- 途中の解析失敗では部分tokenを成功として渡さない。語種・品詞・読みの選択と、発話へ採用するかの判断はRustが行う。
+- `.[tts-reading]` は任意の辞書依存として継続する。補助の全体像は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料)、単独取得口は [最小UniDic補助](rust-tts-adapter.md) を参照する。
+
+## 移植時の接続・検証記録（旧Pythonの処理は終了）
+
+以下は共有取得口を接続した当時の記録。Pythonに通常会話・workshopの他処理が残るという説明、旧辞書関数やPython最終result生成は現在の責務ではない。当時の試験件数・未確認範囲を保持する。
 
 ワークショップの `reading` 要求は Rust `haiku_bridge::Helper` が受け、既存の `tts_reading::prepare`、token 選択、`finish` で `spoken_text` を作る。表示本文・現在句・保存・編集の採否は変更しない。
 

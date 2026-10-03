@@ -3,7 +3,9 @@
 別に起動した常駐 MLX サーバーの `http://127.0.0.1:8080/v1` を、雑談と川柳で
 共有するための起動プロファイルです。各アプリは OpenAI 互換 Chat Completions endpoint へ
 接続するだけです。
-通常のプロセス内 MLX は従来どおり `standalone` です。
+**状態: 旧Python本体のプロセス内MLX運用は終了（2026-10-03）。**
+現在は `standalone` / `shared` のどちらも [Rust本体](../dogido-rust/README.md) を起動します。
+`standalone` は `.env`、`shared` は `.env` と `.env.shared` の設定選択を表し、モデル実行方式の切替ではありません。
 
 ## 初回設定
 
@@ -29,13 +31,13 @@ context・cache は共有 MLX サーバー側で管理します。`GET /v1/model
 # 共有 endpoint を使う
 ./scripts/start_dogido.command --profile shared server
 
-# 従来のプロセス内 MLX を明示して使う
+# .env の接続設定でRust本体を起動する
 ./scripts/start_dogido.command --profile standalone server
 
 # 起動せず設定元を確認する
 ./scripts/start_dogido.command --profile standalone --dry-run
 ```
 
-引数を省略した既存コマンドも `standalone` のままです。共有 endpoint 自体はこのスクリプトで
+引数を省略した既存コマンドも `.env` を使う `standalone` のままです。Rust本体は設定されたローカルAPIへ接続します。共有 endpoint 自体はこのスクリプトで
 起動しません。既存の LLM timeout、生成上限、メッセージ、temperature、JSON 検証、
 VOICEVOX / Whisper / Fabric の設定も変更しません。

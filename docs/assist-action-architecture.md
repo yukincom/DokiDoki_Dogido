@@ -1,5 +1,7 @@
 # 支援アクションの操縦席 — Hermes Agent の設計パターン評価
 
+**現行実装: Rust本体（2026-10-03）。** 型付き限定操作・原文根拠・実行直前検証・重複防止という設計は継続する。実装は `dogido-rust/src/assist/` と `dialogue/assist_runtime.rs`、評価記録は `src/episode_log.rs`。以下のPython配置案・単一worker・py_trees・実装順は移植前の記録として保持し、その経路の運用は終了した。D以降の将来機能まで完了とはしない。現行の起動・責務は [Rust本体](../dogido-rust/README.md) と [API仕様](adapter-api.md) を参照する。
+
 **日付:** 2026-08-14  
 **状態:** A「エピソード JSONL」と、B/C の最初の縦切り `select_sword` は実装済み（2026-08-15）。D 以降は方針メモ・未実装で、完成度の本丸を置き換えない
 **参照元:** [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)（2026-08-14 参照）。公開実装から設計パターンを調査するが、コードや agent loop は取り込まない。
@@ -53,7 +55,7 @@ Hermes Agent には似た部品がある。ただしドギドは汎用エージ�
 
 ---
 
-## 3. いまのドギド（移植先）
+## 3. 検討当時のPython本体（運用終了）
 
 ### 3.1 すでに下地がある
 
@@ -155,7 +157,7 @@ Hermes の approval は汎用コマンド実行を対象にした設計で、ド
 
 ---
 
-## 5. 推奨形（ドギド版）
+## 5. 旧Python本体で採用した配置（終了した実装手順）
 
 パッケージ名は `tools/` にしない。LLM tool-calling に見える。  
 既存支援計画に合わせて **`dogido_server/assist/`**。
@@ -321,7 +323,7 @@ AGENTS.md の「Hermes 導入禁止」は維持する。実装に入るとき、
 
 ---
 
-## 8. 最初の実装単位（実装済み）
+## 8. 旧Pythonでの最初の実装単位（履歴）
 
 川柳・観測・workshop の PR に混ぜない。1本の縦貫通:
 

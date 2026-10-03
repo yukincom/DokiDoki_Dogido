@@ -42,7 +42,7 @@
 
 ### 対話（前段・main 側）
 
-- peace / battle / tension、会話履歴、inventory オンデマンド、tactics、player-input 再キュー など
+- 共通Baseと場面別トーン、会話履歴、inventory オンデマンド、tactics、player-input 再キュー など（共通バトルトーンは廃止）
 
 ### 正本データの置き場
 

@@ -1,5 +1,8 @@
 # マイクのエコー除去（macOS実機試験用）
 
+**状態（2026-10-03）: 旧Python音声入力の運用は終了。AEC補助は現役。**
+現在の録音制御・発話区切り・認識配送は [Rust音声入力](../dogido-rust/README.md) が担当し、`dogido_server.echo_input` をAEC機器接続に使います。以下の9月の検査結果は当時の記録で、現行Rust構成の実機合格を表しません。
+
 2026-09-08: `voice_input` に任意のWebRTC AEC3経路を接続した。
 ビルド・非録音自己検査・既存音声経路の自動試験・架空TTSのオフライン試験まで実施。
 **実マイク／実スピーカー／Minecraftとの同時動作は未確認。既定は従来入力 `off` のまま。**
@@ -72,7 +75,7 @@ zsh scripts/start_dogido.command voice-aec
 通常の開発環境なら次でも同じ。モデル・サーバー設定は既存の `.env` を使う。
 
 ```bash
-DOGIDO_VOICE_ECHO_CANCELLATION=webrtc python -m dogido_server.voice_input
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice --aec
 ```
 
 `DOGIDO_VOICE_ECHO_INPUT_UID` が空ならmacOSの既定マイク。
@@ -96,7 +99,7 @@ Ctrl+CでAEC入力とその子プロセスを終了する。従来へ戻す場�
 `DOGIDO_VOICE_ECHO_CANCELLATION=off` を明示して音声入力を起動する。既定機器を元へ戻す操作は不要。
 本実装では `.env` を変更していない。
 
-## 今回の検査結果と残る課題
+## 2026年9月の検査記録と残る課題
 
 - native自己検査: 機器を開かずリング境界・順序、時計不連続、stereo逆相維持、欠落/NaN/滞留停止、16/48kHz変換、表示rateが異なる場合でもaggregate I/O周期内の合成インパルス位置、buffer間frame不一致の停止を確認。
 - 関連自動試験: `test_voice_echo` / `test_voice_input` / `test_app` / `test_player_chat` / `test_audio_segmented_speech` が88件＋49 subtests成功。

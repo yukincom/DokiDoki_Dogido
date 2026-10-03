@@ -54,7 +54,7 @@ Minecraft の洞窟も、朝日も、突然のクリーパーも——
 ```text
 Minecraft (Fabric アダプタ)
     ↓  現在地・Mob・天気・持ちもの…
-dogido-server
+dogido-rust (Rust)
     ↓  ステートマシンで「今なにを言うか」を決める
     ↓  必要なときだけ言語モデル（雑談 / 川柳の言い回し）
 音声でプレイヤーへ
@@ -74,45 +74,63 @@ dogido-server
 
 ## 導入方法
 
+### 動作要件
+
+- Minecraft Java Edition 1.21.11 + Fabric Loader
+- Rust（版は `dogido-rust/rust-toolchain.toml` で固定）
+- Python 3.11 以上（設定・辞書・音声機器などの接続補助）
+- 設定済みのLLM APIと [VOICEVOX](https://voicevox.hiroshiba.jp/)
+
+### 1. 本体の準備と起動
+
+リポジトリのルートで、Python補助とRust本体を準備します。
 
 ```bash
-cd /path/to/DokiDoki-Dogido
 python -m venv .venv
 source .venv/bin/activate
-
-# 依存（初回）。テストも回すなら: pip install -e ".[dev]"
 pip install -e .
-# 任意: VOICEVOX の音読み誤読を減らす（fugashi + UniDic lite、~250MB）
+
+# 任意: VOICEVOXの漢字の読みを補うUniDic辞書
 # pip install -e ".[tts-reading]"
-# まとめて: pip install -e ".[dev,tts-reading]"
 
-# 設定（初回）
 cp .env.example .env
-# TTS 読み: DOGIDO_TTS_READING_ENGINE=auto|unidic|off（既定 auto）
-
-# サーバー
-python -m dogido_server
+./dogido-rust/cargo.sh build --release --locked
 ```
 
-マイクから話しかける（別ターミナル・サーバー起動中）:
+`.env` にLLMの接続先・モデル名と音声設定を記入し、LLM APIとVOICEVOXを起動してから本体を開きます。
+
+```bash
+python dogido-rust/scripts/launch_dialogue.py --settings-dir .
+```
+
+標準の接続先は `http://127.0.0.1:5055` です。起動後は [会話画面](http://127.0.0.1:5055/rust-chat) で文字入力から返答を確認できます。ポートを設定で変更した場合は、Minecraft側の接続先も同じポートに合わせてください。
+
+### 2. マイク音声入力
+
+Whisper・VAD・AECの準備は [音声入力の案内](docs/voice-echo-cancellation.md) を参照してください。準備済みの環境では、本体を起動したまま別のターミナルで次を開きます。
 
 ```bash
 source .venv/bin/activate
-python -m dogido_server.voice_input
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
 ```
 
-ヘッドホン推奨。macOSスピーカー利用時の任意[エコー除去（AEC）](docs/voice-echo-cancellation.md)も追加。
-再生音を参照してから音声認識へ渡す実機試験用経路で、導入と非録音検査・起動方法はリンク先を参照。
+終了は、それぞれの起動画面で `Ctrl+C`。LLM APIとVOICEVOXは各アプリで終了します。
 
-Minecraft 用アダプタは `adapter/minecraft-fabric/`（Java 1.21.11 / Fabric）。  
-ビルドと入れ方は [adapter/minecraft-fabric/README.md](adapter/minecraft-fabric/README.md) をご確認ください。
+### 3. Minecraft連携
 
-動作確認（開発用）:
+[Fabric Modの導入手順](adapter/minecraft-fabric/README.md)に従ってModを配置します。Minecraftの `config/dogido-fabric-client.properties` は、標準設定では次の接続先を使います。
+
+```properties
+server_base_url=http://127.0.0.1:5055
+```
+
+### 4. 動作確認
 
 ```bash
-python -m dogido_server.replay fixtures --no-audio
-python -m dogido_server.smoke_test --mode all
+./dogido-rust/cargo.sh test --all-targets --locked
 ```
+
+本体の設定・検証方法は [Rust本体の案内](dogido-rust/README.md)、実際の会話や音声の確認は [実機チェック](dogido-rust/manual-dialogue-check.md) を参照してください。
 
 ---
 

@@ -8,7 +8,7 @@ Minecraft のプレイ状況をもとに、怖がりな AI キャラクター「
 
 ## Minecraft からのデータ取得
 
-専用の Fabric client adapter（`adapter/minecraft-fabric/`）でイベントを取得し、`dogido-server` に送る。
+専用の Fabric client adapter（`adapter/minecraft-fabric/`）でイベントを取得し、Rust本体（`dogido-rust/`）に送る。
 
 ## 外部連携・周辺機能の方針（2026-07-09 更新）
 
@@ -25,7 +25,7 @@ Minecraft のプレイ状況をもとに、怖がりな AI キャラクター「
 ### いま参考にするもの
 
 - 音声入力（whisper 周り）の実装ノウハウ
-  - 本リポジトリの `dogido_server/voice_input.py` が参考にしている
+  - 現行実装は `dogido-rust/src/voice/`。旧 `dogido_server/voice_input.py` の運用は2026-10-03に終了し、機器接続・AECだけPython補助を残した。起動手順は [Rust本体](../dogido-rust/README.md) を参照。
 
 ### 使わない / 別途やるもの
 

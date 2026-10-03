@@ -1,5 +1,7 @@
 # TTS 読み補正 — UniDic / 形態素解析方針
 
+**実装先更新（2026-10-03）:** 読み補正の仕様は継続し、実装はRustへ移した。旧 `dogido_server/tts_reading.py` を保持する計画は終了。現行の読み判定・整形は `dogido-rust/src/tts_reading.rs`、辞書tokenは `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()` が担当する。詳細は [共有取得口](rust-tts-shared.md) と [最小UniDic補助](rust-tts-adapter.md)。過去のフェーズ・実測待ちの記録を、今回の実機検証済みへ読み替えない。
+
 **日付:** 2026-07-29  
 **状態:** Phase 1–2 **実装済み**（optional UniDic + 例外表）。Phase 3 実測・Phase 4 既定オン方針は運用しながら。  
 **きっかけ:** VOICEVOX が「朝」を「ちょう」と読むなど、自由文 TTS の誤読。自前置換の都度追加は非効率。
@@ -7,8 +9,8 @@
 関連:
 
 - [voice-delivery-plan.md](voice-delivery-plan.md) §12（現状の薄い辞書）
-- 実装: `dogido_server/tts_reading.py`
-- 川柳ラベル読み: `catalog_readings.py`（本方針とは別系統）
+- 現行実装: `dogido-rust/src/tts_reading.rs` と `dogido-rust/scripts/tts_unidic_adapter.py`
+- 川柳ラベル読み: Rustの `catalog_knowledge` と読みoverlay（本方針とは別系統）
 
 ---
 
@@ -20,9 +22,9 @@
 | 第一候補 | **MeCab + UniDic**（語種・読みが TTS 向き）→ **fugashi + unidic-lite で実装** |
 | 第二候補 | Sudachi + SudachiDict（導入のしやすさ・現代語） |
 | 第三 | Open JTalk 標準辞書系（軽量・組み込み寄り。サーバー本線ではない） |
-| 載せる場所 | **dogido_server の VOICEVOX 直前**のみ |
+| 載せる場所 | Rust本体で表示本文を確定した後、音声合成へ渡す読みの生成時 |
 | ログ / `action.text` | **漢字交じりのまま**（表示・デバッグ用） |
-| 自前 `tts_reading.py` | **消さない**。UniDic のあと **例外・残差**として残す（優先読み表も同ファイル） |
+| 例外・残差の扱い | Rustの `tts_reading.rs` と `tts_reading/replacements.json` に保持。旧Python実装の残存指示は終了 |
 | 依存 | **optional** `pip install -e ".[tts-reading]"` |
 
 ---
@@ -122,24 +124,24 @@ pip install -e ".[tts-reading]"
 
 ### 4.4 性能
 
-- 解析器は **プロセス内シングルトン**（`tts_reading._get_unidic_tagger`）  
+- 辞書token取得用worker内で **一つの遅延初期化インスタンス**（`tts_shared_tokens._reader = Unidic()`）を共有する
 - Phase 3 で ambient 短文の ms を実測予定  
 
 ---
 
-## 5. 現状（例外表）
+## 5. 現行の例外表
 
 | 項目 | 内容 |
 |---|---|
-| ファイル | `dogido_server/tts_reading.py` |
-| 辞書の場所 | `_TTS_HIRAGANA_REPLACEMENTS`（外部 JSON ではない） |
-| 処理 | UniDic（任意）→ 単純 `str.replace`（長い語優先） |
+| ファイル | `dogido-rust/src/tts_reading.rs` |
+| 例外表の場所 | `dogido-rust/src/tts_reading/replacements.json`（ビルド時に取り込む） |
+| 処理 | UniDic tokenから読みを選択（任意）→ 既存例外表の順序で置換。off／辞書不要時は例外表だけ |
 | 例 | 朝から→あさから、草地→くさち、一日→いちにち 等 |
-| 呼び出し | `VoicevoxSpeechBackend` 合成直前（`engine=settings.tts_reading_engine`） |
+| 呼び出し | Rustの `prepare`・`finish`。設定解決後の `tts_reading_engine` に従って音声用の読みを作る |
 
 ---
 
-## 6. 実装フェーズ
+## 6. 旧Python実装時のフェーズ記録
 
 | Phase | 内容 | 状態 |
 |---|---|---|

@@ -58,26 +58,26 @@ JSON Linesを採用したのは、大きなデータ本体や索引全体をメ�
 
 ## 検索
 
-国語知識と公式配布データは、同じ入口から検索できます。
+資料整備時の国語知識と公式配布データは、`dev_tools.catalog_tools.language_knowledge` のCLI/APIで検索できます。以下はリポジトリのルートから実行します。ドギド本体の実行時検索はRustの `dogido-rust/src/knowledge/` が担当し、このPython補助は呼びません。
 
 ```bash
-python -m dogido_server.language_knowledge ゐ
-python -m dogido_server.language_knowledge 枕詞
-python -m dogido_server.language_knowledge 川柳
-python -m dogido_server.language_knowledge 主語と述語
-python -m dogido_server.language_knowledge "〜あげく"
-python -m dogido_server.language_knowledge 𛀂 --dataset historical_hiragana_unicode
-python -m dogido_server.language_knowledge 敬語 --dataset curriculum_japanese
-python -m dogido_server.language_knowledge せんりゅう --dataset education_basic_vocabulary
-python -m dogido_server.language_knowledge 亜 --dataset joyo_kanji
-python -m dogido_server.language_knowledge 第4学年 --dataset grade_level_kanji_allocation
-python -m dogido_server.language_knowledge 一 --kanji-profile
+python -m dev_tools.catalog_tools.language_knowledge ゐ
+python -m dev_tools.catalog_tools.language_knowledge 枕詞
+python -m dev_tools.catalog_tools.language_knowledge 川柳
+python -m dev_tools.catalog_tools.language_knowledge 主語と述語
+python -m dev_tools.catalog_tools.language_knowledge "〜あげく"
+python -m dev_tools.catalog_tools.language_knowledge 𛀂 --dataset historical_hiragana_unicode
+python -m dev_tools.catalog_tools.language_knowledge 敬語 --dataset curriculum_japanese
+python -m dev_tools.catalog_tools.language_knowledge せんりゅう --dataset education_basic_vocabulary
+python -m dev_tools.catalog_tools.language_knowledge 亜 --dataset joyo_kanji
+python -m dev_tools.catalog_tools.language_knowledge 第4学年 --dataset grade_level_kanji_allocation
+python -m dev_tools.catalog_tools.language_knowledge 一 --kanji-profile
 ```
 
 Pythonからは次のように使います。
 
 ```python
-from dogido_server.language_knowledge import (
+from dev_tools.catalog_tools.language_knowledge import (
     get_bulk_knowledge,
     get_kanji_profile,
     search_bulk_knowledge,
@@ -93,11 +93,11 @@ kanji = get_kanji_profile("一")
 世界詩の分類や出典台帳は、分類検索用の入口から検索できます。
 
 ```bash
-python -m dogido_server.reference_catalog 川柳 --full
-python -m dogido_server.reference_catalog 共同制作 --dataset world_poetry
-python -m dogido_server.reference_catalog --dataset world_poetry --region jp --limit 50
-python -m dogido_server.reference_catalog --dataset world_poetry --entity-kind form --prosodic-basis mora
-python -m dogido_server.reference_catalog --dataset world_poetry --composition-mode 共同制作
+python -m dev_tools.catalog_tools.reference_catalog 川柳 --full
+python -m dev_tools.catalog_tools.reference_catalog 共同制作 --dataset world_poetry
+python -m dev_tools.catalog_tools.reference_catalog --dataset world_poetry --region jp --limit 50
+python -m dev_tools.catalog_tools.reference_catalog --dataset world_poetry --entity-kind form --prosodic-basis mora
+python -m dev_tools.catalog_tools.reference_catalog --dataset world_poetry --composition-mode 共同制作
 ```
 
 世界詩の分類軸は、内部IDだけでなく「詩形」「規則形式」「共同制作」などの日本語分類名からも検索・絞り込みできます。分類の説明文全体は検索対象にせず、明示した分類名だけを索引へ登録します。
@@ -127,7 +127,7 @@ python -m dogido_server.reference_catalog --dataset world_poetry --composition-m
 - 常用漢字外であることや、ある学年に配当されていないことだけを誤り・使用禁止の根拠にしません。配当学年から個々の音訓の学習学年を推定しません。
 - 琉歌や口承詩は、地域の読み、歌唱、伝承の文脈を標準日本語の辞書だけで置き換えません。
 - このデータをプロンプトへ自動注入せず、必要な項目だけをコード側で取得します。
-- 現在ターンの明示質問だけを `dogido_server.knowledge_query` が分類し、player chatまたはworkshopの発話枝へ到達した時点で一回だけ検索します。手整備の5データセットは正式名と全別名、日本語文型バンクは正式名800件をそれぞれ完全一致で同期し、通常tick、警戒・戦闘・死亡時、支援操作、保存判断では検索しません。
+- 現在ターンの明示質問をRustの `dogido-rust/src/knowledge/query.rs` が分類し、通常会話またはworkshopの専用経路で一回だけ検索します。危険中に受けた知識質問は安全になるまで保留し、通常tick・戦闘判断・支援操作・保存判断へ検索を混ぜません。手整備の5データセットは正式名と全別名、日本語文型バンクは正式名800件をそれぞれ完全一致で同期します。
 - 返答は最大3事実と出典名に限定し、事実本文をLLMに書き換えさせません。差替えproviderの事実一式は正本ローカルDBの再構成結果と照合し、0件・曖昧語・データ欠落・検証失敗時は推測しない固定文を返します。詳細は [出典付き知識質問の統合](../../docs/knowledge-query-integration.md) を参照してください。
 
 ## 再生成と検証
@@ -140,9 +140,10 @@ python scripts/build_reference_index.py
 python scripts/validate_reference_catalog.py
 python scripts/build_language_knowledge_data.py --check
 python scripts/build_reference_index.py --check
-python -m pytest tests/test_reference_catalog.py tests/test_language_knowledge.py tests/test_knowledge_query.py tests/test_knowledge_chat.py -q
+python -m pytest tests/test_reference_catalog.py -q
+./dogido-rust/cargo.sh test --locked knowledge::
 ```
 
 検証では、JSON Schema、出典機関、URLの公式ドメイン、利用条件、禁止された本文・歌詞キー、全知識レコードの `source_refs` にある出典ID・根拠内容・出典箇所、全ファイルのSHA-256と件数、JSONL全45,168件のバイト位置と索引内容、索引の再現性を確認します。さらに、常用漢字・音訓・学年別件数と包含関係、原データ・編集入力・正規化データ・索引の未登録ファイル、シンボリックリンク、許可されたディレクトリ外を指すパスも拒否します。主索引の検索時にも各データセットのSHA-256を照合します。
 
-トップレベルの `reference/` は現在のwheelには同梱しません。リポジトリまたはeditable installでの利用を前提とします。
+トップレベルの `reference/` と資料整備用の `dev_tools/catalog_tools/` は、Python補助のwheelには同梱しません。資料整備CLIはリポジトリのルートで使い、Rust本体や配布物には必要な資料を別途含めます。

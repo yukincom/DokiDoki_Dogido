@@ -44,7 +44,6 @@
   "visual_threats": [],
   "auditory_threats": [],
   "smell_observation": {"status": "none", "temperature_modifier": 0, "rain_after_active": false, "basis": "smell_policy_v1"},
-  "zombie_scent_clues": [],
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
@@ -171,6 +170,25 @@
 }
 ```
 
+### `environment`（個体の環境実測）
+
+`player`、`visual_threats`、`passive_mobs`、entity型の`look_target`に任意で添える。
+同じ種類でも個体IDごとに保持する。欠測・旧adapterでは未確認であり、`false`へ補完しない。
+
+| 項目 | 実測内容 |
+|---|---|
+| `touching_water` | その個体が水に触れている |
+| `submerged_in_water` | その個体の頭まで水に沈んでいる |
+| `touching_water_or_rain` | 水またはその個体に降る雨に触れている |
+| `on_ground` | その個体が地面に接している。水中の底でもtrueになり得る |
+| `on_fire` | その個体が現在燃えている |
+
+各項目は省略／nullが未確認。`touching_water=false`だけでは陸上と決めず、地面の観測も併用する。
+天候の雨区分だけでは、屋根の下の個体まで濡れているとは扱わない。
+視認保持中の敵が遮蔽物に隠れた場合、Fabricは空の`environment`を送って新しい環境実測を伏せる。
+この明示的な欠測を旧`in_water/on_fire`から復元しない。音だけの対象には環境実測を添えない。
+水没継続時間、日光の直達、防具、窒息中、変身開始／完了は、このフィールドからは確定しない。
+
 ## 8. `event` オブジェクト
 
 主要イベントを 1 つだけ持つ。
@@ -188,14 +206,10 @@
 
 スキーマ上は以下を受け付ける。
 
-- `threat_detected`
 - `threat_approaching`
 - `hostile_audio_detected`
-- `danger_darkness_changed`
-- `resource_option_found`
 - `ambient_mob_detected`
 - `player_died`
-- `time_phase_changed`
 - `hostile_defeated`
 - `creeper_detonated`
 - `combat_ended`
@@ -214,12 +228,9 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `creeper_detonated`
 - `combat_ended`
 
-#### レガシー / テスト用（専用イベントを主経路にしない）
+#### 継続観測
 
-- `danger_darkness_changed` … 暗所は `status_snapshot` 上の `danger_darkness_score` 等と server 内の多段状態（`dark_push` / shelter 等）で扱う。経緯は [現行仕様 §6](current-spec.md)
-- `threat_detected` … 接近は `threat_approaching`、平常同期は snapshot で足りることが多い
-- `resource_option_found` … `nearby_resources` 同梱で代替
-- `time_phase_changed` … `world.time_phase` を snapshot 等で継続更新
+暗所・周辺資源・時間帯は `status_snapshot` の `world`・`nearby_resources` で継続更新する。暗所反応は `danger_darkness_score` 等と server 内の多段状態（`dark_push` / shelter 等）で扱う。経緯は [現行仕様 §6](current-spec.md)。接近通知は `threat_approaching`、音の通知は `hostile_audio_detected` を使う。
 
 ## 9. `player` オブジェクト
 
@@ -329,6 +340,9 @@ Fabric adapter が実際に送る中心は次のとおり。
 - `connected_dark_volume`
 - `nearest_dark_spawn_distance`
 - `danger_darkness_score`
+- `visible_villager_count`（0以上。16ブロック以内で既存の見通し判定を通る村人全数。`passive_mobs` の4件制限前に集計し、背後も含む。0は範囲内未検出、省略は未確認。村全体の人口ではない）
+- `nearby_portal_type` / `nearby_portal_distance`（Nether／End portalは5ブロック、End gatewayは15ブロック以内。走査Yは±8）
+- `nearby_portal_encounter`（`appeared | arrived | observed`。直前のロード済み同一座標が非ポータルからポータルになり、前方かつ遮蔽なしなら `appeared`。すでにあるポータルの範囲へ入れば `arrived`。新規出現でも前方の見通しが確認できないときは `observed`。区分はその接近中保持し、世界変更・大きな位置移動・走査間隔超過で履歴を捨てる。省略時は突然の出現を断言しない）
 
 ### 注意
 
@@ -430,41 +444,13 @@ Fabric adapterが近接源・hotbar・バイオーム・温度・天候からス
 ```
 
 - `status`: `none / present / suppressed`
-- `none` は観測対応済みで匂い源なし。field省略（旧adapter）とは異なる
+- `none` は観測対応済みで匂い源なし。field省略による観測未提供とは異なる
 - `suppressed` は `suppression_reason: rain / snow / thunder / submerged` を持つ
 - `present` だけが `smell_id / category / valence / source_kind / specificity / effective_strength` を持つ
+- 外部源の単独勝者（`specificity=source`、`source_kind=block/entity/dropped_item`、雨上がり全般以外）だけ任意の `direction_estimate` を持てる。形は `{ "cardinal": "east", "vertical": "above", "basis": "source_bearing" }`。cardinalは既存の8方位、verticalは `above / below`。一方以上が必要で、取得できない軸は省略する
+- 方角なしは未知として扱い、距離情報・正確な位置・個体IDは追加しない。Rust環境対話と匂い質問にだけ粗い方向を渡す
 - serverは2観測連続で自発発話を安定化し、問いには現在値をコード固定で即答する
 - この観測だけで戦闘状態やworkshop pauseを開始せず、通常LLMへも渡さない
-
-## 12.1a `zombie_scent_clues`（移行互換）
-
-実エンティティの近接を、ドギド固有の「ゾンビの匂い」へ変える限定手掛かり。
-通常の視認・音警告を増やすものではなく、遊びとしての別経路である。
-
-```json
-[
-  {
-    "type": "zombie",
-    "entity_id": "84e2f05a-4bc8-4e23-a7d9-19be9a321c4d",
-    "distance_band": "close",
-    "certainty": "medium",
-    "basis": "nearby_without_visual_or_audio"
-  }
-]
-```
-
-### 閉じた条件
-
-- 対象は `zombie / zombie_villager / husk / drowned` だけ。`skeleton / wither_skeleton / zombified_piglin` は含めない
-- 実エンティティが8ブロック以内にいる
-- 対象への line-of-sight がなく、`visual_threats` にも確定保持されていない
-- 現在の音保持に同じ `entity_id` の音源がない
-- exact position、方向、正確な距離、頭数は発話材料として送らない。距離は `touching / very_close / close` だけ
-- server側でも `visual_threats` または `auditory_threats` があるフレームでは匂い経路を使わない
-- この配列だけでは `combat_active`、`panic / alert`、川柳workshopの戦闘中断を開始しない
-
-新adapterは `smell_observation` を正とし、優勢な匂いが特定ゾンビのときだけこの配列も送る。
-serverは新fieldがない旧adapterに限って、この配列を従来のゾンビ匂いへ読み替える。
 
 ## 12.2 `ambient_sounds`
 
@@ -494,9 +480,10 @@ serverは新fieldがない旧adapterに限って、この配列を従来のゾ�
 
 ## 13. `passive_mobs`
 
-旧スキーマ名 `peaceful_mobs` も受信時には受け付ける（移行用）。非敵対状態の中立モブも `temperament="neutral"` として含まれる。
+非敵対状態の中立モブも `temperament="neutral"` として含まれる。
 
-昼の雑談に使う平和 mob の一覧。
+昼の雑談に使う非敵対モブの一覧。Fabricは受動的な種を `temperament="passive"`、
+中立種を `temperament="neutral"` として送る。
 
 ```json
 [
@@ -692,16 +679,16 @@ MISS・空気のときは **フィールド自体を省略**する。
 ### 方針
 
 - 生データだけでなく、状態機械がすぐ使える集約値も持たせてよい
-- `hostile_scan_distance` は通常敵の索敵半径、`hostiles_within_scan_ground` はその範囲内の地上系敵数
+- `hostile_scan_distance` は通常敵の索敵半径、`hostiles_within_scan_ground` はその範囲内の地上系敵数。範囲付き集計には両方を送る。集計がない場合は現在の視認から数え、固定30ブロックの値へ読み替えない
 - `hostile_outcomes` は、追跡中の個体について実際の死亡またはクリーパー爆発を観測した結果。一覧要素は `entity_id / type / outcome / evidence`
-- `entity_id` は同じ結果を即時発話と戦闘終了で二重に話さないための個体ID。旧adapterでは省略可
+- `entity_id` は同じ結果を即時発話と戦闘終了で二重に話さないための空でない個体IDで、各結果に必須
 - `outcome` は `player_kill / explosion_death / other_death / creeper_detonation`
 - `evidence` は `server_death_event / client_death_state / explosion_packet`
 - `player_kill` は論理サーバーの死亡イベントで `DamageSource` の攻撃者が当該プレイヤーだった場合だけ。攻撃履歴、経験値、敵数0、観測範囲からの消失だけでは付けない
 - リモートサーバーでクライアント死亡状態しか取れない場合は `other_death` とし、プレイヤー撃破へ推測しない
 - `creeper_detonation` は実際の爆発パケットと、直前まで追跡したクリーパー個体の消失が位置・時刻とも対応した場合だけ
 - 通常／帯電クリーパーの導火開始は `visual_threats[].fuse_active`、実爆発は一回限りの `creeper_detonated` で通知する。死亡音はどの結果の根拠にも使わない
-- 新adapterは結果なしを空配列で送る。項目自体が無い場合は旧adapterとして扱う
+- 結果なしは空配列で送る。項目省略・空配列のどちらからも、死亡・撃破を推定しない
 
 ## 17. `meta`
 
@@ -736,12 +723,6 @@ MISS・空気のときは **フィールド自体を省略**する。
 
 ## 19. 主要イベントごとの最低要件
 
-### `threat_detected`
-
-- `player`
-- `world`
-- `visual_threats` または `auditory_threats`
-
 ### `threat_approaching`
 
 - `player`
@@ -755,23 +736,14 @@ MISS・空気のときは **フィールド自体を省略**する。
 - `world`
 - `auditory_threats`
 
-### `danger_darkness_changed`（レガシー / テスト用）
+### `status_snapshot`
 
 - `player`
-- `world`
+- `world`（暗所スコア・`time_phase` 等）
 - `inventory`
 - 任意で `nearby_resources`
 
-> 現行の本番経路では、暗所判定の入力は主に `status_snapshot`（および他イベント同梱の `world`）のスコア群。  
-> 専用イベント発火に依存した反応設計はしない。
-
-### `resource_option_found`（レガシー寄り）
-
-- `player`
-- `inventory`
-- `nearby_resources`
-
-> 現行は `status_snapshot` 等への `nearby_resources` 同梱で代替する。
+暗所判定は、このsnapshotおよび他イベント同梱の `world` の現在値を使う。資源・時間帯も同じ継続観測から判断する。
 
 ### `ambient_mob_detected`
 
@@ -784,13 +756,6 @@ MISS・空気のときは **フィールド自体を省略**する。
 - `player`
 - `world`
 - `meta.death_cause`
-
-### `time_phase_changed`（レガシー寄り）
-
-- `player`
-- `world.time_phase`
-
-> 現行は snapshot 等での `world.time_phase` 継続更新が本流。
 
 ### `combat_ended`
 
@@ -935,8 +900,7 @@ MISS・空気のときは **フィールド自体を省略**する。
 
 ## 22. サンプル 3: 暗所危険
 
-本番 adapter では `status_snapshot` に暗所スコアを載せる形が本流。  
-以下は互換例（`danger_darkness_changed` も受理するが主経路ではない）。
+adapter は `status_snapshot` に暗所スコアを載せる。以下はその受信例。
 
 ```json
 {

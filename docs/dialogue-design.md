@@ -1,5 +1,7 @@
 # 対話設計
 
+**現行実装: Rust本体（2026-10-03）。** モードは `base / normal / tension / workshop`、平時は `normal`。共通バトルトーンと旧Python本体の運用は終了した。現在の共通対話仕様は [雑談仕様のRust本体節](player-chat-casual-plan.md#2026-10-01-rust本体の共通対話) を優先する。以下のpeace／battle、py_trees、次game-eventへの相乗りは旧実装の設計記録として残し、現在の起動・配線へ復活させない。
+
 この文書は、ドギドの**口調・キャラクター性**を壊さないための対話モード仕様です。
 
 状態機械の `normal / alert / panic / …` は「いつ・何を優先するか」の制御用。  
@@ -22,16 +24,16 @@
 
 ## 2. キャラクターの核（全モード共通）
 
-実装の system 文は `dogido_server/llm/character_mode.py` の `BASE_IDENTITY_PROMPT` が正。
+人格の正本は `dogido_server/llm/companion_prompts.json`。Rustの `src/companion_prompt.rs` が参照する。
 
 - Minecraft 実況 AI「ドギド」— 関西弁の**やさしい**相棒
 - きつくなく、温かく短い一言
 - 関西弁は**語尾中心**。単語は自然な日本語
 - プレイヤーが主役。対等な相棒として話す
 - 動物や穏やかなモブには基本やさしく
-- セリフ 1 文・**50 字以内**
+- 長さは共有プロンプトが指定する。現在のbase／normal／tensionは35字以内、workshopは120字以内
 
-## 3. キャラクターモード
+## 3. 旧キャラクターモードの設計記録（終了）
 
 | モード | イメージ | 怖がり | 応援 |
 |---|---|---|---|
@@ -105,7 +107,7 @@
 - 実行していない修正を「直した」「必ず直す」と約束しない
 - アイテム用途や攻略の話へ広げない
 
-## 4. 状態機械モードとの対応
+## 4. 旧モードとの対応記録（終了）
 
 | 状態機械 `mode` | キャラクターモード | メモ |
 |---|---|---|
@@ -118,7 +120,7 @@
 `combat_active` や視認敵が近い場合は、`normal` でも一時的に `battle` へ寄せてよい  
 （実装では `character_mode` を event/state から解決する）。
 
-## 5. LLM leaf への割り当て
+## 5. 移行前のLLM leaf割り当て記録
 
 | leaf kind | 既定モード |
 |---|---|
@@ -126,7 +128,7 @@
 | `player_chat` | state から解決（下表） |
 | `haiku` / irony / scene | peace（戦闘中は起動しない想定） |
 | `structure_entry` / `ender_eye_throw` / `portal_appearance` | peace 寄り（危険構造物は tension 可） |
-| `weather_transition` | peace 〜 tension（雷などは tension） |
+| `weather_transition` / `thunder_reaction` | normal。天候変化・実雷鳴・悲鳴の再生状態を分けて渡す |
 | `hostile_callout` / `occluded_hostile_presence` | battle |
 | `aftermath` / `newly_burning_visual` | battle |
 | `death` | peace（責めず立て直す。わーきゃーしない） |
@@ -170,7 +172,7 @@
 
 載せないもの: 毎 tick snapshot、悲鳴 cue 連打、生 JSON イベント全文。
 
-実装: `dogido_server/dialogue_context.py`（session ごと）  
+現行実装: `dogido-rust/src/dialogue/history.rs` と `chat_context.rs`（sessionごと）。旧 `dialogue_context.py` は退役
 新adapterでは、通常敵も追跡中entityの死亡状態とプレイヤー帰属を `hostile_outcomes` で別々に送る。
 プレイヤー撃破は論理サーバーの死亡イベントにある攻撃者だけを根拠にし、死亡音・攻撃履歴・経験値では補わない。
 観測範囲から消えただけの場合は撃破メモにせず「交戦した」と残す。旧adapterに限り、互換のため消失推定へ戻る。
@@ -218,7 +220,8 @@
 - `player_chat` には `hearing_summary` を渡す
 - 音メモが空のとき、LLM は「離れた所で音がした」などの**捏造禁止**。正直に拾えてないと返す
 - 雷鳴の実音は天候遷移とは別に扱う。悲鳴 cue は雷種別で共有して10分、一言は3分の独立クールダウン
-- 雷の一言は `weather_transition` leaf で短い独り言へ調整し、失敗時だけ固定 fallback。cue と文字の悲鳴を重ねない
+- 乾燥バイオームでは世界の天候区分が `thunder` でも雨・自然落雷を推定せず、空が暗く曇る変化として渡す。実際に聞こえた雷鳴や観測した落雷は別経路で扱う。
+- 天候変化は `weather_transition`、実際の雷鳴・近距離落雷への一言は `thunder_reaction` で分け、失敗時だけ固定 fallback。状況文は共通の `reaction_situations.json` を本体の環境反応にも渡す。Rust本体は同じ配送内の悲鳴音声が再生完了してから「悲鳴を上げた直後」を一言の生成へ渡す。悲鳴のない回と再生予定も区別し、予定だけで再生済みとしない。
 - 雷雨中にプレイヤーへ返答したら、自発的な雷反応をその時点から3分抑える
 - 地表の雷雨中は友好・中立 Mob の低優先 ambient を止める。洞窟バイオームは地上天候と切り離し、従来どおり反応する
 
@@ -240,7 +243,7 @@
 バトル中に平和口調の長い雑談や川柳を差し込まない。  
 平和中にバトル口調の悲鳴を出さない。
 
-### 話しかけが「届いたのに返事がない」問題
+### 旧Pythonでの「届いたのに返事がない」問題と対策（経路終了）
 
 `/api/v1/player-input` は **次の game-event に `user_text` として相乗り**する。  
 以前は ambient_mob 枝・暗所 high-priority・alert callout などに食われると **speech なしで消費**され、たまに無反応になった。
@@ -283,9 +286,9 @@ workshop の自然文は、常駐する会話モデルの `chat` routeで文脈�
 
 ## 7. 実装メモ
 
-- システムプロンプトは **共通の声 + 冒険役／共同編集者役 + モード別トーン** で組み立てる
+- システムプロンプトは **共通Base + 必要な役割・場面のトーン + 今回の目的・出力形式** で組み立てる。人格の正本は `dogido_server/llm/companion_prompts.json`
 - `details["character_mode"]` を leaf に渡し、未指定時は kind 既定値
-- 状態機械モード名をそのまま LLM に投げず、`peace` / `battle` / `tension` / `workshop` に正規化して渡す
+- 状態機械モード名をそのまま LLM に投げず、`base` / `normal` / `tension` / `workshop` に正規化して渡す。共通バトルトーンは廃止し、`base` は追加トーンなし。戦闘後の安堵や気配への反応は各場面の指示で表現する
 - キャッシュ cue（絶叫）はキャラモードの外。トーン制御の対象は主に TTS / LLM セリフ
 
 ## 8. 今後（対話設計の次ステップ）

@@ -1,5 +1,11 @@
 # パッケージ整理 ＋ 川柳ワークショップ — 編集順
 
+**状態: 終了（2026-10-03）—旧Python本体の再配置計画。**
+
+本体の実行時正本はRustへ移りました。この文書は当時の編集順の記録として保持し、未完了だったPhase E/Fやre-exportを改めて実装しません。旧 `player_chat_policy.py` の互換入口も終了しています。現行の編集先は [Rust本体](../dogido-rust/README.md) と [AGENTS](../AGENTS.md)、仕様は [現行仕様](current-spec.md)・[川柳workshop](haiku-player-improvement-plan.md) を参照してください。
+
+以下の「状態」「作業」「テスト」は計画作成・更新当時の記録です。
+
 **日付:** 2026-07-16  
 **状態:** Phase A〜D（H1〜H5.2）・H7-lite（常駐会話モデルの限定意味抽出: intent / findings / 一行置換 / pending採否。OS／端末内AIは戦闘中断中の小分類のみ）・修正案1本・プレイヤー語の連続局所編集 実装済み。H6 固定語 materials 突合は**撤回**。catalog 分割（Phase E）は未
 **方針:** [server-package-layout-proposal.md](server-package-layout-proposal.md)  

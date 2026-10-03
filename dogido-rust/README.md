@@ -1,4 +1,106 @@
-# ドギド Rust版
+# ドギド Rust本体
+
+HTTP受付、ゲーム判断、通常会話、川柳・共同編集、記憶、知識検索、音声入力の制御と配送をRustが所有します。旧Python本体・比較oracleの運用は終了しました。Pythonは設定、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPの接続補助に残ります。
+
+保存した句だけを相談する場合は [川柳のテキスト相談室](workshop-text.md)、Minecraftと音声を合わせた確認は [実機チェック](manual-dialogue-check.md) を使います。
+
+## 準備
+
+Rustの版は `rust-toolchain.toml`、依存は `Cargo.lock` で固定しています。Python補助はリポジトリのルートで `pip install -e .`、必要に応じて `.[tts-reading]` 等の追加依存を導入します。共有LLMとVOICEVOXは設定した既存のものを使用します。
+
+以下はすべてリポジトリのルートから実行します。
+
+```sh
+./dogido-rust/cargo.sh build --release --locked
+```
+
+`cargo.sh` は通常のRust環境に加え、`DOGIDO_RUST_TOOLCHAIN_DIR` で指定した `cargo/`・`rustup/` を使えます。家庭用配布は準備済みのRust本体を同梱し、利用先でのRustビルドを前提にしません。
+
+## 起動と停止
+
+### 標準の起動（5055）
+
+リポジトリのルートで、準備したPython補助環境を有効にして実行します。`.env` の一般設定を使い、ポートの既定は5055、記憶の保存先は設定した `memory_dir` です。
+
+```sh
+source .venv/bin/activate
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --check
+python dogido-rust/scripts/launch_dialogue.py --settings-dir .
+```
+
+起動後は [会話画面](http://127.0.0.1:5055/rust-chat) を開けます。Fabricの `server_base_url` も標準は `http://127.0.0.1:5055` です。ポートを設定で変えた場合は双方を揃えます。
+
+マイクはWhisper・VAD・AECの準備後、同じリポジトリのルートを開いた別のターミナルで起動します。
+
+```sh
+source .venv/bin/activate
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice --check
+python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
+```
+
+`--check` は設定・本体ファイル・補助を確認するだけで、サーバー・モデル生成・録音・Chromeを開始しません。終了は各ターミナルで `Ctrl+C`。今回起動した録音・補助・再生プロセスを回収し、共有LLMとVOICEVOX本体はそのままにします。
+
+既存の `dogido-llm` 補助環境を使う場合は、`./scripts/start_dogido.command server` と別ターミナルの `./scripts/start_dogido.command voice` も同じRust起動へ接続します。`--profile shared` は従来どおり `.env.shared` を重ねます。
+
+### 従来の専用起動（5056）
+
+`dogido-rust/start_dialogue.command` / `start_voice.command` は、専用経路として5056と実行するcheckout内の従来の `.dogido_memory/rust-migration` を明示します。標準の5055とは保存先・接続先を分けて使い、記憶を自動移動しません。
+
+```sh
+./dogido-rust/start_dialogue.command --check
+./dogido-rust/start_dialogue.command
+# マイクは別ターミナルで起動
+./dogido-rust/start_voice.command --check
+./dogido-rust/start_voice.command
+```
+
+この経路の会話画面は [5056の会話画面](http://127.0.0.1:5056/rust-chat)、Fabric接続先は `http://127.0.0.1:5056` です。Python補助環境は `DOGIDO_PYTHON`、設定を読むルートは `DOGIDO_RUST_SETTINGS_DIR` で指定できます。省略時はGit共通ディレクトリ側の設定ルートと、その `dogido-llm/bin/python` を使用します。Git情報がない配布フォルダでは、そのフォルダを設定ルートにします。Python環境の自動導入はしません。
+
+## 変更箇所と確認
+
+| 処理 | 現行実装 |
+|---|---|
+| セッション・配線・取消 | `src/dialogue/` |
+| 戦闘・環境 | `src/combat/` · `src/environment/` |
+| 通常会話・観測照合 | `src/planner/` · `src/chat_*` · `src/conversation_observation.rs` |
+| 川柳・共同編集・記憶 | `src/haiku/` · `src/workshop_*` · `src/haiku_memory.rs` |
+| 知識・限定国語 | `src/knowledge/` · `src/language/` |
+| 音声入力・配送 | `src/voice/` · `src/dialogue/audio.rs` |
+
+`source_cards.json`、`reference/`、カタログは現役の資料です。旧Python本体とともに削除しません。Python SDK補助へ会話判断や保存権限を戻さず、各SDKとの入出力に閉じます。
+
+### 残すPython補助と資料
+
+パスはリポジトリのルートからの相対表記です。
+
+| パス | 残す役割 |
+|---|---|
+| `dogido_server/__init__.py` · `dogido_server/config.py` | パッケージ入口と既存設定の解決 |
+| `dogido_server/platform_ai.py` · `dogido_server/combat_input_contract.py` | 戦闘中断中の限定分類に必要な端末AI接続と出力契約 |
+| `dogido_server/voice_settings.py` · `dogido_server/voice_capture.py` · `dogido_server/echo_input.py` | 音声設定・録音機器・AECの接続 |
+| `dogido_server/language_dialogue/{__init__,main_web,chrome_web,google_overview,web_types}.py` | 専用Chrome・MCP SDKの接続と結果形式。会話・検索開始の判断はRust |
+| `dogido-rust/scripts/tts_shared_tokens.py` · `dogido-rust/scripts/tts_unidic_adapter.py` | UniDic token取得。`tts_shared_tokens._reader = Unidic()` をworker内で共有し、辞書は初回利用時に初期化 |
+| `dogido_server/language_dialogue/source_cards.json` | Rustの国語検索が読む資料カード |
+| `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有プロンプト・状況文の正本データ |
+| `dogido_server/static/*.html` | Rustから提供する既存画面のデータ |
+
+旧 `dogido_server/tts_reading.py` は廃止しました。読みの判定・整形は `src/tts_reading.rs`、辞書tokenの取得だけが上記のPython補助です。`.[tts-reading]` はこの補助に必要な任意のUniDic依存であり、旧Python本体を起動するものではありません。
+
+データ整備用のPython補助は `dev_tools/catalog_tools/` に置きます。`language_knowledge` を含む検索CLI/APIは資料整備専用で、本体の実行時検索はRustの `src/knowledge/` が担当します。`dogido-rust/scripts/` の起動・SDK接続・検証スクリプトも引き続き使用します。
+
+### 検証
+
+```sh
+./dogido-rust/cargo.sh test --all-targets --locked
+./dogido-rust/cargo.sh clippy --all-targets --locked -- -D warnings
+./dogido-rust/cargo.sh build --release --locked
+```
+
+さらに変更した領域の `scripts/check_*.py` で模擬通信を確認します。保存済みの移植fixtureは回帰資産として使い、撤去したPython oracleを再導入して再生成しません。実モデル試験は生成内容と条件を別記し、実Minecraft・実マイク・スピーカー・Chromeの確認を自動テストの成功から推定しません。
+
+## 移行時の実装・比較記録（終了）
+
+以下は移植中のREADMEを当時の記録として保持したものです。Python比較器・fixture生成器のコマンド、旧Pythonとの並走、各段階の未移植・未接続という説明は現在の手順ではありません。現在の入口・責務は上記、変更経緯は [Rust移行記録](../docs/rust-migration-plan.md) が参照先です。過去の試験件数と実機未確認の記録は書き換えません。
 
 保存済みの句をMinecraftなしで相談し、プロンプトを調整する場合は、[川柳のテキスト相談室](workshop-text.md)を使えます。
 
@@ -6,7 +108,7 @@
 
 通常会話の観測・材料・プロンプト・検査、戦闘と環境の判断、川柳の生成・共同編集・記憶、知識検索・限定国語対話、音声入力と配送をRustで接続しています。Pythonは起動設定、UniDicの辞書トークン、端末AI、Chrome/MCP、AECの接続補助に残ります。全体の実Minecraft確認とMac miniでの速度・メモリ測定は別途必要です。[移行計画](../docs/rust-migration-plan.md)と[実機チェック](manual-dialogue-check.md)を参照してください。
 
-## ビルド
+### ビルド
 
 Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください。`rust-toolchain.toml`でRust 1.98.1、`Cargo.lock`で依存を固定しています。Rigは`rig-core 0.42.0`です。
 
@@ -18,7 +120,7 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 
 `cargo.sh`は通常のRust環境のほか、`DOGIDO_RUST_TOOLCHAIN_DIR`で指定した場所の`cargo/`・`rustup/`を使えます。
 
-## 一往復の会話を試す
+### 一往復の会話を試す
 
 既存のMLX API（既定8080）とVOICEVOXを起動した状態で、次を開きます。
 
@@ -40,7 +142,7 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 
 [実機チェック手順](manual-dialogue-check.md)にMinecraft接続と確認する発話をまとめています。
 
-### この段階の動作
+#### この段階の動作
 
 - `serve-dialogue`で明示選択する限定モードです。`serve`の接続専用動作は維持します。`/healthz`のreadyはRust受付の準備完了であり、モデル・TTSの応答成功を保証する値ではありません。
 - 通常はplannerと本文を各1回。plannerの契約再試行と、不合格本文の言い直しはそれぞれ最大1回です。全体の補助処理は95秒まで。追加の分類モデルや音声の全件事前生成は使いません。
@@ -53,11 +155,11 @@ Rustは[rustup](https://rust-lang.org/tools/install/)で用意してください
 
 文分割は[voicevox-sentence-stream](https://github.com/yukincom/voicevox-sentence-stream)の日本語即時境界・180文字上限・末尾保持をRustへ移植しています。来歴とMITライセンスは[third-party](third-party/voicevox-sentence-stream/NOTICE)に保持しています。`audio_sentence_ready`に文ごとの合成時間、`audio_first_sentence`に音声準備から最初のplayer起動までの時間を出します。実際に耳へ届く時刻の計測とは区別します。
 
-通常会話はsessionが保持する時系列観測と再生済み履歴を、入力受付時に同じsnapshotへ束ねます。Rust内で対象照合、材料構築、planner、本文生成と一度の言い直し、最終検査を行い、旧Python状態機械を起動しません。最終本文の辞書が必要な場合だけUniDic tokenを取得し、読みの判定と整形はRustで行います。音声入力も起動設定とAECの接続補助を除き、区切り・VAD/STT呼出・配送・停止処理はRustです。
+通常会話はsessionが保持する時系列観測と短期履歴を同じsnapshotへ束ね、待機後の生成開始前に最新状態へ更新します。Rust内で対象照合、材料構築、planner、本文生成と一度の言い直し、最終検査を行い、旧Python状態機械を起動しません。最終本文の辞書が必要な場合だけUniDic tokenを取得し、読みの判定と整形はRustで行います。音声入力も起動設定とAECの接続補助を除き、区切り・VAD/STT呼出・配送・停止処理はRustです。
 
 記憶の参照API三本とデバッグ用の判断記録もRustが担当します。判断記録は会話の記憶へ読み戻さず、発話の選択と実際の再生成功を区別します。[記憶APIと評価記録](../docs/rust-memory-api-and-episodes.md)を参照してください。
 
-### マイク入力の制御
+#### マイク入力の制御
 
 `src/voice/`が録音子プロセスのPCMを受け取り、RMS判定、300msの先行音、発話区切り、待ち列、Silero VAD、whisper.cpp、認識文字列の検査とHTTP配送を担当します。待ち列は既定1件で、満杯なら古い待機入力を置き換え、8秒を過ぎた入力を捨てます。認識結果が空の場合だけ、promptを外して一度再試行します。不正UTF-8がログにある場合は本文を保ち、本文自体が壊れている場合は配送しません。
 
@@ -101,7 +203,7 @@ python dogido-rust/scripts/check_combat_runtime.py
 python dogido-rust/scripts/check_environment_runtime.py
 ```
 
-### 戦闘の移植範囲
+#### 戦闘の移植範囲
 
 `src/combat/`が通常・警戒・パニック・抑制・戦闘後の状態を管理します。通常敵の単体・群れ、音だけの敵、後方の警告、低体力、敵が動かない場面、敵対化した中立モブ、飛行敵、昼の雨・水中・燃焼、異世界到着時の群れを扱います。ウォーデン、ドラゴン、ウィザー、エルダーガーディアンの固有反応も接続しています。エンダーマンはFabricが敵対と観測した場合だけ戦闘対象になります。
 
@@ -111,7 +213,7 @@ python dogido-rust/scripts/check_environment_runtime.py
 
 視認の正本と10秒の期限は全観測で更新します。音やambient通知の空の視認配列で、敵の消失を推定したり期限を延長したりしません。聴覚は独立した観測寿命を持ちます。発生済みの死亡・撃破・爆散への反応は、後続の空視認だけでは取り消しません。撃破根拠がない消失は離脱です。重複した結果や既報の死亡個体を、次の安堵で再び倒した扱いにはしません。
 
-固定警告と位置・体数回答はLLMを呼びません。既存の死亡・安堵・遮蔽された敵音・昼の水中スケルトン・燃焼・deep_dark不穏音の言い回しだけ、元のプロンプト・発話検査をRustで行い、Rigから生成します。失敗時は既存固定文へ戻ります。判断・優先順・状態変更はRustが所有し、安堵では観測根拠より強い撃破主張を棄却します。短期の状況メモはコード事実8件・各80字までで、未再生の発話を会話履歴へ入れません。
+固定警告と位置・体数回答はLLMを呼びません。死亡・戦闘後・遮蔽された敵音・昼の水中スケルトン・燃焼・deep_dark不穏音などの個別反応は、`dogido_server/llm/reaction_situations.json` の出来事と状況、現在観測、共通の対話履歴をRigへ渡します。このJSONは人が編集する正本で、共通人格と合わせてビルド時に取り込みます。個別のセリフ・感情・語彙は指定せず、共通対話の発言／沈黙を使います。沈黙は読み補正・TTSを起動せず、生成失敗や不正な出力は既存固定文へ戻ります。判断・優先順・状態変更はRustが所有し、安堵では観測根拠より強い撃破主張を棄却します。短期の状況メモはコード事実8件・各80字までで、未再生の発話を会話履歴へ入れません。
 
 暗所への入口、逃げるよう促す段階、呼吸、明るさ回復の安堵と、その最中の前方奇襲を接続しています。暗所の状態と再生中の音声を分け、戦闘へ移った後の反復観測で警告本文を止めません。川柳は危険中に保持して表示と時計をpauseし、安全な観測と警告の再生終了を待って再開します。
 
@@ -124,13 +226,17 @@ python dogido-rust/scripts/check_combat_runtime.py
 
 `compare_combat.py`はPython正本と同じ系列で状態・台詞・cue・断片列を比較します。269系列の等値と、部分観測・保留・優先順など5系列の意図的変更を別々に確認します。結果は`reports/combat-parity.json`、模擬LLM・TTS・playerによるHTTP確認は`reports/combat-runtime-check.json`です。実マイク・スピーカー・Minecraft上の聞こえ方は[実機チェック](manual-dialogue-check.md)で確認します。
 
-### 環境反応と剣への持ち替え
+#### 環境反応と剣への持ち替え
 
 `src/environment/`が暗所・避難・夕方・雷・天候・ポータル・危険な光源、友好／中立モブ、建物・バイオーム・ホタル・匂い・照明器具の所持数変化を扱います。乗り物は乗車中だけ会話材料にし、独立した常時実況は追加しません。モブへの反応は会話後30秒の抑制を引き継ぎます。同じモブの反復cooldownとは別です。雷などの割込み後は受理済みの会話を再開し、未回答の同じ入力を履歴に重ねません。
 
-モブ・雷鳴・天候変化・匂い・特別なバイオーム／木陰／遮蔽された場所への入口では、`environment/reaction.rs` が既存の会話モデルへ観測・一般的性質・再生完了した直近の会話と反応を渡します。モデルは一回の生成で「話す／黙る」と反応内容を選びます。モデルや接続先は通常会話と共通で、出力予算も既存の `--max-tokens` を引き継ぎます。専用の小型モデル、文字数による打切り、名詞禁止リストは設けません。
+モブ・雷鳴・天候変化・匂い・特別なバイオーム／木陰／遮蔽された場所への入口では、`environment/reaction.rs` が既存の会話モデルへ観測・一般的性質・再生完了した直近の会話と反応を渡します。モデルは一回の生成で「話す／黙る」と反応内容を選びます。通常会話も同じ人格と観測を使い、返事に雨や匂いの話を交ぜたり、黙って受け止めたりできます。モデルや接続先は通常会話と共通で、出力予算も既存の `--max-tokens` を引き継ぎます。専用の小型モデル、文字数による打切り、名詞禁止リストは設けません。
 
-観測、候補の優先順位、反応間隔、workshop中の抑止、戦闘への即時切替はコードが所有します。無言を選んでも検討済みとして反応間隔を消費し、発声・完了会話・川柳前の静穏時間へは加えません。雷の悲鳴cueはモデルを待たずに先行します。生成失敗・空出力・不正なJSON・明確な反復や生成崩れだけをfallbackへ戻し、短い相槌・英字・方言・語句では棄却しません。生成中に観測が失効すれば取り消します。自然さや観測と推量の使い分けは実モデルで検証する対象です。戦闘警告、危険な暗所の制御、匂いへの明示質問は従来経路です。
+明るさは実測の `local_light`（0〜15、不明は `null`）を渡し、暗さへの反応には既存の `darkness_advice_light_threshold`（既定3）を共有します。明るさが不明なときは、会話上は暗くないものとして反応します。怖がる根拠を場所の種類へ広げず、生成中に明るさが変われば古い観測への反応を取り消します。
+
+観測、候補の優先順位、反応間隔、workshop中の抑止、戦闘への即時切替はコードが所有します。無言を選んでも検討済みとして反応間隔を消費します。「黙って受け止めた」という発話なしの反応を共通の短期履歴へ残し、次の会話で参照します。発声・再生済みの一往復・川柳材料へは加えません。雷の悲鳴cueはモデルを待たずに先行します。生成失敗・空出力・不正なJSON・明確な反復や生成崩れだけをfallbackへ戻し、短い相槌・英字・方言・語句では棄却しません。生成中に観測が失効すれば取り消します。自然さや観測と推量の使い分けは実モデルで検証する対象です。戦闘警告、危険な暗所の制御、匂いへの明示質問は従来経路です。
+
+匂いの外部源が単独で勝った場合は、勝者の実方角を丸めた8方位・上下を環境対話と明示質問へ渡します。接近中のゾンビも現在方角へ更新し、実位置・個体ID・頭数はこの追加情報に含めません。混合・所持品などで推定がない場合は距離や方向を補いません。
 
 環境の現在性は生成中・再生前にも照合します。現行Fabricの音／モブ通知に含まれる完全なworld/player sectionでは、建物・ポータル・乗り物等の不在も反映します。空の敵配列で視認を消したり、全観測の10秒期限を延長したりはしません。環境sectionを省略した通知は直前の全観測とその期限を使います。
 
@@ -144,6 +250,7 @@ python scripts/compare_assist.py
 python scripts/compare_environment_danger.py
 python dogido-rust/scripts/check_environment_runtime.py
 python dogido-rust/scripts/check_environment_reactions.py
+python dogido-rust/scripts/check_shared_dialogue.py
 ```
 
 操作支援は同一入力1,572系列と意図的修正2系列、危険環境は91系列、ambientはPython由来202参照ケースで比較しています。地表の夕方警告を常に割込みにする差は危険環境比較器で明示的に正規化しています。命令期限切れの即時整理・成功未確認の断言抑止・未知結果への誤応答防止は等値比較とは分けています。統合試験は模擬LLM・TTS・playerによるものです。実ゲームの持ち替え、実モデルの表現、実スピーカーの間は実機確認が必要です。
@@ -156,7 +263,7 @@ python dogido-rust/scripts/check_dialogue_live.py
 
 この実試験はテキスト入力で行います。実マイク・Minecraftでの確認とは区別してください。試験結果は`reports/dialogue-check.json`、`reports/dialogue-live.json`に出力します。試験終了時に起動したサーバーと子プロセスを回収します。
 
-## 接続専用サーバー
+### 接続専用サーバー
 
 ```sh
 dogido-rust/target/release/dogido-rust serve
@@ -184,7 +291,7 @@ dogido-rust/target/release/dogido-rust serve
 
 状態変更は一つの処理係へ直列に渡し、表示GETは公開済みsnapshotだけを直接読みます。HTTP側が待機を取り消しても、キューに入った登録／終了の順序と投影の公開は維持します。接続が途絶えた表示も定期更新します。
 
-## LLM単独の接続確認
+### LLM単独の接続確認
 
 要求の形式だけを検査します。
 
@@ -204,7 +311,7 @@ dogido-rust/target/release/dogido-rust generate dogido-rust/fixtures/connection.
 
 出力JSONには返答、`finish_reason`、入力／生成トークン数、要求／応答のモデル名、応答ID、API所要時間を残します。トークン数が返らなかった場合は`null`です。`elapsed_ms`は一回のAPI呼出と応答読取の時間で、音声の体感応答時間とは別です。
 
-## 自動川柳の生成・検査を比較する
+### 自動川柳の生成・検査を比較する
 
 `src/haiku/`は準備済みの材料から三行を生成し、音数・文字種・出典・自然さを検査します。内容の再生成は不合格slotだけ、検査票の欠落は元の行を保持して一度だけ再検査します。再検査も読めなければ`grounding_unavailable`で終了します。出典は検査中だけ一時番号にし、結果には元IDと材料を保持します。検査の既定上限は512トークンで、句生成の上限と別です。
 
@@ -221,7 +328,7 @@ python dogido-rust/scripts/check_haiku_bridge.py
 
 生成単独の接続器は`examples/generate_haiku.rs`です。要求JSONに`input`（材料・制約）、`chat`と`haiku`（各`base_url / model / max_tokens / timeout_ms`）を指定し、`--python`で既存の依存が入ったPythonを選びます。接続先の省略による自動接続はありません。このCLIは生成部品だけを確認します。ゲーム中の発句・音声・初期workshop・JSONL保存は`serve-dialogue`へ接続済みです。
 
-## ゲーム中の自動川柳
+### ゲーム中の自動川柳
 
 通常は10分周期で、安全かつ静かなsnapshot、または会話の返答を再生し終えた境界から始めます。生成された見どころを先に話し、同じ観測・材料で句を生成・検査します。掛け軸は生成中にthinkingを示し、完成してから三行を表示してworkshopの時計を開始します。新入力・危険・観測失効・停止では未完成の発句を取り消します。
 
@@ -291,7 +398,7 @@ python dogido-rust/scripts/check_haiku_runtime.py
 
 最後の検証は空きローカルポートの模擬モデル・TTSと無音playerを使い、終了時に所有プロセスを回収します。実モデルの品質・速度とMinecraft・音声実機の確認は別途必要です。
 
-## ローカル知識回答・限定国語対話
+### ローカル知識回答・限定国語対話
 
 明示的な一般知識質問はworkshop内外とも正本DBから答え、参考資料を発話と一緒に表示します。国語の質問と学習中の続きは、問いの解釈を1回、必要な場合だけ資料に基づく説明を1回生成します。漢字の配当学年・明示かなの音数は表・計算の結果を使い、対象や読みが不明なら聞き返します。通常雑談には国語分類を追加しません。
 
@@ -319,7 +426,8 @@ python dogido-rust/scripts/check_haiku_runtime.py
 
 ```sh
 ./dogido-rust/cargo.sh build --locked
-python -m pytest dogido-rust/scripts/test_address_helper.py dogido-rust/scripts/test_language_helper.py tests/test_language_dialogue.py -q
+./dogido-rust/cargo.sh test --offline address::
+python -m pytest tests/test_language_dialogue.py -q
 python dogido-rust/scripts/check_knowledge.py
 python -m pytest dogido-rust/scripts/test_knowledge_handoff.py -q
 python dogido-rust/scripts/check_knowledge_handoff.py
@@ -333,12 +441,12 @@ python dogido-rust/scripts/generate_language_retrieval_fixtures.py --check
 python -m pytest dogido-rust/scripts/test_language_retrieval.py -q
 python dogido-rust/scripts/generate_knowledge_query_fixtures.py
 python -m pytest dogido-rust/scripts/test_knowledge_query_assets.py -q
-python -m pytest dogido-rust/scripts/test_input_helper.py -q
+./dogido-rust/cargo.sh test --offline input_context::
 python dogido-rust/scripts/generate_address_fixtures.py
 python dogido-rust/scripts/check_address_runtime.py
 ```
 
-## 通常会話plannerの単独確認
+### 通常会話plannerの単独確認
 
 ```sh
 dogido-rust/target/release/dogido-rust plan-chat dogido-rust/fixtures/planner/explicit_repair.json
@@ -358,7 +466,7 @@ python dogido-rust/scripts/check_planner_live.py
 
 2026-09-21の確認では、会話継続・本人訂正・聞き返し・引用語・未観測の猫への問い・聞き返し後の説明の6件が各1回で採用されました。API時間は1,568〜3,284ms、全件`finish_reason=stop`。要求・応答モデル名とも`default_model`で、具体的なモデル名は応答から確定できません。合成文脈でのplanner検証であり、返答文・STT・TTSを含む応答時間や速度改善率ではありません。
 
-## 検証
+### 検証
 
 ```sh
 ./dogido-rust/cargo.sh test --locked
@@ -417,7 +525,7 @@ python dogido-rust/scripts/generate_event_types.py
 ./dogido-rust/cargo.sh fmt
 ```
 
-## 接続実装の範囲
+### 接続実装の範囲
 
 - RigのChat Completions経路を明示し、messages・温度・トークン上限・thinking指定を保持します。
 - messagesは既存Pythonと同じrole／文字列形式に揃えます。通信の自動再試行とリダイレクトは無効です。
@@ -425,7 +533,7 @@ python dogido-rust/scripts/generate_event_types.py
 - 対象は現在のMLXの通常のChat Completions応答です。Rigは`id`・`model`・messageの`role`等を要求するため、旧Pythonが許容する省略形すべての互換実装ではありません。
 - LLM境界、session／heartbeat／player-inputの外形、ゲームイベントの受信モデル、通常会話plannerの型を移植しています。句の自動保存、採用済みrevision、全文の明示直し・自作句、critique・lesson・読み訂正の形式はPythonと照合済みです。workshopの全入力経路は設定済み記憶ルートの`sessions/<session_id>/long_term/haiku_workshop_turns.jsonl`へ自動記録します。受付・句の変更結果・音声結果を区別し、思考文やプロンプトは記録しません。設定全体、旧分類器fallbackなどは引き続き移植中です。
 
-## 同意したWeb調査
+### 同意したWeb調査
 
 利用前提が揃うMacでは、国語の調査提案に同意し、案内音声が最後まで流れた後に専用Chromeで検索します。既存の `main_language_web_enabled` 設定を引き継ぎ、起動時の可用性確認だけではブラウザーを開きません。
 

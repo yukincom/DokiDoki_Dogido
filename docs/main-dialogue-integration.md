@@ -1,8 +1,12 @@
 # 本体の会話所有権・中断・再生確定
 
+**現行の所有者: Rust本体（2026-10-03）。** この文書の会話所有権・原文根拠・実再生完了・同意の契約は継続します。旧Python本体と独立試験ホストの運用は終了しました。現行実装は `dogido-rust/src/dialogue/`・`src/foreground.rs`・`src/language/`、起動は [Rust本体](../dogido-rust/README.md) を参照してください。以下の日付付き検証記録は当時の結果で、移植後の実機確認済みへ読み替えません。
+
 **状態:** 2026-09-14、限定国語対話・同意済みの専用Chrome検索・話題転換・本人barge-in・危険前履歴保護の変更をmainへ統合。コード・自動テスト済み。ユーザー環境ではMinecraftの自動ポーズと川柳生成カウント停止を確認済み。統合後の実Minecraft、実モデル、実TTS、実Chromeを重ねた本体E2Eは別途確認する。
 
-独立 `language_dialogue` で確かめた国語対話を、本体の状態機械を置き換えずに接続するための境界を定める。戦況、assist、川柳workshop、保存判断は従来どおりコード側が所有する。
+**2026-09-17更新:** 情景音声と本句生成をworkshop外の準備段階へ分離。全Pythonテストと、実モデルを使う独立service試験で、情景を先に出力し本句完成後にpinを開始することを確認。実スピーカー／Minecraft画面の一連の確認は未実施。
+
+独立試験で確かめた国語対話を本体へ接続した契約を定める。現在はRustの限定国語対話と本体sessionがこの境界を所有する。戦況、assist、川柳workshop、保存判断は従来どおりコード側が所有する。
 
 ## 1. 会話ルートの所有者
 
@@ -11,16 +15,18 @@ session内に、同時に一つだけforeground routeを置く。
 | route | 役割 | 非敵対ambient | 新しい自動川柳 |
 |---|---|---:|---:|
 | `none` | プレイヤー主導の話題なし | 可 | 通常条件で可 |
-| `casual` | Minecraft観測を使う既存 `player_chat` | 抑止 | 10分周期で可 |
+| `casual` | Minecraft観測を使う既存 `player_chat` | 最後の入力から30秒抑止 | 10分周期で可 |
 | `learning` | 正本DBの明示知識回答と、国語・語句の限定対話 | 抑止 | 周期ごと凍結 |
 | `web` | Web閲覧中の一時対話 | 抑止 | 周期ごと凍結 |
+| `haiku_preparation` | 情景の先行音声と本句生成。pin・workshop期限は未開始 | 抑止 | pendingで抑止 |
 | `haiku_workshop` | 既存の一句共同編集 | 抑止 | 既存workshop規則で抑止 |
 
 - routeは長期記憶へ保存しない。
 - 通常会話の本文履歴は従来の5往復を維持する。
+- 雑談後の友好・中立Mobコメントは `DOGIDO_CONVERSATION_AMBIENT_MUTE_MS`（既定30秒）で再開する。会話保持の5分期限は維持し、入力待ち・危険・同種Mobのクールダウンは別に検査する。
 - 国語・語句の明示質問と `learning` 中の続きだけを有界な専用workerで生成し、ゲームイベントの直列workerをLLM待ちで塞がない。正本DBの即答は従来どおり状態機械が所有する。
 - 世界操作・敵方向・所持品・明示知識DB・workshop入力は、このworkerへ渡さない。
-- workerが満杯なら質問を雑談へ誤配送せず、既存のplayer input待ち列へ一度だけ戻す。
+- 入力受付では未完了jobの上限を検査し、満杯なら `input_queue_full` を返す。危険中の知識質問の保留枠は別に最大9件で、満杯なら `knowledge_queue_full`。通常会話へ誤配送したり、旧Pythonの共通入力FIFOへ戻したりしない。現行受付は [入力API](adapter-api.md#21-post-apiv1player-input) を参照。
 - workerが一般雑談・Minecraft話題への切替を返した場合、独立試験用の仮想Minecraft文脈では本文を生成しない。元の `turn_id`・原文・sourceを保った型付き要求だけを本体へ返し、既存 `player_chat` が現在のゲーム観測で一度だけ答える。
 
 ### 学習中の突然の別話題
@@ -44,7 +50,7 @@ player accepted
 ```
 
 - プレイヤー発話は受理時に台帳へ記録し、返答の所有routeが決まった時点で短期会話に共有する。状態機械が返す正本DB回答も同じturn IDを使う。
-- ドギドの返答は、音声プロセスの `completed` を次の直列game eventで回収した後だけ履歴へ入る。
+- ドギドの返答は、音声プロセスの `completed` を本体の配送結果として回収した後だけ履歴へ入る。
 - `failed`、実際に `cancelled` となった音声、キュー置換、未配送の古いworker結果はassistant履歴や川柳材料へ入れない。
 - workerの生成epochと、dispatcherへ渡した音声の事実を分ける。戦闘開始後でも、すでに再生開始して実際に正常終了した通常返答は `completed` のまま残す。実プロセスを止めた返答だけを `cancelled` にする。
 - dispatcherが一つのbatchを取得した後に割り込まれても、現在actionと未開始の末尾actionすべてへ一度ずつterminal通知を返す。末尾を台帳上の `queued` のまま残さない。
@@ -67,7 +73,7 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 
 音声認識結果が全文で反復叫声だけの場合、通常player input・workshop・学習worker・LLM会話履歴へ入れない。原文は上限付きの非永続診断だけに残し、LLMへは、同時点のコード観測から作った「敵対モブを視認」「爆発を観測」「原因不明の驚き」等の短い状況メモだけを渡す。叫び声の字面から敵・落下・爆発を推測しない。現行event契約には生存中の落下を確定する接地・落下距離がないため、落下は未観測時に断定しない。
 
-川柳workshopの戦闘中断は既存 `haiku/combat_pause.py` が正であり、この一般会話bookmarkへ置き換えない。
+川柳workshopの戦闘中断は `dogido-rust/src/workshop_combat.rs` と `src/dialogue/workshop_combat_runtime.rs` が所有し、この一般会話bookmarkへ置き換えない。
 
 ## 4. 雷と夕方
 
@@ -81,13 +87,12 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 雑談が続いても発句を永久に止めない。
 
 - 通常の10分周期が来ても、現在のマイク入力やplayer replyを途中で切らない。
-- player replyがある境界ではその返答の後ろ、そうでなければ次の安全なstatus／音声キュー境界へ、非割り込みの固定導入
-  「あっ……ちょっと待って。なんか、浮かんできたかもしれん……。」
-  を置く。
+- player replyがある境界ではその返答の後ろ、そうでなければ次の安全なstatus／音声キュー境界へ、生成した情景（ironyのdescription）を非割り込みの先行音声として置く。雑談中も固定の前置きへ置き換えない。音声本文はRustの発句準備と `dogido-rust/src/dialogue/haiku_runtime.rs` が組み立て、workshopやHUDの状態を変更しない。
 - 再生完了済みの直近3 turnだけから、目標40〜60字・最大80字の短い会話材料、最大3語のmotif、元turn IDを作る。
 - 会話材料は `player_reported_context` として元turn IDへ結ぶsoft材料であり、Minecraft世界の実測事実やhard制約へ昇格しない。
-- 固定の会話中導入しか実際に話していない場合、裏で生成した取り合わせ説明を `preface:spoken` 出典にしない。生成用の非発話解釈は `generated_unspoken` と区別し、実際に読み上げた文だけをspoken provenanceとして扱う。
-- 発句開始時は雑談を `suspended` に置き、既存workshopをforegroundにする。
+- 先行音声に含めた取り合わせだけを `spoken_preface` として出典へ結ぶ。これは川柳生成側の発話選択記録であり、スピーカー実再生完了の証明ではない。従来の未発話解釈 `generated_unspoken` は読み戻し互換として区別する。
+- 情景音声から本句生成までは雑談を `suspended` に置き、foregroundを `haiku_preparation` にする。句が生成検査を通った時点でpinと `haiku_workshop` を開始し、その完了時刻から既存の無操作120秒／全体240秒を数える。生成前の観測時刻や古い待機入力へ時計を戻さない。失敗・危険による取消では新しいpinを作らず準備段階を終了する。
+- 考え顔は実際の生成処理中だけ表示し、先行音声／句の配送前に通常顔へ戻す。掛け軸は完成した句だけを表示する。情景音声の生成・本句生成の所要時間はworkshopの持ち時間へ含めない。
 - `learning` と `web` の間は発句間隔そのものを凍結する。解除直後に抑止時間分をまとめて経過扱いにしない。
 - 発句準備中に危険が来た場合は、既存規則どおり古いprompt・材料・pendingを破棄する。
 
@@ -133,10 +138,10 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 
 ## 7. 自動確認
 
-中心は `tests/test_main_dialogue_integration.py`。次を正負の対で固定する。
+Rustの各ドメインテストと、`dogido-rust/scripts/check_foreground_runtime.py`・`check_history_retention.py`・`check_language_runtime.py`・`check_address_runtime.py`・`check_web_runtime.py` で確認する。次を正負の対で固定する。
 
 - casualでは発句可／learningでは発句時計を凍結
-- foreground中は非敵対ambient抑止／敵対警告は維持
+- casualの非敵対ambientは最後の入力から30秒で再開し、再入力で数え直す。学習・Web・川柳集中中の抑止／敵対警告は維持
 - 戦闘で一件だけ保留／game tickでは減らない／player turn 10件で失効
 - 戦闘中の会話試行あり／なしで終了文を分ける
 - 雷・夕方が入力を失わず次tickへ戻す
@@ -148,7 +153,7 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 - 2分未満の突然の話題を無言保留し、呼び直し→修復質問の再生完了→肯定後に元入力を一度だけ本体へ戻す。2分・5分の境界と期限切れも固定する
 - 純粋な音声叫声を通常履歴へ入れず、原因をコード観測だけから状況メモへ落とす
 - 危険前5往復を危険後3 player turn目まで限定対話にも共有し、4 turn目で解除する
-- 固定の雑談中川柳導入で、未発話の取り合わせ説明をspoken source atomにしない
+- 雑談中も情景音声を先に返し、準備中は掛け軸を開かない。130秒／300秒の本句生成後からworkshop期限を数え、失敗・戦闘取消では空のworkshopを残さない
 - 音声callbackとgame-event回収の同時実行、満杯のイベント列、重複した完了通知でも終端結果と履歴を壊さない
 - Web同意→案内音声の `completed` 後だけ一度起動し、失敗・取消・戦闘・満杯・重複完了では開かない
 - Web成功時のforeground所有、通常会話5分を越える読書期限、ambient抑止、復帰時の話題一件だけの受け渡し、session終了時の専用client close
@@ -156,7 +161,7 @@ hostileの視認・聴取、直近被弾、adapterのcombat activeを根拠に�
 全体回帰は次で確認する。
 
 ```bash
-python -m pytest -q
+./dogido-rust/cargo.sh test --all-targets --locked
 ```
 
 2026-09-12の最終回帰は **1389 passed、1 skipped、1512 subtests passed**。

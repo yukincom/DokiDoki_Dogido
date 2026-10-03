@@ -413,7 +413,8 @@
 
 - `smell_observation` はadapter側の[スメルバトル](smell-policy.md)で解決済みの一件。`none / present / suppressed` を区別する
 - 新しい `present` は同じsignatureを2観測連続で受けてから有効化し、境界で勝者が揺れた1frameを話さない
-- 同じ優勢状態では一度だけ、消失後の再出現や別の勝者にも全体2分クールダウン。旧 `zombie_scent_clues` だけは互換上初回で有効化する
+- 同じ優勢状態では一度だけ、消失後の再出現や別の勝者にも全体2分クールダウン
+- Rust環境対話・明示質問は任意の粗い方向だけを使う。再生前に推定だけが変わった生成は取消し、2観測で安定した現在値へ一度だけ即時再判断する。再取消後は通常間隔を守り、無言選択・再生済み発話はやり直さない
 - visual／auditory脅威と同frameなら自発匂い発話を後回しにするが、匂いの存在状態は失わない
 - 特定ゾンビは従来の警告優先度、それ以外はplayer inputと安全反応の後のambientに置く
 - 匂い単独ではmodeを `normal` のまま保ち、combat activeやworkshop pauseを立てない

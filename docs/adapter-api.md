@@ -91,7 +91,6 @@ adapter の起動時に session を作る。
     "visual_threats",
     "auditory_threats",
     "smell_observation",
-    "zombie_scent_clues",
     "ambient_sounds",
     "inventory",
     "hotbar_slots",
@@ -423,8 +422,8 @@ adapter 側は以下を実装する。
 
 単送信または短時間 debounce。
 
-- （レガシー）`danger_darkness_changed` / `resource_option_found` / `time_phase_changed`
-  - 現行 adapter はこれらを主経路にせず、`status_snapshot` 同梱フィールドで代替する
+- `status_snapshot`
+  - 暗所スコア・周辺資源・時間帯は同梱フィールドで継続更新する
 
 ### 低優先度
 
@@ -494,65 +493,105 @@ batch 可。
 
 ## 21. `POST /api/v1/player-input`
 
-adapter 経路ではない。`dogido_server.voice_input`（マイク）や開発時のテキスト注入用。
-
-- 直近のアクティブセッションへ入力を載せる。先頭の `pending_player_text` 1件に加え、直接入力との衝突時は最大8件の内部待ち列を使う（合計9件）
-- `source: "voice"` でも短さだけでは棄却しない（`石炭だ`、`雨だ`、`はい`などの短い自然な発話を通す）
-- `source: "voice"` では、環境音から生じやすい `Thank` 系の定型誤認識を受け付けない
-- `source: "voice"` では、現在のworkshop句・原文材料・時間帯などから作った候補内に限り、音の近いかな断片を会話理解用に補正する。原文は明示操作判定用に保持する
-- **次の game-event** の `meta.user_text` としてチャットと同じ経路に合流する
-- **セッションが無いと受け付けない**（`accepted: false`, `reason: no_active_session`）
-- 先頭が明示知識質問、または開いているworkshopの入力なら、後続入力を先着順に保全する。それ以外の未処理の一般入力は、従来どおり最新入力で置き換える
-- 同一本文は `voice` / `text` の経路が異なっても一発話として重複させず、先に受けた `source` を保つ
-- 保全対象の待ち列が上限のときは上書きせず拒否する（`accepted: false`, `reason: queue_full`）
-- 製品 README のプレイヤー向け手順には載せない（開発・デバッグ用）
-
-相乗り・再キューの挙動は [対話設計](dialogue-design.md) を参照。
+Rustの `voice-input`（マイク）と会話画面・開発時のテキスト入力が使うAPI。以下は現行本体 `serve-dialogue` の契約です。入力を受けた時点で現在観測へ照合し、返答生成や分類を非同期jobへ渡します。次のgame-eventへの相乗りは行いません。
 
 ### request
 
 ```json
 {
+  "session_id": "session_…",
   "text": "おはようさん",
   "source": "voice"
 }
 ```
 
-`source` は `voice | text`。省略時は `text` で、開発用curlや手入力を音近傍補正しない。`dogido_server.voice_input` は `voice` を送る。
+| フィールド | 契約 |
+|---|---|
+| `session_id` | 任意。省略または `null` の場合は接続中sessionがちょうど一つのときだけ自動選択する。ゼロ件・複数件なら `select_one_session` |
+| `text` | 必須の文字列。空白だけは `empty_text`、空白を含むUnicode文字数が1000を超えれば `text_too_long` |
+| `source` | `voice` または `text`。省略時は `text`。手入力を音近傍補正しないため、マイクからの配送だけ `voice` を指定する |
 
-### response 例
+指定した `session_id` が存在しなければ `unknown_session_id`。通常のゲーム接続では直近観測の受信から10秒以内かつ `observed_at` が現在時刻の前後10秒以内であることを検査し、古い観測のまま通常会話を開始しません。
+
+`source: "voice"` でも短さだけでは棄却しません。workshopの現在句・保存済み材料を候補とした音近傍補正は会話理解用に限り、原文は明示操作の検証用に保持します。`Thank` 系などの定型誤認識はRust音声クライアントが配送前に除外します。このHTTP APIは `noise_text` を返しません。
+
+### 受付・重複・保留
+
+- `accepted: true` は受付または既存入力への照合が成立したことを表す。生成・採用・保存・実再生の完了ではない。返された `turn_id` と会話表示の `playback_status` で後続結果を確認する。
+- 通常会話は受付時に `generating` の行を作り、jobを開始する。新しい別入力は先行する通常会話の生成・再生を取り消すため、全入力を先着順に蓄える共通FIFOではない。
+- 受付検査を通り、処理中または保留中の同一本文に一致した場合は、`voice` / `text` をまたいでも `deduplicated: true` で既存入力を返す。これは処理中・保留中の重複防止であり、完了後の同文を永久に拒むものではない。
+- Dialogue全体の未完了jobが16件以上なら `input_queue_full`。これは未完了の処理数の上限であり、sessionごとの入力16件を保存する待ち列ではない。
+- 危険中・警告中などに届く入力は知識質問かを別jobで分類できる。受付時は `queued: true`・`reason: "knowledge_input_routing"`、表示は `routing`。明示知識質問と確定すると `waiting_for_safety` となり、安全な観測と先行処理の終了後に同じ `turn_id` で先着順に再開する。
+- この知識保留枠はsessionごとに最大9件（再開のため取り出した一件を含む）。満杯なら `knowledge_queue_full` とし、古い質問を落とさない。一般のjob上限16件とは別に検査する。
+- 戦闘の限定質問、剣支援、句の戦闘中断中入力は各専用経路が採否を決める。通常会話を始められない場合は `fresh_safe_snapshot_required`。安全な観測があり緊急環境音声だけを待つ場合は一件保留でき、`reason: "after_environment_warning"` を返す。
+- 叫声だけの `voice` 入力は `reason: "situation_vocalization"` として受け付け、生成中の会話等を中断し状況記録へ渡す。この経路はjob上限と観測鮮度の検査を迂回するが、通常会話・句の操作には流さない。
+
+経路によって `turn_id` が未発行または `null` の受付もあります。`queued`・`deduplicated`・`reason` は該当時だけ返り、すべての成功応答に同じ項目が揃うとは限りません。
+
+### response 例（HTTP 200）
+
+通常会話の受付:
 
 ```json
 {
   "accepted": true,
-  "session_id": "…"
+  "session_id": "session_…",
+  "turn_id": "turn_…"
 }
 ```
+
+危険中の知識質問の振り分け受付:
+
+```json
+{
+  "accepted": true,
+  "queued": true,
+  "session_id": "session_…",
+  "turn_id": "knowledge_…",
+  "reason": "knowledge_input_routing"
+}
+```
+
+受付拒否:
 
 ```json
 {
   "accepted": false,
-  "reason": "no_active_session"
+  "reason": "select_one_session"
 }
 ```
 
-拒否理由は `empty_text` / `noise_text` / `no_active_session` /
-`queue_full` のいずれか。`noise_text` は `source: "voice"` のみで返る。
+| 主な `accepted: false` の理由 | 意味 |
+|---|---|
+| `empty_text` / `text_too_long` | 本文が空白だけ、または1000文字超 |
+| `select_one_session` | session未指定で、一件に決められない |
+| `unknown_session_id` | 指定sessionが存在しない |
+| `input_queue_full` | 未完了jobが16件以上 |
+| `knowledge_queue_full` | 対象sessionの知識保留枠が満杯 |
+| `fresh_safe_snapshot_required` | 観測が古い、または現在の危険・警告等によりその入力を開始できない |
+| `server_stopping` | 本体が停止処理中 |
+| `chat_context_unavailable` | 現在観測から会話用snapshotを構築できない |
+
+保留入力の再開・宛先確認では、入力の世代が変わった `superseded_input` / `superseded_address_input`、保留元が表示台帳から失効した `held_turn_expired` もあり得ます。これらを成功や自動再送として扱いません。
+
+型不正・必須項目欠落・不正な `source` 等はHTTP 422の `detail.code: "invalid_request"`、要求サイズ超過は413、認証失敗は401です。HTTP受付workerの停止時は503の `detail: "server_stopping"` になることがあります。呼出側はHTTP状態と本文の `accepted` の両方を確認します。
 
 ### 開発時の例
 
 ```bash
-# アダプタ接続中（セッションあり）のサーバーへ
+# 標準設定のRust本体へ。Fabricが接続し、新しい観測を送っている状態で使用
 curl -X POST http://127.0.0.1:5055/api/v1/player-input \
   -H 'Content-Type: application/json' \
-  -d '{"text": "おはようさん"}'
+  -d '{"text": "おはようさん", "source": "text"}'
 ```
 
-auth が有効なときは adapter 系と同様に `Authorization: Bearer <token>` を付ける。
+複数sessionがある場合は本文に `session_id` を指定します。authが有効なときは `Authorization: Bearer <token>` を付けます。接続先ポートは実際の起動設定に合わせてください。
+
+現在の受付の実装は `dogido-rust/src/server/contracts.rs`・`server/runtime.rs`、採否とjob開始は `dialogue/mod.rs`、知識保留は `dialogue/knowledge_queue.rs` です。接続診断だけの `serve` は会話を接続しないため、この本体契約の確認には使いません。
 
 ## 22. `GET /api/v1/voice-input/context`
 
-別プロセスの `dogido_server.voice_input` が、書き起こし直前に Whisper の文脈を選ぶための内部API。直近のアクティブセッションだけを見て、`prompt_mode` を返す。
+別プロセスのRust `voice-input` が、書き起こし直前に Whisper の文脈を選ぶための内部API。単一のアクティブセッションと観測の鮮度を確認して、`prompt_mode` を返す。
 
 ```json
 {
@@ -561,14 +600,14 @@ auth が有効なときは adapter 系と同様に `Authorization: Bearer <token
 }
 ```
 
-- workshop が open なら `haiku_workshop`、それ以外とセッションなしは `normal`
+- 単一セッション・新鮮な観測・workshop open・戦闘pause外で、そのworkshopが入力受付可能なときだけ `haiku_workshop`。それ以外、セッションなし、複数セッションでは `normal`
 - 句本文や材料は返さない
 - 取得に失敗した音声入力プロセスは `normal` を使い、書き起こしを止めない
 - auth が有効なときは `Authorization: Bearer <token>` が必要
 
 ## 23. `POST /api/v1/voice-input/diagnostics`
 
-別プロセスの `dogido_server.voice_input` が、STTの処理段階、認識結果、棄却理由、配送結果をサーバーの診断履歴へ通知する内部API。音声波形は送らない。
+別プロセスのRust `voice-input` が、STTの処理段階、認識結果、棄却理由、配送結果をサーバーの診断履歴へ通知する内部API。音声波形は送らない。
 
 ```json
 {

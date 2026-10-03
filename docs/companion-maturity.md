@@ -131,7 +131,7 @@ P1〜P5 で過適合と none 時の相槌は改善済み。2026-09-11には、�
 
 - 呼び方・嗜好  
 - 「このワールドで一緒に見たこと」をたまに思い出す（haiku recall の一般化）  
-- battle / peace のトーン切り替えのキレ  
+- `base / normal / tension / workshop` の場面に応じた調子
 
 ### 3.6 大きな飛び道具は後回し
 
@@ -182,13 +182,15 @@ soft workshop 方針は後半をすでに押さえている。
 
 2026-09-11通常雑談の一回再考: 自然な「ドギド」自己言及を旧 `unusable_output` の広域禁止から外し、謝罪・「例」「本番」・表面上の方言差も単語だけで棄却しない。外形またはgrounding不合格時だけ、同じ会話へ候補と閉じた理由を返して一度言い直し、二案目にも同じ検査を適用する。再不合格は固定fallback、不合格案は履歴外。汎用ReActにはせず発話候補だけを扱う。**コード・全Python自動テスト済み。ローカルQwen独立試験では英語ラベル混入と未観測嗅覚を各一回で修正し、warm時の追加生成は約0.7秒。実Minecraft・実TTS・長時間の自然さは未確認。**
 
-2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・pending・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合した。説明／質問／検査／提案／比較等から一手を選び、読み・音数・出典またはeditor validation後は一度だけ返答を再判断する。正本・行対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード。局所編集・採否・終了は音声認識原文にも行為evidenceがある場合だけ通し、疑問・否定・条件・引用・伝聞は拒否する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談返答が成立した同じ入力だけを二回driftへ数える。初手不成立は旧分類器、実観測後はコード固定fallback。実行step・検証結果・発話根拠・原文／解釈だけを改善JSONLへ有界記録し、思考文・agent speech・長期会話は保存・常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
+2026-09-12川柳workshop共同編集: 自然な句相談を、現在句・pending・直近4往復・保存済み出典・当該ターンの実検査結果を読む一つの有界agent stepへ統合した。説明／質問／検査／提案／比較等から一手を選び、読み・音数・出典またはeditor validation後は一度だけ返答を再判断する。正本・行対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード。局所編集・採否・終了は音声認識原文にも行為evidenceがある場合だけ通し、疑問・否定・条件・引用・伝聞は拒否する。採否＋終了は両意思を検証したtransaction、`unrelated`は通常雑談返答が成立した同じ入力だけを二回driftへ数える。この時点では初手不成立を旧分類器へ戻していたが、現在は初手・実観測後ともコード固定fallbackを使う。実行step・検証結果・発話根拠・原文／解釈だけを改善JSONLへ有界記録し、思考文・agent speech・長期会話は保存・常時注入しない。**コード・自動テスト済み。ローカルQwen独立stepで意味説明、inspect後の返答、修正方向の質問、合成validator不合格後の再質問、schema再試行後の採用＋終了を確認。実Minecraft・実TTS・editor込みE2Eは未確認。**
 
 2026-09-11照明コメント判断: inventory snapshot の照明器具増加をクラフト／設置とは断定せず、発話前の有界 `light_source_comment_plan` が無言・備え増加への相槌・実際の暗所回復後の安堵から一件だけ選ぶ。半スタック以上を持って周囲が既存の暗所警告条件外、同種コメント後5分以内、または現在も危険な暗さならコードで即時に無言とし、曖昧な場面だけをplannerへ渡す。`dark_push` の停止は現在の明るさ・危険度でコード確定し、所持数増加だけでは止めない。発話leafへ正確な本数を渡さず、入手方法や本数を補作した生成結果も棄却する。**コード・自動テスト済み。実Minecraft・実Qwen・実TTSは未確認。**
 
 2026-09-11通常雑談grounding: `player_chat`本文の前に、発話内evidence付きの閉じたstructured plannerが `continue_conversation / check_entity_presence / identify_entity / answer_observation / clarify_reference / correct_previous_reply` からread actionを一件だけ選ぶ。通常の相槌をカタログ描写タグへ流さず、対象照合時だけ候補IDをvisual・passive・hearing・現在構造物・乗車・視線先entityへコード照合する。候補順位は発話だけで先に決め、関連Mob観測で別対象へすり替えない。明示在否問いとplayerの平叙存在報告もコードrouting hintでactionを再検査する。カタログ一致、player報告、assistant履歴は観測ではない。未観測の在否は不在断定を避けた固定文、過去の誤断言は固定の謝罪・訂正へ落とす。種名白リストは全通常雑談で有効にし、現在観測・player発話・planner同定候補だけを許可する。世界操作、保存、戦況、assist、workshopはplannerへ渡していない。**コード・自動テスト済み。実Minecraft・実Qwen・実TTSは未確認。**
 
 2026-09-11通常雑談の家らしさ: 設定済みリスポーン地点から既存距離内にいて、周辺にベッドまたはドアがあるときだけ、場所投影を `home_base`（家・拠点らしい場所）へ上げる。暗さ・低い天井・囲まれ度・洞窟バイオームより先にするが、水中と実破壊根拠のある採掘中は優先しない。窓、リスポーン地点単独、遠いベッド／ドアでは上げず、暗所危険度・洞窟検出・安全判定は変更していない。**コード・自動テスト済み。実Minecraft・実Qwen・実TTSは未確認。**
+
+2026-09-17発句境界更新: 雑談中の固定導入を撤回し、生成した情景をworkshop外の先行音声として共有する。`haiku_preparation` 中はpinを作らず、本句完成時にworkshop／表示期限を開始する。9月9日の固定導入に関する記述は当時の履歴。現行境界は [本体対話統合](main-dialogue-integration.md#5-雑談中の自動川柳) を正とする。
 
 2026-09-09本体会話更新: session内の `none / casual / learning / web / haiku_workshop` foreground所有権を維持しつつ、通常雑談・正本DB回答・限定国語workerが同じID付き完了履歴を使うようにした。workerが一般話題を判定した場合は独立試験の仮想Minecraft文脈で答えず、元turnを本体 `player_chat` へ一度だけ戻す。学習中の突然の別話題は、直前会話から2分以上または明示名指し／転換なら即時移管し、2分未満の宛先不明入力は無言で一件保留する。後の呼び直しでは固定の驚き・謝罪と元話題を確認し、その音声が実再生完了してから肯定で元turnを一度だけ移管する。保留は5分で `expired_unaddressed`。本人の有効入力は本体TTSへbarge-inし、取得済みbatch末尾も各一度terminal化する一方、読み終えた実 `completed` は生成取消で上書きしない。純粋な音声叫声は通常履歴へ入れず、原文は非永続診断、LLM側は同時点のコード観測による状況メモだけを使う。危険前の通常5往復は危険中と危険後3通常turn目まで一時保護し、戦況発話では押し出さない。`player_died` は `combat_ended` なしでforeground戦闘を解放する。従来の戦闘話題bookmark 10 player turn、雷・夕方の入力保全、ambient抑止、雑談中の10分周期川柳、学習・Web中の周期凍結は維持。固定の雑談中川柳導入では、裏で生成した未発話の取り合わせを `preface:spoken` にしない。**この時点では実Minecraft・実モデル・実TTS・家庭音声は未確認。本体Webは未接続で、Fabric変更もない。** [境界と残件](main-dialogue-integration.md)。
 

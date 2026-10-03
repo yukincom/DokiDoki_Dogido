@@ -3,6 +3,10 @@
 保存済みの句と当時の材料を使い、Minecraftなしでドギドと相談するローカル窓口。
 `start_workshop_text.command` を開き、表示された `http://127.0.0.1:5057/` にアクセスする。
 既存の会話モデルとPython環境を使う。新しいモデル・音声サーバーは起動しない。
+この専用起動ファイルは、従来どおり実行中のプロジェクト内の `.dogido_memory/rust-migration` を読む。
+通常本体と同じ設定済み保存先を使う場合は、リポジトリルートから
+`python dogido-rust/scripts/launch_workshop_text.py --settings-dir .` で起動する。
+`--memory-dir` で別の保存先も指定できる。相対パスは設定フォルダ基準で、既存記録は移動しない。
 
 句を選ぶと本体と同じRustのworkshop処理が始まる。音声は使わず、表示した返答だけを
 直近4往復の相談履歴へ引き継ぐ。発話の `audio_disabled` と `text_displayed` を分け、

@@ -2,6 +2,8 @@
 
 DokiDoki Dogido の設計・仕様ドキュメントです。
 
+本体の現行入口は [Rust本体の案内](../dogido-rust/README.md)。旧Python本体・比較oracleの運用は終了しました。Pythonには設定・辞書token・音声機器・端末AI・Web SDKの接続補助を残します。残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を参照してください。終了した文書は冒頭の状態と後継リンクを読み、過去の起動コマンドや未接続の記述を現在の指示として使わないでください。
+
 | 入口 | 対象 |
 |---|---|
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
@@ -20,6 +22,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | **計画・方針** | 設計・PR 経緯・技術判断。**状態は各文書のヘッダ／表を正**（本索引では断定しない） | workshop · casual · voice · `rag` · `technical-risks` |
 | **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · `debug-checklist` · 国語知識・詩形データベース · Minecraft Java 公式技術データベース |
 | **バグ / 観測メモ** | 切り分け。正本を置き換えない | `bug-player-chat-observation-gaps` |
+| **終了・履歴** | 過去の実装・試験記録。現行の起動・編集手順には使わない | 旧Python再配置・py_trees・独立国語試験 |
 | **調査 (`research/`)** | 追加の作業メモ。**仕様の正本ではない**が、捨てた資料ではない | `research/haiku` · TTS 地図 · `research/mob_list` |
 
 **状態（済 / 未 / 一部）は各ドキュメント本体と GitHub issue を正とする。**  
@@ -59,7 +62,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 5 | [integration-architecture.md](integration-architecture.md) | コンポーネント連携 |
 | 6 | [future-assistance-and-senryu-app-plan.md](future-assistance-and-senryu-app-plan.md) | 支援アクション・マイクラ句集UI・あんちょこ・OS 連携の将来構想 |
 | 7 | [assist-action-architecture.md](assist-action-architecture.md) | 支援アクションの実装箱、episode決定ログ、実装済み `select_sword` 縦切り |
-| 8 | [rust-migration-plan.md](rust-migration-plan.md) | MLX等を維持したドギド本体の段階的Rust移行・比較・切替計画 |
+| 8 | [rust-migration-plan.md](rust-migration-plan.md) | Rust移行の到達点と過去の段階・検証記録 |
 
 **つながり:** `concept` → 体験の核 · `project-overview` / `current-spec` → 何を作るか · `companion-maturity` → 次に何を厚くするか。
 
@@ -70,11 +73,11 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 1 | [event-schema.md](event-schema.md) | ゲームイベントのスキーマ |
 | 2 | [adapter-api.md](adapter-api.md) | サーバー受信 API |
 | 3 | [sample-event-log-cases.md](sample-event-log-cases.md) | イベントログの代表ケース |
-| 4 | [runtime-dependencies.md](runtime-dependencies.md) | 実行時依存関係 |
+| 4 | [Rust本体の案内](../dogido-rust/README.md) | 現行のビルド・起動・補助依存 |
 | 5 | [debug-checklist.md](debug-checklist.md) | デバッグ手順 |
 | 6 | [shared-llm-profile.md](shared-llm-profile.md) | 別に起動した共有 MLX endpoint と従来 standalone の明示切替 |
 | 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
-| 7a | [language-dialogue-voice-test.md](language-dialogue-voice-test.md) | ユーザー操作の実マイク・STT・ドギド音声・実Chrome独立試験 |
+| 7a | [実機チェック](../dogido-rust/manual-dialogue-check.md) | Rust本体の会話・音声・Minecraft確認 |
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 
@@ -86,8 +89,8 @@ Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md]
 |---|---|---|
 | 1 | [state-machine.md](state-machine.md) | 状態機械 |
 | 2 | [behavior-spec.md](behavior-spec.md) | 挙動仕様 |
-| 3 | [py-trees-integration.md](py-trees-integration.md) | アクション方針（py_trees） |
-| 4 | [dialogue-design.md](dialogue-design.md) | 対話モード（peace / battle 等） |
+| 3 | [py-trees-integration.md](py-trees-integration.md) | 終了したPython版の優先制御記録。現行はstate-machineとRust本体 |
+| 4 | [dialogue-design.md](dialogue-design.md) | 対話モード（base / normal / tension / workshop） |
 | 5 | [smell-policy.md](smell-policy.md) | 近接源・温度・天候をコードで解決するスメルバトル |
 | 6 | [voice-delivery-plan.md](voice-delivery-plan.md) | ボイス速度・間・川柳の呼吸（#13） |
 | 7 | [tts-reading-unidic-plan.md](tts-reading-unidic-plan.md) | TTS 誤読補正・UniDic 方針 |
@@ -156,8 +159,8 @@ architecture（どう詠む）
 
 | # | Document | Summary |
 |---|---|---|
-| 1 | [server-package-layout-proposal.md](server-package-layout-proposal.md) | パッケージ構成案 |
-| 2 | [server-reorg-and-workshop-order.md](server-reorg-and-workshop-order.md) | 再配置と実装順序 |
+| 1 | [Rust本体の案内](../dogido-rust/README.md) | 現行の責務・起動・検証 |
+| 2 | [rust-migration-plan.md](rust-migration-plan.md) | Rust移行の経緯と残る実機確認 |
 | 3 | [technical-risks.md](technical-risks.md) | 技術課題・設計判断（現役の論点メモ） |
 
 ---
@@ -232,6 +235,13 @@ architecture（どう詠む）
 - [technical-risks.md](technical-risks.md)
 
 ---
+
+## 終了した手順・過去の記録
+
+- [Pythonパッケージ構成案](server-package-layout-proposal.md)・[再配置手順](server-reorg-and-workshop-order.md)：旧本体の整理計画は終了。現行の編集先はRust本体。
+- [py_trees統合](py-trees-integration.md)：旧Python版の優先制御記録。
+- [初期依存整理](runtime-dependencies.md)：2026年5月の導入検討。現行セットアップはRust本体の案内。
+- [独立国語テキスト試験](language-dialogue-text-test.md)・[手動台本](language-dialogue-manual-test.md)・[独立音声試験](language-dialogue-voice-test.md)：旧Python試験経路は終了。結果は当時の記録として保持。
 
 ## Research notes
 

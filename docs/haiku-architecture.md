@@ -1,5 +1,7 @@
 # 川柳アーキテクチャ
 
+**現行実装: Rust本体（2026-10-03）。** 発句・検査は `dogido-rust/src/haiku/`・`haiku_bridge.rs`、共同編集は `workshop_*` と `dialogue/workshop_runtime.rs` が所有する。旧Python本体と比較oracleの運用は終了。発句方式・根拠・採否の仕様は継続し、起動は [Rust本体](../dogido-rust/README.md) を参照する。
+
 読み上げの速度・5-7-5 の間・SE 方針は [voice-delivery-plan.md](voice-delivery-plan.md)（Issue #13）。
 
 ## プレイヤー指摘の薄い記憶
@@ -52,7 +54,7 @@ irony の `description` は発句前に実際に話す短い詩的解釈であ�
 
 行照合の `assessments` が一部しか返らなければ、欠けた行だけを一行ずつ再照合する。候補外atom ID、意味不保持、不自然な日本語、音数違反等は行の不合格理由として扱い、合格行と使用済み材料を保持したまま不合格スロットを最大6回作り直す。初稿はこの6回とは別なので、同じ不合格スロットには初稿を含め最大7候補が生じうる。
 
-workshopの共同編集step・旧意味抽出fallback・採否・修正差分やassist等は、引き続き `structured_contracts.py` の共通契約を通す。こちらは旧外形を一度だけschema専用で再試行し、なお不一致なら状態変更や操作を行わない。共同編集stepの初手不成立時は旧workshop分類器へ、実検査後の不成立時は観測に対応するコード固定返答へ戻す。自動川柳の創作再試行と、状態変更を伴う限定抽出のfail-closedを同じ終了条件にしない。
+workshopの共同編集step・採否・修正差分やassist等は、Rustの各ドメイン検証器を通す。外形と原文根拠の検査に通らなければ状態変更や操作を行わない。旧workshop分類器へのfallbackは終了し、初手・実検査後とも観測に対応するコード固定返答へ戻す。自動川柳の創作再試行と、状態変更を伴う限定抽出のfail-closedを同じ終了条件にしない。
 
 現行契約にない旧 `haiku_workshop_material_pick` は削除済みである。句中の意味質問は、保存済み行別出典だけをコードで参照する。
 
@@ -227,4 +229,4 @@ VLM はまだ常時使わない。
 - 通常workshopだけ、閉じたactionと実検査を持つ最大三stepの共同編集agentを使う。句正本・CAS・音数・hard制約・採否・保存・戦闘中断はコード所有
 - 汎用エージェント基盤（例: Hermes）は**使わない**。任意tool実行・長い自律loop・長期思考履歴は機能過剰
 - irony 抽出 → 一句生成 → fallback のような LLM 経路も、既存 route と閉じた型・コード検証で小さく構成し、特定の汎用ワークフロー基盤を前提にしない
-- panic / cue / 状態遷移は引き続きコード側（状態機械 + py_trees）が担当し、LLM ワークフローへ移さない
+- panic / cue / 状態遷移は引き続きRustのコード側（状態機械 + 優先規則）が担当し、LLM ワークフローへ移さない

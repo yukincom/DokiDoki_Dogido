@@ -1,5 +1,9 @@
 # 実行時依存ライブラリ
 
+**状態: 終了（2026-10-03）—2026年5月のPython本体向け導入検討。**
+
+以下の「今すぐ必要」「まだ不要」や導入コマンドは当時の段階に対する判断です。現行セットアップには [Rust本体の案内](../dogido-rust/README.md) と [README](../README.md) を使ってください。Pythonは設定・UniDic・Whisper設定・AEC・端末AI・Chrome/MCPの接続補助に残り、旧FastAPI本体・py_trees・本体内MLX生成の導入手順は終了しました。実際の補助依存は `pyproject.toml`、残存モジュールと資料は [Rust本体の補助一覧](../dogido-rust/README.md#残すpython補助と資料) を正とします。旧 `tts_reading.py` は廃止し、UniDic依存は `dogido-rust/scripts/tts_shared_tokens.py` のtoken取得に使います。
+
 この文書は、ドギドをまず PC 上で動かすための依存ライブラリ整理です。
 
 対象環境は、2026-05-25 時点の macOS / Apple Silicon / Python 3.11 系を主に想定しています。

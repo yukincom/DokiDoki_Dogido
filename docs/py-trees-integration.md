@@ -1,5 +1,9 @@
 # `py_trees` 統合メモ
 
+**状態: 終了（2026-10-03）—Python本体の優先制御方式。**
+
+`py_trees` の本体経路は退役しました。以下は採用時の設計記録であり、現行Rustへこの層を追加する指示ではありません。発話優先・状態遷移は [状態機械仕様](state-machine.md) と `dogido-rust/src/combat/`・`dogido-rust/src/environment/`、起動は [Rust本体](../dogido-rust/README.md) を参照してください。
+
 このプロジェクトでは、`py_trees` を **状態遷移の置き換え** ではなく、**出力優先制御の policy layer** として使う。
 
 ## 使い方
@@ -52,16 +56,9 @@ LLM は leaf node に差し込める。
 
 ## 設定
 
-`.env` または環境変数:
+出力優先制御は `PyTreeActionPolicy` を使う。LLMの設定は `.env` または環境変数:
 
 ```text
-DOGIDO_DECISION_POLICY=py_trees
 DOGIDO_LLM_ENABLED=true
 DOGIDO_LLM_BACKEND=mlx
-```
-
-旧ロジックに戻したい場合:
-
-```text
-DOGIDO_DECISION_POLICY=legacy
 ```

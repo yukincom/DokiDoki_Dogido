@@ -1,5 +1,7 @@
 # 川柳フィードバック計画（実装メモ）
 
+**状態: 旧Pythonの操作・実装手順は終了（2026-10-03）。** 以下は2026年7月の実装記録として保持する。現行の句編集・保存・想起は [川柳workshop仕様](haiku-player-improvement-plan.md) と `dogido-rust/src/haiku_memory.rs`・`poem_input.rs`、起動は [Rust本体](../dogido-rust/README.md) を参照する。会話から読み辞書へ保存する経路は終了し、現在はあんちょこ画面で編集する。元句・revisionを残す原則は継続する。
+
 2026-07-14 時点の実装方針と動かし方。
 
 **全体の進捗・将来（保存 UI 含む）:** [senryu-roadmap.md](senryu-roadmap.md)  

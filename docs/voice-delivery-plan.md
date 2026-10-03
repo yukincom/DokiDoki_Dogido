@@ -11,7 +11,7 @@
 - [haiku-architecture.md](haiku-architecture.md) … 発句パイプライン
 - [companion-maturity.md](companion-maturity.md) … 完成度の優先軸
 - [research/tts-landscape-2026.md](research/tts-landscape-2026.md) … TTS 世代・コミュニティ・適性・権利（調査メモ）
-- 実装: `dogido_server/audio.py` · `config.py` · `state_machine/types.py`（`AudioAction`）
+- 現行実装: `dogido-rust/src/dialogue/audio.rs` · `src/tts_reading.rs`。設定解決は `dogido_server/config.py`、辞書tokenは `dogido-rust/scripts/tts_shared_tokens.py`。旧Pythonの `audio.py`・`tts_reading.py`・`AudioAction` 実装は終了し、日付付きの検証記録は当時の結果として読む。
 
 ---
 
@@ -111,6 +111,8 @@ DOGIDO_VOICEVOX_SPEED_SCALE=0.85
 
 **語順の理由:** 先に「何が頭に浮かんだか」を共有してから一句に入る。  
 `「ここで一句」→ 見どころ` より自然。
+
+2026-09-17更新: この情景の先行音声は雑談中も維持する。音声本文は当時 `haiku/prelude.py` へ分離した。現在の組立・配送は `dogido-rust/src/haiku/` と `src/dialogue/haiku_runtime.rs` が所有し、UI用の固定導入へ置換しない。情景音声／本句生成の準備中はworkshopを開始せず、生成検査を通った句の完成時からpinと表示期限を開始する。考え顔は実生成中だけ、掛け軸は句完成後だけ表示する。
 
 **自分の世界モード（入力）:**
 

@@ -1,5 +1,9 @@
 # 国語対話の検索判断と資料利用の比較
 
+**状態: 試験経路の運用終了（2026-10-03）／結果は履歴として保持。**
+
+この文書は旧Python検索経路の比較を行った当時の記録です。Python本体・独立CLIの終了後に、掲載コマンドや「未接続」の記述を現行手順へ戻しません。後継は [Rust本体](../../dogido-rust/README.md) と [本体会話統合](../main-dialogue-integration.md)。当時の成功・失敗・未確認の結果自体は変更していません。
+
 2026-09-07。**実モデル比較は完了。本体への適用・接続はしていない。**
 
 以下は比較時点の記録。比較後に独立テキスト経路を修正した結果は、末尾の「比較後の修正と再試験」に分けて記す。過去のA/B/C/Dの数値は更新していない。
@@ -104,7 +108,7 @@
 
 ## 4. DBから規則が落ちていた
 
-検索コードは[retrieval.py](../../dogido_server/language_dialogue/retrieval.py)で、core資料の `definition_ja` または `summary_ja` だけを `text_ja` へ入れている。`rules` と `structured_data` の詳細は回答入力に含まれない。
+検索コードは旧 `dogido_server/language_dialogue/retrieval.py`（運用終了）で、core資料の `definition_ja` または `summary_ja` だけを `text_ja` へ入れている。`rules` と `structured_data` の詳細は回答入力に含まれない。
 
 | DBに存在する情報 | 実際にQwenへ届いた説明 |
 |---|---|
@@ -152,9 +156,9 @@ A/Bの回答生成速度はほぼ同じ。共通の解釈＋検索＋回答を�
 
 ## 再現用成果物と検証範囲
 
-- [比較ハーネス](../../dev_tools/language_dialogue/compare_language_retrieval.py)
+- 旧比較ハーネス `dev_tools/language_dialogue/compare_language_retrieval.py`（運用終了）
 - [匿名化・集計スクリプト](../../dev_tools/language_dialogue/summarize_language_retrieval.py)
-- [事後の規則投影診断](../../dev_tools/language_dialogue/probe_language_rule_projection.py)
+- 旧事後診断 `dev_tools/language_dialogue/probe_language_rule_projection.py`（運用終了）
 - [新規30問と採点観点](../../tests/fixtures/language_dialogue/retrieval_comparison_cases.json)
 - 実行記録：`logs/language-dialogue/retrieval-compare-20260907-v1/`。`run.json`、`results.jsonl`、`analysis.json`、`dispatch_review.json`、`blind_review/`、`rule_projection_diagnostic.json`。ログは既存方針どおりGit対象外。
 - 方針ハッシュ：`54666546a02635a64712893cb0a932bc5c0c55234d3597535e48e9ec01fdd98b`。
