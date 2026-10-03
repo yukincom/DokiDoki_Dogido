@@ -1,0 +1,1552 @@
+{
+  "schema_version": 1,
+  "id": "mobs15-entity-context",
+  "title": "モブ15件：カタログ情報＋移動中の個体観測",
+  "cases": [
+    {
+      "id": "cow",
+      "label": "ウシ",
+      "group": "passive",
+      "details": {
+        "user_text": "ウシがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ウシ。性質: passive。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "cow",
+                "label": "ウシ",
+                "classification": "passive",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-cow-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "cow"
+        ],
+        "entity_observed_ids": [
+          "cow"
+        ],
+        "entity_candidate_labels": [
+          "ウシ"
+        ],
+        "entity_observed_labels": [
+          "ウシ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: passive\n{\"label\": \"ウシ\", \"poetic\": {\"visual_tags\": [\"まだら\", \"四角い顔\", \"大きい体\"], \"sound_tags\": [\"もー\"], \"motion_tags\": [\"のっそり\"], \"scene_tags\": [\"草地\", \"柵\", \"牧場\"], \"reaction_tags\": [\"のどか\", \"平和やな\"], \"comic_tags\": [\"草食っとる\"], \"role\": \"牧場の落ち着きを作る役\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/passive.json",
+        "catalog_sha256": "4b8a871829af9f5d9dddb648b9ce372ffd2cff5337aa58ee12ab672080293fb9",
+        "catalog_entry": {
+          "label": "ウシ",
+          "poetic": {
+            "visual_tags": [
+              "まだら",
+              "四角い顔",
+              "大きい体"
+            ],
+            "sound_tags": [
+              "もー"
+            ],
+            "motion_tags": [
+              "のっそり"
+            ],
+            "scene_tags": [
+              "草地",
+              "柵",
+              "牧場"
+            ],
+            "reaction_tags": [
+              "のどか",
+              "平和やな"
+            ],
+            "comic_tags": [
+              "草食っとる"
+            ],
+            "role": "牧場の落ち着きを作る役"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "sheep",
+      "label": "ヒツジ",
+      "group": "passive",
+      "details": {
+        "user_text": "ヒツジがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ヒツジ。性質: passive。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "sheep",
+                "label": "ヒツジ",
+                "classification": "passive",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-sheep-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "sheep"
+        ],
+        "entity_observed_ids": [
+          "sheep"
+        ],
+        "entity_candidate_labels": [
+          "ヒツジ"
+        ],
+        "entity_observed_labels": [
+          "ヒツジ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: passive\n{\"label\": \"ヒツジ\", \"poetic\": {\"visual_tags\": [\"白い\", \"もこもこ\", \"群れ\"], \"sound_tags\": [\"めえめえ\"], \"motion_tags\": [\"のそのそ\"], \"scene_tags\": [\"草地\", \"柵のそば\"], \"reaction_tags\": [\"のどか\", \"平和\"], \"comic_tags\": [\"草ばっか食う\"], \"role\": \"平原ののどかさ担当\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/passive.json",
+        "catalog_sha256": "4b8a871829af9f5d9dddb648b9ce372ffd2cff5337aa58ee12ab672080293fb9",
+        "catalog_entry": {
+          "label": "ヒツジ",
+          "poetic": {
+            "visual_tags": [
+              "白い",
+              "もこもこ",
+              "群れ"
+            ],
+            "sound_tags": [
+              "めえめえ"
+            ],
+            "motion_tags": [
+              "のそのそ"
+            ],
+            "scene_tags": [
+              "草地",
+              "柵のそば"
+            ],
+            "reaction_tags": [
+              "のどか",
+              "平和"
+            ],
+            "comic_tags": [
+              "草ばっか食う"
+            ],
+            "role": "平原ののどかさ担当"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "pig",
+      "label": "ブタ",
+      "group": "passive",
+      "details": {
+        "user_text": "ブタがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ブタ。性質: passive。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "pig",
+                "label": "ブタ",
+                "classification": "passive",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-pig-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "pig"
+        ],
+        "entity_observed_ids": [
+          "pig"
+        ],
+        "entity_candidate_labels": [
+          "ブタ"
+        ],
+        "entity_observed_labels": [
+          "ブタ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: passive\n{\"label\": \"ブタ\", \"poetic\": {\"visual_tags\": [\"桃色\", \"鼻\", \"ころん\"], \"sound_tags\": [\"ぶひ\"], \"motion_tags\": [\"とことこ\"], \"scene_tags\": [\"草地\", \"畑\"], \"reaction_tags\": [\"のどか\", \"にんじん欲しそう\"], \"comic_tags\": [\"素朴さが強い\", \"肉くれ\"], \"role\": \"平和な日常の象徴\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/passive.json",
+        "catalog_sha256": "4b8a871829af9f5d9dddb648b9ce372ffd2cff5337aa58ee12ab672080293fb9",
+        "catalog_entry": {
+          "label": "ブタ",
+          "poetic": {
+            "visual_tags": [
+              "桃色",
+              "鼻",
+              "ころん"
+            ],
+            "sound_tags": [
+              "ぶひ"
+            ],
+            "motion_tags": [
+              "とことこ"
+            ],
+            "scene_tags": [
+              "草地",
+              "畑"
+            ],
+            "reaction_tags": [
+              "のどか",
+              "にんじん欲しそう"
+            ],
+            "comic_tags": [
+              "素朴さが強い",
+              "肉くれ"
+            ],
+            "role": "平和な日常の象徴"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "chicken",
+      "label": "ニワトリ",
+      "group": "passive",
+      "details": {
+        "user_text": "ニワトリがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ニワトリ。性質: passive。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "chicken",
+                "label": "ニワトリ",
+                "classification": "passive",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-chicken-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "chicken"
+        ],
+        "entity_observed_ids": [
+          "chicken"
+        ],
+        "entity_candidate_labels": [
+          "ニワトリ"
+        ],
+        "entity_observed_labels": [
+          "ニワトリ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: passive\n{\"label\": \"ニワトリ\", \"poetic\": {\"visual_tags\": [\"白い羽\", \"赤いとさか\", \"小さな脚\"], \"sound_tags\": [\"こっこ\", \"ぱたぱた\"], \"motion_tags\": [\"ちょこちょこ\"], \"scene_tags\": [\"畑\", \"村\"], \"reaction_tags\": [\"のどか\", \"たまご産まないかな\"], \"comic_tags\": [\"飛びそうで飛ばん\"], \"role\": \"元気な牧場の仲間\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/passive.json",
+        "catalog_sha256": "4b8a871829af9f5d9dddb648b9ce372ffd2cff5337aa58ee12ab672080293fb9",
+        "catalog_entry": {
+          "label": "ニワトリ",
+          "poetic": {
+            "visual_tags": [
+              "白い羽",
+              "赤いとさか",
+              "小さな脚"
+            ],
+            "sound_tags": [
+              "こっこ",
+              "ぱたぱた"
+            ],
+            "motion_tags": [
+              "ちょこちょこ"
+            ],
+            "scene_tags": [
+              "畑",
+              "村"
+            ],
+            "reaction_tags": [
+              "のどか",
+              "たまご産まないかな"
+            ],
+            "comic_tags": [
+              "飛びそうで飛ばん"
+            ],
+            "role": "元気な牧場の仲間"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "rabbit",
+      "label": "ウサギ",
+      "group": "passive",
+      "details": {
+        "user_text": "ウサギがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ウサギ。性質: passive。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "rabbit",
+                "label": "ウサギ",
+                "classification": "passive",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-rabbit-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "rabbit"
+        ],
+        "entity_observed_ids": [
+          "rabbit"
+        ],
+        "entity_candidate_labels": [
+          "ウサギ"
+        ],
+        "entity_observed_labels": [
+          "ウサギ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: passive\n{\"label\": \"ウサギ\", \"poetic\": {\"visual_tags\": [\"白\", \"耳\", \"小さい\"], \"sound_tags\": [\"ぴょこ\"], \"motion_tags\": [\"ぴょんぴょん\"], \"scene_tags\": [\"草むら\", \"ひらけたとこにおる\"], \"reaction_tags\": [\"かわいい\", \"追いかけたい\"], \"comic_tags\": [\"なかなか捕まらない\"], \"role\": \"軽快な警戒者\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/passive.json",
+        "catalog_sha256": "4b8a871829af9f5d9dddb648b9ce372ffd2cff5337aa58ee12ab672080293fb9",
+        "catalog_entry": {
+          "label": "ウサギ",
+          "poetic": {
+            "visual_tags": [
+              "白",
+              "耳",
+              "小さい"
+            ],
+            "sound_tags": [
+              "ぴょこ"
+            ],
+            "motion_tags": [
+              "ぴょんぴょん"
+            ],
+            "scene_tags": [
+              "草むら",
+              "ひらけたとこにおる"
+            ],
+            "reaction_tags": [
+              "かわいい",
+              "追いかけたい"
+            ],
+            "comic_tags": [
+              "なかなか捕まらない"
+            ],
+            "role": "軽快な警戒者"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "wolf",
+      "label": "オオカミ",
+      "group": "neutral",
+      "details": {
+        "user_text": "オオカミがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: オオカミ。性質: neutral。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "wolf",
+                "label": "オオカミ",
+                "classification": "neutral",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-wolf-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "wolf"
+        ],
+        "entity_observed_ids": [
+          "wolf"
+        ],
+        "entity_candidate_labels": [
+          "オオカミ"
+        ],
+        "entity_observed_labels": [
+          "オオカミ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: neutral\n{\"label\": \"オオカミ\", \"threat_class\": \"melee\", \"priority\": \"medium\", \"provoked_only\": true, \"poetic\": {\"visual_tags\": [\"灰色\", \"耳\", \"群れ\"], \"sound_tags\": [\"わふ\", \"うなり\"], \"motion_tags\": [\"駆ける\", \"見つめる\"], \"scene_tags\": [\"森\", \"雪\", \"夜\"], \"reaction_tags\": [\"かわいい\", \"仲良くしたい\"], \"comic_tags\": [\"犬っぽいのに野生\"], \"role\": \"親近感と野性の境目\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/neutral.json",
+        "catalog_sha256": "1a8283bd97d89d58ffcfb4a88920fe3dd6e8de0b1f3f6d1f683c126acacea255",
+        "catalog_entry": {
+          "label": "オオカミ",
+          "threat_class": "melee",
+          "priority": "medium",
+          "provoked_only": true,
+          "poetic": {
+            "visual_tags": [
+              "灰色",
+              "耳",
+              "群れ"
+            ],
+            "sound_tags": [
+              "わふ",
+              "うなり"
+            ],
+            "motion_tags": [
+              "駆ける",
+              "見つめる"
+            ],
+            "scene_tags": [
+              "森",
+              "雪",
+              "夜"
+            ],
+            "reaction_tags": [
+              "かわいい",
+              "仲良くしたい"
+            ],
+            "comic_tags": [
+              "犬っぽいのに野生"
+            ],
+            "role": "親近感と野性の境目"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "bee",
+      "label": "ミツバチ",
+      "group": "neutral",
+      "details": {
+        "user_text": "ミツバチがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ミツバチ。性質: neutral。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 飛んでいる。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "bee",
+                "label": "ミツバチ",
+                "classification": "neutral",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-bee-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "飛んでいる",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "bee"
+        ],
+        "entity_observed_ids": [
+          "bee"
+        ],
+        "entity_candidate_labels": [
+          "ミツバチ"
+        ],
+        "entity_observed_labels": [
+          "ミツバチ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: neutral\n{\"label\": \"ミツバチ\", \"threat_class\": \"swarm\", \"priority\": \"low\", \"provoked_only\": true, \"poetic\": {\"visual_tags\": [\"黄色\", \"羽音\", \"花\"], \"sound_tags\": [\"ぶんぶん\"], \"motion_tags\": [\"ふわふわ\", \"群れる\"], \"scene_tags\": [\"花畑\", \"巣箱\", \"昼\"], \"reaction_tags\": [\"刺されたくない\", \"普段はかわいい\"], \"comic_tags\": [\"怒らすと急に怖い\"], \"role\": \"手順を間違えると怖い\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/neutral.json",
+        "catalog_sha256": "1a8283bd97d89d58ffcfb4a88920fe3dd6e8de0b1f3f6d1f683c126acacea255",
+        "catalog_entry": {
+          "label": "ミツバチ",
+          "threat_class": "swarm",
+          "priority": "low",
+          "provoked_only": true,
+          "poetic": {
+            "visual_tags": [
+              "黄色",
+              "羽音",
+              "花"
+            ],
+            "sound_tags": [
+              "ぶんぶん"
+            ],
+            "motion_tags": [
+              "ふわふわ",
+              "群れる"
+            ],
+            "scene_tags": [
+              "花畑",
+              "巣箱",
+              "昼"
+            ],
+            "reaction_tags": [
+              "刺されたくない",
+              "普段はかわいい"
+            ],
+            "comic_tags": [
+              "怒らすと急に怖い"
+            ],
+            "role": "手順を間違えると怖い"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "enderman",
+      "label": "エンダーマン",
+      "group": "neutral",
+      "details": {
+        "user_text": "エンダーマンがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: エンダーマン。性質: neutral。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "enderman",
+                "label": "エンダーマン",
+                "classification": "neutral",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-enderman-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "enderman"
+        ],
+        "entity_observed_ids": [
+          "enderman"
+        ],
+        "entity_candidate_labels": [
+          "エンダーマン"
+        ],
+        "entity_observed_labels": [
+          "エンダーマン"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: neutral\n{\"label\": \"エンダーマン\", \"threat_class\": \"teleport\", \"priority\": \"high\", \"provoked_only\": true, \"poetic\": {\"visual_tags\": [\"黒い\", \"長身\", \"紫の目\"], \"sound_tags\": [\"ぴきぃ\", \"ぞわっ\"], \"motion_tags\": [\"瞬間移動\", \"凝視\"], \"scene_tags\": [\"夜\", \"エンド\", \"雨前\"], \"reaction_tags\": [\"目を合わせたくない\", \"みないようにすると視界が取れない\"], \"comic_tags\": [\"見るなと言われるほど見てしまう\"], \"role\": \"視線で始まる緊張\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/neutral.json",
+        "catalog_sha256": "1a8283bd97d89d58ffcfb4a88920fe3dd6e8de0b1f3f6d1f683c126acacea255",
+        "catalog_entry": {
+          "label": "エンダーマン",
+          "threat_class": "teleport",
+          "priority": "high",
+          "provoked_only": true,
+          "poetic": {
+            "visual_tags": [
+              "黒い",
+              "長身",
+              "紫の目"
+            ],
+            "sound_tags": [
+              "ぴきぃ",
+              "ぞわっ"
+            ],
+            "motion_tags": [
+              "瞬間移動",
+              "凝視"
+            ],
+            "scene_tags": [
+              "夜",
+              "エンド",
+              "雨前"
+            ],
+            "reaction_tags": [
+              "目を合わせたくない",
+              "みないようにすると視界が取れない"
+            ],
+            "comic_tags": [
+              "見るなと言われるほど見てしまう"
+            ],
+            "role": "視線で始まる緊張"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "zombified_piglin",
+      "label": "ゾンビピグリン",
+      "group": "neutral",
+      "details": {
+        "user_text": "ゾンビピグリンがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ゾンビピグリン。性質: neutral。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "zombified_piglin",
+                "label": "ゾンビピグリン",
+                "classification": "neutral",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-zombified_piglin-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "zombified_piglin"
+        ],
+        "entity_observed_ids": [
+          "zombified_piglin"
+        ],
+        "entity_candidate_labels": [
+          "ゾンビピグリン"
+        ],
+        "entity_observed_labels": [
+          "ゾンビピグリン"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: neutral\n{\"label\": \"ゾンビピグリン\", \"threat_class\": \"swarm\", \"priority\": \"medium\", \"burns_in_daylight\": false, \"undead\": true, \"provoked_only\": true, \"poetic\": {\"visual_tags\": [\"腐敗\", \"金剣\", \"ネザー\"], \"sound_tags\": [\"ぶもっ\", \"うめき\"], \"motion_tags\": [\"群れる\", \"寄る\"], \"scene_tags\": [\"ネザー\", \"金\", \"群集\"], \"reaction_tags\": [\"一体で済ませたい\", \"怒らせたくない\"], \"comic_tags\": [\"連鎖で空気が変わる\"], \"role\": \"群れで牙をむく静かな圧\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/neutral.json",
+        "catalog_sha256": "1a8283bd97d89d58ffcfb4a88920fe3dd6e8de0b1f3f6d1f683c126acacea255",
+        "catalog_entry": {
+          "label": "ゾンビピグリン",
+          "threat_class": "swarm",
+          "priority": "medium",
+          "burns_in_daylight": false,
+          "undead": true,
+          "provoked_only": true,
+          "poetic": {
+            "visual_tags": [
+              "腐敗",
+              "金剣",
+              "ネザー"
+            ],
+            "sound_tags": [
+              "ぶもっ",
+              "うめき"
+            ],
+            "motion_tags": [
+              "群れる",
+              "寄る"
+            ],
+            "scene_tags": [
+              "ネザー",
+              "金",
+              "群集"
+            ],
+            "reaction_tags": [
+              "一体で済ませたい",
+              "怒らせたくない"
+            ],
+            "comic_tags": [
+              "連鎖で空気が変わる"
+            ],
+            "role": "群れで牙をむく静かな圧"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "polar_bear",
+      "label": "シロクマ",
+      "group": "neutral",
+      "details": {
+        "user_text": "シロクマがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: シロクマ。性質: neutral。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "polar_bear",
+                "label": "シロクマ",
+                "classification": "neutral",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-polar_bear-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明"
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "polar_bear"
+        ],
+        "entity_observed_ids": [
+          "polar_bear"
+        ],
+        "entity_candidate_labels": [
+          "シロクマ"
+        ],
+        "entity_observed_labels": [
+          "シロクマ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: neutral\n{\"label\": \"シロクマ\", \"threat_class\": \"melee\", \"priority\": \"medium\", \"provoked_only\": true, \"poetic\": {\"visual_tags\": [\"白\", \"大きい\", \"雪\"], \"sound_tags\": [\"うおっ\"], \"motion_tags\": [\"のっそり\", \"急に走る\"], \"scene_tags\": [\"氷原\", \"海氷\", \"吹雪\"], \"reaction_tags\": [\"遠くから眺めたい\", \"子連れは特に怖い\"], \"comic_tags\": [\"白くて丸いのに重い\"], \"role\": \"雪景色に潜む力強い気配\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/neutral.json",
+        "catalog_sha256": "1a8283bd97d89d58ffcfb4a88920fe3dd6e8de0b1f3f6d1f683c126acacea255",
+        "catalog_entry": {
+          "label": "シロクマ",
+          "threat_class": "melee",
+          "priority": "medium",
+          "provoked_only": true,
+          "poetic": {
+            "visual_tags": [
+              "白",
+              "大きい",
+              "雪"
+            ],
+            "sound_tags": [
+              "うおっ"
+            ],
+            "motion_tags": [
+              "のっそり",
+              "急に走る"
+            ],
+            "scene_tags": [
+              "氷原",
+              "海氷",
+              "吹雪"
+            ],
+            "reaction_tags": [
+              "遠くから眺めたい",
+              "子連れは特に怖い"
+            ],
+            "comic_tags": [
+              "白くて丸いのに重い"
+            ],
+            "role": "雪景色に潜む力強い気配"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "zombie",
+      "label": "ゾンビ",
+      "group": "hostile",
+      "details": {
+        "user_text": "ゾンビがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ゾンビ。性質: hostile。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。接近中ではない。燃えておらず、水中でもない。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "zombie"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "zombie",
+                "label": "ゾンビ",
+                "classification": "hostile",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-zombie-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明",
+                "approaching": false,
+                "on_fire": false,
+                "in_water": false
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "zombie"
+        ],
+        "entity_observed_ids": [
+          "zombie"
+        ],
+        "entity_candidate_labels": [
+          "ゾンビ"
+        ],
+        "entity_observed_labels": [
+          "ゾンビ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: hostile\n{\"label\": \"ゾンビ\", \"threat_class\": \"melee\", \"priority\": \"high\", \"burns_in_daylight\": true, \"undead\": true, \"poetic\": {\"visual_tags\": [\"腐敗\", \"緑\", \"腕をのばす\"], \"sound_tags\": [\"うめき\"], \"motion_tags\": [\"よたよた\"], \"scene_tags\": [\"夜道\", \"背後\", \"洞窟\"], \"reaction_tags\": [\"逃げたい\", \"燃えてほしい\"], \"comic_tags\": [\"日光で逆転\"], \"role\": \"じわじわ来る恐怖\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/hostile.json",
+        "catalog_sha256": "62721cc7f7c29abb63bb8960b64cfab235b3c3eacff865b85989e8abea9eeaf7",
+        "catalog_entry": {
+          "label": "ゾンビ",
+          "threat_class": "melee",
+          "priority": "high",
+          "burns_in_daylight": true,
+          "undead": true,
+          "poetic": {
+            "visual_tags": [
+              "腐敗",
+              "緑",
+              "腕をのばす"
+            ],
+            "sound_tags": [
+              "うめき"
+            ],
+            "motion_tags": [
+              "よたよた"
+            ],
+            "scene_tags": [
+              "夜道",
+              "背後",
+              "洞窟"
+            ],
+            "reaction_tags": [
+              "逃げたい",
+              "燃えてほしい"
+            ],
+            "comic_tags": [
+              "日光で逆転"
+            ],
+            "role": "じわじわ来る恐怖"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "skeleton",
+      "label": "スケルトン",
+      "group": "hostile",
+      "details": {
+        "user_text": "スケルトンがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: スケルトン。性質: hostile。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。接近中ではない。燃えておらず、水中でもない。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "skeleton"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "skeleton",
+                "label": "スケルトン",
+                "classification": "hostile",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-skeleton-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明",
+                "approaching": false,
+                "on_fire": false,
+                "in_water": false
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "skeleton"
+        ],
+        "entity_observed_ids": [
+          "skeleton"
+        ],
+        "entity_candidate_labels": [
+          "スケルトン"
+        ],
+        "entity_observed_labels": [
+          "スケルトン"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: hostile\n{\"label\": \"スケルトン\", \"threat_class\": \"ranged\", \"priority\": \"high\", \"burns_in_daylight\": true, \"undead\": true, \"poetic\": {\"visual_tags\": [\"骨\", \"弓\", \"白い\"], \"sound_tags\": [\"かたかた\"], \"motion_tags\": [\"引き絞る\", \"離れる\"], \"scene_tags\": [\"夜道\", \"森\", \"崖上\"], \"reaction_tags\": [\"遠くから怖い\", \"水に入るな\"], \"comic_tags\": [\"燃えてくれたら助かる\"], \"role\": \"精密射撃ガイコツの射手\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/hostile.json",
+        "catalog_sha256": "62721cc7f7c29abb63bb8960b64cfab235b3c3eacff865b85989e8abea9eeaf7",
+        "catalog_entry": {
+          "label": "スケルトン",
+          "threat_class": "ranged",
+          "priority": "high",
+          "burns_in_daylight": true,
+          "undead": true,
+          "poetic": {
+            "visual_tags": [
+              "骨",
+              "弓",
+              "白い"
+            ],
+            "sound_tags": [
+              "かたかた"
+            ],
+            "motion_tags": [
+              "引き絞る",
+              "離れる"
+            ],
+            "scene_tags": [
+              "夜道",
+              "森",
+              "崖上"
+            ],
+            "reaction_tags": [
+              "遠くから怖い",
+              "水に入るな"
+            ],
+            "comic_tags": [
+              "燃えてくれたら助かる"
+            ],
+            "role": "精密射撃ガイコツの射手"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "creeper",
+      "label": "クリーパー",
+      "group": "hostile",
+      "details": {
+        "user_text": "クリーパーがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: クリーパー。性質: hostile。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。接近中ではない。燃えておらず、水中でもない。導火線は作動していない。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "creeper"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "creeper",
+                "label": "クリーパー",
+                "classification": "hostile",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-creeper-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明",
+                "approaching": false,
+                "on_fire": false,
+                "in_water": false,
+                "fuse_active": false
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "creeper"
+        ],
+        "entity_observed_ids": [
+          "creeper"
+        ],
+        "entity_candidate_labels": [
+          "クリーパー"
+        ],
+        "entity_observed_labels": [
+          "クリーパー"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: hostile\n{\"label\": \"クリーパー\", \"threat_class\": \"explosive\", \"priority\": \"critical\", \"poetic\": {\"visual_tags\": [\"緑\", \"無言\", \"４本足\", \"虚のような顔\"], \"sound_tags\": [\"しゅう\"], \"motion_tags\": [\"ぬっと来る\", \"接近\"], \"scene_tags\": [\"草むら\", \"背後\", \"曲がり角\"], \"reaction_tags\": [\"逃げたい\", \"見失いたくない\"], \"comic_tags\": [\"緑にまぎれる\"], \"role\": \"一瞬で全部を壊す役\"}, \"dogido_tactics\": {\"notes\": \"近づくと爆発する。放置すると寄ってくる。\", \"safe_hints\": [\"近づくな\", \"離れろ\", \"気いつけ\", \"距離を取れ\"]}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/hostile.json",
+        "catalog_sha256": "62721cc7f7c29abb63bb8960b64cfab235b3c3eacff865b85989e8abea9eeaf7",
+        "catalog_entry": {
+          "label": "クリーパー",
+          "threat_class": "explosive",
+          "priority": "critical",
+          "poetic": {
+            "visual_tags": [
+              "緑",
+              "無言",
+              "４本足",
+              "虚のような顔"
+            ],
+            "sound_tags": [
+              "しゅう"
+            ],
+            "motion_tags": [
+              "ぬっと来る",
+              "接近"
+            ],
+            "scene_tags": [
+              "草むら",
+              "背後",
+              "曲がり角"
+            ],
+            "reaction_tags": [
+              "逃げたい",
+              "見失いたくない"
+            ],
+            "comic_tags": [
+              "緑にまぎれる"
+            ],
+            "role": "一瞬で全部を壊す役"
+          },
+          "dogido_tactics": {
+            "notes": "近づくと爆発する。放置すると寄ってくる。",
+            "safe_hints": [
+              "近づくな",
+              "離れろ",
+              "気いつけ",
+              "距離を取れ"
+            ]
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "witch",
+      "label": "ウィッチ",
+      "group": "hostile",
+      "details": {
+        "user_text": "ウィッチがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ウィッチ。性質: hostile。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。接近中ではない。燃えておらず、水中でもない。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "witch"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "witch",
+                "label": "ウィッチ",
+                "classification": "hostile",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-witch-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明",
+                "approaching": false,
+                "on_fire": false,
+                "in_water": false
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "witch"
+        ],
+        "entity_observed_ids": [
+          "witch"
+        ],
+        "entity_candidate_labels": [
+          "ウィッチ"
+        ],
+        "entity_observed_labels": [
+          "ウィッチ"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: hostile\n{\"label\": \"ウィッチ\", \"threat_class\": \"trickster\", \"priority\": \"high\", \"poetic\": {\"visual_tags\": [\"紫\", \"とんがり帽子\", \"薬\", \"鼻にできもの\", \"ババア\"], \"sound_tags\": [\"笑い声\", \"ごくごく\"], \"motion_tags\": [\"投げる\", \"回復する\"], \"scene_tags\": [\"沼\", \"小屋\", \"夜\"], \"reaction_tags\": [\"近寄りたくない\", \"長引くのがいや\"], \"comic_tags\": [\"飲んでから投げる\"], \"role\": \"じわじわ嫌がらせする魔女\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/hostile.json",
+        "catalog_sha256": "62721cc7f7c29abb63bb8960b64cfab235b3c3eacff865b85989e8abea9eeaf7",
+        "catalog_entry": {
+          "label": "ウィッチ",
+          "threat_class": "trickster",
+          "priority": "high",
+          "poetic": {
+            "visual_tags": [
+              "紫",
+              "とんがり帽子",
+              "薬",
+              "鼻にできもの",
+              "ババア"
+            ],
+            "sound_tags": [
+              "笑い声",
+              "ごくごく"
+            ],
+            "motion_tags": [
+              "投げる",
+              "回復する"
+            ],
+            "scene_tags": [
+              "沼",
+              "小屋",
+              "夜"
+            ],
+            "reaction_tags": [
+              "近寄りたくない",
+              "長引くのがいや"
+            ],
+            "comic_tags": [
+              "飲んでから投げる"
+            ],
+            "role": "じわじわ嫌がらせする魔女"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    },
+    {
+      "id": "pillager",
+      "label": "ピリジャー",
+      "group": "hostile",
+      "details": {
+        "user_text": "ピリジャーがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ピリジャー。性質: hostile。今回の試験条件では1体がプレイヤーの前方6ブロックに見える。\n現在の動き: 歩いている。個体の視線、姿勢、現在の鳴き声は不明。名付けなし、飼いならしなし。接近中ではない。燃えておらず、水中でもない。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "pillager"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "observed",
+        "world_context": {
+          "observations": {
+            "entities": [
+              {
+                "source": "synthetic_test_fixture",
+                "type": "pillager",
+                "label": "ピリジャー",
+                "classification": "hostile",
+                "distance_blocks": 6.0,
+                "direction": "前方",
+                "identity": {
+                  "entity_id": "lab-pillager-1",
+                  "custom_name": null,
+                  "tamed": false
+                },
+                "current_movement": "歩いている",
+                "entity_gaze": "不明",
+                "pose": "不明",
+                "current_sound": "不明",
+                "approaching": false,
+                "on_fire": false,
+                "in_water": false
+              }
+            ]
+          },
+          "changes": [],
+          "revision": 1,
+          "source": "synthetic_test_fixture"
+        },
+        "entity_candidate_ids": [
+          "pillager"
+        ],
+        "entity_observed_ids": [
+          "pillager"
+        ],
+        "entity_candidate_labels": [
+          "ピリジャー"
+        ],
+        "entity_observed_labels": [
+          "ピリジャー"
+        ],
+        "catalog_topic_hints": "【種のカタログ情報：現在個体の動作・音・周囲を観測した記録ではない】\n分類: hostile\n{\"label\": \"ピリジャー\", \"threat_class\": \"ranged\", \"priority\": \"high\", \"poetic\": {\"visual_tags\": [\"クロスボウ\", \"灰色\", \"隊列\", \"オッサン\", \"ジジイ\", \"旗\"], \"sound_tags\": [\"かちゃ\", \"びゅっ\"], \"motion_tags\": [\"囲む\", \"射る\"], \"scene_tags\": [\"襲撃\", \"前哨基地\", \"平地\"], \"reaction_tags\": [\"遠くからいや\", \"数が増えると怖い\"], \"comic_tags\": [\"見た目より堅実に痛い\"], \"role\": \"群れる略奪者\"}}\npoeticは種の特徴・連想・表現候補。motion_tags、sound_tags、scene_tagsは今この個体の動き・音・場所を確認した値ではない。個体の現在状態は上の観測欄を参照する。"
+      },
+      "entity_context_provenance": {
+        "catalog_path": "data/catalogs/entries/mobs/hostile.json",
+        "catalog_sha256": "62721cc7f7c29abb63bb8960b64cfab235b3c3eacff865b85989e8abea9eeaf7",
+        "catalog_entry": {
+          "label": "ピリジャー",
+          "threat_class": "ranged",
+          "priority": "high",
+          "poetic": {
+            "visual_tags": [
+              "クロスボウ",
+              "灰色",
+              "隊列",
+              "オッサン",
+              "ジジイ",
+              "旗"
+            ],
+            "sound_tags": [
+              "かちゃ",
+              "びゅっ"
+            ],
+            "motion_tags": [
+              "囲む",
+              "射る"
+            ],
+            "scene_tags": [
+              "襲撃",
+              "前哨基地",
+              "平地"
+            ],
+            "reaction_tags": [
+              "遠くからいや",
+              "数が増えると怖い"
+            ],
+            "comic_tags": [
+              "見た目より堅実に痛い"
+            ],
+            "role": "群れる略奪者"
+          }
+        },
+        "individual_source": "synthetic_test_fixture",
+        "unsupported_live_fields": [
+          "current_movement",
+          "entity_gaze",
+          "pose"
+        ],
+        "note": "カタログの全フィールドを保持。poeticタグを観測へ昇格しない。",
+        "movement_source": "user_requested_test_assumption"
+      }
+    }
+  ],
+  "description": "カタログ原文と、各モブ1体が前方6ブロックに見える合成観測を渡す。ユーザー指定の前提として地上モブは歩行中、ミツバチは飛行中。実Minecraftの採取ログではない。個体視線・姿勢は不明。敵は接近中ではなく、燃えておらず水中でもない試験条件。",
+  "source_hashes": {
+    "data/catalogs/entries/mobs/passive.json": "4b8a871829af9f5d9dddb648b9ce372ffd2cff5337aa58ee12ab672080293fb9",
+    "data/catalogs/entries/mobs/neutral.json": "1a8283bd97d89d58ffcfb4a88920fe3dd6e8de0b1f3f6d1f683c126acacea255",
+    "data/catalogs/entries/mobs/hostile.json": "62721cc7f7c29abb63bb8960b64cfab235b3c3eacff865b85989e8abea9eeaf7"
+  }
+}

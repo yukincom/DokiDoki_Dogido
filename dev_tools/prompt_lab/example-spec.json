@@ -1,0 +1,18 @@
+{
+  "candidate_ids": [
+    "normal-observed-presence"
+  ],
+  "model_ids": [
+    "http-current"
+  ],
+  "suite_id": "mobs15-entity-context",
+  "settings": {
+    "temperature": 0.65,
+    "max_tokens": 384,
+    "repeats": 1,
+    "seed": null,
+    "stream": false,
+    "enable_thinking": false,
+    "timeout_seconds": 20
+  }
+}

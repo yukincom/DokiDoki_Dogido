@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "id": "mobs15",
+  "title": "モブ15件：passive 5・neutral 5・hostile 5",
+  "cases": [
+    {
+      "id": "cow",
+      "label": "ウシ",
+      "group": "passive",
+      "details": {
+        "user_text": "ウシがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ウシ。性質: passive。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "sheep",
+      "label": "ヒツジ",
+      "group": "passive",
+      "details": {
+        "user_text": "ヒツジがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ヒツジ。性質: passive。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "pig",
+      "label": "ブタ",
+      "group": "passive",
+      "details": {
+        "user_text": "ブタがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ブタ。性質: passive。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "chicken",
+      "label": "ニワトリ",
+      "group": "passive",
+      "details": {
+        "user_text": "ニワトリがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ニワトリ。性質: passive。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "rabbit",
+      "label": "ウサギ",
+      "group": "passive",
+      "details": {
+        "user_text": "ウサギがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ウサギ。性質: passive。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "wolf",
+      "label": "オオカミ",
+      "group": "neutral",
+      "details": {
+        "user_text": "オオカミがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: オオカミ。性質: neutral。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "bee",
+      "label": "ミツバチ",
+      "group": "neutral",
+      "details": {
+        "user_text": "ミツバチがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ミツバチ。性質: neutral。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "enderman",
+      "label": "エンダーマン",
+      "group": "neutral",
+      "details": {
+        "user_text": "エンダーマンがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: エンダーマン。性質: neutral。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "zombified_piglin",
+      "label": "ゾンビピグリン",
+      "group": "neutral",
+      "details": {
+        "user_text": "ゾンビピグリンがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ゾンビピグリン。性質: neutral。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "polar_bear",
+      "label": "シロクマ",
+      "group": "neutral",
+      "details": {
+        "user_text": "シロクマがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "normal",
+        "reply_stance": "none",
+        "dialogue_choice": true,
+        "observation_summary": "視認: シロクマ。性質: neutral。",
+        "has_visual_threats": false,
+        "nearby_hostile_types": [],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "zombie",
+      "label": "ゾンビ",
+      "group": "hostile",
+      "details": {
+        "user_text": "ゾンビがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ゾンビ。性質: hostile。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "zombie"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "skeleton",
+      "label": "スケルトン",
+      "group": "hostile",
+      "details": {
+        "user_text": "スケルトンがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: スケルトン。性質: hostile。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "skeleton"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "creeper",
+      "label": "クリーパー",
+      "group": "hostile",
+      "details": {
+        "user_text": "クリーパーがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: クリーパー。性質: hostile。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "creeper"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "witch",
+      "label": "ウィッチ",
+      "group": "hostile",
+      "details": {
+        "user_text": "ウィッチがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ウィッチ。性質: hostile。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "witch"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    },
+    {
+      "id": "pillager",
+      "label": "ピリジャー",
+      "group": "hostile",
+      "details": {
+        "user_text": "ピリジャーがいるね。",
+        "player_name": "プレイヤー",
+        "character_mode": "base",
+        "reply_stance": "saw",
+        "dialogue_choice": true,
+        "observation_summary": "視認: ピリジャー。性質: hostile。",
+        "has_visual_threats": true,
+        "nearby_hostile_types": [
+          "pillager"
+        ],
+        "player_chat_plan_action": "continue_conversation",
+        "entity_grounding_status": "not_applicable",
+        "world_context": {
+          "observations": {},
+          "changes": [],
+          "revision": 1
+        }
+      }
+    }
+  ]
+}

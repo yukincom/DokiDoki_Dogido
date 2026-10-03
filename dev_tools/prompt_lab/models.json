@@ -1,0 +1,11 @@
+[
+  {
+    "id": "http-current",
+    "title": "8080：アプリが起動したモデル",
+    "backend": "http",
+    "base_url": "http://127.0.0.1:8080/v1",
+    "model": "default_model",
+    "metrics_pid": null,
+    "api_key_env": "DOGIDO_LLM_API_KEY"
+  }
+]
