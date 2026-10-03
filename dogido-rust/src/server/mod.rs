@@ -53,6 +53,8 @@ impl ApiReply {
     fn unavailable() -> Self {
         Self::error(StatusCode::SERVICE_UNAVAILABLE, json!("server_stopping"))
     }
+    // dialogueを構築していない接続試験の応答。各呼出元がNoneを確認してから使う。
+    // dialogue内の生成失敗・音声無効・機能別失敗には使わない。phaseもこの前提で固定する。
     fn unsupported(feature: &str) -> Self {
         Self::new(
             StatusCode::NOT_IMPLEMENTED,

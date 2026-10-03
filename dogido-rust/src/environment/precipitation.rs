@@ -211,8 +211,8 @@ pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationConte
     })
 }
 
-/// Pure adapter for WorldAnalysisMixin._precipitation_context. No catalog reads or state.
-/// Only nearby resources whose type lowercases to "block" provide surface-snow evidence.
+/// 現在イベントと呼出側が取得した気候を、降水判定への入力に投影する。
+/// カタログ検索・状態変更は行わない。積雪の実測根拠にはtypeがblockの近接資源だけを使う。
 pub fn from_event(event: &GameEvent, climate: &Climate) -> Result<PrecipitationContext> {
     resolve_precipitation_context(&Input {
         current_y: event.player.position.y,

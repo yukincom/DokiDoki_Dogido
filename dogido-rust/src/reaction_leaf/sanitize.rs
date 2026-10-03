@@ -1,4 +1,6 @@
-//! The narrow reaction-leaf guards, kept separate from normal player-chat policy.
+//! 共通の発話整形・危険助言検査と、反応別の内容検査を同じモジュールに置いている。
+//! chat_validationはclean/usability_reason/forbidden等、workshop_validationはstripを使う。
+//! final_guardは反応固有の主張検査。通常会話はchat_validation::guardで固有のgroundingを検査する。
 use super::prompts::{pystr, truth};
 use regex::Regex;
 use serde_json::Value;
@@ -40,6 +42,8 @@ fn japanese(c: char) -> bool {
         || digit(c)
         || "。、！？!?,，．…ー〜「」（）()・：:; 　".contains(c)
 }
+// Python isdigit由来の文字集合をRustだけで読む。²を含み、Ⅳ・½は含まない。
+// Rustのis_numericとは範囲が異なるため、表の削除・置換は採否規則の変更になる。
 fn digit(c: char) -> bool {
     static RANGES: LazyLock<Vec<(u32, u32)>> = LazyLock::new(|| {
         serde_json::from_str(include_str!("digit-ranges.json")).expect("Python digit table")

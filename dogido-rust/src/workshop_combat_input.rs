@@ -32,6 +32,9 @@ pub struct Analysis {
     pub evidence: String,
 }
 impl Analysis {
+    /// SDK接続側の外形検査とは別に、行為候補として必要な信頼度と原文根拠を検査する。
+    /// SDK・chatのどちらもここを通す。合格後もcombat_classifierの原文行為ガードと
+    /// 現在の戦闘状態を通るまで、再開・終了や句の変更は行わない。
     pub fn parse(payload: &Value, text: &str) -> Self {
         let Ok(a) = serde_json::from_value::<Self>(payload.clone()) else {
             return Self::default();

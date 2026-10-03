@@ -1,5 +1,7 @@
 //! One personality source for every model path that speaks as Dogido.
 //! Internal extractors/validators have their own contracts and do not impersonate him.
+//! JSONはラボ・配布と共有する編集用資産。配置先がPythonパッケージでも、発話要求の構築はRust。
+//! 現在はLazyLockの初回参照でJSONを読む。ビルド時・起動時の全キー検査は行っていない。
 use serde_json::Value;
 use std::sync::LazyLock;
 

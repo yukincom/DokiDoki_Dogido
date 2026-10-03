@@ -145,6 +145,8 @@ fn compact(text: &str) -> String {
     normalize(text).chars().filter(|c| !space(*c)).collect()
 }
 use crate::compat::json_truthy as truthy;
+// registry絞り込み・検索語の文字列化にも使う。単体null/boolはNone/True/False、
+// 配列・objectは空白なしJSON。ここを変えると発話表記だけでなく検索一致も変わる。
 fn python_text(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),

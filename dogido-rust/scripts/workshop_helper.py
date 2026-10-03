@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# workshopという名前は起動元を表す。受理するのはop=tts_tokensだけで、相談の判断はしない。
+# haiku_tokensの読込上限・改行・出力上限検査は共有しておらず、この入口は読込後の入力サイズだけを検査する。
 from tts_shared_tokens import handle
 
 

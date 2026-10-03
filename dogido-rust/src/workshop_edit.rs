@@ -1,4 +1,6 @@
-//! Player-authored local edits. Rust owns pending/CAS, adoption and append-only revisions.
+//! 未採用の行差分Pendingと、採用時のCAS・追記保存の契約。
+//! 発話から案を作るworkshop_editingとは分担し、元句一致・対象外不変・読みをここで再検証する。
+//! 実際にpendingを変更し保存を呼ぶのはdialogue/workshop_edits。生成案の採用前検証も同じ境界を使う。
 use crate::{
     haiku::meter::count_japanese_sounds,
     haiku_record::{Emission, HaikuLine, MemoryStore, SAVE_LOCK, append_line, locked_file},

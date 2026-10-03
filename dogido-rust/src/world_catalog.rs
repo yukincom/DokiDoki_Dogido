@@ -52,7 +52,8 @@ impl WorldCatalog {
     pub fn biome_entries(&self) -> &Map<String, Value> {
         &self.biomes
     }
-    /// This is NarrationMixin's overriding method, deliberately NOT WorldAnalysisMixin's.
+    /// item辞書を優先し、見つからなければblock辞書、最後にminecraft:だけを除いた元IDを返す。
+    /// block_labelの小文字化・接尾辞補完とは別の契約。移植時のNarrationMixinの挙動を維持する。
     pub fn item_label(&self, id: Option<&str>) -> String {
         let key = id.unwrap_or("");
         if key.is_empty() {

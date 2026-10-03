@@ -4,6 +4,8 @@ from pathlib import Path
 import json
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# op=tts_tokens付きの共通通信契約。辞書実装はtts_unidic_adapter.Unidicを共有する。
+# 発句の準備・生成・読み整形はRust。単独TTSのop無し契約とは入口が異なる。
 from tts_shared_tokens import handle
 FRAME_LIMIT = 1_000_000
 

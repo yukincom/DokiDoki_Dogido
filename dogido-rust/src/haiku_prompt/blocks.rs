@@ -6,6 +6,8 @@ pub(super) use crate::compat::json_truthy as truth;
 pub(super) fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
+/// 単体null/boolはNone/True/False、配列・objectは空白付きJSONへ変換する。
+/// 反応文の空白なしJSONやカタログの入れ子reprと同一ではない。
 pub(super) fn string(v: &Value) -> String {
     match v {
         Value::Null => "None".into(),

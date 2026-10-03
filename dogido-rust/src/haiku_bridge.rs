@@ -1,4 +1,7 @@
-//! 辞書tokenのIPC。Rustが準備・生成・検査・再試行とhelper寿命を所有する。
+//! 川柳生成の接続と、発句・workshop・戦闘分類・TTSが共有するPython worker通信。
+//! Helperは子プロセスの上限付きJSON通信・取消・回収に加え、Rust内の読み整形も持つ。
+//! prepare/transformはRustで処理し、辞書が必要な場合だけtokenをworkerから受け取る。
+//! Route/LiveBackend/runは川柳生成側の責務で、workerの通信・寿命管理とは分担する。
 use crate::{
     haiku::{
         self, Backend, GroundedHaikuResult, Input, LineForm, StructuredRequest, TransformRequest,
@@ -96,8 +99,8 @@ impl Helper {
         result
     }
 
-    /// A reading request never reaches the legacy Python formatter. The only
-    /// optional exchange is tokens from this already-owned helper's dictionary.
+    /// 読みの判定・整形はRust。Pythonへ送るのは必要時のtts_tokens要求だけ。
+    /// 所有中workerの辞書を共有し、別workerの生成や旧Pythonの整形処理は行わない。
     async fn reading(&mut self, frame: &Value, timeout: Duration) -> Result<Value> {
         use crate::tts_reading::{self, Step, tokens};
         let deadline = tokio::time::Instant::now() + timeout;

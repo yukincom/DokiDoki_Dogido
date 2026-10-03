@@ -1,5 +1,7 @@
-//! Read-only extraction and local-edit construction. Reading is an explicit
-//! dependency; mutation, acceptance, CAS, and persistence remain runtime-owned.
+//! 発話から行・置換語を抽出し、未採用の編集案と検査結果を構成する。
+//! 入出力のValueはworkshop runtimeとの結果契約。Engine自身は句・pending・記憶を変更しない。
+//! workshop_edit::Pendingが正本への差分とCASを検証し、dialogue/workshop_editsが採用・保存する。
+//! 辞書の読みは明示的な依存であり、Pythonへ編集判断を渡さない。
 mod edits;
 pub mod materials;
 mod parse;

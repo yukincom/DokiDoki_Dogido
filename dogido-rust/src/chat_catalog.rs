@@ -77,8 +77,9 @@ pub fn fold_kana(text: &str) -> String {
     crate::compat::fold_kana(text)
 }
 pub(crate) use crate::compat::json_truthy as truth;
-// Catalogue fields are strings in the shipped schema. Scalar coercion also
-// preserves the canonical legacy string-entry format and scalar aliases.
+// 検索aliasの文字列化。単体null/boolに加え、配列・objectの入れ子もPython repr風にする。
+// 例: [true, null] → [True, None]。一般JSON整形へ置き換えると検索語が変わる。
+// 非文字列aliasの境界は移植時fixtureとtests/chat_catalog.rsで保持する。
 pub(crate) fn text(v: &Value) -> String {
     match v {
         Value::Null => "None".into(),

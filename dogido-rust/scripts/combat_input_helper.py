@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""OS SDKだけを保持するworker。chat生成・状態・発声・保存はRust所有。"""
+"""端末SDKの接続・応答外形検査・provider切替を担うworker。"""
+# chatが必要ならneeds_chatをRustへ返す。行為根拠の採否・状態・発声・保存はRust所有。
+# payloadの余分なキーを落とす前にrouterが外形を検査するため、検査だけを除去しない。
 import json
 import logging
 import sys

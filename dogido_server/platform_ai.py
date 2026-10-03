@@ -504,6 +504,8 @@ class PlatformStructuredAIRouter:
             try:
                 payload = provider.generate(request)
                 if isinstance(payload, dict):
+                    # 外形不正もprovider失敗として下のcooldown・次provider/chatへ進める。
+                    # この検査だけを除くと、Rustに届く応答だけでなくfallback順序も変わる。
                     validate_payload(request, payload)
                     result = dict(payload)
                     result[STRUCTURED_STATUS_KEY] = "accepted"

@@ -11,6 +11,7 @@ static ASSETS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("prompts.json")).expect("checked planner assets")
 });
 
+// JSONのカンマ・コロン直後に空白を置く共有表記。Python実行への依存はない。
 struct PythonSpaces;
 impl Formatter for PythonSpaces {
     fn begin_array_value<W: ?Sized + io::Write>(
@@ -42,6 +43,9 @@ impl Formatter for PythonSpaces {
         CompactFormatter.write_f64(writer, value)
     }
 }
+/// planner以外の会話・川柳・国語・workshopも使う空白付きJSON。
+/// null/boolはJSON表記を維持する。返り値は一部のサイズ上限検査にも使うため、
+/// 空白を削る変更は単なる改名ではなくprompt・境界値の変更になる。
 pub(crate) fn python_json(value: &Value) -> String {
     let mut output = Vec::new();
     value

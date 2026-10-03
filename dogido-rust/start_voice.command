@@ -1,4 +1,6 @@
 #!/bin/zsh
+# 既存の専用接続先5056と記憶保存先を維持する入口。接続先・保存先を標準値へ自動変更しない。
+# 通常起動はscripts/start_dogido.commandと同じlaunch_dialogue.pyを設定値で使う。
 set -eu
 SCRIPT_DIR="${0:A:h}"
 PROJECT_ROOT="${SCRIPT_DIR:h}"

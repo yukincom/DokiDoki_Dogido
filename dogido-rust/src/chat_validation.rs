@@ -1,6 +1,7 @@
 //! Candidate acceptance and at most one wording repair for ordinary player_chat.
-//! Python retains observation projection and its compatible narration pass;
-//! Rust also computes the exact expected final text, checked by the bridge.
+//! Rustの会話入力から候補の検査・一度だけの言い直し・最終文を確定する。
+//! 本文はdialogueへ返し、発話IDの実再生完了による履歴確定はdialogueが所有する。
+//! reaction_leaf::sanitizeの共通整形を使うが、会話固有のgroundingはguardで検査する。
 mod guard;
 use crate::{chat_prompt, reaction_leaf::sanitize, types::GenerationRequest};
 use anyhow::{Context, Result, ensure};

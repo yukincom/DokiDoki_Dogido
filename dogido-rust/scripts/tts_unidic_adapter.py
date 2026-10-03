@@ -52,6 +52,8 @@ class Unidic:
             return 'parse_error', []
 
 
+# 単独TTSはschema_version/request_id/textだけを送る。共有workerのtts_tokensは
+# tts_shared_tokens.handleがopを外してここへ渡し、辞書取得と応答契約を一か所で検査する。
 def handle(frame, reader):
     if (not isinstance(frame, dict)
         or set(frame) != {'schema_version', 'request_id', 'text'}

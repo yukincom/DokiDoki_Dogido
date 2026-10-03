@@ -18,6 +18,9 @@ class ChatFallback(Protocol):
     def generate_structured_json(self, request: CombatInputRequest) -> dict[str, Any]: ...
 
 
+# SDK応答の外形と0..1のconfidenceだけを検査し、不正ならprovider切替へ返す。
+# RustのAnalysis::parseが0.75以上・原文中evidenceを検査し、別の行為ガードと現在状態で
+# 再開・終了の可否を決める。Pythonの外形合格は行為の採用を意味しない。
 def validate_payload(request, payload):
     if request.kind != "haiku_workshop_combat_input":
         raise ValueError("unsupported platform AI task")

@@ -1,5 +1,6 @@
 //! 通常会話の限定planner。入力投影・catalog検索は呼出側、採否はこのコードが所有する。
-//! HTTPへ公開せず、まず既存Pythonが作る同一文脈で比較する。
+//! dialogueがRustの現在観測・実再生済み履歴から入力を作る。plannerはread actionを一件だけ選び、
+//! 発話・操作・状態変更・保存はしない。旧Pythonとの比較は保存済みfixtureの来歴。
 mod grounding;
 pub mod handoff;
 pub mod prepare;
