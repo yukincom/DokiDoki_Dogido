@@ -1,0 +1,8 @@
+# Rust本体の設定・辞書・AEC接続補助。MLX/Qwen はこのMacへ入れない。
+pydantic==2.13.4
+pydantic-settings==2.14.1
+httpx==0.28.1
+fugashi==1.5.2
+unidic-lite==1.0.8
+numpy==2.2.6
+pywebrtc-audio==0.2.0
