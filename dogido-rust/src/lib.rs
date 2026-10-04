@@ -1,3 +1,10 @@
+//! ドギド本体の判断・会話・外部接続をまとめるライブラリ。
+//!
+//! HTTPの入口はserver、接続ごとの状態変更と生成・取消の配線はdialogueが担う。
+//! combat/environmentは観測への反応、haiku/workshopは句の生成・共同編集を扱う。
+//! LLMの提案は各ドメインで検証してから使い、採否・状態変更・保存はRustが決める。
+//! Python補助の通信と寿命管理はpython_worker、録音・音声認識の制御はvoiceを参照する。
+
 pub mod address;
 pub mod assist;
 pub mod catalog_editor;

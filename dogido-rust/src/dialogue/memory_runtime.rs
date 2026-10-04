@@ -1,4 +1,5 @@
-//! Memory I/O is serialized with turns, outside the real-time state mutex.
+//! 句の想起・指摘・soft lessonを、現在の会話から記憶の読込・保存へ結ぶ。
+//! turnと保存処理の順序を揃え、ディスクI/Oの待機中はリアルタイム判断の状態lockを保持しない。
 use super::*;
 use crate::{haiku_memory::RecallQuery, haiku_record::MemoryStore, workshop_edit};
 use anyhow::{Context, ensure};
@@ -12,6 +13,9 @@ impl Dialogue {
         tokio::task::spawn_blocking(move || crate::memory_api::read(&root, view)).await?
     }
 
+    /// 記憶処理を始める入力が、現在のsessionとworkshopにまだ属するか照合する。
+    /// 生成後の取消・戦闘中断・句の更新を保存前に確認する。この検査自体はI/Oを行わない。
+    /// 書込みを開始した後の完了待ちは、各保存処理が担当する。
     pub(super) fn memory_live(
         &self,
         sid: &str,

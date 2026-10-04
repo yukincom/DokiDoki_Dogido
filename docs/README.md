@@ -9,6 +9,7 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
+| [実機チェック](../dogido-rust/manual-dialogue-check.md) | 起動条件、最初の一巡、個別の確認、結果の記録 |
 | 本ページ | 仕様・設計ドキュメントの索引 |
 
 ---
@@ -17,13 +18,13 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 
 | 役割 | 意味 | 例 |
 |---|---|---|
-| **正本** | いまの仕様・方針の基準 | `event-schema` · `state-machine` · `adapter-api` · `dialogue-design` |
+| **現行仕様** | いまの仕様・方針の基準 | `event-schema` · `state-machine` · `adapter-api` · `dialogue-design` |
 | **完成度ハブ** | 「何を足すか」の優先軸 | `companion-maturity` |
 | **計画・方針** | 設計・PR 経緯・技術判断。**状態は各文書のヘッダ／表を正**（本索引では断定しない） | workshop · casual · voice · `rag` · `technical-risks` |
-| **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · `debug-checklist` · 国語知識・詩形データベース · Minecraft Java 公式技術データベース |
-| **バグ / 観測メモ** | 切り分け。正本を置き換えない | `bug-player-chat-observation-gaps` |
-| **終了・履歴** | 過去の実装・試験記録。現行の起動・編集手順には使わない | 旧Python再配置・py_trees・独立国語試験 |
-| **調査 (`research/`)** | 追加の作業メモ。**仕様の正本ではない**が、捨てた資料ではない | `research/haiku` · TTS 地図 · `research/mob_list` |
+| **参照メモ** | 実装の横で使う一覧・調査メモ（現役） | `mob_list` · 国語知識・詩形データベース · Minecraft Java 公式技術データベース |
+| **バグ / 観測メモ** | 切り分け。現行仕様を置き換えない | `bug-player-chat-observation-gaps` |
+| **終了・履歴** | 過去の実装・試験記録。現行の起動・編集手順には使わない | 旧Python再配置・py_trees・独立国語試験・`debug-checklist` |
+| **調査 (`research/`)** | 追加の作業メモ。**現行仕様ではない**が、捨てた資料ではない | `research/haiku` · TTS 地図 · `research/mob_list` |
 
 **状態（済 / 未 / 一部）は各ドキュメント本体と GitHub issue を正とする。**  
 索引で横断の「済」表を置かない。
@@ -75,10 +76,10 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | 2 | [adapter-api.md](adapter-api.md) | サーバー受信 API |
 | 3 | [sample-event-log-cases.md](sample-event-log-cases.md) | イベントログの代表ケース |
 | 4 | [Rust本体の案内](../dogido-rust/README.md) | 現行のビルド・起動・補助依存 |
-| 5 | [debug-checklist.md](debug-checklist.md) | デバッグ手順 |
+| 5 | [debug-checklist.md](debug-checklist.md) | 旧Python版のデバッグ履歴。現在の実機結果とは区別 |
 | 6 | [shared-llm-profile.md](shared-llm-profile.md) | 別に起動した共有 MLX endpoint と従来 standalone の明示切替 |
 | 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
-| 7a | [実機チェック](../dogido-rust/manual-dialogue-check.md) | Rust本体の会話・音声・Minecraft確認 |
+| 7a | [実機チェック](../dogido-rust/manual-dialogue-check.md) | Rust本体の一巡・個別確認・結果記録 |
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 

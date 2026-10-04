@@ -164,6 +164,12 @@ final class DogidoEventClient {
         }
     }
 
+    /**
+     * 観測の写しへ未ACKの操作結果を付け、非同期で本体へ送る。
+     * 送信時のsession・worldEpochが変わった応答は捨て、退出前の命令を新接続へ持ち込まない。
+     * unknown_sessionでは再登録するが、古い観測は再送しない。受理応答のACKで操作結果を外し、
+     * 新規の型付き命令だけをhandlerへ渡す。期限・現在slot・期待itemの検査と実行はadapter側が担う。
+     */
     CompletableFuture<Void> postEvent(JsonObject payload) {
         if (!this.config.enabled) {
             return CompletableFuture.completedFuture(null);

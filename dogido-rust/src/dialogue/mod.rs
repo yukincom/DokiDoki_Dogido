@@ -1,4 +1,7 @@
 //! 通常会話、冒険中の判断、限定操作と自動川柳の配送。
+//! Sessionが観測・短期履歴・workshop・発声の状態を持ち、各runtimeが処理結果を反映する。
+//! dataのmutexは状態の照合と更新、serialは通常turnの生成・保存・発声の直列化に使う。
+//! 待機中の取消と、戻った結果を現在の状態へ反映できるかの確認は分けて扱う。
 mod address_runtime;
 mod web_adapter;
 mod web_runtime;
@@ -1254,6 +1257,9 @@ impl Dialogue {
         }
         d.revision += 1;
     }
+    /// 処理開始時のepoch（世代）を持つturnへ配送結果を反映する。
+    /// 同じturn IDが再開されても、新しい世代の表示行を古い処理から上書きしない。
+    /// 現在のsession世代でない結果は取消とし、会話・workshopの状態へ適用しない。
     fn update(
         &self,
         sid: &str,
@@ -1534,6 +1540,9 @@ impl Dialogue {
                 if status == PlaybackStatus::Completed {
                     web_runtime::completed(s, turn, &player_text, result);
                 }
+                // 生成や再生開始だけでは「話した履歴」にしない。音声完了、または
+                // テキスト相談室での表示確認を受けてから確定する。ここで成立した
+                // 通常雑談の対だけを、後の川柳の会話材料へ渡す。
                 if (status == PlaybackStatus::Completed || text_displayed)
                     && !workshop_reply
                     && result["memory_action"].is_null()

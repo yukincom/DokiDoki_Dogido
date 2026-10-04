@@ -22,6 +22,9 @@ use tokio::{
 
 const FRAME_LIMIT: u64 = 1_000_000;
 
+/// 一つのPython子プロセスとの要求・応答を直列に扱う所有ハンドル。
+/// 改行区切りJSONの入出力サイズと待ち時間に上限を設ける。
+/// 通信失敗後は遅延応答を次の要求へ混ぜないよう再利用せず、呼出元がfinishをawaitして回収する。
 pub struct Helper {
     child: Child,
     stdin: Option<ChildStdin>,

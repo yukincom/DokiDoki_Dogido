@@ -109,6 +109,9 @@ impl Settings {
     }
 }
 
+/// 録音と音声認識の速度差を吸収する、上限つきの発話待ち列。
+/// 満杯時は最古の未処理区間を外し、workerも認識前に経過時間を確認して古い発話を捨てる。
+/// 遅れて届いた昔の発話を、現在の会話への入力として処理し続けないための制御。
 struct Pending {
     items: Mutex<VecDeque<Segment>>,
     notify: Notify,

@@ -25,6 +25,9 @@ pub struct LineEdit {
     pub atom_ids: Option<Vec<String>>,
 }
 
+/// 元句baseと置換後の三行linesを一組で保持する編集差分。
+/// 作成だけでは採用・保存済みにならず、適用時にもbaseと現在句の一致を検証する。
+/// 表記・行ID・確定読み・出典を同じ行の記録として扱い、未採用案と本人編集の双方で使う。
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Pending {

@@ -58,6 +58,13 @@ def voice_settings(settings, folder):
 
 
 def main():
+    """指定フォルダの設定を、準備済みRust本体または音声入力へ渡す。
+
+    設定と相対保存先はsettings-dir、実行ファイル・補助資料はこのスクリプトの
+    ROOTを基準に解決する。既存の設定ファイル自体は書き換えない。
+    本体と--voiceは別プロセスで、音声入力は同じ接続先の本体を確認してから動く。
+    起動時はexecでRustへ置き換え、Pythonを監視用の親として残さない。
+    """
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--settings-dir", type=Path, required=True)
     p.add_argument("--voice", action="store_true")

@@ -71,6 +71,9 @@ pub(super) fn finish_notice(s: &mut Session, id: &str, version: u64, status: Not
 }
 
 impl Dialogue {
+    /// 復帰できる観測と発声の空きを待ち、保持した三行を再掲する。
+    /// 句を再開して案内を配送し、案内完了後にfinish_noticeが継続確認へ進める。
+    /// 未採用案があればその案を再掲するが、再掲だけで採用・保存は行わない。
     pub(super) fn start_workshop_recovery(
         self: &Arc<Self>,
         d: &mut Data,

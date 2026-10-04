@@ -1,10 +1,14 @@
-//! Commit validated player edits before speech. Persistence is owned by the turn
-//! job and awaited even if playback is cancelled; no disk I/O holds the state lock.
+//! 検証済みの句編集を保存し、返答の再生前に現在句と表示へ反映する。
+//! 状態lockで元句と版を照合した後、lockを離して保存する。開始済みの保存は音声取消でも完了を待つ。
 use super::*;
 use crate::{haiku_record::MemoryStore, workshop_edit::Pending};
 use anyhow::{Context, ensure};
 
 impl Dialogue {
+    /// 編集結果を、現在のworkshop ID・版・元句へ再照合して適用する（CAS）。
+    /// 未採用案がない本人の編集は保存へ進む。生成案や既存の未採用案への編集は案として保持する。
+    /// 音声取消だけで開始済みの保存を取り消さない。保存失敗時は現在句を更新せず、
+    /// 同じworkshop ID・版・既存の案が保たれていれば、検査済み案を再試行用に保持する。
     pub(super) async fn apply_workshop_edit(
         &self,
         sid: &str,

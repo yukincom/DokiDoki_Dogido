@@ -1,3 +1,5 @@
+//! 検査済みの返答を文ごとに音声合成し、一文先を準備しながら順番に再生する。
+//! 合成・再生プロセスと取消を扱い、履歴や句の状態は呼出側が配送結果から確定する。
 use super::{DialogueConfig, bridge::cancelled, sentences::sentences};
 use anyhow::{Result, ensure};
 use serde_json::Value;
@@ -36,6 +38,8 @@ impl Audio {
             cache: Mutex::new(VecDeque::new()),
         })
     }
+    /// 最初の再生プロセス起動時に開始通知を一度だけ返し、全文の正常終了でOkを返す。
+    /// 途中の失敗・取消は完了扱いにしない。これはプロセスの結果であり、スピーカーの聞こえ方は実機確認する。
     pub async fn speak(
         &self,
         config: &DialogueConfig,

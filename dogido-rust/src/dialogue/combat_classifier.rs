@@ -56,6 +56,9 @@ pub(super) struct Classifier {
     helper: tokio::sync::Mutex<Option<Helper>>,
 }
 impl Classifier {
+    /// 中断中の発話を五分類へ絞り、信頼度・原文の根拠・行為表現を検証する。
+    /// 戻すのは候補だけで、実際の再開・終了はworkshop_combat_inputが現在の句と戦況へ再照合する。
+    /// OS側が利用できなければchatへ進み、有効な分類が得られない場合に限り閉じた規則を使う。
     pub async fn run(
         &self,
         c: &DialogueConfig,

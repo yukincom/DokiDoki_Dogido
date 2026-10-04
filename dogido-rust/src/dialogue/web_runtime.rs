@@ -300,7 +300,9 @@ impl Dialogue {
         d.revision += 1;
         true
     }
-    /// completed/failed/cancelledの実際のplayer結果だけ。jobの登録とpermit消費を同じlock内で行う。
+    /// 出発案内の発話IDと現在epochを照合し、再生完了で得た検索許可を一度だけ消費する。
+    /// 許可の消費とjob登録を同じlock内で行い、完了通知が重複しても検索を二重起動しない。
+    /// 検索結果はsearch_webで取消・epoch・期限・検索IDを再確認してから反映する。
     pub(super) fn web_playback(
         self: &Arc<Self>,
         sid: &str,

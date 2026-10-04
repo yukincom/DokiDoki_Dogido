@@ -1,4 +1,6 @@
-//! 受理後の入力管理。接続専用HTTP段階では消費せず、会話workerへの接続時に使う。
+//! 入力元の共通型と、接続ごとのイベント重複・順序検査。
+//! SequenceLedgerはDialogueが受理済みイベントを再処理しないために使う。
+//! この層では入力の意味解釈、会話状態の変更、発話・保存は行わない。
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 
@@ -24,7 +26,9 @@ pub enum Admission {
 }
 
 impl SequenceLedger {
-    /// SessionInfoの検査順を維持する。未実装/失敗で拒否する前に呼ばない。
+    /// 冪等キー、既受信sequence、古いsequenceの順に照合し、台帳を更新する。
+    /// 読み取り検査ではないため、停止中・不明sessionなどの受付拒否は呼出前に済ませる。
+    /// キーはsequenceより先に記録される。拒否されたsequenceに付いた新規キーも消費する。
     pub fn admit(&mut self, sequence: Option<i64>, key: Option<&str>) -> Admission {
         if let Some(key) = key.filter(|key| !key.is_empty()) {
             if self.key_set.contains(key) {

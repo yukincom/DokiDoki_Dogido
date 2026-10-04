@@ -1,4 +1,6 @@
-//! Rust本体のHTTP APIと表示画面。接続試験モードは会話・音声・保存を開始しない。
+//! Rust本体のHTTP APIと表示画面。接続登録・観測・入力をruntimeへ渡す入口。
+//! 会話状態と生成・保存はDialogueが所有し、GETは接続情報や状態の読み取り用投影を返す。
+//! Dialogueを接続しない接続試験モードでは、会話・音声・保存を開始しない。
 mod catalog;
 pub mod contracts;
 mod runtime;
@@ -94,6 +96,10 @@ impl AppState {
     }
 }
 
+/// HTTP受付と接続管理workerの寿命を所有する。
+/// 接続登録・ゲームイベント・player入力はworkerで順序を揃える。読み訂正や割り込みは別の専用経路。
+/// 正常終了ではshutdownをawaitしてworkerとDialogueの後始末を待つ。
+/// Dropによる取消・abortは取りこぼし対策であり、正常終了の代わりにはしない。
 pub struct Application {
     state: AppState,
     router: Router,

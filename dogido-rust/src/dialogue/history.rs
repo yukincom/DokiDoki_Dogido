@@ -1,3 +1,6 @@
+//! 通常会話の短期履歴と、戦闘前の会話の一時退避を管理する。
+//! 永続保存や再生判定は行わず、assistantを加える時機は呼出側が配送結果から決める。
+//! 沈黙はeventとして残し、発話済みのassistantや川柳用の会話対には数えない。
 use crate::planner::repair::{self, Repair};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -88,7 +91,7 @@ impl History {
             }
         }
     }
-    /// 実再生完了に対応するuser/assistantの対だけ。未回答・取消入力は除く。
+    /// 呼出側が配送を確定したuser/assistantの対を返す。未回答・取消入力や沈黙は対にしない。
     pub fn completed_pairs(&self) -> Vec<Value> {
         let mut pairs: Vec<Value> =
             self.rows

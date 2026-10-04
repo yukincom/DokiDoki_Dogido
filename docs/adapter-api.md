@@ -724,3 +724,37 @@ Minecraft画面とは別に、ブラウザで `GET /dogido` を開くと、ド�
 - キャラクター本体は欠損／失敗／3秒以上の未受信でも隠さず、通常顔＋瞬きへ戻る。ローカル危険・死亡・ワールド変更でも考え顔を解除し、古いrevision／危険観測より前のsnapshotで復帰しない。音声とは別の約400msポーリング表示なので、画面切替と実音声開始のフレーム単位の同期は保証しない。
 - ローカルの敵／被弾／死亡観測でも即遮蔽し、`observed_sequence`が新しい危険観測まで追いつく前の応答では復帰させない。`provisional_resume`は既存の明示・低脅威再開がコードで成立したときだけtrue。再接近・被弾・敵変更はその許可を再度遮蔽する。匂い単独では遮蔽しない。
 - 句の出現／通常終了は各1秒、危険は即時。編集中の対象切替はフェードせず、一度だけ短い操作音を出す。初回接続・同じsnapshotの再受信では音を出さない。TTSの実再生完了との厳密な同期ではない。
+
+## 26. あんちょこと読み訂正
+
+Rust本体の `/catalog` は、カタログの説明・読みを表示し、フォームから読みを訂正する画面。
+通常の会話・音声・旧 `読み:` 入力からは登録しない。現在句や未採用案を編集せず、モデル生成・音声再生も開始しない。
+以下のAPIは既存Bearer認証を使用し、ゲームsessionの指定は不要。
+
+| API | 内容 |
+|---|---|
+| `GET /api/v1/catalog` | `enabled`（記憶保存の有効・無効）、`entries`（カタログ一覧）、`corrections`（現在有効な訂正）を返す |
+| `PUT /api/v1/catalog/readings` | 明示した読みを検証・保存し、`saved: true` と保存した `correction` を返す |
+| `DELETE /api/v1/catalog/readings` | 表記と現在の登録IDを照合して取消を追記し、`removed: true` を返す |
+
+PUTの新規登録例:
+
+```json
+{
+  "surface": "草地",
+  "reading": "くさち",
+  "entry_id": "biome:meadow",
+  "wrong_reading": "そうち",
+  "expected_id": null
+}
+```
+
+- `surface`: 前後空白・制御文字のない1〜80文字。`reading`: 1〜80文字のひらがな・長音符。
+- `entry_id`: 任意。指定した場合はカタログIDと表記の一致を検査する。
+- `wrong_reading`: 任意。指定する場合は正しい読みとは異なる1〜80文字のひらがな・長音符。
+- `expected_id`: 新規登録ではnull。既存訂正の編集では、GETで読んだ現在の訂正IDを渡す。
+- DELETEは `surface` と `expected_id` を渡す。別の更新が先行したときは409 `reading_changed` とし、上書きしない。
+
+表記・読み・カタログ照合の不正は422、記憶保存が無効なら409 `memory_disabled`、停止中は503 `server_stopping`、保存処理の失敗は500 `reading_storage_failed`。成功応答だけを保存成功として扱う。
+
+保存先は設定した記憶ルートの `long_term/catalog_corrections.jsonl`。元のカタログを変更せず、登録・取消を追記し、次の処理から有効な訂正を読み込む。実機での確認は [あんちょこの手順](../dogido-rust/manual-dialogue-check.md#あんちょこでの読み訂正) を参照。

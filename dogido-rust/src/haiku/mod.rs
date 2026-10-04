@@ -1,5 +1,6 @@
-//! Automatic source-grounded haiku. State, reservations, validation and bounded
-//! regeneration belong to Rust. Backend owns only generation and lexical transforms.
+//! 観測由来の材料から三行の川柳を生成し、音数・出典・重複を検査する。
+//! 不合格行の再生成回数と材料の使い分けはRustが管理し、Backendへ生成と読み整形を依頼する。
+//! ここで返すのは採否と行ごとの根拠。発句時刻、現在句の更新、保存、音声配送はdialogue側が担当する。
 pub mod companions;
 mod generation;
 pub mod lexical;
@@ -13,6 +14,7 @@ use serde_json::{Map, Value};
 use std::future::Future;
 
 pub const PROMPT_VARIANT: &str = "source_atoms_slots_v2_kana_normalize";
+/// 一つの材料とその出典。似た文面でも、同じ事実を複数行で使い回したかをIDと参照先で検査する。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAtom {
     pub atom_id: String,
@@ -55,6 +57,7 @@ pub struct LineForm {
     pub text: String,
     pub signature: String,
 }
+/// 生成器から外部処理を呼ぶ境界。返答は未検査の候補であり、このtraitに採用・保存を委ねない。
 pub trait Backend {
     fn generate(
         &mut self,

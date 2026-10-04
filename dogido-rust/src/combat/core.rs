@@ -13,6 +13,7 @@ use crate::{
 };
 use serde::Serialize;
 
+/// 一回の判断で選んだ状態と配送要求。actionsは再生予定であり、実際に聞こえた証拠ではない。
 #[derive(Clone, Debug, Serialize)]
 pub struct Decision {
     pub mode: Mode,
@@ -22,6 +23,7 @@ pub struct Decision {
     pub dimension_changed: bool,
     pub input_handled: bool,
 }
+/// 一接続の脅威・被弾・警告間隔を保持する。完全観測と部分通知を分け、情報欠落を安全と誤認しない。
 pub struct Engine {
     pub mode: Mode,
     pub shut_up_count: u32,
@@ -112,6 +114,8 @@ impl Engine {
             now,
         )
     }
+    /// 受信済みの観測と呼び手の時計から、優先警告・会話可否・音声停止を決める。
+    /// completeは全体観測かを示す。部分的な音・死亡通知だけで、見えていた敵を消した扱いにしない。
     #[allow(clippy::too_many_arguments)]
     pub fn observe(
         &mut self,
@@ -332,6 +336,8 @@ impl Engine {
         }
         Some(d)
     }
+    /// 新しい完全観測が届くまで、部分通知へ直近の視認・不足文脈を補う。
+    /// 古い体力や「直前に聞こえた音」の経過時間は持ち越さず、10秒を越えた全体観測も使わない。
     fn context(&self, event: &GameEvent, now: u64, complete: bool) -> GameEvent {
         if complete
             || self

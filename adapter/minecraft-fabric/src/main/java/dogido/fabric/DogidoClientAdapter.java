@@ -107,6 +107,12 @@ import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 
+/**
+ * Minecraft側の観測を、本体へ送るイベントへまとめるクライアント入口。
+ * tick・音packet・実再生音・ブロック破壊・取得できた死亡通知を集め、根拠と鮮度を保って送る。
+ * 発話内容と句の相談・保存はRust本体が決める。ゲーム操作は受信した型付きhotbar命令を
+ * 専用経路で検査して実行し、観測を組み立てる処理から自発的に操作しない。
+ */
 public final class DogidoClientAdapter implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("dogido-client-adapter");
     // 音 packet をクライアント側で保持する長さ。
@@ -425,6 +431,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         );
     }
 
+    /**
+     * このtickの観測を集め、周期snapshotと変化イベントを送る。
+     * 接続・次元・大きな移動に伴う古い観測の破棄を先に行い、実死亡・爆発の通知を
+     * 反映してから視覚・聴覚・匂いを組み立てる。HUDの危険表示も同じ観測で更新し、
+     * 本体から返る古い表示結果が新しい危険観測を上書きしないようにする。
+     */
     private void onClientTick(MinecraftClient client) {
         if (!this.config.enabled) {
             this.characterHud.reset();

@@ -17,7 +17,9 @@ pub(super) struct Assessment {
     pub(super) reason: String,
 }
 
-/// Pure bounded orchestration: no prompt/lexicon I/O, model calls or persistence here.
+/// 三行を生成し、不合格行を含む生成グループを上限付きで作り直す。
+/// モデル通信と辞書処理はBackend経由で実行し、採用済み行の出典予約と候補ごとの不合格理由を保持する。
+/// 結果を返すところまでが責務で、句の保存や掛け軸の更新は行わない。
 pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<GroundedHaikuResult> {
     let groups: &[&[usize]] = match input.generation_strategy.as_str() {
         "whole_poem" => &[&[0, 1, 2]],
