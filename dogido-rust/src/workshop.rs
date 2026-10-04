@@ -162,6 +162,9 @@ pub fn fallback(observation: Option<&Value>) -> String {
 }
 
 pub fn fallback_for(observation: Option<&Value>, view: &Value, lines: &[HaikuLine]) -> String {
+    if observation.is_none() && view["pending"].is_object() {
+        return "未採用の案があるで。採用するか、元の句に戻すか教えてな。".into();
+    }
     let reply = fallback(observation);
     let Some(target) = crate::workshop_target::Target::from_view(view, lines) else {
         return reply;

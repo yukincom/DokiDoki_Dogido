@@ -70,14 +70,26 @@ impl Classifier {
                 // Chat classification needs no OS SDK or Python preparation.
                 json!({"provider":"chat", "needs_chat":true, "payload":null})
             } else {
-                Self::helper(&mut slot, c)?
-                    .exchange_with_timeout(
+                let response = async {
+                    Self::helper(&mut slot, c)?
+                        .exchange_with_timeout(
                         json!({"op":"classify", "text":text,
                 "verse":input["verse"], "settings":c.haiku.platform_ai,
                 "messages":crate::workshop_input_guard::combat_messages(input["verse"].as_str().unwrap_or(""), text)}),
                         Duration::from_secs_f64(c.haiku.platform_ai.timeout_sec * 2.0 + 5.0),
                     )
-                    .await?
+                        .await
+                }.await;
+                match response {
+                    Ok(response) => response,
+                    Err(error) => {
+                        if let Some(helper) = slot.take() {
+                            let _ = helper.finish(true).await;
+                        }
+                        tracing::warn!(event="combat_platform_unavailable", %error);
+                        json!({"provider":"chat", "needs_chat":true, "payload":null})
+                    }
+                }
             };
             let mut provider = response["provider"].clone();
             let mut payload = response["payload"].clone();
@@ -132,17 +144,30 @@ impl Classifier {
                 analysis = Analysis::default();
             }
             if analysis.action == Action::Uncertain {
-                // The remaining fallback resolves spoken verse fragments through the dictionary.
-                let fallback = crate::workshop_editing::Engine::default()
+                if crate::workshop::fixed_action(text) == Some("close_workshop")
+                    && !crate::workshop::fixed_praise(text)
+                    && crate::workshop_input_guard::combat_safe("close_workshop", text, text)
+                {
+                    // 全AI不成立時の明示終了は、任意の辞書・SDK補助に依存させない。
+                    analysis = Analysis {
+                        action: Action::CloseWorkshop,
+                        confidence: 1.0,
+                        evidence: text.into(),
+                    }
+                    .validate(text);
+                } else {
+                    // The remaining fallback resolves spoken verse fragments through the dictionary.
+                    let fallback = crate::workshop_editing::Engine::default()
                     .run(
                         Self::helper(&mut slot, c)?,
                         &json!({"op":"combat_fallback","text":text,"workshop":input["workshop"]}),
                     )
                     .await?;
-                let crate::workshop_editing::Output::CombatFallback(fallback) = fallback else {
-                    anyhow::bail!("unexpected combat fallback output");
-                };
-                analysis = fallback.validate(text);
+                    let crate::workshop_editing::Output::CombatFallback(fallback) = fallback else {
+                        anyhow::bail!("unexpected combat fallback output");
+                    };
+                    analysis = fallback.validate(text);
+                }
                 if analysis.action != Action::Uncertain {
                     provider = "rule_fallback".into();
                 }

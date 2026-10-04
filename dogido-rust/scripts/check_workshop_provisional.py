@@ -117,6 +117,8 @@ def main():
         with fixture(combat_settings=SETTINGS,low_threat_resume_delay_ms=1000) as (base,p,log,control,seen,gate,drafting,checks,send,hud,rows,stored,folder):
             entered=threading.Event();release=threading.Event()
             def slow(text):
+                if text == "終了":
+                    return intent(text,"close_workshop")
                 entered.set();release.wait(timeout=10);return intent(text)
             calls=classifier(control,slow)
             try:
@@ -124,12 +126,17 @@ def main():
                 t=submit(base,sid,"句の続きを話そう");assert entered.wait(timeout=5)
                 duplicate=submit(base,sid,"句の続きを話そう");assert duplicate==t and len(calls)==1
                 if change=="enemy":send(sid,visual_threats=[{**MOB,"entity_id":"z2"}],combat={"combat_active_hint":True})
-                elif change=="new_input":request(base,"/api/v1/player-input",{"session_id":sid,"text":"終了","source":"voice"})
+                elif change=="new_input":
+                    closing=submit(base,sid,"終了")
                 elif change=="stale":threatening(send,sid,observed_at=(datetime.now(timezone.utc)-timedelta(seconds=20)).isoformat())
                 else:request(base,"/api/v1/rust-dialogue/interrupt",{"session_id":sid})
                 release.set()
                 r=wait_for(lambda:row(base,t,{"quiet","cancelled"}))
                 assert r["playback_status"]=="cancelled" or r["combat_input_outcome"]=="threat_not_stable",r
+                if change=="new_input":
+                    closed=wait_for(lambda:row(base,closing,{"quiet"}))
+                    assert closed["combat_input_outcome"]=="close_checked" and hud(sid)["state"]=="closed",closed
+                    assert len(calls)==2
                 assert not hud(sid)["provisional_resume"] and not revisions(folder,sid)
                 passed.append("late_classifier_discarded_after_"+change)
             finally:release.set()

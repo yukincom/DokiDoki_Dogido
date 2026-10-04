@@ -4,11 +4,12 @@ from datetime import datetime, timedelta, timezone
 import json
 
 from check_dialogue import register, request, row, snapshot, submit, wait_for
-from check_haiku_runtime import fixture
+from check_haiku_runtime import fixture, LINES
 from check_language_runtime import interpretation
 from check_workshop_combat import SETTINGS, MOB, end, enter, returned
-from check_workshop_runtime import ready, session, install
-from check_workshop_edits import finish, edit, adoption
+from check_workshop_runtime import ready, session, install, step
+from check_workshop_edits import finish, edit, adoption, revisions
+from check_workshop_revision import wire
 from check_workshop_provisional import classifier, intent, stable, done, threatening
 from check_workshop_combat import actions, drive
 
@@ -110,7 +111,7 @@ def main():
         passed.append("ambiguous_session_rejected_and_preview_uses_unknown_without_waiting")
 
     with fixture(combat_settings=SETTINGS) as f:
-        base, _, log, control, seen, _, _, _, send, hud, rows, stored, _ = f
+        base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
         sid = ready(base, send, rows)
         assert context(base) == {"prompt_mode":"haiku_workshop", "session_id":sid}
         before_revision = snapshot(base)["revision"]
@@ -119,6 +120,24 @@ def main():
         assert snapshot(base)["revision"] == before_revision
         install(control, lambda text, prompt, n: edit(text))
         finish(base, send, sid, "上五を『さくらいろ』にして")
+        assert hud(sid)["canonical_lines"] == ["さくらいろ", *LINES[1:]] and not hud(sid)["pending_lines"]
+        saved = revisions(folder, sid)
+        assert len(saved) == 1
+        before = hud(sid)
+        assert scream(base, sid)["reason"] == "situation_vocalization"
+        assert hud(sid)["canonical_lines"] == before["canonical_lines"] and not hud(sid)["pending_lines"]
+        assert revisions(folder, sid) == saved
+        passed.append("scream_preserves_already_saved_player_edit_without_creating_pending")
+
+    with fixture(combat_settings=SETTINGS) as f:
+        base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
+        sid = ready(base, send, rows)
+        wait_for(lambda: stored(sid))
+        wire(control, stored, sid)
+        proposed = finish(base, send, sid, "上五のさくらのはを別の表現に直して")
+        assert proposed["workshop_outcome"] == "revision_proposed"
+        assert hud(sid)["canonical_lines"] == LINES and hud(sid)["pending_lines"] == ["さくらいろ", *LINES[1:]]
+        assert not revisions(folder, sid)
         before = hud(sid)
         before_dialogue = session(base, sid)["workshop_history"]
         before_calls = len(calls(seen))
@@ -141,11 +160,14 @@ def main():
         returned(send, rows, sid)
         # 安全復帰の句再掲が完了すると相談を受け付ける状態に戻る。
         assert context(base)["prompt_mode"] == "haiku_workshop"
+        install(control, lambda text, prompt, n: {**step(text,"resume_workshop"),"purpose":"continue_discussion"})
         finish(base, send, sid, "うん")
         assert context(base)["prompt_mode"] == "haiku_workshop"
         install(control, lambda text, prompt, n: adoption(text, action="reject_pending"))
         rejected = finish(base, send, sid, "その案を却下して")
         assert rejected.get("workshop_outcome") == "pending_rejected", rejected
+        assert hud(sid)["canonical_lines"] == LINES and not hud(sid)["pending_lines"] and not revisions(folder, sid)
+        install(control, lambda text, prompt, n: step(text,"close_workshop"))
         finish(base, send, sid, "終了でいいよ")
         assert context(base)["prompt_mode"] == "normal"
         passed.append("paused_and_closed_workshop_use_normal_stt_and_resume_restores_context")

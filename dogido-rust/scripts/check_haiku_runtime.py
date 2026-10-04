@@ -167,8 +167,13 @@ def main():
         wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "failed" for r in rows(sid)))
         assert len(wait_for(lambda: stored(sid))) == 1 and hud(sid)["state"] == "open"
         assert snapshot(base)["sessions"][0]["history"] == []
+        from check_workshop_runtime import install, step
+        calls = install(control, lambda text, prompt, n: step(text,"close_workshop"))
+        original = stored(sid)
         got = request(base, "/api/v1/player-input", {"session_id": sid, "text": "終了", "source": "voice"})
-        assert got["accepted"] and hud(sid)["state"] == "closed", got
+        assert got["accepted"], got
+        wait_for(lambda: hud(sid)["state"] == "closed")
+        assert len(calls) == 1 and stored(sid) == original
         passed.append("completed_poem_survives_tts_failure_and_explicit_close")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):

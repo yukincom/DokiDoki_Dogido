@@ -120,46 +120,4 @@ impl Dialogue {
         );
         self.spawn_actions(d, jobs, sid, vec![speech], None);
     }
-
-    /// 戦闘中でも完全一致の終了依頼は受け付ける。警告音声は中断しない。
-    pub(super) fn close_paused_workshop(
-        self: &Arc<Self>,
-        d: &mut Data,
-        jobs: &mut Vec<tokio::task::JoinHandle<()>>,
-        sid: &str,
-        text: &str,
-    ) -> Option<Value> {
-        let s = d.sessions.get_mut(sid)?;
-        let w = s
-            .haiku
-            .workshop
-            .as_mut()
-            .filter(|w| w.open && (w.combat_paused() || w.provisional.is_some()))?;
-        if crate::workshop::fixed_action(text) != Some("close_workshop") {
-            return None;
-        }
-        let pending = w.pending.is_some();
-        if !pending {
-            w.close("combat_interrupted_close");
-        }
-        let can_speak = s.warning.is_none() && s.pending_warning.is_none();
-        d.revision += 1;
-        let speech = if pending {
-            "未採用の案があるで。採用するか、元の句に戻すか教えてな。"
-        } else {
-            "おけ、句はここまでにしよか。"
-        };
-        // 戦闘警告がある時は無音で状態だけ反映する。
-        if can_speak {
-            let mut speech = Speech::new("workshop_close_feedback", speech);
-            speech.delivery = Delivery::PlayerReply;
-            let s = d.sessions.get_mut(sid).unwrap();
-            s.pending_warning = Some(vec![speech]);
-            s.pending_input = Some(text.into());
-            self.start_pending(d, jobs, sid);
-        }
-        Some(
-            json!({"accepted":true,"session_id":sid,"reason":if pending {"workshop_pending_decision_required"} else {"combat_workshop_closed"}}),
-        )
-    }
 }

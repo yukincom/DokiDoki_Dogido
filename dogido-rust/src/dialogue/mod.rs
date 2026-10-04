@@ -1001,9 +1001,6 @@ impl Dialogue {
                     "turn_id":if s.pending_warning.is_some(){None}else{s.warning.as_ref().map(|w|w.turn.clone())},"queued":s.pending_warning.is_some(),"state":s.mode});
             }
         }
-        if let Some(result) = self.close_paused_workshop(&mut d, &mut jobs, &session_id, text) {
-            return result;
-        }
         if let Some(result) =
             self.queue_knowledge_input(&mut d, &mut jobs, &session_id, text, source)
         {

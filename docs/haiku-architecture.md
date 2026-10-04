@@ -114,7 +114,7 @@ workshop は、この発話前ゲートを通った句に対する好み・表�
 
 三行だけの川柳では、コード用ASTや汎用サブエージェントを持ち込まず、**一行を構造ノード**として扱う。行の正本は `line_id / line_index / position / canonical_name / surface_text / reading_text / source_atom_ids / source_atoms / provenance` を束ねた一オブジェクトである。`surface_text` はモデルやプレイヤーが出した漢字・カタカナを含みうる表記、`reading_text` はTTS・音数・比較に使う確定ひらがなであり、両者は同一句の二表現である。役割は呼び出しとコード境界で分離する。
 
-自然な相談の入口は、個別のintent分類器と返答表ではなく`haiku_workshop_agent_step`である。現在句、未採用案、この一句の直近4往復、保存済み出典、直近のaction結果をまとめて読み、`respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / accept_pending / reject_pending / close_workshop / unrelated`から次の一手を一つ選ぶ。説明だけなら一手で終了し、必要なときだけコードの`reading / meter / source`検査または既存editorを実行する。各実結果を戻した後の再計画は一度だけ、全体は最大3 stepで、長い思考文、任意tool call、状態変更権限は持たない。会話理解には音声解釈を使えるが、局所編集／採否／終了は音声認識原文にも行為を示す根拠がなければ実行せず、疑問・否定・条件・引用・伝聞を拒否する。採否＋終了は各意思をそれぞれ検証する一つのtransaction、`unrelated`は同じ入力の通常雑談返答が成立したときだけ既存二回driftへ数える。
+自然な相談の入口は、個別のintent分類器と返答表ではなく`haiku_workshop_agent_step`である。現在句、未採用案、この一句の直近4往復、保存済み出典、直近のaction結果をまとめて読み、`respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / stage_conversation_candidate / accept_pending / reject_pending / close_workshop / unrelated`から次の一手を一つ選ぶ。説明だけなら一手で終了し、必要なときだけコードの`reading / meter / source`検査または既存editorを実行する。各実結果を戻した後の再計画は一度だけ、全体は最大3 stepで、長い思考文、任意tool call、状態変更権限は持たない。会話理解には音声解釈を使えるが、局所編集／採否／終了は音声認識原文にも行為を示す根拠がなければ実行せず、疑問・否定・条件・引用・伝聞を拒否する。採否＋終了は各意思をそれぞれ検証する一つのtransaction、`unrelated`は同じ入力の通常雑談返答が成立したときだけ既存二回driftへ数える。
 
 1. 共同編集stepが、会話の流れから修正を選んだ場合だけ、プレイヤー発話の対象行・一意な断片・問題種別を locate する
 2. コードが対象行を確定し、固定行・使用可能atom・発句時hard制約を閉じる
@@ -122,13 +122,15 @@ workshop は、この発話前ゲートを通った句に対する好み・表�
 4. コードが `expected_text` と現在の元行の完全一致、対象外行の不変、候補の実変更、一意な出典を確認する
 5. 別structured評価と共通検査器が、意味保持・自然さ・音数・hard制約・出典重複を確認する
 6. 不合格なら、コードで確定した行別失敗理由と不合格案を次の編集AIへ返す。前と実質同じ差分は別評価を呼ばずコードで棄却する
-7. 合格案も未保存の `pending_revision` に置く。自然な採否は同じ共同編集step（利用不可時は旧pending専用schema）が閉じたactionと今回発話のevidenceへ抽出し、コードがそのevidenceを音声認識原文へ再照合したうえで、同じ差分を同じ元句へ適用できるか再確認してから保存する
+7. 合格案も未保存の `pending_revision` に置く。自然な採否は同じ共同編集stepが閉じたactionと今回発話のevidenceへ抽出し、コードがそのevidenceを音声認識原文へ再照合したうえで、同じ差分を同じ元句へ適用できるか再確認してから保存する
 
 これは行単位の compare-and-swap であり、対象が0件・複数解釈・元行不一致・一部だけ成功のときは元句を維持する。旧 `{line_index, text}` 応答は受け付けない。内部再試行は最大2回で、二回目は同じpromptの再送ではなく `meaning_not_retained`、`unnatural_japanese`、音数、出典、差分契約などの閉じた失敗理由を受けた再編集である。採用済み revision には `edit_contract` と検証済み `edits` も残し、後から局所修正の成功傾向を監査できるようにする。
 
 修正案の句本文・採用語・保存可否はコードが固定する。共同編集stepは検証結果に沿った前置きだけを話せるが、句本文の復唱・別案への書き換え・保存済みという断言は禁止し、不成立時は実観測に対応する短い定型へ戻す。
 
-プレイヤー自身が置換語を述べた場合、常駐会話モデルは句を生成せず、発話中の `replacement_text` / `evidence` と現在句中の `target_fragment` だけを抽出する。コードが発話根拠・対象行の一意性・ひらがな化・正確な5/7/5音・hard制約・CASを確認し、対象行オブジェクトの `surface_text` と `reading_text` を同じ操作で置換する。合格した三行だけを未保存案として提示し、採用時も両表現と出典を一緒に昇格する。
+プレイヤー自身が置換語を述べた場合、常駐会話モデルは句を生成せず、発話中の `replacement_text` / `evidence` と現在句中の `target_fragment` だけを抽出する。コードが発話根拠・対象行の一意性・ひらがな化・正確な5/7/5音・hard制約・CASを確認し、対象行オブジェクトの `surface_text` と `reading_text` を同じ操作で置換する。現在句に対するプレイヤー指定編集は、検証・保存成功後に両表現を現在句へ反映して相談を続ける。AI生成案と、その未採用案だけへの編集は採用待ちを維持する。相談中の一案への「それにして」もモデルで意思を判断し、コードの再検査・保存後に反映する。
+
+終了は言い方によらずモデルが判断する。称賛だけでは閉じず、未採用案の採否が不明なら確認する。採否＋終了の明示時は両意思を検証して採否後に閉じる。モデル不成立時にも未採用案は保持して確認する。入力受付と終了処理完了を分け、検証後に `closed` へ移ったことを終了の基準にする。
 
 句中の意味を尋ねられた場合は、質問と一意に対応した行オブジェクトの保存済み `source_atoms` だけを説明根拠にする。行の出典が `poetic_interpretation` で、質問中にその派生元の一次材料名が明示されている場合だけ、保存済み `basis_atom_ids` を辿ってその材料名を答える。全材料候補からもっともらしい語をAIに選ばせない。行対応または出典が確定できなければ、別材料を捏造せず「オレにも分からん」と正直に返す。
 
