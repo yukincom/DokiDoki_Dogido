@@ -3,8 +3,8 @@
 //! 正規化順序・句読点・照合・型変換の判断は呼出側が所有する。
 use serde_json::Value;
 
-/// Python str.isspace()/re \s includes these four C0 separators in addition to
-/// Rust's Unicode whitespace. Do not substitute str::trim for this predicate.
+/// 入力・照合で使う空白集合。Unicode空白にC0区切りU+001C..U+001Fを加える。
+/// 標準trimだけではこの4文字が残り、同じ入力の分割・一致結果が変わる。
 pub(crate) fn is_python_whitespace(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
@@ -22,7 +22,8 @@ pub(crate) fn fold_kana(text: &str) -> String {
         .collect()
 }
 
-/// Python truthiness for the finite JSON value domain. This does not coerce text.
+/// JSONの値を「情報あり/なし」へ写す。null・false・数値0・空の文字列/配列/objectだけがfalse。
+/// 文字列は内容を解釈しないため、"false"や空白一文字はtrueになる。
 pub(crate) fn json_truthy(value: &Value) -> bool {
     match value {
         Value::Null => false,

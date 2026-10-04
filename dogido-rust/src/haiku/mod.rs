@@ -51,7 +51,7 @@ pub struct TransformRequest {
     pub atom_ids: Vec<String>,
     pub source_atoms: Vec<SourceAtom>,
 }
-/// Signature is Python's NFKC + casefold + kana folding/filtering of this text.
+/// 一行の本文と重複検査用signature。NFKC・大小文字の統一・かな変換と文字選別で表記差をそろえる。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LineForm {
     pub text: String,

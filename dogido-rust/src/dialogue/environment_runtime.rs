@@ -405,7 +405,8 @@ impl Dialogue {
             self.queue_environment(d, jobs, sid, vec![speech], false);
             return;
         }
-        // 落選候補のクールダウンや入口フラグを消費せず、Pythonの反応順を保つ。
+        // 警告とambientを複製上で評価し、優先順を比較して採用した状態だけを本体へ反映する。
+        // 落選した反応のクールダウン・入口フラグを消費しないので、次の安全な機会に話せる。
         let mut danger = s.danger.clone();
         let mut ambient = s.ambient.clone();
         let danger_actions = danger.actions(&event, now, s.mode, busy, false, &self.config.combat);

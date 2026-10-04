@@ -92,7 +92,7 @@ pub fn pending(history: &[Value]) -> Value {
     )
 }
 
-// Pythonの正規表現と同じ閉じた4組。未閉鎖の引用は範囲にしない。
+// 4組の引用符で閉じた範囲だけを抽出する。未閉鎖の引用まで広げると、訂正の原文根拠を誤って囲う。
 fn quoted_ranges(raw: &str) -> Vec<std::ops::Range<usize>> {
     let mut ranges = Vec::new();
     let mut offset = 0;

@@ -307,7 +307,7 @@ impl<'a> Reader<'a> {
             );
             for character in characters {
                 self.stop.check()?;
-                // ㍻→平成等はPythonのprofileと同じく一字検査で不成立にする。
+                // 漢字profileは一文字の照会。正規化で㍻→平成など複数文字になった候補は対象外にする。
                 valid(character.chars().count() == 1)?;
                 let c = character.chars().next().unwrap();
                 let joyo = self.bulk()?.get(&format!("kanji.joyo.u{:x}", c as u32))?;

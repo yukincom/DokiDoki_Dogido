@@ -190,8 +190,8 @@ pub fn atoms_from_catalog_sources(
     }
     atoms
 }
-/// Attribute projection (`source`, `key`, `label`) of HaikuFeature values.
-/// Missing source has Python's `getattr(...,"observation")` semantics.
+/// featureのsource・key・labelを、観測ラベルを表す出典atomへ投影する。
+/// sourceが未指定/空ならobservation、key/labelが空またはlabelが不明なら材料から除外する。
 pub fn atoms_from_observations(features: &[Value]) -> Vec<SourceAtom> {
     features
         .iter()

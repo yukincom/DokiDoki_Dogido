@@ -339,8 +339,8 @@ async fn request_assessments<B: Backend>(
         ),
     );
     details.insert("source_atoms".into(), json!(atoms));
-    // Insertion order matches Python: eligible IDs first, then basis IDs. Basis-only
-    // numbers are printed for provenance but cannot be returned as eligible evidence.
+    // 根拠番号は採用可能なatom IDを先に並べ、その後に由来となるbasis IDを足す。
+    // 番号と表示の対応を固定し、由来の説明だけに使うbasisを採用可能な根拠と混同しない。
     let mut numbers = Map::new();
     for id in atoms
         .iter()

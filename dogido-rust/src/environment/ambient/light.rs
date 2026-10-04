@@ -1,5 +1,10 @@
+//! 照明器具の所持数が増えた際に、無言・備えへの相槌・暗所回復への安堵から一件を選ぶための処理。
+//! Ambientが完全なinventory snapshotの前後差を渡し、Danger由来の明るさ／暗所回復状態から許可actionと根拠を作る。
+//! モデルの選択が戻ったら現在観測で再検証し、発話する場合はカタログ代替文付きのSpeechを配送側へ返す。
+//! 明るさの測定・暗所警告の状態変更・モデル実行・音声再生は各担当に残し、入手方法や設置完了は推定しない。
 use super::*;
 use serde::Serialize;
+/// Dangerが観測と閾値から算出した結果を受け取る。ここでは暗さや回復を所持数から決め直さない。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LightContext {
     pub surroundings_reasonably_lit: bool,
@@ -8,6 +13,8 @@ pub struct LightContext {
     pub dark_push_context_before: bool,
     pub dark_push_recovered: bool,
 }
+/// 一回の選択依頼。公開するdetailsは許可actionと段階化した所持量、fallbackは無言の選択。
+/// 正確な前後個数・作成時刻・当時の暗所状態はRust内に保持し、返ってきた選択の現在性を照合する。
 #[derive(Clone, Debug, Serialize)]
 pub struct LightPlanRequest {
     pub request_id: u64,
@@ -22,12 +29,14 @@ pub struct LightPlanRequest {
     #[serde(skip)]
     context: LightContext,
 }
+/// inventory内の松明・魂の松明・ランタン・魂のランタンを合算する。近くの設置済み光源とは別の所持数。
 pub(super) fn count(e: &GameEvent) -> i64 {
     ["torch", "soul_torch", "lantern", "soul_lantern"]
         .iter()
         .map(|key| e.inventory.get(*key).copied().unwrap_or(0))
         .sum()
 }
+/// モデルへ渡す所持量を、0以下／1〜7／8〜31／32以上の4段階にする。
 fn band(n: i64) -> &'static str {
     if n <= 0 {
         "empty"
@@ -39,6 +48,8 @@ fn band(n: i64) -> &'static str {
         "abundant"
     }
 }
+/// 所持増分と暗所状態から選択可能なactionだけを返す。常にstay_silentを含み、無言だけならモデル依頼を省ける。
+/// 増加なし・直近コメントありは無言。実際の暗所回復があれば安堵を許可し、それ以外で継続中の危険な暗さは抑制する。
 pub(super) fn allowed(
     previous: i64,
     current: i64,
@@ -53,15 +64,18 @@ pub(super) fn allowed(
         out.push("relief_after_darkness");
         return out;
     }
+    // 32個以上で周囲も明るい場合は備えの実況を抑える。暗所回復への安堵は上の分岐で別に扱っている。
     if current >= 32 && c.surroundings_reasonably_lit || c.severe_darkness && !c.dark_push_recovered
     {
         return out;
     }
+    // 初めて照明を確保した時か、32個未満で十分に明るくない時だけ備えへの相槌を候補にする。
     if previous <= 0 && current > 0 || current < 32 && !c.surroundings_reasonably_lit {
         out.push("acknowledge_supply_gain");
     }
     out
 }
+/// 依頼時に成立した観測をbasis_id付きで渡す。所持増分という事実と、暗所からの回復という事実を分ける。
 pub(super) fn facts(previous: i64, current: i64, c: &LightContext, recent: bool) -> Value {
     let mut rows = vec![
         ("light_source_gain_observed", "true".to_owned()),
@@ -95,6 +109,8 @@ pub(super) fn facts(previous: i64, current: i64, c: &LightContext, recent: bool)
     )
 }
 impl Ambient {
+    /// 未処理の所持増分を一度消費し、発話の余地があれば選択依頼をpendingと配送待ちの両方へ登録する。
+    /// 戻り値trueは依頼の準備完了であり、発話決定ではない。無言しか許可されなければfalseを返す。
     pub(super) fn light_request(
         &mut self,
         _e: &GameEvent,
@@ -110,6 +126,7 @@ impl Ambient {
             self.last_light_comment,
             s.ms("darkness_llm_comment_cooldown_ms"),
         );
+        // 前回コメントからの間隔は設定値を使う（既定5分）。本数増加だけでは暗所警告を解除しない。
         let actions = allowed(previous, current, &focus.light, recent);
         if actions.len() == 1 {
             return false;
@@ -128,6 +145,8 @@ impl Ambient {
         self.light_ready = Some(request);
         true
     }
+    /// 指定IDの応答を一度消費し、現在の所持数・会話優先・敵・暗所状態と、action／根拠／信頼度を照合する。
+    /// 条件が揃った時だけ生成leaf付きSpeechを返し、コメント時刻を進める。無言・不正・古い応答はNone。
     pub fn resolve_light_plan(
         &mut self,
         id: u64,
@@ -152,6 +171,7 @@ impl Ambient {
         {
             self.light_ready = None;
         }
+        // 依頼後の会話開始・敵出現・在庫変化を再確認し、古い備えのコメントを現在の会話へ差し込まない。
         if focus.foreground
             || focus.player_priority
             || focus.boss_presence
@@ -182,6 +202,8 @@ impl Ambient {
             self.last_light_comment,
             s.ms("darkness_llm_comment_cooldown_ms"),
         );
+        // 安堵の根拠は依頼時に実測した回復を保ちつつ、再び危険な暗さなら失効させる。
+        // それ以外の明るさとクールダウンは現在値で許可actionを選び直す。
         let mut current_context = focus.light.clone();
         current_context.dark_push_context_before = request.context.dark_push_context_before;
         current_context.dark_push_recovered =
@@ -189,6 +211,7 @@ impl Ambient {
         if !allowed(request.previous, request.current, &current_context, recent).contains(&action) {
             return None;
         }
+        // 根拠は依頼時に渡した重複しない1〜3件へ限定し、安堵／備えに対応する根拠も要求する。
         let basis = payload["basis_ids"].as_array()?;
         if !(1..=3).contains(&basis.len()) {
             return None;
@@ -217,6 +240,7 @@ impl Ambient {
         {
             return None;
         }
+        // 発話には有限の0〜1の信頼度と0.78以上が必要。stay_silentは妥当でもSpeechを作らない。
         let confidence = payload["confidence"].as_f64()?;
         if !confidence.is_finite()
             || !(0.0..=1.0).contains(&confidence)
@@ -236,6 +260,8 @@ impl Ambient {
         } else {
             "light_source_gain"
         };
+        // 選ばれたactionに対応するカタログ文を生成失敗時の代替として用意し、言い回しはleafへ渡す。
+        // 選択自体のfallbackはstay_silentなので、planner失敗だけを理由にこの固定文を発話しない。
         let text = catalog::general("darkness", key).replace("{prefix}", &prefix);
         let mut details = common_details(e, s);
         details["comment_action"] = action.into();

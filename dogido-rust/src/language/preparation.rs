@@ -50,7 +50,7 @@ pub(super) fn fixed_reply(interpretation: &Value, facts: &[Value]) -> Option<Val
     let target = interpretation["target"].as_str()?;
     let normalized = ComposingNormalizer::new_nfkc().normalize(target);
     if interpretation["facet"] == "mora_count" {
-        // Python strip includes these four C0 separators in addition to Unicode whitespace.
+        // 計算対象と資料の表記を同じ空白規則で照合する。C0区切りも前後の空白として除く。
         let surface = normalized
             .trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c));
         for fact in facts {

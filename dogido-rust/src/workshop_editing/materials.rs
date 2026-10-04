@@ -1,3 +1,7 @@
+//! 句についての質問と、現在句または未採用案の保存済み出典・材料を結び付ける読み取り処理。
+//! 質問から一行に絞れる出典を先に調べ、次に出典文、保存済みfragment_links、短い材料名へ照合を広げる。
+//! 一致した材料名はknowledge_routeで句の相談と一般知識の質問を分ける根拠になる。
+//! 置換対象の行決定や編集・採用の実行は別の経路が担当し、この照合だけでは句を変更しない。
 use super::*;
 use crate::entry_catalog::BIOMES;
 use crate::haiku::source_atoms;
@@ -6,6 +10,8 @@ use std::collections::{BTreeSet, HashMap};
 fn len(s: &str) -> usize {
     s.chars().count()
 }
+/// 行と問いが包含関係なら行の全長、そうでなければmin以上の最長共通連続部分の長さを返す。
+/// 形態素や意味の同一性ではなく、候補の順位付けに使う文字列の重なりを測る。
 fn overlap(line: &str, probe: &str, min: usize) -> usize {
     if !line.is_empty() && (probe.contains(line) || line.contains(probe)) {
         return len(line);
@@ -28,6 +34,8 @@ fn string(v: &Value) -> String {
         String::new()
     }
 }
+/// (照合点, 種別の優先点)の最大組が、一つの異なるラベルだけを指す場合に返す。
+/// 同点の別ラベルがある場合は、その候補群だけから一意な由来を断定しない。
 fn unique_best(rows: &[(usize, usize, String)]) -> Option<String> {
     let best = rows.iter().map(|(s, k, _)| (*s, *k)).max()?;
     let mut labels = vec![];
@@ -39,6 +47,8 @@ fn unique_best(rows: &[(usize, usize, String)]) -> Option<String> {
     (labels.len() == 1).then(|| labels.remove(0))
 }
 impl Engine {
+    /// 2字以上の出典表記が問いに含まれれば200+長さ、抽出語の表記なら100+長さ、2字以上の読みなら50+長さで得点化する。
+    /// 読みはEngineのturn内cacheを使い、必要な漢字読みが未準備なら上位の辞書補助経路へErrを返す。
     fn source_score(&self, source: &str, question: &str) -> Result<usize> {
         let c = compact(source);
         let q = compact(question);
@@ -63,6 +73,9 @@ impl Engine {
         }
         Ok(best)
     }
+    /// 質問が指す保存済み材料を探す。三行のpending記録があれば優先し、なければ現在句を使う。
+    /// 行との重なりから当該行の基底出典・出典文を調べ、次に全行の出典文→fragment_links→短い材料名へ進む。
+    /// 一致する材料がなければNone、必要な読みをまだ持たなければErrを返す。
     pub(super) fn material_for_question(
         &self,
         s: &Snapshot,
@@ -88,6 +101,8 @@ impl Engine {
                 matched.push((score, line.line_index))
             }
         }
+        // 行の最高点が一行だけに絞れたとき、その行の記録へ進む。
+        // 基底atomが複数ある解釈でも、問いに合う一意な出典があればそちらの表記を優先する。
         if let Some(best) = matched.iter().map(|r| r.0).max() {
             let indices = matched
                 .iter()
@@ -119,6 +134,8 @@ impl Engine {
                 if let Some(label) = unique_best(&basis) {
                     return Ok(Some(label));
                 }
+                // 基底出典を一意に選べなければ、その行の保存済み出典を返す。
+                // 名前に当たるcatalog_labelを先にし、異なる説明は最大二つまで併記する。
                 let mut sources = line.source_atoms.iter().collect::<Vec<_>>();
                 sources.sort_by_key(|s| {
                     usize::from(s.get("kind").and_then(Value::as_str) != Some("catalog_label"))
@@ -137,6 +154,8 @@ impl Engine {
                 }
             }
         }
+        // 句本文から行を絞れない問いは出典文そのものと照合する。
+        // 最大点が複数行にまたがる場合はここで決めず、保存済み対応と短い材料の検索へ進む。
         let mut matches = vec![];
         for line in records {
             for source in &line.source_atoms {
@@ -189,6 +208,8 @@ impl Engine {
             .min_by_key(|s| (len(s), s.matches('の').count())))
     }
 }
+/// 質問内に現れる句の断片を探す。引用符の有無に頼らず、空白区切りの句部分との最良の重なりを先に使う。
+/// それがなければ句全体から2〜6文字の連続片を長い順に探す。同点の部分は先に見つけたものを残す。
 fn quoted_fragment(question: &str, verse: &str) -> Option<String> {
     let question = question.trim_matches(space);
     if question.is_empty() || verse.is_empty() {
@@ -228,6 +249,9 @@ fn quoted_fragment(question: &str, verse: &str) -> Option<String> {
 fn material_compact(s: &str) -> String {
     compact(s).replace(['・', '…'], "")
 }
+/// 保存済みfragment_linksのsurface/materialと、句断片・質問本文を照合して材料名を返す。
+/// 完全一致30点、表記の包含20+長さ、材料名の包含12+長さで比較し、最高点が12以上なら採用する。
+/// 同点は先行する対応を残す。新しい対応関係を推測して保存する処理ではない。
 fn resolve_links(question: &str, fragment: Option<&str>, materials: &Value) -> Option<String> {
     let mut best = None;
     let mut best_score = 0;
@@ -275,6 +299,9 @@ fn catalog_label(doc: &Value, id: &str) -> Option<String> {
     }
     None
 }
+/// 材料snapshotから表示名とkindの組を作り、質問に含まれる短い材料名を探すための候補を返す。
+/// motif・手もと・周辺物・Mob・場所・時刻を集め、場所の日本語名がなければカタログで補い、解釈文の断片も加える。
+/// 同じ表示名は先のkindを残す。これは材料の名寄せと短縮であり、置換行の照合結果ではない。
 pub fn short_material_entries(materials: &Value) -> Vec<(String, String)> {
     fn add(out: &mut Vec<(String, String)>, source: &str, kind: &str, max: usize) {
         let mut s = source
@@ -284,6 +311,8 @@ pub fn short_material_entries(materials: &Value) -> Vec<(String, String)> {
         if len(&s) < 2 {
             return;
         }
+        // 長すぎる材料は助詞・読点等で切った末尾側の短い部分を優先し、無ければ省略記号で切る。
+        // 「プレイヤー」を「あんた」へ揃え、単なる動詞や短い述語だけの候補は後段で省く。
         if len(&s) > max {
             let mut shortened = None;
             for sep in ['の', '、', '，', ' '] {
@@ -395,6 +424,7 @@ pub fn short_material_entries(materials: &Value) -> Vec<(String, String)> {
     out
 }
 
+/// material_visibilityで明示的にfalseとされた文脈だけを隠す。旧記録などで欄がない場合は表示可能とする。
 pub fn material_context_visible(materials: &Value, context: &str) -> bool {
     materials["material_visibility"][context] != false
 }

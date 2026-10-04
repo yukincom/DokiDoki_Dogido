@@ -1,6 +1,9 @@
-//! Native ordinary turn: routing -> bounded plan -> materials -> bounded leaf.
-//! The Session supplies a frozen observation/history snapshot. This worker never
-//! observes events, commits history/repair, changes permissions, or opens a browser.
+//! Sessionから受け取った入力・観測・完了済み履歴を、通常会話の返答と読み上げ用テキストへ変換する。
+//! 入口のroutingで宛先確認・記憶照会・正本知識・限定国語対話を分け、通常雑談は次の順で進む。
+//! 入力に応じた材料準備 → bounded planner → 観測との照合 → 固定回答または発話leaf → 読み補正。
+//! plannerは一件のread actionを選び、カタログ候補が現在の観測にあるかはafter_planで照合する。
+//! 発話leafは採否検査と必要時一回の言い直しを経る。参照するsnapshotはこの判断中は固定する。
+//! 戻り値は未配送の結果。Sessionが世代を確認して状態・履歴へ反映し、音声合成・実再生を担当する。
 use super::{DialogueConfig, bridge, chat_context::CatalogLabels};
 use crate::{
     chat_materials::{self, After, Before},
@@ -21,6 +24,9 @@ fn live(cancel: &watch::Receiver<bool>) -> Result<()> {
     Ok(())
 }
 
+/// 返答処理全体をbudget内で実行し、表示用textと必要時spoken_textを返す。
+/// select_route/hold_handoffはSession側で所有権と保留を照合する入口。
+/// 読み補正に子プロセスが必要な場合は、その終了処理まで待ってから返る。
 pub(super) async fn render(
     config: &DialogueConfig,
     llm: &RigLlm,
@@ -33,7 +39,7 @@ pub(super) async fn render(
     live(cancel)?;
     let deadline = Instant::now() + budget;
     let mut native_cancel = cancel.clone();
-    // This phase owns only droppable model/reader futures, never a child process.
+    // 本文生成と資料読取りはfutureの破棄で止められるため、全体期限と取消を同じ待機で扱う。
     let mut result = tokio::select! { biased;
         _ = bridge::cancelled(cancel) => bail!("cancelled"),
         result = tokio::time::timeout_at(deadline, body(config,llm,input,&mut native_cancel,&mut select_route,&mut hold_handoff)) => result.context("chat generation timed out")??,
@@ -45,8 +51,8 @@ pub(super) async fn render(
         .filter(|_| result["dialogue_action"] != "silent")
     {
         let text = text.as_str().context("native chat result text")?;
-        // Do not wrap this owned adapter in an outer cancellation select: read()
-        // waits for its own child cleanup before returning cancellation/timeout.
+        // 読み補正は自身で取消・期限を監視し、所有する子プロセスを終了してから戻る。
+        // 外側でfutureを先に破棄すると終了待ちを失うため、readの完了を直接待つ。
         let reading_deadline = deadline.min(Instant::now() + Duration::from_secs(35));
         result["spoken_text"] = super::tts_runtime::read(config, text, cancel, reading_deadline)
             .await?
@@ -57,6 +63,7 @@ pub(super) async fn render(
     Ok(result)
 }
 
+/// 固定routingを先に処理し、通常雑談だけをbefore_plan → planner → after_plan → leafへ進める。
 async fn body(
     config: &DialogueConfig,
     llm: &RigLlm,
@@ -73,8 +80,8 @@ async fn body(
     }
     let mut context = input.context.clone().context("native prepared input")?;
     let raw = input["text"].as_str().context("native current input")?;
-    // Routing/authority uses the canonical raw parser; semantic wording uses the
-    // Session's separately-owned interpretation only when explicitly supplied.
+    // 操作・保存・知識照会のroutingは原文由来の解析を使う。
+    // STTの文脈補正は別のinterpreted_textとして会話の意味理解へ渡し、原文を保存判断の正として残す。
     context.raw_text = raw.into();
     context.interpreted_text = input["interpreted_text"]
         .as_str()
@@ -156,8 +163,8 @@ async fn body(
         }
         language = Some(turn);
     }
-    // The Session supplies this frozen typed snapshot; missing projection is an
-    // error, never a fallback to a fresh state machine or later observation.
+    // Sessionがこのturn用に投影した観測・履歴をまとめて読む。
+    // 判断途中で別時点の観測を拾うと照合対象が変わるため、snapshot欠落はエラーにする。
     let (event, snapshot) = input
         .snapshot
         .as_deref()
@@ -170,6 +177,7 @@ async fn body(
     if language.is_none() {
         select_route(Route::Casual)?;
     }
+    // 明示照会などの固定回答を先に確定し、LLMによる次手の選択が必要な入力だけPlanへ渡す。
     let before = chat_materials::before_plan(
         event,
         &native.settings,
@@ -195,6 +203,7 @@ async fn body(
             } else {
                 prepared.planner.fallback.clone()
             };
+            // 選ばれたread actionを観測へ照合し、断定可能な固定文か生成用材料へ落とす。
             match chat_materials::after_plan(&prepared, &plan)? {
                 After::Fixed(fixed) => fixed_result(fixed),
                 After::Leaf(leaf) => {
@@ -214,8 +223,7 @@ async fn body(
                     let reply = if config.llm_enabled {
                         super::chat_leaf_runtime::render(turn, llm, cancel).await?
                     } else {
-                        // Finish the existing fallback/final-safety state machine
-                        // without sending a generation request to any provider.
+                        // モデル無効時も同じ採否器を完走し、fallbackと最終安全検査の結果を受け取る。
                         live(cancel)?;
                         let _unused = turn.request()?;
                         ensure!(turn.complete(None)?, "disabled leaf must finish");
@@ -263,6 +271,8 @@ fn language_fields(result: &mut Value, turn: &crate::language::Turn) -> Result<(
     }
     Ok(())
 }
+/// 国語対話のTurnが返すgenerate/lookupだけを実行し、その結果を次の段階へ戻す。
+/// 資料照会はローカルDB読取り、生成失敗はerror結果としてTurnへ渡し、doneまで状態機械を進める。
 async fn drive_language(
     config: &DialogueConfig,
     llm: &RigLlm,

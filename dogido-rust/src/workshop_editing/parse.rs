@@ -104,8 +104,8 @@ pub(super) struct Replacement {
     pub fragment: Option<String>,
 }
 fn second_matches(s: &str) -> Vec<(String, String)> {
-    // Python lookahead never consumes its suffix. Match the same earliest start,
-    // shortest value, then resume after the verb (not after the lookahead).
+    // 連続した修正表現を取りこぼさないよう、最初の開始位置で最短の置換語を採る。
+    // 末尾の確認用境界は消費せず、動詞の直後から次を探す（先読み付き文型と同じ範囲）。
     let mut out = vec![];
     let mut from = 0;
     while from < s.len() {

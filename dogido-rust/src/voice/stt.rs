@@ -1,3 +1,7 @@
+//! 区切り済みの発話PCMを、一時WAV → 任意のSilero VAD → whisper.cpp → 本体への入力配送へ渡す。
+//! 入力は16kHz・モノラル・16bit符号付き整数のlittle-endian PCM。区切りとRMS判定はsegment側が行う。
+//! 認識本文を検査し、設定された呼びかけ語も満たす場合にだけTransportへ送る。進捗・棄却理由はReporterへ出す。
+//! 録音や発話待ち列はvoice側が所有し、ここでは一発話の処理と一時WAVの寿命を扱う。
 use super::{
     Settings,
     process::{self, Output, cancelled},
@@ -15,8 +19,10 @@ use std::{
 };
 use tokio::{process::Command, sync::watch};
 
+/// VADとWhisperが共用する一発話分の一時ファイル。処理終了・取消・書込み失敗後もDropで削除を試みる。
 struct Wav(PathBuf);
 impl Wav {
+    /// UUID付きの新規ファイルを所有者だけが読める0600で作り、入力PCMをWAVに包む。
     fn create(pcm: &[u8]) -> Result<Self> {
         let path = std::env::temp_dir().join(format!("dogido-voice-{}.wav", uuid::Uuid::new_v4()));
         let mut file = OpenOptions::new()
@@ -35,6 +41,7 @@ impl Drop for Wav {
     }
 }
 
+/// 既に16kHz・モノラル・16bitであるPCMへ44バイトのRIFFヘッダを付ける。再サンプリングは行わない。
 fn write_wav(file: &mut File, pcm: &[u8]) -> Result<()> {
     let size = u32::try_from(pcm.len())?;
     file.write_all(b"RIFF")?;
@@ -56,6 +63,7 @@ fn write_wav(file: &mut File, pcm: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Whisperの`[_NAME_]`形式の制御トークンだけを外す。大文字・数字・下線以外を含む似た表記は本文に残す。
 fn remove_tokens(mut line: &str) -> String {
     let mut text = String::new();
     while let Some(start) = line.find("[_") {
@@ -77,6 +85,8 @@ fn remove_tokens(mut line: &str) -> String {
     text
 }
 
+/// Whisper標準出力のタイムスタンプ付き行から本文を結合し、採用可能な認識文字列か閉じた棄却理由を返す。
+/// ログ行のUTF-8破損は許容するが、取り出した本文の破損・空・既知の雑音文字列は配送対象から外す。
 pub fn transcript(stdout: &[u8]) -> std::result::Result<String, &'static str> {
     let output = String::from_utf8_lossy(stdout);
     let text = output
@@ -122,6 +132,7 @@ fn detail(bytes: &[u8]) -> String {
     chars[chars.len().saturating_sub(600)..].iter().collect()
 }
 
+/// Silero CLIの「Detected N speech segments」から検出数を読む。不明な外形は無音の0件と区別する。
 fn vad_count(stdout: &[u8]) -> Option<usize> {
     let text = String::from_utf8_lossy(stdout);
     let words: Vec<_> = text.split_whitespace().collect();
@@ -132,6 +143,9 @@ fn vad_count(stdout: &[u8]) -> Option<usize> {
     })
 }
 
+/// 任意のSilero VADで一時WAVに発話があるかを調べる。成功時の0区間、または取消だけをfalseにする。
+/// 未設定ならそのままWhisperへ進む。起動失敗・外形不明・10秒の期限超過も診断を残して通す。
+/// 補助VADの不調で入力全体を失わないため、無音と確定できた場合だけ認識を省く。
 async fn vad(
     settings: &Settings,
     wav: &Path,
@@ -158,6 +172,8 @@ async fn vad(
             "200",
             "--no-prints",
         ]);
+    // 発話250ms・無音500ms・前後200msのパディングはVAD側の検出条件。
+    // ここでは検出の有無だけを使い、Whisperには切り抜かず同じWAVを渡す。
     let error = match process::run(command, Duration::from_secs(10), stop).await {
         Ok(Output::Cancelled) => return false,
         Ok(Output::Done {
@@ -191,6 +207,8 @@ enum Recognition {
     Stopped,
 }
 
+/// 日本語指定でWhisperを一度実行し、本文・棄却理由・取消のいずれかを返す。1試行の期限は60秒。
+/// GPUの利用、文脈prompt、no-speech閾値は受け取った設定をCLI引数へ渡す。再試行の判断は呼出元が行う。
 async fn recognize(
     settings: &Settings,
     wav: &Path,
@@ -245,6 +263,7 @@ async fn recognize(
                     json!({"detail":detail(&stderr)}),
                 );
             }
+            // 非ゼロ終了は診断するが、既に得られた本文は同じ検査へ通す。終了コードだけで読み取れる認識を捨てない。
             match transcript(&stdout) {
                 Ok(text) => {
                     report.event("stt_result", "info", None, json!({"recognized_text":text}));
@@ -264,6 +283,9 @@ async fn recognize(
     }
 }
 
+/// 待ち列から受け取った一発話を認識して本体へ送る。通常の無音・棄却・配送拒否は診断してOkで終わる。
+/// 文脈APIの返すmodeで通常用／句相談用promptを選び、取得失敗時は通常用を使う。
+/// last_modeはprompt切替診断の重複を避けるため更新する。本文の採否と会話処理は配送先が担当する。
 pub async fn process_segment(
     settings: &Settings,
     segment: Segment,
@@ -317,6 +339,8 @@ pub async fn process_segment(
         stop,
     )
     .await;
+    // 本文が空のときだけ、より大きいno-speech閾値が設定されていればpromptを外して一度再試行する。
+    // 同じWAVを使い、期限超過・UTF-8破損・雑音としての棄却をこの再試行へ回さない。
     if matches!(result, Recognition::Rejected("empty_transcript"))
         && let Some(retry) = settings
             .retry_threshold
@@ -360,6 +384,7 @@ pub async fn process_segment(
         );
         return Ok(());
     }
+    // 呼びかけ語を通った本文を一度だけ配送する。HTTPのacceptedは入力受付の結果であり、返答の再生完了ではない。
     let delivery = tokio::select! { biased;
         _ = cancelled(stop) => return Ok(()),
         result = transport.deliver(&text) => result,

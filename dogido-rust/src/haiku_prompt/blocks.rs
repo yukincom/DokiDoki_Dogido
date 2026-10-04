@@ -1,3 +1,7 @@
+//! 川柳の構造化要求に入ったdetailsを、モデルへ渡す日本語の材料・出典・検査結果の文章へ整形する。
+//! materialsは観測と会話、sceneは共有済みの見どころ、constraintsは読みと好み、source_atomsは行の根拠を表す。
+//! 再生成と共同編集には不合格理由や既存文脈を別ブロックで付け、親moduleがテンプレートと組み合わせる。
+//! この層の入力は準備・検査側の結果であり、通信、音数測定、採否の判定はここでは行わない。
 use super::{ASSETS, asset};
 use crate::text_format::spaced_json;
 use crate::text_format::{self, ContainerFormat::SpacedJson};
@@ -46,6 +50,8 @@ pub(super) fn structure(d: &Value) -> bool {
     truth(&d["has_structure"]) || !clean(&d["structure_label"]).is_empty()
 }
 
+/// 選択品が実際の手持ちか所持品から選んだ一品かを文中に残し、ほかの所持品を重複なく最大4件添える。
+/// pocketから選んだ品を「手に持っている」と書かないため、poem_item_sourceを使って主語を分ける。
 fn item_hint(d: &Value) -> String {
     let held = clean(&d["held_item"]);
     let mut parts = vec![];
@@ -76,6 +82,8 @@ fn item_hint(d: &Value) -> String {
     }
     or_none(parts.join("。"))
 }
+/// 場所→周辺物→手もと→Mob→空→会話→語彙・カタログの順に、共有材料の説明を組む。
+/// 構造物名があれば一般のバイオーム説明より優先し、biome/sky_context_visibleがfalseの欄は省く。
 pub(super) fn materials(d: &Value) -> String {
     let mut chunks = vec![];
     let label = clean(&d["structure_label"]);
@@ -137,6 +145,8 @@ pub(super) fn materials(d: &Value) -> String {
             chunks.push(format!("コードで確定した現在地の気象: {context}"));
         }
     }
+    // 直前の雑談は80字の要約と最大3語に留め、プレイヤーとの会話に由来する軽い材料と明示する。
+    // 観測した周辺物の列とは分けて、本人の話を現在世界の在否証拠へ変えないようにする。
     let dialogue = &d["player_dialogue_material"];
     if dialogue.is_object() {
         let summary = cut(&clean(&dialogue["summary"]), 80);
@@ -180,6 +190,8 @@ pub(super) fn materials(d: &Value) -> String {
     }
     chunks.join("\n")
 }
+/// sceneに保持された発話文・motif・焦点を表示する。発話文がないsceneは「なし」とする。
+/// 本当に配送済みかの確定は呼出側が行い、ここでは渡された記録の文章化に徹する。
 pub(super) fn scene(d: &Value) -> String {
     let scene = &d["scene"];
     if !scene.is_object() || !truth(&scene["spoken_text"]) {
@@ -192,6 +204,8 @@ pub(super) fn scene(d: &Value) -> String {
         or_none(join(&scene["focus"], "、"))
     )
 }
+/// 道具等の許容読み・避ける語と、最大3件のプレイヤーの好みを別の説明へ整える。
+/// 参考lessonを読みの禁止語へ昇格させず、生成器の検査と同じ欄の区別をモデルにも伝える。
 pub(super) fn constraints(d: &Value) -> String {
     let d = &d["haiku_constraints"];
     let mut parts = vec![];
@@ -218,6 +232,7 @@ pub(super) fn constraints(d: &Value) -> String {
     }
     parts.join("\n")
 }
+/// 制約があるときだけ見出しと改行を付ける。空の「読みのメモ」をテンプレートへ残さない。
 pub(super) fn constraint_section(d: &Value) -> String {
     let text = constraints(d);
     if text.is_empty() {
@@ -226,6 +241,9 @@ pub(super) fn constraint_section(d: &Value) -> String {
         format!("\n読みのメモ:\n{text}\n")
     }
 }
+/// 出典atomを、本文・主張種別・許容範囲・基底出典が追える一覧へ変える。
+/// grounding_atom_numbersがある場合はatom_idとbasisを同じ番号表へ置換し、照合応答の参照先を揃える。
+/// IDか本文が欠けた項目は省き、使える出典がなければ「なし」を返す。
 pub(super) fn source_atoms(d: &Value) -> String {
     let numbers = d["grounding_atom_numbers"].as_object();
     let numbered = |id: &str| {
@@ -279,6 +297,8 @@ pub(super) fn source_atoms(d: &Value) -> String {
         format!("{}\n{}", asset("source_guide"), lines.join("\n"))
     }
 }
+/// 行の根拠照合へ渡す見どころは、sceneの発話文→interpretation→ironyの説明の順で最初の非空値を使う。
+/// 最大1200字に切り、いずれもなければ「なし」を返す。
 pub(super) fn grounding_scene(d: &Value) -> String {
     for v in [
         &d["scene"]["spoken_text"],
@@ -295,6 +315,7 @@ pub(super) fn grounding_scene(d: &Value) -> String {
     }
     "なし".into()
 }
+/// 呼出側が作ったworkshop_contextを、空でない場合だけJSONのまま共有文脈欄へ載せる。
 pub(super) fn context(d: &Value) -> String {
     let c = &d["workshop_context"];
     if c.as_object().is_some_and(|c| !c.is_empty()) {
@@ -303,6 +324,8 @@ pub(super) fn context(d: &Value) -> String {
         String::new()
     }
 }
+/// 一行分の再生成指示を、固定行または不合格理由付きの書き直し対象として表示する。
+/// 四つの音数値が整数で揃う場合だけ数値付きで説明し、ここで再計測や欠損値の補完はしない。
 pub(super) fn regeneration_line(row: &Value) -> String {
     let index = text_format::value_text(&row["line_index"], SpacedJson);
     let text = text_format::value_text(&row["text"], SpacedJson);
@@ -359,6 +382,9 @@ pub(super) fn regeneration_line(row: &Value) -> String {
 pub(super) fn integer(v: &Value) -> bool {
     v.is_i64() || v.is_u64()
 }
+/// 前回編集の全体・行別の失敗理由、照合モデルの指摘、繰り返せない案を次の編集要求へまとめる。
+/// モデルの指摘は事実や命令とは区別して最大240字で載せ、未知の理由コードもコード自体は残す。
+/// edit_retry_feedbackがobjectでなければ、再試行用の説明は付けない。
 pub(super) fn edit_retry(d: &Value) -> String {
     let feedback = &d["edit_retry_feedback"];
     if !feedback.is_object() {

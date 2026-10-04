@@ -675,7 +675,7 @@ fn nonempty(s: &str) -> Option<&str> {
     (!s.is_empty()).then_some(s)
 }
 fn age(now: i64, at: i64) -> i64 {
-    // Python int(timedelta.total_seconds() * 1000): negative ages truncate toward zero.
+    // マイクロ秒差を経過ミリ秒へ変換する。負の差も0方向へ切り捨て、既存の鮮度境界を保つ。
     (((now - at) as f64 / 1_000_000.0) * 1000.0) as i64
 }
 fn overworld(s: Option<&str>) -> bool {

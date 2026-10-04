@@ -2,7 +2,8 @@ use super::{actions, basis};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-/// 現行strict Pydantic契約と同じ順序・コードで再試行理由を構成する。
+/// action・basis_ids・confidenceの型を検査し、許可actionと今回の根拠IDへ照合する。
+/// 再試行へ渡すエラーコードと順序は現行のstructured契約にそろえる。
 /// 低confidenceは契約不一致ではない。採用閾値と現在観測はambientが再検査する。
 pub fn contract_errors(payload: &Value, details: &Value) -> Vec<String> {
     let Some(object) = payload.as_object() else {

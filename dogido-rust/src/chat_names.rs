@@ -155,8 +155,8 @@ pub fn allowed_labels(catalog: &Catalog, input: &Input) -> Vec<String> {
     }
     labels
 }
-/// Equivalent to build_observed_speech_name_corrections. Python iterates sets,
-/// so dictionary key order is unspecified there; native output is deterministic.
+/// 現在観測IDとカタログの明示的な名前補正対応から、一意な読み上げ名の置換表を作る。
+/// BTreeMap/BTreeSetで出力順を固定し、観測されている別の種名を補正元として上書きしない。
 pub fn observed_name_corrections(
     catalog: &Catalog,
     observed_ids: &[String],

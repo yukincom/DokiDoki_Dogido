@@ -151,7 +151,7 @@ impl PreparedPlan {
     }
 }
 
-// Python str.split/stripのUnicode空白にはU+001C..U+001Fも含まれる。
+// plannerの入力分割・端の除去は、Unicode空白とC0区切りU+001C..U+001Fを同じ空白として扱う。
 pub(super) fn is_space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }

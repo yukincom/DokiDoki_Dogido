@@ -58,7 +58,7 @@ fn place(text: &str, overlay: &[Value]) -> Place {
     let raw = text.trim_matches(space);
     let folded = fold(raw);
     let mut labels: Vec<(String, &Entry)> = vec![];
-    // Pythonのdictと同様、重複ラベルは最初の位置に残し、対応先だけ後勝ち。
+    // 照合の優先順を固定するため、重複ラベルは最初の位置に残し、対応先だけ後の定義へ更新する。
     for entry in &POLICY.entries {
         let reading = overlay
             .iter()

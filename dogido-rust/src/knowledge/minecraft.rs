@@ -93,7 +93,7 @@ impl<'de> Deserialize<'de> for Strict {
     }
 }
 fn parse(bytes: &[u8]) -> Result<Value> {
-    // Python json.loads(bytes)もUTF-8 BOMを受け付ける。
+    // 配布JSONのUTF-8 BOMは符号化の目印として除き、その後の本文はStrictで検査する。
     let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
     serde_json::from_slice::<Strict>(bytes)
         .map(|s| s.0)

@@ -1,4 +1,8 @@
-//! 明示知識質問を正本資料へ結び、検証可能な事実だけを返す。生成・保存・世界操作なし。
+//! 抽出済みの明示知識質問を、国語・詩・Minecraftの正本資料へ照合して回答事実を組み立てる。
+//! 正常経路はQueryの事前確認→分野と意図に合う資料検索→対象の一致確認→出典付き事実の抽出。
+//! 対象語を生成で増やさず、登録済みの題名・別名・読み・検索語と正規化して照合する。
+//! 未収録はnot_found、読込・検証・取消の失敗はunavailableへ分け、一般知識の生成で穴埋めしない。
+//! ファイル読取りを所有し、発話生成・会話状態・保存・世界操作は呼出側へ残す。
 use super::{
     catalog::{CORE, Stop, error_class, valid},
     query::{Query, fold, normalize, space},
@@ -16,12 +20,16 @@ static POLICY: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("provider-policy.json")).expect("checked knowledge policy")
 });
 #[derive(Clone)]
+/// 検索に使う正本資料の所在。国語資料とMinecraftの収録データ・出典固定情報をまとめる。
+/// パスの基準は起動時に選んだ補助スクリプトと同じcheckoutで、質問文から組み立てない。
 pub struct Paths {
     pub language: retrieval::Paths,
     pub minecraft: PathBuf,
     pub source_lock: PathBuf,
 }
 impl Paths {
+    /// 起動に使用するhelperの実パスからcheckoutを確定し、各資料の既定配置を求める。
+    /// この段階はパス解決だけで、資料の読込み・検証は検索時に行う。
     pub fn from_helper(helper: &Path) -> Result<Self> {
         let language = retrieval::Paths::from_helper(helper)?;
         let root = language.reference.parent().unwrap().parent().unwrap();
@@ -44,6 +52,7 @@ fn choose<'a>(v: &'a Value, keys: &[&str], default: &'a str) -> &'a str {
 fn rows<'a>(v: &'a Value, key: &str) -> &'a [Value] {
     v[key].as_array().map(Vec::as_slice).unwrap_or(&[])
 }
+/// 対象の完全一致照合用に表記を正規化し、case foldと空白除去を行う。
 fn compact(s: &str) -> String {
     fold(&normalize(s)).chars().filter(|c| !space(*c)).collect()
 }
@@ -55,6 +64,8 @@ fn push_unique(out: &mut Vec<String>, value: &str) {
         out.push(value.into());
     }
 }
+/// 本文と出典が両方そろうときだけ、共通の回答事実を一件作る。
+/// 本文・会話用説明を220文字以内へ整え、収録recordとclaim_statusの対応を保持する。
 fn fact(
     record: &Value,
     body: &str,
@@ -72,6 +83,8 @@ fn fact(
         "sources":sources,"dialogue_text_ja":shorten(dialogue,220)}),
     )
 }
+/// 正規化後の完全一致を、題名/entry_id→別名/読み→検索語→record IDの順に順位付けする。
+/// 小さい値ほど優先。Noneは対象一致なしで、検索indexの部分一致候補を回答へ昇格させない。
 fn match_rank(record: &Value, subject: &str) -> Option<u8> {
     let q = compact(subject);
     if ["title_ja", "entry_id"]
@@ -95,6 +108,7 @@ fn match_rank(record: &Value, subject: &str) -> Option<u8> {
     }
     (compact(text(record, "id")) == q).then_some(3)
 }
+/// 対象が対応範囲の漢字一文字なら返す。読み・配当学年の文字ID直接検索への入口。
 fn cjk(subject: &str) -> Option<char> {
     let mut chars = subject.chars();
     let c = chars.next()?;
@@ -104,6 +118,8 @@ fn cjk(subject: &str) -> Option<char> {
             || (0xf900..=0xfaff).contains(&(c as u32))))
     .then_some(c)
 }
+/// 文型recordの一般説明・語義・接続・分類を重複除去して、一件の説明へ組み立てる。
+/// definitionでは先頭の意味・用法を、それ以外では代表的な接続を優先し、省略数も表示する。
 fn grammar_fact(record: &Value, intent: &str, sources: Vec<Value>) -> Option<Value> {
     let title = choose(record, &["title_ja", "reading"], "");
     let reading = text(record, "reading");
@@ -204,6 +220,8 @@ fn suffix(notes: &[String]) -> String {
         format!("（{}）", notes.join("、"))
     }
 }
+/// 出典を取得できたrecordから、質問意図に合う事実を上限まで抽出する。
+/// 文型はgrammar_fact、rulesは規則文を先に扱い、その後に定義または要約を補う。
 fn reference_facts(
     reader: &mut Reader<'_>,
     record: &Value,
@@ -255,6 +273,7 @@ fn reference_facts(
     facts.truncate(limit);
     Ok(facts)
 }
+/// 世界の詩形recordに収録された分類軸を日本語ラベルへ写し、編集上の分類根拠と出典を付ける。
 fn classification_fact(record: &Value, sources: Vec<Value>) -> Option<Value> {
     let mut labels = vec![];
     if let Some(label) = POLICY["_ENTITY_KIND_LABELS"][text(record, "entity_kind")].as_str() {
@@ -291,6 +310,8 @@ fn classification_fact(record: &Value, sources: Vec<Value>) -> Option<Value> {
         "",
     )
 }
+/// 一文字のUnicode値に対応する常用漢字・学年配当recordを直接読む。
+/// gradeでは配当表、readingでは常用漢字表の音訓を使い、対象recordがなければ空を返す。
 fn kanji_facts(reader: &mut Reader<'_>, query: &Query, c: char) -> Result<Vec<Value>> {
     let joyo = reader.bulk()?.get(&format!("kanji.joyo.u{:x}", c as u32))?;
     let grade = reader
@@ -354,6 +375,9 @@ fn kanji_facts(reader: &mut Reader<'_>, query: &Query, c: char) -> Result<Vec<Va
     .into_iter()
     .collect())
 }
+/// 国語・詩の質問を資料群へ振り分け、完全一致したrecordから出典付き事実を取り出す。
+/// 表そのものの質問と漢字一文字は直接照合し、詩形・通常語句・明示文型はそれぞれ検索する。
+/// 曖昧語は空を返し、検索後は一致順位と重複除去で少数の回答事実へ絞る。
 fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<Value>> {
     let subject = compact(&query.subject);
     if has(&POLICY["ambiguous"], &subject) {
@@ -408,6 +432,7 @@ fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<
         }
         reader.japanese(&query.subject, &datasets, limit)?
     };
+    // 下位readerの検索は部分一致も拾うため、回答へ使う段階で対象の完全一致を必須にする。
     records.retain(|r| match_rank(r, &query.subject).is_some());
     let exact: HashSet<_> = records
         .iter()
@@ -416,12 +441,14 @@ fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<
         })
         .map(|r| compact(text(r, "title_ja")))
         .collect();
+    // 文型の題名そのものが当たった場合は、同じ別名などで拾った別文型の混入を避ける。
     if !exact.is_empty() {
         records.retain(|r| {
             text(r, "dataset_id") != "grammar_patterns"
                 || exact.contains(&compact(text(r, "title_ja")))
         });
     }
+    // 一致順位が先。同順位の分類質問だけworld_poetryを優先し、最後はrecord IDで順序を固定する。
     records.sort_by_key(|r| {
         (
             match_rank(r, &query.subject).unwrap_or(0),
@@ -452,6 +479,7 @@ fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<
                 }
             }
         }
+        // 定義・分類・読みは一つの非文型recordから事実を得たら確定し、別recordの説明を混ぜない。
         if has_candidates
             && ["definition", "classification", "reading"].contains(&query.intent.as_str())
             && text(&record, "dataset_id") != "grammar_patterns"
@@ -462,6 +490,8 @@ fn japanese(reader: &mut Reader<'_>, query: &Query, limit: usize) -> Result<Vec<
     Ok(facts)
 }
 
+/// 収録された公式Webページ・公式配布物だけを回答の出典表示へ変換する。
+/// 同じ種類/URL/パスを重複除去し、版と所在を含む参照を最大3件残す。
 fn minecraft_sources(record: &Value) -> Vec<Value> {
     let version = text(record, "minecraft_version").trim_matches(space);
     let mut seen = HashSet::new();
@@ -491,6 +521,8 @@ fn minecraft_sources(record: &Value) -> Vec<Value> {
     out.truncate(3);
     out
 }
+/// Minecraft recordを質問意図へ対応させ、改名・公式ID・item属性などの回答事実を作る。
+/// 専用情報がない場合は収録済み変更要約または登録IDへ狭め、出典のない事実は返さない。
 fn minecraft_record(record: &Value, query: &Query, limit: usize) -> Vec<Value> {
     let sources = minecraft_sources(record);
     if sources.is_empty() {
@@ -599,6 +631,9 @@ fn minecraft_record(record: &Value, query: &Query, limit: usize) -> Vec<Value> {
     facts.truncate(limit);
     facts
 }
+/// 質問意図からMinecraftの検索datasetを選び、対象が完全一致した収録recordを回答へ写す。
+/// 作り方だけは名称から公式IDを確定し、そのIDのレシピ定義を二段階で探す。
+/// レシピの縮約資料から返せるのは方式と素材参照で、配置手順を補作しない。
 fn minecraft(
     reader: &super::minecraft::Minecraft,
     query: &Query,
@@ -621,6 +656,7 @@ fn minecraft(
                 target = text(r, "entry_id").into();
             }
         }
+        // 名称から登録IDを特定できないときは、似た名前のレシピを代わりに返さない。
         if target.is_empty() {
             return Ok(vec![]);
         }
@@ -636,6 +672,7 @@ fn minecraft(
                 continue;
             }
             let summary = &record["document_summary"];
+            // 縮約資料に含まれる参照IDを素材候補として示す。個数や格子配置はこの資料にはない。
             let Some(references) = summary["referenced_resource_ids"].as_array() else {
                 continue;
             };
@@ -719,6 +756,8 @@ static VERSIONS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
         .map(|v| super::query::compile(v.as_str().unwrap(), false))
         .collect()
 });
+/// 発話evidence中に版があれば、収録対象の1.21.11一種類だけかを確認する。
+/// 版指定なしは通し、別版または複数版の質問は対応版の回答で代用しない。
 fn version_error(query: &Query) -> bool {
     let versions: HashSet<_> = VERSIONS
         .iter()
@@ -729,6 +768,8 @@ fn version_error(query: &Query) -> bool {
         .collect();
     !versions.is_empty() && (versions.len() != 1 || !versions.contains("1.21.11"))
 }
+/// 取消を確認し、Minecraft用readerまたは国語用readerへ検索を渡す。
+/// 取得不能と未収録を区別するため、readerのエラーは空配列へ変換せず呼出側へ返す。
 fn lookup_inner(paths: &Paths, query: &Query, limit: usize, stop: Stop) -> Result<Vec<Value>> {
     stop.check()?;
     if query.domain == "minecraft" {
@@ -738,6 +779,9 @@ fn lookup_inner(paths: &Paths, query: &Query, limit: usize, stop: Stop) -> Resul
         japanese(&mut Reader::new(&paths.language, stop), query, limit)
     }
 }
+/// Queryから回答事実1〜3件と状態を返す同期入口。
+/// 曖昧な数字表記・未対応Minecraft版はnot_found、読込等の失敗はunavailable。
+/// 成功時でも事実0件ならnot_foundとなり、検索成功だけではfoundにしない。
 pub fn lookup(paths: &Paths, query: &Query, limit: usize, stop: Stop) -> Value {
     let limit = limit.clamp(1, 3);
     let error = if query.domain == "japanese_language"
@@ -764,9 +808,11 @@ pub fn lookup(paths: &Paths, query: &Query, limit: usize, stop: Stop) -> Value {
         }
     }
 }
+/// ファイル検索を取消対応の専用workerで実行し、返却形と出典の契約を再検査する。
+/// 検査済みのJSONを返すまでが担当で、ここから発話生成や会話保存は行わない。
 pub async fn lookup_async(paths: Paths, query: Query) -> Result<Value> {
     let result = retrieval::lookup_worker(move |stop| lookup(&paths, &query, 3, stop)).await?;
-    // 正本readerでも発話へ渡す前の閉じた型・出典の再検証は省略しない。
+    // 検索経路にかかわらず、発話へ渡す最終形をLookupの閉じた型と出典規則へ揃える。
     let checked: super::Lookup = serde_json::from_value(result.clone())?;
     valid(checked.valid())?;
     Ok(result)
@@ -787,6 +833,7 @@ mod tests {
         }
     }
     #[test]
+    // 移植時に確定したfixtureと事実・出典・順序を照合する回帰試験。旧Python本体は起動しない。
     fn full_facts_sources_and_order_match_canonical_python() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../../fixtures/knowledge-provider.json")).unwrap();

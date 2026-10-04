@@ -100,7 +100,7 @@ fn confidence(value: &Value) -> f64 {
         Value::String(s) => float_string(s).unwrap_or(0.0),
         _ => 0.0,
     };
-    // Python max(0.0, min(1.0, value)) returns 1.0 for NaN.
+    // confidenceの数値化は0..1へ収める。NaNだけは既存入力契約どおり1.0へ写す。
     if number.is_nan() {
         1.0
     } else {
@@ -387,7 +387,7 @@ pub fn scene_for_spoken_irony(irony: &Irony, scene: &Scene, atoms: &[SourceAtom]
     }
 }
 
-// Python domain names retained as public aliases for integration.
+// 呼出側が使うドメイン名を、同じRust型への公開別名として提供する。
 pub type HaikuContext = Context;
 pub type HaikuFeature = Feature;
 pub type IronyContext = Irony;

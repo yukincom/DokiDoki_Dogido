@@ -67,9 +67,8 @@ pub struct Emission {
 }
 
 impl PreparedEmission {
-    /// Only canonical, already-resolved three-line records can be emitted.
-    /// Match HaikuEmission.__post_init__: line records own display/readings and
-    /// synchronize line_sources without inventing missing source evidence.
+    /// 検査済み三行から表示・読みをそろえ、出典をmaterialsへ投影した発句記録を返す。
+    /// 行正本が持つ出典だけを使い、不足した由来を補わずに記録の一貫性を保つ。
     pub fn complete(mut self, created_at: DateTime<Utc>) -> Result<Emission> {
         let resolved = ResolvedLines::try_from(self.lines.as_slice())?;
         self.surface_text = Some(resolved.surface());
@@ -80,8 +79,8 @@ impl PreparedEmission {
         if !sources.is_empty() {
             self.materials.insert("line_sources".into(), sources.into());
         }
-        // Python datetime stores microseconds. Use that same precision for IDs,
-        // serialized timestamps, and all comparisons to the original store.
+        // 永続化済み記録の精度に合わせてマイクロ秒へ切り捨てる。
+        // entry ID・JSONの時刻・既存記録との比較が、ナノ秒の端数で食い違うことを防ぐ。
         let created_at = created_at
             .with_nanosecond(created_at.nanosecond() / 1000 * 1000)
             .context("invalid completion timestamp")?;

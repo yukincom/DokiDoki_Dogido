@@ -360,7 +360,7 @@ impl Catalog {
         let mut records = HashMap::new();
         for hit in hits {
             if let Some(mut record) = self.get(string(&hit["id"])?)? {
-                // Pythonの {dataset_id: ..., **record} と同じ優先関係。
+                // レコード自身のdataset_idを優先し、省略時だけ検索hitの所属資料で補う。
                 if record.get("dataset_id").is_none() {
                     record["dataset_id"] = hit["dataset_id"].clone();
                 }

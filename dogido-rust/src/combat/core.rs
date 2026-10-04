@@ -1,4 +1,11 @@
-//! 戦闘判断の同期Engine。時計・観測は呼び手から受け取り、I/Oは一切実行しない。
+//! ゲーム観測と単調時計の経過ミリ秒から、戦況mode・優先発話・会話可否を決める同期Engine。
+//! 観測文脈の統合 → 被弾/音/戦闘結果の更新 → mode解決 → 優先発話選択、の順でDecisionを返す。
+//! 呼び手がDecisionを配送し、実再生の成否を扱う。ここではネットワーク・音声I/Oを実行しない。
+//!
+//! Fabricの音・ambient通知は視認一覧を省きvisual_threats=[]を送ることがある。
+//! completeは呼び手がイベント種別の送信仕様から決めるため、配列の空き具合とは別の情報。
+//! 完全観測なら視認一式を置換し、部分通知なら10秒以内の直近完全観測へ音等を重ねる。
+//! 撃破・爆散はoutcomesが明示の戦闘結果を照合し、視認の消失だけを撃破へ昇格させない。
 use super::{
     auditory::{self, Auditory},
     catalog,
@@ -31,8 +38,10 @@ pub struct Engine {
     auditory: Auditory,
     specials: Specials,
     outcomes: Outcomes,
+    /// 部分通知へ補う最後の完全観測。observe末尾でcompleteのときだけ更新する。
     latest_full: Option<GameEvent>,
     latest_full_at: Option<u64>,
+    /// 部分通知で危険が増えたことを保持し、次の完全観測まで通常会話の早すぎる再開を止める。
     partial_danger: bool,
     last_damage: Option<(u64, u64)>,
     last_audio: Option<u64>,
@@ -93,7 +102,7 @@ impl Engine {
     pub fn take_notes(&mut self) -> Vec<String> {
         self.outcomes.take_notes()
     }
-    /// Call once after each accepted raw observe, before the next event.
+    /// 今回の明示戦闘結果から得た対象名の更新を取り出す。次のobserve前に一度だけ消費する。
     pub fn take_name_updates(&mut self) -> crate::chat_observation::NameOutcomeUpdate {
         self.outcomes.take_name_updates()
     }
@@ -115,7 +124,7 @@ impl Engine {
         )
     }
     /// 受信済みの観測と呼び手の時計から、優先警告・会話可否・音声停止を決める。
-    /// completeは全体観測かを示す。部分的な音・死亡通知だけで、見えていた敵を消した扱いにしない。
+    /// completeは全視認を含むかを示す。falseなら直近の視認を補い、観測省略を敵の不在と誤認しない。
     #[allow(clippy::too_many_arguments)]
     pub fn observe(
         &mut self,
@@ -161,7 +170,8 @@ impl Engine {
         if let Some(age) = event.combat.recent_damage_ms {
             self.last_damage = Some((now, age as u64));
         }
-        // Partial notifications carry no authoritative health absence.
+        // 回復を実測したとき、または完全観測で体力が未提供に戻ったときに低体力警告を再待機にする。
+        // 部分通知で体力が省かれただけでは再待機にせず、同じ低体力への警告連発を防ぐ。
         if event
             .player
             .health
@@ -187,6 +197,7 @@ impl Engine {
                     .is_some_and(|n| n <= s.ms("recent_damage_window_ms") as i64)
                 || dark_alert(event, s);
         }
+        // 撃破・爆散など今回の明示結果を先に処理し、通常の危険度警告より先に配送候補にする。
         let immediate = self.outcomes.observe(event, now);
         if complete && event.event.name == EventName::CombatEnded {
             self.pending_safe_at = self.outcomes.boss_defeat_confirmed(event).then_some(now);
@@ -376,6 +387,7 @@ impl Engine {
         }
         GameEvent::parse(v).expect("combining validated independent observations")
     }
+    /// 現在脅威・被弾・警告抑止を設定閾値へ照合し、次の戦況modeを選ぶ。
     fn resolve_mode(&self, e: &GameEvent, now: u64, s: &Settings) -> Mode {
         let nearest = e
             .visual_threats

@@ -1,5 +1,7 @@
-//! One capture per job. Current structure, ordered inventory and readings are
-//! explicit snapshots owned by the caller, never a new empty RuntimeState.
+//! 一件の観測から、川柳の見どころ抽出と三行生成に共通のContextを組み立てる。
+//! 所持品・周辺ブロック・落下物・Mobを選び、環境投影で使える場所と空の情報を決め、出典と語彙候補へ変換する。
+//! 現在構造物・受信時の所持品順・読み訂正は呼出側のsnapshotを使う。ここで観測の取得やモデル呼出しは行わない。
+//! selectionは材料の選択順、constraintsは道具・読みとsoft lesson、rules.jsonはその固定語彙を担当する。
 use super::{
     context::{Context, Feature, Scene},
     source_atoms::*,
@@ -29,8 +31,8 @@ static RULES: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("materials/rules.json"))
         .expect("canonical haiku context rules")
 });
-/// Existing raw entry readers and exact MOB_VOICE_LABELS lookup. This is not a
-/// substitute for WorldCatalog's display-label reader; both contracts are used.
+/// 材料の分類・出典に使うカタログ項目と、Mob名を引くための読み取り口。
+/// WorldCatalogの表示名とは別に、section・group_path・説明文などの元項目を参照する。
 pub trait Entries {
     fn item_entry(&self, id: &str) -> Option<&Value>;
     fn block_entry(&self, id: &str) -> Option<&Value>;
@@ -42,12 +44,14 @@ pub struct ReadingCorrection {
     #[serde(default)]
     pub forbidden_readings: Vec<String>,
 }
+/// この発句で使う表記ごとの読み訂正。正しい読みと既知の誤読を別々に保持する。
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ReadingSnapshot {
     #[serde(default)]
     pub by_surface: HashMap<String, ReadingCorrection>,
 }
 impl ReadingSnapshot {
+    /// 空でない本人の読み訂正を優先し、なければカタログの読みへ戻る。どちらも空ならNone。
     pub fn resolve(&self, surface: &str, catalog: Option<&str>) -> Option<String> {
         self.by_surface
             .get(strip(surface))
@@ -71,6 +75,7 @@ impl ReadingSnapshot {
             .unwrap_or_default()
     }
 }
+/// 呼出側が確定した構造物・名前・所持品順を借りる。材料抽出中のsession参照を不要にする。
 pub struct RuntimeRead<'a> {
     pub current_structure: Option<&'a str>,
     pub player_name: &'a str,
@@ -108,6 +113,7 @@ fn distance_cmp(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
         .partial_cmp(&b.unwrap_or(f64::INFINITY))
         .unwrap_or(std::cmp::Ordering::Equal)
 }
+/// 所持数の多い順、同数ならID順へ揃える。所持品の近い二品・異なる一品を選ぶ際の同点順になる。
 fn sorted_inventory(event: &GameEvent) -> Vec<(&String, &i64)> {
     let mut values: Vec<_> = event.inventory.iter().collect();
     values.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
@@ -147,6 +153,8 @@ fn weather_label(s: &str) -> &'static str {
         _ => "不明",
     }
 }
+/// 今回イベントの構造物を先に使い、欠けているときだけ呼出側の現在構造物へ補完する。
+/// カタログのlabelがあればそれを表示名にし、なければ共通の構造物名変換へ戻す。
 fn structure_fields(
     event: &GameEvent,
     current: Option<&str>,
@@ -178,6 +186,8 @@ fn structure_fields(
         },
     )
 }
+/// バイオームのカタログ温度を「暑い／穏やか／寒い」等へ区分し、地帯名を添える。
+/// 現在の高度での実測温度や季節の重みではなく、土地の特徴を短く示す材料になる。
 pub fn climate_hint(world: &WorldCatalog, biome: Option<&str>) -> Result<String> {
     let climate = world.climate(biome)?;
     let entry = world.biome_entry(biome).unwrap_or(&Value::Null);
@@ -212,6 +222,8 @@ pub fn climate_hint(world: &WorldCatalog, biome: Option<&str>) -> Result<String>
         },
     )
 }
+/// バイオーム名へ、訂正優先で解決した読みを必要時だけ括弧付きで添える。
+/// カタログ項目がない場合はWorldCatalogの通常表示名を返す。
 fn biome_reading_label(
     world: &WorldCatalog,
     biome: Option<&str>,
@@ -322,6 +334,8 @@ fn unique(values: impl IntoIterator<Item = String>) -> Vec<String> {
     }
     out
 }
+/// passive_mobsに観測されたMobのカタログから、役割と声・姿などの説明を最大二種分まとめる。
+/// IDと表示名の重複を除き、採用した種をcoveredとして返して後段の語彙重複を抑える。
 fn poetic_lines(
     event: &GameEvent,
     catalog: &Catalog,
@@ -355,6 +369,8 @@ fn poetic_lines(
     }
     (lines, covered)
 }
+/// featureの語彙タグに、説明文へ収めていないMobのタグを足す。
+/// poetic_linesで既に表した種のタグを除き、説明文ありなら最大8、なければ最大16へ絞る。
 fn tags(
     event: &GameEvent,
     features: &[Feature],
@@ -380,6 +396,9 @@ fn tags(
         .take(if covered.is_empty() { 16 } else { 8 })
         .collect()
 }
+/// 観測・runtime文脈・カタログ・読み訂正を、生成用の一つのContextへ投影する。
+/// 所持品などの選択→雨雪と環境範囲の確定→特徴と出典atomの作成→対比候補の順に組み立てる。
+/// featuresは目に留まる候補、source_atomsは行の根拠照合用であり、同じ配列にはしない。
 pub fn capture(
     event: &GameEvent,
     runtime: RuntimeRead<'_>,
@@ -448,6 +467,8 @@ pub fn capture(
         entries,
         readings,
     );
+    // カタログ説明の出典を先に置き、観測featureの短い事実を併合する。
+    // 出典IDや重複文の整理は共通のmergeに任せ、三行での材料の使い分けへ同じ根拠を渡す。
     let source_atoms = merge_source_atoms(&[
         atoms_from_catalog_sources(&sources, 8, 5),
         atoms_from_observations(
@@ -513,6 +534,8 @@ pub fn capture(
     })
 }
 #[allow(clippy::too_many_arguments)]
+/// 見どころ候補を、ポータル→周辺→落下物→選択品と他の所持品→Mob→乗車・採掘→場所→空の順に作る。
+/// 最後に先頭14件へ絞るため、この追加順が候補枠の優先順になる。個別の季語スコアは付けない。
 fn features(
     event: &GameEvent,
     poem: &PoemItem,
@@ -616,6 +639,8 @@ fn features(
             ["地下", "採掘", "石", "土"].map(str::to_owned).to_vec(),
         );
     }
+    // 構造物があるときはその場所名を軸にし、一般のバイオーム名と地帯名を重ねない。
+    // 気候と空の材料は環境投影の可視範囲に従い、地下で地表の景色ばかりを詠むのを抑える。
     if !structure.is_empty() {
         add("構造物", "structure".into(), structure.into(), vec![]);
         if !hint.is_empty() && environment.include_biome_context {
@@ -660,6 +685,9 @@ fn features(
     out
 }
 #[allow(clippy::too_many_arguments)]
+/// 選択材料に対応するカタログ項目を、観測上の役割を添えた出典snapshotへ変換する。
+/// 周辺・落下物・選択品・所持品・場所・Mobの順に集め、同じsource_refは先に現れた役割を残す。
+/// 個体ID付きMobは最後に個体出典を足し、読みが分かる個体名は種名と同じ出典へまとめる。
 fn catalog_sources(
     event: &GameEvent,
     poem: &PoemItem,
@@ -764,7 +792,7 @@ fn catalog_sources(
             &entries.mob_label(&m.r#type),
         );
     }
-    // Custom name and species share the individual source, including its reading.
+    // 個体ID付きMobは種だけの項目と二重登録せず、個体に結び付いた出典を使う。名前の読みもそこで扱う。
     sources.extend(
         event
             .passive_mobs
@@ -776,6 +804,9 @@ fn catalog_sources(
     sources
 }
 #[allow(clippy::too_many_arguments)]
+/// 乾いた土地と荒天、昼と深い地下など、現在材料の取り合わせから見どころ候補を作る。
+/// 場所・空の候補には各可視フラグを使い、深さはY<=16で判定する。重複を除き最大8件を返す。
+/// 返す文は見どころ抽出への補助であり、Mobの存在やプレイヤーの感情を新たに観測した記録ではない。
 fn tensions(
     event: &GameEvent,
     world: &WorldCatalog,

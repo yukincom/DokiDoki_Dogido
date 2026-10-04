@@ -1,23 +1,32 @@
-//! 国語対話からの話題移管。宛先不明の入力は一件だけ、元の期限・IDで保持する。
+//! 国語の学習中に出た別の話題を、通常会話へ渡してよいか確認するための判定と保留データ。
+//! 最近の学習に無関係で、呼びかけも話題転換語もない入力を保留候補にする。
+//! 呼び直し → 元の話題を短く示す確認 → 確認音声の再生完了 → 肯定、の順に元入力を解放する。
+//! Sessionのaddress_runtimeが一件の保留を所有し、置換・期限切れ・拒否・割込み時に片づける。
+//! このモジュールは次のActionを返す。実際の再送・履歴更新・音声配送はSession側が行い、
+//! 保留中も元のturn ID・入力時刻・記録制限を引き継いで、別の新規発話として扱わない。
 use crate::playback::Status as PlaybackStatus;
 use icu_normalizer::ComposingNormalizer;
 use serde_json::Value;
 
+/// 宛先確認後に再利用する元の入力。input_atはDialogue時計の経過ミリ秒。
 #[derive(Clone, Debug)]
 pub struct Request {
     pub turn: String,
     pub text: String,
     pub source: String,
     pub input_at: u64,
-    /// Admission privacy survives row eviction and delayed replay. Never sent to a model.
+    /// 入力受理時の記録制限。表示行が消えた後の再送にも引き継ぐ、モデルには渡さない値。
     pub record_private: bool,
 }
+/// 原入力の期限と、確認turnが聞こえたかを持つ保留一件。
 #[derive(Debug)]
 pub struct Pending {
     pub original: Request,
     pub expires_at: u64,
+    /// 確認turn IDと実再生済みフラグ。Noneなら、次の呼び直しで確認を提示できる。
     pub repair: Option<(String, bool)>,
 }
+/// 通常routingへ通す／確認を話す／無言で待つ／元入力を再送する／破棄する、の閉じた指示。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Pass,
@@ -127,6 +136,7 @@ fn shift(text: &str) -> bool {
     .iter()
     .any(|p| text.starts_with(p))
 }
+/// 名前での呼びかけ、宛先の明言、聞いているかの確認を、幅・空白を正規化して検出する。
 pub fn addressed(text: &str) -> bool {
     let normalized = ComposingNormalizer::new_nfkc().normalize(text);
     let text = normalized.trim_matches(space);
@@ -145,6 +155,9 @@ pub fn addressed(text: &str) -> bool {
                 .ends_with(p)
         })
 }
+/// 学習から別の話題へ移る入力を、宛先確認まで保留するかを返す。
+/// submitted・previous・fresh_msは同じ時計のミリ秒。今回の入力受理と直前の入力／会話完了の近さを測り、
+/// モデルの生成待ち時間によって「しばらく会話していない」と判断が変わることを防ぐ。
 pub fn should_hold(
     text: &str,
     interpretation: &Value,
@@ -164,6 +177,7 @@ pub fn should_hold(
         && !shift(text)
         && previous.is_some_and(|at| submitted.saturating_sub(at) < fresh_ms)
 }
+/// 確認音声で引用する話題を、空白をまとめた最大48文字にする（長い場合は末尾を省略記号にする）。
 pub fn summary(text: &str) -> String {
     let text = text
         .split(space)
@@ -178,6 +192,7 @@ pub fn summary(text: &str) -> String {
     }
 }
 impl Pending {
+    /// 入力時刻から期限を作る。ttlの単位はミリ秒で、最低1秒を確保する。
     pub fn new(original: Request, ttl: u64) -> Self {
         Self {
             expires_at: original.input_at.saturating_add(ttl.max(1000)),
@@ -188,6 +203,8 @@ impl Pending {
     pub fn expired(&self, now: u64) -> bool {
         now >= self.expires_at
     }
+    /// 次の入力に対する指示を返す。保留本体の消費は呼び手が行う。
+    /// 確認をまだ聞いていない肯定はWaitにし、元入力への同意と取り違えない。
     pub fn input(&self, text: &str) -> Action {
         let Some((_, completed)) = &self.repair else {
             return if addressed(text) {
@@ -217,6 +234,8 @@ impl Pending {
             _ => Action::Wait("ambiguous_confirmation"),
         }
     }
+    /// 対応する確認turnの実再生結果だけを反映する。
+    /// 失敗・取消・音声無効なら確認を未提示へ戻し、次の呼び直しで聞き直せるようにする。
     pub fn playback(&mut self, turn: &str, status: PlaybackStatus) {
         if let Some((id, heard)) = self.repair.as_mut().filter(|(id, _)| id == turn) {
             let _ = id;

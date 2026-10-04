@@ -1,4 +1,6 @@
-//! The one strict Pydantic contract used here, including its error ordering.
+//! workshopの構造化返答を、同梱schemaの型・必須項目・上限・余剰項目へ厳密に照合する。
+//! フィールドpath付きのエラーを決まった順序で返し、モデルの再試行へ具体的な修正理由を渡す。
+//! エラーコードと順序は既存契約を維持する。意味・行対象・採用意思の検証は呼び手の次段階。
 use super::*;
 
 fn field_path(prefix: &str, key: &str) -> String {

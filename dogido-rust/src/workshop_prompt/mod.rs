@@ -170,7 +170,7 @@ pub(super) fn prepare_with_assets(
     if let Some(fixed) = projection.get("fixed_payload") {
         output["fixed_payload"] = fixed.clone();
     }
-    // Keep the former Python response limit, including its trailing newline.
+    // 末尾改行1byte分を含めても1MB以内になるよう、返却するJSON本文を厳密な上限未満にする。
     ensure!(
         spaced_json(&output).len() < 1_000_000,
         "workshop prompt too large"

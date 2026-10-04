@@ -40,7 +40,7 @@ fn basis(details: &Value) -> BTreeSet<&str> {
         .filter(|s| !s.is_empty())
         .collect()
 }
-// Python's retry constraints use json.dumps default ensure_ascii=True.
+// 再試行promptの許可値一覧は既存のASCII表記に固定する。非ASCII文字はUTF-16単位でescapeする。
 fn ascii_json(value: &Value) -> String {
     let mut out = String::new();
     for ch in spaced_json(value).chars() {

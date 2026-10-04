@@ -37,7 +37,7 @@ static GRAMMAR: LazyLock<Grammar> = LazyLock::new(|| {
     serde_json::from_str(include_str!("query-grammar.json")).expect("checked knowledge grammar")
 });
 
-// Python re.IGNORECASEのASCII IとUnicode I二種、str.splitのC0空白も維持。
+// 資料照会の大文字小文字・空白の許容範囲を固定する。I/iにİ/ıを、空白にC0区切りを含める。
 pub(super) fn compile(pattern: &str, full: bool) -> Regex {
     let pattern = pattern
         .replace("Minecraft", "M[iİı]necraft")
@@ -85,12 +85,12 @@ static WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"\A{}\z", GRAMMAR.word_class)).unwrap());
 
 pub(crate) use crate::compat::is_python_whitespace as space;
-/// Python's Unicode-versioned str.isalnum; its regex word class adds only '_'.
+/// 同梱のUnicode文字集合にある文字・数値かを返す。単語境界用の集合から_だけを除く。
 pub(crate) fn alphanumeric(c: char) -> bool {
     c != '_' && WORD.is_match(c.encode_utf8(&mut [0; 4]))
 }
 pub(crate) fn nfkc(text: &str) -> String {
-    // Unicodeの正規化安定性を使い、Python側で未割当だった文字はそのまま保持。
+    // 照合規則をUnicode更新で変えないため、同梱の文字表で未割当の文字はそのまま保持。
     // 未割当文字の結合クラスは0なので、ここで区切っても前後の合成・順序は同じ。
     let nfkc = ComposingNormalizer::new_nfkc();
     let mut result = String::new();
@@ -199,7 +199,7 @@ fn subject(text: &str) -> Option<String> {
     None
 }
 fn identifier(text: &str) -> bool {
-    // Pythonの\bは文字・数値・_。Rust regexの\wに含まれる結合記号は含めない。
+    // ID/idの語境界は同梱の文字・数値・_の集合で調べる。結合記号まで含む標準\wとは範囲が異なる。
     for (index, word) in text.match_indices("ID").chain(text.match_indices("id")) {
         let before = text[..index].chars().next_back();
         let after = text[index + word.len()..].chars().next();

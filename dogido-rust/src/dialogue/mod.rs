@@ -1,7 +1,12 @@
-//! 通常会話、冒険中の判断、限定操作と自動川柳の配送。
-//! Sessionが観測・短期履歴・workshop・発声の状態を持ち、各runtimeが処理結果を反映する。
-//! dataのmutexは状態の照合と更新、serialは通常turnの生成・保存・発声の直列化に使う。
-//! 待機中の取消と、戻った結果を現在の状態へ反映できるかの確認は分けて扱う。
+//! 接続ごとの観測・会話・川柳・限定操作をまとめ、判断結果を表示と音声へ配送する本体。
+//! observeがゲーム観測を更新し、submitが入力を受理してturnと読み取り用snapshotを作る。
+//! 通常turnはserial待ち → snapshot更新 → routing/生成 → 結果の再照合 → 保存/配送へ進む。
+//! assistant履歴は実再生完了後に確定し、テキスト相談室では表示確認を使う。生成だけでは確定しない。
+//!
+//! Sessionと表示台帳はdataのmutexで保護し、各runtimeが短い同期区間で照合・更新する。
+//! job登録で両方を取る順序はjobs → data。通常turnのserial待ちはdataを解放して行う。
+//! epochは返答処理の世代、input_generationは入力とその内部再送の世代を識別する。
+//! 取消通知で処理を止めるとともに、完了時にも世代を再照合して古い結果の混入を防ぐ。
 mod address_runtime;
 mod web_adapter;
 mod web_runtime;
@@ -57,10 +62,11 @@ use std::{
 };
 use tokio::sync::{Semaphore, watch};
 
+/// 会話・発句・音声の接続先と予算。newで検査し、各workerへ読み取り用に共有する。
 #[derive(Clone)]
 pub struct DialogueConfig {
     pub python: PathBuf,
-    /// Dictionary worker path; sibling SDK adapters use this directory.
+    /// UniDic token補助のパス。同じディレクトリのOS AI・Web等のSDKアダプターもここを基準に探す。
     pub helper: PathBuf,
     pub model: String,
     pub base_url: String,
@@ -113,58 +119,108 @@ impl Default for DialogueConfig {
         }
     }
 }
+/// 一接続の可変状態。全フィールドはDialogue.dataのmutexで保護する。
+/// 観測入口と各runtimeが同期区間で更新し、生成workerには必要な値のsnapshotを渡す。
+/// 非同期結果はepochや対象IDを再照合してから反映する。型内に独立したロックは持たない。
 struct Session {
+    /// 接続時のプレイヤー表示名。registerで設定する。
     name: String,
+    /// ゲーム観測なしの対話試験か。trueなら通常の観測鮮度条件を免除する。
     preview: bool,
+    /// workshop_textが設定する、音声を伴わない共同編集試験の入口。
     text_workshop: bool,
+    /// テキスト試験で選択した保存句。workshop_textが読み込み・参照する。
     text_poem: Option<crate::poem_book::SavedPoem>,
+    /// テキスト試験への返却結果とturn ID・epoch。要求と対応づけて一度だけ取り出す。
     text_reply: Option<(String, u64, Value)>,
+    /// テキスト試験に表示する直近要求。workshop_textが生成段階を記録する。
     text_last_request: Option<Value>,
-    // 全視認を含む観測とその受信時刻。部分通知で消去・延命しない。
+    /// observeが全視認を含むイベントだけから更新する、通常会話と戦況の観測正本。
     latest: Option<GameEvent>,
+    /// latestの受信時刻。受信時点で古い／時差不明ならNone。以後の鮮度はobservation_freshで測る。
     received: Option<Instant>,
+    /// 完全観測または新しい聴覚通知。warnings等が最新の音による中断根拠を読む。
     audio_latest: Option<GameEvent>,
+    /// audio_latestの受信時刻。聴覚通知の鮮度を全体観測とは別に測る。
     audio_received: Option<Instant>,
+    /// combat_runtimeが戦況から更新する会話可否。入口では観測鮮度も合わせて調べる。
     chat_allowed: bool,
+    /// combat_runtimeが反映する現在のnormal/alert/panic等の状態。
     mode: crate::combat::model::Mode,
+    /// observeが更新する受信済みsequence・冪等キー。再送で同じ判断を繰り返すことを防ぐ。
     sequences: SequenceLedger,
+    /// turnに結びついた短期履歴。assistant側は実再生完了、テキスト相談室では表示確認で確定する。
     history: history::History,
+    /// 観測された名前と最近の対象の記録。chat_contextが会話用snapshotへ投影する。
     chat_observation: crate::chat_observation::ChatObservationMemory,
+    /// 発句開始に添える現在構造物・プレイヤー名・所持品順。chat_contextが観測入口で更新する。
     haiku_context: crate::haiku::preparation::RuntimeSnapshot,
+    /// voice_input_runtimeが叫声と後続状況を対応づける一時保留。
     pending_vocalization: Option<voice_input_runtime::Pending>,
+    /// haiku_runtimeが持つ生成状態・現在句・workshopの正本。発句時計はforegroundが所有する。
     haiku: haiku_runtime::State,
+    /// 戦闘の出来事とWeb復帰時の話題を保持する短い文脈。combat_runtime／web_runtimeが更新する。
     combat_digest: VecDeque<String>,
+    /// 敵の同一性・接近・被弾を追跡し、workshop暫定再開の安全条件に使う。
     stable_threat: crate::workshop_combat_input::StableThreat,
+    /// 戦闘中入力の限定分類を待つ要求。workshop_combat_inputが世代付きで管理する。
     combat_input: Option<workshop_combat_input::Pending>,
+    /// 通常turnの結果を反映できる世代。新turn・取消後の古い生成や再生通知を識別する。
     epoch: u64,
+    /// 現在の通常turn ID。表示行・生成結果・再生通知を同じ入力へ結ぶ。
     current_turn: String,
+    /// updateが反映する現在turnの生成・配送・再生状態。
     status: PlaybackStatus,
+    /// 通常turnへの取消通知口。待機・生成・再生が同じ通知を監視する。
     cancel: Option<watch::Sender<bool>>,
+    /// 観測・被弾・警告間隔から戦況と優先発話を決める同期Engine。
     combat: crate::combat::core::Engine,
+    /// 許可能力・発行中command・実行結果と重複防止情報。現在slotはイベント観測と照合する。
     assist: crate::assist::AssistState,
+    /// assist_runtimeが限定意図抽出の完了を待つ要求。
     assist_pending: Option<assist_runtime::Pending>,
+    /// environment_runtimeが扱う暗さ・夕方・天候などの警告状態。
     danger: crate::environment::danger::Danger,
+    /// environment_runtimeが扱う周辺反応・匂い・照明増加の状態と間隔。
     ambient: crate::environment::ambient::Ambient,
+    /// 部分通知へ必要な既存文脈を補った環境判断用観測。
     environment_latest: Option<GameEvent>,
+    /// 会話へ渡す場所・天候等の投影と版。観測入口が更新する。
     conversation_observation: crate::conversation_observation::State,
+    /// 最後に扱ったplayer入力のDialogue時計上の経過ミリ秒。発話の優先制御に使う。
     last_player_input: Option<u64>,
+    /// casual/learning/web/workshop等、現在どの会話を優先するかの状態。
     foreground: crate::foreground::State,
+    /// 限定国語対話の対象・確認段階。language_runtimeが検証済み結果を反映する。
     language: crate::language::State,
+    /// Web調査の同意・実再生待ち・読書期限・専用アダプターの状態。
     web: web_runtime::State,
+    /// 高優先発話の後へ回す知識質問。knowledge_queueが先着順・安全復帰時の再送・取消を管理する。
     knowledge_queue: VecDeque<knowledge_queue::Pending>,
+    /// 先に分類済みの知識質問。内部再送を同じ入力世代へ結ぶ。
     knowledge_checked: Option<knowledge_queue::Checked>,
+    /// 学習から通常会話へ戻す際の宛先確認待ち一件。address_runtimeが所有する。
     address: Option<crate::address::Pending>,
+    /// 宛先待ちの自由文を先に分類した結果。元turnと入力世代が一致するときだけ使う。
     address_checked: Option<address_runtime::Checked>,
+    /// 会話の実再生完了またはテキスト表示確認時の経過ミリ秒。話題の新しさの判定に使う。
     last_completed_conversation: Option<u64>,
+    /// 新規入力や割込みで進める世代。内部再送が後の入力を追い越すことを防ぐ。
     input_generation: u64,
-    // Privacy belongs to the admitted generation, including its internal forwards.
+    /// 受理時の世代と記録制限。内部再送にも同じ制限を引き継ぐ。
     record_private_generation: Option<(u64, bool)>,
+    /// 進行中の照明コメント判定への取消通知口。発話の寿命は警告配送側が扱う。
     light_cancel: Option<watch::Sender<bool>>,
+    /// 雷・夕方などの優先発話後へ回す入力。environment_runtimeが再送する。
     deferred_input: Option<environment_runtime::DeferredInput>,
+    /// 再生中の優先警告と取消情報。warningsが音声の寿命を管理する。
     warning: Option<warnings::Active>,
+    /// 優先警告をまだ開始できない間の配送候補。次の観測で再評価する。
     pending_warning: Option<Vec<crate::combat::model::Speech>>,
+    /// 保留した警告・戦況質問に対応する元入力。候補と一緒に消費する。
     pending_input: Option<String>,
 }
+/// data mutexでまとめて保護する接続群と表示台帳。revisionは表示更新の検知に使う。
 #[derive(Default)]
 struct Data {
     sessions: HashMap<String, Session>,
@@ -175,6 +231,7 @@ struct Data {
     text_prompt_settings: Option<Value>,
     text_prompt_version: u64,
 }
+/// 共有設定・各I/O実装・接続状態・job寿命を所有する本体ハンドル。
 pub struct Dialogue {
     config: DialogueConfig,
     workshop_records: workshop_record::Recorder,
@@ -183,16 +240,21 @@ pub struct Dialogue {
     haiku_routes: haiku_runtime::Routes,
     combat_classifier: combat_classifier::Classifier,
     episodes: Option<Arc<crate::episode_log::Recorder>>,
+    /// 状態の短い照合・更新区間だけで保持し、ネットワークや音声の完了待ちへ持ち越さない。
     data: Mutex<Data>,
+    /// 全接続に共通の通常turn実行枠一つ。生成から保存・音声配送までの競合を抑える。
     serial: Semaphore,
+    /// shutdownが完了待ちする登録済みjob。dataと同時取得する入口はjobsを先に取る。
     jobs: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    /// 入力期限・発句時計・クールダウンに共通の、起動からの単調時計。
     clock: Instant,
 }
 fn id(prefix: &str) -> String {
     format!("{prefix}_{}", uuid::Uuid::new_v4().simple())
 }
-// Fabricの音・ambient通知はvisual_threats=[]を送るが、視認消失の証拠ではない。
-// 分類は送信側の観測範囲で決める。配列が空かどうかで推測しない。
+/// Fabricが現在の視認一式を添えるイベントを区別する。
+/// status・接近・死亡/爆散・戦闘終了なら視認正本を更新し、音・ambient通知なら既存を保持する。
+/// 後者のvisual_threats=[]は観測省略なので、敵の消失や観測鮮度の延長に使わない。
 fn complete_observation(event: &GameEvent) -> bool {
     match event.event.name {
         EventName::StatusSnapshot
@@ -235,6 +297,7 @@ impl Dialogue {
         self.config.llm_enabled
     }
 
+    /// 設定を検査して各I/Oの所有者を構築する。会話処理はregister後のobserve/submitから始まる。
     pub fn new(mut config: DialogueConfig) -> Result<Arc<Self>> {
         config.warnings.validate()?;
         config.combat = crate::combat::model::Settings::merged(&config.combat.0)?;
@@ -283,6 +346,7 @@ impl Dialogue {
             clock: Instant::now(),
         }))
     }
+    /// 接続IDへ空の履歴・観測・判断器を登録し、workshop記録の差分比較状態を初期化する。
     pub fn register(&self, session_id: &str, name: &str, preview: bool) {
         let mut d = self.data.lock().unwrap();
         d.sessions.insert(
@@ -341,6 +405,7 @@ impl Dialogue {
         d.revision += 1;
         self.workshop_records.register(session_id);
     }
+    /// 接続の各workerへ取消を通知して状態を外し、開いていたworkshopの終了を記録する。
     pub fn close(&self, session_id: &str) {
         let before = self.workshop_record_state(session_id);
         let mut d = self.data.lock().unwrap();
@@ -372,6 +437,8 @@ impl Dialogue {
             None
         }
     }
+    /// 一件のイベントを受理し、戦況・環境・発句と必要なplayer入力を処理する。
+    /// 戻り値は受理・判断・配送予定の結果。音声の実再生結果は各workerから後で届く。
     pub fn observe(
         self: &Arc<Self>,
         session_id: &str,
@@ -430,7 +497,9 @@ impl Dialogue {
         let sequence = event.sequence;
         let recent = recent_observation(&event);
         let text = event.meta.user_text.clone().unwrap_or_default();
-        // submitと同じlock順序。shutdownが取りこぼす未登録jobを作らない。
+        // submitと同じjobs → dataの順で、停止判定からjob登録までを保護する。
+        // shutdownはdataで停止を確定して解放した後、jobsを回収するため、
+        // 受理されたjobは回収対象に入り、停止後の新規受付はここで断られる。
         let mut jobs = self.jobs.lock().unwrap();
         jobs.retain(|j| !j.is_finished());
         let mut d = self.data.lock().unwrap();
@@ -726,6 +795,8 @@ impl Dialogue {
         json!({"accepted":true,"event_id":event_id,"session_id":session_id,"sequence":sequence,"deduplicated":duplicate,
             "state":null,"outputs":null,"commands":commands,"acknowledged_command_ids":results.acknowledged_ids,"server_time":recorded_at,"phase":"dialogue","player_input":input,"_workshop_direct_input":input_handled})
     }
+    /// 明示入力を対象接続へ送り、受理・保留・重複・拒否をすぐ返す。
+    /// 通常turnの生成や再生は登録したjobで進み、ここでのacceptedは再生成功を意味しない。
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
         self.submit_recorded(
             selected,
@@ -1231,6 +1302,7 @@ impl Dialogue {
         jobs.push(job);
         json!({"accepted":true,"session_id":session_id,"turn_id":turn})
     }
+    /// 接続の進行中処理を取り消し、保留入力と世代を更新して遅れた結果の反映を止める。
     pub fn interrupt(&self, session_id: &str) {
         let mut d = self.data.lock().unwrap();
         self.cancel_knowledge_queue(&mut d, session_id, "manual_interrupt");
@@ -1639,6 +1711,9 @@ impl Dialogue {
             .await;
         self.record_workshop_turn(&sid, &turn, &attempt);
     }
+    /// 通常turnを直列枠内で実行する。待ち時間中の観測・保存済み句を取り込み直し、
+    /// routing/生成 → 状態再照合・保存 → 読み上げ → 実再生結果の反映、まで所有する。
+    /// dataは必要な照合区間ごとに取り直すため、この間もゲーム観測を受理できる。
     async fn run_turn_body(
         self: Arc<Self>,
         sid: String,
@@ -1946,6 +2021,8 @@ impl Dialogue {
             }
         }
     }
+    /// 新規受付を停止して各処理を取り消し、登録済みjobの終了を待って記録を閉じる。
+    /// cancel_allでdataを解放してからjobsを取得し、どちらのmutexもawaitへ持ち越さない。
     pub async fn shutdown(&self) {
         self.cancel_all();
         let jobs = std::mem::take(&mut *self.jobs.lock().unwrap());

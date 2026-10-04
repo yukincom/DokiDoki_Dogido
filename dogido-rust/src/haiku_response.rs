@@ -1,13 +1,9 @@
-//! Transport parsing for automatic haiku and domain-validated workshop revisions.
-//!
-//! Mirrors `DogidoLLM.generate_structured_json`, `_extract_json_object`, and
-//! `_extract_grounding_prefix`. `accepted` means an object was received, not
-//! that its lines, verdicts, or evidence passed the downstream domain checks.
-//! No model retries, evidence completion, or schema repair happen here.
-//!
-//! serde_json deliberately keeps its standard JSON limits: non-finite numbers,
-//! unpaired Unicode surrogates, and excessively deep values are not accepted.
-//! Python's JSON decoder is more permissive for those non-domain inputs.
+//! 自動川柳・修正案のモデル返答からJSON objectを取り出し、内容検査へ渡す入口。
+//! 完成objectの抽出を試し、行別出典の返答だけは途切れる前に完成した外側の項目も回収する。
+//! 抽出できなければ、呼び手のfallbackにinvalid_json/output_truncatedを付けて返す。
+//! acceptedはobjectを取得できたという意味。句・判定・根拠の採否は後続のドメイン検査が決める。
+//! 生成再試行は呼び手が所有し、ここでは欠けた根拠の補完やschemaの修復を行わない。
+//! 非有限数・対にならないUnicode surrogate・過度な深さはserde_jsonの制限に従って棄却する。
 use crate::types::GeneratedText;
 use anyhow::{Result, ensure};
 use serde_json::{Map, Value};
@@ -137,9 +133,8 @@ fn grounding_prefix(text: &str) -> Option<Map<String, Value>> {
 }
 
 fn raw_value(text: &str) -> Option<(Value, usize)> {
-    // Python raw_decode ends literals/numbers at their valid prefix, even if
-    // the following text is not a JSON delimiter (e.g. `trueXXX` or `1e`).
-    // StreamDeserializer checks that delimiter, so handle these tokens first.
+    // 途中で切れた返答から値の有効な先頭部分を回収する。trueXXXならtrue、1eなら1まで。
+    // StreamDeserializerは後続の区切りも要求するため、literalと数値は先に長さを確定する。
     for (token, value) in [
         ("true", Value::Bool(true)),
         ("false", Value::Bool(false)),
@@ -203,7 +198,7 @@ fn strip_code_fence(text: &str) -> String {
     if !text.starts_with("```") {
         return text.into();
     }
-    // Python str.splitlines also recognizes these Unicode line boundaries.
+    // モデル返答のコード囲みは、LF/CR以外のUnicode改行・C0改行でも行境界として外す。
     let lines: Vec<_> = text
         .split([
             '\n', '\r', '\u{000b}', '\u{000c}', '\u{001c}', '\u{001d}', '\u{001e}', '\u{0085}',

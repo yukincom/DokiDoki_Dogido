@@ -1,15 +1,22 @@
-//! PydanticのJSON入力で使われる数値・bool変換。未知フィールドには適用しない。
+//! 既知fieldのJSON値をRustの数値・真偽値・時刻へ変換する通信入力層。
+//! 既存adapterと保存済みfixtureの入力互換を保つため、数値文字列や0/1などの許容形を明示する。
+//! Pythonを呼び出す処理ではなく、旧受信契約で許されていた変換をここで完結させる。
+//! 値域とfield間の整合はmodels/semanticに任せ、extraに保持する未知fieldは変換しない。
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+/// 既知fieldのJSON値一件を変換し、許容形でなければ説明付きのエラーを返す。
 pub trait FromWire: Sized {
     fn from_wire(value: Value) -> Result<Self, String>;
 }
+/// modelsのserde属性から呼ぶ共通入口。変換エラーを受信JSONのdeserialize失敗へ結び付ける。
 pub fn deserialize<'de, D: Deserializer<'de>, T: FromWire>(d: D) -> Result<T, D::Error> {
     T::from_wire(Value::deserialize(d)?).map_err(serde::de::Error::custom)
 }
+// 整数・boolの0/1・整数表記の文字列を受け、実数なら有限で小数部0の範囲内だけ通す。
+// 文字列の桁区切りアンダースコアと.00を許容し、小数の切り捨てによる別値への変換は行わない。
 impl FromWire for i64 {
     fn from_wire(value: Value) -> Result<Self, String> {
         if let Some(n) = value.as_i64() {
@@ -55,6 +62,7 @@ impl FromWire for i64 {
         }
     }
 }
+// 数値・数値文字列・boolの0/1を有限実数へ揃える。NaNや無限大は観測値へ入れない。
 impl FromWire for f64 {
     fn from_wire(value: Value) -> Result<Self, String> {
         let number = match value {
@@ -68,6 +76,7 @@ impl FromWire for f64 {
             .ok_or_else(|| "expected a finite number".into())
     }
 }
+// JSON bool、数値0/1、列挙した大小文字を区別しない文字列だけを真偽値へ写す。
 impl FromWire for bool {
     fn from_wire(value: Value) -> Result<Self, String> {
         match value {
@@ -83,6 +92,7 @@ impl FromWire for bool {
         }
     }
 }
+// nullはNoneとして残す。field自体の省略はmodelsのserde(default)が処理する。
 impl<T: FromWire> FromWire for Option<T> {
     fn from_wire(value: Value) -> Result<Self, String> {
         if value.is_null() {
@@ -104,13 +114,17 @@ impl<T: FromWire> FromWire for BTreeMap<String, T> {
     }
 }
 
-/// naive時刻にタイムゾーンを補作せず保持する。ゲーム状態の時計変換は消費側が行う。
+/// イベント・操作結果の時刻。UTC offset付きと、タイムゾーンなしを区別して保持する。
+/// FabricのISO offset時刻に加え、既存入力との互換用にnaive日付時刻とUnix timestampを受ける。
+/// naive値へタイムゾーンを補作せず、ゲーム状態での時計変換は消費側へ渡す。
 #[derive(Clone, Debug)]
 pub enum EventTime {
     Aware(DateTime<FixedOffset>),
     Naive(NaiveDateTime),
 }
 impl EventTime {
+    /// ISO時刻、naive日時、日付のみの順に読み、残りはUnix timestampとして解釈する。
+    /// 数値は絶対値200億を超えるとミリ秒、それ以下は秒とする既存契約を維持する。
     fn parse(value: Value) -> Result<Self, String> {
         if let Value::String(raw) = &value {
             let text = raw.replacen(' ', "T", 1);
@@ -135,6 +149,7 @@ impl EventTime {
         } else {
             timestamp
         };
+        // 入力の小数秒をマイクロ秒へ丸め、i64の表現範囲を確認してからchronoへ渡す。
         let micros = (seconds * 1_000_000.0).round();
         if micros < i64::MIN as f64 || micros >= -(i64::MIN as f64) {
             return Err("datetime out of range".into());
@@ -149,6 +164,7 @@ impl<'de> Deserialize<'de> for EventTime {
         Self::parse(Value::deserialize(d)?).map_err(serde::de::Error::custom)
     }
 }
+// 保存済みfixtureとの表記互換のため小数秒は6桁。naive/offset付きの区別も出力へ残す。
 impl Serialize for EventTime {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let text = match self {

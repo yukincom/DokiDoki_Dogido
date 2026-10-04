@@ -68,7 +68,7 @@ impl Dialogue {
         {
             return None;
         }
-        // Pythonのpending 1件 + deferred 8件と同じ上限。満杯でも古い質問を落とさない。
+        // 分類済みの予約枠と待機中の質問を合わせて上限9件。満杯なら新規受付を断り、先の質問を守る。
         let reserved = usize::from(
             s.knowledge_checked
                 .as_ref()

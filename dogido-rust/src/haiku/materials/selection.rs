@@ -1,10 +1,16 @@
+//! 手持ち・所持品・周辺観測を、句に使う少数の表示名へ選び直す。
+//! 道具以外の手持ちはそのまま主材料にし、道具を持つ場合は所持品の重みから一品を選ぶ。
+//! ほかの所持品は分類の近い二品と異なる一品、周辺物は近距離の上限件数でまとめる。
 use super::*;
+/// 句の手もと材料一品。sourceはhand（実際の手持ち）かpocket（所持品からの選択）を区別する。
 #[derive(Clone, Debug, Serialize)]
 pub struct PoemItem {
     pub id: String,
     pub label: String,
     pub source: String,
 }
+/// namespaceを除いたIDの末尾で、別の所持品を句の主材料にできる道具類を判別する。
+/// この分類は材料選択用で、持ち替え可能性やゲーム操作の許可を表さない。
 pub fn is_work_tool(id: &str) -> bool {
     let id = strip(id.rsplit(':').next().unwrap_or("")).to_lowercase();
     !id.is_empty()
@@ -28,6 +34,8 @@ pub fn is_work_tool(id: &str) -> bool {
         .iter()
         .any(|s| id.ends_with(s))
 }
+/// 道具を持つときの所持品候補へ重みを付ける。鉱物等12、花・染料11、装飾等10、食べ物9を使う。
+/// よく集まる石土等は1に抑え、未分類品だけ6+所持数（最大4）にする。季節や俳句の季語の重みではない。
 pub fn pocket_weight(id: &str, count: i64) -> i64 {
     let id = strip(id.rsplit(':').next().unwrap_or("")).to_lowercase();
     if [
@@ -129,9 +137,9 @@ pub fn pocket_weight(id: &str, count: i64) -> i64 {
     }
     6 + count.clamp(0, 4)
 }
-/// The ordered keys must be the original inventory JSON order, before BTreeMap conversion.
-/// Weighted pocket selection requires all keys exactly once, without extras.
-/// A non-tool hand item does not inspect inventory order.
+/// 道具以外の手持ちはそのまま返し、道具なら非道具の所持品から主材料を一品選ぶ。
+/// inventory_orderは受信JSONに現れた全キーを一度ずつ含む必要がある。同じ表示名の候補を最初の一品へまとめるため。
+/// 候補なしなら実際の手持ちへ戻る。道具以外を持つ経路では所持品順の検査自体を省く。
 pub fn poem_item(
     event: &GameEvent,
     world: &WorldCatalog,
@@ -175,6 +183,8 @@ pub fn poem_item(
     let Some(max) = scored.iter().map(|v| v.0).max() else {
         return Ok(fallback);
     };
+    // 最上位から2点以内の品を残し、名前とIDで安定した順序へ揃える。
+    // sequenceと名前から選択位置を作るので、同じ観測は再現でき、最大点の一品だけにも固定されない。
     scored.retain(|v| v.0 >= max - 2);
     scored.sort_by(|a, b| (&a.1, &a.2).cmp(&(&b.1, &b.2)));
     let name = event
@@ -196,6 +206,7 @@ pub fn poem_item(
         source: "pocket".into(),
     })
 }
+/// 分類の近い二品・異なる一品と、それらを同じ順でまとめた表示用リスト。
 #[derive(Clone, Debug, Serialize)]
 pub struct InventorySelection {
     pub close_pair: Vec<String>,
@@ -210,6 +221,7 @@ struct Candidate {
     count: i64,
     order: usize,
 }
+/// カタログ分類の共通接頭段数を3倍し、同じsectionなら4点を足す。名称の文字列類似度ではない。
 fn similarity(a: &Candidate, b: &Candidate) -> usize {
     a.path
         .iter()
@@ -223,6 +235,9 @@ fn similarity(a: &Candidate, b: &Candidate) -> usize {
             0
         }
 }
+/// 実際の手持ちを除いた所持品から、分類の近い二品と、その二品から最も離れた一品を返す。
+/// 二品の同点は合計所持数、元の候補順で決める。異なる一品の同点は所持数が多い方を優先する。
+/// 二品未満ならある品だけ、二品しかなければfar_itemなしになる。
 pub fn inventory_values(
     event: &GameEvent,
     world: &WorldCatalog,
@@ -308,6 +323,8 @@ pub fn inventory_values(
         items,
     }
 }
+/// 距離順に表示名の重複を除いて最大6件を取り、その6件の中で自然ブロックを前へ並べる。
+/// 遠い自然ブロックを探して候補枠へ割り込ませる処理ではない。距離不明は末尾へ送る。
 pub fn nearby_blocks(
     event: &GameEvent,
     world: &WorldCatalog,
@@ -336,6 +353,8 @@ pub fn nearby_blocks(
     natural.extend(other);
     natural
 }
+/// 近い落下物を表示名で重複排除し、最大4件を「地面に〜が落ちている」という観測文へ変える。
+/// 所持品と混同しないよう落下状態を残し、距離不明の候補は後ろへ置く。
 pub fn dropped_items(event: &GameEvent, world: &WorldCatalog) -> Vec<String> {
     let mut dropped: Vec<_> = event.dropped_items.iter().collect();
     dropped.sort_by(|a, b| distance_cmp(a.distance, b.distance));

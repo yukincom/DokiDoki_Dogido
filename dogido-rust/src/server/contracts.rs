@@ -1,4 +1,5 @@
-//! 接続段階で移した契約だけ。世界観測・会話・操作の型を代用しない。
+//! 接続開始・heartbeat・player入力など、HTTP入口の要求型。
+//! 観測本体はevents、会話や操作の採否は各runtimeが検証し、この型は受付時の外形を表す。
 pub use crate::ingress::InputSource;
 use chrono::{DateTime, FixedOffset};
 use serde::Deserialize;
@@ -18,7 +19,7 @@ pub struct SessionRequest {
     pub capabilities: Vec<String>,
     #[serde(default)]
     pub execution_capabilities: Vec<String>,
-    // Pythonのextra=allowを維持。観測と実行capabilityは別々に保持する。
+    // 接続メタデータの追加項目を保持する。観測capabilitiesと実行権限は専用フィールドへ分離する。
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }

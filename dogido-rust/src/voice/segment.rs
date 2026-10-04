@@ -10,7 +10,8 @@ pub struct Segment {
     pub captured_at: Instant,
 }
 
-/// Python版と同じ30msのRMS判定・300msの先行音・整数切捨ての区切り。
+/// 30msフレームのRMSで発話区間を切り出す。語頭を残すため300msの先行音を保持し、
+/// 各時間設定を整数フレームへ切り捨てて、最小発話・連続無音・最大長の境界を判定する。
 pub struct Segmenter {
     threshold: u32,
     silence_frames: usize,

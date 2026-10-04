@@ -1,6 +1,10 @@
+//! 発句時の道具・場面語・読み訂正と、有効なlessonから生成用の制約欄を作る。
+//! 道具の語彙と既知の誤読はallowed/forbiddenへ、本人の好みは別のplayer_lessonsへ置く。
+//! 返すのはsnapshotのJSONだけで、語句の採否やlessonの期限・保存はそれぞれの担当へ渡す。
 use super::*;
-/// Tool and reading constraints are hard. Player notes are separate soft values.
-/// Call with the captured job event, selected scene, and a code-owned lesson snapshot.
+/// 手持ちIDとsceneのmotifに一致する道具語彙を集め、使える場面ではバイオームの読みを加える。
+/// lessonはloosen以外のnoteを重複なく最大3件の参考欄へ置き、forbidden_termsへ混ぜない。
+/// 全欄が空ならNoneを返す。入力lessonの期限や抑止は呼出側で解決済みという前提を使う。
 pub fn constraint_details(
     event: &GameEvent,
     scene: &Scene,
@@ -31,6 +35,8 @@ pub fn constraint_details(
             selected.push(family);
         }
     }
+    // 手持ち由来の分類を先に残し、見どころで言及された道具分類を補う。
+    // 複数分類が当たる場合もfamilyのkeyごとに一度だけ集め、語彙の重複は後で除く。
     for motif in &scene.motifs {
         for family in families {
             if !keys.contains(&field(family, "key"))
@@ -53,8 +59,8 @@ pub fn constraint_details(
             .iter()
             .flat_map(|f| array_strings(&f["forbidden_terms"])),
     );
-    // Place readings are available with visible sky or a cave biome. This
-    // material rule is separate from the environment observation projection.
+    // 地名の読みは空が見えるときか洞窟バイオームで加える。地下でも洞窟そのものの名は使えるため。
+    // これは読み制約を載せる条件で、見どころへ空や景色を載せる環境投影の判定とは分ける。
     let biome = biome_id(event.world.biome.as_deref());
     let visible =
         event.world.sky_visible == Some(true) || biome == "deep_dark" || biome.ends_with("_caves");
@@ -77,6 +83,7 @@ pub fn constraint_details(
         {
             allowed.push(r.clone());
         }
+        // 現在の正しい読みと同じ誤読記録は除き、許容語を同時に禁止することを避ける。
         for bad in readings.forbidden(strip(&label)) {
             if Some(&bad) != reading.as_ref() && !forbidden.contains(&bad) {
                 forbidden.push(bad);

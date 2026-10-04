@@ -1,4 +1,7 @@
-//! A single observation-owned job. No model, clock, persistence or playback authority.
+//! 一回の発句について、受け取った観測と読み・会話材料を固定し、生成前後の段階をつなぐ。
+//! 通常はcaptureで見どころ抽出要求を作り、inspirationで前置きとscene要求、materialsで三行生成入力を返す。
+//! 生成器の採用結果をemissionで表記・読み・行出典を持つ発句記録へ変換する。LLM無効時は固定句の経路を使う。
+//! モデル呼出し、前置きの配送完了、発句時刻と保存は呼出側が担当し、この値はその一件分の準備状態を持つ。
 use super::{
     GroundedHaikuResult, Input, SourceAtom, StructuredRequest,
     context::{Context as HaikuContext, Irony, Scene, scene_for_spoken_irony},
@@ -18,12 +21,15 @@ use std::future::Future;
 pub mod fallback;
 mod materials;
 pub use materials::dialogue_material;
+/// 観測イベントだけでは復元できない呼出側の文脈。所持品の順序は受信JSONの順序を保持する。
+/// 現在構造物とプレイヤー名も同じ発句の準備へ渡し、途中のsession更新を直接読みに行かない。
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RuntimeSnapshot {
     pub current_structure: Option<String>,
     pub inventory_order: Vec<String>,
     pub player_name: String,
 }
+/// 見どころ抽出と三行生成に渡す予算・生成方式。再生成回数等はcapture時に検査する。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -44,6 +50,8 @@ impl Default for Settings {
         }
     }
 }
+/// 発句開始時の入力一式。eventとruntimeに、読み訂正・有効なlesson・配送済み会話を添える。
+/// dialogue_materialを省略した場合はcompleted_turnsから短い会話材料を作る。明示した空値は材料なしを表す。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Start {
     pub event: GameEvent,
@@ -57,18 +65,21 @@ pub struct Start {
     pub completed_turns: Vec<Value>,
     pub dialogue_material: Option<Value>,
 }
+/// captureの結果。通常は見どころ抽出request、モデル無効時はfixed_textを呼び手へ返す。
 #[derive(Clone, Debug, Serialize)]
 pub struct ContextOutput {
     pub request: Option<StructuredRequest>,
     pub fallback_text: String,
     pub fixed_text: Option<String>,
 }
+/// 見どころの説明、配送する前置き文、次のscene要求を束ねた結果。
 #[derive(Clone, Debug, Serialize)]
 pub struct InspirationOutput {
     pub text: String,
     pub spoken_text: String,
     pub request: StructuredRequest,
 }
+/// 三行生成器へのInputと、採用時の記録へ残す材料・解釈のsnapshot。
 #[derive(Clone, Debug, Serialize)]
 pub struct MaterialsOutput {
     pub input: Input,
@@ -76,6 +87,7 @@ pub struct MaterialsOutput {
     pub interpretation: Option<String>,
     pub interpretation_origin: Option<String>,
 }
+/// 通常はContext→Inspiration→Materials→Emitted。モデル無効時はFixed→Emittedへ進む。
 #[derive(Debug, PartialEq, Eq)]
 enum Stage {
     Context,
@@ -84,6 +96,8 @@ enum Stage {
     Materials,
     Emitted,
 }
+/// 見どころ、生成材料、発句記録へ順に進む一件の状態。各公開操作はstageを照合する。
+/// 同じモデル応答の二重適用や、材料準備前の発句確定を段階違反として返す。
 pub struct Preparation {
     stage: Stage,
     event: GameEvent,
@@ -112,6 +126,8 @@ fn normalized(s: Option<&str>) -> Option<String> {
     let s = s.rsplit(':').next().unwrap_or("");
     (!s.is_empty()).then(|| s.into())
 }
+/// 保存済みの読み訂正を表記ごとの参照表へまとめる。表記・読み・禁止読みの外形不正はErrになる。
+/// 同じ表記の読みは後の行で更新し、過去の誤読候補は重複を除いて蓄積する。
 pub fn reading_snapshot(rows: &[Value]) -> Result<ReadingSnapshot> {
     let mut snapshot = ReadingSnapshot::default();
     for row in rows {
@@ -152,6 +168,8 @@ pub fn reading_snapshot(rows: &[Value]) -> Result<ReadingSnapshot> {
     }
     Ok(snapshot)
 }
+/// 見どころの説明を短い前置きへ整え、見つからなければ「なんか浮かんできたわ。」を返す。
+/// 既に「浮かぶ／思いつく」を含む説明には同じ結びを重ねず、句読点だけを補う。
 pub fn compose_inspiration_speech(found: bool, description: &str) -> String {
     let s = if found { strip(description) } else { "" };
     if s.is_empty() {
@@ -171,6 +189,8 @@ pub fn compose_inspiration_speech(found: bool, description: &str) -> String {
     }
 }
 impl Preparation {
+    /// 設定を検査し、観測・所持品・読み訂正・会話材料からこの発句のContextを作る。
+    /// LLM有効ならhaiku_irony要求、無効なら観測に対応した固定句を返す。ここではモデルを呼ばない。
     pub fn capture(start: Start) -> Result<(Self, ContextOutput)> {
         ensure!(
             start.settings.grounding_max_tokens >= 1
@@ -188,7 +208,8 @@ impl Preparation {
             }
             None => dialogue_material(&start.completed_turns)?,
         };
-        // Only the existing completed player-turn material promotes a follower.
+        // 会話中に話題となった同行者だけを主材料の観測へ昇格する。要約・motifに加え、
+        // 材料を自動作成する経路では配送済みturnの本人発話も使い、残る同行者から背景材料を一体分選ぶ。
         let mut topics = dialogue
             .get("summary")
             .and_then(Value::as_str)
@@ -266,6 +287,8 @@ impl Preparation {
             fallback_value: json!({"found":false}),
         }
     }
+    /// scene応答前の材料を初期化する。観測出典と本人に帰属する会話出典を併合し、
+    /// 見どころ・前置き・道具と読みの制約を、後の発句記録にも渡せるmaterialsへ保存する。
     fn seed(&mut self, irony: Irony, spoken: Option<&str>) {
         self.interpretation = (irony.found && !strip(&irony.description).is_empty())
             .then(|| strip(&irony.description).into());
@@ -295,6 +318,8 @@ impl Preparation {
                 .insert("haiku_constraints".into(), constraints);
         }
     }
+    /// Context段階の見どころ応答を読み、前置きと次のhaiku_scene要求を返す。
+    /// 応答を解釈できなければ見どころなしで続ける。返したspoken_textの配送は呼出側の仕事になる。
     pub fn inspiration(&mut self, payload: &Value) -> Result<InspirationOutput> {
         ensure!(
             self.stage == Stage::Context,
@@ -314,6 +339,9 @@ impl Preparation {
             request: self.request("haiku_scene", self.context.scene_details(Some(&self.irony))),
         })
     }
+    /// 前置きの後のscene応答を、生成器用Inputと保存用materialsへまとめる。
+    /// sceneが不成立でも一次観測の出典は残し、会話・前置き由来・背景同行者の出典を区別して併合する。
+    /// 前置きを配送してから呼ぶ順序は呼出側が守る。この関数は保存した前置き文との対応を確認する。
     pub fn materials(&mut self, payload: &Value) -> Result<MaterialsOutput> {
         ensure!(
             self.stage == Stage::Inspiration,
@@ -332,6 +360,8 @@ impl Preparation {
         if was_spoken {
             scene = scene_for_spoken_irony(&self.irony, &scene, &self.context.source_atoms);
         }
+        // 説明が実際の前置き文に含まれる場合だけ、その説明に由来する節を出典候補へ加える。
+        // 対応しないsceneの説明を「既に共有した見どころ」として三行の根拠へ混ぜないため。
         let clauses = if was_spoken {
             scene.clauses.as_slice()
         } else {
@@ -406,6 +436,8 @@ impl Preparation {
             interpretation_origin: Some(origin.into()),
         })
     }
+    /// 採用された三行と出典を、表示表記・確定読み・安定した行IDを持つPreparedEmissionへ変換する。
+    /// 固定句経路では準備した句との一致も検査する。時刻の付与、句の公開、保存はこの戻り値を使う呼出側で行う。
     pub async fn emission<R: Reading>(
         &mut self,
         result: &GroundedHaikuResult,
@@ -501,6 +533,8 @@ impl Preparation {
                 });
             }
         }
+        // 読みを三行とも確定できた場合だけ行記録を正本として使う。一行でも未解決なら
+        // linesを空にしたまま元の句本文を表示・読みの両方へ返し、不完全な行対応を作らない。
         let surface_text = if lines.len() == 3 {
             crate::haiku_record::verse::surface(&lines)
         } else {
@@ -535,6 +569,8 @@ impl Preparation {
         })
     }
 }
+/// 改行で句を分割する。一行表記の場合だけ、空白でちょうど三語に分かれれば三行として扱う。
+/// ここでは音数から境界を推測せず、三行になったかの判断は利用側へ返す。
 pub fn split_verse(text: &str) -> Vec<String> {
     let s = strip(text);
     let mut lines: Vec<_> = s
@@ -558,9 +594,12 @@ pub fn split_verse(text: &str) -> Vec<String> {
     }
     lines
 }
+/// 発句の表示表記から読みを得る境界。生成や採否を委ねず、読み文字列または処理エラーを返す。
 pub trait Reading {
     fn hiraganize(&mut self, surface: &str) -> impl Future<Output = Result<String>> + Send;
 }
+// 漢字がある行だけ、既に所有する辞書補助へtokenを問い合わせる。辞書応答が
+// tokenを返さなければ原文を使い、emission側のかな検査へ渡す。通信・応答の検査失敗はErrを返す。
 impl Reading for crate::python_worker::Helper {
     async fn hiraganize(&mut self, surface: &str) -> Result<String> {
         if !crate::tts_reading::has_kanji(surface) {

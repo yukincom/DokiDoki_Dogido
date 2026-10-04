@@ -120,7 +120,9 @@ fn overwhelmed(e: &GameEvent, preferred: &[String]) -> (String, Vec<String>) {
     (text, ids)
 }
 fn massive(e: &GameEvent) -> String {
-    // Python datetime.isoformatと同じ6桁の小数・UTC offsetで既存の文面を選ぶ。
+    // 大群向けの定型文はsequence・観測時刻・場所から作るseedで決定的に選ぶ。
+    // 時刻の表記を変えると同じイベントの文面が変わるため、小数は非ゼロ時だけ6桁、
+    // offsetは元イベントにあるときだけ付ける既存形式を保つ（UTCへ変換はしない）。
     let date = match &e.observed_at {
         EventTime::Aware(t) => format!(
             "{}{}{}",

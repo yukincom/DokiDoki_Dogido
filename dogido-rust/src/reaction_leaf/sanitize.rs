@@ -320,7 +320,7 @@ fn sep(c: char) -> bool {
 }
 pub(crate) fn repeated(text: &str) -> bool {
     let c: Vec<_> = text.chars().collect();
-    // Python's (.{2,8}) separator* backreference separator* backreference.
+    // 2〜8文字の同じ単位が、区切り記号を挟んで3回続く生成崩れを検出する。
     for start in 0..c.len() {
         for len in 2..=8 {
             if start + len > c.len() {

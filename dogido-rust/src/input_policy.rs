@@ -1,4 +1,6 @@
-//! player_input/guardrails.pyの純粋な読取り用分類。保存・操作の採否は決めない。
+//! player入力を閉じた語彙・文型で調べ、静粛要求・戦況質問・句の保存/修正・読み訂正へ分類する。
+//! 原文と共有input-policy.jsonからProjectionを返す純粋な読取り処理。
+//! 呼び手が現在状態・権限・根拠と合わせて採否を決めるため、分類だけでは保存や操作を実行しない。
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,7 +22,7 @@ fn has(text: &str, key: &str) -> bool {
 use crate::compat::fold_kana as fold;
 use crate::compat::is_python_whitespace as space;
 fn compile(pattern: &str) -> Regex {
-    // Pythonのstr/reに含まれるC0空白を維持する。クラス内部の置換も集合の和。
+    // 入力仕様上の空白はUnicode空白とU+001C..U+001F。正規表現内でも同じ集合へ広げる。
     Regex::new(&pattern.replace(r"\s", r"[\s\u001c-\u001f]")).expect("checked input regex")
 }
 fn patterns(key: &str) -> Vec<Regex> {
