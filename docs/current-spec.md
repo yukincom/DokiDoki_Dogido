@@ -58,8 +58,8 @@ Minecraft Java Edition
 
 ### 起動と資料の境界
 
-- 一般起動は `launch_dialogue.py --settings-dir .` と `--voice`、または `scripts/start_dogido.command server|voice` でRustを起動する。一般設定のbindポートとFabric既定は5055。`dogido-rust/start_dialogue.command` / `start_voice.command` は5056と従来の記憶保存先を明示する専用経路として残す。
-- `memory_dir` は起動経路ごとに維持し、移行を理由に記憶を自動移動・上書きしない。
+- 一般起動は `launch_dialogue.py --settings-dir .` と `--voice`、または `scripts/start_dogido.command server|voice` でRustを起動する。`dogido-rust/start_dialogue.command` / `start_voice.command` も同じ設定のbindポート（既定5055）と `memory_dir` を使い、入口ごとの上書きはしない。Fabricの接続先も同じポートへ揃える。テキスト相談室は同じ記憶保存先を参照する。
+- `memory_dir` は共通設定へ集約する。引き継ぐ保存先を設定へ明示し、起動時に記憶を自動移動・上書きしない。
 - `dogido_server/language_dialogue/source_cards.json` と `reference/` はRustが読む現役資料。Python本体の終了と一緒に削除しない。
 - 共有プロンプトと状況文は人が編集する正本からRustへ取り込む。ラボの比較候補を自動反映しない。
 - 戦闘・環境とHTTPの既定値は `dogido_server/runtime_defaults.json` 一つをRustとPython起動補助で共有する。`.env` の上書きは明示的にRustへ渡し、廃止した設定は名前だけを通知する。VADの実行ファイル指定は音声起動経路で有効。

@@ -20,7 +20,7 @@ Minecraft Java Edition
   -> 同じ本体のplayer入力
 ```
 
-標準は `launch_dialogue.py --settings-dir .` と `--voice`、または `scripts/start_dogido.command server|voice` によるRust起動です。一般設定とFabricのポート既定は5055。`dogido-rust/start_dialogue.command` / `start_voice.command` は5056と従来の保存先を維持する専用経路です。接続先は選んだ起動経路に揃え、設定した `memory_dir` の記憶を自動移動しません。
+標準は `launch_dialogue.py --settings-dir .` と `--voice`、または `scripts/start_dogido.command server|voice` によるRust起動です。`dogido-rust/start_dialogue.command` / `start_voice.command` も同じ設定のポート（既定5055）と `memory_dir` を使います。本体・マイク・Fabricの接続先を揃え、テキスト相談室も同じ記憶保存先を参照します。既存の記憶は設定で保存先を指定して引き継ぎ、自動移動しません。
 
 ## 責務分担
 

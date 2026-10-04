@@ -61,7 +61,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 
 残すPythonモジュールと資料の一覧は [Rust本体の補助一覧](dogido-rust/README.md#残すpython補助と資料) を正とする。旧 `dogido_server/tts_reading.py` は廃止し、UniDic取得は `dogido-rust/scripts/tts_shared_tokens.py` の共有 `Unidic()` に限定する。読みの判定・整形はRust。データ整備用補助は `dev_tools/catalog_tools/` へ分離する。
 
-一般起動は `python dogido-rust/scripts/launch_dialogue.py --settings-dir .` と別ターミナルの `--voice`。一般設定のポート既定5055と設定した `memory_dir` を使う。`scripts/start_dogido.command server|voice` もRustへ接続する。既存の `dogido-rust/start_dialogue.command` / `start_voice.command` は専用経路として明示5056と従来の記憶保存先を維持する。接続先と `memory_dir` は起動経路を確認して扱い、記憶を自動移動しない。
+一般起動は `python dogido-rust/scripts/launch_dialogue.py --settings-dir .` と別ターミナルの `--voice`。`scripts/start_dogido.command server|voice`、`dogido-rust/start_dialogue.command` / `start_voice.command` も同じ一般設定のポート（既定5055）と `memory_dir` を使う。入口ごとの5056・記憶保存先の固定指定は廃止した。テキスト相談室も同じ `memory_dir` を読み、独立したHTTP窓口の既定5057は維持する。既存の記憶は設定で保存先を指定して引き継ぎ、起動時に自動移動・統合しない。
 
 ---
 

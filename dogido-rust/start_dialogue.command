@@ -1,6 +1,6 @@
 #!/bin/zsh
-# 既存の専用接続先5056と記憶保存先を維持する入口。接続先・保存先を標準値へ自動変更しない。
-# 通常起動はscripts/start_dogido.commandと同じlaunch_dialogue.pyを設定値で使う。
+# 本体・マイクは同じ設定の接続先（既定5055）と記憶保存先を使う。
+# scripts/start_dogido.commandと同じlaunch_dialogue.pyへ渡し、入口ごとに上書きしない。
 set -eu
 SCRIPT_DIR="${0:A:h}"
 PROJECT_ROOT="${SCRIPT_DIR:h}"
@@ -17,7 +17,7 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   exit 1
 fi
 if [[ "${1:-}" == '--check' ]]; then
-  exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --port 5056 --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration" --check
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --check
 fi
 if [[ $# -gt 0 ]]; then
   print -u2 -- '使い方: start_dialogue.command [--check]'
@@ -29,4 +29,4 @@ elif [[ ! -x "$SCRIPT_DIR/target/release/dogido-rust" ]]; then
   print -u2 -- '準備済みRust本体が見つかりません。移動先でreleaseビルドを行ってください。'
   exit 1
 fi
-exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT" --port 5056 --memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration"
+exec "$PYTHON_BIN" "$SCRIPT_DIR/scripts/launch_dialogue.py" --settings-dir "$CONFIG_ROOT"

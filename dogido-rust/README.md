@@ -52,9 +52,9 @@ python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
 
 既存の `dogido-llm` 補助環境を使う場合は、`./scripts/start_dogido.command server` と別ターミナルの `./scripts/start_dogido.command voice` も同じRust起動へ接続します。`--profile shared` は従来どおり `.env.shared` を重ねます。
 
-### 従来の専用起動（5056）
+### 起動ファイルを使う
 
-`dogido-rust/start_dialogue.command` / `start_voice.command` は、専用経路として5056と実行するcheckout内の従来の `.dogido_memory/rust-migration` を明示します。標準の5055とは保存先・接続先を分けて使い、記憶を自動移動しません。
+`dogido-rust/start_dialogue.command` / `start_voice.command` も同じ設定のポート（既定5055）と記憶保存先を使います。移行時の5056固定は廃止しました。
 
 ```sh
 ./dogido-rust/start_dialogue.command --check
@@ -64,7 +64,15 @@ python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
 ./dogido-rust/start_voice.command
 ```
 
-この経路の会話画面は [5056の会話画面](http://127.0.0.1:5056/rust-chat)、Fabric接続先は `http://127.0.0.1:5056` です。Python補助環境は `DOGIDO_PYTHON`、設定を読むルートは `DOGIDO_RUST_SETTINGS_DIR` で指定できます。省略時はGit共通ディレクトリ側の設定ルートと、その `dogido-llm/bin/python` を使用します。Git情報がない配布フォルダでは、そのフォルダを設定ルートにします。Python環境の自動導入はしません。
+会話画面・Fabric接続先は上の標準起動と共通です。`start_voice.command` は従来のAEC・無音800ms指定を維持します。Python補助環境は `DOGIDO_PYTHON`、設定を読むルートは `DOGIDO_RUST_SETTINGS_DIR` で指定できます。省略時はGit共通ディレクトリ側の設定ルートと、その `dogido-llm/bin/python` を使用します。Git情報がない配布フォルダでは、そのフォルダを設定ルートにします。Python環境の自動導入はしません。
+
+記憶保存先は `DOGIDO_MEMORY_DIR` で指定します。移行時の保存先を引き継ぐ場合は、設定フォルダの `.env` に次を指定してください。本体とテキスト相談室が同じ既存記録を読み、起動時にファイルを移動・統合することはありません。相対パスは設定フォルダ基準です。
+
+```dotenv
+DOGIDO_MEMORY_DIR=.dogido_memory/rust-migration
+```
+
+未指定の既定は `.dogido_memory` です。接続先を変えた場合はMinecraftの `server_base_url` も合わせ、Minecraftを再起動して読み直します。
 
 ## 変更箇所と確認
 

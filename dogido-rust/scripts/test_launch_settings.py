@@ -2,6 +2,9 @@
 import json
 import os
 from pathlib import Path
+import shlex
+import shutil
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -136,14 +139,46 @@ def test_voice_check_uses_same_endpoint_and_does_not_contact_or_capture(monkeypa
     assert not list(tmp_path.iterdir())
 
 
-def test_localhost_is_resolved_without_dns_and_dedicated_wrapper_keeps_checkout_memory(monkeypatch, tmp_path):
+def test_localhost_is_resolved_without_dns(monkeypatch, tmp_path):
     args, _ = command(monkeypatch, tmp_path, Settings(_env_file=None, bind_host="localhost", bind_port=5123))
     assert value(args, "--listen") == "127.0.0.1:5123"
-    # A different settings directory must not silently switch dedicated-wrapper records.
-    for name in ("start_dialogue.command", "start_voice.command", "start_workshop_text.command"):
-        script=(launch.ROOT / "dogido-rust" / name).read_text()
-        assert '--memory-dir "$PROJECT_ROOT/.dogido_memory/rust-migration"' in script
-        assert '--memory-dir "$CONFIG_ROOT/' not in script
+
+
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="起動ファイルの検証にはzshが必要")
+@pytest.mark.parametrize("name,launcher,voice", [
+    ("start_dialogue.command", "launch_dialogue.py", False),
+    ("start_voice.command", "launch_dialogue.py", True),
+    ("start_workshop_text.command", "launch_workshop_text.py", False),
+])
+@pytest.mark.parametrize("check", [False, True])
+def test_wrappers_forward_shared_settings_without_port_or_memory_overrides(tmp_path, name, launcher, voice, check):
+    # 設定フォルダをcheckoutの外へ置き、通常起動と事前確認の両方を通す。
+    # interpreterとbuildだけ代替し、モデル・本体・SDK・録音は起動しない。
+    scripts = tmp_path / "checkout" / "dogido-rust"
+    scripts.mkdir(parents=True)
+    wrapper = scripts / name
+    wrapper.write_bytes((launch.ROOT / "dogido-rust" / name).read_bytes())
+    cargo = scripts / "cargo.sh"
+    cargo.write_text("#!/bin/sh\nexit 0\n")
+    cargo.chmod(0o700)
+    interpreter = tmp_path / "capture interpreter"
+    interpreter.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
+                           + " -c 'import json, sys; print(json.dumps(sys.argv[1:]))' \"$@\"\n")
+    interpreter.chmod(0o700)
+    config = tmp_path / "selected settings"
+    config.mkdir()
+    env = dict(os.environ, DOGIDO_PYTHON=str(interpreter), DOGIDO_RUST_SETTINGS_DIR=str(config),
+               DOGIDO_RUST_USE_PREBUILT="0", PYTHONDONTWRITEBYTECODE="1")
+    result = subprocess.run(["zsh", str(wrapper), *(["--check"] if check else [])],
+                            env=env, cwd=tmp_path, capture_output=True, text=True, check=True, timeout=10)
+    args = json.loads(result.stdout)
+    assert Path(args[0]).name == launcher
+    assert value(args, "--settings-dir") == str(config)
+    assert "--port" not in args and "--memory-dir" not in args
+    assert ("--voice" in args) is voice
+    assert ("--check" in args) is check
+    if voice:
+        assert "--aec" in args and value(args, "--silence-ms") == "800"
 
 
 @pytest.mark.parametrize("layout,override", [("long_term", None), ("sessions", "other-records")])
