@@ -14,6 +14,15 @@ pub enum Action {
     Uncertain,
 }
 impl Action {
+    /// 分類器へ渡す許可集合。IPCとpromptは同じRustの型から組み立てる。
+    pub const ALL: [Self; 5] = [
+        Self::ResumeWorkshop,
+        Self::WorkshopInput,
+        Self::CloseWorkshop,
+        Self::Unrelated,
+        Self::Uncertain,
+    ];
+
     pub fn name(self) -> &'static str {
         match self {
             Self::ResumeWorkshop => "resume_workshop",
@@ -183,5 +192,25 @@ mod tests {
                 Action::Uncertain
             );
         }
+    }
+
+    #[test]
+    fn allowed_actions_share_wire_names_and_pass_the_same_analysis_contract() {
+        let names = Action::ALL.map(Action::name);
+        assert_eq!(
+            names.iter().collect::<std::collections::HashSet<_>>().len(),
+            Action::ALL.len()
+        );
+        assert_eq!(serde_json::to_value(Action::ALL).unwrap(), json!(names));
+        for action in Action::ALL {
+            let wire = serde_json::to_value(action).unwrap();
+            assert_eq!(
+                serde_json::from_value::<Action>(wire.clone()).unwrap(),
+                action
+            );
+            let payload = json!({"action":wire,"confidence":0.75,"evidence":"句の相談"});
+            assert_eq!(Analysis::parse(&payload, "句の相談をしよう").action, action);
+        }
+        assert!(serde_json::from_value::<Action>(json!("save")).is_err());
     }
 }

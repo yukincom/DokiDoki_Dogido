@@ -196,7 +196,12 @@ pub fn combat_messages(verse: &str, text: &str) -> Vec<ChatMessage> {
                 } else {
                     text
                 },
-                p[2].as_str().unwrap()
+                p[2].as_str().unwrap().replace(
+                    "{allowed_actions}",
+                    &crate::workshop_combat_input::Action::ALL
+                        .map(|a| a.name())
+                        .join("、"),
+                )
             ),
         },
     ]

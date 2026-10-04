@@ -9,6 +9,7 @@ from dogido_server.combat_input_contract import CombatInputRequest
 def frame(provider='chat'):
     return {"op": "classify", "text": "句に戻ろう", "verse": "句",
             "settings": {"provider": provider},
+            "allowed_actions": ["resume_workshop", "workshop_input", "close_workshop", "unrelated", "uncertain"],
             "messages": [{"role": "system", "content": "Rustが確定した5分類の指示"},
                          {"role": "user", "content": "句に戻ろう"}]}
 
@@ -40,9 +41,12 @@ def test_available_os_uses_same_router_and_does_not_request_chat(monkeypatch):
         request_frame = frame("apple")
         r=w.handle(request_frame); original=w.router
         assert not r["needs_chat"] and r["provider"]=="apple_foundation_models"
-        w.handle(request_frame);assert w.router is original
+        next_frame = {**request_frame, "allowed_actions": ["resume_workshop"]}
+        w.handle(next_frame);assert w.router is original
         assert len(requests) == 2
         assert all(request.messages == request_frame["messages"] for request in requests)
+        assert requests[0].details["allowed_actions"] == request_frame["allowed_actions"]
+        assert requests[1].details["allowed_actions"] == next_frame["allowed_actions"]
     finally:w.close()
 
 
@@ -53,11 +57,45 @@ def test_missing_rust_messages_never_calls_a_provider(monkeypatch):
     for provider in (AppleFoundationModelsProvider, FoundryLocalProvider):
         monkeypatch.setattr(provider, "probe", forbidden)
         monkeypatch.setattr(provider, "generate", forbidden)
+    monkeypatch.setattr("combat_input_helper.PlatformStructuredAIRouter", forbidden)
     request = frame('apple')
     del request['messages']
     worker = Worker()
     try:
         with pytest.raises(KeyError, match='messages'):
             worker.handle(request)
+    finally:
+        worker.close()
+
+
+@pytest.mark.parametrize("actions", [None, "uncertain", {}, [], [None], [1], [True],
+                                      [[]], [""], [" "], [" uncertain"], ["uncertain\n"],
+                                      ["uncertain", "uncertain"]])
+def test_invalid_rust_actions_never_initialize_router(monkeypatch, actions):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("malformed IPC must not initialize the router")
+    monkeypatch.setattr("combat_input_helper.PlatformStructuredAIRouter", forbidden)
+    request = frame('apple')
+    request["allowed_actions"] = actions
+    worker = Worker()
+    try:
+        with pytest.raises(ValueError, match="allowed_actions"):
+            worker.handle(request)
+        assert worker.router is None
+    finally:
+        worker.close()
+
+
+def test_missing_rust_actions_never_initialize_router(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("missing contract must not initialize the router")
+    monkeypatch.setattr("combat_input_helper.PlatformStructuredAIRouter", forbidden)
+    request = frame('apple')
+    del request["allowed_actions"]
+    worker = Worker()
+    try:
+        with pytest.raises(ValueError, match="allowed_actions"):
+            worker.handle(request)
+        assert worker.router is None
     finally:
         worker.close()

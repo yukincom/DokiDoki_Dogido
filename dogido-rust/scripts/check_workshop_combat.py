@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """戦闘後の句再掲・確認を、実HTTPと模擬モデル/再生で検査。所有プロセスは回収する。"""
 from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
+from pathlib import Path
+import argparse
 import json
 import time
 import threading
 from check_dialogue import register, request, row, submit, wait_for
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import ready, session, install, step
-from check_workshop_edits import edit, finish, revisions, adoption
+from check_workshop_edits import edit, finish, revisions, adoption, token_fixture
 
 SETTINGS = {"aftermath_time_ms": 150, "combat_clear_time_ms": 150}
 MOB = {"type": "zombie", "entity_id": "z1", "distance": 6, "direction": {"horizontal": "front"}}
@@ -47,10 +50,67 @@ def returned(send, rows, sid, count=1):
     return drive(send, sid, lambda: next((r for r in actions(rows, sid, "workshop_resume")[count-1:] if r["playback_status"] == "completed"), None))
 
 
-def main():
+@contextmanager
+def platform_fixture():
+    """実workerのIPCとrouterを通し、端末SDKのprobe/生成だけを置き換える。"""
+    with token_fixture("unavailable") as (args, folder):
+        helper = folder / "combat_input_helper.py"
+        helper.unlink()
+        helper.write_text("import sys\nsys.path.insert(0, " + repr(str(Path(__file__).resolve().parent)) + ")\n" + '''
+import json
+from pathlib import Path
+from combat_input_helper import Worker
+from dogido_server.platform_ai import AppleFoundationModelsProvider, PlatformAIProbe, _json_schema_for
+folder = Path(__file__).parent
+AppleFoundationModelsProvider.probe = lambda self: PlatformAIProbe(self.name, True, "fixture")
+def generate(self, request):
+    actions = _json_schema_for(request)["properties"]["action"]["enum"]
+    with (folder / "platform_requests.jsonl").open("a") as out:
+        out.write(json.dumps({"allowed_actions": request.details["allowed_actions"], "schema_actions": actions}) + "\\n")
+    return {**json.loads((folder / "platform_payload.json").read_text()), "evidence": request.details["player_text"]}
+AppleFoundationModelsProvider.generate = generate
+worker = Worker()
+try:
+    for line in sys.stdin:
+        frame = json.loads(line)
+        if frame["op"] == "classify":
+            with (folder / "platform_frames.jsonl").open("a") as out:
+                out.write(json.dumps(frame, ensure_ascii=False) + "\\n")
+        print(json.dumps(worker.handle(frame), ensure_ascii=False), flush=True)
+finally:
+    worker.close()
+''')
+        yield args, folder
+
+
+def main(*, platform_contract_only=False):
     # Import here: provisional fixtures reuse this module's combat driver.
     from check_workshop_provisional import classifier, intent
     passed = []
+    with platform_fixture() as (args, platform_dir), fixture(extra_args=args, combat_settings=SETTINGS, platform_ai={"provider": "apple"}) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        chat_calls = classifier(control, lambda text: intent(text, "uncertain", confidence=0.0))
+        sid = ready(base, send, rows)
+        enter(send, rows, sid)
+        (platform_dir / "platform_payload.json").write_text(json.dumps({"action": "unrelated", "confidence": .95}))
+        turn = submit(base, sid, "少し待っているね")
+        r = wait_for(lambda: row(base, turn, {"quiet"}))
+        result = r["combat_input_result"]
+        assert result["provider"] == "apple_foundation_models" and not result["llm_reports"], r
+        assert not chat_calls
+        frames = [json.loads(line) for line in (platform_dir / "platform_frames.jsonl").read_text().splitlines()]
+        requests = [json.loads(line) for line in (platform_dir / "platform_requests.jsonl").read_text().splitlines()]
+        assert len(frames) == len(requests) == 1
+        for frame, sdk in zip(frames, requests):
+            assert frame["allowed_actions"] == ["resume_workshop", "workshop_input", "close_workshop", "unrelated", "uncertain"]
+            assert sdk["allowed_actions"] == sdk["schema_actions"] == frame["allowed_actions"]
+            prompt = frame["messages"][-1]["content"]
+            assert "許可された action: " + "、".join(frame["allowed_actions"]) + "\n" in prompt
+        passed.append("rust_action_set_reaches_helper_schema_and_prompt_without_live_sdk")
+
+    if platform_contract_only:
+        print(json.dumps({"passed": len(passed), "cases": passed, "live_sdk": False, "all_owned_processes_stopped": True}, indent=2))
+        return
+
     with fixture(combat_settings=SETTINGS) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: step(text,"respond","気に入ってもらえてうれしいわ。"))
         sid = ready(base, send, rows)
@@ -264,7 +324,6 @@ def main():
         passed.append("unavailable_combat_classifier_falls_back_only_for_explicit_close")
 
     # SDK補助が壊れてもchatへ進み、chatも不成立なら辞書なしで明示終了を判定する。
-    from check_workshop_edits import token_fixture
     for decision in ["close_workshop", "uncertain"]:
         with token_fixture("unavailable") as (args, token_dir), fixture(extra_args=args,combat_settings=SETTINGS,platform_ai={"provider":"auto"}) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
             helper=token_dir/"combat_input_helper.py"
@@ -284,4 +343,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--platform-contract-only", action="store_true", help="SDKを模擬した許可集合の伝達だけを確認する")
+    main(platform_contract_only=parser.parse_args().platform_contract_only)

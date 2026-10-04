@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.config import Settings
 from dogido_server.platform_ai import PlatformStructuredAIRouter
-from dogido_server.combat_input_contract import CombatInputRequest, ACTIONS
+from dogido_server.combat_input_contract import CombatInputRequest, allowed_actions
 
 
 
@@ -30,12 +30,15 @@ class Worker:
             return handle(frame)
         text = frame["text"]
         if frame["op"] == "classify":
+            request = CombatInputRequest(messages=frame["messages"],
+                details={"verse": frame["verse"], "player_text": text,
+                         "allowed_actions": frame.get("allowed_actions")},
+                temperature=0.0, max_tokens=120)
+            # 不正なIPCはSDKの初期化前に拒否し、Rustの許可集合だけを使う。
+            request.details["allowed_actions"] = allowed_actions(request)
             if self.router is None:
                 self.router = PlatformStructuredAIRouter(Settings(_env_file=None,
                     **{"platform_ai_" + k: v for k, v in frame["settings"].items()}))
-            request = CombatInputRequest(messages=frame["messages"],
-                details={"verse": frame["verse"], "player_text": text, "allowed_actions": ACTIONS},
-                temperature=0.0, max_tokens=120)
             result = self.router.generate_structured_json(request, fallback=ChatFallback())
             return {"payload": {k: result[k] for k in ("action", "confidence", "evidence") if k in result},
                     "needs_chat": result.get("__needs_chat", False),

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from dogido_server.config import Settings
 from dogido_server.combat_input_contract import STRUCTURED_STATUS_KEY
-from dogido_server.combat_input_contract import CombatInputRequest
+from dogido_server.combat_input_contract import CombatInputRequest, validate_payload
 from dogido_server.platform_ai import (
     FoundryLocalProvider,
     PLATFORM_AI_PROVIDER_KEY,
@@ -132,6 +132,59 @@ def _request() -> CombatInputRequest:
 
 
 class PlatformAIRouterTests(unittest.TestCase):
+    def test_invalid_action_contract_never_probes_generates_or_falls_back(self) -> None:
+        router = PlatformStructuredAIRouter(Settings(platform_ai_provider="apple"))
+        fallback = _Fallback()
+        try:
+            with patch.object(router, "_select_provider", side_effect=AssertionError("must not probe")):
+                for details in ({}, {"allowed_actions": []}, {"allowed_actions": "uncertain"}, None):
+                    with self.subTest(details=details):
+                        request = _request()
+                        request.details = details
+                        with self.assertRaisesRegex(ValueError, "allowed_actions"):
+                            router.generate_structured_json(request, fallback=fallback)
+            self.assertEqual(fallback.calls, 0)
+            self.assertEqual(router._failed_until, {})
+        finally:
+            router.close()
+
+    def test_action_outside_this_request_is_rejected_before_provider_acceptance(self) -> None:
+        router = PlatformStructuredAIRouter(Settings(platform_ai_provider="apple"))
+        provider = _Provider()
+        router._providers["apple"] = provider
+        fallback = _Fallback()
+        request = _request()
+        request.details["allowed_actions"] = ["uncertain"]
+        try:
+            payload = router.generate_structured_json(request, fallback=fallback)
+            self.assertEqual(payload["action"], "uncertain")
+            self.assertEqual(payload[PLATFORM_AI_PROVIDER_KEY], "chat_fallback")
+            self.assertEqual((provider.calls, fallback.calls), (1, 1))
+        finally:
+            router.close()
+
+    def test_schema_and_response_use_exact_request_actions_without_python_vocabulary(self) -> None:
+        request = _request()
+        request.details["allowed_actions"] = ["fixture_new_action", "close_workshop"]
+        schema = _json_schema_for(request)
+        self.assertEqual(schema["properties"]["action"]["enum"], request.details["allowed_actions"])
+        validate_payload(request, {"action": "fixture_new_action", "confidence": 0.94, "evidence": "句に戻ろう"})
+        with self.assertRaisesRegex(ValueError, "invalid combat input fields"):
+            validate_payload(request, {"action": "uncertain", "confidence": 0.0, "evidence": ""})
+
+    def test_schema_and_response_reject_missing_or_malformed_actions(self) -> None:
+        for details in ({}, None, {"allowed_actions": None}, {"allowed_actions": []},
+                        {"allowed_actions": [1]}, {"allowed_actions": [""]},
+                        {"allowed_actions": [" uncertain"]},
+                        {"allowed_actions": ["uncertain", "uncertain"]}):
+            with self.subTest(details=details):
+                request = _request()
+                request.details = details
+                with self.assertRaisesRegex(ValueError, "allowed_actions"):
+                    _json_schema_for(request)
+                with self.assertRaisesRegex(ValueError, "allowed_actions"):
+                    validate_payload(request, {"action": "uncertain", "confidence": 0.0, "evidence": ""})
+
     def test_platform_provider_is_used_before_chat_fallback(self) -> None:
         router = PlatformStructuredAIRouter(
             Settings(platform_ai_provider="apple", platform_ai_refresh_sec=300)

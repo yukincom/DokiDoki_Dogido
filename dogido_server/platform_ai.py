@@ -22,7 +22,7 @@ from typing import Any, Protocol
 
 from dogido_server.config import Settings
 from dogido_server.combat_input_contract import (
-    STRUCTURED_STATUS_KEY, CombatInputRequest, ChatFallback, validate_payload,
+    STRUCTURED_STATUS_KEY, CombatInputRequest, ChatFallback, allowed_actions, validate_payload,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -84,13 +84,7 @@ def _json_schema_for(request: CombatInputRequest) -> dict[str, object]:
     """戦闘中断中の小分類にだけ使う、端末内 guided generation schema。"""
 
     if request.kind == "haiku_workshop_combat_input":
-        actions = [
-            str(value)
-            for value in request.details.get("allowed_actions", [])
-            if value
-        ]
-        if not actions:
-            actions = ["uncertain"]
+        actions = allowed_actions(request)
         return {
             "title": "DogidoWorkshopCombatInput",
             "type": "object",
@@ -497,6 +491,8 @@ class PlatformStructuredAIRouter:
         *,
         fallback: ChatFallback,
     ) -> dict[str, Any]:
+        # 契約不正はprovider障害ではない。probeやchatへの切替より先に拒否する。
+        allowed_actions(request)
         provider = self._select_provider()
         attempted: set[str] = set()
         while provider is not None and provider.name not in attempted:

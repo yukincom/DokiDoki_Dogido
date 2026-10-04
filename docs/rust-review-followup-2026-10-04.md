@@ -58,7 +58,7 @@
 | レビュー項目 | 照合結果・次の扱い |
 |---|---|
 | 2・3：worker名と文字処理名 | P1で改名済み。Rust呼出側・起動確認・家庭用配布・試験の参照も更新した |
-| 4：戦闘5分類の列挙 | 現在の両言語の値は一致。RustのActionを正本として既存IPCへ許可集合を渡す案を次のP2で検証する。未変更 |
+| 4：戦闘5分類の列挙 | P2でRustのActionを正本に統一。既存IPCの許可集合をhelper・schema・promptへ渡し、不正集合はSDK起動前に拒否する |
 | 5：workshopの名前対応表 | P1でAGENTSに差分契約・編集案構成・採用保存・模擬試験の対応表を追記した |
 | 6：`dialogue/mod.rs` | 保守課題として継続。具体的な不具合と無関係な全体分割は今回行わない |
 | 7：fixture試験名 | P1で変更対象ファイルの5件をfixture照合と分かる名前に変更。fixture本体・出典は保持し、他の試験名は未変更 |
@@ -80,3 +80,19 @@
 - 模擬HTTPによるworkshop編集14ケースと句入力・保存9ケースが成功。モデル・音声・辞書は試験用の代替を使い、試験で起動した本体・子プロセスは回収済み。
 
 実Minecraft・実マイク・実モデル・実TTS・家庭用Macでの動作は今回未確認。既存の別変更を除き、今回の命名と参照整理だけを保存する。
+
+
+## 第三レビュー：P2の戦闘5分類契約
+
+`workshop_combat_input::Action::ALL` を許可集合の正本とし、Rustが同じ集合を分類promptと端末AI workerの `allowed_actions` へ渡す。Python側の固定 `ACTIONS` と、schema生成時の `uncertain` 補完を撤去した。workerは集合を受け取り、空・欠落・型違い・空文字・前後空白・重複をrouter生成前に拒否する。routerを直接呼ぶ場合もprovider選択前に同じ検査を行い、SDK schemaと応答検査は受け取った集合をそのまま使う。
+
+判断ロジック、信頼度・発話根拠・現在の戦況の検査、およびproviderからchat・閉じた規則へ進む既存の優先順は変更していない。生成されるprompt全文も既存fixtureと一致する。
+
+検証範囲は、許可集合の伝達と不正入力の拒否に限定する。
+
+- Pythonのworker・platform契約試験36件、14 subtests成功。欠落・不正集合でrouterを生成しないこと、provider選択・fallbackを呼ばないこと、順序と部分集合がschemaへ届くこと、今回の集合外の応答を受理しないことを確認した。
+- Rustの関連58テストが成功。5分類のwire名と型、既存promptの全文一致を含む。Clippy `-D warnings` と対象ファイルの整形も成功。
+- `check_workshop_combat.py --platform-contract-only` が成功。実Rust本体から実helper/routerへ送った集合と、生成用schema・promptの一致を1ケースで確認した。SDKのprobe・生成は試験用に置き換え、試験が起動した本体・子プロセスを回収した。
+- debug / releaseの本体を再ビルドした。
+
+実Apple／Foundry SDKは使用していない。実モデルの応答品質・実機動作はこの変更の完了条件に含めない。

@@ -77,7 +77,7 @@ impl Classifier {
                     Self::helper(&mut slot, c)?
                         .exchange_with_timeout(
                         json!({"op":"classify", "text":text,
-                "verse":input["verse"], "settings":c.haiku.platform_ai,
+                "verse":input["verse"], "settings":c.haiku.platform_ai, "allowed_actions":Action::ALL,
                 "messages":crate::workshop_input_guard::combat_messages(input["verse"].as_str().unwrap_or(""), text)}),
                         Duration::from_secs_f64(c.haiku.platform_ai.timeout_sec * 2.0 + 5.0),
                     )
