@@ -29,11 +29,11 @@ fn check(catalog: &Catalog, cases: &Value) {
     }
 }
 #[test]
-fn chat_names_all_shipped_names_and_narration_additions_match_python() {
+fn chat_names_all_shipped_names_and_narration_additions_match_fixture() {
     check(chat_catalog::catalog(), &FIXTURE["cases"]);
 }
 #[test]
-fn chat_names_aliases_unknown_ids_and_ambiguous_corrections_match_python() {
+fn chat_names_aliases_unknown_ids_and_ambiguous_corrections_match_fixture() {
     let docs = &FIXTURE["synthetic"]["documents"];
     let catalog = Catalog::from_documents(
         [&docs["mobs"][0], &docs["mobs"][1], &docs["mobs"][2]],

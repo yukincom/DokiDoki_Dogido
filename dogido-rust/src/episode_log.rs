@@ -207,7 +207,7 @@ impl Recorder {
 mod tests {
     use super::*;
     #[test]
-    fn schema_five_matches_python_observations_actions_and_receipts() {
+    fn schema_five_matches_fixture_observations_actions_and_receipts() {
         let fixtures: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/episode-records.json")).unwrap();
         for fixture in fixtures {

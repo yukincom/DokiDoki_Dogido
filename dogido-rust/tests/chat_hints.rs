@@ -61,7 +61,7 @@ fn check(catalog: &Catalog, plau: &Value, tactics: &Value) {
     }
 }
 #[test]
-fn chat_hints_current_catalog_and_actual_narration_match_python() {
+fn chat_hints_current_catalog_and_actual_narration_match_fixture() {
     check(
         chat_catalog::catalog(),
         &FIXTURE["plausibility"],
@@ -69,7 +69,7 @@ fn chat_hints_current_catalog_and_actual_narration_match_python() {
     );
 }
 #[test]
-fn chat_hints_synthetic_related_mobs_order_notes_and_normalization_match_python() {
+fn chat_hints_synthetic_related_mobs_order_notes_and_normalization_match_fixture() {
     let d = &FIXTURE["synthetic"]["documents"];
     let catalog = Catalog::from_documents(
         [&d["mobs"][0], &d["mobs"][1], &d["mobs"][2]],

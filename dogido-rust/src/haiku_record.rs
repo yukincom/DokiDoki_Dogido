@@ -501,7 +501,7 @@ mod tests {
         }
     }
     #[test]
-    fn completion_time_and_python_compatible_ids_use_microseconds() {
+    fn completion_time_and_record_ids_use_microseconds() {
         let e = emission();
         assert_eq!(e.created_at_json(), "2026-09-26T12:34:56.123456+00:00");
         assert_eq!(e.entry_id(), "hk_20260926_123456_42");

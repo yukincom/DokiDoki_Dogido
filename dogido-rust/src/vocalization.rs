@@ -63,7 +63,7 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn matches_python_closed_rules_and_observed_notes() {
+    fn matches_fixture_closed_rules_and_observed_notes() {
         let fixtures: Value =
             serde_json::from_str(include_str!("../fixtures/vocalization.json")).unwrap();
         for case in fixtures["texts"].as_array().unwrap() {

@@ -108,7 +108,7 @@ mod tests {
         assert_eq!(rms(&frame(0)), 0);
     }
     #[test]
-    fn pre_roll_and_800ms_floor_match_python() {
+    fn pre_roll_and_800ms_floor_match_canonical_contract() {
         let mut s = Segmenter::new(700, 800, 350, 30_000);
         for _ in 0..20 {
             assert!(s.push(frame(0)).is_none());

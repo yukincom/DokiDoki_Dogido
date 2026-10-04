@@ -81,7 +81,7 @@ pub fn read(root: &Path, view: View) -> anyhow::Result<Value> {
 mod tests {
     use super::*;
     #[test]
-    fn missing_documents_have_python_defaults_and_never_create_directories() {
+    fn missing_documents_have_canonical_defaults_and_never_create_directories() {
         let root =
             std::env::temp_dir().join(format!("dogido-memory-view-{}", uuid::Uuid::new_v4()));
         assert_eq!(read(&root, View::Haiku).unwrap(), json!([]));

@@ -108,7 +108,7 @@ fn explicit_language(text: &str) -> bool {
 mod tests {
     use super::*;
     #[test]
-    fn python_normalization_and_language_entry_parity() {
+    fn normalization_and_language_entry_match_fixture() {
         let cases: Vec<Prepared> =
             serde_json::from_str(include_str!("../fixtures/player-text.json")).unwrap();
         for expected in cases {

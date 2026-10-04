@@ -455,7 +455,7 @@ mod tests {
         }
     }
     #[test]
-    fn full_lookup_terms_facts_sources_rules_and_order_match_python() {
+    fn full_lookup_terms_facts_sources_rules_and_order_match_fixture() {
         let fixture: Value =
             serde_json::from_str(include_str!("../../fixtures/language-retrieval.json")).unwrap();
         for case in fixture["lookups"].as_array().unwrap() {

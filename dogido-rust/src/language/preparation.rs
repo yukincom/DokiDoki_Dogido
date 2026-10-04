@@ -115,7 +115,7 @@ fn answer(text: String, id: &str, application: &str) -> Value {
 mod tests {
     use super::*;
     #[test]
-    fn checkpoint_python_preparation_parity() {
+    fn checkpoint_preparation_matches_fixture() {
         let fixture: Value =
             serde_json::from_str(include_str!("../../fixtures/language-preparation.json")).unwrap();
         for case in fixture["prompts"].as_array().unwrap() {

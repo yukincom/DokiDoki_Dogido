@@ -467,7 +467,7 @@ mod tests {
 mod parity {
     use super::*;
     #[test]
-    fn research_decisions_match_canonical_python_cases() {
+    fn research_decisions_match_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("research-fixtures.json")).unwrap();
         assert_eq!(cases.len(), 47);

@@ -19,7 +19,7 @@ static FIXTURES: LazyLock<Value> = LazyLock::new(|| {
 });
 
 #[test]
-fn all_python_consultation_prompts_match_exactly() {
+fn all_consultation_prompts_match_fixture_exactly() {
     let mut count = 0;
     for group in ["projection_cases", "pure_cases"] {
         for case in FIXTURES[group].as_array().unwrap() {

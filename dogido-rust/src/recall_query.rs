@@ -289,7 +289,7 @@ pub fn context_from_normalized(
 mod tests {
     use super::*;
     #[test]
-    fn catalog_reading_overlay_and_calendar_matches_fixture() {
+    fn catalog_reading_overlay_and_calendar_match_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/recall-query.json")).unwrap();
         for case in cases {

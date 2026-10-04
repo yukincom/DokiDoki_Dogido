@@ -14,7 +14,7 @@ fn prepared(case: &Value) -> PreparedPlan {
         "confidence":0,"source":"fallback","status":"fallback"}})).unwrap()
 }
 #[test]
-fn chat_grounding_python_golden_matches_all_actions_and_current_evidence() {
+fn chat_grounding_fixture_covers_all_actions_and_current_evidence() {
     for (i, case) in fixture()["cases"].as_array().unwrap().iter().enumerate() {
         let input: Input = serde_json::from_value(case["input"].clone()).unwrap();
         let mut state = Handoff::default();
@@ -25,7 +25,7 @@ fn chat_grounding_python_golden_matches_all_actions_and_current_evidence() {
     }
 }
 #[test]
-fn chat_grounding_python_parse_fallback_keeps_reports_and_corrections_separate() {
+fn chat_grounding_parse_fallback_matches_fixture_for_reports_and_corrections() {
     for (i, case) in fixture()["parsed"].as_array().unwrap().iter().enumerate() {
         let details = serde_json::from_value(case["details"].clone()).unwrap();
         let fallback: planner::Plan = serde_json::from_value(case["fallback"].clone()).unwrap();

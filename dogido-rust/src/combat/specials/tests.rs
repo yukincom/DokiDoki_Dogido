@@ -391,7 +391,7 @@ fn rear_requires_exact_event_back_melee_range_and_global_cooldown() {
 }
 
 #[test]
-fn classic_sha1_matches_known_vectors_and_python_seed() {
+fn classic_sha1_matches_known_vectors_and_reaction_seed() {
     assert_eq!(sha1_first(b""), 0xda);
     assert_eq!(sha1_first(b"abc"), 0xa9);
     assert_eq!(

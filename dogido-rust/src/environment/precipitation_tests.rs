@@ -19,7 +19,7 @@ fn check_public_details(context: &PrecipitationContext) {
     }
 }
 #[test]
-fn precipitation_and_prompt_facts_match_python() {
+fn precipitation_and_prompt_facts_match_fixture() {
     let cases = include_str!("../../fixtures/precipitation.jsonl");
     for (index, line) in cases.lines().enumerate() {
         let case: Value = serde_json::from_str(line).unwrap();

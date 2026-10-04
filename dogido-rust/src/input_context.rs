@@ -167,7 +167,7 @@ mod tests {
         }
     }
     #[test]
-    fn all_context_fields_and_address_ownership_match_python() {
+    fn all_context_fields_and_address_ownership_match_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/input-context.json")).unwrap();
         for case in cases {

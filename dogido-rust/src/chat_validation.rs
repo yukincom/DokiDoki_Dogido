@@ -303,7 +303,7 @@ mod tests {
             .collect()
     }
     #[test]
-    fn python_candidate_reasons_and_observed_name_rules_match() {
+    fn candidate_reasons_and_observed_name_rules_match_fixture() {
         for row in fixtures("candidates") {
             let raw = row["raw"].as_str().unwrap();
             let d = &row["details"];
@@ -328,7 +328,7 @@ mod tests {
         }
     }
     #[test]
-    fn python_full_turn_retries_and_narration_fallback_boundary_match() {
+    fn full_turn_retries_and_narration_fallback_boundary_match_fixture() {
         for row in fixtures("turns") {
             let input: Input = serde_json::from_value(row["input"].clone()).unwrap();
             let d = input.validation.clone();

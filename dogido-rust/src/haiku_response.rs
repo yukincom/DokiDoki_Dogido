@@ -338,7 +338,7 @@ mod tests {
     }
 
     #[test]
-    fn complete_fences_and_open_fence_grounding_prefix_match_python() {
+    fn complete_fences_and_open_fence_grounding_prefix_match_canonical_contract() {
         for separator in ["\n", "\r\n", "\u{2028}"] {
             let raw = format!("  ```json{separator}{PREFIX}}}{separator}```  ");
             assert_eq!(grounding(&raw, None)[STATUS], "accepted");
@@ -412,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn completed_json_duplicate_keys_follow_python_last_value_wins() {
+    fn completed_json_duplicate_keys_use_last_value() {
         // The duplicate-key guard applies to recovery, not ordinary json.loads.
         let result = grounding(
             r#"{"verdicts":{"0":"pass"},"verdicts":{"0":"meaning_fail"},"assessments":[]}"#,
@@ -438,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_primitive_prefixes_match_python_without_repairing_tokens() {
+    fn raw_primitive_prefixes_match_canonical_contract_without_repairing_tokens() {
         for (token, value) in [
             ("trueXXX", json!(true)),
             ("falsex", json!(false)),

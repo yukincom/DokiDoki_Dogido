@@ -349,7 +349,7 @@ mod tests {
         query: Option<Query>,
     }
     #[test]
-    fn matches_canonical_python_queries() {
+    fn queries_match_fixture() {
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../../fixtures/knowledge-query.json")).unwrap();
         for case in cases {

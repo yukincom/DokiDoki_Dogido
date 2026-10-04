@@ -73,16 +73,16 @@ fn cases_match(catalog: &Catalog, cases: &Value) {
     }
 }
 #[test]
-fn chat_catalog_all_current_rows_and_terms_match_python_without_material_loss() {
+fn chat_catalog_all_current_rows_and_terms_match_fixture_without_material_loss() {
     rows_match(chat_catalog::catalog(), &FIXTURE["real"]);
 }
 #[test]
-fn chat_catalog_all_current_terms_queries_and_hints_match_python() {
+fn chat_catalog_all_current_terms_queries_and_hints_match_fixture() {
     cases_match(chat_catalog::catalog(), &FIXTURE["real"]["cases"]);
     cases_match(chat_catalog::catalog(), &FIXTURE["real_edges"]);
 }
 #[test]
-fn chat_catalog_source_variants_duplicates_ties_and_limits_match_python() {
+fn chat_catalog_source_variants_duplicates_ties_and_limits_match_fixture() {
     let synthetic = &FIXTURE["synthetic"];
     let docs = &synthetic["documents"];
     let c = Catalog::from_documents(

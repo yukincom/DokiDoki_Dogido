@@ -318,7 +318,7 @@ pub async fn run(settings: Settings) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
-    fn python_voice_fixtures() {
+    fn voice_segments_and_transcripts_match_fixture() {
         let data: serde_json::Value =
             serde_json::from_str(include_str!("../../fixtures/voice-parity.json")).unwrap();
         for case in data["segments"].as_array().unwrap() {

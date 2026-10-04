@@ -2,7 +2,7 @@ use super::*;
 use serde_json::Value;
 
 #[test]
-fn current_frame_projection_matches_python_without_mutating_the_event() {
+fn current_frame_projection_matches_fixture_without_mutating_the_event() {
     let cases = include_str!("../../fixtures/environment-projection.jsonl");
     for (index, line) in cases.lines().enumerate() {
         let case: Value = serde_json::from_str(line).unwrap();

@@ -644,7 +644,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
-    fn initial_and_repair_messages_matches_fixture() {
+    fn initial_and_repair_messages_match_fixture() {
         let fixture: Value =
             serde_json::from_str(include_str!("chat_prompt/fixtures.json")).unwrap();
         let pool = fixture["pool"].as_array().unwrap();

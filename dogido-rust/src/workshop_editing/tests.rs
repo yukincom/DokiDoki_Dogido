@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 #[test]
-fn canonical_python_extraction_reading_edits_and_materials() {
+fn extraction_reading_edits_and_materials_match_fixture() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
     assert_eq!(cases.as_array().unwrap().len(), 2666);
     for (index, case) in cases.as_array().unwrap().iter().enumerate() {

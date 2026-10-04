@@ -129,7 +129,7 @@ mod tests {
             "sanitizers":v["sanitizers"].as_array().unwrap().iter().map(|r|json!({"kind":r[0],"details":get(&r[1]),"raw":get(&r[2]),"cleaned":get(&r[3]),"usable":r[4],"style":r[5],"guard":r[6],"selected":get(&r[7])})).collect::<Vec<_>>()})
     }
     #[test]
-    fn prompts_match_python_for_all_kinds_and_branches() {
+    fn prompts_match_fixture_for_all_kinds_and_branches() {
         for row in fixture()["prompts"].as_array().unwrap() {
             let kind = row["kind"].as_str().unwrap();
             let actual =
@@ -138,7 +138,7 @@ mod tests {
         }
     }
     #[test]
-    fn cleaner_usable_style_and_final_guards_match_python() {
+    fn cleaner_usable_style_and_final_guards_match_fixture() {
         for row in fixture()["sanitizers"].as_array().unwrap() {
             let kind = row["kind"].as_str().unwrap();
             let raw = row["raw"].as_str().unwrap();

@@ -280,7 +280,7 @@ pub(super) fn reply_shape(reply: &Value) -> bool {
 mod tests {
     use super::*;
     #[test]
-    fn checkpoint_python_interpretation_and_reply_parity() {
+    fn checkpoint_interpretation_and_reply_match_fixture() {
         let fixtures: Value =
             serde_json::from_str(include_str!("../../fixtures/language-validation.json")).unwrap();
         for case in fixtures["interpretations"].as_array().unwrap() {

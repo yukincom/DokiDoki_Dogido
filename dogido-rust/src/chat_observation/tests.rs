@@ -47,7 +47,7 @@ struct Step {
     expected: Value,
 }
 #[test]
-fn persistent_python_traces() {
+fn persistent_observation_traces_match_fixture() {
     let labels = labels();
     let mut traces = 0;
     let mut steps = 0;

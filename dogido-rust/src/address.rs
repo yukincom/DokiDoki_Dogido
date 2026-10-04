@@ -342,7 +342,7 @@ mod tests {
         assert!(!addressed("ドギドの話"));
     }
     #[test]
-    fn python_address_fixtures() {
+    fn address_handling_matches_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/address.json")).unwrap();
         for case in cases {

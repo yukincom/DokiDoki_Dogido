@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn reasoning_fallback_matches_the_current_python_provider() {
+    fn empty_content_uses_reasoning_content() {
         let output = decode_response(&json!({"choices": [{"message": {
             "content": "", "reasoning_content": "確認できたで。"
         }}]}))

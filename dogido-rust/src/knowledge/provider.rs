@@ -834,7 +834,7 @@ mod tests {
     }
     #[test]
     // 移植時に確定したfixtureと事実・出典・順序を照合する回帰試験。旧Python本体は起動しない。
-    fn full_facts_sources_and_order_match_canonical_python() {
+    fn full_facts_sources_and_order_match_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../../fixtures/knowledge-provider.json")).unwrap();
         for case in cases {

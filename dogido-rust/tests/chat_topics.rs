@@ -7,7 +7,7 @@ fn fixture() -> Value {
     serde_json::from_str(include_str!("../src/chat_topics/fixtures.json")).unwrap()
 }
 #[test]
-fn chat_topics_canonical_python_projection_including_none_and_observation_boundaries() {
+fn chat_topics_projection_matches_fixture_including_none_and_observation_boundaries() {
     let f = fixture();
     let pool = f["pool"].as_array().unwrap();
     for (i, row) in f["cases"].as_array().unwrap().iter().enumerate() {
@@ -28,7 +28,7 @@ fn chat_topics_canonical_python_projection_including_none_and_observation_bounda
     }
 }
 #[test]
-fn chat_topics_weak_terms_intent_and_policy_lines_match_python() {
+fn chat_topics_weak_terms_intent_and_policy_lines_match_fixture() {
     let f = fixture();
     for row in f["terms"].as_array().unwrap() {
         assert_eq!(

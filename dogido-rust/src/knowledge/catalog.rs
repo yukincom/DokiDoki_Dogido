@@ -621,7 +621,7 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../reference/language_education_and_poetry")
     }
     #[test]
-    fn canonical_search_order_facets_and_records_match_python() {
+    fn canonical_search_order_facets_and_records_match_fixture() {
         let fixture: Value =
             serde_json::from_str(include_str!("../../fixtures/language-retrieval.json")).unwrap();
         let catalog = Catalog::open(&base(), Stop::default()).unwrap();

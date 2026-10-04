@@ -57,7 +57,7 @@ fn strings(values: &[String]) -> Vec<&str> {
 }
 
 #[test]
-fn synthetic_searches_and_rejections_match_canonical_python() {
+fn synthetic_searches_and_rejections_match_fixture() {
     for case in cases() {
         let tmp = Temporary::new(&case);
         let result = tmp.open(Stop::default()).and_then(|reader| {

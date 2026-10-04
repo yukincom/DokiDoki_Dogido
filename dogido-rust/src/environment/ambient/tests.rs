@@ -23,7 +23,7 @@ fn actions(a: &mut Ambient, e: &GameEvent, now: u64) -> Vec<Speech> {
     a.actions(e, now, Mode::Normal, false, &AmbientFocus::default(), &s)
 }
 #[test]
-fn python_reference_cases_match() {
+fn ambient_reference_cases_match_fixture() {
     let rows: Value = serde_json::from_str(include_str!("reference.json")).unwrap();
     for (n, row) in rows.as_array().unwrap().iter().enumerate() {
         let got = match row["op"].as_str().unwrap() {
