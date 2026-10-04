@@ -1,5 +1,7 @@
 # 川柳の出典と相談用文脈の Rust 投影
 
+現行の起動・検証は [Rust本体の案内](../dogido-rust/README.md) を正とする。本文のモデル独立検証とfixture生成コマンドは移植時の記録。旧Python比較器・生成器は削除済みで、保存fixtureをRustから検査する。
+
 `haiku::source_atoms` は、渡されたカタログ項目・観測・検証済み見どころから出典を作り、
 保存済み materials の出典を読み戻す純粋部品。`haiku::SourceAtom` を共用し、
 カタログの選定・現世界の観測・保存は行わない。保存済み出典を読む際に、現在のカタログへ
@@ -8,17 +10,17 @@
 `workshop_projection` は現在句・未採用案・実再生済みの短い対話・保存済み材料から、
 相談の details と editor の revision input を構築する。表示と読み、現在句と未採用案を分離し、
 実行直後の step は直近履歴と二重に提示しない。source atom24件、出典3件、履歴4往復、
-直近step6件、現在turnのstep4件など、正本Pythonの上限と並び順を維持する。
+直近step6件、現在turnのstep4件など、移植時のfixtureに記録した上限と並び順を維持する。
 
-`Snapshot::from_view` は既存helperへ渡す検証済みviewの投影を再現する。
-元helperが転写しない last_findings / last_repair_feedback は勝手に補わない。
+`Snapshot::from_view` は検証済みruntime viewから相談用のsnapshotを構築する。
+viewが渡さない last_findings / last_repair_feedback は勝手に補わない。
 直接 `Snapshot` を構築する場合は両フィールドを保持でき、修正結果は元句が一致する場合だけ載せる。
 短い同意は `fixed_followup(text, Stage, pending)` で候補actionを返すだけ。
 実再生後の段階・pending・終了・採否の更新は従来のRust runtimeが所有する。
 
 workshop runtime の相談 details・短い同意・editor入力はこのAPIへ接続済み。
-`prepare_details` / `fixed_followup` / `revision_input` のPython操作は実行経路から外し、
-互換比較用oracleに定義を残す。相談と修正の出典は保存済み materials だけから組み立てる。
+`prepare_details` / `fixed_followup` / `revision_input` の旧Python操作と比較oracleは運用終了済み。
+相談と修正の出典は保存済み materials だけから組み立てる。
 
 意味説明では、句の言葉・響きと当時の材料を手がかりに、情景や感情へつながる解釈を返す。
 材料と語句の一対一対応は要求せず、比喩や連想を膨らませてよい。なじみのない語も
@@ -56,8 +58,8 @@ Pythonの関連1,863件とRustの相談prompt・validation10件を確認済み�
 漢字の中立読みが必要な場合だけ、既存の同じhelper子へ `tts_tokens` を送る。
 Rust側でかな変換し、同一turnの同じ読み要求をcacheする。辞書なし・辞書内部の失敗は元表記へ戻し、
 IPC破損・schema不一致・取消・期限超過は成功へ変換せず子を回収する。漢字なしの照合・編集はIPC不要。
-`workshop_helper.py` は辞書SDKトークン取得だけを担当し、従来ロジックはオフライン比較専用の
-`workshop_oracle.py` に分けている。カタログの読み上書きはこの中立読みへ混ぜない。
+`tts_tokens_worker.py` は辞書SDKトークン取得だけを担当する。相談・編集はRustが所有し、
+カタログの読み上書きはこの中立読みへ混ぜない。
 
 戦闘中断中の固定fallbackも同じRust部品へ接続し、OS AIの分類だけをSDK workerへ残す。
 相談中は句の入力を優先し、匂い・戦況質問・持ち替え語が含まれても、敵の根拠がない間は

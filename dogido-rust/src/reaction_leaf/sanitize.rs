@@ -20,7 +20,7 @@ pub(crate) fn re(pattern: &'static str) -> Regex {
         .or_insert_with(|| Regex::new(pattern).expect("reaction regex"))
         .clone()
 }
-use crate::compat::is_python_whitespace as whitespace;
+use crate::compat::is_dogido_whitespace as whitespace;
 pub(crate) fn strip(s: &str) -> &str {
     s.trim_matches(whitespace)
 }

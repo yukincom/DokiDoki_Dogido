@@ -19,7 +19,7 @@ const FACTUAL_SCOPES: [&str; 4] = [
     "observed_state",
     "player_reported_context",
 ];
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn compact(s: &str) -> String {
     s.chars().filter(|c| !space(*c)).collect()
 }

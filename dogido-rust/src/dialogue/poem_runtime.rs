@@ -44,7 +44,7 @@ impl Dialogue {
         let lines: Vec<HaikuLine> = if let Input::Revision { text, source } = &request {
             let mut helper = Helper::start(
                 &self.config.python,
-                &self.config.helper.with_file_name("workshop_helper.py"),
+                &self.config.helper.with_file_name("tts_tokens_worker.py"),
             )?;
             let mut editing = crate::workshop_editing::Engine::default();
             let frame = json!({"op":"whole_verse","text":text,"source":source});

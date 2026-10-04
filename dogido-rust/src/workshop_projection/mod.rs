@@ -34,7 +34,7 @@ fn list(v: &Value) -> &[Value] {
 fn cut(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
 }
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn clean(s: &str) -> String {
     s.split(space)
         .filter(|s| !s.is_empty())
@@ -60,8 +60,8 @@ pub struct Snapshot {
     pub awaiting_close_confirmation: bool,
 }
 impl Snapshot {
-    /// Matches workshop_helper.snapshot_for over the already-validated runtime
-    /// view. It does not add last_findings/repair_feedback omitted by that bridge.
+    /// 検証済みのruntime viewから、移植時のfixtureと同じ相談用snapshotを構築する。
+    /// viewが渡さないlast_findings/repair_feedbackは補わない。
     pub fn from_view(view: &Value) -> Result<Self> {
         let emission = view
             .get("emission")

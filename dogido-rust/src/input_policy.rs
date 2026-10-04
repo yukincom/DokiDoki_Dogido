@@ -20,7 +20,7 @@ fn has(text: &str, key: &str) -> bool {
     words(key).any(|word| text.contains(word))
 }
 use crate::compat::fold_kana as fold;
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn compile(pattern: &str) -> Regex {
     // 入力仕様上の空白はUnicode空白とU+001C..U+001F。正規表現内でも同じ集合へ広げる。
     Regex::new(&pattern.replace(r"\s", r"[\s\u001c-\u001f]")).expect("checked input regex")
@@ -206,7 +206,7 @@ mod tests {
         expected: Projection,
     }
     #[test]
-    fn pure_projection_matches_python_guardrails() {
+    fn pure_projection_matches_fixture_guardrails() {
         let cases: Vec<Case> =
             serde_json::from_str(include_str!("../fixtures/input-policy.json")).unwrap();
         for case in cases {

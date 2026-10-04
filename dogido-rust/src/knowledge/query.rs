@@ -84,7 +84,7 @@ static RESOURCE: LazyLock<Regex> = LazyLock::new(|| {
 static WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"\A{}\z", GRAMMAR.word_class)).unwrap());
 
-pub(crate) use crate::compat::is_python_whitespace as space;
+pub(crate) use crate::compat::is_dogido_whitespace as space;
 /// 同梱のUnicode文字集合にある文字・数値かを返す。単語境界用の集合から_だけを除く。
 pub(crate) fn alphanumeric(c: char) -> bool {
     c != '_' && WORD.is_match(c.encode_utf8(&mut [0; 4]))

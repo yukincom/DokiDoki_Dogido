@@ -27,7 +27,7 @@ impl Dialogue {
         input: &Value,
         cancel: &mut watch::Receiver<bool>,
     ) -> Result<Value> {
-        let script = self.config.helper.with_file_name("workshop_helper.py");
+        let script = self.config.helper.with_file_name("tts_tokens_worker.py");
         let mut helper = Helper::start(&self.config.python, &script)?;
         let body = self.workshop_body(input, &mut helper);
         let result = tokio::select! {

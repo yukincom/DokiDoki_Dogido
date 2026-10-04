@@ -71,7 +71,7 @@ pub fn catalog() -> &'static Catalog {
     &CATALOG
 }
 pub(crate) fn strip(s: &str) -> &str {
-    s.trim_matches(crate::compat::is_python_whitespace)
+    s.trim_matches(crate::compat::is_dogido_whitespace)
 }
 /// Canonical kana-only folding: no NFKC, case folding or whitespace rewriting.
 pub fn fold_kana(text: &str) -> String {

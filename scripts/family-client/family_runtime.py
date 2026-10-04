@@ -10,7 +10,7 @@ import sys
 
 RUST_BINARY = "dogido-rust/target/release/dogido-rust"
 RUNTIME_SCRIPTS = (
-    "launch_dialogue.py", "runtime_build.py", "haiku_tokens.py", "workshop_helper.py",
+    "launch_dialogue.py", "runtime_build.py", "haiku_tokens.py", "tts_tokens_worker.py",
     "tts_shared_tokens.py", "tts_unidic_adapter.py", "combat_input_helper.py",
     "web_adapter.py",
 )

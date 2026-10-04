@@ -11,7 +11,7 @@ pub(super) use crate::compat::json_truthy as truth;
 pub(super) fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
-pub(super) use crate::compat::is_python_whitespace as space;
+pub(super) use crate::compat::is_dogido_whitespace as space;
 pub(super) fn clean(v: &Value) -> String {
     if truth(v) {
         text_format::value_text(v, SpacedJson)

@@ -19,7 +19,7 @@ pub struct Correction {
     pub distance: usize,
 }
 
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn stripped(s: &str) -> &str {
     s.trim_matches(space)
 }
@@ -372,7 +372,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn matches_python_candidates_normalization_and_corrections() {
+    fn matches_fixture_candidates_normalization_and_corrections() {
         let fixture: Value =
             serde_json::from_str(include_str!("../fixtures/contextual-asr.json")).unwrap();
         for c in fixture["builders"].as_array().unwrap() {

@@ -124,7 +124,7 @@ pub(crate) fn spaced_json<T: Serialize + ?Sized>(value: &T) -> String {
 /// 前後の空白と、先頭・末尾が揃ったコード囲みだけを除く。
 /// 閉じていない囲みや本文の壊れは修復せず、呼出側のJSON検査へ渡す。
 pub(crate) fn strip_code_fence(text: &str) -> String {
-    use crate::compat::is_python_whitespace as is_space;
+    use crate::compat::is_dogido_whitespace as is_space;
 
     let text = text.trim_matches(is_space);
     if !text.starts_with("```") {

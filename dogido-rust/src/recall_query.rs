@@ -42,7 +42,7 @@ fn number(s: &str) -> u32 {
     s.chars().fold(0, |v, c| v * 10 + POLICY.digits[&c])
 }
 use crate::compat::fold_kana as fold;
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn contains_any(text: &str, values: &[&str]) -> bool {
     values.iter().any(|v| text.contains(v))
 }
@@ -289,7 +289,7 @@ pub fn context_from_normalized(
 mod tests {
     use super::*;
     #[test]
-    fn catalog_reading_overlay_and_calendar_match_python() {
+    fn catalog_reading_overlay_and_calendar_matches_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("../fixtures/recall-query.json")).unwrap();
         for case in cases {

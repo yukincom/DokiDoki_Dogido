@@ -142,7 +142,7 @@ pub fn reply_policy_line(stance: &str) -> &'static str {
     )
 }
 
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn strip(s: &str) -> &str {
     s.trim_matches(space)
 }
@@ -644,7 +644,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
-    fn initial_and_repair_messages_match_python() {
+    fn initial_and_repair_messages_matches_fixture() {
         let fixture: Value =
             serde_json::from_str(include_str!("chat_prompt/fixtures.json")).unwrap();
         let pool = fixture["pool"].as_array().unwrap();

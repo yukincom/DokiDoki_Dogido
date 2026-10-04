@@ -55,10 +55,10 @@ def token_fixture(status):
         folder = Path(temp)
         scripts = Path(__file__).resolve().parent
         for source in scripts.glob("*.py"):
-            if source.name != "workshop_helper.py":
+            if source.name != "tts_tokens_worker.py":
                 (folder / source.name).symlink_to(source)
         (folder / "token_status").write_text(status)
-        (folder / "workshop_helper.py").write_text('''import json,sys
+        (folder / "tts_tokens_worker.py").write_text('''import json,sys
 from pathlib import Path
 folder=Path(__file__).parent
 readings={"桜の葉":"サクラノハ","桜色":"サクライロ"}

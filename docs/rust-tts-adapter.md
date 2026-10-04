@@ -2,7 +2,7 @@
 
 **現行の責務（2026-10-03）:** Rustが読みを判定・整形し、Pythonの `tts_unidic_adapter.py` はtoken取得だけを行う。旧 `dogido_server/tts_reading.py` は廃止。共有workerは [共有UniDic取得口](rust-tts-shared.md) の `Unidic()` を使う。以下の移植時の比較件数と未確認範囲は当時の記録であり、旧Pythonの残存範囲は [現行一覧](../dogido-rust/README.md#残すpython補助と資料) を優先する。
 
-反応音声（`reaction_runtime`）と記憶の想起応答（`memory_runtime::recall_poems`）は、自由文の読みのためだけに `workshop_helper.py` を起動しない。Rust の `tts_reading::prepare` が空・off・現行範囲の漢字なしと判断した場合は補助プロセスを起動せず、従来の順序付き例外表だけを適用する。
+反応音声（`reaction_runtime`）と記憶の想起応答（`memory_runtime::recall_poems`）は、自由文の読みのためだけに `tts_tokens_worker.py` を起動しない。Rust の `tts_reading::prepare` が空・off・現行範囲の漢字なしと判断した場合は補助プロセスを起動せず、従来の順序付き例外表だけを適用する。
 
 UniDic が必要な場合だけ `tts_unidic_adapter.py` を一回の読み処理の間起動する。Python の担当は既存 fugashi の初期化・一度の warmup・token feature の取得に限る。Rust が優先読み、語種（和・混）、除外 POS、kana／pron の選択とかな変換、最後の例外表を担当する。表示原文は変更せず、派生した `spoken_text` のみを音声へ渡す。カタログの読み overlay は送らず、自由文へ適用しない。
 

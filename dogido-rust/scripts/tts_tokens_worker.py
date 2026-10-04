@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Optional UniDic token adapter for one Rust-owned workshop turn.
+"""Rustのtts_tokens要求に対し、共有UniDicのtoken取得結果を返すworker。
 
-No workshop parser, prompt, validator, catalog, state, or persistence is imported.
-The shared token adapter lazily owns the existing optional dictionary singleton.
+辞書は初回利用時に初期化する。読みの判定・相談・保存はRustが所有する。
 """
 import json
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-# workshopという名前は起動元を表す。受理するのはop=tts_tokensだけで、相談の判断はしない。
+# 受理するのはop=tts_tokensだけ。辞書結果を返し、読みや相談内容は判断しない。
 # haiku_tokensの読込上限・改行・出力上限検査は共有しておらず、この入口は読込後の入力サイズだけを検査する。
 from tts_shared_tokens import handle
 

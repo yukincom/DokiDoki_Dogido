@@ -7,16 +7,19 @@ use std::{collections::HashMap, sync::LazyLock};
 static ASSETS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("workshop_input_guard/assets.json")).expect("guard assets")
 });
-fn py_regex(s: &str) -> Regex {
+fn guard_regex(s: &str) -> Regex {
     Regex::new(&s.replace(r"\s", r"[\s\x1c-\x1f]")).expect("canonical guard regex")
 }
 static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
     let mut patterns = HashMap::new();
     for k in ["report", "conditional", "uncertain"] {
-        patterns.insert(k.into(), py_regex(ASSETS["patterns"][k].as_str().unwrap()));
+        patterns.insert(
+            k.into(),
+            guard_regex(ASSETS["patterns"][k].as_str().unwrap()),
+        );
     }
     for (k, v) in ASSETS["patterns"]["contradictions"].as_object().unwrap() {
-        patterns.insert(k.clone(), py_regex(v.as_str().unwrap()));
+        patterns.insert(k.clone(), guard_regex(v.as_str().unwrap()));
     }
     for (k, v) in [
         (
@@ -44,11 +47,11 @@ static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
             r"(?:変え|直さ|置き換え|変更し|修正し|使わ|採用し|(?:に|へ)(?:は)?し)ない(?:かな|か|ですか|でしょうか)?[?？][。！!\s]*\z",
         ),
     ] {
-        patterns.insert(k.into(), py_regex(v));
+        patterns.insert(k.into(), guard_regex(v));
     }
     patterns
 });
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn quoted(text: &str, evidence: &str) -> bool {
     let stripped = evidence.trim_matches(space);
     if stripped.chars().count() >= 2

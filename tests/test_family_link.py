@@ -221,12 +221,12 @@ def test_missing_runtime_rejects_before_replacing_existing_connection_keys(tmp_p
     (kit / '00_setup.command').write_text('OLD')
     (kit / '.env.shared').write_text('SHARED')
     prepared_runtime(kit)
-    missing = kit / 'dogido-rust/scripts/workshop_helper.py'
+    missing = kit / 'dogido-rust/scripts/tts_tokens_worker.py'
     missing.unlink()
     key = kit / '.dogido_tools/family-link/identity'
     key.parent.mkdir(parents=True)
     key.write_text('EXISTING TEST KEY')
     before = {p.relative_to(kit): p.read_bytes() for p in kit.rglob('*') if p.is_file()}
-    with pytest.raises(ValueError, match='workshop_helper.py'):
+    with pytest.raises(ValueError, match='tts_tokens_worker.py'):
         installer.apply(tmp_path / 'package', kit)
     assert before == {p.relative_to(kit): p.read_bytes() for p in kit.rglob('*') if p.is_file()}

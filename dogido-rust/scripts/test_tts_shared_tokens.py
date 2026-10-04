@@ -36,7 +36,7 @@ class SharedTokenTests(unittest.TestCase):
 
     def test_worker_token_clients_share_one_factory_and_warmup(self):
         import haiku_tokens
-        import workshop_helper
+        import tts_tokens_worker
         calls = []
         def tagger(text):
             calls.append(text)
@@ -46,7 +46,7 @@ class SharedTokenTests(unittest.TestCase):
             return tagger
         with patch.dict(sys.modules, {'fugashi': SimpleNamespace(Tagger=factory)}):
             first = haiku_tokens.handle(request())
-            second = workshop_helper.handle(request('朝鮮'))
+            second = tts_tokens_worker.handle(request('朝鮮'))
             again = shared.handle(request())
         self.assertEqual(calls, ['factory', '朝', '猫', '朝鮮', '猫'])
         self.assertEqual(first['tokens'][0]['surface'], '猫')
@@ -95,15 +95,15 @@ class SharedTokenTests(unittest.TestCase):
                     shared.handle(frame)
             getter.assert_not_called()
 
-    def test_workshop_dispatch_is_token_only(self):
-        import workshop_helper
+    def test_tts_tokens_dispatch_is_token_only(self):
+        import tts_tokens_worker
         with patch.object(shared._reader, 'initialize', return_value=lambda _: [word(kana='ネコ')]) as getter:
-            self.assertEqual(workshop_helper.handle(request())['tokens'][0]['surface'], '猫')
+            self.assertEqual(tts_tokens_worker.handle(request())['tokens'][0]['surface'], '猫')
             getter.assert_called_once()
             for op in ('reading_overlay', 'reading', 'whole_verse', 'knowledge_route', 'player_edit', 'prepare_details', 'fragment_candidate'):
                 with self.subTest(op=op), self.assertRaises(ValueError):
-                    workshop_helper.handle({'op':op,'text':'猫','rows':[]})
-        self.assertNotIn('workshop_oracle', workshop_helper.__dict__)
+                    tts_tokens_worker.handle({'op':op,'text':'猫','rows':[]})
+        self.assertNotIn('workshop_oracle', tts_tokens_worker.__dict__)
 
 
 if __name__ == '__main__': unittest.main()

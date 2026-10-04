@@ -84,7 +84,7 @@ pub fn plain_control(text: &str) -> bool {
         .contains(&s)
     })
 }
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 fn punctuation(c: char) -> bool {
     space(c) || "、,。.!！?？".contains(c)
 }

@@ -89,6 +89,7 @@ python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice
 | `dogido_server/platform_ai.py` · `dogido_server/combat_input_contract.py` | 戦闘中断中の限定分類に必要な端末AI接続と出力契約 |
 | `dogido_server/voice_settings.py` · `dogido_server/voice_capture.py` · `dogido_server/echo_input.py` | 音声設定・録音機器・AECの接続 |
 | `dogido_server/language_dialogue/{__init__,main_web,chrome_web,google_overview,web_types}.py` | 専用Chrome・MCP SDKの接続と結果形式。会話・検索開始の判断はRust |
+| `dogido-rust/scripts/haiku_tokens.py` · `dogido-rust/scripts/tts_tokens_worker.py` | Rustからの辞書token要求を受けるworker。相談・読みの判定・保存はRustが担当 |
 | `dogido-rust/scripts/tts_shared_tokens.py` · `dogido-rust/scripts/tts_unidic_adapter.py` | UniDic token取得。`tts_shared_tokens._reader = Unidic()` をworker内で共有し、辞書は初回利用時に初期化 |
 | `dogido_server/language_dialogue/source_cards.json` | Rustの国語検索が読む資料カード |
 | `dogido_server/llm/companion_prompts.json` · `dogido_server/llm/reaction_situations.json` | 共有プロンプト・状況文の正本データ |

@@ -34,7 +34,11 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 | `dogido-rust/src/conversation_observation.rs` · `catalog_knowledge.rs` | 共通観測と、観測へ昇格させない一般知識 |
 | `dogido-rust/src/haiku/` · `python_worker.rs` | 材料・発句準備・生成・検査・再生成 |
 | `dogido-rust/src/workshop_*.rs` · `workshop_*/` | 一句の相談、行対象、原文根拠、CAS、採否・保存前検証 |
-| `dogido-rust/src/dialogue/workshop_runtime.rs` · `workshop_edits.rs` | 検証済みの相談結果・局所編集を正本へ接続 |
+| `dogido-rust/src/workshop_edit.rs` | 未採用差分、CAS検証、revision追記保存の契約 |
+| `dogido-rust/src/workshop_editing/` | 発話・材料から編集案と検査結果を構成。正本は変更しない |
+| `dogido-rust/src/dialogue/workshop_edits.rs` | 現在の句・版へ再照合し、採用・保存・表示へ反映 |
+| `dogido-rust/scripts/check_workshop_edits.py` | モデル・音声・tokenを模擬し、pending・CAS・保存の接続を検査 |
+| `dogido-rust/src/dialogue/workshop_runtime.rs` | 検証済みの相談結果を正本へ接続し、局所編集はworkshop_editsへ渡す |
 | `dogido-rust/src/dialogue/workshop_combat_runtime.rs` | 句・候補を保持した戦闘中断と、コードで確定する再開 |
 | `dogido-rust/src/haiku_record/verse.rs` | 表示・確定読み・行概念・出典を束ねた一行の正本 |
 | `dogido-rust/src/haiku_memory.rs` · `dialogue/memory_runtime.rs` | JSONLの句・revision・critique・soft lessonと明示想起 |

@@ -14,7 +14,7 @@ pub enum Engine {
     Unidic,
     Off,
 }
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 /// Explicit engine (including an empty/invalid string) wins over the environment.
 /// The caller supplies the environment snapshot; this pure function reads no process state.
 pub fn resolve_engine(explicit: Option<&str>, environment: Option<&str>) -> Engine {
@@ -74,7 +74,7 @@ mod tests {
     use super::*;
     use serde_json::Value;
     #[test]
-    fn pure_tts_boundary_matches_python() {
+    fn pure_tts_boundary_matches_fixture() {
         let cases: Vec<Value> =
             serde_json::from_str(include_str!("tts_reading/fixtures.json")).unwrap();
         for c in cases {

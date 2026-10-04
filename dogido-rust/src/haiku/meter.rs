@@ -4,7 +4,7 @@
 use serde_json::{Map, Value};
 pub const TARGETS: [usize; 3] = [5, 7, 5];
 // 通常のUnicode空白に加えてC0の区切り文字も除き、入力経路による音数の差を避ける。
-use crate::compat::is_python_whitespace as space;
+use crate::compat::is_dogido_whitespace as space;
 /// 空白を除いた読みを数える。ゃゅょ等の指定小書き文字は前の一音に付き、先頭に単独で現れた場合は一音とする。
 /// 促音っ・撥音ん・長音ーは各一音。漢字から読みを推測せず、空白以外の記号も通常文字と同様に数える。
 /// 文字種を受け入れてよいかは、line_failure_reasonsなどの利用側が別に検査する。

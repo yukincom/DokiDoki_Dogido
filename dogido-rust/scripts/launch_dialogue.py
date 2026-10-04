@@ -26,7 +26,7 @@ def check_runtime_files(root):
         "dogido-rust/scripts/web_adapter.py",
         "dogido_server/runtime_defaults.json",
         "dogido-rust/scripts/haiku_tokens.py",
-        "dogido-rust/scripts/workshop_helper.py",
+        "dogido-rust/scripts/tts_tokens_worker.py",
         "dogido-rust/scripts/combat_input_helper.py",
         "dogido_server/language_dialogue/source_cards.json",
         "reference/language_education_and_poetry",
