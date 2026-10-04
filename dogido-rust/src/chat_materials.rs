@@ -1,5 +1,6 @@
 //! A frozen ordinary turn's pure materials, split before and after the bounded planner.
 //! No Session mutation, model run, history writes, clock reads, or playback success claims.
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 mod current;
 mod descriptions;
 mod individuals;
@@ -422,7 +423,7 @@ pub fn after_plan(turn: &Prepared, plan: &Plan) -> Result<After> {
                     text: r
                         .get("text")
                         .filter(|v| chat_catalog::truth(v))
-                        .map(chat_catalog::text)
+                        .map(|value| text_format::value_text(value, QuotedRepr))
                         .unwrap_or_default(),
                 })
             })

@@ -89,8 +89,8 @@ fn has(text: &str, values: &[&str]) -> bool {
     values.iter().any(|v| text.contains(v))
 }
 fn positive(text: &str) -> bool {
-    // These exclusions implement only the four negative-lookahead expressions
-    // in the Python sensing rule; they are not a general negation classifier.
+    // These exclusions cover the four closed conditional sensing patterns;
+    // they are not a general negation classifier.
     for c in re(r"(?:匂い|におい|臭い|香り)(?:が|は|の)?(する|した|して|漂|残|来|きた)")
         .captures_iter(text)
     {

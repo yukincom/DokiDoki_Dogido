@@ -1,11 +1,12 @@
 //! Pure snapshots of the sources used by one poem. Never re-query current
 //! catalogs when loading saved material; callers own selection and observation.
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 mod generation;
 mod stored;
 #[cfg(test)]
 mod tests;
 use super::SourceAtom;
-use crate::chat_catalog::{strip, text, truth};
+use crate::chat_catalog::{strip, truth};
 pub use generation::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -23,7 +24,11 @@ fn compact(s: &str) -> String {
     s.chars().filter(|c| !space(*c)).collect()
 }
 fn value_text(v: &Value) -> String {
-    if truth(v) { text(v) } else { String::new() }
+    if truth(v) {
+        text_format::value_text(v, QuotedRepr)
+    } else {
+        String::new()
+    }
 }
 fn field(v: &Value, k: &str) -> String {
     strip(&value_text(&v[k])).into()

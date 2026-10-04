@@ -170,8 +170,8 @@ pub fn request(kind: &str, model: &str, details: &Value) -> GenerationRequest {
                 role: Role::User,
                 content: format!(
                     "{}\n以上は背景。今回応答する最新の発話はこちら：\n{}",
-                    crate::planner::python_json(&Value::Object(background)),
-                    crate::planner::python_json(&current)
+                    crate::text_format::spaced_json(&Value::Object(background)),
+                    crate::text_format::spaced_json(&current)
                 ),
             },
         ],

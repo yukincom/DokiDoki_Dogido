@@ -1,8 +1,9 @@
 //! Pure construction of speech-name permissions and unique observed-name rewrites.
 //! A permission is not world evidence. The caller owns current/recent observations
 //! and must supply only completed dialogue history from the existing runtime.
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{
-    chat_catalog::{self, Catalog, normalized_observation_id, strip, text, truth},
+    chat_catalog::{self, Catalog, normalized_observation_id, strip, truth},
     chat_validation::mentioned,
 };
 use serde::{Deserialize, Serialize};
@@ -76,7 +77,11 @@ pub struct Names {
     pub speech_whitelist_enforce: bool,
 }
 fn value_text(v: &Value) -> String {
-    if truth(v) { text(v) } else { String::new() }
+    if truth(v) {
+        text_format::value_text(v, QuotedRepr)
+    } else {
+        String::new()
+    }
 }
 fn add(labels: &mut Vec<String>, value: &str) {
     let value = strip(value);

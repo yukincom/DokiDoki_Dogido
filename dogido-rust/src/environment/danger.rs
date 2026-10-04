@@ -357,8 +357,8 @@ impl Danger {
                     return a;
                 }
                 // Cooldown suppresses the underwater sentence, never the stop of
-                // previously running breathing. Python reset the state here but
-                // could omit its control action when that sentence was on cooldown.
+                // previously running breathing. Return the stop control action
+                // even when the sentence is on cooldown.
                 if stop {
                     return vec![control()];
                 }

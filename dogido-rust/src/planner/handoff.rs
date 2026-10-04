@@ -1,6 +1,6 @@
 //! One ordinary turn's accepted plan and current-observation grounding boundary.
-//! Native catalog lookup uses only the accepted plan. Observation construction
-//! remains in the trusted Python projection during this migration stage.
+//! Catalog lookup uses only the accepted plan. Rust chat_observation supplies
+//! current observations; player reports and model text never become observations.
 use super::{Action, Grounding, Plan, PreparedPlan, clean, fixed_reply, ground};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};

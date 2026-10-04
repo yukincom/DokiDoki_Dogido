@@ -53,7 +53,8 @@ pub fn constraint_details(
             .iter()
             .flat_map(|f| array_strings(&f["forbidden_terms"])),
     );
-    // This method uses CommonMixin's cave check, not environment projection's variant.
+    // Place readings are available with visible sky or a cave biome. This
+    // material rule is separate from the environment observation projection.
     let biome = biome_id(event.world.biome.as_deref());
     let visible =
         event.world.sky_visible == Some(true) || biome == "deep_dark" || biome.ends_with("_caves");

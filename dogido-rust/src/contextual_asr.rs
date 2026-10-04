@@ -42,7 +42,7 @@ pub fn normalize_kana(text: &str) -> String {
             other => other,
         };
         if c == 'ー' {
-            // 先頭の長音もPython正本の空文字判定に合わせる。
+            // 先頭の長音には既定母音「あ」を補い、それ以外は直前のかなから決める。
             if let Some(c) = chars.last().copied().map_or(Some('あ'), last_vowel) {
                 chars.push(c);
             }
@@ -64,7 +64,7 @@ fn last_vowel(c: char) -> Option<char> {
     .find_map(|(v, group)| group.contains(c).then_some(v))
 }
 
-/// Pythonの2つのかなrun正規表現と同じ左優先・非重複のbyte範囲。
+/// 入力／候補ごとの2種類のかな列を、左優先・非重複のbyte範囲で取り出す。
 fn runs(text: &str, for_input: bool) -> Vec<(usize, usize)> {
     let chars: Vec<_> = text.char_indices().collect();
     let mut result = Vec::new();

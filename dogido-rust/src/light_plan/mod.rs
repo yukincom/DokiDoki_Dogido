@@ -1,12 +1,13 @@
 //! 照明コメントの限定判定。観測・発話権限・クールダウンは既存ambientが所有する。
-//! Pythonのstructured契約だけを置換し、JSON不正時の無言と契約一回再試行を保つ。
+//! プロンプトとstructured契約をRustで検査し、JSON不正時の無言と契約一回再試行を保つ。
 #[cfg(test)]
 mod tests;
 mod validation;
 
 use crate::{
     llm::RigLlm,
-    planner::{extract_object, python_json},
+    planner::extract_object,
+    text_format::spaced_json,
     types::{ChatMessage, GenerationReport, GenerationRequest, Role},
 };
 use anyhow::{Context, Result, ensure};
@@ -42,7 +43,7 @@ fn basis(details: &Value) -> BTreeSet<&str> {
 // Python's retry constraints use json.dumps default ensure_ascii=True.
 fn ascii_json(value: &Value) -> String {
     let mut out = String::new();
-    for ch in python_json(value).chars() {
+    for ch in spaced_json(value).chars() {
         if ch.is_ascii() {
             out.push(ch);
         } else {
@@ -57,12 +58,12 @@ fn ascii_json(value: &Value) -> String {
 
 pub fn messages(details: &Value, retry: Option<(&[String], &Value)>) -> Vec<ChatMessage> {
     let mut slots = json!({
-        "actions":python_json(details.get("allowed_actions").filter(|v| !v.is_null()).unwrap_or(&json!([]))),
-        "facts":python_json(details.get("facts").filter(|v| !v.is_null()).unwrap_or(&json!([])))
+        "actions":spaced_json(details.get("allowed_actions").filter(|v| !v.is_null()).unwrap_or(&json!([]))),
+        "facts":spaced_json(details.get("facts").filter(|v| !v.is_null()).unwrap_or(&json!([])))
     });
     if let Some((errors, previous)) = retry {
         slots["errors"] = errors.join("、").into();
-        slots["previous"] = python_json(previous)
+        slots["previous"] = spaced_json(previous)
             .chars()
             .take(2400)
             .collect::<String>()

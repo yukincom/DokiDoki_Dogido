@@ -79,9 +79,9 @@ def run(folder, url, *options, stop_signal=None):
             finally:
                 if process.poll() is None:
                     process.kill(); process.wait()
-    pids = re.findall(r'haiku_helper_started.*?pid=Some\((\d+)\)', result.stderr)
+    pids = re.findall(r'python_worker_started.*?pid=Some\((\d+)\)', result.stderr)
     assert len(pids) == 1, result.stderr
-    assert "haiku_helper_stopped" in result.stderr, result.stderr
+    assert "python_worker_stopped" in result.stderr, result.stderr
     for pid in pids:
         try: os.kill(int(pid), 0)
         except ProcessLookupError: pass
@@ -143,7 +143,7 @@ def main():
                 process = run(folder, url, stop_signal=stop)
                 assert process.returncode != 0 and "cancelled" in process.stderr and len(seen) == 1, process.stderr
                 checks.append(stop.name + "_reaps_helper")
-    path = ROOT / "reports/haiku-bridge-check.json"; path.parent.mkdir(exist_ok=True)
+    path = ROOT / "reports/python-worker-check.json"; path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps({"checks": checks, "passed": len(checks)}, ensure_ascii=False, indent=2) + "\n")
     print(f"haiku mock HTTP: {len(checks)} passed; own helpers and listeners stopped")
 

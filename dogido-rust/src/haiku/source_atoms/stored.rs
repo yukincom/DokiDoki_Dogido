@@ -1,4 +1,5 @@
 use super::*;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use std::collections::{BTreeMap, HashMap};
 
 pub fn source_atoms_from_materials(materials: &Value) -> Vec<SourceAtom> {
@@ -153,7 +154,7 @@ pub fn line_source_ids_from_materials(
         }
         let ids = ids
             .iter()
-            .map(|v| strip(&text(v)).to_owned())
+            .map(|v| strip(&text_format::value_text(v, QuotedRepr)).to_owned())
             .collect::<Vec<_>>();
         let reserved = ids
             .iter()

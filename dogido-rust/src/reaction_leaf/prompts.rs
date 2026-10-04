@@ -1,5 +1,6 @@
 //! 人が編集する共有状況文をRustの発話要求へ投影する。旧Pythonからの生成物ではない。
 //! JSONはラボ・配布とも共有する資産で、Pythonパッケージ内の配置は実行時の判断所有者を示さない。
+use crate::text_format::{self, ContainerFormat::CompactJson};
 use crate::types::{ChatMessage, Role};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -13,18 +14,6 @@ static SITUATIONS: LazyLock<Value> = LazyLock::new(|| {
 });
 
 pub(super) use crate::compat::json_truthy as truth;
-/// 単体null/boolはNone/True/False、配列・objectは空白なしJSONへ変換する。
-/// haiku_promptの空白付きJSONやchat_catalogの入れ子reprとは出力契約が異なる。
-pub(super) fn pystr(v: &Value) -> String {
-    match v {
-        Value::Null => "None".into(),
-        Value::Bool(true) => "True".into(),
-        Value::Bool(false) => "False".into(),
-        Value::String(v) => v.clone(),
-        _ => v.to_string(),
-    }
-}
-
 fn situation(kind: &str, d: &Value) -> Result<&'static str> {
     let kind = if kind == "daylight_water_skeleton" {
         "daylight_water"
@@ -143,7 +132,7 @@ pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
         let outcome = d
             .get("combat_outcome")
             .filter(|v| truth(v))
-            .map(pystr)
+            .map(|value| text_format::value_text(value, CompactJson))
             .unwrap_or("disengaged".into());
         let fact = match outcome.as_str() {
             "player_kill" => "追跡していた敵の死亡と、プレイヤーによる撃破根拠を確認済み。",
@@ -221,7 +210,11 @@ pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
 }
 
 fn mode(kind: &str, d: &Value) -> &'static str {
-    match pystr(&d["character_mode"]).trim().to_lowercase().as_str() {
+    match text_format::value_text(&d["character_mode"], CompactJson)
+        .trim()
+        .to_lowercase()
+        .as_str()
+    {
         "normal" => return "normal",
         "base" => return "base",
         "tension" => return "tension",

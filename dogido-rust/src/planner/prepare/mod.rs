@@ -3,6 +3,7 @@
 //! world observations must not contain player reports or remembered names.
 //! No event state, clocks, model calls, or dictionary SDK are used here.
 use super::{Action, Details, Evidence, Plan, PreparedPlan, clean, handoff, repair};
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{chat_catalog, chat_topics, chat_validation};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -131,13 +132,13 @@ pub fn prepare(model: Option<&str>, input: &Input) -> PreparedInput {
 
 fn value_text(value: &Value) -> String {
     if chat_catalog::truth(value) {
-        chat_catalog::text(value)
+        text_format::value_text(value, QuotedRepr)
     } else {
         String::new()
     }
 }
 /// Slice the last ten raw rows before discarding malformed/empty history rows.
-/// Repair fields preserve Python's string conversion without cleaning/truncation.
+/// Repair fields retain scalar text and quoted containers without cleaning/truncation.
 pub fn normalize_history(value: &Value) -> Vec<Value> {
     let Some(rows) = value.as_array() else {
         return vec![];
@@ -153,7 +154,7 @@ pub fn normalize_history(value: &Value) -> Vec<Value> {
             let turn = raw
                 .get("turn_id")
                 .filter(|v| chat_catalog::truth(v))
-                .map(chat_catalog::text)
+                .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_else(|| format!("history:{index}:{role}"));
             let turn = clean(&turn, 180);
             let silent = role == "event" && raw.get("reaction").is_some_and(|v| v == "silent");
@@ -169,7 +170,7 @@ pub fn normalize_history(value: &Value) -> Vec<Value> {
             }
             for key in repair::FIELDS {
                 if let Some(value) = raw.get(key) {
-                    row[key] = Value::String(chat_catalog::text(value));
+                    row[key] = Value::String(text_format::value_text(value, QuotedRepr));
                 }
             }
             Some(row)

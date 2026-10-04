@@ -1,4 +1,5 @@
 use super::*;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use std::collections::HashMap;
 
 pub fn catalog_source_snapshot(
@@ -15,7 +16,7 @@ pub fn catalog_source_snapshot(
     let label = [&entry["japanese"], &entry["label"]]
         .into_iter()
         .find(|v| truth(v))
-        .map(text)
+        .map(|value| text_format::value_text(value, QuotedRepr))
         .unwrap_or_else(|| {
             if !fallback_label.is_empty() {
                 fallback_label.into()
@@ -43,7 +44,7 @@ pub fn catalog_source_snapshot(
         ] {
             if let Some(values) = poetic[key].as_array() {
                 for (i, value) in values.iter().enumerate() {
-                    let value = text(value);
+                    let value = text_format::value_text(value, QuotedRepr);
                     let value = strip(&value);
                     if !value.is_empty() {
                         extra_fields.push((format!("poetic.{key}[{i}]"), value.into()))
@@ -198,7 +199,7 @@ pub fn atoms_from_observations(features: &[Value]) -> Vec<SourceAtom> {
             let source = f
                 .get("source")
                 .filter(|v| truth(v))
-                .map(text)
+                .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_else(|| "observation".into());
             let key = field(f, "key");
             let label = field(f, "label");
@@ -265,7 +266,7 @@ pub fn preface_clauses_from_payload(
         }
         let ids = ids
             .iter()
-            .map(|v| strip(&super::text(v)).to_owned())
+            .map(|v| strip(&text_format::value_text(v, QuotedRepr)).to_owned())
             .collect::<Vec<_>>();
         if ids.iter().any(|id| id.is_empty()) || !unique(&ids) {
             return None;

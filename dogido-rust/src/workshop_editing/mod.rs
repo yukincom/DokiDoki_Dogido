@@ -8,7 +8,7 @@ mod parse;
 #[cfg(test)]
 mod tests;
 use crate::{
-    haiku::lexical, haiku_bridge::Helper, haiku_record::HaikuLine, workshop_projection::Snapshot,
+    haiku::lexical, python_worker::Helper, haiku_record::HaikuLine, workshop_projection::Snapshot,
 };
 use anyhow::{Context, Result, ensure};
 use parse::{compact, list, space, text, truth};
@@ -70,7 +70,7 @@ impl Engine {
             match self.project(frame) {
                 Ok(result) => {
                     ensure!(
-                        crate::planner::python_json(&result).len() < 1_000_000,
+                        crate::text_format::spaced_json(&result).len() < 1_000_000,
                         "workshop edit response too large"
                     );
                     return Ok(result);

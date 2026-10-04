@@ -88,7 +88,7 @@ async fn canonical_runtime_retry_and_abstention() {
             requests.len()
         );
         assert!(requests.len() <= 2);
-        // Compare the unchanged native event consumer with Python's domain decision.
+        // Compare the Rust event consumer with the saved domain-decision fixture.
         use crate::environment::ambient::{Ambient, AmbientFocus};
         use crate::{combat::model::Mode, events::GameEvent};
         let event = |inventory| {

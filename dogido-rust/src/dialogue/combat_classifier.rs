@@ -1,7 +1,7 @@
 //! OS SDKは休眠worker、chat fallbackはRig。一要求の所有者が取消・回収を待つ。
 use super::*;
 use crate::{
-    haiku_bridge::Helper,
+    python_worker::Helper,
     types::{ChatMessage, GenerationRequest},
     workshop_combat_input::{Action, Analysis},
 };

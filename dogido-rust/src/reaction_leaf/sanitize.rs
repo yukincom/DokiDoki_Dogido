@@ -1,7 +1,8 @@
 //! 共通の発話整形・危険助言検査と、反応別の内容検査を同じモジュールに置いている。
 //! chat_validationはclean/usability_reason/forbidden等、workshop_validationはstripを使う。
 //! final_guardは反応固有の主張検査。通常会話はchat_validation::guardで固有のgroundingを検査する。
-use super::prompts::{pystr, truth};
+use super::prompts::truth;
+use crate::text_format::{self, ContainerFormat::CompactJson};
 use regex::Regex;
 use serde_json::Value;
 use std::{
@@ -178,9 +179,9 @@ fn hostile(text: &str, d: &Value) -> bool {
         return true;
     }
     let mode = if truth(&d["mode"]) {
-        pystr(&d["mode"])
+        text_format::value_text(&d["mode"], CompactJson)
     } else if truth(&d["character_mode"]) {
-        pystr(&d["character_mode"])
+        text_format::value_text(&d["character_mode"], CompactJson)
     } else {
         String::new()
     }
@@ -197,7 +198,13 @@ fn hostile(text: &str, d: &Value) -> bool {
     }
     if ["threat_summary", "hearing_summary", "event_digest"]
         .iter()
-        .any(|k| truth(&d[*k]) && has(&pystr(&d[*k]), &["視認", "敵"]))
+        .any(|k| {
+            truth(&d[*k])
+                && has(
+                    &text_format::value_text(&d[*k], CompactJson),
+                    &["視認", "敵"],
+                )
+        })
     {
         return true;
     }
@@ -230,7 +237,7 @@ fn catalog_forbidden(d: &Value) -> Vec<String> {
                         .as_array()
                         .map(|a| {
                             a.iter()
-                                .map(pystr)
+                                .map(|value| text_format::value_text(value, CompactJson))
                                 .map(|s| strip(&s).to_owned())
                                 .filter(|s| !s.is_empty())
                                 .collect()
@@ -249,7 +256,10 @@ fn catalog_forbidden(d: &Value) -> Vec<String> {
     };
     let ids = match ids {
         Value::String(s) => vec![s.clone()],
-        Value::Array(a) => a.iter().map(pystr).collect(),
+        Value::Array(a) => a
+            .iter()
+            .map(|value| text_format::value_text(value, CompactJson))
+            .collect(),
         _ => vec![],
     };
     ids.iter()
@@ -293,7 +303,12 @@ pub(crate) fn forbidden(text: &str, d: &Value) -> bool {
     }
     let mut patterns: Vec<_> = d["forbidden_advice"]
         .as_array()
-        .map(|a| a.iter().filter(|v| truth(v)).map(pystr).collect())
+        .map(|a| {
+            a.iter()
+                .filter(|v| truth(v))
+                .map(|value| text_format::value_text(value, CompactJson))
+                .collect()
+        })
         .unwrap_or_default();
     if patterns.is_empty() {
         patterns = catalog_forbidden(d);
@@ -359,7 +374,7 @@ pub(super) fn final_guard(kind: &str, text: &str, d: &Value) -> bool {
     let text = compact(text);
     let outcome = d
         .get("combat_outcome")
-        .map(pystr)
+        .map(|value| text_format::value_text(value, CompactJson))
         .unwrap_or_else(|| "disengaged".into());
     let kill = has(
         &text,

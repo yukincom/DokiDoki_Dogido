@@ -1,7 +1,8 @@
 //! Pure catalogue plausibility and observed-Mob tactics. No observation memory,
 //! entity inference, model calls, or world actions. Presence stays caller-owned.
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{
-    chat_catalog::{Catalog, Hit, Kind, normalized_observation_id, strip, text, truth},
+    chat_catalog::{Catalog, Hit, Kind, normalized_observation_id, strip, truth},
     events::VisualThreat,
 };
 use anyhow::{Result, bail};
@@ -10,7 +11,11 @@ use serde_json::Value;
 use std::collections::HashSet;
 
 fn value_text(v: &Value) -> String {
-    if truth(v) { text(v) } else { String::new() }
+    if truth(v) {
+        text_format::value_text(v, QuotedRepr)
+    } else {
+        String::new()
+    }
 }
 pub fn normalize_biome_id(raw: Option<&str>) -> Option<String> {
     let normalized = normalized_observation_id(raw.unwrap_or("")).replace('-', "_");
@@ -23,7 +28,7 @@ fn structure_biomes(catalog: &Catalog, id: &str) -> HashSet<String> {
         .and_then(|e| e["biomes"].as_array())
         .into_iter()
         .flatten()
-        .filter_map(|raw| normalize_biome_id(Some(&text(raw))))
+        .filter_map(|raw| normalize_biome_id(Some(&text_format::value_text(raw, QuotedRepr))))
         .collect()
 }
 fn structures_for_mob<'a>(catalog: &'a Catalog, raw: &str) -> Vec<&'a str> {
@@ -118,7 +123,7 @@ pub fn build_plausibility_hint_lines(
         };
         seen.insert(id.to_owned());
         let label = if truth(&entry["label"]) {
-            text(&entry["label"])
+            text_format::value_text(&entry["label"], QuotedRepr)
         } else {
             id.into()
         };
@@ -193,7 +198,10 @@ fn iterable(v: &Value) -> Result<Vec<String>> {
         return Ok(vec![]);
     }
     Ok(match v {
-        Value::Array(a) => a.iter().map(text).collect(),
+        Value::Array(a) => a
+            .iter()
+            .map(|value| text_format::value_text(value, QuotedRepr))
+            .collect(),
         Value::String(s) => s.chars().map(|c| c.to_string()).collect(),
         Value::Object(o) => o.keys().cloned().collect(),
         _ => bail!("catalog tactics list is not iterable"),
@@ -211,7 +219,7 @@ pub fn collect_tactics(catalog: &Catalog, ids: &[String]) -> Result<Tactics> {
             continue;
         };
         let label = if truth(&entry["label"]) {
-            text(&entry["label"])
+            text_format::value_text(&entry["label"], QuotedRepr)
         } else {
             id
         };
@@ -220,7 +228,10 @@ pub fn collect_tactics(catalog: &Catalog, ids: &[String]) -> Result<Tactics> {
             continue;
         };
         if let Some(note) = tactics.get("notes").filter(|v| truth(v)) {
-            out.notes.push(format!("{label}: {}", text(note)));
+            out.notes.push(format!(
+                "{label}: {}",
+                text_format::value_text(note, QuotedRepr)
+            ));
         }
         for (key, target) in [
             ("forbidden_advice", &mut out.forbidden_advice),

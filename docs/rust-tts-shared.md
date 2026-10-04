@@ -12,7 +12,7 @@
 
 以下は共有取得口を接続した当時の記録。Pythonに通常会話・workshopの他処理が残るという説明、旧辞書関数やPython最終result生成は現在の責務ではない。当時の試験件数・未確認範囲を保持する。
 
-ワークショップの `reading` 要求は Rust `haiku_bridge::Helper` が受け、既存の `tts_reading::prepare`、token 選択、`finish` で `spoken_text` を作る。表示本文・現在句・保存・編集の採否は変更しない。
+ワークショップの `reading` 要求は Rust `python_worker::Helper` が受け、既存の `tts_reading::prepare`、token 選択、`finish` で `spoken_text` を作る。表示本文・現在句・保存・編集の採否は変更しない。
 
 - `off`、空、現行範囲の漢字がない文は読み用 IPC を送らない。ワークショップのほかの仕事に必要な既存 helper は存続する。
 - 辞書が必要な場合だけ、同じ子へ `tts_tokens` を一回送る。新しい子は起動しない。

@@ -64,7 +64,7 @@ pub fn prepare(text: &str, engine: Option<&str>, environment: Option<&str>) -> S
 }
 /// None means unavailable/failed UniDic and retains the prepared original.
 /// Cancellation, timeout and broken IPC are caller errors, not a None fallback.
-/// A successful empty result is not a failure: Python also preserves it as empty.
+/// A successful empty result remains empty; only a failed lookup uses the original.
 /// Do not trim/NFKC/fold here, and do not apply catalog overlays to free-form TTS.
 pub fn finish(source: &str, unidic_output: Option<&str>) -> String {
     apply_manual(unidic_output.unwrap_or(source))

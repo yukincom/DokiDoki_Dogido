@@ -2,6 +2,7 @@
 //! A dictionary match is a candidate, never evidence of presence. Normal chat
 //! ranks by the player's words first and adds observed flags only afterwards.
 use crate::entry_catalog::{HOSTILE, NEUTRAL, PASSIVE, STRUCTURES};
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
@@ -77,58 +78,12 @@ pub fn fold_kana(text: &str) -> String {
     crate::compat::fold_kana(text)
 }
 pub(crate) use crate::compat::json_truthy as truth;
-// 検索aliasの文字列化。単体null/boolに加え、配列・objectの入れ子もPython repr風にする。
-// 例: [true, null] → [True, None]。一般JSON整形へ置き換えると検索語が変わる。
-// 非文字列aliasの境界は移植時fixtureとtests/chat_catalog.rsで保持する。
-pub(crate) fn text(v: &Value) -> String {
-    match v {
-        Value::Null => "None".into(),
-        Value::Bool(true) => "True".into(),
-        Value::Bool(false) => "False".into(),
-        Value::String(s) => s.clone(),
-        Value::Array(a) => format!("[{}]", a.iter().map(repr).collect::<Vec<_>>().join(", ")),
-        Value::Object(o) => format!(
-            "{{{}}}",
-            o.iter()
-                .map(|(k, v)| format!("{}: {}", repr(&Value::String(k.clone())), repr(v)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Value::Number(n) => n.to_string(),
-    }
-}
-fn repr(v: &Value) -> String {
-    let Value::String(s) = v else {
-        return text(v);
-    };
-    let quote = if s.contains('\'') && !s.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::from(quote);
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if c.is_control() => out.push_str(&format!("\\x{:02x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
-    out
-}
+// Non-string search aliases retain recursive quoted representations.
 fn label(entry: &Value, fallback: &str) -> String {
     entry
         .get("label")
         .filter(|v| truth(v))
-        .map(text)
+        .map(|value| text_format::value_text(value, QuotedRepr))
         .unwrap_or_else(|| fallback.into())
 }
 pub(crate) fn normalized_observation_id(s: &str) -> String {
@@ -157,7 +112,7 @@ impl Catalog {
                     if payload.is_object() {
                         payload.clone()
                     } else {
-                        serde_json::json!({"label":text(payload)})
+                        serde_json::json!({"label":text_format::value_text(payload, QuotedRepr)})
                     },
                 );
             }
@@ -206,7 +161,7 @@ impl Catalog {
                     .get("label")
                     .filter(|v| truth(v))
                     .or_else(|| entry.get("japanese").filter(|v| truth(v)))
-                    .map(text)
+                    .map(|value| text_format::value_text(value, QuotedRepr))
                     .unwrap_or_default();
                 let label_field = if kind == Kind::Mob {
                     "label"
@@ -216,13 +171,25 @@ impl Catalog {
                 add(&mut result.terms, &label, id, kind, label_field);
                 if let Some(aliases) = entry["spoken_aliases"].as_array() {
                     for alias in aliases {
-                        add(&mut result.terms, &text(alias), id, kind, "spoken_aliases");
+                        add(
+                            &mut result.terms,
+                            &text_format::value_text(alias, QuotedRepr),
+                            id,
+                            kind,
+                            "spoken_aliases",
+                        );
                     }
                 }
                 if kind == Kind::Mob {
                     if let Some(poetic) = entry["poetic"].as_object() {
                         if let Some(role) = poetic.get("role").filter(|v| truth(v)) {
-                            add(&mut result.terms, &text(role), id, kind, "role");
+                            add(
+                                &mut result.terms,
+                                &text_format::value_text(role, QuotedRepr),
+                                id,
+                                kind,
+                                "role",
+                            );
                         }
                         for key in [
                             "visual_tags",
@@ -234,13 +201,25 @@ impl Catalog {
                         ] {
                             if let Some(values) = poetic.get(key).and_then(Value::as_array) {
                                 for value in values {
-                                    add(&mut result.terms, &text(value), id, kind, key);
+                                    add(
+                                        &mut result.terms,
+                                        &text_format::value_text(value, QuotedRepr),
+                                        id,
+                                        kind,
+                                        key,
+                                    );
                                 }
                             }
                         }
                     }
                 } else if truth(&entry["note"]) {
-                    add(&mut result.terms, &text(&entry["note"]), id, kind, "note");
+                    add(
+                        &mut result.terms,
+                        &text_format::value_text(&entry["note"], QuotedRepr),
+                        id,
+                        kind,
+                        "note",
+                    );
                 }
             }
         }

@@ -1,10 +1,11 @@
 //! 自動川柳6種の読み取り専用prompt組立。生成・検査・再生成・辞書は呼出側の所有。
+use crate::text_format::{self, ContainerFormat::SpacedJson};
 mod blocks;
 #[cfg(test)]
 mod tests;
 use crate::{
     haiku::StructuredRequest,
-    planner::python_json,
+    text_format::spaced_json,
     types::{ChatMessage, Role},
 };
 use anyhow::{Context, Result, ensure};
@@ -67,7 +68,7 @@ fn grounding_example(d: &Value) -> Value {
     }
     let mut verdicts = Map::new();
     for index in &requested {
-        verdicts.insert(string(index), json!("pass"));
+        verdicts.insert(text_format::value_text(index, SpacedJson), json!("pass"));
     }
     let assessments:Vec<_>=requested.iter().enumerate().map(|(p,i)|json!({"line_index":i,"atom_ids":[example_numbers[p.min(example_numbers.len()-1)].clone()]})).collect();
     json!({"verdicts":verdicts,"assessments":assessments,"failure_reasons":{}})
@@ -103,7 +104,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
     );
     slots.insert("form".into(), asset("form").into());
     let strategy = if truth(&d["generation_strategy"]) {
-        string(&d["generation_strategy"])
+        text_format::value_text(&d["generation_strategy"], SpacedJson)
     } else {
         "three_slot".into()
     };
@@ -134,9 +135,15 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         let focus = join(&irony["focus"], "、");
         let focus = if focus.is_empty() { "—" } else { &focus };
         if kind == "haiku_draft" {
-            format!("{}（焦点: {focus}）", string(&irony["description"]))
+            format!(
+                "{}（焦点: {focus}）",
+                text_format::value_text(&irony["description"], SpacedJson)
+            )
         } else {
-            format!("{} / 焦点: {focus}", string(&irony["description"]))
+            format!(
+                "{} / 焦点: {focus}",
+                text_format::value_text(&irony["description"], SpacedJson)
+            )
         }
     } else {
         if kind == "haiku_scene" {
@@ -158,7 +165,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         if d["revision_edits"].is_array() {
             format!(
                 "【今回の修正差分】\n{}{}",
-                python_json(&d["revision_edits"]),
+                spaced_json(&d["revision_edits"]),
                 asset("grounding_revision_note")
             )
         } else {
@@ -168,14 +175,18 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
     slots.insert(
         "line_block".into(),
         row_lines(&d["grounding_lines"], |r| {
-            format!("- {}: {}", string(&r["line_index"]), string(&r["text"]))
+            format!(
+                "- {}: {}",
+                text_format::value_text(&r["line_index"], SpacedJson),
+                text_format::value_text(&r["text"], SpacedJson)
+            )
         }),
     );
     slots.insert(
         "json_tail".into(),
         format!(
             "返事は JSON オブジェクト1つだけ。\n形: {}",
-            python_json(&grounding_example(&d))
+            spaced_json(&grounding_example(&d))
         ),
     );
     slots.insert(
@@ -184,8 +195,8 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             row_lines(&d["current_lines"], |r| {
                 format!(
                     "- {}: {} ({})",
-                    string(&r["line_index"]),
-                    string(&r["text"]),
+                    text_format::value_text(&r["line_index"], SpacedJson),
+                    text_format::value_text(&r["text"], SpacedJson),
                     if truth(&r["frozen"]) {
                         "固定"
                     } else {
@@ -204,7 +215,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             if let Some(b) = v.as_bool() {
                 u8::from(b).to_string()
             } else {
-                string(v)
+                text_format::value_text(v, SpacedJson)
             }
         })
         .collect::<Vec<_>>()
@@ -215,7 +226,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         if d["target_line_indices"].is_array() {
             array(&d["target_line_indices"])
                 .iter()
-                .map(string)
+                .map(|value| text_format::value_text(value, SpacedJson))
                 .collect::<Vec<_>>()
                 .join(", ")
         } else {
@@ -227,16 +238,20 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         row_lines(&d["workshop_findings"], |r| {
             format!(
                 "- 行{}: {} / {}",
-                string(&r["line_index"]),
-                string(&r["problem"]),
-                string(&r["note"])
+                text_format::value_text(&r["line_index"], SpacedJson),
+                text_format::value_text(&r["problem"], SpacedJson),
+                text_format::value_text(&r["note"], SpacedJson)
             )
         }),
     );
     slots.insert(
         "atom_lines".into(),
         row_lines(&d["source_atoms"], |r| {
-            format!("- [{}] {}", string(&r["atom_id"]), string(&r["text"]))
+            format!(
+                "- [{}] {}",
+                text_format::value_text(&r["atom_id"], SpacedJson),
+                text_format::value_text(&r["text"], SpacedJson)
+            )
         }),
     );
     slots.insert("retry_block".into(), edit_retry(&d));
@@ -265,7 +280,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         };
         slots.insert("errors".into(), errors);
         let previous = if truth(&retry["previous_payload"]) {
-            string(&retry["previous_payload"])
+            text_format::value_text(&retry["previous_payload"], SpacedJson)
         } else {
             String::new()
         };
@@ -275,13 +290,13 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
             .filter_map(|a| a["atom_id"].as_str())
             .filter(|s| !s.is_empty())
             .collect();
-        slots.insert("ids".into(), python_json(&json!(ids)));
+        slots.insert("ids".into(), spaced_json(&json!(ids)));
         let indices: Vec<_> = array(&d["failed_line_indices"])
             .iter()
             .filter(|v| integer(v))
             .cloned()
             .collect();
-        slots.insert("indices".into(), python_json(&json!(indices)));
+        slots.insert("indices".into(), spaced_json(&json!(indices)));
         result.push(ChatMessage {
             role: Role::User,
             content: render(&ASSETS["retry"][kind], &slots)?,
@@ -299,7 +314,7 @@ pub fn messages(request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
     {
         result.last_mut().unwrap().content.push_str(&format!(
             "\n同行ペットの補助材料: {}\n主題は今回選んだ情景を優先。この個体は必要なら添景に使える。名前と種名は同じ個体の別表現。\n",
-            python_json(&d["background_companions"])));
+            spaced_json(&d["background_companions"])));
     }
     Ok(result)
 }

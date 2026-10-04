@@ -248,7 +248,7 @@ fn parse_at(text: &str, overlay: &[Value], now: DateTime<FixedOffset>) -> Option
     })
 }
 
-/// Input routing retains Python's group IDs and local date types. The storage
+/// Input routing retains biome-group IDs and local date types. The storage
 /// query above deliberately uses its existing UTC/expanded-biome contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputRecall {

@@ -322,20 +322,19 @@ dogido-rust/target/release/dogido-rust generate dogido-rust/fixtures/connection.
 
 出力JSONには返答、`finish_reason`、入力／生成トークン数、要求／応答のモデル名、応答ID、API所要時間を残します。トークン数が返らなかった場合は`null`です。`elapsed_ms`は一回のAPI呼出と応答読取の時間で、音声の体感応答時間とは別です。
 
-### 自動川柳の生成・検査を比較する
+### 自動川柳の生成・検査を確認する
 
 `src/haiku/`は準備済みの材料から三行を生成し、音数・文字種・出典・自然さを検査します。内容の再生成は不合格slotだけ、検査票の欠落は元の行を保持して一度だけ再検査します。再検査も読めなければ`grounding_unavailable`で終了します。出典は検査中だけ一時番号にし、結果には元IDと材料を保持します。検査の既定上限は512トークンで、句生成の上限と別です。
 
-`haiku_response`は合否と出典の両方が完成した外側のJSON項目だけを回収します。説明末尾の途中切れを許容する一方、出典配列の途中にある一件を完全な検査票として拾いません。`haiku_bridge`はRig経由のchat／haiku routeと、辞書補助の寿命を管理します。プロンプト、句の一文字補正、読みの正規化はRustが担当し、漢字の辞書トークンだけ必要時に取得します。取消はwatchで通知し、呼出元は処理の完了まで待ちます。
+`haiku_response`は合否と出典の両方が完成した外側のJSON項目だけを回収します。説明末尾の途中切れを許容する一方、出典配列の途中にある一件を完全な検査票として拾いません。`python_worker`はRig経由のchat／haiku routeと、辞書補助の寿命を管理します。プロンプト、句の一文字補正、読みの正規化はRustが担当し、漢字の辞書トークンだけ必要時に取得します。取消はwatchで通知し、呼出元は処理の完了まで待ちます。
 
 ```sh
 ./dogido-rust/cargo.sh build --locked --offline --examples
-python dogido-rust/scripts/compare_haiku.py
-python dogido-rust/scripts/compare_haiku_response.py
-python dogido-rust/scripts/check_haiku_bridge.py
+./dogido-rust/cargo.sh test --offline --locked haiku --lib
+python dogido-rust/scripts/check_python_worker.py
 ```
 
-生成結果・要求・promptの67ケース、検査票解析4,875ケースを現行Pythonと照合します。模擬HTTPではroute、512トークン、元行の再検査、不合格行だけの再生成、通信失敗、取消・期限切れ時のhelper回収を確認します。比較基準のPythonは合否先行・番号付き材料・512トークンの修正を含む版が必要です。
+Rustテストは生成結果・要求・prompt・検査票解析を保存済みfixtureと照合します。模擬HTTPではroute、512トークン、元行の再検査、不合格行だけの再生成、通信失敗、取消・期限切れ時のworker回収を確認します。旧Python本体との実行時比較は行いません。
 
 生成単独の接続器は`examples/generate_haiku.rs`です。要求JSONに`input`（材料・制約）、`chat`と`haiku`（各`base_url / model / max_tokens / timeout_ms`）を指定し、`--python`で既存の依存が入ったPythonを選びます。接続先の省略による自動接続はありません。このCLIは生成部品だけを確認します。ゲーム中の発句・音声・初期workshop・JSONL保存は`serve-dialogue`へ接続済みです。
 

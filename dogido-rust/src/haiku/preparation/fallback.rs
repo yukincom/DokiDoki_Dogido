@@ -1,4 +1,5 @@
 use super::*;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use std::sync::LazyLock;
 static CATALOG: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/fallbacks/haiku.json"))
@@ -114,7 +115,7 @@ pub fn fixed_text(event: &GameEvent) -> String {
                 names.is_some_and(|a| {
                     a.iter().any(|v| {
                         strip(
-                            crate::chat_catalog::text(v)
+                            text_format::value_text(v, QuotedRepr)
                                 .rsplit(':')
                                 .next()
                                 .unwrap_or(""),
@@ -124,7 +125,7 @@ pub fn fixed_text(event: &GameEvent) -> String {
                     })
                 }) || suffixes.is_some_and(|a| {
                     a.iter()
-                        .any(|v| name.ends_with(&crate::chat_catalog::text(v)))
+                        .any(|v| name.ends_with(&text_format::value_text(v, QuotedRepr)))
                 })
             });
         }
@@ -132,15 +133,15 @@ pub fn fixed_text(event: &GameEvent) -> String {
     };
     for rule in CATALOG["rules"].as_array().unwrap() {
         if matches(rule) {
-            return crate::chat_catalog::text(&rule["line"]);
+            return text_format::value_text(&rule["line"], QuotedRepr);
         }
     }
     if let Some(line) = CATALOG["defaults"].get(biome) {
-        return crate::chat_catalog::text(line);
+        return text_format::value_text(line, QuotedRepr);
     }
     for rule in CATALOG["group_defaults"].as_array().unwrap() {
         if matches(rule) {
-            return crate::chat_catalog::text(&rule["line"]);
+            return text_format::value_text(&rule["line"], QuotedRepr);
         }
     }
     CATALOG["under_construction_line"]

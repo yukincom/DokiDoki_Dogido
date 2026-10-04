@@ -1,10 +1,11 @@
 //! Read-only workshop snapshots and request materials. No edits, state, saving,
 //! dictionary lookup, or model calls. Snapshot data stays tied to its saved poem.
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 mod followup;
 #[cfg(test)]
 mod tests;
 use crate::{
-    chat_catalog::{strip, text, truth},
+    chat_catalog::{strip, truth},
     haiku::source_atoms,
     haiku_record::HaikuLine,
 };
@@ -21,7 +22,11 @@ static RULES: LazyLock<Value> = LazyLock::new(|| {
         .expect("workshop shared constants")
 });
 fn value_text(v: &Value) -> String {
-    if truth(v) { text(v) } else { String::new() }
+    if truth(v) {
+        text_format::value_text(v, QuotedRepr)
+    } else {
+        String::new()
+    }
 }
 fn list(v: &Value) -> &[Value] {
     v.as_array().map_or(&[], Vec::as_slice)

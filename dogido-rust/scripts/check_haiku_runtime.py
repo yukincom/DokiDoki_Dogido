@@ -99,7 +99,7 @@ def main():
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
         send(sid, world={"game_paused": True})
-        wait_for(lambda: "haiku_helper_stopped" in log.read_text())
+        wait_for(lambda: "python_worker_stopped" in log.read_text())
         gate.set()
         for _ in range(3):
             time.sleep(.2); send(sid, world={"game_paused": True})
@@ -142,7 +142,7 @@ def main():
         wait_for(lambda: any(r["turn_id"] == got["turn_id"] and r["playback_status"] == "completed" for r in rows(sid)))
         gate.set()
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
-        wait_for(lambda: "haiku_helper_stopped" in log.read_text())
+        wait_for(lambda: "python_worker_stopped" in log.read_text())
         assert not stored(sid)
         passed.append("new_input_cancels_generation_without_losing_reply")
 
@@ -151,7 +151,7 @@ def main():
         send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory", "priority_hint": "background", "certainty": "high"},
              auditory_threats=[{"label": "zombie", "source_id": "sound-z", "spoken_name_allowed": True}])
         wait_for(lambda: any(r["playback_status"] == "completed" and r.get("combat_actions") for r in rows(sid)))
-        gate.set(); wait_for(lambda: "haiku_helper_stopped" in log.read_text())
+        gate.set(); wait_for(lambda: "python_worker_stopped" in log.read_text())
         assert not stored(sid) and hud(sid)["state"] == "closed"
         passed.append("partial_hostile_audio_cancels_and_warning_precedes_late_model")
 
@@ -174,14 +174,14 @@ def main():
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
         # 新しい全観測が来ないまま10秒を超えた生成は採用しない。
-        wait_for(lambda: "haiku_helper_stopped" in log.read_text(), timeout=12)
+        wait_for(lambda: "python_worker_stopped" in log.read_text(), timeout=12)
         assert not stored(sid) and hud(sid)["state"] == "closed"
         gate.set()
         passed.append("stale_observation_cancels_unfinished_poem")
 
     with fixture(job_timeout_ms=1400) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
-        wait_for(lambda: "haiku_helper_stopped" in log.read_text())
+        wait_for(lambda: "python_worker_stopped" in log.read_text())
         assert not stored(sid) and hud(sid)["state"] == "closed"
         gate.set()
         passed.append("job_deadline_reaps_helper_without_inference_completion")
@@ -211,7 +211,7 @@ def main():
             gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
             process.send_signal(stop); process.wait(timeout=5); gate.set()
             assert process.returncode == 0 and not stored(sid)
-            assert "haiku_helper_stopped" in log.read_text()
+            assert "python_worker_stopped" in log.read_text()
             passed.append(stop.name + "_reaps_helper_without_save")
 
     report = ROOT / "reports/haiku-runtime-check.json"

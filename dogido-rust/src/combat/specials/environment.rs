@@ -58,7 +58,7 @@ impl Specials {
             self.water_handled.insert(identity(t));
         }
         let mut text = catalog::text("combat", &["daylight", "water_generic"]);
-        // Pythonは水中の文に現在の敵全体の個数を添える。過去の視認は混ぜない。
+        // 水中の文に現在視認している敵全体の個数を添える。過去の視認は混ぜない。
         let mut suffix = String::new();
         if e.visual_threats.len() >= 2 {
             let summary = if e.visual_threats.len() >= 9

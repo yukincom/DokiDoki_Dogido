@@ -395,7 +395,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
                 "conversation_repair",
                 &[(
                     "repair",
-                    &crate::planner::python_json(&d["conversation_repair"]),
+                    &crate::text_format::spaced_json(&d["conversation_repair"]),
                 )],
             )
         } else {
@@ -461,18 +461,18 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             .shift_remove("villager_routines");
         let mut block = format!(
             "【現在の環境観測と変化（会話履歴とは別）】\n{}\n",
-            crate::planner::python_json(&world)
+            crate::text_format::spaced_json(&world)
         );
         if let Some(knowledge) = knowledge.filter(|value| !value.is_null()) {
             block.push_str(&format!(
                 "【対象のカタログ情報（一般的特徴・表現材料）】\n{}\n",
-                crate::planner::python_json(&knowledge)
+                crate::text_format::spaced_json(&knowledge)
             ));
         }
         if let Some(routines) = routines.filter(|value| !value.is_null()) {
             block.push_str(&format!(
                 "【観測範囲の村人の日課（時刻からの予定）】\n{}\n",
-                crate::planner::python_json(&routines)
+                crate::text_format::spaced_json(&routines)
             ));
         }
         block
@@ -589,7 +589,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             .map(strip)
             .filter(|s| !s.is_empty())
             .unwrap_or(asset(&DATA["empty_candidate"]));
-        // The Python reason keeps surrounding spaces; only an empty/null value defaults.
+        // Keep surrounding spaces in the reason; only an empty/null value defaults.
         let reason = repair
             .get("reason")
             .and_then(Value::as_str)
@@ -618,7 +618,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     Ok(out)
 }
 
-/// Same closed field projection used by the transitional Python helper.
+/// 通常会話のプロンプトへ渡す既知フィールドだけをRustで投影する。
 pub(crate) fn project_details(details: &Value) -> Value {
     Value::Object(
         details

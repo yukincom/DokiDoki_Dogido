@@ -204,7 +204,7 @@ fn shorten(text: &str, max: usize) -> String {
         return text;
     }
     let mut kept = String::new();
-    // Pythonの既存rendererと同じく、まず文の境界で短くする。
+    // まず文の境界で短くし、文の途中で切る範囲を最小限にする。
     for sentence in text.split_inclusive(punctuation) {
         let sentence = sentence.trim();
         if sentence.chars().all(punctuation) {

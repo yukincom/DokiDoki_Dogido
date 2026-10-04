@@ -160,7 +160,7 @@ def main():
             assert context(base)["prompt_mode"] == "normal" and hud(sid)["state"] == "closed"
             assert scream(base, sid)["reason"] == "situation_vocalization"
             gate.set()
-            wait_for(lambda: "haiku_helper_stopped" in log.read_text())
+            wait_for(lambda: "python_worker_stopped" in log.read_text())
             assert not stored(sid) and hud(sid)["state"] == "closed"
         finally:
             gate.set()

@@ -1,7 +1,7 @@
 //! Free-text reading for native reaction/recall paths only. No catalog overlay.
 use super::{DialogueConfig, bridge};
 use crate::{
-    haiku_bridge::Helper,
+    python_worker::Helper,
     tts_reading::{self, Step, tokens},
 };
 use anyhow::{Context, Result, ensure};

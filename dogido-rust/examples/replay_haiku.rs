@@ -2,7 +2,7 @@
 use anyhow::{Context, Result};
 use dogido_rust::{
     haiku::{self, Backend, Input, LineForm, StructuredRequest, TransformRequest},
-    haiku_bridge::Helper,
+    python_worker::Helper,
     haiku_response,
     types::GeneratedText,
 };

@@ -197,7 +197,7 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             logs = log_path.read_text()
             assert "dialogue_stopped" in logs
             # 起動したhelperとplayerの実PIDが終了していることをOSへ確認。
-            pids = set(re.findall(r'event="(?:helper_started|haiku_helper_started|audio_started|web_adapter_started)" pid=Some\((\d+)\)', logs))
+            pids = set(re.findall(r'event="(?:helper_started|python_worker_started|audio_started|web_adapter_started)" pid=Some\((\d+)\)', logs))
             # Native fixed/disabled turns may own no child at all.
             for pid in pids:
                 try: os.kill(int(pid), 0)

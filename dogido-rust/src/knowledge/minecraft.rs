@@ -3,6 +3,7 @@ use super::{
     catalog::{Stop, array, object, string, valid},
     query::{fold, nfkc, space},
 };
+use crate::text_format::{self, ContainerFormat::CompactJson};
 use anyhow::{Context, Result};
 use serde::{
     Deserialize, Deserializer,
@@ -145,17 +146,7 @@ fn compact(text: &str) -> String {
     normalize(text).chars().filter(|c| !space(*c)).collect()
 }
 use crate::compat::json_truthy as truthy;
-// registry絞り込み・検索語の文字列化にも使う。単体null/boolはNone/True/False、
-// 配列・objectは空白なしJSON。ここを変えると発話表記だけでなく検索一致も変わる。
-fn python_text(value: &Value) -> String {
-    match value {
-        Value::String(s) => s.clone(),
-        Value::Null => "None".into(),
-        Value::Bool(true) => "True".into(),
-        Value::Bool(false) => "False".into(),
-        _ => value.to_string(),
-    }
-}
+// Registry filters and search terms keep compact container formatting.
 fn one(value: &Value) -> bool {
     value == &Value::Bool(true) || value.as_f64() == Some(1.0)
 }
@@ -330,7 +321,7 @@ impl Minecraft {
                     && !registries.contains(&normalize(
                         &entry
                             .get("registry_id")
-                            .map(python_text)
+                            .map(|value| text_format::value_text(value, CompactJson))
                             .unwrap_or_default(),
                     ))
                 {
@@ -412,7 +403,7 @@ fn score(entry: &Value, query: &str) -> Result<Option<u8>> {
     let terms: Vec<_> = array(&entry["search_terms"])?
         .iter()
         .filter(|v| truthy(v))
-        .map(|v| normalize(&python_text(v)))
+        .map(|v| normalize(&text_format::value_text(v, CompactJson)))
         .collect();
     if query == id || query == title {
         return Ok(Some(0));

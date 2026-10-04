@@ -1,26 +1,18 @@
 use super::{ASSETS, asset};
-use crate::planner::python_json;
+use crate::text_format::spaced_json;
+use crate::text_format::{self, ContainerFormat::SpacedJson};
 use serde_json::{Value, json};
 
 pub(super) use crate::compat::json_truthy as truth;
 pub(super) fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
-/// 単体null/boolはNone/True/False、配列・objectは空白付きJSONへ変換する。
-/// 反応文の空白なしJSONやカタログの入れ子reprと同一ではない。
-pub(super) fn string(v: &Value) -> String {
-    match v {
-        Value::Null => "None".into(),
-        Value::Bool(true) => "True".into(),
-        Value::Bool(false) => "False".into(),
-        Value::String(s) => s.clone(),
-        _ => python_json(v),
-    }
-}
 pub(super) use crate::compat::is_python_whitespace as space;
 pub(super) fn clean(v: &Value) -> String {
     if truth(v) {
-        string(v).trim_matches(space).into()
+        text_format::value_text(v, SpacedJson)
+            .trim_matches(space)
+            .into()
     } else {
         String::new()
     }
@@ -32,7 +24,7 @@ pub(super) fn join(v: &Value, separator: &str) -> String {
     array(v)
         .iter()
         .filter(|v| truth(v))
-        .map(string)
+        .map(|value| text_format::value_text(value, SpacedJson))
         .collect::<Vec<_>>()
         .join(separator)
 }
@@ -69,7 +61,9 @@ fn item_hint(d: &Value) -> String {
     }
     let mut others = vec![];
     for item in array(&d["inventory_items"]) {
-        let item = string(item).trim_matches(space).to_owned();
+        let item = text_format::value_text(item, SpacedJson)
+            .trim_matches(space)
+            .to_owned();
         if !item.is_empty() && item != held && !others.contains(&item) {
             others.push(item);
         }
@@ -94,10 +88,13 @@ pub(super) fn materials(d: &Value) -> String {
             chunks.push(format!("空気・温度の気配: {climate}"));
         }
     } else if biome_visible {
-        let biome = string(d.get("biome").unwrap_or(&json!("不明")));
+        let biome = text_format::value_text(d.get("biome").unwrap_or(&json!("不明")), SpacedJson);
         let mut place = format!("いまの景色: {biome}");
         if truth(&d["biome_group"]) {
-            place.push_str(&format!("（{}）", string(&d["biome_group"])));
+            place.push_str(&format!(
+                "（{}）",
+                text_format::value_text(&d["biome_group"], SpacedJson)
+            ));
         }
         chunks.push(place);
         let traits = join(&d["biome_traits"], "、");
@@ -122,15 +119,17 @@ pub(super) fn materials(d: &Value) -> String {
         fallback(join(&d["passive_mobs"], "、"))
     ));
     if sky_visible {
-        let weather = string(
+        let weather = text_format::value_text(
             d.get("weather_label")
                 .or_else(|| d.get("weather"))
                 .unwrap_or(&json!("不明")),
+            SpacedJson,
         );
-        let time = string(
+        let time = text_format::value_text(
             d.get("time_label")
                 .or_else(|| d.get("time_phase"))
                 .unwrap_or(&json!("不明")),
+            SpacedJson,
         );
         chunks.push(format!("空と時間: {weather} / {time}"));
         let context = clean(&d["weather_context"]);
@@ -150,7 +149,12 @@ pub(super) fn materials(d: &Value) -> String {
             .iter()
             .take(3)
             .filter(|v| truth(v))
-            .map(|v| cut(string(v).trim_matches(space), 16))
+            .map(|v| {
+                cut(
+                    text_format::value_text(v, SpacedJson).trim_matches(space),
+                    16,
+                )
+            })
             .collect();
         if !motifs.is_empty() {
             chunks.push(format!("雑談のことば: {}", motifs.join("、")));
@@ -167,7 +171,7 @@ pub(super) fn materials(d: &Value) -> String {
         let lines = array(&d[key])
             .iter()
             .filter(|v| truth(v))
-            .map(|v| format!("- {}", string(v)))
+            .map(|v| format!("- {}", text_format::value_text(v, SpacedJson)))
             .collect::<Vec<_>>()
             .join("\n");
         if !lines.is_empty() {
@@ -183,7 +187,7 @@ pub(super) fn scene(d: &Value) -> String {
     }
     format!(
         "発話済みの見どころ: {}\nモチーフ: {}\n焦点: {}",
-        string(&scene["spoken_text"]),
+        text_format::value_text(&scene["spoken_text"], SpacedJson),
         or_none(join(&scene["motifs"], "、")),
         or_none(join(&scene["focus"], "、"))
     )
@@ -204,7 +208,7 @@ pub(super) fn constraints(d: &Value) -> String {
         .iter()
         .filter(|v| truth(v))
         .take(3)
-        .map(|v| format!("- {}", string(v)))
+        .map(|v| format!("- {}", text_format::value_text(v, SpacedJson)))
         .collect();
     if !lessons.is_empty() {
         parts.push(format!(
@@ -227,7 +231,7 @@ pub(super) fn source_atoms(d: &Value) -> String {
     let numbered = |id: &str| {
         numbers
             .and_then(|n| n.get(id))
-            .map(string)
+            .map(|value| text_format::value_text(value, SpacedJson))
             .unwrap_or_else(|| id.into())
     };
     let mut lines = vec![];
@@ -294,14 +298,14 @@ pub(super) fn grounding_scene(d: &Value) -> String {
 pub(super) fn context(d: &Value) -> String {
     let c = &d["workshop_context"];
     if c.as_object().is_some_and(|c| !c.is_empty()) {
-        format!("{}{}\n", asset("context_prefix"), python_json(c))
+        format!("{}{}\n", asset("context_prefix"), spaced_json(c))
     } else {
         String::new()
     }
 }
 pub(super) fn regeneration_line(row: &Value) -> String {
-    let index = string(&row["line_index"]);
-    let text = string(&row["text"]);
+    let index = text_format::value_text(&row["line_index"], SpacedJson);
+    let text = text_format::value_text(&row["text"], SpacedJson);
     if truth(&row["frozen"]) {
         return format!("- {index}: {text}（固定）");
     }
@@ -335,7 +339,7 @@ pub(super) fn regeneration_line(row: &Value) -> String {
     .iter()
     .all(|key| integer(&row[key]))
     {
-        let status = match string(&row["meter_status"]).as_str() {
+        let status = match text_format::value_text(&row["meter_status"], SpacedJson).as_str() {
             "too_long" => "音数が長い",
             "too_short" => "音数が短い",
             "within_range" => "音数は許容内",
@@ -386,7 +390,10 @@ pub(super) fn edit_retry(d: &Value) -> String {
             .collect::<Vec<_>>()
             .join("、");
         if !rendered.is_empty() {
-            lines.push(format!("- 行{}: {rendered}", string(&row["line_index"])));
+            lines.push(format!(
+                "- 行{}: {rendered}",
+                text_format::value_text(&row["line_index"], SpacedJson)
+            ));
         }
         if let Some(comment) = row["assessment_comment"]
             .as_str()
@@ -403,7 +410,12 @@ pub(super) fn edit_retry(d: &Value) -> String {
         .filter(|r| r.is_object())
         .filter_map(|r| {
             let text = clean(&r["replacement_text"]);
-            (!text.is_empty()).then(|| format!("- 行{}: {text}", string(&r["line_index"])))
+            (!text.is_empty()).then(|| {
+                format!(
+                    "- 行{}: {text}",
+                    text_format::value_text(&r["line_index"], SpacedJson)
+                )
+            })
         })
         .collect();
     if !rejected.is_empty() {

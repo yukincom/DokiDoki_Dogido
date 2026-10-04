@@ -16,7 +16,7 @@ fn canonical_context_details_and_revision_goldens() {
         };
         assert_eq!(output, row["expected"], "case {i} op {}", row["op"]);
         assert_eq!(
-            crate::planner::python_json(&output),
+            crate::text_format::spaced_json(&output),
             row["expected_json"].as_str().unwrap(),
             "serialized case {i}"
         );

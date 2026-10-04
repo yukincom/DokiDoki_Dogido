@@ -5,8 +5,9 @@ use super::{
     materials::{self as selection, ReadingCorrection, ReadingSnapshot, RuntimeRead},
     source_atoms::*,
 };
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{
-    chat_catalog::{strip, text, truth},
+    chat_catalog::{strip, truth},
     events::GameEvent,
     haiku_record::{HaikuLine, PreparedEmission},
 };
@@ -102,7 +103,9 @@ fn take(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
 }
 fn value_text(v: Option<&Value>) -> String {
-    v.filter(|v| truth(v)).map(text).unwrap_or_default()
+    v.filter(|v| truth(v))
+        .map(|value| text_format::value_text(value, QuotedRepr))
+        .unwrap_or_default()
 }
 fn normalized(s: Option<&str>) -> Option<String> {
     let s = strip(s.unwrap_or("")).to_lowercase();
@@ -141,7 +144,7 @@ pub fn reading_snapshot(rows: &[Value]) -> Result<ReadingSnapshot> {
             .or_insert_with(ReadingCorrection::default);
         entry.reading = reading.into();
         for wrong in forbidden.into_iter().filter(truth) {
-            let wrong = text(&wrong);
+            let wrong = text_format::value_text(&wrong, QuotedRepr);
             if !entry.forbidden_readings.contains(&wrong) {
                 entry.forbidden_readings.push(wrong);
             }
@@ -558,7 +561,7 @@ pub fn split_verse(text: &str) -> Vec<String> {
 pub trait Reading {
     fn hiraganize(&mut self, surface: &str) -> impl Future<Output = Result<String>> + Send;
 }
-impl Reading for crate::haiku_bridge::Helper {
+impl Reading for crate::python_worker::Helper {
     async fn hiraganize(&mut self, surface: &str) -> Result<String> {
         if !crate::tts_reading::has_kanji(surface) {
             return Ok(surface.into());

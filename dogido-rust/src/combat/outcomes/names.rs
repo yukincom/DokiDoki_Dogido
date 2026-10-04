@@ -27,8 +27,8 @@ impl Tracker {
                 EventName::HostileDefeated | EventName::CreeperDetonated | EventName::CombatEnded
             )
         {
-            // Immediate Python memory accepts all outcome kinds; only speech
-            // dispatch filters by event kind. Preserve that distinction.
+            // Immediate outcome memory accepts every outcome kind; only speech
+            // dispatch filters outcomes by event kind.
             let fresh: Vec<_> = outcomes
                 .iter()
                 .filter(|v| !self.seen.contains(&outcome_key(v)))

@@ -105,7 +105,7 @@ pub fn inspect(lines: &[HaikuLine], checks: &[String]) -> Value {
         }
         rows.push(row);
     }
-    // checksの順序は呼出側の順序を維持（Python inspect_workshopと同じ）。
+    // checksの順序は呼出側の要求順を維持する。
     let mut ordered = Vec::new();
     for c in checks {
         if requested.contains(&c.as_str()) && !ordered.contains(c) {

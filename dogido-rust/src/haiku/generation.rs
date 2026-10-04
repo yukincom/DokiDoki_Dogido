@@ -237,7 +237,7 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
     Ok(failed(&input, "max_regeneration_rounds", limit))
 }
 
-/// Match the Python frontend's error fallback; consumer never accepts fallback as a draft/evaluation.
+/// 生成失敗時は要求のfallbackと失敗状態を返す。consumerは句案・検査結果として採用しない。
 pub(super) async fn request<B: Backend>(backend: &mut B, request: StructuredRequest) -> Value {
     let fallback = request.fallback_value.clone();
     match backend.generate(request).await {

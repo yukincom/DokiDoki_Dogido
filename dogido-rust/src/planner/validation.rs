@@ -225,7 +225,7 @@ pub fn parse_model_plan(value: &Value, details: &Details) -> Option<Plan> {
     })
 }
 
-/// plannerの現行Pythonと同じく、前置き・コードフェンス後の最初のJSON objectを読む。
+/// 前置き・コードフェンス後の最初のJSON objectをRustで読む。
 /// 川柳検査には使わない（川柳は途中の内側objectを拾ってはいけない）。
 pub fn extract_object(text: &str) -> Option<Value> {
     let trimmed = text.trim_matches(super::is_space);

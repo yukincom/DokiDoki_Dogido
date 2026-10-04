@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::Parser;
 use dogido_rust::{
     haiku::Input,
-    haiku_bridge::{self, Route, RouteConfig, RunConfig},
+    python_worker::{self, Route, RouteConfig, RunConfig},
 };
 use serde::Deserialize;
 use std::{path::PathBuf, time::Duration};
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
         }
         let _ = tx.send(true);
     });
-    let result = haiku_bridge::run(
+    let result = python_worker::run(
         RunConfig {
             python: &args.python,
             helper: &helper,

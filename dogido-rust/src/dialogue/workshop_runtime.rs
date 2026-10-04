@@ -5,7 +5,7 @@ pub(super) mod prompt;
 mod validation;
 use super::*;
 use crate::{
-    haiku_bridge::Helper,
+    python_worker::Helper,
     haiku_record::HaikuLine,
     types::GenerationRequest,
     workshop, workshop_candidate,
@@ -372,7 +372,7 @@ impl Dialogue {
                         "grounding_max_tokens":self.config.haiku.grounding_max_tokens}),
                     )?;
                     let basis = prepared.basis.clone();
-                    let mut backend = crate::haiku_bridge::LiveBackend {
+                    let mut backend = crate::python_worker::LiveBackend {
                         helper,
                         chat: &self.haiku_routes.chat,
                         haiku: &self.haiku_routes.haiku,
@@ -681,7 +681,7 @@ fn projection_request(frame: &Value) -> Result<()> {
 }
 fn projection_response(response: &Value) -> Result<()> {
     ensure!(
-        crate::planner::python_json(response).len() < PROJECTION_FRAME_LIMIT,
+        crate::text_format::spaced_json(response).len() < PROJECTION_FRAME_LIMIT,
         "workshop projection response too large"
     );
     Ok(())

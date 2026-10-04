@@ -1,6 +1,7 @@
 use super::*;
 use crate::entry_catalog::BIOMES;
 use crate::haiku::source_atoms;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use std::collections::{BTreeSet, HashMap};
 fn len(s: &str) -> usize {
     s.chars().count()
@@ -22,7 +23,7 @@ fn overlap(line: &str, probe: &str, min: usize) -> usize {
 }
 fn string(v: &Value) -> String {
     if truth(v) {
-        crate::chat_catalog::text(v)
+        text_format::value_text(v, QuotedRepr)
     } else {
         String::new()
     }
@@ -103,7 +104,7 @@ impl Engine {
                 let mut basis = vec![];
                 for source in &line.source_atoms {
                     for id in list(source.get("basis_atom_ids").unwrap_or(&Value::Null)) {
-                        if let Some(a) = atoms.get(&crate::chat_catalog::text(id)) {
+                        if let Some(a) = atoms.get(&text_format::value_text(id, QuotedRepr)) {
                             let score = self.source_score(&a.text, question)?;
                             if score > 0 {
                                 basis.push((
@@ -346,7 +347,7 @@ pub fn short_material_entries(materials: &Value) -> Vec<(String, String)> {
             for v in list(&materials[key]) {
                 add(
                     &mut out,
-                    &crate::chat_catalog::text(v),
+                    &text_format::value_text(v, QuotedRepr),
                     match key {
                         "motifs" => "motif",
                         "inventory_items" => "inventory_item",

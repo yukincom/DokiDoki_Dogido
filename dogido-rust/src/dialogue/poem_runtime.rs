@@ -2,7 +2,7 @@
 //! at input receipt, rechecked before I/O, and closed only after a successful save.
 use super::*;
 use crate::{
-    haiku_bridge::Helper,
+    python_worker::Helper,
     haiku_record::{HaikuLine, MemoryStore},
     poem_input::{self, Input, WholeRevision},
 };

@@ -1,5 +1,5 @@
 use super::*;
-use crate::haiku_bridge::Helper;
+use crate::python_worker::Helper;
 use std::path::Path;
 
 static FIXTURES: LazyLock<Value> = LazyLock::new(|| {
@@ -154,7 +154,7 @@ fn directory() -> std::path::PathBuf {
     dir
 }
 fn child(dir: &Path, response: &Value, block: bool) -> Helper {
-    std::fs::write(dir.join("response"), format!("{}\n", python_json(response))).unwrap();
+    std::fs::write(dir.join("response"), format!("{}\n", spaced_json(response))).unwrap();
     let reply = if block {
         "read -r never"
     } else {
@@ -237,8 +237,8 @@ fn native_runtime_materials_match_every_canonical_preparation() {
         let details = crate::workshop_projection::details_for(&case["frame"]).unwrap();
         assert_eq!(details, case["prepared"]["details"], "{}", case["name"]);
         assert_eq!(
-            python_json(&details),
-            python_json(&case["prepared"]["details"])
+            spaced_json(&details),
+            spaced_json(&case["prepared"]["details"])
         );
     }
     let fixtures: Value =

@@ -1,4 +1,5 @@
 use super::*;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use sha2::{Digest, Sha256};
 fn clean(text: &str, limit: usize) -> String {
     let s = text
@@ -97,7 +98,11 @@ pub fn dialogue_material(turns: &[Value]) -> Result<Value> {
 fn list(material: &Value, key: &str) -> Vec<String> {
     material[key]
         .as_array()
-        .map(|a| a.iter().map(crate::chat_catalog::text).collect())
+        .map(|a| {
+            a.iter()
+                .map(|value| text_format::value_text(value, QuotedRepr))
+                .collect()
+        })
         .unwrap_or_default()
 }
 pub(super) fn conversation_atoms(material: &Value) -> Vec<SourceAtom> {
@@ -244,7 +249,7 @@ pub(super) fn seed(
             && let Some(entry) = entries.get(id)
             && let Some(value) = entry.get("label").filter(|v| crate::chat_catalog::truth(v))
         {
-            out.insert(ja.into(), crate::chat_catalog::text(value).into());
+            out.insert(ja.into(), text_format::value_text(value, QuotedRepr).into());
         }
     }
     out.insert(

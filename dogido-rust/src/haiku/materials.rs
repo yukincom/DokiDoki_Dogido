@@ -4,8 +4,9 @@ use super::{
     context::{Context, Feature, Scene},
     source_atoms::*,
 };
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{
-    chat_catalog::{Catalog, strip, text, truth},
+    chat_catalog::{Catalog, strip, truth},
     environment::{
         precipitation::{self, PrecipitationKind},
         projection::{MiningState, project_environment},
@@ -76,11 +77,19 @@ pub struct RuntimeRead<'a> {
     pub inventory_order: &'a [String],
 }
 fn field(v: &Value, k: &str) -> String {
-    v.get(k).filter(|v| truth(v)).map(text).unwrap_or_default()
+    v.get(k)
+        .filter(|v| truth(v))
+        .map(|value| text_format::value_text(value, QuotedRepr))
+        .unwrap_or_default()
 }
 fn array_strings(v: &Value) -> Vec<String> {
     v.as_array()
-        .map(|a| a.iter().filter(|v| truth(v)).map(text).collect())
+        .map(|a| {
+            a.iter()
+                .filter(|v| truth(v))
+                .map(|value| text_format::value_text(value, QuotedRepr))
+                .collect()
+        })
         .unwrap_or_default()
 }
 fn normalize_id(s: &str) -> String {
@@ -275,7 +284,11 @@ fn poetic_line(catalog: &Catalog, id: &str) -> Option<String> {
     ] {
         if let Some(values) = p[key].as_array() {
             for v in values {
-                let raw = if truth(v) { text(v) } else { String::new() };
+                let raw = if truth(v) {
+                    text_format::value_text(v, QuotedRepr)
+                } else {
+                    String::new()
+                };
                 let tag = strip(&raw);
                 if tag.is_empty() || tag == role || tags.iter().any(|s| s == tag) {
                     continue;

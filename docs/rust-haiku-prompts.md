@@ -1,11 +1,13 @@
 # 川柳の Rust プロンプト組立
 
-`haiku_irony`、`haiku_scene`、`haiku_draft`、`haiku_line_grounding`、`haiku_line_regeneration`、`haiku_workshop_revision` のメッセージ組立は `haiku_prompt` が行う。既存の `StructuredRequest` を読み取り、モデル、route、温度、token 上限、fallback を変更しない。`haiku_bridge::Helper::prepare` は Python への送受信を行わず、この純粋関数を呼ぶ。
+`haiku_irony`、`haiku_scene`、`haiku_draft`、`haiku_line_grounding`、`haiku_line_regeneration`、`haiku_workshop_revision` のメッセージ組立は `haiku_prompt` が所有する。`StructuredRequest` を読み取り、モデル、route、温度、token 上限、fallback を変更しない。`python_worker::Helper::prepare` は Python への送受信を行わず、この純粋関数を呼ぶ。
 
-固定文は Python 正本から literal／slot のテンプレートとして生成し、材料、制約、出典、共有文脈、失敗理由を Rust で組み立てる。テンプレートは文章の部品だけで、Python コードや任意の式を実行しない。検査用は移行版 `scripts/haiku_grounding_prompt.py` の合否先行・一時整数番号・不合格理由だけを返す形式を正とする。revision の同案拒否案内も維持する。
+固定文の正本は `dogido-rust/src/haiku_prompt/templates.json`。literal／slot の文章部品へ、材料、制約、出典、共有文脈、失敗理由を Rust で組み込む。検査要求は合否先行・一時整数番号・不合格理由の形式を使い、revision の同案拒否案内もこのテンプレートで管理する。
 
-348 件の golden 比較は、6 種の role と本文全体について、4 生成方式、構造物・可視性・詩的解釈、空材料、Unicode と切詰め、修正差分、失敗理由、共有文脈、契約再試行の各分岐を照合する。正本更新時は `python dogido-rust/scripts/generate_haiku_prompt_fixtures.py` で更新し、`./dogido-rust/cargo.sh test --locked haiku --lib` を実行する。
+`text_format::spaced_json` は会話・川柳・workshop・国語に共通する空白付きJSON整形。単体値の `None/True/False` 表記は `text_format::value_text` が所有し、呼出側が配列・辞書の表記形式を指定する。JSON整形と単体値の文字列化を混同しない。
 
-検査の既定 512 tokens、欠けた判定だけの再照合、最大再生成回数、同案の拒否、固定行・CAS の検査は既存の Rust 生成器が所有する。今回それらのループは変更しない。辞書による normalize／correct と signature、`HaikuPreparation` の材料準備は引き続き Python 補助を使う。補助の失敗後停止と frame 上限は維持し、prompt が後続の辞書応答を消費しないことを模擬補助で確認する。
+348件の保存済みfixtureは、6種のroleと本文全体について、4生成方式、構造物・可視性・詩的解釈、空材料、Unicodeと切詰め、修正差分、失敗理由、共有文脈、契約再試行を照合する。文章仕様を変更するときだけ同じ変更内でfixtureも更新し、`./dogido-rust/cargo.sh test --offline --locked haiku_prompt --lib` を実行する。今回の整形共通化では本文を変更していない。
 
-実 Minecraft、実モデル、マイク、音声再生による検証はこの移植には含まない。
+検査の既定512 tokens、欠けた判定だけの再照合、最大再生成回数、同案拒否、固定行・CASはRust生成器が所有する。材料準備、normalize／correct、signatureもRustが行い、必要な漢字の辞書tokenだけPython補助から受け取る。通信の上限・失敗後の停止・取消・子の回収は `python_worker` が管理する。
+
+実Minecraft、実モデル、マイク、音声再生の検証は、自動テストとは別に扱う。

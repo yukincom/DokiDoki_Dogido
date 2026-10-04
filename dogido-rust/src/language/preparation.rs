@@ -1,6 +1,6 @@
 //! 国語対話の指示文と、計算・検索済みの値だけを使う回答。外部通信しない。
 use crate::{
-    planner::python_json,
+    text_format::spaced_json,
     types::{ChatMessage, Role},
 };
 use icu_normalizer::ComposingNormalizer;
@@ -25,8 +25,8 @@ pub(super) fn messages(kind: &str, details: &Value) -> Vec<ChatMessage> {
             role: Role::User,
             content: format!(
                 "{}\n以上は背景。今回応答する最新の発話はこちら：\n{}",
-                python_json(&Value::Object(background)),
-                python_json(&current)
+                spaced_json(&Value::Object(background)),
+                spaced_json(&current)
             ),
         },
     ]

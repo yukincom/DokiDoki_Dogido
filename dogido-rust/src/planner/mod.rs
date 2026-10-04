@@ -1,6 +1,6 @@
 //! 通常会話の限定planner。入力投影・catalog検索は呼出側、採否はこのコードが所有する。
 //! dialogueがRustの現在観測・実再生済み履歴から入力を作る。plannerはread actionを一件だけ選び、
-//! 発話・操作・状態変更・保存はしない。旧Pythonとの比較は保存済みfixtureの来歴。
+//! 発話・操作・状態変更・保存はしない。投影・採否は保存済みfixtureで回帰検証する。
 mod grounding;
 pub mod handoff;
 pub mod prepare;
@@ -11,7 +11,6 @@ mod validation;
 
 pub use grounding::{Grounding, fixed_reply, ground};
 pub use prompts::messages;
-pub(crate) use prompts::python_json;
 pub use runner::{PlannerReport, run};
 pub use validation::{contract_errors, extract_object, parse_model_plan};
 

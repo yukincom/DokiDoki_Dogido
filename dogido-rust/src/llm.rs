@@ -111,7 +111,7 @@ fn to_rig_request(input: &GenerationRequest) -> CompletionRequest {
     }
 }
 
-/// Python providerの本文選択・終了情報保持に合わせる。JSON本文はここでは検査しない。
+/// 応答本文を選択し、終了理由・使用量を保持する。JSON本文のドメイン検査は呼出側が行う。
 pub fn decode_response(body: &Value) -> Result<GeneratedText> {
     let choice = body
         .get("choices")

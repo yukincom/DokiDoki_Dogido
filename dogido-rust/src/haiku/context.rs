@@ -3,8 +3,9 @@ use super::{
     SourceAtom,
     source_atoms::{CatalogSourceSnapshot, PrefaceClause, preface_clauses_from_payload},
 };
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{
-    chat_catalog::{strip, text, truth},
+    chat_catalog::{strip, truth},
     environment::precipitation::PrecipitationContext,
 };
 use anyhow::{Result, bail};
@@ -66,7 +67,7 @@ impl Default for Irony {
 }
 fn selected_text(value: &Value, fallback: &str) -> String {
     if truth(value) {
-        text(value)
+        text_format::value_text(value, QuotedRepr)
     } else {
         fallback.into()
     }
@@ -76,7 +77,11 @@ fn strings(value: &Value) -> Result<Vec<String>> {
         return Ok(vec![]);
     }
     Ok(match value {
-        Value::Array(values) => values.iter().filter(|v| truth(v)).map(text).collect(),
+        Value::Array(values) => values
+            .iter()
+            .filter(|v| truth(v))
+            .map(|value| text_format::value_text(value, QuotedRepr))
+            .collect(),
         Value::Object(values) => values.keys().filter(|v| !v.is_empty()).cloned().collect(),
         Value::String(value) => value.chars().map(|c| c.to_string()).collect(),
         _ => bail!("TypeError: context field is not iterable"),

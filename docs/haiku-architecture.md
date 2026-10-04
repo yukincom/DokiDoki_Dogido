@@ -1,6 +1,6 @@
 # 川柳アーキテクチャ
 
-**現行実装: Rust本体（2026-10-03）。** 発句・検査は `dogido-rust/src/haiku/`・`haiku_bridge.rs`、共同編集は `workshop_*` と `dialogue/workshop_runtime.rs` が所有する。旧Python本体と比較oracleの運用は終了。発句方式・根拠・採否の仕様は継続し、起動は [Rust本体](../dogido-rust/README.md) を参照する。
+**現行実装: Rust本体（2026-10-03）。** 発句・検査は `dogido-rust/src/haiku/`・`python_worker.rs`、共同編集は `workshop_*` と `dialogue/workshop_runtime.rs` が所有する。旧Python本体と比較oracleの運用は終了。発句方式・根拠・採否の仕様は継続し、起動は [Rust本体](../dogido-rust/README.md) を参照する。
 
 読み上げの速度・5-7-5 の間・SE 方針は [voice-delivery-plan.md](voice-delivery-plan.md)（Issue #13）。
 

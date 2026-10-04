@@ -1,7 +1,7 @@
-//! 川柳生成の接続と、発句・workshop・戦闘分類・TTSが共有するPython worker通信。
+//! Rustが所有するPython補助プロセスのstdio通信と寿命管理。
 //! Helperは子プロセスの上限付きJSON通信・取消・回収に加え、Rust内の読み整形も持つ。
 //! prepare/transformはRustで処理し、辞書が必要な場合だけtokenをworkerから受け取る。
-//! Route/LiveBackend/runは川柳生成側の責務で、workerの通信・寿命管理とは分担する。
+//! Route/LiveBackend/runもRustで川柳生成を進める。Pythonへ生成・編集・保存判断は渡さない。
 use crate::{
     haiku::{
         self, Backend, GroundedHaikuResult, Input, LineForm, StructuredRequest, TransformRequest,
@@ -38,10 +38,10 @@ impl Helper {
             .stderr(Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
-            .context("cannot start haiku helper")?;
-        tracing::info!(event = "haiku_helper_started", pid = ?child.id());
-        let stdin = child.stdin.take().context("haiku helper stdin")?;
-        let stdout = child.stdout.take().context("haiku helper stdout")?;
+            .context("cannot start Python worker")?;
+        tracing::info!(event = "python_worker_started", pid = ?child.id());
+        let stdin = child.stdin.take().context("Python worker stdin")?;
+        let stdout = child.stdout.take().context("Python worker stdout")?;
         Ok(Self {
             child,
             stdin: Some(stdin),
@@ -70,19 +70,19 @@ impl Helper {
     ) -> Result<Value> {
         ensure!(
             !self.poisoned,
-            "haiku helper protocol is closed after failure"
+            "Python worker protocol is closed after failure"
         );
         let request = serde_json::to_vec(&frame)?;
         ensure!(
             request.len() < FRAME_LIMIT as usize,
-            "haiku helper request too large"
+            "Python worker request too large"
         );
         let exchange = async {
             if frame["op"] == "reading" {
                 let response = self.reading(&frame, timeout).await?;
                 ensure!(
                     serde_json::to_vec(&response)?.len() < FRAME_LIMIT as usize,
-                    "haiku helper response too large"
+                    "Python worker response too large"
                 );
                 Ok(response)
             } else {
@@ -91,7 +91,7 @@ impl Helper {
         };
         let result = tokio::time::timeout(timeout, exchange)
             .await
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("haiku helper timed out")));
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Python worker timed out")));
         if result.is_err() {
             // 遅れて届く旧要求の返答を、次の行のpromptや読みとして使わない。
             self.poison_and_reap().await;
@@ -126,7 +126,7 @@ impl Helper {
                 }))?;
                 ensure!(
                     request.len() < FRAME_LIMIT as usize,
-                    "haiku helper request too large"
+                    "Python worker request too large"
                 );
                 let response = self.exchange_raw(&request).await?;
                 let dictionary = tokens::decode(response, &request_id)?;
@@ -135,7 +135,7 @@ impl Helper {
         };
         ensure!(
             tokio::time::Instant::now() < deadline,
-            "haiku helper timed out"
+            "Python worker timed out"
         );
         Ok(json!({"spoken_text":spoken}))
     }
@@ -152,17 +152,17 @@ impl Helper {
             .await?;
         ensure!(
             bytes.len() <= FRAME_LIMIT as usize,
-            "haiku helper response too large"
+            "Python worker response too large"
         );
         ensure!(
             bytes.last() == Some(&b'\n'),
-            "haiku helper ended before a result"
+            "Python worker ended before a result"
         );
         let response: Value =
-            serde_json::from_slice(&bytes).context("invalid haiku helper JSON")?;
+            serde_json::from_slice(&bytes).context("invalid Python worker JSON")?;
         ensure!(
             response.get("error").is_none(),
-            "haiku helper: {}",
+            "Python worker: {}",
             response["error"]
         );
         Ok(response)
@@ -171,17 +171,17 @@ impl Helper {
     pub async fn prepare(&mut self, request: &StructuredRequest) -> Result<Vec<ChatMessage>> {
         ensure!(
             !self.poisoned,
-            "haiku helper protocol is closed after failure"
+            "Python worker protocol is closed after failure"
         );
         ensure!(
             serde_json::to_vec(&json!({"op":"prepare", "request":request}))?.len()
                 < FRAME_LIMIT as usize,
-            "haiku helper request too large"
+            "Python worker request too large"
         );
         let messages = crate::haiku_prompt::messages(request)?;
         ensure!(
-            crate::planner::python_json(&json!({"messages":messages})).len() < FRAME_LIMIT as usize,
-            "haiku helper response too large"
+            crate::text_format::spaced_json(&json!({"messages":messages})).len() < FRAME_LIMIT as usize,
+            "Python worker response too large"
         );
         Ok(messages)
     }
@@ -193,12 +193,12 @@ impl Helper {
         };
         ensure!(
             !self.poisoned,
-            "haiku helper protocol is closed after failure"
+            "Python worker protocol is closed after failure"
         );
         ensure!(
             serde_json::to_vec(&json!({"op":"transform","request":request}))?.len()
                 < FRAME_LIMIT as usize,
-            "haiku helper request too large"
+            "Python worker request too large"
         );
         let result = async {
             let result = match request.mode {
@@ -219,7 +219,7 @@ impl Helper {
             };
             ensure!(
                 serde_json::to_vec(&result)?.len() < FRAME_LIMIT as usize,
-                "haiku helper response too large"
+                "Python worker response too large"
             );
             Ok(result)
         }
@@ -266,8 +266,8 @@ impl Helper {
                 self.child.wait().await?
             }
         };
-        tracing::info!(event = "haiku_helper_stopped", ?pid, ?status);
-        ensure!(abort || status.success(), "haiku helper exit {status}");
+        tracing::info!(event = "python_worker_stopped", ?pid, ?status);
+        ensure!(abort || status.success(), "Python worker exit {status}");
         Ok(())
     }
 }
@@ -517,5 +517,5 @@ printf '{"schema_version":1,"request_id":"%s","status":"ok","tokens":[{"surface"
 }
 
 #[cfg(all(test, unix))]
-#[path = "haiku_bridge/reading_tests.rs"]
+#[path = "python_worker/reading_tests.rs"]
 mod reading_tests;

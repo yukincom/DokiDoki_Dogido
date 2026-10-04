@@ -1,6 +1,7 @@
 //! Immutable labels and climate from the existing source catalogues, without search.
-use crate::chat_catalog::{Catalog, strip, text, truth};
+use crate::chat_catalog::{Catalog, strip, truth};
 use crate::environment::precipitation::Climate;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use anyhow::{Result, bail};
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
@@ -53,7 +54,7 @@ impl WorldCatalog {
         &self.biomes
     }
     /// item辞書を優先し、見つからなければblock辞書、最後にminecraft:だけを除いた元IDを返す。
-    /// block_labelの小文字化・接尾辞補完とは別の契約。移植時のNarrationMixinの挙動を維持する。
+    /// block_labelの小文字化・接尾辞補完とは別の契約。item IDは上記の順序だけで解決する。
     pub fn item_label(&self, id: Option<&str>) -> String {
         let key = id.unwrap_or("");
         if key.is_empty() {
@@ -64,7 +65,7 @@ impl WorldCatalog {
             .get(key)
             .filter(|v| truth(v))
             .or_else(|| self.blocks.get(key).filter(|v| truth(v)))
-            .map(text)
+            .map(|value| text_format::value_text(value, QuotedRepr))
             .unwrap_or_else(|| key.into())
     }
     pub fn block_label(&self, id: Option<&str>) -> String {
@@ -77,7 +78,7 @@ impl WorldCatalog {
             return String::new();
         }
         if let Some(mapped) = self.blocks.get(&normalized) {
-            return text(mapped);
+            return text_format::value_text(mapped, QuotedRepr);
         }
         for (suffix, ja) in [
             ("_log", "の原木"),
@@ -110,7 +111,10 @@ impl WorldCatalog {
             return "そのへん".into();
         }
         if let Some(entry) = self.biomes.get(&key) {
-            return entry.get("label").map(text).unwrap_or(key);
+            return entry
+                .get("label")
+                .map(|value| text_format::value_text(value, QuotedRepr))
+                .unwrap_or(key);
         }
         if key.is_ascii() {
             "そのへん".into()
@@ -128,7 +132,7 @@ impl WorldCatalog {
             biome_group_id: entry
                 .get("group_id")
                 .filter(|v| truth(v))
-                .map(text)
+                .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_default(),
         })
     }
@@ -152,11 +156,11 @@ impl WorldCatalog {
                 .and_then(|e| e.get("label"))
                 .filter(|v| truth(v))
             {
-                return text(label);
+                return text_format::value_text(label, QuotedRepr);
             }
             return crate::combat::catalog::labels()
                 .get(name)
-                .map(text)
+                .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_else(|| name.clone());
         }
         let label = self.block_label(Some(name));
@@ -174,7 +178,10 @@ pub fn structure_label(catalog: &Catalog, id: Option<&str>) -> String {
     }
     let key = strip(original).to_lowercase();
     if let Some(entry) = catalog.structure_entries().get(&key) {
-        return entry.get("label").map(text).unwrap_or(key);
+        return entry
+            .get("label")
+            .map(|value| text_format::value_text(value, QuotedRepr))
+            .unwrap_or(key);
     }
     if key.is_ascii() {
         "なにかの建物".into()
@@ -193,7 +200,7 @@ pub fn material_label(token: &str) -> String {
     }
     RULES["material_labels"]
         .get(&normalized)
-        .map(text)
+        .map(|value| text_format::value_text(value, QuotedRepr))
         .unwrap_or_else(|| normalized.replace('_', " "))
 }
 pub(crate) fn foliage_biome(id: &str) -> bool {
@@ -278,7 +285,7 @@ fn flatten_biomes(doc: &Value) -> Map<String, Value> {
         }
     } else {
         for (k, v) in doc {
-            out.insert(k.clone(), serde_json::json!({"label":text(v)}));
+            out.insert(k.clone(), serde_json::json!({"label":text_format::value_text(v, QuotedRepr)}));
         }
     }
     out
@@ -295,7 +302,11 @@ impl crate::haiku::materials::Entries for WorldCatalog {
         VOICE_CATALOG
             .all_mob_entries()
             .get(id)
-            .map(|e| e.get("label").map(text).unwrap_or_else(|| id.into()))
+            .map(|e| {
+                e.get("label")
+                    .map(|value| text_format::value_text(value, QuotedRepr))
+                    .unwrap_or_else(|| id.into())
+            })
             .unwrap_or_else(|| id.into())
     }
 }

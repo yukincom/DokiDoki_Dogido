@@ -1,6 +1,7 @@
 use super::*;
 use crate::chat_observation::{self, Labels, PassiveSighting};
 use crate::events::{HorizontalDirection, TimePhase, Weather};
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::world_catalog;
 use serde_json::json;
 pub(super) fn unique<'a>(groups: impl IntoIterator<Item = &'a str>) -> Vec<String> {
@@ -88,7 +89,7 @@ pub(super) fn observed(
             let label = entry
                 .and_then(|e| e.get("label"))
                 .filter(|v| chat_catalog::truth(v))
-                .map(chat_catalog::text)
+                .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_else(|| id.clone());
             handoff::Observation {
                 entity_id: id,
@@ -149,7 +150,7 @@ pub(super) fn threat(
             .unwrap_or_else(|| "近く".into());
         let label = crate::combat::catalog::labels()
             .get(&nearest.r#type)
-            .map(chat_catalog::text)
+            .map(|value| text_format::value_text(value, QuotedRepr))
             .unwrap_or_else(|| nearest.r#type.clone());
         parts.push(format!(
             "視認 {label} が{} {distance}",
@@ -203,7 +204,7 @@ pub(super) fn observation(
             .mob_entry(id)
             .and_then(|e| e.get("label"))
             .filter(|v| chat_catalog::truth(v))
-            .map(chat_catalog::text)
+            .map(|value| text_format::value_text(value, QuotedRepr))
             .unwrap_or_else(|| id.into())
     };
     let mut names = vec![];

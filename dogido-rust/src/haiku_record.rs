@@ -144,7 +144,7 @@ pub struct SaveResult {
     pub inserted: bool,
 }
 impl MemoryStore {
-    /// The parent chooses an isolated Rust-migration root. Construction is pure.
+    /// The runtime selects the session memory root. Construction performs no I/O.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }
@@ -154,7 +154,7 @@ impl MemoryStore {
     pub fn root(&self) -> &Path {
         &self.root
     }
-    /// Like Python, this is separate from long-term deduplication. Call once at
+    /// Emission history is separate from long-term deduplication. Call once at
     /// the parent-owned emission boundary, never for explicit resave requests.
     pub fn append_haiku_emission(&self, session_id: &str, emission: &Emission) -> Result<()> {
         let _guard = SAVE_LOCK
@@ -214,8 +214,7 @@ pub(crate) fn locked_file(path: &Path) -> Result<File> {
         .open(path)?;
     // Lock the actual file as well as this process: independent Rust store
     // instances/processes cannot race between checking an ID and appending.
-    // Existing Python does not participate in this advisory lock; never share
-    // this migration root with a concurrent Python writer.
+    // Writers of this memory root must use the same advisory-lock contract.
     file.lock().context("cannot lock haiku JSONL")?;
     Ok(file)
 }

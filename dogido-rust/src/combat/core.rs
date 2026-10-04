@@ -519,7 +519,7 @@ impl Engine {
         ws: &threats::Settings,
         input_handled: &mut bool,
     ) -> Option<Speech> {
-        // 新規導火は呼吸ループや進行中本文より優先。Pythonのcue-only消費による欠落を修正。
+        // 新規導火は呼吸ループや進行中本文より優先。cue-onlyで警告本文を消費しない。
         if complete && let Some(plan) = self.policy.fuse(e, now, ws) {
             return Some(from_warning(plan));
         }

@@ -1,4 +1,4 @@
-//! Closed literal grammar equivalent to the existing Python request regexes.
+//! 剣への持ち替え依頼をRustで検証する閉じた文字列規則。
 //! LLM confidence never grants authority without contiguous evidence and whole-text checks.
 use super::IntentEvidence;
 use serde::Serialize;
@@ -512,8 +512,8 @@ pub fn validate_payload(
     if !(0.0..=1.0).contains(&confidence) || confidence < min_confidence {
         return None;
     }
-    // Non-string evidence cannot demonstrate a literal quote. The Python string coercion
-    // also rejects these for lack of a sword action, so this is an equivalent closed gate.
+    // Non-string evidence cannot demonstrate a literal quote. Accept only
+    // source text that explicitly requests a sword action.
     let evidence: String = payload
         .get("evidence")?
         .as_str()?

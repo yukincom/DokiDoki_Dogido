@@ -33,8 +33,8 @@ pub trait Labels {
     fn mob_label(&self, id: &str) -> Option<&str>;
     fn mob_fallback_label(&self, id: &str) -> Option<&str>;
     fn hostile_label(&self, id: &str) -> String;
-    /// Match Python block_entry: final namespace component, strip/lower, then
-    /// label-or-japanese from the existing immutable block catalog.
+    /// Use the final namespace component, trim/lowercase, then read
+    /// label-or-japanese from the shared immutable block catalog.
     fn block_label(&self, id: &str) -> Option<&str>;
 }
 /// Names selected by the existing combat outcome owner at its memory-update phase.

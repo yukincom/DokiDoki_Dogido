@@ -1,4 +1,5 @@
 use super::*;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{haiku::meter, workshop_edit};
 use parse::Replacement;
 impl Engine {
@@ -58,9 +59,9 @@ impl Engine {
             return Ok(Value::Null);
         }
         let r = if proposal.is_object() && truth(&proposal["replacement_text"]) {
-            let replacement = crate::chat_catalog::text(&proposal["replacement_text"]);
+            let replacement = text_format::value_text(&proposal["replacement_text"], QuotedRepr);
             let fragment = if truth(&proposal["target_fragment"]) {
-                crate::chat_catalog::text(&proposal["target_fragment"])
+                text_format::value_text(&proposal["target_fragment"], QuotedRepr)
             } else {
                 String::new()
             };

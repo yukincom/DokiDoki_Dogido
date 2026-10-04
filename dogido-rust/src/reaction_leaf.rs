@@ -1,5 +1,6 @@
 //! Optional reactions use shared dialogue and observed situations.
 //! Code still owns event detection, immediate warnings, priorities and fallback.
+use crate::text_format::{self, ContainerFormat::CompactJson};
 mod prompts;
 pub(crate) mod sanitize;
 use crate::types::{GeneratedText, GenerationRequest};
@@ -62,7 +63,7 @@ impl Leaf {
         details.remove("__ambient_guard");
         let suffix = details
             .remove("__speech_suffix")
-            .map_or_else(String::new, |v| prompts::pystr(&v));
+            .map_or_else(String::new, |v| text_format::value_text(&v, CompactJson));
         let mut fallback = input["fallback_text"]
             .as_str()
             .context("reaction fallback")?

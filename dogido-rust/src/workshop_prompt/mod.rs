@@ -1,7 +1,7 @@
 //! 川柳相談のprompt組み立て。材料投影・根拠検査・編集権限を変更しない。
 #[cfg(test)]
 mod tests;
-use crate::planner::python_json;
+use crate::text_format::spaced_json;
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -85,7 +85,7 @@ pub(super) fn prepare_with_assets(
             assets["context_prefix"]
                 .as_str()
                 .context("context prefix")?,
-            python_json(&Value::Object(details.workshop_context.clone())),
+            spaced_json(&Value::Object(details.workshop_context.clone())),
             assets["context_suffix"]
                 .as_str()
                 .context("context suffix")?
@@ -101,11 +101,11 @@ pub(super) fn prepare_with_assets(
         ("purposes", details.allowed_purposes.join(", ")),
         (
             "steps",
-            python_json(&serde_json::to_value(&details.turn_steps)?),
+            spaced_json(&serde_json::to_value(&details.turn_steps)?),
         ),
         (
             "observation",
-            python_json(&serde_json::to_value(&details.tool_observation)?),
+            spaced_json(&serde_json::to_value(&details.tool_observation)?),
         ),
         ("context", context),
     ]);
@@ -163,7 +163,7 @@ pub(super) fn prepare_with_assets(
     if projection.get("fixed_payload").is_none()
         && let Some(retry) = retry.filter(|v| truth(v))
     {
-        slots.insert("retry", python_json(retry));
+        slots.insert("retry", spaced_json(retry));
         messages.push(json!({"role":"user", "content":render(&assets["retry"], &slots)?}));
     }
     let mut output = json!({"messages":messages});
@@ -172,7 +172,7 @@ pub(super) fn prepare_with_assets(
     }
     // Keep the former Python response limit, including its trailing newline.
     ensure!(
-        python_json(&output).len() < 1_000_000,
+        spaced_json(&output).len() < 1_000_000,
         "workshop prompt too large"
     );
     Ok(output)

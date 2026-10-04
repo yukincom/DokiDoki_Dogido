@@ -1,5 +1,6 @@
 //! Existing grouped-entry rules, evaluated over immutable bundled documents.
 use super::*;
+use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use std::collections::HashSet;
 const GROUP: &[&str] = &["items", "groups", "refs"];
 const NON_ENTRY: &[&str] = &[
@@ -47,16 +48,18 @@ fn label(v: &Value) -> Option<String> {
         return Some(s.into());
     }
     v.as_object()?;
-    ["japanese", "label"]
-        .iter()
-        .find_map(|k| v.get(*k).filter(|x| truth(x)).map(text))
+    ["japanese", "label"].iter().find_map(|k| {
+        v.get(*k)
+            .filter(|x| truth(x))
+            .map(|value| text_format::value_text(value, QuotedRepr))
+    })
 }
 struct Reader<'a> {
     docs: &'a Map<String, Value>,
 }
 impl Reader<'_> {
     fn path(&self, spec: &Value) -> Option<String> {
-        let raw = text(spec);
+        let raw = text_format::value_text(spec, QuotedRepr);
         let name = strip(&raw);
         if name.is_empty() {
             return None;
@@ -209,7 +212,7 @@ impl Reader<'_> {
             && let Some(path) = self.path(source)
         {
             for id in refs {
-                let id = text(id);
+                let id = text_format::value_text(id, QuotedRepr);
                 if let Some(value) = self.canonical(&path, &id, &HashSet::new()) {
                     out.push((id, value));
                 }
@@ -293,7 +296,12 @@ pub(super) fn labels(docs: &Map<String, Value>) -> (Map<String, Value>, Map<Stri
     }
     let items = entries
         .into_iter()
-        .map(|(k, v)| (k, Value::String(text(&v["label"]))))
+        .map(|(k, v)| {
+            (
+                k,
+                Value::String(text_format::value_text(&v["label"], QuotedRepr)),
+            )
+        })
         .collect();
     let mut blocks = Map::new();
     let mut paths: Vec<_> = docs
@@ -316,7 +324,11 @@ pub(super) fn labels(docs: &Map<String, Value>) -> (Map<String, Value>, Map<Stri
         };
         if let Some(labels) = doc.get("direct_labels").and_then(Value::as_object) {
             for (k, v) in labels {
-                merge(&mut blocks, k.clone(), text(v));
+                merge(
+                    &mut blocks,
+                    k.clone(),
+                    text_format::value_text(v, QuotedRepr),
+                );
             }
         }
         for payload in doc.values() {
@@ -397,7 +409,7 @@ impl Reader<'_> {
         ) && let Some(source) = self.path(source)
         {
             for id in refs {
-                let id = text(id);
+                let id = text_format::value_text(id, QuotedRepr);
                 if let Some(value) = self.canonical(&source, &id, &HashSet::new()) {
                     out.push((id, value, path.to_vec()));
                 }
@@ -503,7 +515,7 @@ pub(super) fn raw_entries(docs: &Map<String, Value>) -> (Map<String, Value>, Map
             let name = path.rsplit('/').next().unwrap().trim_end_matches(".json");
             if let Some(labels) = doc.get("direct_labels").and_then(Value::as_object) {
                 for (id, value) in labels {
-                    blocks.insert(id.clone(),raw_payload(value,name,&["direct_labels".into()]).unwrap_or_else(||serde_json::json!({"label":text(value),"japanese":text(value),"section":name,"group_path":["direct_labels"]})));
+                    blocks.insert(id.clone(),raw_payload(value,name,&["direct_labels".into()]).unwrap_or_else(||serde_json::json!({"label":text_format::value_text(value, QuotedRepr),"japanese":text_format::value_text(value, QuotedRepr),"section":name,"group_path":["direct_labels"]})));
                 }
             }
             for (section, value) in doc {

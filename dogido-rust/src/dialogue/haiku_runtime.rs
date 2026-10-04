@@ -5,7 +5,7 @@ use crate::{
         self, Backend,
         preparation::{Preparation, RuntimeSnapshot},
     },
-    haiku_bridge::{Helper, LiveBackend, Route, RouteConfig},
+    python_worker::{Helper, LiveBackend, Route, RouteConfig},
     haiku_record::{MemoryStore, PreparedEmission, Workshop, project_workshop},
 };
 use anyhow::{Context, ensure};
