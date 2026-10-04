@@ -1,6 +1,6 @@
 # スメルバトル仕様
 
-状態: **2026-10-01 勝者の粗い方角を追加。Python/Rust/Java自動テストと模擬HTTP確認済み。実Minecraft・実Qwen・実TTSは未確認。**
+状態: **2026-10-01 勝者の粗い方角を追加。Python/Rust/Java自動テストと模擬HTTP確認済み。実Minecraft・実LLM・実TTSは未確認。**
 
 Fabric adapter が実際の近接源、hotbar、バイオーム、天候をコードで照合し、
 その時点で優勢な匂いを一件の `smell_observation` に解決する。サーバーやLLMに
