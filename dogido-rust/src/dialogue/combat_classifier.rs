@@ -139,7 +139,10 @@ impl Classifier {
                         &json!({"op":"combat_fallback","text":text,"workshop":input["workshop"]}),
                     )
                     .await?;
-                analysis = Analysis::parse(&fallback, text);
+                let crate::workshop_editing::Output::CombatFallback(fallback) = fallback else {
+                    anyhow::bail!("unexpected combat fallback output");
+                };
+                analysis = fallback.validate(text);
                 if analysis.action != Action::Uncertain {
                     provider = "rule_fallback".into();
                 }

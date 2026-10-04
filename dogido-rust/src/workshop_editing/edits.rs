@@ -3,7 +3,7 @@ use crate::text_format::{self, ContainerFormat::QuotedRepr};
 use crate::{haiku::meter, workshop_edit};
 use parse::Replacement;
 impl Engine {
-    pub(super) fn fixed_fragment(&self, f: &Value, s: &Snapshot) -> Result<Value> {
+    pub(super) fn fixed_fragment(&self, f: &Value, s: &Snapshot) -> Result<Option<FixedEditStep>> {
         let input = text(&f["text"]);
         if f["phase"] != "decide"
             || !list(&f["allowed_actions"])
@@ -12,14 +12,14 @@ impl Engine {
             || !parse::explicit_edit(input)
             || parse::explicit_lines(input).len() > 1
         {
-            return Ok(Value::Null);
+            return Ok(None);
         }
         let pairs = parse::pattern("quoted_edit")
             .captures_iter(input)
             .collect::<Vec<_>>();
         let replacement = if !pairs.is_empty() {
             if pairs.len() != 1 {
-                return Ok(Value::Null);
+                return Ok(None);
             }
             Replacement {
                 text: pairs[0]["alternative"].into(),
@@ -29,7 +29,7 @@ impl Engine {
         } else {
             let (status, r) = parse::replacement(input);
             if status != "accepted" {
-                return Ok(Value::Null);
+                return Ok(None);
             }
             let mut r = r.unwrap();
             r.fragment = self.mentioned_fragment(s, input, &r.text)?;
@@ -39,24 +39,45 @@ impl Engine {
             || !input.contains(&replacement.text)
             || replacement.fragment.is_none()
         {
-            return Ok(Value::Null);
+            return Ok(None);
         }
         let result = self.revise(&f["workshop"], s, &replacement)?;
-        if !result["text"].is_string() {
-            return Ok(Value::Null);
+        if result.text.is_none() {
+            return Ok(None);
         }
-        Ok(
-            json!({"action":"stage_player_edit","purpose":"improve_wording","confidence":1.0,"evidence":input,"speech":"","checks":[],
-   "line_reference":{"found":false,"concept_id":"unknown","evidence":"","confidence":0.0},
-   "line_proposal":{"found":true,"target_fragment":replacement.fragment,"replacement_text":replacement.text,"evidence":input,"confidence":1.0}}),
-        )
+        Ok(Some(FixedEditStep::StagePlayerEdit {
+            purpose: EditPurpose::ImproveWording,
+            confidence: 1.0,
+            evidence: input.into(),
+            speech: String::new(),
+            checks: vec![],
+            line_reference: LineReference {
+                found: false,
+                concept_id: LineConcept::Unknown,
+                evidence: String::new(),
+                confidence: 0.0,
+            },
+            line_proposal: LineProposal {
+                found: true,
+                target_fragment: replacement.fragment,
+                replacement_text: replacement.text,
+                evidence: input.into(),
+                confidence: 1.0,
+            },
+        }))
     }
-    pub(super) fn discussion(&self, f: &Value, s: &Snapshot, proposal: &Value) -> Result<Value> {
+
+    pub(super) fn discussion(
+        &self,
+        f: &Value,
+        s: &Snapshot,
+        proposal: &Value,
+    ) -> Result<Option<crate::workshop_candidate::Draft>> {
         let input = text(&f["text"]);
         if parse::pattern("discussion_report").is_match(input)
             || !crate::workshop_input_guard::discussion_idea_safe(input)
         {
-            return Ok(Value::Null);
+            return Ok(None);
         }
         let r = if proposal.is_object() && truth(&proposal["replacement_text"]) {
             let replacement = text_format::value_text(&proposal["replacement_text"], QuotedRepr);
@@ -68,9 +89,9 @@ impl Engine {
             let index = &proposal["line_index"];
             if replacement.is_empty()
                 || !input.contains(&replacement)
-                || (!index.is_null() && index.as_i64().is_none())
+                || (!index.is_null() && !index.as_i64().is_some_and(|i| i >= 0))
             {
-                return Ok(Value::Null);
+                return Ok(None);
             }
             Replacement {
                 text: replacement,
@@ -82,7 +103,7 @@ impl Engine {
                 .captures_iter(input)
                 .collect::<Vec<_>>();
             if pairs.len() != 1 || parse::explicit_lines(input).len() > 1 {
-                return Ok(Value::Null);
+                return Ok(None);
             }
             Replacement {
                 text: pairs[0]["alternative"].into(),
@@ -91,28 +112,64 @@ impl Engine {
             }
         };
         let result = self.revise(&f["workshop"], s, &r)?;
-        Ok(
-            json!({"proposal":{"line_index":result["target_line_index"].as_i64().or(r.index),"target_fragment":r.fragment.unwrap_or_default(),"replacement_text":r.text},"evidence":input,"validation_codes":result["failure_reasons"]}),
-        )
+        Ok(Some(crate::workshop_candidate::Draft {
+            proposal: crate::workshop_candidate::Proposal {
+                line_index: result.target_line_index.or(r.index.map(|i| i as usize)),
+                target_fragment: r.fragment.unwrap_or_default(),
+                replacement_text: r.text,
+            },
+            evidence: input.into(),
+            validation_codes: result.failure_reasons,
+        }))
     }
-    pub(super) fn player_edit(&self, f: &Value, s: &Snapshot) -> Result<Value> {
-        let mut p = f["proposal"]
+    pub(super) fn player_edit(&self, f: &Value, s: &Snapshot) -> Result<PlayerEditResult> {
+        let proposal = f["proposal"]
             .as_object()
-            .context("missing player edit proposal")?
-            .clone();
+            .context("missing player edit proposal")?;
         let input = text(&f["text"]);
+        let conflict = |code: &str| PlayerEditResult::Rejected {
+            text: None,
+            failure_reasons: vec![code.into()],
+        };
+        // Invalid fields must never become absent and acquire a different target
+        // from a retained line or an earlier discussion candidate.
+        if proposal
+            .get("line_index")
+            .is_some_and(|i| !i.is_null() && !i.as_i64().is_some_and(|i| (0..3).contains(&i)))
+        {
+            return Ok(conflict("target_conflict"));
+        }
+        if proposal
+            .get("target_fragment")
+            .is_some_and(|v| !v.is_null() && !v.is_string())
+        {
+            return Ok(conflict("target_fragment_not_readable"));
+        }
+        let Some(replacement_text) = proposal.get("replacement_text").and_then(Value::as_str)
+        else {
+            return Ok(conflict("not_hiragana"));
+        };
+        let mut replacement = Replacement {
+            text: replacement_text.into(),
+            index: proposal.get("line_index").and_then(Value::as_i64),
+            fragment: proposal
+                .get("target_fragment")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned),
+        };
         let explicit = parse::explicit_lines(input);
         if explicit.len() > 1 {
-            return Ok(json!({"text":null,"failure_reasons":["target_conflict"]}));
+            return Ok(conflict("target_conflict"));
         }
         if let Some(index) = explicit.first() {
-            if !p
+            if !proposal
                 .get("line_index")
                 .is_none_or(|i| i.is_null() || i.as_u64() == Some(*index as u64))
             {
-                return Ok(json!({"text":null,"failure_reasons":["target_conflict"]}));
+                return Ok(conflict("target_conflict"));
             }
-            p.insert("line_index".into(), json!(index));
+            replacement.index = Some(*index as i64);
         }
         // The player-selected target survives the short history window. A model
         // cannot silently redirect an edit; only a new player reference moves it.
@@ -120,57 +177,56 @@ impl Engine {
             && let Some(target) =
                 crate::workshop_target::Target::from_view(&f["workshop"], editing_records(s))
         {
-            if p.get("line_index")
-                .and_then(Value::as_u64)
-                .is_some_and(|i| i != target.line_index as u64)
+            if replacement
+                .index
+                .is_some_and(|i| i >= 0 && i != target.line_index as i64)
             {
-                return Ok(json!({"text":null,"failure_reasons":["retained_target_conflict"]}));
+                return Ok(conflict("retained_target_conflict"));
             }
-            p.insert("line_index".into(), json!(target.line_index));
-            if !p.get("target_fragment").is_some_and(truth) {
-                p.insert("target_fragment".into(), json!(target.fragment));
+            replacement.index = Some(target.line_index as i64);
+            if replacement.fragment.is_none() {
+                replacement.fragment = (!target.fragment.is_empty()).then_some(target.fragment);
             }
         }
-        let fragment = self.mentioned_fragment(s, input, text(&p["replacement_text"]))?;
-        if !p.get("target_fragment").is_some_and(truth) && fragment.is_some() {
-            p.insert("target_fragment".into(), json!(fragment));
+        let fragment = self.mentioned_fragment(s, input, &replacement.text)?;
+        if replacement.fragment.is_none() {
+            replacement.fragment = fragment;
         }
         let discussed = &f["workshop"]["conversation_candidate"]["proposal"];
-        if !p.get("target_fragment").is_some_and(truth)
-            && p.get("line_index").is_none_or(Value::is_null)
-            && discussed.is_object()
-        {
-            p.insert(
-                "target_fragment".into(),
-                discussed["target_fragment"].clone(),
-            );
-            p.insert("line_index".into(), discussed["line_index"].clone());
+        if replacement.fragment.is_none() && replacement.index.is_none() && discussed.is_object() {
+            let discussed: crate::workshop_candidate::Proposal =
+                serde_json::from_value(discussed.clone()).context("invalid discussion proposal")?;
+            replacement.fragment =
+                (!discussed.target_fragment.is_empty()).then_some(discussed.target_fragment);
+            replacement.index = discussed
+                .line_index
+                .map(i64::try_from)
+                .transpose()
+                .context("invalid discussion line index")?;
         }
-        if !p.get("target_fragment").is_some_and(truth)
-            && p.get("line_index").is_none_or(Value::is_null)
+        if replacement.fragment.is_none()
+            && replacement.index.is_none()
             && let Some(target) =
                 crate::workshop_target::Target::from_view(&f["workshop"], editing_records(s))
         {
-            p.insert("line_index".into(), json!(target.line_index));
-            p.insert("target_fragment".into(), json!(target.fragment));
+            replacement.index = Some(target.line_index as i64);
+            replacement.fragment = (!target.fragment.is_empty()).then_some(target.fragment);
         }
-        self.revise(
-            &f["workshop"],
-            s,
-            &Replacement {
-                text: text(&p["replacement_text"]).into(),
-                index: p.get("line_index").and_then(Value::as_i64),
-                fragment: p
-                    .get("target_fragment")
-                    .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned),
-            },
-        )
+        self.revise(&f["workshop"], s, &replacement)
+            .map(PlayerEditResult::Validated)
     }
-    fn revise(&self, view: &Value, s: &Snapshot, r: &Replacement) -> Result<Value> {
+
+    fn revise(&self, view: &Value, s: &Snapshot, r: &Replacement) -> Result<EditResult> {
         let base = s.surface_text.trim_matches(space).to_owned();
-        let fail = |codes: Vec<String>, target: Option<usize>| json!({"text":null,"base_text":base,"surface_text":null,"lines":[],"edits":[],"failure_reasons":codes,"target_line_index":target});
+        let fail = |codes: Vec<String>, target: Option<usize>| EditResult {
+            text: None,
+            base_text: base.clone(),
+            surface_text: None,
+            lines: vec![],
+            edits: vec![],
+            failure_reasons: codes,
+            target_line_index: target,
+        };
         let failure = |code: &str, target: Option<usize>| fail(vec![code.into()], target);
         if s.pending_revision.as_ref().is_some_and(|s| !s.is_empty())
             && truth(&view["pending"]["generated_basis"])
@@ -316,14 +372,29 @@ impl Engine {
             return Ok(failure("no_change", Some(target)));
         }
         draft = parse::verse_lines(&revised_text);
-        let edits=(0..3).filter(|i|base_lines[*i]!=draft[*i]).map(|i|json!({"line_index":i,"expected_text":base_lines[i],"replacement_text":draft[i],"provenance":"player_explicit"})).collect::<Vec<_>>();
+        let edits = (0..3)
+            .filter(|i| base_lines[*i] != draft[*i])
+            .map(|i| workshop_edit::LineEdit {
+                line_index: i,
+                expected_text: base_lines[i].clone(),
+                replacement_text: draft[i].clone(),
+                provenance: "player_explicit".into(),
+                atom_ids: None,
+            })
+            .collect::<Vec<_>>();
         // These edits are constructed from the same three base/draft lines. Runtime
         // Pending::stage rechecks identity/frozen lines/CAS before any state mutation.
         if edits.is_empty() {
             return Ok(failure("invalid_edit", Some(target)));
         }
-        Ok(
-            json!({"text":revised_text,"base_text":base,"surface_text":workshop_edit::surface(&source),"lines":source,"edits":edits,"failure_reasons":[],"target_line_index":target}),
-        )
+        Ok(EditResult {
+            text: Some(revised_text),
+            base_text: base,
+            surface_text: Some(workshop_edit::surface(&source)),
+            lines: source,
+            edits,
+            failure_reasons: vec![],
+            target_line_index: Some(target),
+        })
     }
 }

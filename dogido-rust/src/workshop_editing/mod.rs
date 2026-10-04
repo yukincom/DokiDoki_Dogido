@@ -1,5 +1,5 @@
 //! 発話から行・置換語を抽出し、未採用の編集案と検査結果を構成する。
-//! 入出力のValueはworkshop runtimeとの結果契約。Engine自身は句・pending・記憶を変更しない。
+//! 生入力はValue境界で受け、編集案・行差分・検査結果は型で渡す。句・pending・記憶は変更しない。
 //! workshop_edit::Pendingが正本への差分とCASを検証し、dialogue/workshop_editsが採用・保存する。
 //! 辞書の読みは明示的な依存であり、Pythonへ編集判断を渡さない。
 mod edits;
@@ -8,12 +8,102 @@ mod parse;
 #[cfg(test)]
 mod tests;
 use crate::{
-    haiku::lexical, python_worker::Helper, haiku_record::HaikuLine, workshop_projection::Snapshot,
+    haiku::lexical, haiku_record::HaikuLine, python_worker::Helper, workshop_projection::Snapshot,
 };
 use anyhow::{Context, Result, ensure};
 use parse::{compact, list, space, text, truth};
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
+
+/// Native outputs stay typed until a prompt/log serialization boundary. No state
+/// mutation is authorized here; Pending::stage still validates the full lines.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum Output {
+    WholeVerse {
+        lines: Vec<HaikuLine>,
+    },
+    KnowledgeRoute {
+        query: Option<crate::knowledge::query::Query>,
+    },
+    CombatFallback(crate::workshop_combat_input::Analysis),
+    FragmentCandidate {
+        fixed_payload: Option<FixedEditStep>,
+    },
+    DiscussionCandidate {
+        candidate: Option<crate::workshop_candidate::Draft>,
+    },
+    PlayerEdit(PlayerEditResult),
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum FixedEditStep {
+    StagePlayerEdit {
+        purpose: EditPurpose,
+        confidence: f64,
+        evidence: String,
+        speech: String,
+        checks: Vec<String>,
+        line_reference: LineReference,
+        line_proposal: LineProposal,
+    },
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EditPurpose {
+    ImproveWording,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LineConcept {
+    Unknown,
+}
+#[derive(Debug, Serialize)]
+pub struct LineReference {
+    pub found: bool,
+    pub concept_id: LineConcept,
+    pub evidence: String,
+    pub confidence: f64,
+}
+#[derive(Debug, Serialize)]
+pub struct LineProposal {
+    pub found: bool,
+    pub target_fragment: Option<String>,
+    pub replacement_text: String,
+    pub evidence: String,
+    pub confidence: f64,
+}
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum PlayerEditResult {
+    Rejected {
+        text: Option<String>,
+        failure_reasons: Vec<String>,
+    },
+    Validated(EditResult),
+}
+impl PlayerEditResult {
+    pub fn failure_reasons(&self) -> &[String] {
+        match self {
+            Self::Rejected {
+                failure_reasons, ..
+            } => failure_reasons,
+            Self::Validated(result) => &result.failure_reasons,
+        }
+    }
+}
+#[derive(Debug, Serialize)]
+pub struct EditResult {
+    pub text: Option<String>,
+    pub base_text: String,
+    pub surface_text: Option<String>,
+    pub lines: Vec<HaikuLine>,
+    pub edits: Vec<crate::workshop_edit::LineEdit>,
+    pub failure_reasons: Vec<String>,
+    pub target_line_index: Option<usize>,
+}
 
 pub(crate) fn explicit_line_indices(text: &str) -> std::collections::BTreeSet<usize> {
     parse::explicit_lines(text)
@@ -61,7 +151,7 @@ impl Engine {
                 .all(|c| ('ぁ'..='ゖ').contains(&c) || c == 'ー'))
         .then_some(result))
     }
-    pub async fn run(&mut self, helper: &mut Helper, frame: &Value) -> Result<Value> {
+    pub async fn run(&mut self, helper: &mut Helper, frame: &Value) -> Result<Output> {
         ensure!(
             serde_json::to_vec(frame)?.len() < 1_000_000,
             "workshop edit request too large"
@@ -86,10 +176,12 @@ impl Engine {
             }
         }
     }
-    fn project(&self, frame: &Value) -> Result<Value> {
+    fn project(&self, frame: &Value) -> Result<Output> {
         let input = text(&frame["text"]);
         if frame["op"] == "whole_verse" {
-            return Ok(json!({"lines":self.whole_verse(input,text(&frame["source"]))?}));
+            return Ok(Output::WholeVerse {
+                lines: self.whole_verse(input, text(&frame["source"]))?,
+            });
         }
         if frame["op"] == "knowledge_route" {
             return self.knowledge_route(frame);
@@ -119,41 +211,54 @@ impl Engine {
                     ]
                     .iter()
                     .any(|s| compact.contains(s));
+                use crate::workshop_combat_input::{Action, Analysis};
                 let mut action = if source.is_empty() {
-                    "uncertain"
+                    Action::Uncertain
                 } else if resume {
-                    "resume_workshop"
+                    Action::ResumeWorkshop
                 } else if self.mentioned_line(&snapshot, source)?.is_some() {
-                    "workshop_input"
+                    Action::WorkshopInput
                 } else {
-                    "uncertain"
+                    Action::Uncertain
                 };
-                let confidence = if action == "uncertain" { 0.0 } else { 1.0 };
-                let evidence = if action == "uncertain" { "" } else { source };
-                if !crate::workshop_input_guard::combat_safe(action, input, evidence) {
-                    action = "uncertain";
+                let confidence = if action == Action::Uncertain {
+                    0.0
+                } else {
+                    1.0
+                };
+                let evidence = if action == Action::Uncertain {
+                    ""
+                } else {
+                    source
+                };
+                if !crate::workshop_input_guard::combat_safe(action.name(), input, evidence) {
+                    action = Action::Uncertain;
                 }
-                Ok(json!({"action":action,"confidence":confidence,"evidence":evidence}))
+                Ok(Output::CombatFallback(Analysis {
+                    action,
+                    confidence,
+                    evidence: evidence.into(),
+                }))
             }
-            "fragment_candidate" => {
-                Ok(json!({"fixed_payload":self.fixed_fragment(frame,&snapshot)?}))
-            }
+            "fragment_candidate" => Ok(Output::FragmentCandidate {
+                fixed_payload: self.fixed_fragment(frame, &snapshot)?,
+            }),
             "explicit_discussion" => {
                 let candidate = if parse::explicit_discussion(input) {
                     self.discussion(frame, &snapshot, &Value::Null)?
                 } else {
-                    Value::Null
+                    None
                 };
-                Ok(json!({"candidate":candidate}))
+                Ok(Output::DiscussionCandidate { candidate })
             }
-            "discussion_candidate" => {
-                Ok(json!({"candidate":self.discussion(frame,&snapshot,&frame["proposal"])?}))
-            }
-            "player_edit" => self.player_edit(frame, &snapshot),
+            "discussion_candidate" => Ok(Output::DiscussionCandidate {
+                candidate: self.discussion(frame, &snapshot, &frame["proposal"])?,
+            }),
+            "player_edit" => self.player_edit(frame, &snapshot).map(Output::PlayerEdit),
             _ => anyhow::bail!("unsupported native workshop edit operation"),
         }
     }
-    fn knowledge_route(&self, frame: &Value) -> Result<Value> {
+    fn knowledge_route(&self, frame: &Value) -> Result<Output> {
         let input = text(&frame["text"]);
         let prepared = crate::player_text::prepare(input);
         let context = crate::input_context::Context::from_prepared(
@@ -163,10 +268,10 @@ impl Engine {
         );
         let query = context.knowledge_query;
         let Some(query) = query else {
-            return Ok(json!({"query":null}));
+            return Ok(Output::KnowledgeRoute { query: None });
         };
         if context.wants_quiet || prepared.normalized_text.starts_with('/') {
-            return Ok(json!({"query":null}));
+            return Ok(Output::KnowledgeRoute { query: None });
         }
         let snapshot = Snapshot::from_view(&frame["workshop"])?;
         let question = frame["interpreted_text"]
@@ -191,7 +296,9 @@ impl Engine {
         let related = whole
             || self.mentioned_line(&snapshot, question)?.is_some()
             || self.material_for_question(&snapshot, question)?.is_some();
-        Ok(json!({"query":if related {Value::Null} else {serde_json::to_value(query)?}}))
+        Ok(Output::KnowledgeRoute {
+            query: (!related).then_some(query),
+        })
     }
     fn whole_verse(&self, input: &str, provenance: &str) -> Result<Vec<HaikuLine>> {
         let surfaces = parse::verse_lines(input);

@@ -1,4 +1,5 @@
 use super::*;
+use serde_json::json;
 #[test]
 fn canonical_python_extraction_reading_edits_and_materials() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
@@ -34,7 +35,9 @@ fn canonical_python_extraction_reading_edits_and_materials() {
             _ => {
                 let mut f = f.clone();
                 f["op"] = op.into();
-                engine.project(&f)
+                engine
+                    .project(&f)
+                    .and_then(|result| Ok(serde_json::to_value(result)?))
             }
         };
         assert_eq!(
@@ -97,11 +100,14 @@ async fn same_child_cache_and_optional_dictionary_failure() {
         let frame = json!({"op":"whole_verse","text":"桜\n桜\n桜","source":"formal"});
         let first = engine.run(&mut helper, &frame).await.unwrap();
         let second = engine.run(&mut helper, &frame).await.unwrap();
+        let Output::WholeVerse { lines: first } = first else {
+            panic!("wrong output");
+        };
+        let Output::WholeVerse { lines: second } = second else {
+            panic!("wrong output");
+        };
         assert_eq!(first, second);
-        assert_eq!(
-            list(&first["lines"]).len(),
-            if mode == "ok" { 3 } else { 0 }
-        );
+        assert_eq!(first.len(), if mode == "ok" { 3 } else { 0 });
         helper.finish(false).await.unwrap();
         reaped(&dir);
         let requests = std::fs::read_to_string(dir.join("requests")).unwrap();
@@ -184,12 +190,152 @@ fn retained_target_applies_omitted_location_but_blocks_silent_redirection() {
     frame["text"] = "それをさくらいろにして".into();
     frame["proposal"] =
         json!({"replacement_text":"さくらいろ","line_index":null,"target_fragment":""});
-    let applied = engine.project(&frame).unwrap();
-    assert!(applied["text"].is_string(), "{applied}");
-    assert_eq!(applied["target_line_index"], 0);
+    let Output::PlayerEdit(PlayerEditResult::Validated(applied)) = engine.project(&frame).unwrap()
+    else {
+        panic!("wrong output");
+    };
+    assert!(applied.text.is_some(), "{applied:?}");
+    assert_eq!(applied.target_line_index, Some(0));
     frame["proposal"]["line_index"] = 2.into();
-    assert_eq!(
-        engine.project(&frame).unwrap()["failure_reasons"],
-        json!(["retained_target_conflict"])
+    let Output::PlayerEdit(result) = engine.project(&frame).unwrap() else {
+        panic!("wrong output");
+    };
+    assert_eq!(result.failure_reasons(), ["retained_target_conflict"]);
+}
+
+#[test]
+fn typed_proposal_preserves_model_evidence_boundary_and_rejects_invalid_indices() {
+    let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["op"] == "player_edit" && c["expected"]["text"].is_string())
+        .unwrap();
+    let engine = Engine {
+        readings: serde_json::from_value(case["readings"].clone()).unwrap(),
+    };
+    let mut frame = case["input"].clone();
+    frame["op"] = "discussion_candidate".into();
+    frame["text"] = "『さくらのは』を『さくらいろ』にするのはどう？".into();
+    frame["proposal"] = json!({"found":true,"line_index":0,"target_fragment":"さくらのは","replacement_text":"さくらいろ","evidence":frame["text"],"confidence":0.95});
+    let Output::DiscussionCandidate {
+        candidate: Some(draft),
+    } = engine.project(&frame).unwrap()
+    else {
+        panic!("missing draft");
+    };
+    assert_eq!(draft.proposal.line_index, Some(0));
+    assert!(draft.validation_codes.is_empty());
+    assert_eq!(draft.evidence, frame["text"].as_str().unwrap());
+    assert!(
+        crate::workshop_candidate::Candidate::from_player(
+            draft,
+            &Snapshot::from_view(&frame["workshop"])
+                .unwrap()
+                .current_lines,
+            0,
+            frame["text"].as_str().unwrap()
+        )
+        .is_some()
     );
+    for index in [
+        json!(-1),
+        json!(u64::MAX),
+        json!(true),
+        json!(0.5),
+        json!("0"),
+    ] {
+        frame["proposal"]["line_index"] = index;
+        assert!(matches!(
+            engine.project(&frame).unwrap(),
+            Output::DiscussionCandidate { candidate: None }
+        ));
+    }
+}
+
+#[test]
+fn typed_edit_passes_directly_to_pending_and_rechecks_stale_or_untargeted_lines() {
+    let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["op"] == "player_edit" && c["expected"]["text"].is_string())
+        .unwrap();
+    let engine = Engine {
+        readings: serde_json::from_value(case["readings"].clone()).unwrap(),
+    };
+    let mut frame = case["input"].clone();
+    frame["op"] = "player_edit".into();
+    frame["proposal"]["evidence"] = frame["text"].clone();
+    frame["proposal"]["confidence"] = 0.95.into();
+    let Output::PlayerEdit(PlayerEditResult::Validated(edit)) = engine.project(&frame).unwrap()
+    else {
+        panic!("missing edit");
+    };
+    let current = Snapshot::from_view(&frame["workshop"])
+        .unwrap()
+        .current_lines;
+    let target = edit.target_line_index.unwrap();
+    let pending =
+        crate::workshop_edit::Pending::stage(&current, &current, edit.lines.clone(), target)
+            .unwrap();
+    assert_eq!(pending.edits(), edit.edits);
+    assert!(
+        serde_json::to_value(&edit).unwrap()["edits"][0]
+            .get("atom_ids")
+            .is_none()
+    );
+    let mut changed = edit.lines;
+    changed[(target + 1) % 3].surface_text = "対象外".into();
+    assert!(crate::workshop_edit::Pending::stage(&current, &current, changed, target).is_err());
+    assert!(pending.validate(&pending.lines).is_err());
+}
+
+#[test]
+fn malformed_proposal_cannot_borrow_a_target_from_an_earlier_candidate() {
+    let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["op"] == "player_edit" && c["expected"]["text"].is_string())
+        .unwrap();
+    let engine = Engine {
+        readings: serde_json::from_value(case["readings"].clone()).unwrap(),
+    };
+    let mut frame = case["input"].clone();
+    frame["op"] = "player_edit".into();
+    frame["text"] = "さくらいろにして".into();
+    frame["proposal"] =
+        json!({"replacement_text":"さくらいろ","target_fragment":"","line_index":null});
+    frame["workshop"]["conversation_candidate"] =
+        json!({"proposal":{"replacement_text":"さくらいろ","target_fragment":"","line_index":0}});
+    assert!(matches!(
+        engine.project(&frame).unwrap(),
+        Output::PlayerEdit(PlayerEditResult::Validated(EditResult {
+            text: Some(_),
+            ..
+        }))
+    ));
+    for (key, value) in [
+        ("line_index", json!("bad")),
+        ("line_index", json!(-1)),
+        ("line_index", json!(u64::MAX)),
+        ("line_index", json!(true)),
+        ("line_index", json!(0.5)),
+        ("target_fragment", json!(true)),
+        ("replacement_text", json!(23)),
+    ] {
+        let mut malformed = frame.clone();
+        malformed["proposal"][key] = value;
+        assert!(
+            matches!(
+                engine.project(&malformed).unwrap(),
+                Output::PlayerEdit(PlayerEditResult::Rejected { .. })
+            ),
+            "{malformed}"
+        );
+    }
 }

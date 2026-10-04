@@ -14,6 +14,17 @@ pub const CONTRACT: &str = "player_line_compare_and_swap_v1";
 
 pub use crate::haiku_record::verse::{reading, surface};
 
+/// Validated line difference shared by edit preparation and persisted revisions.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct LineEdit {
+    pub line_index: usize,
+    pub expected_text: String,
+    pub replacement_text: String,
+    pub provenance: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub atom_ids: Option<Vec<String>>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Pending {
@@ -209,12 +220,23 @@ impl Pending {
         }
         Ok(())
     }
-    pub fn edits(&self) -> Vec<Value> {
-        self.base.iter().zip(&self.lines).enumerate().filter(|(_, (a,b))| a.reading_text!=b.reading_text).map(|(i,(a,b))| {
-            let mut edit=json!({"line_index":i,"expected_text":a.reading_text,"replacement_text":b.reading_text,"provenance":b.provenance});
-            if self.generated_basis.is_some() {edit["atom_ids"]=json!(b.source_atom_ids);}
-            edit
-        }).collect()
+    pub fn edits(&self) -> Vec<LineEdit> {
+        self.base
+            .iter()
+            .zip(&self.lines)
+            .enumerate()
+            .filter(|(_, (a, b))| a.reading_text != b.reading_text)
+            .map(|(i, (a, b))| LineEdit {
+                line_index: i,
+                expected_text: a.reading_text.clone(),
+                replacement_text: b.reading_text.clone(),
+                provenance: b.provenance.clone(),
+                atom_ids: self
+                    .generated_basis
+                    .as_ref()
+                    .map(|_| b.source_atom_ids.clone()),
+            })
+            .collect()
     }
     fn record(&self, original: &Emission, parent: Option<&str>) -> Value {
         json!({"id":self.id,"created_at":chrono::Utc::now(),"haiku_id":original.entry_id(),
@@ -413,6 +435,14 @@ mod tests {
         assert_eq!(good.lines[1], base[1]);
         assert_eq!(good.source(), "generated_confirmed");
         assert_eq!(good.edits().len(), 2);
+        assert_eq!(
+            good.edits()[0].atom_ids.as_deref(),
+            Some(["source:0".to_owned()].as_slice())
+        );
+        assert_eq!(
+            serde_json::to_value(good.edits()).unwrap()[0]["atom_ids"],
+            json!(["source:0"])
+        );
         for case in 0..5 {
             let mut bad = good.clone();
             match case {

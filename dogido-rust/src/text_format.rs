@@ -110,7 +110,7 @@ impl Formatter for SpacedJsonFormatter {
 
 /// JSON with a space after each comma/colon, also used by payload size checks.
 /// Unlike value text, scalar null/bools stay JSON and strings are quoted.
-pub(crate) fn spaced_json(value: &Value) -> String {
+pub(crate) fn spaced_json<T: Serialize + ?Sized>(value: &T) -> String {
     let mut output = Vec::new();
     value
         .serialize(&mut serde_json::Serializer::with_formatter(

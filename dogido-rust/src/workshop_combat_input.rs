@@ -39,15 +39,18 @@ impl Analysis {
         let Ok(a) = serde_json::from_value::<Self>(payload.clone()) else {
             return Self::default();
         };
-        let evidence = a.evidence.trim();
-        if !(0.75..=1.0).contains(&a.confidence)
+        a.validate(text)
+    }
+    pub fn validate(self, text: &str) -> Self {
+        let evidence = self.evidence.trim();
+        if !(0.75..=1.0).contains(&self.confidence)
             || evidence.chars().count() < 2
             || evidence.chars().count() > 120
             || !text.contains(evidence)
         {
             Self::default()
         } else {
-            a
+            self
         }
     }
 }

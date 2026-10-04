@@ -5,11 +5,12 @@ pub(super) mod prompt;
 mod validation;
 use super::*;
 use crate::{
-    python_worker::Helper,
     haiku_record::HaikuLine,
+    python_worker::Helper,
     types::GenerationRequest,
     workshop, workshop_candidate,
     workshop_edit::{self, Pending},
+    workshop_editing::{Output, PlayerEditResult},
     workshop_followup::{self, Stage},
     workshop_projection,
 };
@@ -41,22 +42,22 @@ impl Dialogue {
         let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
         // 正本DBで答える一般知識を、句の相談・確認状態の消費より先に分ける。
-        let knowledge = editing
+        let Output::KnowledgeRoute { query: knowledge } = editing
             .run(
                 helper,
                 &json!({"op":"knowledge_route", "text":text,
             "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
             "workshop":input["workshop"]}),
             )
-            .await?;
-        if knowledge["query"].is_object() {
+            .await?
+        else {
+            anyhow::bail!("unexpected knowledge route output");
+        };
+        if let Some(knowledge) = knowledge {
             let prepared = crate::player_text::prepare(text);
             let query = crate::knowledge::query::from_normalized(&prepared.normalized_text)
                 .context("workshop knowledge query missing from original input")?;
-            ensure!(
-                knowledge["query"] == serde_json::to_value(&query)?,
-                "workshop knowledge query mismatch"
-            );
+            ensure!(knowledge == query, "workshop knowledge query mismatch");
             let lookup = crate::knowledge::provider::lookup_async(
                 crate::knowledge::provider::Paths::from_helper(&self.config.helper)?,
                 query,
@@ -87,14 +88,20 @@ impl Dialogue {
         let lines = pending.as_ref().map_or(current.as_slice(), |p| &p.lines);
         let mut proposed = None;
         let mut discussion_target = crate::workshop_target::Target::from_view(view, lines);
-        let explicit_discussion = editing
+        let Output::DiscussionCandidate {
+            candidate: explicit_discussion,
+        } = editing
             .run(
                 helper,
                 &json!({"op":"explicit_discussion", "workshop":view,"text":text}),
             )
-            .await?;
+            .await?
+        else {
+            anyhow::bail!("unexpected discussion output");
+        };
+        let explicit_discussion_present = explicit_discussion.is_some();
         let mut conversation_candidate: Option<workshop_candidate::Draft> = if pending.is_none() {
-            serde_json::from_value(explicit_discussion["candidate"].clone()).ok()
+            explicit_discussion
         } else {
             None
         };
@@ -117,7 +124,7 @@ impl Dialogue {
                     snapshot["pending"].is_object(),
                     snapshot["conversation_candidate"].is_object(),
                 );
-                if explicit_discussion["candidate"].is_object() && pending.is_none() {
+                if explicit_discussion_present && pending.is_none() {
                     allowed.retain(|a| {
                         matches!(
                             *a,
@@ -348,7 +355,10 @@ impl Dialogue {
                         "proposal":step["analysis"]["line_proposal"]}),
                         )
                         .await?;
-                    if let Ok(candidate) = serde_json::from_value(validated["candidate"].clone()) {
+                    if let Output::DiscussionCandidate {
+                        candidate: Some(candidate),
+                    } = validated
+                    {
                         conversation_candidate = Some(candidate);
                     }
                 }
@@ -427,21 +437,23 @@ impl Dialogue {
                             // own target, even after a question about another line.
                             edit_view["discussion_target"] = Value::Null;
                         }
-                        let validated = editing
+                        let Output::PlayerEdit(validated) = editing
                             .run(
                                 helper,
                                 &json!({"op":"player_edit",
                             "workshop":edit_view,"text":if a=="stage_player_edit" {text} else {""},
                             "proposal":proposal}),
                             )
-                            .await?;
-                        if validated["text"].is_string() {
-                            let new_lines = serde_json::from_value(validated["lines"].clone())?;
-                            let target = validated["target_line_index"]
-                                .as_u64()
-                                .context("missing edit target")?
-                                as usize;
-                            match Pending::stage(&current, lines, new_lines, target) {
+                            .await?
+                        else {
+                            anyhow::bail!("unexpected player edit output");
+                        };
+                        let failure_reasons = validated.failure_reasons().to_vec();
+                        if let PlayerEditResult::Validated(result) = validated
+                            && result.text.is_some()
+                        {
+                            let target = result.target_line_index.context("missing edit target")?;
+                            match Pending::stage(&current, lines, result.lines, target) {
                                 Ok(p) => {
                                     if a == "stage_conversation_candidate" {
                                         discussion_target = Some(crate::workshop_target::Target {
@@ -460,8 +472,7 @@ impl Dialogue {
                             }
                         } else {
                             reason = "player_edit_rejected".into();
-                            steps.last_mut().unwrap()["validation_codes"] =
-                                validated["failure_reasons"].clone();
+                            steps.last_mut().unwrap()["validation_codes"] = json!(failure_reasons);
                         }
                     }
                     if matches!(a, "stage_player_edit" | "stage_conversation_candidate")

@@ -2,9 +2,9 @@
 //! at input receipt, rechecked before I/O, and closed only after a successful save.
 use super::*;
 use crate::{
-    python_worker::Helper,
     haiku_record::{HaikuLine, MemoryStore},
     poem_input::{self, Input, WholeRevision},
+    python_worker::Helper,
 };
 use anyhow::{Context, ensure};
 
@@ -52,7 +52,9 @@ impl Dialogue {
             r=tokio::time::timeout(Duration::from_secs(15), editing.run(&mut helper, &frame))=>
                 r.unwrap_or_else(|_|Err(anyhow::anyhow!("whole verse timed out")))};
             helper.finish(result.is_err()).await?;
-            let lines: Vec<HaikuLine> = serde_json::from_value(result?["lines"].clone())?;
+            let crate::workshop_editing::Output::WholeVerse { lines } = result? else {
+                anyhow::bail!("unexpected whole verse output");
+            };
             poem_input::validate_lines(text, source, &lines)?;
             lines
         } else {

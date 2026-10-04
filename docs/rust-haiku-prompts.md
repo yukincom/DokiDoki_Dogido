@@ -10,4 +10,6 @@
 
 検査の既定512 tokens、欠けた判定だけの再照合、最大再生成回数、同案拒否、固定行・CASはRust生成器が所有する。材料準備、normalize／correct、signatureもRustが行い、必要な漢字の辞書tokenだけPython補助から受け取る。通信の上限・失敗後の停止・取消・子の回収は `python_worker` が管理する。
 
+workshopの生入力はJSON境界で受ける。`workshop_editing` は行差分・編集案・検査結果を型付きで返し、runtimeは行をJSONへ戻して読み直さず `Pending::stage` へ渡す。元句一致・対象外不変・音数・出典の検証と保存権限は従来どおりRustが持つ。保存済み2,666ケースの出力契約は維持する。
+
 実Minecraft、実モデル、マイク、音声再生の検証は、自動テストとは別に扱う。
