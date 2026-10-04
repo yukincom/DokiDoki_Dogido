@@ -1,12 +1,28 @@
 # player_chat: 状態機械とプロンプトの分担
 
 **日付:** 2026-07-15  
-**状態:** **実装計画の正本**（優先順・PR 定義）  
+**状態:** 2026-07の実装順・PR定義の記録。現行Rustの編集先と責務は次節を正とし、旧Pythonの作業順を再開しない。  
 **関連:** [pillager-banner-chat-plan.md](pillager-banner-chat-plan.md)（観測・トピック・structure の詳細）、[sound-identity-plan.md](sound-identity-plan.md)、[player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md)（トピック過適合・将来 VLM）、[player-chat-casual-plan.md](player-chat-casual-plan.md)（**雑談3本柱の実装計画**）、[research/code-review-player-reactivity-2026-07-02.md](research/code-review-player-reactivity-2026-07-02.md)
 
 ---
 
-## 優先判断（確定）
+## 現行の分担（2026-10-04）
+
+コードが観測・候補照合・優先順位・状態変更・保存を持ち、会話モデルは閉じたread action、返答、沈黙を選ぶ。候補はコードで再検査する。共通の人格と場面・観測・対話目的を渡す現在の契約は[通常会話の共通対話](player-chat-casual-plan.md#2026-10-01-rust本体の共通対話)を参照する。
+
+| 責務 | Rustの実装先 |
+|---|---|
+| 次のread actionと引用根拠の検証 | [planner/](../dogido-rust/src/planner/) |
+| 候補検索 | [chat_catalog.rs](../dogido-rust/src/chat_catalog.rs)・[planner/handoff.rs](../dogido-rust/src/planner/handoff.rs) |
+| 候補の絞り込み・現在観測との照合 | [chat_topics.rs](../dogido-rust/src/chat_topics.rs)・[chat_observation.rs](../dogido-rust/src/chat_observation.rs) |
+| 会話へ渡す材料 | [chat_materials.rs](../dogido-rust/src/chat_materials.rs)・[共通観測](../dogido-rust/src/conversation_observation.rs) |
+| 返答の一回再考・検査 | [chat_leaf_runtime.rs](../dogido-rust/src/dialogue/chat_leaf_runtime.rs)・[chat_validation.rs](../dogido-rust/src/chat_validation.rs) |
+
+現在の検証は`./dogido-rust/cargo.sh test --locked --test chat_topics --test chat_grounding --test planner`から始める。以下のPR表・旧関数名・Pythonテスト名は当時の記録であり、現在の起動・検証手順ではない。過去の完了表をRust本体の実機確認済みへ読み替えない。
+
+---
+
+## 当時の優先判断
 
 | 選択 | 内容 |
 |---|---|
@@ -20,7 +36,7 @@
 
 ---
 
-## PR 進行状況
+## 当時のPR進行状況
 
 | 項目 | 状態 |
 |---|---|
@@ -66,7 +82,7 @@
 
 ---
 
-## いまの分担（事実）
+## 当時の分担
 
 | 層 | やっていること |
 |---|---|
@@ -97,7 +113,7 @@ sanitize
 
 ---
 
-## 実装 PR 定義（新・正本）
+## 当時の実装PR定義
 
 ```text
 A ✅ ── B ⏸（エンジンのみ）
@@ -192,7 +208,7 @@ A ✅ ── B ⏸（エンジンのみ）
 - habitat／スポーン表で動物園の展示を否定しない  
 - 詳細: [player-chat-topic-overfit-plan.md](player-chat-topic-overfit-plan.md) の「将来: VLM」節  
 
-当面の次手は VLM ではなく **トピック過適合修正（T-A〜）**。
+当時はVLMよりトピック過適合修正を先行させた。現行の変更先は冒頭のRust実装を参照する。
 
 ---
 

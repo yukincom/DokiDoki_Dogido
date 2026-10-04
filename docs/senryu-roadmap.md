@@ -1,170 +1,88 @@
 # 川柳・Senryu ロードマップ
 
-**更新:** 2026-08-13
-**ブランチ文脈:** `Senryu-RAG` 以降の対話・カタログ・記憶まわり
+**更新:** 2026-10-04  
+**状態:** 発句・カタログ直引き・JSONL記憶・共同編集はRust本体へ接続済み。実機での品質評価と、将来の拡張を分けて整理する。
 
-関連:
+関連: [完成度の方針](companion-maturity.md) · [川柳アーキテクチャ](haiku-architecture.md) · [共同編集](haiku-player-improvement-plan.md) · [記憶](memory-architecture.md) · [カタログ利用とRAG](senryu-rag-plan.md)
 
-- [相棒としての完成度ガイド](companion-maturity.md)（何を足すと完成に近づくか）
-- [川柳プレイヤー改善](haiku-player-improvement-plan.md)（workshop / soft lesson）
-- [川柳フィードバック（実装メモ）](haiku-feedback-plan.md)
-- [Senryu-RAG 実装プラン](senryu-rag-plan.md)（カタログ直引き優先・ベクトルは任意）
-- [川柳アーキテクチャ](haiku-architecture.md)
-- [記憶アーキテクチャ](memory-architecture.md)
-- [対話設計](dialogue-design.md)
+## 1. 実装済みの機能
 
----
-
-## 1. いま入っているもの（だいたい完了）
-
-「根拠検証を通った句を出して、好みや表現を一緒に直し、残して、あとから呼び出す」の**骨格は一通り入った**。
-
-### 発句の質（カタログ使い切り）
-
-| 項目 | 内容 |
-|---|---|
-| カタログ観察 | biome / structure / nearby block の `note` を HaikuContext へ |
-| 詩語 | 主役平和 mob の `poetic_lines`（role 中心）。`haiku_tags` と二重にしない |
-| 読み | エントリ `reading` ＋ `catalog_corrections.jsonl` オーバーレイ（例: 草地→くさち） |
-| 発句フロー | irony → scene → haiku。状態機械優先は維持 |
-| 発話前品質ゲート | 行ごとの source atom 照合・重複排除。共通検査のまま4生成方式を固定比較し、不合格スロットを実測中最大6回再生成。詳細は [川柳アーキテクチャ](haiku-architecture.md) |
-
-### 記憶・フィードバック
-
-| 項目 | 内容 |
-|---|---|
-| 発句の長期保存 | **基本すべて** `haiku_entries.jsonl` へ自動保存（プレイ中は句が珍しいため） |
-| 元句＋直し | `直し:` で revision にペア保存（プロンプトには常時載せない） |
-| 読み訂正 | プレイヤー指摘 → オーバーレイ → 次回のラベル／制約に反映 |
-| 明示的想起のみ | 「句思い出して」等のときだけ memory 検索。発句プロンプト常駐はしない |
-| 日付（壁時計） | 今日／昨日／今週／**今月**／**ここひと月**／N月／N月M日。`created_at` を使用。**ゲーム時刻は使わない** |
-| 場所 | カタログ全ラベル・読み ＋ biome **group**（寒いところ＝cold+snowy、乾燥帯、温帯、洞窟、ネザー…） |
-
-### 対話（前段・main 側）
-
-- 共通Baseと場面別トーン、会話履歴、inventory オンデマンド、tactics、player-input 再キュー など（共通バトルトーンは廃止）
-
-### 正本データの置き場
-
-```text
-.dogido_memory/
-  short_term/          … セッションログ（発話・haiku_emitted 等）
-  long_term/
-    haiku_entries.jsonl
-    haiku_revisions.jsonl
-    catalog_corrections.jsonl
-    player_profile.json
-```
-
-API 例: `GET /api/v1/memory/haiku`（entries 一覧。UI の土台になりうる）
-
----
-
-## 2. 入れていない・薄いもの
-
-| 項目 | 状態 | メモ |
+| 機能 | 現在の範囲 | 詳細 |
 |---|---|---|
-| 音の正体・非MC生物名 | 一部対応 / 計画 | [sound-identity-plan.md](sound-identity-plan.md)。直近音バッファは実装済み |
-| player_chat 観測ギャップ（旗・地下・移動） | 地下コンテキスト一部済 / 乗車中の乗り物は済 / 旗・エリトラは計画 | [bug-player-chat-observation-gaps.md](bug-player-chat-observation-gaps.md)、[pillager-banner-chat-plan.md](pillager-banner-chat-plan.md) |
-| Simple Vector RAG（Chroma 等） | 未実装 | [senryu-rag-plan.md](senryu-rag-plan.md) 第2波。直引きと被らせない |
-| 対話ワークショップ | 計画 | [haiku-player-improvement-plan.md](haiku-player-improvement-plan.md)。自然文の講評→critique/lesson→次回制約 |
-| biome / block note の中身 | データ不足 | 仕組みはある。コンテンツ作業 |
-| ぼんやり場所の言い回し網羅 | 部分的 | プレイでフレーズを足す |
-| `haiku.py` mixin 分割 | 任意 | ~850 行。context 構築の切り出し候補 |
-| M5Stack / LINE・Discord | 後回し | 対話・川柳が固まってから |
+| 材料と出典 | 現在観測とカタログの説明・詩語を取り出し、行の根拠として扱う | [カタログ利用](senryu-rag-plan.md) |
+| 発句 | 見どころ→scene→三行生成。出典・重複・音数・制約を検査し、内容の再生成は最大6回 | [生成方式](haiku-architecture.md) |
+| 保存 | 完成した発句を自動保存し、元句を保持してrevisionを追記する。保存成功と実再生成功は別に扱う | [記憶設計](memory-architecture.md) |
+| 共同編集 | 意味の説明、行検査、修正提案、本人の局所編集、採否、終了、戦闘中断と再開 | [workshop](haiku-player-improvement-plan.md) |
+| 好みの反映 | critiqueとsoft lessonを保存し、期限・発句回数・明示的な緩めで扱う | [workshop](haiku-player-improvement-plan.md) |
+| 明示的な想起 | 本人の照会時だけ句を検索する。日付は壁時計、場所はカタログのラベル・読み・groupで扱う | [フィードバック](haiku-feedback-plan.md) |
+| 読み辞書 | あんちょこ画面で登録・更新・取消し、保存済み訂正を次の読み・生成材料へ反映する。会話を辞書の保存命令にはしない | [API仕様](adapter-api.md#26-あんちょこと読み訂正) |
+| 保存句の一覧と相談 | 専用テキスト相談室で句を選び、日時・情景・採用済み本文を見ながら同じworkshop処理を使う | [テキスト相談室](../dogido-rust/workshop-text.md) |
 
----
+実装先は`dogido-rust/src/haiku/`、`haiku_record.rs`、`haiku_memory.rs`、`workshop_*`と各`dialogue` runtime。旧Pythonのmixin分割は現在の未着手項目ではない。
 
-## 3. 将来計画
+## 2. 保存先と読み戻し
 
-### 3.1 保存した川柳を見る UI（候補・優先度高）
-
-長期 JSONL に句が貯まる前提なので、**見る・探す・見返す UI** があると体験が閉じる。
-
-**やりたいこと（案）**
-
-- 一覧: 日付・バイオーム・元句／直し句・interpretation
-- フィルタ: 今月／ここひと月、biome group、作者（dogido / player）
-- 詳細: 元と直しの並び、読み訂正との関連は後で
-- 操作（任意）: お気に入り、削除、Markdown / 画像エクスポート（日記用）
-- データ源: `.dogido_memory/long_term/*` と既存 `GET /api/v1/memory/haiku`（revisions 用 endpoint を足す想定）
-
-**置き場所の候補**
-
-| 案 | 向き |
-|---|---|
-| ローカル Web（dogido-server に静的 UI + API） | 実装が近い。PC プレイと同居しやすい |
-| 別 CLI / TUI | 軽い。一覧・grep 向き |
-| 将来 M5Stack / 外部アプリ | 出力デバイス方針が固まってから |
-
-**やらないこと（最初）**
-
-- クラウド同期必須
-- ソーシャル投稿
-- 句を毎回 LLM プロンプトに自動注入する UI（記憶方針と矛盾）
-
-**実装の切り方（案）**
-
-1. API: entries + revisions の一覧／フィルタ（since/until/biome/group）  
-2. 最小 HTML/React 等でテーブル表示  
-3. お気に入り・エクスポートは後続  
-
-### 3.2 Vector RAG（任意）
-
-- 直引きで足りない横断語・教育短文だけ
-- 見えている ID の poetic 再取得はしない（二重）
-- 発句はレアなので、**先に UI と note コンテンツの方が体感価値が高い**可能性あり
-
-### 3.3 対話での添削ワークショップ
-
-- 直近句 + interpretation を chat に明示注入
-- 「直して」→ 候補 → プレイヤー確定で revision 保存
-- 戦闘中は起動しない（既存優先順位）
-
-### 3.4 カタログコンテンツ
-
-- biome / structure / block の `note` 充実
-- 主要語の `reading` 先回り投入（誤読が分かったものから）
-- オーバーレイ訂正の data/ 本編への取り込み手順
-
-### 3.5 コード健全性
-
-- `mixins/haiku.py` から context 組み立てを分離
-- 想起・読み・保存のテストをプレイシナリオで増やす
-
-### 3.6 デバイス・外部（方針どおり後回し）
-
-- M5Stack Push Avatar
-- LINE / Discord メッセージ
-
----
-
-## 4. 優先度の目安（将来）
+保存ルートは設定の`memory_dir`を使う。以下の`<memory_dir>`はその設定値であり、固定のフォルダ名ではない。
 
 ```text
-1. 実プレイで読み訂正・直し・想起を回して穴潰し
-2. 保存川柳 UI（一覧・フィルタ）     ← 記憶が貯まるほど効く
-3. note / reading のコンテンツ増強
-4. 添削ワークショップ（対話）
-5. Vector RAG（必要なら）
-6. haiku mixin 分割・M5Stack 等
+<memory_dir>/
+  long_term/
+    catalog_corrections.jsonl
+    haiku_critiques.jsonl
+    haiku_lessons.jsonl
+    player_profile.json              … 存在する場合に参照
+    haiku_entries.jsonl              … 既存の直下記録も読取り対象
+    haiku_revisions.jsonl
+  sessions/<session_id>/
+    short_term/current_session.jsonl … 完成した発句の記録
+    long_term/
+      haiku_entries.jsonl
+      haiku_revisions.jsonl
+      haiku_workshop_turns.jsonl      … 相談の評価記録
 ```
 
----
+通常の発句・revisionはセッション配下へ保存する。テキスト相談室からのrevisionは、選んだ句の元の保存先へ追記する。一覧と想起は直下とセッション配下の句を読み、移行を理由に既存記録を移動しない。
 
-## 5. 設計上の固定方針（忘れない用）
+`GET /api/v1/memory/haiku`は採用済みrevisionを反映した一覧を返す。相談の評価記録は会話・発句へ読み戻さない。一般起動と専用起動では保存先を明示的に変えているため、[起動案内](../dogido-rust/README.md)で使用中の設定を確認する。
 
-1. **履歴句はプロンプト常駐させない**。明示 recall か UI で見る  
-2. **読み・語の訂正はカタログ側**（オーバーレイ → のち本編）  
-3. **日付は壁時計 `created_at`**。ゲーム内昼夜は使わない  
-4. **場所はカタログ group / label が正本**。手書き辞書は補助に留める  
-5. **状態機械の panic / cue は触らない**  
-6. 汎用エージェント基盤（Hermes 等）は使わない  
+## 3. 次に確認すること
 
----
+機能があることと、実プレイで自然に使えることは分ける。現在の優先順位は[実機チェック](../dogido-rust/manual-dialogue-check.md)に沿って次を確認すること。
 
-## 6. 関連テスト
+1. 観測した材料が句と説明に届くか。地下・天候・乗車・音などの取り違えを記録する。
+2. 本人の局所編集、AI案の採否、保存、戦闘中断と再開を一巡する。
+3. 読み・音数・出典の説明が検査結果と一致するか、返答の自然さと待ち時間を確認する。
+4. 保存後に一覧・想起・テキスト相談から同じ句と採用結果を参照できるか確認する。
 
-```bash
-pytest tests/test_haiku_feedback.py tests/test_haiku.py tests/test_memory.py -q
+過去のPython版や独立したモデル試験の結果を、変更後のRust本体の実機確認済みへ読み替えない。個々の結果には実行した版・入口・入力・状態変更・表示／音声の結果を残す。
+
+## 4. 未実装・今後の候補
+
+| 項目 | 現在との違い・条件 |
+|---|---|
+| マイクラ句集UIの拡張 | 基本の一覧と相談はある。画像との紐付け、期間・作者等のフィルター、お気に入り、削除、エクスポートは別の将来案 |
+| あんちょこの記憶表示 | カタログ閲覧・検索・読み編集はある。critique／lessonや関連句を項目へ紐付ける表示は将来案 |
+| カタログの説明・読みの充実 | 仕組みの追加より、実際に不足した項目の内容を整える |
+| 観測ギャップの改善 | [観測メモ](bug-player-chat-observation-gaps.md)・[音の仕様](sound-identity-plan.md)の各項目を、現在の実測に照らして判断する |
+| Vector RAG | 未実装・任意。直引きや内容追加で解決できない用途だけを対象にする |
+| M5Stack・外部メッセージ・OS連携 | 対話と川柳が安定してから検討する |
+
+画像付きの冒険記録やOS連携の具体案は[将来構想](future-assistance-and-senryu-app-plan.md)にまとめる。クラウド同期やソーシャル投稿を必須にはしない。
+
+## 5. 継続する設計方針
+
+1. 履歴句を発句プロンプトへ常駐させない。明示的な想起かUIで参照する。
+2. 読み訂正はカタログのオーバーレイ、句の直しはrevisionとして分ける。
+3. 日付の絞り込みには壁時計の`created_at`を使い、ゲーム内の昼夜を使わない。
+4. 本人の好みはsoft lessonに留め、道具・読みのhard制約へ混ぜない。
+5. 発句・戦闘優先・採否・保存はコードが所有し、汎用エージェント基盤へ移さない。
+
+## 6. 検証の入口
+
+材料・準備・記憶の自動検証は、リポジトリルートから実行する。
+
+```sh
+./dogido-rust/cargo.sh test --locked --test haiku_context --test haiku_preparation --test haiku_memory
 ```
+
+全体の自動検証と模擬通信は[Rust本体の案内](../dogido-rust/README.md)、実モデル・Minecraft・音声を使う確認は[実機チェック](../dogido-rust/manual-dialogue-check.md)を参照する。

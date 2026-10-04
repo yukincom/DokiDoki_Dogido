@@ -1,23 +1,24 @@
-> **正本プランは [senryu-rag-plan.md](senryu-rag-plan.md)（2026-07 改訂）。**  
-> 以下は初期メモ。全 `data/` の LlamaIndex 前提や poetic の再ベクトル化は **採用しない**（直引きと二重になるため）。
+# RAGの初期検討記録（2026-07）
+
+> **正本プランは [senryu-rag-plan.md](senryu-rag-plan.md)（現行方針）。**  
+> ※ 以下は初期検討時のメモです。全 `data/` の LlamaIndex 前提や poetic の再ベクトル化は **採用していません**（カタログ直引きと二重化するため）。  
+> ※ 状態機械・本体処理は現在 Rust（`dogido-rust`）へ移行完了しており、初期案にある Python / `py_trees` / `dogido_server/rag/` は現行構成ではありません。
 
 ---
 
-**✅ Dogido最新状況を反映したRAG導入計画（2026-07時点・初期メモ）**
+**状態:** 初期案の記録。以下の配置・依存・作業案は現行の実装手順ではない。
 
-ユキ、ありがとう！ GitHub（https://github.com/yukincom/DokiDoki_Dogido）を確認したよ。  
-**勘違い修正**：すでに `dogido_server` がかなり進んでいて、**状態機械（py_trees統合）・イベント受信API・LLM routes（chat / haiku分離）・Fabric adapter・voice_input** が実装済み。LLMは低遅延部分を避け、雑談/川柳で使ってる形。
+本メモは初期検討段階の記録です。
+当時想定していた「Simple Vector RAG」の検討経緯を参考資料として残しています。
 
-これを基準に**Simple Vector RAG**の計画を立て直した。
-
-### 1. 現状との整合性
+## 1. 当時の構成との整合性
 - **良い点**: 状態機械が強く、**LLM leaf**（aftermath/ambient/death）で既にLLM呼び出しあり。RAGをここに自然に挿入可能。
 - **RAG挿入ポイント**:
   - haiku route / chat route のプロンプト前にRAGコンテキスト注入。
   - 川柳の「下手くそだけど教育的」部分を強化（観察ポイント・添削例をRAGから引き出す）。
   - 敵対mob定義（docs/monster-schema.md）やdata/をRAG知識源に。
 
-### 2. 更新されたRAG導入方針（Simple Vector優先）
+## 2. 当時のRAG案（Simple Vector優先・後に方針変更）
 **目標**: JSONイベント + 状態をRAGで補完 → 川柳/雑談の質向上。状態機械の優先制御は崩さない。
 
 - **タイプ**: **Simple Vector RAG**。ライブラリ選定は未決とし、導入する場合も `dogido_server/rag/` 内に限定して、プロジェクト全体のワークフロー基盤にはしない。GraphRAGは不要。
@@ -28,7 +29,7 @@
   - `data/` + `docs/monster-schema.md` + `docs/haiku-architecture.md`
   - モブ描写、怖がり反応例、川柳テンプレート、プレイヤー句保存データ
 
-### 3. 実装コードプラン（dogido_server拡張）
+## 3. 当時のPython配置案（未採用）
 1. **新モジュール作成** (`dogido_server/rag/`):
    ```python
    # dogido_server/rag/vector_store.py
@@ -43,7 +44,7 @@
            collection = db.get_or_create_collection("dogido_knowledge")
            vector_store = ChromaVectorStore(chroma_collection=collection)
            self.index = VectorStoreIndex.from_vector_store(vector_store, embed_model=...)
-       
+
        def retrieve(self, event, state):  # event_json + 現在の状態機械状態
            query = f"{event.visual_threats} {state.current} 川柳 怖がり"
            return self.index.as_retriever(similarity_top_k=3).retrieve(query)
@@ -56,7 +57,7 @@
 3. **py_trees連携**:
    - LLM leafでRAG呼び出しを追加（ambient/death時特に有効）。
 
-### 4. 次アクション（即実行可能）
+## 4. 当時の着手候補（現行タスクではない）
 - **PoC**: `data/`やmonster-schemaから知識投入 → 既存fixtureでRAG retrieveテスト。
 - **優先**: 川柳routeから開始（矛盾検出→RAG参考→生成）。
 - **モデル**: 持ってる **Qwen3.6-35B-A3B**をchat/haikuメインに。

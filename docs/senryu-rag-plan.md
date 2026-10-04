@@ -1,280 +1,101 @@
-# Senryu-RAG 実装プラン
+# 川柳のカタログ利用とRAG方針
 
-**ブランチ:** `Senryu-RAG`  
-**関連:** [rag.md](rag.md), [haiku-architecture.md](haiku-architecture.md), [dialogue-design.md](dialogue-design.md), **[進捗・将来ロードマップ](senryu-roadmap.md)**
+**更新:** 2026-10-04  
+**状態:** 第1波のカタログ直引きは実装済み。第2波のVector RAGは未実装・任意。  
+**関連:** [川柳アーキテクチャ](haiku-architecture.md) · [ロードマップ](senryu-roadmap.md) · [初期RAG案の記録](rag.md)
 
-川柳（senryu/haiku）向けに、カタログ知識をどう足すかの実装方針。  
-「全部ベクトル化」ではなく、**既存の直引きを使い切ってから**、必要なら Simple Vector を載せる。
+現在の観測に含まれるIDからカタログを直接読み、説明文と詩語を川柳の材料へ渡す。既に得られる情報をベクトル検索で取り直さず、直引きで不足する用途が確認できた場合だけRAGを検討する。
 
----
+`Senryu-RAG` は当初の開発ブランチ名。現行の実装はRust本体にあり、この文書は旧Pythonモジュールの作成や第1波の再実装を指示するものではない。
 
-## 0. 監査結果（無駄・取りこぼし・二重）
+## 1. 実装済みの範囲
 
-### もう使っている（＝同じ中身を RAG に載せても二重）
-
-| 既存経路 | 何をやっているか |
+| 材料 | 現在の扱い |
 |---|---|
-| `entry_catalog.mob_poetic_tags` | mob の `poetic.*_tags` + `role` をフラット化 |
-| `HaikuMixin._haiku_tags` | 上を最大16個 `haiku_tags` に載せ、プロンプトの **「詩語ヒント」** へ |
-| `HaikuFeature.tags`（平和 mob） | feature 候補にも poetic を付与 |
-| `feature_candidates` / `candidate_tensions` | 状況の候補・取り合わせをコード側で構築 |
-| biome ラベル / group / temp・降水・雪Y | `biome_traits` として既に details 入り |
+| バイオーム・構造物・周辺ブロックの説明 | 現在のIDに対応するカタログの説明を取り出し、空でないものを`catalog_notes`へ載せる |
+| 非敵対Mobの詩語 | 主なMobの役割・声・姿などを`poetic_lines`へまとめ、`haiku_tags`との重複を抑える |
+| 場所と空の情報 | 空の見え方や地下の観測に従って材料を選ぶ。地下で地表の景色を常に載せることはしない |
+| 行の出典 | カタログ原文と観測を`source_atoms`へ投影し、三行の根拠照合へ渡す |
+| 読み | カタログの読みと保存済み訂正を参照する。道具・読みの制約と、参考にするplayer lessonを分ける |
 
-→ **見えている mob の poetic を Chroma に入れて retrieve し直すのはほぼ無駄。**  
-いまの句に既に「詩語ヒント」として載っている。
+コードと自動検証の対応は下表のとおり。句としての自然さや実Minecraft・音声を通した品質は、[実機チェック](../dogido-rust/manual-dialogue-check.md)で別に確認する。
 
-### カタログにあるのに川柳経路が使っていない（＝取りこぼし・ここが本命）
-
-| 資産 | 状況 |
+| 責務 | 現行実装・検証 |
 |---|---|
-| biome の `note` | entry にはある（数は少なめ）。haiku は temp/降水だけ。**note 未注入** |
-| structure の `note` / overview | **構造物入場の narration では使用**。**haiku には未注入** |
-| nearby block の `note` | block エントリに短い note があるものあり。haiku は **日本語ラベル列だけ** |
-| poetic の構造（visual/sound/… の区分） | フラットタグに潰している。区分を残した短文にすると LLM が使いやすい可能性 |
-| 敵対 mob poetic | 川柳は脅威中は基本起動しないので、平和時の句では優先度低 |
+| カタログの読取り | [entry_catalog.rs](../dogido-rust/src/entry_catalog.rs) · [world_catalog.rs](../dogido-rust/src/world_catalog.rs) |
+| 材料の選択と説明の収集 | [haiku/materials.rs](../dogido-rust/src/haiku/materials.rs) · [materials/selection.rs](../dogido-rust/src/haiku/materials/selection.rs) |
+| 見どころ・生成材料の準備 | [haiku/preparation.rs](../dogido-rust/src/haiku/preparation.rs) |
+| 出典の作成 | [haiku/source_atoms/](../dogido-rust/src/haiku/source_atoms/) |
+| プロンプトの材料欄 | [haiku_prompt/blocks.rs](../dogido-rust/src/haiku_prompt/blocks.rs) |
+| 回帰検証 | [haiku_context.rs](../dogido-rust/tests/haiku_context.rs) · [haiku_preparation.rs](../dogido-rust/tests/haiku_preparation.rs) |
 
-### 載せるな（固定セリフ・別経路）
-
-| 資産 | 理由 |
-|---|---|
-| `data/fallbacks/**` | 失敗時ネット。RAG に入れると失敗句を模倣しやすい |
-| `data/responses/ques/**` | ルール発話専用。すでに別経路 |
-| `data/mobs/ambient_reactions.json` | ambient 専用 |
-| `dogido_tactics` | 戦闘 chat 用。川柳に混ぜると攻略口調になる |
-| combat `priority` | 戦闘優先度 ≠ 詠みたい度 |
-
-### 結論（方針の芯）
+## 2. データの流れ
 
 ```text
-① まず「ID が分かっているもの」は entry_catalog 直引きで使い切る
-   （既存パターンの延長。embed 不要・二重なし）
-
-② ベクトル RAG は、直引きで足りないときだけ
-   （似た情景語・横断ヒント・将来の教育知識 など）
-   かつ「見えている ID の poetic 再取得」は禁止
+ゲーム観測 + 発句開始時の文脈
+  → カタログをIDで直接参照
+  → 材料の選択、場所・気象の範囲を確定
+  → catalog_notes / poetic_lines / haiku_tags / source_atoms
+  → 見どころ抽出（irony）→ scene → 三行生成
+  → 根拠・重複・音数・制約の検査
 ```
 
-ブランチ名は Senryu-RAG でも、**第1波の本体は「カタログ使い切り」**。  
-ベクトルは **第2波**（または需要が出てから）。  
-「RAG」を広義に「外部知識を句に足す」と読めば、①もこのブランチの成果になる。
+カタログ原文、現在観測、本人の会話、発話済みの見どころは出典を分ける。説明文から作るsource atomは実行時の派生物であり、第二のカタログ正本にはしない。生成と再試行の詳細は[川柳アーキテクチャ](haiku-architecture.md)を参照する。
 
----
+第1波では説明のない項目に文を補作せず、使える表示名や観測を残す。説明文そのものが不足する場合は、まずカタログの内容を整える。検索方式を変えても元データの不足は解消しない。
 
-## 1. ゴール / 非ゴール
+## 3. 知識源の境界
 
-### ゴール
+| 利用するもの | 利用しないもの |
+|---|---|
+| 現在のIDに対応するカタログ説明・詩語 | 固定fallback句や定型反応を、生成の模倣例として再検索すること |
+| 現在観測から選んだ特徴と、その出典 | 戦闘用tacticsや戦闘優先度を、川柳の材料優先度へ流用すること |
+| 実再生済みの直近会話から作った少量の参考材料 | 過去revisionを毎回プロンプトへ大量投入すること |
 
-1. 川柳プロンプトに、**いまの場面の観察文**が欠落なく載る（biome/structure/block note + 整理した poetic）
-2. 既存の haiku フロー・fallback・状態機械を壊さない
-3. そのうえで必要なら、**直引きと被らない** Simple Vector を後付けできる形にする
+Mobの詩語は既にID直引きで使っている。同じMobの同じ詩語を別の検索経路から追加しても情報は増えない。全カタログのベクトル化、GraphRAG、全項目へのレア度追加は採用しない。
 
-### 非ゴール
+## 4. 第2波 — Vector RAG（未実装・任意）
 
-- GraphRAG / ネット検索 / `player_chat` 本接続 / M5Stack
-- JSON 全件への `rarity`
-- fallbacks・ques のベクトル化
-- **見えている mob poetic の再インデックス用途の RAG**（二重）
+直引きとカタログの内容改善を行っても、類似情景の描写語やカタログ外の教育短文が必要だと確認できた場合に限って検討する。導入を既定の次作業にはしない。
 
----
+### 検討できる用途
 
-## 2. 役割分担（完成形）
+| 候補 | 条件 |
+|---|---|
+| 別の地帯・構造物の説明文 | 描写の語彙を参考にする用途。そこにいることや対象の実在を断定する材料へ変えない |
+| 詩語を短文化した資料 | 現在のIDから直引きした内容と重複する結果を除外する |
+| 観察や表現についての教育短文 | カタログ外の補助知識として出典と用途を分ける |
 
-```text
-GameEvent
-  └─ HaikuContext（既存）
-       ├─ feature_candidates / candidate_tensions     … コードが選ぶ
-       ├─ haiku_tags（mob poetic・既存）              … ID 直引き
-       ├─ catalog_notes  【NEW・第1波】               … biome/structure/block note
-       ├─ poetic_lines   【NEW or 強化・第1波】       … 区分を残した短文（任意）
-       └─ observation_hints 【NEW・第2波・任意】      … ベクトル retrieve
-            （直引きで得た id と同じ hit は捨てる）
+### 必要な条件
 
-  → irony / scene / haiku プロンプト
+1. 現在のIDと同じ結果は直引き側に任せ、検索結果から除外する。
+2. 未観測のMobやブロックを主役として持ち込まない。
+3. 追加する材料は少量にし、検索失敗や索引なしでも既存の発句経路を使えるようにする。
+4. 判断・発句時刻・戦闘優先・保存を検索器やLLMへ渡さない。
+
+Chromaと軽量embedding、上位2〜3件、短い`observation_hints`は当初の候補であり、導入済みの依存や設定ではない。採用時に現行Rust本体との接続方法を決める。旧案の`dogido_server/rag/`や索引作成スクリプトを、現在の作成先として扱わない。
+
+## 5. 当初計画との対応
+
+| 当初の区分 | 現在の扱い |
+|---|---|
+| PR1: カタログ観察の注入 | 実装済み。材料収集・出典・プロンプト欄をRustが所有する |
+| PR2: poeticの見せ方 | 実装済み。Mobの短い説明とタグを整理する |
+| PR3: Vector RAG | 未実装。必要性の確認後に別作業として判断する |
+| PR4: 方針文書 | 本文を現行実装へ整理。旧案は[初期検討記録](rag.md)に残す |
+
+旧Pythonの`HaikuMixin`や`haiku_context.py`を前提にした着手手順は終了した。直引きを優先し、固定セリフを知識源にせず、ベクトルを必須にしない方針は継続する。
+
+## 6. 次に確認すること
+
+1. 句が外れた実例で、必要な観測・説明文・出典が材料に入っていたか確認する。
+2. 元データ不足ならカタログを、選択漏れなら材料収集を直す。
+3. それでも直引きでは扱えない用途が残った場合に、第2波の必要性を判断する。
+
+関連する自動検証は、リポジトリルートで実行する。
+
+```sh
+./dogido-rust/cargo.sh test --locked --test haiku_context --test haiku_preparation
 ```
 
-| 層 | 実装 | 知識源 | いつ使う |
-|---|---|---|---|
-| A. 直引き | `entry_catalog` + HaikuMixin | 今の biome / structure / nearby blocks / passive mobs の ID | **常に（第1波）** |
-| B. ベクトル | `dogido_server/rag/` | 直引きに載らない横断知識 | **第2波。オフでも動く** |
-
----
-
-## 3. 第1波 — カタログ使い切り（ベクトルなし）
-
-### 3.1 やること
-
-**`HaikuContext` に「いまの ID から取れる観察文」を足す。**
-
-1. **biome note**  
-   - `_biome_entry` は既にある → `note` があれば details へ  
-   - 例: `catalog_notes: ["雪のタイガ: 雪が降ると葉が白く…"]`
-
-2. **structure note**  
-   - `event.world.structure` / `state.current_structure` があるとき  
-   - narration と同じ structure entry 系を **haiku でも読む**（新規パーサ不要）
-
-3. **nearby block notes（上位数個）**  
-   - 既に `block_entry` がある → ラベルだけでなく短い `note` を最大 N 件  
-   - note が空ならラベルのみ（現状維持）
-
-4. **poetic の見せ方（軽く）**  
-   - フラット16タグはそのまま残してよい（互換）  
-   - 追加で「主役 mob 1〜2体だけ」`role` + 代表タグを1行にまとめた `poetic_lines` を足すと、  
-     ベクトル化なしで「誰の詩語か」がはっきりする  
-   - **同じタグ列を2回プロンプトに載せない**（`haiku_tags` か `poetic_lines` のどちらか主、片方は短く）
-
-5. **プロンプト**  
-   - `build_haiku_*_messages` に「カタログ観察」ブロックを1つ  
-   - ルールは既存どおり: **状況にない実体を増やさない**
-
-### 3.2 やらないこと（第1波）
-
-- chromadb / sentence-transformers 導入
-- 全 entries のインデックス
-- rarity フィールド
-
-### 3.3 モジュール
-
-新規巨大パッケージは不要。既存に寄せる:
-
-| 場所 | 内容 |
-|---|---|
-| `entry_catalog.py` | 必要なら `biome_note` / `block_note` の薄いヘルパ（既存 loader 再利用） |
-| `haiku_context.py` | `catalog_notes: tuple[str, ...]` 等フィールド追加 |
-| `mixins/haiku.py` | `_haiku_context` で note 収集 |
-| `llm/haiku_prompts.py` | 観察ブロック表示 |
-| `tests/test_haiku.py` 等 | note がある fixture で details に入ることを検証 |
-
-### 3.4 完了条件
-
-- 雪タイガ等 **note 付き biome** で、irony/scene/haiku のいずれかのプロンプト材料に note が入る
-- structure 滞在中に structure note が入る（データがある場合）
-- note なし環境では従来どおり（空リスト）
-- 既存 haiku テストが通る
-
-### 3.5 第1波で効きが弱いとき
-
-- biome note 自体が **約10/65** と薄い → **コンテンツ作業**（note 追記）が先。ベクトルでは解決しない
-- block note が疎 → 同上
-- mob poetic は全 mob 充実済み → ここは「見せ方」改善が主
-
----
-
-## 4. 第2波 — 本当の Vector RAG（直引きと被らせない）
-
-第1波のあと、まだ「似た情景の語彙が欲しい」「教育的ヒントが欲しい」なら入れる。
-
-### 4.1 インデックスしてよいもの
-
-| 載せてよい | 理由 |
-|---|---|
-| biome note / structure 説明文（全文） | 直引きは「今の ID だけ」。類似 biome の **描写語だけ**借りる用途 |
-| poetic を **短文化したコーパス** | ただし retrieve 後に **今の scene の id/label と一致する hit は捨てる or 降格**（二重排除） |
-| （将来）下手さ・観察の教育短文 | カタログ外のメタ知識 |
-
-| 載せない | 理由 |
-|---|---|
-| 見えている mob の poetic を「再取得」 | 既に haiku_tags |
-| fallbacks / ques | 固定セリフ汚染 |
-| tactics | 戦闘用 |
-
-### 4.2 二重排除ルール（必須）
-
-```text
-retrieve 結果 hit について:
-  if hit.id in current_scene_ids:
-      drop  # 直引き側が担当済み
-  if hit が新しい mob/block 固有名を主役に勧める:
-      固有名を落とし、描写語だけ残す or drop
-```
-
-### 4.3 技術（第2波で初めて入れる）
-
-- Chroma 直接 + 軽量 embed（LlamaIndex は必須にしない）
-- `dogido_server/rag/` + `scripts/build_senryu_rag_index.py`
-- `rag_enabled`（index 無しはスキップ）
-- top_k 2〜3、プロンプトは短い `observation_hints` のみ
-- 失敗時は hints 空で従来フロー（川柳自体は落とさない）
-
-### 4.4 第2波をスキップしてよい条件
-
-第1波 + note コンテンツ追加で句の語彙が十分なら、**ベクトルは後回しで正解**。  
-このブランチで「カタログ使い切りまで」マージしてよい。
-
----
-
-## 5. 実装フェーズ（PR 分割）
-
-### PR1 — カタログ観察の haiku 注入（本命）
-
-- biome / structure / nearby block の note → HaikuContext
-- プロンプト1ブロック
-- テスト
-- **依存ライブラリ追加なし**
-
-### PR2 — poetic の見せ方整理（小さく）
-
-- 主役 mob の poetic を1行要約（role 中心）
-- `haiku_tags` との重複を整理
-- 任意。PR1 に含めてもよいが差分が大きくなるなら分離
-
-### PR3 — Vector RAG（任意・需要が出てから）
-
-- chunk（**直引きと役割が被らない設計**をテストに明記）
-- retrieve + 二重 drop
-- プロンプト `observation_hints`
-- docs 更新
-
-### PR4 — ドキュメント
-
-- [rag.md](rag.md) を「①カタログ直引き ②任意ベクトル」の二段に書き換え
-- [haiku-architecture.md](haiku-architecture.md) に観察データの流れを追記
-- 旧 rag メモの「全部 data/ を LlamaIndex」は **採用しない** と明記
-
----
-
-## 6. 以前の案からの変更点
-
-| 以前 | 本プラン |
-|---|---|
-| まず Chroma + 全 poetic インデックス | **まず entry_catalog で note 使い切り** |
-| RAG が poetic の主供給 | poetic の主供給は **現状の ID 直引きのまま** |
-| rarity 検討の余地 | **付けない** |
-| LlamaIndex 前提気味 | 第2波でも **直接 Chroma で十分** |
-| haiku 接続が後回し | 価値が出る接続は **第1PR から**（ベクトルなし） |
-
----
-
-## 7. Key Decisions
-
-1. **見える ID の知識 = entry_catalog 直引きが正本。ベクトルでやり直さない**
-2. **第1波は note（biome/structure/block）の haiku 注入。依存ゼロ**
-3. **fallbacks/ques は知識源にしない**
-4. **レア度フィールドは作らない**
-5. **ベクトルは第2波・任意。入れるなら二重 drop 必須**
-6. **biome note が薄い問題はコンテンツ作業。RAG の代替にしない**
-7. **状態機械・panic・cue は触らない**
-
----
-
-## 8. 着手チェックリスト
-
-- [ ] `Senryu-RAG` で作業
-- [ ] PR1: `_haiku_context` に note 収集を足すところから（rag パッケージはまだ作らない）
-- [ ] 迷ったら: 「このデータ、今の event の ID で直引きできる？」→ Yes ならカタログ、No だけベクトル候補
-- [ ] 「詩語ヒントに既にある？」→ Yes なら足さない
-
----
-
-## 9. 最初の具体タスク（PR1）
-
-1. `HaikuContext` に `catalog_notes: tuple[str, ...]` を追加し `*_details()` に載せる
-2. `_haiku_context` で:
-   - biome entry の `note`
-   - structure entry の `note`（あれば）
-   - nearby 上位ブロックの `note`（空はスキップ、最大3）
-3. `haiku_prompts` の irony / scene / haiku に「カタログ観察」節
-4. ユニットテスト: note 付き biome で details に文字列が入る
-5. 手動: 実際の句で note の語が活きるか確認
-
-これで「使えるものは使う」「二重にしない」がコード上はっきりする。ベクトルは、その結果を見てから判断する。
+これは材料と段階処理の検証であり、実モデルの句の品質や実音声の確認を代替しない。

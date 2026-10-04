@@ -1,8 +1,22 @@
 # player_chat: トピック過適合・音声誤変換への対処計画
 
 **日付:** 2026-07-16  
-**状態:** 方針・詳細設計（実装前）  
+**状態:** 初期設計の記録。弱い語で対象を決めない方針は現行Rustにも実装済み。T系の当時の提案を、そのまま未着手一覧として使わない。  
 **関連:** [player-chat-sm-vs-prompt.md](player-chat-sm-vs-prompt.md)、[pillager-banner-chat-plan.md](pillager-banner-chat-plan.md)、[player-chat-casual-plan.md](player-chat-casual-plan.md)（**雑談3本柱の実装計画**）
+
+---
+
+## 現行の入口（2026-10-04）
+
+弱い形容から無理に対象を決めず、通常の雑談を保つ。現在は[planner](../dogido-rust/src/planner/)が閉じたread actionを選び、[chat_catalog.rs](../dogido-rust/src/chat_catalog.rs)が候補を検索する。[chat_topics.rs](../dogido-rust/src/chat_topics.rs)と[照合規則](../dogido-rust/src/chat_topics/rules.json)が弱い語による候補を絞り、コードが現在観測へ突き合わせる。カタログ候補やプレイヤーの報告を世界観測へ昇格させない。
+
+現行仕様は[通常会話の共通対話](player-chat-casual-plan.md#2026-10-01-rust本体の共通対話)と[会話の観測境界](rust-chat-grounding-boundary.md)。検証の入口は次のとおり。
+
+```sh
+./dogido-rust/cargo.sh test --locked --test chat_topics --test chat_grounding --test planner
+```
+
+以下のログ・Pythonの関数名・T-A以降の順序は2026-07の設計記録。将来VLMで建造物の感想を扱う方針は残すが、常時経路や現在の実装済み機能ではない。
 
 ---
 
@@ -308,11 +322,11 @@ VLM（将来・イベント駆動）
 
 ---
 
-## 次の合意ポイント
+## 当時の合意ポイント（履歴）
 
 1. **T-A（stance 入場条件）を最優先で実装してよいか**  
 2. GENERIC 語リストの初版をコード定数で持つか（まずは **コード定数で十分**）  
 3. T-D（scene×場所）を同 PR に入れるか、A+B+C のあとにするか  
 4. VLM は将来枠として文書化済み。**当面は T-A から**  
 
-合意後に T 系実装に入る。
+この着手相談は当時の記録。現在の変更は、冒頭の実装・現行仕様と具体的な再現例を照合して決める。

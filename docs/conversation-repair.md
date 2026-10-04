@@ -1,8 +1,9 @@
 # 本人の言い直しから会話を立て直す
 
-2026-09-16: 通常雑談の本体経路に実装。2D表示・3D身体の実験から独立した対話機能。
+**更新:** 2026-10-04  
+**状態:** 通常会話の修復はRust本体へ接続済み。2026-09-16の旧Python版・実モデル試験は後半に履歴として残す。2D表示・3D身体の実験から独立した対話機能。
 
-## 今回の振る舞い
+## 現在の振る舞い
 
 | プレイヤーの発言 | 対応 |
 |---|---|
@@ -11,23 +12,36 @@
 | 聞き返しへの「仲間にはなれないってこと」 | 聞き返しが再生完了した直後の説明なら、訂正語がなくても同じ対象へ結び付ける |
 | 「うん」だけ／別の話題 | 肯定一語では訂正内容を確定しない。別話題を挟んだ後は古い聞き返しを持ち越さない |
 
-通常会話モデルの既存plannerに `repair_conversation / clarify_repair` を追加した。対象turn ID、対象引用、訂正を示す引用、言い直した意味の引用を閉じたJSONで抽出し、Pydantic schemaとconsumerの両方で検査する。信頼度0.82以上、実在する履歴と原文に一致した引用、現在発話と対象発話のevidenceが必要。単なる反対意見・引用・仮定・話題転換との意味の区別はモデルが担い、コードの引用一致だけでは意味的な正しさを保証しない。
+通常会話モデルの既存plannerに `repair_conversation / clarify_repair` を追加した。対象turn ID、対象引用、訂正を示す引用、言い直した意味の引用を閉じたJSONで抽出し、Rustの型・planner検証・引用検証を通す。信頼度0.82以上、実在する履歴と原文に一致した引用、現在発話と対象発話のevidenceが必要。単なる反対意見・引用・仮定・話題転換との意味の区別はモデルが担い、コードの引用一致だけでは意味的な正しさを保証しない。
 
 訂正は既存の短期会話のplayer行へ付記し、元の発話は保持する。訂正注記はその行と一緒に期限を迎える。世界観測、操作依頼、川柳の正本、長期記憶へ昇格させない。聞き返しの未再生・失敗・中断では、次の説明を受け付ける待機状態を作らない。通常plannerまたは返答生成が失敗した場合は既存fallbackまたは短い修復用fallbackへ戻る。
 
-実装: `dialogue/conversation_repair.py`（引用検証・短期注記）、`player_chat_planner.py`（判断）、`dialogue_context.py`（短期保持）、`service.py`（現在turnと再生境界への接続）。訂正開始の根拠も未解決の質問もない通常ターンには修復用の指示・選択肢を追加しない。川柳workshopには既存の共同編集経路があるため、この一般会話修復を重ねない。独立した国語音声ハーネスへは今回追加していない。
+実装は[planner/repair.rs](../dogido-rust/src/planner/repair.rs)（引用検証）、[planner/validation.rs](../dogido-rust/src/planner/validation.rs)（出力検証）、[dialogue/history.rs](../dogido-rust/src/dialogue/history.rs)（短期注記）、[dialogue/mod.rs](../dogido-rust/src/dialogue/mod.rs)（入力・配送結果への接続）。訂正開始の根拠も未解決の質問もない通常ターンには修復用の指示・選択肢を追加しない。川柳workshopには既存の共同編集経路があるため、この一般会話修復を重ねない。
 
-実モデルを本体入力から動かした際、「違う、村の一員にはなれないってこと」が既存の省略読み訂正「AはB」に誤分類された。省略形で文中の句読点と説明末尾の「ってこと／ということ」を除外し、通常会話へ届くよう修正した。明示の読み訂正は維持する。
+2026-09-16の旧Python版の実モデル試験では、「違う、村の一員にはなれないってこと」が既存の省略読み訂正「AはB」に誤分類された。省略形で文中の句読点と説明末尾の「ってこと／ということ」を除外し、通常会話へ届くよう修正した。明示の読み訂正は維持する。
 
 ## 研究・OSSの利用範囲
 
 [Third Position Repair / REPAIR-QA（SIGDIAL 2023）](https://aclanthology.org/2023.sigdial-1.52/) が扱う「発話→誤った応答→本人の訂正」を今回の単位とした。[著者公開リポジトリ](https://github.com/alanaai/Repair-QA) は今後の評価・学習候補。今回はデータやモデルを取り込まず、日本語の独自例で検査する。論文のモデル・評価成績をドギドで再現したという意味ではない。
 
-OSSは既存のPydanticと会話モデル接続を再利用し、追加依存はない。ASR候補の再評価、音韻類似度、UniDic／RapidFuzzによる候補探索、音声認識精度の評価は次段階。「1位」を音が似た「一員」へ本人の根拠なしに置換する処理は今回導入していない。
+旧Python版では既存のPydanticと会話モデル接続を再利用した。現行Rustは既存のJSON型・検証と会話モデル接続を使う。ASR候補の再評価、音韻類似度、UniDic／RapidFuzzによる候補探索、音声認識精度の評価は次段階。「1位」を音が似た「一員」へ本人の根拠なしに置換する処理は今回導入していない。
 
-## 検証
+## 現行Rustの検証
 
-`python -m pytest tests/test_conversation_repair.py -q` で、本人の訂正、補作・原文不一致の棄却、曖昧な否定、質問→説明、再生失敗、別話題での失効、短期保持の期限、workshopとの分離を検査する。
+本人の訂正、原文・対象引用の一致、質問→説明、履歴注記、通常会話との分離は、リポジトリルートから次の検証を使う。
+
+```sh
+./dogido-rust/cargo.sh test --locked --test planner
+./dogido-rust/cargo.sh test --locked --lib planner::prepare::tests::
+./dogido-rust/cargo.sh test --locked --lib dialogue::history::tests::
+./dogido-rust/cargo.sh test --locked --lib dialogue::chat_context::tests::
+```
+
+自動検証と、実マイク・Minecraft・TTSの体験確認は区別する。通し確認は[実機チェック](../dogido-rust/manual-dialogue-check.md)を参照する。
+
+## 旧Python版の検証記録（2026-09-16）
+
+当時の`tests/test_conversation_repair.py`で、本人の訂正、補作・原文不一致の棄却、曖昧な否定、質問→説明、再生失敗、別話題での失効、短期保持の期限、workshopとの分離を検査した。このテストファイルは退役しており、現在の実行手順には使わない。
 
 2026-09-16: 修復専用22件。全Pythonテスト1418件と1502 subtestsが通過（8件skip）。最後の指示調整後も関連テストと静的チェックを再確認した。これらは処理の契約・回帰の確認であり、会話品質の証明ではない。
 
