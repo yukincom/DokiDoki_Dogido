@@ -189,6 +189,19 @@ mod tests {
             leaf.finish(Some(&spoken)),
             ("ひと息つこか。 後ろも気になるわ。".into(), "speak")
         );
+        for (body, expected) in [
+            (
+                r#"{"action":"silent","speech":""}"#,
+                (String::new(), "silent"),
+            ),
+            (
+                spoken.text.as_str(),
+                ("ひと息つこか。 後ろも気になるわ。".into(), "speak"),
+            ),
+        ] {
+            let fenced = generated(&format!("```json\n{body}\n```"));
+            assert_eq!(leaf.finish(Some(&fenced)), expected);
+        }
     }
     #[test]
     fn reactions_do_not_impose_old_emotions_or_vocabulary_but_keep_observed_outcomes() {

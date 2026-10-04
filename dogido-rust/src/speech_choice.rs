@@ -1,4 +1,6 @@
-//! Speaking and intentional silence share one wire contract in ordinary dialogue.
+//! 通常会話の「話す／黙る」を、同じJSON契約で検証する。
+//! 完結したコード囲みを除き、全体の型・発話内容を検査する。状態変更は呼出側が担当する。
+use crate::text_format::strip_code_fence;
 use serde::Deserialize;
 
 #[derive(Debug, PartialEq)]
@@ -20,7 +22,8 @@ struct Reply {
 }
 
 pub fn parse(raw: &str) -> Result<Choice, &'static str> {
-    let reply: Reply = serde_json::from_str(raw.trim()).map_err(|_| "invalid_contract")?;
+    let reply: Reply =
+        serde_json::from_str(&strip_code_fence(raw)).map_err(|_| "invalid_contract")?;
     match reply.action {
         Action::Silent if reply.speech.is_empty() => Ok(Choice::Silent),
         Action::Silent => Err("invalid_contract"),
@@ -68,6 +71,58 @@ pub fn broken_output(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn complete_fences_preserve_speaking_and_intentional_silence() {
+        for (raw, expected) in [
+            (
+                r#"{"action":"speak","speech":"そやな。"}"#,
+                Choice::Speak("そやな。".into()),
+            ),
+            (r#"{"action":"silent","speech":""}"#, Choice::Silent),
+        ] {
+            assert_eq!(parse(raw).as_ref(), Ok(&expected));
+            for tag in ["", "json"] {
+                for newline in [
+                    "\n", "\r\n", "\r", "\u{000b}", "\u{000c}", "\u{001c}", "\u{001d}", "\u{001e}",
+                    "\u{0085}", "\u{2028}", "\u{2029}",
+                ] {
+                    let fenced = format!(" \n```{tag}{newline}{raw}{newline}```\n ");
+                    assert_eq!(parse(&fenced).as_ref(), Ok(&expected), "{fenced:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fences_do_not_repair_partial_json_or_extract_nested_choices() {
+        for body in [
+            r#"{"action":"silent","speech":"""#,
+            r#"{"action":"silent","speech":"","extra":1}"#,
+            r#"{"action":"silent","speech":"黙るで"}"#,
+            r#"{"child":{"action":"silent","speech":""}}"#,
+            "ここにJSONを書くで。\n{\"action\":\"silent\",\"speech\":\"\"}",
+            "{\"action\":\"silent\",\"speech\":\"\"}\nこれで終わりや。",
+        ] {
+            assert_eq!(
+                parse(&format!("```json\n{body}\n```")),
+                Err("invalid_contract")
+            );
+        }
+        let valid = r#"{"action":"silent","speech":""}"#;
+        for raw in [
+            format!("```json\n{valid}"),
+            format!("```\n{valid}\n``"),
+            format!("```json{valid}```"),
+            format!("```json\n{valid}\n```\n後書き"),
+        ] {
+            assert_eq!(parse(&raw), Err("invalid_contract"), "{raw}");
+        }
+        assert_eq!(
+            parse("```json\n{\"action\":\"speak\",\"speech\":\"\"}\n```"),
+            Err("broken_output")
+        );
+    }
+
     #[test]
     fn silence_is_explicit_and_never_salvaged_from_broken_json() {
         assert_eq!(

@@ -436,6 +436,29 @@ mod tests {
         assert!(out.final_text.is_empty());
     }
     #[test]
+    fn fenced_choice_finishes_without_an_unnecessary_repair() {
+        for (body, status, text) in [
+            (
+                json!({"action":"speak","speech":"そやな、一緒に帰ろか。"}),
+                "accepted",
+                "そやな、一緒に帰ろか。",
+            ),
+            (json!({"action":"silent","speech":""}), "silent", ""),
+        ] {
+            let mut turn = choice_turn(json!({"status":"none"}));
+            turn.request().unwrap();
+            assert!(
+                turn.complete(Some(&format!("```json\n{body}\n```")))
+                    .unwrap()
+            );
+            let outcome = turn.take_outcome().unwrap();
+            assert_eq!(outcome.status, status);
+            assert_eq!(outcome.final_text, text);
+            assert_eq!(outcome.attempts, 1);
+        }
+    }
+
+    #[test]
     fn no_observation_and_broken_contract_require_repair_not_silent_history() {
         for smell in [
             json!({"status":"none"}),

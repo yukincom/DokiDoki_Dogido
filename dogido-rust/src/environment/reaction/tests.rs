@@ -102,6 +102,20 @@ fn silence_is_distinct_from_error_and_whole_contract_is_required() {
         p.finish(Some(&generated(json!({"action":"silent","speech":""})))),
         (String::new(), "silent")
     );
+    for (body, expected) in [
+        (
+            json!({"action":"silent","speech":""}),
+            (String::new(), "silent"),
+        ),
+        (
+            json!({"action":"speak","speech":"そやな。"}),
+            ("そやな。".into(), "speak"),
+        ),
+    ] {
+        let mut fenced = generated(body);
+        fenced.text = format!("```json\n{}\n```", fenced.text);
+        assert_eq!(p.finish(Some(&fenced)), expected);
+    }
     for value in [
         json!({"action":"silent","speech":"黙るで"}),
         json!({"action":"move","speech":""}),

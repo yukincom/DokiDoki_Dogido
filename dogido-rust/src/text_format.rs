@@ -1,4 +1,4 @@
-//! Shared value-to-text and JSON formatting for prompts and catalog terms.
+//! プロンプト・カタログ用の値の文字列化、JSON整形、モデル返答のコード囲み除去。
 //! Scalar text keeps None/True/False and unquoted strings. Containers retain
 //! their caller's established format; changing that also changes search terms.
 use serde::Serialize;
@@ -119,6 +119,35 @@ pub(crate) fn spaced_json<T: Serialize + ?Sized>(value: &T) -> String {
         ))
         .expect("JSON value serializes");
     String::from_utf8(output).expect("JSON is UTF-8")
+}
+
+/// 前後の空白と、先頭・末尾が揃ったコード囲みだけを除く。
+/// 閉じていない囲みや本文の壊れは修復せず、呼出側のJSON検査へ渡す。
+pub(crate) fn strip_code_fence(text: &str) -> String {
+    use crate::compat::is_python_whitespace as is_space;
+
+    let text = text.trim_matches(is_space);
+    if !text.starts_with("```") {
+        return text.into();
+    }
+    // モデル返答のコード囲みは、LF/CR以外のUnicode改行・C0改行でも行境界として外す。
+    let lines: Vec<_> = text
+        .split([
+            '\n', '\r', '\u{000b}', '\u{000c}', '\u{001c}', '\u{001d}', '\u{001e}', '\u{0085}',
+            '\u{2028}', '\u{2029}',
+        ])
+        .collect();
+    if lines.len() >= 2
+        && lines
+            .last()
+            .is_some_and(|line| line.trim_matches(is_space) == "```")
+    {
+        return lines[1..lines.len() - 1]
+            .join("\n")
+            .trim_matches(is_space)
+            .into();
+    }
+    text.into()
 }
 
 #[cfg(test)]

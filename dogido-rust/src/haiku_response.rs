@@ -4,7 +4,7 @@
 //! acceptedはobjectを取得できたという意味。句・判定・根拠の採否は後続のドメイン検査が決める。
 //! 生成再試行は呼び手が所有し、ここでは欠けた根拠の補完やschemaの修復を行わない。
 //! 非有限数・対にならないUnicode surrogate・過度な深さはserde_jsonの制限に従って棄却する。
-use crate::types::GeneratedText;
+use crate::{text_format::strip_code_fence, types::GeneratedText};
 use anyhow::{Result, ensure};
 use serde_json::{Map, Value};
 
@@ -191,31 +191,6 @@ fn is_space(c: char) -> bool {
 
 fn trim_start(text: &str) -> &str {
     text.trim_start_matches(is_space)
-}
-
-fn strip_code_fence(text: &str) -> String {
-    let text = text.trim_matches(is_space);
-    if !text.starts_with("```") {
-        return text.into();
-    }
-    // モデル返答のコード囲みは、LF/CR以外のUnicode改行・C0改行でも行境界として外す。
-    let lines: Vec<_> = text
-        .split([
-            '\n', '\r', '\u{000b}', '\u{000c}', '\u{001c}', '\u{001d}', '\u{001e}', '\u{0085}',
-            '\u{2028}', '\u{2029}',
-        ])
-        .collect();
-    if lines.len() >= 2
-        && lines
-            .last()
-            .is_some_and(|line| line.trim_matches(is_space) == "```")
-    {
-        return lines[1..lines.len() - 1]
-            .join("\n")
-            .trim_matches(is_space)
-            .into();
-    }
-    text.into()
 }
 
 #[cfg(test)]
