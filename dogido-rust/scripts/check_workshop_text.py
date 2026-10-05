@@ -108,7 +108,10 @@ def main():
                 assert second['turn']['text_delivery_acknowledged']
                 assert '静かな夜の草を思い浮かべた読みやな。' in seen[-1]['messages'][1]['content']
                 snapshot = call('snapshot', {'session_id': sid}, base)
-                assert len(snapshot['dialogue']['sessions'][0]['workshop_history']) == 2
+                # 一覧の順序は未規定。相談した窓と未使用の窓をIDで区別する。
+                sessions = {s['session_id']: s for s in snapshot['dialogue']['sessions']}
+                assert len(sessions[sid]['workshop_history']) == 2
+                assert not sessions[stale_sid]['workshop_history']
                 assert all(r['playback_status'] == 'audio_disabled' and r['text_displayed'] for r in snapshot['dialogue']['utterances'])
                 assert source.read_text() == original
                 assert json.loads((folder / 'prompts.json').read_text()) == prompts['settings']

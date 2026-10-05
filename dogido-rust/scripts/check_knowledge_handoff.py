@@ -5,7 +5,9 @@ import time
 from check_dialogue import register, request, row, submit, wait_for
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import install, ready, session, step
-from check_workshop_edits import edit, finish, revisions
+from check_workshop_edits import finish, revisions
+from check_workshop_followup import followup
+from check_workshop_revision import wire
 from check_workshop_combat import SETTINGS, enter, end, returned, drive
 
 
@@ -20,10 +22,20 @@ def main():
     passed = []
     with fixture(combat_settings=SETTINGS) as f:
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
-        calls = install(control, lambda text, prompt, n: step(text))
+        def choose(text, prompt, n):
+            if text == "なるほど":
+                assert "会話段階: meaning_explained" in prompt
+                return followup(text, "acknowledge_meaning")
+            if text == "うん":
+                return step(text, "respond", "うん、この句の話を続けよか。")
+            if text == "この句の相談は終了でいいよ":
+                return step(text, "close_workshop")
+            return step(text)
+        calls = install(control, choose)
         sid = ready(base, send, rows)
         finish(base, send, sid, "この句の意味を教えて")
         before = session(base, sid)
+        assert before["workshop_followup"] == "meaning_explained"
         original = stored(sid)
         n = len(seen)
         for text in ["枕詞って何？", "川柳の決まりを教えて", "ソネットの形式は？"]:
@@ -36,22 +48,36 @@ def main():
             assert session(base, sid)["foreground"]["route"] == "haiku_workshop"
         assert not any(r["path"] == "/v1/chat/completions" for r in seen[n:])
         assert hud(sid)["canonical_lines"] == LINES and stored(sid) == original
-        assert finish(base, send, sid, "なるほど")["workshop_action"] == "acknowledge_meaning"
         passed.append("knowledge_detours_preserve_poem_history_followup_and_ownership_without_model")
 
-        finish(base, send, sid, "枕詞って何？")
-        assert session(base, sid)["workshop_followup"] == "close_confirmation"
         (folder / "player_mode").write_text("fail")
-        assert finish(base, send, sid, "ソネットとは？")["playback_status"] == "failed"
-        assert session(base, sid)["workshop_followup"] == "close_confirmation"
+        failed = finish(base, send, sid, "ソネットとは？")
+        assert failed["playback_status"] == "failed" and failed["workshop_action"] == "knowledge", failed
+        after_failure = session(base, sid)
+        assert after_failure["workshop_followup"] == before["workshop_followup"]
+        assert after_failure["workshop_history"] == before["workshop_history"]
+        assert not any(h["turn_id"] == failed["turn_id"] + ":reply" for h in after_failure["history"])
+        assert len(calls) == 1
         (folder / "player_mode").write_text("ok")
-        assert finish(base, send, sid, "うん")["workshop_action"] == "confirm_close"
-        passed.append("knowledge_and_failed_audio_do_not_consume_close_confirmation")
+        # 納得への返事はモデルが選ぶ。相槌だけでは終了確認へ進まない。
+        acknowledged = finish(base, send, sid, "なるほど")
+        assert acknowledged["workshop_action"] == "acknowledge_meaning" and len(acknowledged["llm_reports"]) == 1
+        assert session(base, sid)["workshop_followup"] == "discussion"
+        assert finish(base, send, sid, "うん")["workshop_action"] == "respond"
+        assert len(calls) == 3 and hud(sid)["state"] == "open" and stored(sid) == original
+        assert not revisions(folder, sid)
+        assert finish(base, send, sid, "この句の相談は終了でいいよ")["workshop_action"] == "close_workshop"
+        assert hud(sid)["state"] == "closed"
+        passed.append("failed_knowledge_preserves_meaning_stage_and_model_ack_keeps_workshop_open")
 
         sid = ready(base, send, rows)
-        install(control, lambda text, prompt, n: edit(text))
-        finish(base, send, sid, "上五を『さくらいろ』にして")
+        wait_for(lambda: stored(sid))
+        # プレイヤーの明示編集は即保存されるため、採用待ちはAI修正案で作る。
+        wire(control, stored, sid)
+        proposed = finish(base, send, sid, "上五のさくらのはを別の表現に直して")
+        assert proposed["workshop_outcome"] == "revision_proposed", proposed
         before_hud = hud(sid)
+        assert before_hud["canonical_lines"] == LINES and before_hud["pending_lines"] == ["さくらいろ", *LINES[1:]]
         before_history = session(base, sid)["workshop_history"]
         for text in ["枕詞って何？", "川柳の決まりを教えて"]:
             assert finish(base, send, sid, text)["workshop_action"] == "knowledge"
@@ -96,12 +122,16 @@ def main():
         assert not session(base, sid)["history"]
         request(base, "/api/v1/rust-dialogue/interrupt", {"session_id":sid})
         assert all(row(base, t, {"cancelled"}) for t in turns)
-        end(send, rows, sid)
+        aftermath = end(send, rows, sid)
         for _ in range(5): send(sid); time.sleep(.1)
-        assert not session(base, sid)["history"]
-        passed.append("bounded_queue_rejects_overflow_and_manual_stop_clears_without_unheard_history")
+        assert all(row(base, t, {"cancelled"}) for t in turns)
+        # 取消した質問は履歴に入れず、実再生済みの安堵だけを記録する。
+        assert session(base, sid)["history"] == [{"turn_id": aftermath["turn_id"] + ":reply",
+            "role": "assistant", "text": aftermath["text"]}]
+        passed.append("bounded_queue_cancels_questions_and_keeps_only_completed_aftermath_history")
 
         enter(send, rows, sid)
+        spoken_before = [r for r in session(base, sid)["history"] if r["role"] == "assistant"]
         first = enqueue(base, sid, "枕詞って何？")
         second = enqueue(base, sid, "ソネットの形式は？")
         for turn in [first,second]: wait_for(lambda: row(base, turn, {"waiting_for_safety"}))
@@ -109,7 +139,9 @@ def main():
         # 安堵音声も失敗させたまま、安全観測で待ち列が進むことを確認。
         send(sid, event={"name":"combat_ended","source_kind":"system","priority_hint":"background","certainty":"high"})
         for turn in [first,second]: drive(send,sid,lambda:row(base,turn,{"failed"}))
-        assert not any(r["role"]=="assistant" for r in session(base,sid)["history"])
+        history = session(base, sid)["history"]
+        assert [r for r in history if r["role"] == "assistant"] == spoken_before
+        assert not any(r["turn_id"] in {first + ":reply", second + ":reply"} for r in history)
         (folder / "player_mode").write_text("ok")
         passed.append("failed_answer_does_not_block_next_question_or_commit_assistant_history")
 
