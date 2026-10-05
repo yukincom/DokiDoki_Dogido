@@ -60,7 +60,7 @@
 | 2・3：worker名と文字処理名 | P1で改名済み。Rust呼出側・起動確認・家庭用配布・試験の参照も更新した |
 | 4：戦闘5分類の列挙 | P2でRustのActionを正本に統一。既存IPCの許可集合をhelper・schema・promptへ渡し、不正集合はSDK起動前に拒否する |
 | 5：workshopの名前対応表 | P1でAGENTSに差分契約・編集案構成・採用保存・模擬試験の対応表を追記した |
-| 6：`dialogue/mod.rs` | 集積禁止の既存ルールをP3で再確認。2026-10-05に分割の第1段階として`update`を専用ファイルへ移した。`observe`・`submit`・`turn`の分割は後続の段階に残す |
+| 6：`dialogue/mod.rs` | 集積禁止の既存ルールをP3で再確認。2026-10-05に`update`と観測実処理`observe_inner`をそれぞれ専用ファイルへ分割した。`submit`・`turn`の分割は後続の段階に残す |
 | 7：fixture試験名 | P1の5件に続き、P3で旧Python比較を示す残り43件と既存2件の文法を整理。実際の検証対象に合わせ、fixture照合・仕様検査・現役Python補助の境界を名前で区別した |
 | 8：alignmentメモ | P3で冒頭にスクリプト5本の対応済み・難点分析の履歴であることを追記。第三レビュー・修正記録・現行規則へ案内し、原文は保持した |
 | 9：5055と5056 | レビュー時点では既存接続と保存先を維持していた。2026-10-05のユーザー依頼で起動設定を一本化し、既存commandも一般設定のポート（既定5055）と `memory_dir` を参照する形へ変更した |
@@ -147,3 +147,21 @@
 実Minecraft・実モデル・実音声の動作確認は行っていない。
 
 次の段階は`observe`、その後に`submit`・`turn`を同じ形で一つずつ移す。任意のSession/鮮度ヘルパの分離と結合テストの移動は今回行っていない。
+
+
+## dialogue分割の第2段階（2026-10-05）
+
+提案の「公開入口は残す」に合わせ、`observe`とそのworkshop記録処理を`mod.rs`に維持し、観測実処理`observe_inner`を`dogido-rust/src/dialogue/observe.rs`へ移した。新しいラッパは増やさず、同じ`Dialogue`の`impl`から親モジュールの範囲に限定した`pub(super)`で呼べる形にした。
+
+移動した308行はメソッドの可視範囲指定以外を変更していない。専用ファイルの日本語説明・importと親モジュールの宣言を追加し、観測処理だけが使う`SourceKind`・`Admission`のimportを移した。公開API、Session/Data、観測鮮度ヘルパ、jobs → dataの取得順と解放位置、重複排除、操作結果の照合、戦闘・環境・発句・入力の処理順、既存テストは維持した。`mod.rs`は2,031行から1,724行になった。
+
+検証結果:
+
+- `cargo test --offline --locked --all-targets --quiet`は587件成功。`cargo clippy --offline --locked --all-targets -- -D warnings`も成功。
+- `check_combat_runtime.py`は12ケース、`check_environment_runtime.py`は28ケース、`check_workshop_combat.py`は17ケース成功。戦闘・環境・操作結果・川柳の中断と復帰を模擬HTTPで確認した。モデル・音声を模擬し、端末SDKのprobe・生成も試験用に置き換えた。試験用の本体・子プロセス・待受は終了した。
+- 開発用本体と通常起動用release本体、テキスト相談室のrelease exampleを再ビルドした。
+- 処理本文・公開入口・既存テストと、今回の変更外の先行34ファイル・差分が変更前と一致することを照合した。
+
+実Minecraft・実モデル・実音声の動作確認は行っていない。前段で記録したテキスト相談室試験の順序依存には変更を加えていない。
+
+次の段階は`submit`、その後に`turn`を同じ形で一つずつ移す。
