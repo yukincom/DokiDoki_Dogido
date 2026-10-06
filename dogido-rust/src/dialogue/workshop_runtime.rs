@@ -698,6 +698,7 @@ impl Dialogue {
 
     /// 現在の一句の読み取りsnapshotだけ。保存・句の正本はhelperへ委譲しない。
     pub(super) fn workshop_view(s: &mut Session, text: &str) -> Option<Value> {
+        let shared_context = super::story::workshop_context(s);
         let w = s
             .haiku
             .workshop
@@ -722,7 +723,7 @@ impl Dialogue {
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "conversation_candidate":candidate,
             "discussion_target":w.discussion_target,
-            "provisional":w.provisional,"dialogue":w.dialogue,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
+            "provisional":w.provisional,"dialogue":w.dialogue,"shared_context":shared_context,"agent_steps":w.agent_steps,"followup":w.followup,"text":text}),
         )
     }
 

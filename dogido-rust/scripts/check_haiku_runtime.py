@@ -129,8 +129,12 @@ def main():
         assert datetime.fromisoformat(entry["created_at"]) >= completed_after
         assert entry["materials_snapshot"]["preface_spoken"] == inspiration["text"]
         assert len(stored(sid)) == 1
-        assert len((folder / "memory/sessions" / sid / "short_term/current_session.jsonl").read_text().splitlines()) == 1
-        assert snapshot(base)["sessions"][0]["history"] == [], "automatic poem entered casual history"
+        short = [json.loads(line) for line in (folder / "memory/sessions" / sid / "short_term/current_session.jsonl").read_text().splitlines()]
+        assert len([r for r in short if r["type"] == "haiku_emitted"]) == 1, short
+        assert len([r for r in short if r.get("kind") == "haiku_delivered"]) == 1, short
+        history = snapshot(base)["sessions"][0]["history"]
+        assert len(history) == 1 and history[0]["role"] == "event" and history[0]["reaction"] == "story", history
+        assert "ドギドが川柳を詠んだ。" in history[0]["text"]
         wait_for(lambda: hud(sid)["state"] == "closed", timeout=4)
         assert checks["drafts"] == 1
         passed.extend(["generated_inspiration_played_before_draft", "completion_clock_and_read_only_hud", "autosave_once_and_no_fake_chat_history"])

@@ -222,7 +222,7 @@ impl Recorder {
         *last = Some((before.clone(), after.clone()));
         true
     }
-    fn append(&self, path: PathBuf, row: Value) {
+    pub(super) fn append(&self, path: PathBuf, row: Value) {
         if let Some(sender) = &self.sender
             && let Err(error) = sender.try_send(Message::Record(path, row))
         {

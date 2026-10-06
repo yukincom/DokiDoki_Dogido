@@ -1,5 +1,5 @@
 //! Code-owned request preparation before the existing bounded planner runner.
-//! Inputs are read snapshots: history must already be playback-completed and
+//! Inputs are read snapshots: history contains delivered speech and code-owned events;
 //! world observations must not contain player reports or remembered names.
 //! No event state, clocks, model calls, or dictionary SDK are used here.
 use super::{Action, Details, Evidence, Plan, PreparedPlan, clean, handoff, repair};
@@ -157,16 +157,19 @@ pub fn normalize_history(value: &Value) -> Vec<Value> {
                 .map(|value| text_format::value_text(value, QuotedRepr))
                 .unwrap_or_else(|| format!("history:{index}:{role}"));
             let turn = clean(&turn, 180);
-            let silent = role == "event" && raw.get("reaction").is_some_and(|v| v == "silent");
-            if !(matches!(role, "user" | "assistant") || silent)
+            let reaction = raw
+                .get("reaction")
+                .and_then(Value::as_str)
+                .filter(|r| role == "event" && matches!(*r, "silent" | "story"));
+            if !(matches!(role, "user" | "assistant") || reaction.is_some())
                 || text.is_empty()
                 || turn.is_empty()
             {
                 return None;
             }
             let mut row = json!({"turn_id":turn,"role":role,"text":text});
-            if silent {
-                row["reaction"] = "silent".into();
+            if let Some(reaction) = reaction {
+                row["reaction"] = reaction.into();
             }
             for key in repair::FIELDS {
                 if let Some(value) = raw.get(key) {

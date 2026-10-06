@@ -121,6 +121,7 @@ def main():
             assert "そのときの出来事（返答は未発話）" in prompt, prompt
             assert "言葉を飲み込んで、戦いに挑んだ。" in prompt, prompt
             assert intended in prompt, prompt
+            assert "会話段階: combat_resume_confirmation" in prompt, prompt
             return {"action": "respond", "speech": "さっきは返事を飲み込んでもうたな。気に入ってもらえてうれしいわ。"}
         calls = install(control, delayed)
         try:
@@ -148,6 +149,8 @@ def main():
             story_record = {"event_kind": recorded["event_kind"], "reply_delivery": result["reply_delivery"], "narrative": result["narrative"][:100]}
             end(send, rows, sid)
             returned(send, rows, sid)
+            common = session(base, sid)["history"]
+            assert any(intended in r["text"] and r["role"] == "event" for r in common), common
             response = finish(base, send, sid, "うん、余韻の話を続けよう")
             assert response["workshop_action"] == "respond" and len(calls) == 2, response
             assert len(records(folder, "critiques")) == len(critiques) + 1

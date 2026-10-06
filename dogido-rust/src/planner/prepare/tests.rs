@@ -114,3 +114,73 @@ fn raw_evidence_stays_distinct_and_disabled_repair_cannot_leak_pending() {
             .all(|action| !action.is_repair())
     );
 }
+
+#[test]
+fn story_events_survive_preparation_but_unknown_reactions_do_not() {
+    let full = "戦闘が終わり、川柳の相談へ戻った。".repeat(20);
+    let input: Input = serde_json::from_value(json!({"user_text":"さっきの続きにしよう",
+    "conversation_turns":[
+        {"turn_id":"story:combat","role":"event","reaction":"story","text":full},
+        {"turn_id":"silent:reply","role":"event","reaction":"silent","text":"発話なし。"},
+        {"turn_id":"unknown","role":"event","reaction":"invented","text":"許可されない出来事。"}
+    ]}))
+    .unwrap();
+    let request = prepare(Some("m"), &input).request.unwrap();
+    request.validate().unwrap();
+    assert_eq!(request.details.history.len(), 2);
+    assert_eq!(request.details.history[0]["turn_id"], "story:combat");
+    assert_eq!(request.details.history[0]["role"], "event");
+    assert_eq!(request.details.history[0]["reaction"], "story");
+    assert_eq!(request.details.history[0]["text"], clean(&full, 160));
+    assert_eq!(request.details.history[1]["reaction"], "silent");
+    for reaction in [json!("invented"), Value::Null, json!(true)] {
+        let mut invalid = request.clone();
+        invalid.details.history[0]["reaction"] = reaction;
+        assert!(invalid.validate().is_err());
+    }
+}
+
+#[test]
+fn story_does_not_break_pending_clarification_but_silence_still_does() {
+    let player = json!({"turn_id":"q","role":"user","text":"違う",
+        "repair_action":"clarify_repair","repair_target_turn_id":"old:reply",
+        "repair_target_quote":"前の返答"});
+    let reply = json!({"turn_id":"q:reply","role":"assistant","text":"どんな意味？"});
+    let expected = repair::pending(&[player.clone(), reply.clone()]);
+    assert!(!expected.as_object().unwrap().is_empty());
+    let mut input: Input = serde_json::from_value(json!({"user_text":"材料を集めたい",
+        "conversation_turns":[
+            player,
+            {"turn_id":"story:before-reply","role":"event","reaction":"story","text":"敵の離脱を確認した。"},
+            reply,
+            {"turn_id":"story:after-reply","role":"event","reaction":"story","text":"川柳相談へ戻った。"}
+        ]})).unwrap();
+    assert!(!repair::has_signal(&input.user_text));
+    let request = prepare(Some("m"), &input).request.unwrap();
+    request.validate().unwrap();
+    assert_eq!(request.details.pending_repair, expected);
+    assert!(
+        request
+            .details
+            .allowed_actions
+            .contains(&Action::RepairConversation)
+    );
+
+    input
+        .conversation_turns
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "turn_id":"silent:reply","role":"event","reaction":"silent","text":"沈黙を選んだ。"
+        }));
+    let request = prepare(Some("m"), &input).request.unwrap();
+    request.validate().unwrap();
+    assert_eq!(request.details.pending_repair, json!({}));
+    assert!(
+        request
+            .details
+            .allowed_actions
+            .iter()
+            .all(|a| !a.is_repair())
+    );
+}

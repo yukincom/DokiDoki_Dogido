@@ -64,7 +64,7 @@ impl Dialogue {
     }
     /// 戦闘判断が実際に会話音声を止める直前に、その会話だけへ未発話の印を付ける。
     /// 通常の新入力、接続終了、環境の予兆による取消からは呼ばない。
-    pub(super) fn mark_workshop_combat_priority(d: &mut Data, sid: &str) {
+    pub(super) fn mark_workshop_combat_priority(&self, d: &mut Data, sid: &str) {
         let Some(session) = d.sessions.get(sid).filter(|s| s.cancel.is_some()) else {
             return;
         };
@@ -76,12 +76,12 @@ impl Dialogue {
         };
         row["reply_delivery"] = "unspoken_combat".into();
         row["unspoken_text"] = row["text"].clone();
-        Self::retain_workshop_story(d, sid, &turn);
+        self.retain_workshop_story(d, sid, &turn);
     }
 
     /// 音声とは別に保持した本文を、元の入力と元の一句へ結ぶ。
     /// 同じturnの生成が後から終わった場合も一件を補完し、別の句へ持ち越さない。
-    pub(super) fn retain_workshop_story(d: &mut Data, sid: &str, turn: &str) {
+    pub(super) fn retain_workshop_story(&self, d: &mut Data, sid: &str, turn: &str) {
         let Some(row) = d.rows.iter_mut().find(|r| {
             r["session_id"] == sid
                 && r["turn_id"] == turn
@@ -95,19 +95,33 @@ impl Dialogue {
         let entry = json!({"turn_id":turn,"player_text":player,"dogido_text":"",
             "unspoken_text":reply,"reply_delivery":"unspoken_combat","narrative":story,
             "workshop_version":row["workshop_state_before"]["version"]});
-        row["narrative"] = story.into();
+        row["narrative"] = story.clone().into();
+        let private = row["workshop_record_private"] == true;
         let wid = row["workshop_id"].clone();
         let instance = row["session_instance"].clone();
         if d.stopped {
             return;
         }
-        if let Some(workshop) = d
+        let Some(session) = d
             .sessions
             .get_mut(sid)
             .filter(|s| instance == s.instance_id)
-            .and_then(|s| s.haiku.workshop.as_mut())
-            .filter(|w| wid == w.hud_id)
-        {
+        else {
+            return;
+        };
+        if private {
+            return;
+        }
+        self.share_story(
+            sid,
+            session,
+            &format!("unspoken:{turn}"),
+            wid.as_str(),
+            "workshop_unspoken",
+            &story,
+            json!({"workshop_id":wid,"input_turn_id":turn,"unspoken_text":entry["unspoken_text"]}),
+        );
+        if let Some(workshop) = session.haiku.workshop.as_mut().filter(|w| wid == w.hud_id) {
             if let Some(saved) = workshop.dialogue.iter_mut().find(|r| r["turn_id"] == turn) {
                 *saved = entry;
             } else {

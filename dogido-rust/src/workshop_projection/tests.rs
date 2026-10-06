@@ -39,3 +39,21 @@ fn combat_resume_preserves_whole_utterance_conditions() {
         );
     }
 }
+
+#[test]
+fn shared_context_joins_workshop_projection_without_repeating_the_existing_dialogue() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = fixture["projection"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["op"] == "details")
+        .unwrap();
+    let mut input = case["input"].clone();
+    input["workshop"]["shared_context"] = "出来事: ゾンビを倒した".into();
+    let details = details_for(&input).unwrap();
+    let text = details["workshop_context"]["recent_dialogue"].as_str().unwrap();
+    assert_eq!(text.matches("ゾンビを倒した").count(), 1);
+    assert_eq!(text.matches("プレイヤー: 何の対比？").count(), 1);
+    assert_eq!(text.matches("ドギド: 葉と斧。").count(), 1);
+}

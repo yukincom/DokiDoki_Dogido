@@ -152,7 +152,7 @@ impl Dialogue {
         {
             row["unspoken_text"] = text.into();
         }
-        Self::retain_workshop_story(&mut d, sid, turn);
+        self.retain_workshop_story(&mut d, sid, turn);
         if current {
             let row = d.rows.iter().find(|r| r["turn_id"] == turn);
             let route = row
@@ -338,6 +338,30 @@ impl Dialogue {
                         s.haiku.material_turns.push_back(pair);
                     }
                 }
+            }
+        }
+        if current
+            && (status == PlaybackStatus::Completed || text_displayed)
+            && let Some(wid) = workshop_id.as_deref()
+            && let Some(result) = result.filter(|r| {
+                !matches!(
+                    r["workshop_action"].as_str(),
+                    Some("unrelated" | "knowledge")
+                )
+            })
+            && let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn)
+            && row["shared_story_recorded"] != true
+            && row["workshop_record_private"] != true
+            && result["web_private"] != true
+        {
+            row["shared_story_recorded"] = true.into();
+            let text = result["text"].as_str().unwrap_or("");
+            let story = format!("川柳の相談。プレイヤー「{player_text}」\nドギド「{text}」");
+            if let Some(s) = d.sessions.get_mut(sid) {
+                self.share_story(
+                    sid, s, &format!("workshop:{turn}"), Some(wid), "workshop_dialogue", &story,
+                    json!({"workshop_id":wid,"input_turn_id":turn,"player_text":player_text,"dogido_text":text}),
+                );
             }
         }
         d.revision += 1;

@@ -1,6 +1,6 @@
 //! 通常会話の短期履歴と、戦闘前の会話の一時退避を管理する。
 //! 永続保存や再生判定は行わず、assistantを加える時機は呼出側が配送結果から決める。
-//! 沈黙はeventとして残し、発話済みのassistantや川柳用の会話対には数えない。
+//! 沈黙とコード由来の出来事はeventとして残し、発話済みのassistantや川柳用の会話対には数えない。
 use crate::planner::repair::{self, Repair};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -162,6 +162,10 @@ impl History {
                 lines.push("ドギドの反応: 黙って受け止めた（沈黙を選択。発話なし）".into());
                 continue;
             }
+            if row["role"] == "event" && row["reaction"] == "story" {
+                lines.push(format!("出来事: {}", row["text"].as_str().unwrap_or("")));
+                continue;
+            }
             lines.push(format!(
                 "{}: {}",
                 if row["role"] == "user" {
@@ -218,6 +222,39 @@ impl History {
                 self.counted_player_turns.clear();
             }
         }
+    }
+    /// コードが確定した出来事を原文のまま保持し、同じIDの補完を退避側にも反映する。
+    /// 呼出側が本文の範囲とIDを決める。出来事は発話や通常会話の完了対へ昇格しない。
+    pub fn story(&mut self, event_id: &str, text: &str) -> bool {
+        if event_id.trim().is_empty() || text.trim().is_empty() {
+            return false;
+        }
+        // 別種の発話・反応とIDが衝突しても、その記録を書き換えない。
+        if self.rows.iter().chain(&self.danger_retained).any(|row| {
+            row["turn_id"] == event_id && !(row["role"] == "event" && row["reaction"] == "story")
+        }) {
+            return false;
+        }
+        let replacement = json!({"turn_id":event_id,"role":"event","reaction":"story","text":text});
+        let mut found = false;
+        let mut changed = false;
+        for row in self.rows.iter_mut().chain(&mut self.danger_retained) {
+            if row["turn_id"] == event_id {
+                found = true;
+                if *row != replacement {
+                    *row = replacement.clone();
+                    changed = true;
+                }
+            }
+        }
+        if found {
+            return changed;
+        }
+        if self.rows.len() == 10 {
+            self.rows.pop_front();
+        }
+        self.rows.push_back(replacement);
+        true
     }
     /// A chosen response, never a fabricated spoken assistant message.
     pub fn silent(&mut self, turn: &str) {
@@ -513,5 +550,70 @@ mod tests {
         assert!(h.completed_pairs().is_empty());
         pair(&mut h, "b");
         assert_eq!(h.completed_pairs().len(), 1);
+    }
+
+    #[test]
+    fn story_keeps_full_text_and_updates_both_current_and_retained_copies() {
+        let mut h = History::default();
+        h.push("a", "user", "川柳の話を続けよう");
+        let original = format!(
+            "プレイヤーの言葉: {}\n返答は戦闘のため未発話。",
+            "句の話。".repeat(50)
+        );
+        assert!(original.chars().count() > 160);
+        assert!(h.story("story:a", &original));
+        assert!(!h.story("story:a", &original));
+        assert_eq!(h.rows()[1]["text"], original);
+        assert!(h.lines().contains(&format!("出来事: {original}")));
+        assert!(!h.lines().contains(&format!("ドギド: {original}")));
+        assert!(h.completed_pairs().is_empty());
+
+        h.begin_danger();
+        let completed = format!("{original}\n予定していた返答: 続きも一緒に考えよか。");
+        assert!(h.story("story:a", &completed));
+        assert!(!h.story("story:a", &completed));
+        for rows in [
+            h.rows.iter().collect::<Vec<_>>(),
+            h.danger_retained.iter().collect(),
+        ] {
+            let matching: Vec<_> = rows.iter().filter(|r| r["turn_id"] == "story:a").collect();
+            assert_eq!(matching.len(), 1);
+            assert_eq!(matching[0]["text"], completed);
+            assert_eq!(matching[0]["role"], "event");
+            assert_eq!(matching[0]["reaction"], "story");
+        }
+        assert_eq!(h.rows().len(), 2);
+        assert!(h.completed_pairs().is_empty());
+        h.push("a", "assistant", "続きも一緒に考えよか。");
+        assert_eq!(h.completed_pairs().len(), 1);
+    }
+
+    #[test]
+    fn story_preserves_retention_limits_and_never_replaces_a_spoken_row() {
+        let mut h = History::default();
+        assert!(h.story("story:before", "戦闘前に川柳の話をした。"));
+        h.begin_danger();
+        for i in 0..11 {
+            assert!(h.story(&format!("story:{i}"), "戦闘の出来事。"));
+        }
+        assert_eq!(h.rows.len(), 10);
+        assert_eq!(h.rows.front().unwrap()["turn_id"], "story:1");
+        h.end_danger(3);
+        assert!(!h.story("story:before", "戦闘前に川柳の話をした。"));
+        assert!(h.story("story:before", "戦闘前の川柳相談。返答は未発話。"));
+        assert!(!h.rows.iter().any(|r| r["turn_id"] == "story:before"));
+        assert_eq!(
+            h.danger_retained[0]["text"],
+            "戦闘前の川柳相談。返答は未発話。"
+        );
+        assert_eq!(h.post_danger_turns, 3);
+        assert!(h.completed_pairs().is_empty());
+
+        h.push("spoken", "assistant", "実際に届けた返答。");
+        assert!(!h.story("spoken:reply", "この出来事では上書きしない。"));
+        assert_eq!(h.rows.back().unwrap()["role"], "assistant");
+        assert_eq!(h.rows.back().unwrap()["text"], "実際に届けた返答。");
+        assert!(!h.story("", "出来事。"));
+        assert!(!h.story("story:empty", "\n "));
     }
 }

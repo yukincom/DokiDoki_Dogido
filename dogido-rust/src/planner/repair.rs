@@ -68,15 +68,15 @@ fn string<'a>(row: &'a Value, key: &str) -> &'a str {
     row.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
-/// 呼び出し元は実再生completed済みの履歴だけを渡す。queued発話では継続しない。
+/// 配送済みの確認対を探す。出来事の追記は確認待ちを切らず、沈黙は従来どおり区切る。
 pub fn pending(history: &[Value]) -> Value {
-    let Some(pair) = history
-        .get(history.len().saturating_sub(2)..)
-        .filter(|p| p.len() == 2)
-    else {
+    let mut spoken = history
+        .iter()
+        .rev()
+        .filter(|row| !(row["role"] == "event" && row["reaction"] == "story"));
+    let (Some(reply), Some(player)) = (spoken.next(), spoken.next()) else {
         return json!({});
     };
-    let (player, reply) = (&pair[0], &pair[1]);
     if string(player, "role") != "user"
         || string(reply, "role") != "assistant"
         || string(reply, "turn_id") != format!("{}:reply", string(player, "turn_id"))

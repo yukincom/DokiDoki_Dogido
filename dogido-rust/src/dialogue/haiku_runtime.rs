@@ -373,6 +373,17 @@ impl Dialogue {
         let s = d.sessions.get_mut(sid).unwrap();
         s.status = status;
         s.haiku.last_activity = Instant::now();
+        if status == PlaybackStatus::Completed && part == "poem" {
+            self.share_story(
+                sid,
+                s,
+                &turn,
+                None,
+                "haiku_delivered",
+                &format!("ドギドが川柳を詠んだ。「{text}」"),
+                json!({"text":text}),
+            );
+        }
         d.revision += 1;
         tracing::info!(
             event = "haiku_status",

@@ -2,10 +2,10 @@
 """All workshop routing families write result facts; mock HTTP/audio only."""
 
 import json
-from check_dialogue import request, row, submit, wait_for
+from check_dialogue import row, submit, wait_for
 from check_haiku_runtime import fixture, LINES
 from check_workshop_runtime import install, ready, step
-from check_workshop_edits import edit
+from check_workshop_edits import edit, adoption
 from check_workshop_provisional import classifier, intent, threatening, done
 from check_workshop_combat import SETTINGS
 
@@ -35,6 +35,27 @@ def finished(folder, sid, turn):
     )
 
 
+def model(text, prompt, n):
+    # 操作は現行のモデル応答で選ぶ。旧い固定語ルートへ委ねない。
+    if "段階: after_validation" in prompt:
+        return step(text, "respond", "音数が合わへんかったな。別の言葉を考えよか。")
+    if text == "今の句":
+        return step(text, "show_current")
+    if text == "終了でいいよ":
+        return step(text, "close_workshop")
+    if text in {"採用して", "却下して"}:
+        return adoption(text, "accept_pending" if text == "採用して" else "reject_pending")
+    if text.startswith("上五を『"):
+        return edit(text, replacement=text.split("『", 1)[1].split("』", 1)[0])
+    if text in {"中七のくろいをしろいに変えて", "中七のしろいをくろいに変えて"}:
+        old, new = text.removeprefix("中七の").removesuffix("に変えて").split("を")
+        result = edit(text, index=1, reference="中七", replacement=new, fragment=old)
+        return result
+    if text == "検査方法を相談したい":
+        return {"action": "inspect", "checks": ["unsupported"]}
+    return step(text)
+
+
 def main():
     count = 0
     with fixture() as (
@@ -52,20 +73,15 @@ def main():
         stored,
         folder,
     ):
-        calls = install(
-            control,
-            lambda text, prompt, n: (
-                edit(text, replacement="さくら") if text == "上五を『さくら』にして" else step(text)
-            ),
-        )
+        calls = install(control, model)
         sid = ready(base, send, rows)
         for text, expected in [
             ("今の句", "show_current"),
             ("この句はどういう意味？", "explain"),
-            ("上五を『さくら』にして", "stage_player_edit"),
-            ("くろいをしろいに変えて", "stage_player_edit"),
-            ("しろいをくろいに変えて", "stage_player_edit"),
-            ("読み: 草地=くさち", "fallback"),  # Reading registration is a separate typed form.
+            ("上五を『さくら』にして", "respond"),
+            ("中七のくろいをしろいに変えて", "stage_player_edit"),
+            ("中七のしろいをくろいに変えて", "stage_player_edit"),
+            ("検査方法を相談したい", "fallback"),  # 不正な検査指定も理由とともに記録する。
         ]:
             send(sid)
             turn = submit(base, sid, text)
@@ -88,21 +104,21 @@ def main():
             )
             if text == "上五を『さくら』にして":
                 assert "meter_not_exact" in str(r["steps"]), r
-            if text == "くろいをしろいに変えて":
+            if text == "中七のくろいをしろいに変えて":
                 assert r["result"]["workshop_outcome"] == "player_edit_saved", r
                 assert r["base_verse"] == "\n".join(LINES) and r["canonical_after"].splitlines()[1] == "しろいおのへと", r
                 assert not r["pending_after"], r
             count += 1
-        install(control, lambda text, prompt, n: step(text, speech="保存したで。"))
+        install(control, lambda text, prompt, n: step(text, speech=""))
         send(sid)
         turn = submit(base, sid, "意味を教えて")
         r = finished(folder, sid, turn)
         assert (
             r["result"]["workshop_action"] == "fallback"
-            and r["result"]["workshop_reason"] == "false_persistence_claim"
+            and r["result"]["workshop_reason"] == "invalid_speech"
         ), r
         count += 1
-        install(control, lambda text, prompt, n: edit(text))
+        install(control, model)
         revision_path = folder / "memory/sessions" / sid / "long_term/haiku_revisions.jsonl"
         revision_path.rename(revision_path.with_suffix(".backup"))
         revision_path.mkdir()
@@ -129,7 +145,7 @@ def main():
         turn=submit(base,sid,"採用して")
         r=finished(folder,sid,turn)
         assert r["result"]["workshop_action"]=="accept_pending" and r["result"]["workshop_outcome"]=="pending_saved",r
-        install(control, lambda text, prompt, n: step(text))
+        install(control, model)
         count += 1
         # Failed speech is not a failed edit: decision and playback have separate records.
         (folder / "player_mode").write_text("fail")
@@ -189,18 +205,12 @@ def main():
         r = finished(folder, sid, turn)
         assert r["result"]["combat_action"] == "uncertain", r
         assert r["state_before"]["combat_paused"], r
-        got = request(
-            base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "終了"}
-        )
-        assert got["reason"] == "combat_workshop_closed", got
-        wait_for(
-            lambda: any(
-                r["event_kind"] == "input_admission"
-                and r["result"].get("reason") == "combat_workshop_closed"
-                and not r["state_after"]["open"]
-                for r in records(folder, sid)
-            )
-        )
+        closing = submit(base, sid, "終了")
+        result = done(base, send, sid, closing)
+        assert result["combat_input_outcome"] == "close_checked", result
+        closed = finished(folder, sid, closing)
+        assert closed["result"]["combat_action"] == "close_workshop", closed
+        assert closed["state_before"]["open"] and not closed["state_after"]["open"], closed
         count += 2
 
     with fixture() as (

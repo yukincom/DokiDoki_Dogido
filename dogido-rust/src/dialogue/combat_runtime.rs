@@ -173,6 +173,8 @@ impl Dialogue {
                 if s.combat_digest.len() == 8 {
                     s.combat_digest.pop_front();
                 }
+                self.append_story(sid, &s.instance_id, &super::id("combat_note"), None,
+                    "combat_fact", &note, serde_json::json!({}));
                 s.combat_digest.push_back(note);
             }
         }
@@ -201,7 +203,7 @@ impl Dialogue {
             || decision.dimension_changed
         {
             if combat_priority && !decision.dimension_changed {
-                Self::mark_workshop_combat_priority(d, sid);
+                self.mark_workshop_combat_priority(d, sid);
             }
             Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
             Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));

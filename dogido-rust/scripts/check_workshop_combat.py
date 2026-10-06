@@ -164,9 +164,10 @@ def main(*, platform_contract_only=False):
         assert datetime.fromisoformat(r["created_at"]) >= datetime.fromisoformat(aftermath["completed_at"])
         assert session(base, sid)["workshop_followup"] == "combat_resume_confirmation"
         history = session(base, sid)["history"]
-        assert history == [{"turn_id":aftermath["turn_id"]+":reply", "role":"assistant", "text":aftermath["text"]}], history
+        assert [h for h in history if h["role"] == "assistant"] == [{"turn_id":aftermath["turn_id"]+":reply", "role":"assistant", "text":aftermath["text"]}], history
+        assert sum(h["text"] == "句の話に戻る。" for h in history) == 1, history
         assert not session(base, sid)["workshop_history"]
-        assert all("\n".join(LINES) not in item["text"] for item in history)
+        assert not any(item["role"] == "assistant" and "\n".join(LINES) in item["text"] for item in history)
         for _ in range(3): send(sid)
         assert len(actions(rows, sid, "workshop_resume")) == 1
         calls = install(control, lambda text, prompt, n: {**step(text,"resume_workshop"),"purpose":"continue_discussion"})
@@ -231,6 +232,7 @@ def main(*, platform_contract_only=False):
         (folder / "player_mode").write_text("fail")
         r = drive(send, sid, lambda: next((r for r in actions(rows, sid, "workshop_resume") if r["playback_status"] == "failed"), None))
         assert session(base, sid)["workshop_followup"] == "discussion" and hud(sid)["state"] == "danger"
+        assert not any(h["text"] == "句の話に戻る。" for h in session(base, sid)["history"])
         for _ in range(4): send(sid)
         assert len(actions(rows, sid, "workshop_resume")) == 1
         (folder / "player_mode").write_text("ok")
@@ -249,6 +251,7 @@ def main(*, platform_contract_only=False):
         send(sid, visual_threats=[{**MOB, "entity_id": "z2"}], combat={"combat_active_hint": True})
         wait_for(lambda: row(base, r["turn_id"], {"cancelled"}))
         assert hud(sid)["state"] == "danger" and hud(sid)["canonical_lines"] == LINES
+        assert not any(h["text"] == "句の話に戻る。" for h in session(base, sid)["history"])
         send(sid, event=event("combat_ended"), combat={"hostile_outcomes": [], "hostiles_within_scan_ground": 0})
         r = returned(send, rows, sid, count=2)
         assert "倒せた" not in r["text"] and "離れられた" in r["text"], r

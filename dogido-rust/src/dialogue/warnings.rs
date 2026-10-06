@@ -576,6 +576,10 @@ impl Dialogue {
                         NoticeEnd::Retry
                     };
                     super::workshop_combat_runtime::finish_notice(s, &id, version, end);
+                    if end == NoticeEnd::Completed {
+                        self.share_story(sid, s, &format!("resume:{turn}"), Some(&id),
+                            "workshop_return", "句の話に戻る。", json!({}));
+                    }
                 }
                 s.warning = None;
             }

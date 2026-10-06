@@ -52,14 +52,16 @@ def main():
         result = wait_for(lambda: row(base, turn, {"completed"}))
         assert result["workshop_action"] == "explain", (result, log.read_text())
         assert len(calls) == 1
-        assert session(base, sid)["history"] == []
+        history = session(base, sid)["history"]
+        assert len(history) == 2 and all(r["role"] == "event" and r["reaction"] == "story" for r in history), history
+        assert "この句はどういう意味？" in history[-1]["text"] and result["text"] in history[-1]["text"]
         assert len(session(base, sid)["workshop_history"]) == 1
         send(sid)
         turn2 = submit(base, sid, "その黒さは何を表してる？")
         wait_for(lambda: row(base, turn2, {"completed"}))
         assert "葉の明るさと斧の黒さ" in calls[-1][1]
         assert stored(sid) == before and hud(sid)["canonical_lines"] == LINES
-        passed.append("one_step_meaning_and_completed_separate_history_without_mutation")
+        passed.append("one_step_meaning_shared_as_event_without_verse_mutation")
 
         def inspect(text, prompt, n):
             if "段階: decide" in prompt:
@@ -205,7 +207,7 @@ def main():
                 assert hud(sid)["workshop_id"] == wid and hud(sid)["state"] == "open"
         assert hud(sid)["state"] == "closed" and len(calls) == 2
         assert not session(base, sid)["workshop_history"]
-        assert len(session(base, sid)["history"]) == 4 and stored(sid) == before
+        assert len([r for r in session(base, sid)["history"] if r["role"] in {"user", "assistant"}]) == 4 and stored(sid) == before
         passed.append("unrelated_input_handed_to_casual_once_and_closes_after_two_completed_replies")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):

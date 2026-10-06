@@ -75,6 +75,11 @@ impl Snapshot {
             None => vec![],
         };
         let dialogue = dialogue_from_view(list(&view["dialogue"]))?;
+        let dialogue = [view["shared_context"].as_str().unwrap_or(""), dialogue.as_str()]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
         let steps = list(&view["agent_steps"]);
         let steps = steps[steps.len().saturating_sub(12)..].to_vec();
         Ok(Self {

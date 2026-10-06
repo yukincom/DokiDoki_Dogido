@@ -32,6 +32,7 @@ mod observe;
 mod poem_runtime;
 mod reaction_runtime;
 mod reading_runtime;
+mod story;
 mod submit;
 mod tts_runtime;
 mod turn;

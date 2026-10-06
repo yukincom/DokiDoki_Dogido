@@ -71,7 +71,7 @@ impl Plan {
 }
 
 /// 状態機械からの読み取り用投影。モデルの出力とは別の入口。
-/// historyには実再生済みの発話だけ、observationsには現在観測だけを渡す。
+/// historyには配送済みの発話とコード由来の出来事、observationsには現在観測だけを渡す。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Details {
@@ -123,7 +123,8 @@ impl PreparedPlan {
                     && row["turn_id"].is_string()
                     && row["text"].is_string()
                     && (matches!(row["role"].as_str(), Some("user" | "assistant"))
-                        || row["role"] == "event" && row["reaction"] == "silent")),
+                        || row["role"] == "event"
+                            && matches!(row["reaction"].as_str(), Some("silent" | "story")))),
             "invalid completed history projection"
         );
         anyhow::ensure!(
