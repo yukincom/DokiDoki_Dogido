@@ -231,6 +231,24 @@
       },
       "line_proposal": {
         "$ref": "#/$defs/_WorkshopLineProposal"
+      },
+      "feedback": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "praise"
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "evidence"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

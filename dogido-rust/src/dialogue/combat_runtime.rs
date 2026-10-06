@@ -164,6 +164,7 @@ impl Dialogue {
         mut decision: Decision,
         input: Option<&str>,
         reason: Option<&str>,
+        combat_priority: bool,
     ) {
         let s = d.sessions.get_mut(sid).unwrap();
         for note in s.combat.take_notes() {
@@ -199,6 +200,9 @@ impl Dialogue {
             || decision.stop_audio
             || decision.dimension_changed
         {
+            if combat_priority && !decision.dimension_changed {
+                Self::mark_workshop_combat_priority(d, sid);
+            }
             Self::cancel_haiku(d, sid, reason.unwrap_or("combat_priority"));
             Self::cancel_chat(d, sid, reason.unwrap_or("combat_priority"));
         }

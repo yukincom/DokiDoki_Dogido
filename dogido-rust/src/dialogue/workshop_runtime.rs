@@ -26,21 +26,66 @@ impl Dialogue {
         &self,
         input: &Value,
         cancel: &mut watch::Receiver<bool>,
+        permit: &mut Option<tokio::sync::SemaphorePermit<'_>>,
     ) -> Result<Value> {
         let script = self.config.helper.with_file_name("tts_tokens_worker.py");
         let mut helper = Helper::start(&self.config.python, &script)?;
-        let body = self.workshop_body(input, &mut helper);
-        let result = tokio::select! {
-            _ = bridge::cancelled(cancel) => Err(anyhow::anyhow!("cancelled")),
-            result = tokio::time::timeout(Duration::from_secs(95), body) =>
-                result.unwrap_or_else(|_| Err(anyhow::anyhow!("workshop turn timed out"))),
+        let reply = super::workshop_story::Reply::default();
+        let mut result = {
+            let body = tokio::time::timeout(
+                Duration::from_secs(95),
+                self.workshop_body(input, &mut helper, &reply),
+            );
+            tokio::pin!(body);
+            tokio::select! {
+                result = &mut body => result.unwrap_or_else(|_| Err(anyhow::anyhow!("workshop turn timed out"))),
+                _ = bridge::cancelled(cancel) => {
+                    if self.workshop_combat_priority(input) {
+                        // 音声・生成に共通の直列枠をすぐ戦闘へ譲る。元の会話は
+                        // 送信済みの生成だけ受け取り、句操作・追加推論・音声配送は行わない。
+                        drop(permit.take());
+                        reply.interrupted.store(true, std::sync::atomic::Ordering::Relaxed);
+                        if !reply.waiting_for_model.load(std::sync::atomic::Ordering::Relaxed) {
+                            Ok(reply.result(input))
+                        } else {
+                        loop {
+                            tokio::select! {
+                                result = &mut body => break result.unwrap_or_else(|_| Err(anyhow::anyhow!("workshop turn timed out"))),
+                                _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                                    if !self.workshop_input_session_exists(input) {
+                                        break Err(anyhow::anyhow!("session_closed"));
+                                    }
+                                }
+                            }
+                        }
+                        }
+                    } else if reply.has_received_reply() {
+                        Ok(reply.superseded_result(input))
+                    } else {
+                        Err(anyhow::anyhow!("cancelled"))
+                    }
+                },
+            }
         };
-        let finished = helper.finish(result.is_err()).await;
-        finished?;
+        if reply.interrupted() && result.is_err() {
+            result = Ok(reply.result(input));
+        }
+        if let Err(error) = helper.finish(result.is_err() || *cancel.borrow()).await {
+            if reply.interrupted() {
+                tracing::warn!(event="unspoken_workshop_helper_failed", %error);
+                return Ok(reply.result(input));
+            }
+            return Err(error);
+        }
         result
     }
 
-    async fn workshop_body(&self, input: &Value, helper: &mut Helper) -> Result<Value> {
+    async fn workshop_body(
+        &self,
+        input: &Value,
+        helper: &mut Helper,
+        reply: &super::workshop_story::Reply,
+    ) -> Result<Value> {
         let corrections = self.reading_overlay().await?;
         let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
@@ -114,6 +159,7 @@ impl Dialogue {
         let mut steps = Vec::new();
         let mut feedback = Value::Null;
         let mut reports = Vec::new();
+        let mut praise = Value::Null;
         let mut reason = "accepted".to_owned();
         let mut action: Option<String> = None;
         let mut speech = String::new();
@@ -143,6 +189,9 @@ impl Dialogue {
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
                 for attempt in 0..2 {
+                    if reply.interrupted() || self.workshop_combat_priority(input) {
+                        return Ok(reply.result(input));
+                    }
                     let (mut prepared, details) =
                         prepare_consultation(helper, &mut editing, &mut frame).await?;
                     if let Some(assets) =
@@ -172,10 +221,23 @@ impl Dialogue {
                         max_tokens: 420,
                         enable_thinking: false,
                     };
+                    if reply.interrupted() || self.workshop_combat_priority(input) {
+                        return Ok(reply.result(input));
+                    }
                     self.record_text_workshop_request(input, &request, phase);
-                    let report = match self.llm.generate(&request).await {
+                    reply
+                        .waiting_for_model
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    let generated = self.llm.generate(&request).await;
+                    reply
+                        .waiting_for_model
+                        .store(false, std::sync::atomic::Ordering::Relaxed);
+                    let report = match generated {
                         Ok(report) => report,
                         Err(error) => {
+                            if reply.interrupted() || self.workshop_combat_priority(input) {
+                                return Ok(reply.result(input));
+                            }
                             reports.push(json!({"kind":request.kind,"error":error.to_string()}));
                             reason = "generation_error".into();
                             break;
@@ -191,6 +253,9 @@ impl Dialogue {
                     let payload = crate::planner::extract_object(&report.generated.text);
                     reports.push(serde_json::to_value(report)?);
                     let Some(payload) = payload.filter(|_| !truncated) else {
+                        if reply.interrupted() || self.workshop_combat_priority(input) {
+                            return Ok(reply.result(input));
+                        }
                         reason = if truncated {
                             "output_truncated"
                         } else {
@@ -204,6 +269,13 @@ impl Dialogue {
                         }
                         break;
                     };
+                    if let Some(verified) = validation::feedback(&payload["feedback"], text) {
+                        praise = json!({"action":"praise","findings":[],"evidence":verified["evidence"]});
+                    }
+                    reply.remember(payload["speech"].as_str().unwrap_or(""), &praise);
+                    if reply.interrupted() || self.workshop_combat_priority(input) {
+                        return Ok(reply.result(input));
+                    }
                     frame["op"] = "validate".into();
                     frame["payload"] = payload.clone();
                     if phase == "decide"
@@ -507,9 +579,6 @@ impl Dialogue {
             }
         }
         let action = action.unwrap_or_else(|| "fallback".into());
-        if action == "close_workshop" && workshop::fixed_praise(text) {
-            feedback = json!({"action":"praise","findings":[]});
-        }
         if speech.is_empty()
             && let Some(fixed_speech) = workshop_followup::speech(&action)
         {
@@ -522,12 +591,7 @@ impl Dialogue {
         }
         match action.as_str() {
             "close_workshop" if speech.is_empty() => {
-                speech = if workshop::fixed_praise(text) {
-                    "気にいってもらえてうれしいわ。"
-                } else {
-                    "ほな、この句はここまでにしよか。"
-                }
-                .into()
+                speech = "ほな、この句はここまでにしよか。".into()
             }
             "show_current" => {
                 let verse = workshop_edit::reading(lines);
@@ -606,6 +670,13 @@ impl Dialogue {
             }
         }
         tracing::info!(event="workshop_step",workshop_id=view["workshop_id"].as_str().unwrap_or(""),%action,%reason);
+        if !praise.is_null() {
+            feedback = praise;
+        }
+        reply.remember(&speech, &feedback);
+        if reply.interrupted() || self.workshop_combat_priority(input) {
+            return Ok(reply.result(input));
+        }
         let spoken = if action == "unrelated" {
             String::new()
         } else {

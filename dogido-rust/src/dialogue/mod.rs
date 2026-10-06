@@ -47,6 +47,7 @@ mod workshop_edits;
 mod workshop_focus;
 mod workshop_record;
 mod workshop_runtime;
+mod workshop_story;
 mod workshop_text;
 
 use crate::{
@@ -126,6 +127,8 @@ impl Default for DialogueConfig {
 /// 観測入口と各runtimeが同期区間で更新し、生成workerには必要な値のsnapshotを渡す。
 /// 非同期結果はepochや対象IDを再照合してから反映する。型内に独立したロックは持たない。
 struct Session {
+    /// 接続の寿命。戦闘や新入力のepochとは分けて、元の発言を識別する。
+    instance_id: String,
     /// 接続時のプレイヤー表示名。registerで設定する。
     name: String,
     /// ゲーム観測なしの対話試験か。trueなら通常の観測鮮度条件を免除する。
@@ -355,6 +358,7 @@ impl Dialogue {
         d.sessions.insert(
             session_id.into(),
             Session {
+                instance_id: id("session"),
                 name: name.into(),
                 preview,
                 text_workshop: false,

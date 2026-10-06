@@ -143,6 +143,8 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
     if let Some(object) = raw.as_object() {
         payload = ASSETS["inactive"].clone();
         payload.as_object_mut().unwrap().extend(object.clone());
+        // 任意の評価情報の不備で、会話や操作の検証を失敗させない。
+        payload.as_object_mut().unwrap().remove("feedback");
     }
     // The model can express a contextual selection as an edit. Resolve only
     // the exact current, player-grounded candidate; current assent is still
@@ -239,6 +241,11 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
         }
     }
     Ok(outcome)
+}
+
+/// 発話時点の評価は、返答の採用や終了の可否と分けて検証する。
+pub(super) fn feedback(payload: &Value, source: &str) -> Option<Value> {
+    contract::feedback(payload, source)
 }
 
 fn finalize(payload: &Value, d: &Value) -> Value {

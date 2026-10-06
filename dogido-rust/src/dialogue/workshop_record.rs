@@ -101,11 +101,19 @@ fn result_fields(result: &Value) -> Value {
         "workshop_revision_id",
         "playback_status",
         "cancel_reason",
+        "reply_delivery",
+        "unspoken_text",
+        "narrative",
+        "workshop_feedback_outcome",
         "combat_input_outcome",
         "forwarded_input",
     ] {
         if let Some(value) = result.get(key) {
-            out[key] = limited(value, 4);
+            out[key] = if matches!(key, "unspoken_text" | "narrative") {
+                value.clone()
+            } else {
+                limited(value, 4)
+            };
         }
     }
     if let Some(steps) = result["workshop_steps"].as_array() {

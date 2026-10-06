@@ -56,7 +56,9 @@ impl Dialogue {
         mut cancel: watch::Receiver<bool>,
     ) {
         let started = Instant::now();
-        let permit = tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,PlaybackStatus::Cancelled,None);return;}, p=self.serial.acquire()=>p.unwrap() };
+        let mut permit = Some(
+            tokio::select! { _=bridge::cancelled(&mut cancel)=>{self.update(&sid,&turn,epoch,PlaybackStatus::Cancelled,None);return;}, p=self.serial.acquire()=>p.unwrap() },
+        );
         // Pick up rain/smell changes and reactions completed while waiting for
         // the preceding turn. The resulting snapshot is fixed for this decision.
         {
@@ -153,7 +155,7 @@ impl Dialogue {
         } else if crate::haiku_memory::clear_requested(input["text"].as_str().unwrap_or("")) {
             self.clear_lessons(&sid, epoch, &input).await
         } else if input["workshop"].is_object() {
-            match self.render_workshop(&input, &mut cancel).await {
+            match self.render_workshop(&input, &mut cancel, &mut permit).await {
                 Ok(workshop) if workshop["workshop_action"] == "unrelated" => {
                     let safe = self
                         .data
@@ -222,9 +224,43 @@ impl Dialogue {
                     result["language_status"] = "host_chat".into();
                     result["language_state"] = json!(crate::language::State::default());
                 }
+                if result["output_suppressed"] == true || self.workshop_combat_priority(&input) {
+                    // 発言への評価と返答予定は残すが、古い句操作や音声は実行しない。
+                    drop(permit.take());
+                    if result["workshop_feedback"]["action"] == "praise" {
+                        self.record_feedback(&sid, epoch, &input, &mut result).await;
+                    }
+                    self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, Some(&result));
+                    monitor.finish().await;
+                    drop(permit);
+                    return;
+                }
                 self.apply_language_result(&sid, &turn, epoch, &result);
-                self.record_feedback(&sid, epoch, &input, &mut result).await;
+                {
+                    // ディスクへの記録待ちも、戦闘音声の直列枠を占有し続けない。
+                    let feedback = self.record_feedback(&sid, epoch, &input, &mut result);
+                    tokio::pin!(feedback);
+                    tokio::select! {
+                        _ = &mut feedback => {},
+                        _ = bridge::cancelled(&mut cancel) => {
+                            drop(permit.take());
+                            feedback.await;
+                        },
+                    }
+                }
+                if self.workshop_combat_priority(&input) {
+                    self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, Some(&result));
+                    monitor.finish().await;
+                    drop(permit);
+                    return;
+                }
                 if let Err(error) = self.apply_workshop_edit(&sid, epoch, &mut result).await {
+                    if self.workshop_combat_priority(&input) {
+                        self.update(&sid, &turn, epoch, PlaybackStatus::Cancelled, Some(&result));
+                        monitor.finish().await;
+                        drop(permit);
+                        return;
+                    }
                     result["text"] =
                         "句が変わったか、編集を続けられん状態になったわ。もう一度確認してな。"
                             .into();

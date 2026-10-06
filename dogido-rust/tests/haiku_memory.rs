@@ -277,3 +277,25 @@ fn malformed_rows_are_skipped_but_io_failures_are_reported() {
     fs::create_dir(f.0.join("long_term/haiku_lessons.jsonl")).unwrap();
     assert!(f.store().active_lessons(at()).is_err());
 }
+
+#[test]
+fn praise_retries_deduplicate_by_received_turn_not_words() {
+    let f = Fixture::new();
+    let mut critique = json!({"session_id":"s", "session_instance":"connection-a", "operation_id":"turn-a", "player_text":"この句好きだよ"});
+    let praise = json!({"action":"praise"});
+    f.store()
+        .save_feedback(critique.clone(), &praise, at())
+        .unwrap();
+    f.store()
+        .save_feedback(critique.clone(), &praise, at())
+        .unwrap();
+    assert_eq!(read(&f.0.join("long_term/haiku_critiques.jsonl")).len(), 1);
+    critique["operation_id"] = "turn-b".into();
+    f.store()
+        .save_feedback(critique.clone(), &praise, at())
+        .unwrap();
+    critique["session_instance"] = "connection-b".into();
+    f.store().save_feedback(critique, &praise, at()).unwrap();
+    assert_eq!(read(&f.0.join("long_term/haiku_critiques.jsonl")).len(), 3);
+    assert!(!f.0.join("long_term/haiku_lessons.jsonl").exists());
+}

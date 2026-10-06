@@ -254,75 +254,6 @@ pub fn fallback_for(observation: Option<&Value>, view: &Value, lines: &[HaikuLin
         .replace("どこを一緒に見よか？", &format!("{label}の話を続けよか。"))
 }
 
-/// モデルが終了を選んだ後の称賛記録・空返答の補助に使う。
-/// この判定だけで相談を終了せず、次の一手は会話モデルが選ぶ。
-pub fn fixed_praise(text: &str) -> bool {
-    let mut text = text.trim().trim_end_matches(['。', '！', '!']);
-    for prefix in ["うん", "ほんまに", "めっちゃ", "なかなか", "すごく"] {
-        if let Some(rest) = text.strip_prefix(prefix) {
-            text = rest.trim_start_matches(['、', ',', ' ']);
-            break;
-        }
-    }
-    for subject in ["これ", "この句", "その句", "句"] {
-        if let Some(rest) = text.strip_prefix(subject) {
-            text = rest
-                .strip_prefix(['は', 'が'])
-                .unwrap_or(rest)
-                .trim_start_matches(['、', ',', ' ']);
-            break;
-        }
-    }
-    [
-        "いい句",
-        "良い句",
-        "ええ句",
-        "いい",
-        "ええ",
-        "うまい",
-        "上手",
-        "好き",
-        "気に入った",
-        "そのままでいい",
-        "そのままでええ",
-    ]
-    .iter()
-    .any(|base| {
-        text.strip_prefix(base).is_some_and(|tail| {
-            [
-                "",
-                "やな",
-                "やね",
-                "やん",
-                "やで",
-                "やわ",
-                "や",
-                "だね",
-                "ですね",
-                "だ",
-                "です",
-                "な",
-                "ね",
-                "よ",
-                "わ",
-                "と思う",
-                "って思う",
-                "だと思う",
-                "だって思う",
-                "やと思う",
-                "やって思う",
-                "とおもう",
-                "っておもう",
-                "だとおもう",
-                "だっておもう",
-                "やとおもう",
-                "やっておもう",
-            ]
-            .contains(&tail)
-        })
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,30 +264,6 @@ mod tests {
         assert_eq!(result["lines"][1]["source_status"], "unavailable");
         assert_eq!(result["validation_codes"].as_array().unwrap().len(), 9);
         assert!(fallback(Some(&result)).contains("記録が見つからん"));
-    }
-    #[test]
-    fn fixed_praise_recognizes_only_unqualified_whole_utterances() {
-        for text in [
-            "いい句だね",
-            "ええ句やな。",
-            "うん、この句は好き！",
-            "ほんまに上手",
-            "そのままでいい",
-            "良い句だと思う",
-        ] {
-            assert!(fixed_praise(text), "{text}");
-        }
-        for text in [
-            "いい句だね？",
-            "『いい句だね』",
-            "いい句ではない",
-            "いい句だねと言った",
-            "いい句だけど下五を直して",
-            "いい句なら終わろう",
-            "好きじゃない",
-        ] {
-            assert!(!fixed_praise(text), "{text}");
-        }
     }
     #[test]
     fn one_inspection_per_turn_and_no_unimplemented_mutations() {

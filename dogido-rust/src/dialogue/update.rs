@@ -19,8 +19,14 @@ impl Dialogue {
         result: Option<&Value>,
     ) -> bool {
         let mut d = self.data.lock().unwrap();
-        let current = !d.stopped && d.sessions.get(sid).is_some_and(|s| s.epoch == epoch);
         let row = d.rows.iter().find(|r| r["turn_id"] == turn);
+        let current = !d.stopped
+            && d.sessions.get(sid).is_some_and(|s| {
+                s.epoch == epoch
+                    && row.is_none_or(|r| {
+                        r["session_instance"].is_null() || r["session_instance"] == s.instance_id
+                    })
+            });
         if row.is_some_and(|r| r["epoch"].as_u64().is_some_and(|owner| owner != epoch)) {
             return false;
         }
@@ -138,6 +144,15 @@ impl Dialogue {
                 }
             }
         }
+        if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn)
+            && row["reply_delivery"] == "unspoken_combat"
+            && let Some(text) = result
+                .and_then(|r| r["text"].as_str())
+                .filter(|t| !t.is_empty())
+        {
+            row["unspoken_text"] = text.into();
+        }
+        Self::retain_workshop_story(&mut d, sid, turn);
         if current {
             let row = d.rows.iter().find(|r| r["turn_id"] == turn);
             let route = row

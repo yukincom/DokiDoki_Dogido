@@ -6,7 +6,7 @@ pub(super) fn active(s: &Session) -> bool {
     s.haiku.workshop.as_ref().is_some_and(|w| w.open)
 }
 
-fn hostile(e: &GameEvent) -> bool {
+pub(super) fn hostile(e: &GameEvent) -> bool {
     !e.visual_threats.is_empty()
         || !e.auditory_threats.is_empty()
         || e.combat.combat_active_hint == Some(true)

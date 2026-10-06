@@ -285,10 +285,21 @@ impl MemoryStore {
             clipped(critique["player_text"].as_str().unwrap_or(""), 240).into();
         critique["surface_at_time"] =
             clipped(critique["surface_at_time"].as_str().unwrap_or(""), 200).into();
-        append_line(
-            &mut locked_file(&self.root().join("long_term/haiku_critiques.jsonl"))?,
-            &critique,
-        )?;
+        let path = self.root().join("long_term/haiku_critiques.jsonl");
+        let mut file = locked_file(&path)?;
+        // 同じ発言の再処理で称賛を増やさない。本文一致では別の発言を消してしまう。
+        if kind == "praise"
+            && critique["operation_id"].is_string()
+            && rows(&path)?.iter().any(|row| {
+                row["kind"] == "praise"
+                    && row["session_id"] == critique["session_id"]
+                    && row["session_instance"] == critique["session_instance"]
+                    && row["operation_id"] == critique["operation_id"]
+            })
+        {
+            return Ok(());
+        }
+        append_line(&mut file, &critique)?;
         if step["action"] != "propose_revision"
             && let Some(mut l) = lesson(kind)
         {

@@ -28,8 +28,10 @@ def main():
             if text == "そうなんだ":
                 assert "会話段階: meaning_explained" in prompt
                 return followup(text, "acknowledge_meaning", "うん、もう少し話してもええで。")
-            if text == "いい句":
-                return step(text, "close_workshop")
+            if text == "余韻が心に残る。今日はここまでにしよう":
+                result = step(text, "close_workshop")
+                result["feedback"] = {"kind": "praise", "evidence": "余韻が心に残る"}
+                return result
             assert text == "この句はどういう意味？", text
             return step(text)
         calls = install(control, choose)
@@ -53,7 +55,7 @@ def main():
         assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
         assert not hud(sid)["pending_lines"] and stored(sid) == original
         assert session(base, sid)["workshop_followup"] == "discussion"
-        r = finish(base, send, sid, "いい句")
+        r = finish(base, send, sid, "余韻が心に残る。今日はここまでにしよう")
         assert r["workshop_action"] == "close_workshop" and len(calls) == 3, r
         assert hud(sid)["state"] == "closed" and r.get("workshop_feedback_outcome") == "saved", r
         after_praise = records(folder, "critiques")

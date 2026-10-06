@@ -164,13 +164,26 @@ impl Dialogue {
         {
             return;
         }
-        if self
-            .memory_live(sid, epoch, input, step["action"] == "praise")
-            .is_err()
-        {
+        let praise = step["action"] == "praise";
+        if praise {
+            // 評価は受付時点の発言。返答の世代変更や戦闘は評価の撤回ではない。
+            let d = self.data.lock().unwrap();
+            if d.stopped
+                || !d
+                    .sessions
+                    .get(sid)
+                    .is_some_and(|s| input["session_instance"] == s.instance_id)
+            {
+                return;
+            }
+        } else if self.memory_live(sid, epoch, input, false).is_err() {
             return;
         }
-        let view = &input["workshop"];
+        let view = if praise {
+            &input["feedback_workshop"]
+        } else {
+            &input["workshop"]
+        };
         let lines: Result<Vec<crate::haiku_record::HaikuLine>, _> =
             serde_json::from_value(if view["pending"].is_object() {
                 view["pending"]["lines"].clone()
@@ -180,8 +193,18 @@ impl Dialogue {
         let Ok(lines) = lines else {
             return;
         };
-        let critique = json!({"entry_id":view["entry_id"],"player_text":input["text"],
+        let mut critique = json!({"entry_id":view["entry_id"],"player_text":input["text"],
             "surface_at_time":workshop_edit::reading(&lines),"materials_snapshot":view["materials"],"session_id":sid});
+        if praise {
+            critique["operation_id"] = input["operation_id"].clone();
+            critique["session_instance"] = input["session_instance"].clone();
+            critique["received_at_ms"] = input["input_at_ms"].clone();
+            critique["evidence"] = step["evidence"].clone();
+            critique["workshop_id"] = view["workshop_id"].clone();
+            critique["workshop_version"] = view["version"].clone();
+            critique["current_lines_at_input"] = view["current_lines"].clone();
+            critique["pending_at_input"] = view["pending"].clone();
+        }
         let root = self.config.haiku.memory_dir.clone();
         tracing::info!(event = "haiku_feedback_save_started", session_id = sid);
         match tokio::task::spawn_blocking(move || {

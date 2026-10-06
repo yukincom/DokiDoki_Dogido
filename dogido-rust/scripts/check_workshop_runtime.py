@@ -183,9 +183,12 @@ def main():
         send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory", "priority_hint": "background", "certainty": "high"},
              auditory_threats=[{"label": "zombie", "source_id": "sound-z", "spoken_name_allowed": True}])
         wait_for(lambda: row(base, turn, {"cancelled"}))
-        assert not session(base, sid)["workshop_history"] and hud(sid)["state"] == "danger"
+        history = session(base, sid)["workshop_history"]
+        assert len(history) == 1 and history[0]["turn_id"] == turn and not history[0]["dogido_text"], history
+        assert history[0]["reply_delivery"] == "unspoken_combat" and history[0]["unspoken_text"] == step("")["speech"], history
+        assert "言葉を飲み込んで、戦いに挑んだ。" in history[0]["narrative"] and hud(sid)["state"] == "danger"
         assert stored(sid) == before
-        passed.append("hostile_interrupt_keeps_poem_and_excludes_partial_explanation")
+        passed.append("hostile_interrupt_keeps_poem_and_records_unspoken_explanation")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: step(text, "unrelated"))

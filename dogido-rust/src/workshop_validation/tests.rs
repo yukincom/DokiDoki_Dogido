@@ -1,4 +1,72 @@
 use super::*;
+
+#[test]
+fn praise_feedback_is_optional_and_cannot_authorize_closing() {
+    let input = "余韻が心に残る。今日はここまでにしよう";
+    let valid = json!({"kind":"praise","evidence":"余韻が心に残る"});
+    let (base, details) = conversation(input, "また詠もな。", "close_workshop");
+    assert_eq!(
+        validate(&base, &details).unwrap()["step"]["action"],
+        "close_workshop"
+    );
+    for (feedback, accepted) in [
+        (valid.clone(), true),
+        (Value::Null, false),
+        (json!("praise"), false),
+        (json!({"kind":"other","evidence":"余韻が心に残る"}), false),
+        (json!({"kind":"praise"}), false),
+        (json!({"kind":"praise","evidence":4}), false),
+        (json!({"kind":"praise","evidence":""}), false),
+        (json!({"kind":"praise","evidence":" "}), false),
+        (json!({"kind":"praise","evidence":"気に入った"}), false),
+        (json!({"kind":"praise","evidence":"余韻が 心に残る"}), false),
+        (
+            json!({"kind":"praise","evidence":"余韻が心に残る","confidence":0.95}),
+            false,
+        ),
+    ] {
+        let mut frame = base.clone();
+        frame["payload"]["feedback"] = feedback.clone();
+        let result = validate(&frame, &details).unwrap();
+        assert_eq!(
+            result["step"]["action"], "close_workshop",
+            "{feedback}: {result}"
+        );
+        assert_eq!(result["step"]["speech"], "また詠もな。");
+        assert!(result["step"].get("feedback").is_none());
+        assert_eq!(
+            super::feedback(&feedback, input),
+            accepted.then_some(valid.clone())
+        );
+    }
+    for input in ["ここで終わろうか？", "終了しないよ", "『終了』と言っただけ"]
+    {
+        let (mut frame, details) = conversation(input, "", "close_workshop");
+        frame["payload"]["feedback"] = json!({"kind":"praise","evidence":input});
+        assert!(
+            validate(&frame, &details).unwrap()["step"].is_null(),
+            "{input}"
+        );
+    }
+    let (mut frame, details) = conversation(input, "ありがとう。", "respond");
+    frame["payload"]["feedback"] = valid;
+    let result = validate(&frame, &details).unwrap();
+    assert_eq!(result["step"]["action"], "respond");
+    assert!(result["step"].get("feedback").is_none());
+}
+
+#[test]
+fn praise_evidence_uses_raw_input_without_semantic_or_lexical_reconstruction() {
+    let (mut frame, mut details) = conversation("余韻が残る。今日は終了", "", "close_workshop");
+    details["player_text"] = "余韻が心に残る。今日は終了".into();
+    frame["payload"]["evidence"] = "今日は終了".into();
+    frame["payload"]["feedback"] = json!({"kind":"praise","evidence":"余韻が心に残る"});
+    let result = validate(&frame, &details).unwrap();
+    assert_eq!(result["step"]["action"], "close_workshop");
+    assert!(super::feedback(&frame["payload"]["feedback"], text(&frame["text"])).is_none());
+    let long = "句".repeat(121);
+    assert!(contract::feedback(&json!({"kind":"praise","evidence":long}), &long).is_none());
+}
 static FIXTURES: LazyLock<Value> =
     LazyLock::new(|| serde_json::from_str(include_str!("fixtures.json")).unwrap());
 // This corpus predates model-owned conversational decisions. Preserve its

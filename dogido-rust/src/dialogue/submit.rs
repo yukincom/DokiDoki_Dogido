@@ -271,6 +271,7 @@ impl Dialogue {
                     decision,
                     Some(text),
                     None,
+                    false,
                 );
                 self.start_pending(&mut d, &mut jobs, &session_id);
                 let s = &d.sessions[&session_id];
@@ -427,6 +428,7 @@ impl Dialogue {
         let (language_active, language_state) = language_runtime::context(s, text);
         let input = json!({"audit_before":audit_before,"audit_private":private,"model":self.config.model,"max_tokens":self.config.max_tokens,"reading_engine":self.config.reading_engine,"workshop":workshop,
             "poem_input":poem_input,"poem_reference":poem_reference,"operation_id":turn,
+            "session_instance":s.instance_id,"feedback_workshop":workshop,
             "source":source,"language_active":language_active,"language_state":language_state,
             "address_reply":address_reply,"host_chat_confirmed":host_chat_confirmed,
             "input_at_ms":now,"previous_activity_ms":s.foreground.last_player_at.max(s.last_completed_conversation),
@@ -452,7 +454,7 @@ impl Dialogue {
             d.rows.pop_front();
         }
         let mut new_row = json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":session_id,"category":"speech","text":"",
-            "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
+            "created_at":chrono::Utc::now(),"input_at_ms":now,"epoch":epoch,"session_instance":input["session_instance"],"reference_ids":[],"output_mode":"both","player_input_text":text,"source":source,"playback_status":"generating",
             "interpreted_player_input_text":interpreted_text,"asr_corrections":asr_corrections,
             "workshop_id":workshop.as_ref().map(|w| &w["workshop_id"]),"workshop_fixed_close":false,"workshop_state_before":audit_before,"workshop_record_private":private});
         if let Some(original) = &replay {

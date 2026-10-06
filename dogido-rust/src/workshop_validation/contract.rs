@@ -188,3 +188,22 @@ pub(super) fn errors(payload: &Value, details: &Value) -> Vec<String> {
     errors.truncate(12);
     errors
 }
+
+/// 評価の意味はモデルが判断し、コードは型と認識原文の連続した根拠だけを照合する。
+pub(super) fn feedback(payload: &Value, source: &str) -> Option<Value> {
+    let mut errors = Vec::new();
+    check(
+        &ASSETS["schema"]["properties"]["feedback"],
+        payload,
+        "feedback",
+        &mut errors,
+    );
+    if !errors.is_empty() {
+        return None;
+    }
+    let evidence = payload["evidence"].as_str()?;
+    if evidence.trim().is_empty() || evidence.chars().count() > 120 || !source.contains(evidence) {
+        return None;
+    }
+    Some(payload.clone())
+}

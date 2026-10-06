@@ -248,7 +248,7 @@ pub struct Workshop {
     pub materials: Map<String, Value>,
     pub open: bool,
     pub close_reason: Option<String>,
-    /// 一句専用。実再生済みの対だけを最大4往復保持する。
+    /// 一句専用。実再生済みの対と、戦闘で言葉を飲み込んだ出来事を最大4件保持する。
     pub dialogue: VecDeque<Value>,
     pub agent_steps: VecDeque<Value>,
     /// プレイヤーが会話で示した案。採用待ちの pending とは別に保持する。

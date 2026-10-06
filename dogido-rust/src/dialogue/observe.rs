@@ -215,6 +215,14 @@ impl Dialogue {
                     decision,
                     input_handled.then_some(text.as_str()),
                     warnings::interruption_reason(&event),
+                    recent
+                        && (workshop_focus::hostile(&event)
+                            || matches!(
+                                event.event.name,
+                                EventName::HostileDefeated
+                                    | EventName::CreeperDetonated
+                                    | EventName::CombatEnded
+                            )),
                 );
                 self.process_environment(
                     &mut d,
