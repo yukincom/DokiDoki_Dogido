@@ -785,3 +785,68 @@ fn named_presence_is_individual_and_remembered_names_do_not_assert_current_prese
     };
     assert!(reply.text.contains("どれのことか"));
 }
+
+#[test]
+fn shared_world_context_is_used_once_without_legacy_place_or_weather_materials() {
+    let event = individual_event(
+        "2026-10-06T00:00:00Z",
+        json!({
+        "player":{"dimension":"minecraft:overworld","position":{"y":123}},
+        "world":{"biome":"meadow","sky_visible":true,"weather":"clear","local_light":8,"ceiling_height":24}}),
+    );
+    let world = crate::conversation_observation::project(&event, None, 10.0, 3.0, 5000).unwrap();
+    let context = Context {
+        world_context: Some(world.clone()),
+        ..Context::default()
+    };
+    let input = PlayerInput {
+        raw_text: "いい天気だね".into(),
+        semantic_text: "いい天気だね".into(),
+        ..PlayerInput::default()
+    };
+    let Before::Plan(prepared) = before_plan(
+        &event,
+        &Settings::default(),
+        &input,
+        &context,
+        &individual_snapshot(&event),
+        &labels(),
+        Some("mock"),
+    )
+    .unwrap() else {
+        panic!()
+    };
+    assert_eq!(prepared.base_details["world_context"], json!(world));
+    for key in [
+        "place_context",
+        "biome",
+        "space_kind",
+        "sky_visible",
+        "time_phase",
+        "weather",
+        "weather_label",
+        "weather_context",
+        "precipitation_kind",
+    ] {
+        assert!(
+            prepared.base_details.get(key).is_none(),
+            "duplicate material: {key}"
+        );
+    }
+    let After::Leaf(leaf) = after_plan(&prepared, &prepared.planner.fallback).unwrap() else {
+        panic!()
+    };
+    let messages = leaf
+        .input("mock", 512)
+        .prompt
+        .into_request()
+        .unwrap()
+        .messages;
+    let text = messages
+        .iter()
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(text.matches("開けた地上").count(), 1);
+    assert!(!text.contains("天井おおよそ") && !text.contains("高さY"));
+}

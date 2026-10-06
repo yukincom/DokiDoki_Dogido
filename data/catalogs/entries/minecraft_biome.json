@@ -101,8 +101,7 @@
       "label": "温帯バイオーム",
       "description": "Medium/lush biomes",
       "notes": [
-        "植物や草は、沼地や暗い森を除き、鮮やかな黄緑色。水は青色。",
-        "ペールガーデンは気温・降水量は不明。"
+        "植物や草は、沼地や暗い森を除き、鮮やかな黄緑色。水は青色。"
       ],
       "biomes": {
         "plains": {
@@ -180,7 +179,8 @@
         "pale_garden": {
           "japanese": "ペールガーデン",
           "temperature": null,
-          "downfall": null
+          "downfall": null,
+          "note": "ペールガーデンは気温・降水量は不明。"
         },
         "beach": {
           "japanese": "砂浜",

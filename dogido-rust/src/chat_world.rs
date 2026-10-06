@@ -134,6 +134,43 @@ pub fn place_context(
     current_structure: Option<&str>,
     home_bed_prompt_distance: f64,
 ) -> Result<Place> {
+    build_place_context(
+        catalog,
+        entries,
+        event,
+        current_structure,
+        home_bed_prompt_distance,
+        false,
+    )
+}
+
+/// Shared observations carry biome, sky and light in their own fields.
+/// Keep this place description semantic; measurement jitter is not a move.
+pub fn shared_place_context(
+    catalog: &WorldCatalog,
+    entries: &Catalog,
+    event: &GameEvent,
+    current_structure: Option<&str>,
+    home_bed_prompt_distance: f64,
+) -> Result<Place> {
+    build_place_context(
+        catalog,
+        entries,
+        event,
+        current_structure,
+        home_bed_prompt_distance,
+        true,
+    )
+}
+
+fn build_place_context(
+    catalog: &WorldCatalog,
+    entries: &Catalog,
+    event: &GameEvent,
+    current_structure: Option<&str>,
+    home_bed_prompt_distance: f64,
+    shared: bool,
+) -> Result<Place> {
     let environment = project_environment(event);
     let w = &event.world;
     let y = event.player.position.y;
@@ -202,38 +239,48 @@ pub fn place_context(
     } else {
         ("unknown", "空間の詳細は不明".into())
     };
-    let sky_ja = match sky {
-        Some(true) => "空が見える",
-        Some(false) => "空は見えない",
-        None => "空の見え方は不明",
-    };
-    let mut bits = vec![format!("空間: {ja}"), sky_ja.into()];
-    if !biome_label.is_empty() {
-        let prefix = if environment.cave_biome && !environment.include_sky_context {
-            "洞窟バイオーム"
-        } else {
-            "地表バイオーム"
+    let mut bits = if shared {
+        vec![match kind {
+            "open_surface" => "開けた地上".into(),
+            "underground_or_roofed" => "地下っぽい／屋根のある空間".into(),
+            "roofed_unclear" => "深さははっきりしない空間".into(),
+            _ => ja,
+        }]
+    } else {
+        let sky_ja = match sky {
+            Some(true) => "空が見える",
+            Some(false) => "空は見えない",
+            None => "空の見え方は不明",
         };
-        bits.insert(0, format!("{prefix}: {biome_label}"));
-    }
-    if let Some(y) = y {
-        ensure!(y.is_finite(), "nonfinite player Y cannot be rounded");
-        let rounded = y.round_ties_even();
-        bits.push(format!(
-            "高さY{}",
-            if rounded == 0.0 {
-                "0".into()
+        let mut bits = vec![format!("空間: {ja}"), sky_ja.into()];
+        if !biome_label.is_empty() {
+            let prefix = if environment.cave_biome && !environment.include_sky_context {
+                "洞窟バイオーム"
             } else {
-                format!("{rounded:.0}")
-            }
-        ));
-    }
-    if let Some(ceiling) = ceiling {
-        bits.push(format!("天井おおよそ{ceiling:.0}m"));
-    }
-    if let Some(light) = w.local_light {
-        bits.push(format!("明るさ{light}"));
-    }
+                "地表バイオーム"
+            };
+            bits.insert(0, format!("{prefix}: {biome_label}"));
+        }
+        if let Some(y) = y {
+            ensure!(y.is_finite(), "nonfinite player Y cannot be rounded");
+            let rounded = y.round_ties_even();
+            bits.push(format!(
+                "高さY{}",
+                if rounded == 0.0 {
+                    "0".into()
+                } else {
+                    format!("{rounded:.0}")
+                }
+            ));
+        }
+        if let Some(ceiling) = ceiling {
+            bits.push(format!("天井おおよそ{ceiling:.0}m"));
+        }
+        if let Some(light) = w.local_light {
+            bits.push(format!("明るさ{light}"));
+        }
+        bits
+    };
     if let Some(id) = current_structure.filter(|v| !v.is_empty()) {
         bits.push(format!(
             "構造物: {}",

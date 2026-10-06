@@ -45,7 +45,7 @@ pub fn project(
 ) -> anyhow::Result<Context> {
     let catalog = world_catalog::catalog();
     let projection = environment::projection::project_environment(event);
-    let place = chat_world::place_context(
+    let place = chat_world::shared_place_context(
         catalog,
         chat_catalog::catalog(),
         event,
@@ -164,7 +164,15 @@ impl State {
                     revision: next.revision,
                 });
             }
-            for key in ["weather", "smell", "place", "darkness_observed"] {
+            for key in [
+                "weather",
+                "smell",
+                "place",
+                "location_biome",
+                "sky_visible",
+                "local_light",
+                "darkness_observed",
+            ] {
                 let before = &previous.observations[key];
                 let after = &next.observations[key];
                 // Smell direction may move while the identity stays the same. The
@@ -300,6 +308,66 @@ mod tests {
         assert_eq!(
             state.context().unwrap().observations["smell"]["direction_estimate"]["cardinal"],
             "west"
+        );
+    }
+    fn surface(light: u8, y: f64, ceiling: f64) -> Context {
+        let event = GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture",
+            "observed_at":"2026-10-06T00:00:00Z",
+            "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+            "player":{"dimension":"minecraft:overworld","position":{"y":y}},
+            "world":{"biome":"meadow","sky_visible":true,"weather":"clear","local_light":light,"ceiling_height":ceiling}})).unwrap();
+        project(&event, Some("village_plains"), 10.0, 3.0, 5000).unwrap()
+    }
+    #[test]
+    fn shared_place_keeps_structure_without_repeating_separate_observations() {
+        let context = surface(8, 123.0, 24.0);
+        assert_eq!(
+            context.observations["place"],
+            "開けた地上 / 構造物: 平原の村"
+        );
+        assert_eq!(context.observations["location_biome"], "草地");
+        assert_eq!(context.observations["sky_visible"], true);
+        assert_eq!(context.observations["local_light"], 8);
+    }
+    #[test]
+    fn light_only_change_does_not_repeat_the_place_or_turn_measurements_into_moves() {
+        let mut state = State::default();
+        state.observe(surface(8, 123.0, 24.0));
+        state.observe(surface(7, 123.0, 24.0));
+        let context = state.context().unwrap();
+        assert_eq!(context.changes.len(), 1);
+        assert_eq!(context.changes[0].kind, "local_light");
+        assert_eq!(context.changes[0].before, 8);
+        assert_eq!(context.changes[0].now, 7);
+        state.considered(context.revision);
+        state.observe(surface(7, 124.0, 23.0));
+        assert!(state.context().unwrap().changes.is_empty());
+        state.observe(surface(3, 124.0, 23.0));
+        assert!(
+            state
+                .context()
+                .unwrap()
+                .changes
+                .iter()
+                .any(|c| c.kind == "darkness_observed" && c.now == true)
+        );
+    }
+    #[test]
+    fn separated_sky_and_biome_changes_remain_visible() {
+        let mut state = State::default();
+        state.observe(surface(8, 123.0, 24.0));
+        let mut next = surface(8, 123.0, 24.0);
+        next.observations["location_biome"] = json!("タイガ");
+        next.observations["sky_visible"] = json!(false);
+        state.observe(next);
+        let context = state.context().unwrap();
+        assert_eq!(
+            context
+                .changes
+                .iter()
+                .map(|c| c.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["location_biome", "sky_visible"]
         );
     }
     #[test]

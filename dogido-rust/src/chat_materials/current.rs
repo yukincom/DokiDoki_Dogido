@@ -252,35 +252,14 @@ pub(super) fn frame_details(
 ) -> Result<Value> {
     let (combat, visual, dark) = flags;
     let c = world_catalog::catalog();
-    let env = crate::environment::projection::project_environment(event);
-    let climate = c.climate(event.world.biome.as_deref())?;
-    let precipitation = crate::environment::precipitation::from_event(event, &climate)?;
-    let place = crate::chat_world::place_context(
-        c,
-        chat_catalog::catalog(),
-        event,
-        ctx.current_structure.as_deref(),
-        settings.home_bed_prompt_distance,
-    )?;
     let inv = input.asks_inventory;
     let mut out = json!({
         "player_name": call_name(event,&settings.default_call_name),
         "user_text": chat_catalog::strip(&input.semantic_text).chars().take(160).collect::<String>(),
-        "biome": place.biome_label,
-        "structure_label": ctx.current_structure.as_deref().filter(|v|!v.is_empty()).map(|v|world_catalog::structure_label(chat_catalog::catalog(),Some(v))).unwrap_or_default(),
-        "place_context": place.place_line,
-        "space_kind": place.space_kind,
-        "sky_visible": place.sky_visible,
-        "include_biome_context": !place.biome_label.is_empty(),
-        "include_sky_context": env.include_sky_context,
-        "time_phase": if env.include_sky_context{serde_json::to_value(event.world.time_phase)?.as_str().unwrap_or("").to_owned()}else{String::new()},
         "safety_priority": safety(event),
         "player_turn_plan": travel.action,
         "player_turn_plan_evidence": travel.evidence,
         "home_progress": if travel.action=="return_home"{serde_json::to_value(snapshot.home.progress)?}else{json!("unknown")},
-        "weather": if env.include_sky_context{serde_json::to_value(event.world.weather)?.as_str().unwrap_or("").to_owned()}else{String::new()},
-        "weather_label": if env.include_sky_context{crate::chat_world::weather_label(event,&climate)?}else{String::new()},
-        "weather_fact": if env.include_sky_context{crate::chat_world::weather_fact(event)}else{""},
         "mode": ctx.mode,
         "combat_active": combat,
         "has_visual_threats": visual,
@@ -296,14 +275,39 @@ pub(super) fn frame_details(
     out["character_mode"] = json!(crate::chat_prompt::mode(&out));
     if let Some(world) = &ctx.world_context {
         out["world_context"] = json!(world);
-    }
-    if env.include_sky_context {
-        out.as_object_mut().unwrap().extend(
-            serde_json::to_value(precipitation.to_prompt_details())?
-                .as_object()
-                .unwrap()
-                .clone(),
-        );
+    } else {
+        // Standalone callers without shared observations retain their existing view.
+        let env = crate::environment::projection::project_environment(event);
+        let climate = c.climate(event.world.biome.as_deref())?;
+        let precipitation = crate::environment::precipitation::from_event(event, &climate)?;
+        let place = crate::chat_world::place_context(
+            c,
+            chat_catalog::catalog(),
+            event,
+            ctx.current_structure.as_deref(),
+            settings.home_bed_prompt_distance,
+        )?;
+        out.as_object_mut().unwrap().extend(json!({
+            "biome": place.biome_label,
+            "structure_label": ctx.current_structure.as_deref().filter(|v|!v.is_empty()).map(|v|world_catalog::structure_label(chat_catalog::catalog(),Some(v))).unwrap_or_default(),
+            "place_context": place.place_line,
+            "space_kind": place.space_kind,
+            "sky_visible": place.sky_visible,
+            "include_biome_context": !place.biome_label.is_empty(),
+            "include_sky_context": env.include_sky_context,
+            "time_phase": if env.include_sky_context{serde_json::to_value(event.world.time_phase)?.as_str().unwrap_or("").to_owned()}else{String::new()},
+            "weather": if env.include_sky_context{serde_json::to_value(event.world.weather)?.as_str().unwrap_or("").to_owned()}else{String::new()},
+            "weather_label": if env.include_sky_context{crate::chat_world::weather_label(event,&climate)?}else{String::new()},
+            "weather_fact": if env.include_sky_context{crate::chat_world::weather_fact(event)}else{""},
+        }).as_object().unwrap().clone());
+        if env.include_sky_context {
+            out.as_object_mut().unwrap().extend(
+                serde_json::to_value(precipitation.to_prompt_details())?
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            );
+        }
     }
     if let Some(workshop) = &ctx.workshop_details {
         out.as_object_mut()
