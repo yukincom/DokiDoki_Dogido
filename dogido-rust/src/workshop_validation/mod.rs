@@ -1,6 +1,8 @@
-//! Pure acceptance of a workshop model step. No dictionary, state mutation or I/O.
+//! 会話は本文を受け取り、実行する操作だけをその入力契約へ照合する。
+//! 読み等の確認はモデルが選ぶinspectへ渡す。ここでは辞書・状態変更・保存を行わない。
 mod analysis;
 mod contract;
+mod conversation;
 #[cfg(test)]
 mod tests;
 use crate::{reaction_leaf::sanitize, workshop_input_guard};
@@ -23,20 +25,10 @@ static PATTERNS: LazyLock<HashMap<String, Regex>> = LazyLock::new(|| {
     for key in [
         "edit_quote",
         "edit_negative",
-        "edit_positive",
         "repair_quote",
         "repair_negative",
-        "repair_positive",
-        "followup_negative",
-        "resume_negative",
-        "ack_negative",
-        "pending_accept",
-        "pending_reject",
     ] {
         patterns.insert(key.to_owned(), compile(text(&ASSETS[key])));
-    }
-    for (action, p) in ASSETS["positive"].as_object().unwrap() {
-        patterns.insert(action.clone(), compile(text(p)));
     }
     for pair in array(&ASSETS["explicit_lines"]) {
         patterns.insert(format!("line_{}", pair[0]), compile(text(&pair[1])));
@@ -130,6 +122,9 @@ pub(super) fn validate(frame: &Value, details: &Value) -> Result<Value> {
         );
     }
     let action = text(&raw["action"]);
+    if conversation::handles(action) {
+        return Ok(conversation::validate(raw, details));
+    }
     if raw.is_object() && strings(&ASSETS["followups"]).contains(action) {
         if !strings(&details["allowed_actions"]).contains(action) {
             return Ok(reject("action_not_allowed"));

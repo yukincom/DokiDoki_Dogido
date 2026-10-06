@@ -160,30 +160,6 @@ impl Candidate {
     }
 }
 
-pub fn fixed_selection(text: &str) -> bool {
-    matches!(
-        text.trim().trim_end_matches(['。', '！', '!']),
-        "それにして" | "その案にして" | "さっきの案にして" | "その案でお願い"
-    )
-}
-
-/// A model may resolve a short assent only against the one current candidate
-/// (or pending proposal). The whole original utterance must be affirmative.
-pub fn contextual_assent(text: &str) -> bool {
-    use std::sync::LazyLock;
-    static ASSENT: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(
-        r"\A(?:うん[、,\s]*)?(?:はい|そう(?:しよう|しましょう|して(?:ください)?)|それで(?:お願い(?:します)?|いい(?:です)?|ええ))[。！!\s]*\z"
-    ).unwrap()
-    });
-    ASSENT.is_match(text.trim())
-        && crate::workshop_input_guard::state_change_safe(
-            "stage_conversation_candidate",
-            text,
-            text,
-        )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,28 +222,6 @@ mod tests {
         assert!(Candidate::from_model(&payload, &current, 0, player, Some(&retained)).is_none());
     }
     #[test]
-    fn contextual_assent_requires_the_whole_original_utterance() {
-        for text in [
-            "そうしましょう",
-            "そうしよう。",
-            "うん、それでお願いします",
-            "はい",
-        ] {
-            assert!(contextual_assent(text), "{text}");
-        }
-        for text in [
-            "そうしましょう？",
-            "そうしましょうとは言ってない",
-            "『そうしましょう』",
-            "そうしないで",
-            "はい、でもまだ変えないで",
-            "もしそうしましょうと言ったら",
-            "そうしましょうと彼が言った",
-        ] {
-            assert!(!contextual_assent(text), "{text}");
-        }
-    }
-    #[test]
     fn raw_words_are_required_even_when_an_idea_is_only_discussed() {
         let draft = Draft {
             proposal: Proposal {
@@ -279,10 +233,5 @@ mod tests {
             validation_codes: vec![],
         };
         assert!(Candidate::from_player(draft, &[], 0, "発話にない案").is_none());
-        assert!(fixed_selection("それにして。"));
-        for text in ["それにして？", "それにしないで", "『それにして』と言われた"]
-        {
-            assert!(!fixed_selection(text));
-        }
     }
 }

@@ -38,6 +38,20 @@ pub fn allowed_actions(
     actions
 }
 
+fn meter_result(row: &mut Value, count: Option<i64>, target: i64) {
+    row["mora_count"] = json!(count);
+    row["target_mora"] = target.into();
+    row["meter_delta"] = json!(count.map(|c| c - target));
+    row["meter_exact"] = json!(count.map(|c| c == target));
+    row["meter_status"] = match count {
+        None => "unavailable",
+        Some(c) if c > target => "too_long",
+        Some(c) if c < target => "too_short",
+        Some(_) => "exact",
+    }
+    .into();
+}
+
 /// 生成時に確定した読み・行出典だけを検査する。現在世界の観測で上書きしない。
 pub fn inspect(lines: &[HaikuLine], checks: &[String]) -> Value {
     let requested: Vec<_> = ["reading", "meter", "source"]
@@ -49,7 +63,7 @@ pub fn inspect(lines: &[HaikuLine], checks: &[String]) -> Value {
     for (index, target) in [5, 7, 5].into_iter().enumerate() {
         let record = lines.iter().find(|l| l.line_index == index);
         let reading = record.map_or("", |l| l.reading_text.as_str());
-        let mut row = json!({"line_index":index});
+        let mut row = json!({"line_index":index,"canonical_name":(["上五","中七","下五"][index])});
         if requested.contains(&"reading") {
             row["surface_text"] = record.map_or(reading, |l| l.surface_text.as_str()).into();
             row["reading_text"] = if reading.is_empty() {
@@ -69,10 +83,7 @@ pub fn inspect(lines: &[HaikuLine], checks: &[String]) -> Value {
         }
         if requested.contains(&"meter") {
             let count = (!reading.is_empty()).then(|| count_japanese_sounds(reading) as i64);
-            row["mora_count"] = json!(count);
-            row["target_mora"] = target.into();
-            row["meter_delta"] = json!(count.map(|c| c - target));
-            row["meter_exact"] = json!(count.map(|c| c == target));
+            meter_result(&mut row, count, target);
             if count.is_none() {
                 codes.push(format!("meter_unavailable_line_{index}"));
             } else if count != Some(target) {
@@ -116,11 +127,69 @@ pub fn inspect(lines: &[HaikuLine], checks: &[String]) -> Value {
         "checks":ordered,"lines":rows,"validation_codes":codes})
 }
 
+/// モデルが指定した語・候補の読みを確認する。辞書が解決できなければ
+/// 読みも音数も未確定として返し、漢字を一文字一音として数えない。
+pub fn inspect_text(
+    source: &str,
+    checks: &[String],
+    dictionary_reading: Option<&str>,
+    line_index: Option<usize>,
+) -> Value {
+    let reading = crate::haiku::lexical::hiragana(dictionary_reading.unwrap_or(source))
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>();
+    let known = !reading.is_empty()
+        && reading
+            .chars()
+            .all(|c| ('ぁ'..='ゖ').contains(&c) || c == 'ー');
+    let mut row = json!({"surface_text":source});
+    let mut codes = Vec::new();
+    if checks.iter().any(|c| c == "reading") {
+        row["reading_text"] = if known { json!(reading) } else { Value::Null };
+        row["reading_status"] = if known { "known" } else { "unavailable" }.into();
+        if !known {
+            codes.push("reading_unavailable");
+        }
+    }
+    if checks.iter().any(|c| c == "meter") {
+        let count = known.then(|| count_japanese_sounds(&reading) as i64);
+        row["mora_count"] = json!(count);
+        if let Some(index) = line_index.filter(|i| *i < 3) {
+            row["line_index"] = index.into();
+            row["canonical_name"] = ["上五", "中七", "下五"][index].into();
+            meter_result(&mut row, count, [5, 7, 5][index]);
+        }
+        if !known {
+            codes.push("meter_unavailable");
+        }
+    }
+    if checks.iter().any(|c| c == "source") {
+        row["source_status"] = "unavailable".into();
+        codes.push("source_not_recorded_for_text");
+    }
+    json!({"kind":"inspection","status":"completed","verse_kind":"text",
+        "checks":checks,"lines":[row],"validation_codes":codes})
+}
+
 pub fn fallback(observation: Option<&Value>) -> String {
     let Some(o) = observation else {
         return "ごめん、今の返事をうまくまとめられんかったわ。".into();
     };
     let rows = o["lines"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    if o["verse_kind"] == "text" {
+        let row = &o["lines"][0];
+        let source = row["surface_text"].as_str().unwrap_or("");
+        if let Some(reading) = row["reading_text"].as_str() {
+            return format!("「{source}」の読みは「{reading}」やで。");
+        }
+        if let Some(count) = row["mora_count"].as_u64() {
+            return format!("「{source}」は{count}音やで。");
+        }
+        return format!(
+            "「{source}」は今回の確認では分からんかったわ。その言葉の相談は続けられるで。"
+        );
+    }
     let has = |s: &str| {
         o["checks"]
             .as_array()
@@ -185,31 +254,8 @@ pub fn fallback_for(observation: Option<&Value>, view: &Value, lines: &[HaikuLin
         .replace("どこを一緒に見よか？", &format!("{label}の話を続けよか。"))
 }
 
-/// 原文が代表形に完全一致するときだけ、モデルを使わず一手を確定する。
-pub fn fixed_action(text: &str) -> Option<&'static str> {
-    if fixed_praise(text) {
-        return Some("close_workshop");
-    }
-    match text.trim().trim_end_matches(['。', '！', '!']) {
-        "終了"
-        | "終わり"
-        | "川柳は終了"
-        | "川柳終わり"
-        | "句はここまで"
-        | "終了でいいよ"
-        | "終了でお願いします" => Some("close_workshop"),
-        "今の句"
-        | "今の川柳"
-        | "もう一度読んで"
-        | "直った？"
-        | "直った?"
-        | "修正できた？"
-        | "修正できた?" => Some("show_current"),
-        _ => None,
-    }
-}
-
-/// 旧workshopの明確な称賛だけを同期で確定する。疑問・否定・引用は全体一致から外れる。
+/// モデルが終了を選んだ後の称賛記録・空返答の補助に使う。
+/// この判定だけで相談を終了せず、次の一手は会話モデルが選ぶ。
 pub fn fixed_praise(text: &str) -> bool {
     let mut text = text.trim().trim_end_matches(['。', '！', '!']);
     for prefix in ["うん", "ほんまに", "めっちゃ", "なかなか", "すごく"] {
@@ -289,20 +335,7 @@ mod tests {
         assert!(fallback(Some(&result)).contains("記録が見つからん"));
     }
     #[test]
-    fn fixed_close_does_not_consume_questions_or_quotations() {
-        assert_eq!(fixed_action("終了でいいよ。"), Some("close_workshop"));
-        for text in [
-            "終了？",
-            "「終了」",
-            "終了しない",
-            "終了と言った",
-            "終了でいいよ？",
-        ] {
-            assert_eq!(fixed_action(text), None);
-        }
-    }
-    #[test]
-    fn fixed_praise_closes_only_unqualified_whole_utterances() {
+    fn fixed_praise_recognizes_only_unqualified_whole_utterances() {
         for text in [
             "いい句だね",
             "ええ句やな。",
@@ -312,7 +345,6 @@ mod tests {
             "良い句だと思う",
         ] {
             assert!(fixed_praise(text), "{text}");
-            assert_eq!(fixed_action(text), Some("close_workshop"));
         }
         for text in [
             "いい句だね？",
@@ -324,7 +356,6 @@ mod tests {
             "好きじゃない",
         ] {
             assert!(!fixed_praise(text), "{text}");
-            assert_eq!(fixed_action(text), None);
         }
     }
     #[test]
@@ -333,5 +364,48 @@ mod tests {
         for a in ["accept_pending", "reject_pending"] {
             assert!(!allowed_actions("decide", false, false).contains(&a));
         }
+    }
+}
+
+#[cfg(test)]
+mod inspection_tests {
+    use super::*;
+    #[test]
+    fn inspection_returns_exact_excess_and_shortage_without_changing_a_line() {
+        let checks = vec!["meter".into()];
+        for (reading, index, count, delta, status) in [
+            ("しろいほねたち", 2, 7, 2, "too_long"),
+            ("しろいほね", 1, 5, -2, "too_short"),
+            ("しろいほね", 0, 5, 0, "exact"),
+        ] {
+            let result = inspect_text(reading, &checks, None, Some(index));
+            let row = &result["lines"][0];
+            assert_eq!(row["mora_count"], count);
+            assert_eq!(row["meter_delta"], delta);
+            assert_eq!(row["meter_status"], status);
+            assert_eq!(row["target_mora"], [5, 7, 5][index]);
+        }
+        let plain = inspect_text("しろいほね", &checks, None, None);
+        assert!(plain["lines"][0]["meter_status"].is_null());
+    }
+
+    #[test]
+    fn a_dictionary_reading_is_measured_without_inventing_an_unknown_reading() {
+        let checks = vec!["reading".into(), "meter".into()];
+        let known = inspect_text("白い骨", &checks, Some("シロイホネ"), None);
+        assert_eq!(known["lines"][0]["reading_text"], "しろいほね");
+        assert_eq!(known["lines"][0]["mora_count"], 5);
+        assert_eq!(known["verse_kind"], "text");
+        for source in ["白い骨", "未登録語Abc"] {
+            let unknown = inspect_text(source, &checks, Some(source), Some(2));
+            assert_eq!(unknown["lines"][0]["reading_status"], "unavailable");
+            assert!(unknown["lines"][0]["mora_count"].is_null());
+            assert!(unknown["lines"][0]["meter_delta"].is_null());
+            assert_eq!(unknown["lines"][0]["meter_status"], "unavailable");
+        }
+        assert_eq!(
+            inspect_text("しろいほね", &checks, None, None)["lines"][0]["mora_count"],
+            5
+        );
     }
 }

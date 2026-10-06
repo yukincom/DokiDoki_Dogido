@@ -1,4 +1,4 @@
-//! player入力を閉じた語彙・文型で調べ、静粛要求・戦況質問・句の保存/修正・読み訂正へ分類する。
+//! player入力を閉じた語彙・文型で調べ、静粛要求・戦況質問・句の保存/修正へ分類する。
 //! 原文と共有input-policy.jsonからProjectionを返す純粋な読取り処理。
 //! 呼び手が現在状態・権限・根拠と合わせて採否を決めるため、分類だけでは保存や操作を実行しない。
 use regex::Regex;
@@ -25,9 +25,6 @@ fn compile(pattern: &str) -> Regex {
     // 入力仕様上の空白はUnicode空白とU+001C..U+001F。正規表現内でも同じ集合へ広げる。
     Regex::new(&pattern.replace(r"\s", r"[\s\u001c-\u001f]")).expect("checked input regex")
 }
-fn patterns(key: &str) -> Vec<Regex> {
-    words(key).map(compile).collect()
-}
 static SHORT_INVENTORY: LazyLock<Regex> = LazyLock::new(|| {
     // 真偽値だけを使う検索なので、非対応の先読みは同じ末尾境界を消費して検査する。
     let pattern = POLICY["short_inventory"]
@@ -38,17 +35,6 @@ static SHORT_INVENTORY: LazyLock<Regex> = LazyLock::new(|| {
 });
 static DIRECTION_STRIP: LazyLock<Regex> =
     LazyLock::new(|| compile(POLICY["direction_strip"].as_str().unwrap()));
-static READING: LazyLock<Vec<Regex>> = LazyLock::new(|| patterns("reading_matches"));
-static READING_SEARCH: LazyLock<Vec<Regex>> = LazyLock::new(|| patterns("reading_searches"));
-static EXPLICIT_READING: LazyLock<Vec<Regex>> = LazyLock::new(|| patterns("explicit_matches"));
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ReadingCorrection {
-    pub surface: String,
-    pub reading: String,
-    pub wrong_reading: Option<String>,
-    pub explicit: bool,
-}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Projection {
     pub wants_quiet: bool,
@@ -61,8 +47,6 @@ pub struct Projection {
     pub asks_about_sound: bool,
     pub player_haiku_text: Option<String>,
     pub revised_haiku_text: Option<String>,
-    pub reading_correction: Option<ReadingCorrection>,
-    pub is_explicit_reading_correction: bool,
 }
 fn payload(raw: &str, prefix_key: &str) -> Option<String> {
     let text = raw.trim_matches(space);
@@ -94,55 +78,8 @@ fn payload(raw: &str, prefix_key: &str) -> Option<String> {
     }
     Some(pieces.into_iter().take(3).collect::<Vec<_>>().join("\n"))
 }
-fn reading(text: &str, explicit: bool) -> Option<ReadingCorrection> {
-    if text.is_empty() {
-        return None;
-    }
-    for (index, regex) in READING.iter().enumerate() {
-        let Some(capture) = regex.captures(text) else {
-            continue;
-        };
-        let surface = capture[1].trim_matches(space);
-        let reading = capture[2].trim_matches(space);
-        if surface.is_empty() || reading.is_empty() || surface == reading {
-            continue;
-        }
-        if index > 0 && surface.chars().count() > 20 {
-            continue;
-        }
-        if index == 2
-            && (!READING_SEARCH[1].is_match(surface)
-                || reading.chars().count() > 16
-                || READING_SEARCH[2].is_match(surface)
-                || READING_SEARCH[3].is_match(reading))
-        {
-            continue;
-        }
-        return Some(ReadingCorrection {
-            surface: surface.into(),
-            reading: reading.into(),
-            wrong_reading: None,
-            explicit,
-        });
-    }
-    let folded = fold(text);
-    if let Some(capture) = READING_SEARCH[0].captures(&folded) {
-        let (wrong, right) = (&capture[1], &capture[2]);
-        if wrong != right {
-            return Some(ReadingCorrection {
-                surface: wrong.into(),
-                reading: right.into(),
-                wrong_reading: Some(wrong.into()),
-                explicit: true,
-            });
-        }
-    }
-    None
-}
-
-/// `normalized`の再正規化はせず、句本文と読みだけは改行・引用を保持した`raw`から読む。
+/// `normalized`の再正規化はせず、句本文だけは改行・引用を保持した`raw`から読む。
 /// slash commandの早期returnと保存可否は呼出側が既存の規則で判断する。
-/// 永続化用reading_correction::parseの強いguardをこの投影で置換しない。
 pub fn classify(raw: &str, normalized: &str) -> Projection {
     let text = fold(normalized);
     let has_dragon = words("DRAGON_KEYWORDS").any(|word| text.contains(&fold(word)));
@@ -170,8 +107,6 @@ pub fn classify(raw: &str, normalized: &str) -> Projection {
                 && (has(&text, "_SOUND_QUERY_SHAPES")
                     || (compact_sound.chars().count() <= 5
                         && has(&compact_sound, "_SOUND_TOPIC_MARKERS")))));
-    let raw_text = raw.trim_matches(space);
-    let explicit = !raw_text.is_empty() && EXPLICIT_READING.iter().any(|r| r.is_match(raw_text));
     Projection {
         wants_quiet: !text.is_empty() && has(&text, "HUSH_KEYWORDS"),
         should_block_ambient: !normalized.is_empty(),
@@ -191,8 +126,6 @@ pub fn classify(raw: &str, normalized: &str) -> Projection {
         asks_about_sound,
         player_haiku_text: payload(raw, "HAIKU_SAVE_PREFIXES"),
         revised_haiku_text: payload(raw, "HAIKU_REVISE_PREFIXES"),
-        reading_correction: reading(raw_text, explicit),
-        is_explicit_reading_correction: explicit,
     }
 }
 
@@ -227,7 +160,5 @@ mod tests {
             Some("一行\n二行\n三行")
         );
         assert!(value.asks_inventory);
-        let value = classify("「草地はくさち」", "草地はくさち");
-        assert!(value.reading_correction.is_none());
     }
 }

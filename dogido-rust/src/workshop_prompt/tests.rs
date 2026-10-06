@@ -31,18 +31,11 @@ fn all_consultation_prompts_match_fixture_exactly() {
             assert_eq!(input, case["prepared"]);
             assert_eq!(retry, case["retry"]);
             let messages = actual["messages"].as_array().unwrap();
-            assert_eq!(
-                messages.len(),
-                if input.get("fixed_payload").is_none() && truth(&retry) {
-                    3
-                } else {
-                    2
-                }
-            );
+            assert_eq!(messages.len(), if truth(&retry) { 3 } else { 2 });
             count += 1;
         }
     }
-    assert_eq!(count, 670);
+    assert_eq!(count, 666);
     let keys = [
         "raw_semantic",
         "current_idea",
@@ -105,6 +98,7 @@ fn malformed_projection_is_not_a_legacy_prompt_or_model_fallback() {
         json!({"details":good["details"],"messages":[]}),
         json!({"details":good["details"],"fixed_payload":null}),
         json!({"details":good["details"],"fixed_payload":"model prose"}),
+        json!({"details":good["details"],"fixed_payload":{"action":"stage_player_edit"}}),
     ] {
         assert!(prepare(&invalid, None).is_err());
     }
@@ -123,20 +117,15 @@ fn malformed_projection_is_not_a_legacy_prompt_or_model_fallback() {
 }
 
 #[test]
-fn assembled_response_preserves_former_frame_limit_for_retry_and_fixed_edit() {
-    for fixed in [false, true] {
-        let mut input = FIXTURES["projection_cases"][0]["prepared"].clone();
-        input["details"]["player_text"] = json!("猫".repeat(340_000));
-        if fixed {
-            input["fixed_payload"] = json!({"action":"stage_player_edit"});
-        }
-        assert!(
-            prepare(&input, None)
-                .unwrap_err()
-                .to_string()
-                .contains("too large")
-        );
-    }
+fn assembled_response_preserves_frame_limit_for_messages_and_retry() {
+    let mut input = FIXTURES["projection_cases"][0]["prepared"].clone();
+    input["details"]["player_text"] = json!("猫".repeat(340_000));
+    assert!(
+        prepare(&input, None)
+            .unwrap_err()
+            .to_string()
+            .contains("too large")
+    );
     let input = FIXTURES["projection_cases"][0]["prepared"].clone();
     assert!(prepare(&input, Some(&json!({"payload":"a".repeat(1_000_000)}))).is_err());
 }
@@ -178,7 +167,8 @@ fn pid(dir: &Path) -> u32 {
 
 #[tokio::test]
 async fn native_preparation_uses_no_helper_for_nonedit_or_kana_fragments() {
-    for index in [0, 2, 579] {
+    let cases = FIXTURES["projection_cases"].as_array().unwrap();
+    for index in [0, 2, cases.len() - 1] {
         let case = &FIXTURES["projection_cases"][index];
         let dir = directory();
         let mut helper = child(&dir, &Value::Null, true);

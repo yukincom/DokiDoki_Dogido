@@ -3,7 +3,7 @@ use serde_json::json;
 #[test]
 fn extraction_reading_edits_and_materials_match_fixture() {
     let cases: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    assert_eq!(cases.as_array().unwrap().len(), 2666);
+    assert_eq!(cases.as_array().unwrap().len(), 2006);
     for (index, case) in cases.as_array().unwrap().iter().enumerate() {
         let engine = Engine {
             readings: serde_json::from_value(case["readings"].clone()).unwrap(),
@@ -11,12 +11,6 @@ fn extraction_reading_edits_and_materials_match_fixture() {
         let f = &case["input"];
         let op = text(&case["op"]);
         let actual: Result<Value> = match op {
-            "parse" => {
-                let (status, replacement) = parse::replacement(text(&f["text"]));
-                Ok(
-                    json!({"status":status,"replacement":replacement.map(|r|json!({"text":r.text,"explicit_line_index":r.index,"target_fragment":r.fragment}))}),
-                )
-            }
             "normalize" => engine.normalized(text(&f["text"]), true).map(|v| json!(v)),
             "material" => engine
                 .material_for_question(

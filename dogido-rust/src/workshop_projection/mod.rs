@@ -10,7 +10,7 @@ use crate::{
     haiku_record::HaikuLine,
 };
 use anyhow::{Context, Result};
-pub use followup::fixed_followup;
+pub use followup::fixed_combat_resume;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{

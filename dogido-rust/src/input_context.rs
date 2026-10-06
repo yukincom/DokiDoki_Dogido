@@ -25,7 +25,6 @@ pub struct Context {
     pub knowledge_query: Option<query::Query>,
     pub player_haiku_text: Option<String>,
     pub revised_haiku_text: Option<String>,
-    pub reading_correction: Option<input_policy::ReadingCorrection>,
     pub asks_haiku_recall: bool,
     pub haiku_recall_biome_hint: Option<String>,
     pub haiku_recall_query: Option<recall_query::InputRecall>,
@@ -44,7 +43,7 @@ impl Context {
             now,
         )
     }
-    /// The raw text is used only for poem/reading extraction; normalized and
+    /// The raw text is used only for poem extraction; normalized and
     /// interpreted surfaces have already been prepared by their respective owner.
     pub fn from_surfaces(
         raw: &str,
@@ -83,7 +82,6 @@ impl Context {
             knowledge_query: None,
             player_haiku_text: None,
             revised_haiku_text: None,
-            reading_correction: None,
             asks_haiku_recall: false,
             haiku_recall_biome_hint: None,
             haiku_recall_query: None,
@@ -113,8 +111,6 @@ impl Context {
         context.asks_about_sound = p.asks_about_sound;
         context.player_haiku_text = p.player_haiku_text;
         context.revised_haiku_text = p.revised_haiku_text;
-        // Pronunciation registration belongs to the typed catalogue form, never
-        // to an utterance (including text chat). Keep the wire field for helpers.
         context.haiku_recall_query =
             recall_query::context_from_normalized(normalized, overlay, now);
         context.asks_haiku_recall = context.haiku_recall_query.is_some();
@@ -140,7 +136,6 @@ impl Context {
             && self.knowledge_query.is_none()
             && self.player_haiku_text.is_none()
             && self.revised_haiku_text.is_none()
-            && self.reading_correction.is_none()
             && !self.asks_haiku_recall
     }
 }
@@ -149,9 +144,8 @@ impl Context {
 mod tests {
     use super::*;
     #[test]
-    fn conversation_cannot_register_pronunciation_even_with_explicit_reading_words() {
+    fn pronunciation_words_remain_conversation_input() {
         for raw in [
-            "何か音はするね",
             "読み: 草地=くさち",
             "草地の読みはくさち",
             "そうちじゃなくてくさち",
@@ -163,7 +157,7 @@ mod tests {
                 &[],
                 DateTime::parse_from_rfc3339("2026-09-30T00:00:00Z").unwrap(),
             );
-            assert!(c.reading_correction.is_none(), "{raw}");
+            assert!(c.general_conversation(), "{raw}");
         }
     }
     #[test]
@@ -178,8 +172,7 @@ mod tests {
                 case["overlay"].as_array().unwrap(),
                 DateTime::parse_from_rfc3339(case["now"].as_str().unwrap()).unwrap(),
             );
-            let mut expected = case["expected"].clone();
-            expected["reading_correction"] = Value::Null;
+            let expected = case["expected"].clone();
             assert_eq!(
                 serde_json::to_value(&actual).unwrap(),
                 expected,
@@ -187,11 +180,8 @@ mod tests {
                 case["raw"],
                 case["normalized"]
             );
-            let mut legacy = actual.clone();
-            legacy.reading_correction =
-                serde_json::from_value(case["expected"]["reading_correction"].clone()).unwrap();
             assert_eq!(
-                legacy.general_conversation(),
+                actual.general_conversation(),
                 case["general"].as_bool().unwrap(),
                 "raw={:?}",
                 case["raw"]

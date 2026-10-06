@@ -61,7 +61,7 @@ def token_fixture(status):
         (folder / "tts_tokens_worker.py").write_text('''import json,sys
 from pathlib import Path
 folder=Path(__file__).parent
-readings={"桜の葉":"サクラノハ","桜色":"サクライロ"}
+readings={"桜の葉":"サクラノハ","桜色":"サクライロ","白い骨":"シロイホネ"}
 for line in sys.stdin:
     frame=json.loads(line)
     assert frame["op"]=="tts_tokens" and frame["schema_version"]==1

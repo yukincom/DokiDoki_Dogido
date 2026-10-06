@@ -24,128 +24,6 @@ fn kana(text: &str) -> bool {
             .chars()
             .all(|c| ('ぁ'..='ん').contains(&c) || c == 'ー')
 }
-fn kanji(text: &str) -> bool {
-    text.chars().any(|c| ('一'..='鿿').contains(&c))
-}
-fn value(surface: &str, reading: &str, explicit: bool) -> Option<Correction> {
-    let (surface, reading) = (surface.trim(), reading.trim());
-    if ["ではない", "じゃない", "ではなく", "じゃなく"]
-        .iter()
-        .any(|s| reading.ends_with(s))
-    {
-        return None;
-    }
-    if surface.is_empty()
-        || surface == reading
-        || !kana(reading)
-        || surface.contains(['\n', '\r', '「', '」', '『', '』', '"', '？', '?'])
-    {
-        return None;
-    }
-    Some(Correction {
-        surface: surface.into(),
-        reading: reading.into(),
-        wrong_reading: None,
-        explicit,
-    })
-}
-
-/// Raw STT/typed input only. Reject embedded quotations and explicit negation.
-/// Natural editing remains workshop's; a model cannot create this operation.
-pub fn parse(raw: &str) -> Option<Correction> {
-    let text = raw.trim();
-    if let Some(rest) = text
-        .strip_prefix("読み")
-        .or_else(|| text.strip_prefix("よみ"))
-    {
-        let rest = rest
-            .trim_start()
-            .trim_start_matches([':', '：'])
-            .trim_start();
-        if let Some((surface, reading)) = rest.split_once(['=', '＝', ':', '：']) {
-            return value(surface, reading, true);
-        }
-    }
-    for marker in ["の読みは", "のよみは"] {
-        if let Some((surface, reading)) = text.split_once(marker) {
-            if surface.chars().count() > 20 {
-                return None;
-            }
-            return value(surface, reading.trim(), true);
-        }
-    }
-    if let Some((surface, reading)) = text.split_once('は') {
-        let reading = reading.trim();
-        if kanji(surface)
-            && surface.chars().count() <= 20
-            && reading.chars().count() <= 16
-            && !surface.contains(['、', '。', '！', '!'])
-            && ![
-                "にして",
-                "として",
-                "どう",
-                "でした",
-                "ですか",
-                "なら",
-                "けど",
-                "から",
-                "ので",
-                "ほう",
-                "まま",
-                "ってこと",
-                "ということ",
-            ]
-            .iter()
-            .any(|s| reading.contains(s))
-        {
-            return value(surface, reading, false);
-        }
-    }
-    // Legacy kana correction, but require a whole utterance (not a quote inside
-    // another request). Biome resolution is separate and needs current context.
-    let folded: String = text
-        .chars()
-        .map(|c| {
-            if ('ァ'..='ヶ').contains(&c) {
-                char::from_u32(c as u32 - 0x60).unwrap()
-            } else {
-                c
-            }
-        })
-        .collect();
-    for marker in ["じゃなくて", "ではなく", "やなくて", "じゃなく"] {
-        if let Some((wrong, right)) = folded.split_once(marker)
-            && kana(wrong)
-            && wrong.chars().count() >= 2
-            && right.trim().chars().count() >= 2
-        {
-            let mut c = value(wrong, right, true)?;
-            c.wrong_reading = Some(wrong.into());
-            return Some(c);
-        }
-    }
-    None
-}
-
-pub fn grounded_in_workshop(c: &Correction, workshop: &Value) -> bool {
-    let m = &workshop["materials"];
-    ["biome_ja", "structure_ja", "held_item"]
-        .iter()
-        .any(|k| m[k].as_str() == Some(&c.surface))
-        || m["catalog_sources"]
-            .as_array()
-            .is_some_and(|rows| rows.iter().any(|r| r["label"] == c.surface))
-        || m["source_atoms"].as_array().is_some_and(|rows| {
-            rows.iter()
-                .any(|r| r["kind"] == "catalog_label" && r["text"] == c.surface)
-        })
-}
-
-pub fn for_input(raw: &str, workshop: &Value) -> Option<Correction> {
-    let c = parse(raw)?;
-    (c.explicit || !workshop.is_object() || grounded_in_workshop(&c, workshop)).then_some(c)
-}
-
 impl Correction {
     /// Preserve the old biome shorthand only when its target is actually known.
     /// An explicit named surface is never replaced with the current biome.
@@ -277,36 +155,25 @@ impl MemoryStore {
 mod tests {
     use super::*;
     #[test]
-    fn explicit_and_grounded_shorthand_do_not_steal_edits() {
-        assert_eq!(parse("読み: 荒野=こうや").unwrap().reading, "こうや");
-        let w = json!({"materials":{"held_item":"草地"}});
-        assert!(for_input("読み: 草地=くさち", &json!({})).is_some());
-        assert!(for_input("草地の読みはくさち", &json!({})).is_some());
-        assert!(for_input("草地はくさち", &w).is_some());
-        assert!(for_input("草地はくさち", &json!({})).is_none());
-        assert!(for_input("草地はくさち", &Value::Null).is_some());
-        for s in [
-            "おはようさん",
-            "上五をさくらいろにして",
-            "草地はくさちにしてはどう",
-            "草地の読みはくさちではない",
-            "「草地」の読みはくさち",
-            "読み: 草地=くさち？",
-            "『そうちじゃなくてくさち』と言った",
-        ] {
-            assert!(parse(s).is_none(), "{s}");
-        }
-    }
-    #[test]
     fn kana_shorthand_requires_known_biome() {
-        let mut c = parse("そうちじゃなくてくさち").unwrap();
+        let mut c = Correction {
+            surface: "そうち".into(),
+            reading: "くさち".into(),
+            wrong_reading: Some("そうち".into()),
+            explicit: true,
+        };
         assert_eq!(
             c.resolve_biome(Some("minecraft:meadow")).as_deref(),
             Some("biome:meadow")
         );
         assert_eq!(c.surface, "草地");
         assert!(!c.needs_surface());
-        let mut c = parse("そうちじゃなくてくさち").unwrap();
+        let mut c = Correction {
+            surface: "そうち".into(),
+            reading: "くさち".into(),
+            wrong_reading: Some("そうち".into()),
+            explicit: true,
+        };
         assert_eq!(c.resolve_biome(Some("unknown")), None);
         assert!(c.needs_surface());
     }
@@ -316,11 +183,21 @@ mod tests {
         let store = MemoryStore::new(&root);
         assert!(store.reading_corrections().unwrap().is_empty());
         assert!(!root.exists());
-        let c = parse("草地の読みはくさち").unwrap();
+        let c = Correction {
+            surface: "草地".into(),
+            reading: "くさち".into(),
+            wrong_reading: None,
+            explicit: true,
+        };
         store
             .save_reading_correction(&c, Some("biome:meadow"), Utc::now(), "ses_a")
             .unwrap();
-        let c = parse("草地の読みはくさぢ").unwrap();
+        let c = Correction {
+            surface: "草地".into(),
+            reading: "くさぢ".into(),
+            wrong_reading: None,
+            explicit: true,
+        };
         store
             .save_reading_correction(&c, None, Utc::now(), "ses_b")
             .unwrap();

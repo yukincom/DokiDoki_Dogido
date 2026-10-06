@@ -16,7 +16,7 @@ use crate::{
 };
 use anyhow::{Context, ensure};
 
-const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル（上の古い固定応答指示より優先）: 現在句・未採用案・直近対話・discussion_targetを読み、次のactionをあなたが選ぶ。編集、案の採用と保存、破棄、終了も、本人の意思を文脈から理解して選んでよい。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードが対象・元句一致・音数・保存結果を確定する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話し、検査を必須にしない。記録された読み・音数・出典を確かめたいときはinspectを選ぶ。inspectとunrelated以外は、操作actionでもspeechに自然な返事を入れる（空にするという以前の指示は無効）。編集・採用はコードが実行に成功してからこの返事を再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。実行できない理由が返ってきたら同じ対象について説明・相談を続ける。";
+const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次のactionをあなたが選ぶ。編集、案の採用と保存、破棄、終了も、本人の意思を文脈から理解して選んでよい。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードが対象・元句一致・音数・保存結果を確定する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話し、検査を必須にしない。読み・音数・出典の確認は必要と判断したときだけinspectを選ぶ。相談中の語や候補はinspect_textに渡せる。どの行へ置くか決まっていたらinspect_line_index（上五0・中七1・下五2）も付ける。結果のmeter_statusはtoo_long=字余り、too_short=字足らず、exact=一致、unavailable=未確定。meter_deltaの正数は超過、負数は不足の音数なので、結果を受けて自然に説明や相談を続ける。inspectとunrelated以外は、操作actionでもspeechに自然な返事を入れる（空にするという以前の指示は無効）。編集・採用はコードが実行に成功してからこの返事を再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。実行できない理由が返ってきたら同じ対象について説明・相談を続ける。";
 
 impl Dialogue {
     /// 現在句のsnapshotから、返答と検証済みの行為候補を作る。
@@ -148,10 +148,7 @@ impl Dialogue {
                     if let Some(assets) =
                         input.get("text_workshop_prompt").filter(|v| v.is_object())
                     {
-                        let mut projection = json!({"details":details});
-                        if let Some(fixed) = prepared.get("fixed_payload") {
-                            projection["fixed_payload"] = fixed.clone();
-                        }
+                        let projection = json!({"details":details});
                         prepared =
                             prompt::prepare_with_assets(&projection, frame.get("retry"), assets)?;
                     }
@@ -166,52 +163,46 @@ impl Dialogue {
                         prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
                             "content":"ここはテキスト相談室。採用した変更はコードが句集へ保存する。保存や採用の成否を先回りして言わず、コードの実行結果に従ってな。"}));
                     }
-                    let payload = if let Some(fixed) = prepared.get("fixed_payload") {
-                        fixed.clone()
-                    } else {
-                        let request = GenerationRequest {
-                            schema_version: 1,
-                            kind: "haiku_workshop_agent_step".into(),
-                            model: self.config.model.clone(),
-                            messages: serde_json::from_value(prepared["messages"].clone())?,
-                            temperature: 0.25,
-                            max_tokens: 420,
-                            enable_thinking: false,
-                        };
-                        self.record_text_workshop_request(input, &request, phase);
-                        let report = match self.llm.generate(&request).await {
-                            Ok(report) => report,
-                            Err(error) => {
-                                reports
-                                    .push(json!({"kind":request.kind,"error":error.to_string()}));
-                                reason = "generation_error".into();
-                                break;
-                            }
-                        };
-                        tracing::info!(kind="haiku_workshop_agent_step",phase,attempt,
-                        elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,
-                        finish_reason=?report.generated.finish_reason);
-                        let truncated = matches!(
-                            report.generated.finish_reason.as_deref(),
-                            Some("length" | "max_tokens" | "MAX_TOKENS")
-                        );
-                        let payload = crate::planner::extract_object(&report.generated.text);
-                        reports.push(serde_json::to_value(report)?);
-                        let Some(payload) = payload.filter(|_| !truncated) else {
-                            reason = if truncated {
-                                "output_truncated"
-                            } else {
-                                "invalid_json"
-                            }
-                            .into();
-                            if attempt == 0 {
-                                frame["retry"] = json!({"reason":reason,
-                                    "instruction":"同じ会話の返答を指定JSONにまとめ直してな。必須6キーを入れ、speechを短めにして完成させてな。"});
-                                continue;
-                            }
+                    let request = GenerationRequest {
+                        schema_version: 1,
+                        kind: "haiku_workshop_agent_step".into(),
+                        model: self.config.model.clone(),
+                        messages: serde_json::from_value(prepared["messages"].clone())?,
+                        temperature: 0.25,
+                        max_tokens: 420,
+                        enable_thinking: false,
+                    };
+                    self.record_text_workshop_request(input, &request, phase);
+                    let report = match self.llm.generate(&request).await {
+                        Ok(report) => report,
+                        Err(error) => {
+                            reports.push(json!({"kind":request.kind,"error":error.to_string()}));
+                            reason = "generation_error".into();
                             break;
-                        };
-                        payload
+                        }
+                    };
+                    tracing::info!(kind="haiku_workshop_agent_step",phase,attempt,
+                    elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,
+                    finish_reason=?report.generated.finish_reason);
+                    let truncated = matches!(
+                        report.generated.finish_reason.as_deref(),
+                        Some("length" | "max_tokens" | "MAX_TOKENS")
+                    );
+                    let payload = crate::planner::extract_object(&report.generated.text);
+                    reports.push(serde_json::to_value(report)?);
+                    let Some(payload) = payload.filter(|_| !truncated) else {
+                        reason = if truncated {
+                            "output_truncated"
+                        } else {
+                            "invalid_json"
+                        }
+                        .into();
+                        if attempt == 0 {
+                            frame["retry"] = json!({"reason":reason,
+                                "instruction":"同じ会話の返答をJSONにまとめ直してな。普通の返答はactionとspeechだけでええで。"});
+                            continue;
+                        }
+                        break;
                     };
                     frame["op"] = "validate".into();
                     frame["payload"] = payload.clone();
@@ -333,16 +324,34 @@ impl Dialogue {
                     snapshot["discussion_target"] = serde_json::to_value(&discussion_target)?;
                 }
                 let candidate = json!({"action":a,"purpose":step["purpose"],"findings":step["analysis"]["findings"]});
-                if (feedback.is_null() || a == "propose_revision")
+                if step["analysis"]["feedback_allowed"] != false
+                    && (feedback.is_null() || a == "propose_revision")
                     && crate::haiku_memory::feedback_kind(&candidate).is_some()
                 {
                     feedback = candidate;
                 }
                 if a == "inspect" {
                     let checks: Vec<String> = serde_json::from_value(step["checks"].clone())?;
-                    observation = workshop::inspect(lines, &checks);
-                    if pending.is_some() {
-                        observation["verse_kind"] = "pending".into();
+                    if let Some(target) = step["inspect_text"].as_str() {
+                        let reading = if checks
+                            .iter()
+                            .any(|c| matches!(c.as_str(), "reading" | "meter"))
+                        {
+                            Some(helper.neutral_reading(target).await?)
+                        } else {
+                            None
+                        };
+                        observation = workshop::inspect_text(
+                            target,
+                            &checks,
+                            reading.as_deref(),
+                            step["inspect_line_index"].as_u64().map(|i| i as usize),
+                        );
+                    } else {
+                        observation = workshop::inspect(lines, &checks);
+                        if pending.is_some() {
+                            observation["verse_kind"] = "pending".into();
+                        }
                     }
                 }
                 if phase == "decide"
@@ -707,8 +716,8 @@ fn prepare_revision(frame: &Value) -> Result<crate::haiku::revision::Input> {
     serde_json::from_value(prepared).context("workshop revision input")
 }
 
-// Details, saved sources, fixed edit extraction, prompts and validation are Rust
-// owned. Only unresolved kanji requests neutral tokens from the existing child.
+// Consultation preparation projects saved context and builds the model prompt.
+// It does not select an action or request dictionary tokens from the helper.
 async fn prepare_consultation(
     _helper: &mut Helper,
     _editing: &mut crate::workshop_editing::Engine,

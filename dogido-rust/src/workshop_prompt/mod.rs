@@ -54,7 +54,6 @@ fn render(parts: &Value, slots: &BTreeMap<&str, String>) -> Result<String> {
 
 /// The prepared frame is code-owned projection, never a model response. A legacy
 /// messages-only response is rejected rather than silently bypassing Rust.
-/// Fixed edits still pass through the existing validation, and skip retry prose.
 pub(super) fn prepare(prepared: &Value, retry: Option<&Value>) -> Result<Value> {
     prepare_with_assets(prepared, retry, &ASSETS)
 }
@@ -66,16 +65,11 @@ pub(super) fn prepare_with_assets(
 ) -> Result<Value> {
     let projection = prepared.as_object().context("workshop prepared object")?;
     ensure!(
-        projection
-            .keys()
-            .all(|k| matches!(k.as_str(), "details" | "fixed_payload")),
+        projection.keys().all(|k| k == "details"),
         "unexpected workshop prepared field"
     );
     let details: Details = serde_json::from_value(prepared["details"].clone())
         .context("invalid workshop prompt details")?;
-    if let Some(fixed) = projection.get("fixed_payload") {
-        ensure!(fixed.is_object(), "invalid workshop fixed payload");
-    }
     let allowed = |name: &str| details.allowed_actions.iter().any(|a| a == name);
     let context = if details.workshop_context.is_empty() {
         String::new()
@@ -160,16 +154,11 @@ pub(super) fn prepare_with_assets(
         json!({"role":"system", "content":crate::companion_prompt::expand(assets["system"].as_str().context("system prompt")?)}),
         json!({"role":"user", "content":render(&assets["main"], &slots)?}),
     ];
-    if projection.get("fixed_payload").is_none()
-        && let Some(retry) = retry.filter(|v| truth(v))
-    {
+    if let Some(retry) = retry.filter(|v| truth(v)) {
         slots.insert("retry", spaced_json(retry));
         messages.push(json!({"role":"user", "content":render(&assets["retry"], &slots)?}));
     }
-    let mut output = json!({"messages":messages});
-    if let Some(fixed) = projection.get("fixed_payload") {
-        output["fixed_payload"] = fixed.clone();
-    }
+    let output = json!({"messages":messages});
     // 末尾改行1byte分を含めても1MB以内になるよう、返却するJSON本文を厳密な上限未満にする。
     ensure!(
         spaced_json(&output).len() < 1_000_000,

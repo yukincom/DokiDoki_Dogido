@@ -15,10 +15,11 @@
 `Snapshot::from_view` は検証済みruntime viewから相談用のsnapshotを構築する。
 viewが渡さない last_findings / last_repair_feedback は勝手に補わない。
 直接 `Snapshot` を構築する場合は両フィールドを保持でき、修正結果は元句が一致する場合だけ載せる。
-短い同意は `fixed_followup(text, Stage, pending)` で候補actionを返すだけ。
+戦闘分類器が不成立の場合の短い再開同意は、`fixed_combat_resume(text)` を `combat_fallback` から使う。
+通常の相談・終了確認の短い返答はモデルが判断し、未使用の固定判定は削除済み。
 実再生後の段階・pending・終了・採否の更新は従来のRust runtimeが所有する。
 
-workshop runtime の相談 details・短い同意・editor入力はこのAPIへ接続済み。
+workshop runtime の相談 details・戦闘再開fallback・editor入力はこのAPIへ接続済み。
 `prepare_details` / `fixed_followup` / `revision_input` の旧Python操作と比較oracleは運用終了済み。
 相談と修正の出典は保存済み materials だけから組み立てる。
 
@@ -50,7 +51,7 @@ Pythonの関連1,863件とRustの相談prompt・validation10件を確認済み�
 「噛んだ」の許可後にも元の9件と反論後2件を実モデルで検査したが、この逃げ道を使う返答は
 確認できなかった。語義を断定する返答が残るため、指示追加による改善は未確認。
 
-句と材料の照合、固定・自然な局所編集、三行の読み確定は `workshop_editing` が担当する。
+句と材料の照合、局所編集案の組み立て、三行の読み確定は `workshop_editing` が担当する。
 原文と解釈、行指定とfragmentの一意性、未採用案、保存済み出典、表示と読みを分離したまま、
 候補を既存の音数・hard制約・原文evidence・CAS検査へ戻す。採用・保存の権限はruntimeに残す。
 完成三行の持込みは従来どおり音数外の句も保管でき、読みが確定しない場合は推測しない。
@@ -77,7 +78,8 @@ IPC破損・schema不一致・取消・期限超過は成功へ変換せず子�
 native投影にも旧IPCの100万byte上限を適用し、新たなhelper子・辞書・モデル呼出は追加しない。
 読み・音数・保存出典の `inspect` もRustで実行する。
 
-Python正本由来で出典1,831例、相談投影408例、短い同意5,712例を比較する。
+移植時に保存した出典1,831例、相談投影408例、戦闘再開同意714例を検査する。
+未使用の通常同意判定にだけ対応する例は削除し、戦闘再開の期待結果は維持する。
 相談投影は全項目に加えPython互換のJSON文字列も比較し、promptのキー順・空白を維持する。
 生成器は辞書の初期化を禁止している。実モデル・音声・Minecraft確認を代替するものではない。
 
@@ -88,7 +90,7 @@ python dogido-rust/scripts/generate_workshop_source_fixtures.py
 ./dogido-rust/cargo.sh test --offline workshop_followup --lib
 ```
 
-実配線の回帰検査は、canonical準備580例と編集・材料2,666例、元のprompt・検査の比較、
+実配線の回帰検査は、canonical準備576例と編集・材料2,006例、元のprompt・検査の比較、
 同一辞書子の再利用、辞書失敗時の元表記、IPC不要の入力、旧helper応答の拒否、
 サイズ上限、取消・期限超過と実子回収を含む。
 模擬HTTPの `check_workshop_runtime.py` / `check_workshop_edits.py` /

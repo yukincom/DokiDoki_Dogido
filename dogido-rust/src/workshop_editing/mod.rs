@@ -28,53 +28,12 @@ pub enum Output {
         query: Option<crate::knowledge::query::Query>,
     },
     CombatFallback(crate::workshop_combat_input::Analysis),
-    FragmentCandidate {
-        fixed_payload: Option<FixedEditStep>,
-    },
     DiscussionCandidate {
         candidate: Option<crate::workshop_candidate::Draft>,
     },
     PlayerEdit(PlayerEditResult),
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "action", rename_all = "snake_case")]
-pub enum FixedEditStep {
-    StagePlayerEdit {
-        purpose: EditPurpose,
-        confidence: f64,
-        evidence: String,
-        speech: String,
-        checks: Vec<String>,
-        line_reference: LineReference,
-        line_proposal: LineProposal,
-    },
-}
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EditPurpose {
-    ImproveWording,
-}
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LineConcept {
-    Unknown,
-}
-#[derive(Debug, Serialize)]
-pub struct LineReference {
-    pub found: bool,
-    pub concept_id: LineConcept,
-    pub evidence: String,
-    pub confidence: f64,
-}
-#[derive(Debug, Serialize)]
-pub struct LineProposal {
-    pub found: bool,
-    pub target_fragment: Option<String>,
-    pub replacement_text: String,
-    pub evidence: String,
-    pub confidence: f64,
-}
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum PlayerEditResult {
@@ -192,11 +151,7 @@ impl Engine {
             "combat_fallback" => {
                 let source = input.trim_matches(space);
                 let compact = source.split(space).collect::<String>();
-                let resume = crate::workshop_projection::fixed_followup(
-                    source,
-                    crate::workshop_followup::Stage::CombatResumeConfirmation,
-                    false,
-                ) == Some("resume_workshop")
+                let resume = crate::workshop_projection::fixed_combat_resume(source)
                     || [
                         "句を続け",
                         "句の続き",
@@ -240,9 +195,6 @@ impl Engine {
                     evidence: evidence.into(),
                 }))
             }
-            "fragment_candidate" => Ok(Output::FragmentCandidate {
-                fixed_payload: self.fixed_fragment(frame, &snapshot)?,
-            }),
             "explicit_discussion" => {
                 let candidate = if parse::explicit_discussion(input) {
                     self.discussion(frame, &snapshot, &Value::Null)?

@@ -27,17 +27,15 @@ fn canonical_context_details_and_revision_goldens() {
     }
 }
 #[test]
-fn short_followups_preserve_stage_pending_and_whole_utterance_conditions() {
+fn combat_resume_preserves_whole_utterance_conditions() {
     let data: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
-    let rows = data["followup"].as_array().unwrap();
-    assert!(rows.len() > 5700);
+    let rows = data["combat_resume"].as_array().unwrap();
+    assert_eq!(rows.len(), 714);
     for row in rows {
-        let stage = serde_json::from_value(row["stage"].clone()).unwrap();
-        let pending = row["pending"].as_bool().unwrap();
-        let action = fixed_followup(row["text"].as_str().unwrap(), stage, pending);
-        assert_eq!(json!(action), row["expected"], "{row}");
-        if let Some(action) = action {
-            assert!(stage.actions(pending).contains(&action));
-        }
+        assert_eq!(
+            fixed_combat_resume(row["text"].as_str().unwrap()),
+            row["expected"].as_bool().unwrap(),
+            "{row}"
+        );
     }
 }

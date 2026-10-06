@@ -67,6 +67,20 @@ struct Step {
 
 /// 原文の否定・引用等は既存の純粋helperで照合し、外形と段階の権限をRustで再検査する。
 pub fn validate(payload: &Value, text: &str, stage: Stage, pending: bool) -> Result<()> {
+    // 納得や会話続行は保存・終了・戦闘復帰を実行しない。本文の受理は
+    // conversation側で済ませ、ここでは実際の直前段階との接続だけを見る。
+    if matches!(
+        payload["action"].as_str(),
+        Some("acknowledge_meaning" | "continue_workshop")
+    ) {
+        ensure!(
+            stage
+                .actions(pending)
+                .contains(&payload["action"].as_str().unwrap()),
+            "followup_stage_mismatch"
+        );
+        return Ok(());
+    }
     let step: Step = serde_json::from_value(payload.clone())?;
     ensure!(
         stage.actions(pending).contains(&step.action.as_str()),
