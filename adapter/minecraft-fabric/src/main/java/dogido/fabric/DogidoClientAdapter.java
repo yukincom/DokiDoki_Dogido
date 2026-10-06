@@ -537,22 +537,23 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
+        WorldObservationFrame worldFrame = new WorldObservationFrame(() -> buildWorld(player, world));
 
         if (shouldSendSnapshot()) {
-            JsonObject snapshot = buildStatusSnapshot(player, world, visibleThreats, audioThreats, ambientSounds, ambientMobs);
+            JsonObject snapshot = buildStatusSnapshot(player, world, worldFrame, visibleThreats, audioThreats, ambientSounds, ambientMobs);
             this.eventClient.postEvent(snapshot);
             this.lastSnapshotTick = this.tickCounter;
         }
 
         if (shouldSendThreatEvent(visibleThreats)) {
-            JsonObject threatEvent = buildThreatApproaching(player, world, visibleThreats, audioThreats, ambientMobs);
+            JsonObject threatEvent = buildThreatApproaching(player, world, worldFrame, visibleThreats, audioThreats, ambientMobs);
             this.eventClient.postEvent(threatEvent);
             this.lastThreatTick = this.tickCounter;
             this.lastThreatSignature = threatSignature(visibleThreats);
         }
 
         if (shouldSendAudioThreatEvent(unseenAudioThreats)) {
-            JsonObject audioEvent = buildHostileAudioDetected(player, world, threats, unseenAudioThreats, ambientMobs);
+            JsonObject audioEvent = buildHostileAudioDetected(player, world, worldFrame, threats, unseenAudioThreats, ambientMobs);
             this.eventClient.postEvent(audioEvent);
             this.lastAudioEventTick = this.tickCounter;
             this.lastAudioDispatchObservationTick = latestAudioObservationTick(unseenAudioThreats);
@@ -560,7 +561,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
 
         if (shouldSendAmbientMobEvent(ambientMobs, visibleThreats, unseenAudioThreats, deadNow)) {
-            JsonObject ambientEvent = buildAmbientMobDetected(player, world, ambientMobs);
+            JsonObject ambientEvent = buildAmbientMobDetected(player, world, worldFrame, ambientMobs);
             this.eventClient.postEvent(ambientEvent);
             this.lastAmbientMobEventTick = this.tickCounter;
             this.lastAmbientMobSignature = ambientMobSignature(ambientMobs);
@@ -570,6 +571,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             JsonObject detonationEvent = buildCreeperDetonated(
                 player,
                 world,
+                worldFrame,
                 visibleThreats,
                 audioThreats,
                 ambientMobs,
@@ -582,6 +584,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             JsonObject defeatedEvent = buildHostileDefeated(
                 player,
                 world,
+                worldFrame,
                 visibleThreats,
                 audioThreats,
                 ambientMobs,
@@ -591,7 +594,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
 
         if (deadNow && !this.wasDead) {
-            JsonObject deathEvent = buildPlayerDied(player, world, visibleThreats, audioThreats, ambientMobs);
+            JsonObject deathEvent = buildPlayerDied(player, world, worldFrame, visibleThreats, audioThreats, ambientMobs);
             this.eventClient.postEvent(deathEvent);
             this.combatActive = false;
             clearCombatOutcomeObservations();
@@ -599,7 +602,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             // combat_ended 自体にも終了後の状態を載せる。旧順序では
             // buildCombat() が combat_active_hint=true を書いてしまっていた。
             this.combatActive = false;
-            JsonObject combatEndedEvent = buildCombatEnded(player, world, ambientMobs);
+            JsonObject combatEndedEvent = buildCombatEnded(player, world, worldFrame, ambientMobs);
             this.eventClient.postEvent(combatEndedEvent);
             clearCombatOutcomeObservations();
         }
@@ -1535,7 +1538,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
         }
 
-        // Encounter priority: prefer wildlife over followers. Wire selection preserves named individuals separately.
+        // Routine encounter priority stays unchanged. Extra companions are retained only as conversation candidates.
         mobs.sort(Comparator.comparing((AmbientMobObservation mob) -> mob.identity().tamed())
             .thenComparingDouble(AmbientMobObservation::distance));
         return mobs;
@@ -1884,6 +1887,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildStatusSnapshot(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
         List<AudioThreatObservation> ambientSounds,
@@ -1893,7 +1897,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root = baseEnvelope("status_snapshot", "system", "background", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         root.add("ambient_sounds", buildAmbientSounds(ambientSounds));
@@ -1909,6 +1913,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildThreatApproaching(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs
@@ -1917,7 +1922,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root = baseEnvelope("threat_approaching", "visual", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
@@ -1932,6 +1937,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildHostileAudioDetected(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs
@@ -1940,7 +1946,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root = baseEnvelope("hostile_audio_detected", "auditory", "normal", "medium");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", new JsonArray());
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
@@ -1955,13 +1961,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildAmbientMobDetected(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("ambient_mob_detected", "visual", "background", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", new JsonArray());
         root.add("auditory_threats", new JsonArray());
         attachPassiveMobs(root, ambientMobs);
@@ -1976,6 +1983,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildPlayerDied(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs
@@ -1984,7 +1992,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root = baseEnvelope("player_died", "system", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
@@ -1999,6 +2007,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildCreeperDetonated(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs,
@@ -2008,7 +2017,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root = baseEnvelope("creeper_detonated", "system", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
@@ -2025,6 +2034,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildHostileDefeated(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<ThreatObservation> threats,
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs,
@@ -2034,7 +2044,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root = baseEnvelope("hostile_defeated", "system", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", buildVisualThreats(threats));
         root.add("auditory_threats", buildAuditoryThreats(audioThreats));
         attachPassiveMobs(root, ambientMobs);
@@ -2051,13 +2061,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private JsonObject buildCombatEnded(
         ClientPlayerEntity player,
         ClientWorld world,
+        WorldObservationFrame worldFrame,
         List<AmbientMobObservation> ambientMobs
     ) {
         JsonArray nearbyResources = buildNearbyResources(player, world);
         JsonObject root = baseEnvelope("combat_ended", "system", "normal", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
-        root.add("world", buildWorld(player, world));
+        root.add("world", worldFrame.copy());
         root.add("visual_threats", new JsonArray());
         root.add("auditory_threats", new JsonArray());
         attachPassiveMobs(root, ambientMobs);
@@ -2217,6 +2228,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private JsonObject buildWorld(ClientPlayerEntity player, ClientWorld world) {
         BlockPos pos = player.getBlockPos();
+        LocalSpaceObservation space = observeLocalSpace(world, pos);
         JsonObject json = new JsonObject();
         long timeOfDay = world.getTimeOfDay() % 24000L;
         boolean submerged = isWaterContext(player);
@@ -2231,17 +2243,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         if (structureName != null && !structureName.isBlank()) {
             json.addProperty("structure", structureName);
         }
-        json.addProperty("local_light", world.getLightLevel(pos));
-        json.addProperty("sky_visible", world.isSkyVisible(pos));
+        json.addProperty("local_light", space.localLight());
+        json.addProperty("sky_visible", space.skyVisible());
         json.addProperty("game_paused", MinecraftClient.getInstance().isPaused());
         if (usesDayNightCycle(world)) {
             int surfaceY = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
             json.addProperty("surface_y", surfaceY);
             json.addProperty("depth_below_surface", Math.max(0, surfaceY - pos.getY()));
         }
-        double ceilingHeight = estimateCeilingHeight(world, pos);
-        String overheadCoverType = classifyOverheadCover(world, pos);
-        double enclosureScore = estimateEnclosureScore(world, pos);
+        double ceilingHeight = space.overhead().clearance();
+        String overheadCoverType = space.overhead().coverType();
+        double enclosureScore = estimateEnclosureScore(world, pos, space.skyVisible());
         int nearbyDoorCount = countNearbyDoors(world, pos);
         int openDoorCount = countOpenDoors(world, pos);
         boolean nearbyWindowPresent = hasNearbyWindow(world, pos);
@@ -2264,6 +2276,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         long nearbyLightningRecentMs = ticksSince(this.lastNearbyLightningObservedTick);
         Double respawnDistance = estimateRespawnDistance(world, pos);
         json.addProperty("ceiling_height", round(ceilingHeight));
+        json.addProperty("ceiling_observed", space.overhead().ceilingObserved());
         json.addProperty("overhead_cover_type", overheadCoverType);
         json.addProperty("is_submerged", submerged);
         json.addProperty("submerged_depth_blocks", submergedDepthBlocks);
@@ -2305,22 +2318,19 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         }
         json.addProperty(
             "safe_zone_with_door",
-            isSafeZoneWithDoor(world, pos, submerged, nearbyDoorCount, enclosureScore, ceilingHeight)
+            isSafeZoneWithDoor(space, submerged, nearbyDoorCount, enclosureScore)
         );
 
         int connectedDarkVolume = estimateConnectedDarkVolume(world, pos);
         double nearestDarkSpawnDistance = estimateNearestDarkSpawnDistance(world, pos);
         double darknessScore = estimateDangerDarkness(
-            world,
-            pos,
-            overheadCoverType,
+            space,
             enclosureScore,
             connectedDarkVolume,
             nearestDarkSpawnDistance,
             nearbyLightSourceCount,
             nearestLightSourceDistance,
-            cardinalWallCount,
-            ceilingHeight
+            cardinalWallCount
         );
 
         json.addProperty("enclosure_score", round(enclosureScore));
@@ -2423,9 +2433,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private JsonArray buildPassiveMobs(List<AmbientMobObservation> ambientMobs) {
         JsonArray array = new JsonArray();
-        List<AmbientMobObservation> selected = PassiveMobSelection.select(
-            ambientMobs, mob -> mob.identity().customName() != null);
-        for (AmbientMobObservation mob : selected) {
+        for (AmbientMobObservation mob : ambientMobs) {
             JsonObject entry = new JsonObject();
             entry.addProperty("type", mob.type());
             entry.add("identity", mob.identity().toJson());
@@ -2459,9 +2467,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void attachPassiveMobs(JsonObject root, List<AmbientMobObservation> ambientMobs) {
-        JsonArray passiveMobs = buildPassiveMobs(ambientMobs);
-        root.add("passive_mobs", passiveMobs);
-        // Count before buildPassiveMobs limits all species together to four entries.
+        root.add("passive_mobs", buildPassiveMobs(PassiveMobSelection.regular(ambientMobs)));
+        root.add("companion_candidates", buildPassiveMobs(PassiveMobSelection.companions(
+            ambientMobs, mob -> mob.identity().tamed() || mob.identity().customName() != null)));
+        // Count the full scan before the four routine observation slots are selected.
         long villagers = ambientMobs.stream().filter(mob -> "villager".equals(mob.type())).count();
         root.getAsJsonObject("world").addProperty("visible_villager_count", villagers);
     }
@@ -4086,35 +4095,17 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return "minecraft:overworld".equals(world.getRegistryKey().getValue().toString());
     }
 
-    private double estimateCeilingHeight(ClientWorld world, BlockPos origin) {
-        BlockPos.Mutable cursor = new BlockPos.Mutable(origin.getX(), origin.getY() + 1, origin.getZ());
-        int maxSteps = 24;
-        for (int step = 1; step <= maxSteps; step += 1) {
-            if (!isOpenMedium(world.getBlockState(cursor))) {
-                return step;
-            }
-            cursor.move(0, 1, 0);
-        }
-        return maxSteps;
-    }
+    private record LocalSpaceObservation(int localLight, boolean skyVisible, OverheadObservation overhead) {}
 
-    private String classifyOverheadCover(ClientWorld world, BlockPos origin) {
-        BlockPos.Mutable cursor = new BlockPos.Mutable(origin.getX(), origin.getY() + 1, origin.getZ());
-        int maxSteps = 24;
-        boolean sawFluid = false;
-        for (int step = 1; step <= maxSteps; step += 1) {
-            BlockState state = world.getBlockState(cursor);
-            if (state.getFluidState().isEmpty() == false) {
-                sawFluid = true;
-                cursor.move(0, 1, 0);
-                continue;
-            }
-            if (!state.isAir()) {
-                return classifyCoverBlock(state);
-            }
-            cursor.move(0, 1, 0);
-        }
-        return sawFluid ? "fluid" : "none";
+    private LocalSpaceObservation observeLocalSpace(ClientWorld world, BlockPos origin) {
+        int localLight = world.getLightLevel(origin);
+        boolean skyVisible = world.isSkyVisible(origin);
+        OverheadObservation overhead = OverheadObservation.scan(step -> {
+            BlockState state = world.getBlockState(origin.up(step));
+            if (!state.getFluidState().isEmpty()) return "fluid";
+            return state.isAir() ? "air" : classifyCoverBlock(state);
+        });
+        return new LocalSpaceObservation(localLight, skyVisible, overhead);
     }
 
     private String classifyCoverBlock(BlockState state) {
@@ -4132,7 +4123,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return "solid";
     }
 
-    private double estimateEnclosureScore(ClientWorld world, BlockPos origin) {
+    private double estimateEnclosureScore(ClientWorld world, BlockPos origin, boolean skyVisible) {
         int solid = 0;
         int total = 0;
         for (int dx = -2; dx <= 2; dx += 1) {
@@ -4151,7 +4142,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             }
         }
         double base = total == 0 ? 0.0 : (double) solid / (double) total;
-        if (!world.isSkyVisible(origin)) {
+        if (!skyVisible) {
             base += 0.15;
         }
         return clamp01(base);
@@ -4195,18 +4186,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private double estimateDangerDarkness(
-        ClientWorld world,
-        BlockPos origin,
-        String overheadCoverType,
+        LocalSpaceObservation space,
         double enclosureScore,
         int connectedDarkVolume,
         double nearestDarkSpawnDistance,
         int nearbyLightSourceCount,
         double nearestLightSourceDistance,
-        int cardinalWallCount,
-        double ceilingHeight
+        int cardinalWallCount
     ) {
-        int localLight = world.getLightLevel(origin);
+        int localLight = space.localLight();
+        double ceilingHeight = space.overhead().clearance();
         double lightPenalty = (15.0 - localLight) / 15.0;
         double darkVolumeScore = Math.min(1.0, connectedDarkVolume / 80.0);
         double spawnDistanceScore = nearestDarkSpawnDistance >= 99.0
@@ -4215,17 +4204,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         double nearbyLightSourceRelief = nearbyLightSourceCount <= 0 || nearestLightSourceDistance >= 99.0
             ? 0.0
             : Math.max(0.0, (4.0 - nearestLightSourceDistance) / 4.0);
-        double skyPenalty = world.isSkyVisible(origin) ? 0.0 : 0.15;
+        double skyPenalty = space.skyVisible() ? 0.0 : 0.15;
         boolean litInteriorPocket = isLitInteriorSafePocket(
-            world,
-            origin,
-            localLight,
-            overheadCoverType,
+            space,
             connectedDarkVolume,
             nearestDarkSpawnDistance,
             nearbyLightSourceCount,
-            nearestLightSourceDistance,
-            ceilingHeight
+            nearestLightSourceDistance
         );
         if (litInteriorPocket) {
             return clamp01(
@@ -4235,7 +4220,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                     - nearbyLightSourceRelief * 0.25
             );
         }
-        boolean crampedDarkBurrow = !world.isSkyVisible(origin)
+        boolean crampedDarkBurrow = !space.skyVisible()
             && ceilingHeight <= 3.0
             && cardinalWallCount >= 3
             && connectedDarkVolume <= 12;
@@ -4258,17 +4243,16 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private boolean isLitInteriorSafePocket(
-        ClientWorld world,
-        BlockPos origin,
-        int localLight,
-        String overheadCoverType,
+        LocalSpaceObservation space,
         int connectedDarkVolume,
         double nearestDarkSpawnDistance,
         int nearbyLightSourceCount,
-        double nearestLightSourceDistance,
-        double ceilingHeight
+        double nearestLightSourceDistance
     ) {
-        if (world.isSkyVisible(origin)) {
+        int localLight = space.localLight();
+        double ceilingHeight = space.overhead().clearance();
+        String overheadCoverType = space.overhead().coverType();
+        if (space.skyVisible()) {
             return false;
         }
         boolean nearbyLightSource = nearbyLightSourceCount > 0
@@ -4738,21 +4722,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private boolean isSafeZoneWithDoor(
-        ClientWorld world,
-        BlockPos origin,
+        LocalSpaceObservation space,
         boolean submerged,
         int nearbyDoorCount,
-        double enclosureScore,
-        double ceilingHeight
+        double enclosureScore
     ) {
         if (submerged || nearbyDoorCount <= 0) {
             return false;
         }
-        int localLight = world.getLightLevel(origin);
-        return localLight >= 8 && (
+        return space.localLight() >= 8 && (
             enclosureScore >= 0.18
-                || ceilingHeight <= 5.0
-                || !world.isSkyVisible(origin)
+                || space.overhead().clearance() <= 5.0
+                || !space.skyVisible()
         );
     }
 

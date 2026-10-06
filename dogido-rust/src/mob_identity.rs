@@ -61,7 +61,7 @@ pub fn observed(event: &GameEvent, now: i64) -> (HashSet<String>, Vec<NamedMob>)
     {
         add(identity, &look.name, "look", 0);
     }
-    for mob in &event.passive_mobs {
+    for mob in event.passive_mobs.iter().chain(&event.companion_candidates) {
         if let Some(identity) = &mob.identity {
             add(identity, &mob.r#type, "visual", 0);
         }

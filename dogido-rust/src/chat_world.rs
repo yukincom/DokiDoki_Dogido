@@ -2,7 +2,7 @@
 use crate::chat_catalog::{Catalog, strip};
 use crate::environment::{
     precipitation,
-    projection::{MiningState, project_environment},
+    projection::{EnvironmentProjection, MiningState, project_environment},
 };
 use crate::events::{GameEvent, TimePhase, Weather};
 use crate::world_catalog::{self, WorldCatalog};
@@ -140,6 +140,7 @@ pub fn place_context(
         event,
         current_structure,
         home_bed_prompt_distance,
+        &project_environment(event),
         false,
     )
 }
@@ -152,6 +153,7 @@ pub fn shared_place_context(
     event: &GameEvent,
     current_structure: Option<&str>,
     home_bed_prompt_distance: f64,
+    environment: &EnvironmentProjection,
 ) -> Result<Place> {
     build_place_context(
         catalog,
@@ -159,19 +161,20 @@ pub fn shared_place_context(
         event,
         current_structure,
         home_bed_prompt_distance,
+        environment,
         true,
     )
 }
 
-fn build_place_context(
+pub(crate) fn build_place_context(
     catalog: &WorldCatalog,
     entries: &Catalog,
     event: &GameEvent,
     current_structure: Option<&str>,
     home_bed_prompt_distance: f64,
+    environment: &EnvironmentProjection,
     shared: bool,
 ) -> Result<Place> {
-    let environment = project_environment(event);
     let w = &event.world;
     let y = event.player.position.y;
     let sky = w.sky_visible;
@@ -273,7 +276,7 @@ fn build_place_context(
                 }
             ));
         }
-        if let Some(ceiling) = ceiling {
+        if let Some(ceiling) = ceiling.filter(|_| w.ceiling_observed != Some(false)) {
             bits.push(format!("天井おおよそ{ceiling:.0}m"));
         }
         if let Some(light) = w.local_light {
@@ -296,18 +299,26 @@ fn build_place_context(
     })
 }
 pub fn weather_label(event: &GameEvent, climate: &precipitation::Climate) -> Result<String> {
-    if precipitation::from_event(event, climate)?.precipitation_kind
-        == precipitation::PrecipitationKind::Snow
-    {
-        return Ok("雪".into());
+    Ok(weather_label_from_context(
+        event,
+        &precipitation::from_event(event, climate)?,
+    ))
+}
+
+pub(crate) fn weather_label_from_context(
+    event: &GameEvent,
+    context: &precipitation::PrecipitationContext,
+) -> String {
+    if context.precipitation_kind == precipitation::PrecipitationKind::Snow {
+        return "雪".into();
     }
-    Ok(match event.world.weather {
+    match event.world.weather {
         Some(Weather::Clear) => "晴れ",
         Some(Weather::Rain) => "雨",
         Some(Weather::Thunder) => "雷",
         None => "不明",
     }
-    .into())
+    .into()
 }
 pub fn weather_fact(event: &GameEvent) -> &'static str {
     if matches!(event.world.weather, Some(Weather::Rain | Weather::Thunder))

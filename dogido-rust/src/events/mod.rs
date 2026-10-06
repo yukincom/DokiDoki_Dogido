@@ -52,6 +52,13 @@ impl GameEvent {
         Self(data, self.1.clone())
     }
 
+    /// Per-turn subject priority; never mutates accepted observations or ambient selection.
+    pub(crate) fn with_passive_mobs(&self, mobs: Vec<PassiveMob>) -> Self {
+        let mut data = self.0.clone();
+        data.passive_mobs = mobs;
+        Self(data, self.1.clone())
+    }
+
     /// Keep world observations while another conversation owner handles this input.
     pub(crate) fn without_player_input(&self) -> Self {
         let mut data = self.0.clone();

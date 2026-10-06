@@ -56,6 +56,7 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
     }
     if event.event.name == EventName::AmbientMobDetected || !event.passive_mobs.is_empty() {
         data["passive_mobs"] = incoming["passive_mobs"].clone();
+        data["companion_candidates"] = json!(event.companion_candidates);
     }
     if event.smell_observation.is_some() {
         data["smell_observation"] = incoming["smell_observation"].clone();
@@ -87,6 +88,7 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
         // These producer events sample both sections even when no mob/crosshair
         // target exists. Do not let an old target overwrite newer measurements.
         data["passive_mobs"] = incoming["passive_mobs"].clone();
+        data["companion_candidates"] = json!(event.companion_candidates);
         data["look_target"] = incoming["look_target"].clone();
     }
     for section in ["world", "player"] {
@@ -749,6 +751,8 @@ mod tests {
             "position":{"x":0,"y":64,"z":0},"hotbar":{"selected_slot":0,"slots":[]}});
         value["passive_mobs"] = json!([{"type":"salmon","identity":{"entity_id":"fish"},
             "environment":{"touching_water":true,"on_ground":false}}]);
+        value["companion_candidates"] = json!([{"type":"cat", "identity":{
+            "entity_id":"cat-1", "custom_name":"クロちゃん", "tamed":true}}]);
         value["look_target"] = json!({"kind":"entity","name":"salmon","identity":{"entity_id":"fish"},
             "environment":{"touching_water":true,"on_ground":false}});
         let full = GameEvent::parse(value.clone()).unwrap();
@@ -766,6 +770,15 @@ mod tests {
         let partial = GameEvent::parse(value.clone()).unwrap();
         let merged = context(session, &partial, false);
         assert!(merged.look_target.is_none());
+        assert_eq!(
+            merged.companion_candidates[0]
+                .identity
+                .as_ref()
+                .unwrap()
+                .custom_name
+                .as_deref(),
+            Some("クロちゃん")
+        );
         let projected =
             crate::conversation_observation::project(&merged, None, 24.0, 7.0, 10000).unwrap();
         assert_eq!(
@@ -785,8 +798,13 @@ mod tests {
         session.environment_latest = Some(merged);
         value["event"]["name"] = "hostile_audio_detected".into();
         value["passive_mobs"] = json!([]);
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("companion_candidates");
         let gone = context(session, &GameEvent::parse(value).unwrap(), false);
         assert!(gone.passive_mobs.is_empty() && gone.look_target.is_none());
+        assert!(gone.companion_candidates.is_empty());
         session.conversation_observation.observe(
             crate::conversation_observation::project(&gone, None, 24.0, 7.0, 10000).unwrap(),
         );

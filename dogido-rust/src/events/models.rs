@@ -1115,6 +1115,9 @@ pub struct WorldState {
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
     pub ceiling_height: Option<f64>,
+    /// True only when the upward scan found a ceiling; false means height is the search bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ceiling_observed: Option<bool>,
     #[serde(default)]
     pub overhead_cover_type: Option<String>,
     /// 現Fabricでは接水または水没をまとめた値。頭部まで水没したことだけを意味しない。
@@ -1293,6 +1296,9 @@ pub struct EventData {
     pub ambient_sounds: Vec<AmbientSound>,
     #[serde(default)]
     pub passive_mobs: Vec<PassiveMob>,
+    /// Same visible scan, outside the four routine slots. Read only for a player topic.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub companion_candidates: Vec<PassiveMob>,
     /// buildInventoryが所持枠をitem IDのpathごとに合算した個数。入手・クラフト・設置の行為ログではない。
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
@@ -1670,6 +1676,19 @@ impl Validate for EventData {
         self.smell_observation.validate()?;
         self.ambient_sounds.validate()?;
         self.passive_mobs.validate()?;
+        ensure(
+            self.companion_candidates.len() <= 32,
+            "EventData.companion_candidates: maxItems 32",
+        )?;
+        self.companion_candidates.validate()?;
+        ensure(
+            self.companion_candidates.iter().all(|mob| {
+                mob.identity.as_ref().is_some_and(|identity| {
+                    identity.tamed || crate::mob_identity::name(identity).is_some()
+                })
+            }),
+            "EventData.companion_candidates: named or tamed identity required",
+        )?;
         self.nearby_resources.validate()?;
         ensure(
             (self.dropped_items).len() <= 32,

@@ -1,39 +1,40 @@
 package dogido.fabric;
 
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PassiveMobSelectionTest {
-    private record Mob(String id, String customName) {}
-    private static Mob unnamed(String id) { return new Mob(id, null); }
-    private static List<Mob> select(List<Mob> observed) {
-        return PassiveMobSelection.select(observed, mob -> mob.customName() != null);
+    private record Mob(String id, String customName, boolean tamed) {}
+    private static Mob wild(String id) { return new Mob(id, null, false); }
+    private static List<Mob> candidates(List<Mob> observed) {
+        return PassiveMobSelection.companions(observed, m -> m.tamed() || m.customName() != null);
     }
 
-    @Test void fourWildAnimalsCannotDisplaceTheNamedCat() {
-        Mob cow = unnamed("cow1"), chicken = unnamed("chicken1"), otherCow = unnamed("cow2");
-        Mob otherChicken = unnamed("chicken2"), cat = new Mob("cat1", "クロちゃん");
-        List<Mob> observed = List.of(cow, chicken, otherCow, otherChicken, cat);
-        assertEquals(List.of(cow, chicken, otherCow, cat), select(observed));
-        assertEquals(List.of(cow, chicken, otherCow, otherChicken, cat), observed);
+    @Test void namedCatDoesNotDisplaceWildlifeButRemainsAvailableForConversation() {
+        List<Mob> wildlife = List.of(wild("cow1"), wild("chicken1"), wild("cow2"), wild("chicken2"));
+        Mob cat = new Mob("cat", "クロちゃん", true);
+        List<Mob> observed = java.util.stream.Stream.concat(wildlife.stream(), java.util.stream.Stream.of(cat)).toList();
+        assertEquals(wildlife, PassiveMobSelection.regular(observed));
+        assertEquals(List.of(cat), candidates(observed));
+        assertEquals(cat, observed.get(4));
     }
 
-    @Test void multipleNamedIndividualsAreRetainedInTheirOriginalEncounterOrder() {
-        Mob wild = unnamed("cow1"), namedWild = new Mob("cow2", "モモ"), other = unnamed("chicken1");
-        Mob cat1 = new Mob("cat1", "クロちゃん"), cat2 = new Mob("cat2", "クロちゃん");
-        assertEquals(List.of(wild, namedWild, cat1, cat2),
-            select(List.of(wild, namedWild, other, cat1, cat2)));
+    @Test void candidatesIncludeNamedWildAndUnnamedPetsWithoutDuplicatingRoutineEntries() {
+        Mob named = new Mob("cow", "モモ", false), pet = new Mob("wolf", null, true);
+        List<Mob> observed = List.of(named, wild("1"), wild("2"), wild("3"), pet,
+            new Mob("cat1", "クロちゃん", false), new Mob("cat2", "クロちゃん", true), wild("4"));
+        assertEquals(observed.subList(4, 7), candidates(observed));
+        assertEquals(observed.subList(0, 4), PassiveMobSelection.regular(observed));
     }
 
-    @Test void unnamedAndSmallObservationsKeepTheirExistingOrderAndBound() {
-        List<Mob> wild = List.of(unnamed("1"), unnamed("2"), unnamed("3"), unnamed("4"), unnamed("5"));
-        assertEquals(wild.subList(0, 4), select(wild));
-        assertEquals(List.of(), select(List.of()));
-        List<Mob> small = List.of(wild.get(0), new Mob("cat", "クロちゃん"));
-        assertEquals(small, select(small));
-        List<Mob> named = List.of(new Mob("1", "a"), new Mob("2", "b"), new Mob("3", "c"),
-            new Mob("4", "d"), new Mob("5", "e"));
-        assertEquals(named.subList(0, 4), select(named));
+    @Test void emptyAndSmallScansStayUnchangedAndCompanionStorageIsBounded() {
+        assertEquals(List.of(), PassiveMobSelection.regular(List.of()));
+        List<Mob> small = List.of(wild("1"), new Mob("cat", "クロちゃん", true));
+        assertEquals(small, PassiveMobSelection.regular(small));
+        assertTrue(candidates(small).isEmpty());
+        List<Mob> many = IntStream.range(0, 40).mapToObj(i -> new Mob("cat"+i, "名前"+i, true)).toList();
+        assertEquals(many.subList(4, 36), candidates(many));
     }
 }

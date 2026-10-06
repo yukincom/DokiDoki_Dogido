@@ -1,11 +1,19 @@
 use super::*;
 use crate::{chat_observation::SoundCandidate, mob_identity};
 
-pub(super) fn current_observations(snapshot: &Snapshot) -> Vec<handoff::Observation> {
+pub(super) fn current_observations(snapshot: &Snapshot, user: &str) -> Vec<handoff::Observation> {
+    let mentioned = mob_identity::mentioned(&snapshot.named_mobs, user);
     snapshot
         .named_mobs
         .iter()
-        .filter(|row| row.current)
+        .filter(|row| {
+            row.current
+                && (mentioned
+                    .iter()
+                    .any(|named| named.entity_id == row.entity_id)
+                    || (mentioned.is_empty()
+                        && mob_identity::species_mentioned(&row.mob_type, user)))
+        })
         .map(|row| handoff::Observation {
             entity_id: format!("individual:{}", row.entity_id),
             label: row.custom_name.clone(),
@@ -191,4 +199,96 @@ pub(super) fn hearing(snapshot: &Snapshot, user: &str) -> HearingAnswer {
         sources,
         ambiguous: duplicate_name,
     }
+}
+
+pub(super) struct Focused {
+    pub event: GameEvent,
+    pub snapshot: Snapshot,
+    pub context: Context,
+}
+
+/// Current names/species mentioned by the player determine priority for this reply only.
+/// Retained names and previous model replies never create a current observation.
+pub(super) fn focus(
+    event: &GameEvent,
+    snapshot: &Snapshot,
+    context: &Context,
+    user: &str,
+) -> Option<Focused> {
+    // The retained name table is capped independently of the current candidate scan.
+    // Add missing current visual names only to this reply's read projection.
+    let now = match &event.observed_at {
+        crate::events::EventTime::Aware(at) => at.timestamp_micros(),
+        crate::events::EventTime::Naive(at) => at.and_utc().timestamp_micros(),
+    };
+    let (_, observed_names) = mob_identity::observed(event, now);
+    let mut snapshot = snapshot.clone();
+    for row in observed_names {
+        if row.current
+            && row.basis != "hearing"
+            && !row.custom_name.is_empty()
+            && !snapshot
+                .named_mobs
+                .iter()
+                .any(|known| known.entity_id == row.entity_id)
+        {
+            snapshot.named_mobs.push(row);
+        }
+    }
+    let named = mob_identity::mentioned(&snapshot.named_mobs, user);
+    let candidates = event
+        .passive_mobs
+        .iter()
+        .chain(&event.companion_candidates)
+        .collect::<Vec<_>>();
+    let matches_topic = |mob: &&crate::events::PassiveMob| {
+        mob.identity.as_ref().is_some_and(|identity| {
+            (identity.tamed || mob_identity::name(identity).is_some())
+                && (named.iter().any(|row| row.entity_id == identity.entity_id)
+                    || (named.is_empty() && mob_identity::species_mentioned(&mob.r#type, user)))
+        })
+    };
+    let mut selected = candidates
+        .iter()
+        .copied()
+        .filter(matches_topic)
+        .take(4)
+        .cloned()
+        .collect::<Vec<_>>();
+    if selected.is_empty() {
+        return None;
+    }
+    for mob in &event.passive_mobs {
+        if selected.len() == 4 {
+            break;
+        }
+        let already_selected = mob.identity.as_ref().is_some_and(|identity| {
+            selected.iter().any(|other| {
+                other
+                    .identity
+                    .as_ref()
+                    .is_some_and(|other| other.entity_id == identity.entity_id)
+            })
+        });
+        if !already_selected {
+            selected.push(mob.clone());
+        }
+    }
+    let event = event.with_passive_mobs(selected);
+    snapshot.current.passive_types =
+        current::unique(event.passive_mobs.iter().map(|mob| mob.r#type.as_str()));
+    let mut context = context.clone();
+    if let Some(world) = &mut context.world_context {
+        // Reuse the frame's place/weather measurements; only the chosen animals change.
+        world.observations["mob_states"] = crate::mob_environment::project(&event);
+        world.villager_routines = crate::villager_routines::project(&event);
+        let knowledge =
+            crate::catalog_knowledge::for_event(&event, context.current_structure.as_deref());
+        world.catalog_knowledge = (!knowledge.is_empty()).then_some(knowledge);
+    }
+    Some(Focused {
+        event,
+        snapshot,
+        context,
+    })
 }

@@ -51,12 +51,13 @@ pub fn project(
         event,
         structure,
         home_distance,
+        &projection,
     )?;
     let climate = catalog.climate(event.world.biome.as_deref())?;
     let precipitation = environment::precipitation::from_event(event, &climate)?;
     let weather = if projection.include_sky_context {
         // Climate resolves rain/snow. A world thunder setting is not a heard thunderclap.
-        json!({"label":chat_world::weather_label(event,&climate)?,
+        json!({"label":chat_world::weather_label_from_context(event,&precipitation),
             "precipitation_kind":precipitation.precipitation_kind,
             "precipitation_possible":precipitation.precipitation_possible,
             "surface_snow_observed":precipitation.surface_snow_observed})

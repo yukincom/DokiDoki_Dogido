@@ -1,36 +1,20 @@
 package dogido.fabric;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-/** Select up to four visible mobs without losing named individuals behind followers' priority. */
+/** Keep routine observations unchanged; retain extra companions only for explicit conversation. */
 final class PassiveMobSelection {
-    private static final int LIMIT = 4;
+    private static final int ROUTINE_LIMIT = 4;
+    private static final int COMPANION_LIMIT = 32;
 
     private PassiveMobSelection() {}
 
-    static <T> List<T> select(List<T> observed, Predicate<T> hasCustomName) {
-        if (observed.size() <= LIMIT) return List.copyOf(observed);
-        boolean[] selected = new boolean[observed.size()];
-        int count = 0;
-        for (int i = 0; i < observed.size() && count < LIMIT; i++) {
-            if (hasCustomName.test(observed.get(i))) {
-                selected[i] = true;
-                count++;
-            }
-        }
-        for (int i = 0; i < observed.size() && count < LIMIT; i++) {
-            if (!selected[i]) {
-                selected[i] = true;
-                count++;
-            }
-        }
-        // Retain encounter priority among the selected mobs; do not reorder the input.
-        List<T> result = new ArrayList<>(LIMIT);
-        for (int i = 0; i < observed.size(); i++) {
-            if (selected[i]) result.add(observed.get(i));
-        }
-        return List.copyOf(result);
+    static <T> List<T> regular(List<T> observed) {
+        return List.copyOf(observed.subList(0, Math.min(observed.size(), ROUTINE_LIMIT)));
+    }
+
+    static <T> List<T> companions(List<T> observed, Predicate<T> companion) {
+        return observed.stream().skip(ROUTINE_LIMIT).filter(companion).limit(COMPANION_LIMIT).toList();
     }
 }

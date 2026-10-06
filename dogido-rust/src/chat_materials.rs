@@ -136,6 +136,11 @@ pub fn before_plan(
         return Ok(Before::Knowledge);
     }
     let user = chat_catalog::strip(&input.semantic_text);
+    let focused = individuals::focus(event, snapshot, context, user);
+    let (event, snapshot, context) = focused
+        .as_ref()
+        .map(|turn| (&turn.event, &turn.snapshot, &turn.context))
+        .unwrap_or((event, snapshot, context));
     if crate::environment::ambient::is_smell_query(user) {
         return Ok(Before::Fixed(Fixed {
             text: crate::environment::ambient::current_smell_query_reply(event, user).text,
@@ -194,7 +199,7 @@ pub fn before_plan(
     );
     let mut observed_entities =
         current::observed(event, &observed_ids, context.current_structure.as_deref());
-    observed_entities.splice(0..0, individuals::current_observations(snapshot));
+    observed_entities.splice(0..0, individuals::current_observations(snapshot, user));
     let mut look = if crate::chat_world::wants_look_answer(user) {
         crate::world_catalog::catalog()
             .look_target_label(chat_catalog::catalog(), event.look_target.as_ref())

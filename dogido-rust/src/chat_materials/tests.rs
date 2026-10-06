@@ -850,3 +850,155 @@ fn shared_world_context_is_used_once_without_legacy_place_or_weather_materials()
     assert_eq!(text.matches("開けた地上").count(), 1);
     assert!(!text.contains("天井おおよそ") && !text.contains("高さY"));
 }
+
+#[test]
+fn companion_priority_is_limited_to_the_current_player_topic() {
+    let event = individual_event(
+        "2026-10-06T02:00:00Z",
+        json!({
+        "passive_mobs":[{"type":"cow"},{"type":"chicken"},{"type":"cow"},{"type":"chicken"}],
+        "companion_candidates":[
+            {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true},
+                "environment":{"touching_water":false,"on_ground":true}},
+            {"type":"wolf","identity":{"entity_id":"wolf-1","tamed":true}}]}),
+    );
+    let snapshot = individual_snapshot(&event);
+    let context = Context {
+        world_context: Some(
+            crate::conversation_observation::project(&event, None, 10.0, 3.0, 5000).unwrap(),
+        ),
+        ..Context::default()
+    };
+    let original = serde_json::to_value(&event).unwrap();
+    let prepare = |user: &str| {
+        let input = PlayerInput {
+            raw_text: user.into(),
+            semantic_text: user.into(),
+            ..PlayerInput::default()
+        };
+        let Before::Plan(turn) = before_plan(
+            &event,
+            &Settings::default(),
+            &input,
+            &context,
+            &snapshot,
+            &labels(),
+            Some("mock"),
+        )
+        .unwrap() else {
+            panic!()
+        };
+        turn
+    };
+    let unrelated = prepare("いい天気だね");
+    assert_eq!(unrelated.passive, ["cow", "chicken"]);
+    assert!(
+        !unrelated
+            .planner_input
+            .observation_summary
+            .contains("クロちゃん")
+    );
+    assert!(
+        !unrelated
+            .planner_input
+            .observed_entities
+            .iter()
+            .any(|row| row["label"] == "クロちゃん")
+    );
+    assert!(
+        !unrelated.base_details["world_context"]["catalog_knowledge"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["id"] == "cat")
+    );
+    let named = prepare("クロちゃんがいるね");
+    assert_eq!(named.event.passive_mobs.len(), 4);
+    assert_eq!(named.event.passive_mobs[0].r#type, "cat");
+    assert!(
+        named
+            .planner_input
+            .observation_summary
+            .contains("クロちゃん")
+    );
+    assert!(
+        named.base_details["world_context"]["catalog_knowledge"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["id"] == "cat")
+    );
+    assert_eq!(prepare("猫かわいいね").event.passive_mobs[0].r#type, "cat");
+    assert_eq!(prepare("狼がいるね").event.passive_mobs[0].r#type, "wolf");
+    assert_eq!(prepare("いい天気だね").passive, ["cow", "chicken"]);
+    assert_eq!(serde_json::to_value(&event).unwrap(), original);
+    assert_eq!(snapshot.current.passive_types, ["cow", "chicken"]);
+}
+
+#[test]
+fn retained_companion_name_never_restores_current_presence() {
+    let named = individual_event(
+        "2026-10-06T02:00:00Z",
+        json!({"companion_candidates":[
+        {"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}}]}),
+    );
+    let gone = individual_event("2026-10-06T02:00:01Z", json!({}));
+    let mut memory = crate::chat_observation::ChatObservationMemory::default();
+    memory
+        .observe(&named, &Default::default(), &labels())
+        .unwrap();
+    memory
+        .observe(&gone, &Default::default(), &labels())
+        .unwrap();
+    let snapshot = memory.snapshot(&gone, &labels()).unwrap();
+    assert!(!snapshot.named_mobs[0].current);
+    assert!(individuals::focus(&gone, &snapshot, &Context::default(), "クロちゃんは？").is_none());
+    assert!(individuals::current_observations(&snapshot, "クロちゃんは？").is_empty());
+}
+
+#[test]
+fn current_companion_name_survives_the_retained_name_table_limit() {
+    let regular = (0..4)
+        .map(|i| json!({"type":"cow", "identity":{"entity_id":format!("cow-{i}")}}))
+        .collect::<Vec<_>>();
+    let companions = (0..32)
+        .map(|i| {
+            json!({"type":"cat", "identity":{
+        "entity_id":format!("cat-{i}"), "custom_name":format!("個体番号{i}号"), "tamed":true}})
+        })
+        .collect::<Vec<_>>();
+    let event = individual_event(
+        "2026-10-06T02:00:00Z",
+        json!({
+        "passive_mobs":regular, "companion_candidates":companions}),
+    );
+    let snapshot = individual_snapshot(&event);
+    assert!(
+        !snapshot
+            .named_mobs
+            .iter()
+            .any(|row| row.entity_id == "cat-31")
+    );
+    let focus =
+        individuals::focus(&event, &snapshot, &Context::default(), "個体番号31号は？").unwrap();
+    assert_eq!(
+        focus.event.passive_mobs[0]
+            .identity
+            .as_ref()
+            .unwrap()
+            .entity_id,
+        "cat-31"
+    );
+    assert!(
+        individuals::current_observations(&focus.snapshot, "個体番号31号は？")
+            .iter()
+            .any(|row| row.entity_id == "individual:cat-31")
+    );
+    assert!(individuals::focus(&event, &snapshot, &Context::default(), "いい天気だね").is_none());
+    assert!(
+        !snapshot
+            .named_mobs
+            .iter()
+            .any(|row| row.entity_id == "cat-31")
+    );
+}

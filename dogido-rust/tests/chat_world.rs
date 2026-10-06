@@ -216,3 +216,34 @@ fn measured_surface_leaves_keep_taiga_instead_of_inventing_underground() {
         }
     }
 }
+
+#[test]
+fn bounded_ceiling_clearance_is_not_reported_as_a_detected_ceiling() {
+    let base = serde_json::json!({"schema_version":"2026-05-24","adapter":"fixture",
+        "observed_at":"2026-10-06T02:00:00Z",
+        "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+        "world":{"sky_visible":true,"ceiling_height":24,"ceiling_observed":false}});
+    let event = dogido_rust::events::GameEvent::parse(base.clone()).unwrap();
+    let place = dogido_rust::chat_world::place_context(
+        dogido_rust::world_catalog::catalog(),
+        dogido_rust::chat_catalog::catalog(),
+        &event,
+        None,
+        10.0,
+    )
+    .unwrap();
+    assert!(!place.place_line.contains("天井おおよそ"));
+    let mut found = base;
+    found["world"]["ceiling_observed"] = true.into();
+    let event = dogido_rust::events::GameEvent::parse(found).unwrap();
+    let detected = dogido_rust::chat_world::place_context(
+        dogido_rust::world_catalog::catalog(),
+        dogido_rust::chat_catalog::catalog(),
+        &event,
+        None,
+        10.0,
+    )
+    .unwrap();
+    assert!(detected.place_line.contains("天井おおよそ24m"));
+    assert_eq!(place.space_kind, detected.space_kind);
+}

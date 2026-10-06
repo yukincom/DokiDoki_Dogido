@@ -280,12 +280,14 @@ pub(super) fn frame_details(
         let env = crate::environment::projection::project_environment(event);
         let climate = c.climate(event.world.biome.as_deref())?;
         let precipitation = crate::environment::precipitation::from_event(event, &climate)?;
-        let place = crate::chat_world::place_context(
+        let place = crate::chat_world::build_place_context(
             c,
             chat_catalog::catalog(),
             event,
             ctx.current_structure.as_deref(),
             settings.home_bed_prompt_distance,
+            &env,
+            false,
         )?;
         out.as_object_mut().unwrap().extend(json!({
             "biome": place.biome_label,
@@ -297,7 +299,7 @@ pub(super) fn frame_details(
             "include_sky_context": env.include_sky_context,
             "time_phase": if env.include_sky_context{serde_json::to_value(event.world.time_phase)?.as_str().unwrap_or("").to_owned()}else{String::new()},
             "weather": if env.include_sky_context{serde_json::to_value(event.world.weather)?.as_str().unwrap_or("").to_owned()}else{String::new()},
-            "weather_label": if env.include_sky_context{crate::chat_world::weather_label(event,&climate)?}else{String::new()},
+            "weather_label": if env.include_sky_context{crate::chat_world::weather_label_from_context(event,&precipitation)}else{String::new()},
             "weather_fact": if env.include_sky_context{crate::chat_world::weather_fact(event)}else{""},
         }).as_object().unwrap().clone());
         if env.include_sky_context {
