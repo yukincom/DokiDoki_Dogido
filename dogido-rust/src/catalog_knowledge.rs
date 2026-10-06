@@ -4,7 +4,7 @@ use crate::{chat_catalog, entry_catalog, events::GameEvent, world_catalog};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-const USAGE: &str = "対象の一般的な特徴と、作者が用意した表現の材料。説明文・特徴タグ・役割は自然な会話の参考にする。今回見えた姿、聞こえた音、実際の動き、在否は観測に従い、音だけの対象を目撃したことにはしない。場面・感情・比喩のタグは演技の命令ではない。現在地でのポータルの行き先は、今回渡されたportal_roleを優先する。";
+const USAGE: &str = "対象の一般的な特徴と、会話で使える表現のヒントやで。説明文や特徴タグ、役割は自然な会話の参考にしてな。今見えとる姿や聞こえた音、実際の動き、おるかおらんかはちゃんと観測データに従ってな。音しか聞こえてへんのに目で姿を見たことにしたらあかんで。場面・感情・比喩のタグは演技の命令やないから、無理に合わせんでええよ。";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]

@@ -40,10 +40,9 @@
       "portal_blocks": {
         "label": "ポータル系ブロック",
         "items": {
-          "nether_portal": {"japanese":"ネザーポータルブロック","note":"ネザーへ誘う不思議なポータル。紫色の光が渦巻く"},
-          "end_portal": {"japanese":"エンドポータルブロック","note":"ワープゲート本体。中に緑色の星が煌めく"},
-          "end_gateway": {"japanese":"エンドゲートウェイ","note":"エンドの島々にワープする門"
-        }
+          "nether_portal": {"japanese":"ネザーポータルブロック","note":"ネザーへ誘う不思議なポータル。紫色の光が渦巻く","notes":["いまいる場所でのポータルの行き先は、今回渡されとるportal_roleを最優先して判断してな。"]},
+          "end_portal": {"japanese":"エンドポータルブロック","note":"ワープゲート本体。中に緑色の星が煌めく","notes":["いまいる場所でのポータルの行き先は、今回渡されとるportal_roleを最優先して判断してな。"]},
+          "end_gateway": {"japanese":"エンドゲートウェイ","note":"エンドの島々にワープする門","notes":["いまいる場所でのポータルの行き先は、今回渡されとるportal_roleを最優先して判断してな。"]}
       },
       "spawner_and_vault_blocks": {
         "label": "スポナー・宝物庫系",
