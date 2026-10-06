@@ -38,6 +38,130 @@ fn tick(engine: &mut Engine, e: &GameEvent, at: u64) -> dogido_rust::combat::cor
 }
 
 #[test]
+fn burning_start_waits_for_current_speech_and_survives_partial_events() {
+    let mut engine = Engine::default();
+    let s = Settings::default();
+    let ws = threats::Settings::default();
+    let seen = event(json!([visual("skeleton", "s", 13.54)]), json!([]));
+    assert!(
+        tick(&mut engine, &seen, 0)
+            .actions
+            .iter()
+            .any(|a| a.kind == "visual_hostile")
+    );
+    let burning = changed(&seen, |v| v["visual_threats"][0]["on_fire"] = true.into());
+    // 実機で発見音声の終了133ms前に燃焼が始まった順序を再現する。
+    assert!(
+        engine
+            .observe(&burning, 4954, true, true, &s, &ws)
+            .actions
+            .is_empty()
+    );
+    let partial = changed(&event(json!([]), json!([])), |v| {
+        v["event"]["name"] = "hostile_audio_detected".into();
+        v["event"]["source_kind"] = "auditory".into();
+    });
+    assert!(
+        engine
+            .observe(&partial, 5000, false, true, &s, &ws)
+            .actions
+            .is_empty()
+    );
+    let ready = tick(&mut engine, &burning, 5087);
+    let reaction = ready
+        .actions
+        .iter()
+        .find(|a| a.kind == "newly_burning_visual")
+        .expect("先の台詞が終わったら、まだ視認中で燃えている個体へ一度反応する");
+    assert_eq!(
+        reaction.leaf.as_ref().unwrap().details["hostile"],
+        "スケルトン"
+    );
+    assert!(!ready.stop_audio);
+    for at in [6000, 26000] {
+        assert!(
+            tick(&mut engine, &burning, at)
+                .actions
+                .iter()
+                .all(|a| a.kind != "newly_burning_visual")
+        );
+    }
+}
+
+#[test]
+fn pending_burning_is_discarded_when_extinguished_lost_or_dimension_changes() {
+    let s = Settings::default();
+    let ws = threats::Settings::default();
+    for reason in ["extinguished", "lost", "dimension"] {
+        let mut engine = Engine::default();
+        let seen = event(json!([visual("skeleton", "s", 13.54)]), json!([]));
+        tick(&mut engine, &seen, 0);
+        let burning = changed(&seen, |v| v["visual_threats"][0]["on_fire"] = true.into());
+        engine.observe(&burning, 4954, true, true, &s, &ws);
+        let gone = match reason {
+            "extinguished" => seen.clone(),
+            "lost" => event(json!([]), json!([])),
+            _ => changed(&event(json!([]), json!([])), |v| {
+                v["player"]["dimension"] = "minecraft:the_nether".into();
+            }),
+        };
+        engine.observe(&gone, 5000, true, true, &s, &ws);
+        for at in [5087, 26000] {
+            assert!(
+                tick(&mut engine, &gone, at)
+                    .actions
+                    .iter()
+                    .all(|a| a.kind != "newly_burning_visual"),
+                "{reason}"
+            );
+        }
+    }
+}
+
+#[test]
+fn pending_burning_keeps_fuse_priority_and_existing_cooldown() {
+    let mut engine = Engine::default();
+    let fire = changed(
+        &event(json!([visual("skeleton", "s", 13.54)]), json!([])),
+        |v| {
+            v["visual_threats"][0]["on_fire"] = true.into();
+        },
+    );
+    let fuse = changed(&fire, |v| {
+        let mut creeper = visual("creeper", "c", 5.0);
+        creeper["fuse_active"] = true.into();
+        v["visual_threats"].as_array_mut().unwrap().push(creeper);
+    });
+    assert_eq!(tick(&mut engine, &fuse, 0).actions[0].kind, "creeper_fuse");
+    assert!(
+        tick(&mut engine, &fire, 2000)
+            .actions
+            .iter()
+            .any(|a| a.kind == "newly_burning_visual")
+    );
+    let extinguished = changed(&fire, |v| v["visual_threats"][0]["on_fire"] = false.into());
+    tick(&mut engine, &extinguished, 3000);
+    assert!(
+        tick(&mut engine, &fire, 4000)
+            .actions
+            .iter()
+            .all(|a| a.kind != "newly_burning_visual")
+    );
+    assert!(
+        tick(&mut engine, &fire, 22000)
+            .actions
+            .iter()
+            .any(|a| a.kind == "newly_burning_visual")
+    );
+    assert!(
+        tick(&mut engine, &fire, 43000)
+            .actions
+            .iter()
+            .all(|a| a.kind != "newly_burning_visual")
+    );
+}
+
+#[test]
 fn quiet_needs_three_commands_and_resets_only_after_aftermath() {
     let mut engine = Engine::default();
     let e = event(json!([visual("zombie", "z", 4.0)]), json!([]));

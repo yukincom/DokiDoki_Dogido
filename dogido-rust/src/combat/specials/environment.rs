@@ -111,9 +111,9 @@ impl Specials {
         let target = e
             .visual_threats
             .iter()
-            .find(|t| t.on_fire && self.new_burning.contains(&identity(t)))?;
+            .find(|t| t.on_fire && self.pending_burning.contains(&identity(t)))?;
         self.last_burning_at = Some(now);
-        self.new_burning.remove(&identity(target));
+        self.pending_burning.remove(&identity(target));
         let speech = Speech::visual(
             "newly_burning_visual",
             fallback("newly_burning_visual"),

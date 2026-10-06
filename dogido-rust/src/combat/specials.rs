@@ -49,7 +49,8 @@ pub struct Specials {
     close_flying: HashSet<String>,
     entered_flying: HashSet<String>,
     burning_ids: HashSet<String>,
-    new_burning: HashSet<String>,
+    // 発話待ちでも保持し、完全観測で燃焼が続いている個体だけを候補にする。
+    pending_burning: HashSet<String>,
     water_handled: HashSet<String>,
     last_water_at: Option<u64>,
     last_rain_at: Option<u64>,
@@ -113,7 +114,6 @@ impl Specials {
         self.fresh_visual.clear();
         self.fresh_boss.clear();
         self.entered_flying.clear();
-        self.new_burning.clear();
         self.entered_fatigue = false;
         let current = e
             .player
@@ -205,7 +205,11 @@ impl Specials {
                 .filter(|t| t.on_fire)
                 .map(identity)
                 .collect();
-            self.new_burning = burning.difference(&self.burning_ids).cloned().collect();
+            // 他の音声・高優先警告で見送った燃焼開始を次の完全観測へ持ち越す。
+            // 消火・視界外になった候補は捨て、部分的な音通知では既観測を消さない。
+            self.pending_burning.retain(|id| burning.contains(id));
+            self.pending_burning
+                .extend(burning.difference(&self.burning_ids).cloned());
             self.burning_ids = burning;
             let current_ids: HashSet<_> = e.visual_threats.iter().map(identity).collect();
             self.water_handled.retain(|id| current_ids.contains(id));
