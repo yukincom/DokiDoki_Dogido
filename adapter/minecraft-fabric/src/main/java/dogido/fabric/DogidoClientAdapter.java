@@ -1535,7 +1535,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             );
         }
 
-        // Preserve pet observations, but do not let nearby followers fill every slot.
+        // Encounter priority: prefer wildlife over followers. Wire selection preserves named individuals separately.
         mobs.sort(Comparator.comparing((AmbientMobObservation mob) -> mob.identity().tamed())
             .thenComparingDouble(AmbientMobObservation::distance));
         return mobs;
@@ -2423,9 +2423,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private JsonArray buildPassiveMobs(List<AmbientMobObservation> ambientMobs) {
         JsonArray array = new JsonArray();
-        int limit = Math.min(ambientMobs.size(), 4);
-        for (int index = 0; index < limit; index += 1) {
-            AmbientMobObservation mob = ambientMobs.get(index);
+        List<AmbientMobObservation> selected = PassiveMobSelection.select(
+            ambientMobs, mob -> mob.identity().customName() != null);
+        for (AmbientMobObservation mob : selected) {
             JsonObject entry = new JsonObject();
             entry.addProperty("type", mob.type());
             entry.add("identity", mob.identity().toJson());
