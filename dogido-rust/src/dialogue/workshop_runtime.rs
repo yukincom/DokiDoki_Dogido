@@ -299,6 +299,17 @@ impl Dialogue {
                         .as_str()
                         .unwrap_or("invalid_validation")
                         .into();
+                    // 時間経過で閉じるので対話を壊すような開発は不要。
+                    // 終了できない一手は本文だけを会話として使い、モデルへ差し戻さない。
+                    if payload["action"] == "close_workshop" && validation["step"].is_null() {
+                        action = Some("respond".into());
+                        speech = crate::reaction_leaf::sanitize::strip(
+                            payload["speech"].as_str().unwrap_or(""),
+                        )
+                        .into();
+                        reason = "close_skipped".into();
+                        break;
+                    }
                     if validation["contract_errors"]
                         .as_array()
                         .is_some_and(|e| !e.is_empty())
@@ -677,7 +688,7 @@ impl Dialogue {
         if reply.interrupted() || self.workshop_combat_priority(input) {
             return Ok(reply.result(input));
         }
-        let spoken = if action == "unrelated" {
+        let spoken = if action == "unrelated" || speech.is_empty() {
             String::new()
         } else {
             let response = helper.exchange(json!({"op":"reading","text":speech,"reading_engine":self.config.reading_engine})).await?;

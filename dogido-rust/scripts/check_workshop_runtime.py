@@ -121,11 +121,9 @@ def main():
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def mistaken_close(text, prompt, n):
-            if n % 2 == 0:
-                assert "前の一手は実行していない" in prompt
-                return step(text, speech="うん、まだこの句の話を続けよか。")
             result = step("終了", "close_workshop")
-            result["speech"] = "ほな今日はここまでや。また話そな。"
+            result["speech"] = ("ほな今日はここまでや。また話そな。" if text == "終了でいいよ"
+                                else "うん、まだこの句の話を続けよか。")
             return result
         calls = install(control, mistaken_close)
         sid = ready(base, send, rows)
@@ -133,17 +131,38 @@ def main():
             send(sid)
             turn = submit(base, sid, text)
             result = wait_for(lambda: row(base, turn, {"completed"}))
-            assert result["workshop_action"] == "explain" and hud(sid)["state"] == "open", (text, result)
+            assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", (text, result)
+            assert result["workshop_reason"] == "close_skipped" and len(result["llm_reports"]) == 1
             assert result["text"] == "うん、まだこの句の話を続けよか。"
-        assert len(calls) == 8
-        passed.append("negation_quotation_condition_question_never_close")
+        assert len(calls) == 4
+        passed.append("negation_quotation_condition_question_skip_close_without_retry")
         send(sid)
         turn = submit(base, sid, "終了でいいよ")
         result = wait_for(lambda: row(base, turn, {"completed"}))
-        assert result["workshop_action"] == "close_workshop" and len(calls) == 9
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 5
         assert hud(sid)["state"] == "closed"
         assert result["text"] == "ほな今日はここまでや。また話そな。"
         passed.append("short_close_uses_model_decision_and_model_speech")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        for overrides in [{"evidence": "今日は終了"}, {"confidence": .5}, {"checks": "meter"},
+                          {"checks": ["shell"]}, {"confidence": "invalid", "speech": ""}]:
+            calls = install(control, lambda text, prompt, n: {
+                **step(text, "close_workshop"), "speech": "この句の話、聞いとるで。", **overrides})
+            sid = ready(base, send, rows)
+            before = stored(sid)
+            turn = submit(base, sid, "相談はここでおしまい")
+            result = wait_for(lambda: row(base, turn, {"completed", "quiet"}))
+            assert result["workshop_action"] == "respond" and result["workshop_reason"] == "close_skipped", result
+            assert len(calls) == 1 and len(result["llm_reports"]) == 1, result
+            assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
+            assert stored(sid) == before
+            if overrides.get("speech") == "":
+                assert result["text"] == "" and result["playback_status"] == "quiet", result
+            else:
+                assert result["text"] == "この句の話、聞いとるで。" and result["playback_status"] == "completed", result
+                assert session(base, sid)["workshop_history"][-1]["dogido_text"] == result["text"]
+        passed.append("invalid_close_keeps_original_reply_or_silence_without_retry_or_failure_message")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         calls = install(control, lambda text, prompt, n: {"action": "explain"} if n == 1 else step(text))

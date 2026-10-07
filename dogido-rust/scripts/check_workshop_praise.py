@@ -75,18 +75,17 @@ def main():
         passed.append("praise_is_saved_without_closing_or_changing_the_verse")
 
         # 操作が不成立でも、発話中の検証済み称賛は同じ一件として残る。
-        def retry(text, prompt, n):
-            result = closing(text, VALID if n == 1 else None, "また一緒に詠もな。")
-            if n == 1:
-                result["confidence"] = "invalid"
+        def skipped_close(text, prompt, n):
+            result = closing(text, VALID, "また一緒に詠もな。")
+            result["confidence"] = "invalid"
             return result
-        calls = install(control, retry)
+        calls = install(control, skipped_close)
         result = finish(base, send, sid, INPUT)
-        assert result["workshop_action"] == "close_workshop" and len(calls) == 2, result
-        assert result["text"] == "また一緒に詠もな。" and hud(sid)["state"] == "closed", result
+        assert result["workshop_action"] == "respond" and len(calls) == 1, result
+        assert result["text"] == "また一緒に詠もな。" and hud(sid)["state"] == "open", result
         assert len(records(folder, "critiques")) == len(critiques) + 1
         assert records(folder, "critiques")[-1]["player_text"] == INPUT
-        passed.append("praise_survives_action_retry_as_one_record_and_model_speech_is_kept")
+        passed.append("praise_and_model_speech_survive_skipped_close_without_retry")
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
         sid = ready(base, send, rows)
@@ -95,9 +94,12 @@ def main():
         pending = hud(sid)["pending_lines"]
         assert pending
         critiques, lessons = records(folder, "critiques"), records(folder, "lessons")
-        install(control, lambda text, prompt, n: closing(text))
-        result = finish(base, send, sid, INPUT)
-        assert result["workshop_action"] == "fallback" and hud(sid)["state"] == "open", result
+        calls = install(control, lambda text, prompt, n: closing(text))
+        send(sid)
+        turn = submit(base, sid, INPUT)
+        result = wait_for(lambda: row(base, turn, {"quiet"}))
+        assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", result
+        assert result["text"] == "" and len(calls) == 1, result
         assert hud(sid)["pending_lines"] == pending and not revisions(folder, sid)
         assert len(records(folder, "critiques")) == len(critiques) + 1
         assert records(folder, "lessons") == lessons
@@ -199,7 +201,7 @@ def main():
         assert hud(sid)["state"] == "danger" and not revisions(folder, sid)
         passed.append("feedback_disk_wait_does_not_delay_combat_audio")
 
-    # 再試行の応答が壊れていても、戦闘前に得た返答予定をfallbackで消さない。
+    # 編集の再試行応答が壊れていても、戦闘前に得た返答予定をfallbackで消さない。
     with fixture(combat_settings=SETTINGS) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context
         sid = ready(base, send, rows)
@@ -208,6 +210,8 @@ def main():
         def invalid_retry(text, prompt, n):
             if n == 1:
                 result = closing(text, speech=planned)
+                result["action"] = "propose_revision"
+                result["purpose"] = "improve_wording"
                 result["confidence"] = "invalid"
                 return result
             entered.set()

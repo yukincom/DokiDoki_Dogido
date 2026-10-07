@@ -24,9 +24,7 @@ def main():
                 return {"action": "ask", "confidence": .1, "evidence": idea,
                         "speech": "この言葉の響き、一緒に考えよか。"}
             if text == "この子はもう完成でいいんじゃないかな":
-                if "前の一手は実行していない" not in prompt:
-                    return step(text, "close_workshop")
-                return {"action": "respond", "speech": "完成にするか、ここで一緒に決めよか。"}
+                return {**step(text, "close_workshop"), "speech": "この句の響き、一緒に考えたな。"}
             if text == "白い骨の響きはどうかな":
                 if "段階: decide" in prompt:
                     return {"action": "inspect", "checks": ["reading", "meter"], "inspect_text": "白い骨"}
@@ -84,8 +82,9 @@ def main():
 
         result = finish(base, send, sid, "この子はもう完成でいいんじゃないかな")
         assert result["workshop_action"] == "respond" and hud(sid)["state"] == "open", result
-        assert len(result["llm_reports"]) == 2 and len(revisions(folder, sid)) == 1
-        passed.append("rejected_operation_returns_to_minimal_conversation_without_closing")
+        assert len(result["llm_reports"]) == 1 and len(revisions(folder, sid)) == 1
+        assert result["text"] == "この句の響き、一緒に考えたな。"
+        passed.append("skipped_close_keeps_original_conversation_without_retry")
 
     with token_fixture("unavailable") as (args, token_dir), fixture(extra_args=(*args, "--reading-engine", "off")) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context

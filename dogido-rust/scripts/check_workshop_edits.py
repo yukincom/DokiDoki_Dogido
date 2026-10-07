@@ -217,12 +217,12 @@ def main():
         for text in ["採用しないよ","『採用』って言っただけ","採用したらどうなる？","採用かな？"]:
             r=finish(base,send,sid,text)
             assert r["workshop_action"]=="fallback" and hud(sid)["pending_lines"] and not revisions(folder,sid),r
-        bad_close=install(control,lambda text,prompt,n:step(text,"close_workshop"))
+        bad_close=install(control,lambda text,prompt,n:{**step(text,"close_workshop"),"speech":"この句の話、聞いとるで。"})
         r=finish(base,send,sid,"お開きー")
-        assert r["workshop_action"]=="fallback" and len(bad_close)==2,r
-        assert "採用するか、元の句に戻すか" in r["text"] and hud(sid)["state"]=="open",r
+        assert r["workshop_action"]=="respond" and len(bad_close)==1,r
+        assert r["text"]=="この句の話、聞いとるで。" and hud(sid)["state"]=="open",r
         assert hud(sid)["canonical_lines"]==LINES and hud(sid)["pending_lines"] and not revisions(folder,sid)
-        passed.append("invalid_model_close_keeps_pending_and_falls_back_to_adoption_confirmation")
+        passed.append("invalid_model_close_keeps_pending_and_original_reply_without_confirmation")
         install(control,lambda text,prompt,n:step(text,"ask",speech="今の案を使うか、もう少し話すか聞かせてな。"))
         for text in ["終了","いい句だね"]:
             r=finish(base,send,sid,text)
