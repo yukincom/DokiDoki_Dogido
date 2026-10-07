@@ -41,7 +41,7 @@ def main():
             assert result["dialogue_action"] == "silent" and not result["text"], result
             assert [r["role"] for r in history(sid)] == ["user", "event"], history(sid)
             assert history(sid)[1]["reaction"] == "silent"
-            assert not audio() and len(calls()) == 2, seen
+            assert not audio() and len(calls()) == 1, seen
             passed.append("normal_silence_has_no_tts_or_repair_and_records_reaction")
 
             control["choice"] = {"action": "speak", "speech": "そやな、ゆっくりしよ。"}
@@ -50,15 +50,17 @@ def main():
             wait_for(lambda: row(base, second, {"completed"}))
             assert all("黙って受け止めた" in json.dumps(c, ensure_ascii=False) for c in calls()[start:]), calls()[start:]
             assert [r["role"] for r in history(sid)] == ["user", "event", "user", "assistant"]
-            passed.append("planner_and_reply_see_silence_as_an_event")
+            passed.append("single_reply_sees_silence_as_an_event")
 
             # Empty/nonconforming model output must not be interpreted as assent.
             control["choice"] = {"action": "silent", "speech": "まだ話している"}
             third = submit(base, sid, "そのあとどうしようかな")
-            result = wait_for(lambda: row(base, third, {"completed"}))
-            assert result["dialogue_action"] == "speak" and result["text"], result
+            result = wait_for(lambda: row(base, third, {"quiet"}))
+            assert result["dialogue_action"] == "silent" and not result["text"], result
+            assert history(sid)[-1]["text"] == "難しい話だったので、ドギドは沈黙を選んだ"
+            assert history(sid)[-1]["role"] == "event"
             assert len([r for r in history(sid) if r.get("reaction") == "silent"]) == 1
-            passed.append("invalid_silence_is_repaired_or_fallback_not_recorded_as_silence")
+            passed.append("invalid_output_records_failure_silence_without_tts")
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
 
             sid = register(base, preview=False)

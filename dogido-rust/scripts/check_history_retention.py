@@ -30,7 +30,7 @@ def main():
         def say(text, *, retain_seed=False, remaining=0):
             send(sid)
             before = len(seen)
-            expected_planner_history = session(base, sid)["history"][-10:]
+            expected_history = session(base, sid)["history"]
             turn = submit(base, sid, text)
             reply = wait_for(lambda: row(base, turn, {"completed"}))
             # These short synthetic utterances need no normalization oracle.
@@ -42,13 +42,10 @@ def main():
             expected = completed_rows if retain_seed else completed_rows[-10:]
             compare(expected, retained=10 if retain_seed else 0, remaining=remaining)
             prompts = [r["body"] for r in seen[before:] if r["path"] == "/v1/chat/completions"]
-            assert len(prompts) == 2, prompts
-            planner = next(p for p in prompts if p["max_tokens"] == 640)
-            # Current input has its own field. It must not displace a completed
-            # history row or expire this input's pre-combat bookmark early.
-            planner_text = next(m["content"] for m in planner["messages"] if m["role"] == "user")
-            actual_history, _ = json.JSONDecoder().raw_decode(planner_text.split("\nhistory: ", 1)[1])
-            assert actual_history == expected_planner_history, planner
+            assert len(prompts) == 1, prompts
+            prompt = json.dumps(prompts[0], ensure_ascii=False)
+            for previous in expected_history:
+                assert previous["text"] in prompt, (previous, prompt)
             return turn, prompts
 
         seed = [say(f"ドギド、今日の話その{i}だよ")[0] for i in range(5)]
@@ -67,18 +64,22 @@ def main():
         compare(completed_rows, retained=10, remaining=3)
         for i, text in enumerate(["ドギド、一段落したね", "ドギド、落ち着いたね", "さっきの話の続き"]):
             _, prompts = say(text, retain_seed=i < 2, remaining=2 - i)
-            # 既存plannerは直近10件に限定。本文生成には退避分も渡す。
-            leaf = next(p for p in prompts if p["max_tokens"] != 640)
+            # 一回の本文生成にも戦闘前の退避分を渡す。
+            leaf = prompts[0]
             assert "今日の話その0だよ" in json.dumps(leaf, ensure_ascii=False), leaf
             assert session(base, sid)["history_retention"]["remaining_player_turns"] == 2 - i
         _, prompts = say("ドギド、次の話をしよう")
         assert seed[0] not in json.dumps(prompts, ensure_ascii=False), prompts
         passed.append(f"synthetic_history_{comparisons}_snapshots_and_three_turn_prompt_lifetime")
         # Evaluation episodes are intentionally written separately from memory.
-        # Ordinary conversation must not create a short/long-term memory file.
+        # 通常雑談は保存せず、既存の戦闘の出来事だけは共有短期ログへ残る。
         persisted = {p.relative_to(folder / "memory").as_posix()
                      for p in (folder / "memory").rglob("*.jsonl")}
-        assert persisted <= {"eval/episodes.jsonl"}, persisted
+        short_path = f"sessions/{sid}/short_term/current_session.jsonl"
+        assert persisted <= {"eval/episodes.jsonl", short_path}, persisted
+        if short_path in persisted:
+            short_rows = [json.loads(line) for line in (folder / "memory" / short_path).read_text().splitlines()]
+            assert all(r["kind"] == "combat_fact" for r in short_rows), short_rows
         passed.append("no_added_model_calls_or_conversation_persistence")
 
         # 実際に始まった音声を敵が中断しても、全文を会話済みにはしない。

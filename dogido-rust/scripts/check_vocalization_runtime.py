@@ -41,7 +41,7 @@ def main():
             result = scream(base, sid, text, source)
             assert result.get("reason") != "situation_vocalization", result
             wait_for(lambda: row(base, result["turn_id"], {"completed"}))
-            assert len(calls(seen)) == before + 2
+            assert len(calls(seen)) == before + 1
             send(sid)
         passed.append("only_pure_voice_is_intercepted_typed_quote_and_sentence_still_reply")
 
@@ -114,6 +114,8 @@ def main():
         base, _, log, control, seen, _, _, _, send, hud, rows, stored, folder = f
         sid = ready(base, send, rows)
         assert context(base) == {"prompt_mode":"haiku_workshop", "session_id":sid}
+        # 音声completed直後のworker終了通知まで待ち、GET以外の変更を除く。
+        wait_for(lambda: 'event="haiku_finished"' in log.read_text())
         before_revision = snapshot(base)["revision"]
         for _ in range(3):
             context(base)

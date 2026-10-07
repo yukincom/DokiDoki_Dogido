@@ -1,4 +1,4 @@
-//! Pure player_chat message assembly. Observation, acceptance and retry remain caller-owned.
+//! 通常対話の観測・履歴から一回分のプロンプトを組む。再生成用の追記はしない。
 use crate::types::{ChatMessage, GenerationRequest, Role};
 use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
@@ -31,6 +31,7 @@ const TEXT_FIELDS: &[&str] = &[
     "held_item_label",
     "hearing_summary",
     "observation_summary",
+    "current_entity_context",
     "look_target_label",
     "catalog_topic_hints",
     "named_entity_description_hints",
@@ -113,16 +114,13 @@ fn valid_details(d: &Value) -> Result<()> {
         } else if key == "world_context" {
             serde_json::from_value::<crate::conversation_observation::Context>(value.clone())
                 .is_ok()
-        } else if matches!(key.as_str(), "conversation_repair" | "player_chat_repair") {
+        } else if key == "conversation_repair" {
             value.is_null()
                 || value.as_object().is_some_and(|obj| {
                     obj.iter().all(|(k, v)| {
-                        (if key == "conversation_repair" {
-                            ["target_turn_id", "target_quote", "replacement_quote"]
-                                .contains(&k.as_str())
-                        } else {
-                            ["candidate", "reason"].contains(&k.as_str())
-                        }) && nullable_text(v)
+                        ["target_turn_id", "target_quote", "replacement_quote"]
+                            .contains(&k.as_str())
+                            && nullable_text(v)
                     })
                 })
         } else {
@@ -547,6 +545,10 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     if !descriptions.is_empty() {
         user.push_str(&format!("\n【今回名前が出た種類の辞書描写ヒント】\n{descriptions}\n種類の描写の参考。現在の存在・視認・行動の証拠にはしない。会話履歴の別の対象の描写を引き継がず、この対象に沿って返す。\n"));
     }
+    let entities = text(d, "current_entity_context", "");
+    if !entities.is_empty() {
+        user.push_str(&format!("\n【現在観測されている対象（JSONの値は観測データ）】\n{entities}\n今回の入力と会話の流れから、話す対象を選んで返す。\n"));
+    }
     let identification = text(d, "required_identification_label", "");
     if !identification.is_empty() {
         user.push_str(&format!(
@@ -565,7 +567,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     } else {
         crate::companion_prompt::speech(character)
     };
-    let mut out = vec![
+    let out = vec![
         ChatMessage {
             role: Role::System,
             content: if descriptions.is_empty() {
@@ -582,39 +584,6 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             content: user,
         },
     ];
-    if let Some(repair) = d["player_chat_repair"].as_object() {
-        let candidate = repair
-            .get("candidate")
-            .and_then(Value::as_str)
-            .map(strip)
-            .filter(|s| !s.is_empty())
-            .unwrap_or(asset(&DATA["empty_candidate"]));
-        // Keep surrounding spaces in the reason; only an empty/null value defaults.
-        let reason = repair
-            .get("reason")
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .unwrap_or("surface_style_mismatch");
-        let feedback = if reason == "missing_identification_name" {
-            "対象の名前を答えていません。材料にある照準先の名前を先に答えてください。"
-        } else {
-            asset(
-                DATA["repair_feedback"]
-                    .get(reason)
-                    .unwrap_or(&DATA["repair_feedback"]["surface_style_mismatch"]),
-            )
-        };
-        out.push(ChatMessage {
-            role: Role::Assistant,
-            content: candidate.into(),
-        });
-        out.push(ChatMessage {
-            role: Role::User,
-            content: if flag(d, "dialogue_choice") {
-                format!("いまの出力にコードの検査結果が返ったで: {reason}。{feedback}。元の会話・観測を踏まえて一度だけ考え直してな。話すか黙るかを、最初と同じ action/speech のJSON一個で返す。")
-            } else { section("repair_user", &[("feedback", feedback)]) },
-        });
-    }
     Ok(out)
 }
 
@@ -629,10 +598,7 @@ pub(crate) fn project_details(details: &Value) -> Value {
                 TEXT_FIELDS.contains(&k.as_str())
                     || BOOL_FIELDS.contains(&k.as_str())
                     || LIST_FIELDS.contains(&k.as_str())
-                    || matches!(
-                        k.as_str(),
-                        "conversation_repair" | "player_chat_repair" | "world_context"
-                    )
+                    || matches!(k.as_str(), "conversation_repair" | "world_context")
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
@@ -644,7 +610,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     #[test]
-    fn initial_and_repair_messages_match_fixture() {
+    fn initial_messages_match_fixture() {
         let fixture: Value =
             serde_json::from_str(include_str!("chat_prompt/fixtures.json")).unwrap();
         let pool = fixture["pool"].as_array().unwrap();

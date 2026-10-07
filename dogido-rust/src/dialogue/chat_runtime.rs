@@ -1,15 +1,11 @@
-//! Sessionから受け取った入力・観測・完了済み履歴を、通常会話の返答と読み上げ用テキストへ変換する。
-//! 入口のroutingで宛先確認・記憶照会・正本知識・限定国語対話を分け、通常雑談は次の順で進む。
-//! 入力に応じた材料準備 → bounded planner → 観測との照合 → 固定回答または発話leaf → 読み補正。
-//! plannerは一件のread actionを選び、カタログ候補が現在の観測にあるかはafter_planで照合する。
-//! 発話leafは採否検査と必要時一回の言い直しを経る。参照するsnapshotはこの判断中は固定する。
-//! 戻り値は未配送の結果。Sessionが世代を確認して状態・履歴へ反映し、音声合成・実再生を担当する。
+//! Sessionの現在観測と確定済み短期履歴から、通常対話を一回だけ生成する。
+//! 話題選択を本文生成へまとめ、コードは形式補完と明らかな出力破損だけを判定する。
+//! 正本知識・川柳想起・国語対話は既存routing、履歴と実再生の確定はSessionが所有する。
 use super::{DialogueConfig, bridge, chat_context::CatalogLabels};
 use crate::{
-    chat_materials::{self, After, Before},
+    chat_materials::{self, Prepared},
     foreground::Route,
     llm::RigLlm,
-    planner,
 };
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
@@ -63,7 +59,7 @@ pub(super) async fn render(
     Ok(result)
 }
 
-/// 固定routingを先に処理し、通常雑談だけをbefore_plan → planner → after_plan → leafへ進める。
+/// 固定routingを先に処理し、通常雑談だけを一回生成へ進める。
 async fn body(
     config: &DialogueConfig,
     llm: &RigLlm,
@@ -177,78 +173,31 @@ async fn body(
     if language.is_none() {
         select_route(Route::Casual)?;
     }
-    // 明示照会などの固定回答を先に確定し、LLMによる次手の選択が必要な入力だけPlanへ渡す。
-    let before = chat_materials::before_plan(
+    let prepared = chat_materials::prepare(
         event,
         &native.settings,
         &chat_materials::PlayerInput::from(&context),
         &native.context,
         &native.snapshot,
         &CatalogLabels,
-        config.llm_enabled.then_some(config.model.as_str()),
     )?;
-    let mut result = match before {
-        Before::Knowledge => bail!("knowledge routing already consumed"),
-        Before::Fixed(fixed) => fixed_result(fixed),
-        Before::Plan(prepared) => {
-            let mut handoff = planner::handoff::Handoff::default();
-            let plan = if let Some(request) = &prepared.planner.request {
-                live(cancel)?;
-                let report = planner::run(llm, request).await?;
-                live(cancel)?;
-                handoff.record_plan(request, &report.plan)?;
-                let plan = report.plan.clone();
-                reports.push(serde_json::to_value(report)?);
-                plan
+    let mut result = match prepared {
+        Prepared::Knowledge => bail!("knowledge routing already consumed"),
+        Prepared::Fixed(fixed) => fixed_result(fixed),
+        Prepared::Reply(reply) => {
+            let output = if config.llm_enabled {
+                let request = reply.request(&config.model, config.max_tokens)?;
+                let run = super::chat_leaf_runtime::render(request, llm, cancel).await?;
+                reports.extend(run.reports);
+                run.output
             } else {
-                prepared.planner.fallback.clone()
+                live(cancel)?;
+                crate::chat_validation::finish(None)
             };
-            // 選ばれたread actionを観測へ照合し、断定可能な固定文か生成用材料へ落とす。
-            match chat_materials::after_plan(&prepared, &plan)? {
-                After::Fixed(fixed) => fixed_result(fixed),
-                After::Leaf(leaf) => {
-                    if prepared.planner.request.is_some() {
-                        let output = handoff.resolve(leaf.handoff_input.clone(), true)?;
-                        ensure!(output == leaf.handoff, "native handoff projection changed");
-                    }
-                    let input = leaf.input(&config.model, config.max_tokens);
-                    handoff.validate_leaf(&input.prompt.details)?;
-                    handoff.validate_materials(
-                        &input.prompt.details,
-                        &input.validation,
-                        native.context.workshop_open,
-                    )?;
-                    let mut turn =
-                        crate::chat_validation::Turn::new(input, &config.model, config.max_tokens)?;
-                    let reply = if config.llm_enabled {
-                        super::chat_leaf_runtime::render(turn, llm, cancel).await?
-                    } else {
-                        // モデル無効時も同じ採否器を完走し、fallbackと最終安全検査の結果を受け取る。
-                        live(cancel)?;
-                        let _unused = turn.request()?;
-                        ensure!(turn.complete(None)?, "disabled leaf must finish");
-                        let outcome = turn.take_outcome()?;
-                        super::chat_leaf_runtime::Run {
-                            text: outcome.text,
-                            final_text: outcome.final_text,
-                            reports: vec![],
-                            action: if outcome.status == "silent" {
-                                "silent"
-                            } else {
-                                "speak"
-                            },
-                        }
-                    };
-                    tracing::info!(
-                        event = "chat_final_safety",
-                        changed = reply.text != reply.final_text
-                    );
-                    reports.extend(reply.reports);
-                    handoff.validate_result(&json!(reply.final_text))?;
-                    json!({"op":"result","text":reply.final_text,"repair":leaf.repair,
-                        "dialogue_action":reply.action,"observation_revision":leaf.details["world_context"]["revision"]})
-                }
-            }
+            json!({"op":"result","text":output.text,
+                "dialogue_action":output.action,"dialogue_outcome":output.status,
+                "dialogue_reason":output.reason,
+                "observation_revision":reply.details["world_context"]["revision"]})
         }
     };
     result["llm_reports"] = json!(reports);
@@ -259,7 +208,7 @@ async fn body(
 }
 fn fixed_result(fixed: chat_materials::Fixed) -> Value {
     tracing::info!(event = "chat_fixed", reason = fixed.reason);
-    json!({"op":"result","text":fixed.text,"repair":fixed.repair,"announce_smell":fixed.announce_smell})
+    json!({"op":"result","text":fixed.text,"announce_smell":fixed.announce_smell})
 }
 fn language_fields(result: &mut Value, turn: &crate::language::Turn) -> Result<()> {
     ensure!(turn.finished(), "unfinished language turn");
@@ -449,7 +398,7 @@ mod tests {
         );
     }
     #[tokio::test]
-    async fn disabled_model_and_language_use_native_fallback_without_transport() {
+    async fn disabled_model_and_language_are_quiet_without_transport() {
         let mut c = config();
         c.llm_enabled = false;
         c.language_enabled = false;
@@ -495,52 +444,11 @@ mod tests {
         .await
         .unwrap();
         assert!(started.elapsed() < Duration::from_millis(500));
-        assert!(!result["text"].as_str().unwrap().is_empty());
+        assert_eq!(result["text"], "");
+        assert_eq!(result["dialogue_action"], "silent");
+        assert_eq!(result["dialogue_outcome"], "generation_error");
+        assert!(result.get("spoken_text").is_none());
         assert_eq!(result["llm_reports"], json!([]));
         assert!(result.get("language_status").is_none());
-    }
-    #[test]
-    fn native_projection_satisfies_existing_plan_and_material_boundary() {
-        let mut checked = 0;
-        for line in include_str!("../../fixtures/chat-materials.jsonl").lines() {
-            let row: Value = serde_json::from_str(line).unwrap();
-            let before = chat_materials::before_plan(
-                &serde_json::from_value(row["event"].clone()).unwrap(),
-                &serde_json::from_value(row["settings"].clone()).unwrap(),
-                &serde_json::from_value(row["input"].clone()).unwrap(),
-                &serde_json::from_value(row["context"].clone()).unwrap(),
-                &serde_json::from_value(row["snapshot"].clone()).unwrap(),
-                &CatalogLabels,
-                Some("fixture"),
-            )
-            .unwrap();
-            let Before::Plan(prepared) = before else {
-                continue;
-            };
-            let plan = serde_json::from_value(row["plan"].clone()).unwrap();
-            let After::Leaf(leaf) = chat_materials::after_plan(&prepared, &plan).unwrap() else {
-                continue;
-            };
-            let Some(request) = &prepared.planner.request else {
-                continue;
-            };
-            let mut handoff = planner::handoff::Handoff::default();
-            handoff.record_plan(request, &plan).unwrap();
-            assert_eq!(
-                handoff.resolve(leaf.handoff_input.clone(), true).unwrap(),
-                leaf.handoff
-            );
-            let input = leaf.input("fixture", 72);
-            handoff.validate_leaf(&input.prompt.details).unwrap();
-            handoff
-                .validate_materials(
-                    &input.prompt.details,
-                    &input.validation,
-                    row["context"]["workshop_open"] == true,
-                )
-                .unwrap();
-            checked += 1;
-        }
-        assert!(checked >= 300, "{checked}");
     }
 }

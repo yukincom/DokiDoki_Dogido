@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Native ordinary Session/HTTP path against owned mock model/audio only."""
+"""通常対話の一回生成・形式補完・沈黙履歴を、実HTTPと模擬LLM/音声で確認する。"""
 import argparse, json, re, tempfile, time
 from pathlib import Path
 from check_dialogue import dependencies, running, register, request, submit, wait_for, row, snapshot
 ROOT=Path(__file__).resolve().parents[1]
+SILENCE='難しい話だったので、ドギドは沈黙を選んだ'
 
 def objects(incoming):
+    # 独立planner診断の既存利用者向け。通常対話はこの形式を要求しない。
     out=[]; decoder=json.JSONDecoder()
     for message in incoming['messages']:
         for match in re.finditer(r'\{\s*"turn_id"\s*:',message['content']):
@@ -21,76 +23,66 @@ def main():
       with running(args.binary.resolve(),Path(temp),dep,haiku_settings={'enabled':False,'memory_enabled':False}) as (base,process,log):
         sid=register(base)
         def calls():return [v['body'] for v in seen if v['path']=='/v1/chat/completions']
-        def say(text):
-            turn=submit(base,sid,text)
-            result=wait_for(lambda:row(base,turn,{'completed','failed','unsupported'}))
-            assert result['playback_status']=='completed',(result,log.read_text())
+        def audio():return [v for v in seen if v['path'].startswith('/audio_query?')]
+        def history():return next(s['history'] for s in snapshot(base)['sessions'] if s['session_id']==sid)
+        def say(text, status='completed', count=1):
+            start=len(calls());turn=submit(base,sid,text)
+            result=wait_for(lambda:row(base,turn,{'completed','quiet','failed','unsupported'}))
+            assert result['playback_status']==status,(result,log.read_text())
+            assert len(calls())-start==count,calls()[start:]
             return result
         first=say('こんにちは')
-        assert [c['max_tokens'] for c in calls()]==[640,72],calls()
-        assert first['text']==control['leaf']
+        assert [c['max_tokens'] for c in calls()]==[72],calls()
+        assert first['text']==control['leaf'] and len(first['llm_reports'])==1
         assert 'event="helper_started"' not in log.read_text()
-        assert 'chat_worker_finished' in log.read_text()
-        passed.append('ordinary_http_one_plan_one_leaf_without_dialogue_helper')
-        n=len(calls()); sequence=iter(['Sure, here is an explanation.','せやな、いっしょに歩こうか。'])
-        def candidate(incoming):
-            if incoming['max_tokens']!=72:return None
-            return {'id':'mock','object':'chat.completion','created':0,'model':'mock-model',
-                'choices':[{'index':0,'message':{'role':'assistant','content':json.dumps({'action':'speak','speech':next(sequence)},ensure_ascii=False)},'finish_reason':'stop'}]}
-        control['completion_override']=candidate
-        reconsider=say('今日はのんびり歩こう')
-        assert reconsider['text']=='せやな、いっしょに歩こうか。',reconsider
-        assert [c['max_tokens'] for c in calls()[n:]]==[640,72,72]
-        del control['completion_override']
-        passed.append('invalid_candidate_reconsidered_once')
-        n=len(calls())
-        def presence(incoming):
-            if incoming['max_tokens']!=640:return None
-            current=[r for r in objects(incoming) if r['turn_id']=='current'][-1]
-            return {'action':'check_entity_presence','focus':'猫の在否','entity_query':'猫','evidence':[{'turn_id':'current','quote':current['text']}],'confidence':.95,'repair':None}
-        control['structured_handler']=presence
-        fixed=say('猫はいる？')
-        assert [c['max_tokens'] for c in calls()[n:]]==[640],calls()[n:]
-        assert fixed['text']=='どれのことか、今の材料だけやと分からへんわ。',fixed
-        del control['structured_handler']
-        passed.append('unobserved_presence_is_code_fixed_without_leaf')
-        # Repair is returned by the native plan and annotated only by the owner.
+        passed.append('ordinary_http_one_model_call')
+        for text in ['うん','Sure, here is an explanation.','そこのエンダーマン、元気やな。','土の匂いがするわ。']:
+            control['leaf']=text
+            assert say('少し話そう。'+str(len(calls())))['text']==text
+        passed.append('short_foreign_and_unobserved_content_is_not_regenerated')
+        control['leaf']='そこまでは分からへん。'
+        assert say('猫はいる？')['text']==control['leaf']
+        passed.append('target_choice_and_reply_share_one_call')
+        control['leaf']='同じや。同じや。同じや。'
+        audio_before=len(audio());bad=say('続きも聞かせて','quiet')
+        assert not bad['text'] and bad['dialogue_outcome']=='rejected'
+        assert len(audio())==audio_before
+        assert history()[-1]=={'turn_id':bad['turn_id']+':reply','role':'event','reaction':'story','text':SILENCE},history()
+        assert all(control['leaf'] not in r['text'] for r in history())
+        control['leaf']='そばにおるで。'
+        say('じゃあ一緒にいよう')
+        prompt=json.dumps(calls()[-1],ensure_ascii=False)
+        assert SILENCE in prompt and '同じや。同じや。同じや。' not in prompt
+        passed.append('broken_output_is_quiet_and_only_silence_event_reaches_next_prompt')
+        for raw,expected,reason in [
+            ('{"action":"speak"}', '', 'stop'),
+            ('{"action":"speak","speech":"そや', 'そや', 'length'),
+            ('{"action":"speak","speech":123}', '123', 'stop'),
+        ]:
+            control['completion_override']=lambda incoming,raw=raw,reason=reason: {'id':'mock','object':'chat.completion','created':0,'model':'mock-model','choices':[{'index':0,'message':{'role':'assistant','content':raw},'finish_reason':reason}]}
+            answer=say('今の気分を教えて。'+str(len(calls())),'completed' if expected else 'quiet')
+            assert answer['text']==expected,answer
+        control.pop('completion_override')
+        passed.append('missing_speech_truncation_and_numeric_speech_are_handled_in_code')
         control['leaf']='一位になれんでもええやん。'
         say('一位になるのは無理やな')
-        n=len(calls())
-        def repair(incoming):
-            if incoming['max_tokens']!=640:return None
-            rows=objects(incoming)
-            target=[r for r in rows if r['role']=='assistant' and r['text']==control['leaf']][-1]
-            return {'action':'repair_conversation','focus':'本人の言い直し','entity_query':'',
-                'evidence':[{'turn_id':'current','quote':'違う'},{'turn_id':target['turn_id'],'quote':target['text']}],
-                'confidence':.95,'repair':{'target_turn_id':target['turn_id'],'target_quote':target['text'],'signal_quote':'違う','replacement_quote':'仲間になるのは無理ってこと'}}
-        control['structured_handler']=repair
-        # Keep the prior target above stable while supplying separate leaf wording.
-        def repair_reply(incoming):
-            if incoming['max_tokens']!=72:return None
-            return {'id':'mock','object':'chat.completion','created':0,'model':'mock-model','choices':[{'index':0,'message':{'role':'assistant','content':json.dumps({'action':'speak','speech':'仲間になる話やったんやな。取り違えてすまん。'},ensure_ascii=False)},'finish_reason':'stop'}]}
-        control['completion_override']=repair_reply
-        repaired=say('違う、仲間になるのは無理ってこと')
-        assert repaired['llm_reports'][0]['plan']['action']=='repair_conversation',repaired
-        hist=snapshot(base)['sessions'][0]['history']
-        assert any(r.get('repair_action')=='repair_conversation' for r in hist),hist
-        del control['structured_handler'];del control['completion_override']
-        passed.append('repair_survives_native_plan_leaf_and_completed_owner_history')
-        n=len(calls());knowledge=say('枕詞って何？')
-        assert len(calls())==n and knowledge['knowledge_status']=='found',knowledge
-        assert knowledge['references']
-        passed.append('canonical_knowledge_has_no_model_or_dialogue_helper')
+        control['leaf']='仲間になる話やったんやな。取り違えてすまん。'
+        answer=say('違う、仲間になるのは無理ってこと')
+        assert answer['text']==control['leaf']
+        assert '一位になれんでもええやん。' in json.dumps(calls()[-1],ensure_ascii=False)
+        assert history()[-1]['role']=='assistant'
+        passed.append('human_correction_uses_existing_history_in_one_call')
+        knowledge=say('枕詞って何？',count=0)
+        assert knowledge['knowledge_status']=='found' and knowledge['references']
+        passed.append('canonical_knowledge_still_has_no_model_call')
         control['delay']=.7;n=len(calls())
         turn=submit(base,sid,'少しゆっくり話そう')
         wait_for(lambda:len(calls())>n)
         request(base,'/api/v1/rust-dialogue/interrupt',{'session_id':sid})
-        wait_for(lambda:row(base,turn,{'cancelled'}))
-        time.sleep(.85)
-        assert len(calls())==n+1,calls()[n:]
-        assert not any(r.get('turn_id')==turn+':reply' for r in snapshot(base)['sessions'][0]['history'])
-        passed.append('cancelled_planner_never_starts_leaf_or_commits_reply')
-        assert 'event="helper_started"' not in log.read_text(),log.read_text()
+        wait_for(lambda:row(base,turn,{'cancelled'}));time.sleep(.85)
+        assert len(calls())==n+1
+        assert not any(r.get('turn_id')==turn+':reply' for r in history())
+        passed.append('cancelled_generation_has_no_reply_or_silence_history')
       assert process.poll()==0
     out=ROOT/'reports/chat-native-check.json';out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({'passed':passed,'model':'mock','tts':'mock','playback':'mock','all_owned_processes_stopped':True},ensure_ascii=False,indent=2)+'\n')

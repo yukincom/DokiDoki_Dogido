@@ -136,6 +136,8 @@ impl Dialogue {
                     "workshop_followup",
                     "workshop_feedback_outcome",
                     "dialogue_action",
+                    "dialogue_outcome",
+                    "dialogue_reason",
                     "observation_revision",
                 ] {
                     if let Some(value) = result.get(key) {
@@ -188,7 +190,17 @@ impl Dialogue {
                     && !workshop_reply
                 {
                     s.history.push(turn, "user", &player_text);
-                    s.history.silent(turn);
+                    if matches!(
+                        result["dialogue_outcome"].as_str(),
+                        Some("rejected" | "generation_error")
+                    ) {
+                        s.history.story(
+                            &format!("{turn}:reply"),
+                            "難しい話だったので、ドギドは沈黙を選んだ",
+                        );
+                    } else {
+                        s.history.silent(turn);
+                    }
                 }
                 if (status == PlaybackStatus::Completed
                     || status == PlaybackStatus::Quiet && result["dialogue_action"] == "silent")

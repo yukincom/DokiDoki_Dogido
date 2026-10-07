@@ -220,11 +220,11 @@ def main():
             reply = wait_for(lambda: row(base, turn, {"completed", "failed"}))
             assert reply["playback_status"] == "completed", (reply, log.read_text())
             assert reply["text"] == control["leaf"], (reply, log.read_text())
-            assert reply["llm_reports"][0]["result"] == "accepted", reply
+            assert reply["dialogue_outcome"] == "accepted", reply
             assert [r["role"] for r in snapshot(base)["sessions"][0]["history"]] == ["user", "assistant"]
-            assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 2, seen
+            assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 1, seen
             assert [r["generated"]["finish_reason"] for r in reply["llm_reports"] if "generated" in r] == ["stop"]
-            passed.append("one_planner_one_leaf_completed_history")
+            passed.append("one_generation_completed_history")
             first_tts = len([r for r in seen if r["path"].startswith("/synthesis")])
             turn = submit(base, sid, "うん、ありがとう")
             wait_for(lambda: row(base, turn, {"completed"}))
@@ -300,17 +300,16 @@ def main():
             focused["world"] = {"biome":"desert", "sky_visible":True, "local_light":15, "time_phase":"day"}
             focused["look_target"] = {"kind":"block", "name":"cactus", "distance":2.0}
             request(base, "/api/v1/game-events", focused, sid=sid)
-            control["structured"] = {640:{"action":"identify_entity", "focus":"照準先の名前を答える",
-                "entity_query":"これ", "evidence":[{"turn_id":"current", "quote":"これは何かな"}], "confidence":.95}}
             control["leaf"] = "尖っていて緑色やな。"
             before = len([r for r in seen if r["path"] == "/v1/chat/completions"])
             turn = submit(base, sid, "これは何かな")
             reply = wait_for(lambda: row(base, turn, {"completed", "failed"}))
-            assert reply["playback_status"] == "completed" and reply["text"] == "それはサボテンやで。", reply
-            assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) - before == 3
-            assert snapshot(base)["sessions"][0]["history"][-1]["text"] == "それはサボテンやで。"
-            passed.append("crosshair_name_survives_planner_and_two_nonanswers_without_false_history")
-            control.pop("structured")
+            assert reply["playback_status"] == "completed" and reply["text"] == control["leaf"], reply
+            assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) - before == 1
+            assert snapshot(base)["sessions"][0]["history"][-1]["text"] == control["leaf"]
+            passed.append("crosshair_in_single_request_without_code_rewriting_reply")
+            generated = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"][-1]
+            assert "サボテン" in json.dumps(generated, ensure_ascii=False)
             control["leaf"] = "そうやな。また話しかけてな。"
             (directory / "player_mode").write_text("slow")
             stopping_turn = submit(base, sid, "停止を確認するよ")

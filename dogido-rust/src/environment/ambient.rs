@@ -13,7 +13,6 @@ use crate::{
     events::{EventName, GameEvent},
 };
 pub(crate) use catalog::biome_label;
-pub(crate) use catalog::general as general_text;
 pub use light::{LightContext, LightPlanRequest};
 use serde_json::{Value, json};
 pub(crate) use smell::is_query as is_smell_query;

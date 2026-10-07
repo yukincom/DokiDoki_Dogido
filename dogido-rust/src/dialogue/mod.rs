@@ -892,6 +892,37 @@ mod tests {
         dialogue.shutdown().await;
     }
     #[test]
+    fn broken_generation_records_only_current_silence_event() {
+        for outcome in ["rejected", "generation_error"] {
+            for (status, epoch, expected) in [
+                (PlaybackStatus::Quiet, 0, true),
+                (PlaybackStatus::Failed, 0, false),
+                (PlaybackStatus::Cancelled, 0, false),
+                (PlaybackStatus::Quiet, 9, false),
+            ] {
+                let d = Dialogue::new(DialogueConfig::default()).unwrap();
+                d.register("s", "試験", true);
+                d.data.lock().unwrap().rows.push_back(json!({"session_id":"s","turn_id":"t","epoch":0,"player_input_text":"そうなんだ"}));
+                d.update(
+                    "s",
+                    "t",
+                    epoch,
+                    status,
+                    Some(&json!({"text":"","dialogue_action":"silent","dialogue_outcome":outcome})),
+                );
+                let data = d.data.lock().unwrap();
+                let h = &data.sessions["s"].history;
+                assert_eq!(
+                    h.rows().iter().any(|r| r["role"] == "event"
+                        && r["text"] == "難しい話だったので、ドギドは沈黙を選んだ"),
+                    expected
+                );
+                assert!(!h.rows().iter().any(|r| r["role"] == "assistant"));
+                assert!(h.completed_pairs().is_empty());
+            }
+        }
+    }
+    #[test]
     fn only_explicit_current_silence_records_reaction_without_spoken_material() {
         for (status, action, epoch, expect_silent) in [
             (PlaybackStatus::Quiet, "silent", 0, true),

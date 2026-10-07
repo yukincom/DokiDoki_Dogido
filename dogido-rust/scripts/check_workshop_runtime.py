@@ -245,7 +245,7 @@ def main():
             turn = submit(base, sid, text)
             result = wait_for(lambda: row(base, turn, {"completed"}))
             assert result["workshop_action"] == "unrelated" and result["text"] == control["leaf"]
-            assert len(result["llm_reports"]) == 3  # workshop + ordinary planner + leaf
+            assert len(result["llm_reports"]) == 2  # workshop + ordinary single generation
             if len(calls) == 1:
                 assert hud(sid)["workshop_id"] == wid and hud(sid)["state"] == "open"
         assert hud(sid)["state"] == "closed" and len(calls) == 2

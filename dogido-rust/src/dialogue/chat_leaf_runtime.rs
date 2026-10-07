@@ -1,7 +1,8 @@
-//! Ordinary speech candidates: model calls, rejection and one repair are Rust-owned.
+//! 通常対話を一回だけ生成し、コードで整形した本文または沈黙を返す。
+//! 内容の照合・再生成・定型の代替発話は行わない。取消結果の履歴確定は所有者に委ねる。
 use super::bridge;
 use crate::{
-    chat_validation::Turn,
+    chat_validation,
     llm::RigLlm,
     types::{GenerationReport, GenerationRequest},
 };
@@ -11,77 +12,52 @@ use std::future::Future;
 use tokio::sync::watch;
 
 pub(super) struct Run {
-    pub text: String,
-    pub final_text: String,
+    pub output: chat_validation::Outcome,
     pub reports: Vec<Value>,
-    pub action: &'static str,
 }
 pub(super) async fn render(
-    turn: Turn,
+    request: GenerationRequest,
     llm: &RigLlm,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Run> {
-    render_with(turn, cancel, |request| async move {
+    render_with(request, cancel, |request| async move {
         llm.generate(&request).await
     })
     .await
 }
 async fn render_with<F: Future<Output = Result<GenerationReport>>>(
-    mut turn: Turn,
+    request: GenerationRequest,
     cancel: &mut watch::Receiver<bool>,
-    mut generate: impl FnMut(GenerationRequest) -> F,
+    generate: impl FnOnce(GenerationRequest) -> F,
 ) -> Result<Run> {
-    let mut reports = vec![];
-    loop {
-        ensure!(
-            !*cancel.borrow() && cancel.has_changed().is_ok(),
-            "cancelled"
-        );
-        let request = turn.request()?;
-        let response = tokio::select! {biased;_=bridge::cancelled(cancel)=>anyhow::bail!("cancelled"),result=generate(request)=>result};
-        let raw = match response {
-            Ok(report) => {
-                tracing::info!(kind="player_chat",elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,finish_reason=?report.generated.finish_reason);
-                let text = (report.generated.finish_reason.as_deref() != Some("length"))
-                    .then(|| report.generated.text.clone());
-                reports.push(serde_json::to_value(report)?);
-                text
-            }
-            Err(error) => {
-                reports.push(json!({"kind":"player_chat","error":error.to_string()}));
-                None
-            }
-        };
-        if turn.complete(raw.as_deref())? {
-            break;
-        }
-    }
-    // Cancellation never commits a fallback or a just-completed old candidate.
     ensure!(
         !*cancel.borrow() && cancel.has_changed().is_ok(),
         "cancelled"
     );
-    let outcome = turn.take_outcome()?;
-    for (i, v) in outcome.validations.iter().enumerate() {
-        tracing::info!(event="chat_leaf_validation",attempt=i+1,reason=?v.reason,issue=?v.issue,corrections=?v.corrections);
-    }
-    tracing::info!(
-        event = "chat_leaf",
-        implementation = "rust",
-        status = outcome.status,
-        attempts = outcome.attempts
+    let response = tokio::select! {biased;_=bridge::cancelled(cancel)=>anyhow::bail!("cancelled"),result=generate(request)=>result};
+    ensure!(
+        !*cancel.borrow() && cancel.has_changed().is_ok(),
+        "cancelled"
     );
+    let (output, report) = match response {
+        Ok(report) => {
+            tracing::info!(kind="player_chat",elapsed_ms=report.elapsed_ms as u64,completion_tokens=?report.generated.completion_tokens,finish_reason=?report.generated.finish_reason);
+            // 打切りでも届いた本文はコード補完へ渡す。続きをモデルへ要求しない。
+            let output = chat_validation::finish(Some(&report.generated.text));
+            (output, serde_json::to_value(report)?)
+        }
+        Err(error) => (
+            chat_validation::finish(None),
+            json!({"kind":"player_chat","error":error.to_string()}),
+        ),
+    };
+    tracing::info!(event="chat_leaf",implementation="rust",status=output.status,reason=?output.reason,attempts=1);
     Ok(Run {
-        text: outcome.text,
-        final_text: outcome.final_text,
-        reports,
-        action: if outcome.status == "silent" {
-            "silent"
-        } else {
-            "speak"
-        },
+        output,
+        reports: vec![report],
     })
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,8 +66,18 @@ mod tests {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
-    fn turn() -> Turn {
-        Turn::new(serde_json::from_value(json!({"prompt":{"schema_version":1,"kind":"player_chat","model":"fixture","temperature":0.65,"max_tokens":72,"enable_thinking":false,"details":{}},"validation":{},"fallback_text":"話を聞いとるで。"})).unwrap(),"fixture",72).unwrap()
+    fn request() -> GenerationRequest {
+        crate::chat_prompt::Input {
+            schema_version: 1,
+            kind: "player_chat".into(),
+            model: "fixture".into(),
+            details: json!({"dialogue_choice":true}),
+            temperature: 0.65,
+            max_tokens: 72,
+            enable_thinking: false,
+        }
+        .into_request()
+        .unwrap()
     }
     fn report(text: &str) -> GenerationReport {
         GenerationReport {
@@ -111,56 +97,51 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn model_failure_does_not_retry_and_invalid_text_is_bounded_to_two() {
-        for first_error in [true, false] {
-            let (tx, mut rx) = watch::channel(false);
+    async fn failure_and_broken_output_make_one_call_and_no_fallback() {
+        for fail in [true, false] {
+            let (_owner, mut cancel) = watch::channel(false);
             let mut calls = 0;
-            let result = render_with(turn(), &mut rx, |_| {
+            let result = render_with(request(), &mut cancel, |_| {
                 calls += 1;
                 async move {
-                    if first_error {
+                    if fail {
                         Err(anyhow::anyhow!("network failure"))
                     } else {
-                        Ok(report("English explanation"))
+                        Ok(report(
+                            r#"{"action":"speak","speech":"同じや。同じや。同じや。"}"#,
+                        ))
                     }
                 }
             })
             .await
             .unwrap();
-            assert_eq!(calls, if first_error { 1 } else { 2 });
-            assert_eq!(result.reports.len(), calls);
-            assert_eq!(result.text, "話を聞いとるで。");
-            drop(tx);
+            assert_eq!(calls, 1);
+            assert_eq!(result.reports.len(), 1);
+            assert!(result.output.text.is_empty());
+            assert_eq!(result.output.action, "silent");
         }
     }
     #[tokio::test]
-    async fn second_network_failure_returns_original_fallback_once() {
-        let (_tx, mut rx) = watch::channel(false);
-        let mut calls = 0;
-        let result = render_with(turn(), &mut rx, |_| {
-            calls += 1;
-            let n = calls;
-            async move {
-                if n == 1 {
-                    Ok(report("English explanation"))
-                } else {
-                    Err(anyhow::anyhow!("network failure"))
-                }
-            }
+    async fn truncated_body_is_completed_in_code_without_retry() {
+        let (_owner, mut cancel) = watch::channel(false);
+        let result = render_with(request(), &mut cancel, |_| async {
+            let mut output = report(r#"{"action":"speak","speech":"そや"#);
+            output.generated.finish_reason = Some("length".into());
+            Ok(output)
         })
         .await
         .unwrap();
-        assert_eq!(calls, 2);
-        assert_eq!(result.text, "話を聞いとるで。");
+        assert_eq!(result.output.text, "そや");
+        assert_eq!(result.reports.len(), 1);
     }
     #[tokio::test]
-    async fn cancellation_before_during_and_between_attempts_never_speaks() {
+    async fn cancelled_generation_never_yields_speech_or_silence_history() {
         let (tx, mut rx) = watch::channel(true);
         let mut calls = 0;
         assert!(
-            render_with(turn(), &mut rx, |_| {
+            render_with(request(), &mut rx, |_| {
                 calls += 1;
-                async { Ok(report("ありがとうやで。")) }
+                async { Ok(report("{}")) }
             })
             .await
             .is_err()
@@ -168,35 +149,29 @@ mod tests {
         assert_eq!(calls, 0);
         drop(tx);
         let (tx, mut rx) = watch::channel(false);
-        let count = Arc::new(AtomicUsize::new(0));
-        let c = count.clone();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let count = calls.clone();
         let task = tokio::spawn(async move {
-            render_with(turn(), &mut rx, |_| {
-                c.fetch_add(1, Ordering::SeqCst);
+            render_with(request(), &mut rx, |_| {
+                count.fetch_add(1, Ordering::SeqCst);
                 std::future::pending::<Result<GenerationReport>>()
             })
             .await
         });
-        while count.load(Ordering::SeqCst) == 0 {
+        while calls.load(Ordering::SeqCst) == 0 {
             tokio::task::yield_now().await;
         }
         tx.send(true).unwrap();
         assert!(task.await.unwrap().is_err());
-        assert_eq!(count.load(Ordering::SeqCst), 1);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
         let (tx, mut rx) = watch::channel(false);
-        let mut calls = 0;
         assert!(
-            render_with(turn(), &mut rx, |_| {
-                calls += 1;
-                let tx = tx.clone();
-                async move {
-                    tx.send(true).unwrap();
-                    Ok(report("English explanation"))
-                }
+            render_with(request(), &mut rx, |_| async move {
+                tx.send(true).unwrap();
+                Ok(report("{}"))
             })
             .await
             .is_err()
         );
-        assert_eq!(calls, 1);
     }
 }

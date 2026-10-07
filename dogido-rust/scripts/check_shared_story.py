@@ -28,12 +28,12 @@ def main():
         ordinary = finish(base, send, sid, "今日はどんな気分？")
         assert ordinary["workshop_action"] == "unrelated", ordinary
         requests = [r["body"] for r in seen[offset:] if r["path"] == "/v1/chat/completions"]
-        planner = next(r for r in requests if r["max_tokens"] == 640)
-        leaf = next(r for r in requests if r["max_tokens"] not in {420, 640})
-        for r in [planner, leaf]:
+        assert len(requests) == 2, requests
+        leaf = next(r for r in requests if r["max_tokens"] != 420)
+        for r in [leaf]:
             text = json.dumps(r["messages"], ensure_ascii=False)
             assert "この句の余韻について話したい" in text and reply["text"] in text, text
-        passed.append("delivered_workshop_dialogue_reaches_normal_planner_leaf_and_same_short_log")
+        passed.append("delivered_workshop_dialogue_reaches_single_normal_reply_and_same_short_log")
 
     with fixture(combat_settings=SETTINGS) as context:
         base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder = context

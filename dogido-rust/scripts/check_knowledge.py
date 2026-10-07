@@ -101,8 +101,8 @@ def integration(binary, directory):
         # 学習の続きではない別sessionの雑談に、国語分類を増やさない。
         turn = submit(base, other, "こんにちは")
         wait_for(lambda: row(base, turn, {"completed"}))
-        assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 2, seen
-        passed.append("ordinary_chat_still_one_planner_one_leaf")
+        assert len([r for r in seen if r["path"] == "/v1/chat/completions"]) == 1, seen
+        passed.append("ordinary_chat_uses_one_generation")
     return passed
 
 

@@ -30,7 +30,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 | `dogido-rust/src/dialogue/` | セッション、入力、会話・川柳・音声・記憶の配線。状態変更と取消の所有者 |
 | `dogido-rust/src/combat/` · `environment/` | 戦闘・環境・発話優先。降水は `environment/precipitation.rs` |
 | `dogido-rust/src/foreground.rs` · `dialogue/history.rs` | 会話所有権、戦闘保留、実再生完了後の短期履歴 |
-| `dogido-rust/src/planner/` · `chat_observation.rs` · `chat_validation.rs` | 通常会話の有界read action、現在観測との照合、発話検査 |
+| `dogido-rust/src/chat_materials.rs` · `chat_observation.rs` · `chat_validation.rs` | 通常会話の一回生成用材料、形式補完と明らかな出力破損の検査 |
 | `dogido-rust/src/conversation_observation.rs` · `catalog_knowledge.rs` | 共通観測と、観測へ昇格させない一般知識 |
 | `dogido-rust/src/haiku/` · `python_worker.rs` | 材料・発句準備・生成・検査・再生成 |
 | `dogido-rust/src/workshop_*.rs` · `workshop_*/` | 一句の相談、行対象、原文根拠、CAS、採否・保存前検証 |
@@ -71,10 +71,10 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 
 - panic / 警告の優先、発話抑制、いつ川柳かは **状態機械側**
 - LLM に「今パニックすべきか」を委ねない
-- Rust本体の通常会話と環境反応は、共通Base・場面・観測の扱い・対話目的・`speak/silent` 契約を使う。人格の正本は `dogido_server/llm/companion_prompts.json`、共通観測は `dogido-rust/src/conversation_observation.rs`。通常会話でも観測された雨・匂いを返事へ織り交ぜたり沈黙を選べる。生成開始前に待機中の観測・短期履歴を更新し、生成中の新しい変化は次の判断へ残す。沈黙は短期履歴の `role=event, reaction=silent`、再生成功だけがassistant発話。失敗・取消・不正出力を沈黙として記録しない。川柳・共同編集・国語対話の発話も同じBaseを参照するが、分類器・検証器の役割には混ぜない
+- Rust本体の通常会話と環境反応は、共通Base・場面・観測の扱い・対話目的・`speak/silent` 契約を使う。人格の正本は `dogido_server/llm/companion_prompts.json`、共通観測は `dogido-rust/src/conversation_observation.rs`。通常会話でも観測された雨・匂いを返事へ織り交ぜたり沈黙を選べる。生成開始前に待機中の観測・短期履歴を更新し、生成中の新しい変化は次の判断へ残す。沈黙は短期履歴の `role=event, reaction=silent`、再生成功だけがassistant発話。通常対話の不成立・生成通信失敗は下記の出来事として残す。再生失敗・取消・古いepochでは沈黙記録を作らない。川柳・共同編集・国語対話の発話も同じBaseを参照するが、分類器・検証器の役割には混ぜない
 - Rust本体の環境対話は `dogido-rust/src/environment/reaction.rs`。モブ・雷鳴・天候変化・匂い・バイオーム／木陰／遮蔽入口について、既存会話モデルが実観測・一般的性質・再生完了した会話から「話す／黙る」と内容を選ぶ。候補・優先順位・間隔・観測の現在性・取消・状態／操作／保存はコード。無言は生成失敗と区別し、`event/silent` の発話なしの反応として共通短期履歴へ残す。再生済みの一往復や川柳材料へは数えない。戦闘経路は変えず、雷の悲鳴cueもモデルを待たない。小型モデル専用経路や新規の語句による意味判定は設けず、出力予算は既存会話設定を使う
 - 環境対話のモデル向け指示文も関西弁で書く。語句・方言・短い相槌で出力を棄却せず、fallbackは生成失敗・空出力・形式不正・明確なループや生成崩れに限る
-- leaf 失敗時はカタログ fallback がある前提を壊さない
+- 通常対話以外のleafは既存のカタログfallbackを維持する。通常対話の不成立時は下記の沈黙記録を使う
 - AI 出力から直接 close / lesson解除 / revision保存しない。評価極性・評価範囲・終了scope・enum・行概念ID・行番号・発話中evidence・confidence・現在pending・CASをコード検証する
 - 通常workshopの自然な相談は、一つの有界stepが現在句・pending・直近対話から `respond / explain / ask / inspect / propose_revision / compare / show_current / stage_player_edit / accept_pending / reject_pending / close_workshop / unrelated` の次手を選べる。普通の相談・説明・比較はactionと非空のspeechで受け取り、purpose・confidence・evidence・使わない項目の不備で棄却しない。読み・音数・出典を確かめる必要性はモデルが判断してinspectを選び、確認結果を参考に一度だけ返答を続ける。inspect_textを指定すれば相談中の語・候補も既存UniDicでひらがなと音数を確認でき、未解決は未確定として返す。修正検証後の再判断は一度だけ。句正本・編集対象・CAS・音数・hard制約・採否・保存・戦闘中断はコード所有を維持する。局所編集・採否・終了は音声認識原文にも行為を示す連続evidenceがあることを必須とし、疑問・否定・条件・引用・伝聞をコードで棄却する。同じ発話の採否＋終了は各意思をそれぞれ検証して一つのtransactionとして実行する
 - workshopは会話・読み取り・操作を分け、そのactionが実際に使う入力だけ検証する。編集・採否・終了の原文意思と正本整合性は従来どおり守る。assist等の structured 出力は kind ごとにRustの各ドメイン検証器で現行外形を検査する。自動川柳の `haiku_draft` / `haiku_irony` / `haiku_scene` / `haiku_line_grounding` / `haiku_line_regeneration` は、2026-08-16完成版のドメイン検査を正とし、欠けた行の個別再照合と最大6回の内容再生成を途中の共通schemaで打ち切らない。新kind追加時は呼出箇所・prompt例・fallback・consumer・テストを同時に揃える
@@ -82,9 +82,9 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - platform provider は設定と可用性だけで選ぶ。Foundry のモデル自動 download は既定 off を守る
 - 乗り物は乗車中だけ `player.vehicle` を送る。LLM には必ず「プレイヤーはXXに乗って…」の主語付き事実として渡す
 - 本体の一般雑談は既存 `player_chat`、国語・語句の明示質問と学習中の続きだけを有界workerへ渡す。正本DBの明示知識回答、戦況、assist、workshopは状態機械側に残す。利用前提が揃うMacのWeb調査は、同意→案内音声の実再生 `completed`→専用Chromeの一度だけの検索に閉じ、検索自体も同じbackground workerで行う。調査中はWeb用30分期限まで `web` foregroundを保持し、復帰時は話題一件だけを短期文脈へ渡す。ページ本文・URLは本体会話や長期記憶へ持ち帰らない。foreground中は非敵対ambientを止めるが、敵対警告・雷・夕方を止めない。assistant履歴と会話由来の川柳材料は発話IDの実再生 `completed` 後だけ確定し、失敗・取消・古いepochを混ぜない。2026-09-14にユーザー環境のMinecraft自動ポーズと川柳カウント停止を確認済み。追加のpause contractは不要
-- 通常 `player_chat` は本文生成前に、実再生済み5往復・現在入力・コード観測から閉じたread actionを一件だけ選ぶ。通常の相槌を全カタログ検索へ流さず、対象照合時だけ候補IDを現在観測へコードで突合する。player報告とassistant履歴は世界観測ではない。未観測の在否・過去誤断言の訂正はコード固定。plannerへ世界操作・保存・戦況判断を渡さない
-- 通常 `player_chat` の採否は自然な自己言及・謝罪・方言・比喩を単語だけで落とさない。空出力・役割ラベル・英語説明・生成崩れと、危険助言・未観測名・嗅覚補作・突き放し・現在方針との衝突だけをコードで検査する。不合格時は候補と閉じた理由を同じ会話モデルへ一度だけ返して言い直させ、二案目にも同じ検査を通す。採用・fallback・状態変更はコードが決め、不合格案を会話履歴へ入れない。これは汎用ReActや世界操作loopではない
-- 嗅覚は一般LLMセンサーにしない。Fabricが指定した近接源・hotbar・バイオーム・温度・天候をコードのスメルバトルで一件へ解決し、`none / present / suppressed` を明示する。外部源の単独勝者だけ勝者の実方角を丸めた粗い方向を渡し、正確な位置・距離・個数・entity IDは渡さない。動く源も現在方角を使い、匂い単独で戦闘mode／workshop pauseを立てない。現在の匂いへの問いはコード固定文。Rust通常雑談にも解決済みの匂いを共通観測として渡し、現在の `present` 観測がない嗅覚断言を生成後に棄却する。正本は `docs/smell-policy.md`
+- 通常 `player_chat` は今回入力・現在観測・確定済み短期履歴から、話題選択と返答を一回のモデル呼出しで行う。前段plannerと生成後の意味・観測整合検査は使わない。観測・一般知識・player報告・assistant履歴を別の材料として渡し、世界操作・保存・戦況判断はコードが所有する。
+- 通常 `player_chat` はJSON末尾と単純な型違いをコード補完し、空・文字化け・明らかな反復・補完不能な外形だけを発話なしにする。日本語・方言・名前・嗅覚・内容整合を採否の条件にせず、再生成と定型fallbackは行わない。不成立・生成通信失敗は「難しい話だったので、ドギドは沈黙を選んだ」を短期の出来事として残す。壊れた本文を履歴へ入れず、この出来事を再生済み発話・川柳材料に数えない。川柳・workshopの検査経路は別。
+- 嗅覚は一般LLMセンサーにしない。Fabricが指定した近接源・hotbar・バイオーム・温度・天候をコードのスメルバトルで一件へ解決し、`none / present / suppressed` を明示する。外部源の単独勝者だけ勝者の実方角を丸めた粗い方向を渡し、正確な位置・距離・個数・entity IDは渡さない。動く源も現在方角を使い、匂い単独で戦闘mode／workshop pauseを立てない。現在の匂いへの問いはコード固定文。Rust通常雑談にも解決済みの匂いを共通観測として渡し、観測の扱いは生成プロンプトで伝え、通常対話の嗅覚断言を生成後に棄却しない。正本は `docs/smell-policy.md`
 - 照明器具のinventory増加はクラフト／設置とは断定しない。半スタック以上＋暗所警告外、5分以内の重複、継続中の危険な暗さはコードで無言にし、それ以外だけ有界 `light_source_comment_plan` に発話要否を選ばせる。暗所状態の停止は現在観測でコード確定し、発話leafへ正確な本数を渡さない
 - 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。学習・Web中は発句時計そのものを凍結する
 - 世界操作はLLMへtools一覧として渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。実行capability・現在snapshot・slot・期限・期待item・重複はコード検証する

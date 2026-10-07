@@ -7,7 +7,6 @@ from pathlib import Path
 import tempfile
 import time
 
-from check_chat_native import objects
 from check_dialogue import dependencies, running, register, request, submit, wait_for, row, snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,30 +42,17 @@ def main():
             def calls():
                 return [r["body"] for r in seen if r["path"] == "/v1/chat/completions"]
 
-            def plan(incoming):
-                if incoming["max_tokens"] != 640:
-                    return None
-                text = [r for r in objects(incoming) if r["turn_id"] == "current"][-1]["text"]
-                action = "answer_observation" if "音" in text or "声" in text else "continue_conversation"
-                query = ""
-                if "いる？" in text:
-                    action, query = "check_entity_presence", "クロちゃん"
-                elif "これ何" in text:
-                    action, query = "identify_entity", "これ"
-                return {"action": action, "focus": text, "entity_query": query,
-                        "evidence": [{"turn_id": "current", "quote": text}], "confidence": .95, "repair": None}
-
             def say(text, answer):
                 control["leaf"] = answer
                 before = len(calls())
                 turn = submit(base, sid, text)
                 result = wait_for(lambda: row(base, turn, {"completed", "failed", "unsupported"}))
                 assert result["playback_status"] == "completed", (result, log.read_text())
-                leaf = [c for c in calls()[before:] if c["max_tokens"] == 72]
+                leaf = calls()[before:]
+                assert len(leaf) == 1 and leaf[0]["max_tokens"] == 72, leaf
                 prompt = "\n".join(m["content"] for c in leaf for m in c["messages"])
                 return result, prompt, leaf
 
-            control["structured_handler"] = plan
             send()
             send(passive_mobs=[cat])
             time.sleep(.35)
@@ -101,13 +87,13 @@ def main():
             sid = register(base, preview=False)
             other = {**sound, "source_id": "cat-2", "identity": {"entity_id": "cat-2", "custom_name": "シロ", "tamed": True}}
             send(passive_mobs=[cat], ambient_sounds=[other])
-            result, prompt, leaf = say("クロちゃんの声？", "これは採用されない。")
-            assert not leaf and "クロちゃんの声や" not in result["text"], result
+            result, prompt, leaf = say("クロちゃんの声？", "今の音はシロの声やな。")
+            assert "クロちゃんの声 右" not in prompt, prompt
             passed.append("same_species_different_id_is_not_the_named_sound")
 
             send()
-            result, prompt, leaf = say("クロちゃんいる？", "これは採用されない。")
-            assert not leaf and "クロちゃんは確認できてへん" in result["text"], result
+            result, prompt, leaf = say("クロちゃんいる？", "今の観測では分からへん。")
+            assert '"current_observation":false' in prompt and '"name":"クロちゃん"' in prompt, prompt
             passed.append("remembered_name_is_not_current_presence")
         assert process.returncode == 0
     report = ROOT / "reports/pet-runtime-check.json"

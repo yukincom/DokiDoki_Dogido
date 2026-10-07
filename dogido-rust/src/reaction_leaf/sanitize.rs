@@ -1,6 +1,6 @@
 //! 共通の発話整形・危険助言検査と、反応別の内容検査を同じモジュールに置いている。
-//! chat_validationはclean/usability_reason/forbidden等、workshop_validationはstripを使う。
-//! final_guardは反応固有の主張検査。通常会話はchat_validation::guardで固有のgroundingを検査する。
+//! 現役反応のforbiddenとworkshop_validation用のstripを持つ。旧clean/usabilityはfixture試験だけに残す。
+//! final_guardは反応固有の主張検査。通常会話はchat_validationで形式補完と明らかな出力破損だけを検査する。
 use super::prompts::truth;
 use crate::text_format::{self, ContainerFormat::CompactJson};
 use regex::Regex;
@@ -27,6 +27,7 @@ pub(crate) fn strip(s: &str) -> &str {
 pub(crate) fn compact(s: &str) -> String {
     s.chars().filter(|c| !whitespace(*c)).collect()
 }
+#[cfg(test)]
 fn quotes(s: &str) -> String {
     let s = strip(s);
     for (a, b) in [('「', '」'), ('『', '』'), ('"', '"'), ('\'', '\'')] {
@@ -36,6 +37,7 @@ fn quotes(s: &str) -> String {
     }
     s.into()
 }
+#[cfg(test)]
 fn japanese(c: char) -> bool {
     ('\u{3040}'..='\u{309f}').contains(&c)
         || ('\u{30a0}'..='\u{30ff}').contains(&c)
@@ -45,12 +47,14 @@ fn japanese(c: char) -> bool {
 }
 // Python isdigit由来の文字集合をRustだけで読む。²を含み、Ⅳ・½は含まない。
 // Rustのis_numericとは範囲が異なるため、表の削除・置換は採否規則の変更になる。
+#[cfg(test)]
 fn digit(c: char) -> bool {
     static RANGES: LazyLock<Vec<(u32, u32)>> = LazyLock::new(|| {
         serde_json::from_str(include_str!("digit-ranges.json")).expect("Python digit table")
     });
     RANGES.iter().any(|(a, b)| (*a..=*b).contains(&(c as u32)))
 }
+#[cfg(test)]
 fn forward(s: &str) -> bool {
     let c: Vec<_> = s.chars().filter(|c| !whitespace(*c)).collect();
     !c.is_empty()
@@ -58,6 +62,7 @@ fn forward(s: &str) -> bool {
         && c.iter()
             .any(|c| ('\u{3040}'..='\u{309f}').contains(c) || ('\u{4e00}'..='\u{9fff}').contains(c))
 }
+#[cfg(test)]
 pub(crate) fn clean(raw: &str) -> String {
     let s = re(r"(?s)<think>.*?</think>").replace_all(raw, "");
     let s = s.replace("<|im_end|>", "").replace("<|endoftext|>", "");
@@ -102,6 +107,7 @@ pub(crate) fn clean(raw: &str) -> String {
         .cloned()
         .unwrap_or_else(|| lines.first().map_or_else(String::new, |s| quotes(s)))
 }
+#[cfg(test)]
 fn stripped_ascii(text: &str, d: &Value) -> String {
     let mut s = re(r"[A-Za-z]+")
         .replace_all(text, |c: &regex::Captures<'_>| {
@@ -126,6 +132,7 @@ pub(super) fn usable(text: &str, d: &Value) -> bool {
     usability_reason(text, d).is_none()
 }
 /// Shared surface contract, including the original reason ordering.
+#[cfg(test)]
 pub(crate) fn usability_reason(text: &str, d: &Value) -> Option<&'static str> {
     if text.is_empty() {
         return Some("empty_output");
@@ -314,47 +321,6 @@ pub(crate) fn forbidden(text: &str, d: &Value) -> bool {
         patterns = catalog_forbidden(d);
     }
     patterns.iter().any(|p| text.contains(p))
-}
-fn sep(c: char) -> bool {
-    whitespace(c) || "！？!?,，．。…〜ー".contains(c)
-}
-pub(crate) fn repeated(text: &str) -> bool {
-    let c: Vec<_> = text.chars().collect();
-    // 2〜8文字の同じ単位が、区切り記号を挟んで3回続く生成崩れを検出する。
-    for start in 0..c.len() {
-        for len in 2..=8 {
-            if start + len > c.len() {
-                break;
-            }
-            let unit = &c[start..start + len];
-            if unit.contains(&'\n') {
-                continue;
-            }
-            let mut middle = start + len;
-            loop {
-                if c.get(middle..middle + len) == Some(unit) {
-                    let mut end = middle + len;
-                    loop {
-                        if c.get(end..end + len) == Some(unit) {
-                            return true;
-                        }
-                        if c.get(end).is_some_and(|c| sep(*c)) {
-                            end += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                if c.get(middle).is_some_and(|c| sep(*c)) {
-                    middle += 1;
-                } else {
-                    break;
-                }
-            }
-        }
-    }
-    let tokens: Vec<_> = text.split(sep).filter(|s| !s.is_empty()).collect();
-    tokens.windows(3).any(|w| w[0] == w[1] && w[1] == w[2])
 }
 #[cfg(test)]
 pub(super) fn style(_kind: &str, text: &str, d: &Value) -> bool {

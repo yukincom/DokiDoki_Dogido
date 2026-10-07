@@ -13,9 +13,6 @@ def main():
     with fixture(enabled=False, combat_settings={"conversation_pending_address_ttl_ms":4000}) as f:
         base, _, log, control, seen, _, _, _, send, _, rows, _, folder = f
         def model(incoming):
-            if incoming["max_tokens"] == 640 and "持ち物を教えて" in incoming["messages"][-1]["content"]:
-                return {"action":"answer_observation","focus":"現在の所持品","entity_query":"",
-                        "evidence":[{"turn_id":"current","quote":"持ち物を教えて"}],"confidence":.95}
             if incoming["max_tokens"] != 850: return None
             current = json.loads(incoming["messages"][-1]["content"].split("\n以上は背景。今回応答する最新の発話はこちら：\n")[1])
             if "音数" in current["text"]: return interpretation(current)
@@ -51,20 +48,20 @@ def main():
         assert "家を建てたい" in repair["text"] and calls() == n, repair
         resumed = say(sid, "うん")
         assert resumed["turn_id"] == held["turn_id"] and resumed["source"] == "voice", resumed
-        assert resumed["player_input_text"] == held["player_input_text"] and calls() == n + 2, resumed
+        assert resumed["player_input_text"] == held["player_input_text"] and calls() == n + 1, resumed
         assert resumed["category"] == "speech" and session(sid)["foreground"]["route"] == "casual"
         assert len([r for r in rows(sid) if r["turn_id"] == held["turn_id"]]) == 1
         assert len([r for r in session(sid)["history"] if r["turn_id"] == held["turn_id"] + ":reply"]) == 1
         say(sid, "うん")
         assert len([r for r in rows(sid) if r["turn_id"] == held["turn_id"]]) == 1
-        close(sid); passed.append("held_input_replayed_once_with_original_id_text_source_and_two_calls")
+        close(sid); passed.append("held_input_replayed_once_with_original_id_text_source_and_one_call")
 
         sid = fresh(); held = hold(sid, "明日は家を作りたい")
         gate = threading.Event()
-        # 初めての引用部分を止める。cache済みの冒頭二文を再利用しても全文completedにはならない。
+        # cache済みの冒頭二文のあと、初めて合成する文を止める。読み補正後の表記には依存しない。
         quoted_tts = []
         def gate_quoted_sentence(text):
-            if text.startswith("さっきの『"):
+            if text:
                 quoted_tts.append(text)
                 return gate
             return None
@@ -72,7 +69,7 @@ def main():
         repair_id = submit(base, sid, "ドギド")
         wait_for(lambda: quoted_tts)
         assert len(quoted_tts) == 1
-        assert "『" in quoted_tts[0] and "』" in quoted_tts[0], quoted_tts
+        assert quoted_tts[0], quoted_tts
         n = calls(); early = submit(base, sid, "うん")
         assert row(base, early, {"not_selected"})["resolution"] == "confirmation_before_repair_completed"
         assert calls() == n and row(base, held["turn_id"], {"not_selected"})
@@ -116,7 +113,7 @@ def main():
         for text in ["ドギド、家を作りたい", "ところで家を作りたい"]:
             sid = fresh(); n = calls()
             reply = say(sid, text)
-            assert reply["language_status"] == "host_chat" and calls() == n + 3
+            assert reply["language_status"] == "host_chat" and calls() == n + 2
             close(sid)
         passed.append("explicit_address_or_topic_shift_bypasses_hold")
 
@@ -126,7 +123,7 @@ def main():
         fact = say(sid, "枕詞って何？")
         assert fact["knowledge_status"] == "found" and calls() == n, fact
         inventory = say(sid, "持ち物を教えて")
-        assert inventory["player_input_text"] == "持ち物を教えて" and calls() == n + 2, inventory
+        assert inventory["player_input_text"] == "持ち物を教えて" and calls() == n + 1, inventory
         assert row(base, held["turn_id"], {"not_selected"})
         close(sid); passed.append("pending_confirmation_does_not_swallow_knowledge_or_inventory_questions")
 
