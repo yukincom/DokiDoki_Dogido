@@ -239,7 +239,10 @@ pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
     Ok(vec![
         ChatMessage {
             role: Role::System,
-            content: crate::companion_prompt::dialogue(mode(kind, d)),
+            content: crate::companion_prompt::dialogue(
+                mode(kind, d),
+                crate::companion_prompt::DialoguePurpose::Ambient,
+            ),
         },
         ChatMessage {
             role: Role::User,

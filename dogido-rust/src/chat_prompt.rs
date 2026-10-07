@@ -563,7 +563,10 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         ));
     }
     let system = if flag(d, "dialogue_choice") {
-        crate::companion_prompt::dialogue(character)
+        crate::companion_prompt::dialogue(
+            character,
+            crate::companion_prompt::DialoguePurpose::Reply,
+        )
     } else {
         crate::companion_prompt::speech(character)
     };
@@ -628,6 +631,31 @@ mod tests {
                 serde_json::json!(expected),
                 "case {index} details={details}"
             );
+        }
+    }
+    #[test]
+    fn player_reply_uses_reply_purpose_and_preserves_speech_only_path() {
+        for mode in ["normal", "tension", "base"] {
+            let reply = messages(
+                &json!({"user_text":"そうだね", "character_mode":mode, "dialogue_choice":true}),
+            )
+            .unwrap();
+            assert_eq!(
+                reply[0].content,
+                crate::companion_prompt::dialogue(
+                    mode,
+                    crate::companion_prompt::DialoguePurpose::Reply
+                )
+            );
+            assert_ne!(
+                reply[0].content,
+                crate::companion_prompt::dialogue(
+                    mode,
+                    crate::companion_prompt::DialoguePurpose::Ambient
+                )
+            );
+            let speech = messages(&json!({"character_mode":mode})).unwrap();
+            assert_eq!(speech[0].content, crate::companion_prompt::speech(mode));
         }
     }
     #[test]

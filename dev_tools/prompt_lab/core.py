@@ -179,7 +179,8 @@ class Lab:
     def canonical(self) -> dict:
         data = read_json(self.repo / "dogido_server/llm/companion_prompts.json")
         parts = {k: (data["modes"]["normal"] if k == "normal"
-                     else data["modes"][k] if k == "tension" else data[k]) for k in COMPONENTS}
+                     else data["modes"][k] if k == "tension"
+                     else data["dialogue"]["reply"] if k == "dialogue" else data[k]) for k in COMPONENTS}
         return {"schema_version": 1, "id": "canonical", "title": "採用中のプロンプト（読み取り専用）",
                 "author": "本体", "hypothesis": "現在の正本。試験はコピーを使い、正本へ書き戻しません。",
                 "components": parts, "body_mode": "production", "response_format": "speech_json"}

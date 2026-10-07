@@ -36,6 +36,13 @@ def spec():
 
 
 
+def test_canonical_player_lab_uses_reply_purpose(lab):
+    prompts = read_json(lab.repo / "dogido_server/llm/companion_prompts.json")
+    canonical = lab.validate_candidate(lab.canonical())
+    assert canonical["components"]["dialogue"] == prompts["dialogue"]["reply"]
+    assert canonical["components"]["dialogue"] != prompts["dialogue"]["ambient"]
+
+
 def test_prepare_is_frozen_and_candidate_edits_detect_conflicts(lab):
     batch = lab.prepare(spec())
     path = lab.runs / batch["runs"][0] / "requests.json"

@@ -38,12 +38,23 @@ pub fn speech(mode_name: &str) -> String {
     .collect::<Vec<_>>()
     .join("\n")
 }
-pub fn dialogue(mode_name: &str) -> String {
+/// The caller owns the purpose; no model call classifies this branch.
+#[derive(Clone, Copy)]
+pub enum DialoguePurpose {
+    Reply,
+    Ambient,
+}
+
+pub fn dialogue(mode_name: &str, purpose: DialoguePurpose) -> String {
+    let purpose_key = match purpose {
+        DialoguePurpose::Reply => "reply",
+        DialoguePurpose::Ambient => "ambient",
+    };
     [
         base(),
         mode(mode_name),
         grounding(),
-        TEXT["dialogue"].as_str().unwrap(),
+        TEXT["dialogue"][purpose_key].as_str().unwrap(),
         TEXT["choice_contract"].as_str().unwrap(),
     ]
     .into_iter()

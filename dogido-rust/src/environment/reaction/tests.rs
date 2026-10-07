@@ -62,6 +62,13 @@ fn candidate_has_one_decision_and_only_selected_facts_and_delivered_context() {
     assert_eq!(p.request.kind, KIND);
     assert_eq!(p.request.max_tokens, 2048);
     assert_eq!(p.request.messages.len(), 2);
+    assert_eq!(
+        p.request.messages[0].content,
+        crate::companion_prompt::dialogue(
+            "normal",
+            crate::companion_prompt::DialoguePurpose::Ambient
+        )
+    );
     let content = &p.request.messages[1].content;
     assert!(content.contains("passive"));
     assert!(content.contains("ウシ") && content.contains("のんびり歩こか"));

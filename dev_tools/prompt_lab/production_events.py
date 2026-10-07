@@ -145,7 +145,7 @@ def run(args):
     prompt_path = root / "dogido_server/llm/companion_prompts.json"
     prompts = json.loads(prompt_path.read_text())
     expected_system = "\n".join([prompts["base"], prompts["modes"]["normal"], prompts["grounding"],
-                                 prompts["dialogue"], prompts["choice_contract"]])
+                                 prompts["dialogue"]["ambient"], prompts["choice_contract"]])
     sources = [prompt_path, root / "dogido-rust/src/environment/reaction.rs",
                root / "dogido-rust/src/environment/ambient/mobs.rs", root / "dogido-rust/src/llm.rs",
                root / "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoClientAdapter.java"]

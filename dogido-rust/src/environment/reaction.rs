@@ -281,7 +281,10 @@ impl Prepared {
             messages: vec![
                 ChatMessage {
                     role: Role::System,
-                    content: crate::companion_prompt::dialogue("normal"),
+                    content: crate::companion_prompt::dialogue(
+                        "normal",
+                        crate::companion_prompt::DialoguePurpose::Ambient,
+                    ),
                 },
                 ChatMessage {
                     role: Role::User,
