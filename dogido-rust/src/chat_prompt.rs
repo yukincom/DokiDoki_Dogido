@@ -201,6 +201,17 @@ fn fill(template: &str, fields: &[(&str, &str)]) -> String {
 fn section(key: &str, values: &[(&str, &str)]) -> String {
     fill(asset(&DATA[key]), values)
 }
+// Join only templates first, then substitute once so inserted text stays literal.
+fn combined_section(key: &str, fields: &[(&str, &str)], optional: &[(&str, bool)]) -> String {
+    let parts = &DATA[key];
+    let mut template = asset(&parts["common"]).to_owned();
+    for (name, enabled) in optional {
+        if *enabled {
+            template.push_str(asset(&parts[*name]));
+        }
+    }
+    fill(&template, fields)
+}
 fn pair(key: &str, value: &str, marker: &str) -> (String, String) {
     if value.is_empty() {
         return (String::new(), String::new());
@@ -397,12 +408,15 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         (String::new(), String::new())
     } else {
         let status = text(d, "entity_grounding_status", "not_applicable");
-        let rules = asset(
-            DATA["grounding_rules"]
-                .get(status)
-                .unwrap_or(&DATA["grounding_rules"]["not_applicable"]),
-        )
-        .into();
+        let rules = combined_section(
+            "grounding_rules",
+            &[],
+            &[
+                ("observed", status == "observed"),
+                ("not_observed", status == "not_observed"),
+                ("unresolved", matches!(status, "unknown" | "ambiguous")),
+            ],
+        );
         let mut block = format!(
             "{}action: {action}\nentity_status: {status}\n",
             asset(&DATA["grounding_header"])
@@ -446,14 +460,9 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     } else {
         let fact = text(d, "weather_fact", "");
         let context = text(d, "weather_context", "");
-        let key = format!(
-            "{}{}",
-            u8::from(!fact.is_empty()),
-            u8::from(!context.is_empty())
-        );
         (
-            fill(
-                asset(&DATA["weather"][&key]),
+            combined_section(
+                "weather",
                 &[
                     (
                         "weather",
@@ -462,6 +471,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
                     ("fact", fact),
                     ("context", context),
                 ],
+                &[("fact", !fact.is_empty()), ("context", !context.is_empty())],
             ),
             section("time", &[("time", text(d, "time_phase", "unknown"))]),
         )
@@ -504,14 +514,13 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     } else {
         let verse = text(d, "haiku_workshop_text", "");
         let materials = text(d, "haiku_workshop_materials", "");
-        let key = format!(
-            "{}{}",
-            u8::from(!verse.is_empty()),
-            u8::from(!materials.is_empty())
-        );
-        fill(
-            asset(&DATA["workshop"][&key]),
+        combined_section(
+            "workshop",
             &[("verse", verse), ("materials", materials)],
+            &[
+                ("verse", !verse.is_empty()),
+                ("materials", !materials.is_empty()),
+            ],
         )
     };
     f.insert("haiku_workshop_block", block);
@@ -523,17 +532,13 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     let block = if !in_hostile {
         String::new()
     } else if nearby.is_empty() {
-        asset(&DATA["combat_without_nearby"]).into()
+        asset(&DATA["combat"]["common"]).into()
     } else {
         let notes = strings(d, "mob_tactics_notes");
         let hints = strings(d, "safe_hints");
-        let key = format!(
-            "{}{}",
-            u8::from(!notes.is_empty()),
-            u8::from(!hints.is_empty())
-        );
-        fill(
-            asset(&DATA["combat"][&key]),
+        let optional = [("notes", !notes.is_empty()), ("hints", !hints.is_empty())];
+        combined_section(
+            "combat",
             &[
                 (
                     "notes",
@@ -544,6 +549,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
                     &hints.into_iter().take(5).collect::<Vec<_>>().join(" / "),
                 ),
             ],
+            &optional,
         )
     };
     f.insert("combat_safety_rules", block);
