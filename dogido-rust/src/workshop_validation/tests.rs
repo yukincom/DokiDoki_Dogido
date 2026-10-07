@@ -147,6 +147,49 @@ fn conversation(input: &str, speech: &str, action: &str) -> (Value, Value) {
 }
 
 #[test]
+fn missing_operation_checks_are_defaulted_before_intent_validation() {
+    let (mut frame, details) =
+        conversation("相談はここでおしまい", "また話そな。", "close_workshop");
+    frame["payload"].as_object_mut().unwrap().remove("checks");
+    let original = frame.clone();
+    let result = validate(&frame, &details).unwrap();
+    assert_eq!(result["reason"], "accepted", "{result}");
+    assert_eq!(result["step"]["action"], "close_workshop");
+    assert_eq!(result["step"]["checks"], json!([]));
+    assert_eq!(frame, original);
+
+    for key in ["purpose", "confidence", "evidence"] {
+        let mut incomplete = frame.clone();
+        incomplete["payload"].as_object_mut().unwrap().remove(key);
+        assert!(
+            validate(&incomplete, &details).unwrap()["step"].is_null(),
+            "{key}"
+        );
+    }
+    frame["payload"]["confidence"] = json!(0.5);
+    assert!(validate(&frame, &details).unwrap()["step"].is_null());
+    frame["payload"]["confidence"] = json!(0.95);
+    frame["payload"]["evidence"] = json!("今日は終了");
+    assert!(validate(&frame, &details).unwrap()["step"].is_null());
+}
+
+#[test]
+fn explicit_invalid_operation_checks_are_not_replaced_by_defaults() {
+    let (mut frame, details) = conversation("相談はここでおしまい", "", "close_workshop");
+    for checks in [Value::Null, json!("meter"), json!(["shell"]), json!([42])] {
+        frame["payload"]["checks"] = checks.clone();
+        let result = validate(&frame, &details).unwrap();
+        assert!(result["step"].is_null(), "{checks}: {result}");
+        assert!(
+            array(&result["contract_errors"])
+                .iter()
+                .any(|e| text(e).starts_with("checks")),
+            "{checks}: {result}"
+        );
+    }
+}
+
+#[test]
 fn live_conversation_metadata_cannot_discard_speech_or_execute_an_action() {
     for (input, speech, extra) in [
         (
@@ -219,6 +262,20 @@ fn conversational_acceptance_does_not_authorize_unverified_feedback() {
 #[test]
 fn inspection_needs_only_the_requested_tool_arguments() {
     let (mut frame, details) = conversation("読みを確認してみよう", "", "inspect");
+    for checks in [
+        None,
+        Some(json!([])),
+        Some(Value::Null),
+        Some(json!("meter")),
+    ] {
+        frame["payload"] = json!({"action":"inspect"});
+        if let Some(checks) = checks {
+            frame["payload"]["checks"] = checks;
+        }
+        let result = validate(&frame, &details).unwrap();
+        assert!(result["step"].is_null(), "{result}");
+        assert_eq!(result["reason"], "inspection_check_required");
+    }
     frame["payload"] = json!({"action":"inspect","checks":["reading","meter","reading"],"inspect_text":"白い骨","inspect_line_index":2});
     let result = validate(&frame, &details).unwrap();
     assert_eq!(result["reason"], "accepted");
@@ -306,7 +363,8 @@ fn model_selects_natural_close_and_words_but_cannot_close_a_negation() {
         "『終了』ってどういう意味？",
         "終了したらどうなる？",
     ] {
-        let (frame, details) = conversation(input, "まだ話そな。", "close_workshop");
+        let (mut frame, details) = conversation(input, "まだ話そな。", "close_workshop");
+        frame["payload"].as_object_mut().unwrap().remove("checks");
         assert!(
             validate(&frame, &details).unwrap()["step"].is_null(),
             "{input}"

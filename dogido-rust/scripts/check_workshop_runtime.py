@@ -96,6 +96,30 @@ def main():
         passed.append("natural_close_applied_once_after_original_evidence_check")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        calls = install(control, lambda text, prompt, n: {
+            "action": "close_workshop", "purpose": "finish_workshop", "confidence": .95,
+            "evidence": text, "speech": "ほな、また話そな。"})
+        sid = ready(base, send, rows)
+        before = stored(sid)
+        turn = submit(base, sid, "この句の相談はここで終わりにしよう。")
+        result = wait_for(lambda: row(base, turn, {"completed"}))
+        assert result["workshop_action"] == "close_workshop" and len(calls) == 1, result
+        assert result["text"] == "ほな、また話そな。" and hud(sid)["state"] == "closed"
+        record_path = folder / "memory/sessions" / sid / "long_term/haiku_workshop_turns.jsonl"
+        def completed_records():
+            if not record_path.exists():
+                return []
+            records = [json.loads(line) for line in record_path.read_bytes().splitlines(keepends=True)
+                       if line.endswith(b"\n")]
+            return [r for r in records if r["event_kind"] == "turn_result"
+                    and r["result"]["turn_id"] == turn]
+        recorded = wait_for(completed_records)
+        assert len(recorded) == 1 and recorded[0]["state_after"]["open"] is False, recorded
+        assert recorded[0]["state_after"]["close_reason"] == "explicit_close", recorded
+        assert stored(sid) == before
+        passed.append("missing_checks_defaulted_and_close_completed_without_model_retry")
+
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def mistaken_close(text, prompt, n):
             if n % 2 == 0:
                 assert "前の一手は実行していない" in prompt
