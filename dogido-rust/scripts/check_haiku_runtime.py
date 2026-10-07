@@ -133,8 +133,9 @@ def main():
         assert len([r for r in short if r["type"] == "haiku_emitted"]) == 1, short
         assert len([r for r in short if r.get("kind") == "haiku_delivered"]) == 1, short
         history = snapshot(base)["sessions"][0]["history"]
-        assert len(history) == 1 and history[0]["role"] == "event" and history[0]["reaction"] == "story", history
-        assert "ドギドが川柳を詠んだ。" in history[0]["text"]
+        assert sum(p["text"] == inspiration["text"] and p["role"] == "assistant" for p in history) == 1, history
+        poem_events = [p for p in history if p.get("reaction") == "story" and "ドギドが川柳を詠んだ。" in p["text"]]
+        assert len(poem_events) == 1 and len(history) == 2, history
         wait_for(lambda: hud(sid)["state"] == "closed", timeout=4)
         assert checks["drafts"] == 1
         passed.extend(["generated_inspiration_played_before_draft", "completion_clock_and_read_only_hud", "autosave_once_and_no_fake_chat_history"])
@@ -170,7 +171,11 @@ def main():
         sid = register(base, preview=False); send(sid)
         wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "failed" for r in rows(sid)))
         assert len(wait_for(lambda: stored(sid))) == 1 and hud(sid)["state"] == "open"
-        assert snapshot(base)["sessions"][0]["history"] == []
+        history = snapshot(base)["sessions"][0]["history"]
+        inspiration = next(r for r in rows(sid) if r["turn_id"].endswith(":inspiration"))
+        assert inspiration["playback_status"] == "completed"
+        assert len(history) == 1 and history[0]["text"] == inspiration["text"], history
+        assert not any(p.get("reaction") == "story" for p in history), history
         from check_workshop_runtime import install, step
         calls = install(control, lambda text, prompt, n: step(text,"close_workshop"))
         original = stored(sid)

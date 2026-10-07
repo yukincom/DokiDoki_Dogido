@@ -373,6 +373,10 @@ impl Dialogue {
         let s = d.sessions.get_mut(sid).unwrap();
         s.status = status;
         s.haiku.last_activity = Instant::now();
+        if status == PlaybackStatus::Completed && part != "poem" {
+            // 発句前の一言も、次の受け答えが参照できる実発話として残す。
+            s.history.push(&turn, "assistant", text);
+        }
         if status == PlaybackStatus::Completed && part == "poem" {
             self.share_story(
                 sid,

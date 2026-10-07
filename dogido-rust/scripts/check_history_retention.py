@@ -52,10 +52,13 @@ def main():
         seed_rows = list(completed_rows)
         assert len(seed_rows) == 10
         enter(send, rows, sid)
-        compare(seed_rows, danger=True, retained=10)
+        warning = next(r for r in rows(sid) if r["playback_status"] == "completed" and r.get("combat_actions"))
+        completed_rows.append({"turn_id": warning["turn_id"] + ":reply",
+                               "role": "assistant", "text": warning["text"]})
+        compare(completed_rows, danger=True, retained=10)
         for _ in range(12):
             send(sid, visual_threats=[MOB], combat={"combat_active_hint": True})
-        compare(seed_rows, danger=True, retained=10)
+        compare(completed_rows, danger=True, retained=10)
         aftermath = end(send, rows, sid)
         # The delivered aftermath is current conversation material, not a user/reply pair.
         assert aftermath["playback_status"] == "completed" and aftermath["text"]

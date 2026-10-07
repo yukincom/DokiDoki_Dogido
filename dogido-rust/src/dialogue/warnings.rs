@@ -540,16 +540,20 @@ impl Dialogue {
             if let Some(row) = reaction {
                 let outcomes = row["model_reaction_outcomes"].as_array();
                 let has_model = outcomes.is_some_and(|items| !items.is_empty());
-                let all_silent = has_model && outcomes.unwrap().iter().all(|v| v == "silent");
+                // モデルが沈黙しても、同じbatchの固定発話が完了していれば発話として残す。
+                let text = row["text"].as_str().unwrap_or("");
+                let all_silent = has_model
+                    && outcomes.unwrap().iter().all(|v| v == "silent")
+                    && text.trim().is_empty();
                 if matches!(
                     status,
                     PlaybackStatus::NotSelected | PlaybackStatus::Completed
                 ) && all_silent
                 {
                     s.history.silent(turn);
-                } else if status == PlaybackStatus::Completed && has_model {
-                    s.history
-                        .push(turn, "assistant", row["text"].as_str().unwrap_or(""));
+                } else if status == PlaybackStatus::Completed {
+                    // 固定警告・支援返答・環境反応を、生成元で区別しない。
+                    s.history.push(turn, "assistant", text);
                 }
                 if (status == PlaybackStatus::NotSelected && all_silent
                     || status == PlaybackStatus::Completed)
@@ -1013,5 +1017,87 @@ mod tests {
                 assert!(h.completed_pairs().is_empty());
             }
         }
+    }
+    #[test]
+    fn fixed_speech_enters_history_once_only_after_current_playback_completes() {
+        for kind in [
+            "damaging_light",
+            "visual_hostile",
+            "assist_feedback",
+            "combat_query",
+            "workshop_resume",
+        ] {
+            for (status, current, expected) in [
+                (PlaybackStatus::Queued, true, false),
+                (PlaybackStatus::Started, true, false),
+                (PlaybackStatus::Failed, true, false),
+                (PlaybackStatus::Cancelled, true, false),
+                (PlaybackStatus::AudioDisabled, true, false),
+                (PlaybackStatus::Completed, false, false),
+                (PlaybackStatus::Completed, true, true),
+            ] {
+                let d = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
+                d.register("s", "試験", false);
+                let (turn, _rx) = {
+                    let mut data = d.data.lock().unwrap();
+                    Dialogue::queue_actions(
+                        &mut data,
+                        "s",
+                        &[Speech::new(kind, "触るとあちちやで！")],
+                        None,
+                    )
+                };
+                if !current {
+                    d.data
+                        .lock()
+                        .unwrap()
+                        .sessions
+                        .get_mut("s")
+                        .unwrap()
+                        .warning = None;
+                }
+                d.warning_update("s", &turn, status, None);
+                d.warning_update("s", &turn, status, None);
+                let data = d.data.lock().unwrap();
+                let history = &data.sessions["s"].history;
+                assert_eq!(
+                    history.rows().len(),
+                    usize::from(expected),
+                    "{kind} {status}"
+                );
+                if expected {
+                    assert_eq!(history.rows()[0]["text"], "触るとあちちやで！");
+                    assert_eq!(history.rows()[0]["role"], "assistant");
+                }
+                assert!(history.completed_pairs().is_empty());
+            }
+        }
+    }
+    #[test]
+    fn silent_model_does_not_hide_a_completed_fixed_speech_in_the_same_batch() {
+        let d = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
+        d.register("s", "試験", false);
+        let (turn, _rx) = {
+            let mut data = d.data.lock().unwrap();
+            let (turn, rx) = Dialogue::queue_actions(
+                &mut data,
+                "s",
+                &[Speech::new("damaging_light", "触るとあちちやで！")],
+                None,
+            );
+            Dialogue::remember_environment_outcome(
+                &mut data,
+                &turn,
+                Some(&json!({"environment_reaction_outcome":"silent"})),
+            );
+            (turn, rx)
+        };
+        d.warning_update("s", &turn, PlaybackStatus::Completed, None);
+        let data = d.data.lock().unwrap();
+        assert_eq!(data.sessions["s"].history.rows()[0]["role"], "assistant");
+        assert_eq!(
+            data.sessions["s"].history.rows()[0]["text"],
+            "触るとあちちやで！"
+        );
     }
 }

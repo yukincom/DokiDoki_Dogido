@@ -317,6 +317,18 @@ impl Dialogue {
                 if status == PlaybackStatus::Completed {
                     web_runtime::completed(s, turn, &player_text, result);
                 }
+                if (status == PlaybackStatus::Completed || text_displayed)
+                    && !workshop_reply
+                    && !result["memory_action"].is_null()
+                    && result["web_private"] != true
+                    && let Some(text) = result["text"].as_str().filter(|text| !text.is_empty())
+                {
+                    // 想起・保存結果も実発話として共有する。通常雑談の対や新しい句の材料にはしない。
+                    s.history.story(
+                        &format!("memory:{turn}"),
+                        &format!("プレイヤー「{player_text}」\nドギド「{text}」"),
+                    );
+                }
                 // 生成や再生開始だけでは「話した履歴」にしない。音声完了、または
                 // テキスト相談室での表示確認を受けてから確定する。ここで成立した
                 // 通常雑談の対だけを、後の川柳の会話材料へ渡す。

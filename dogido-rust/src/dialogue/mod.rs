@@ -952,4 +952,43 @@ mod tests {
             assert!(h.completed_pairs().is_empty());
         }
     }
+    #[tokio::test]
+    async fn memory_speech_is_shared_after_delivery_without_becoming_new_poem_material() {
+        for (status, current, expected) in [
+            (PlaybackStatus::Queued, true, false),
+            (PlaybackStatus::Started, true, false),
+            (PlaybackStatus::Failed, true, false),
+            (PlaybackStatus::Cancelled, true, false),
+            (PlaybackStatus::AudioDisabled, true, false),
+            (PlaybackStatus::Completed, false, false),
+            (PlaybackStatus::Completed, true, true),
+        ] {
+            let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+            dialogue.register("s", "試験", true);
+            let full = "前に詠んだ句と、そのときの説明やで。".repeat(8);
+            let result =
+                json!({"text":full,"memory_action":"haiku_recall","memory_outcome":"read"});
+            {
+                let mut data = dialogue.data.lock().unwrap();
+                data.rows.push_back(json!({"session_id":"s","turn_id":"recall","epoch":0,"player_input_text":"句を思い出して"}));
+                if !current {
+                    data.sessions.get_mut("s").unwrap().epoch = 1;
+                }
+            }
+            dialogue.update("s", "recall", 0, status, Some(&result));
+            dialogue.update("s", "recall", 0, status, Some(&result));
+            {
+                let data = dialogue.data.lock().unwrap();
+                let session = &data.sessions["s"];
+                assert_eq!(session.history.rows().len(), usize::from(expected));
+                if expected {
+                    assert!(session.history.lines().contains(&full));
+                    assert!(session.history.lines().contains("句を思い出して"));
+                }
+                assert!(session.history.completed_pairs().is_empty());
+                assert!(session.haiku.material_turns.is_empty());
+            }
+            dialogue.shutdown().await;
+        }
+    }
 }

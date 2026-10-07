@@ -65,8 +65,10 @@ def main():
         r = finish(base, send, sid, "覚えてる句を教えて")
         assert r.get("memory_outcome") == "read" and not r["llm_reports"], r
         assert " / ".join(LINES) in r["text"] and hud(sid)["state"] == "closed"
-        assert not session(base, sid)["history"]
-        passed.append("recall_outside_workshop_is_read_only_without_model_or_history_injection")
+        common = session(base, sid)["history"]
+        assert sum(p["turn_id"] == "memory:" + r["turn_id"] and r["text"] in p["text"] for p in common) == 1, common
+        assert not any(p["turn_id"] == r["turn_id"] + ":reply" for p in common), common
+        passed.append("completed_recall_is_shared_once_without_new_poem_material_or_model_call")
 
         request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
         next_sid = ready(base, send, rows)
