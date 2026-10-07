@@ -6,102 +6,38 @@
     "none": "プレイヤーの発言と直近の会話を受けて応じる。観測メモにある生き物や様子には触れてよい。在否を聞かれたら、手元の材料を根拠に答える。材料が空なら、いないと断定せず現在観測では未確認と伝える。指差しのときは視線先を材料にしてよい。"
   },
   "template": [
-    {
-      "text": "いまの答え方: "
-    },
-    {
-      "field": "policy"
-    },
-    {
-      "text": "\n"
-    },
-    {
-      "field": "inventory_rules"
-    },
-    {
-      "field": "history_rules"
-    },
-    {
-      "field": "digest_rules"
-    },
-    {
-      "field": "combat_safety_rules"
-    },
-    {
-      "field": "world_observation_rules"
-    },
-    {
-      "field": "grounding_rules"
-    },
-    {
-      "field": "priority_rules"
-    },
-    {
-      "text": "/no_think\n【材料】\n"
-    },
-    {
-      "field": "history_block"
-    },
-    {
-      "field": "digest_block"
-    },
-    {
-      "field": "grounding_block"
-    },
-    {
-      "field": "repair_block"
-    },
-    {
-      "text": "プレイヤー:「"
-    },
-    {
-      "field": "user_text"
-    },
-    {
-      "text": "」\n呼び名: "
-    },
-    {
-      "field": "player_name"
-    },
-    {
-      "text": "（自然なら一度だけ）\n"
-    },
-    {
-      "field": "world_context_block"
-    },
-    {
-      "text": "スタンス: "
-    },
-    {
-      "field": "stance"
-    },
-    {
-      "text": "\n"
-    },
-    {
-      "field": "priority_block"
-    },
-    {
-      "field": "haiku_workshop_block"
-    },
-    {
-      "field": "observation_block"
-    },
-    {
-      "field": "topic_block"
-    },
-    {
-      "field": "plausibility_block"
-    },
-    {
-      "field": "hearing_block"
-    },
-    {
-      "field": "inventory_block"
-    },
-    {
-      "text": "\n"
-    }
+    {"text": "いまの答え方: "},
+    {"field": "policy"},
+    {"text": "\n"},
+    {"field": "inventory_rules"},
+    {"field": "history_rules"},
+    {"field": "digest_rules"},
+    {"field": "combat_safety_rules"},
+    {"field": "world_observation_rules"},
+    {"field": "grounding_rules"},
+    {"field": "priority_rules"},
+    {"text": "/no_think\n【材料】\n"},
+    {"field": "history_block"},
+    {"field": "digest_block"},
+    {"field": "grounding_block"},
+    {"field": "repair_block"},
+    {"text": "プレイヤー:「"},
+    {"field": "user_text"},
+    {"text": "」\n呼び名: "},
+    {"field": "player_name"},
+    {"text": "（自然なら一度だけ）\n"},
+    {"field": "world_context_block"},
+    {"text": "スタンス: "},
+    {"field": "stance"},
+    {"text": "\n"},
+    {"field": "priority_block"},
+    {"field": "haiku_workshop_block"},
+    {"field": "observation_block"},
+    {"field": "topic_block"},
+    {"field": "plausibility_block"},
+    {"field": "hearing_block"},
+    {"field": "inventory_block"},
+    {"text": "\n"}
   ],
   "inventory": [
     "- 所持品は与えられた要約を根拠に、関係しそうな物に触れてよい\n",
