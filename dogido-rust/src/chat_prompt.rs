@@ -210,6 +210,44 @@ fn pair(key: &str, value: &str, marker: &str) -> (String, String) {
         fill(asset(&DATA[key][1]), &[(marker, value)]),
     )
 }
+// Shared wording is stored once; only the applicable facts are assembled here.
+fn priority(d: &Value) -> (String, String) {
+    let home = text(d, "player_turn_plan", "none") == "return_home";
+    let safe = text(d, "safety_priority", "none") == "seek_safe_place";
+    if !home && !safe {
+        return (String::new(), String::new());
+    }
+    let parts = &DATA["priority"];
+    let mut rules = String::new();
+    let mut block = asset(&parts["header"]).to_owned();
+    if home {
+        let home_parts = &parts["return_home"];
+        rules.push_str(asset(&home_parts["rules"]));
+        block.push_str(asset(&home_parts["block"]));
+        let evidence = text(d, "player_turn_plan_evidence", "");
+        if !evidence.is_empty() {
+            block.push_str(&fill(
+                asset(&home_parts["evidence"]),
+                &[("evidence", evidence)],
+            ));
+        }
+        let labels = &home_parts["progress_labels"];
+        let progress = labels
+            .get(text(d, "home_progress", "unknown"))
+            .unwrap_or(&labels["unknown"]);
+        block.push_str(&fill(
+            asset(&home_parts["progress"]),
+            &[("progress", asset(progress))],
+        ));
+    }
+    if safe {
+        let safe_parts = &parts["seek_safe_place"];
+        rules.push_str(asset(&safe_parts["rules"]));
+        block.push_str(asset(&safe_parts["block"]));
+    }
+    (rules, block)
+}
+
 pub(crate) fn mode(d: &Value) -> &'static str {
     match text(d, "character_mode", "").to_lowercase().as_str() {
         "normal" => return "normal",
@@ -400,26 +438,9 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             String::new()
         },
     );
-    let home = text(d, "player_turn_plan", "none") == "return_home";
-    let safe = text(d, "safety_priority", "none") == "seek_safe_place";
-    let evidence = text(d, "player_turn_plan_evidence", "");
-    let progress = text(d, "home_progress", "unknown");
-    let progress = if ["approaching", "leaving", "at_home"].contains(&progress) {
-        progress
-    } else {
-        "unknown"
-    };
-    let key = format!(
-        "{}{}{}:{progress}",
-        u8::from(home),
-        u8::from(safe),
-        u8::from(!evidence.is_empty())
-    );
-    f.insert("priority_rules", asset(&DATA["priority"][&key][0]).into());
-    f.insert(
-        "priority_block",
-        fill(asset(&DATA["priority"][&key][1]), &[("evidence", evidence)]),
-    );
+    let (rules, block) = priority(d);
+    f.insert("priority_rules", rules);
+    f.insert("priority_block", block);
     let (weather, time) = if d["include_sky_context"] == false {
         (String::new(), String::new())
     } else {
