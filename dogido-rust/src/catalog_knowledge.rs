@@ -257,6 +257,18 @@ pub fn for_event(event: &GameEvent, structure: Option<&str>) -> Knowledge {
             "passive_observation",
         ));
     }
+    if let Some(composition) = &event.nearby_composition {
+        if !composition.mobs_truncated {
+            for key in &composition.mobs {
+                out.add(mob(key, None, false, "nearby_composition"));
+            }
+        }
+        if !composition.blocks_truncated {
+            for key in &composition.blocks {
+                out.add(thing("block", key, "nearby_composition"));
+            }
+        }
+    }
     for target in &event.visual_threats {
         out.add(mob(&target.r#type, None, false, "visual"));
     }
@@ -305,19 +317,6 @@ pub fn for_reaction(kind: &str, details: &Value) -> Knowledge {
         "deep_dark_ominous_sound" => {
             out.add(details["ominous_kind"].as_str().and_then(ominous));
         }
-        "ambient" => {
-            let reference = details["__ambient_guard"]["mob_type"]
-                .as_str()
-                .or_else(|| details["mob"].as_str());
-            out.add(reference.and_then(|id| {
-                mob(
-                    id,
-                    details["mob_profession"].as_str(),
-                    details["mob_is_baby"] == true,
-                    "reaction_target",
-                )
-            }));
-        }
         "death" | "newly_burning_visual" | "occluded_hostile_presence" => {
             let basis = if kind == "occluded_hostile_presence" {
                 "heard"
@@ -345,13 +344,6 @@ pub fn for_reaction(kind: &str, details: &Value) -> Knowledge {
                     );
                 }
             }
-        }
-        "structure_entry" => {
-            out.add(
-                details["structure"]
-                    .as_str()
-                    .and_then(|id| place("structure", id, "reaction_target")),
-            );
         }
         "ender_eye_throw" => out.add(thing("item", "ender_eye", "player_action")),
         _ => {}

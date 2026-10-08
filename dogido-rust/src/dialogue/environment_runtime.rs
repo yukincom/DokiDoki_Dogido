@@ -58,6 +58,8 @@ pub(super) fn context(s: &Session, event: &GameEvent, complete: bool) -> GameEve
         data["passive_mobs"] = incoming["passive_mobs"].clone();
         data["companion_candidates"] = json!(event.companion_candidates);
     }
+    // 種類表は今回の観測だけ。部分通知に無い表を前の測定から作らない。
+    data["nearby_composition"] = incoming["nearby_composition"].clone();
     if event.smell_observation.is_some() {
         data["smell_observation"] = incoming["smell_observation"].clone();
     }
@@ -159,6 +161,7 @@ pub(super) fn focus(
         player_priority: s.cancel.is_some() || s.assist_pending.is_some(),
         boss_presence: boss,
         ominous_presence: ominous,
+        notice_ready: s.conversation_observation.noticing_context().is_some(),
         submerged: e.world.is_submerged == Some(true),
         safe_zone_with_door: danger::safe_zone_with_door(e),
         light: LightContext {
@@ -172,7 +175,7 @@ pub(super) fn focus(
 }
 
 /// Reuse one factual/history context when a queued decision is about to run.
-pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) {
+pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> bool {
     for action in actions {
         if !crate::reaction_leaf::is_model_reaction(action) {
             continue;
@@ -191,14 +194,23 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) {
         if !leaf.details[key].is_object() {
             leaf.details[key] = json!({});
         }
-        let context = s
-            .conversation_observation
-            .context()
-            .unwrap_or_default()
-            .for_reaction(kind, &leaf.details);
-        leaf.details[key]["world_context"] = json!(context);
+        // 周期の気づきは当回の表を固定する。生成・音声待ちの普通の移動で差し替えない。
+        if action.kind != crate::environment::notice::KIND
+            || !leaf.details[key]["world_context"].is_object()
+        {
+            let context = if action.kind == crate::environment::notice::KIND {
+                let Some(context) = s.conversation_observation.noticing_context() else {
+                    return false;
+                };
+                context
+            } else {
+                s.conversation_observation.context().unwrap_or_default()
+            };
+            leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
+        }
         leaf.details[key]["recent"] = json!({"conversation":s.history.rows()});
     }
+    true
 }
 
 impl Dialogue {
@@ -289,7 +301,9 @@ impl Dialogue {
                 crate::environment::reaction::attach(action, event, &recent, &self.config.combat);
             }
         }
-        refresh_dialogue_context(s, &mut actions);
+        if !refresh_dialogue_context(s, &mut actions) {
+            return;
+        }
         if urgent {
             let s = &d.sessions[sid];
             if s.cancel.is_some()
@@ -333,7 +347,6 @@ impl Dialogue {
         d: &mut Data,
         jobs: &mut Vec<JoinHandle<()>>,
         sid: &str,
-        notification: &GameEvent,
         now: u64,
         combat_priority: CombatPriority,
     ) {
@@ -348,9 +361,6 @@ impl Dialogue {
         };
         let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
         s.danger.set_presence(boss, ominous);
-        if danger::heard_thunder(notification, &self.config.combat) {
-            s.ambient.clear_weather_transition();
-        }
         let focus = focus(s, now, &self.config.combat);
         if combat_priority != CombatPriority::None {
             let stop = if combat_priority == CombatPriority::FrontAmbush {
@@ -519,19 +529,15 @@ fn priority(actions: &[Speech]) -> u8 {
             "dark_push_no_light" => 7,
             "dark_push_stop" | "dark_push_after_breath" | "dark_push_breath" => 8,
             "night_warning_surface" | "night_warning_cave" => 9,
-            "weather_transition" | "thunder_reaction" => 10,
+            "thunder_reaction" => 10,
             "smell" => 11,
             "ender_eye_throw" => 12,
             "portal_appearance" => 13,
-            "firefly" | "firefly_cue" => 14,
             "magma_block" => 15,
             "damaging_light" => 16,
             "emergency_shelter_presence" | "emergency_shelter_advice" => 17,
-            "foliage_shade" => 18,
-            "structure_entry" => 19,
             "end_portal_frame" => 20,
-            "special_biome_entry" => 21,
-            "ambient" => 22,
+            "surroundings_notice" => 22,
             "darkness_escape" | "darkness_advice" => 23,
             _ => 24,
         })
@@ -561,7 +567,15 @@ mod tests {
             s.conversation_observation.observe(
                 crate::conversation_observation::project(&event, None, 32.0, 7.0, 5000).unwrap(),
             );
-            for kind in ["ambient", "portal_appearance"] {
+            s.conversation_observation
+                .sample_notice(time as u64 * 2, 1, true);
+            // table差分のある時だけ通知を準備できる。
+            let mut changed = s.conversation_observation.context().unwrap();
+            changed.observations["structure"] = json!(format!("fixture-{time}"));
+            s.conversation_observation.observe(changed);
+            s.conversation_observation
+                .sample_notice(time as u64 * 2 + 1, 1, true);
+            for kind in ["surroundings_notice", "portal_appearance"] {
                 let mut action = Speech::new(kind, "気になるな。");
                 action.delivery = crate::combat::model::Delivery::Ambient;
                 action.leaf = Some(crate::combat::model::LeafRequest {
@@ -569,7 +583,7 @@ mod tests {
                     temperature: 0.65,
                     details: json!({"mob":"子供","mob_is_baby":true,"__ambient_guard":{"mob_type":"villager"},"portal_type":"nether_portal","portal_encounter":"arrived","dimension":"minecraft:overworld"}),
                 });
-                if kind == "ambient" {
+                if kind == "surroundings_notice" {
                     crate::environment::reaction::attach(
                         &mut action,
                         &event,
@@ -580,7 +594,7 @@ mod tests {
                 refresh_dialogue_context(s, std::slice::from_mut(&mut action));
                 let leaf = action.leaf.unwrap();
                 let input = json!({"kind":leaf.kind,"details":leaf.details,"model":"test","max_tokens":72,"temperature":0.65,"fallback_text":action.text});
-                let request = if kind == "ambient" {
+                let request = if kind == "surroundings_notice" {
                     crate::environment::reaction::Prepared::new(&input, "test")
                         .unwrap()
                         .request
@@ -596,7 +610,7 @@ mod tests {
                     expected
                 );
                 assert!(body["world_context"].get("villager_routines").is_none());
-                if expected == "sleep" {
+                if expected == "sleep" && kind != "surroundings_notice" {
                     assert_eq!(
                         body["world_context"]["changes"][0]["now"]["villagers"][0]["activity"],
                         "sleep"
@@ -643,6 +657,11 @@ mod tests {
         let mut data = d.data.lock().unwrap();
         let s = data.sessions.get_mut("catalogue").unwrap();
         s.conversation_observation.observe(context);
+        s.conversation_observation.sample_notice(0, 1, true);
+        let mut changed = s.conversation_observation.context().unwrap();
+        changed.observations["structure"] = json!("fixture-changed");
+        s.conversation_observation.observe(changed);
+        s.conversation_observation.sample_notice(1, 1, true);
         let original = s.conversation_observation.context().unwrap();
         for (kind, details) in [
             (
@@ -653,7 +672,10 @@ mod tests {
                 "deep_dark_ominous_sound",
                 json!({"ominous_kind":"sculk_shrieker","ominous_stage":2}),
             ),
-            ("ambient", json!({"mob":"cow","mob_temperament":"passive"})),
+            (
+                "surroundings_notice",
+                json!({"mob":"cow","mob_temperament":"passive"}),
+            ),
             ("daylight_water", json!({"hostiles":["スケルトン"]})),
         ] {
             let mut action = Speech::new(kind, "気になるな。");
@@ -668,7 +690,7 @@ mod tests {
                 details,
                 temperature: 0.65,
             });
-            if kind == "ambient" {
+            if kind == "surroundings_notice" {
                 crate::environment::reaction::attach(
                     &mut action,
                     &event,
@@ -679,7 +701,7 @@ mod tests {
             refresh_dialogue_context(s, std::slice::from_mut(&mut action));
             let leaf = action.leaf.unwrap();
             let input = json!({"kind":leaf.kind,"details":leaf.details,"model":"test","temperature":0.65,"max_tokens":72,"fallback_text":action.text});
-            let request = if kind == "ambient" {
+            let request = if kind == "surroundings_notice" {
                 crate::environment::reaction::Prepared::new(&input, "test")
                     .unwrap()
                     .request
@@ -874,5 +896,42 @@ mod tests {
         minimal["event"]["name"] = "hostile_audio_detected".into();
         let kept = context(s, &GameEvent::parse(minimal).unwrap(), false);
         assert!(kept.world.structure.is_some() && kept.player.vehicle.is_some());
+    }
+}
+
+#[cfg(test)]
+mod noticing_tests {
+    use super::*;
+    use crate::conversation_observation::Context;
+    #[test]
+    fn queued_notice_keeps_periodic_table_after_opportunity_and_movement() {
+        let dialogue = Dialogue::new(super::super::DialogueConfig::default()).unwrap();
+        dialogue.register("notice", "試験", false);
+        let mut data = dialogue.data.lock().unwrap();
+        let s = data.sessions.get_mut("notice").unwrap();
+        let frame = |mobs| Context {
+            observations: json!({"dimension":"overworld","nearby_mob_types":mobs}),
+            ..Default::default()
+        };
+        s.conversation_observation.observe(frame(json!([])));
+        s.conversation_observation.sample_notice(0, 180000, true);
+        s.conversation_observation.observe(frame(json!(["cow"])));
+        s.conversation_observation
+            .sample_notice(180000, 180000, true);
+        let mut actions = vec![crate::environment::notice::action()];
+        assert!(refresh_dialogue_context(s, &mut actions));
+        let offered =
+            actions[0].leaf.as_ref().unwrap().details["reaction_context"]["world_context"].clone();
+        s.conversation_observation.finish_notice_opportunity();
+        s.conversation_observation.observe(frame(json!(["sheep"])));
+        assert!(refresh_dialogue_context(s, &mut actions));
+        assert_eq!(
+            actions[0].leaf.as_ref().unwrap().details["reaction_context"]["world_context"],
+            offered
+        );
+        assert!(!refresh_dialogue_context(
+            s,
+            &mut [crate::environment::notice::action()]
+        ));
     }
 }

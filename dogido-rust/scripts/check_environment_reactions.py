@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import time
 from urllib.parse import parse_qs, urlsplit
 
@@ -40,8 +41,7 @@ def main():
         player.chmod(0o700)
         control["environment_action"] = "speak"
         spoken = {
-            "mob": "ウシを見ると、なんや気持ちが和むな。",
-            "weather": "天気が変わってきたな。ちょっと気になるわ。",
+            "surroundings": "周りの顔ぶれが変わったな。ちょっと気になるわ。",
             "smell": "ええ匂いやな。お腹がすいてきたわ。",
             "place": "昼でも木陰は気になるな。気ぃつけて進もな。",
             "thunder": "雷の音は何度聞いても落ち着かんな。",
@@ -57,7 +57,7 @@ def main():
             return {"action": action, "speech": "" if action == "silent" else spoken[context["topic"]]}
 
         control["structured_handler"] = respond
-        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, extra_args=("--max-tokens", "384")) as (base, _, _):
+        with running(ROOT / "target/debug/dogido-rust", folder, dep, player=player, combat_settings={"surroundings_notice_interval_ms":100}, extra_args=("--max-tokens", "384")) as (base, _, _):
             sequence = 0
             normal = {"weather": "clear", "biome": "plains", "sky_visible": True,
                       "ceiling_height": 20, "local_light": 15, "time_phase": "day"}
@@ -75,7 +75,10 @@ def main():
                          "observed_at": datetime.now(timezone.utc).isoformat(),
                          "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                          "player": {"name": "試験", "dimension": dimension},
-                         "world": {**normal, **(world or {})}, **extra}
+                         "world": {**normal, **(world or {})},
+                         "nearby_composition": {"mobs": [m["type"] for m in extra.get("passive_mobs", [])],
+                                                "blocks": [], "mobs_truncated": False, "blocks_truncated": False},
+                         "smell_observation": {"status": "none"}, **extra}
                 return request(base, "/api/v1/game-events", event, sid=sid)
 
             def close(sid):
@@ -94,18 +97,20 @@ def main():
             def audio():
                 return [parse_qs(urlsplit(r["path"]).query)["text"][0] for r in seen if r["path"].startswith("/audio_query?")]
 
+            initialized = set()
             def trigger(sid, topic):
-                if topic == "mob":
-                    return send(sid, passive_mobs=[cow])
-                if topic == "weather":
+                if topic == "thunder":
+                    return send(sid, world={"weather": "thunder", "thunder_sound_recent_ms": 0})
+                if sid not in initialized:
                     send(sid)
-                    return send(sid, world={"weather": "rain"})
-                if topic == "smell":
-                    send(sid, smell_observation=bread)
-                    return send(sid, smell_observation=bread)
-                if topic == "place":
-                    return send(sid, world={"biome": "forest"})
-                return send(sid, world={"weather": "thunder", "thunder_sound_recent_ms": 0})
+                    initialized.add(sid)
+                fields = ({"passive_mobs": [cow]} if topic in {"mob", "surroundings"}
+                          else {"world": {"weather": "rain"}} if topic == "weather"
+                          else {"smell_observation": bread} if topic == "smell"
+                          else {"world": {"biome": "forest"}})
+                send(sid, **fields)
+                time.sleep(.12)
+                return send(sid, **fields)
 
             def repeat(sid, topic):
                 if topic == "weather":
@@ -120,7 +125,7 @@ def main():
 
             for decision in ("speak", "silent"):
                 control["environment_action"] = decision
-                for topic in spoken:
+                for topic in ("surroundings", "thunder"):
                     sid = register(base, preview=False)
                     before_calls, before_audio = len(calls()), len(audio())
                     trigger(sid, topic)
@@ -146,6 +151,79 @@ def main():
                     assert len(calls()) == before_calls + 1, calls()[before_calls:]
                     close(sid)
                     passed.append(f"{topic}_{decision}_one_call_and_consideration_consumed")
+
+            control["environment_action"] = "silent"
+            sid = register(base, preview=False)
+            send(sid)
+            before_calls = len(calls())
+            time.sleep(.12)
+            # 新しい種類を含む部分通知だけでは周期比較を起動しない。
+            request(base, "/api/v1/game-events", {
+                "schema_version":"2026-05-24", "adapter":"fixture", "sequence":sequence+1,
+                "observed_at":datetime.now(timezone.utc).isoformat(),
+                "event":{"name":"hostile_audio_detected","source_kind":"auditory","priority_hint":"background","certainty":"high"},
+                "nearby_composition":{"mobs":["cow"],"blocks":[],"mobs_truncated":False,"blocks_truncated":False}}, sid=sid)
+            sequence += 1
+            time.sleep(.12)
+            assert len(calls()) == before_calls
+            send(sid, passive_mobs=[cow])
+            wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
+            assert len(calls()) == before_calls+1
+            time.sleep(.12)
+            send(sid, passive_mobs=[cow])
+            time.sleep(.12)
+            assert len(calls()) == before_calls+1
+            close(sid)
+            passed.append("only_fresh_periodic_snapshot_triggers_and_unchanged_table_stays_quiet")
+
+            # 発話中で使えない周期の変化は、後から同じ表で繰り返さない。
+            sid = register(base, preview=False)
+            before_calls = len(calls())
+            control["delay"] = .5
+            trigger(sid, "surroundings")
+            wait_for(lambda: len(calls()) == before_calls+1)
+            offered = reaction_context(calls()[-1]["body"])["world_context"]
+            blocks = {"mobs":["cow"],"blocks":["minecraft:oak_log"],"mobs_truncated":False,"blocks_truncated":False}
+            time.sleep(.12)
+            send(sid, passive_mobs=[cow], nearby_composition=blocks)
+            wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
+            control["delay"] = 0
+            time.sleep(.12)
+            send(sid, passive_mobs=[cow], nearby_composition=blocks)
+            time.sleep(.12)
+            assert len(calls()) == before_calls+1
+            assert offered["observations"]["nearby_block_types"] == []
+            # 次の新しい変化は、消費済みの前周期とのブロック差分だけを渡す。
+            newer = {**blocks, "blocks":["minecraft:birch_log"]}
+            send(sid, passive_mobs=[cow], nearby_composition=newer)
+            wait_for(lambda: len(calls()) == before_calls+2)
+            context = reaction_context(calls()[-1]["body"])
+            assert [c["kind"] for c in context["world_context"]["changes"]] == ["nearby_block_types"], context
+            wait_for(lambda: len([r for r in reactions(sid) if r["playback_status"] == "not_selected"]) == 2)
+            close(sid)
+            passed.append("busy_period_is_consumed_without_replaying_its_change")
+
+            # 当回の表を固定し、音声合成待ち中の普通の種類変化では取り消さない。
+            sid = register(base, preview=False)
+            control["environment_action"] = "speak"
+            control["environment_payload"] = {"action":"speak", "speech":"さっき見えた木、気になるな。"}
+            gate = threading.Event()
+            control["tts_gates"]["さっき見えた木、気になるな。"] = gate
+            before_calls = len(calls())
+            before_seen = len(seen)
+            trigger(sid, "surroundings")
+            wait_for(lambda: any(r["path"].startswith("/synthesis?") for r in seen[before_seen:]))
+            pending = reactions(sid)[-1]
+            time.sleep(.12)
+            send(sid, passive_mobs=[cow], nearby_composition=blocks)
+            assert row(base,pending["turn_id"],{"cancelled"}) is None
+            gate.set()
+            completed = wait_for(lambda: row(base,pending["turn_id"],{"completed"}))
+            assert completed["text"] == "さっき見えた木、気になるな。", completed
+            assert len(calls()) == before_calls+1
+            control.pop("environment_payload")
+            close(sid)
+            passed.append("ordinary_table_change_during_tts_keeps_the_sampled_utterance")
 
             control["environment_action"] = "speak"
             spatial_smell = {"status": "present", "smell_id": "zombie", "category": "decay", "valence": "unpleasant",
@@ -230,7 +308,7 @@ def main():
                 trigger(sid, "place")
                 result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
                 assert result["environment_reaction_outcome"] == "invalid_contract", result
-                assert result["text"] == "ここ、雰囲気が変わったな。ちょっと気になるわ。", result
+                assert result["text"] == "周りの様子、ちょっと変わったな。", result
                 assert len(calls()) == before_calls + 1
                 close(sid)
             control.pop("environment_payload")
@@ -242,7 +320,7 @@ def main():
                 trigger(sid, "place")
                 result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
                 assert result["environment_reaction_outcome"] == outcome, result
-                assert result["text"] == (speech if outcome == "speak" else "ここ、雰囲気が変わったな。ちょっと気になるわ。"), result
+                assert result["text"] == (speech if outcome == "speak" else "周りの様子、ちょっと変わったな。"), result
                 close(sid)
             control.pop("environment_payload")
             passed.append("short_acknowledgement_is_spoken_and_only_clear_loop_falls_back")
@@ -262,37 +340,27 @@ def main():
             control.pop("completion_override")
             passed.append("truncated_valid_child_is_not_a_silent_decision")
 
-            for change in ("mob_gone", "smell_gone", "weather_changed", "place_covered", "dimension_changed", "session_closed", "new_player_input"):
+            for change in ("dimension_changed", "session_closed", "new_player_input", "hostile_arrived"):
                 sid = register(base, preview=False)
                 before_calls, before_audio = len(calls()), len(audio())
                 control["delay"] = .6
-                topic = "smell" if change == "smell_gone" else "weather" if change == "weather_changed" else "place" if change == "place_covered" else "mob"
-                trigger(sid, topic)
+                trigger(sid, "surroundings")
                 wait_for(lambda: len(calls()) > before_calls)
                 queued = reactions(sid)[-1]
                 assert not queued["text"], queued
-                if change == "mob_gone":
-                    send(sid)
-                elif change == "smell_gone":
-                    send(sid, smell_observation={"status": "none"})
-                elif change == "weather_changed":
-                    send(sid)
-                elif change == "place_covered":
-                    send(sid, world={"biome": "forest", "sky_visible": False, "overhead_cover_type": "stone"})
-                elif change == "dimension_changed":
+                if change == "dimension_changed":
                     send(sid, dimension="minecraft:the_nether", passive_mobs=[cow])
                 elif change == "session_closed":
                     close(sid)
+                elif change == "hostile_arrived":
+                    send(sid, visual_threats=[zombie])
                 else:
                     newer = submit(base, sid)
                     wait_for(lambda: row(base, newer, {"completed"}))
                 cancelled = wait_for(lambda: row(base, queued["turn_id"], {"cancelled"}))
                 assert "started_at" not in cancelled and not cancelled["text"], cancelled
                 time.sleep(.7)
-                # A fresh weather/place observation may legitimately start a
-                # new reaction; only the invalidated turn must stay unplayed.
-                if change not in {"weather_changed", "place_covered"}:
-                    assert spoken[topic] not in audio()[before_audio:], audio()[before_audio:]
+                assert spoken["surroundings"] not in audio()[before_audio:], audio()[before_audio:]
                 control["delay"] = 0
                 if change != "session_closed":
                     close(sid)

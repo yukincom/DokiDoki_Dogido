@@ -9,14 +9,6 @@ fn event(mut fields: Value) -> GameEvent {
         .extend(fields.as_object_mut().unwrap().clone());
     GameEvent::parse(value).unwrap()
 }
-fn scent(status: &str, id: &str) -> GameEvent {
-    let obs = if status == "present" {
-        json!({"status":status,"smell_id":id,"category":"food","valence":"pleasant","source_kind":"hotbar","specificity":"source","effective_strength":3})
-    } else {
-        json!({"status":status})
-    };
-    event(json!({"smell_observation":obs}))
-}
 fn actions(a: &mut Ambient, e: &GameEvent, now: u64) -> Vec<Speech> {
     let s = Settings::default();
     a.update(e, now, true, &s);
@@ -33,22 +25,6 @@ fn ambient_reference_cases_match_fixture() {
                 let s = smell::speech(&e);
                 json!({"text":s.text,"cue_id":s.cue_id})
             }
-            "mob_candidates" => {
-                let e = GameEvent::parse(row["event"].clone()).unwrap();
-                json!(mobs::fallback_candidates(&e, &e.passive_mobs[0]))
-            }
-            "villager_schedule" => {
-                let e = event(
-                    json!({"world":{"time_of_day":row["time"]},"passive_mobs":[{"type":"villager","profession":row["profession"],"is_baby":row["baby"]}]}),
-                );
-                json!(mobs::schedule(&e, &e.passive_mobs[0]))
-            }
-            "weather_scene" => json!(surroundings::weather_scene(
-                row["from"].as_str().unwrap(),
-                row["to"].as_str().unwrap(),
-                row["cold"].as_bool().unwrap(),
-                row["dry"].as_bool().unwrap()
-            )),
             "vehicle" => {
                 let v: VehicleState = serde_json::from_value(row["vehicle"].clone()).unwrap();
                 json!(player_vehicle_fact(Some(&v)))
@@ -69,82 +45,12 @@ fn ambient_reference_cases_match_fixture() {
                 let recent = row["recent"].as_bool().unwrap();
                 json!({"allowed_actions":light::allowed(p,q,&c,recent),"facts":light::facts(p,q,&c,recent)})
             }
-            "smell_sequence" | "mob_sequence" => {
-                let mut machine = Ambient::default();
-                for step in row["steps"].as_array().unwrap() {
-                    let e = GameEvent::parse(step["event"].clone()).unwrap();
-                    let got = actions(&mut machine, &e, step["now"].as_u64().unwrap());
-                    assert_eq!(
-                        json!(got.iter().map(|s| &s.text).collect::<Vec<_>>()),
-                        step["expected"],
-                        "sequence {n}: {step}"
-                    );
-                }
-                Value::Null
-            }
             _ => panic!("unknown fixture"),
         };
         assert_eq!(got, row["expected"], "reference {n} {}", row["op"]);
     }
 }
-#[test]
-fn smell_requires_two_stable_observations_and_two_absences() {
-    let mut a = Ambient::default();
-    let bread = scent("present", "bread");
-    let none = scent("none", "");
-    assert!(actions(&mut a, &bread, 0).is_empty());
-    assert_eq!(actions(&mut a, &bread, 1000)[0].cue_id, Some("smell_bread"));
-    assert!(actions(&mut a, &bread, 122000).is_empty());
-    assert!(actions(&mut a, &none, 123000).is_empty());
-    assert!(actions(&mut a, &bread, 124000).is_empty());
-    actions(&mut a, &none, 125000);
-    actions(&mut a, &none, 126000);
-    assert!(actions(&mut a, &bread, 127000).is_empty());
-    assert_eq!(actions(&mut a, &bread, 128000).len(), 1);
-}
-#[test]
-fn smell_winner_change_global_cooldown_and_query_consumes_pending() {
-    let mut a = Ambient::default();
-    let bread = scent("present", "bread");
-    let cake = scent("present", "cake");
-    actions(&mut a, &bread, 0);
-    actions(&mut a, &bread, 1000);
-    actions(&mut a, &cake, 2000);
-    assert!(actions(&mut a, &cake, 3000).is_empty());
-    assert_eq!(actions(&mut a, &cake, 121000)[0].cue_id, Some("smell_cake"));
-    let mut a = Ambient::default();
-    a.update(&bread, 0, true, &Settings::default());
-    let reply = a.smell_query(&bread, "この匂いなに？", 1).unwrap();
-    assert_eq!(reply.cue_id, Some("smell_bread"));
-    assert!(actions(&mut a, &bread, 150000).is_empty());
-}
-#[test]
-fn partial_absence_does_not_reset_smell() {
-    let mut a = Ambient::default();
-    let s = Settings::default();
-    let bread = scent("present", "bread");
-    a.update(&bread, 0, true, &s);
-    a.update(&event(json!({"event":{"name":"ambient_mob_detected","source_kind":"visual","priority_hint":"background","certainty":"high"}})),1,false,&s);
-    assert_eq!(actions(&mut a, &bread, 2).len(), 1);
-    assert!(!still_applicable(
-        &smell::speech(&bread),
-        &scent("none", "")
-    ));
-}
-#[test]
-fn explicit_zombie_observation_requires_two_samples() {
-    let mut a = Ambient::default();
-    let e = event(
-        json!({"smell_observation":{"status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","specificity":"source","effective_strength":8}}),
-    );
-    assert!(actions(&mut a, &e, 0).is_empty());
-    assert_eq!(
-        actions(&mut a, &e, 1000)[0].cue_id,
-        Some("zombie_scent_warning")
-    );
-    let e = event(json!({"smell_observation":{"status":"none"}}));
-    assert_eq!(smell::speech(&e).cue_id, Some("smell_none"));
-}
+
 #[test]
 fn no_ambient_during_threat_busy_or_foreground() {
     let s = Settings::default();
@@ -166,8 +72,19 @@ fn no_ambient_during_threat_busy_or_foreground() {
         assert!(a.actions(&e, 0, mode, busy, &f, &s).is_empty());
     }
     assert_eq!(
-        a.actions(&e, 1, Mode::Normal, false, &AmbientFocus::default(), &s)[0].kind,
-        "ambient"
+        a.actions(
+            &e,
+            1,
+            Mode::Normal,
+            false,
+            &AmbientFocus {
+                notice_ready: true,
+                ..Default::default()
+            },
+            &s
+        )[0]
+        .kind,
+        "surroundings_notice"
     );
 }
 #[test]
@@ -179,86 +96,14 @@ fn casual_foreground_mutes_mobs_for_thirty_seconds_only() {
         foreground: true,
         casual_foreground: true,
         last_player_input_at: Some(0),
+        notice_ready: true,
         ..Default::default()
     };
     a.update(&e, 0, true, &s);
     assert!(a.actions(&e, 29999, Mode::Normal, false, &f, &s).is_empty());
     assert_eq!(a.actions(&e, 30000, Mode::Normal, false, &f, &s).len(), 1);
 }
-#[test]
-fn mob_cooldown_per_species_and_villager_crowd_sleep() {
-    let mut a = Ambient::default();
-    let cat = event(json!({"passive_mobs":[{"type":"cat"}]}));
-    let cow = event(json!({"passive_mobs":[{"type":"cow"}]}));
-    assert_eq!(actions(&mut a, &cat, 0).len(), 1);
-    assert!(actions(&mut a, &cat, 30000).is_empty());
-    assert_eq!(actions(&mut a, &cow, 30001).len(), 1);
-    assert_eq!(actions(&mut a, &cat, 120000).len(), 1);
-    let crowd = event(
-        json!({"world":{"time_of_day":3000},"passive_mobs":[{"type":"villager","profession":"farmer","distance":3},{"type":"villager","profession":"cleric","distance":2},{"type":"villager","profession":"librarian","distance":1}]}),
-    );
-    let mut a = Ambient::default();
-    let line = actions(&mut a, &crowd, 0).remove(0);
-    let details = &line.leaf.unwrap().details;
-    assert_eq!(details["mob"], "村人");
-    assert_eq!(details["mob_count"], 1);
-    assert!(details.get("mob_profession").is_none());
-    let lone = event(
-        json!({"world":{"time_of_day":3000},"passive_mobs":[{"type":"villager","profession":"armorer"}]}),
-    );
-    assert!(actions(&mut a, &lone, 1000).is_empty());
-    let sleep = event(
-        json!({"world":{"time_of_day":12000},"passive_mobs":[{"type":"villager","profession":"farmer"},{"type":"cat"}]}),
-    );
-    assert_eq!(
-        actions(&mut a, &sleep, 2000)[0]
-            .leaf
-            .as_ref()
-            .unwrap()
-            .details["mob"],
-        "ネコ"
-    );
-}
 
-#[test]
-fn pets_are_observed_but_do_not_comment_or_consume_species_cooldown() {
-    let mut ambient = Ambient::default();
-    let pet = event(
-        json!({"passive_mobs":[{"type":"cat","identity":{"entity_id":"cat-1","custom_name":"クロちゃん","tamed":true}}]}),
-    );
-    assert!(actions(&mut ambient, &pet, 0).is_empty());
-    let wild = event(
-        json!({"passive_mobs":[{"type":"cat","identity":{"entity_id":"cat-2","custom_name":"シロ","tamed":false}}]}),
-    );
-    let speech = actions(&mut ambient, &wild, 1).remove(0);
-    assert!(!still_applicable(&speech, &pet));
-    let now_tamed = event(
-        json!({"passive_mobs":[{"type":"cat","identity":{"entity_id":"cat-2","tamed":true}}]}),
-    );
-    assert!(!still_applicable(&speech, &now_tamed));
-    let mixed = event(json!({"passive_mobs":[
-        {"type":"wolf","identity":{"entity_id":"wolf","tamed":true}},
-        {"type":"cow","identity":{"entity_id":"cow","tamed":false}}]}));
-    let line = actions(&mut ambient, &mixed, 2).remove(0);
-    assert_eq!(line.leaf.unwrap().details["mob"], "ウシ");
-}
-#[test]
-fn mobs_do_not_use_recent_absent_species_and_thunder_surface_is_quiet() {
-    let mut a = Ambient::default();
-    let e = event(json!({"passive_mobs":[{"type":"cat"}]}));
-    let line = actions(&mut a, &e, 0).remove(0);
-    assert!(!still_applicable(&line, &event(json!({}))));
-    let thunder = event(
-        json!({"world":{"weather":"thunder","biome":"plains"},"passive_mobs":[{"type":"cow"}]}),
-    );
-    let mut a = Ambient::default();
-    assert!(actions(&mut a, &thunder, 0).is_empty());
-    let cave = event(
-        json!({"world":{"weather":"thunder","biome":"deep_dark"},"passive_mobs":[{"type":"cow"}]}),
-    );
-    assert_eq!(actions(&mut a, &cave, 1000)[0].kind, "special_biome_entry");
-    assert_eq!(actions(&mut a, &cave, 2000)[0].kind, "ambient");
-}
 fn light_request(a: &mut Ambient, f: &AmbientFocus) -> (GameEvent, LightPlanRequest) {
     let s = Settings::default();
     let e = event(json!({"inventory":{"torch":1}}));
@@ -409,57 +254,17 @@ fn initial_inventory_and_abundant_safe_supply_do_not_request_model() {
     a.actions(&e, 1, Mode::Normal, false, &f, &s);
     assert!(a.take_light_plan().is_none());
 }
+
 #[test]
-fn structure_beats_biome_and_entry_cooldowns_are_independent() {
+fn eye_requires_actual_recent_event() {
     let mut a = Ambient::default();
-    let e = event(json!({"world":{"biome":"deep_dark","structure":"minecraft:ancient_city"}}));
-    let line = actions(&mut a, &e, 0).remove(0);
-    assert_eq!(line.kind, "structure_entry");
-    assert_eq!(line.leaf.as_ref().unwrap().details["biome"], "地下");
-    assert!(actions(&mut a, &e, 1000).is_empty());
-    let empty = event(json!({}));
-    actions(&mut a, &empty, 2000);
-    assert!(actions(&mut a, &e, 3000).is_empty());
-    actions(&mut a, &empty, 600000);
-    assert_eq!(actions(&mut a, &e, 601000)[0].kind, "structure_entry");
-    assert!(!still_applicable(&line, &empty));
-}
-#[test]
-fn firefly_night_latch_resets_and_eye_requires_actual_recent_event() {
-    let mut a = Ambient::default();
-    let e = event(
-        json!({"world":{"biome":"plains","time_phase":"night","nearby_firefly_bush_count":1}}),
-    );
-    assert_eq!(actions(&mut a, &e, 0).len(), 2);
-    assert!(actions(&mut a, &e, 1000).is_empty());
-    actions(&mut a, &event(json!({})), 2000);
-    assert_eq!(actions(&mut a, &e, 3000).len(), 2);
     let eye = event(json!({"world":{"biome":"plains","ender_eye_launch_recent_ms":2000}}));
     assert_eq!(actions(&mut a, &eye, 4000)[0].kind, "ender_eye_throw");
     assert!(actions(&mut a, &eye, 5000).is_empty());
     let stale = event(json!({"world":{"ender_eye_launch_recent_ms":2001}}));
     assert!(actions(&mut a, &stale, 13000).is_empty());
 }
-#[test]
-fn weather_transition_uses_sky_or_recent_sound_and_can_be_cleared_by_thunder() {
-    let mut a = Ambient::default();
-    actions(&mut a, &event(json!({"world":{"weather":"clear"}})), 0);
-    let rain =
-        event(json!({"world":{"weather":"rain","sky_visible":false,"rain_sound_recent_ms":4000}}));
-    assert_eq!(
-        actions(&mut a, &rain, 1)[0].leaf.as_ref().unwrap().details["scene"],
-        "rain_suspected"
-    );
-    let mut a = Ambient::default();
-    let s = Settings::default();
-    a.update(&event(json!({"world":{"weather":"clear"}})), 0, true, &s);
-    a.update(&rain, 1, true, &s);
-    a.clear_weather_transition();
-    assert!(
-        a.actions(&rain, 1, Mode::Normal, false, &AmbientFocus::default(), &s)
-            .is_empty()
-    );
-}
+
 #[test]
 fn losing_clone_does_not_consume_mob_or_light_decision() {
     let mut a = Ambient::default();
@@ -469,13 +274,33 @@ fn losing_clone_does_not_consume_mob_or_light_decision() {
     let mut losing = a.clone();
     assert_eq!(
         losing
-            .actions(&e, 0, Mode::Normal, false, &AmbientFocus::default(), &s)
+            .actions(
+                &e,
+                0,
+                Mode::Normal,
+                false,
+                &AmbientFocus {
+                    notice_ready: true,
+                    ..Default::default()
+                },
+                &s
+            )
             .len(),
         1
     );
     assert_eq!(
-        a.actions(&e, 1, Mode::Normal, false, &AmbientFocus::default(), &s)
-            .len(),
+        a.actions(
+            &e,
+            1,
+            Mode::Normal,
+            false,
+            &AmbientFocus {
+                notice_ready: true,
+                ..Default::default()
+            },
+            &s
+        )
+        .len(),
         1
     );
     let mut a = Ambient::default();
@@ -560,57 +385,5 @@ fn light_result_must_be_in_the_original_offered_actions() {
             &Settings::default()
         )
         .is_none()
-    );
-}
-
-#[test]
-fn forest_entry_resumes_after_player_priority_without_waiting_for_casual_to_end() {
-    let s = Settings::default();
-    let f = AmbientFocus {
-        foreground: true,
-        casual_foreground: true,
-        last_player_input_at: Some(0),
-        ..Default::default()
-    };
-    for biome in ["forest", "taiga"] {
-        let mut a = Ambient::default();
-        let e = event(
-            json!({"world":{"biome":biome,"time_phase":"day"},"passive_mobs":[{"type":"cat"}]}),
-        );
-        a.update(&e, 1000, true, &s);
-        assert!(a.actions(&e, 19999, Mode::Normal, false, &f, &s).is_empty());
-        let actions = a.actions(&e, 20000, Mode::Normal, false, &f, &s);
-        assert_eq!(actions[0].kind, "special_biome_entry");
-        assert!(actions[0].text.contains("敵") || actions[0].text.contains("夜にわいた"));
-        assert!(a.actions(&e, 29999, Mode::Normal, false, &f, &s).is_empty());
-        assert_eq!(
-            a.actions(&e, 30000, Mode::Normal, false, &f, &s)[0].kind,
-            "ambient"
-        );
-    }
-}
-
-#[test]
-fn village_leaf_uses_full_observed_count_not_four_mob_entries() {
-    for count in [Value::Null, json!(0), json!(9), json!(10)] {
-        let mut a = Ambient::default();
-        let e = event(
-            json!({"world":{"structure":"village_plains","visible_villager_count":count},"passive_mobs":[]}),
-        );
-        let line = actions(&mut a, &e, 0).remove(0);
-        let details = &line.leaf.unwrap().details;
-        assert_eq!(details["group_id"], "village");
-        assert_eq!(details["visible_villager_count"], count);
-    }
-    let mut a = Ambient::default();
-    let e = event(json!({"world":{"structure":"stronghold","visible_villager_count":10}}));
-    assert!(
-        actions(&mut a, &e, 0)[0]
-            .leaf
-            .as_ref()
-            .unwrap()
-            .details
-            .get("visible_villager_count")
-            .is_none()
     );
 }

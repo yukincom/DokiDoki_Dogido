@@ -1,7 +1,6 @@
 //! Non-urgent environment decisions. No I/O, model calls, playback, or world actions.
 mod catalog;
 mod light;
-mod mobs;
 mod places;
 mod smell;
 mod surroundings;
@@ -12,11 +11,10 @@ use crate::{
     combat::model::{LeafRequest, Mode, Scope, Settings, Speech, elapsed},
     events::{EventName, GameEvent},
 };
-pub(crate) use catalog::biome_label;
+pub(crate) use catalog::{biome_label, mob_label};
 pub use light::{LightContext, LightPlanRequest};
 use serde_json::{Value, json};
 pub(crate) use smell::is_query as is_smell_query;
-use std::collections::HashMap;
 pub use surroundings::player_vehicle_fact;
 /// 配送時に明示質問の返答だけを現在観測から作り直す。状態を進めない。
 pub fn current_smell_reply(event: &GameEvent) -> Speech {
@@ -53,13 +51,13 @@ pub struct AmbientFocus {
     pub submerged: bool,
     pub safe_zone_with_door: bool,
     pub light: LightContext,
+    pub notice_ready: bool,
 }
 #[derive(Clone, Default)]
 pub struct Ambient {
     smell: smell::Presence,
     places: places::Places,
     last_danger: Option<u64>,
-    mob_comments: HashMap<String, u64>,
     last_player_input: Option<u64>,
     dimension: Option<String>,
     inventory: Option<i64>,
@@ -68,10 +66,7 @@ pub struct Ambient {
     light_serial: u64,
     light_pending: Option<LightPlanRequest>,
     light_ready: Option<LightPlanRequest>,
-    firefly_reacted: bool,
     last_eye: Option<u64>,
-    weather: Option<String>,
-    weather_pending: Option<(String, String)>,
 }
 
 impl Ambient {
@@ -93,9 +88,6 @@ impl Ambient {
                 self.smell = smell::Presence::default();
                 self.places.dimension_changed();
                 self.last_danger = None;
-                self.firefly_reacted = false;
-                self.weather = None;
-                self.weather_pending = None;
                 self.gain = None;
                 self.light_pending = None;
                 self.light_ready = None;
@@ -122,16 +114,7 @@ impl Ambient {
             self.last_danger = Some(now);
         }
         if complete {
-            self.places.update(e, now, s);
-            if surroundings::phase(e) != Some("night") {
-                self.firefly_reacted = false;
-            }
-            if let Some(current) = e.world.weather.as_ref().map(catalog::enum_text) {
-                if let Some(previous) = self.weather.as_ref().filter(|old| **old != current) {
-                    self.weather_pending = Some((previous.clone(), current.clone()));
-                }
-                self.weather = Some(current);
-            }
+            self.places.update(e);
         }
         self.gain = None;
         if complete && e.event.name == EventName::StatusSnapshot {
@@ -176,26 +159,10 @@ impl Ambient {
         if self.light_request(e, now, focus, s) {
             return vec![];
         }
-        if let Some(speech) = self.weather_action(e, focus, s) {
-            return vec![speech];
-        }
-        if let Some(speech) = self.smell.action(e, now, s) {
-            return vec![speech];
-        }
         if let Some(speech) = self.eye_action(e, now, s) {
             return vec![speech];
         }
-        if focus.boss_presence {
-            self.places.clear_pending();
-            return vec![];
-        }
-        if let Some(actions) = self.firefly_actions(e, focus) {
-            return actions;
-        }
-        if let Some(speech) = self.places.action(e, now, focus, s) {
-            return vec![speech];
-        }
-        if focus.ominous_presence {
+        if focus.boss_presence || focus.ominous_presence {
             return vec![];
         }
         if focus.casual_foreground
@@ -203,9 +170,11 @@ impl Ambient {
         {
             return vec![];
         }
-        self.mob_action_if_allowed(e, now, mode, focus, s)
-            .into_iter()
-            .collect()
+        if focus.notice_ready {
+            vec![super::notice::action()]
+        } else {
+            vec![]
+        }
     }
     pub fn smell_query(&mut self, e: &GameEvent, text: &str, now: u64) -> Option<Speech> {
         if !smell::is_query(text) {
@@ -223,9 +192,6 @@ impl Ambient {
     }
     pub fn take_light_plan(&mut self) -> Option<LightPlanRequest> {
         self.light_ready.take()
-    }
-    pub fn clear_weather_transition(&mut self) {
-        self.weather_pending = None;
     }
 }
 fn leaf(kind: &'static str, text: String, details: Value, temperature: f64) -> Speech {
@@ -251,15 +217,7 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     // 暗所や雷の許可条件をambientの「敵なし」で上書きしない。
     if !matches!(
         speech.kind,
-        "ambient"
-            | "weather_transition"
-            | "smell"
-            | "light_source_gain"
-            | "ender_eye_throw"
-            | "firefly"
-            | "firefly_cue"
-            | "structure_entry"
-            | "special_biome_entry"
+        "surroundings_notice" | "smell" | "light_source_gain" | "ender_eye_throw"
     ) || speech
         .leaf
         .as_ref()
@@ -272,31 +230,6 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     }
     let guard = speech.leaf.as_ref().map(|r| &r.details["__ambient_guard"]);
     if let Some(g) = guard {
-        if let Some(kind) = g["mob_type"].as_str() {
-            return e.passive_mobs.iter().any(|m| {
-                m.r#type == kind
-                    && !m.identity.as_ref().is_some_and(|i| i.tamed)
-                    && g["entity_id"]
-                        .as_str()
-                        .is_none_or(|id| m.identity.as_ref().is_some_and(|i| i.entity_id == id))
-                    && (g["crowd"] == true
-                        || g["baby"].as_bool().unwrap_or(false) == m.is_baby.unwrap_or(false))
-                    && g["profession"].as_str().is_none_or(|p| {
-                        m.profession.as_deref().map(catalog::norm).as_deref() == Some(p)
-                    })
-                    && (catalog::norm(kind) != "villager" || mobs::schedule(e, m) != "sleep")
-            });
-        }
-        if let Some(weather) = g["weather"].as_str() {
-            return e
-                .world
-                .weather
-                .as_ref()
-                .is_some_and(|v| catalog::enum_text(v) == weather);
-        }
-        if let Some(structure) = g["structure"].as_str() {
-            return e.world.structure.as_deref().map(catalog::norm).as_deref() == Some(structure);
-        }
         if let Some(count) = g["light_source_count"].as_i64() {
             return light::count(e) == count;
         }
@@ -304,15 +237,6 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     match speech.kind {
         "smell" if super::reaction::is_model_reaction(speech) => true,
         "smell" => smell::still_applicable(speech, e),
-        "firefly" | "firefly_cue" => {
-            surroundings::phase(e) == Some("night")
-                && e.world.nearby_firefly_bush_count.unwrap_or(0) > 0
-        }
-        "special_biome_entry" if super::reaction::is_model_reaction(speech) => true,
-        "special_biome_entry" => ["day", "night", "ominous"].iter().any(|phase| {
-            catalog::biome_lines(e.world.biome.as_deref().unwrap_or(""), phase)
-                .contains(&speech.text)
-        }),
         _ => true,
     }
 }

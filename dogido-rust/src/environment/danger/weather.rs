@@ -124,7 +124,7 @@ impl Danger {
             details["dry_biome"] = json!(dry(e));
             let mut line = leaf(
                 "thunder_reaction",
-                text("fallback", &["weather_transition", scene]),
+                text("fallback", &["thunder_reaction", scene]),
                 details,
                 0.72,
             );

@@ -648,7 +648,10 @@ impl Dialogue {
                     if let Some(row)=d.rows.iter_mut().find(|r|r["turn_id"]==turn){row["text"]=display_text(&resolved).into();row["combat_actions"]=json!(resolved);}
                 }
                 let s=&d.sessions[&sid];
-                super::environment_runtime::refresh_dialogue_context(s,&mut resolved);
+                if !super::environment_runtime::refresh_dialogue_context(s,&mut resolved) {
+                    Self::cancel_warning(&mut d,&sid,"surroundings_unavailable");
+                    anyhow::bail!("surroundings unavailable");
+                }
                 d.sessions.get_mut(&sid).unwrap().warning.as_mut().unwrap().actions=resolved.clone();
                 resolved
             };

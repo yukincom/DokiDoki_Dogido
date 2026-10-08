@@ -65,11 +65,9 @@ pub struct Danger {
     previous_zone: bool,
     previous_water: bool,
     previous_shelter: bool,
-    previous_foliage: bool,
     entered_zone: bool,
     entered_water: bool,
     entered_shelter: bool,
-    entered_foliage: bool,
     stage: u8,
     active: bool,
     entry_x: Option<f64>,
@@ -81,7 +79,6 @@ pub struct Danger {
     pending_relief: Option<u64>,
     last_dark_advice: Option<u64>,
     last_water: Option<u64>,
-    last_foliage: Option<u64>,
     shelter_advised: bool,
     shelter_seen: bool,
     shelter_entry_spoken: bool,
@@ -160,11 +157,9 @@ impl Danger {
             self.previous_zone = false;
             self.previous_water = false;
             self.previous_shelter = false;
-            self.previous_foliage = false;
             self.entered_zone = false;
             self.entered_water = false;
             self.entered_shelter = false;
-            self.entered_foliage = false;
             self.shelter_entry_spoken = false;
             self.night_pending = false;
             self.portal_initialized = false;
@@ -173,22 +168,19 @@ impl Danger {
             self.pending_portal_encounter = None;
         }
         self.dimension = dimension;
-        let (z, w, h, f) = (zone(e, s), water_dark(e, s), shelter(e, s), foliage(e));
+        let (z, w, h) = (zone(e, s), water_dark(e, s), shelter(e, s));
         self.entered_zone &= z;
         self.entered_water &= w;
         self.entered_shelter &= h;
-        self.entered_foliage &= f;
         if snapshot(e) {
             if !self.dimension_changed {
                 self.entered_zone = z && (self.entered_zone || !self.previous_zone);
                 self.entered_water = w && (self.entered_water || !self.previous_water);
                 self.entered_shelter = h && (self.entered_shelter || !self.previous_shelter);
-                self.entered_foliage = f && (self.entered_foliage || !self.previous_foliage);
             }
             self.previous_zone = z;
             self.previous_water = w;
             self.previous_shelter = h;
-            self.previous_foliage = f;
             let portal = e
                 .world
                 .nearby_portal_type
@@ -448,24 +440,6 @@ impl Danger {
             return vec![Speech::new(
                 "emergency_shelter_advice",
                 text("darkness", &["emergency_shelter", key]),
-            )];
-        }
-        if self.entered_foliage
-            && e.world.structure.is_none()
-            && foliage(e)
-            && !safe(e)
-            && ready(
-                now,
-                self.last_foliage,
-                s,
-                "foliage_darkness_comment_cooldown_ms",
-            )
-        {
-            self.entered_foliage = false;
-            self.last_foliage = Some(now);
-            return vec![Speech::new(
-                "foliage_shade",
-                "木がしげっているとこは暗いわー。こういうとこはおひさんでとっても敵が残っとるんやで……。",
             )];
         }
         if self.ominous_presence {
@@ -778,7 +752,6 @@ pub fn still_applicable(a: &Speech, e: &GameEvent, s: &Settings) -> bool {
                             .unwrap_or(json!("unknown"))
                 })
         }
-        "foliage_shade" => foliage(e) && !safe(e),
         "magma_block" => e.world.standing_on_magma_block == Some(true),
         "damaging_light" => {
             e.world.nearby_damaging_light_source_count.unwrap_or(0) > 0

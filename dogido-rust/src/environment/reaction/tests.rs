@@ -46,53 +46,8 @@ fn outcome(prepared: &Prepared, speech: &str) -> (String, &'static str) {
 }
 
 #[test]
-fn candidate_has_one_decision_and_only_selected_facts_and_delivered_context() {
-    let mut a = action(
-        "ambient",
-        json!({"mob":"ウシ","direction":"右","distance":2,"mob_temperament":"passive",
-        "mob_count":7,"fallback_candidates":["古い固定台詞"],"mob_tags":["走る"],"villager_schedule":"work",
-        "__ambient_guard":{"mob_type":"cow","entity_id":"private-id"}}),
-    );
-    attach(
-        &mut a,
-        &event(json!({})),
-        &json!({"completed_conversation":[{"player_text":"のんびり歩こか","dogido_text":"せやな。"}]}),
-    );
-    let p = prepared(&a);
-    assert_eq!(p.request.kind, KIND);
-    assert_eq!(p.request.max_tokens, 2048);
-    assert_eq!(p.request.messages.len(), 2);
-    assert_eq!(
-        p.request.messages[0].content,
-        crate::companion_prompt::dialogue(
-            "normal",
-            crate::companion_prompt::DialoguePurpose::Ambient
-        )
-    );
-    let content = &p.request.messages[1].content;
-    assert!(content.contains("passive"));
-    assert!(content.contains("ウシ") && content.contains("のんびり歩こか"));
-    for hidden in [
-        "private-id",
-        "古い固定台詞",
-        "走る",
-        "villager_schedule",
-        "mob_count",
-        "effective_strength",
-    ] {
-        assert!(!content.contains(hidden), "{hidden}");
-    }
-    assert_eq!(
-        outcome(&p, "ウシものんびりしとるように見えるな。気持ちよさそうや。").1,
-        "speak"
-    );
-    assert_eq!(outcome(&p, "さっきのブタの話を思い出したわ。").1, "speak");
-    assert_eq!(outcome(&p, "ブタがおるんかな。").1, "speak");
-}
-
-#[test]
 fn model_expression_is_not_limited_by_a_small_model_word_filter_or_character_ceiling() {
-    let mut a = action("special_biome_entry", json!({}));
+    let mut a = action("occluded_entry_no_light", json!({}));
     attach(&mut a, &event(json!({})), &json!({}));
     let p = prepared(&a);
     let text = "木々の間を歩いてると、さっき話してたブタのことを思い出すな。オレは暗いところがちょっと苦手やけど、こうして一緒に景色を眺めるのは好きやで。あの話の続き、気が向いたらまた聞かせてな。";
@@ -102,7 +57,7 @@ fn model_expression_is_not_limited_by_a_small_model_word_filter_or_character_cei
 
 #[test]
 fn silence_is_distinct_from_error_and_whole_contract_is_required() {
-    let mut a = action("special_biome_entry", json!({}));
+    let mut a = action("occluded_entry_no_light", json!({}));
     attach(&mut a, &event(json!({})), &json!({}));
     let p = prepared(&a);
     assert_eq!(
@@ -209,7 +164,7 @@ fn smell_and_biome_guards_are_not_generated_wording() {
     ));
 
     let e = event(json!({}));
-    let mut a = action("special_biome_entry", json!({}));
+    let mut a = action("occluded_entry_no_light", json!({}));
     a.text = "夜にわいた敵が残っとるんやで。".into();
     attach(&mut a, &e, &json!({}));
     assert!(!a.text.contains("敵"));
@@ -329,7 +284,7 @@ fn underground_forest_is_a_location_not_a_visible_surface_scene() {
     let e = event(
         json!({"world":{"biome":"forest","sky_visible":false,"overhead_cover_type":"stone","time_phase":"day"}}),
     );
-    let mut a = action("special_biome_entry", json!({}));
+    let mut a = action("occluded_entry_no_light", json!({}));
     attach(&mut a, &e, &json!({}));
     let p = prepared(&a);
     assert_eq!(
@@ -360,16 +315,6 @@ fn thunder_heard_is_not_a_nearby_strike_and_weather_is_not_thunder_heard() {
     assert_eq!(outcome(&p, "雷の音は何度聞いても落ち着かんな。").1, "speak");
     assert_eq!(outcome(&p, "雷が落ちたら怖いな。").1, "speak");
     assert!(super::super::ambient::still_applicable(&a, &e));
-    let mut a = action(
-        "weather_transition",
-        json!({"scene":"thunder_started","weather_from":"clear","weather_to":"thunder"}),
-    );
-    attach(&mut a, &e, &json!({}));
-    assert_eq!(
-        serde_json::from_str::<Value>(&prepared(&a).request.messages[1].content).unwrap()["observations"]
-            ["thunder_heard"],
-        false
-    );
 }
 
 #[test]
@@ -401,20 +346,6 @@ fn final_environment_input_uses_shared_weather_situations_and_actual_scream_stat
     let e = event(
         json!({"world":{"biome":"plains","weather":"thunder","sky_visible":true,"thunder_sound_recent_ms":0}}),
     );
-    let mut weather = action(
-        "weather_transition",
-        json!({"scene":"thunder_started","weather_from":"rain","weather_to":"thunder"}),
-    );
-    attach(&mut weather, &e, &json!({}));
-    let request = prepared(&weather).request;
-    let context: Value = serde_json::from_str(&request.messages[1].content).unwrap();
-    assert_eq!(context["event"], "weather_transition");
-    assert_eq!(
-        context["situation"],
-        "空が一気に暗くなって、嵐の気配がしてきた。"
-    );
-    assert_eq!(context["observations"]["thunder_heard"], false);
-    assert!(context.get("self_state").is_none());
     for state in ["scheduled", "completed", "not_scheduled"] {
         let mut thunder = action(
             "thunder_reaction",
@@ -433,38 +364,6 @@ fn final_environment_input_uses_shared_weather_situations_and_actual_scream_stat
                 .unwrap()
                 .contains("直後"),
             state == "completed"
-        );
-    }
-}
-
-#[test]
-fn shared_weather_situation_matches_actual_altitude_precipitation() {
-    for (biome, y, precipitation, situation) in [
-        ("taiga", 64, "rain", "雨が降り始めた。"),
-        (
-            "taiga",
-            250,
-            "snow",
-            "雪がしんしんと降り始めた。あたりが静かに白くなってきとる。",
-        ),
-        ("desert", 64, "none", "空が曇ってきた。"),
-        ("unknown_biome", 64, "unknown", "天候が変わった。"),
-    ] {
-        let e = event(json!({
-            "player":{"dimension":"minecraft:overworld","position":{"x":0,"y":y,"z":0}},
-            "world":{"biome":biome,"weather":"rain","sky_visible":true}
-        }));
-        let mut a = action(
-            "weather_transition",
-            json!({"scene":"rain_started","weather_from":"clear","weather_to":"rain"}),
-        );
-        attach(&mut a, &e, &json!({}));
-        let request = prepared(&a).request;
-        let context: Value = serde_json::from_str(&request.messages[1].content).unwrap();
-        assert_eq!(context["situation"], situation, "{biome}:{y}");
-        assert_eq!(
-            context["observations"]["local_precipitation"],
-            precipitation
         );
     }
 }

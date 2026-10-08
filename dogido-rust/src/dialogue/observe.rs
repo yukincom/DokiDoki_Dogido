@@ -93,7 +93,14 @@ impl Dialogue {
                         self.config.combat.number("darkness_advice_light_threshold"),
                         self.config.combat.ms("weather_sound_recent_ms"),
                     ) {
-                        Ok(context) => s.conversation_observation.observe(context),
+                        Ok(context) => {
+                            s.conversation_observation.observe(context);
+                            s.conversation_observation.sample_notice(
+                                now,
+                                self.config.combat.ms("surroundings_notice_interval_ms"),
+                                event.event.name == EventName::StatusSnapshot,
+                            );
+                        }
                         Err(error) => {
                             tracing::warn!(event="conversation_observation_rejected",session_id,%error)
                         }
@@ -224,15 +231,9 @@ impl Dialogue {
                                     | EventName::CombatEnded
                             )),
                 );
-                self.process_environment(
-                    &mut d,
-                    &mut jobs,
-                    session_id,
-                    &event,
-                    now,
-                    combat_priority,
-                );
+                self.process_environment(&mut d, &mut jobs, session_id, now, combat_priority);
                 let s = d.sessions.get_mut(session_id).unwrap();
+                s.conversation_observation.finish_notice_opportunity();
                 s.danger.finish_frame(s.mode);
             } else {
                 let s = d.sessions.get_mut(session_id).unwrap();

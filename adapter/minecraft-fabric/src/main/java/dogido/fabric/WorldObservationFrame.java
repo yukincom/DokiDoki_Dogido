@@ -7,8 +7,17 @@ import java.util.function.Supplier;
 final class WorldObservationFrame {
     private final Supplier<JsonObject> capture;
     private JsonObject observation;
+    private final Supplier<JsonObject> captureBlocks;
+    private JsonObject blocks;
 
-    WorldObservationFrame(Supplier<JsonObject> capture) { this.capture = capture; }
+    WorldObservationFrame(Supplier<JsonObject> capture, Supplier<JsonObject> captureBlocks) {
+        this.capture = capture;
+        this.captureBlocks = captureBlocks;
+    }
+    JsonObject blocks() {
+        if (blocks == null) blocks = captureBlocks.get();
+        return blocks.deepCopy();
+    }
 
     JsonObject copy() {
         if (observation == null) observation = capture.get();

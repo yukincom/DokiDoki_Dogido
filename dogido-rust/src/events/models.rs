@@ -1262,6 +1262,35 @@ impl Default for WorldState {
         serde_json::from_str("{}").expect("model defaults")
     }
 }
+/// 同じ走査で確認した種類の集合。個体ID・位置・個数は送らず、上限超過は明示する。
+/// Noneは未提供、空の一覧は走査範囲内で未検出。切り詰めた一覧から不在を判断しない。
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NearbyComposition {
+    pub mobs: Vec<String>,
+    pub blocks: Vec<String>,
+    pub mobs_truncated: bool,
+    pub blocks_truncated: bool,
+}
+impl Validate for NearbyComposition {
+    fn validate(&self) -> Result<(), String> {
+        for values in [&self.mobs, &self.blocks] {
+            ensure(values.len() <= 128, "NearbyComposition: maxItems 128")?;
+            ensure(
+                values.iter().all(|id| {
+                    !id.is_empty()
+                        && id.len() <= 128
+                        && id.bytes().all(|c| {
+                            c.is_ascii_lowercase() || c.is_ascii_digit() || b"_:./-".contains(&c)
+                        })
+                }),
+                "NearbyComposition: registry IDs required",
+            )?;
+        }
+        Ok(())
+    }
+}
+
 /// FabricのbaseEnvelopeと各buildイベント関数が組み立てる通信本文。
 /// GameEvent::parseでこの型へ変換した後、入れ子のValidateを通して本体へ公開する。
 /// 定期snapshotと部分通知は同じ外形を使うため、空の既定値だけで既存観測を消去しない。
@@ -1296,6 +1325,9 @@ pub struct EventData {
     pub ambient_sounds: Vec<AmbientSound>,
     #[serde(default)]
     pub passive_mobs: Vec<PassiveMob>,
+    /// 全非敵対Mob走査と近傍ブロック走査から得た種類一覧。4個体・16資源の上限を適用する前に集約する。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nearby_composition: Option<NearbyComposition>,
     /// Same visible scan, outside the four routine slots. Read only for a player topic.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub companion_candidates: Vec<PassiveMob>,
@@ -1676,6 +1708,7 @@ impl Validate for EventData {
         self.smell_observation.validate()?;
         self.ambient_sounds.validate()?;
         self.passive_mobs.validate()?;
+        self.nearby_composition.validate()?;
         ensure(
             self.companion_candidates.len() <= 32,
             "EventData.companion_candidates: maxItems 32",

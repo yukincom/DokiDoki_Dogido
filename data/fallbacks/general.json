@@ -48,28 +48,13 @@
     "rain_after": "あ、雨上がりの匂いや。濡れた草と土の匂いがするな。",
     "mixed": "いろんな匂いが混じって、よう分からへんわ。"
   },
-  "weather_transition": {
-    "clear_after_bad_weather": "ふぅ……ようやく晴れたな。ちょっと落ち着けるかも……でも油断したらあかんぞ。",
-    "overcast_after_thunder": "空の暗さは和らいだけど、まだ曇っとるな。",
-    "overcast_started": "うわっ……空がどんよりしてきたで！ 暗うなったら敵湧きやすなるし、怖いわぁ！",
-    "snow_after_thunder": "雪や！きれいやけど……おっさんには辛いわぁ……。",
-    "snow_started": "雪や……寒いし暗いし……このまま夜になってしもたらツラいわぁ！家帰りとーなってきたわ。",
-    "rain_after_thunder": "雷は止まったな……まあまだ油断できへん。きいつけよや！",
-    "rain_started": "うわっ……雨降ってきたで！くろぉなったらまた敵湧きやすなるで……怖いわぁ！",
-    "dry_thunder_after_overcast": "空がさらに暗うなってきたな。どんよりしとるわ。",
-    "dry_thunder_started": "空が暗く曇ってきたな。なんか落ち着かへんわ。",
-    "blizzard_after_snow": "ふぶいてきたわ〜〜！視界わるぅ！雷も落ちよるし……おっさんにはキツいわぁ。",
-    "blizzard_started": "ぐわー！なんじゃこの天気は！！",
-    "thunder_after_rain": "はぁはぁ……雷鳴ってる！めっちゃ暗いし雷の音が怖すぎるわ！あかん、隠れなあかん！",
-    "thunder_started": "うわああっ！雷や！雷落ちてくるで！くわばらくわばら！！",
-    "rain_suspected": "なんか雨の音する気が・・・",
-    "thunder_suspected": "なんかゴロゴロ聞こえるな……雷きとるんか？",
-    "thunder_heard": "また鳴った……ほんま雷だけは落ち着かへんな。",
-    "nearby_lightning_strike": "今、落ちたで！"
-  },
   "chat": {
     "reply": "ようわからん、もうちょい教えて。",
     "no_hearing_evidence": "ごめん、こっちには今の音の記録が残ってへんわ。",
     "no_scent_evidence": "うーん、オレには今、その匂いまでは分からへんわ。"
+  },
+  "thunder_reaction": {
+    "thunder_heard": "また鳴った……ほんま雷だけは落ち着かへんな。",
+    "nearby_lightning_strike": "今、落ちたで！"
   }
 }

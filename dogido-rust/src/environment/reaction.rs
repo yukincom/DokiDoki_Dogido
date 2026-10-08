@@ -31,14 +31,10 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
         return;
     }
     let topic = match action.kind {
-        "ambient" => "mob",
+        "surroundings_notice" => "surroundings",
         "thunder_reaction" => "thunder",
-        "weather_transition" => "weather",
         "smell" => "smell",
-        "special_biome_entry"
-        | "foliage_shade"
-        | "occluded_entry_with_light"
-        | "occluded_entry_no_light" => "place",
+        "occluded_entry_with_light" | "occluded_entry_no_light" => "place",
         _ => return,
     };
     let mut details = action
@@ -50,23 +46,6 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     let mut properties = json!({});
     let mut guard = json!({"dimension":normalized(event.player.dimension.as_deref())});
     match topic {
-        "mob" => {
-            // No all-mob count, poetic tags, example sentences or inferred daily
-            // schedule is promoted to the selected animal's observed behaviour.
-            for key in [
-                "mob",
-                "direction",
-                "mob_temperament",
-                "mob_caution_reason",
-                "mob_profession",
-                "mob_is_baby",
-            ] {
-                if let Some(value) = details.get(key).filter(|v| !v.is_null()) {
-                    observations[key] = value.clone();
-                }
-            }
-            properties["temperament"] = observations["mob_temperament"].clone();
-        }
         "thunder" => {
             let heard = event.world.thunder_sound_recent_ms.is_some_and(|age| {
                 age >= 0 && age as u64 <= settings.ms("weather_sound_recent_ms")
@@ -74,35 +53,7 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
             observations = json!({"thunder_heard":heard,"nearby_lightning_observed":details["nearby_lightning"] == true});
             properties["note"] = "雷鳴だけでは落雷地点や距離は未確認。".into();
         }
-        "weather" => {
-            let sky = event.world.sky_visible == Some(true);
-            observations = json!({"weather_before":details["weather_from"],"weather_now":details["weather_to"],"sky_visible":sky});
-            let scene = details["scene"].as_str().unwrap_or("");
-            observations["rain_heard"] = (scene == "rain_suspected").into();
-            observations["thunder_heard"] = (scene == "thunder_suspected").into();
-            if sky {
-                let precipitation = precipitation_kind(event);
-                if details["weather_to"] == "rain" {
-                    // The game weather enum covers both rain and snowfall; use
-                    // the same current-altitude fact as the model observation.
-                    let after_thunder = details["weather_from"] == "thunder";
-                    details["scene"] = match (precipitation.as_str(), after_thunder) {
-                        (Some("rain"), false) => "rain_started",
-                        (Some("rain"), true) => "rain_after_thunder",
-                        (Some("snow"), false) => "snow_started",
-                        (Some("snow"), true) => "snow_after_thunder",
-                        (Some("none"), false) => "overcast_started",
-                        (Some("none"), true) => "overcast_after_thunder",
-                        _ => "weather_changed",
-                    }
-                    .into();
-                }
-                observations["local_precipitation"] = precipitation.clone();
-                guard["precipitation"] = precipitation;
-            }
-            guard["sky_visible"] = json!(event.world.sky_visible);
-            properties["note"] = "weatherはゲームの天候区分。local_precipitationは現在地で確認した降水。空が見えない場合は音からの観測。雷雨区分だけでは雷鳴や落雷の観測根拠にならない。".into();
-        }
+        "surroundings" => {}
         "smell" => {
             let Some(smell) = super::ambient::smell_context(event) else {
                 return;
@@ -124,30 +75,14 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
                 "time_phase":event.world.time_phase,
                 "overhead_cover":event.world.overhead_cover_type,
                 "entered_occluded_place":action.kind.starts_with("occluded_entry"),
-                "entered_foliage_shade":action.kind == "foliage_shade",
             });
             guard["biome"] = biome.clone().into();
             guard["time_phase"] = json!(event.world.time_phase);
             guard["sky_visible"] = json!(event.world.sky_visible);
             guard["overhead_cover"] = json!(event.world.overhead_cover_type);
             guard["biome_scene_visible"] = json!(projection.include_biome_context);
-            properties["note"] = if projection.cave_biome || action.kind.starts_with("occluded_entry") {
-                "地上の昼夜と、日光の届かへん場所の明るさは別やで。昼でも暗い場所があるが、それだけでは現在の敵の在否は未確認。"
-            } else if action.kind == "foliage_shade" || ["forest", "taiga", "jungle", "grove", "pale_garden"].iter().any(|s| biome.contains(s)) {
-                "木陰には昼でも日光が届かへん場所があるで。所在地のバイオームだけやと、見える木々や今の敵の在否までは分からへんで。"
-            } else {
-                "所在地のバイオームは種類の情報や。biome_scene_visibleがfalseやったら、地表の景色はまだ見えてへんで。今そこに敵がおるかどうかは、別の観測が要るで。"
-            }.into();
-            // Old catalogue lines sometimes asserted enemies from a biome alone.
-            // They remain comparison data, never the new request or its fallback.
-            action.text = match action.kind {
-                "foliage_shade" => "木陰は昼でも気になるな。気ぃつけて進もな。",
-                "occluded_entry_with_light" | "occluded_entry_no_light" => {
-                    "日が届かん場所は落ち着かんな。足元、気ぃつけよ。"
-                }
-                _ => "ここ、雰囲気が変わったな。ちょっと気になるわ。",
-            }
-            .into();
+            properties["note"] = "日光の届かへん場所へ入った実観測やで。所在地のバイオームだけでは地表の景色までは分からへんで。".into();
+            action.text = "日が届かん場所は落ち着かんな。足元、気ぃつけよ。".into();
         }
         _ => unreachable!(),
     }
@@ -159,14 +94,6 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
         details,
         temperature: 0.65,
     });
-}
-
-fn precipitation_kind(event: &GameEvent) -> Value {
-    crate::world_catalog::catalog()
-        .climate(event.world.biome.as_deref())
-        .and_then(|climate| super::precipitation::from_event(event, &climate))
-        .map(|p| json!(p.precipitation_kind))
-        .unwrap_or_else(|_| json!("unknown"))
 }
 
 /// A new estimate of the same smell may replace an unplayed estimate once.
@@ -225,8 +152,6 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
             .is_some_and(|p| *p != json!(event.world.time_phase))
         || g.get("sky_visible")
             .is_some_and(|v| *v != json!(event.world.sky_visible))
-        || g.get("precipitation")
-            .is_some_and(|p| *p != precipitation_kind(event))
         || g.get("overhead_cover")
             .is_some_and(|v| *v != json!(event.world.overhead_cover_type))
         || g.get("biome_scene_visible").is_some_and(|v| {
@@ -256,7 +181,6 @@ impl Prepared {
         crate::catalog_knowledge::separate(&mut context);
         crate::villager_routines::separate(&mut context);
         if let Some(kind) = match context.get("topic").and_then(Value::as_str) {
-            Some("weather") => Some("weather_transition"),
             Some("thunder") => Some("thunder_reaction"),
             _ => None,
         } {
@@ -270,10 +194,14 @@ impl Prepared {
         ensure!(
             matches!(
                 context.get("topic").and_then(Value::as_str),
-                Some("mob" | "thunder" | "weather" | "smell" | "place")
+                Some("surroundings" | "thunder" | "smell" | "place")
             ),
             "unknown reaction topic"
         );
+        if context.get("topic").and_then(Value::as_str) == Some("surroundings") {
+            let shared = crate::reaction_leaf::context("surroundings_notice", &input["details"])?;
+            context.insert("situation".into(), shared["situation"].clone());
+        }
         let request = GenerationRequest {
             schema_version: 1,
             kind: KIND.into(),

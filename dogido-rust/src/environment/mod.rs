@@ -3,6 +3,7 @@
 //! reactionは選ばれた機会のモデル向け材料と返答検査を持つ。通信・再生・取消はdialogue側が実行する。
 pub mod ambient;
 pub mod danger;
+pub(crate) mod notice;
 pub mod precipitation;
 pub mod projection;
 pub(crate) mod reaction;

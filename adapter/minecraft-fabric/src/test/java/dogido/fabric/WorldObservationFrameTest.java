@@ -11,7 +11,7 @@ class WorldObservationFrameTest {
         WorldObservationFrame frame = new WorldObservationFrame(() -> {
             reads.incrementAndGet();
             JsonObject value = new JsonObject(); value.addProperty("local_light", 8); return value;
-        });
+        }, JsonObject::new);
         assertEquals(0, reads.get());
         JsonObject first = frame.copy();
         first.addProperty("local_light", 1);
@@ -23,11 +23,20 @@ class WorldObservationFrameTest {
         java.util.function.Supplier<JsonObject> capture = () -> {
             JsonObject value = new JsonObject(); value.addProperty("local_light", light.get()); return value;
         };
-        WorldObservationFrame first = new WorldObservationFrame(capture);
+        WorldObservationFrame first = new WorldObservationFrame(capture, JsonObject::new);
         assertEquals(8, first.copy().get("local_light").getAsInt());
         light.set(7);
-        WorldObservationFrame next = new WorldObservationFrame(capture);
+        WorldObservationFrame next = new WorldObservationFrame(capture, JsonObject::new);
         assertEquals(7, next.copy().get("local_light").getAsInt());
         assertEquals(8, first.copy().get("local_light").getAsInt());
+    }
+    @Test void blockObservationIsCapturedOnceAndCopiedWithinTheCycle() {
+        AtomicInteger reads = new AtomicInteger();
+        WorldObservationFrame frame = new WorldObservationFrame(JsonObject::new, () -> {
+            reads.incrementAndGet(); JsonObject v = new JsonObject(); v.addProperty("types", "stone"); return v;
+        });
+        frame.blocks().addProperty("types", "changed");
+        assertEquals("stone", frame.blocks().get("types").getAsString());
+        assertEquals(1, reads.get());
     }
 }

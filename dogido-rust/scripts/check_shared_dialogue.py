@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import tempfile
+import time
 
 from check_dialogue import dependencies, register, request, row, running, snapshot, submit, wait_for
 from check_environment_reactions import reaction_context
@@ -25,7 +26,7 @@ def main():
             return None
 
         control["structured_handler"] = respond
-        with running(ROOT / "target/debug/dogido-rust", folder, dep, extra_args=("--max-tokens", "384")) as (base, _, _):
+        with running(ROOT / "target/debug/dogido-rust", folder, dep, combat_settings={"surroundings_notice_interval_ms":100}, extra_args=("--max-tokens", "384")) as (base, _, _):
             def history(sid):
                 return next(s["history"] for s in snapshot(base)["sessions"] if s["session_id"] == sid)
 
@@ -81,6 +82,7 @@ def main():
             bread = {"status": "present", "smell_id": "bread", "category": "food", "valence": "pleasant",
                      "specificity": "source", "source_kind": "hotbar", "effective_strength": 3}
             event("clear", {"status": "none"})
+            time.sleep(.12)
             event("rain", bread)
             event("rain", bread)
             wait_for(lambda: any(r["source"] == "game_observation" and r["playback_status"] == "not_selected"
@@ -99,7 +101,9 @@ def main():
             assert context["observations"]["smell"]["status"] == "present", context
             assert "effective_strength" not in json.dumps(context), context
             env = next(c for c in calls() if reaction_context(c) is not None)
-            assert env["messages"][0]["content"] == leaf["messages"][0]["content"]
+            shared_base = json.loads((ROOT.parent / "dogido_server/llm/companion_prompts.json").read_text())["base"]
+            assert env["messages"][0]["content"].startswith(shared_base)
+            assert leaf["messages"][0]["content"].startswith(shared_base)
             assert any(r.get("reaction") == "silent" for r in history(sid)), history(sid)
             passed.append("player_reply_combines_rain_and_smell_using_shared_base_observation_history")
 

@@ -49,17 +49,8 @@ fn observation_fields(kind: &str) -> &[&str] {
         "newly_burning_visual" => &["hostile", "distance"],
         "deep_dark_ominous_sound" => &["ominous_kind", "ominous_stage"],
         "occluded_hostile_presence" => &["direction", "hostile", "distance_band", "sound_event"],
-        "ambient" => &[
-            "mob",
-            "direction",
-            "distance",
-            "mob_profession",
-            "mob_is_baby",
-        ],
-        "weather_transition" => &["weather_from", "weather_to", "scene"],
         "thunder_reaction" => &["scene", "nearby_lightning"],
         "ender_eye_throw" => &[],
-        "structure_entry" => &["structure_label"],
         "light_source_gain" => &["surroundings_light"],
         "darkness_escape" => &["hostiles"],
         "occluded_entry_with_light" => &["local_light"],
@@ -106,22 +97,6 @@ pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
     }
     let mut observations = selected(d, &["biome", "time_phase"]);
     observations.extend(selected(d, observation_fields(kind)));
-    if kind == "structure_entry" && d["group_id"] == "village" {
-        let count = d["visible_villager_count"].as_i64();
-        let crowd = match count {
-            None => "未確認",
-            Some(n) if n >= 10 => "多い（10人以上）",
-            Some(n) if n > 0 => "多くはない（10人未満）",
-            _ => "観測範囲では未検出",
-        };
-        observations.insert(
-            "villagers".into(),
-            json!({
-                "scope":"16ブロック以内で見通しが通る範囲。村全体の人口ではない。",
-                "count":count,"crowd":crowd
-            }),
-        );
-    }
     if kind == "portal_appearance" && d["portal_encounter"].is_null() {
         observations.insert(
             "appearance_fact".into(),
@@ -162,14 +137,7 @@ pub(super) fn context(kind: &str, d: &Value) -> Result<Value> {
     if !observations.is_empty() {
         context["observations"] = observations.into();
     }
-    let mut properties = selected(
-        d,
-        match kind {
-            "ambient" => &["mob_temperament", "mob_caution_reason"],
-            "structure_entry" => &["structure_note"],
-            _ => &[],
-        },
-    );
+    let mut properties = serde_json::Map::new();
     if kind == "portal_appearance" {
         let dimension = d["dimension"].as_str().unwrap_or("").trim().to_lowercase();
         let portal_type = d["portal_type"]

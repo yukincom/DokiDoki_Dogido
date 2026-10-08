@@ -153,9 +153,3 @@ impl SmellObservation {
         }
     }
 }
-
-impl PassiveMobTemperament {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self { Self::Passive => "passive", Self::Neutral => "neutral" }
-    }
-}

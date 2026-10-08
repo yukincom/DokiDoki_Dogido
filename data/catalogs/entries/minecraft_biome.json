@@ -75,19 +75,22 @@
           "japanese": "タイガ",
           "temperature": 0.25,
           "downfall": 0.8,
-          "snow_starts_at_y": 153
+          "snow_starts_at_y": 153,
+          "note": "影が多く、視線が遮られる。"
         },
         "old_growth_pine_taiga": {
           "japanese": "マツの原生林",
           "temperature": 0.3,
           "downfall": 0.8,
-          "snow_starts_at_y": 193
+          "snow_starts_at_y": 193,
+          "note": "影が多く、視線が遮られる。"
         },
         "old_growth_spruce_taiga": {
           "japanese": "トウヒの原生林",
           "temperature": 0.25,
           "downfall": 0.8,
-          "snow_starts_at_y": 153
+          "snow_starts_at_y": 153,
+          "note": "影が多く、視線が遮られる。"
         },
         "stony_shore": {
           "japanese": "石だらけの海岸",
@@ -117,17 +120,20 @@
         "forest": {
           "japanese": "森林",
           "temperature": 0.7,
-          "downfall": 0.8
+          "downfall": 0.8,
+          "note": "影が多く、視線が遮られる。"
         },
         "flower_forest": {
           "japanese": "花の森",
           "temperature": 0.7,
-          "downfall": 0.8
+          "downfall": 0.8,
+          "note": "影が多く、視線が遮られる。"
         },
         "birch_forest": {
           "japanese": "シラカバの森",
           "temperature": 0.6,
-          "downfall": 0.6
+          "downfall": 0.6,
+          "note": "影が多く、視線が遮られる。"
         },
         "old_growth_birch_forest": {
           "japanese": "シラカバの原生林",
@@ -138,12 +144,14 @@
           "downfall": {
             "java": 0.6,
             "bedrock": 0.8
-          }
+          },
+          "note": "影が多く、視線が遮られる。"
         },
         "dark_forest": {
           "japanese": "暗い森",
           "temperature": 0.7,
-          "downfall": 0.8
+          "downfall": 0.8,
+          "note": "影が多く、視線が遮られる。"
         },
         "swamp": {
           "japanese": "沼地",
@@ -164,23 +172,26 @@
         "jungle": {
           "japanese": "ジャングル",
           "temperature": 0.95,
-          "downfall": 0.9
+          "downfall": 0.9,
+          "note": "影が多く、視線が遮られる。"
         },
         "sparse_jungle": {
           "japanese": "まばらなジャングル",
           "temperature": 0.95,
-          "downfall": 0.8
+          "downfall": 0.8,
+          "note": "影が多く、視線が遮られる。"
         },
         "bamboo_jungle": {
           "japanese": "竹林",
           "temperature": 0.95,
-          "downfall": 0.9
+          "downfall": 0.9,
+          "note": "影が多く、視線が遮られる。"
         },
         "pale_garden": {
           "japanese": "ペールガーデン",
           "temperature": null,
           "downfall": null,
-          "note": "ペールガーデンは気温・降水量は不明。"
+          "note": "ペールガーデンは気温・降水量は不明。影が多く、視線が遮られる。"
         },
         "beach": {
           "japanese": "砂浜",

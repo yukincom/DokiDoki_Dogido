@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     main_language_web_enabled: bool = True
     conversation_active_ttl_ms: int = Field(default=COMBAT_DEFAULTS["conversation_active_ttl_ms"], ge=30000, le=3600000)
     # 雑談後の非敵対モブコメント抑止。会話の文脈保持期限とは分ける。
+    surroundings_notice_interval_ms: int = Field(default=COMBAT_DEFAULTS["surroundings_notice_interval_ms"], ge=1000, le=3600000)
     conversation_ambient_mute_ms: int = Field(default=COMBAT_DEFAULTS["conversation_ambient_mute_ms"], ge=0, le=3600000)
     # learning中の無関係な発話を「新しい話」と即扱う無会話時間。
     conversation_topic_fresh_ms: int = Field(default=COMBAT_DEFAULTS["conversation_topic_fresh_ms"], ge=0, le=3600000)
@@ -232,7 +233,6 @@ class Settings(BaseSettings):
     cramped_dark_burrow_min_wall_count: int = COMBAT_DEFAULTS["cramped_dark_burrow_min_wall_count"]
     cramped_dark_burrow_min_enclosure_score: float = COMBAT_DEFAULTS["cramped_dark_burrow_min_enclosure_score"]
     darkness_llm_comment_cooldown_ms: int = COMBAT_DEFAULTS["darkness_llm_comment_cooldown_ms"]
-    foliage_darkness_comment_cooldown_ms: int = COMBAT_DEFAULTS["foliage_darkness_comment_cooldown_ms"]
     submerged_darkness_comment_cooldown_ms: int = COMBAT_DEFAULTS["submerged_darkness_comment_cooldown_ms"]
     submerged_darkness_depth_threshold: int = COMBAT_DEFAULTS["submerged_darkness_depth_threshold"]
     dark_push_comment_cooldown_ms: int = COMBAT_DEFAULTS["dark_push_comment_cooldown_ms"]
@@ -250,8 +250,6 @@ class Settings(BaseSettings):
     emergency_shelter_respawn_distance: float = COMBAT_DEFAULTS["emergency_shelter_respawn_distance"]
     emergency_shelter_max_ceiling_height: float = COMBAT_DEFAULTS["emergency_shelter_max_ceiling_height"]
     home_bed_prompt_distance: float = COMBAT_DEFAULTS["home_bed_prompt_distance"]
-    special_biome_comment_cooldown_ms: int = COMBAT_DEFAULTS["special_biome_comment_cooldown_ms"]
-    structure_comment_cooldown_ms: int = COMBAT_DEFAULTS["structure_comment_cooldown_ms"]
     portal_frame_comment_cooldown_ms: int = COMBAT_DEFAULTS["portal_frame_comment_cooldown_ms"]
     # 設置済みエンドポータルフレームへの接近反応（この距離以内で一言）
     end_portal_frame_comment_distance: float = COMBAT_DEFAULTS["end_portal_frame_comment_distance"]
@@ -259,9 +257,7 @@ class Settings(BaseSettings):
     ender_eye_recent_ms: int = COMBAT_DEFAULTS["ender_eye_recent_ms"]
     ender_eye_comment_cooldown_ms: int = COMBAT_DEFAULTS["ender_eye_comment_cooldown_ms"]
     # 種ごと（村人は villager:職 で別 key → 別職は即出し可、同職は下の秒数）
-    ambient_mob_comment_cooldown_ms: int = COMBAT_DEFAULTS["ambient_mob_comment_cooldown_ms"]
     # この人数以上の非睡眠村人がいると汎用村人1発 + villager:crowd 共有 CD（職連発渋滞防止）
-    ambient_villager_crowd_threshold: int = COMBAT_DEFAULTS["ambient_villager_crowd_threshold"]
     # player_chat: 今フレームに音配列が無くても、この時間内の音を会話に残す
     # 人間の「…？ → 今の音なに？」ラグ用。adapter 音 TTL（約15s）より少し長く
     player_chat_hearing_retention_ms: int = COMBAT_DEFAULTS["player_chat_hearing_retention_ms"]

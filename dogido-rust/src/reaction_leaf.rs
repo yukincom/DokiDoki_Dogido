@@ -7,7 +7,7 @@ use crate::types::{GeneratedText, GenerationRequest};
 use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 
-pub const KINDS: [&str; 20] = [
+pub const KINDS: [&str; 17] = [
     "death",
     "aftermath",
     "daylight_water",
@@ -15,11 +15,8 @@ pub const KINDS: [&str; 20] = [
     "newly_burning_visual",
     "deep_dark_ominous_sound",
     "occluded_hostile_presence",
-    "ambient",
-    "weather_transition",
     "thunder_reaction",
     "ender_eye_throw",
-    "structure_entry",
     "light_source_gain",
     "darkness_escape",
     "occluded_entry_with_light",

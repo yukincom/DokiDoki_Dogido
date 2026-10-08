@@ -271,6 +271,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private BlockPos observedRespawnPos = null;
     private String observedRespawnDimension = null;
     private String lastDimensionId = null;
+    private final NearbyComposition.RangeTracker nearbyMobKinds =
+        new NearbyComposition.RangeTracker(NearbyComposition.MOB_ENTER, NearbyComposition.MOB_EXIT);
+    private final NearbyComposition.RangeTracker nearbyBlockKinds =
+        new NearbyComposition.RangeTracker(0.0, NearbyComposition.BLOCK_MARGIN);
+    private JsonObject nearbyMobTypes = NearbyComposition.types(List.of());
     private String pendingUserText = null;
     private double lastPlayerX = Double.NaN;
     private double lastPlayerY = Double.NaN;
@@ -463,6 +468,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         if (this.displayWorld != world) {
+            this.nearbyMobKinds.reset();
+            this.nearbyBlockKinds.reset();
             this.portalObservationTracker.reset();
             this.eventClient.invalidateDisplayRequests();
             this.workshopHud.reset();
@@ -534,12 +541,14 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             audioThreats
         );
         updateSmellObservation(player, world, rawZombieScentClues);
-        List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world);
+        boolean captureNearbyKinds = shouldSendSnapshot();
+        List<AmbientMobObservation> ambientMobs = scanAmbientMobs(player, world, captureNearbyKinds);
         updateCombatTracking(visibleThreats, audioThreats);
         boolean deadNow = isPlayerDead(player);
-        WorldObservationFrame worldFrame = new WorldObservationFrame(() -> buildWorld(player, world));
+        WorldObservationFrame worldFrame = new WorldObservationFrame(
+            () -> buildWorld(player, world), () -> buildNearbyBlocks(player, world, captureNearbyKinds));
 
-        if (shouldSendSnapshot()) {
+        if (captureNearbyKinds) {
             JsonObject snapshot = buildStatusSnapshot(player, world, worldFrame, visibleThreats, audioThreats, ambientSounds, ambientMobs);
             this.eventClient.postEvent(snapshot);
             this.lastSnapshotTick = this.tickCounter;
@@ -628,6 +637,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void resetTransientState() {
+        this.nearbyMobKinds.reset();
+        this.nearbyBlockKinds.reset();
         this.portalObservationTracker.reset();
         this.tickCounter = 0;
         this.lastSnapshotTick = -1;
@@ -691,6 +702,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void resetThreatStateForDimensionChange() {
+        this.nearbyMobKinds.reset();
+        this.nearbyBlockKinds.reset();
         this.portalObservationTracker.reset();
         this.lastThreatTick = -1;
         this.lastAudioEventTick = -1;
@@ -1487,10 +1500,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return audioThreats;
     }
 
-    private List<AmbientMobObservation> scanAmbientMobs(ClientPlayerEntity player, ClientWorld world) {
+    private List<AmbientMobObservation> scanAmbientMobs(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
         List<Entity> entities = world.getOtherEntities(
             player,
-            player.getBoundingBox().expand(AMBIENT_MOB_DISTANCE),
+            player.getBoundingBox().expand(captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE),
             this::isAmbientMobCandidate
         );
 
@@ -1504,9 +1517,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 continue;
             }
             double distance = Math.sqrt(player.squaredDistanceTo(entity));
-            if (distance > AMBIENT_MOB_DISTANCE) {
+            if (distance > (captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE)) {
                 continue;
             }
+            // 外周の新規種類は今回の表に入らないので、追加の視線検査をしない。
+            if (distance > AMBIENT_MOB_DISTANCE && !this.nearbyMobKinds.allows(disposition.type(), distance)) continue;
             if (!hasLineOfSight(player, world, entity)) {
                 continue;
             }
@@ -1541,7 +1556,13 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         // Routine encounter priority stays unchanged. Extra companions are retained only as conversation candidates.
         mobs.sort(Comparator.comparing((AmbientMobObservation mob) -> mob.identity().tamed())
             .thenComparingDouble(AmbientMobObservation::distance));
-        return mobs;
+        if (captureNearbyKinds) {
+            this.nearbyMobTypes = this.nearbyMobKinds.finish(mobs.stream()
+                .filter(mob -> this.nearbyMobKinds.allows(mob.type(), mob.distance()))
+                .map(AmbientMobObservation::type).toList());
+        }
+        // 会話の種類表だけ外周まで保つ。個体一覧・村人数・従来の材料の範囲は変えない。
+        return mobs.stream().filter(mob -> mob.distance() <= AMBIENT_MOB_DISTANCE).toList();
     }
 
     private boolean isAmbientMobCandidate(Entity entity) {
@@ -1893,7 +1914,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> ambientSounds,
         List<AmbientMobObservation> ambientMobs
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("status_snapshot", "system", "background", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -1918,7 +1939,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("threat_approaching", "visual", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -1942,7 +1963,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("hostile_audio_detected", "auditory", "normal", "medium");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -1964,7 +1985,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         WorldObservationFrame worldFrame,
         List<AmbientMobObservation> ambientMobs
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("ambient_mob_detected", "visual", "background", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -1988,7 +2009,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AudioThreatObservation> audioThreats,
         List<AmbientMobObservation> ambientMobs
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("player_died", "system", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -2013,7 +2034,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AmbientMobObservation> ambientMobs,
         java.util.Collection<HostileOutcomeObservation> detonations
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("creeper_detonated", "system", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -2040,7 +2061,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         List<AmbientMobObservation> ambientMobs,
         java.util.Collection<HostileOutcomeObservation> outcomes
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("hostile_defeated", "system", "urgent", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -2064,7 +2085,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         WorldObservationFrame worldFrame,
         List<AmbientMobObservation> ambientMobs
     ) {
-        JsonArray nearbyResources = buildNearbyResources(player, world);
+        JsonObject nearbyResources = worldFrame.blocks();
         JsonObject root = baseEnvelope("combat_ended", "system", "normal", "high");
         root.addProperty("sequence", this.eventClient.nextSequence());
         root.add("player", buildPlayer(player, world));
@@ -2084,9 +2105,18 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         JsonObject root,
         ClientPlayerEntity player,
         ClientWorld world,
-        JsonArray nearbyResources
+        JsonObject nearbyResources
     ) {
-        root.add("nearby_resources", nearbyResources);
+        root.add("nearby_resources", nearbyResources.get("resources"));
+        // 拡張した気づき表は全snapshotの周期だけ採る。緊急の部分通知へ古い表を転記しない。
+        if (nearbyResources.has("types")) {
+            JsonObject composition = new JsonObject();
+            composition.add("mobs", this.nearbyMobTypes.get("ids").deepCopy());
+            composition.add("mobs_truncated", this.nearbyMobTypes.get("truncated").deepCopy());
+            composition.add("blocks", nearbyResources.getAsJsonObject("types").get("ids"));
+            composition.add("blocks_truncated", nearbyResources.getAsJsonObject("types").get("truncated"));
+            root.add("nearby_composition", composition);
+        }
         root.add("dropped_items", buildDroppedItems(player, world));
         root.add("recent_block_breaks", buildRecentBlockBreaks());
     }
@@ -2616,25 +2646,38 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         return null;
     }
 
-    private JsonArray buildNearbyResources(ClientPlayerEntity player, ClientWorld world) {
+    private JsonObject buildNearbyBlocks(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
         BlockPos origin = player.getBlockPos();
         Map<String, Double> nearestDistances = new LinkedHashMap<>();
         Map<String, String> resourceTypes = new LinkedHashMap<>();
+        java.util.Set<String> observedTypes = new java.util.TreeSet<>();
 
-        for (int dx = -8; dx <= 8; dx += 1) {
-            for (int dy = -3; dy <= 4; dy += 1) {
-                for (int dz = -8; dz <= 8; dz += 1) {
+        int margin = captureNearbyKinds ? NearbyComposition.BLOCK_MARGIN : 0;
+        for (int dx = -8 - margin; dx <= 8 + margin; dx += 1) {
+            for (int dy = -3 - margin; dy <= 4 + margin; dy += 1) {
+                for (int dz = -8 - margin; dz <= 8 + margin; dz += 1) {
                     BlockPos sample = origin.add(dx, dy, dz);
                     BlockState state = world.getBlockState(sample);
+                    if (state.isAir()) continue;
+                    double padding = NearbyComposition.blockPadding(dx, dy, dz);
+                    String blockId = Registries.BLOCK.getId(state.getBlock()).toString();
+                    boolean candidate = captureNearbyKinds && !observedTypes.contains(blockId)
+                        && this.nearbyBlockKinds.allows(blockId, padding);
+                    if ((padding > 0 && !candidate) || !isAirExposedNearbyResource(world, sample)) continue;
+                    if (candidate) {
+                        // 隣に空気があるだけでは壁越しの観測にしない。対象自身への命中は視認可。
+                        BlockHitResult hit = world.raycast(new RaycastContext(player.getEyePos(),
+                            Vec3d.ofCenter(sample), RaycastContext.ShapeType.OUTLINE,
+                            RaycastContext.FluidHandling.ANY, player));
+                        if (hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample)) {
+                            observedTypes.add(blockId);
+                        }
+                    }
                     String resourceName = nearbyResourceNameForBlock(state);
-                    if (resourceName == null) {
-                        continue;
+                    if (padding == 0 && resourceName != null) {
+                        double distance = Math.sqrt(sample.getSquaredDistance(origin));
+                        mergeNearbyResource(resourceTypes, nearestDistances, "block", resourceName, distance);
                     }
-                    if (!isAirExposedNearbyResource(world, sample)) {
-                        continue;
-                    }
-                    double distance = Math.sqrt(sample.getSquaredDistance(origin));
-                    mergeNearbyResource(resourceTypes, nearestDistances, "block", resourceName, distance);
                 }
             }
         }
@@ -2662,7 +2705,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
                 item.addProperty("distance", round(entry.getValue()));
                 array.add(item);
             });
-        return array;
+        JsonObject result = new JsonObject();
+        result.add("resources", array);
+        if (captureNearbyKinds) result.add("types", this.nearbyBlockKinds.finish(observedTypes));
+        return result;
     }
 
     private JsonArray buildDroppedItems(ClientPlayerEntity player, ClientWorld world) {

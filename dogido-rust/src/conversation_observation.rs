@@ -1,6 +1,7 @@
 //! The same bounded world facts accompany player replies and spontaneous speech.
 //! Facts come from GameEvent; dialogue history and generated text never enter here.
 use crate::{chat_catalog, chat_world, environment, events::GameEvent, world_catalog};
+use environment::notice::{self, Snapshot};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -74,6 +75,37 @@ pub fn project(
         json!({"status":"unknown"})
     };
     let knowledge = crate::catalog_knowledge::for_event(event, structure);
+    let kind_list = |mobs: bool| -> Value {
+        let Some(composition) = &event.nearby_composition else {
+            return Value::Null;
+        };
+        if if mobs {
+            composition.mobs_truncated
+        } else {
+            composition.blocks_truncated
+        } {
+            return Value::Null;
+        }
+        let mut ids = if mobs {
+            composition.mobs.clone()
+        } else {
+            composition.blocks.clone()
+        };
+        ids.sort();
+        ids.dedup();
+        json!(
+            ids.into_iter()
+                .map(|id| {
+                    let label = if mobs {
+                        environment::ambient::mob_label(&id)
+                    } else {
+                        catalog.block_label(Some(&id))
+                    };
+                    json!({"id":id,"label":label})
+                })
+                .collect::<Vec<_>>()
+        )
+    };
     Ok(Context {
         catalog_knowledge: (!knowledge.is_empty()).then_some(knowledge),
         villager_routines: crate::villager_routines::project(event),
@@ -82,11 +114,17 @@ pub fn project(
             "dimension":event.player.dimension,
             "player_environment":event.player.environment,
             "place":place.place_line,
-            "location_biome":place.biome_label,
+            "location_biome":event.world.biome.as_deref().map(|id| json!({
+                "id":id,"label":environment::ambient::biome_label(id)})),
+            "structure":structure.or(event.world.structure.as_deref()),
+            "overhead_cover":event.world.overhead_cover_type,
+            "nearby_mob_types":kind_list(true),
+            "nearby_block_types":kind_list(false),
             "biome_scene_visible":projection.include_biome_context,
             "sky_visible":event.world.sky_visible,
             "time_phase":if projection.include_sky_context {json!(event.world.time_phase)} else {Value::Null},
             "weather":weather,
+            "rain_heard":event.world.rain_sound_recent_ms.is_some_and(|age|age>=0 && age as u64<=thunder_age_ms),
             "thunder_heard":event.world.thunder_sound_recent_ms.is_some_and(|age|age>=0 && age as u64<=thunder_age_ms),
             "local_light":event.world.local_light,
             "darkness_observed":event.world.local_light.map(|v| v as f64<=darkness_light),
@@ -102,8 +140,40 @@ pub fn project(
 pub struct State {
     current: Option<Context>,
     considered: u64,
+    notice_previous: Option<Snapshot>,
+    notice_pending: Option<Context>,
+    notice_last_sample: Option<u64>,
 }
 impl State {
+    /// 周期に来た新しい全snapshotだけを比較する。初回は基準の作成だけ。
+    /// 今回の機会を使えなくても差分は次回へ持ち越さず、発話結果にも依存しない。
+    pub fn sample_notice(&mut self, now: u64, interval_ms: u64, full_snapshot: bool) {
+        self.notice_pending = None;
+        if !full_snapshot
+            || self
+                .notice_last_sample
+                .is_some_and(|last| now.saturating_sub(last) < interval_ms)
+        {
+            return;
+        }
+        let Some(mut current) = self.context() else {
+            return;
+        };
+        if let Some(previous) = &self.notice_previous {
+            current.changes = notice::changes(previous, &current);
+            if !current.changes.is_empty() {
+                self.notice_pending = Some(current.clone());
+            }
+        }
+        self.notice_previous = Some(notice::snapshot(&current));
+        self.notice_last_sample = Some(now);
+    }
+    pub fn noticing_context(&self) -> Option<Context> {
+        self.notice_pending.clone()
+    }
+    pub fn finish_notice_opportunity(&mut self) {
+        self.notice_pending = None;
+    }
     pub fn observe(&mut self, mut next: Context) {
         if let Some(previous) = &self.current {
             if previous.observations["dimension"] != next.observations["dimension"] {
@@ -167,9 +237,15 @@ impl State {
             }
             for key in [
                 "weather",
+                "rain_heard",
                 "smell",
                 "place",
                 "location_biome",
+                "structure",
+                "overhead_cover",
+                "nearby_mob_types",
+                "nearby_block_types",
+                "time_phase",
                 "sky_visible",
                 "local_light",
                 "darkness_observed",
@@ -326,7 +402,10 @@ mod tests {
             context.observations["place"],
             "開けた地上 / 構造物: 平原の村"
         );
-        assert_eq!(context.observations["location_biome"], "草地");
+        assert_eq!(
+            context.observations["location_biome"],
+            json!({"id":"meadow","label":"草地"})
+        );
         assert_eq!(context.observations["sky_visible"], true);
         assert_eq!(context.observations["local_light"], 8);
     }

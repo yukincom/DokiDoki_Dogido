@@ -28,16 +28,5 @@
         "こっちかぁ。道中、気ぃつけて行こか。"
       ]
     }
-  },
-  "structure": {
-    "entry_fallbacks": {
-      "village": "お、{label}や。ちょっとほっとするわぁ。",
-      "overworld_surface": "お、{label}や。なんかありそうやなぁ。",
-      "overworld_ocean": "{label}や。ええもん残っとるとええなぁ。",
-      "overworld_underground": "ここ、{label}やんか……静かに行こな。",
-      "nether": "{label}や……気ぃ引き締めていこか。",
-      "end": "おお、{label}や！とうとう来てしもたなぁ。",
-      "default": "お、{label}やんか。"
-    }
   }
 }

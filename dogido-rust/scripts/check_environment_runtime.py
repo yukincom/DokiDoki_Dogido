@@ -23,7 +23,7 @@ def main():
         player.chmod(0o700)
         (folder / "delay").write_text(".04")
         settings = {"aftermath_time_ms": 0, "player_input_priority_cooldown_ms": 100,
-                    "conversation_ambient_mute_ms": 300, "conversation_active_ttl_ms": 1200,
+                    "surroundings_notice_interval_ms":100, "conversation_ambient_mute_ms": 300, "conversation_active_ttl_ms": 1200,
                     "dark_push_after_breath_protect_ms": 0}
         # 存在する設定だけを使い、所要時間の長いCDはこの模擬試験内に限り短縮。
         settings = {k: v for k, v in settings.items() if k in COMBAT_DEFAULTS}
@@ -41,7 +41,9 @@ def main():
                     "observed_at": datetime.now(timezone.utc).isoformat(),
                     "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                     "player": {"name": "試験", "hotbar": hotbar, **(player_state or {})},
-                    "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day", **(world or {})}, **extra}
+                    "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day", **(world or {})},
+                    "nearby_composition": {"mobs":[m["type"] for m in extra.get("passive_mobs", [])],
+                        "blocks":[],"mobs_truncated":False,"blocks_truncated":False}, **extra}
             def send(sid, **fields): return request(base, "/api/v1/game-events", event(**fields), sid=sid)
             def say(sid, text, source="voice"):
                 got = request(base, "/api/v1/player-input", {"session_id": sid, "source": source, "text": text})
@@ -215,38 +217,42 @@ def main():
             cat = {"type": "cat", "entity_id": "cat-1", "distance": 3, "direction": {"horizontal": "front"}}
             sid = register(); send(sid)
             control["delay"] = .4; before = calls()
-            send(sid, passive_mobs=[cat])
+            time.sleep(.12); send(sid, passive_mobs=[cat])
             wait_for(lambda: calls() > before)
             send(sid)
-            wait_for(lambda: match(sid, "ambient", "cancelled"))
+            comment = wait_for(lambda: match(sid, "surroundings_notice", "completed"))
+            assert not match(sid, "surroundings_notice", "cancelled"), rows(sid)
             close(sid); control["delay"] = 0
-            passed.append("ambient_mob_disappearance_cancels_pending_leaf")
+            passed.append("periodic_mob_comment_keeps_its_sample_when_the_mob_disappears")
 
             sid = register(); send(sid); (folder / "delay").write_text(".5")
-            send(sid, passive_mobs=[cat])
-            comment = wait_for(lambda: match(sid, "ambient", "started"))
+            time.sleep(.12); send(sid, passive_mobs=[cat])
+            comment = wait_for(lambda: match(sid, "surroundings_notice", "started"))
             send(sid)
             wait_for(lambda: row(base, comment["turn_id"], {"completed"}))
             close(sid); (folder / "delay").write_text(".04")
-            passed.append("started_mob_comment_finishes_after_mob_disappears")
+            passed.append("started_periodic_comment_finishes_after_mob_disappears")
 
             sid = register(); send(sid); (folder / "delay").write_text(".5")
-            send(sid, passive_mobs=[cat])
-            comment = wait_for(lambda: match(sid, "ambient", "started"))
+            time.sleep(.12); send(sid, passive_mobs=[cat])
+            comment = wait_for(lambda: match(sid, "surroundings_notice", "started"))
             send(sid, visual_threats=[zombie])
             wait_for(lambda: row(base, comment["turn_id"], {"cancelled"}))
             close(sid); (folder / "delay").write_text(".04")
-            passed.append("hostile_still_interrupts_started_mob_comment")
+            passed.append("hostile_still_interrupts_started_periodic_comment")
 
             sid = register(); send(sid)
             control["delay"] = .3
             turn = say(sid, "こんにちは")["turn_id"]
-            send(sid, passive_mobs=[cat])
+            time.sleep(.12); send(sid, passive_mobs=[cat])
             wait_for(lambda: row(base, turn, {"completed"}))
-            assert not any(a["kind"] == "ambient" for r in rows(sid) for a in r.get("combat_actions", []))
+            assert not match(sid, "surroundings_notice", "completed")
             control["delay"] = 0; time.sleep(.31); send(sid, passive_mobs=[cat])
-            wait_for(lambda: match(sid, "ambient", "completed")); close(sid)
-            passed.append("chat_priority_then_mob_reaction_after_configured_mute")
+            time.sleep(.12)
+            assert not match(sid, "surroundings_notice", "completed")
+            send(sid, passive_mobs=[cat, {**cat, "type":"cow"}])
+            wait_for(lambda: match(sid, "surroundings_notice", "completed")); close(sid)
+            passed.append("chat_priority_drops_busy_period_and_only_new_changes_speak_later")
 
             sid = register(); send(sid)
             control["structured"] = {160: {"action": "acknowledge_supply_gain", "basis_ids": ["first_light_supply"], "confidence": .95}}
@@ -364,9 +370,10 @@ def main():
             sid = register(); send(sid)
             turn = say(sid, "こんにちは")["turn_id"]
             wait_for(lambda: row(base, turn, {"completed"}))
-            time.sleep(.12)
+            time.sleep(.32)
             send(sid, world={"biome": "taiga"})
-            wait_for(lambda: match(sid, "special_biome_entry", "completed"))
+            send(sid, world={"biome": "taiga"})
+            wait_for(lambda: match(sid, "surroundings_notice", "completed"))
             close(sid)
             passed.append("taiga_entry_is_delivered_during_casual_foreground")
         report = {"passed": len(passed), "scenarios": passed, "all_owned_processes_stopped": True}

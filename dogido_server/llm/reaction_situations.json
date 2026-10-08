@@ -34,32 +34,6 @@
   ],
   "周囲・探索の出来事": [
     {
-      "event": "ambient",
-      "situation": "周囲の生き物の姿が見えている。"
-    },
-    {
-      "event": "weather_transition",
-      "situation": "天候が変わった。",
-      "situation_key": "scene",
-      "situations": {
-        "clear_after_bad_weather": "荒れていた天候が回復した。",
-        "overcast_after_thunder": "荒れていた天候が落ち着き、曇り空になった。",
-        "overcast_started": "空が曇ってきた。",
-        "snow_after_thunder": "荒れていた天候が落ち着き、雪が降っている。",
-        "snow_started": "雪がしんしんと降り始めた。あたりが静かに白くなってきとる。",
-        "rain_after_thunder": "荒れていた天候が落ち着き、雨が降っている。",
-        "rain_started": "雨が降り始めた。",
-        "dry_thunder_after_overcast": "空がさらに暗く曇ってきた。",
-        "dry_thunder_started": "空が暗く曇ってきた。",
-        "blizzard_after_snow": "天候が荒れてきた。",
-        "blizzard_started": "天候が荒れてきた。",
-        "thunder_after_rain": "天候が荒れてきた。",
-        "thunder_started": "空が一気に暗くなって、嵐の気配がしてきた。",
-        "rain_suspected": "雨音が聞こえた。外の空は見えていない。",
-        "thunder_suspected": "雷鳴が聞こえた。外の空は見えていない。"
-      }
-    },
-    {
       "event": "thunder_reaction",
       "situation": "雷鳴または近くの落雷を確認した。",
       "situation_key": "scene",
@@ -76,10 +50,6 @@
     {
       "event": "ender_eye_throw",
       "situation": "プレイヤーがエンダーアイを投げた。"
-    },
-    {
-      "event": "structure_entry",
-      "situation": "プレイヤーが構造物に入った。"
     },
     {
       "event": "light_source_gain",
@@ -131,6 +101,10 @@
         }
       },
       "unknown_role": "この観測だけでは移動先は未確認。"
+    },
+    {
+      "event": "surroundings_notice",
+      "situation": "前回の定期観測と今回の周りの表を比べたら変化があったで。changesに前と今がある。対話履歴を見て、この変化についてもうコメントしたか、今の会話で触れる意味があるかも考えてな。同じ話をしたばかりで新しく言うことがなければ黙っててええ。気になる変化があれば自然に話しかけてな。とくに話すことがなければ黙っててええよ。種類の一覧は個体や個数や景色全部やないで。nullは未確認、空の一覧は観測範囲で未検出や。ブロックの見た目と、smellにある実際の匂いは別の観測やで。"
     }
   ]
 }

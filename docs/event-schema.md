@@ -958,3 +958,9 @@ adapter は `status_snapshot` に暗所スコアを載せる。以下はその�
   ]
 }
 ```
+
+## 周辺の種類構成（2026-10-08）
+
+任意の `nearby_composition` は `mobs: string[]`、`blocks: string[]`、`mobs_truncated: boolean`、`blocks_truncated: boolean` の4項目を持つ。各配列は最大128、IDは最大128文字のregistry ID。空配列は範囲内で未検出、省略・上限超過は未確認とする。後方互換の推測補完はしない。個体ID・個数・座標はこの表に入れない。
+
+Fabricは非敵対モブと見通しを確認したブロックの種類を送る。新しい種類は通常範囲で発見し、既知の種類は外側5ブロックの余白で実視認できる間だけ維持する。定期snapshotと部分通知で同じ欄を使うが、種類表の省略を前の値で補完せず、周期比較は新しい全snapshotだけで行う。詳細は[気づきテーブル](2026-10-08-surroundings-notice.md)を参照。

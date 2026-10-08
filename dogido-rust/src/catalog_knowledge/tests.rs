@@ -142,12 +142,14 @@ fn heard_animals_and_selected_villager_variants_keep_their_authored_materials() 
     assert_eq!(heard.entries[0].id, "cow");
     assert_eq!(heard.entries[0].basis, ["heard"]);
     for (label, profession, baby) in [("子供", "none", true), ("農民", "farmer", false)] {
-        let selected = for_reaction(
-            "ambient",
-            &json!({"mob":label,"mob_profession":profession,"mob_is_baby":baby,
-            "__ambient_guard":{"mob_type":"villager"}}),
+        let selected = for_event(
+            &frame(
+                json!({"passive_mobs":[{"type":"villager","profession":profession,"is_baby":baby}]}),
+            ),
+            None,
         );
-        let expected = mob("villager", Some(profession), baby, "reaction_target").unwrap();
+        let expected = mob("villager", Some(profession), baby, "passive_observation").unwrap();
+        assert_eq!(selected.entries[0].label, label);
         assert_eq!(selected.entries, [expected]);
     }
     let event = frame(

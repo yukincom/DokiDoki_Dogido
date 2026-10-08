@@ -1,14 +1,10 @@
-use crate::entry_catalog::{BIOMES, NEUTRAL, PASSIVE, STRUCTURES};
+use crate::entry_catalog::{BIOMES, NEUTRAL, PASSIVE};
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::LazyLock;
 static GENERAL: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../data/fallbacks/general.json")).unwrap()
 });
-static REACTIONS: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../../data/mobs/ambient_reactions.json")).unwrap()
-});
-
 static EXPLORATION: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!(
         "../../../../data/responses/ques/exploration.json"
@@ -27,9 +23,6 @@ pub fn general(group: &str, key: &str) -> String {
         .as_str()
         .expect("general text")
         .to_owned()
-}
-pub fn reactions() -> &'static Value {
-    &REACTIONS
 }
 pub fn exploration() -> &'static Value {
     &EXPLORATION
@@ -90,70 +83,6 @@ pub fn biome_label(kind: &str) -> String {
         .unwrap_or(kind)
         .to_owned()
 }
-pub fn tags(entry: &Value) -> Vec<String> {
-    let mut tags = vec![];
-    for key in [
-        "visual_tags",
-        "sound_tags",
-        "motion_tags",
-        "scene_tags",
-        "reaction_tags",
-        "comic_tags",
-    ] {
-        if let Some(values) = entry["poetic"][key].as_array() {
-            for value in values {
-                if let Some(s) = value.as_str().filter(|s| !s.is_empty())
-                    && !tags.iter().any(|v| v == s)
-                {
-                    tags.push(s.to_owned());
-                }
-            }
-        }
-    }
-    if let Some(role) = entry["poetic"]["role"].as_str().filter(|s| !s.is_empty())
-        && !tags.iter().any(|s| s == role)
-    {
-        tags.push(role.to_owned());
-    }
-    tags.truncate(8);
-    tags
-}
-static BIOME_REACTIONS: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../../data/responses/ques/biome.json")).unwrap()
-});
-
-pub fn biome_lines(biome: &str, phase: &str) -> Vec<String> {
-    let r = &BIOME_REACTIONS["reactions"][biome];
-    let payload = if r[phase].is_object() {
-        &r[phase]
-    } else {
-        &r["default"]
-    };
-    let lines = if payload["lines"].is_array() {
-        &payload["lines"]
-    } else {
-        &BIOME_REACTIONS["line_groups"][payload["line_group"].as_str().unwrap_or("")]
-    };
-    lines
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-pub fn structure(key: &str) -> Option<Value> {
-    STRUCTURES["groups"].as_object()?.iter().find_map(|(id,group)|{
-        let entry=&group["structures"][key];if !entry.is_object(){return None;}
-        Some(serde_json::json!({"label":entry["japanese"].as_str().unwrap_or(key),"note":entry["note"].as_str().unwrap_or(""),"group_id":id,"group_label":group["label"]}))
-    })
-}
-
-pub fn dry_biome(kind: &str) -> bool {
-    BIOMES["groups"]["dry"]["biomes"][norm(kind)].is_object()
-}
-
 static VEHICLES: LazyLock<Value> =
     LazyLock::new(|| serde_json::from_str(include_str!("vehicle_labels.json")).unwrap());
 pub fn vehicle_item_label(id: &str) -> Option<&'static str> {
