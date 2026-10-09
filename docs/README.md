@@ -167,6 +167,8 @@ architecture（どう詠む）
 | 1 | [Rust本体の案内](../dogido-rust/README.md) | 現行の責務・起動・検証 |
 | 2 | [rust-migration-plan.md](rust-migration-plan.md) | Rust移行の経緯と残る実機確認 |
 | 3 | [technical-risks.md](technical-risks.md) | 技術課題・設計判断（現役の論点メモ） |
+| 4 | [Fabricアダプター分割計画](2026-10-08-fabric-adapter-split-plan.md) | P1〜P17の構造分割・自動検証完了。状態所有と検証条件 |
+| 5 | [Fabric分割の実施記録](2026-10-09-fabric-adapter-split-results.md) | 最終配置、Java・Rust検証、復帰資料、実機未確認項目 |
 
 ---
 

@@ -50,7 +50,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 | `dogido-rust/src/voice/` · `dialogue/audio.rs` · `tts_reading.rs` | 録音・STTの制御、配送・取消・実再生結果、読みの判定 |
 | `dogido-rust/scripts/` · `dogido_server/` | 起動設定、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPのPython接続補助 |
 | `dogido_server/llm/companion_prompts.json` · `reaction_situations.json` | 人が編集する共有プロンプト・状況文。Rustビルドへ反映する |
-| `adapter/minecraft-fabric/` | ゲーム観測・typed commandのクライアント実行 |
+| `adapter/minecraft-fabric/` | rootはtick・送信・ライフサイクル。`observation/` は観測と履歴、`protocol/` は通信契約、`commands/` は限定操作、`display/` はHUD。詳細はadapter README |
 | `docs/` | 現行仕様と履歴。終了文書には後継を明記し、古い計画を再実装しない |
 | `dogido-rust/tests/` · `dogido-rust/scripts/check_*.py` | Rust単体検証と模擬通信。実機確認とは区別する |
 | `dev_tools/` | 表示・音声診断・ラボ・独立試作。本体接続の有無は各READMEで区別 |

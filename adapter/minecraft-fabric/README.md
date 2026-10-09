@@ -98,6 +98,22 @@ F1、メニュー、インベントリ、チャット入力中は両方隠れる
 - `panic_distance=7.0`
 - `rear_warning_distance=8.0`
 
+## 実装の入口
+
+`src/main/java/dogido/fabric/` は責務ごとに分けている。
+
+| 配置 | 担当 |
+|---|---|
+| `DogidoClientAdapter` | 初期化、tick順、送信タイミング、接続・world変更、各担当への配線 |
+| `observation/` | 共用観測型、tick内のworld/blocks取得、イベントごとの観測取得 |
+| `observation/{smell,player,world,sound,mobs}/` | 各観測の収集・規則・履歴とreset |
+| `protocol/` | JSON組み立て、HTTP/session/sequence、command契約、表示payload解析 |
+| `commands/` | 許可済みhotbar操作の検証・実行 |
+| `display/` | 両HUD、表示状態、配置・アニメーション |
+| `mixin/` | 音packet・爆発packet・実再生音の既存入口 |
+
+状態は各観測担当が持ち、rootが従来の順番で呼ぶ。分割の検証範囲と実機未確認項目は[2026-10-09の実施記録](../../docs/2026-10-09-fabric-adapter-split-results.md)を参照。
+
 ## 開発メモ
 
 - `dogido-server` を先に起動する

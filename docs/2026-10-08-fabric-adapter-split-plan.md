@@ -1,18 +1,18 @@
 # 2026-10-08 Fabricアダプター分割計画
 
-更新: **2026-10-09 — P1の基準整理に着手**。
+更新: **2026-10-09 — P1〜P17の構造分割・自動検証完了**。
 
-状態: **P1の関連検証完了。P2の匂い規則分離へ進む**。この文書の作成・細分化ではコード変更、テスト、ビルド、Minecraftへの導入を行っていない。
+状態: **書類側mainへ分割を反映し、Java全98テストとjarビルド、Rustライブラリ全488テストが成功。Minecraft実機は未確認**。最終配置と復帰資料は[実施記録](2026-10-09-fabric-adapter-split-results.md)にまとめた。以下のP番号は実施した作業単位として保持する。
 
 対象は `adapter/minecraft-fabric/`。`DogidoClientAdapter.java` に集まった観測・状態管理・イベント組み立てを責務ごとに分け、既存の補助クラスも対応するパッケージへ整理する。イベント内容と実行順序を保ったまま、次の修正で読む範囲を小さくする。
 
-## 1. 現状と前提
+## 1. 分割前の状況と前提
 
 2026-10-08の作業中ソースでは `DogidoClientAdapter.java` は5,291行。初期化、毎tickの進行、匂い、音、敵・死亡結果、周辺環境、プレイヤー、JSON生成、限定コマンド実行、HUDへの接続を一つのクラスが担当している。
 
-すでに `SmellPolicy`、`ZombieScentPolicy`、`SoundObservationPolicy`、`NearbyComposition`、`PortalObservationTracker`、`WorldObservationFrame`、HTTPクライアント、表示状態などは別クラスになっている。これらを移動・再利用し、同じ機能の別経路を増やさない。
+分割前から `SmellPolicy`、`ZombieScentPolicy`、`SoundObservationPolicy`、`NearbyComposition`、`PortalObservationTracker`、`WorldObservationFrame`、HTTPクライアント、表示状態などは別クラスになっている。これらを移動・再利用し、同じ機能の別経路を増やさない。
 
-基準にするのはHEADだけでなく、現在の未コミット変更を含む作業中ソース。直前の匂いの方位撤去はP1で変更範囲のJava/Rustテストとコンパイルを確認済み。全体テスト・通しビルドはP17で行う。[スメルバトルv2検証記録](2026-10-08-smell-v2-test-results.md)の成功件数を現在の検証結果として転用しない。
+基準にするのはHEADだけでなく、現在の未コミット変更を含む作業中ソース。直前の匂いの方位撤去はP1で変更範囲のJava/Rustテストとコンパイルを確認済み。全体テスト・通しビルドはP17で実施した。[スメルバトルv2検証記録](2026-10-08-smell-v2-test-results.md)の成功件数を現在の検証結果として転用しない。
 
 仕様の確認先:
 
@@ -25,7 +25,7 @@
 
 ## 2. 完成時の構成
 
-以下は責務と配置の目標。新しいクラス名は仮称とし、段階ごとに必要なものだけ作る。空のフォルダや共通基盤を先に大量作成しない。
+以下の責務と配置へ分割済み。実際の主要クラス名と所有状態は実施記録を参照。空のフォルダや共通基盤は追加していない。
 
 ```text
 adapter/minecraft-fabric/src/main/java/dogido/fabric/
@@ -33,6 +33,7 @@ adapter/minecraft-fabric/src/main/java/dogido/fabric/
 ├── DogidoConfig.java              設定読込と既存の既定値
 ├── DogidoBuildInfo.java           ビルド情報
 ├── observation/
+│   ├── EventObservationCapture.java 各イベントの観測取得順・入力消費
 │   ├── WorldObservationFrame.java tick内の遅延取得とコピー
 │   ├── NearbyComposition.java     近傍集計・範囲追跡の共用アルゴリズム
 │   ├── MobEnvironmentObservation.java 共用のモブ環境値
@@ -48,15 +49,17 @@ adapter/minecraft-fabric/src/main/java/dogido/fabric/
 ├── protocol/
 │   ├── DogidoEventClient.java     HTTP・session・sequence・応答処理
 │   ├── DogidoCommandProtocol.java command解析・重複防止・結果ack
-│   └── …                         イベントJSONと表示受信データの組み立て
+│   ├── EventJsonBuilder.java      取得済み観測のイベントJSON組み立て
+│   ├── EventObservationJson.java  死亡結果の共用JSON化
+│   └── WorkshopDisplayPayload.java 表示受信型と唯一のparser
 ├── commands/                     許可済みhotbar操作のクライアント実行
 ├── display/                      両HUD・表示状態・配置・瞬き等
 └── mixin/                        現在のMixin入口を維持
 ```
 
-`src/test/java/dogido/fabric/` も製品側と対応するパッケージへ移す。`OverheadObservation` と `PortalObservationTracker` は `observation/world`、`PassiveMobSelection` は `observation/mobs`、`SoundObservationPolicy` は `observation/sound` に置く。
+`src/test/java/dogido/fabric/` も製品側と対応するパッケージへ移動済み。`OverheadObservation` と `PortalObservationTracker` は `observation/world`、`PassiveMobSelection` は `observation/mobs`、`SoundObservationPolicy` は `observation/sound` に置く。
 
-最終的に `DogidoClientAdapter` に残すのは、Fabricイベント登録、共通時計、接続・world変更の検出、観測呼び出し順、送信タイミング、コマンド・表示への配線。具体的な匂い計算、ブロック探索、敵の分類、音の同定、個々のJSONフィールド生成は各担当へ移す。行数だけを完了基準にしない。
+分割後の `DogidoClientAdapter` は624行で、残した責務はFabricイベント登録、共通時計、接続・world変更の検出、観測呼び出し順、送信タイミング、コマンド・表示への配線。具体的な匂い計算、ブロック探索、敵の分類、音の同定、個々のJSONフィールド生成は各担当へ移した。行数だけを完了基準にしない。
 
 ## 3. 分割中も保つ境界
 
@@ -373,25 +376,25 @@ Rust側は同じpayloadが同じ受信結果になることを関連テストで
 
 ## 8. 進捗
 
-2026-10-09時点。P内の作業を終えていても、コード確認・関連検証を終えるまではそのPを完了にしない。
+2026-10-09時点。全Pのコード確認・自動検証と文書整理を完了。P17の実機確認は未実施として範囲を記録した。
 
 - [x] P1: 分割前の基準・状態一覧・復帰点（関連検証済み。詳細はP1基準記録）
-- [ ] P2: 匂い規則・結果型のパッケージ移動
-- [ ] P3: 匂い収集・cache・雨上がり状態の分離
-- [ ] P4: 共用モブ判別・identityの分離
-- [ ] P5: 共用の範囲集計・位置・視線計算の整理
-- [ ] P6: プレイヤー・所持品・乗車・視線先の分離
-- [ ] P7: 限定hotbar操作の分離
-- [ ] P8: 周囲環境の補助処理・既存小クラスの整理
-- [ ] P9: world/blocks集約・構造物cacheの分離
-- [ ] P10: 音の受付・保持・聴覚観測の分離
-- [ ] P11: 友好・中立モブ・村人観測の分離
-- [ ] P12: 敵追跡・可視性・死亡結果の分離
-- [ ] P13: boss固有観測・戦闘情報の分離
-- [ ] P14: イベントJSON組み立ての分離
-- [ ] P15: HTTP・command契約・表示受信型の整理
-- [ ] P16: HUDと表示状態の移動・root整理
-- [ ] P17: 総合確認・実機確認範囲・文書更新
+- [x] P2: 匂い規則・結果型のパッケージ移動
+- [x] P3: 匂い収集・cache・雨上がり状態の分離
+- [x] P4: 共用モブ判別・identityの分離
+- [x] P5: 共用の範囲集計・位置・視線計算の整理
+- [x] P6: プレイヤー・所持品・乗車・視線先の分離
+- [x] P7: 限定hotbar操作の分離
+- [x] P8: 周囲環境の補助処理・既存小クラスの整理
+- [x] P9: world/blocks集約・構造物cacheの分離
+- [x] P10: 音の受付・保持・聴覚観測の分離
+- [x] P11: 友好・中立モブ・村人観測の分離
+- [x] P12: 敵追跡・可視性・死亡結果の分離
+- [x] P13: boss固有観測・戦闘情報の分離
+- [x] P14: イベントJSON組み立ての分離
+- [x] P15: HTTP・command契約・表示受信型の整理
+- [x] P16: HUDと表示状態の移動・root整理
+- [x] P17: 総合確認・実機確認範囲・文書更新（構造分割・自動検証済み、実機未確認）
 
 ## 9. 実施結果
 
