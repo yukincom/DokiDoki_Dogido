@@ -1,0 +1,3655 @@
+{
+  "schema_version": 1,
+  "captured_on": "2026-10-09",
+  "git_head": "71c178b20086b7dc69fe50ccdf4ac74a2e6c77ba",
+  "scope": "All Git-listed Fabric adapter files plus the 25 smell-direction removal paths. Does not reproduce unrelated changes elsewhere in the repository.",
+  "archive": ".dogido_tools/checkpoints/fabric-adapter-split-p1-20261009/source-before.tar.gz",
+  "archive_sha256": "34ac99225afc1b3d8a72a130bb7e73ceeb4a71fc86554545166d240f27d0df03",
+  "verification_status": "targeted_java_and_rust_tests_passed_full_suite_deferred_to_p17",
+  "removed_smell_direction_results_match": [
+    {
+      "path": "AGENTS.md",
+      "matches_removal_result": true
+    },
+    {
+      "path": "docs/smell-policy.md",
+      "matches_removal_result": true
+    },
+    {
+      "path": "docs/event-schema.md",
+      "matches_removal_result": true
+    },
+    {
+      "path": "docs/player-chat-casual-plan.md",
+      "matches_removal_result": true
+    },
+    {
+      "path": "docs/2026-10-08-surroundings-notice.md",
+      "matches_removal_result": true
+    },
+    {
+      "path": "docs/2026-10-08-smell-v2-test-results.md",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido_server/llm/companion_prompts.json",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/chat_prompt/fixtures.json",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient/reference.json",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/events/models.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/events/semantic.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient/smell.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient/tests.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/notice/tests.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/reaction.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/environment/reaction/tests.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/conversation_observation.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/src/dialogue/warnings.rs",
+      "matches_removal_result": true
+    },
+    {
+      "path": "dogido-rust/scripts/check_environment_reactions.py",
+      "matches_removal_result": true
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/SmellPolicy.java",
+      "matches_removal_result": true
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/SmellSpatialEstimate.java",
+      "matches_removal_result": true
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoClientAdapter.java",
+      "matches_removal_result": true
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/SmellPolicyTest.java",
+      "matches_removal_result": true
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/SmellSpatialEstimateTest.java",
+      "matches_removal_result": true
+    }
+  ],
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "exists": true,
+      "sha256": "20dd918ea4fd92199394cee40c3fce8c6f97cfb10213cc3b58c0af1b01f32b28"
+    },
+    {
+      "path": "adapter/minecraft-fabric/README.md",
+      "exists": true,
+      "sha256": "8c148381842c0b076587317b3fe51d0e5c144901ddb8fb436267494ecf9e6bba"
+    },
+    {
+      "path": "adapter/minecraft-fabric/build.gradle",
+      "exists": true,
+      "sha256": "737adc2ae92252b8e4cb40f5ccf1492ccb7d498d4e160e76cc05f8f7a4a5cfec"
+    },
+    {
+      "path": "adapter/minecraft-fabric/gradle.properties",
+      "exists": true,
+      "sha256": "ba05ed46750c5326576d3d2d62c46e2ff351664f04fef517a0b006cca4f171b5"
+    },
+    {
+      "path": "adapter/minecraft-fabric/gradle/wrapper/gradle-wrapper.jar",
+      "exists": true,
+      "sha256": "55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c"
+    },
+    {
+      "path": "adapter/minecraft-fabric/gradle/wrapper/gradle-wrapper.properties",
+      "exists": true,
+      "sha256": "70fa201501995e6f45c0c475def71093f8115849344c48322ca997cfddba8534"
+    },
+    {
+      "path": "adapter/minecraft-fabric/gradlew",
+      "exists": true,
+      "sha256": "aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754"
+    },
+    {
+      "path": "adapter/minecraft-fabric/gradlew.bat",
+      "exists": true,
+      "sha256": "9ca26d733ada3a45f27b2151288f54e75c9f95b287d1f82ef942ec5cc2d4f006"
+    },
+    {
+      "path": "adapter/minecraft-fabric/settings.gradle",
+      "exists": true,
+      "sha256": "d9ad6da0a22be8640e0d851d314ba0ceecc84b4adc385ec8030b4fb6d51f72c8"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/CharacterBlink.java",
+      "exists": true,
+      "sha256": "d0d3197e5f8b5fd1b2ad66e3b9149945ad58bb8763df71d7fae7dae52e8444ff"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/CharacterDisplayState.java",
+      "exists": true,
+      "sha256": "747cccd4269430f8842dd4c62253f6588ffce69c27908b7567e00a9cb0fb7956"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/CharacterPlacement.java",
+      "exists": true,
+      "sha256": "bf580f3c97a42b3863f78c40ca48c8671707c5f64d0d4ece244c4ecf2efaf41d"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoBuildInfo.java",
+      "exists": true,
+      "sha256": "12648785ef3295034ea0d7d2ad8e42a82d0f9d41a84fbddc7eb7a881cb9f7403"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoCharacterHud.java",
+      "exists": true,
+      "sha256": "ea43a233733e1bc6b8284da468f6b05b3c8e85f813ae46f8bb16e9fa11a1ade1"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoClientAdapter.java",
+      "exists": true,
+      "sha256": "6c4d198aa7cd86b0d6d2fb1b045df653434b9f0ca46587fd113b4c6c33bab823"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoCommandProtocol.java",
+      "exists": true,
+      "sha256": "2db582b8c1c03ea01b2800a8146d8d809738aeb75ee8d05940218fdb9e9ea2ab"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoConfig.java",
+      "exists": true,
+      "sha256": "2c2b5e964bbd55b877872756fa790d1028d71afda96c3567bdc8d8777034bcc5"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoEventClient.java",
+      "exists": true,
+      "sha256": "b72cec787f8db2bfb1129f843d023c22dda78fac4d915500ad8f79ad090bd0e1"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoWorkshopHud.java",
+      "exists": true,
+      "sha256": "59afb5dcd6964e1abe96798a64b9d922d065fe5060a76697e474a12f738108c1"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/MobEnvironmentObservation.java",
+      "exists": true,
+      "sha256": "b6c88fd9aa2af6dc2c44c635ec1728a0237ebe3577f6bdc2112439ad063f1467"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/NearbyComposition.java",
+      "exists": true,
+      "sha256": "286405714a85aa67b23a8eb6ceeca9e2ed7f95b6fd343ad796f5497c06f37381"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/OverheadObservation.java",
+      "exists": true,
+      "sha256": "85968215e7a7e46b3a8b413e72848274cd548b1b3547e40235e26dccdcf49dde"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/PassiveMobSelection.java",
+      "exists": true,
+      "sha256": "5bc1cef186be3e6921697fb90b8995c4025d962ab886732d8b07eb35fb58b7d7"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/PortalObservationTracker.java",
+      "exists": true,
+      "sha256": "3a63e0730eb27ec67e0e0424042b5c9128cae18b9155b76429afc46a51773318"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/SmellPolicy.java",
+      "exists": true,
+      "sha256": "5a4217adbec503b06adbd75896f4fdbd8e360ef58d7c85c2236c754b6b3a27b3"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/SmellSpatialEstimate.java",
+      "exists": false,
+      "sha256": null
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/SoundObservationPolicy.java",
+      "exists": true,
+      "sha256": "19c424b523ff18577d4d843669ad01c35cd6625dfedf102a7ff167afddf8fca8"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/ThinkingAnimation.java",
+      "exists": true,
+      "sha256": "42766e42eccec4888cb5b3c66a73bbd5531e28dda172caad65da6b2b3c705ca7"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/WorkshopDisplayState.java",
+      "exists": true,
+      "sha256": "756de5f00918149ef8d147793dc3c4b4b8c26a2b427df06c3f90a562a3640968"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/WorldObservationFrame.java",
+      "exists": true,
+      "sha256": "090103240e00e761cc0c4b783952b15e6e98974a3a80a219cabfb3a42f5c19e5"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/ZombieScentPolicy.java",
+      "exists": true,
+      "sha256": "435d0bf75ab82e8cfc1d9adf220604bc37d98b723eadabbcd3c9689f73cc1f4c"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/mixin/ClientPlayNetworkHandlerMixin.java",
+      "exists": true,
+      "sha256": "90abd6ff9155bd407ce881f962ab94d1dcb297e184b86712e92a4d751166be12"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/java/dogido/fabric/mixin/SoundManagerMixin.java",
+      "exists": true,
+      "sha256": "d30e117bfb03342334e49d147c6b76b4e8f882f6ca8c1071eb10ea8370e76f9b"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/README.md",
+      "exists": true,
+      "sha256": "c2b37b7d4df4baf86d931ac4af969c0e7cb7de7a75d4a60e0fd9e780b30b98e3"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/character.png",
+      "exists": true,
+      "sha256": "c25016db04b1c20a3091859e91bf25c5f243feca3fe67b51f80c537b1364086c"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/character_closed.png",
+      "exists": true,
+      "sha256": "1cd6f0adc6856eb63fb33b812e1ed3e4e9fec9fbfbb4834e6c47a5e8517466a4"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/character_thinking.png",
+      "exists": true,
+      "sha256": "21e1e92386b5b677b71d6ac503dda72569b16cdd51e58af12d67b8d0dc89e7d5"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_body_1.png",
+      "exists": true,
+      "sha256": "9d5bae415c47a1d3b980e18db315250048eca1669680bac1b5940db167b99ed8"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_body_2.png",
+      "exists": true,
+      "sha256": "b776f4ff6591d32519344f405adeafc224768893d2f4e41aa954743d06e02956"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_body_3.png",
+      "exists": true,
+      "sha256": "ce75282c8e58490d195002447241b875959af0f00560711899fd15163fb1b435"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_body_4.png",
+      "exists": true,
+      "sha256": "dac46b5f557d3674b44a4e1c2a00c08031121a78beb8e938c34d67b7dc3a5f84"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_body_5.png",
+      "exists": true,
+      "sha256": "d9bc28a76cd03e6d7dab37843a8f5c86005a1f8ca52d41e8d2ee16c30c7a0cfd"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_eye_l.png",
+      "exists": true,
+      "sha256": "e615b66663297836063ad6618c04239d528e064abaa3c534a9b48e0974c73e8a"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_eye_r.png",
+      "exists": true,
+      "sha256": "e2641f4d0be1fb7db0fee2473579fbf56432039ade2bca7d8033e048d0747f9d"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_face.png",
+      "exists": true,
+      "sha256": "6eb1b9f6886b3c40603357232a7703eddb6cf602fc6a6b272f70e8e4e2cd8e40"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_tail_1.png",
+      "exists": true,
+      "sha256": "07c252149ef41ae74780683fc884093d75fdecb83670ec7c7ff2e200fa151722"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/thinking/thinking_tail_2.png",
+      "exists": true,
+      "sha256": "db3c0c2ebb703fd83cdbc506f523e1cc1c953792b8eb5d054990fe2e4d8a6516"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/dogido-fabric-client.mixins.json",
+      "exists": true,
+      "sha256": "f9625e856b3e0f197f38b00739766682d9a4baff47e84d52cd7a2f8ae5f12567"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/main/resources/fabric.mod.json",
+      "exists": true,
+      "sha256": "d91338610959bdf8af0c2f2306d00606fab8d2f3309fbd898c317122267d7d14"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/CharacterBlinkTest.java",
+      "exists": true,
+      "sha256": "9ae161762451aa52e00e7769bfcbcb9048eb53048d38dfc7111ccd063366c68c"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/CharacterDisplayStateTest.java",
+      "exists": true,
+      "sha256": "6d870e8bb6cbc25de89e03c2bb0ade213039fac1ca4a38a1c465c01ad7612896"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/CharacterPlacementTest.java",
+      "exists": true,
+      "sha256": "4d723bfa19d35d8e6fecd02ca5df01e3ad0bc959260822289cfc0bfa4d10c5da"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/DogidoCommandProtocolTest.java",
+      "exists": true,
+      "sha256": "37a8e841f83818c9382474c9ce03f9e8f7d562c1488069759075d116eab5f9bf"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/NearbyCompositionTest.java",
+      "exists": true,
+      "sha256": "80aedc627075e5129d233056931bdb7bd88d2922d13bf62e004dc0c8eb2fc3a8"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/OverheadObservationTest.java",
+      "exists": true,
+      "sha256": "c92b6704e21e413ba1ce688cf0a05b196411c87ccccef514a1e4cc790def79bd"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/PassiveMobSelectionTest.java",
+      "exists": true,
+      "sha256": "af3c876fede7a2f645bf867fd8b957a281202daa32ec3dee5d1f9d9b63afeb7f"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/PortalObservationTrackerTest.java",
+      "exists": true,
+      "sha256": "ca327f34b6c0a2badef0e42d4ec83c2fb8c68c00eb9fa3896baf2303ce697034"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/SmellPolicyTest.java",
+      "exists": true,
+      "sha256": "ff5ea3c14579c1e312a14871a4f1d17fa8bb363cfc2ced5283e23beacef94e86"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/SmellSpatialEstimateTest.java",
+      "exists": false,
+      "sha256": null
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/SoundObservationPolicyTest.java",
+      "exists": true,
+      "sha256": "e5d8e568e5397014b8da890216515da78a9ec8adf138327060cbfcb91dedcfec"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/ThinkingAnimationTest.java",
+      "exists": true,
+      "sha256": "b516765018ba8c0571e97a35d734bae5f177287bd529b8ccb03cab3c940c35f6"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/WorkshopDisplayStateTest.java",
+      "exists": true,
+      "sha256": "9011f33585fb9e67e0880266c2590fb994356ff4cbce906c38e7e8676899f568"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/WorldObservationFrameTest.java",
+      "exists": true,
+      "sha256": "246589cea1febf5b6e7fb17a4b7db4aa91369b8a894d74f9649efbfcd16ecb1f"
+    },
+    {
+      "path": "adapter/minecraft-fabric/src/test/java/dogido/fabric/ZombieScentPolicyTest.java",
+      "exists": true,
+      "sha256": "01a10edd0b35230e1974958df6fb2fd814edbc920f6ca71852a66d3af29188fe"
+    },
+    {
+      "path": "docs/2026-10-08-smell-v2-test-results.md",
+      "exists": true,
+      "sha256": "8e489633fbc3e39cacc44dc850caec40324d9ff45ffa4a82154b2adec2e58c38"
+    },
+    {
+      "path": "docs/2026-10-08-surroundings-notice.md",
+      "exists": true,
+      "sha256": "cbb75978ca645af65db4cf8764756e427bfa1ab12fd553ecc7f111986ab98cd1"
+    },
+    {
+      "path": "docs/event-schema.md",
+      "exists": true,
+      "sha256": "af8e1bb1e4f85da6dea2cf19ac6a6da46edb2336c84548ff9fe20ddd6a3c7ce0"
+    },
+    {
+      "path": "docs/player-chat-casual-plan.md",
+      "exists": true,
+      "sha256": "faed0054cd8ee0da4b72dec68cb78c3a5d6444b48051c3445beb6ac6d4c337dd"
+    },
+    {
+      "path": "docs/smell-policy.md",
+      "exists": true,
+      "sha256": "c5deb6afc2624738bf4c721b449775023ec26b1c0f700df10b5a7161e313e466"
+    },
+    {
+      "path": "dogido-rust/scripts/check_environment_reactions.py",
+      "exists": true,
+      "sha256": "a26ccdd4c75ea4d942f4aab976e03df4754c8a8e82b514b8f472e279c030aab1"
+    },
+    {
+      "path": "dogido-rust/src/chat_prompt/fixtures.json",
+      "exists": true,
+      "sha256": "d7181aba9367c43fc0f4b6e119a6452ae15f15329db412cf09b0713cbf1b3718"
+    },
+    {
+      "path": "dogido-rust/src/conversation_observation.rs",
+      "exists": true,
+      "sha256": "c4e11b559418694ab909310f399c5ad420f41ca8bef6318c99ba45f6184a890c"
+    },
+    {
+      "path": "dogido-rust/src/dialogue/warnings.rs",
+      "exists": true,
+      "sha256": "72503d40ae09fa06aa314110a70c2cf65b61cc7683f21377d1f83f457c62de4b"
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient.rs",
+      "exists": true,
+      "sha256": "a9dd214752af3032672e15943a41c71aa20549d7e58fe9b6117a191b25634420"
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient/reference.json",
+      "exists": true,
+      "sha256": "7b203f21f435c9e8aeac04569c034780a3fd2b1c2725854ccb770bed95cec6e5"
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient/smell.rs",
+      "exists": true,
+      "sha256": "1e01b38844baf61d9d2754ae3efabfadabd455c0225251f066674441e9db73b5"
+    },
+    {
+      "path": "dogido-rust/src/environment/ambient/tests.rs",
+      "exists": true,
+      "sha256": "e9d5b9b3c2bbc2b147f8f27b10177f70418a78e295fe8597e25e8129ba5fe525"
+    },
+    {
+      "path": "dogido-rust/src/environment/notice/tests.rs",
+      "exists": true,
+      "sha256": "d6e9df1bcd549dcd3ac1d8c2f8f8192e4670c0c183e9992d10bf865985e04967"
+    },
+    {
+      "path": "dogido-rust/src/environment/reaction.rs",
+      "exists": true,
+      "sha256": "6cdd654be3807ed0b623491178520eacb0efb9fdb230d7bf8b17b72d85fc92cd"
+    },
+    {
+      "path": "dogido-rust/src/environment/reaction/tests.rs",
+      "exists": true,
+      "sha256": "740fdd5c67b6fe54650382f3ee502930fa04ba8a5492d87ce92b6a4252badbfd"
+    },
+    {
+      "path": "dogido-rust/src/events/models.rs",
+      "exists": true,
+      "sha256": "7e4ed5ac1c73041711138dd6567139426522c1ff58aae0097946ad359bce4c8a"
+    },
+    {
+      "path": "dogido-rust/src/events/semantic.rs",
+      "exists": true,
+      "sha256": "9870c46360e59135dda3fc955758adefde4ba72e02caf2e2553088688d8cc10b"
+    },
+    {
+      "path": "dogido_server/llm/companion_prompts.json",
+      "exists": true,
+      "sha256": "9b6e5e9e899162aa73225f0d7af19a05c8b9fa70f187c972b4f5172f59a064a4"
+    }
+  ],
+  "adapter_state_inventory": {
+    "schema_version": 1,
+    "source": "adapter/minecraft-fabric/src/main/java/dogido/fabric/DogidoClientAdapter.java",
+    "sha256": "6c4d198aa7cd86b0d6d2fb1b045df653434b9f0ca46587fd113b4c6c33bab823",
+    "method_reference_note": "Mechanical occurrence list; comments may be included. Thread and transitive writes are reviewed in the Markdown record.",
+    "fields": [
+      {
+        "name": "INSTANCE",
+        "java_type": "DogidoClientAdapter",
+        "declaration_line": 197,
+        "method_references": [
+          {
+            "method": "onInitializeClient",
+            "line": 284,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordGlobalSoundPacket",
+            "line": 317,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordEntitySoundPacket",
+            "line": 325,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordExplosionPacket",
+            "line": 333,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordPlayedSound",
+            "line": 341,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root",
+        "group": "初期化・参照"
+      },
+      {
+        "name": "config",
+        "java_type": "DogidoConfig",
+        "declaration_line": 199,
+        "method_references": [
+          {
+            "method": "onInitializeClient",
+            "line": 284,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendSnapshot",
+            "line": 773,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendThreatEvent",
+            "line": 777,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendAudioThreatEvent",
+            "line": 796,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendAmbientMobEvent",
+            "line": 818,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateSmellObservation",
+            "line": 887,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendCombatEnded",
+            "line": 1136,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "retainedSoundSource",
+            "line": 1399,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldTreatAsVisible",
+            "line": 1678,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "resolvePlayerName",
+            "line": 3422,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "probeStructureAtPlayer",
+            "line": 3444,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordSoundObservation",
+            "line": 3744,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordAmbientSoundObservation",
+            "line": 3801,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "scanNearbyPortals",
+            "line": 4436,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root",
+        "group": "初期化・参照"
+      },
+      {
+        "name": "eventClient",
+        "java_type": "DogidoEventClient",
+        "declaration_line": 200,
+        "method_references": [
+          {
+            "method": "onInitializeClient",
+            "line": 284,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "rememberSelectHotbarResult",
+            "line": 413,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildStatusSnapshot",
+            "line": 1865,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildThreatApproaching",
+            "line": 1891,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildHostileAudioDetected",
+            "line": 1915,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildAmbientMobDetected",
+            "line": 1939,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildPlayerDied",
+            "line": 1961,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildCreeperDetonated",
+            "line": 1985,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildHostileDefeated",
+            "line": 2012,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildCombatEnded",
+            "line": 2039,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root",
+        "group": "初期化・参照"
+      },
+      {
+        "name": "lastThreatDistances",
+        "java_type": "Map<UUID, Double>",
+        "declaration_line": 201,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "isApproaching",
+            "line": 1718,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "敵個体追跡"
+      },
+      {
+        "name": "lastThreatSeenTicks",
+        "java_type": "Map<UUID, Long>",
+        "declaration_line": 202,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "isThreatScanCandidateEntity",
+            "line": 1254,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "敵個体追跡"
+      },
+      {
+        "name": "lastThreatHealths",
+        "java_type": "Map<UUID, Float>",
+        "declaration_line": 203,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "敵個体追跡"
+      },
+      {
+        "name": "lastThreatTypes",
+        "java_type": "Map<UUID, String>",
+        "declaration_line": 204,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "applyServerDeathObservations",
+            "line": 1279,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "敵個体追跡"
+      },
+      {
+        "name": "lastThreatEntityIds",
+        "java_type": "Map<UUID, Integer>",
+        "declaration_line": 205,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "敵個体追跡"
+      },
+      {
+        "name": "lastThreatPositions",
+        "java_type": "Map<UUID, Vec3d>",
+        "declaration_line": 206,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "敵個体追跡"
+      },
+      {
+        "name": "hostileOutcomes",
+        "java_type": "Map<UUID, HostileOutcomeObservation>",
+        "declaration_line": 207,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordDefeatedHostile",
+            "line": 1264,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordHostileOutcome",
+            "line": 1350,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "clearCombatOutcomeObservations",
+            "line": 1742,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "死亡・爆散結果"
+      },
+      {
+        "name": "pendingServerDeaths",
+        "java_type": "Queue<ServerDeathObservation>",
+        "declaration_line": 208,
+        "method_references": [
+          {
+            "method": "onInitializeClient",
+            "line": 284,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "applyServerDeathObservations",
+            "line": 1279,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "clearCombatOutcomeObservations",
+            "line": 1742,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "死亡・爆散結果"
+      },
+      {
+        "name": "recentExplosionObservations",
+        "java_type": "Deque<ExplosionObservation>",
+        "declaration_line": 209,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "clearCombatOutcomeObservations",
+            "line": 1742,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "onExplosionPacket",
+            "line": 3949,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "死亡・爆散結果"
+      },
+      {
+        "name": "lineOfSightStartedTicks",
+        "java_type": "Map<UUID, Long>",
+        "declaration_line": 210,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldTreatAsVisible",
+            "line": 1678,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "可視性保持"
+      },
+      {
+        "name": "confirmedVisibleTicks",
+        "java_type": "Map<UUID, Long>",
+        "declaration_line": 211,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldTreatAsVisible",
+            "line": 1678,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "可視性保持"
+      },
+      {
+        "name": "recentSoundObservations",
+        "java_type": "Deque<SoundObservation>",
+        "declaration_line": 212,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "currentSoundSources",
+            "line": 1380,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "scanAuditoryThreats",
+            "line": 1414,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireSoundObservations",
+            "line": 1748,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordSoundObservation",
+            "line": 3744,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音記録"
+      },
+      {
+        "name": "recentAmbientSoundObservations",
+        "java_type": "Deque<SoundObservation>",
+        "declaration_line": 214,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "currentSoundSources",
+            "line": 1380,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireAmbientSoundObservations",
+            "line": 1759,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanAmbientSounds",
+            "line": 1769,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordAmbientSoundObservation",
+            "line": 3801,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音記録"
+      },
+      {
+        "name": "recentBlockBreakObservations",
+        "java_type": "Deque<BlockBreakObservation>",
+        "declaration_line": 215,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "rememberBlockBreak",
+            "line": 2772,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "expireBlockBreakObservations",
+            "line": 2787,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildRecentBlockBreaks",
+            "line": 2797,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "ブロック破壊履歴"
+      },
+      {
+        "name": "currentBlockSmellCandidates",
+        "java_type": "List<SmellPolicy.LocatedCandidate>",
+        "declaration_line": 216,
+        "method_references": [
+          {
+            "method": "resetSmellState",
+            "line": 753,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateSmellObservation",
+            "line": 887,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetSmellState"
+        ],
+        "reset_via_smell": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange",
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P3 smell",
+        "group": "匂い"
+      },
+      {
+        "name": "currentSmellObservation",
+        "java_type": "SmellPolicy.Observation",
+        "declaration_line": 217,
+        "method_references": [
+          {
+            "method": "resetSmellState",
+            "line": 753,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateSmellObservation",
+            "line": 887,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "baseEnvelope",
+            "line": 2081,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetSmellState"
+        ],
+        "reset_via_smell": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange",
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P3 smell",
+        "group": "匂い"
+      },
+      {
+        "name": "lastBlockSmellScanTick",
+        "java_type": "long",
+        "declaration_line": 218,
+        "method_references": [
+          {
+            "method": "resetSmellState",
+            "line": 753,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateSmellObservation",
+            "line": 887,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetSmellState"
+        ],
+        "reset_via_smell": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange",
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P3 smell",
+        "group": "匂い"
+      },
+      {
+        "name": "rainAfterSmellUntilTick",
+        "java_type": "long",
+        "declaration_line": 219,
+        "method_references": [
+          {
+            "method": "resetSmellState",
+            "line": 753,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateSmellObservation",
+            "line": 887,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateRainAfterSmellWindow",
+            "line": 939,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildSmellObservation",
+            "line": 2100,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetSmellState"
+        ],
+        "reset_via_smell": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange",
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P3 smell",
+        "group": "匂い"
+      },
+      {
+        "name": "previousLocalSmellWeather",
+        "java_type": "String",
+        "declaration_line": 220,
+        "method_references": [
+          {
+            "method": "resetSmellState",
+            "line": 753,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateRainAfterSmellWindow",
+            "line": 939,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetSmellState"
+        ],
+        "reset_via_smell": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange",
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P3 smell",
+        "group": "匂い"
+      },
+      {
+        "name": "tickCounter",
+        "java_type": "long",
+        "declaration_line": 222,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendSnapshot",
+            "line": 773,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendThreatEvent",
+            "line": 777,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendAudioThreatEvent",
+            "line": 796,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendAmbientMobEvent",
+            "line": 818,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateSmellObservation",
+            "line": 887,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateRainAfterSmellWindow",
+            "line": 939,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendCombatEnded",
+            "line": 1136,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeCreeperDetonations",
+            "line": 1302,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordHostileOutcome",
+            "line": 1350,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldTreatAsVisible",
+            "line": 1678,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireThreatMemory",
+            "line": 1723,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireSoundObservations",
+            "line": 1748,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireAmbientSoundObservations",
+            "line": 1759,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "rememberBlockBreak",
+            "line": 2772,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "expireBlockBreakObservations",
+            "line": 2787,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeTrackedDragonDefeat",
+            "line": 3216,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "isRecentDragonDefeatConfirmed",
+            "line": 3233,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "appendDragonCombatInfo",
+            "line": 3296,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeTrackedWardenDefeat",
+            "line": 3322,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "isRecentWardenDefeatConfirmed",
+            "line": 3338,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "probeStructureAtPlayer",
+            "line": 3444,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "onGlobalSoundPacket",
+            "line": 3477,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordSoundObservation",
+            "line": 3744,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordAmbientSoundObservation",
+            "line": 3801,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "onExplosionPacket",
+            "line": 3949,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordOminousSoundObservation",
+            "line": 3956,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordWeatherSoundObservation",
+            "line": 3965,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeNearbyLightning",
+            "line": 3975,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "scanNearbyPortals",
+            "line": 4436,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "ticksSince",
+            "line": 5035,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "root",
+        "group": "共通時計"
+      },
+      {
+        "name": "portalObservationTracker",
+        "java_type": "PortalObservationTracker",
+        "declaration_line": 223,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanNearbyPortals",
+            "line": 4436,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "portal"
+      },
+      {
+        "name": "lastSnapshotTick",
+        "java_type": "long",
+        "declaration_line": 224,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendSnapshot",
+            "line": 773,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "root",
+        "group": "送信時機"
+      },
+      {
+        "name": "lastThreatTick",
+        "java_type": "long",
+        "declaration_line": 225,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendThreatEvent",
+            "line": 777,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信時機"
+      },
+      {
+        "name": "lastAudioEventTick",
+        "java_type": "long",
+        "declaration_line": 226,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAudioThreatEvent",
+            "line": 796,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信時機"
+      },
+      {
+        "name": "lastAmbientMobEventTick",
+        "java_type": "long",
+        "declaration_line": 227,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAmbientMobEvent",
+            "line": 818,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信時機"
+      },
+      {
+        "name": "lastAudioDispatchObservationTick",
+        "java_type": "long",
+        "declaration_line": 228,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAudioThreatEvent",
+            "line": 796,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信時機"
+      },
+      {
+        "name": "lastDamageTick",
+        "java_type": "long",
+        "declaration_line": 229,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAmbientMobEvent",
+            "line": 818,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendCombatEnded",
+            "line": 1136,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "lastVisualThreatObservedTick",
+        "java_type": "long",
+        "declaration_line": 230,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "lastAudioThreatObservedTick",
+        "java_type": "long",
+        "declaration_line": 231,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordSoundObservation",
+            "line": 3744,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "lastOminousSoundObservedTick",
+        "java_type": "long",
+        "declaration_line": 232,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordOminousSoundObservation",
+            "line": 3956,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音由来の環境"
+      },
+      {
+        "name": "lastExplosionObservedTick",
+        "java_type": "long",
+        "declaration_line": 233,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "onExplosionPacket",
+            "line": 3949,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "死亡・爆散結果"
+      },
+      {
+        "name": "lastRainSoundObservedTick",
+        "java_type": "long",
+        "declaration_line": 234,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordWeatherSoundObservation",
+            "line": 3965,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音由来の環境"
+      },
+      {
+        "name": "lastThunderSoundObservedTick",
+        "java_type": "long",
+        "declaration_line": 235,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordWeatherSoundObservation",
+            "line": 3965,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音由来の環境"
+      },
+      {
+        "name": "lastNearbyLightningObservedTick",
+        "java_type": "long",
+        "declaration_line": 236,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeNearbyLightning",
+            "line": 3975,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "視覚の雷"
+      },
+      {
+        "name": "lastNearbyLightningDistance",
+        "java_type": "double",
+        "declaration_line": 237,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeNearbyLightning",
+            "line": 3975,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "視覚の雷"
+      },
+      {
+        "name": "lastEnderEyeLaunchObservedTick",
+        "java_type": "long",
+        "declaration_line": 238,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "onGlobalSoundPacket",
+            "line": 3477,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音由来の環境"
+      },
+      {
+        "name": "structureAtPlayer",
+        "java_type": "String",
+        "declaration_line": 240,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "probeStructureAtPlayer",
+            "line": 3444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "構造物"
+      },
+      {
+        "name": "lastStructureProbeTick",
+        "java_type": "long",
+        "declaration_line": 241,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "probeStructureAtPlayer",
+            "line": 3444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "構造物"
+      },
+      {
+        "name": "lastCombatSignalTick",
+        "java_type": "long",
+        "declaration_line": 242,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendCombatEnded",
+            "line": 1136,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "lastWardenSeenTick",
+        "java_type": "long",
+        "declaration_line": 243,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "isRecentWardenDefeatConfirmed",
+            "line": 3338,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "trackedWardenEntityId",
+        "java_type": "int",
+        "declaration_line": 244,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordHostileOutcome",
+            "line": 1350,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeTrackedWardenDefeat",
+            "line": 3322,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "lastWardenDefeatObservedTick",
+        "java_type": "long",
+        "declaration_line": 245,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordHostileOutcome",
+            "line": 1350,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeTrackedWardenDefeat",
+            "line": 3322,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "isRecentWardenDefeatConfirmed",
+            "line": 3338,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "lastDragonSeenTick",
+        "java_type": "long",
+        "declaration_line": 246,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "isRecentDragonDefeatConfirmed",
+            "line": 3233,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "appendDragonCombatInfo",
+            "line": 3296,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "trackedDragonEntityId",
+        "java_type": "int",
+        "declaration_line": 247,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordHostileOutcome",
+            "line": 1350,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeTrackedDragonDefeat",
+            "line": 3216,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "appendDragonCombatInfo",
+            "line": 3296,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "lastDragonDefeatObservedTick",
+        "java_type": "long",
+        "declaration_line": 248,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "recordHostileOutcome",
+            "line": 1350,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "observeTrackedDragonDefeat",
+            "line": 3216,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "isRecentDragonDefeatConfirmed",
+            "line": 3233,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "awakenedShulkerIds",
+        "java_type": "Set<UUID>",
+        "declaration_line": 250,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "isShulkerAwakened",
+            "line": 1601,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P4 mobs",
+        "group": "モブ共用判別"
+      },
+      {
+        "name": "lastWardenEndCrystalObservedTick",
+        "java_type": "long",
+        "declaration_line": 251,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P13 mobs",
+        "group": "Warden仕掛け"
+      },
+      {
+        "name": "lastWardenTntSetupObservedTick",
+        "java_type": "long",
+        "declaration_line": 252,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P13 mobs",
+        "group": "Warden仕掛け"
+      },
+      {
+        "name": "lastWardenSeenX",
+        "java_type": "double",
+        "declaration_line": 253,
+        "method_references": [
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "lastWardenSeenY",
+        "java_type": "double",
+        "declaration_line": 254,
+        "method_references": [
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "lastWardenSeenZ",
+        "java_type": "double",
+        "declaration_line": 255,
+        "method_references": [
+          {
+            "method": "scanThreats",
+            "line": 1154,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "observeWardenSpecialSetups",
+            "line": 3015,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "P12で所有確定、P13で固有処理",
+        "group": "boss共有状態"
+      },
+      {
+        "name": "lastHealth",
+        "java_type": "float",
+        "declaration_line": 256,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "lastThreatSignature",
+        "java_type": "String",
+        "declaration_line": 257,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendThreatEvent",
+            "line": 777,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信署名"
+      },
+      {
+        "name": "lastAudioSignature",
+        "java_type": "String",
+        "declaration_line": 258,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAudioThreatEvent",
+            "line": 796,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信署名"
+      },
+      {
+        "name": "lastAmbientMobSignature",
+        "java_type": "String",
+        "declaration_line": 259,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAmbientMobEvent",
+            "line": 818,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "送信署名"
+      },
+      {
+        "name": "lastOminousSoundKind",
+        "java_type": "String",
+        "declaration_line": 260,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "recordOminousSoundObservation",
+            "line": 3956,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P10 sound",
+        "group": "音由来の環境"
+      },
+      {
+        "name": "combatActive",
+        "java_type": "boolean",
+        "declaration_line": 261,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "shouldSendAmbientMobEvent",
+            "line": 818,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "shouldSendCombatEnded",
+            "line": 1136,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "updateCombatTracking",
+            "line": 1703,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildCombat",
+            "line": 2908,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "workshopHud",
+        "java_type": "DogidoWorkshopHud",
+        "declaration_line": 262,
+        "method_references": [
+          {
+            "method": "onInitializeClient",
+            "line": 284,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root / P16 display",
+        "group": "表示の配線"
+      },
+      {
+        "name": "characterHud",
+        "java_type": "DogidoCharacterHud",
+        "declaration_line": 263,
+        "method_references": [
+          {
+            "method": "onInitializeClient",
+            "line": 284,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root / P16 display",
+        "group": "表示の配線"
+      },
+      {
+        "name": "displayWorld",
+        "java_type": "ClientWorld",
+        "declaration_line": 264,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root / P16 display",
+        "group": "表示の配線"
+      },
+      {
+        "name": "displayConnection",
+        "java_type": "Object",
+        "declaration_line": 265,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root / P16 display",
+        "group": "表示の配線"
+      },
+      {
+        "name": "displayThreatSignature",
+        "java_type": "String",
+        "declaration_line": 266,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "root / P16 display",
+        "group": "表示の配線"
+      },
+      {
+        "name": "wasDead",
+        "java_type": "boolean",
+        "declaration_line": 267,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "P12 mobs",
+        "group": "被弾・戦闘継続"
+      },
+      {
+        "name": "wasSleeping",
+        "java_type": "boolean",
+        "declaration_line": 268,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "P6 player",
+        "group": "睡眠・拠点根拠"
+      },
+      {
+        "name": "respawnPointObserved",
+        "java_type": "boolean",
+        "declaration_line": 269,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildWorld",
+            "line": 2227,
+            "direct_assignment_or_known_mutator": false
+          },
+          {
+            "method": "estimateRespawnDistance",
+            "line": 4689,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "P6 player",
+        "group": "睡眠・拠点根拠"
+      },
+      {
+        "name": "observedRespawnPos",
+        "java_type": "BlockPos",
+        "declaration_line": 270,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "estimateRespawnDistance",
+            "line": 4689,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "P6 player",
+        "group": "睡眠・拠点根拠"
+      },
+      {
+        "name": "observedRespawnDimension",
+        "java_type": "String",
+        "declaration_line": 271,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "estimateRespawnDistance",
+            "line": 4689,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "P6 player",
+        "group": "睡眠・拠点根拠"
+      },
+      {
+        "name": "lastDimensionId",
+        "java_type": "String",
+        "declaration_line": 272,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "root",
+        "group": "world境界・前回位置"
+      },
+      {
+        "name": "nearbyMobKinds",
+        "java_type": "NearbyComposition.RangeTracker",
+        "declaration_line": 273,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "scanAmbientMobs",
+            "line": 1457,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P11 mobs",
+        "group": "友好・中立の種類"
+      },
+      {
+        "name": "nearbyBlockKinds",
+        "java_type": "NearbyComposition.RangeTracker",
+        "declaration_line": 275,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "buildNearbyBlocks",
+            "line": 2617,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "P9 world",
+        "group": "ブロック種類"
+      },
+      {
+        "name": "nearbyMobComposition",
+        "java_type": "JsonObject",
+        "declaration_line": 277,
+        "method_references": [
+          {
+            "method": "scanAmbientMobs",
+            "line": 1457,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "attachNearbyMaterials",
+            "line": 2061,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [],
+        "planned_owner": "P11 mobs",
+        "group": "友好・中立の種類"
+      },
+      {
+        "name": "pendingUserText",
+        "java_type": "String",
+        "declaration_line": 278,
+        "method_references": [
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "rememberUserText",
+            "line": 3084,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "consumePendingUserText",
+            "line": 3098,
+            "direct_assignment_or_known_mutator": true
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState"
+        ],
+        "planned_owner": "root",
+        "group": "入力"
+      },
+      {
+        "name": "lastPlayerX",
+        "java_type": "double",
+        "declaration_line": 279,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "hasLargePositionJump",
+            "line": 765,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "world境界・前回位置"
+      },
+      {
+        "name": "lastPlayerY",
+        "java_type": "double",
+        "declaration_line": 280,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "hasLargePositionJump",
+            "line": 765,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "world境界・前回位置"
+      },
+      {
+        "name": "lastPlayerZ",
+        "java_type": "double",
+        "declaration_line": 281,
+        "method_references": [
+          {
+            "method": "onClientTick",
+            "line": 444,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetTransientState",
+            "line": 633,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "resetThreatStateForDimensionChange",
+            "line": 698,
+            "direct_assignment_or_known_mutator": true
+          },
+          {
+            "method": "hasLargePositionJump",
+            "line": 765,
+            "direct_assignment_or_known_mutator": false
+          }
+        ],
+        "explicit_reset_methods": [
+          "resetTransientState",
+          "resetThreatStateForDimensionChange"
+        ],
+        "reset_via_dimension": [
+          "resetThreatStateForPositionJump"
+        ],
+        "planned_owner": "root",
+        "group": "world境界・前回位置"
+      }
+    ]
+  },
+  "inventory_thread_note": "Callbacks retain their current calling thread. Mixin HEAD hooks do not dispatch here; no additional main-thread guarantee is inferred.",
+  "event_contract": {
+    "evidence": "source_reading_only",
+    "raw_fabric_payloads_captured": false,
+    "common_builder_keys": [
+      "schema_version",
+      "game",
+      "adapter",
+      "observed_at",
+      "event",
+      "sequence",
+      "smell_observation",
+      "player",
+      "world",
+      "visual_threats",
+      "auditory_threats",
+      "passive_mobs",
+      "companion_candidates",
+      "inventory",
+      "nearby_resources",
+      "dropped_items",
+      "recent_block_breaks",
+      "combat",
+      "meta"
+    ],
+    "no_fabric_event_id": true,
+    "session_header": "X-Dogido-Session-Id",
+    "send_body_additions": [
+      "command_results"
+    ],
+    "events": [
+      {
+        "name": "status_snapshot",
+        "source_kind": "system",
+        "priority_hint": "background",
+        "certainty": "high",
+        "ambient_sounds_present": true,
+        "explicit_empty_visual": false,
+        "explicit_empty_auditory": false
+      },
+      {
+        "name": "threat_approaching",
+        "source_kind": "visual",
+        "priority_hint": "urgent",
+        "certainty": "high",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": false,
+        "explicit_empty_auditory": false
+      },
+      {
+        "name": "hostile_audio_detected",
+        "source_kind": "auditory",
+        "priority_hint": "normal",
+        "certainty": "medium",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": true,
+        "explicit_empty_auditory": false
+      },
+      {
+        "name": "ambient_mob_detected",
+        "source_kind": "visual",
+        "priority_hint": "background",
+        "certainty": "high",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": true,
+        "explicit_empty_auditory": true
+      },
+      {
+        "name": "creeper_detonated",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": false,
+        "explicit_empty_auditory": false
+      },
+      {
+        "name": "hostile_defeated",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": false,
+        "explicit_empty_auditory": false
+      },
+      {
+        "name": "player_died",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": false,
+        "explicit_empty_auditory": false
+      },
+      {
+        "name": "combat_ended",
+        "source_kind": "system",
+        "priority_hint": "normal",
+        "certainty": "high",
+        "ambient_sounds_present": false,
+        "explicit_empty_visual": true,
+        "explicit_empty_auditory": true
+      }
+    ]
+  },
+  "comparison_cases": [
+    {
+      "id": "all_eight_events",
+      "input": "Same fixed current observations; no Minecraft capture yet",
+      "expected": "Descriptors, mandatory keys, omission and array order match source contract"
+    },
+    {
+      "id": "same_tick_multiple_events",
+      "input": "One frame; pending player text; multiple eligible events",
+      "expected": "World and blocks captured once each; sequence once per event; player text in first event only"
+    },
+    {
+      "id": "composition_snapshot_tick",
+      "input": "Partial event on snapshot tick versus non-snapshot tick",
+      "expected": "nearby_composition follows frame.blocks.types presence, not event name"
+    },
+    {
+      "id": "smell_variants",
+      "input": "none, suppressed, mixed components and rain_after_notice",
+      "expected": "Five component fields, no bearing; omission conditions and original window ID retained"
+    },
+    {
+      "id": "visible_and_named_mobs",
+      "input": "Retained occluded hostile; named/tamed candidates; more than four ambient mobs including villagers",
+      "expected": "Empty environment object for held invisible hostile; regular/named arrays separate; villager count before truncation"
+    },
+    {
+      "id": "optional_player_observations",
+      "input": "Mounted versus not mounted; valid look target versus MISS",
+      "expected": "Exact omission versus value preserved"
+    },
+    {
+      "id": "outcome_sequence",
+      "input": "Detonation, non-detonation death, then combat end",
+      "expected": "Only current outcome subset in event; combat flag and clear timing preserved"
+    },
+    {
+      "id": "dragon_builder_side_effect",
+      "input": "Dragon combat information generation",
+      "expected": "Tracking update retains original invocation timing and count"
+    }
+  ],
+  "targeted_checks": [
+    {
+      "cwd": "adapter/minecraft-fabric",
+      "command": "./gradlew --offline test --tests dogido.fabric.SmellPolicyTest --tests dogido.fabric.ZombieScentPolicyTest",
+      "tests": 22,
+      "failures": 0,
+      "exit_code": 0
+    },
+    {
+      "cwd": "dogido-rust",
+      "command": "./cargo.sh test --lib --locked --offline smell",
+      "tests": 14,
+      "failures": 0,
+      "exit_code": 0
+    },
+    {
+      "cwd": "dogido-rust",
+      "command": "./cargo.sh test --lib --locked --offline rain_after",
+      "tests": 7,
+      "failures": 0,
+      "exit_code": 0
+    },
+    {
+      "cwd": "dogido-rust",
+      "command": "./cargo.sh test --lib --locked --offline strength",
+      "tests": 8,
+      "failures": 0,
+      "exit_code": 0
+    }
+  ],
+  "targeted_checks_note": "Rust filters overlap. These are not full-suite results; no live Minecraft, model or TTS calls."
+}

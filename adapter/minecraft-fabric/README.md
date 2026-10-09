@@ -15,7 +15,7 @@
 - `status_snapshot` の定期送信
 - 近距離 hostile 検知時の `threat_approaching` 送信
 - 遮蔽された近距離 hostile を `hostile_audio_detected` として送信
-- 実近接源・hotbar・現在バイオーム・温度・天候を競わせ、解決済みの匂いと取得可能な粗い方向を `smell_observation` 一件として送信
+- 実近接源・hotbar・現在バイオーム・温度・天候から各匂いの種類と強度を解決し、`smell_observation.components` として送信
 - プレイヤー死亡時の `player_died` 送信
 - 戦闘収束時の `combat_ended` 送信
 - game-event応答の型付き `select_hotbar` command受信
@@ -74,11 +74,12 @@ F1、メニュー、インベントリ、チャット入力中は両方隠れる
 
 ## 匂い（遊びの限定観測）
 
-- 伝播力に必要な範囲だけ調べる指定block、指定itemのhotbar 9slotと落下item、沼バイオーム、未視認・未聴取ゾンビ系だけを候補にする
-- 伝播力、3次元距離、Minecraft温度、雨上がり補正をコードで比較し、同種は合算しない
+- 伝播力に必要な範囲だけ調べる指定block、指定itemのhotbar 9slotと落下item、沼バイオーム、ゾンビ系を候補にする。ゾンビ系は敵対状態・視認・聴取と独立して収集する
+- 伝播力、3次元距離、Minecraft温度をコードで比較し、同種は合算しない。マスキング後に残る各種類と強度を送る
 - activeな雨・雪・雷と水中は `suppressed`。候補なしも `none` として明示する
 - 火のついたcampfire／soul campfireの実調理slotにある肉・魚だけは寒さによる減衰を受けない
-- 外部源の単独勝者は勝者の実方角を丸めた粗い方向を付ける。正確な位置・距離、個数、entity IDは含めず、匂いだけでadapterの戦闘追跡を開始しない
+- 方位は計算・送信しない。位置・距離・個数・entity IDも送らず、匂いだけでadapterの戦闘追跡を開始しない
+- 雨上がりは通常の成分と分けた一度の気づき候補として送る。180秒は候補期限で、通常の匂いを消さない
 - 詳しい対象ID・計算・雨上がり・サーバー発話は親プロジェクトの [`docs/smell-policy.md`](../../docs/smell-policy.md)
 
 ## 設定ファイル
