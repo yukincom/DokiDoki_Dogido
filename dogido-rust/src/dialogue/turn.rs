@@ -67,6 +67,8 @@ impl Dialogue {
                 && let Some((event, previous)) = input.snapshot.as_deref()
             {
                 let event = s.latest.as_ref().unwrap_or(event);
+                input.horse_recall =
+                    super::horse_recall_runtime::capture(s, input["text"].as_str().unwrap_or(""));
                 let mut history = previous.context.history.clone();
                 history.conversation_turns = s.history.refresh_before_input(
                     &turn,
@@ -220,6 +222,19 @@ impl Dialogue {
         };
         match result {
             Ok(mut result) => {
+                if let Err(error) = self.apply_horse_recall(
+                    &sid,
+                    &turn,
+                    epoch,
+                    &input,
+                    &mut result,
+                    *cancel.borrow(),
+                ) {
+                    result["text"] = "馬の状態が変わったから、呼び戻しは見送ったで。".into();
+                    result["spoken_text"] = result["text"].clone();
+                    result["horse_recall_status"] = "rejected".into();
+                    result["horse_recall_reason"] = error.to_string().into();
+                }
                 if input["host_chat_confirmed"] == true {
                     result["language_status"] = "host_chat".into();
                     result["language_state"] = json!(crate::language::State::default());

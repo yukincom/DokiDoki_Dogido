@@ -241,6 +241,12 @@ Rustは同じowner・次元で受理した新しい身体tick/revisionから現�
 - 実行結果はserverがackするまで後続イベントへ再添付する
 - `succeeded` は実際の選択slotとitem IDがcommandに一致したときだけ。古いsnapshotなら `rejected / expected_item_mismatch`
 
+### `recall_horse` のルール
+
+登録の `execution_capabilities` に `integrated_server.horse.recall.v1` があるときだけ使う。所有馬のsnapshotを照合した後、5秒の命令を同じ `commands` へ載せる。結果の `entity_id` と `world_id` はトップレベルで送り、ACKまで再添付する。未知ID・期限切れ・別個体の結果を移動成功にしない。
+
+対象範囲、snapshot・commandの全項目、二段階の選択と出現演出は [所有馬の呼び戻し](2026-10-11-horse-recall.md) を参照。
+
 ## 9. `POST /api/v1/game-events/batch`
 
 複数イベントをまとめて送る endpoint。

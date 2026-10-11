@@ -13,6 +13,9 @@
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
+    "main": [
+      "dogido.fabric.horse_recall.HorseRecallParticles"
+    ],
     "client": [
       "dogido.fabric.DogidoClientAdapter"
     ]

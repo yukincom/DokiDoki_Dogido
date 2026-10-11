@@ -185,6 +185,21 @@ async fn body(
         Prepared::Knowledge => bail!("knowledge routing already consumed"),
         Prepared::Fixed(fixed) => fixed_result(fixed),
         Prepared::Reply(reply) => {
+            if config.llm_enabled
+                && language.is_none()
+                && input["workshop_fallback"] != true
+                && let Some(horse) = &input.horse_recall
+            {
+                let mut result = super::horse_recall_runtime::render(
+                    reply.request(&config.model, config.max_tokens)?,
+                    llm,
+                    horse,
+                    cancel,
+                )
+                .await?;
+                result["observation_revision"] = reply.details["world_context"]["revision"].clone();
+                return Ok(result);
+            }
             let output = if config.llm_enabled {
                 let request = reply.request(&config.model, config.max_tokens)?;
                 let run = super::chat_leaf_runtime::render(request, llm, cancel).await?;

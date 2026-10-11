@@ -1,6 +1,7 @@
 //! Explicit, bounded world assistance. No I/O or model/tool execution occurs here.
 //! The caller supplies a fresh, complete snapshot and preserves combat speech priority.
 pub mod intent;
+pub mod horse_recall;
 pub mod selection;
 mod state;
 pub use selection::{RiskPolicy, SelectHotbarCommand, WeaponSelection, select_weapon_slot};

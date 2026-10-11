@@ -87,6 +87,7 @@
 - `look_target` … クロスヘア（＋）が刺さっているブロック/エンティティ。MISS 時は省略可
 - `meta`
 - `command_results` … adapterで未ackの型付きcommand実行結果。通常は空配列
+- `owned_horses` … 統合サーバーの所有馬候補。通常会話の視界とは分け、呼び寄せ依頼後の候補選択だけに使う。項目・期限は [所有馬の呼び戻し](2026-10-11-horse-recall.md) を参照
 
 ## 6. 共通 enum
 
