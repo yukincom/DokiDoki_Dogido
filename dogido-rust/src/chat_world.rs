@@ -197,12 +197,11 @@ pub(crate) fn build_place_context(
     } else {
         String::new()
     };
-    let occluded = crate::combat::core::occluded_with_cover(event, &cover);
     let home = home_evidence(event, home_bed_prompt_distance);
     let (kind, ja) = if w.is_submerged == Some(true) {
         ("underwater", "水中".into())
     } else if environment.mining_state == MiningState::Active {
-        ("active_mining", "地下で採掘中".into())
+        ("active_mining", "採掘中".into())
     } else if !home.is_empty() {
         let fixtures = [("nearby_bed", "ベッド"), ("nearby_door", "ドア")]
             .into_iter()
@@ -216,37 +215,20 @@ pub(crate) fn build_place_context(
         )
     } else if environment.cave_biome {
         ("cave_biome", "洞窟バイオームの中".into())
-    } else if environment.mining_state == MiningState::LikelyPlace {
-        ("mine_like", "坑道らしい地下空間".into())
     } else if surface_canopy {
         ("canopy", "地表の木陰（頭上は木の葉）".into())
-    } else if sky == Some(false)
-        && (ceiling.is_some_and(|v| v <= 8.0)
-            || w.enclosure_score.unwrap_or(0.0) >= 0.35
-            || y.is_some_and(|v| v <= 48.0)
-            || occluded)
-    {
-        (
-            "underground_or_roofed",
-            "地下っぽい／屋根のある空間（空は見えない）".into(),
-        )
     } else if foliage(event) || (cover == "foliage" && sky != Some(true)) {
         ("canopy", "木陰っぽい空間".into())
     } else if sky == Some(true) {
         ("open_surface", "開けた地上（空が見える）".into())
     } else if sky == Some(false) {
-        (
-            "roofed_unclear",
-            "空は見えないが、深さははっきりしない空間".into(),
-        )
+        ("sky_hidden", "空が見えない空間".into())
     } else {
         ("unknown", "空間の詳細は不明".into())
     };
     let mut bits = if shared {
         vec![match kind {
             "open_surface" => "開けた地上".into(),
-            "underground_or_roofed" => "地下っぽい／屋根のある空間".into(),
-            "roofed_unclear" => "深さははっきりしない空間".into(),
             _ => ja,
         }]
     } else {

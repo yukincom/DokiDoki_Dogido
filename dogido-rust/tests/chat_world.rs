@@ -186,8 +186,8 @@ fn measured_surface_leaves_keep_taiga_instead_of_inventing_underground() {
     let base = value(&FIXTURE["places"][0], 0).clone();
     for (cover, depth, expected) in [
         ("foliage", 0, "canopy"),
-        ("solid", 0, "underground_or_roofed"),
-        ("stone", 12, "mine_like"),
+        ("solid", 0, "sky_hidden"),
+        ("stone", 12, "sky_hidden"),
     ] {
         let mut raw = base.clone();
         raw["player"]["position"]["y"] = json!(111.0);

@@ -627,17 +627,30 @@ fn features(
     if !vehicle.is_empty() {
         add("乗車", "vehicle_activity".into(), vehicle, vec![]);
     }
-    if !environment.mining_label.is_empty() {
+    if environment.mining_state == MiningState::Active {
         add(
-            if environment.mining_state == MiningState::Active {
-                "行動"
-            } else {
-                "空間"
-            },
+            "行動",
             "mining_context".into(),
             environment.mining_label.clone(),
-            ["地下", "採掘", "石", "土"].map(str::to_owned).to_vec(),
+            vec!["採掘".into()],
         );
+    }
+    // 川柳にも既存の頭上材質を観測材料として渡す。
+    if event.world.sky_visible == Some(false) && event.world.ceiling_observed != Some(false) {
+        let material = match event.world.overhead_cover_type.as_deref() {
+            Some("stone") => Some("石"),
+            Some("earth") => Some("土"),
+            Some("ore") => Some("鉱石"),
+            _ => None,
+        };
+        if let Some(material) = material {
+            add(
+                "空間",
+                "overhead_cover".into(),
+                format!("空は見えず、頭上に{material}がある"),
+                vec![material.into()],
+            );
+        }
     }
     // 構造物があるときはその場所名を軸にし、一般のバイオーム名と地帯名を重ねない。
     // 気候と空の材料は環境投影の可視範囲に従い、地下で地表の景色ばかりを詠むのを抑える。

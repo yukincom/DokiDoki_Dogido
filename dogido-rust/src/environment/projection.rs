@@ -7,7 +7,6 @@ use serde::Serialize;
 #[serde(rename_all = "snake_case")]
 pub enum MiningState {
     Active,
-    LikelyPlace,
     None,
 }
 
@@ -21,7 +20,7 @@ pub struct EnvironmentProjection {
     pub evidence: Vec<String>,
 }
 
-/// Mirrors environment_context.project_environment; raw values are never rewritten.
+/// Projects visible context and observed mining activity; raw values are never rewritten.
 pub fn project_environment(event: &GameEvent) -> EnvironmentProjection {
     let biome = event.world.biome.as_deref().unwrap_or("");
     // Prefix removal intentionally precedes trim/lower, exactly as in Python.
@@ -84,36 +83,8 @@ pub fn project_environment(event: &GameEvent) -> EnvironmentProjection {
     }
     if mining_tool && (breaks >= 2 || (breaks >= 1 && (actively_breaking || drops > 0))) {
         result.mining_state = MiningState::Active;
-        result.mining_label = "プレイヤーは地下で採掘している".into();
+        result.mining_label = "プレイヤーは採掘している".into();
         return result;
-    }
-    let cover = event
-        .world
-        .overhead_cover_type
-        .as_deref()
-        .unwrap_or("")
-        .trim_matches(space)
-        .to_lowercase();
-    let natural_cover = matches!(cover.as_str(), "stone" | "earth" | "ore");
-    if natural_cover {
-        result.evidence.push(format!("natural_overhead:{cover}"));
-    }
-    let depth_signal = match event.world.depth_below_surface {
-        Some(depth) => depth >= 6,
-        None => event.player.position.y.is_some_and(|y| y <= 48.0),
-    };
-    if depth_signal {
-        result.evidence.push("below_surface".into());
-    }
-    let interior_signal = event.world.safe_zone_with_door == Some(true)
-        || event.world.nearby_door_count.unwrap_or(0) > 0
-        || event.world.nearby_bed_count.unwrap_or(0) > 0;
-    if interior_signal {
-        result.evidence.push("interior_fixture_observed".into());
-    }
-    if natural_cover && depth_signal && !interior_signal {
-        result.mining_state = MiningState::LikelyPlace;
-        result.mining_label = "坑道らしい地下空間にいる".into();
     }
     result
 }
