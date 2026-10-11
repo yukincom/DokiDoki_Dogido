@@ -54,6 +54,7 @@ impl Dialogue {
             let now = self.clock.elapsed().as_millis() as u64;
             let complete = complete_observation(&event);
             let s = d.sessions.get_mut(session_id).unwrap();
+            s.horse_recall.observe(&event, recent);
             if complete {
                 s.latest = Some(event.clone());
                 s.received = recent.then(Instant::now);

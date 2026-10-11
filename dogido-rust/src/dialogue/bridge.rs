@@ -13,7 +13,7 @@ pub(super) struct Input {
     pub snapshot: Option<std::sync::Arc<(crate::events::GameEvent, super::chat_context::Native)>>,
     pub context: Option<crate::input_context::Context>,
     pub retained_history_count: usize,
-    pub horse_recall: Option<crate::assist::horse_recall::contracts::Prepared>,
+    pub horse_recall: Option<super::horse_recall_runtime::Request>,
 }
 
 impl Input {

@@ -129,7 +129,7 @@ fn first_stage_preserves_personality_without_candidates_then_selection_exposes_t
         }
         .into_request()
         .unwrap();
-        let (request, tools) = intent::request(base, &p, stage).unwrap();
+        let (request, tools) = intent::request(base, &p.original, Some(&p), stage).unwrap();
         let system = &request.messages[0].content;
         assert!(system.contains(crate::companion_prompt::base()));
         assert!(!system.contains(crate::companion_prompt::choice_contract()));

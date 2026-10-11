@@ -46,7 +46,8 @@ fn action(stage: Stage) -> &'static str {
 /// 名前の表記ゆれと対象の対応はモデルが判断し、UUIDはコード側の固定表にのみ保持する。
 pub fn request(
     mut base: GenerationRequest,
-    prepared: &Prepared,
+    original: &str,
+    prepared: Option<&Prepared>,
     stage: Stage,
 ) -> Result<(GenerationRequest, Vec<Value>)> {
     let old = crate::companion_prompt::choice_contract();
@@ -82,8 +83,9 @@ pub fn request(
         .find(|m| matches!(m.role, Role::User))
         .context("horse_user_required")?;
     user.content
-        .push_str(&format!("\n今回発話の原文: {}\n", prepared.original));
+        .push_str(&format!("\n今回発話の原文: {original}\n"));
     if stage == Stage::Selection {
+        let prepared = prepared.context("horse_selection_snapshot_required")?;
         let candidates: Vec<Value> = prepared.candidates.iter().enumerate().map(|(i, horse)| json!({
             "candidate_id":format!("h{}",i+1), "name":horse.custom_name,
             "eligible":prepared.snapshot.eligible(horse),
