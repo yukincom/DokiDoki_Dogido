@@ -20,7 +20,11 @@ adapter/minecraft-fabric/.gradle/
 adapter/minecraft-fabric/build/
 adapter/minecraft-fabric/run/
 /資料
-animation/
+# 身体Modだけを追跡し、他のアニメーション制作物は除外する
+/animation/*
+!/animation/cube_dogido/
+/animation/cube_dogido/*
+!/animation/cube_dogido/cube-dogido-lab/
 .DS_Store
 /dogido-llm
 .venv/

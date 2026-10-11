@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "dogido_experiment",
+  "version": "${version}",
+  "name": "Cube Dogido Lab",
+  "description": "A physical, hovering Dogido for experimental worlds.",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dogido.lab.DogidoLab"
+    ],
+    "dogido:body_bridge_v2": [
+      "dogido.lab.client.BodyClientBridge"
+    ],
+    "client": [
+      "dogido.lab.client.DogidoLabClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
