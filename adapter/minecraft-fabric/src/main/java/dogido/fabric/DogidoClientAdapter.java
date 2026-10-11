@@ -62,6 +62,9 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
     private DogidoConfig config;
     private DogidoEventClient eventClient;
+    // client tickで一度採る身体実測。各イベントは同じ不変コピーを送信する。
+    private final dogido.fabric.body.BodyConnection bodyConnection = new dogido.fabric.body.BodyConnection();
+    private com.google.gson.JsonObject bodyObservation;
     private final SmellObserver smellObserver = new SmellObserver();
 
     private long tickCounter = 0;
@@ -124,7 +127,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.dialogueChat = DogidoDialogueChat.register(this.eventClient, this.config::saveVoiceEnabled);
         this.eventCapture = new EventObservationCapture(this.playerObserver, this.worldObserver, this.smellObserver,
             this.ambientMobObserver, this.combatObserver, this.eventClient::nextSequence,
-            () -> this.tickCounter, () -> null);
+            () -> this.tickCounter, () -> null, () -> this.bodyObservation);
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientPlayerBlockBreakEvents.AFTER.register((world, player, pos, state) -> {
             this.worldObserver.rememberBlockBreak(state, this.tickCounter);
@@ -238,7 +241,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
-        this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player));
+        this.bodyObservation = this.bodyConnection.capture(player.getUuid(),currentDimensionId);
+        this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player),player.getUuid(),this.bodyConnection.supported());
         this.soundObserver.expireSoundObservations();
         this.worldObserver.expireBlockBreakObservations(this.tickCounter);
         this.worldObserver.observeNearbyLightning(player, world, this.tickCounter);

@@ -250,7 +250,7 @@ public final class DogidoEntity extends PathAwareEntity {
         return new Snapshot(BodyProtocol.VERSION,owner() == null ? Presence.OWNER_UNAVAILABLE : Presence.PRESENT,control.context(),player == null ? null : player.getEntityWorld().getRegistryKey().getValue().toString(),serverTick(),snapshotRevision,
             new Position(p.x,p.y,p.z),getYaw(),activity,reason,control.revision(),control.stateResult(),control.actionResult(),Sensors.NOT_IMPLEMENTED,
             vitals.snapshot(getHealth(),getMaxHealth(),damageEnabled(),player == null ? null : player.interactionManager.getGameMode().getId()),
-            owner() == null || vitals.downed() ? new FoodObservation(ObservationStatus.UNAVAILABLE,serverTick(),List.of(),false) : food.observe());
+            owner() == null || vitals.downed() ? new FoodObservation(ObservationStatus.UNAVAILABLE,serverTick(),List.of(),false) : food.observe(), BodyPoseObservation.capture(this,owner()));
     }
 
     private void prepareLifecycle() {
@@ -275,6 +275,8 @@ public final class DogidoEntity extends PathAwareEntity {
         if (lastBodyStep == serverTick()) return;
         lastBodyStep = serverTick();
         if (administrativeRemoval) return;
+        // DOWNED中もowner位置と復活待ち時間は変わる。早期returnより先に観測revisionを進める。
+        snapshotRevision++;
         ServerPlayerEntity player = owner();
         BodySpace space = new BodySpace((ServerWorld)getEntityWorld(),this);
         var step = vitals.step(player != null,damageEnabled(),space.insideSolid(getBoundingBox()),
@@ -296,7 +298,6 @@ public final class DogidoEntity extends PathAwareEntity {
         }
         if (!damageEnabled()) extinguish();
         if (!vitals.downed()) followOwnerWorld();
-        snapshotRevision++;
     }
     private void respawnAtOwner(ServerPlayerEntity player) {
         if (player == null) { reason = "respawn_owner_unavailable"; return; }

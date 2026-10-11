@@ -51,6 +51,8 @@ public final class DogidoEventClient {
     private final DogidoCommandProtocol.State commandState;
     private final Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler;
     private volatile String sessionId;
+    private java.util.UUID lastPlayerUuid;
+    private boolean bodySupported;
     private volatile String lastPlayerName = "unknown";
     private final AtomicBoolean displayRequestInFlight = new AtomicBoolean();
     private final AtomicLong worldEpoch = new AtomicLong();
@@ -152,6 +154,13 @@ public final class DogidoEventClient {
         }
     }
 
+    /** UUIDは登録時に固定する身体owner照合用。表示名のoverrideとは別に実playerから受け取る。 */
+    public synchronized void ensureSession(String playerName, java.util.UUID playerUuid, boolean bodySupported) {
+        this.lastPlayerUuid = playerUuid;
+        this.bodySupported = bodySupported;
+        ensureSession(playerName);
+    }
+
     public synchronized void ensureSession(String playerName) {
         if (playerName != null && !playerName.isBlank()) {
             this.lastPlayerName = playerName;
@@ -170,11 +179,13 @@ public final class DogidoEventClient {
         payload.addProperty("game", DogidoBuildInfo.GAME);
         payload.addProperty("schema_version", DogidoBuildInfo.SCHEMA_VERSION);
         payload.addProperty("player_name", playerName);
+        if (this.lastPlayerUuid != null) payload.addProperty("player_uuid", this.lastPlayerUuid.toString());
         payload.addProperty("profile_name", DogidoBuildInfo.PROFILE_NAME);
         payload.addProperty("adapter_build", DogidoBuildInfo.ADAPTER_BUILD);
         if (this.preferredVoiceEnabled != null) payload.addProperty("voice_enabled", this.preferredVoiceEnabled);
         JsonArray capabilities = new JsonArray();
         capabilities.add("player_state");
+        if (this.bodySupported) capabilities.add("body_observation.v1");
         capabilities.add("inventory");
         capabilities.add("hotbar_slots");
         capabilities.add("visual_threats");

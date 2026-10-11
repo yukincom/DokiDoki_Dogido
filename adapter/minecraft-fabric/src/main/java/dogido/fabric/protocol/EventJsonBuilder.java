@@ -23,6 +23,11 @@ public final class EventJsonBuilder {
         this.root = baseEnvelope(eventName, sourceKind, priorityHint, certainty, observedAt, smell);
     }
 
+    /** body取得値は独立した主語のまま付ける。コピー後の変更は送信済みeventへ遡らない。 */
+    public EventJsonBuilder bodyObservation(JsonObject observation) {
+        if (observation != null) root.add("body_observation", observation.deepCopy());
+        return this;
+    }
     public void sequence(long sequence) { root.addProperty("sequence", sequence); }
     public void player(JsonObject player) { root.add("player", player); }
     public void world(JsonObject world) { root.add("world", world); }

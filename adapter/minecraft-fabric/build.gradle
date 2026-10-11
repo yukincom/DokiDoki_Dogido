@@ -25,7 +25,20 @@ repositories {
     mavenCentral()
 }
 
+// 身体APIだけをcompile classpathへ置く。実行時は任意の身体modが所有し、adapter jarには複製しない。
+def bodyProject = file('../../animation/cube_dogido/cube-dogido-lab')
+def bodyProperties = new Properties()
+file("$bodyProject/gradle.properties").withInputStream { bodyProperties.load(it) }
+def buildBodyApi = tasks.register('buildBodyApi', GradleBuild) {
+    dir = bodyProject
+    tasks = ['bodyApiJar']
+    startParameter.offline = gradle.startParameter.offline
+}
+def bodyApi = files("$bodyProject/build/libs/${bodyProperties.archives_base_name}-${bodyProperties.mod_version}-body-api.jar").builtBy(buildBodyApi)
+
 dependencies {
+    compileOnly bodyApi
+    testImplementation bodyApi
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"

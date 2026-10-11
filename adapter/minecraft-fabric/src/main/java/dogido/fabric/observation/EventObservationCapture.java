@@ -27,11 +27,12 @@ public final class EventObservationCapture {
     private final java.util.function.LongSupplier nextSequence;
     private final java.util.function.LongSupplier tickSource;
     private final java.util.function.Supplier<String> userText;
+    private final java.util.function.Supplier<JsonObject> bodyObservation;
 
     public EventObservationCapture(PlayerObserver playerObserver, WorldObserver worldObserver,
             SmellObserver smellObserver, AmbientMobObserver ambientMobObserver, CombatObserver combatObserver,
             java.util.function.LongSupplier nextSequence, java.util.function.LongSupplier tickSource,
-            java.util.function.Supplier<String> userText) {
+            java.util.function.Supplier<String> userText, java.util.function.Supplier<JsonObject> bodyObservation) {
         this.playerObserver = playerObserver;
         this.worldObserver = worldObserver;
         this.smellObserver = smellObserver;
@@ -40,11 +41,12 @@ public final class EventObservationCapture {
         this.nextSequence = nextSequence;
         this.tickSource = tickSource;
         this.userText = userText;
+        this.bodyObservation = bodyObservation;
     }
 
     private EventJsonBuilder baseEnvelope(String name, String source, String priority, String certainty) {
         return new EventJsonBuilder(name, source, priority, certainty,
-            OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), this.smellObserver.current());
+            OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), this.smellObserver.current()).bodyObservation(this.bodyObservation.get());
     }
 
     public JsonObject buildStatusSnapshot(

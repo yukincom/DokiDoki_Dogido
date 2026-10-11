@@ -52,6 +52,6 @@ final class BodyManager {
             id == null ? null : new Context(player.getUuid(),id,null,null),player.getEntityWorld().getRegistryKey().getValue().toString(),server.getTicks(),0,null,0,
             id == null ? Activity.UNBOUND : Activity.HOLDING,id == null ? "bind_existing_body" : "body_chunk_not_loaded",
             -1,null,null,Sensors.NOT_IMPLEMENTED,null,
-            new FoodObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false));
+            new FoodObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false),null);
     }
 }

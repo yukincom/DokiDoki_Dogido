@@ -224,6 +224,7 @@ impl Runtime {
                         registration.adapter_name == "rust-conversation-preview"
                             && registration.game == "none",
                     );
+                    d.bind_body_owner(&id, registration.player_uuid.as_deref());
                     d.set_execution_capabilities(&id, &registration.execution_capabilities);
                     if registration
                         .capabilities

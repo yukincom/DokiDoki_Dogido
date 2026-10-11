@@ -13,6 +13,7 @@ mod web_runtime;
 pub use web_runtime::Settings as WebSettings;
 mod assist_runtime;
 mod audio;
+mod body_runtime;
 mod bridge;
 mod chat_context;
 mod chat_leaf_runtime;
@@ -134,6 +135,10 @@ struct Session {
     instance_id: String,
     /// 接続時のプレイヤー表示名。registerで設定する。
     name: String,
+    /// 接続登録の実player UUID。身体ownerとの照合専用で表示名から推定しない。
+    player_uuid: Option<String>,
+    /// 生eventだけから更新する身体実測と前回値。会話開始時に鮮度を再検査する。
+    body_observation: crate::body::State,
     /// ゲーム観測なしの対話試験か。trueなら通常の観測鮮度条件を免除する。
     preview: bool,
     /// workshop_textが設定する、音声を伴わない共同編集試験の入口。
@@ -364,6 +369,8 @@ impl Dialogue {
             Session {
                 instance_id: id("session"),
                 name: name.into(),
+                player_uuid: None,
+                body_observation: crate::body::State::default(),
                 preview,
                 text_workshop: false,
                 delivery: text_delivery::State::new(self.config.audio_enabled),

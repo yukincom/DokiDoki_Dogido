@@ -1351,6 +1351,9 @@ pub struct EventData {
     /// Noneは匂いの契約自体が未送信。送信されたstatus=none（候補なし）と区別する。
     #[serde(default)]
     pub smell_observation: Option<SmellObservation>,
+    /// 身体の自他位置。Noneは旧adapter等の未送信で、player視覚とは別の観測。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_observation: Option<crate::body::contracts::Observation>,
     #[serde(default)]
     pub ambient_sounds: Vec<AmbientSound>,
     #[serde(default)]
@@ -1725,6 +1728,9 @@ impl Validate for EventData {
         self.visual_threats.validate()?;
         self.auditory_threats.validate()?;
         self.smell_observation.validate()?;
+        if let Some(body) = &self.body_observation {
+            body.validate()?;
+        }
         self.ambient_sounds.validate()?;
         self.passive_mobs.validate()?;
         self.nearby_composition.validate()?;

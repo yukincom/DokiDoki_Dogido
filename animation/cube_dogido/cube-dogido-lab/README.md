@@ -2,12 +2,12 @@
 
 Minecraft Java 1.21.11 / Fabricで動く3Dドギドの身体です。浮遊する既存モデルに、移動・HP・休息・食事・復活を持たせます。
 
-0.3.0では **行動を外部のモデルが選ぶためのDIRECT操作** を追加しました。身体Modが実行と実測を担当し、本線のRustがモデルとの接続を担当します。現在は身体単体とJava APIまで実装済みで、本線からモデルに行動を選ばせる接続はこれからです。
+0.4.0では、自分とプレイヤーの位置を同じサーバー時刻で測り、既存adapter・Rustの会話入力へ渡す読取り接続を追加しました。現在／前回の位置理解を確かめる第一段階です。DIRECT操作は0.3.0で追加済み。モデルによる行動選択は後続です。
 
 ## 導入
 
 1. Minecraftを終了する。
-2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.3.0.jar`へ置き換える。同じModの新旧を同時に入れない。
+2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.4.0.jar`へ置き換える。同じModの新旧を同時に入れない。
 3. Minecraft **1.21.11**、Fabric Loader **0.18.4以上**、Fabric APIで起動する。
 
 2D表示用Modと併用できます。2D表示は既存Modの`/dogidohud hide`・`/dogidohud show`で切り替えます。身体単体の試験にHTTPサーバーやLAN公開は不要です。
@@ -87,15 +87,15 @@ Java 21以上でビルドします。
 
 既存キャッシュがない環境では、通常の`./gradlew test build`で依存関係を取得します。
 
-- `build/libs/cube-dogido-lab-0.3.0.jar`：Minecraftへ入れるMod
-- `build/libs/cube-dogido-lab-0.3.0-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
-- `build/libs/cube-dogido-lab-0.3.0-sources.jar`：ソース
+- `build/libs/cube-dogido-lab-0.4.0.jar`：Minecraftへ入れるMod
+- `build/libs/cube-dogido-lab-0.4.0-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
+- `build/libs/cube-dogido-lab-0.4.0-sources.jar`：ソース
 
-[API v2と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
+[API v3と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
 
 ## 確認状態
 
-移動・時間ルール・要求検証は自動テスト、Minecraft APIへの配線はコンパイルで検査しています。0.3.0のゲーム内描画、被弾、食事、保存再開、復活、次元転送、C2S/S2C実通信は実機確認待ちです。本線のRust／既存adapterへの接続、モデルによる行動選択と結果の利用も未実装です。
+移動・時間ルール・要求検証は自動テスト、Minecraft APIへの配線はコンパイルで検査しています。0.4.0のゲーム内描画、被弾、食事、保存再開、復活、次元転送、C2S/S2C実通信は実機確認待ちです。Rust／既存adapterへの位置観測接続はコードと自動テストまで。実モデルの位置理解・行動選択は未確認です。[P1の検証範囲と実機手順](../../../docs/2026-10-11-body-integration-plan.md#p1-静止した身体から自分とプレイヤーの位置関係を把握する)を参照してください。
 
 食料の見通し観測と身体のHP等は実装済みです。身体位置からの一般的なモブ視認・スメル・構造物センサーは`NOT_IMPLEMENTED`として区別します。花・雷雨・就寝の専用行動は未実装です。
 

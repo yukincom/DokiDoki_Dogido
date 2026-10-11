@@ -115,7 +115,7 @@ pub(super) fn capture(
             history,
             workshop_open: workshop.is_some(),
             workshop_details: workshop.map(workshop_details).transpose()?,
-            world_context: s.conversation_observation.context(),
+            world_context: super::body_runtime::context(s),
         },
         settings: Settings {
             darkness_alert_threshold: settings.number("darkness_alert_threshold"),

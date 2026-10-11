@@ -130,6 +130,16 @@ adapter の起動時に session を作る。
 - `capabilities` は観測できる情報、`execution_capabilities` は実行できる操作。混ぜない
 - sessionなしの暗黙sessionは実行capabilityを持たず、世界操作を返さない
 
+### 身体の位置観測（P1、2026-10-11）
+
+登録にoptionalの`player_uuid`（小文字・ハイフン付きUUID）を追加した。表示名・call_nameとは分け、身体owner UUIDとの照合に使う。旧adapterの省略は許可し、その接続では身体観測だけ利用不可。Body API v3を読み取れるadapterは`body_observation.v1`をcapabilitiesへ加える。これは観測の契約で、実行権限ではない。
+
+既存ゲームイベントにoptionalの`body_observation`を添える。外形は`version:1, status:"observed", basis:"server_pose", age_ms, sample`。sampleは`context(owner_id,body_id,epoch,dimension)`、`server_tick`、`snapshot_revision`、`self_pose(position,eye_position,yaw)`、`player_pose(position)`を持つ。[共有JSON例](../dogido-rust/fixtures/body-observation-v1.json)をJava送信・Rust受信双方で検査する。未取得は`version:1,status:"unavailable",reason`だけを送り、座標を0にしない。
+
+座標はblock、yawは度（-180以上180未満）。Minecraftの+xは東、+yは上、+zは南、yaw=0は南、+90は西。根拠はサーバー実測であり、壁越しの視認は未検査。身体Modは10 client tickごとに採取要求を送り、HTTPは既存のイベント周期（既定20tick）を使う。client受信経過ms＋HTTPイベント経過＋Rust受信後経過が3秒未満の値だけを現在値にする。HTTP周期を3秒以上に延ばすと観測が一時的に未取得になる。
+
+Rustは同じowner・次元で受理した新しい身体tick/revisionから現在・前回を持つ。身体epochの切替・未取得・鮮度切れは前回比較を消す。再送・逆順・部分イベントへの旧値合成で鮮度を更新しない。異なる世代は接続中256個まで退役記録に保持し、上限時は`context_limit`として再接続まで未取得にする。モデルには現在／前回の座標と向き、座標規約だけを渡し、配送UUIDや検査用の距離・方向正解を渡さない。従来の周囲材料はplayer由来と明示する。
+
 ## 8. `POST /api/v1/game-events`
 
 単一イベント受信の主 endpoint。

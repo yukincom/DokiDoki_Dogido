@@ -6,6 +6,7 @@
 
 ## できること
 
+- 任意の身体Mod 0.4.0／Body API v3から、自分とプレイヤーの位置を`body_observation`で送信。取得不能時は理由を送り、player観測へ代入しない（[P1仕様](../../docs/2026-10-11-body-integration-plan.md)）。
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
 - `player.hotbar`（0〜8、選択中slot、item ID、耐久、main-hand攻撃属性、武器候補種別）
 - 乗車中だけ `player.vehicle`（乗り物ID・操縦者か・漕ぐ／走る／移動中）

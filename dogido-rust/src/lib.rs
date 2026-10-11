@@ -7,6 +7,7 @@
 
 pub mod address;
 pub mod assist;
+pub mod body;
 pub mod catalog_editor;
 pub mod chat_catalog;
 pub mod chat_names;

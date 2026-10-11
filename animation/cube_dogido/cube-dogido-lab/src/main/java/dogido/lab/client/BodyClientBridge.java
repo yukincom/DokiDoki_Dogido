@@ -36,7 +36,7 @@ public final class BodyClientBridge implements BodyBridge {
                             || !client.world.getRegistryKey().getValue().toString().equals(next.ownerDimension())) return;
                     if (next.context() != null && !client.player.getUuid().equals(next.context().ownerId())) return;
                     Snapshot old = latest;
-                    if (old != null && Objects.equals(old.context(),next.context()) && next.snapshotRevision() < old.snapshotRevision()) return;
+                    if (old != null && Objects.equals(old.context(),next.context()) && next.snapshotRevision() <= old.snapshotRevision()) return;
                     latest = next;
                     receivedAt = System.nanoTime();
                 } catch (RuntimeException ignored) { }
@@ -59,6 +59,9 @@ public final class BodyClientBridge implements BodyBridge {
     }
     @Override public Optional<Snapshot> snapshot() {
         return System.nanoTime()-receivedAt > 3_000_000_000L ? Optional.empty() : Optional.ofNullable(latest);
+    }
+    @Override public long snapshotAgeMillis() {
+        return latest == null ? Long.MAX_VALUE : Math.max(0,(System.nanoTime()-receivedAt)/1_000_000L);
     }
     private Submission ready(Context context) {
         if (!MinecraftClient.getInstance().isOnThread()) return Submission.WRONG_THREAD;
