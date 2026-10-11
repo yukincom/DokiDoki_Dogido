@@ -167,10 +167,10 @@ impl Dialogue {
             if status.is_terminal() {
                 s.cancel = None;
             }
-            if let Some(p) = s.address.as_mut() {
-                if !text_displayed {
-                    p.playback(turn, status);
-                }
+            if let Some(p) = s.address.as_mut()
+                && !text_displayed
+            {
+                p.playback(turn, status);
             }
             if let Some(result) = result {
                 let knowledge_detour =

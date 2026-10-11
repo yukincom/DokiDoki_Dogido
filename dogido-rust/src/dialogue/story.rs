@@ -2,6 +2,15 @@
 use super::{Dialogue, Session, history::History};
 use serde_json::{Value, json};
 
+/// 通常履歴と短期ログで共有する、一件の出来事。
+pub(super) struct StoryEvent<'a> {
+    pub id: &'a str,
+    pub workshop: Option<&'a str>,
+    pub kind: &'a str,
+    pub text: &'a str,
+    pub details: Value,
+}
+
 /// 通常会話が既に持つ文脈を相談へ渡す。相談由来のeventはw.dialogueと重なるため戻さない。
 pub(super) fn workshop_context(s: &Session) -> String {
     let history = s.history.rows();
@@ -30,14 +39,10 @@ impl Dialogue {
         &self,
         sid: &str,
         s: &mut Session,
-        event_id: &str,
-        workshop: Option<&str>,
-        kind: &str,
-        text: &str,
-        details: Value,
+        event: StoryEvent<'_>,
     ) {
-        if s.history.story(event_id, text) {
-            self.append_story(sid, &s.instance_id, event_id, workshop, kind, text, details);
+        if s.history.story(event.id, event.text) {
+            self.append_story(sid, &s.instance_id, event);
         }
     }
     /// 既存の確定・配送境界から受け取った記録を、既存writerで短期ログへ追記するだけ。
@@ -45,11 +50,7 @@ impl Dialogue {
         &self,
         sid: &str,
         instance: &str,
-        event_id: &str,
-        workshop: Option<&str>,
-        kind: &str,
-        text: &str,
-        details: Value,
+        event: StoryEvent<'_>,
     ) {
         if !self.config.haiku.memory_enabled
             || sid.is_empty()
@@ -67,8 +68,8 @@ impl Dialogue {
                 .join(sid)
                 .join("short_term/current_session.jsonl"),
             json!({"type":"dialogue_event","schema_version":"1","time":chrono::Utc::now(),
-                "session_id":sid,"session_instance":instance,"event_id":event_id,
-                "workshop_id":workshop,"kind":kind,"text":text,"details":details}),
+                "session_id":sid,"session_instance":instance,"event_id":event.id,
+                "workshop_id":event.workshop,"kind":event.kind,"text":event.text,"details":event.details}),
         );
     }
 }
@@ -91,11 +92,13 @@ mod tests {
             f.d.share_story(
                 "s",
                 s,
-                "workshop:1",
-                None,
-                "workshop_dialogue",
-                "相談本文は専用履歴にある",
-                json!({}),
+                StoryEvent {
+                    id: "workshop:1",
+                    workshop: None,
+                    kind: "workshop_dialogue",
+                    text: "相談本文は専用履歴にある",
+                    details: json!({}),
+                },
             );
             let context = workshop_context(s);
             assert!(context.contains("プレイヤー: この景色好きだよ"));
@@ -123,11 +126,13 @@ mod tests {
                 f.d.share_story(
                     "s",
                     s,
-                    "unspoken:1",
-                    None,
-                    "workshop_unspoken",
-                    &full,
-                    json!({}),
+                    StoryEvent {
+                        id: "unspoken:1",
+                        workshop: None,
+                        kind: "workshop_unspoken",
+                        text: &full,
+                        details: json!({}),
+                    },
                 );
             }
             assert_eq!(s.history.rows().len(), 1);
