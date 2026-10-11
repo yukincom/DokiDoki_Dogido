@@ -10,6 +10,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+// 実行期限後の配送停止と結果待ちを分け、期限内の移動を次の観測で受け取れるようにする。
+const RESULT_GRACE_SECONDS: i64 = 5;
+
 /// UUIDはモデルの返却値ではなく、現在も一致する候補表からコードが確定する。
 /// 発行から5秒だけ有効。同じIDの再配送ではFabric側が移動を重複実行しない。
 #[derive(Clone, Debug, Serialize)]
@@ -57,7 +60,7 @@ impl Queue {
         Ok(command)
     }
 
-    /// 発行済みIDだけを消費し、期限・種類・個体・接続世代を照合した結果を返す。
+    /// 発行済みIDだけを消費し、実行期限と受信猶予・種類・個体・接続世代を照合する。
     /// 未知IDはNoneであり、ACKと重複判定は剣と共通のAssistStateに任せる。
     pub(crate) fn observe(
         &mut self,
@@ -74,7 +77,7 @@ impl Queue {
         if incoming.command_type != AdapterCommandResultCommandType::RecallHorse {
             result.status = AdapterCommandResultStatus::Failed;
             result.detail_code = "result_type_mismatch".into();
-        } else if now >= command.expires_at {
+        } else if now >= command.expires_at + Duration::seconds(RESULT_GRACE_SECONDS) {
             result.status = AdapterCommandResultStatus::Expired;
             result.detail_code = "server_result_timeout".into();
         } else if result.status == AdapterCommandResultStatus::Succeeded {
@@ -97,9 +100,10 @@ impl Queue {
         Some(result)
     }
 
-    /// 結果が来ない命令を一度だけ退役する。呼出元が同じIDを共有台帳へ登録する。
+    /// 実行期限から5秒待っても結果が来ない命令を一度だけ退役する。
+    /// 受信猶予は再配送や実行の許可を延ばさず、呼出元が同じIDを共有台帳へ登録する。
     pub(crate) fn expire(&mut self, now: DateTime<Utc>) -> Option<AdapterCommandResult> {
-        if self.pending.as_ref()?.expires_at > now {
+        if self.pending.as_ref()?.expires_at + Duration::seconds(RESULT_GRACE_SECONDS) > now {
             return None;
         }
         let command = self.pending.take().expect("expired pending command");
@@ -365,7 +369,7 @@ mod tests {
             assert_eq!(out.observed[0].result.detail_code, detail);
             assert_eq!(
                 out.feedback.as_deref(),
-                Some("馬を呼び戻せへんかったわ。足場や馬の状態を確認してな。")
+                Some("馬の呼び戻しを確認できへんかったわ。馬の状態を見てな。")
             );
             assert!(state.commands(now()).is_empty());
         }
@@ -382,7 +386,7 @@ mod tests {
             } else {
                 vec![]
             };
-            let out = state.observe_results(&input, now() + Duration::seconds(5), false);
+            let out = state.observe_results(&input, now() + Duration::seconds(10), false);
             assert_eq!(out.observed.len(), 1);
             assert_eq!(
                 out.observed[0].result.status,
@@ -392,25 +396,77 @@ mod tests {
             assert_eq!(out.observed[0].result.detail_code, "server_result_timeout");
             assert!(
                 state
-                    .observe_results(&[], now() + Duration::seconds(6), false)
+                    .observe_results(&[], now() + Duration::seconds(11), false)
                     .observed
                     .is_empty()
             );
-            let late = state.observe_results(&[success], now() + Duration::seconds(6), false);
+            let late = state.observe_results(&[success], now() + Duration::seconds(11), false);
             assert_eq!(late.acknowledged_ids, [command.command_id]);
             assert!(late.observed.is_empty());
         }
         let mut state = state();
         let old = issue(&mut state);
         let mut p = prepared();
-        p.snapshot.observed_at += Duration::seconds(5);
+        p.snapshot.observed_at += Duration::seconds(10);
         let new = state
-            .enqueue_horse(&p, &choice(), &p.snapshot, now() + Duration::seconds(5))
+            .enqueue_horse(&p, &choice(), &p.snapshot, now() + Duration::seconds(10))
             .unwrap();
         assert_ne!(old.command_id, new.command_id);
-        let out = state.observe_results(&[], now() + Duration::seconds(5), false);
+        let out = state.observe_results(&[], now() + Duration::seconds(10), false);
         assert_eq!(out.observed.len(), 1);
         assert_eq!(out.observed[0].result.command_id, old.command_id);
+    }
+
+    #[test]
+    fn horse_queue_waits_for_receipt_without_extending_execution_or_retransmission() {
+        for receipt_ms in [5_200, 9_999] {
+            let mut state = state();
+            let command = issue(&mut state);
+            // 次の観測で成功が届くまで、期限切れを失敗として記録せず、再配送も止める。
+            let out = state.observe_results(&[], now() + Duration::seconds(5), false);
+            assert!(out.observed.is_empty());
+            assert!(out.feedback.is_none());
+            assert!(state.commands(now() + Duration::seconds(5)).is_empty());
+            let mut p = prepared();
+            p.snapshot.observed_at += Duration::seconds(5);
+            assert!(
+                state
+                    .enqueue_horse(&p, &choice(), &p.snapshot, now() + Duration::seconds(5))
+                    .is_err()
+            );
+            let mut success = result(&command);
+            success.executed_at =
+                EventTime::Aware((now() + Duration::milliseconds(4_700)).fixed_offset());
+            let out = state.observe_results(
+                &[success.clone()],
+                now() + Duration::milliseconds(receipt_ms),
+                false,
+            );
+            assert_eq!(
+                out.observed[0].result.status,
+                AdapterCommandResultStatus::Succeeded
+            );
+            assert!(out.feedback.is_none());
+            assert!(
+                state
+                    .observe_results(&[success], now() + Duration::seconds(10), false)
+                    .observed
+                    .is_empty()
+            );
+        }
+        let mut state = state();
+        let command = issue(&mut state);
+        let mut too_late = result(&command);
+        too_late.executed_at = EventTime::Aware((now() + Duration::seconds(5)).fixed_offset());
+        let out = state.observe_results(&[too_late], now() + Duration::seconds(6), false);
+        assert_eq!(
+            out.observed[0].result.status,
+            AdapterCommandResultStatus::Failed
+        );
+        assert_eq!(
+            out.observed[0].result.detail_code,
+            "result_outside_validity_window"
+        );
     }
 
     #[test]
@@ -432,7 +488,7 @@ mod tests {
         let mut failure = result(&horse);
         failure.status = AdapterCommandResultStatus::Rejected;
         let out = state.observe_results(&[failure], now() + Duration::seconds(1), false);
-        assert!(out.feedback.unwrap().starts_with("馬を"));
+        assert!(out.feedback.unwrap().starts_with("馬の"));
         assert_eq!(
             sword(&mut state, now() + Duration::seconds(1)).detail_code,
             "command_cooldown"

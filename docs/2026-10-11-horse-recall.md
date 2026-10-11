@@ -41,11 +41,15 @@
 
 `world_id` は接続・ClientWorldが変わると新しくする。同じ次元名の別世界へ命令を持ち込まない。revisionが増えても対象情報が一致すればよい。未知IDの結果はACKするが成功の証拠にせず、正しい命令・種類・個体・世界・期限が一致した成功だけを一度記録する。
 
+実行と再配送の期限は発行から5秒。結果の受信にはさらに5秒の猶予を設け、期限内に動いた馬の結果が次の観測で届いても成功を確認できるようにする。猶予中の新しい呼び戻しは受け付けず、実行時刻が5秒の期限外なら成功扱いにしない。受信猶予を過ぎた結果は復活させず、「確認できなかった」と記録・案内する。
+
 ## 配置と検証
 
 - `dogido-rust/src/assist/horse_recall/`: 依頼・候補選択の契約、原文/個体検証、命令の待ち行列。
 - `dogido-rust/src/dialogue/horse_recall_runtime.rs`: 通常会話からの呼出し、最新状態への適用、実行結果の会話への接続。
 - `adapter/minecraft-fabric/.../horse_recall/`: 所有馬観測、実移動、着地点、演出。
 - `dogido-rust/scripts/check_horse_recall.py`: 実HTTPと模擬LLM/TTSによる接続・候補の段階的公開・再配送・ACK・取消・改名検査。
+
+最終コードでRust全656テスト（33 target）と `clippy --all-targets --locked -- -D warnings` が通過。模擬HTTPは7項目が通過し、期限内に実行・期限後に受信した成功を失敗へ変えないことも確認した。Fabricは `./gradlew test build --offline --no-daemon` で133テストとjarのビルドが通過した。これらは実Minecraftでの移動・描画・音声を検証するものではない。
 
 比較結果と採用方式は [API / JSONの適性](2026-10-11-api-json-suitability.md) を参照。実モデル比較は選択結果までを検証し、Minecraftの馬は動かさない。

@@ -402,7 +402,7 @@ impl AssistState {
         {
             out.feedback = Some(
                 if result.command_type == AdapterCommandResultCommandType::RecallHorse {
-                    "馬を呼び戻せへんかったわ。足場や馬の状態を確認してな。"
+                    "馬の呼び戻しを確認できへんかったわ。馬の状態を見てな。"
                 } else if result.status == AdapterCommandResultStatus::Expired {
                     "持ち替えが間に合わへんかったわ。もう一回言うてな。"
                 } else if ["expected_item_mismatch", "result_mismatch"]

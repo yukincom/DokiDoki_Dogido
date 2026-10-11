@@ -239,6 +239,30 @@ def check_wrong_identity(helper, binary, passed):
     passed.append("wrong_entity_ack_never_establishes_success_or_revives_on_later_correct_receipt")
 
 
+def check_delayed_receipt(helper, binary, passed):
+    plan = selection_plan()
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        helper.submit_text(base, sid, RECALL)
+        command = get_command(helper, send)
+        receipt = result(command)
+        expires = datetime.fromisoformat(command["expires_at"].replace("Z", "+00:00"))
+        # 実行時刻を期限内に固定し、実HTTPでは次の観測まで結果が遅れた状況を作る。
+        while datetime.now(timezone.utc) <= expires:
+            assert not stories(FAILURE_STORY), history()
+            send()
+            time.sleep(.1)
+        quiet_commands(send, seconds=.2)
+        assert not stories(FAILURE_STORY) and not stories(SUCCESS_STORY), history()
+        response = send(results=[receipt])
+        assert response["acknowledged_command_ids"] == [command["command_id"]], response
+        helper.wait_for(lambda: stories(SUCCESS_STORY))
+        assert len(stories(SUCCESS_STORY)) == 1 and not stories(FAILURE_STORY), history()
+        send(results=[receipt])
+        assert len(stories(SUCCESS_STORY)) == 1, history()
+        plan.verify()
+    passed.append("on_time_execution_with_delayed_receipt_succeeds_without_post_deadline_retransmission")
+
+
 def check_chat(helper, binary, passed, *, capability):
     plan = MockPlan([("ordinary", {"action": "speak", "speech": SPEECH})], capability=capability)
     with fixture(helper, binary, plan, capability=capability) as (base, sid, send, rows, history, stories, state, seen):
@@ -296,6 +320,7 @@ def main():
     passed = []
     check_success(helper, binary, passed)
     check_wrong_identity(helper, binary, passed)
+    check_delayed_receipt(helper, binary, passed)
     check_chat(helper, binary, passed, capability=True)
     check_chat(helper, binary, passed, capability=False)
     check_change_during_selection(helper, binary, passed, cancel=False)
