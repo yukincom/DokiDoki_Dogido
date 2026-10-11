@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""所有馬の二段JSON操作を実HTTP・模擬LLM/TTSで確認する。Minecraftや実モデルは使わない。"""
+"""所有馬の二段native API操作を実HTTP・模擬LLM/TTSで確認する。Minecraftや実モデルは使わない。"""
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import argparse
@@ -30,7 +30,7 @@ def utc_now():
 
 
 class MockPlan:
-    """呼出順と候補公開範囲を検査し、決まったJSONだけを返す。"""
+    """呼出順と候補公開範囲を検査し、決まったAPI応答だけを返す。"""
     def __init__(self, responses, *, capability=True, block_selection=False):
         self.responses = responses
         self.capability = capability
@@ -51,7 +51,11 @@ class MockPlan:
             assert index < len(self.responses), f"unexpected extra LLM call {index + 1}"
             stage, response = self.responses[index]
             prompt = json.dumps(incoming["messages"], ensure_ascii=False)
-            assert not incoming.get("tools"), "native tools must not be used"
+            if self.capability:
+                names = [t["function"]["name"] for t in incoming.get("tools", [])]
+                assert names == (["select_horse"] if stage == "selection" else ["list_horses"]), names
+            else:
+                assert not incoming.get("tools"), "missing capability exposed tools"
             assert WORLD_ID not in prompt and PLAYER_ID not in prompt and HORSE_ID not in prompt, "UUID leaked to model"
             if stage == "selection":
                 assert HORSE_NAME in prompt, "second call did not receive observed candidate name"
@@ -66,6 +70,13 @@ class MockPlan:
                     assert "list_horses" in prompt, "ordinary chat lacks list_horses contract"
                 else:
                     assert "list_horses" not in prompt and "select_horse" not in prompt, "unsupported capability exposed horse action"
+            if self.capability:
+                if response["action"] in ("list_horses", "select_horse"):
+                    arguments = {k: v for k, v in response.items() if k != "action"}
+                    return {"role": "assistant", "content": None, "tool_calls": [{
+                        "id": f"mock-horse-{index}", "type": "function", "function": {
+                            "name": response["action"], "arguments": json.dumps(arguments, ensure_ascii=False)}}]}
+                return {"role": "assistant", "content": response["speech"], "tool_calls": []}
             return response
         except BaseException as error:
             with self.lock:

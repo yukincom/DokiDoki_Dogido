@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""API/JSON二段階を同一corpusで比較。実モデルのみ呼び、Minecraft操作は行わない。"""
+"""採用した二段階native APIを固定corpusで検証。実モデルを呼ぶがMinecraft操作は行わない。"""
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -43,25 +43,23 @@ def main():
     p.add_argument("--output",type=Path,required=True)
     p.add_argument("--base-url",default="http://127.0.0.1:8080/v1")
     p.add_argument("--model",default="lmstudio-community/gemma-4-26B-A4B-it-QAT-MLX-4bit")
-    p.add_argument("--development",action="store_true")
     args=p.parse_args()
     raw=args.corpus.read_bytes()
     corpus=[json.loads(line) for line in raw.decode().splitlines() if line.strip()]
-    if args.development: corpus=[r for r in corpus if r["id"].startswith("dev_")]
     args.output.mkdir(parents=True,exist_ok=False)
-    seeds=[101] if args.development else [101,202,303]
+    seeds=[101,202,303]
     manifest={"model":args.model,"base_url":args.base_url,"seeds":seeds,"case_count":len(corpus),
         "corpus":args.corpus.name,"corpus_sha256":hashlib.sha256(raw).hexdigest(),
         "probe_sha256":hashlib.sha256(args.probe.read_bytes()).hexdigest(),
-        "temperature":.65,"max_tokens_per_call":192,"thinking":False,"transports":["json","native"],
+        "temperature":.65,"max_tokens_per_call":192,"thinking":False,"transport":"native",
         "retry":False,"max_calls_per_trial":2,"first_call_candidates":False,
         "execution":"decode_and_validate_only","started_at":datetime.now(timezone.utc).isoformat()}
     (args.output/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n")
     (args.output/"cases.json").write_text(json.dumps(corpus,ensure_ascii=False,indent=2)+"\n")
     rows=[]
 
-    def one(case,seed,transport,warmup=False):
-        base={**case,"model":args.model,"transport":transport}
+    def one(case,seed,warmup=False):
+        base={**case,"model":args.model}
         calls=[]
         total_start=time.monotonic()
         for stage in ("intent","selection"):
@@ -83,18 +81,18 @@ def main():
         expected=case["expected"]
         correct=(outcome.get("kind")=="recall" and outcome.get("entity_id")==expected if expected
                  else outcome.get("kind")=="conversation" and outcome.get("valid") and bool(outcome.get("text")))
-        row={"case_id":case["id"],"transport":transport,"seed":seed,"warmup":warmup,"expected":expected,
+        row={"case_id":case["id"],"seed":seed,"warmup":warmup,"expected":expected,
             "correct":bool(correct),"elapsed_ms":round(sum(c["elapsed_ms"] for c in calls),2),
             "wall_ms":round((time.monotonic()-total_start)*1000,2),"outcome":outcome,"calls":calls}
         rows.append(row)
         with (args.output/"wire.jsonl").open("a") as f:f.write(json.dumps(row,ensure_ascii=False)+"\n")
-        print(json.dumps({k:row[k] for k in ("case_id","transport","seed","correct","elapsed_ms","outcome")},ensure_ascii=False),flush=True)
+        print(json.dumps({k:row[k] for k in ("case_id","seed","correct","elapsed_ms","outcome")},ensure_ascii=False),flush=True)
         if outcome["kind"]=="error":raise RuntimeError("upstream failed; records retained")
-    for arm in ("json","native"):one(corpus[0],7,arm,True)
-    for i,case in enumerate(corpus):
-        for j,seed in enumerate(seeds):
-            for arm in (("json","native") if (i+j)%2==0 else ("native","json")):one(case,seed,arm)
-    result={arm:summary([r for r in rows if r["transport"]==arm]) for arm in ("json","native")}
+    one(corpus[0],7,True)
+    for case in corpus:
+        for seed in seeds:
+            one(case,seed)
+    result=summary(rows)
     (args.output/"summary.json").write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n")
     print(json.dumps(result,ensure_ascii=False),flush=True)
 if __name__=="__main__": main()

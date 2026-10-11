@@ -5,7 +5,7 @@ use super::{Dialogue, Session, bridge, fresh, warnings};
 use crate::{
     assist::horse_recall::{
         contracts::{Choice, Prepared},
-        transport::{self, Decision, Stage, Transport},
+        intent::{self, Decision, Stage},
     },
     events::{AdapterCommandResultCommandType, AdapterCommandResultStatus},
     foreground::Route,
@@ -54,7 +54,6 @@ pub(super) async fn render(
     prepared: &Prepared,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Value> {
-    let transport = Transport::Json;
     request.max_tokens = request.max_tokens.max(192);
     let mut reports = Vec::new();
     for stage in [Stage::Intent, Stage::Selection] {
@@ -62,8 +61,7 @@ pub(super) async fn render(
             !*cancel.borrow() && cancel.has_changed().is_ok(),
             "cancelled"
         );
-        let (stage_request, tools) =
-            transport::request(request.clone(), prepared, transport, stage)?;
+        let (stage_request, tools) = intent::request(request.clone(), prepared, stage)?;
         let response = tokio::select! { biased;
             _ = bridge::cancelled(cancel) => anyhow::bail!("cancelled"),
             r = llm.generate_with_tools(&stage_request, &tools, &[], true) => r,
@@ -84,8 +82,7 @@ pub(super) async fn render(
             }
         };
         let message = native_message.unwrap_or_else(|| json!({"content":report.generated.text}));
-        let decoded = transport::decode(
-            transport,
+        let decoded = intent::decode(
             stage,
             &message,
             report.generated.finish_reason.as_deref().unwrap_or(""),
@@ -102,8 +99,7 @@ pub(super) async fn render(
                 Err(error) => rejected(error),
             },
             Ok(Decision::Conversation) => {
-                let output =
-                    transport::conversation(transport, message["content"].as_str().unwrap_or(""));
+                let output = intent::conversation(message["content"].as_str().unwrap_or(""));
                 json!({"op":"result","text":output.text,"dialogue_action":output.action,
                     "dialogue_outcome":output.status,"dialogue_reason":output.reason})
             }

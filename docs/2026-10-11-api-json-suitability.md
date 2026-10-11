@@ -48,7 +48,9 @@ JSONの9失敗は、一頭しかいない無名馬・文脈で示した馬・「
 
 ## 再現と保存
 
-比較時点の両実装、corpus、manifest、全リクエスト・応答・usage・判定はローカルGitの比較保存commitに置く。採用後の作業ツリーにはAPI実装だけを置き、JSON操作の変換・設定切替・失敗時fallbackは残さない。通信としてのJSONシリアライズと、モデル本文JSON方式は別の意味である。
+比較時点の両実装、corpus、manifest、全リクエスト・応答・usage・判定はローカルGitの `b2b1f6a` に保存した（初期一段階版は `88c0edb`）。例: `git show b2b1f6a:dogido-rust/reports/horse-recall/two-stage-heldout-v2/summary.json`。採用後の作業ツリーにはAPI実装だけを置き、JSON操作の変換・設定切替・失敗時fallbackは残さない。通信としてのJSONシリアライズと、モデル本文JSON方式は別の意味である。
+
+JSON版を撤去した後、最終API試験の165呼出しをオフラインで再照合し、リクエスト全体と復号・判定結果が保存記録に完全一致することを確認した。
 
 候補要求と選択のprompt、厳密decoder、validatorは実モデルprobeと本体で共有する。採用後は `check_horse_recall_model.py` で同じAPI境界を再検証できる。動作の範囲と自動検証は [所有馬の呼び戻し](2026-10-11-horse-recall.md) を参照。
 

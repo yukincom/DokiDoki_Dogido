@@ -1,8 +1,8 @@
-//! 馬呼び戻し二段階の比較境界。productionのprompt/decoder/validatorで検証し、世界操作は行わない。
+//! 馬呼び戻し二段階の検証境界。productionのprompt/decoder/validatorで検証し、世界操作は行わない。
 use dogido_rust::{
     assist::horse_recall::{
         contracts::{Prepared, Snapshot},
-        transport::{self, Decision, Stage, Transport},
+        intent::{self, Decision, Stage},
     },
     chat_prompt,
 };
@@ -12,7 +12,6 @@ fn run(row: Value) -> anyhow::Result<Value> {
     let snapshot: Snapshot = serde_json::from_value(row["snapshot"].clone())?;
     let original = row["text"].as_str().unwrap_or("");
     let prepared = Prepared::new(snapshot, original)?;
-    let transport: Transport = serde_json::from_value(row["transport"].clone())?;
     let stage: Stage = serde_json::from_value(row["stage"].clone())?;
     if row["op"] == "request" {
         let mut details = row["details"].as_object().cloned().unwrap_or_default();
@@ -28,7 +27,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
             enable_thinking: false,
         }
         .into_request()?;
-        let (request, tools) = transport::request(base, &prepared, transport, stage)?;
+        let (request, tools) = intent::request(base, &prepared, stage)?;
         let mut wire = json!({"model":request.model,"messages":request.messages,"temperature":request.temperature,
             "max_tokens":request.max_tokens,"stream":false,
             "chat_template_kwargs":{"enable_thinking":false,"preserve_thinking":false}});
@@ -40,8 +39,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
     }
     let response = &row["response"]["choices"][0];
     let message = &response["message"];
-    let outcome = match transport::decode(
-        transport,
+    let outcome = match intent::decode(
         stage,
         message,
         response["finish_reason"].as_str().unwrap_or(""),
@@ -57,7 +55,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
             Err(e) => json!({"kind":"rejected","error":e.to_string(),"valid":false}),
         },
         Ok(Decision::Conversation) => {
-            let o = transport::conversation(transport, message["content"].as_str().unwrap_or(""));
+            let o = intent::conversation(message["content"].as_str().unwrap_or(""));
             json!({"kind":"conversation","action":o.action,"text":o.text,"status":o.status,"reason":o.reason,"valid":o.status!="rejected"})
         }
         Err(e) => json!({"kind":"rejected","error":e.to_string(),"valid":false}),

@@ -1,6 +1,6 @@
 //! 意図の原文と個体の現在性の境界を検査する。モデル精度は別の実モデル比較で測る。
 use super::*;
-use crate::assist::horse_recall::transport;
+use crate::assist::horse_recall::intent;
 use serde_json::json;
 
 pub fn snapshot() -> Snapshot {
@@ -79,36 +79,32 @@ fn stale_other_world_unsafe_and_unknown_candidates_fail_closed() {
     assert!(p.resolve(&c).is_err());
 }
 #[test]
-fn stage_contracts_reject_truncation_multiple_calls_and_wrong_stage() {
-    use transport::{Decision, Stage, Transport};
+fn native_stage_contracts_reject_truncation_multiple_calls_and_wrong_stage() {
+    use intent::{Decision, Stage};
     let args = json!({"candidate_id":"h1","evidence":"ぶちを呼んで","confidence":0.99});
     let call = json!({"id":"c1","type":"function","function":{"name":"select_horse","arguments":args.to_string()}});
     let native = json!({"tool_calls":[call.clone()],"content":null});
-    let mut payload = args.clone();
-    payload["action"] = "select_horse".into();
-    let content = json!({"content":payload.to_string()});
     assert!(matches!(
-        transport::decode(Transport::Json, Stage::Selection, &content, "stop").unwrap(),
+        intent::decode(Stage::Selection, &native, "tool_calls").unwrap(),
         Decision::Select(_)
     ));
-    assert!(transport::decode(Transport::Json, Stage::Intent, &content, "stop").is_err());
-    assert!(transport::decode(Transport::Json, Stage::Selection, &native, "tool_calls").is_err());
-    assert!(matches!(
-        transport::decode(Transport::Native, Stage::Selection, &native, "tool_calls").unwrap(),
-        Decision::Select(_)
-    ));
+    assert!(intent::decode(Stage::Intent, &native, "tool_calls").is_err());
+    assert!(intent::decode(Stage::Selection, &native, "length").is_err());
     assert!(
-        transport::decode(
-            Transport::Native,
+        intent::decode(
             Stage::Selection,
             &json!({"tool_calls":[call.clone(),call]}),
             "tool_calls"
         )
         .is_err()
     );
-    assert!(transport::decode(Transport::Json, Stage::Selection, &content, "length").is_err());
-    assert!(transport::decode(Transport::Native, Stage::Selection, &content, "stop").is_err());
-    let intent = transport::Intent {
+    let body=json!({"action":"select_horse","candidate_id":"h1","evidence":"ぶちを呼んで","confidence":0.99}).to_string();
+    assert!(matches!(
+        intent::decode(Stage::Selection, &json!({"content":body}), "stop").unwrap(),
+        Decision::Conversation
+    ));
+    assert_eq!(intent::conversation(&body).status, "rejected");
+    let intent = intent::Intent {
         evidence: "ぶちを呼んで".into(),
         confidence: 0.99,
     };
@@ -117,35 +113,41 @@ fn stage_contracts_reject_truncation_multiple_calls_and_wrong_stage() {
 }
 #[test]
 fn first_stage_preserves_personality_without_candidates_then_selection_exposes_them() {
-    use transport::{Stage, Transport};
+    use intent::Stage;
     let mut snapshot = snapshot();
     snapshot.candidates[0].custom_name = Some("candidate_sentinel_not_in_request".into());
     let p = Prepared::new(snapshot, "さっきの馬を呼んで").unwrap();
-    for t in [Transport::Json, Transport::Native] {
-        for stage in [Stage::Intent, Stage::Selection] {
-            let base = crate::chat_prompt::Input {
-                schema_version: 1,
-                kind: "player_chat".into(),
-                model: "fixture".into(),
-                details: json!({"dialogue_choice":true,"user_text":p.original}),
-                temperature: 0.65,
-                max_tokens: 192,
-                enable_thinking: false,
-            }
-            .into_request()
-            .unwrap();
-            let (request, tools) = transport::request(base, &p, t, stage).unwrap();
-            let system = &request.messages[0].content;
-            assert!(system.contains(crate::companion_prompt::base()));
-            assert!(!system.contains(crate::companion_prompt::choice_contract()));
-            let serialized = serde_json::to_string(&request.messages).unwrap();
-            assert_eq!(
-                serialized.contains("candidate_sentinel_not_in_request"),
-                stage == Stage::Selection
-            );
-            assert!(!serialized.contains(&p.snapshot.world_id));
-            assert!(!serialized.contains(&p.candidates[0].entity_id));
-            assert_eq!(tools.len(), usize::from(t == Transport::Native));
+    for stage in [Stage::Intent, Stage::Selection] {
+        let base = crate::chat_prompt::Input {
+            schema_version: 1,
+            kind: "player_chat".into(),
+            model: "fixture".into(),
+            details: json!({"dialogue_choice":true,"user_text":p.original}),
+            temperature: 0.65,
+            max_tokens: 192,
+            enable_thinking: false,
         }
+        .into_request()
+        .unwrap();
+        let (request, tools) = intent::request(base, &p, stage).unwrap();
+        let system = &request.messages[0].content;
+        assert!(system.contains(crate::companion_prompt::base()));
+        assert!(!system.contains(crate::companion_prompt::choice_contract()));
+        let serialized = serde_json::to_string(&request.messages).unwrap();
+        assert_eq!(
+            serialized.contains("candidate_sentinel_not_in_request"),
+            stage == Stage::Selection
+        );
+        assert!(!serialized.contains(&p.snapshot.world_id));
+        assert!(!serialized.contains(&p.candidates[0].entity_id));
+        assert_eq!(tools.len(), 1);
+        assert_eq!(
+            tools[0]["function"]["name"],
+            if stage == Stage::Intent {
+                "list_horses"
+            } else {
+                "select_horse"
+            }
+        );
     }
 }

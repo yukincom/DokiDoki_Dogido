@@ -2,7 +2,7 @@
 //! モデルは対象と依頼の意味を選ぶ。個体・所有・現在性の照合、命令配送はコードが所有する。
 pub mod contracts;
 pub mod queue;
-pub mod transport;
+pub mod intent;
 pub use contracts::{Candidate, Snapshot};
 
 pub const CAPABILITY: &str = "integrated_server.horse.recall.v1";
