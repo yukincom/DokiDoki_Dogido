@@ -3,14 +3,40 @@ import argparse
 from pathlib import Path
 import plistlib
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
 
 SOURCE = Path(__file__).resolve().parents[1]
+LOCAL_SIGNING_IDENTITY = "Dogido Local Code Signing"
 
 
-def build(project, destination):
+def resolve_signing_identity(name, output):
+    identities = dict(re.findall(r'\)\s+([0-9A-Fa-f]{40})\s+"([^"]+)"', output))
+    matches = [fingerprint for fingerprint, label in identities.items()
+               if name == label or name.upper() == fingerprint.upper()]
+    if len(matches) != 1:
+        raise SystemExit(
+            f"署名用の証明書を一意に確認できません: {name}。"
+            "キーチェーンアクセスでコード署名用の証明書を一度作成してください。"
+            "一時的な試用のみ --ad-hoc を指定できますが、更新後にmacOSのアクセス確認が再表示されます。"
+        )
+    return matches[0]
+
+
+def signing_key(name, ad_hoc=False):
+    if ad_hoc:
+        print("一時署名でビルドします。更新後にmacOSのアクセス許可が再確認される場合があります。")
+        return "-"
+    result = subprocess.run(
+        ["security", "find-identity", "-p", "codesigning"],
+        check=True, capture_output=True, text=True,
+    )
+    return resolve_signing_identity(name, result.stdout)
+
+
+def build(project, destination, identity=LOCAL_SIGNING_IDENTITY, ad_hoc=False):
     project = project.expanduser().resolve()
     destination = destination.expanduser().resolve()
     if destination.exists():
@@ -19,6 +45,7 @@ def build(project, destination):
                  "dogido-rust/src/server/utterance-view.js"):
         if not (project / path).is_file():
             raise SystemExit(f"本体のファイルがありません: {path}")
+    identity = signing_key(identity, ad_hoc)
     with tempfile.TemporaryDirectory(prefix="dogido-manager-build-") as temporary:
         work = Path(temporary)
         app = work / "ドギド サーバー.app"
@@ -42,12 +69,12 @@ def build(project, destination):
                     "sips", "-z", str(pixels), str(pixels),
                     str(SOURCE / "Resources/dogido-server-icon.png"), "--out", str(iconset / name),
                 ], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "DogidoServer.icns")], check=True)
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(resources / "DogidoServer-v2.icns")], check=True)
         info = {
             "CFBundleName": "ドギド サーバー", "CFBundleDisplayName": "ドギド サーバー",
             "CFBundleIdentifier": "local.dogido.server-manager", "CFBundleExecutable": "DogidoServerManager",
-            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
-            "CFBundleIconFile": "DogidoServer.icns",
+            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.1", "CFBundleVersion": "2",
+            "CFBundleIconFile": "DogidoServer-v2.icns",
             "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
             "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},
             "NSMicrophoneUsageDescription": "ドギドの音声入力で、プレイヤーの声を認識するためにマイクを使います。",
@@ -55,7 +82,7 @@ def build(project, destination):
             "DogidoProjectRoot": str(project),
         }
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
-        subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True)
+        subprocess.run(["codesign", "--force", "--sign", identity, "--timestamp=none", str(app)], check=True)
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(app, destination)
@@ -66,5 +93,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", type=Path, default=SOURCE.parents[1])
     parser.add_argument("--output", type=Path, required=True)
+    signing = parser.add_mutually_exclusive_group()
+    signing.add_argument("--signing-identity", default=LOCAL_SIGNING_IDENTITY,
+                         help="更新後も同じ証明書を使うコード署名identityの名前またはSHA-1")
+    signing.add_argument("--ad-hoc", action="store_true", help="権限を引き継がない試用専用ビルド")
     args = parser.parse_args()
-    build(args.project_root, args.output)
+    build(args.project_root, args.output, args.signing_identity, args.ad_hoc)
