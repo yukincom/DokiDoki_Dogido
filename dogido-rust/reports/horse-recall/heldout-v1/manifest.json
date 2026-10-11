@@ -1,0 +1,19 @@
+{
+  "phase": "heldout",
+  "model": "lmstudio-community/gemma-4-26B-A4B-it-QAT-MLX-4bit",
+  "base_url": "http://127.0.0.1:8080/v1",
+  "seeds": [
+    101,
+    202,
+    303
+  ],
+  "cases_sha256": "acb222cbc8d8edab3b2df88bc70e409468561cdea914898aea7cf085f3b07c9f",
+  "temperature": 0.65,
+  "max_tokens": 192,
+  "thinking": false,
+  "calls_per_trial": 1,
+  "retry": false,
+  "execution": "decode_and_validate_only",
+  "started_at": "2026-10-11T10:26:13.378252+00:00",
+  "probe_sha256": "9f69f85ead82e07b376899737227f1cd7cebf8c74df7d2d6288e213dd0161455"
+}

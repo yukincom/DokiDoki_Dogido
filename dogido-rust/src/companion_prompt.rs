@@ -21,6 +21,10 @@ pub fn mode(mode: &str) -> &'static str {
 pub fn grounding() -> &'static str {
     TEXT["grounding"].as_str().unwrap()
 }
+/// 出力契約を機能専用のものへ差し替える際も、共有人格・観測方針は同じ正本を使う。
+pub fn choice_contract() -> &'static str {
+    TEXT["choice_contract"].as_str().unwrap()
+}
 pub fn speech(mode_name: &str) -> String {
     let role = if mode_name == "workshop" {
         TEXT["workshop_identity"].as_str().unwrap()
@@ -61,7 +65,7 @@ pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool)
             ""
         },
         TEXT["dialogue"][purpose_key].as_str().unwrap(),
-        TEXT["choice_contract"].as_str().unwrap(),
+        choice_contract(),
     ]
     .into_iter()
     .filter(|s| !s.is_empty())
