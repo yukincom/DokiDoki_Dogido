@@ -1,0 +1,228 @@
+[
+  {
+    "details": {
+      "biome": "平原",
+      "character_mode": "normal",
+      "conversation_history": "",
+      "mode": "normal",
+      "time_phase": "day",
+      "weather": "clear"
+    },
+    "expected": "30000000-0000-0000-0000-000000000001",
+    "id": "dev_direct",
+    "snapshot": {
+      "candidates": [
+        {
+          "alive": true,
+          "custom_name": "buchi",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000001",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        }
+      ],
+      "dimension": "minecraft:overworld",
+      "observed_at": "2026-10-11T00:00:00Z",
+      "player_uuid": "20000000-0000-0000-0000-000000000001",
+      "recent_mount_id": null,
+      "revision": 1,
+      "schema_version": 1,
+      "status": "available",
+      "world_id": "10000000-0000-0000-0000-000000000001"
+    },
+    "split": "development",
+    "text": "buchiを呼んで"
+  },
+  {
+    "details": {
+      "biome": "平原",
+      "character_mode": "normal",
+      "conversation_history": "",
+      "mode": "normal",
+      "time_phase": "day",
+      "weather": "clear"
+    },
+    "expected": "30000000-0000-0000-0000-000000000001",
+    "id": "dev_kana",
+    "snapshot": {
+      "candidates": [
+        {
+          "alive": true,
+          "custom_name": "buchi",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000001",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        }
+      ],
+      "dimension": "minecraft:overworld",
+      "observed_at": "2026-10-11T00:00:00Z",
+      "player_uuid": "20000000-0000-0000-0000-000000000001",
+      "recent_mount_id": null,
+      "revision": 1,
+      "schema_version": 1,
+      "status": "available",
+      "world_id": "10000000-0000-0000-0000-000000000001"
+    },
+    "split": "development",
+    "text": "ぶちをここへ呼んで"
+  },
+  {
+    "details": {
+      "biome": "平原",
+      "character_mode": "normal",
+      "conversation_history": "",
+      "mode": "normal",
+      "time_phase": "day",
+      "weather": "clear"
+    },
+    "expected": null,
+    "id": "dev_question",
+    "snapshot": {
+      "candidates": [
+        {
+          "alive": true,
+          "custom_name": "buchi",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000001",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        }
+      ],
+      "dimension": "minecraft:overworld",
+      "observed_at": "2026-10-11T00:00:00Z",
+      "player_uuid": "20000000-0000-0000-0000-000000000001",
+      "recent_mount_id": null,
+      "revision": 1,
+      "schema_version": 1,
+      "status": "available",
+      "world_id": "10000000-0000-0000-0000-000000000001"
+    },
+    "split": "development",
+    "text": "buchiはどこにいるの？"
+  },
+  {
+    "details": {
+      "biome": "平原",
+      "character_mode": "normal",
+      "conversation_history": "",
+      "mode": "normal",
+      "time_phase": "day",
+      "weather": "clear"
+    },
+    "expected": null,
+    "id": "dev_denial",
+    "snapshot": {
+      "candidates": [
+        {
+          "alive": true,
+          "custom_name": "buchi",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000001",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        }
+      ],
+      "dimension": "minecraft:overworld",
+      "observed_at": "2026-10-11T00:00:00Z",
+      "player_uuid": "20000000-0000-0000-0000-000000000001",
+      "recent_mount_id": null,
+      "revision": 1,
+      "schema_version": 1,
+      "status": "available",
+      "world_id": "10000000-0000-0000-0000-000000000001"
+    },
+    "split": "development",
+    "text": "ぶちを呼ばないで"
+  },
+  {
+    "details": {
+      "biome": "平原",
+      "character_mode": "normal",
+      "conversation_history": "",
+      "mode": "normal",
+      "time_phase": "day",
+      "weather": "clear"
+    },
+    "expected": null,
+    "id": "dev_ambiguous",
+    "snapshot": {
+      "candidates": [
+        {
+          "alive": true,
+          "custom_name": "buchi",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000001",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        },
+        {
+          "alive": true,
+          "custom_name": "shiro",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000002",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        }
+      ],
+      "dimension": "minecraft:overworld",
+      "observed_at": "2026-10-11T00:00:00Z",
+      "player_uuid": "20000000-0000-0000-0000-000000000001",
+      "recent_mount_id": null,
+      "revision": 1,
+      "schema_version": 1,
+      "status": "available",
+      "world_id": "10000000-0000-0000-0000-000000000001"
+    },
+    "split": "development",
+    "text": "馬を呼んで"
+  },
+  {
+    "details": {
+      "biome": "平原",
+      "character_mode": "normal",
+      "conversation_history": "",
+      "mode": "normal",
+      "time_phase": "day",
+      "weather": "clear"
+    },
+    "expected": null,
+    "id": "dev_chat",
+    "snapshot": {
+      "candidates": [
+        {
+          "alive": true,
+          "custom_name": "buchi",
+          "dimension": "minecraft:overworld",
+          "entity_id": "30000000-0000-0000-0000-000000000001",
+          "has_passengers": false,
+          "leashed": false,
+          "owned_by_player": true,
+          "tamed": true
+        }
+      ],
+      "dimension": "minecraft:overworld",
+      "observed_at": "2026-10-11T00:00:00Z",
+      "player_uuid": "20000000-0000-0000-0000-000000000001",
+      "recent_mount_id": null,
+      "revision": 1,
+      "schema_version": 1,
+      "status": "available",
+      "world_id": "10000000-0000-0000-0000-000000000001"
+    },
+    "split": "development",
+    "text": "今日はいい天気だね"
+  }
+]

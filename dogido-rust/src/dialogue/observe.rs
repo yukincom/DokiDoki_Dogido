@@ -253,7 +253,11 @@ impl Dialogue {
             }
             d.revision += 1;
         }
-        if let Some(feedback) = results.feedback.clone() {
+        let horse_feedback = super::horse_recall_runtime::observe_results(
+            d.sessions.get_mut(session_id).unwrap(),
+            &results,
+        );
+        if let Some(feedback) = results.feedback.clone().or(horse_feedback) {
             self.queue_fixed_reply(&mut d, &mut jobs, session_id, feedback, None);
         }
         let mut episode_snapshot = episode_before.map(|mut before| {
@@ -298,7 +302,7 @@ impl Dialogue {
             }
             d.sessions
                 .get(session_id)
-                .map(|s| s.assist.pending_commands(chrono::Utc::now()))
+                .map(|s| s.assist.commands(chrono::Utc::now()))
                 .unwrap_or_default()
         };
         let event_id = id("evt");

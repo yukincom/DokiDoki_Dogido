@@ -133,6 +133,9 @@ impl Dialogue {
                     "dialogue_outcome",
                     "dialogue_reason",
                     "observation_revision",
+                    "horse_recall_status",
+                    "horse_recall_reason",
+                    "horse_command",
                 ] {
                     if let Some(value) = result.get(key) {
                         row[key] = value.clone();

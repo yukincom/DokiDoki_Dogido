@@ -8,11 +8,13 @@ use super::{EventTime, Validate, ensure, wire};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-/// Fabricから結果を報告できる操作の種類。現在はホットバー選択だけを扱う。
+/// Fabricから結果を報告できる操作の種類。発行済み命令の種類との一致はassistで検査する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AdapterCommandResultCommandType {
     #[serde(rename = "select_hotbar")]
     SelectHotbar,
+    #[serde(rename = "recall_horse")]
+    RecallHorse,
 }
 /// Fabricでの操作結果。成功、実行前の拒否、実行失敗、期限切れを区別し、
 /// Rustのassistが同じcommand_idの結果として受領する。
@@ -393,7 +395,7 @@ pub enum WorldStateNearbyPortalEncounter {
     #[serde(rename = "observed")]
     Observed,
 }
-/// DogidoCommandProtocol.commandResultが作る、型付きhotbar命令の実行結果。
+/// DogidoCommandProtocol.commandResultが作る、型付き支援命令の実行結果。
 /// DogidoEventClientが未ACKの結果をイベントへ添付し、Rustのassistがcommand_idで受領する。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdapterCommandResult {
@@ -1361,6 +1363,9 @@ pub struct EventData {
     /// Same visible scan, outside the four routine slots. Read only for a player topic.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub companion_candidates: Vec<PassiveMob>,
+    /// 統合サーバーで確認した所有馬。省略時は呼び戻し用の観測なしで、全世界の不在を表さない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owned_horses: Option<crate::assist::horse_recall::Snapshot>,
     /// buildInventoryが所持枠をitem IDのpathごとに合算した個数。入手・クラフト・設置の行為ログではない。
     #[serde(default)]
     #[serde(deserialize_with = "wire::deserialize")]
@@ -1733,6 +1738,9 @@ impl Validate for EventData {
             "EventData.companion_candidates: maxItems 32",
         )?;
         self.companion_candidates.validate()?;
+        if let Some(horses) = &self.owned_horses {
+            horses.validate().map_err(|error| error.to_string())?;
+        }
         ensure(
             self.companion_candidates.iter().all(|mob| {
                 mob.identity.as_ref().is_some_and(|identity| {

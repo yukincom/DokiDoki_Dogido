@@ -13,6 +13,7 @@ pub(super) struct Input {
     pub snapshot: Option<std::sync::Arc<(crate::events::GameEvent, super::chat_context::Native)>>,
     pub context: Option<crate::input_context::Context>,
     pub retained_history_count: usize,
+    pub horse_recall: Option<crate::assist::horse_recall::contracts::Prepared>,
 }
 
 impl Input {
@@ -26,6 +27,7 @@ impl Input {
             snapshot: Some(std::sync::Arc::new((event, context))),
             context: None,
             retained_history_count: 0,
+            horse_recall: None,
         }
     }
 }
@@ -36,6 +38,7 @@ impl From<Value> for Input {
             snapshot: None,
             context: None,
             retained_history_count: 0,
+            horse_recall: None,
             frame,
         }
     }

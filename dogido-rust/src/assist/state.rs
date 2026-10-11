@@ -1,4 +1,6 @@
-use super::{SELECT_HOTBAR_CAPABILITY, intent, selection::*};
+//! 支援命令の配送、期限切れ、結果ACKと重複除外を所有する。
+//! 対象選択は各支援ドメインへ渡し、剣と馬の実行結果・案内を発行時の種類で分ける。
+use super::{SELECT_HOTBAR_CAPABILITY, horse_recall, intent, selection::*};
 use crate::events::{
     AdapterCommandResult, AdapterCommandResultCommandType, AdapterCommandResultStatus, EventTime,
     GameEvent,
@@ -82,6 +84,7 @@ pub struct Results {
 pub struct AssistState {
     capabilities: BTreeSet<String>,
     pending: BTreeMap<String, SelectHotbarCommand>,
+    horse_queue: horse_recall::queue::Queue,
     seen: BTreeSet<String>,
     seen_order: VecDeque<String>,
     last_issued_at: Option<DateTime<Utc>>,
@@ -96,6 +99,7 @@ impl AssistState {
         Self {
             capabilities: capabilities.into_iter().collect(),
             pending: BTreeMap::new(),
+            horse_queue: horse_recall::queue::Queue::default(),
             seen: BTreeSet::new(),
             seen_order: VecDeque::new(),
             last_issued_at: None,
@@ -105,6 +109,24 @@ impl AssistState {
             owner: uuid::Uuid::new_v4(),
             policy: RiskPolicy::Auto,
         }
+    }
+    /// 接続時に合意したcapabilityだけを参照する。観測の鮮度と対象の照合は発行直前に行う。
+    pub fn supports_horse_recall(&self) -> bool {
+        self.capabilities.contains(horse_recall::CAPABILITY)
+    }
+    /// 同じ入力の生成完了と現在の会話所有権は呼出元が検査する。
+    /// 発行済み命令は後続入力だけでは取り消さず、5秒の期限とFabricの実行前再検査に従う。
+    pub fn enqueue_horse(
+        &mut self,
+        prepared: &horse_recall::contracts::Prepared,
+        choice: &horse_recall::contracts::Choice,
+        latest: &horse_recall::Snapshot,
+        now: DateTime<Utc>,
+    ) -> anyhow::Result<horse_recall::queue::Command> {
+        anyhow::ensure!(self.supports_horse_recall(), "horse_capability_missing");
+        let expired = self.expire_pending(now);
+        self.retired_results.extend(expired);
+        self.horse_queue.enqueue(prepared, choice, latest, now)
     }
     pub fn set_policy(&mut self, policy: RiskPolicy) {
         self.policy = policy;
@@ -329,7 +351,11 @@ impl AssistState {
             let command = self.pending.remove(&incoming.command_id);
             let mut result = incoming.clone();
             if let Some(command) = &command {
-                if result.status == AdapterCommandResultStatus::Succeeded {
+                result.command_type = AdapterCommandResultCommandType::SelectHotbar;
+                if incoming.command_type != AdapterCommandResultCommandType::SelectHotbar {
+                    result.status = AdapterCommandResultStatus::Failed;
+                    result.detail_code = "result_type_mismatch".into();
+                } else if result.status == AdapterCommandResultStatus::Succeeded {
                     let in_time = match result.executed_at {
                         EventTime::Aware(time) => {
                             time >= command.issued_at && time < command.expires_at
@@ -352,9 +378,17 @@ impl AssistState {
                     self.last_issued_at = None;
                 }
             }
+            let known_command = if command.is_some() {
+                true
+            } else if let Some(horse_result) = self.horse_queue.observe(incoming, now) {
+                result = horse_result;
+                true
+            } else {
+                false
+            };
             out.observed.push(ObservedResult {
                 result,
-                known_command: command.is_some(),
+                known_command,
             });
         }
         out.observed.extend(self.expire_pending(now));
@@ -367,7 +401,9 @@ impl AssistState {
                 .find(|r| r.status != AdapterCommandResultStatus::Succeeded)
         {
             out.feedback = Some(
-                if result.status == AdapterCommandResultStatus::Expired {
+                if result.command_type == AdapterCommandResultCommandType::RecallHorse {
+                    "馬を呼び戻せへんかったわ。足場や馬の状態を確認してな。"
+                } else if result.status == AdapterCommandResultStatus::Expired {
                     "持ち替えが間に合わへんかったわ。もう一回言うてな。"
                 } else if ["expected_item_mismatch", "result_mismatch"]
                     .contains(&result.detail_code.as_str())
@@ -410,7 +446,27 @@ impl AssistState {
                 },
             });
         }
+        if let Some(result) = self.horse_queue.expire(now)
+            && !self.remember_result(&result.command_id)
+        {
+            out.push(ObservedResult {
+                known_command: true,
+                result,
+            });
+        }
         out
+    }
+    /// 両種類の有効な命令を同じHTTP応答へ載せる。ACKまでは同じIDのまま再配送する。
+    pub fn commands(&self, now: DateTime<Utc>) -> Vec<Value> {
+        let mut commands: Vec<_> = self
+            .pending_commands(now)
+            .into_iter()
+            .map(|command| serde_json::to_value(command).expect("serializable hotbar command"))
+            .collect();
+        if let Some(command) = self.horse_queue.pending(now) {
+            commands.push(serde_json::to_value(command).expect("serializable horse command"));
+        }
+        commands
     }
     pub fn pending_commands(&self, now: DateTime<Utc>) -> Vec<SelectHotbarCommand> {
         let mut commands: Vec<_> = self

@@ -1,0 +1,175 @@
+{
+  "json": {
+    "trials": 105,
+    "correct": 96,
+    "positive_trials": 36,
+    "positive_correct": 27,
+    "no_action_trials": 69,
+    "no_action_correct": 69,
+    "false_dispatch": 0,
+    "wrong_target": 0,
+    "rejected": 0,
+    "median_ms": 2138.31,
+    "p95_ms": 2397.79,
+    "positive_median_ms": 2321.59,
+    "llm_calls": 165,
+    "prompt_tokens": 185283,
+    "completion_tokens": 4485,
+    "failures": [
+      {
+        "case": "v2_one_unnamed",
+        "seed": 101,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "了解や！でも、どの馬を呼べばええかな？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_one_unnamed",
+        "seed": 202,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "了解や！でも、どの馬を呼べばええかな？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_one_unnamed",
+        "seed": 303,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "了解や！でも、どの馬を呼べばええかな？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_context_target",
+        "seed": 101,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "「すみ」って名前の馬のことか？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_context_target",
+        "seed": 202,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "「すみ」って名前の馬のことか？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_context_target",
+        "seed": 303,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "「すみ」って名前の馬のことか？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_single_pronoun",
+        "seed": 101,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "「うちの子」って、どの馬のことや？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_single_pronoun",
+        "seed": 202,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "「うちの子」って、どの馬のことや？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      },
+      {
+        "case": "v2_single_pronoun",
+        "seed": 303,
+        "outcome": {
+          "kind": "conversation",
+          "action": "speak",
+          "text": "「うちの子」って、どの馬のことや？",
+          "status": "accepted",
+          "reason": null,
+          "valid": true
+        }
+      }
+    ]
+  },
+  "native": {
+    "trials": 105,
+    "correct": 102,
+    "positive_trials": 36,
+    "positive_correct": 36,
+    "no_action_trials": 69,
+    "no_action_correct": 66,
+    "false_dispatch": 0,
+    "wrong_target": 0,
+    "rejected": 3,
+    "median_ms": 2225.02,
+    "p95_ms": 2573.19,
+    "positive_median_ms": 2487.64,
+    "llm_calls": 165,
+    "prompt_tokens": 198918,
+    "completion_tokens": 4380,
+    "failures": [
+      {
+        "case": "v2_passenger_target",
+        "seed": 101,
+        "outcome": {
+          "kind": "rejected",
+          "error": "horse_not_eligible",
+          "valid": false
+        }
+      },
+      {
+        "case": "v2_passenger_target",
+        "seed": 202,
+        "outcome": {
+          "kind": "rejected",
+          "error": "horse_not_eligible",
+          "valid": false
+        }
+      },
+      {
+        "case": "v2_passenger_target",
+        "seed": 303,
+        "outcome": {
+          "kind": "rejected",
+          "error": "horse_not_eligible",
+          "valid": false
+        }
+      }
+    ]
+  }
+}

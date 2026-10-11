@@ -2,6 +2,8 @@ package dogido.fabric;
 
 import com.google.gson.JsonObject;
 import dogido.fabric.commands.HotbarCommandExecutor;
+import dogido.fabric.horse_recall.HorseRecallParticles;
+import dogido.fabric.horse_recall.HorseRecallRuntime;
 import dogido.fabric.display.DogidoCharacterHud;
 import dogido.fabric.display.DogidoDialogueChat;
 import dogido.fabric.display.DogidoWorkshopHud;
@@ -88,6 +90,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     private BossObserver bossObserver;
     private CombatObserver combatObserver;
     private EventObservationCapture eventCapture;
+    private HorseRecallRuntime horseRecall;
     private final BossTracker bossTracker = new BossTracker();
     private String lastDimensionId = null;
     private DogidoDialogueChat dialogueChat;
@@ -117,9 +120,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             this.soundObserver::worldFacts);
         HotbarCommandExecutor hotbarCommands = new HotbarCommandExecutor(
             LOGGER, result -> this.eventClient.rememberCommandResult(result));
+        HorseRecallParticles.registerClient();
+        this.horseRecall = new HorseRecallRuntime(LOGGER, result -> this.eventClient.rememberCommandResult(result),
+            ref -> this.eventClient != null && this.eventClient.isCurrent(ref));
         this.eventClient = new DogidoEventClient(LOGGER,
             new DogidoEventClient.ConnectionSettings(this.config.enabled, this.config.serverBaseUrl, this.config.authToken),
-            hotbarCommands::handleSelectHotbarCommand);
+            hotbarCommands::handleSelectHotbarCommand, this.horseRecall::handle, this.horseRecall::available);
         this.eventClient.rememberVoicePreference(this.config.voiceEnabled());
         this.dialogueChat = DogidoDialogueChat.register(this.eventClient, this.config::saveVoiceEnabled);
         this.eventCapture = new EventObservationCapture(this.playerObserver, this.worldObserver, this.smellObserver,
@@ -185,10 +191,12 @@ public final class DogidoClientAdapter implements ClientModInitializer {
      */
     private void onClientTick(MinecraftClient client) {
         if (!this.config.enabled) {
+            this.horseRecall.clear();
             this.characterHud.reset();
             return;
         }
 
+        this.horseRecall.tick(client);
         ClientPlayerEntity player = client.player;
         ClientWorld world = client.world;
         if (this.displayConnection != null && this.displayConnection != client.getNetworkHandler()) {
@@ -278,6 +286,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
 
         if (captureNearbyKinds) {
             JsonObject snapshot = this.eventCapture.buildStatusSnapshot(player, world, worldFrame, visibleThreats, audioThreats, ambientSounds, ambientMobs);
+            JsonObject ownedHorses = this.horseRecall.snapshotJson();
+            if (ownedHorses != null) snapshot.add("owned_horses", ownedHorses);
             this.eventClient.postEvent(snapshot);
             this.lastSnapshotTick = this.tickCounter;
         }

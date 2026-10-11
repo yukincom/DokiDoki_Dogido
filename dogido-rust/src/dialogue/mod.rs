@@ -23,6 +23,7 @@ mod episode_runtime;
 mod foreground_runtime;
 mod haiku_runtime;
 mod history;
+mod horse_recall_runtime;
 mod knowledge_display;
 mod knowledge_queue;
 mod language_runtime;

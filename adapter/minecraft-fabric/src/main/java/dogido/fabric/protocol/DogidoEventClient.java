@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dogido.fabric.DogidoBuildInfo;
+import dogido.fabric.horse_recall.HorseRecallProtocol;
 import dogido.fabric.protocol.WorkshopDisplayPayload;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -15,6 +16,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.MinecraftClient;
 import org.slf4j.Logger;
 
@@ -50,6 +53,8 @@ public final class DogidoEventClient {
     private final AtomicLong sequence;
     private final DogidoCommandProtocol.State commandState;
     private final Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler;
+    private final BiConsumer<HorseRecallProtocol.Command, SessionRef> horseCommandHandler;
+    private final BooleanSupplier horseRecallAvailable;
     private volatile String sessionId;
     private volatile String lastPlayerName = "unknown";
     private final AtomicBoolean displayRequestInFlight = new AtomicBoolean();
@@ -98,11 +103,15 @@ public final class DogidoEventClient {
     public DogidoEventClient(
         Logger logger,
         ConnectionSettings config,
-        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler
+        Consumer<DogidoCommandProtocol.SelectHotbarCommand> commandHandler,
+        BiConsumer<HorseRecallProtocol.Command, SessionRef> horseCommandHandler,
+        BooleanSupplier horseRecallAvailable
     ) {
         this.logger = logger;
         this.config = config;
         this.commandHandler = commandHandler;
+        this.horseCommandHandler = horseCommandHandler;
+        this.horseRecallAvailable = horseRecallAvailable;
         this.gson = new Gson();
         this.sequence = new AtomicLong();
         this.commandState = new DogidoCommandProtocol.State();
@@ -196,6 +205,7 @@ public final class DogidoEventClient {
         payload.add("capabilities", capabilities);
         JsonArray executionCapabilities = new JsonArray();
         executionCapabilities.add("client.hotbar.select.v1");
+        if (this.horseRecallAvailable.getAsBoolean()) executionCapabilities.add(HorseRecallProtocol.CAPABILITY);
         payload.add("execution_capabilities", executionCapabilities);
 
         try {
@@ -278,7 +288,7 @@ public final class DogidoEventClient {
                     );
                     return;
                 }
-                this.handleAcceptedResponse(response.body());
+                this.handleAcceptedResponse(response.body(), ref);
             })
             .exceptionally(error -> {
                 this.logger.warn("Dogido event send failed: {}", error.getMessage());
@@ -308,7 +318,7 @@ public final class DogidoEventClient {
         this.commandState.rememberResult(result);
     }
 
-    private void handleAcceptedResponse(String body) {
+    private void handleAcceptedResponse(String body, SessionRef ref) {
         this.commandState.acknowledge(
             DogidoCommandProtocol.parseAcknowledgedCommandIds(body)
         );
@@ -337,6 +347,16 @@ public final class DogidoEventClient {
                         "dispatch_failed"
                     )
                 );
+            }
+        }
+        for (HorseRecallProtocol.Command command : HorseRecallProtocol.parseCommands(body)) {
+            if (!this.commandState.markCommandSeen(command.commandId())) continue;
+            try {
+                this.horseCommandHandler.accept(command, ref);
+            } catch (RuntimeException error) {
+                this.logger.warn("Dogido horse command dispatch failed: command_id={} detail={}",
+                    command.commandId(), error.getMessage());
+                this.commandState.rememberResult(HorseRecallProtocol.result(command, "failed", "dispatch_failed", java.time.Instant.now()));
             }
         }
     }
