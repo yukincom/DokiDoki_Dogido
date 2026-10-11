@@ -52,6 +52,8 @@
 
 最終コードでRust全656テスト（33 target）と `clippy --all-targets --locked -- -D warnings` が通過。模擬HTTPは7項目が通過し、期限内に実行・期限後に受信した成功を失敗へ変えないことも確認した。Fabricは `./gradlew test build --offline --no-daemon` で133テストとjarのビルドが通過した。これらは実Minecraftでの移動・描画・音声を検証するものではない。
 
-書類側mainへの統合後もFabricの133テストとビルド、Rustの `build --release --locked`、`launch_dialogue.py --settings-dir . --check` が通過。起動用バイナリとMOD jarを元のプロジェクトに用意した。Minecraftへのjar配備と実機確認は未実施。
+書類側mainへの統合後もFabricの133テストとビルド、Rustの `build --release --locked`、`launch_dialogue.py --settings-dir . --check` が通過。起動用バイナリとMOD jarを元のプロジェクトに用意した。
+
+2026-10-11、ユーザーの実機テスト用の依頼で、通常のFabric起動構成の `mods/dogido-fabric-client-0.1.0.jar` へ配備した。ビルド成果物とのSHA-256一致（`b6854a1bf3f5a5c121441a02264ad107b491a2cb7687c0692c3dfee1b77bcde6`）を確認。旧jarと配備記録は `.dogido_tools/checkpoints/2026-10-11-horse-recall-install/` に退避。配備時点ではMinecraftと旧ビルドのRust本体が稼働していたため、反映にはそれぞれ再起動が必要。実機での馬の移動・画面・音は未確認。
 
 比較結果と採用方式は [API / JSONの適性](2026-10-11-api-json-suitability.md) を参照。実モデル比較は選択結果までを検証し、Minecraftの馬は動かさない。
