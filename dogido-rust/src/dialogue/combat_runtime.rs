@@ -3,6 +3,13 @@ use crate::combat::{core::Decision, model::Speech};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
+/// 戦闘判断を適用する入力と、会話中断の理由・優先度。
+pub(super) struct DecisionContext<'a> {
+    pub input: Option<&'a str>,
+    pub reason: Option<&'a str>,
+    pub combat_priority: bool,
+}
+
 impl Dialogue {
     pub(super) fn preempt_ominous_reaction(
         &self,
@@ -162,10 +169,13 @@ impl Dialogue {
         jobs: &mut Vec<JoinHandle<()>>,
         sid: &str,
         mut decision: Decision,
-        input: Option<&str>,
-        reason: Option<&str>,
-        combat_priority: bool,
+        context: DecisionContext<'_>,
     ) {
+        let DecisionContext {
+            input,
+            reason,
+            combat_priority,
+        } = context;
         let s = d.sessions.get_mut(sid).unwrap();
         for note in s.combat.take_notes() {
             let note = note.chars().take(80).collect::<String>();
@@ -173,8 +183,17 @@ impl Dialogue {
                 if s.combat_digest.len() == 8 {
                     s.combat_digest.pop_front();
                 }
-                self.append_story(sid, &s.instance_id, &super::id("combat_note"), None,
-                    "combat_fact", &note, serde_json::json!({}));
+                self.append_story(
+                    sid,
+                    &s.instance_id,
+                    super::story::StoryEvent {
+                        id: &super::id("combat_note"),
+                        workshop: None,
+                        kind: "combat_fact",
+                        text: &note,
+                        details: serde_json::json!({}),
+                    },
+                );
                 s.combat_digest.push_back(note);
             }
         }

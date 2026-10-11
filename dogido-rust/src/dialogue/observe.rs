@@ -220,16 +220,18 @@ impl Dialogue {
                     &mut jobs,
                     session_id,
                     decision,
-                    input_handled.then_some(text.as_str()),
-                    warnings::interruption_reason(&event),
-                    recent
-                        && (workshop_focus::hostile(&event)
-                            || matches!(
-                                event.event.name,
-                                EventName::HostileDefeated
-                                    | EventName::CreeperDetonated
-                                    | EventName::CombatEnded
-                            )),
+                    super::combat_runtime::DecisionContext {
+                        input: input_handled.then_some(text.as_str()),
+                        reason: warnings::interruption_reason(&event),
+                        combat_priority: recent
+                            && (workshop_focus::hostile(&event)
+                                || matches!(
+                                    event.event.name,
+                                    EventName::HostileDefeated
+                                        | EventName::CreeperDetonated
+                                        | EventName::CombatEnded
+                                )),
+                    },
                 );
                 self.process_environment(&mut d, &mut jobs, session_id, now, combat_priority);
                 let s = d.sessions.get_mut(session_id).unwrap();

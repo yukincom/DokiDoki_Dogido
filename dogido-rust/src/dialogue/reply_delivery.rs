@@ -176,8 +176,15 @@ impl Dialogue {
             let story = format!("川柳の相談。プレイヤー「{player_text}」\nドギド「{text}」");
             if let Some(s) = d.sessions.get_mut(sid) {
                 self.share_story(
-                    sid, s, &format!("workshop:{turn}"), Some(wid), "workshop_dialogue", &story,
-                    json!({"workshop_id":wid,"input_turn_id":turn,"player_text":player_text,"dogido_text":text}),
+                    sid,
+                    s,
+                    super::story::StoryEvent {
+                        id: &format!("workshop:{turn}"),
+                        workshop: Some(wid),
+                        kind: "workshop_dialogue",
+                        text: &story,
+                        details: json!({"workshop_id":wid,"input_turn_id":turn,"player_text":player_text,"dogido_text":text}),
+                    },
                 );
             }
         }

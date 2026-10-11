@@ -275,9 +275,11 @@ impl Dialogue {
                     &mut jobs,
                     &session_id,
                     decision,
-                    Some(text),
-                    None,
-                    false,
+                    super::combat_runtime::DecisionContext {
+                        input: Some(text),
+                        reason: None,
+                        combat_priority: false,
+                    },
                 );
                 self.start_pending(&mut d, &mut jobs, &session_id);
                 let s = &d.sessions[&session_id];

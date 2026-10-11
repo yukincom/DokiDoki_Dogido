@@ -119,11 +119,13 @@ impl Dialogue {
         self.share_story(
             sid,
             session,
-            &format!("unspoken:{turn}"),
-            wid.as_str(),
-            "workshop_unspoken",
-            &story,
-            json!({"workshop_id":wid,"input_turn_id":turn,"unspoken_text":entry["unspoken_text"]}),
+            super::story::StoryEvent {
+                id: &format!("unspoken:{turn}"),
+                workshop: wid.as_str(),
+                kind: "workshop_unspoken",
+                text: &story,
+                details: json!({"workshop_id":wid,"input_turn_id":turn,"unspoken_text":entry["unspoken_text"]}),
+            },
         );
         if let Some(workshop) = session.haiku.workshop.as_mut().filter(|w| wid == w.hud_id) {
             if let Some(saved) = workshop.dialogue.iter_mut().find(|r| r["turn_id"] == turn) {

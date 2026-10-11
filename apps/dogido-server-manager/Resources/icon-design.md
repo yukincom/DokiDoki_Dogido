@@ -1,0 +1,21 @@
+# 管理アプリのアイコン
+
+## 現行版: 外周の透明余白を撤去
+
+2026-10-11、ユーザーの「描画範囲いっぱいにしたい」「周りに透明の枠が入っちゃってる」に合わせ、初稿で指定していた透明余白と角丸の切り抜きを撤回した。おっとりした表情を保ち、背景を画像の四辺・四隅まで伸ばした不透明の正方形を現行PNGとする。ICNS互換のためRGBA形式へ変換し、全画素のalpha=255を確認した。ICNSへの変換は既存ビルド処理を使い、追加の余白を入れない。アイコンのリソース名はv2。
+
+内蔵imagegenによる修正プロンプト:
+
+Use case: precise-object-edit. Edit target: the supplied final Dogido app icon. Fix ONLY the wasted transparent outer border and icon framing. Produce a SQUARE FULL-BLEED OPAQUE icon, with the same dark forest-green background filling every pixel right to all four canvas edges and corners. NO transparency, NO outer padding, NO rounded-corner cutout, NO frame, NO extra border; macOS handles the display shape. Enlarge the existing icon artwork uniformly to use the former transparent margin, while keeping both hands and the entire cube fully visible. Preserve the same creamy yellow cubic 3D Dogido, same two little cuboid hands, same gentle relaxed eyebrows and small warm smile, white-surrounded dark-brown pixel eyes, peach cheeks, three-quarter view, lighting, body proportions and detailed existing image. This is a framing/background extension correction, not a redesign: do not alter the face, pose, palette, character geometry or add anything. The green background must visibly reach the left, right, top and bottom edges, including the four corners. Square 1024x1024 composition, no text or symbols.
+
+## 採用画像への表情修正プロンプト
+
+Use case: identity-preserve. Edit target: the provided Dogido macOS icon. Change ONLY the facial expression to be calm, gentle, easygoing and sweet: おっとりした、のんびり穏やかな表情. The current eyebrows make him look worried and gloomy; remove that tension. Make the eyebrows low-key, gently arched and almost horizontal, neither steeply sloping nor raised in distress. Let the eyes look relaxed and friendly with slightly softened upper lids, clearly awake and attentive, not sleepy, bored, sly, sad or drooping. Keep both distinctive large white-surrounded dark-brown eyes and their pixel-art shape. Change the small mouth to a subtle warm relaxed smile. Preserve the exact creamy yellow cube body, two cubic hands, peach cheeks, three-quarter camera angle, scale, position, existing green rounded-square background tile, voxel geometry, studio lighting, all colors, and outer transparent margin. No other changes, no text, no extra objects.
+
+2026-10-11、ユーザーの「アイコンのデザインはドギドの３Dボディっぽくして！」に合わせて、内蔵imagegenで制作。
+
+参照は本体の `animation/cube_dogido/texture.png` と `adapter/minecraft-fabric/src/main/resources/assets/dogido/textures/gui/character.png`。前者を3Dボディの配色・顔、後者を顔の補助参照にした。初稿では立方体の身体と両側の小さな手を残し、深緑の角丸背景へまとめた。「もうちょいおっとり系で」という指示に合わせ、眉を穏やかにして口元へ小さな笑顔を加えた。初稿の透明余白は上記の現行版で撤去し、ビルド時にmacOS標準のサイズへ縮小してICNSにする。
+
+## 初稿の生成プロンプト
+
+Use case: stylized-concept. Asset type: macOS application icon for the Dogido server manager, square 1024x1024 composition. Input image 1 is the exact texture atlas of Dogido's existing Minecraft 3D body; use it as the primary identity and color reference. Input image 2 is the original 2D Dogido character; use only as supporting facial identity reference, NOT its round body silhouette. Create a polished, charming 3D voxel icon of this specific character: one pale cream-yellow CUBE body, roughly equal width/height/depth, two tiny flat rectangular cream-yellow hands projecting from opposite sides around the body's mid-height. The body is a simple Minecraft-style floating cube with no legs, no feet, no ears, no nose, no antenna, no tail. Front face has two large dark-brown eyes with white surrounds, expressive worried dark-brown eyebrows, tiny peach cheeks and a small friendly mouth, faithful to the atlas and recognizable as Dogido. Slight three-quarter front view with visible top and right side, softly lit, clean crisp cubic geometry with extremely subtle bevels, minimal texture. Center the character large and fully visible with hands in frame, occupying approximately 78% of the icon width. Place it in front of a dark muted forest-green rounded-square macOS icon tile, soft dimensional shadow and gentle warm highlights. Rounded-square tile occupies 88% of canvas with truly transparent margin outside the tile. Keep the face legible at 32px. No text, letters, terminal glyphs, cables, server machines, border, badge, extra objects, or watermark.
