@@ -34,11 +34,13 @@ def request(base, path, body=None, method=None, sid=None):
         return json.load(r)
 
 
-def register(base, preview=True):
+def register(base, preview=True, *, voice_enabled=None):
+    text_mode = ({} if voice_enabled is None else
+                 {"capabilities": ["dialogue_text.v1"], "voice_enabled": voice_enabled})
     return request(base, "/api/v1/adapter-sessions", {
         "adapter_name": "rust-conversation-preview" if preview else "fabric-test",
         "adapter_version": "test", "game": "none" if preview else "minecraft-java",
-        "schema_version": "2026-05-24", "player_name": "試験"})["session_id"]
+        "schema_version": "2026-05-24", "player_name": "試験", **text_mode})["session_id"]
 
 
 def wait_for(predicate, timeout=10):
@@ -115,8 +117,11 @@ def dependencies():
                     text = controls["leaf"]
                     if any('"action":"silent"' in m["content"] for m in incoming["messages"] if m["role"] == "system"):
                         text = json.dumps({"action":"speak","speech":text}, ensure_ascii=False)
+                message = (structured if isinstance(structured, dict) and structured.get("role") == "assistant"
+                           and "tool_calls" in structured else {"role": "assistant", "content": text})
                 raw = json.dumps({"id": "mock", "object": "chat.completion", "created": 0,
-                    "model": "mock-model", "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
+                    "model": "mock-model", "choices": [{"index": 0, "message": message,
+                        "finish_reason": "tool_calls" if message.get("tool_calls") else "stop"}],
                     "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}).encode()
                 if "completion_override" in controls:
                     actual = controls["completion_override"](incoming)
@@ -206,11 +211,145 @@ def running(binary, directory, dependency, *, live=False, player=None, warning_s
             assert not list((directory / "audio").glob("*.wav")), "temporary playback file remains"
 
 
+def submit_text(base, sid, text):
+    result = request(base, "/api/v1/player-input", {"session_id": sid, "source": "text", "text": text})
+    assert result["accepted"], result
+    return result["turn_id"]
+
+
+def display_row(base, turn):
+    return next((r for r in snapshot(base)["utterances"]
+                 if r["turn_id"] == turn and r.get("display_id")), None)
+
+
+def acknowledge(base, sid, reply):
+    result = request(base, "/api/v1/rust-dialogue/displayed",
+                     {"session_id": sid, "display_ids": [reply["display_id"]]})
+    assert result["displayed"] == [reply["display_id"]] and not result["rejected"], result
+
+
+def check_text_delivery(binary, passed):
+    with tempfile.TemporaryDirectory(prefix="dogido-text-dialogue-") as temp, dependencies() as (dep, control, seen):
+        directory = Path(temp)
+        with running(binary, directory, dep, haiku_settings={"enabled": False, "memory_enabled": False}) as (base, process, log):
+            sid = register(base, voice_enabled=False)
+            def history():
+                return next(s["history"] for s in snapshot(base)["sessions"] if s["session_id"] == sid)
+            def mode(enabled):
+                result = request(base, "/api/v1/rust-dialogue/voice", {"session_id": sid, "enabled": enabled})
+                assert result["accepted"], result
+                return result["voice_generation"]
+            turn = submit_text(base, sid, "こんにちは")
+            reply = wait_for(lambda: display_row(base, turn))
+            assert reply["output_mode"] == "text" and not reply["text_displayed"], reply
+            assert [r["role"] for r in history()] == ["user"], history()
+            acknowledge(base, sid, reply)
+            acknowledge(base, sid, reply)
+            delivered = wait_for(lambda: row(base, turn, {"audio_disabled"}))
+            assert delivered["text_displayed"] and delivered["delivery_confirmed"], delivered
+            assert [r["role"] for r in history()] == ["user", "assistant"], history()
+            assert not any(r["path"].startswith(("/audio_query", "/synthesis")) for r in seen), seen
+            passed.append("text_ack_commits_history_once_without_tts_or_fake_playback")
+
+            turn = submit_text(base, sid, "うん、ありがとう")
+            reply = wait_for(lambda: display_row(base, turn))
+            prompt = [r["body"] for r in seen if r["path"] == "/v1/chat/completions"][-1]
+            assert control["leaf"] in json.dumps(prompt, ensure_ascii=False), prompt
+            acknowledge(base, sid, reply)
+            wait_for(lambda: row(base, turn, {"audio_disabled"}))
+            passed.append("text_history_reaches_next_prompt")
+
+            old = submit_text(base, sid, "少し話そう")
+            old_reply = wait_for(lambda: display_row(base, old))
+            new = submit_text(base, sid, "次の話にしよう")
+            result = request(base, "/api/v1/rust-dialogue/displayed",
+                             {"session_id": sid, "display_ids": [old_reply["display_id"]]})
+            assert result["rejected"] == [old_reply["display_id"]], result
+            wait_for(lambda: row(base, old, {"cancelled"}))
+            acknowledge(base, sid, wait_for(lambda: display_row(base, new)))
+            wait_for(lambda: row(base, new, {"audio_disabled"}))
+            assert not any(r["turn_id"] == old + ":reply" for r in history()), history()
+            passed.append("superseded_text_ack_cannot_enter_history")
+
+            generation = mode(True)
+            for supplied in (None, "old-generation"):
+                body = {"session_id": sid, "source": "voice", "text": "聞こえるかな"}
+                if supplied is not None: body["voice_generation"] = supplied
+                rejected = request(base, "/api/v1/player-input", body)
+                assert not rejected["accepted"] and rejected["reason"] == "stale_voice_generation", rejected
+            (directory / "player_mode").write_text("slow")
+            voice = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice",
+                            "text": "聞こえるかな", "voice_generation": generation})
+            assert voice["accepted"], voice
+            turn = voice["turn_id"]
+            reply = wait_for(lambda: display_row(base, turn))
+            acknowledge(base, sid, reply)
+            wait_for(lambda: row(base, turn, {"started"}))
+            state = next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
+            assert [r["text"] for r in state["voice_inputs"]] == ["聞こえるかな"], state
+            mode(False)
+            cancelled = wait_for(lambda: row(base, turn, {"cancelled"}))
+            assert cancelled["text_displayed"] and cancelled["delivery_confirmed"], cancelled
+            assert len([r for r in history() if r["turn_id"] == turn + ":reply"]) == 1, history()
+            rejected = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice",
+                               "text": "古い認識", "voice_generation": generation})
+            assert not rejected["accepted"] and rejected["reason"] == "voice_disabled", rejected
+            assert mode(True) != generation
+            passed.append("voice_generation_echo_and_mode_cancel_preserve_displayed_reply")
+
+            (directory / "player_mode").write_text("ok")
+            turn = submit_text(base, sid, "もう一度こんにちは")
+            reply = wait_for(lambda: display_row(base, turn))
+            acknowledge(base, sid, reply)
+            completed = wait_for(lambda: row(base, turn, {"completed"}))
+            acknowledge(base, sid, completed)
+            assert len([r for r in history() if r["turn_id"] == turn + ":reply"]) == 1, history()
+            passed.append("audio_and_text_completion_share_one_history_entry")
+
+            control["fail_tts"] = True
+            control["leaf"] = "またゆっくり話そな。"
+            turn = submit_text(base, sid, "別の話をしよう")
+            reply = wait_for(lambda: display_row(base, turn))
+            acknowledge(base, sid, reply)
+            failed = wait_for(lambda: row(base, turn, {"failed"}))
+            assert failed["text_displayed"] and failed["delivery_confirmed"], failed
+            assert len([r for r in history() if r["turn_id"] == turn + ":reply"]) == 1, history()
+            passed.append("tts_failure_preserves_confirmed_text_history")
+
+            request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
+            sid = register(base, preview=False, voice_enabled=False)
+            audio_before = len([r for r in seen if r["path"].startswith(("/audio_query", "/synthesis"))])
+            request(base, "/api/v1/game-events", {
+                "schema_version": "2026-05-24", "adapter": "fixture", "sequence": 1,
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
+                "player": {"name": "試験", "dimension": "minecraft:overworld", "health": 20},
+                "world": {"weather": "clear", "biome": "plains", "sky_visible": True,
+                          "ceiling_height": 20, "local_light": 15, "time_phase": "day",
+                          "nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 2},
+                "combat": {"combat_active_hint": False}}, sid=sid)
+            warning = wait_for(lambda: next((r for r in snapshot(base)["utterances"]
+                               if r["session_id"] == sid and r.get("display_id")
+                               and r.get("text") == "触るとあちちやで！"), None))
+            assert not history(), history()
+            acknowledge(base, sid, warning)
+            acknowledge(base, sid, warning)
+            wait_for(lambda: row(base, warning["turn_id"], {"audio_disabled"}))
+            assert len([r for r in history() if r["text"] == warning["text"]]) == 1, history()
+            assert len([r for r in seen if r["path"].startswith(("/audio_query", "/synthesis"))]) == audio_before
+            passed.append("fixed_warning_text_ack_enters_history_once_without_tts")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=ROOT / "target/debug/dogido-rust")
+    parser.add_argument("--text-only", action="store_true", help="テキスト配送の追加確認だけ実行")
     args = parser.parse_args()
     passed = []
+    check_text_delivery(args.binary.resolve(), passed)
+    if args.text_only:
+        print(json.dumps({"passed": passed, "all_owned_processes_stopped": True}, ensure_ascii=False, indent=2))
+        return
     with tempfile.TemporaryDirectory(prefix="dogido-dialogue-") as temp, dependencies() as (dep, control, seen):
         directory = Path(temp)
         with running(args.binary.resolve(), directory, dep) as (base, process, log):

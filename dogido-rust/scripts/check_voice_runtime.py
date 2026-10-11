@@ -50,7 +50,16 @@ class Harness:
                 except (BrokenPipeError, ConnectionResetError): pass
             def do_GET(self):
                 parent.requests.append((self.path, None, self.headers.get("Authorization")))
-                self.response({"prompt_mode": parent.options.get("mode", "normal")}, parent.options.get("context_status", 200))
+                options = parent.options.copy()
+                value = options.get("context", {
+                    "prompt_mode": options.get("mode", "normal"),
+                    "session_id": options.get("session_id", "test-session"),
+                    "voice_enabled": options.get("voice_enabled", True),
+                    "voice_generation": options.get("voice_generation", "generation-1"),
+                })
+                status = options.get("context_status", 200)
+                if options.get("context_delay"): time.sleep(options["context_delay"])
+                self.response(value, status)
             def do_POST(self):
                 value = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 parent.requests.append((self.path, value, self.headers.get("Authorization")))
@@ -62,7 +71,13 @@ class Harness:
                     if parent.options.get("slow_diagnostics"): time.sleep(2)
                     self.response({"accepted": True})
                 else:
-                    self.response(parent.options.get("delivery", {"accepted": True, "session_id": "test-session"}), parent.options.get("delivery_status", 200))
+                    if not parent.options.get("voice_enabled", True):
+                        self.response({"accepted": False, "reason": "voice_disabled"})
+                    elif (value.get("session_id") != parent.options.get("session_id", "test-session")
+                          or value.get("voice_generation") != parent.options.get("voice_generation", "generation-1")):
+                        self.response({"accepted": False, "reason": "stale_voice_generation"})
+                    else:
+                        self.response(parent.options.get("delivery", {"accepted": True, "session_id": "test-session"}), parent.options.get("delivery_status", 200))
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": .05}, daemon=True)
         self.thread.start()
@@ -142,14 +157,14 @@ def main():
             ("empty-only-retry", {"empty_first": True}), ("bad-utf8-log", {"bad_log": True}),
             ("nonzero-with-valid-text", {"whisper_exit": 3}), ("silero-pass", {"vad": True}),
             ("silero-fail-open", {"vad": True, "vad_failure": True}),
-            ("context-failure-fallback", {"context_status": 503}),
             ("server-rejection", {"delivery": {"accepted": False, "reason": "select_one_session"}}),
             ("http-conflict-rejection", {"delivery_status": 409, "delivery": {"accepted": False, "reason": "select_one_session"}}),
         ]:
             with h.case(name, **options) as (p, folder, logs):
                 wait(lambda: len(h.deliveries()) == 1, name)
                 assert "模擬録音" in h.diagnostics("aec_started")[0]["detail"]
-                assert h.deliveries() == [{"text": "ドギド 900", "source": "voice"}]
+                assert h.deliveries() == [{"text": "ドギド 900", "source": "voice",
+                                          "session_id": "test-session", "voice_generation": "generation-1"}]
                 calls = [v for v in logs() if v["role"] == "whisper" and v["event"] == "started"]
                 assert len(calls) == (2 if options.get("empty_first") else 1)
                 first = calls[0]["args"]
@@ -161,6 +176,61 @@ def main():
                 assert "--no-gpu" not in first
                 if name in {"server-rejection", "http-conflict-rejection"}: wait(lambda: h.diagnostics("select_one_session"), name)
             count += 1
+        for name, options in [
+            ("off-at-launch", {"voice_enabled": False}),
+            ("context-unavailable-at-launch", {"context_status": 503}),
+            ("context-missing-permission", {"context": {"prompt_mode": "normal"}}),
+            ("context-missing-session", {"session_id": None}),
+            ("context-missing-generation", {"voice_generation": None}),
+        ]:
+            with h.case(name, **options) as (p, folder, logs):
+                wait(lambda: len([path for path, _, _ in h.requests if path.endswith("context")]) >= 2,
+                     "idle permission polling")
+                assert not logs() and not h.deliveries()
+                assert p.poll() is None
+                h.options = {"voice_generation": "generation-2"}
+                wait(lambda: len(h.deliveries()) == 1, "voice enabled after idle")
+                assert h.deliveries()[0]["voice_generation"] == "generation-2"
+            count += 1
+        for name, change in [
+            ("off-stops-capture-and-stt", {"voice_enabled": False, "voice_generation": "generation-2"}),
+            ("context-loss-stops-capture-and-stt", {"context_status": 503}),
+        ]:
+            with h.case(name, hang_whisper=True, extra_segments=[1000, 1100]) as (p, folder, logs):
+                wait(lambda: (folder / "whisper-started").exists(), "recognition started")
+                wait(lambda: h.diagnostics("pending_segment_replaced"), "pending speech before pause")
+                original_pids = {v.get("child_pid", v["pid"]) for v in logs()}
+                h.options.update(change)
+                wait(lambda: h.diagnostics("voice_input_paused"), "voice pause after child cleanup")
+                assert not any(running(pid) for pid in original_pids)
+                assert not list(folder.glob("dogido-voice-*.wav"))
+                assert not h.deliveries() and p.poll() is None
+                config = folder / "case.json"
+                stub_settings = json.loads(config.read_text())
+                stub_settings["hang_whisper"] = False
+                stub_settings["extra_segments"] = []
+                config.write_text(json.dumps(stub_settings))
+                h.options.update(voice_enabled=True, context_status=200, voice_generation="generation-3")
+                wait(lambda: len(h.deliveries()) == 1, "new recording period after resume")
+                assert h.deliveries()[0]["voice_generation"] == "generation-3"
+                assert h.deliveries()[0]["text"] == "ドギド 900"
+                capture_starts = [v for v in logs() if v["role"] == "capture" and v["event"] == "started"]
+                assert len(capture_starts) == 2
+            count += 1
+        with h.case("generation-change-discards-old-recognition", hang_whisper=True) as (p, folder, logs):
+            wait(lambda: (folder / "whisper-started").exists(), "old generation recognition")
+            original_pids = {v.get("child_pid", v["pid"]) for v in logs()}
+            config = folder / "case.json"
+            stub_settings = json.loads(config.read_text())
+            stub_settings["hang_whisper"] = False
+            config.write_text(json.dumps(stub_settings))
+            h.options["voice_generation"] = "generation-2"
+            wait(lambda: len(h.deliveries()) == 1, "new generation delivery")
+            wait(lambda: h.diagnostics("voice_input_paused"), "old generation cleanup")
+            assert not any(running(pid) for pid in original_pids)
+            assert h.deliveries()[0]["voice_generation"] == "generation-2"
+            assert len([v for v in logs() if v["role"] == "capture" and v["event"] == "started"]) == 2
+        count += 1
         for name, options, reason in [
             ("noise-no-retry", {"output": "[00 --> 01] Thank you!"}, "known_noise_text"),
             ("invalid-text-no-retry", {"bad_text": True}, "whisper_invalid_utf8"),
@@ -190,6 +260,16 @@ def main():
                 assert p.wait(timeout=5) == 0
                 assert not h.deliveries()
             count += 1
+            for name, options in [
+                ("cancel-idle", {"voice_enabled": False}),
+                ("cancel-initial-context-request", {"context_delay": 5}),
+            ]:
+                with h.case(f"{name}-{sig.name}", **options) as (p, folder, logs):
+                    wait(lambda: any(path.endswith("context") for path, _, _ in h.requests), "context request")
+                    p.send_signal(sig)
+                    assert p.wait(timeout=3) == 0
+                    assert not logs() and not h.deliveries()
+                count += 1
         for name, options in [("partial-eof", {"partial_only": True}),
             ("eof-cancels-stt", {"eof_during_stt": True, "hang_whisper": True}),
             ("stalled-capture-cancels-stt", {"stall_capture": True, "hang_whisper": True})]:

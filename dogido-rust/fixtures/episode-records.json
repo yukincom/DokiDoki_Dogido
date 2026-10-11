@@ -1776,17 +1776,11 @@
       "auditory_threats": [],
       "smell_observation": {
         "status": "none",
-        "smell_id": null,
-        "category": null,
-        "valence": null,
-        "source_kind": null,
-        "specificity": null,
-        "effective_strength": null,
         "temperature_modifier": 0,
         "rain_after_active": false,
         "suppression_reason": null,
-        "direction_estimate": null,
-        "basis": "smell_policy_v1"
+        "components": [],
+        "basis": "smell_policy_v2"
       },
       "ambient_sounds": [],
       "passive_mobs": [],
@@ -1979,17 +1973,11 @@
         },
         "smell_observation": {
           "status": "none",
-          "smell_id": null,
-          "category": null,
-          "valence": null,
-          "source_kind": null,
-          "specificity": null,
-          "effective_strength": null,
           "temperature_modifier": 0,
           "rain_after_active": false,
           "suppression_reason": null,
-          "direction_estimate": null,
-          "basis": "smell_policy_v1"
+          "components": [],
+          "basis": "smell_policy_v2"
         },
         "ambient_sounds": [],
         "passive_mobs": {
@@ -2178,17 +2166,11 @@
       "auditory_threats": [],
       "smell_observation": {
         "status": "none",
-        "smell_id": null,
-        "category": null,
-        "valence": null,
-        "source_kind": null,
-        "specificity": null,
-        "effective_strength": null,
         "temperature_modifier": 0,
         "rain_after_active": false,
         "suppression_reason": null,
-        "direction_estimate": null,
-        "basis": "smell_policy_v1"
+        "components": [],
+        "basis": "smell_policy_v2"
       },
       "ambient_sounds": [],
       "passive_mobs": [],
@@ -2381,17 +2363,11 @@
         },
         "smell_observation": {
           "status": "none",
-          "smell_id": null,
-          "category": null,
-          "valence": null,
-          "source_kind": null,
-          "specificity": null,
-          "effective_strength": null,
           "temperature_modifier": 0,
           "rain_after_active": false,
           "suppression_reason": null,
-          "direction_estimate": null,
-          "basis": "smell_policy_v1"
+          "components": [],
+          "basis": "smell_policy_v2"
         },
         "ambient_sounds": [],
         "passive_mobs": {
@@ -2599,17 +2575,11 @@
       "auditory_threats": [],
       "smell_observation": {
         "status": "none",
-        "smell_id": null,
-        "category": null,
-        "valence": null,
-        "source_kind": null,
-        "specificity": null,
-        "effective_strength": null,
         "temperature_modifier": 0,
         "rain_after_active": false,
         "suppression_reason": null,
-        "direction_estimate": null,
-        "basis": "smell_policy_v1"
+        "components": [],
+        "basis": "smell_policy_v2"
       },
       "ambient_sounds": [],
       "passive_mobs": [],
@@ -2802,17 +2772,11 @@
         },
         "smell_observation": {
           "status": "none",
-          "smell_id": null,
-          "category": null,
-          "valence": null,
-          "source_kind": null,
-          "specificity": null,
-          "effective_strength": null,
           "temperature_modifier": 0,
           "rain_after_active": false,
           "suppression_reason": null,
-          "direction_estimate": null,
-          "basis": "smell_policy_v1"
+          "components": [],
+          "basis": "smell_policy_v2"
         },
         "ambient_sounds": [],
         "passive_mobs": {

@@ -26,7 +26,8 @@ use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::events::{BatchEvents, GameEvent};
 use contracts::{
-    HeartbeatRequest, PlayerInputRequest, SessionRequest, SnapshotQuery, WorkshopQuery,
+    DisplayedRequest, HeartbeatRequest, PlayerInputRequest, SessionRequest, SnapshotQuery,
+    VoiceModeRequest, WorkshopQuery,
 };
 use runtime::{Command, Operation, Published};
 
@@ -134,6 +135,8 @@ impl Application {
             )
             .route("/api/v1/rust-dialogue/snapshot", get(chat_snapshot))
             .route("/api/v1/rust-dialogue/interrupt", post(chat_interrupt))
+            .route("/api/v1/rust-dialogue/voice", post(chat_voice))
+            .route("/api/v1/rust-dialogue/displayed", post(chat_displayed))
             .route("/api/v1/adapter-sessions", post(create_session))
             .route("/api/v1/adapter-sessions/{id}/heartbeat", post(heartbeat))
             .route("/api/v1/adapter-sessions/{id}", delete(close_session))
@@ -438,4 +441,17 @@ async fn chat_interrupt(
     };
     d.interrupt(&id);
     Ok(ApiReply::ok(json!({"accepted":true})))
+}
+
+async fn chat_voice(
+    State(state): State<AppState>,
+    payload: Result<Json<VoiceModeRequest>, JsonRejection>,
+) -> Result<ApiReply, ApiReply> {
+    Ok(state.submit(Operation::VoiceMode(parse(payload)?)).await)
+}
+async fn chat_displayed(
+    State(state): State<AppState>,
+    payload: Result<Json<DisplayedRequest>, JsonRejection>,
+) -> Result<ApiReply, ApiReply> {
+    Ok(state.submit(Operation::Displayed(parse(payload)?)).await)
 }

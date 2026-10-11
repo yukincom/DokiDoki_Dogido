@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use super::{
     ApiReply, ServerConfig,
-    contracts::{HeartbeatRequest, PlayerInputRequest, SessionRequest},
+    contracts::{
+        DisplayedRequest, HeartbeatRequest, PlayerInputRequest, SessionRequest, VoiceModeRequest,
+    },
 };
 
 pub(super) enum Operation {
@@ -29,6 +31,8 @@ pub(super) enum Operation {
         key: Option<String>,
     },
     PlayerInput(PlayerInputRequest),
+    VoiceMode(VoiceModeRequest),
+    Displayed(DisplayedRequest),
     Unsupported(&'static str),
     Shutdown,
     #[cfg(test)]
@@ -221,6 +225,19 @@ impl Runtime {
                             && registration.game == "none",
                     );
                     d.set_execution_capabilities(&id, &registration.execution_capabilities);
+                    if registration
+                        .capabilities
+                        .iter()
+                        .any(|c| c == "dialogue_text.v1")
+                    {
+                        d.enable_text_delivery(
+                            &id,
+                            registration
+                                .extra
+                                .get("voice_enabled")
+                                .and_then(Value::as_bool),
+                        );
+                    }
                 }
                 self.data.sessions.insert(
                     id.clone(),
@@ -366,6 +383,14 @@ impl Runtime {
             }
             Operation::PlayerInput(request) => {
                 if let Some(d) = &self.config.dialogue {
+                    if request.source == crate::ingress::InputSource::Voice
+                        && let Some(rejection) = d.validate_voice_input(
+                            request.session_id.as_deref(),
+                            request.voice_generation.as_deref(),
+                        )
+                    {
+                        return ApiReply::ok(rejection);
+                    }
                     return ApiReply::ok(d.submit(
                         request.session_id.as_deref(),
                         &request.text,
@@ -384,6 +409,16 @@ impl Runtime {
                     ApiReply::unsupported("player_dialogue")
                 }
             }
+            Operation::VoiceMode(request) => match &self.config.dialogue {
+                Some(d) => ApiReply::ok(d.set_voice_enabled(&request.session_id, request.enabled)),
+                None => ApiReply::unsupported("player_dialogue"),
+            },
+            Operation::Displayed(request) => match &self.config.dialogue {
+                Some(d) => {
+                    ApiReply::ok(d.acknowledge_display(&request.session_id, &request.display_ids))
+                }
+                None => ApiReply::unsupported("player_dialogue"),
+            },
             Operation::Unsupported(feature) => ApiReply::unsupported(feature),
             Operation::Shutdown => {
                 if let Some(d) = &self.config.dialogue {

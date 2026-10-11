@@ -5,6 +5,8 @@
 mod edits;
 pub mod materials;
 mod parse;
+mod tool_call;
+pub use tool_call::normalize_player_edit_tool;
 #[cfg(test)]
 mod tests;
 use crate::{

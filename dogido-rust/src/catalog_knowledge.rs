@@ -259,8 +259,16 @@ pub fn for_event(event: &GameEvent, structure: Option<&str>) -> Knowledge {
     }
     if let Some(composition) = &event.nearby_composition {
         if !composition.mobs_truncated {
-            for key in &composition.mobs {
-                out.add(mob(key, None, false, "nearby_composition"));
+            for target in &composition.mobs {
+                out.add(mob(&target.id, None, false, "nearby_composition"));
+                for group in &target.professions {
+                    out.add(mob(
+                        &target.id,
+                        Some(&group.id),
+                        group.id == "baby",
+                        "nearby_composition",
+                    ));
+                }
             }
         }
         if !composition.blocks_truncated {

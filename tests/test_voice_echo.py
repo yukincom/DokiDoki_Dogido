@@ -48,6 +48,21 @@ class EchoProcessorTests(unittest.TestCase):
         output = WebRTCEchoProcessor(factory=lambda **_: engine).process(bytes(INPUT_BYTES))
         self.assertTrue(np.all(np.frombuffer(output, '<i2') == 30000))
 
+    def test_level_window_separates_average_from_peak_and_resets(self):
+        engine = Mock(process=Mock(side_effect=lambda near, far: near))
+        processor = WebRTCEchoProcessor(factory=lambda **_: engine)
+        for value in (3000, 0):
+            samples = np.full((FRAME_SAMPLES, 3), value, dtype='<i2')
+            processor.process(samples.tobytes())
+        levels = processor.levels()
+        self.assertEqual(20, levels['window_ms'])
+        for prefix in ('mic', 'reference', 'clean'):
+            self.assertAlmostEqual(2121.3, levels[f'{prefix}_rms'])
+            self.assertEqual(3000, levels[f'{prefix}_peak_rms'])
+        self.assertEqual({}, processor.levels())
+        processor.process(bytes(INPUT_BYTES))
+        self.assertEqual(0, processor.levels()['clean_peak_rms'])
+
     def test_bad_frame_or_changed_engine_output_is_rejected(self):
         for result in (np.zeros(160, np.int16), np.zeros(320, np.float32), np.zeros((160, 2), np.int16)):
             with self.subTest(shape=result.shape, dtype=result.dtype):
@@ -177,6 +192,27 @@ class EchoSelectionTests(unittest.TestCase):
         self.assertEqual('capture_completed', result['status'])
         self.assertFalse(result['audio_saved'])
         self.assertFalse(result['stt_called'])
+
+    def test_normal_capture_reports_levels_without_changing_pcm(self):
+        pcm = b'\x01\x00' * FRAME_SAMPLES
+        levels = {'window_ms': 5000, 'mic_rms': 1000, 'clean_rms': 250}
+        processor = Mock(process=Mock(return_value=pcm), levels=Mock(return_value=levels))
+        output = SimpleNamespace(buffer=io.BytesIO())
+        frames = [HEADER.pack(MAGIC, RATE, 3, 16), bytes(INPUT_BYTES), KeyboardInterrupt()]
+        with patch('dogido_server.echo_input.sys.platform', 'darwin'), \
+             patch('dogido_server.echo_input.Path.is_file', return_value=True), \
+             patch('dogido_server.echo_input.os.access', return_value=True), \
+             patch('dogido_server.echo_input.WebRTCEchoProcessor', return_value=processor), \
+             patch('dogido_server.echo_input.subprocess.Popen') as capture, \
+             patch('dogido_server.echo_input.read_exact', side_effect=frames), \
+             patch('dogido_server.echo_input.time.monotonic', side_effect=[0, 5, 5]), \
+             patch('dogido_server.echo_input.diagnostic') as diagnostic, \
+             patch('dogido_server.echo_input.stop_child') as stop, \
+             patch('sys.stdout', output):
+            self.assertEqual(0, echo_main([]))
+        self.assertEqual(pcm, output.buffer.getvalue())
+        diagnostic.assert_any_call('aec_levels', **levels)
+        stop.assert_called_once_with(capture.return_value)
 
 
 if __name__ == '__main__':

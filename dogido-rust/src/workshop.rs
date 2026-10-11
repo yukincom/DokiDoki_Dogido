@@ -1,4 +1,6 @@
 //! 一句の相談で許可する一手、実測、固定応答。正本の書換えや保存はしない。
+pub(crate) mod inspection_tool;
+pub(crate) mod tools;
 use crate::haiku::meter::count_japanese_sounds;
 use crate::haiku_record::HaikuLine;
 use serde_json::{Value, json};

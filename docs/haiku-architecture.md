@@ -37,20 +37,22 @@ workshop の講評を次の発句に効かせる方針は [haiku-workshop-checkp
 5. コード側で `HaikuContext` を組み立てる
 6. `chat` route で `IronyContext` を抽出する。`description` は自然な関西弁の見どころ文として、その時点で音声キューへ送る
 7. 次のフレームで scene JSONを使って発話済みの見どころを一次 atom IDへ結び直す。一節だけの応答と複数節の応答を同じドメイン検査へ通し、コードで既知 atom ID・主張区分・長さ・重複を検査して、`preface_clause` と句全体で共有する `poetic_interpretation` atom を作る。scene が拾い損ねた場合も、見どころの明示要素を二文字以上の意味のある一致で一次 atom へ戻す
-8. 設定で固定した生成方式を添え、`haiku` route（初稿 temperature `0.60`）で、かな三行の JSON を生成する
+8. 設定で固定した生成方式を添え、`haiku` route（初稿 temperature `0.60`）で、本文JSONの `lines` 配列にかな三行を返す
 9. `chat` route（temperature `0.0`）で、一行ごとに「どの atom の意味が残ったか」「自然な日本語か」を JSON 判定する。検証済み `poetic_interpretation` がある場合は、材料名の逐語的な再現ではなく、句が発話済みの情景に反せず、そこから自然に立ち上がる比喩・余情・印象かを判定する
 10. 漢字混じりの候補は、利用可能なら既存UniDicで意味・語順を変えず読みへ展開し、かな化後の同じ行を検査へ戻す。辞書無し・未知語・漢字残留は推測せず従来どおり不合格にする
 11. コードで、かな・音数・道具 hard 制約・出典 ID・一次 atom 単位の行間重複を検証する。句全体の意味の枠である `poetic_interpretation` だけは三行で共有できる
-12. 不合格行を含む**生成スロット**だけを `haiku` route（temperature `0.30`）で再生成する。各対象行へコードで確定した失敗理由・現在音数・目標音数・許容範囲を渡す。実測中は最大 6 回（設定上限 8 回）
+12. 不合格行を含む**生成スロット**だけを `haiku` route（temperature `0.30`）で再生成する。現在句・音数・失敗理由・固定行・対象行・残る材料を既存のuserプロンプトへまとめ、本文JSONの `lines: [{line_index, text}]` で候補を受け取る。実測中は最大 6 回（設定上限 8 回）
 13. 空白・句読点・カナ種だけが違う既出候補はコードで即時棄却し、意味評価を再実行しない
 14. 合格三行を一行オブジェクトへ確定する。各行は安定ID・位置概念・表示表記・確定ひらがな読み・出典atomを一緒に持ち、TTS・音数・workshop CAS は確定読みを使う。漢字・カタカナを含む表示表記とひらがな読みを別の句として扱わない
 15. 6 回後も一行でも不合格なら、句全体を発話せず `まとまらんかった` 系 fallback に閉じる。失敗句は workshop pin・長期保存の対象にしない
 
 irony の `description` は発句前に実際に話す短い詩的解釈であり、scene はその発話を一次atomへ結び直して本句の意味の枠にする。scene が `found=false` または構造契約不合格でも、一次 source atom が3要素以上あれば従来どおり本句は共通生成器へ進める。固定カタログ句へ切り替えるのは LLM 自体が利用できない場合だけとし、scene の弱さを理由に実測と無関係な固定句を生成句として発話しない。
 
-### Structured JSON の境界
+### 自動生成の本文JSONと検査の境界
 
-自動川柳の `haiku_draft` / `haiku_irony` / `haiku_scene` / `haiku_line_grounding` / `haiku_line_regeneration` は、2026-08-16時点の完成版と同じく各ドメインの検査器と最大6回の内容再生成で扱う。JSONの包み方だけを理由に共通clientで再生成・打切りしない。scene の一節objectと `clauses` 配列、行照合の一件objectと `assessments` 配列は、それぞれ同じ consumer が既知 atom ID・対象行・内容を検査する。
+2026-10-11の固定比較とユーザーの採用判断により、自動川柳の初稿・行再生成は既存の本文JSON方式へ戻した。運用モデルはGoogle公式QAT由来の `lmstudio-community/gemma-4-26B-A4B-it-QAT-MLX-4bit`。比較に使ったJSON実装・人格の共有・プロンプト・ドメイン検査・最大6回再生成を再利用する。初稿は `lines: [上五, 中七, 下五]`、再生成は指定行の `lines: [{line_index, text}]`。生成候補のnative function callingは運用経路から外し、過去の比較資料を実験記録として残す。workshopの読み取り・編集ツールは別の既存経路で継続する。[採用と確認記録](2026-10-11-qat-json-adoption.md)。
+
+`haiku_irony` / `haiku_scene` / `haiku_line_grounding` は本文JSONを維持する。候補の採否は2026-08-16時点の完成版と同じドメイン検査器と最大6回の内容再生成で扱う。本文JSONを使う見どころ・根拠検査は、包み方だけを理由に共通clientで再生成・打切りしない。scene の一節objectと `clauses` 配列、行照合の一件objectと `assessments` 配列は、それぞれ同じ consumer が既知 atom ID・対象行・内容を検査する。
 
 行照合の `assessments` が一部しか返らなければ、欠けた行だけを一行ずつ再照合する。候補外atom ID、意味不保持、不自然な日本語、音数違反等は行の不合格理由として扱い、合格行と使用済み材料を保持したまま不合格スロットを最大6回作り直す。初稿はこの6回とは別なので、同じ不合格スロットには初稿を含め最大7候補が生じうる。
 

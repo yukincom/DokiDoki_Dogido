@@ -1,12 +1,12 @@
-//! 区切り済みの発話PCMを、一時WAV → 任意のSilero VAD → whisper.cpp → 本体への入力配送へ渡す。
-//! 入力は16kHz・モノラル・16bit符号付き整数のlittle-endian PCM。区切りとRMS判定はsegment側が行う。
-//! 認識本文を検査し、設定された呼びかけ語も満たす場合にだけTransportへ送る。進捗・棄却理由はReporterへ出す。
-//! 録音や発話待ち列はvoice側が所有し、ここでは一発話の処理と一時WAVの寿命を扱う。
+//! セグメント分割済みの発話PCM音声データを、一時WAVファイル → （有効時）Silero VAD → whisper.cpp → 対話本体へのHTTP入力配送パイプラインへと引き渡す。
+//! 入力形式は 16kHz / モノラル / 16bit 符号付きリトルエンディアン PCM。発話区間の検出およびRMS閾値判定は `segment` モジュール側で行う。
+//! 認識されたテキスト本文を検査し、設定された呼びかけ語（ウェイクワード等）を満たす場合のみ `Transport` を通じてサーバーへ配送する。進捗状況や棄却理由は `Reporter` へ通知する。
+//! 録音バッファや発話キューの管理は `voice` モジュールが所有し、本モジュールは1発話あたりの推論処理および一時WAVファイルのライフサイクル管理を担当する。
 use super::{
     Settings,
     process::{self, Output, cancelled},
     segment::Segment,
-    transport::{Reporter, Transport},
+    transport::{Reporter, Transport, VoiceBinding},
 };
 use anyhow::Result;
 use serde_json::json;
@@ -19,10 +19,11 @@ use std::{
 };
 use tokio::{process::Command, sync::watch};
 
-/// VADとWhisperが共用する一発話分の一時ファイル。処理終了・取消・書込み失敗後もDropで削除を試みる。
+/// VADおよびWhisper推論で共有される1発話分の一時WAVファイルラッパー。
+/// 正常終了・キャンセル・書き込み失敗のいずれの場合でも、`Drop` 実装により一時ファイルの削除を試みる。
 struct Wav(PathBuf);
 impl Wav {
-    /// UUID付きの新規ファイルを所有者だけが読める0600で作り、入力PCMをWAVに包む。
+    /// UUIDを付与した新規一時ファイルをオーナー権限のみ（パーミッション 0600）で作成し、入力PCMデータをWAVコンテナに書き込む。
     fn create(pcm: &[u8]) -> Result<Self> {
         let path = std::env::temp_dir().join(format!("dogido-voice-{}.wav", uuid::Uuid::new_v4()));
         let mut file = OpenOptions::new()
@@ -143,9 +144,10 @@ fn vad_count(stdout: &[u8]) -> Option<usize> {
     })
 }
 
-/// 任意のSilero VADで一時WAVに発話があるかを調べる。成功時の0区間、または取消だけをfalseにする。
-/// 未設定ならそのままWhisperへ進む。起動失敗・外形不明・10秒の期限超過も診断を残して通す。
-/// 補助VADの不調で入力全体を失わないため、無音と確定できた場合だけ認識を省く。
+/// 外部Silero VADを実行し、一時WAVファイル内に音声区間が存在するかを判定する。
+/// VAD判定成功かつ検出区間が0件の場合、または処理がキャンセルされた場合のみ `false`（スキップ）を返す。
+/// VAD設定が無効な場合はそのままWhisper推論へ進める。プロセス起動失敗、出力形式不明、10秒のタイムアウト超過時は、診断ログを残した上でフォールバックとして `true` を返す。
+/// （※補助VADの不調によってユーザー入力を誤って破棄するのを防ぐため、確実に無音と特定できた場合のみスキップする方針をとる）。
 async fn vad(
     settings: &Settings,
     wav: &Path,
@@ -284,12 +286,13 @@ async fn recognize(
 }
 
 /// 待ち列から受け取った一発話を認識して本体へ送る。通常の無音・棄却・配送拒否は診断してOkで終わる。
-/// 文脈APIの返すmodeで通常用／句相談用promptを選び、取得失敗時は通常用を使う。
+/// 文脈APIの返すmodeで通常用／句相談用promptを選ぶ。許可が不明・別世代なら認識を始めない。
 /// last_modeはprompt切替診断の重複を避けるため更新する。本文の採否と会話処理は配送先が担当する。
 pub async fn process_segment(
     settings: &Settings,
     segment: Segment,
     transport: &Transport,
+    binding: &VoiceBinding,
     report: &Reporter,
     stop: &mut watch::Receiver<bool>,
     last_mode: &mut String,
@@ -298,24 +301,34 @@ pub async fn process_segment(
     if !vad(settings, &wav.0, report, stop).await {
         return Ok(());
     }
-    let mode = tokio::select! { biased;
+    let context = tokio::select! { biased;
         _ = cancelled(stop) => return Ok(()),
         result = transport.context() => match result {
-            Ok(mode) => mode,
+            Ok(context) => context,
             Err(error) => {
                 report.event("context", "warning", Some("context_unavailable"), json!({"detail":error.to_string()}));
-                "normal".into()
+                return Ok(());
             }
         },
     };
-    if mode != *last_mode {
+    if context.binding().as_ref() != Some(binding) {
+        report.event(
+            "context",
+            "info",
+            Some("voice_generation_changed"),
+            json!({}),
+        );
+        return Ok(());
+    }
+    let mode = context.prompt_mode();
+    if mode != last_mode.as_str() {
         report.event(
             "context",
             "info",
             Some("prompt_mode_selected"),
             json!({"prompt_mode":mode}),
         );
-        *last_mode = mode.clone();
+        *last_mode = mode.into();
     }
     let prompt = if mode == "haiku_workshop" {
         &settings.workshop_prompt
@@ -387,7 +400,7 @@ pub async fn process_segment(
     // 呼びかけ語を通った本文を一度だけ配送する。HTTPのacceptedは入力受付の結果であり、返答の再生完了ではない。
     let delivery = tokio::select! { biased;
         _ = cancelled(stop) => return Ok(()),
-        result = transport.deliver(&text) => result,
+        result = transport.deliver(&text, binding) => result,
     };
     match delivery {
         Ok(value) if value["accepted"] == true => {

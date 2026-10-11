@@ -5,8 +5,8 @@ use crate::{
         self, Backend,
         preparation::{Preparation, RuntimeSnapshot},
     },
-    python_worker::{Helper, LiveBackend, Route, RouteConfig},
     haiku_record::{MemoryStore, PreparedEmission, Workshop, project_workshop},
+    python_worker::{Helper, LiveBackend, Route, RouteConfig},
 };
 use anyhow::{Context, ensure};
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,6 @@ pub struct Settings {
     pub job_timeout_ms: u64,
     pub memory_enabled: bool,
     pub memory_dir: PathBuf,
-    pub workshop_open_ms: u64,
     pub workshop_idle_ms: u64,
     pub low_threat_resume_delay_ms: u64,
     pub platform_ai: super::combat_classifier::Settings,
@@ -52,8 +51,7 @@ impl Default for Settings {
             job_timeout_ms: 600_000,
             memory_enabled: true,
             memory_dir: PathBuf::from(".dogido_memory/rust-migration"),
-            workshop_open_ms: 240_000,
-            workshop_idle_ms: 120_000,
+            workshop_idle_ms: crate::haiku_record::DEFAULT_IDLE_TIMEOUT.as_millis() as u64,
             low_threat_resume_delay_ms: 8_000,
             platform_ai: super::combat_classifier::Settings::default(),
         }
@@ -75,7 +73,6 @@ impl Routes {
             h.structured_max_tokens > 0
                 && h.grounding_max_tokens > 0
                 && h.job_timeout_ms > 0
-                && h.workshop_open_ms > 0
                 && h.workshop_idle_ms > 0,
             "invalid haiku settings"
         );
@@ -202,6 +199,21 @@ impl Dialogue {
         let audit_before = super::workshop_record::state(
             d.sessions.get(sid).and_then(|s| s.haiku.workshop.as_ref()),
         );
+        // 移動・道具使用・snapshot受信では延長しない。この句の返答処理中だけ時計を止める。
+        let reply_in_progress = d.sessions.get(sid).is_some_and(|s| {
+            s.haiku.workshop.as_ref().is_some_and(|w| {
+                s.haiku
+                    .active
+                    .as_ref()
+                    .is_some_and(|a| a.id == s.haiku.workshop_generation)
+                    || (!s.status.is_terminal()
+                        && d.rows.iter().any(|r| {
+                            r["session_id"] == sid
+                                && r["turn_id"] == s.current_turn
+                                && r["workshop_id"] == w.hud_id
+                        }))
+            })
+        });
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
@@ -234,11 +246,14 @@ impl Dialogue {
             {
                 w.recovery.observe(e);
             }
-            w.expire(
-                now,
-                Duration::from_millis(self.config.haiku.workshop_open_ms),
-                Duration::from_millis(self.config.haiku.workshop_idle_ms),
-            );
+            if reply_in_progress {
+                w.record_activity(now);
+            } else {
+                w.expire(
+                    now,
+                    Duration::from_millis(self.config.haiku.workshop_idle_ms),
+                );
+            }
             if before != (w.is_open(), w.combat_paused()) {
                 d.revision += 1;
             }
@@ -368,24 +383,30 @@ impl Dialogue {
             if d.rows.len() == 200 {
                 d.rows.pop_front();
             }
-            d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"haiku_job_id":job,"session_id":sid,"category":if part=="poem"{"haiku"}else{"speech"},"text":text,"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both","source":"automatic_haiku","playback_status":status}));
+            let session_instance = d.sessions[sid].instance_id.clone();
+            d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"haiku_job_id":job,"session_id":sid,"session_instance":session_instance,"category":if part=="poem"{"haiku"}else{"speech"},"text":text,"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both","source":"automatic_haiku","playback_status":status}));
         }
         let s = d.sessions.get_mut(sid).unwrap();
         s.status = status;
         s.haiku.last_activity = Instant::now();
-        if status == PlaybackStatus::Completed && part != "poem" {
-            // 発句前の一言も、次の受け答えが参照できる実発話として残す。
-            s.history.push(&turn, "assistant", text);
+        if part == "poem"
+            && matches!(
+                status,
+                PlaybackStatus::Completed | PlaybackStatus::AudioDisabled
+            )
+            && let Some(w) = s.haiku.workshop.as_mut().filter(|w| w.is_open())
+        {
+            w.record_activity(Instant::now());
         }
-        if status == PlaybackStatus::Completed && part == "poem" {
-            self.share_story(
+        if status == PlaybackStatus::Completed {
+            self.confirm_haiku_delivery(&mut d, sid, &turn, part, false);
+        }
+        if status == PlaybackStatus::Queued {
+            Self::publish_text(
+                &mut d,
                 sid,
-                s,
                 &turn,
-                None,
-                "haiku_delivered",
-                &format!("ドギドが川柳を詠んだ。「{text}」"),
-                json!({"text":text}),
+                super::text_delivery::Kind::Haiku { part: part.into() },
             );
         }
         d.revision += 1;
@@ -397,6 +418,66 @@ impl Dialogue {
             status = status.as_str(),
             text
         );
+        true
+    }
+    pub(super) fn confirm_haiku_delivery(
+        &self,
+        d: &mut Data,
+        sid: &str,
+        turn: &str,
+        part: &str,
+        text: bool,
+    ) -> bool {
+        let Some(row) = d
+            .rows
+            .iter()
+            .find(|r| r["session_id"] == sid && r["turn_id"] == turn)
+            .cloned()
+        else {
+            return false;
+        };
+        let Some(s) = d.sessions.get_mut(sid) else {
+            return false;
+        };
+        if d.stopped
+            || (!row["session_instance"].is_null() && row["session_instance"] != s.instance_id)
+        {
+            return false;
+        }
+        if row["delivery_confirmed"] == true {
+            return true;
+        }
+        if text
+            && (row["playback_status"] == "cancelled"
+                || !s
+                    .haiku
+                    .active
+                    .as_ref()
+                    .is_some_and(|active| row["haiku_job_id"] == active.id))
+        {
+            return false;
+        }
+        let body = row["text"].as_str().unwrap_or("");
+        if body.is_empty() {
+            return false;
+        }
+        if part != "poem" {
+            s.history.push(turn, "assistant", body);
+        } else {
+            let verb = if text { "示した" } else { "詠んだ" };
+            self.share_story(
+                sid,
+                s,
+                turn,
+                None,
+                "haiku_delivered",
+                &format!("ドギドが川柳を{verb}。「{body}」"),
+                json!({"text":body,"delivery":if text {"text"} else {"audio"}}),
+            );
+        }
+        if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
+            row["delivery_confirmed"] = true.into();
+        }
         true
     }
     async fn haiku_speak(
@@ -412,7 +493,10 @@ impl Dialogue {
             self.haiku_row(sid, job, part, text, PlaybackStatus::Queued),
             "haiku superseded"
         );
-        if !self.config.audio_enabled {
+        let mut voice = self.output_config(sid);
+        if !voice.audio_enabled {
+            self.wait_for_text(sid, &format!("{job}:{part}"), cancel)
+                .await;
             ensure!(
                 !*cancel.borrow() && cancel.has_changed().is_ok(),
                 "cancelled"
@@ -423,7 +507,6 @@ impl Dialogue {
             );
             return Ok(());
         }
-        let mut voice = self.config.clone();
         voice.speed = voice.haiku_speed;
         self.audio
             .speak(&voice, spoken, cancel, || {
@@ -436,6 +519,7 @@ impl Dialogue {
         );
         Ok(())
     }
+    #[tracing::instrument(skip_all, fields(session_id = sid, job_id = job))]
     async fn haiku_pipeline(
         self: &Arc<Self>,
         sid: &str,
@@ -497,7 +581,8 @@ impl Dialogue {
         };
         let completed_at = chrono::Utc::now();
         let completed_clock = Instant::now();
-        tracing::info!(event="haiku_generation",session_id=sid,job_id=job,result=%json!(generated),llm_reports=%json!(backend.reports));
+        // 各モデル返答は完了時に出力済み。末尾では結果だけを表示する。
+        tracing::info!(event="haiku_generation",session_id=sid,job_id=job,result=%json!(generated),llm_call_count=backend.reports.len());
         if !generated.accepted {
             self.haiku_speak(
                 sid,

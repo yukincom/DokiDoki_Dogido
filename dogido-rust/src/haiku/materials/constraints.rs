@@ -1,10 +1,10 @@
-//! 発句時の道具・場面語・読み訂正と、有効なlessonから生成用の制約欄を作る。
-//! 道具の語彙と既知の誤読はallowed/forbiddenへ、本人の好みは別のplayer_lessonsへ置く。
-//! 返すのはsnapshotのJSONだけで、語句の採否やlessonの期限・保存はそれぞれの担当へ渡す。
+//! 発句時の道具・場面語・読み訂正情報、および有効な lesson から、川柳生成用の制約マップを構築する。
+//! 道具固有の語彙や既知の誤読はハード制約（allowed/forbidden）へ、プレイヤーの好み・指摘はソフト制約（player_lessons）へ分離して格納する。
+//! このモジュールはスナップショットJSONの構築のみを担い、語句の採否判定や lesson の有効期限管理・永続化は各担当ランタイムに委ねる。
 use super::*;
-/// 手持ちIDとsceneのmotifに一致する道具語彙を集め、使える場面ではバイオームの読みを加える。
-/// lessonはloosen以外のnoteを重複なく最大3件の参考欄へ置き、forbidden_termsへ混ぜない。
-/// 全欄が空ならNoneを返す。入力lessonの期限や抑止は呼出側で解決済みという前提を使う。
+/// 手持ちアイテムIDおよび scene の motif に一致する道具語彙を抽出し、利用可能な状況ではバイオームの読みを追加する。
+/// lesson については loosen 以外の note を重複なく最大3件まで参考情報として追加し、`forbidden_terms` には混入させない。
+/// 制約項目が一切ない場合は None を返す（入力 lesson の有効期限や全軸抑止の判定は呼び出し側で解決済みであることを前提とする）。
 pub fn constraint_details(
     event: &GameEvent,
     scene: &Scene,

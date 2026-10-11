@@ -1,5 +1,5 @@
 //! 受信済みの型と数値範囲に続き、複数fieldの組合せが契約として成立するかを検査する。
-//! 対象はhotbarのslot重複、匂いの方向の存在、匂いの状態・分類・発生源の対応。
+//! 対象はhotbarのslot重複、匂いの状態・分類・発生源の対応。
 //! modelsのValidateから呼ばれ、成功なら観測をそのまま通し、不整合なら理由を返す。
 //! ゲーム座標や実在性の照合、観測の補完、戦闘・発話・保存の判断は各消費側の責務。
 use super::{ensure, models::*};
@@ -16,140 +16,100 @@ impl HotbarState {
         )
     }
 }
-/// 方位または上下が少なくとも一つある方向観測だけを通す。
-/// 空objectは方向を推定できたことにならないため、情報なしは親fieldのNoneで表す。
-impl SmellDirectionEstimate {
-    pub(super) fn validate_semantics(&self) -> Result<(), String> {
-        ensure(
-            self.cardinal.is_some() || self.vertical.is_some(),
-            "smell direction estimate requires a direction",
-        )
-    }
-}
-
-/// 匂いのstatusに応じて必要fieldを揃え、特定度ごとのID・分類・快不快・発生源を照合する。
-/// presentの整合性を確認できた後だけunwrapし、none/suppressedは理由の有無を検査して早期に返す。
+/// presentだけが一種類以上を持ち、同じsmell_idを重複させない。
 impl SmellObservation {
     pub(super) fn validate_semantics(&self) -> Result<(), String> {
+        use SmellObservationStatus as Status;
+        // presentと非空配列は必ず対になる。「匂いありだが成分なし」も、
+        // 「匂いなし／抑止中なのに成分あり」も、発話処理へ入る前に拒否する。
+        ensure(
+            (self.status == Status::Present) == !self.components.is_empty(),
+            "smell components do not match status",
+        )?;
+        ensure(
+            (self.status == Status::Suppressed) == self.suppression_reason.is_some(),
+            "smell suppression reason does not match status",
+        )?;
+        // 同種の集約はFabricの責務。重複をここで勝手に足す／選ぶと計算結果が変わるため拒否する。
+        let mut ids = HashSet::new();
+        for component in &self.components {
+            ensure(
+                ids.insert(component.smell_id),
+                "smell component ids must be unique",
+            )?;
+            // 雨上がりは持続する通常臭へ混ぜず、一度の気づき専用fieldだけで受ける。
+            ensure(
+                component.smell_id != SmellObservationSmellId::RainAfter,
+                "rain-after smell belongs in rain_after_notice",
+            )?;
+            component.validate_semantics(false)?;
+        }
+        if let Some(notice) = &self.rain_after_notice {
+            ensure(
+                self.rain_after_active
+                    && self.status != Status::Suppressed
+                    && notice.component.smell_id == SmellObservationSmellId::RainAfter,
+                "rain-after notice requires an active unsuppressed rain-after source",
+            )?;
+            notice.component.validate_semantics(true)?;
+        }
+        Ok(())
+    }
+}
+impl SmellComponent {
+    fn validate_semantics(&self, rain_after_active: bool) -> Result<(), String> {
         use SmellObservationCategory as Category;
         use SmellObservationSmellId as Id;
         use SmellObservationSourceKind as Source;
-        use SmellObservationSpecificity as Specificity;
-        use SmellObservationStatus as Status;
         use SmellObservationValence as Valence;
-        // 方向を語れるのは解決済みの単独外部源だけ。手持ち・バイオーム・雨上がりは方向へ投影しない。
-        if self.direction_estimate.is_some() {
-            ensure(
-                self.status == Status::Present
-                    && self.specificity == Some(Specificity::Source)
-                    && matches!(
-                        self.source_kind,
-                        Some(Source::Block | Source::Entity | Source::DroppedItem)
-                    )
-                    && self.smell_id != Some(Id::RainAfter),
-                "smell spatial estimate requires a resolved external source",
-            )?;
-        }
-        let resolved = [
-            self.smell_id.is_some(),
-            self.category.is_some(),
-            self.valence.is_some(),
-            self.source_kind.is_some(),
-            self.specificity.is_some(),
-            self.effective_strength.is_some(),
-        ];
-        if self.status != Status::Present {
-            ensure(
-                !resolved.iter().any(|v| *v),
-                "non-present smell observation cannot carry a resolved source",
-            )?;
-            return ensure(
-                match self.status {
-                    Status::Suppressed => self.suppression_reason.is_some(),
-                    Status::None => self.suppression_reason.is_none(),
-                    Status::Present => unreachable!(),
-                },
-                "smell suppression reason does not match status",
-            );
-        }
-        ensure(
-            resolved.iter().all(|v| *v),
-            "present smell observation requires resolved smell fields",
-        )?;
-        ensure(
-            self.suppression_reason.is_none(),
-            "present smell observation cannot be suppressed",
-        )?;
-        let id = self.smell_id.unwrap();
-        let category = self.category.unwrap();
-        let valence = self.valence.unwrap();
-        let source = self.source_kind.unwrap();
-        // 同率候補はmixed/categoryの親形、単独候補はsourceの具体形として届く。
-        // SmellPolicyの出力形を検査し、欠けた属性をRust側の推測で埋めない。
-        match self.specificity.unwrap() {
-            Specificity::Mixed => ensure(
-                id == Id::Mixed
-                    && category == Category::Mixed
-                    && valence == Valence::Mixed
-                    && source == Source::Mixed,
-                "mixed smell observation requires the mixed parent shape",
+        let id = self.smell_id;
+        let category = self.category;
+        let valence = self.valence;
+        let source = self.source_kind;
+        let item = &[Source::Hotbar, Source::DroppedItem][..];
+        let flower = &[Source::Hotbar, Source::Block][..];
+        let block = &[Source::Block][..];
+        // 成分ごとの許される分類・快不快・発生源を照合する。
+        // この表は受信契約の検査であり、到達範囲やマスキングをRustで再計算する処理ではない。
+        let expected = match id {
+            Id::Zombie => (Category::Decay, Valence::Unpleasant, &[Source::Entity][..]),
+            Id::RottenFlesh => (Category::Decay, Valence::Unpleasant, item),
+            Id::Composter => (Category::Compost, Valence::Unpleasant, block),
+            Id::BrewingStand => (Category::Brewing, Valence::Mixed, block),
+            Id::Swamp => (Category::Swamp, Valence::Mixed, &[Source::Biome][..]),
+            Id::RawMeat | Id::RawFish => (Category::Food, Valence::Unpleasant, item),
+            Id::CookedMeat | Id::CookedFish | Id::Soup | Id::Cookie | Id::Bread => {
+                (Category::Food, Valence::Pleasant, item)
+            }
+            Id::CookingMeat | Id::CookingFish => (Category::Food, Valence::Pleasant, block),
+            Id::Cake => (
+                Category::Food,
+                Valence::Pleasant,
+                &[Source::Hotbar, Source::DroppedItem, Source::Block][..],
             ),
-            Specificity::Category => {
-                let valid = match (id, category) {
-                    (Id::Decay, Category::Decay) => valence == Valence::Unpleasant,
-                    (Id::Food, Category::Food) | (Id::Flower, Category::Flower) => true,
-                    _ => false,
-                };
-                ensure(
-                    valid && source == Source::Mixed,
-                    "category smell observation has an invalid semantic shape",
-                )
+            Id::InkSac => (Category::Ink, Valence::Unpleasant, &[Source::Hotbar][..]),
+            Id::LilyOfTheValley
+            | Id::Lilac
+            | Id::Peony
+            | Id::RoseBush
+            | Id::CactusFlower
+            | Id::FloweringAzalea => (Category::Flower, Valence::Pleasant, flower),
+            Id::WitherRose => (Category::Flower, Valence::Mixed, flower),
+            Id::Allium | Id::PitcherPlant | Id::Torchflower | Id::OpenEyeblossom => {
+                (Category::Flower, Valence::Unpleasant, flower)
             }
-            Specificity::Source => {
-                let item = &[Source::Hotbar, Source::DroppedItem][..];
-                let flower = &[Source::Hotbar, Source::Block][..];
-                let block = &[Source::Block][..];
-                let expected = match id {
-                    Id::Zombie => (Category::Decay, Valence::Unpleasant, &[Source::Entity][..]),
-                    Id::RottenFlesh => (Category::Decay, Valence::Unpleasant, item),
-                    Id::Composter => (Category::Compost, Valence::Unpleasant, block),
-                    Id::BrewingStand => (Category::Brewing, Valence::Mixed, block),
-                    Id::Swamp => (Category::Swamp, Valence::Mixed, &[Source::Biome][..]),
-                    Id::RawMeat | Id::RawFish => (Category::Food, Valence::Unpleasant, item),
-                    Id::CookedMeat | Id::CookedFish | Id::Soup | Id::Cookie | Id::Bread => {
-                        (Category::Food, Valence::Pleasant, item)
-                    }
-                    Id::CookingMeat | Id::CookingFish => (Category::Food, Valence::Pleasant, block),
-                    Id::Cake => (
-                        Category::Food,
-                        Valence::Pleasant,
-                        &[Source::Hotbar, Source::DroppedItem, Source::Block][..],
-                    ),
-                    Id::InkSac => (Category::Ink, Valence::Unpleasant, &[Source::Hotbar][..]),
-                    Id::LilyOfTheValley
-                    | Id::Lilac
-                    | Id::Peony
-                    | Id::RoseBush
-                    | Id::CactusFlower
-                    | Id::FloweringAzalea => (Category::Flower, Valence::Pleasant, flower),
-                    Id::WitherRose => (Category::Flower, Valence::Mixed, flower),
-                    Id::Allium | Id::PitcherPlant | Id::Torchflower | Id::OpenEyeblossom => {
-                        (Category::Flower, Valence::Unpleasant, flower)
-                    }
-                    Id::RainAfter => {
-                        ensure(
-                            self.rain_after_active,
-                            "rain-after smell requires an active rain-after window",
-                        )?;
-                        (Category::RainAfter, Valence::Pleasant, block)
-                    }
-                    _ => return Err("source smell observation requires a concrete smell id".into()),
-                };
+            Id::RainAfter => {
                 ensure(
-                    category == expected.0 && valence == expected.1 && expected.2.contains(&source),
-                    "source smell observation has an invalid semantic shape",
-                )
+                    rain_after_active,
+                    "rain-after smell requires an active rain-after window",
+                )?;
+                // 手持ちの花も雨上がり候補。blockに偽装せず、実際の採取元を受け取る。
+                (Category::RainAfter, Valence::Pleasant, flower)
             }
-        }
+        };
+        ensure(
+            category == expected.0 && valence == expected.1 && expected.2.contains(&source),
+            "smell component has an invalid semantic shape",
+        )
     }
 }

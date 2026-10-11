@@ -50,8 +50,9 @@ def main():
         r = finish(base, send, sid, "それを『あさひかる』にして")
         assert r["workshop_outcome"] == "player_edit_saved", r
         assert hud(sid)["canonical_lines"] == [*LINES[:2], "あさひかる"]
-        assert r["text"].startswith("その響き、ええな。") and len(revisions(folder, sid)) == 1
-        passed.append("model_edit_with_omitted_target_uses_retained_line_and_own_reply")
+        assert r["text"] == "\n".join([*LINES[:2], "あさひかる"]) and len(revisions(folder, sid)) == 1
+        assert r["workshop_steps"][0]["transport"] == "native_tool", r
+        passed.append("native_edit_with_omitted_target_uses_retained_line_and_confirmed_verse")
         r = finish(base, send, sid, "冒頭の五音を『さくらいろ』にして")
         assert r["workshop_outcome"] == "player_edit_saved", r
         assert hud(sid)["canonical_lines"] == ["さくらいろ", LINES[1], "あさひかる"]
@@ -94,17 +95,51 @@ def main():
                 assert not revisions(folder, sid)
             passed.append("candidate_selection_after_detour_" + ("saved" if succeeds else "replanned_on_failure"))
 
+    # Malformed tool arguments must not execute or borrow an older candidate.
+    # The bounded recovery is conversation-only after a tool decoding failure.
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        new_text = "やっぱり上五をあさひかるに変えて"
+        attempts = 0
+        def missing_arguments_then_conversation(text, prompt, n):
+            nonlocal attempts
+            if text != new_text:
+                return step(text, "respond", "その響きもええな。")
+            attempts += 1
+            if attempts == 1:
+                assert '"conversation_candidate": {' in prompt and '"replacement_text": "さくらいろ"' in prompt
+            p = edit(text, replacement="あさひかる", reference="上五")
+            if attempts == 1:
+                del p["confidence"]
+                del p["evidence"]
+            else:
+                assert "invalid_tool_arguments" in prompt
+                return step(text, "ask", "上五を『あさひかる』に変えるんやな？")
+            return p
+        install(control, missing_arguments_then_conversation)
+        sid = ready(base, send, rows)
+        finish(base, send, sid, "『さくらのは』を『さくらいろ』にしたらどうかな")
+        assert hud(sid)["canonical_lines"] == LINES
+        r = finish(base, send, sid, new_text)
+        assert attempts == 2 and r["workshop_action"] == "ask", r
+        assert hud(sid)["canonical_lines"] == LINES and not hud(sid)["pending_lines"]
+        assert not revisions(folder, sid)
+        assert "workshop_tool_rejected" in log.read_text()
+        passed.append("malformed_native_arguments_keep_verse_and_do_not_select_old_candidate")
+
     from check_workshop_revision import wire
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         proposal_text = 'あさのいろをくささむしに変更しよう！どう？'
         def confirmed_edit(text, prompt, n):
-            if '前の一手は実行していない' in prompt:
-                return step(text, 'ask', '下五をその言葉に変えるんやな？')
+            if text == 'うん！変えて！':
+                p = step(text, 'stage_conversation_candidate')
+                p['purpose'] = 'improve_wording'
+                return p
             p = edit(text, index=2, replacement='くささむし', reference='', fragment=LINES[2])
+            p['action'] = 'ask'
             p['line_reference']['found'] = False
             p['line_reference']['concept_id'] = 'unknown'
             p['line_proposal']['evidence'] = proposal_text
-            p['speech'] = 'うん、相談していた言葉に変えたで。'
+            p['speech'] = '下五をその言葉に変えるんやな？'
             return p
         install(control, confirmed_edit)
         sid = ready(base, send, rows)

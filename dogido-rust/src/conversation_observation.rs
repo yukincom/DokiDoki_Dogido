@@ -67,7 +67,6 @@ pub fn project(
     };
     let smell = if let Some(mut present) = environment::ambient::smell_context(event) {
         present["status"] = "present".into();
-        present["description"] = environment::ambient::current_smell_reply(event).text.into();
         present
     } else if let Some(observation) = &event.smell_observation {
         json!({"status":observation.status,"suppression_reason":observation.suppression_reason})
@@ -75,37 +74,36 @@ pub fn project(
         json!({"status":"unknown"})
     };
     let knowledge = crate::catalog_knowledge::for_event(event, structure);
-    let kind_list = |mobs: bool| -> Value {
-        let Some(composition) = &event.nearby_composition else {
-            return Value::Null;
-        };
-        if if mobs {
-            composition.mobs_truncated
-        } else {
-            composition.blocks_truncated
-        } {
-            return Value::Null;
-        }
-        let mut ids = if mobs {
-            composition.mobs.clone()
-        } else {
-            composition.blocks.clone()
-        };
-        ids.sort();
-        ids.dedup();
-        json!(
+    let mob_list = event.nearby_composition.as_ref().filter(|c| !c.mobs_truncated).map(|c| {
+        let mut mobs: Vec<_> = c.mobs.iter().collect();
+        mobs.sort_by_key(|m| &m.id);
+        mobs.into_iter().map(|mob| {
+            let mut row = json!({"id":mob.id,"label":environment::ambient::mob_label(&mob.id),
+                "quantity":quantity(&mob.quantity)});
+            if !mob.professions.is_empty() {
+                let mut groups: Vec<_> = mob.professions.iter().collect();
+                groups.sort_by_key(|g| &g.id);
+                row["profession_breakdown"] = json!({"relation":"村人合計の内訳",
+                    "groups":groups.into_iter().map(|group| {
+                        let label = crate::catalog_knowledge::mob("villager", Some(&group.id), group.id == "baby", "nearby_composition")
+                            .map(|entry| entry.label).unwrap_or_else(|| "村人".into());
+                        json!({"id":group.id,"label":label,"quantity":quantity(&group.quantity)})
+                    }).collect::<Vec<_>>()});
+            }
+            row
+        }).collect::<Vec<_>>()
+    });
+    let block_list = event
+        .nearby_composition
+        .as_ref()
+        .filter(|c| !c.blocks_truncated)
+        .map(|c| {
+            let mut ids = c.blocks.clone();
+            ids.sort();
             ids.into_iter()
-                .map(|id| {
-                    let label = if mobs {
-                        environment::ambient::mob_label(&id)
-                    } else {
-                        catalog.block_label(Some(&id))
-                    };
-                    json!({"id":id,"label":label})
-                })
+                .map(|id| json!({"label":catalog.block_label(Some(&id)),"id":id}))
                 .collect::<Vec<_>>()
-        )
-    };
+        });
     Ok(Context {
         catalog_knowledge: (!knowledge.is_empty()).then_some(knowledge),
         villager_routines: crate::villager_routines::project(event),
@@ -118,8 +116,8 @@ pub fn project(
                 "id":id,"label":environment::ambient::biome_label(id)})),
             "structure":structure.or(event.world.structure.as_deref()),
             "overhead_cover":event.world.overhead_cover_type,
-            "nearby_mob_types":kind_list(true),
-            "nearby_block_types":kind_list(false),
+            "nearby_mob_types":mob_list,
+            "nearby_block_types":block_list,
             "biome_scene_visible":projection.include_biome_context,
             "sky_visible":event.world.sky_visible,
             "time_phase":if projection.include_sky_context {json!(event.world.time_phase)} else {Value::Null},
@@ -133,6 +131,13 @@ pub fn project(
         }),
         ..Context::default()
     })
+}
+
+fn quantity(value: &crate::events::NearbyQuantity) -> Value {
+    match value {
+        crate::events::NearbyQuantity::Exact(n) => json!(n),
+        crate::events::NearbyQuantity::Many(_) => json!("いっぱい"),
+    }
 }
 
 /// Session-owned changes since the last completed decision, not a second memory store.
@@ -255,14 +260,13 @@ impl State {
                 // Smell direction may move while the identity stays the same. The
                 // current direction is available without creating endless new turns.
                 let signature = |value: &Value| {
-                    let mut value = value.clone();
-                    if key == "smell"
-                        && let Some(map) = value.as_object_mut()
-                    {
-                        map.remove("direction_estimate");
-                        map.remove("description");
+                    if key == "nearby_mob_types" {
+                        return notice::mob_kind_signature(value);
                     }
-                    value
+                    if key == "smell" {
+                        return environment::ambient::smell_change_signature(value);
+                    }
+                    value.clone()
                 };
                 if signature(before) != signature(after) {
                     next.revision = next.revision.saturating_add(1);
@@ -357,13 +361,19 @@ mod tests {
     #[test]
     fn conversation_changes_survive_busy_turns_and_acknowledge_only_the_offered_version() {
         let mut state = State::default();
-        state.observe(frame("clear", json!({"status":"none"})));
-        state.observe(frame("rain", json!({"status":"none"})));
+        state.observe(frame(
+            "clear",
+            json!({"status":"none","components":[],"basis":"smell_policy_v2"}),
+        ));
+        state.observe(frame(
+            "rain",
+            json!({"status":"none","components":[],"basis":"smell_policy_v2"}),
+        ));
         let offered = state.context().unwrap();
         assert_eq!(offered.changes[0].kind, "weather");
         state.observe(frame(
             "rain",
-            json!({"status":"present","smell_id":"zombie"}),
+            json!({"status":"present","components":[{"smell_id":"zombie"}],"basis":"smell_policy_v2"}),
         ));
         state.considered(offered.revision);
         let next = state.context().unwrap();
@@ -377,14 +387,14 @@ mod tests {
         );
     }
     #[test]
-    fn direction_updates_do_not_create_another_smell_arrival() {
+    fn strength_updates_do_not_create_another_smell_arrival() {
         let mut state = State::default();
-        state.observe(frame("clear",json!({"status":"present","smell_id":"zombie","direction_estimate":{"cardinal":"east"},"description":"東や"})));
-        state.observe(frame("clear",json!({"status":"present","smell_id":"zombie","direction_estimate":{"cardinal":"west"},"description":"西や"})));
+        state.observe(frame("clear",json!({"status":"present","components":[{"smell_id":"zombie","effective_strength":5}],"basis":"smell_policy_v2"})));
+        state.observe(frame("clear",json!({"status":"present","components":[{"smell_id":"zombie","effective_strength":8}],"basis":"smell_policy_v2"})));
         assert!(state.context().unwrap().changes.is_empty());
         assert_eq!(
-            state.context().unwrap().observations["smell"]["direction_estimate"]["cardinal"],
-            "west"
+            state.context().unwrap().observations["smell"]["components"][0]["effective_strength"],
+            8
         );
     }
     fn surface(light: u8, y: f64, ceiling: f64) -> Context {
@@ -456,22 +466,24 @@ mod tests {
             "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
             "player":{"dimension":"minecraft:overworld"},"world":{"biome":"plains","sky_visible":true,"weather":"rain"}});
         let mut e = base.clone();
-        e["smell_observation"] = json!({"status":"present","smell_id":"zombie","category":"decay",
-            "valence":"unpleasant","specificity":"source","source_kind":"entity","effective_strength":5,
-            "direction_estimate":{"cardinal":"east"}});
+        e["smell_observation"] = json!({"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":5}],"basis":"smell_policy_v2"});
         let context = project(&GameEvent::parse(e).unwrap(), None, 10.0, 7.0, 5000).unwrap();
         let smell = &context.observations["smell"];
         assert_eq!(smell["status"], "present");
-        assert_eq!(smell["direction_estimate"]["cardinal"], "east");
+        let component = &smell["components"][0];
+        assert_eq!(component["effective_strength"], 5);
+        assert_eq!(component["source_kind"], "entity");
         for key in [
-            "effective_strength",
+            "direction_estimate",
             "temperature_modifier",
-            "source_kind",
             "distance",
             "entity_id",
             "count",
         ] {
-            assert!(smell.get(key).is_none(), "{key}");
+            assert!(
+                smell.get(key).is_none() && component.get(key).is_none(),
+                "{key}"
+            );
         }
         let context = project(&GameEvent::parse(base).unwrap(), None, 10.0, 7.0, 5000).unwrap();
         assert_eq!(context.observations["smell"]["status"], "unknown");

@@ -40,6 +40,22 @@ pub struct PlayerInputRequest {
     pub text: String,
     #[serde(default)]
     pub source: InputSource,
+    #[serde(default)]
+    pub voice_generation: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VoiceModeRequest {
+    pub session_id: String,
+    pub enabled: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DisplayedRequest {
+    pub session_id: String,
+    pub display_ids: Vec<String>,
 }
 
 #[derive(Default, Deserialize)]

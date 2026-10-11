@@ -326,7 +326,10 @@ impl Backend for LiveBackend<'_> {
             }
             _ => anyhow::bail!("unexpected haiku generation route"),
         };
-        let messages = self.helper.prepare(&request).await?;
+        tracing::info!(event="haiku_llm_started",kind=request.kind,route=request.route,model=route.model,request_index=self.requests.len(),"川柳: モデル呼び出し開始");
+        let messages = self.helper.prepare(&request).await.inspect_err(|error| {
+            tracing::error!(event="haiku_llm_failed",kind=request.kind,phase="prompt_prepare",%error);
+        })?;
         let input = GenerationRequest {
             schema_version: 1,
             kind: request.kind.clone(),
@@ -343,10 +346,23 @@ impl Backend for LiveBackend<'_> {
                     &report.generated,
                     &request.fallback_value,
                 );
+                tracing::info!(event="haiku_llm_finished",kind=request.kind,
+                    request_index=self.requests.len(),elapsed_ms=report.elapsed_ms,
+                    provider=report.provider,requested_model=report.requested_model,
+                    response_model=report.response_model,response_id=report.response_id,
+                    finish_reason=?report.generated.finish_reason,
+                    completion_tokens=?report.generated.completion_tokens,
+                    prompt_tokens=?report.generated.prompt_tokens,
+                    parse_status=parsed.as_ref().ok().and_then(|v| v["__dogido_status"].as_str()).unwrap_or("parse_error"),
+                    response=%report.generated.text,"川柳: モデル返答（採否は後続の検査で決定）");
+                if let Err(error) = &parsed {
+                    tracing::error!(event="haiku_llm_failed",kind=request.kind,phase="response_parse",%error);
+                }
                 self.reports.push(serde_json::to_value(report)?);
                 parsed
             }
             Err(error) => {
+                tracing::error!(event="haiku_llm_failed",kind=request.kind,phase="generation",%error);
                 self.reports
                     .push(json!({"kind":request.kind,"error":error.to_string()}));
                 Err(error)

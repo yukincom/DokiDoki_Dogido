@@ -18,6 +18,165 @@ fn registration() -> Value {
         "capabilities":["workshop_display.v1"], "execution_capabilities":["client.hotbar.select.v1"]})
 }
 
+#[tokio::test]
+async fn text_capability_voice_modes_and_display_ack_use_the_authenticated_actor() {
+    let mut config = crate::dialogue::DialogueConfig::default();
+    config.audio_enabled = false;
+    config.llm_enabled = false;
+    config.haiku.enabled = false;
+    config.haiku.memory_enabled = false;
+    config.web.enabled = false;
+    let dialogue = crate::dialogue::Dialogue::new(config).unwrap();
+    let app = Application::new(ServerConfig {
+        auth_token: Some("dialogue-test".into()),
+        dialogue: Some(dialogue.clone()),
+        ..Default::default()
+    });
+    let router = app.router();
+    let auth = [("authorization", "Bearer dialogue-test")];
+    let mut request = registration();
+    request["capabilities"] = json!(["dialogue_text.v1"]);
+    request["voice_enabled"] = true.into();
+    let (status, created) = call(
+        &router,
+        "POST",
+        "/api/v1/adapter-sessions",
+        Some(request),
+        &auth,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let sid = created["session_id"].as_str().unwrap();
+    let (_, context) = call(&router, "GET", "/api/v1/voice-input/context", None, &auth).await;
+    assert_eq!(context["voice_enabled"], true);
+    let old_generation = context["voice_generation"].clone();
+    let off = json!({"session_id":sid,"enabled":false});
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/rust-dialogue/voice",
+            Some(off.clone()),
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (_, stopped) = call(
+        &router,
+        "POST",
+        "/api/v1/rust-dialogue/voice",
+        Some(off.clone()),
+        &auth,
+    )
+    .await;
+    assert_eq!(stopped["voice_enabled"], false);
+    assert_ne!(stopped["voice_generation"], old_generation);
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/rust-dialogue/voice",
+            Some(off),
+            &auth
+        )
+        .await
+        .1,
+        stopped
+    );
+    let input = json!({"session_id":sid,"source":"voice","text":"ドギド","voice_generation":old_generation});
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/player-input",
+            Some(input.clone()),
+            &auth
+        )
+        .await
+        .1["reason"],
+        "voice_disabled"
+    );
+    call(
+        &router,
+        "POST",
+        "/api/v1/rust-dialogue/voice",
+        Some(json!({"session_id":sid,"enabled":true})),
+        &auth,
+    )
+    .await;
+    assert_eq!(
+        call(&router, "POST", "/api/v1/player-input", Some(input), &auth)
+            .await
+            .1["reason"],
+        "stale_voice_generation"
+    );
+    let missing = json!({"session_id":sid,"source":"voice","text":"ドギド"});
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/player-input",
+            Some(missing),
+            &auth
+        )
+        .await
+        .1["reason"],
+        "stale_voice_generation"
+    );
+    let ack = json!({"session_id":sid,"display_ids":["not-published"]});
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/rust-dialogue/displayed",
+            Some(ack.clone()),
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (_, result) = call(
+        &router,
+        "POST",
+        "/api/v1/rust-dialogue/displayed",
+        Some(ack),
+        &auth,
+    )
+    .await;
+    assert_eq!(result["displayed"], json!([]));
+    assert_eq!(result["rejected"], json!(["not-published"]));
+    let excessive = json!({"session_id":sid,"display_ids":vec!["x";201]});
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/rust-dialogue/displayed",
+            Some(excessive),
+            &auth
+        )
+        .await
+        .1["reason"],
+        "too_many_display_ids"
+    );
+    let malformed = json!({"session_id":sid,"enabled":"false"});
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/api/v1/rust-dialogue/voice",
+            Some(malformed),
+            &auth
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    app.shutdown().await.unwrap();
+}
+
 async fn call(
     router: &Router,
     method: &str,
@@ -614,7 +773,8 @@ async fn event_validation_precedes_mutation_and_validates_the_whole_batch() {
     let mut bad = event();
     bad["player"] = json!({"hotbar":{"selected_slot":0,"slots":[{"slot":0},{"slot":0}]}});
     let mut bad_smell = event();
-    bad_smell["smell_observation"] = json!({"status":"none","entity_id":"hidden"});
+    bad_smell["smell_observation"] =
+        json!({"status":"none","entity_id":"hidden","components":[],"basis":"smell_policy_v2"});
     for body in [json!({}), bad.clone(), bad_smell] {
         let (status, _) = call(
             &router,

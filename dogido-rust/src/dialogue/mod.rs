@@ -32,8 +32,10 @@ mod observe;
 mod poem_runtime;
 mod reaction_runtime;
 mod reading_runtime;
+mod reply_delivery;
 mod story;
 mod submit;
+mod text_delivery;
 mod tts_runtime;
 mod turn;
 mod update;
@@ -136,10 +138,11 @@ struct Session {
     preview: bool,
     /// workshop_textが設定する、音声を伴わない共同編集試験の入口。
     text_workshop: bool,
+    /// 文字表示の確認と、接続単位の音声入力・出力の有効期間。
+    delivery: text_delivery::State,
     /// テキスト試験で選択した保存句。workshop_textが読み込み・参照する。
     text_poem: Option<crate::poem_book::SavedPoem>,
     /// テキスト試験への返却結果とturn ID・epoch。要求と対応づけて一度だけ取り出す。
-    text_reply: Option<(String, u64, Value)>,
     /// テキスト試験に表示する直近要求。workshop_textが生成段階を記録する。
     text_last_request: Option<Value>,
     /// observeが全視認を含むイベントだけから更新する、通常会話と戦況の観測正本。
@@ -363,8 +366,8 @@ impl Dialogue {
                 name: name.into(),
                 preview,
                 text_workshop: false,
+                delivery: text_delivery::State::new(self.config.audio_enabled),
                 text_poem: None,
-                text_reply: None,
                 text_last_request: None,
                 latest: None,
                 received: None,
@@ -498,6 +501,7 @@ impl Dialogue {
     /// 明示入力を対象接続へ送り、受理・保留・重複・拒否をすぐ返す。
     /// 通常turnの生成や再生は登録したjobで進み、ここでのacceptedは再生成功を意味しない。
     pub fn submit(self: &Arc<Self>, selected: Option<&str>, text: &str, source: &str) -> Value {
+        self.record_voice_input(selected, text, source);
         self.submit_recorded(
             selected,
             text,
@@ -543,7 +547,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """戦闘のHTTP受付・回答・割込み・leaf検査を模擬LLM/TTS/playerで確認する。"""
 from datetime import datetime, timezone
+import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -12,6 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--adapter-wire-fixture", type=Path,
+                        help="Fabric EventJsonBuilderTestが出力したhostile-margin-wire.json")
+    args = parser.parse_args()
+    wire_bytes = args.adapter_wire_fixture.read_bytes() if args.adapter_wire_fixture else None
+    wire = json.loads(wire_bytes) if wire_bytes is not None else None
     passed = []
     with tempfile.TemporaryDirectory(prefix="dogido-combat-") as tmp, dependencies() as (dep, control, seen):
         folder = Path(tmp)
@@ -53,6 +61,64 @@ time.sleep(float((root/'delay').read_text()))
                              and (kind is None or any(a["kind"]==kind for a in r.get("combat_actions",[])))), None)
             def close(sid): request(base,"/api/v1/adapter-sessions/"+sid,method="DELETE")
             def llm_calls(): return len([r for r in seen if r["path"]=="/v1/chat/completions"])
+
+            if wire is not None:
+                def send_wire(sid, frame):
+                    nonlocal seq
+                    seq += 1
+                    # Javaが実フィルタ・実serializerから出した観測本文はそのまま使う。
+                    # 配送時刻とセッション内sequenceだけを今回の模擬通信へ合わせる。
+                    event = {**wire[frame], "sequence": seq,
+                             "observed_at": datetime.now(timezone.utc).isoformat()}
+                    return request(base, "/api/v1/game-events", event, sid=sid)
+
+                sid = register(base, preview=False)
+                send_wire(sid, "inner")
+                wait_for(lambda: done(sid))
+                send_wire(sid, "outer")
+                session = next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)
+                assert session["state"] == "alert", session
+                assert not any(any(a["kind"] == "aftermath" for a in r.get("combat_actions", [])) for r in rows(sid))
+                before = llm_calls()
+                say(sid, "ゾンビどこ？")
+                answer = wait_for(lambda: done(sid, "ゾンビどこ？"))
+                assert "南" in answer["text"] and "20ブロック" in answer["text"], answer
+                target = wire["outer"]["visual_threats"][0]["entity_id"]
+                assert any(a.get("scope", {}).get("targets") == [target] for a in answer["combat_actions"]), answer
+                assert llm_calls() == before
+                passed.append("adapter_exported_outer_enemy_keeps_identity_distance_and_alert")
+                say(sid, "敵は何体？")
+                answer = wait_for(lambda: done(sid, "敵は何体？"))
+                assert "16ブロック" in answer["text"] and "21ブロック" not in answer["text"], answer
+                assert "おらん" in answer["text"], answer
+                assert next(s for s in snapshot(base)["sessions"] if s["session_id"] == sid)["state"] == "alert"
+                assert llm_calls() == before
+                passed.append("outer_enemy_does_not_expand_authoritative_count_query")
+                previous_leaf = control["leaf"]
+                control["leaf"] = "ふう、ひと息つけたな。"
+                send_wire(sid, "ended")
+                answer = wait_for(lambda: done(sid, kind="aftermath"))
+                assert any(a.get("leaf", {}).get("details", {}).get("combat_outcome") == "disengaged"
+                           for a in answer["combat_actions"]), answer
+                assert not any(any(a["kind"] == "hostile_defeated" for a in r.get("combat_actions", [])) for r in rows(sid))
+                passed.append("adapter_exported_range_exit_is_disengagement_not_death")
+                close(sid)
+
+                sid = register(base, preview=False)
+                send_wire(sid, "inner")
+                wait_for(lambda: done(sid))
+                (folder / "delay").write_text("5")
+                send_wire(sid, "ended")
+                old = wait_for(lambda: next((r for r in rows(sid) if r["playback_status"] == "started"
+                    and any(a["kind"] == "aftermath" for a in r.get("combat_actions", []))), None))
+                (folder / "delay").write_text(".06")
+                send(sid, name="threat_approaching", mobs=[mob("creeper", "new-creeper", 3, fuse_active=True)],
+                     combat={"combat_active_hint": True})
+                wait_for(lambda: row(base, old["turn_id"], {"cancelled"}))
+                wait_for(lambda: done(sid, kind="creeper_fuse"))
+                passed.append("new_creeper_cancels_playing_aftermath_and_warns")
+                close(sid)
+                control["leaf"] = previous_leaf
 
             sid=register(base,preview=False)
             send(sid,mobs=[mob(distance=6)])
@@ -189,6 +255,7 @@ time.sleep(float((root/'delay').read_text()))
     report=ROOT/"reports/combat-runtime-check.json"
     report.parent.mkdir(exist_ok=True)
     report.write_text(json.dumps({"passed":passed,"llm":"mock","tts":"mock","playback":"mock",
+                                 "adapter_wire_sha256": hashlib.sha256(wire_bytes).hexdigest() if wire_bytes else None,
                                  "all_owned_processes_stopped":True},ensure_ascii=False,indent=2)+"\n")
     print(f"PASS {len(passed)} combat HTTP/lifecycle checks; all owned processes stopped")
 

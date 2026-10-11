@@ -91,7 +91,9 @@ pub(super) fn prepare_with_assets(
         ("stage", details.conversation_stage.clone()),
         ("phase", details.phase.clone()),
         ("problems", details.allowed_problem_types.join(", ")),
-        ("actions", details.allowed_actions.join(", ")),
+        ("actions", details.allowed_actions.iter()
+            .filter(|action| !crate::workshop::tools::requires_native_call(action))
+            .cloned().collect::<Vec<_>>().join(", ")),
         ("purposes", details.allowed_purposes.join(", ")),
         (
             "steps",

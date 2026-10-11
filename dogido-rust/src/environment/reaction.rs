@@ -55,14 +55,20 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
         }
         "surroundings" => {}
         "smell" => {
-            let Some(smell) = super::ambient::smell_context(event) else {
+            let smell = match action.rain_after_window {
+                Some(window) => super::ambient::rain_after_context(event, window),
+                None => super::ambient::smell_context(event),
+            };
+            let Some(smell) = smell else {
                 return;
             };
-            guard["smell"] = smell.clone();
+            // 雨上がりはその一瞬の気づき。通常臭の現在値で置換せず、窓の現在性だけを守る。
+            if action.rain_after_window.is_none() {
+                guard["smell"] = smell.clone();
+            }
             observations["smell"] = smell.clone();
-            properties["note"] = "specificityは匂いの識別範囲。categoryは種類まで、mixedは混合。direction_estimateは最も強く匂う大まかな方角。姿・距離・個数は匂いからは未確認。".into();
             // The fixed smell cue would otherwise replace the generated words.
-            // Explicit player questions bypass this function and retain the cue.
+            // Explicit player questions bypass this model path.
             action.cue_id = None;
         }
         "place" => {
@@ -96,9 +102,13 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     });
 }
 
-/// A new estimate of the same smell may replace an unplayed estimate once.
-/// Absence, changed smell identity or other stale guards are not this case.
-pub(crate) fn only_smell_spatial_changed(action: &Speech, event: &GameEvent) -> bool {
+/// 同じ種類の匂いについて、未再生の強度・発生源属性が変わった取消かを判定する。
+/// 消失や別の種類への切替は「同じ匂いの推定し直し」ではないので、この再判断権を与えない。
+/// 一度だけという回数管理と次の安定観測待ちは、ambient::smell::Presenceが所有する。
+pub(crate) fn only_smell_estimate_changed(action: &Speech, event: &GameEvent) -> bool {
+    if action.rain_after_window.is_some() {
+        return false;
+    }
     let Some(leaf) = action
         .leaf
         .as_ref()
@@ -112,17 +122,14 @@ pub(crate) fn only_smell_spatial_changed(action: &Speech, event: &GameEvent) -> 
     let Some(old) = leaf.details["__reaction_guard"].get("smell") else {
         return false;
     };
-    let mut before = old.clone();
-    let mut after = current.clone();
-    for value in [&mut before, &mut after] {
-        let Some(object) = value.as_object_mut() else {
-            return false;
-        };
-        object.remove("direction_estimate");
-    }
-    if old == &current || before != after {
+    if old == &current
+        || super::ambient::smell_change_signature(old)
+            != super::ambient::smell_change_signature(&current)
+    {
         return false;
     }
+    // 匂いの新推定だけを差し替えても有効か、既存guard全体でもう一度確認する。
+    // 次元移動など別の理由でも古くなっている発話を、匂いの再判断として復活させない。
     let mut updated = action.clone();
     updated.leaf.as_mut().unwrap().details["__reaction_guard"]["smell"] = current;
     still_applicable(&updated, event)
@@ -133,6 +140,11 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
     let Some(leaf) = action.leaf.as_ref().filter(|l| l.kind == KIND) else {
         return true;
     };
+    if let Some(window) = action.rain_after_window
+        && super::ambient::rain_after_context(event, window).is_none()
+    {
+        return false;
+    }
     let g = &leaf.details["__reaction_guard"];
     if g["dimension"]
         .as_str()
@@ -140,6 +152,8 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
     {
         return false;
     }
+    // 通知の「新着判定」と違い、再生待ちの発話は強度・発生源属性を含む全観測に照合する。
+    // 生成時は仄かだった匂いが強烈になった場合、古い強さの言い回しをそのまま流さない。
     if g.get("smell")
         .is_some_and(|s| Some(s.clone()) != super::ambient::smell_context(event))
     {
@@ -202,6 +216,13 @@ impl Prepared {
             let shared = crate::reaction_leaf::context("surroundings_notice", &input["details"])?;
             context.insert("situation".into(), shared["situation"].clone());
         }
+        let smell_observed = context
+            .get("world_context")
+            .is_some_and(|world| world["observations"]["smell"]["status"] == "present")
+            || (context["topic"] == "smell"
+                && context
+                    .get("observations")
+                    .is_some_and(|observations| observations["smell"].is_object()));
         let request = GenerationRequest {
             schema_version: 1,
             kind: KIND.into(),
@@ -212,6 +233,7 @@ impl Prepared {
                     content: crate::companion_prompt::dialogue(
                         "normal",
                         crate::companion_prompt::DialoguePurpose::Ambient,
+                        smell_observed,
                     ),
                 },
                 ChatMessage {

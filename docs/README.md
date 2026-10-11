@@ -9,6 +9,8 @@ DokiDoki Dogido の設計・仕様ドキュメントです。
 | [../README.md](../README.md) | 製品コンセプト・クイックスタート |
 | [../AGENTS.md](../AGENTS.md) | 実装エージェント向けの制約と作業ガイド |
 | [../dev_tools/README.md](../dev_tools/README.md) | 表示プレビュー・音声診断・対話評価・独立試作 |
+| [Minecraftのテキスト会話](2026-10-09-minecraft-text-dialogue.md) | `/dogido`、音声の切替、表示確認の仕様と確認状況 |
+| [2026-10-11の全体検査](2026-10-11-checkpoint-verification.md) | コミット整理前の成功・失敗内訳と実機確認報告 |
 | [実機チェック](../dogido-rust/manual-dialogue-check.md) | 起動条件、最初の一巡、個別の確認、結果の記録 |
 | 本ページ | 仕様・設計ドキュメントの索引 |
 
@@ -80,6 +82,7 @@ issueの開閉状態はリンク先で確認する。本文を更新するとき
 | 6 | [shared-llm-profile.md](shared-llm-profile.md) | 別に起動した共有 MLX endpoint と従来 standalone の明示切替 |
 | 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
 | 8 | [debug-checklist.md](debug-checklist.md) | 旧Python版のデバッグ履歴。現在の実機結果とは区別 |
+| 9 | [3D身体とRust本線の連携境界](../dogido-rust/docs/body-integration-boundary.md) | 身体API v2、モデルによる行動選択の分担、未接続箇所と統合手順 |
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 

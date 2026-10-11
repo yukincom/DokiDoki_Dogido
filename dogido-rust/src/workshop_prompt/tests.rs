@@ -117,6 +117,21 @@ fn malformed_projection_is_not_a_legacy_prompt_or_model_fallback() {
 }
 
 #[test]
+fn native_operations_are_not_advertised_as_content_actions() {
+    let case = &FIXTURES["projection_cases"][0];
+    let mut prepared = case["prepared"].clone();
+    prepared["details"]["allowed_actions"] = json!(["respond", "inspect", "stage_player_edit"]);
+    let result = prepare(&prepared, None).unwrap();
+    let prompt = result["messages"][1]["content"].as_str().unwrap();
+    assert!(prompt.contains("本文JSONで使えるaction: respond\n"));
+    assert!(!prompt.contains("\"action\":\"stage_player_edit\""));
+    assert!(!prompt.contains("\"action\":\"inspect\""));
+    assert!(prompt.contains("function call"));
+    let defaults = editable_assets(&editable_defaults()).unwrap();
+    assert_eq!(prepare_with_assets(&prepared, None, &defaults).unwrap(), result);
+}
+
+#[test]
 fn assembled_response_preserves_frame_limit_for_messages_and_retry() {
     let mut input = FIXTURES["projection_cases"][0]["prepared"].clone();
     input["details"]["player_text"] = json!("猫".repeat(340_000));

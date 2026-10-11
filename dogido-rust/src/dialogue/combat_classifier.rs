@@ -8,6 +8,21 @@ use crate::{
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
+/// 戦闘中断中に有効なAI分類が得られない場合だけ使う、明示終了の予備経路。
+/// 通常の句相談・再表示・称賛の判断には使わない。
+fn explicit_close_fallback(text: &str) -> bool {
+    matches!(
+        text.trim().trim_end_matches(['。', '！', '!']),
+        "終了"
+            | "終わり"
+            | "川柳は終了"
+            | "川柳終わり"
+            | "句はここまで"
+            | "終了でいいよ"
+            | "終了でお願いします"
+    ) && crate::workshop_input_guard::combat_safe("close_workshop", text, text)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -147,10 +162,7 @@ impl Classifier {
                 analysis = Analysis::default();
             }
             if analysis.action == Action::Uncertain {
-                if crate::workshop::fixed_action(text) == Some("close_workshop")
-                    && !crate::workshop::fixed_praise(text)
-                    && crate::workshop_input_guard::combat_safe("close_workshop", text, text)
-                {
+                if explicit_close_fallback(text) {
                     // 全AI不成立時の明示終了は、任意の辞書・SDK補助に依存させない。
                     analysis = Analysis {
                         action: Action::CloseWorkshop,
@@ -200,6 +212,41 @@ impl Classifier {
     pub async fn close(&self) {
         if let Some(helper) = self.helper.lock().await.take() {
             let _ = helper.finish(false).await;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workshop_close_fallback_does_not_consume_praise_display_or_ambiguous_speech() {
+        for text in [
+            "終了",
+            "終わり",
+            "川柳は終了",
+            "川柳終わり",
+            "句はここまで",
+            "終了でいいよ。",
+            " 終了でお願いします！ ",
+        ] {
+            assert!(explicit_close_fallback(text), "{text}");
+        }
+        for text in [
+            "いい句だね",
+            "そのままでいい",
+            "今の句",
+            "もう一度読んで",
+            "直った？",
+            "終了？",
+            "「終了」",
+            "終了しない",
+            "終了と言った",
+            "終了したらどうなる？",
+            "終了でいいよ？",
+        ] {
+            assert!(!explicit_close_fallback(text), "{text}");
         }
     }
 }

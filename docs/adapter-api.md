@@ -493,7 +493,7 @@ batch 可。
 
 ## 21. `POST /api/v1/player-input`
 
-Rustの `voice-input`（マイク）と会話画面・開発時のテキスト入力が使うAPI。以下は現行本体 `serve-dialogue` の契約です。入力を受けた時点で現在観測へ照合し、返答生成や分類を非同期jobへ渡します。次のgame-eventへの相乗りは行いません。
+Rustの `voice-input`（マイク）とMinecraftの `/dogido`・会話画面・開発時のテキスト入力が使うAPI。以下は現行本体 `serve-dialogue` の契約です。入力を受けた時点で現在観測へ照合し、返答生成や分類を非同期jobへ渡します。次のgame-eventへの相乗りは行いません。
 
 ### request
 
@@ -501,7 +501,8 @@ Rustの `voice-input`（マイク）と会話画面・開発時のテキスト�
 {
   "session_id": "session_…",
   "text": "おはようさん",
-  "source": "voice"
+  "source": "voice",
+  "voice_generation": "voice_…"
 }
 ```
 
@@ -510,6 +511,7 @@ Rustの `voice-input`（マイク）と会話画面・開発時のテキスト�
 | `session_id` | 任意。省略または `null` の場合は接続中sessionがちょうど一つのときだけ自動選択する。ゼロ件・複数件なら `select_one_session` |
 | `text` | 必須の文字列。空白だけは `empty_text`、空白を含むUnicode文字数が1000を超えれば `text_too_long` |
 | `source` | `voice` または `text`。省略時は `text`。手入力を音近傍補正しないため、マイクからの配送だけ `voice` を指定する |
+| `voice_generation` | 音声入力期間の識別子。Rust音声入口はcontextで取得した値を送る。指定値が現在と異なれば `stale_voice_generation`。`dialogue_text.v1` 接続の音声入力では省略も同じ理由で拒否する。文字入力では使わない |
 
 指定した `session_id` が存在しなければ `unknown_session_id`。通常のゲーム接続では直近観測の受信から10秒以内かつ `observed_at` が現在時刻の前後10秒以内であることを検査し、古い観測のまま通常会話を開始しません。
 
@@ -570,6 +572,7 @@ Rustの `voice-input`（マイク）と会話画面・開発時のテキスト�
 | `knowledge_queue_full` | 対象sessionの知識保留枠が満杯 |
 | `fresh_safe_snapshot_required` | 観測が古い、または現在の危険・警告等によりその入力を開始できない |
 | `server_stopping` | 本体が停止処理中 |
+| `voice_disabled` / `stale_voice_generation` | 音声休止中、または切替前の録音期間から遅れて届いた音声入力 |
 | `chat_context_unavailable` | 現在観測から会話用snapshotを構築できない |
 
 保留入力の再開・宛先確認では、入力の世代が変わった `superseded_input` / `superseded_address_input`、保留元が表示台帳から失効した `held_turn_expired` もあり得ます。これらを成功や自動再送として扱いません。
@@ -591,18 +594,21 @@ curl -X POST http://127.0.0.1:5055/api/v1/player-input \
 
 ## 22. `GET /api/v1/voice-input/context`
 
-別プロセスのRust `voice-input` が、書き起こし直前に Whisper の文脈を選ぶための内部API。単一のアクティブセッションと観測の鮮度を確認して、`prompt_mode` を返す。
+別プロセスのRust `voice-input` が、録音許可と Whisper の文脈を得る内部API。約750msごとの許可確認と書き起こし直前の照合で使う。
 
 ```json
 {
   "prompt_mode": "haiku_workshop",
-  "session_id": "…"
+  "session_id": "…",
+  "voice_enabled": true,
+  "voice_generation": "voice_…"
 }
 ```
 
 - 単一セッション・新鮮な観測・workshop open・戦闘pause外で、そのworkshopが入力受付可能なときだけ `haiku_workshop`。それ以外、セッションなし、複数セッションでは `normal`
 - 句本文や材料は返さない
-- 取得に失敗した音声入力プロセスは `normal` を使い、書き起こしを止めない
+- `voice_enabled: false`、セッションが一件に決まらない場合、通信失敗では録音・認識を休止する。セッションまたは `voice_generation` の変化時も古い録音・STT・待ち列を破棄する
+- 再開時は新しい録音期間を作る。録音開始時のsessionと世代を配送時にも使い、遅れた結果を新世代へ付け替えない
 - auth が有効なときは `Authorization: Bearer <token>` が必要
 
 ## 23. `POST /api/v1/voice-input/diagnostics`
@@ -758,3 +764,19 @@ PUTの新規登録例:
 表記・読み・カタログ照合の不正は422、記憶保存が無効なら409 `memory_disabled`、停止中は503 `server_stopping`、保存処理の失敗は500 `reading_storage_failed`。成功応答だけを保存成功として扱う。
 
 保存先は設定した記憶ルートの `long_term/catalog_corrections.jsonl`。元のカタログを変更せず、登録・取消を追記し、次の処理から有効な訂正を読み込む。実機での確認は [あんちょこの手順](../dogido-rust/manual-dialogue-check.md#あんちょこでの読み訂正) を参照。
+
+
+## 27. Minecraftの文字会話と音声切替
+
+2026-10-09追加分。関連ユニット・模擬HTTPテスト確認済み。全体のRust統合テストには既存の期待値不一致6件が残る。release本体・Modを更新し起動前確認済み。2026-10-11にユーザーが音声ON/OFF・文字入力を実機確認済み。[テスト結果と確認範囲](2026-10-09-minecraft-text-dialogue.md)。
+
+登録capability `dialogue_text.v1` を持つ接続は、既存の `GET /api/v1/rust-dialogue/snapshot?session_id=…` を取得し、自分のsessionだけを表示する。登録時の任意boolean `voice_enabled` は保存済みの音声選択。省略時は本体の音声設定を使う。
+
+- session: `session_instance`、`text_enabled`、`voice_enabled`、`voice_generation`。`voice_inputs` は `{input_id,text}` の認識原文を直近200件まで返す表示専用の写しで、会話履歴へ読み戻さない。
+- utterance: 本文を確定して公開した行だけ `display_id` を持つ。`text_displayed` と `text_displayed_at` は下記の表示確認後に設定する。取消行や別sessionの行は表示しない。
+- `POST /api/v1/rust-dialogue/voice`: `{session_id,enabled}`。capabilityのない接続は `text_display_required`。成功は `{accepted:true,voice_enabled,voice_generation}`。値が変わる時だけ進行中出力・保留入力を取消し、録音世代を更新する。同じ設定の再送は会話を取消さない。
+- `POST /api/v1/rust-dialogue/displayed`: `{session_id,display_ids:[…]}`、最大200件。成功応答は `{accepted:true,displayed:[…],rejected:[…]}`。画面へ本文を挿入してから呼び、本文・操作指示は送らない。公開済みID・session・世代・現在turn・句の状態をコードで照合する。
+
+表示確認は短期履歴・相談の続きへ一度だけ反映する。音声を再生していなくても `playback_status=completed` にはしない。文字のみの出力は最長5秒、表示確認を待つ。未確認の返答を配送成功扱いにしない。Web検索開始の案内には従来どおり実音声完了が必要。
+
+すべて既存の認証を使う。Fabricは表示確認を入力より先に送り、通常のチャット・他のコマンドをこのAPIへ転送しない。入力の自動再送はせず、表示確認だけを再試行する。

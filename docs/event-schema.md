@@ -43,7 +43,7 @@
   "world": {},
   "visual_threats": [],
   "auditory_threats": [],
-  "smell_observation": {"status": "none", "temperature_modifier": 0, "rain_after_active": false, "basis": "smell_policy_v1"},
+  "smell_observation": {"status": "none", "components": [], "temperature_modifier": 0, "rain_after_active": false, "basis": "smell_policy_v2"},
   "passive_mobs": [],
   "inventory": {},
   "nearby_resources": [],
@@ -427,33 +427,40 @@ Fabricは一つの観測周期につきworld情報を必要時に一回だけ測
 
 ## 12.1 `smell_observation`
 
-Fabric adapterが近接源・hotbar・バイオーム・温度・天候からスメルバトルを解決した一件。
-正確な位置・距離・個数・entity IDは含めない。計算と対象の正本は
-[スメルバトル仕様](smell-policy.md)。
+Fabric adapterが近接源・hotbar・バイオーム・温度・天候から到達とマスキングを解決した観測。
+方向・位置・距離・個数・entity IDは含めない。計算と対象の正本は[スメルバトル仕様](smell-policy.md)。
+2026-10-08にv2へ変更し、その後に方位計算と `direction_estimate` を撤去。撤去後のテスト・ビルドはコード確認待ちで未実施。実Minecraft送信・実音声は未確認。以下の検証結果は撤去前の記録。[検証結果](2026-10-08-smell-v2-test-results.md)。
 
 ```json
 {
   "status": "present",
-  "smell_id": "food",
-  "category": "food",
-  "valence": "mixed",
-  "source_kind": "mixed",
-  "specificity": "category",
-  "effective_strength": 3,
+  "components": [
+    {"smell_id": "soup", "category": "food", "valence": "pleasant",
+     "source_kind": "hotbar", "effective_strength": 3},
+    {"smell_id": "zombie", "category": "decay", "valence": "unpleasant",
+     "source_kind": "entity", "effective_strength": 1}
+  ],
   "temperature_modifier": 0,
   "rain_after_active": false,
-  "basis": "smell_policy_v1"
+  "basis": "smell_policy_v2"
 }
 ```
 
-- `status`: `none / present / suppressed`
-- `none` は観測対応済みで匂い源なし。field省略による観測未提供とは異なる
-- `suppressed` は `suppression_reason: rain / snow / thunder / submerged` を持つ
-- `present` だけが `smell_id / category / valence / source_kind / specificity / effective_strength` を持つ
-- 外部源の単独勝者（`specificity=source`、`source_kind=block/entity/dropped_item`、雨上がり全般以外）だけ任意の `direction_estimate` を持てる。形は `{ "cardinal": "east", "vertical": "above", "basis": "source_bearing" }`。cardinalは既存の8方位、verticalは `above / below`。一方以上が必要で、取得できない軸は省略する
-- 方角なしは未知として扱い、距離情報・正確な位置・個体IDは追加しない。Rust環境対話と匂い質問にだけ粗い方向を渡す
-- serverは2観測連続で自発発話を安定化し、問いには現在値をコード固定で即答する
-- この観測だけで戦闘状態やworkshop pauseを開始せず、通常LLMへも渡さない
+- `basis=smell_policy_v2` と `components` は必須。旧flat形・旧basis・新旧field併記は拒否し、互換変換しない。
+- `status`: `none / present / suppressed`。`none` は観測済みで匂いなし、field省略は観測未提供。
+- `present` だけ非空の成分一覧を持つ。各成分のID・分類・快不快・発生源種別・強度は必須。
+  同じ匂いIDの重複、属性の不整合、未知fieldを拒否する。混合しても親IDへ潰さない。
+- `none / suppressed` は空配列。`suppressed` だけ `suppression_reason: rain / snow / thunder / submerged` を持つ。
+- `effective_strength` は距離・温度補正後の1〜12。1が仄か、8が強烈という尺度で、成分ごとに通常会話・環境対話へ渡す。
+- `direction_estimate` は削除済み。どの発生源でも、object・nullともに未知fieldとして拒否する。
+- 通常成分とは別に、任意の `rain_after_notice: {window_id, component}` が一度の雨上がり候補を持つ。
+  `rain_after_active=true` かつ抑止外が必須。成分は `rain_after / pleasant / blockまたはhotbar`、窓IDは正数。
+  `status=none` でも候補は持てる。通常components内の `rain_after` は受理しない。
+  一件の出力完了（または選択された沈黙）後は通常臭へ即時復帰。失敗・取消もその機会を終了して再試行しない。同じ窓は再度扱わず、窓IDをLLMへ渡さない。
+  180秒は候補の観測期限であり、匂いを独占させる期間ではない。
+- 通常の自発反応は既定3分ごとの気づきテーブル。ゾンビ匂いの優先反応は2観測連続・2分間隔。
+  明示質問は現在の各匂い・強さをコード固定文で返す。方向や距離への問いには分からないと答える。
+- この観測だけで戦闘状態やworkshop pauseを開始しない。
 
 ## 12.2 `ambient_sounds`
 
@@ -530,9 +537,11 @@ Fabric adapterが近接源・hotbar・バイオーム・温度・天候からス
 - `custom_name`: 名札等のカスタム名。未設定なら省略（最大64文字、制御文字除去）
 - `tamed`: 飼いならし状態の実値。名前の有無・首輪・リードから推定しない。飼い主の情報は送らない
 
-Fabricの `passive_mobs` は実際の距離・見通し条件を通った先頭4個体を従来の遭遇順で送る。同じ一回の走査で得た残りの名前付き・飼い慣らし個体は、通常枠と重複しない `companion_candidates`（最大32個体）へ保持する。この補助候補は自発的な発話・一般知識・川柳の主材料へ常時追加しない。プレイヤーの今回の発話が実観測の個体名または種類に一致したときだけ、Rustのコードがその返答用の最大4個体へ該当個体を優先する。受信観測や次の発話の順序は変更せず、全候補から数える村人数も減らさない。
+Fabricの `passive_mobs` は実際の距離・見通し条件を通った先頭4個体を従来の遭遇順で送る。同じ一回の走査で得た残りの名前付き・飼い慣らし個体は、通常枠と重複しない `companion_candidates`（最大32個体）へ保持する。この補助候補を遭遇コメントの発話きっかけ・一般知識・川柳の主材料へ常時追加しない。プレイヤーの今回の発話が実観測の個体名または種類に一致したときだけ、Rustのコードがその返答用の最大4個体へ該当個体を優先する。受信観測や次の発話の順序は変更せず、全候補から数える村人数も減らさない。
 
 未送信の旧adapterも受信可能。Rustは `tamed=true` の遭遇コメントを抑止するが、現在の観測・明示質問・危険判定からは消さない。名前だけ付いた野生個体は抑止対象ではない。名前と種類の対応は短期観測に保持し、改名・名前削除は同じ個体IDで更新する。古い鳴き声で名前を巻き戻さず、過去の対応を現在の在否へ昇格しない。
+
+2026-10-11: 通常会話・周辺変化コメントの共通観測 `mob_states` に、実個体IDに結び付いた `tamed=true` と既知の名前を保持する。通常4枠の外にいる `companion_candidates` からも、この識別情報だけを補う。補助候補の環境変化を新しい発話契機へ足さず、従来の遭遇順・ペット遭遇抑止・種類集合の比較を保つ。同じ個体の視線先観測を優先し、同種の別個体へ飼いならし状態を広げない。旧adapterの省略値と明示falseを区別できないため、falseから野生と断定せず、名前だけからペット化や飼い主を推定しない。観測から消えた個体は現在の共通観測からも外す。
 
 川柳では、普段から付いてくるペットを見どころ選択の主材料から外し、見どころ確定後に最大一個体だけ補助材料へ入れる。実再生が完了した直近3往復でプレイヤーが話題にした個体・種類は主材料に戻せる。個体名と種名は同じ出典として扱い、名前の読みがかな又は登録済みの読みで確定しなければ種名を使う。
 
@@ -961,6 +970,8 @@ adapter は `status_snapshot` に暗所スコアを載せる。以下はその�
 
 ## 周辺の種類構成（2026-10-08）
 
-任意の `nearby_composition` は `mobs: string[]`、`blocks: string[]`、`mobs_truncated: boolean`、`blocks_truncated: boolean` の4項目を持つ。各配列は最大128、IDは最大128文字のregistry ID。空配列は範囲内で未検出、省略・上限超過は未確認とする。後方互換の推測補完はしない。個体ID・個数・座標はこの表に入れない。
+任意の `nearby_composition` は `mobs: {id, quantity, professions}[]`、`blocks: string[]`、`mobs_truncated: boolean`、`blocks_truncated: boolean` の4項目を持つ。各配列は最大128、重複なし、IDは最大128文字のregistry ID。空配列は範囲内で未検出、省略・上限超過は未確認とする。後方互換の推測補完はしない。個体ID・座標はこの表に入れない。
+
+Mobは友好・中立のみで、`quantity` は1〜4の整数または5以上を意味する `"many"`。村人だけ `professions: {id, quantity}[]` に合計の内訳を持ち、同じ数量表現を使う。職業IDのほか `baby`（子供）、`none`（求職者）、`nitwit`、`unknown`（未確認）を分け、各村人は一つの内訳に属する。村人以外の内訳は空。モデルには `many` を「いっぱい」として渡し、数量・職業内訳だけの変化では気づきの発話を起動しない。敵の数は既存の敵観測を使う。
 
 Fabricは非敵対モブと見通しを確認したブロックの種類を送る。新しい種類は通常範囲で発見し、既知の種類は外側5ブロックの余白で実視認できる間だけ維持する。定期snapshotと部分通知で同じ欄を使うが、種類表の省略を前の値で補完せず、周期比較は新しい全snapshotだけで行う。詳細は[気づきテーブル](2026-10-08-surroundings-notice.md)を参照。

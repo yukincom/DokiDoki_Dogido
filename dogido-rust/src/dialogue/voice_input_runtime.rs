@@ -84,7 +84,7 @@ impl Dialogue {
     pub fn voice_context(&self) -> Value {
         let d = self.data.lock().unwrap();
         if d.stopped || d.sessions.len() != 1 {
-            return json!({"prompt_mode":"normal", "session_id":null});
+            return json!({"prompt_mode":"normal", "session_id":null,"voice_enabled":false,"voice_generation":null});
         }
         let (sid, s) = d.sessions.iter().next().unwrap();
         let workshop = observation_fresh(s)
@@ -93,7 +93,7 @@ impl Dialogue {
                 .workshop
                 .as_ref()
                 .is_some_and(|w| w.is_open() && !w.combat_paused());
-        json!({"prompt_mode":if workshop {"haiku_workshop"} else {"normal"}, "session_id":sid})
+        json!({"prompt_mode":if workshop {"haiku_workshop"} else {"normal"}, "session_id":sid, "voice_enabled":!s.delivery.enabled || s.delivery.voice_enabled,"voice_generation":s.delivery.generation})
     }
 }
 

@@ -89,6 +89,9 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
     // its diagnostic, never a different candidate's verdict or source evidence.
     let mut last_feedback: BTreeMap<usize, (LineForm, Vec<String>, String)> = BTreeMap::new();
     for round in 0..=limit {
+        tracing::info!(event="haiku_candidate",round,
+            candidate=%json!(lines.iter().map(|line| &line.text).collect::<Vec<_>>()),
+            "川柳: 検査する候補三行（round=0は初案）");
         let used = used_claims(&accepted, &atom_by_id);
         let eligible = eligible_atoms(&input.source_atoms, &used);
         let indices: Indices = failed_indices
@@ -106,6 +109,9 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
         )
         .await;
         if indices.iter().any(|i| !assessments.contains_key(i)) {
+            tracing::warn!(event="haiku_grounding_missing",round,
+                line_numbers=%json!(indices.iter().filter(|i| !assessments.contains_key(i)).map(|i| i + 1).collect::<Vec<_>>()),
+                "川柳: 個別再照合後も検査結果が揃わず終了");
             return Ok(failed(&input, "grounding_unavailable", round));
         }
         let frozen: BTreeSet<_> = accepted
@@ -152,7 +158,10 @@ pub async fn generate<B: Backend>(backend: &mut B, input: Input) -> Result<Groun
                 .into_iter()
                 .filter(|(i, _)| !failed_indices.contains(i)),
         );
-        tracing::info!(event="haiku_grounding_round",strategy=input.generation_strategy,round,accepted=?accepted.keys(),failed=?expanded);
+        tracing::info!(event="haiku_grounding_round",strategy=input.generation_strategy,round,
+            accepted_line_numbers=%json!(accepted.keys().map(|i| i + 1).collect::<Vec<_>>()),
+            failures=%json!(expanded.iter().map(|(i, codes)| json!({"line_number":i + 1,"reasons":codes,"comment":comments.get(i)})).collect::<Vec<_>>()),
+            "川柳: 行ごとの検査結果");
         if failed_indices.is_empty() {
             return Ok(GroundedHaikuResult {
                 text: lines

@@ -1,0 +1,3816 @@
+[
+  {
+    "event": "status_snapshot",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "status_snapshot",
+        "source_kind": "system",
+        "priority_hint": "background",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "ambient_sounds": [
+        {
+          "type": "rain",
+          "source_id": "played:rain",
+          "sound_event": "weather.rain",
+          "heard_ago_ms": 50,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "distance_band": "touching",
+          "certainty": "high"
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "threat_approaching",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "threat_approaching",
+        "source_kind": "visual",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "hostile_audio_detected",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "hostile_audio_detected",
+        "source_kind": "auditory",
+        "priority_hint": "normal",
+        "certainty": "medium"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "ambient_mob_detected",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "ambient_mob_detected",
+        "source_kind": "visual",
+        "priority_hint": "background",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [],
+      "auditory_threats": [],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 0,
+        "audio_count": 0
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "player_died",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "player_died",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "death_cause": "fixture death",
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "creeper_detonated",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "creeper_detonated",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1,
+        "hostile_outcomes": [
+          {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "type": "creeper",
+            "outcome": "creeper_detonation",
+            "evidence": "explosion_packet"
+          }
+        ]
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "hostile_defeated",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "hostile_defeated",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1,
+        "hostile_outcomes": [
+          {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "type": "zombie",
+            "outcome": "player_kill",
+            "evidence": "server_death_event"
+          }
+        ]
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "combat_ended",
+    "detail": false,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "combat_ended",
+        "source_kind": "system",
+        "priority_hint": "normal",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [],
+      "auditory_threats": [],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 0,
+        "audio_count": 0
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "status_snapshot",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "status_snapshot",
+        "source_kind": "system",
+        "priority_hint": "background",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "ambient_sounds": [
+        {
+          "type": "rain",
+          "source_id": "played:rain",
+          "sound_event": "weather.rain",
+          "heard_ago_ms": 50,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "distance_band": "touching",
+          "certainty": "high"
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "threat_approaching",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "threat_approaching",
+        "source_kind": "visual",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "hostile_audio_detected",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "hostile_audio_detected",
+        "source_kind": "auditory",
+        "priority_hint": "normal",
+        "certainty": "medium"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "ambient_mob_detected",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "ambient_mob_detected",
+        "source_kind": "visual",
+        "priority_hint": "background",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [],
+      "auditory_threats": [],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 0,
+        "audio_count": 0
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "player_died",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "player_died",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "death_cause": "fixture death",
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "creeper_detonated",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "creeper_detonated",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1,
+        "hostile_outcomes": [
+          {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "type": "creeper",
+            "outcome": "creeper_detonation",
+            "evidence": "explosion_packet"
+          }
+        ]
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "hostile_defeated",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "hostile_defeated",
+        "source_kind": "system",
+        "priority_hint": "urgent",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [
+        {
+          "type": "creeper",
+          "entity_id": "00000000-0000-0000-0000-000000000001",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "distance": 4.13,
+          "direction": {
+            "horizontal": "front",
+            "cardinal": "south",
+            "vertical": "same"
+          },
+          "approaching": true,
+          "fuse_active": true,
+          "on_fire": false,
+          "in_water": false,
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "certainty": "high"
+        }
+      ],
+      "auditory_threats": [
+        {
+          "label": "zombie",
+          "source_id": "00000000-0000-0000-0000-000000000001",
+          "sound_event": "entity.zombie.ambient",
+          "heard_ago_ms": 125,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "below"
+          },
+          "distance_band": "close",
+          "certainty": "medium",
+          "spoken_name_allowed": true
+        }
+      ],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 1,
+        "audio_count": 1,
+        "hostile_outcomes": [
+          {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "type": "zombie",
+            "outcome": "player_kill",
+            "evidence": "server_death_event"
+          }
+        ]
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  },
+  {
+    "event": "combat_ended",
+    "detail": true,
+    "expected": {
+      "schema_version": "2026-05-24",
+      "game": "minecraft-java",
+      "adapter": "dogido-fabric-client",
+      "observed_at": "2026-10-09T00:00:00Z",
+      "event": {
+        "name": "combat_ended",
+        "source_kind": "system",
+        "priority_hint": "normal",
+        "certainty": "high"
+      },
+      "smell_observation": {
+        "status": "present",
+        "rain_after_notice": {
+          "window_id": 3600,
+          "component": {
+            "smell_id": "rain_after",
+            "category": "rain_after",
+            "valence": "pleasant",
+            "source_kind": "block",
+            "effective_strength": 1
+          }
+        },
+        "components": [
+          {
+            "smell_id": "soup",
+            "category": "food",
+            "valence": "pleasant",
+            "source_kind": "hotbar",
+            "effective_strength": 3
+          }
+        ],
+        "temperature_modifier": 0,
+        "rain_after_active": true,
+        "basis": "smell_policy_v2"
+      },
+      "sequence": 7,
+      "player": {
+        "fixture": "player"
+      },
+      "world": {
+        "fixture": "world",
+        "visible_villager_count": 1
+      },
+      "visual_threats": [],
+      "auditory_threats": [],
+      "passive_mobs": [
+        {
+          "type": "villager",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 3.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive",
+          "is_baby": false,
+          "profession": "farmer",
+          "villager_type": "plains"
+        },
+        {
+          "type": "cow",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 4.0,
+          "direction": {
+            "horizontal": "left",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "pig",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 5.0,
+          "direction": {
+            "horizontal": "right",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        },
+        {
+          "type": "sheep",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "テスト",
+            "tamed": false
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 6.0,
+          "direction": {
+            "horizontal": "front",
+            "vertical": "above"
+          },
+          "certainty": "high",
+          "temperament": "passive"
+        }
+      ],
+      "companion_candidates": [
+        {
+          "type": "wolf",
+          "identity": {
+            "entity_id": "00000000-0000-0000-0000-000000000001",
+            "custom_name": "シロ",
+            "tamed": true
+          },
+          "environment": {
+            "touching_water": false,
+            "submerged_in_water": false,
+            "touching_water_or_rain": false,
+            "on_ground": true,
+            "on_fire": false
+          },
+          "distance": 7.0,
+          "direction": {
+            "horizontal": "back",
+            "vertical": "same"
+          },
+          "certainty": "high",
+          "temperament": "neutral",
+          "caution_reason": "retaliates"
+        }
+      ],
+      "inventory": {
+        "fixture": "inventory"
+      },
+      "nearby_resources": [
+        {
+          "fixture": "resources"
+        }
+      ],
+      "nearby_composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": 1,
+            "professions": []
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [
+          "minecraft:stone"
+        ],
+        "blocks_truncated": false
+      },
+      "dropped_items": [
+        {
+          "fixture": "dropped"
+        }
+      ],
+      "recent_block_breaks": [
+        {
+          "fixture": "breaks"
+        }
+      ],
+      "look_target": {
+        "fixture": "look"
+      },
+      "combat": {
+        "fixture": "combat",
+        "visual_count": 0,
+        "audio_count": 0
+      },
+      "meta": {
+        "adapter_build": "2026-09-28-relaxed-thinking-animation",
+        "profile_name": "default",
+        "debug": false,
+        "user_text": "fixture input"
+      }
+    }
+  }
+]

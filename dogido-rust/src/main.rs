@@ -1,5 +1,7 @@
 use std::{io::Write, net::SocketAddr, path::PathBuf, time::Duration};
 
+mod console_log;
+
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use dogido_rust::{
@@ -332,8 +334,8 @@ async fn serve(
     );
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
-        .with_target(false)
         .with_ansi(false)
+        .event_format(console_log::ConsoleLog)
         .with_writer(std::io::stderr)
         .try_init()
         .ok();

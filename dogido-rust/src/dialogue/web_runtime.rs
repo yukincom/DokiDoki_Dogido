@@ -411,10 +411,11 @@ impl Dialogue {
             }
             let permit = tokio::select! {biased;_=bridge::cancelled(&mut cancel)=>return,p=self.serial.acquire()=>p.unwrap()};
             if self.update(&sid, &turn, epoch, PlaybackStatus::Queued, Some(&outcome)) {
+                let output = self.output_config(&sid);
                 let played = self
                     .audio
                     .speak(
-                        &self.config,
+                        &output,
                         outcome["text"].as_str().unwrap(),
                         &mut cancel,
                         || {
@@ -430,6 +431,8 @@ impl Dialogue {
                         PlaybackStatus::Completed
                     } else if *cancel.borrow() {
                         PlaybackStatus::Cancelled
+                    } else if !output.audio_enabled {
+                        PlaybackStatus::AudioDisabled
                     } else {
                         PlaybackStatus::Failed
                     },

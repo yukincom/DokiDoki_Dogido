@@ -18,7 +18,7 @@ def main():
         sid = ready(base, send, rows)
         original = stored(sid)
         for text in ["夫婦の香りをくんくん匂うに変えませんか", "今の匂いは何？", "ゾンビはどこ？", "剣に変えるという表現はどう？"]:
-            send(sid, smell_observation={"status": "none"})
+            send(sid, smell_observation={"status":"none","components":[],"basis":"smell_policy_v2"})
             turn = submit(base, sid, text)
             result = wait_for(lambda: row(base, turn, {"completed"}))
             assert result["workshop_action"] == "explain" and calls[-1][0] == text, result
@@ -48,7 +48,7 @@ def main():
                 ({"nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 4.12}, {}),
                 ({"local_light": 0, "sky_visible": False, "ceiling_height": 3}, {}),
                 ({}, {"combat": {"recent_damage_ms": 0}, "player": {"name": "試験", "dimension": "minecraft:overworld", "health": 19}}),
-                ({}, {"smell_observation": {"status": "present", "smell_id": "bread", "category": "food", "valence": "pleasant", "source_kind": "hotbar", "specificity": "source", "effective_strength": 3}}),
+                ({}, {"smell_observation": {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}}),
             ]:
                 for _ in range(2):
                     send(sid, world=world, **extra)

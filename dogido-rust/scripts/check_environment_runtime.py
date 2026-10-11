@@ -42,7 +42,7 @@ def main():
                     "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                     "player": {"name": "試験", "hotbar": hotbar, **(player_state or {})},
                     "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day", **(world or {})},
-                    "nearby_composition": {"mobs":[m["type"] for m in extra.get("passive_mobs", [])],
+                    "nearby_composition": {"mobs":[{"id":m["type"],"quantity":1} for m in extra.get("passive_mobs", [])],
                         "blocks":[],"mobs_truncated":False,"blocks_truncated":False}, **extra}
             def send(sid, **fields): return request(base, "/api/v1/game-events", event(**fields), sid=sid)
             def say(sid, text, source="voice"):
@@ -282,13 +282,12 @@ def main():
             passed.append("casual_foreground_expires_and_light_comments_resume")
 
             sid = register()
-            scent = {"status": "present", "smell_id": "bread", "category": "food", "valence": "pleasant",
-                "source_kind": "hotbar", "specificity": "source", "effective_strength": 3}
+            scent = {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}
             send(sid, smell_observation=scent)
             (folder / "delay").write_text(".5")
             say(sid, "今何の匂い？")
             old = wait_for(lambda: match(sid, "smell", "started"))
-            send(sid, smell_observation={"status": "none"})
+            send(sid, smell_observation={"status":"none","components":[],"basis":"smell_policy_v2"})
             new = wait_for(lambda: match(sid, "smell", "completed"))
             assert old["turn_id"] == new["turn_id"] and old["text"] == new["text"], (old, new)
             say(sid, "今何の匂い？")

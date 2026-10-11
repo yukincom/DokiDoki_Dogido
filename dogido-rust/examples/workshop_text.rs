@@ -184,7 +184,6 @@ async fn main() -> Result<()> {
     haiku.enabled = false;
     haiku.memory_enabled = false;
     haiku.memory_dir = temporary;
-    haiku.workshop_open_ms = 86_400_000;
     haiku.workshop_idle_ms = 86_400_000;
     let dialogue = Dialogue::new(DialogueConfig {
         python: args.python,

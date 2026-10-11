@@ -84,3 +84,4 @@ pub mod chat_materials;
 pub mod workshop_projection;
 
 pub mod workshop_editing;
+mod workshop_validation;

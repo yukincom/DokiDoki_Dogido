@@ -128,6 +128,8 @@ fn result_fields(result: &Value) -> Value {
                     "purpose",
                     "outcome",
                     "validation_codes",
+                    "transport",
+                    "tool_call",
                     "checks",
                     "evidence",
                     "close_after_action",

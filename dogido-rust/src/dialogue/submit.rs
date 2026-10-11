@@ -163,6 +163,12 @@ impl Dialogue {
         let Some(s) = d.sessions.get_mut(&session_id) else {
             return json!({"accepted":false,"reason":"unknown_session_id"});
         };
+        if source.trim().eq_ignore_ascii_case("voice")
+            && s.delivery.enabled
+            && !s.delivery.voice_enabled
+        {
+            return json!({"accepted":false,"reason":"voice_disabled"});
+        }
         if expected_generation
             .as_ref()
             .is_some_and(|(g, _)| *g != s.input_generation)

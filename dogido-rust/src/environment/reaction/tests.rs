@@ -14,10 +14,9 @@ fn event(fields: Value) -> GameEvent {
         .extend(fields.as_object().unwrap().clone());
     GameEvent::parse(value).unwrap()
 }
-fn smell(id: &str, category: &str, specificity: &str) -> GameEvent {
+fn smell(id: &str, category: &str) -> GameEvent {
     event(
-        json!({"smell_observation":{"status":"present","smell_id":id,"category":category,
-        "specificity":specificity,"valence":"pleasant","source_kind":if specificity == "source" { "hotbar" } else { "mixed" },"effective_strength":3}}),
+        json!({"smell_observation":{"status":"present","components":[{"smell_id":id,"category":category,"valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}}),
     )
 }
 fn action(kind: &'static str, details: Value) -> Speech {
@@ -113,8 +112,8 @@ fn silence_is_distinct_from_error_and_whole_contract_is_required() {
 }
 
 #[test]
-fn smell_context_preserves_sensor_specificity_without_inventing_spatial_information() {
-    let e = smell("food", "food", "category");
+fn smell_context_preserves_components_and_strength_without_inventing_spatial_information() {
+    let e = smell("bread", "food");
     let mut a = super::super::ambient::current_smell_reply(&e);
     a.delivery = Delivery::Ambient;
     attach(&mut a, &e, &json!({}));
@@ -123,8 +122,8 @@ fn smell_context_preserves_sensor_specificity_without_inventing_spatial_informat
     let parsed: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
     let context = parsed["observations"]["smell"].to_string();
     assert!(
-        !context.contains("effective_strength")
-            && !context.contains("source_kind")
+        context.contains("effective_strength")
+            && context.contains("source_kind")
             && !context.contains("distance")
     );
     assert_eq!(
@@ -138,7 +137,7 @@ fn smell_context_preserves_sensor_specificity_without_inventing_spatial_informat
     ] {
         assert_eq!(outcome(&p, text).1, "speak", "{text}");
     }
-    let source = smell("bread", "food", "source");
+    let source = smell("bread", "food");
     let mut a = action("smell", json!({}));
     attach(&mut a, &source, &json!({}));
     assert_eq!(
@@ -149,18 +148,20 @@ fn smell_context_preserves_sensor_specificity_without_inventing_spatial_informat
 
 #[test]
 fn smell_and_biome_guards_are_not_generated_wording() {
-    let e = smell("bread", "food", "source");
+    let e = smell("bread", "food");
     let mut a = action("smell", json!({}));
     attach(&mut a, &e, &json!({}));
     a.text = "ええ匂いやな。".into();
     assert!(super::super::ambient::still_applicable(&a, &e));
     assert!(!super::super::ambient::still_applicable(
         &a,
-        &smell("cake", "food", "source")
+        &smell("cake", "food")
     ));
     assert!(!super::super::ambient::still_applicable(
         &a,
-        &event(json!({"smell_observation":{"status":"none"}}))
+        &event(
+            json!({"smell_observation":{"status":"none","components":[],"basis":"smell_policy_v2"}})
+        )
     ));
 
     let e = event(json!({}));
@@ -194,60 +195,52 @@ fn smell_and_biome_guards_are_not_generated_wording() {
     }
 }
 
-fn spatial_smell(minimum: i64, cardinal: Option<&str>) -> GameEvent {
-    event(json!({"smell_observation":{
-        "status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant",
-        "source_kind":"entity","specificity":"source","effective_strength":8-minimum,
-        "direction_estimate":cardinal.map(|value|json!({"cardinal":value}))
-    }}))
+fn measured_smell(strength: i64) -> GameEvent {
+    event(
+        json!({"smell_observation":{"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":strength}],"basis":"smell_policy_v2"}}),
+    )
 }
 
 #[test]
-fn resolved_spatial_estimates_reach_the_model_and_change_invalidates_old_speech() {
-    let e = spatial_smell(3, Some("east"));
+fn resolved_strength_reaches_the_model_and_change_invalidates_old_speech() {
+    let e = measured_smell(5);
     let mut a = action("smell", json!({}));
     attach(&mut a, &e, &json!({}));
     let p = prepared(&a);
     let context: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
-    let observed_smell = &context["observations"]["smell"];
-    assert!(observed_smell.get("distance_estimate").is_none());
-    assert_eq!(observed_smell["direction_estimate"]["cardinal"], "east");
-    assert_eq!(
-        observed_smell["direction_estimate"]["basis"],
-        "source_bearing"
-    );
-    for hidden in ["source_id", "entity_id", "position", "effective_strength"] {
+    let observed_smell = &context["observations"]["smell"]["components"][0];
+    assert_eq!(observed_smell["effective_strength"], 5);
+    for hidden in [
+        "direction_estimate",
+        "distance_estimate",
+        "source_id",
+        "entity_id",
+        "position",
+    ] {
         assert!(observed_smell.get(hidden).is_none());
     }
     assert!(still_applicable(&a, &e));
-    assert!(still_applicable(&a, &spatial_smell(4, Some("east"))));
-    assert!(!still_applicable(&a, &spatial_smell(3, Some("west"))));
-    assert!(!still_applicable(&a, &spatial_smell(3, None)));
-    assert!(!only_smell_spatial_changed(
+    assert!(!still_applicable(&a, &measured_smell(8)));
+    assert!(only_smell_estimate_changed(&a, &measured_smell(8)));
+    assert!(!only_smell_estimate_changed(&a, &e));
+    assert!(!only_smell_estimate_changed(&a, &smell("bread", "food")));
+    assert!(!only_smell_estimate_changed(
         &a,
-        &spatial_smell(4, Some("east"))
+        &event(
+            json!({"smell_observation":{"status":"none","components":[],"basis":"smell_policy_v2"}})
+        )
     ));
-    assert!(only_smell_spatial_changed(&a, &spatial_smell(3, None)));
-    assert!(!only_smell_spatial_changed(&a, &e));
-    assert!(!only_smell_spatial_changed(
-        &a,
-        &smell("bread", "food", "source")
-    ));
-    assert!(!only_smell_spatial_changed(
-        &a,
-        &event(json!({"smell_observation":{"status":"none"}}))
-    ));
-    let mut elsewhere = serde_json::to_value(spatial_smell(4, Some("east"))).unwrap();
+    let mut elsewhere = serde_json::to_value(measured_smell(8)).unwrap();
     elsewhere["player"]["dimension"] = json!("minecraft:the_nether");
-    assert!(!only_smell_spatial_changed(
+    assert!(!only_smell_estimate_changed(
         &a,
         &GameEvent::parse(elsewhere).unwrap()
     ));
 }
 
 #[test]
-fn fixed_smell_questions_use_current_estimates_and_keep_unknown_direction_explicit() {
-    let e = spatial_smell(3, None);
+fn fixed_smell_questions_use_current_strength_and_cannot_locate_the_source() {
+    let e = measured_smell(5);
     for text in [
         "匂いはどっちから？",
         "どこから匂う？",
@@ -257,22 +250,22 @@ fn fixed_smell_questions_use_current_estimates_and_keep_unknown_direction_explic
     }
     let reply = super::super::ambient::current_smell_query_reply(&e, "匂いはどっちから？");
     assert!(!reply.text.contains("ブロック"));
-    assert!(reply.text.contains("方向はまだ絞れてへん"));
+    assert!(reply.text.contains("匂いだけでは方向までは分からへん"));
     assert!(reply.cue_id.is_none());
     assert!(super::super::ambient::still_applicable(&reply, &e));
-    let located = spatial_smell(3, Some("east"));
-    assert!(!super::super::ambient::still_applicable(&reply, &located));
-    let current = super::super::ambient::current_smell_query_reply(&located, "匂いはどっちから？");
-    assert!(current.text.contains("東のほうから来とるみたいや"));
-    assert!(!current.text.contains("まだ絞れてへん"));
-    assert!(super::super::ambient::still_applicable(&current, &located));
+    let stronger = measured_smell(8);
+    assert!(!super::super::ambient::still_applicable(&reply, &stronger));
+    let current = super::super::ambient::current_smell_query_reply(&stronger, "匂いはどっちから？");
+    assert!(current.text.contains("強烈に"));
+    assert!(current.text.contains("匂いだけでは方向までは分からへん"));
+    assert!(super::super::ambient::still_applicable(&current, &stronger));
     let range_question =
-        super::super::ambient::current_smell_query_reply(&located, "匂いの距離はどのくらい？");
+        super::super::ambient::current_smell_query_reply(&stronger, "匂いの距離はどのくらい？");
     assert!(range_question.text.contains("距離までは分からへん"));
     assert!(!range_question.text.contains("ブロック"));
     assert!(super::super::ambient::still_applicable(
         &range_question,
-        &located
+        &stronger
     ));
     assert!(!super::super::ambient::is_smell_query(
         "川柳の匂いの表現はどっち？"
@@ -370,7 +363,7 @@ fn final_environment_input_uses_shared_weather_situations_and_actual_scream_stat
 
 #[test]
 fn sensory_questions_combat_and_severe_darkness_keep_the_original_path() {
-    let e = smell("bread", "food", "source");
+    let e = smell("bread", "food");
     for delivery in [Delivery::PlayerReply, Delivery::Combat] {
         let mut a = super::super::ambient::current_smell_reply(&e);
         a.delivery = delivery;
@@ -391,4 +384,72 @@ fn sensory_questions_combat_and_severe_darkness_keep_the_original_path() {
         attach(&mut a, &e, &json!({}));
         assert_eq!(serde_json::to_value(&a).unwrap(), before, "{kind}");
     }
+}
+
+#[test]
+fn mixed_components_reach_model_and_fixed_answer_without_order_dependent_guards() {
+    let first = json!({"smell_id":"zombie","category":"decay","valence":"unpleasant",
+        "source_kind":"entity","effective_strength":1});
+    let second = json!({"smell_id":"soup","category":"food","valence":"pleasant",
+        "source_kind":"hotbar","effective_strength":3});
+    let mixed = |rows: Value| {
+        event(json!({"smell_observation":{
+        "status":"present","basis":"smell_policy_v2","components":rows}}))
+    };
+    let e = mixed(json!([first.clone(), second.clone()]));
+    let mut a = action("smell", json!({}));
+    attach(&mut a, &e, &json!({}));
+    let p = prepared(&a);
+    let context: Value = serde_json::from_str(&p.request.messages[1].content).unwrap();
+    let components = &context["observations"]["smell"]["components"];
+    assert_eq!(components[0]["smell_id"], "soup");
+    assert_eq!(components[0]["effective_strength"], 3);
+    assert_eq!(components[1]["smell_id"], "zombie");
+    assert_eq!(components[1]["effective_strength"], 1);
+    assert!(still_applicable(&a, &mixed(json!([second, first]))));
+    let answer = super::super::ambient::current_smell_reply(&e);
+    assert!(answer.text.contains("スープの匂い"));
+    assert!(answer.text.contains("ゾンビ系の匂いがほのかに"));
+    assert!(answer.cue_id.is_none());
+    assert!(!answer.text.contains("近くにおる"));
+    let directional =
+        super::super::ambient::current_smell_query_reply(&e, "スープの匂いはどっちから？");
+    assert!(!directional.text.contains("東"));
+    assert!(
+        directional
+            .text
+            .contains("匂いだけでは方向までは分からへん")
+    );
+    assert!(super::super::ambient::still_applicable(&directional, &e));
+}
+
+#[test]
+fn rain_after_reaction_uses_one_candidate_and_expires_with_its_window() {
+    let e = event(
+        json!({"smell_observation":{"status":"present","basis":"smell_policy_v2",
+            "rain_after_active":true,"components":[{"smell_id":"bread","category":"food",
+                "valence":"pleasant","source_kind":"hotbar","effective_strength":3}],
+            "rain_after_notice":{"window_id":12,"component":{"smell_id":"rain_after",
+                "category":"rain_after","valence":"pleasant","source_kind":"hotbar","effective_strength":2}}
+        }}),
+    );
+    let mut a = Speech::new("smell", "雨上がりの匂いがするで。");
+    a.delivery = Delivery::Ambient;
+    a.rain_after_window = Some(12);
+    attach(&mut a, &e, &json!({}));
+    assert_eq!(
+        a.leaf.as_ref().unwrap().details["reaction_context"]["observations"]["smell"]["components"]
+            [0]["smell_id"],
+        "rain_after"
+    );
+    assert!(still_applicable(&a, &e));
+    let mut changed = serde_json::to_value(&e).unwrap();
+    changed["smell_observation"]["components"] = json!([]);
+    changed["smell_observation"]["status"] = json!("none");
+    assert!(still_applicable(
+        &a,
+        &GameEvent::parse(changed.clone()).unwrap()
+    )); // 通常臭の変化で一瞬の気づきを取り消さない。
+    changed["smell_observation"]["rain_after_notice"]["window_id"] = json!(13);
+    assert!(!still_applicable(&a, &GameEvent::parse(changed).unwrap()));
 }

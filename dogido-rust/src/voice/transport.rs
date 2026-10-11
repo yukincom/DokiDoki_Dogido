@@ -1,6 +1,7 @@
 use super::process::cancelled;
 use anyhow::Result;
 use reqwest::{Client, RequestBuilder};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
@@ -55,6 +56,51 @@ pub struct Transport {
     token: Option<String>,
 }
 
+/// 本体の読み取り専用投影。欠落した許可情報を音声有効へ補わない。
+#[derive(Debug, Deserialize)]
+pub struct VoiceContext {
+    #[serde(default)]
+    prompt_mode: String,
+    #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
+    voice_enabled: bool,
+    #[serde(default)]
+    voice_generation: Option<String>,
+}
+
+/// 一度の録音開始で固定する配送先。モード切替後の世代へ認識結果を付け替えない。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VoiceBinding {
+    pub session_id: String,
+    pub generation: String,
+}
+
+impl VoiceContext {
+    pub fn prompt_mode(&self) -> &str {
+        if self.prompt_mode == "haiku_workshop" {
+            "haiku_workshop"
+        } else {
+            "normal"
+        }
+    }
+
+    pub fn binding(&self) -> Option<VoiceBinding> {
+        if !self.voice_enabled {
+            return None;
+        }
+        let session_id = self.session_id.as_ref().filter(|s| !s.trim().is_empty())?;
+        let generation = self
+            .voice_generation
+            .as_ref()
+            .filter(|s| !s.trim().is_empty())?;
+        Some(VoiceBinding {
+            session_id: session_id.clone(),
+            generation: generation.clone(),
+        })
+    }
+}
+
 impl Transport {
     pub fn new(base: &str) -> Result<Self> {
         Ok(Self {
@@ -74,8 +120,8 @@ impl Transport {
             None => request,
         }
     }
-    pub async fn context(&self) -> Result<String> {
-        let value: Value = self
+    pub async fn context(&self) -> Result<VoiceContext> {
+        Ok(self
             .auth(
                 self.client
                     .get(format!("{}/api/v1/voice-input/context", self.base)),
@@ -85,21 +131,16 @@ impl Transport {
             .await?
             .error_for_status()?
             .json()
-            .await?;
-        Ok(if value["prompt_mode"] == "haiku_workshop" {
-            "haiku_workshop"
-        } else {
-            "normal"
-        }
-        .into())
+            .await?)
     }
-    pub async fn deliver(&self, text: &str) -> Result<Value> {
+    pub async fn deliver(&self, text: &str, binding: &VoiceBinding) -> Result<Value> {
         Ok(self
             .auth(
                 self.client
                     .post(format!("{}/api/v1/player-input", self.base)),
             )
-            .json(&json!({"text":text,"source":"voice"}))
+            .json(&json!({"text":text,"source":"voice",
+                "session_id":binding.session_id,"voice_generation":binding.generation}))
             .timeout(Duration::from_secs(3))
             .send()
             .await?
@@ -134,5 +175,38 @@ impl Transport {
             }
         });
         (Reporter(tx), task)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn voice_permission_requires_an_enabled_session_and_generation() {
+        for value in [
+            json!({"prompt_mode":"normal"}),
+            json!({"voice_enabled":false,"session_id":"s","voice_generation":"g"}),
+            json!({"voice_enabled":true,"session_id":null,"voice_generation":"g"}),
+            json!({"voice_enabled":true,"session_id":"s","voice_generation":null}),
+            json!({"voice_enabled":true,"session_id":" ","voice_generation":"g"}),
+            json!({"voice_enabled":true,"session_id":"s","voice_generation":""}),
+        ] {
+            let context: VoiceContext = serde_json::from_value(value).unwrap();
+            assert_eq!(context.binding(), None);
+        }
+        let context: VoiceContext = serde_json::from_value(json!({
+            "prompt_mode":"haiku_workshop","voice_enabled":true,
+            "session_id":"s","voice_generation":"g"
+        }))
+        .unwrap();
+        assert_eq!(context.prompt_mode(), "haiku_workshop");
+        assert_eq!(
+            context.binding(),
+            Some(VoiceBinding {
+                session_id: "s".into(),
+                generation: "g".into(),
+            })
+        );
     }
 }

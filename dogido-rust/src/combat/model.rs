@@ -65,6 +65,9 @@ pub struct Speech {
     pub interrupt: bool,
     pub protect_ms: u64,
     pub scope: Scope,
+    /// 一度の雨上がり反応を実出力へ結ぶコード所有の窓ID。生成モデルへは渡さない。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rain_after_window: Option<u64>,
     /// 既存単体・群れ警告の配送中再照合をそのまま使う。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visual_plan: Option<crate::threats::Warning>,
@@ -83,6 +86,7 @@ impl Speech {
             interrupt: false,
             protect_ms: 0,
             scope: Scope::Event,
+            rain_after_window: None,
             visual_plan: None,
             leaf: None,
         }

@@ -1,14 +1,14 @@
 //! 共同編集の相談段階。Rustがモデルの上限、実検査、取消と状態反映を所有する。
 #[path = "../workshop_prompt/mod.rs"]
 pub(super) mod prompt;
-#[path = "../workshop_validation/mod.rs"]
-mod validation;
+use crate::workshop_validation as validation;
 use super::*;
 use crate::{
     haiku_record::HaikuLine,
     python_worker::Helper,
     types::GenerationRequest,
     workshop, workshop_candidate,
+    workshop::tools,
     workshop_edit::{self, Pending},
     workshop_editing::{Output, PlayerEditResult},
     workshop_followup::{self, Stage},
@@ -16,7 +16,7 @@ use crate::{
 };
 use anyhow::{Context, ensure};
 
-const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次のactionをあなたが選ぶ。編集、案の採用と保存、破棄、終了も、本人の意思を文脈から理解して選んでよい。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードが対象・元句一致・音数・保存結果を確定する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話し、検査を必須にしない。読み・音数・出典の確認は必要と判断したときだけinspectを選ぶ。相談中の語や候補はinspect_textに渡せる。どの行へ置くか決まっていたらinspect_line_index（上五0・中七1・下五2）も付ける。結果のmeter_statusはtoo_long=字余り、too_short=字足らず、exact=一致、unavailable=未確定。meter_deltaの正数は超過、負数は不足の音数なので、結果を受けて自然に説明や相談を続ける。inspectとunrelated以外は、操作actionでもspeechに自然な返事を入れる（空にするという以前の指示は無効）。編集・採用はコードが実行に成功してからこの返事を再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。実行できない理由が返ってきたら同じ対象について説明・相談を続ける。";
+const CONVERSATION_PROTOCOL: &str = "現在の会話プロトコル: 現在句・未採用案・直近対話・discussion_targetを読み、次の返答またはfunction callをあなたが選ぶ。実行方法と可能な処理は、今回提示されたtoolsと本文JSONのaction一覧に従う。本人の意思を文脈から理解し、今回許可されている一手だけを選ぶ。「終了ー」「お開きー」など言い方によらず終了意思を読む。「いい句だね」などの称賛だけでは終了を決めない。未採用案があり採否が不明な終了希望にはaskで採用か破棄かを確認し、勝手に閉じない。採否と終了がともに明確ならaccept_pendingまたはreject_pendingにclose_after_actionと各意思の根拠を付ける。コードが対象・元句一致・音数・保存結果を確定する。新しい対象を本人が指定するまではdiscussion_targetの行と語を保ち、話題が分かっているのに『どこを見たいか』を聞き直さない。意味・由来・連想は自由に話し、検査を必須にしない。読み・音数・出典の確認は必要と判断したときだけinspect_verseのfunction callを使う。相談中の語や候補はinspect_textに渡せる。どの行へ置くか決まっていたらinspect_line_index（上五0・中七1・下五2）も付ける。結果のmeter_statusはtoo_long=字余り、too_short=字足らず、exact=一致、unavailable=未確定。meter_deltaの正数は超過、負数は不足の音数なので、結果を受けて自然に説明や相談を続ける。function callでは本文の返事を付けず、propose_revisionのspeechも空文字列にして結果を待つ。ほかの本文JSONのactionでは、unrelatedを除いてspeechに自然な返事を入れる。採用の返事はコードが実行に成功してから再生する。まだ行っていない操作を別のactionのspeechで実行済みとは言わない。句本文はコードが付けるのでspeechに三行を再生成しない。acknowledge_meaningは納得への返事だけで、終了確認へ進めない。本人が話を続けている、訂正している、困っているだけなら、終了を勧めずその話に応じる。実行できない理由が返ってきたら同じ対象について説明・相談を続ける。";
 
 impl Dialogue {
     /// 現在句のsnapshotから、返答と検証済みの行為候補を作る。
@@ -156,6 +156,7 @@ impl Dialogue {
         snapshot["current_player_idea"] = serde_json::to_value(&conversation_candidate)?;
         let mut close_after = false;
         let mut observation = Value::Null;
+        let mut tool_messages = Vec::new();
         let mut steps = Vec::new();
         let mut feedback = Value::Null;
         let mut reports = Vec::new();
@@ -188,6 +189,7 @@ impl Dialogue {
                     "interpreted_text":input["interpreted_text"].as_str().unwrap_or(text),
                     "observation":observation,"turn_steps":steps,"allowed_actions":allowed});
                 let mut selected = None;
+                let mut selected_tool = None;
                 for attempt in 0..2 {
                     if reply.interrupted() || self.workshop_combat_priority(input) {
                         return Ok(reply.result(input));
@@ -207,10 +209,37 @@ impl Dialogue {
                         .push(json!({
                         "role":"user", "content":CONVERSATION_PROTOCOL}));
                     prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
-                        "content":"差し替え案を相談するrespond/askでも、本人が今回言った置換語と対象をline_proposalへ入れてな。確認のあと『うん、変えて』のように案を省略した返事は、現在のconversation_candidateをstage_conversation_candidateで選んでな。行為のevidenceは今回の返事、置換語は保持された一案から使う。以前の発話を今回のevidenceへコピーしないでな。"}));
+                        "content":"差し替え案への感想を相談するだけならrespond/askとline_proposalで返してな。指定語への変更依頼は、今回toolsにあるときだけstage_player_editのfunction callで渡す。確認のあと『うん、変えて』のように案を省略した返事は、stage_conversation_candidateが今回のaction一覧にある場合だけ、現在のconversation_candidateを選んでな。行為のevidenceは今回の返事、置換語は保持された一案から使う。以前の発話を今回のevidenceへコピーしないでな。"}));
+                    // 一turnのnative toolは一件まで。結果後の返答では追加呼出しを止める。
+                    let allow_tool_call = tool_messages.is_empty();
+                    let tool_definitions = tools::definitions(if allow_tool_call {
+                        &allowed
+                    } else {
+                        &["inspect", "stage_player_edit"]
+                    });
+                    if allow_tool_call && !tool_definitions.is_empty() {
+                        let mut instruction = String::from("function callは今回toolsにあるもの一件だけを呼べる。toolsにない操作は選ばず、respond/explain/askの本文JSONで相談を続けてな。本文JSONのactionでtoolを代用せんといてな。");
+                        if allowed.contains(&"inspect") {
+                            instruction.push_str("現在句の読み・音数・出典の確認はinspect_verseや。");
+                        }
+                        if allowed.contains(&"stage_player_edit") {
+                            instruction.push_str("本人が今回、新しい語を指定してその語への変更を頼んだらstage_player_editを呼ぶ。置換語を指定せず新しい案を考えてほしい場合だけpropose_revisionの本文JSONや。expected_textは変更前の対象行全体。「AをBに変えて」ならtarget_fragmentはA、replacement_textはBだけで、変更後の行は作らない。evidenceも今回の原文から抜く。以前の案を選ぶだけの返事はstage_conversation_candidateや。");
+                        }
+                        instruction.push_str("本文JSONは会話の返答と、本文JSONで使えるaction一覧の処理に使う。tool呼出し時は本文の返事を付けず結果を待つ。句の変更・読み・音数・保存の成否はコードが決めるで。");
+                        let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
+                        prepared["messages"][0]["content"] = format!("{system}\n{instruction}").into();
+                    } else if !allow_tool_call {
+                        let system = prepared["messages"][0]["content"].as_str().unwrap_or("");
+                        prepared["messages"][0]["content"] = format!("{system}\nこのターンのtoolは実行済みや。追加のfunction callはせず、返された実検査結果を使い、今回の本文JSONのaction一覧から会話の返答を選んでな。").into();
+                    }
                     if input.get("text_workshop_prompt").is_some() {
                         prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
                             "content":"ここはテキスト相談室。採用した変更はコードが句集へ保存する。保存や採用の成否を先回りして言わず、コードの実行結果に従ってな。"}));
+                    }
+                    if !tool_definitions.is_empty() {
+                        // 補助指示を本人の発話と取り違えないよう、今回入力を最後に置く。
+                        prepared["messages"].as_array_mut().unwrap().push(json!({"role":"user",
+                            "content":format!("今回のプレイヤー発話: {text}")}));
                     }
                     let request = GenerationRequest {
                         schema_version: 1,
@@ -228,11 +257,16 @@ impl Dialogue {
                     reply
                         .waiting_for_model
                         .store(true, std::sync::atomic::Ordering::Relaxed);
-                    let generated = self.llm.generate(&request).await;
+                    let generated = if !tool_definitions.is_empty() {
+                        self.llm.generate_with_tools(&request, &tool_definitions,
+                            &tool_messages, allow_tool_call).await
+                    } else {
+                        self.llm.generate(&request).await.map(|report| (report, None))
+                    };
                     reply
                         .waiting_for_model
                         .store(false, std::sync::atomic::Ordering::Relaxed);
-                    let report = match generated {
+                    let (report, tool_message) = match generated {
                         Ok(report) => report,
                         Err(error) => {
                             if reply.interrupted() || self.workshop_combat_priority(input) {
@@ -250,8 +284,39 @@ impl Dialogue {
                         report.generated.finish_reason.as_deref(),
                         Some("length" | "max_tokens" | "MAX_TOKENS")
                     );
-                    let payload = crate::planner::extract_object(&report.generated.text);
-                    reports.push(serde_json::to_value(report)?);
+                    let native = tool_message.is_some();
+                    reports.push(serde_json::to_value(&report)?);
+                    let tool_call = if truncated {
+                        None
+                    } else if let Some(message) = tool_message {
+                        let decoded = if allow_tool_call {
+                            tools::Call::decode(message, &frame["workshop"], text)
+                        } else {
+                            Err(anyhow::anyhow!("additional_tool_call_not_allowed"))
+                        };
+                        match decoded {
+                            Ok(call) => Some(call),
+                            Err(error) => {
+                                if reply.interrupted() || self.workshop_combat_priority(input) {
+                                    return Ok(reply.result(input));
+                                }
+                                reason = format!("native_tool_rejected:{error}");
+                                tracing::warn!(event="workshop_tool_rejected",phase,attempt,%reason);
+                                if attempt == 0 {
+                                    prepare_conversation_retry(&mut frame, &mut allowed, &reason, &Value::Null);
+                                    continue;
+                                }
+                                break;
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                    let payload = if native {
+                        tool_call.as_ref().map(tools::Call::payload)
+                    } else {
+                        crate::planner::extract_object(&report.generated.text)
+                    };
                     let Some(payload) = payload.filter(|_| !truncated) else {
                         if reply.interrupted() || self.workshop_combat_priority(input) {
                             return Ok(reply.result(input));
@@ -269,6 +334,22 @@ impl Dialogue {
                         }
                         break;
                     };
+                    // 本文JSONに戻っても、検査・差し替え操作へは進めない。
+                    // 候補の保持や意味検査より前に遮断し、同じAPI形式へ一度だけ訂正を求める。
+                    if let Err(error) = tools::validate_transport(&payload, tool_call.as_ref()) {
+                        reason = error.to_string();
+                        tracing::warn!(event="workshop_tool_rejected",phase,attempt,
+                            action=%payload["action"],transport="content_json",%reason);
+                        steps.push(json!({"phase":phase,"action":payload["action"],
+                            "outcome":"rejected","transport":"content_json",
+                            "validation_codes":[reason],"checks":[],"evidence":""}));
+                        if attempt == 0 {
+                            frame["retry"] = json!({"reason":reason,
+                                "instruction":"その本文JSONの操作は実行してへんで。読み・音数・出典の確認はinspect_verse、今回の語句変更はstage_player_editのfunction callだけで渡してな。今回toolsに無い操作はできへんから、必要ならrespond/explain/askで相談を続けてな。"});
+                            continue;
+                        }
+                        break;
+                    }
                     if let Some(verified) = validation::feedback(&payload["feedback"], text) {
                         praise = json!({"action":"praise","findings":[],"evidence":verified["evidence"]});
                     }
@@ -314,14 +395,24 @@ impl Dialogue {
                         .as_array()
                         .is_some_and(|e| !e.is_empty())
                     {
+                        tracing::warn!(event="workshop_contract_rejected",phase,attempt,
+                            action=%payload["action"],errors=%validation["contract_errors"]);
                         frame["retry"] =
                             json!({"errors":validation["contract_errors"],"payload":payload});
-                        if frame["workshop"]["conversation_candidate"].is_object()
+                        if tool_call.is_some() {
+                            frame["retry"] = json!({"errors":validation["contract_errors"],
+                                "instruction":"toolの引数が検査を通らへんかった。今回の原文と現在の句を確かめて、許可されたfunction callの引数を一度だけ直してな。本文JSONの編集操作へ戻したらあかんで。"});
+                        } else if payload["action"] == "stage_conversation_candidate"
+                            && validation["contract_errors"].as_array().unwrap().iter()
+                                .any(|e| matches!(e.as_str(), Some("confidence:missing" | "evidence:missing")))
+                        {
+                            frame["retry"]["instruction"] = "相談案を選ぶ操作は、最上位にconfidenceと今回の原文evidenceが必要や。今回の返事で案を選んだ根拠を付けてな。今回別の置換語を言うてるなら、古い案を選ばずstage_player_editのfunction callへ渡してな。根拠が決められへんときだけaskで確認してな。".into();
+                        } else if frame["workshop"]["conversation_candidate"].is_object()
                             && validation["contract_errors"]
                                 .as_array()
                                 .unwrap()
                                 .iter()
-                                .any(|e| e.as_str().is_some_and(|e| e.starts_with("evidence:")))
+                                .any(|e| matches!(e.as_str(), Some("evidence:not_exact" | "evidence:not_in_original")))
                         {
                             frame["retry"]["instruction"] = "evidenceは今回の発話から抜いてな。直前の相談案を選ぶ返事ならstage_conversation_candidate。置換語を今回もう一度言わせる必要はないで。".into();
                         }
@@ -375,7 +466,12 @@ impl Dialogue {
                                 "mutation not grounded in original input"
                             );
                         }
-                        selected = Some(step.clone());
+                        let mut step = step.clone();
+                        if let Some(call) = &tool_call {
+                            call.retain_verified_target(&mut step);
+                        }
+                        selected = Some(step);
+                        selected_tool = tool_call;
                     } else if attempt == 0 {
                         if reason == "ungrounded_evidence"
                             && frame["workshop"]["conversation_candidate"].is_object()
@@ -395,6 +491,7 @@ impl Dialogue {
                     break;
                 };
                 let a = step["action"].as_str().unwrap();
+                let tool_trace = selected_tool.as_ref().map(tools::Call::trace);
                 if let Some(target) = crate::workshop_target::Target::from_reference(
                     &step["analysis"]["line_reference"],
                     text,
@@ -436,6 +533,9 @@ impl Dialogue {
                             observation["verse_kind"] = "pending".into();
                         }
                     }
+                    if let Some(call) = selected_tool.take() {
+                        tool_messages = call.result_messages(&observation);
+                    }
                 }
                 if phase == "decide"
                     && pending.is_none()
@@ -459,6 +559,8 @@ impl Dialogue {
                 }
 
                 steps.push(json!({"phase":phase,"action":a,"purpose":step["purpose"],
+                    "transport":if tool_trace.is_some() {"native_tool"} else {"content_json"},
+                    "tool_call":tool_trace,
                     "outcome":if a=="inspect" {"inspected"} else {"selected"},
                     "validation_codes":observation.get("validation_codes").cloned().unwrap_or(json!([])),
                     "checks":step["checks"],"evidence":step["evidence"],"close_after_action":step["close_after_action"],"close_evidence":step["close_evidence"]}));
@@ -576,8 +678,14 @@ impl Dialogue {
                         observation = json!({"kind":"player_edit_validation","status":"rejected",
                             "validation_codes":steps.last().unwrap()["validation_codes"],
                             "canonical_unchanged":true,"discussion_target":view["discussion_target"]});
+                        if let Some(call) = selected_tool.take().filter(tools::Call::is_player_edit) {
+                            tool_messages = call.result_messages(&observation);
+                        }
                         phase = "after_validation";
                         continue;
+                    }
+                    if selected_tool.as_ref().is_some_and(tools::Call::is_player_edit) && proposed.is_some() {
+                        steps.last_mut().unwrap()["outcome"] = "validated".into();
                     }
                     action = Some(a.into());
                     speech = step["speech"].as_str().unwrap_or("").into();
@@ -773,7 +881,7 @@ fn prepare_conversation_retry(
     });
     frame["allowed_actions"] = json!(allowed);
     frame["retry"] = json!({"reason":reason,"payload":payload,
-        "instruction":"前の一手は実行していない。相談対象と直近の会話を引き継いで、今回の発言に返答してな。対象をもう一度聞き直さず、終了や採否には進まないでな。実際の検査が必要なら許可されたinspectを選んでな。"});
+        "instruction":"前の一手は実行していない。相談対象と直近の会話を引き継いで、今回の発言に返答してな。対象をもう一度聞き直さず、終了や採否には進まないでな。実際の検査が必要なら許可されたinspect_verseのfunction callを使ってな。"});
 }
 
 // Match the former helper request/response limits even when no IPC is needed.

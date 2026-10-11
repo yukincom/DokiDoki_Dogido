@@ -1,9 +1,9 @@
-//! Fabricの観測JSONを、戦闘・環境・会話が共通に読むRust型へ写すイベント契約。
-//! 各build関数が作る部分観測をEventDataへまとめ、GameEvent::parseが型・範囲・意味を検査する。
-//! Optionは省略またはnullでNoneになる。boolや配列の既定値からは、送信の有無を復元できない。
-//! 空配列を全世界での不在とみなすかはこの型層で決めず、消費側がイベント種別と鮮度を扱う。
-//! 多くの型はextraへ未知キーを保持するが、匂いの二型は閉じた契約として未知キーを拒否する。
-//! 変更時はFabricのDogidoClientAdapter/DogidoCommandProtocol、docs/event-schema.md、検証を揃える。
+//! Fabricアダプターから送信される観測JSONを、戦闘・環境・対話の各エンジンが共通して参照するRust型へとマッピングするイベント契約。
+//! 各build関数が生成する部分観測データをEventDataへと集約し、`GameEvent::parse` において型・数値範囲・セマンティクス（意味論）を網羅的に検査する。
+//! フィールドが省略された場合やnullの場合は `Option::None` となる。真偽値や配列のデフォルト値から送信の有無を逆算することはできない。
+//! 「配列が空であること」を「ゲーム世界全体に存在しないこと」と即断するかどうかはこの型定義層では判定せず、利用側（各ドメインエンジン）がイベント種別と観測の鮮度に基づいて判断する。
+//! 大半の型は `extra` フィールドに未知のキーを許容・保持するが、匂い関連の型は厳密に閉じた契約として未知キーを明示的に拒否する。
+//! 本定義を変更する際は、Fabric側の `DogidoClientAdapter` / `DogidoCommandProtocol`、ドキュメント `docs/event-schema.md`、およびテスト検証コードを同期して整合性を維持すること。
 use super::{EventTime, Validate, ensure, wire};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,7 +27,7 @@ pub enum AdapterCommandResultStatus {
     #[serde(rename = "expired")]
     Expired,
 }
-/// プレイヤーの向きによらない八方位。視覚脅威の方角と匂いの粗い方向推定に使う。
+/// プレイヤーの向きによらない八方位。視覚脅威などの方角に使う。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CardinalDirection {
     #[serde(rename = "north")]
@@ -47,8 +47,8 @@ pub enum CardinalDirection {
     #[serde(rename = "northwest")]
     Northwest,
 }
-/// adapterが付ける観測確度。イベント全体と個々の音・Mobに付けられる。
-/// highは送信側の根拠区分であり、Rustの発話・操作検証を省略する指定ではない。
+/// アダプターが付与する観測の確信度。イベント全体、および個別の音響・Mob検出に設定される。
+/// `high` は送信元（クライアントアダプター）側の判定根拠の強さを示す区分であり、Rust側での発話判断や操作検証を省略してよいフラグではない。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Certainty {
     #[serde(rename = "low")]
@@ -58,8 +58,8 @@ pub enum Certainty {
     #[serde(rename = "high")]
     High,
 }
-/// 音源までの距離を丸めた区分。FabricのbucketDistanceはブロック距離を
-/// 1.5以下、4以下、8以下、16以下、それより遠い、の五段階へ写す。
+/// 音源までの推定距離を大まかに丸めたバンド区分。
+/// Fabric側の `bucketDistance` により、ブロック単位のユークリッド距離が 1.5以下、4以下、8以下、16以下、それ超の5段階に量子化される。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DistanceBand {
     #[serde(rename = "touching")]
@@ -73,8 +73,8 @@ pub enum DistanceBand {
     #[serde(rename = "far")]
     Far,
 }
-/// Fabricの定期snapshotと、敵接近・音・死亡・戦闘終了などの変化通知を区別する。
-/// 一つのイベント名が観測全体の新規取得を保証するわけではなく、消費側が更新範囲を選ぶ。
+/// Fabricから送信される定期スナップショットと、敵接近・音響検出・死亡・戦闘終了などの状態変化通知イベントの種別。
+/// 特定のイベント名が到着したからといって観測全項目の最新取得が保証されるわけではないため、利用側（各エンジン）が更新範囲を制御する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventName {
     #[serde(rename = "threat_approaching")]
@@ -189,27 +189,13 @@ pub enum RecentBlockBreakMaterial {
     #[serde(rename = "other")]
     Other,
 }
-/// 匂いの方向が、勝った発生源の実方角を丸めたsource_bearingであることを示す。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SmellDirectionEstimateBasis {
-    #[serde(rename = "source_bearing")]
-    SourceBearing,
-}
-/// 匂いの発生源の上下差だけを示す。Fabricは上下差が1ブロック以内ならこの値を省略する。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SmellDirectionEstimateVertical {
-    #[serde(rename = "above")]
-    Above,
-    #[serde(rename = "below")]
-    Below,
-}
 /// FabricのSmellPolicyで解決済みの匂いであることを表す契約版。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SmellObservationBasis {
-    #[serde(rename = "smell_policy_v1")]
-    SmellPolicyV1,
+    #[serde(rename = "smell_policy_v2")]
+    SmellPolicyV2,
 }
-/// 匂いを腐敗・食物・花などの種類へまとめる。個別源と同率候補の分類結果に共用する。
+/// 匂いを腐敗・食物・花などの種類へまとめる。各成分の属性として保持する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SmellObservationCategory {
     #[serde(rename = "decay")]
@@ -228,19 +214,14 @@ pub enum SmellObservationCategory {
     Ink,
     #[serde(rename = "rain_after")]
     RainAfter,
-    #[serde(rename = "mixed")]
-    Mixed,
 }
-/// 匂いの具体的な名前、同分類へまとめた名前、混合を表すID。
-/// SmellObservationのspecificityと合わせて、どこまで対象を特定できたかを表す。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// 嗅覚で識別した具体的な匂いの種類。混合しても各種類を保持する。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SmellObservationSmellId {
     #[serde(rename = "zombie")]
     Zombie,
     #[serde(rename = "rotten_flesh")]
     RottenFlesh,
-    #[serde(rename = "decay")]
-    Decay,
     #[serde(rename = "composter")]
     Composter,
     #[serde(rename = "brewing_stand")]
@@ -267,8 +248,6 @@ pub enum SmellObservationSmellId {
     Cake,
     #[serde(rename = "bread")]
     Bread,
-    #[serde(rename = "food")]
-    Food,
     #[serde(rename = "ink_sac")]
     InkSac,
     #[serde(rename = "lily_of_the_valley")]
@@ -293,14 +272,10 @@ pub enum SmellObservationSmellId {
     Torchflower,
     #[serde(rename = "open_eyeblossom")]
     OpenEyeblossom,
-    #[serde(rename = "flower")]
-    Flower,
     #[serde(rename = "rain_after")]
     RainAfter,
-    #[serde(rename = "mixed")]
-    Mixed,
 }
-/// 匂いの候補を得た場所。実体・ブロック・手持ち・落下物・バイオームと混合を区別する。
+/// 匂いの候補を得た場所。実体・ブロック・手持ち・落下物・バイオームを区別する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SmellObservationSourceKind {
     #[serde(rename = "entity")]
@@ -313,18 +288,6 @@ pub enum SmellObservationSourceKind {
     DroppedItem,
     #[serde(rename = "biome")]
     Biome,
-    #[serde(rename = "mixed")]
-    Mixed,
-}
-/// 匂いを一つの発生源まで絞れたsource、同分類のcategory、異分類のmixedの別。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SmellObservationSpecificity {
-    #[serde(rename = "source")]
-    Source,
-    #[serde(rename = "category")]
-    Category,
-    #[serde(rename = "mixed")]
-    Mixed,
 }
 /// 匂いの解決結果。noneは残った候補なし、presentは解決済み、
 /// suppressedは雨・雪・雷・水中による抑止を示す。
@@ -963,63 +926,51 @@ pub struct RecentBlockBreak {
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
-/// SmellSpatialEstimate.resolveが解決済みの外部発生源から作る粗い方向。
-/// 方位または上下の少なくとも一方が必要。正確な位置・距離・個体IDは含めない。
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SmellDirectionEstimate {
-    /// 外部源への八方位。真上・真下など水平成分がない場合はNone。
-    #[serde(default)]
-    pub cardinal: Option<CardinalDirection>,
-    /// 1ブロックを超える上下差の向き。差が小さい場合はNoneで、cardinalだけを送れる。
-    #[serde(default)]
-    pub vertical: Option<SmellDirectionEstimateVertical>,
-    #[serde(default = "default_smelldirectionestimate_basis")]
-    pub basis: SmellDirectionEstimateBasis,
-}
-impl Default for SmellDirectionEstimate {
-    fn default() -> Self {
-        serde_json::from_str("{}").expect("model defaults")
-    }
-}
-/// SmellPolicy.resolveの一件の結果をbuildSmellObservationが送る。
-/// presentなら解決済みの6項目を揃え、none/suppressedなら発生源情報を持たない。
-/// semanticの組合せ検査を通してから、Rustの環境反応・会話へ渡す。
+/// Fabricで到達・マスキングを解決した匂いの一覧。旧flat形式は受信しない。
+/// componentsとbasisに既定値を付けないことで、旧adapterの入力を黙って補完しない。
+/// enumとdeny_unknown_fieldsで外形を閉じ、状態と成分の整合性はsemantic側で照合する。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SmellObservation {
-    /// presentだけが解決済み発生源を持つ。noneとsuppressedは理由の有無で区別する。
+    /// noneは観測して匂いなし、suppressedは天候等で嗅げない。field自体の欠落は別の未提供状態。
     pub status: SmellObservationStatus,
-    #[serde(default)]
-    pub smell_id: Option<SmellObservationSmellId>,
-    #[serde(default)]
-    pub category: Option<SmellObservationCategory>,
-    #[serde(default)]
-    pub valence: Option<SmellObservationValence>,
-    #[serde(default)]
-    pub source_kind: Option<SmellObservationSourceKind>,
-    #[serde(default)]
-    pub specificity: Option<SmellObservationSpecificity>,
-    /// SmellPolicyの距離・気温補正後の比較点（1〜12）。物理的濃度や距離そのものではない。
-    #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
-    pub effective_strength: Option<i64>,
-    /// 気温由来の伝播補正点（-7〜2）。摂氏温度そのものではなく、省略時は0。
-    #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
+    /// 個体の一覧ではなく匂いの種類一覧。同じIDを複数入れて数や強度を加算できない。
+    pub components: Vec<SmellComponent>,
+    /// 気温由来の補正点（-7〜2）。摂氏温度ではない。
+    #[serde(default, deserialize_with = "wire::deserialize")]
     pub temperature_modifier: i64,
-    /// Fabricで雨上がりの観測窓が継続中か。rain_afterの発生源を示す場合はtrueが必要。
-    #[serde(default)]
-    #[serde(deserialize_with = "wire::deserialize")]
+    /// Fabricの雨上がり観測窓。rain_after成分にはtrueが必要。
+    #[serde(default, deserialize_with = "wire::deserialize")]
     pub rain_after_active: bool,
-    /// suppressedでのみ必要。none/presentで付いていればsemanticが拒否する。
+    /// 一度「あっ」と気づく候補。通常componentsを消さず、出力完了後はそちらへ戻す。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rain_after_notice: Option<RainAfterNotice>,
     #[serde(default)]
     pub suppression_reason: Option<SmellObservationSuppressionReason>,
-    /// 単独のblock/entity/dropped_item源を解決できた場合の粗い方向。Noneは方向情報なし。
-    #[serde(default)]
-    pub direction_estimate: Option<SmellDirectionEstimate>,
-    #[serde(default = "default_smellobservation_basis")]
+    /// v2だけを受理する。旧basisや旧flat項目との併記も互換入力として扱わない。
     pub basis: SmellObservationBasis,
+}
+/// 同じ雨上がりを識別する窓IDと、実際に届いた一種類の気配。
+/// window_idは配送完了の照合専用。LLMの世界観測へは投影しない。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RainAfterNotice {
+    /// Fabricの正の整数をそのまま受ける。文字列・真偽値への互換変換は行わない。
+    pub window_id: u64,
+    pub component: SmellComponent,
+}
+/// 同種非加算で残った一種類。強度は距離・温度補正後のスメル値。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SmellComponent {
+    /// 具体的な匂いID。ゾンビ系はzombieに集約し、混合全体を表すmixed IDは持たない。
+    pub smell_id: SmellObservationSmellId,
+    pub category: SmellObservationCategory,
+    pub valence: SmellObservationValence,
+    pub source_kind: SmellObservationSourceKind,
+    /// 1は仄か、8は強烈。範囲1〜12で、物理的濃度や距離ではない。
+    #[serde(deserialize_with = "wire::deserialize")]
+    pub effective_strength: i64,
 }
 /// buildVehicleStateが乗車中だけ作る乗り物の種類・活動・操作席情報。
 /// この構造体があるときに限り、会話材料でプレイヤーを乗車の主語にする。
@@ -1262,19 +1213,62 @@ impl Default for WorldState {
         serde_json::from_str("{}").expect("model defaults")
     }
 }
-/// 同じ走査で確認した種類の集合。個体ID・位置・個数は送らず、上限超過は明示する。
+/// 友好・中立Mobの数量。5以上は正確な数を持ち出さず、manyへまとめる。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum NearbyQuantity {
+    Exact(u8),
+    Many(NearbyMany),
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NearbyMany {
+    Many,
+}
+impl NearbyQuantity {
+    fn minimum(&self) -> u16 {
+        match self {
+            Self::Exact(n) => u16::from(*n),
+            Self::Many(_) => 5,
+        }
+    }
+}
+impl Validate for NearbyQuantity {
+    fn validate(&self) -> Result<(), String> {
+        ensure(
+            !matches!(self, Self::Exact(n) if !(1..=4).contains(n)),
+            "NearbyQuantity: 1..4 or many required",
+        )
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NearbyProfession {
+    pub id: String,
+    pub quantity: NearbyQuantity,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NearbyMob {
+    pub id: String,
+    pub quantity: NearbyQuantity,
+    #[serde(default)]
+    pub professions: Vec<NearbyProfession>,
+}
+/// 同じ走査で確認した種類とMob数量。個体ID・座標は送らず、上限超過は明示する。
 /// Noneは未提供、空の一覧は走査範囲内で未検出。切り詰めた一覧から不在を判断しない。
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NearbyComposition {
-    pub mobs: Vec<String>,
+    pub mobs: Vec<NearbyMob>,
     pub blocks: Vec<String>,
     pub mobs_truncated: bool,
     pub blocks_truncated: bool,
 }
 impl Validate for NearbyComposition {
     fn validate(&self) -> Result<(), String> {
-        for values in [&self.mobs, &self.blocks] {
+        fn ids<'a>(values: impl Iterator<Item = &'a str>) -> Result<(), String> {
+            let values: Vec<_> = values.collect();
             ensure(values.len() <= 128, "NearbyComposition: maxItems 128")?;
             ensure(
                 values.iter().all(|id| {
@@ -1286,6 +1280,42 @@ impl Validate for NearbyComposition {
                 }),
                 "NearbyComposition: registry IDs required",
             )?;
+            ensure(
+                values
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    == values.len(),
+                "NearbyComposition: duplicate ID",
+            )
+        }
+        ids(self.blocks.iter().map(String::as_str))?;
+        ids(self.mobs.iter().map(|m| m.id.as_str()))?;
+        for mob in &self.mobs {
+            mob.quantity.validate()?;
+            ids(mob.professions.iter().map(|p| p.id.as_str()))?;
+            for group in &mob.professions {
+                group.quantity.validate()?;
+            }
+            let villager = mob.id.trim_start_matches("minecraft:") == "villager";
+            ensure(
+                villager || mob.professions.is_empty(),
+                "NearbyComposition: only villagers have professions",
+            )?;
+            if villager {
+                ensure(
+                    !mob.professions.is_empty(),
+                    "NearbyComposition: villager breakdown required",
+                )?;
+                let minimum: u16 = mob.professions.iter().map(|p| p.quantity.minimum()).sum();
+                ensure(
+                    match mob.quantity {
+                        NearbyQuantity::Exact(n) => minimum == u16::from(n),
+                        NearbyQuantity::Many(_) => minimum >= 5,
+                    },
+                    "NearbyComposition: breakdown must partition total",
+                )?;
+            }
         }
         Ok(())
     }
@@ -1378,12 +1408,6 @@ fn default_passivemob_certainty() -> Certainty {
 }
 fn default_recentblockbreak_material() -> RecentBlockBreakMaterial {
     RecentBlockBreakMaterial::Other
-}
-fn default_smelldirectionestimate_basis() -> SmellDirectionEstimateBasis {
-    SmellDirectionEstimateBasis::SourceBearing
-}
-fn default_smellobservation_basis() -> SmellObservationBasis {
-    SmellObservationBasis::SmellPolicyV1
 }
 fn default_vehiclestate_activity() -> VehicleStateActivity {
     VehicleStateActivity::Riding
@@ -1636,34 +1660,29 @@ impl Validate for RecentBlockBreak {
         Ok(())
     }
 }
-impl Validate for SmellDirectionEstimate {
-    fn validate(&self) -> Result<(), String> {
-        self.validate_semantics()?;
-        Ok(())
-    }
-}
 impl Validate for SmellObservation {
     fn validate(&self) -> Result<(), String> {
-        if let Some(value) = &self.effective_strength {
-            ensure(
-                *value >= 1,
-                "SmellObservation.effective_strength: minimum 1",
-            )?;
-            ensure(
-                *value <= 12,
-                "SmellObservation.effective_strength: maximum 12",
-            )?;
-        }
         ensure(
-            self.temperature_modifier >= -7,
-            "SmellObservation.temperature_modifier: minimum -7",
+            (-7..=2).contains(&self.temperature_modifier),
+            "SmellObservation.temperature_modifier: expected -7..2",
         )?;
+        self.components.validate()?;
+        self.rain_after_notice.validate()?;
+        self.validate_semantics()
+    }
+}
+impl Validate for RainAfterNotice {
+    fn validate(&self) -> Result<(), String> {
+        ensure(self.window_id > 0, "rain-after window id must be positive")?;
+        self.component.validate()
+    }
+}
+impl Validate for SmellComponent {
+    fn validate(&self) -> Result<(), String> {
         ensure(
-            self.temperature_modifier <= 2,
-            "SmellObservation.temperature_modifier: maximum 2",
+            (1..=12).contains(&self.effective_strength),
+            "SmellComponent.effective_strength: expected 1..12",
         )?;
-        self.direction_estimate.validate()?;
-        self.validate_semantics()?;
         Ok(())
     }
 }

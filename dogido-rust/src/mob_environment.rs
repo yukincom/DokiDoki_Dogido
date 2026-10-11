@@ -1,4 +1,4 @@
-//! Current per-individual measurements paired with catalogue species IDs.
+//! Current per-individual measurements and known identities paired with catalogue species IDs.
 //! Knowledge never establishes a measurement, elapsed duration, death or conversion.
 use crate::events::{GameEvent, MobEnvironment, MobIdentity, VisualThreat};
 use serde_json::{Value, json};
@@ -51,7 +51,11 @@ fn add(rows: &mut Vec<Value>, observation: Observation<'_>) {
             state.entry("on_fire").or_insert(true.into());
         }
     }
-    if state.is_empty() {
+    // A missing tamed field has a legacy false default, so only a positive
+    // observation establishes taming. A name never establishes taming or ownership.
+    let tamed = identity.is_some_and(|value| value.tamed);
+    let custom_name = identity.and_then(crate::mob_identity::name);
+    if state.is_empty() && !tamed && custom_name.is_none() {
         return;
     }
     let medium = match (state.get("touching_water"), state.get("on_ground")) {
@@ -68,6 +72,12 @@ fn add(rows: &mut Vec<Value>, observation: Observation<'_>) {
         "environment":state,"medium":medium});
     if let Some(subject) = subject {
         row["subject"] = subject.into();
+    }
+    if tamed {
+        row["tamed"] = true.into();
+    }
+    if let Some(custom_name) = custom_name {
+        row["custom_name"] = custom_name.into();
     }
     if let Some(approaching) = approaching {
         row["approaching"] = approaching.into();
@@ -115,6 +125,29 @@ pub fn project(event: &GameEvent) -> Value {
                 legacy_water: false,
                 legacy_fire: false,
                 basis: "passive_observation",
+                approaching: None,
+            },
+        );
+    }
+    // Companions beyond the routine four slots still supply identity facts.
+    // Do not add their environment transitions or change encounter/notice priority.
+    for target in &event.companion_candidates {
+        let Some(identity) = target.identity.as_ref() else {
+            continue;
+        };
+        if rows.iter().any(|row| row["subject"] == identity.entity_id) {
+            continue;
+        }
+        add(
+            &mut rows,
+            Observation {
+                species: &target.r#type,
+                identity: Some(identity),
+                fallback_id: None,
+                environment: None,
+                legacy_water: false,
+                legacy_fire: false,
+                basis: "companion_observation",
                 approaching: None,
             },
         );

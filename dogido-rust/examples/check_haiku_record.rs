@@ -2,8 +2,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use dogido_rust::haiku_record::{
-    DEFAULT_IDLE_TIMEOUT, DEFAULT_OPEN_TIMEOUT, MemoryStore, PreparedEmission, Workshop,
-    project_workshop,
+    DEFAULT_IDLE_TIMEOUT, MemoryStore, PreparedEmission, Workshop, project_workshop,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -45,10 +44,6 @@ fn run(request: Request) -> Result<Value> {
             "expire" => json!(
                 workshop.expire(
                     now,
-                    step["t_open_ms"]
-                        .as_u64()
-                        .map(Duration::from_millis)
-                        .unwrap_or(DEFAULT_OPEN_TIMEOUT),
                     step["t_idle_ms"]
                         .as_u64()
                         .map(Duration::from_millis)

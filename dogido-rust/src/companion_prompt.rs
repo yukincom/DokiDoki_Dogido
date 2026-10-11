@@ -45,7 +45,8 @@ pub enum DialoguePurpose {
     Ambient,
 }
 
-pub fn dialogue(mode_name: &str, purpose: DialoguePurpose) -> String {
+/// Smell guidance is attached only for a current, code-resolved smell observation.
+pub fn dialogue(mode_name: &str, purpose: DialoguePurpose, smell_observed: bool) -> String {
     let purpose_key = match purpose {
         DialoguePurpose::Reply => "reply",
         DialoguePurpose::Ambient => "ambient",
@@ -54,6 +55,11 @@ pub fn dialogue(mode_name: &str, purpose: DialoguePurpose) -> String {
         base(),
         mode(mode_name),
         grounding(),
+        if smell_observed {
+            TEXT["observed_smell"].as_str().unwrap()
+        } else {
+            ""
+        },
         TEXT["dialogue"][purpose_key].as_str().unwrap(),
         TEXT["choice_contract"].as_str().unwrap(),
     ]

@@ -1,9 +1,9 @@
 //! 返答の生成・配送・再生結果を、同じturnとepochの表示台帳・sessionへ反映する。
 //! dataのmutex下で現在性とworkshopの対象を照合し、再生完了またはテキスト表示確認後に履歴を確定する。
 //! 状態反映後にロックを解放してworkshop記録を渡し、現在のturnへ反映できたかを返す。
-use super::{Dialogue, knowledge_display, language_runtime, web_runtime, workshop_record};
+use super::{Dialogue, knowledge_display, workshop_record};
 use crate::{planner::repair::Repair, playback::Status as PlaybackStatus};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::time::Instant;
 
 impl Dialogue {
@@ -35,15 +35,13 @@ impl Dialogue {
             .map(str::to_owned);
         let fixed_close = row.is_some_and(|r| r["workshop_fixed_close"] == true);
         let closed_by_turn = row.is_some_and(|r| r["workshop_closed_by_turn"] == true);
-        let text_displayed = status == PlaybackStatus::AudioDisabled
-            && result.is_some_and(|r| r["text_displayed"] == true)
-            && d.sessions.get(sid).is_some_and(|s| s.text_workshop);
+        let text_displayed = row.is_some_and(|r| r["text_displayed"] == true);
         let player_text = row
             .and_then(|r| r["player_input_text"].as_str())
             .unwrap_or("")
             .to_owned();
         if current
-            && (status == PlaybackStatus::Queued || text_displayed)
+            && status == PlaybackStatus::Queued
             && let Some(wid) = workshop_id.as_ref()
         {
             let valid = d
@@ -94,10 +92,6 @@ impl Dialogue {
                     // This validated queued transition closes the pin below.
                     // Preserve ownership for its later text-display acknowledgement.
                     row["workshop_closed_by_turn"] = true.into();
-                }
-                if text_displayed {
-                    row["text_displayed"] = true.into();
-                    row["output_mode"] = "text".into();
                 }
                 knowledge_display::attach(row, result);
                 if status == PlaybackStatus::Queued
@@ -174,17 +168,29 @@ impl Dialogue {
                 s.cancel = None;
             }
             if let Some(p) = s.address.as_mut() {
-                p.playback(turn, status);
+                if !text_displayed {
+                    p.playback(turn, status);
+                }
             }
             if let Some(result) = result {
-                if s.text_workshop && status == PlaybackStatus::AudioDisabled && !text_displayed {
-                    s.text_reply = Some((turn.into(), epoch, result.clone()));
-                }
                 let knowledge_detour =
                     workshop_id.is_some() && result["workshop_action"] == "knowledge";
                 let workshop_reply = workshop_id.is_some()
                     && result["workshop_action"] != "unrelated"
                     && !knowledge_detour;
+                // 文字ACKが先に履歴を確定していても、待ち時間は音声終了後から数える。
+                if matches!(
+                    status,
+                    PlaybackStatus::Completed | PlaybackStatus::AudioDisabled
+                ) && workshop_reply
+                    && let Some(w) = s
+                        .haiku
+                        .workshop
+                        .as_mut()
+                        .filter(|w| w.is_open() && Some(&w.hud_id) == workshop_id.as_ref())
+                {
+                    w.record_activity(Instant::now());
+                }
                 if status == PlaybackStatus::Quiet
                     && result["dialogue_action"] == "silent"
                     && !workshop_reply
@@ -262,131 +268,36 @@ impl Dialogue {
                         }
                     }
                 }
-                if (status == PlaybackStatus::Completed || text_displayed)
-                    && !knowledge_detour
-                    && let Some(w) = s
-                        .haiku
-                        .workshop
-                        .as_mut()
-                        .filter(|w| Some(&w.hud_id) == workshop_id.as_ref())
-                {
-                    if workshop_reply {
-                        let lines = w
-                            .pending
-                            .as_ref()
-                            .map_or(w.current_lines.as_slice(), |p| &p.lines);
-                        if w.open
-                            && !w.combat_paused()
-                            && let Some(target) = crate::workshop_target::Target::from_view(
-                                &json!({"discussion_target":result["workshop_discussion_target"]}),
-                                lines,
-                            )
-                        {
-                            w.discussion_target = Some(target);
-                        }
-                        if w.open
-                            && !w.combat_paused()
-                            && result["workshop_version"] == w.version
-                            && w.pending.is_none()
-                        {
-                            w.followup =
-                                serde_json::from_value(result["workshop_followup"].clone())
-                                    .unwrap_or_default();
-                        }
-                        w.drift_count = 0;
-                        w.record_activity(Instant::now());
-                        if !w.dialogue.iter().any(|p| p["turn_id"] == turn) {
-                            w.dialogue.push_back(json!({"turn_id":turn,"player_text":player_text,"dogido_text":result["text"]}));
-                            while w.dialogue.len() > 4 {
-                                w.dialogue.pop_front();
-                            }
-                        }
-                    } else {
-                        w.drift_count += 1;
-                        if w.drift_count >= 2 {
-                            w.close("drift");
-                        }
-                    }
-                }
                 if status == PlaybackStatus::Queued
                     && !workshop_reply
                     && let Ok(repair) = serde_json::from_value::<Repair>(result["repair"].clone())
                 {
                     s.history.annotate(turn, &repair);
                 }
-                if status == PlaybackStatus::Completed {
-                    web_runtime::completed(s, turn, &player_text, result);
-                }
-                if (status == PlaybackStatus::Completed || text_displayed)
-                    && !workshop_reply
-                    && !result["memory_action"].is_null()
-                    && result["web_private"] != true
-                    && let Some(text) = result["text"].as_str().filter(|text| !text.is_empty())
-                {
-                    // 想起・保存結果も実発話として共有する。通常雑談の対や新しい句の材料にはしない。
-                    s.history.story(
-                        &format!("memory:{turn}"),
-                        &format!("プレイヤー「{player_text}」\nドギド「{text}」"),
-                    );
-                }
-                // 生成や再生開始だけでは「話した履歴」にしない。音声完了、または
-                // テキスト相談室での表示確認を受けてから確定する。ここで成立した
-                // 通常雑談の対だけを、後の川柳の会話材料へ渡す。
-                if (status == PlaybackStatus::Completed || text_displayed)
-                    && !workshop_reply
-                    && result["memory_action"].is_null()
-                    && result["web_private"] != true
-                {
-                    s.last_completed_conversation = Some(now);
-                    language_runtime::completed(s, result);
-                    s.history
-                        .push(turn, "assistant", result["text"].as_str().unwrap_or(""));
-                    s.foreground.completed(
-                        turn,
-                        &player_text,
-                        result["text"].as_str().unwrap_or(""),
-                        route,
-                    );
-                    if let Some(pair) = s
-                        .history
-                        .completed_pairs()
-                        .into_iter()
-                        .find(|p| p["turn_id"] == turn)
-                        && result["knowledge_status"].is_null()
-                        && route == crate::foreground::Route::Casual
-                        && !s.haiku.material_turns.iter().any(|p| p["turn_id"] == turn)
-                    {
-                        if s.haiku.material_turns.len() == 3 {
-                            s.haiku.material_turns.pop_front();
-                        }
-                        s.haiku.material_turns.push_back(pair);
-                    }
-                }
             }
         }
         if current
-            && (status == PlaybackStatus::Completed || text_displayed)
-            && let Some(wid) = workshop_id.as_deref()
-            && let Some(result) = result.filter(|r| {
-                !matches!(
-                    r["workshop_action"].as_str(),
-                    Some("unrelated" | "knowledge")
-                )
-            })
-            && let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn)
-            && row["shared_story_recorded"] != true
-            && row["workshop_record_private"] != true
-            && result["web_private"] != true
+            && status == PlaybackStatus::Completed
+            && let Some(result) = result
         {
-            row["shared_story_recorded"] = true.into();
-            let text = result["text"].as_str().unwrap_or("");
-            let story = format!("川柳の相談。プレイヤー「{player_text}」\nドギド「{text}」");
-            if let Some(s) = d.sessions.get_mut(sid) {
-                self.share_story(
-                    sid, s, &format!("workshop:{turn}"), Some(wid), "workshop_dialogue", &story,
-                    json!({"workshop_id":wid,"input_turn_id":turn,"player_text":player_text,"dogido_text":text}),
-                );
-            }
+            self.confirm_reply_delivery(&mut d, sid, turn, epoch, result, false);
+        }
+        if current
+            && matches!(
+                status,
+                PlaybackStatus::Queued | PlaybackStatus::AudioDisabled
+            )
+            && let Some(result) = result
+        {
+            Self::publish_text(
+                &mut d,
+                sid,
+                turn,
+                super::text_delivery::Kind::Reply {
+                    epoch,
+                    result: result.clone(),
+                },
+            );
         }
         d.revision += 1;
         let record = if status == PlaybackStatus::Queued {

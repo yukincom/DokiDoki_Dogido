@@ -79,9 +79,8 @@ def main():
                               "ceiling_height": 20, "local_light": 15, "time_phase": "day"},
                     "smell_observation": smell}, sid=sid)
 
-            bread = {"status": "present", "smell_id": "bread", "category": "food", "valence": "pleasant",
-                     "specificity": "source", "source_kind": "hotbar", "effective_strength": 3}
-            event("clear", {"status": "none"})
+            bread = {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}
+            event("clear", {"status":"none","components":[],"basis":"smell_policy_v2"})
             time.sleep(.12)
             event("rain", bread)
             event("rain", bread)
@@ -99,7 +98,7 @@ def main():
             context, _ = json.JSONDecoder().raw_decode(user.split(header, 1)[1])
             assert context["observations"]["weather"]["precipitation_kind"] == "rain", context
             assert context["observations"]["smell"]["status"] == "present", context
-            assert "effective_strength" not in json.dumps(context), context
+            assert context["observations"]["smell"]["components"][0]["effective_strength"] == 3, context
             env = next(c for c in calls() if reaction_context(c) is not None)
             shared_base = json.loads((ROOT.parent / "dogido_server/llm/companion_prompts.json").read_text())["base"]
             assert env["messages"][0]["content"].startswith(shared_base)

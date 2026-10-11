@@ -303,24 +303,33 @@ impl Dialogue {
                         text = result["text"].as_str().unwrap_or(""),
                         generation_ms = started.elapsed().as_millis() as u64
                     );
-                    let playback = self
-                        .audio
-                        .speak(
-                            &self.config,
-                            result["spoken_text"].as_str().unwrap_or(""),
-                            &mut cancel,
-                            || {
-                                self.update(&sid, &turn, epoch, PlaybackStatus::Started, None);
-                            },
-                        )
-                        .await;
+                    let output_config = self.output_config(&sid);
+                    let text_displayed = if !output_config.audio_enabled {
+                        self.wait_for_text(&sid, &turn, &mut cancel).await
+                    } else {
+                        false
+                    };
+                    let playback = if output_config.audio_enabled {
+                        self.audio
+                            .speak(
+                                &output_config,
+                                result["spoken_text"].as_str().unwrap_or(""),
+                                &mut cancel,
+                                || {
+                                    self.update(&sid, &turn, epoch, PlaybackStatus::Started, None);
+                                },
+                            )
+                            .await
+                    } else {
+                        Err(anyhow::anyhow!("audio_disabled"))
+                    };
                     let status = match playback {
                         Ok(()) => PlaybackStatus::Completed,
                         Err(error) => {
                             result["error"] = error.to_string().into();
                             if *cancel.borrow() {
                                 PlaybackStatus::Cancelled
-                            } else if !self.config.audio_enabled {
+                            } else if !output_config.audio_enabled {
                                 result.as_object_mut().unwrap().remove("error");
                                 PlaybackStatus::AudioDisabled
                             } else {
@@ -331,7 +340,7 @@ impl Dialogue {
                     // Web開始は音声プロセスの実終了と同じepochの確認後だけ。
                     self.web_playback(&sid, epoch, &result, status);
                     completed = self.update(&sid, &turn, epoch, status, Some(&result))
-                        && status == PlaybackStatus::Completed
+                        && (status == PlaybackStatus::Completed || text_displayed)
                         && result["workshop_action"].is_null()
                         && result["knowledge_status"].is_null()
                         && result["memory_action"].is_null();

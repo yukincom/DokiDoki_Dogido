@@ -38,17 +38,32 @@ pub fn snapshot(context: &Context) -> Snapshot {
     .into_iter()
     .map(|key| (key.to_owned(), observations[key].clone()))
     .collect();
-    if let Some(smell) = table.get_mut("smell").and_then(Value::as_object_mut) {
-        // 向きや同種の勝者が変わっただけでは新しい匂いの気づきにしない。
-        // 方角・説明は当回の観測には残すが、気づきの再発火には使わない。
-        smell.remove("direction_estimate");
-        smell.remove("description");
+    table.insert(
+        "nearby_mob_types".into(),
+        mob_kind_signature(&observations["nearby_mob_types"]),
+    );
+    if let Some(smell) = table.get_mut("smell") {
+        *smell = super::ambient::smell_change_signature(smell);
     }
     Snapshot {
         revision: context.revision,
         dimension: observations["dimension"].clone(),
         table,
     }
+}
+
+/// 数量・職業構成は当回の会話材料に留め、種類の到着には数えない。
+pub fn mob_kind_signature(value: &Value) -> Value {
+    value
+        .as_array()
+        .map(|rows| {
+            json!(
+                rows.iter()
+                    .map(|row| json!({"id":row["id"],"label":row["label"]}))
+                    .collect::<Vec<_>>()
+            )
+        })
+        .unwrap_or(Value::Null)
 }
 
 /// 同じ種類の個体交代・個数・並び・座標は、元の種類集合に含めない。

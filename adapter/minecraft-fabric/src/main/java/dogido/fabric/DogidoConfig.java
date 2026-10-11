@@ -6,7 +6,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
-
 import net.fabricmc.loader.api.FabricLoader;
 
 final class DogidoConfig {
@@ -26,6 +25,8 @@ final class DogidoConfig {
     final int visualConfirmTicks;
     final int visualHoldTicks;
     final String playerNameOverride;
+    private final Path configPath;
+    private volatile Boolean voiceEnabled;
 
     private DogidoConfig(
         boolean enabled,
@@ -43,7 +44,9 @@ final class DogidoConfig {
         double rearWarningDistance,
         int visualConfirmTicks,
         int visualHoldTicks,
-        String playerNameOverride
+        String playerNameOverride,
+        Path configPath,
+        Boolean voiceEnabled
     ) {
         this.enabled = enabled;
         this.serverBaseUrl = serverBaseUrl;
@@ -61,6 +64,8 @@ final class DogidoConfig {
         this.visualConfirmTicks = visualConfirmTicks;
         this.visualHoldTicks = visualHoldTicks;
         this.playerNameOverride = playerNameOverride;
+        this.configPath = configPath;
+        this.voiceEnabled = voiceEnabled;
     }
 
     static DogidoConfig load() {
@@ -103,20 +108,41 @@ final class DogidoConfig {
             Double.parseDouble(properties.getProperty("rear_warning_distance", "3.0")),
             Integer.parseInt(properties.getProperty("visual_confirm_ticks", "6")),
             Integer.parseInt(properties.getProperty("visual_hold_ticks", "16")),
-            properties.getProperty("player_name_override", "").trim()
+            properties.getProperty("player_name_override", "").trim(),
+            configPath,
+            optionalBoolean(properties.getProperty("voice_enabled"))
         );
     }
 
-    String eventEndpoint() {
-        return this.serverBaseUrl + "/api/v1/game-events";
+    Boolean voiceEnabled() { return this.voiceEnabled; }
+
+    /** Save only the server-accepted choice, preserving all other current properties. */
+    synchronized boolean saveVoiceEnabled(boolean enabled) {
+        this.voiceEnabled = enabled;
+        Properties properties = new Properties();
+        try {
+            if (Files.exists(this.configPath)) {
+                try (InputStream input = Files.newInputStream(this.configPath)) {
+                    properties.load(input);
+                }
+            } else {
+                properties.putAll(createDefaults());
+            }
+            properties.setProperty("voice_enabled", Boolean.toString(enabled));
+            Files.createDirectories(this.configPath.getParent());
+            try (OutputStream output = Files.newOutputStream(this.configPath)) {
+                properties.store(output, "Dogido Fabric Client");
+            }
+            return true;
+        } catch (IOException error) {
+            return false;
+        }
     }
 
-    String sessionEndpoint() {
-        return this.serverBaseUrl + "/api/v1/adapter-sessions";
-    }
-
-    boolean hasAuthToken() {
-        return !this.authToken.isBlank();
+    private static Boolean optionalBoolean(String value) {
+        if ("true".equalsIgnoreCase(value)) return true;
+        if ("false".equalsIgnoreCase(value)) return false;
+        return null;
     }
 
     private static Properties createDefaults() {

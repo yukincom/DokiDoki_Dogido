@@ -85,13 +85,20 @@ python dogido-rust/scripts/launch_dialogue.py --settings-dir . --voice --aec
 
 試験順は「再生なしの人の声」「ドギドだけ再生して人は黙る」「Minecraftだけ再生して人は黙る」
 「再生と重ねて話す」。最後は「石炭」「うん」「いいね」「ちょっと待って」の短い発話も確認する。
-無言なのに配送されるか、話したのにSilero/Whisperで消えるかを `/dogido` の診断で分けて見る。
+無言なのに配送されるか、話したのにSilero/Whisperで消えるかを音声入力ターミナルの `[VOICE]` 診断で分けて見る。
 実際のスピーカー音量・部屋・マイク位置で確認し、RMSしきい値を先に変えて問題を隠さない。
 
 ## 診断と戻し方
 
 通常起動では `aec_started` と `aec_failed` を既存の `capture` 診断として表示する。
-`aec_levels`（mic/reference/cleanのRMS）は `--probe-seconds` による音量検査中だけ表示する。PCM・認証情報は含まない。stderrは継続して読み、保持末尾は4KiBに制限する。
+`aec_levels` は通常入力・`--probe-seconds` とも約5秒ごとに表示する。`mic_rms` / `reference_rms` / `clean_rms` は窓全体のRMS、対応する `*_peak_rms` は10msフレームRMSの最大値、`window_ms` は集計した音声長。短い声は窓平均だけでは小さく見えるため、ピークも確認する。PCM・認証情報は含まない。stderrは継続して読み、保持末尾は4KiBに制限する。
+
+Rustの `capture_levels` も約5秒ごとに、AEC後30msフレームの `peak_rms`、閾値以上の合計 `above_threshold_ms`、まだ区切れていない長さ `recording_ms`、短すぎて捨てた区間数 `short_segments_dropped` を出す。`rms_threshold`、`minimum_voiced_ms`、`required_silence_ms` は実際の判定値。時間設定は既存どおり30ms単位へ切り捨てる。診断窓の回収で発話区間を閉じたり認識条件を変えたりしない。
+
+2026-10-09: 「触るとあちちやで！」直後の「ほんとだ熱そうだー」が文字起こしされなかった実機報告を受け、上記の音量・棄却診断を追加。提示ログでは次に拾えた「ああ」の認識が570msで完了しており、失われた発話の `speech_segment` はなかった。AECでの減衰と区間化のしきい値判定を切り分けるための計測であり、原因の確定・改善の実機確認は未実施。 診断追加後のAEC関連Pythonテスト16件＋3 subtests、Rust区間化テスト6件、録音・実モデルを使わない音声入力の模擬HTTP／プロセス試験24件、releaseビルド、起動前チェックは成功。稼働中の音声入力は再起動しておらず、新しい診断の実機取得は次回起動後に行う。
+
+診断は音声入力ターミナルの `[AEC]` / `[VOICE]`、またはサーバーターミナルの `voice_input` 行で確認する。現行Rustの診断受信はサーバーログへの出力で、表示snapshotの診断欄には保持していない。録音区切りが成立すれば `speech_segment` → `stt_started` → `stt_finished` → `delivery` を追う。`vad_rejected` や短音棄却があれば認識前、`recording_ms` が増え続ければ区切り待ち、`stt_finished.duration_ms` が長ければ認識待ちを疑う。数値だけで人の声とゲーム音を断定しない。
+
 フレーム停止時の主なnative codeは `1=形式/参照欠落`、`2=時計不連続`、`3=入力滞留`、
 `4=不正サンプル`、`5=入力停止`、`6=機器変更`、`7=出力pipe詰まり`。
 

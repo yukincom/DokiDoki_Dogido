@@ -19,7 +19,7 @@ use tokio::{
     process::Command,
     sync::{Notify, watch},
 };
-use transport::{Reporter, Transport};
+use transport::{Reporter, Transport, VoiceBinding};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -145,6 +145,7 @@ async fn worker(
     settings: Arc<Settings>,
     pending: Arc<Pending>,
     transport: Transport,
+    binding: VoiceBinding,
     report: Reporter,
     mut stop: watch::Receiver<bool>,
 ) {
@@ -168,6 +169,7 @@ async fn worker(
             &settings,
             segment,
             &transport,
+            &binding,
             &report,
             &mut stop,
             &mut last_mode,
@@ -191,6 +193,9 @@ async fn capture(
     mut stop: watch::Receiver<bool>,
     stop_tx: &watch::Sender<bool>,
 ) -> Result<()> {
+    if *stop.borrow() {
+        return Ok(());
+    }
     let mut command = Command::new(&settings.capture_command[0]);
     command.args(&settings.capture_command[1..]);
     let mut child = process::OwnedChild::spawn(command)?;
@@ -245,6 +250,20 @@ async fn capture(
                 );
             }
         }
+        if let Some(levels) = segmenter.take_levels() {
+            // 同じPCMの測定値だけを既存診断へ渡す。追加の区切り・認識は行わない。
+            report.event(
+                "capture",
+                "info",
+                Some("capture_levels"),
+                json!({"duration_ms":levels.window_ms,"detail":format!(
+                    "rms_threshold={} peak_rms={} above_threshold_ms={} recording_ms={} short_segments_dropped={} minimum_voiced_ms={} required_silence_ms={}",
+                    levels.rms_threshold, levels.peak_rms, levels.above_threshold_ms,
+                    levels.recording_ms, levels.short_segments_dropped,
+                    levels.minimum_voiced_ms, levels.required_silence_ms
+                )}),
+            );
+        }
     };
     // EOFを知った時点で、進行中STT／配送を取り消す。captureの回収待ちへ持ち越さない。
     let _ = stop_tx.send(true);
@@ -261,7 +280,157 @@ async fn capture(
     result
 }
 
-/// 信号を登録してから録音を開始し、取消後も子の回収が終わるまで待つ。
+/// 一つのsession・音声世代だけの録音と認識。終了時に待ち列と途中のPCMも破棄する。
+async fn active_period(
+    settings: Arc<Settings>,
+    transport: Transport,
+    binding: VoiceBinding,
+    report: Reporter,
+    stop_tx: watch::Sender<bool>,
+    stop_rx: watch::Receiver<bool>,
+) -> Result<()> {
+    let pending = Arc::new(Pending::new(settings.max_pending));
+    let worker_task = tokio::spawn(worker(
+        settings.clone(),
+        pending.clone(),
+        transport,
+        binding,
+        report.clone(),
+        stop_rx.clone(),
+    ));
+    let result = capture(&settings, &pending, &report, stop_rx, &stop_tx).await;
+    // 起動失敗も含め、captureから戻ったらSTTと配送を必ず回収する。
+    let _ = stop_tx.send(true);
+    worker_task
+        .await
+        .context("音声認識workerが異常終了しました")?;
+    result
+}
+
+struct ActivePeriod {
+    binding: VoiceBinding,
+    stop: watch::Sender<bool>,
+    task: tokio::task::JoinHandle<Result<()>>,
+}
+
+impl ActivePeriod {
+    fn start(
+        settings: Arc<Settings>,
+        transport: Transport,
+        binding: VoiceBinding,
+        report: Reporter,
+    ) -> Self {
+        let (stop, receiver) = watch::channel(false);
+        let task = tokio::spawn(active_period(
+            settings,
+            transport,
+            binding.clone(),
+            report,
+            stop.clone(),
+            receiver,
+        ));
+        Self {
+            binding,
+            stop,
+            task,
+        }
+    }
+
+    async fn stop(self, report: &Reporter) -> Result<()> {
+        let _ = self.stop.send(true);
+        self.task
+            .await
+            .context("音声入力workerが異常終了しました")??;
+        // captureと認識workerの双方が子を回収した後だけ、休止完了を通知する。
+        report.event(
+            "context",
+            "info",
+            Some("voice_input_paused"),
+            json!({
+                "detail":"録音・音声認識を休止しました。所有する子プロセスは回収済みです"
+            }),
+        );
+        Ok(())
+    }
+}
+
+async fn wait_active(active: &mut Option<ActivePeriod>) -> Result<()> {
+    match active {
+        Some(active) => (&mut active.task)
+            .await
+            .context("音声入力workerが異常終了しました")?,
+        None => std::future::pending().await,
+    }
+}
+
+/// 既存の音声入口内で本体の許可を追う。通信失敗・off・世代変更では録音期間を終える。
+async fn control(
+    settings: Arc<Settings>,
+    transport: Transport,
+    report: Reporter,
+    mut stop: watch::Receiver<bool>,
+) -> Result<()> {
+    let mut active: Option<ActivePeriod> = None;
+    let mut poll = tokio::time::interval(Duration::from_millis(750));
+    poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut context_unavailable = false;
+    let result = loop {
+        tokio::select! { biased;
+            _ = process::cancelled(&mut stop) => break Ok(()),
+            result = wait_active(&mut active) => {
+                // 通常のモード変更・終了時はstop()で待つ。自発的な終了は従来どおりエラー扱い。
+                active = None;
+                break result.and_then(|()| Err(anyhow::anyhow!("音声入力が予期せず終了しました")));
+            },
+            _ = poll.tick() => {
+                let next = tokio::select! { biased;
+                    _ = process::cancelled(&mut stop) => break Ok(()),
+                    result = transport.context() => match result {
+                        Ok(context) => {
+                            context_unavailable = false;
+                            context.binding()
+                        },
+                        Err(error) => {
+                            if !context_unavailable {
+                                report.event("context", "warning", Some("context_unavailable"),
+                                    json!({"detail":error.to_string()}));
+                            }
+                            context_unavailable = true;
+                            None
+                        },
+                    },
+                };
+                if active.as_ref().map(|active| &active.binding) == next.as_ref() {
+                    continue;
+                }
+                if let Some(previous) = active.take()
+                    && let Err(error) = previous.stop(&report).await
+                {
+                    break Err(error);
+                }
+                if *stop.borrow() {
+                    break Ok(());
+                }
+                if let Some(binding) = next {
+                    report.event("context", "info", Some("voice_input_enabled"),
+                        json!({"detail":"音声入力の許可を確認しました。録音を開始します"}));
+                    active = Some(ActivePeriod::start(
+                        settings.clone(), transport.clone(), binding, report.clone(),
+                    ));
+                }
+            },
+        }
+    };
+    let cleanup = if let Some(active) = active {
+        active.stop(&report).await
+    } else {
+        Ok(())
+    };
+    result?;
+    cleanup
+}
+
+/// 信号を先に登録し、待機中も通信中も終了を受け付ける。診断配送は全期間で一本だけ使う。
 pub async fn run(settings: Settings) -> Result<()> {
     settings.validate()?;
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -270,31 +439,21 @@ pub async fn run(settings: Settings) -> Result<()> {
     let (stop_tx, stop_rx) = watch::channel(false);
     let (diagnostic_stop, diagnostic_rx) = watch::channel(false);
     let (report, mut diagnostic_task) = transport.diagnostics(diagnostic_rx);
-    let settings = Arc::new(settings);
-    let pending = Arc::new(Pending::new(settings.max_pending));
-    let worker_task = tokio::spawn(worker(
-        settings.clone(),
-        pending.clone(),
-        transport,
-        report.clone(),
-        stop_rx.clone(),
-    ));
     println!(
         "[VOICE] Rust音声入力 / WebRTC AEC3 / 無音 {}ms / 配送先 {}",
         settings.silence_ms, settings.base_url
     );
-    println!("[VOICE] 待機中…話しかけてや（終了は Ctrl+C）");
+    println!("[VOICE] 本体の音声入力許可を待機中（終了は Ctrl+C）");
     let result = {
-        let capture = capture(&settings, &pending, &report, stop_rx, &stop_tx);
-        tokio::pin!(capture);
+        let control = control(Arc::new(settings), transport, report.clone(), stop_rx);
+        tokio::pin!(control);
         tokio::select! { biased;
-            _ = term.recv() => { let _ = stop_tx.send(true); capture.await },
-            _ = interrupt.recv() => { let _ = stop_tx.send(true); capture.await },
-            result = &mut capture => result,
+            _ = term.recv() => { let _ = stop_tx.send(true); control.await },
+            _ = interrupt.recv() => { let _ = stop_tx.send(true); control.await },
+            result = &mut control => result,
         }
     };
     let _ = stop_tx.send(true);
-    let worker_result = worker_task.await;
     drop(report);
     // 最後のAECエラーも診断先へ渡すが、終了を通信待ちで引き延ばさない。
     let diagnostic_result =
@@ -305,7 +464,6 @@ pub async fn run(settings: Settings) -> Result<()> {
                 diagnostic_task.await
             }
         };
-    worker_result.context("音声認識workerが異常終了しました")?;
     diagnostic_result.context("音声診断workerが異常終了しました")?;
     println!("[VOICE] 音声入力を停止しました。録音・認識プロセスを回収しました。");
     if let Err(error) = result {

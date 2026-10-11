@@ -191,3 +191,103 @@ fn daylight_and_land_survival_flags_use_the_corrected_species_catalogue() {
     assert_eq!(entries["nautilus"]["dies_on_land"], true);
     assert_eq!(entries["zombie_nautilus"]["dies_on_land"], false);
 }
+
+#[test]
+fn tamed_companion_outside_routine_slots_keeps_identity_without_environment_events() {
+    let event = frame(json!({"passive_mobs":[
+        {"type":"cow"},{"type":"cow"},{"type":"chicken"},{"type":"chicken"}],
+        "companion_candidates":[{"type":"wolf","identity":{"entity_id":"pet","tamed":true},
+            "environment":{"touching_water":false,"on_ground":true}}]}));
+    let rows = project(&event);
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(rows[0]["catalog_id"], "wolf");
+    assert_eq!(rows[0]["subject"], "pet");
+    assert_eq!(rows[0]["tamed"], true);
+    assert_eq!(rows[0]["environment"], json!({}));
+    assert!(rows[0].get("owner").is_none());
+    let wet = frame(json!({"companion_candidates":[{"type":"wolf",
+        "identity":{"entity_id":"pet","tamed":true},
+        "environment":{"touching_water":true,"on_ground":false}}]}));
+    assert!(changes(&rows, &project(&wet)).is_empty());
+    let before = context(&frame(json!({})));
+    let after = context(&event);
+    assert!(
+        crate::environment::notice::changes(&crate::environment::notice::snapshot(&before), &after)
+            .is_empty()
+    );
+}
+
+#[test]
+fn named_or_legacy_wolves_are_not_inferred_to_be_tamed_or_wild() {
+    let event = frame(json!({"passive_mobs":[
+        {"type":"wolf","identity":{"entity_id":"known-pet","tamed":true}},
+        {"type":"wolf","identity":{"entity_id":"named","custom_name":"クロちゃん"}},
+        {"type":"wolf","identity":{"entity_id":"legacy"},"environment":{"on_ground":true}},
+        {"type":"wolf","identity":{"entity_id":"untamed","tamed":false},"environment":{"on_ground":true}}],
+        "ambient_sounds":[{"type":"wolf","source_id":"heard","identity":{"entity_id":"heard","tamed":true}}]}));
+    let rows = project(&event);
+    assert_eq!(rows.as_array().unwrap().len(), 4);
+    assert_eq!(rows[0]["tamed"], true);
+    assert_eq!(rows[1]["custom_name"], "クロちゃん");
+    for row in rows.as_array().unwrap().iter().skip(1) {
+        assert!(row.get("tamed").is_none());
+    }
+    assert!(
+        !rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["subject"] == "heard")
+    );
+}
+
+#[test]
+fn crosshair_keeps_taming_separate_for_two_wolves_and_refreshes_name() {
+    let event = frame(json!({"passive_mobs":[
+        {"type":"wolf","identity":{"entity_id":"pet","tamed":true,"custom_name":"前の名前"},"environment":{"touching_water":true}},
+        {"type":"wolf","identity":{"entity_id":"other"},"environment":{"on_ground":true}}],
+        "companion_candidates":[{"type":"wolf","identity":{"entity_id":"pet","tamed":true,"custom_name":"前の名前"}}],
+        "look_target":{"kind":"entity","name":"wolf","identity":{"entity_id":"pet","tamed":true,"custom_name":"今の名前"},
+            "environment":{"touching_water":false,"on_ground":true}}}));
+    let rows = project(&event);
+    assert_eq!(rows.as_array().unwrap().len(), 2);
+    assert_eq!(rows[0]["subject"], "pet");
+    assert_eq!(rows[0]["tamed"], true);
+    assert_eq!(rows[0]["custom_name"], "今の名前");
+    assert_eq!(rows[0]["environment"]["touching_water"], false);
+    assert_eq!(rows[1]["subject"], "other");
+    assert!(rows[1].get("tamed").is_none());
+    assert!(rows[1].get("custom_name").is_none());
+}
+
+#[test]
+fn companion_metadata_reaches_chat_and_surroundings_model_inputs_and_expires() {
+    let event = frame(json!({"companion_candidates":[{"type":"wolf",
+        "identity":{"entity_id":"pet","tamed":true,"custom_name":"クロちゃん"}}]}));
+    let world = context(&event);
+    let chat = crate::chat_prompt::messages(
+        &json!({"user_text":"そばのオオカミは？","world_context":world,"dialogue_choice":true}),
+    )
+    .unwrap();
+    assert!(chat[1].content.contains("クロちゃん"));
+    assert!(chat[1].content.contains("\"tamed\": true"));
+    let prepared = crate::environment::reaction::Prepared::new(
+        &json!({"kind":"environment_reaction","model":"fixture","max_tokens":100,
+            "fallback_text":"", "details":{"reaction_context":{
+                "topic":"surroundings","world_context":world}}}),
+        "fixture",
+    )
+    .unwrap();
+    let prompt: Value = serde_json::from_str(&prepared.request.messages[1].content).unwrap();
+    let pet = &prompt["world_context"]["observations"]["mob_states"][0];
+    assert_eq!(pet["tamed"], true);
+    assert_eq!(pet["custom_name"], "クロちゃん");
+    assert_eq!(pet["subject"], "pet");
+    let mut state = State::default();
+    state.observe(world);
+    state.observe(context(&frame(json!({}))));
+    assert_eq!(
+        state.context().unwrap().observations["mob_states"],
+        json!([])
+    );
+}

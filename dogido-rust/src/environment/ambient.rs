@@ -25,19 +25,63 @@ pub fn current_smell_query_reply(event: &GameEvent, text: &str) -> Speech {
     smell::query_reply(event, text)
 }
 
-/// Resolved smell and bounded estimates, never exact positions, object IDs,
-/// raw intensity/history or hidden nearby-source observations.
+/// マスキング後の各匂いとスメル値を会話へ渡す。位置・距離・個体IDは持たない。
+/// 通常会話と環境反応で共有する投影。強度を落とすと「仄か／強烈」をモデルが選べなくなる。
+/// ラベルはIDの読みやすい名前で、別の世界観測や個体の特定結果を追加するものではない。
 pub(crate) fn smell_context(event: &GameEvent) -> Option<Value> {
     let observation = smell::observation(event)?;
     if observation.status != crate::events::SmellObservationStatus::Present {
         return None;
     }
-    let mut context = json!({"specificity":observation.specificity,"smell_id":observation.smell_id,
-        "category":observation.category,"valence":observation.valence});
-    if let Some(direction) = observation.direction_estimate {
-        context["direction_estimate"] = json!(direction);
+    Some(smell_components_context(&observation.components))
+}
+fn smell_components_context(components: &[crate::events::SmellComponent]) -> Value {
+    let mut components: Vec<_> = components.iter().collect();
+    components.sort_by_key(|c| catalog::enum_text(&c.smell_id));
+    json!({"components":components.into_iter().map(|component| {
+        json!({"smell_id":component.smell_id,"label":smell::label(component.smell_id),
+            "category":component.category,"valence":component.valence,"source_kind":component.source_kind,
+            "effective_strength":component.effective_strength})
+    }).collect::<Vec<_>>()})
+}
+
+/// 一度の雨上がり反応／明示質問だけに使う読み取り用の投影。
+/// 受信した通常componentsや共有会話の現在観測を上書きしないため、完了後の復帰待ちは要らない。
+fn rain_after_component(event: &GameEvent, window: u64) -> Option<&crate::events::SmellComponent> {
+    let observation = event.smell_observation.as_ref()?;
+    let notice = observation.rain_after_notice.as_ref()?;
+    if !observation.rain_after_active
+        || notice.window_id != window
+        || observation.status == crate::events::SmellObservationStatus::Suppressed
+    {
+        return None;
     }
-    Some(context)
+    // 検証済みGameEventは不変のまま、表示対象の成分だけを借りる。
+    Some(&notice.component)
+}
+pub(crate) fn rain_after_context(event: &GameEvent, window: u64) -> Option<Value> {
+    Some(smell_components_context(std::slice::from_ref(
+        rain_after_component(event, window)?,
+    )))
+}
+
+/// 強度・同種の代表源だけの変化を新しい種類の到着にせず、成分順序を正規化する。
+/// これは通知の比較用コピーだけを縮める処理。実際のモデル入力には現在の値を残す。
+/// 例: ゾンビ1→2だけなら再到着ではなく、花がマスクされて種類集合が変われば差分になる。
+pub(crate) fn smell_change_signature(value: &Value) -> Value {
+    let mut value = value.clone();
+    if let Some(object) = value.as_object_mut()
+        && let Some(rows) = object.get_mut("components").and_then(Value::as_array_mut)
+    {
+        for row in rows.iter_mut() {
+            if let Some(row) = row.as_object_mut() {
+                row.remove("effective_strength");
+                row.remove("source_kind");
+            }
+        }
+        rows.sort_by_key(|row| row["smell_id"].as_str().unwrap_or("").to_owned());
+    }
+    value
 }
 
 #[derive(Clone, Debug, Default)]
@@ -56,6 +100,7 @@ pub struct AmbientFocus {
 #[derive(Clone, Default)]
 pub struct Ambient {
     smell: smell::Presence,
+    rain_after: smell::RainAfter,
     places: places::Places,
     last_danger: Option<u64>,
     last_player_input: Option<u64>,
@@ -86,6 +131,7 @@ impl Ambient {
         if !dimension.is_empty() {
             if self.dimension.as_ref().is_some_and(|old| old != &dimension) {
                 self.smell = smell::Presence::default();
+                self.rain_after = smell::RainAfter::default();
                 self.places.dimension_changed();
                 self.last_danger = None;
                 self.gain = None;
@@ -104,6 +150,7 @@ impl Ambient {
         // Missing fields in partial audio/mob events are not absence observations.
         if complete || e.smell_observation.is_some() {
             self.smell.update(e);
+            self.rain_after.update(e);
         }
         if !e.visual_threats.is_empty()
             || !e.auditory_threats.is_empty()
@@ -170,6 +217,17 @@ impl Ambient {
         {
             return vec![];
         }
+        // 雨上がりの「あっ」は非敵対ambient。Web・学習・会話中のmute等をすべて通った後だけ候補にする。
+        // 呼出側の既存比較で暗所等の警告が勝てるよう、ゾンビ臭の優先経路には入れない。
+        // 通常臭の検討済み状態と2分のゾンビ臭cooldownは、この一言では変更しない。
+        if let Some(window) = self.rain_after.pending(e)
+            && let Some(component) = rain_after_component(e, window)
+        {
+            let mut line = smell::speech_components(std::slice::from_ref(component));
+            line.scope = Scope::Safe;
+            line.rain_after_window = Some(window);
+            return vec![line];
+        }
         if focus.notice_ready {
             vec![super::notice::action()]
         } else {
@@ -180,15 +238,33 @@ impl Ambient {
         if !smell::is_query(text) {
             return None;
         }
-        self.smell.mark(e, now);
-        Some(smell::query_reply(e, text))
+        if self.rain_after.pending(e).is_none() {
+            self.smell.mark(e, now);
+        }
+        Some(self.smell_query_reply(e, text))
     }
-    pub(crate) fn reconsider_smell_spatial(&mut self, e: &GameEvent) {
-        self.smell.reconsider_spatial(e);
+    /// 配送直前にも使う。まだ一度も扱っていない雨上がりなら、その一件を回答へ結ぶ。
+    pub fn smell_query_reply(&self, e: &GameEvent, text: &str) -> Speech {
+        if let Some(window) = self.rain_after.pending(e)
+            && let Some(component) = rain_after_component(e, window)
+        {
+            let mut reply = smell::query_components(std::slice::from_ref(component), text);
+            reply.rain_after_window = Some(window);
+            return reply;
+        }
+        smell::query_reply(e, text)
+    }
+    pub(crate) fn end_rain_after_attention(&mut self, window: u64) {
+        self.rain_after.finish(window);
+    }
+    pub(crate) fn reconsider_smell_estimate(&mut self, e: &GameEvent) {
+        self.smell.reconsider_estimate(e);
     }
     pub fn smell_answer(&mut self, e: &GameEvent, now: u64) -> Speech {
-        self.smell.mark(e, now);
-        smell::speech(e)
+        if self.rain_after.pending(e).is_none() {
+            self.smell.mark(e, now);
+        }
+        self.smell_query_reply(e, "")
     }
     pub fn take_light_plan(&mut self) -> Option<LightPlanRequest> {
         self.light_ready.take()
@@ -236,13 +312,19 @@ pub fn still_applicable(speech: &Speech, e: &GameEvent) -> bool {
     }
     match speech.kind {
         "smell" if super::reaction::is_model_reaction(speech) => true,
-        "smell" => smell::still_applicable(speech, e),
+        "smell" => match speech.rain_after_window {
+            Some(window) => rain_after_component(e, window).is_some_and(|component| {
+                smell::components_still_applicable(speech, std::slice::from_ref(component))
+            }),
+            None => smell::still_applicable(speech, e),
+        },
         _ => true,
     }
 }
 impl Ambient {
-    /// Specific zombie scent retains its old safety priority without entering combat mode.
-    /// Call after lightning/current player input, before low-priority environment branches.
+    /// 残ったゾンビ系の実体臭だけ、雷・現在入力の後、通常ambientより先に反応機会を設ける。
+    /// 手持ちの腐った肉だけではこの優先経路へ入らず、匂い単独で戦闘modeにも変更しない。
+    /// 視覚・聴覚の脅威が既にある時は、そちらの戦闘警告と重ねない。
     pub fn priority_smell(
         &mut self,
         e: &GameEvent,
@@ -251,7 +333,7 @@ impl Ambient {
         busy: bool,
         s: &Settings,
     ) -> Option<Speech> {
-        use crate::events::{SmellObservationSmellId::Zombie, SmellObservationSpecificity::Source};
+        use crate::events::{SmellObservationSmellId::Zombie, SmellObservationSourceKind::Entity};
         if busy
             || matches!(mode, Mode::Panic | Mode::SuppressedPanic | Mode::Aftermath)
             || !e.visual_threats.is_empty()
@@ -259,10 +341,11 @@ impl Ambient {
         {
             return None;
         }
-        let zombie = e
-            .smell_observation
-            .as_ref()
-            .is_some_and(|o| o.smell_id == Some(Zombie) && o.specificity == Some(Source));
+        let zombie = e.smell_observation.as_ref().is_some_and(|o| {
+            o.components
+                .iter()
+                .any(|c| c.smell_id == Zombie && c.source_kind == Entity)
+        });
         if zombie {
             self.smell.action(e, now, s)
         } else {

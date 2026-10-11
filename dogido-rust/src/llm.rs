@@ -58,26 +58,72 @@ impl RigLlm {
     }
 
     pub async fn generate(&self, input: &GenerationRequest) -> Result<GenerationReport> {
+        Ok(self.complete(input, &[], &[], false).await?.0)
+    }
+
+    /// 許可された道具定義と、直前の呼出し・実行結果を既存Chat Completionsへ載せる。
+    /// 道具の実行判断は呼び手の担当。確認後はallow_call=falseで追加呼出しを止める。
+    pub(crate) async fn generate_with_tools(
+        &self,
+        input: &GenerationRequest,
+        tools: &[Value],
+        tool_messages: &[Value],
+        allow_call: bool,
+    ) -> Result<(GenerationReport, Option<Value>)> {
+        self.complete(input, tools, tool_messages, allow_call).await
+    }
+
+    async fn complete(
+        &self,
+        input: &GenerationRequest,
+        tools: &[Value],
+        tool_messages: &[Value],
+        allow_call: bool,
+    ) -> Result<(GenerationReport, Option<Value>)> {
         ensure!(self.enabled, "LLM disabled by configuration");
         input.validate()?;
-        let request = to_rig_request(input);
+        let mut request = to_rig_request(input);
+        if !tools.is_empty() {
+            let params = request.additional_params.as_mut().unwrap();
+            params["tools"] = json!(tools);
+            params["tool_choice"] = if allow_call { "auto" } else { "none" }.into();
+            params["messages"]
+                .as_array_mut()
+                .unwrap()
+                .extend_from_slice(tool_messages);
+        }
         let model = self.client.completion_model(&input.model);
         let start = Instant::now();
         let response = tokio::time::timeout(self.timeout, model.raw_completion(request))
             .await
             .context("LLM request timed out; no retry was sent")?
             .context("Rig Chat Completions request failed")?;
-        let generated = decode_response(&serde_json::to_value(&response)?)?;
-        Ok(GenerationReport {
-            schema_version: 1,
-            provider: "rig-core/openai-chat-completions".into(),
-            kind: input.kind.clone(),
-            requested_model: input.model.clone(),
-            response_model: response.model,
-            response_id: response.id,
-            elapsed_ms: start.elapsed().as_millis(),
-            generated,
-        })
+        let mut body = serde_json::to_value(&response)?;
+        let message = &body["choices"][0]["message"];
+        let tool_message = (!tools.is_empty()
+            && message["tool_calls"]
+                .as_array()
+                .is_some_and(|calls| !calls.is_empty()))
+        .then(|| message.clone());
+        if let Some(message) = &tool_message {
+            // 本文を持たないtool応答も終了理由・使用量つきで記録する。
+            // 呼出し内容は別値で渡し、本文のJSONを実行命令として解釈しない。
+            body["choices"][0]["message"]["content"] = serde_json::to_string(message)?.into();
+        }
+        let generated = decode_response(&body)?;
+        Ok((
+            GenerationReport {
+                schema_version: 1,
+                provider: "rig-core/openai-chat-completions".into(),
+                kind: input.kind.clone(),
+                requested_model: input.model.clone(),
+                response_model: response.model,
+                response_id: response.id,
+                elapsed_ms: start.elapsed().as_millis(),
+                generated,
+            },
+            tool_message,
+        ))
     }
 }
 

@@ -298,47 +298,25 @@ impl Dialogue {
     /// The browser calls this after inserting the returned text into its visible log.
     /// Stale/cancelled turns and repeated acknowledgements cannot enter history.
     pub fn acknowledge_workshop_text(&self, sid: &str, turn: &str) -> bool {
-        let reply = {
-            let mut d = self.data.lock().unwrap();
-            let Some(row) = d
-                .rows
+        let display_id = {
+            let d = self.data.lock().unwrap();
+            if !d.sessions.get(sid).is_some_and(|s| s.text_workshop) {
+                return false;
+            }
+            d.rows
                 .iter()
                 .find(|r| r["session_id"] == sid && r["turn_id"] == turn)
-            else {
-                return false;
-            };
-            if row["text_displayed"] == true {
-                return true;
-            }
-            if row["playback_status"] != "audio_disabled" {
-                return false;
-            }
-            let Some(s) = d.sessions.get_mut(sid) else {
-                return false;
-            };
-            if !s.text_workshop || s.current_turn != turn {
-                return false;
-            }
-            if !s
-                .text_reply
-                .as_ref()
-                .is_some_and(|(id, epoch, _)| id == turn && *epoch == s.epoch)
-            {
-                return false;
-            }
-            s.text_reply.take()
+                .and_then(|r| r["display_id"].as_str())
+                .map(str::to_owned)
         };
-        let Some((_, epoch, mut result)) = reply else {
+        let Some(display_id) = display_id else {
             return false;
         };
-        result["text_displayed"] = true.into();
-        self.update(
-            sid,
-            turn,
-            epoch,
-            PlaybackStatus::AudioDisabled,
-            Some(&result),
-        )
+        let response = self.acknowledge_display(sid, std::slice::from_ref(&display_id));
+        let accepted = response["displayed"]
+            .as_array()
+            .is_some_and(|ids| ids.iter().any(|id| id == &display_id));
+        accepted
     }
 }
 

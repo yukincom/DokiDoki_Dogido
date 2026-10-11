@@ -28,7 +28,7 @@ def main():
                               "ceiling_height": 20, "local_light": 15, "time_phase": "day",
                               "nearby_damaging_light_source_count": 1 if hot else 0,
                               "nearest_damaging_light_source_distance": 2 if hot else 99},
-                    "combat": {"combat_active_hint": False}, "smell_observation": {"status": "none"}}, sid=sid)
+                    "combat": {"combat_active_hint": False}, "smell_observation": {"status":"none","components":[],"basis":"smell_policy_v2"}}, sid=sid)
 
             event(1)
             control["leaf"] = "今日は一緒に散歩しよな。"

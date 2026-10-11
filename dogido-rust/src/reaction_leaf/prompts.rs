@@ -204,17 +204,19 @@ fn mode(kind: &str, d: &Value) -> &'static str {
 }
 
 pub(super) fn messages(kind: &str, d: &Value) -> Result<Vec<ChatMessage>> {
+    let context = context(kind, d)?;
     Ok(vec![
         ChatMessage {
             role: Role::System,
             content: crate::companion_prompt::dialogue(
                 mode(kind, d),
                 crate::companion_prompt::DialoguePurpose::Ambient,
+                context["world_context"]["observations"]["smell"]["status"] == "present",
             ),
         },
         ChatMessage {
             role: Role::User,
-            content: serde_json::to_string(&context(kind, d)?)?,
+            content: serde_json::to_string(&context)?,
         },
     ])
 }

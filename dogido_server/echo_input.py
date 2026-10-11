@@ -55,6 +55,7 @@ class WebRTCEchoProcessor:
                               high_pass_filter=False, stream_delay_ms=delay_ms)
         self.frames = 0
         self.energy = [0.0, 0.0, 0.0]
+        self.peak_energy = [0.0, 0.0, 0.0]
 
     def process(self, pcm: bytes) -> bytes:
         if len(pcm) != INPUT_BYTES:
@@ -70,16 +71,24 @@ class WebRTCEchoProcessor:
         # 複製したcaptureの2ch出力だけをmonoへ戻す。int32で加算してoverflowしない。
         mono = (cleaned.reshape(-1, 2).astype(np.int32).sum(axis=1) // 2).astype("<i2")
         for i, value in enumerate((samples[:, 0], samples[:, 1:3], mono)):
-            self.energy[i] += float(np.mean(value.astype(np.float64) ** 2))
+            energy = float(np.mean(value.astype(np.float64) ** 2))
+            self.energy[i] += energy
+            self.peak_energy[i] = max(self.peak_energy[i], energy)
         self.frames += 1
         return mono.tobytes()
 
     def levels(self):
+        """窓全体のRMSと10msフレームRMSの最大値だけを返し、診断窓を空にする。"""
         if not self.frames:
             return {}
         result = {key: round((value / self.frames) ** .5, 1) for key, value in
                   zip(("mic_rms", "reference_rms", "clean_rms"), self.energy)}
+        result.update({key: round(value ** .5, 1) for key, value in
+                       zip(("mic_peak_rms", "reference_peak_rms", "clean_peak_rms"),
+                           self.peak_energy)})
+        result["window_ms"] = self.frames * 10
         self.frames, self.energy = 0, [0.0, 0.0, 0.0]
+        self.peak_energy = [0.0, 0.0, 0.0]
         return result
 
 
@@ -173,8 +182,9 @@ def main(argv=None) -> int:
                     return 0
                 if time.monotonic() - last_report >= 5:
                     levels = processor.levels()
-                    if args.probe_seconds:
-                        diagnostic("aec_levels", **levels)
+                    # 通常入力でも波形を含まない音量だけを既存stderr診断へ渡す。
+                    # 平均とピークを分け、短い本人発話が平均の無音へ埋もれるのを避ける。
+                    diagnostic("aec_levels", **levels)
                     last_report = time.monotonic()
         finally:
             signal.signal(signal.SIGTERM, previous)

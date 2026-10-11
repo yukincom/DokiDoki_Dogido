@@ -593,6 +593,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
         crate::companion_prompt::dialogue(
             character,
             crate::companion_prompt::DialoguePurpose::Reply,
+            d["world_context"]["observations"]["smell"]["status"] == "present",
         )
     } else {
         crate::companion_prompt::speech(character)
@@ -671,14 +672,16 @@ mod tests {
                 reply[0].content,
                 crate::companion_prompt::dialogue(
                     mode,
-                    crate::companion_prompt::DialoguePurpose::Reply
+                    crate::companion_prompt::DialoguePurpose::Reply,
+                    false
                 )
             );
             assert_ne!(
                 reply[0].content,
                 crate::companion_prompt::dialogue(
                     mode,
-                    crate::companion_prompt::DialoguePurpose::Ambient
+                    crate::companion_prompt::DialoguePurpose::Ambient,
+                    false
                 )
             );
             let speech = messages(&json!({"character_mode":mode})).unwrap();

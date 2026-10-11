@@ -388,7 +388,12 @@ impl Dialogue {
             s.status = PlaybackStatus::Cancelled;
             let _ = c.send(true);
             let turn = s.current_turn.clone();
-            if let Some(p) = s.address.as_mut() {
+            if !d
+                .rows
+                .iter()
+                .any(|row| row["turn_id"] == turn && row["text_displayed"] == true)
+                && let Some(p) = s.address.as_mut()
+            {
                 p.playback(&turn, PlaybackStatus::Cancelled);
             }
             Self::cancel_row(d, sid, &turn, reason);
@@ -398,7 +403,11 @@ impl Dialogue {
         let Some(s) = d.sessions.get_mut(sid) else {
             return;
         };
-        s.pending_warning = None;
+        for action in s.pending_warning.take().into_iter().flatten() {
+            if let Some(window) = action.rain_after_window {
+                s.ambient.end_rain_after_attention(window);
+            }
+        }
         s.pending_input = None;
         if let Some(w) = s.warning.take() {
             if !w.started
@@ -414,11 +423,14 @@ impl Dialogue {
                 && interruption_reason(event).is_none()
                 && w.actions
                     .iter()
-                    .any(|a| crate::environment::reaction::only_smell_spatial_changed(a, event))
+                    .any(|a| crate::environment::reaction::only_smell_estimate_changed(a, event))
             {
-                s.ambient.reconsider_smell_spatial(event);
+                s.ambient.reconsider_smell_estimate(event);
             }
             for a in &w.actions {
+                if let Some(window) = a.rain_after_window {
+                    s.ambient.end_rain_after_attention(window);
+                }
                 if let Scope::Workshop { id, version } = &a.scope {
                     let end = if matches!(reason, "new_player_input" | "manual_interrupt") {
                         NoticeEnd::Consumed
@@ -483,7 +495,8 @@ impl Dialogue {
                 action.text.clear();
             }
         }
-        d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"category":category,
+        let session_instance = d.sessions[sid].instance_id.clone();
+        d.rows.push_back(json!({"utterance_id":id("utt"),"turn_id":turn,"session_id":sid,"session_instance":session_instance,"category":category,
             "source":if input.is_some(){"player_input"}else{"game_observation"},"player_input_text":input,
             "text":display_text(&pending_display),"created_at":chrono::Utc::now(),"reference_ids":[],"output_mode":"both",
             "playback_status":"queued","warning":plan,"combat_actions":actions}));
@@ -534,8 +547,19 @@ impl Dialogue {
                 row["error"] = error.into();
             }
         }
+        if current
+            && (status == PlaybackStatus::Completed
+                || d.rows
+                    .iter()
+                    .any(|r| r["turn_id"] == turn && r["text_displayed"] == true))
+        {
+            self.confirm_warning_delivery(&mut d, sid, turn, false);
+        }
         if current {
             let reaction = d.rows.iter().find(|r| r["turn_id"] == turn).cloned();
+            let notice_delivered = reaction
+                .as_ref()
+                .is_some_and(|r| r["notice_delivered"] == true);
             let s = d.sessions.get_mut(sid).unwrap();
             if let Some(row) = reaction {
                 let outcomes = row["model_reaction_outcomes"].as_array();
@@ -551,15 +575,26 @@ impl Dialogue {
                 ) && all_silent
                 {
                     s.history.silent(turn);
-                } else if status == PlaybackStatus::Completed {
-                    // 固定警告・支援返答・環境反応を、生成元で区別しない。
-                    s.history.push(turn, "assistant", text);
                 }
                 if (status == PlaybackStatus::NotSelected && all_silent
                     || status == PlaybackStatus::Completed)
                     && let Some(revision) = row["observation_revision"].as_u64()
                 {
                     s.conversation_observation.considered(revision);
+                }
+            }
+            if status.is_terminal() {
+                // 出力完了／沈黙で鼻が慣れる。失敗・取消もその機会を終了し、雨だけを再試行し続けない。
+                // 実再生の成功記録とは別で、失敗は失敗のまま。Queued/Started・古いturnは消費しない。
+                let windows: Vec<_> = s
+                    .warning
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|warning| &warning.actions)
+                    .filter_map(|action| action.rain_after_window)
+                    .collect();
+                for window in windows {
+                    s.ambient.end_rain_after_attention(window);
                 }
             }
             s.status = status;
@@ -573,17 +608,13 @@ impl Dialogue {
                 s.haiku.last_activity = Instant::now();
             }
             if status.ends_playback() || status == PlaybackStatus::NotSelected {
-                if let Some((id, version)) = notice {
-                    let end = if status == PlaybackStatus::Completed {
-                        NoticeEnd::Completed
-                    } else {
-                        NoticeEnd::Retry
-                    };
-                    super::workshop_combat_runtime::finish_notice(s, &id, version, end);
-                    if end == NoticeEnd::Completed {
-                        self.share_story(sid, s, &format!("resume:{turn}"), Some(&id),
-                            "workshop_return", "句の話に戻る。", json!({}));
-                    }
+                if !notice_delivered && let Some((id, version)) = notice {
+                    super::workshop_combat_runtime::finish_notice(
+                        s,
+                        &id,
+                        version,
+                        NoticeEnd::Retry,
+                    );
                 }
                 s.warning = None;
             }
@@ -596,6 +627,92 @@ impl Dialogue {
             playback_status = status.as_str()
         );
         current
+    }
+    pub(super) fn confirm_warning_delivery(
+        &self,
+        d: &mut Data,
+        sid: &str,
+        turn: &str,
+        text: bool,
+    ) -> bool {
+        let Some(row) = d
+            .rows
+            .iter()
+            .find(|r| r["session_id"] == sid && r["turn_id"] == turn)
+            .cloned()
+        else {
+            return false;
+        };
+        let Some(s) = d.sessions.get_mut(sid) else {
+            return false;
+        };
+        if d.stopped
+            || (!row["session_instance"].is_null() && row["session_instance"] != s.instance_id)
+            || text && row["playback_status"] == "cancelled"
+        {
+            return false;
+        }
+        let notice = row["combat_actions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find_map(|action| {
+                let scope = &action["scope"];
+                if scope["kind"] != "workshop" {
+                    return None;
+                }
+                Some((
+                    scope["targets"]["id"].as_str()?.to_owned(),
+                    scope["targets"]["version"].as_u64()?,
+                ))
+            });
+        if text
+            && notice.as_ref().is_some_and(|(id, version)| {
+                !super::workshop_combat_runtime::applicable(s, id, *version)
+            })
+            && row["delivery_confirmed"] != true
+        {
+            return false;
+        }
+        if row["delivery_confirmed"] != true {
+            let body = row["text"].as_str().unwrap_or("");
+            if body.is_empty() {
+                return false;
+            }
+            s.history.push(turn, "assistant", body);
+            if let Some(revision) = row["observation_revision"].as_u64() {
+                s.conversation_observation.considered(revision);
+            }
+        }
+        let terminal = matches!(
+            row["playback_status"].as_str(),
+            Some("completed" | "audio_disabled" | "failed")
+        );
+        let mut notice_delivered = row["notice_delivered"] == true;
+        if terminal
+            && !notice_delivered
+            && let Some((id, version)) = notice
+            && super::workshop_combat_runtime::applicable(s, &id, version)
+        {
+            super::workshop_combat_runtime::finish_notice(s, &id, version, NoticeEnd::Completed);
+            self.share_story(
+                sid,
+                s,
+                &format!("resume:{turn}"),
+                Some(&id),
+                "workshop_return",
+                "句の話に戻る。",
+                json!({}),
+            );
+            notice_delivered = true;
+        }
+        if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {
+            row["delivery_confirmed"] = true.into();
+            if notice_delivered {
+                row["notice_delivered"] = true.into();
+            }
+        }
+        true
     }
     fn protect_action(&self, sid: &str, turn: &str, protect: u64) {
         let mut d = self.data.lock().unwrap();
@@ -655,7 +772,7 @@ impl Dialogue {
                 d.sessions.get_mut(&sid).unwrap().warning.as_mut().unwrap().actions=resolved.clone();
                 resolved
             };
-            let mut config=self.config.clone();
+            let mut config=self.output_config(&sid);
             if actions.iter().any(|a| matches!(a.delivery, Delivery::Combat | Delivery::UrgentEnvironment)) {
                 config.speed=config.warnings.battle_speed;
             }
@@ -724,6 +841,7 @@ impl Dialogue {
                     }
                 }
                 silent_only=false;
+                if !config.audio_enabled { continue; }
                 if let Some(plan)=&action.visual_plan{
                     if let Some(cue)=&plan.cue{
                         if let Some(path)=config.warnings.cue_dir.as_deref().and_then(|dir|cue_path(dir,cue.id)){self.audio.play_file(&config,&path,&mut cancel,0,&started).await?;}
@@ -748,8 +866,18 @@ impl Dialogue {
                 }else if !text.is_empty(){self.audio.speak(&config,&text,&mut cancel,&started).await?;}
                 if action.kind=="thunder_cue" && action_began.load(Ordering::SeqCst) { thunder_scream_completed=true; }
             }
-            Ok::<PlaybackStatus,anyhow::Error>(if silent_only { PlaybackStatus::NotSelected } else { PlaybackStatus::Completed })
+            Ok::<PlaybackStatus,anyhow::Error>(if silent_only { PlaybackStatus::NotSelected } else if config.audio_enabled { PlaybackStatus::Completed } else { PlaybackStatus::AudioDisabled })
         }.await;
+        if !*cancel.borrow() && !matches!(result, Ok(PlaybackStatus::NotSelected)) {
+            let published = {
+                let mut d = self.data.lock().unwrap();
+                Self::publish_text(&mut d, &sid, &turn, super::text_delivery::Kind::Warning)
+                    .is_some()
+            };
+            if published && !self.output_config(&sid).audio_enabled {
+                self.wait_for_text(&sid, &turn, &mut cancel).await;
+            }
+        }
         monitor.finish().await;
         match result {
             Ok(status) => {
@@ -809,7 +937,7 @@ pub(super) fn answer_fixed_query(
     settings: &crate::combat::model::Settings,
 ) -> Speech {
     if kind == "smell" {
-        let mut reply = crate::environment::ambient::current_smell_query_reply(
+        let mut reply = session.ambient.smell_query_reply(
             session
                 .environment_latest
                 .as_ref()
@@ -834,6 +962,63 @@ pub(super) fn answer_fixed_query(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rain_after_attention_ends_once_on_completion_silence_failure_or_cancellation() {
+        for (status, finished) in [
+            (PlaybackStatus::Started, false),
+            (PlaybackStatus::Failed, true),
+            (PlaybackStatus::Cancelled, true),
+            (PlaybackStatus::Completed, true),
+            (PlaybackStatus::NotSelected, true),
+        ] {
+            let d = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
+            d.register("rain", "試験", false);
+            let e = GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture",
+                "observed_at":chrono::Utc::now(),"event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+                "smell_observation":{"status":"none","components":[],"basis":"smell_policy_v2","rain_after_active":true,
+                    "rain_after_notice":{"window_id":1,"component":{"smell_id":"rain_after","category":"rain_after",
+                        "valence":"pleasant","source_kind":"hotbar","effective_strength":2}}}})).unwrap();
+            let (turn, _rx) = {
+                let mut data = d.data.lock().unwrap();
+                let session = data.sessions.get_mut("rain").unwrap();
+                session.ambient.update(&e, 0, true, &d.config.combat);
+                let mut action = session.ambient.smell_query_reply(&e, "今の匂いは？");
+                if status == PlaybackStatus::NotSelected {
+                    action.leaf = Some(crate::combat::model::LeafRequest {
+                        kind: crate::environment::reaction::KIND.into(),
+                        details: json!({}),
+                        temperature: 0.65,
+                    });
+                }
+                let queued = Dialogue::queue_actions(&mut data, "rain", &[action], None);
+                if status == PlaybackStatus::NotSelected {
+                    Dialogue::remember_environment_outcome(
+                        &mut data,
+                        &queued.0,
+                        Some(&json!({"environment_reaction_outcome":"silent"})),
+                    );
+                }
+                queued
+            };
+            if status == PlaybackStatus::Cancelled {
+                Dialogue::cancel_warning(&mut d.data.lock().unwrap(), "rain", "manual_interrupt");
+                // activeを外した後の遅延完了も、再生成功や次の雨上がりへ昇格させない。
+                d.warning_update("rain", &turn, PlaybackStatus::Completed, None);
+            } else {
+                d.warning_update("rain", &turn, status, None);
+            }
+            let data = d.data.lock().unwrap();
+            assert_eq!(
+                data.rows.iter().find(|row| row["turn_id"] == turn).unwrap()["playback_status"],
+                status.as_str()
+            );
+            let next = data.sessions["rain"]
+                .ambient
+                .smell_query_reply(&e, "今の匂いは？");
+            assert_eq!(next.rain_after_window.is_none(), finished, "{status}");
+        }
+    }
+
     #[test]
     fn thunder_generation_does_not_promote_a_queued_cue_to_completed() {
         let mut action = Speech::new("thunder_reaction", "雷の一言");
@@ -862,20 +1047,18 @@ mod tests {
     }
 
     #[test]
-    fn returned_silent_choice_is_consumed_before_spatial_invalidation() {
+    fn returned_silent_choice_is_consumed_before_strength_invalidation() {
         use crate::combat::model::Mode;
-        fn smell(cardinal: &str) -> GameEvent {
+        fn smell(strength: i64) -> GameEvent {
             GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture","sequence":1,
                 "observed_at":chrono::Utc::now(),"event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
-                "smell_observation":{"status":"present","smell_id":"zombie","category":"decay","valence":"unpleasant",
-                    "source_kind":"entity","specificity":"source","effective_strength":5,
-                    "direction_estimate":{"cardinal":cardinal}}})).unwrap()
+                "smell_observation":{"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":strength}],"basis":"smell_policy_v2"}})).unwrap()
         }
         for outcome in ["silent", "speak"] {
             let dialogue = Dialogue::new(crate::dialogue::DialogueConfig::default()).unwrap();
             dialogue.register("s", "試験", false);
-            let old = smell("east");
-            let current = smell("west");
+            let old = smell(5);
+            let current = smell(8);
             let settings = &dialogue.config.combat;
             let mut data = dialogue.data.lock().unwrap();
             let session = data.sessions.get_mut("s").unwrap();

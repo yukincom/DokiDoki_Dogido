@@ -74,6 +74,10 @@ impl Dialogue {
         }) else {
             return;
         };
+        // 文字で既に届いた返答を、後から音声が中断されたことだけで未発話へ戻さない。
+        if row["text_displayed"] == true {
+            return;
+        }
         row["reply_delivery"] = "unspoken_combat".into();
         row["unspoken_text"] = row["text"].clone();
         self.retain_workshop_story(d, sid, &turn);

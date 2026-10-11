@@ -65,8 +65,7 @@ def main():
                    "direction": {"horizontal": "right"}}
             zombie = {"type": "zombie", "entity_id": "z", "distance": 2,
                       "direction": {"horizontal": "front", "cardinal": "north"}}
-            bread = {"status": "present", "smell_id": "bread", "category": "food", "valence": "pleasant",
-                     "specificity": "source", "source_kind": "hotbar", "effective_strength": 3}
+            bread = {"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"}
 
             def send(sid, *, world=None, dimension="minecraft:overworld", **extra):
                 nonlocal sequence
@@ -76,9 +75,9 @@ def main():
                          "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                          "player": {"name": "試験", "dimension": dimension},
                          "world": {**normal, **(world or {})},
-                         "nearby_composition": {"mobs": [m["type"] for m in extra.get("passive_mobs", [])],
+                         "nearby_composition": {"mobs": [{"id":m["type"],"quantity":1} for m in extra.get("passive_mobs", [])],
                                                 "blocks": [], "mobs_truncated": False, "blocks_truncated": False},
-                         "smell_observation": {"status": "none"}, **extra}
+                         "smell_observation": {"status":"none","components":[],"basis":"smell_policy_v2"}, **extra}
                 return request(base, "/api/v1/game-events", event, sid=sid)
 
             def close(sid):
@@ -162,7 +161,7 @@ def main():
                 "schema_version":"2026-05-24", "adapter":"fixture", "sequence":sequence+1,
                 "observed_at":datetime.now(timezone.utc).isoformat(),
                 "event":{"name":"hostile_audio_detected","source_kind":"auditory","priority_hint":"background","certainty":"high"},
-                "nearby_composition":{"mobs":["cow"],"blocks":[],"mobs_truncated":False,"blocks_truncated":False}}, sid=sid)
+                "nearby_composition":{"mobs":[{"id":"cow","quantity":1}],"blocks":[],"mobs_truncated":False,"blocks_truncated":False}}, sid=sid)
             sequence += 1
             time.sleep(.12)
             assert len(calls()) == before_calls
@@ -176,6 +175,30 @@ def main():
             close(sid)
             passed.append("only_fresh_periodic_snapshot_triggers_and_unchanged_table_stays_quiet")
 
+            # 4個体上限と独立した集計を実生成payloadまで運び、数量だけでは再発話しない。
+            sid = register(base, preview=False)
+            send(sid)
+            time.sleep(.12)
+            village = {"mobs":[{"id":"villager","quantity":"many","professions":[
+                {"id":"librarian","quantity":"many"},{"id":"farmer","quantity":3}]}],
+                "blocks":[],"mobs_truncated":False,"blocks_truncated":False}
+            before_calls = len(calls())
+            send(sid, nearby_composition=village)
+            wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
+            context = reaction_context(calls()[-1]["body"])["world_context"]
+            mob = context["observations"]["nearby_mob_types"][0]
+            assert mob["quantity"] == "いっぱい", mob
+            assert mob["profession_breakdown"]["groups"] == [
+                {"id":"farmer","label":"農民","quantity":3}, {"id":"librarian","label":"司書","quantity":"いっぱい"}], mob
+            reduced = {**village, "mobs":[{"id":"villager","quantity":4,
+                "professions":[{"id":"farmer","quantity":4}]}]}
+            time.sleep(.12)
+            send(sid, nearby_composition=reduced)
+            time.sleep(.12)
+            assert len(calls()) == before_calls+1
+            close(sid)
+            passed.append("mob_quantities_and_villager_subsets_reach_model_without_count_only_reaction")
+
             # 発話中で使えない周期の変化は、後から同じ表で繰り返さない。
             sid = register(base, preview=False)
             before_calls = len(calls())
@@ -183,7 +206,7 @@ def main():
             trigger(sid, "surroundings")
             wait_for(lambda: len(calls()) == before_calls+1)
             offered = reaction_context(calls()[-1]["body"])["world_context"]
-            blocks = {"mobs":["cow"],"blocks":["minecraft:oak_log"],"mobs_truncated":False,"blocks_truncated":False}
+            blocks = {"mobs":[{"id":"cow","quantity":1}],"blocks":["minecraft:oak_log"],"mobs_truncated":False,"blocks_truncated":False}
             time.sleep(.12)
             send(sid, passive_mobs=[cow], nearby_composition=blocks)
             wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))
@@ -226,61 +249,67 @@ def main():
             passed.append("ordinary_table_change_during_tts_keeps_the_sampled_utterance")
 
             control["environment_action"] = "speak"
-            spatial_smell = {"status": "present", "smell_id": "zombie", "category": "decay", "valence": "unpleasant",
-                             "specificity": "source", "source_kind": "entity", "effective_strength": 5,
-                             "direction_estimate": {"cardinal": "east"}}
+            measured_smell = {"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":5}],"basis":"smell_policy_v2"}
             sid = register(base, preview=False)
             before_calls = len(calls())
-            control["environment_payload"] = {"action": "speak", "speech": "東のほうからゾンビの匂いがするで。"}
-            send(sid, smell_observation=spatial_smell)
-            send(sid, smell_observation=spatial_smell)
+            control["environment_payload"] = {"action": "speak", "speech": "ゾンビ系の匂いがはっきりするで。"}
+            send(sid, smell_observation=measured_smell)
+            send(sid, smell_observation=measured_smell)
             result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
             assert len(calls()) == before_calls + 1, calls()[before_calls:]
             context = reaction_context(calls()[-1]["body"])["observations"]["smell"]
             assert "distance_estimate" not in context, context
-            assert context["direction_estimate"]["cardinal"] == "east", context
-            assert not {"source_id", "entity_id", "position", "effective_strength"}.intersection(context), context
+            assert "direction_estimate" not in context["components"][0], context
+            assert context["components"][0]["effective_strength"] == 5, context
+            assert not {"source_id", "entity_id", "position"}.intersection(context["components"][0]), context
             query_calls = len(calls())
             before_query_rows = {r["turn_id"] for r in rows(sid)}
             query = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "匂いはどっちから？"})
             assert query["accepted"] and query["reason"] == "smell_query", query
             answer = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] not in before_query_rows and r["playback_status"] == "completed"), None))
-            assert "東のほうから来とるみたいや" in answer["text"] and "ブロック" not in answer["text"], answer
-            send(sid, smell_observation={**spatial_smell, "direction_estimate": None})
+            assert "匂いだけでは方向までは分からへん" in answer["text"] and "ブロック" not in answer["text"], answer
+            send(sid, smell_observation={**measured_smell, "components": [{**measured_smell["components"][0], "effective_strength": 8}]})
             before_query_rows = {r["turn_id"] for r in rows(sid)}
             query = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "匂いはどっちから？"})
             assert query["accepted"] and query["reason"] == "smell_query", query
             answer = wait_for(lambda: next((r for r in rows(sid) if r["turn_id"] not in before_query_rows and r["playback_status"] == "completed"), None))
-            assert "方向はまだ絞れてへん" in answer["text"] and "東" not in answer["text"], answer
+            assert "匂いだけでは方向までは分からへん" in answer["text"] and "強烈に" in answer["text"], answer
             assert len(calls()) == query_calls
             close(sid)
             control.pop("environment_payload")
-            passed.append("smell_estimates_reach_model_and_fixed_questions_use_current_direction")
+            passed.append("smell_strength_reaches_model_and_fixed_questions_cannot_locate_source")
 
-            # Strength changes during approach do not cancel the same bearing.
+            # Unplayed words are refreshed when the same smell changes strength.
             sid = register(base, preview=False)
             before_calls = len(calls())
             control["delay"] = .6
-            send(sid, smell_observation=spatial_smell)
-            send(sid, smell_observation=spatial_smell)
+            send(sid, smell_observation=measured_smell)
+            send(sid, smell_observation=measured_smell)
             wait_for(lambda: len(calls()) > before_calls)
             pending = reactions(sid)[-1]
-            send(sid, smell_observation={**spatial_smell, "effective_strength": 7})
-            completed = wait_for(lambda: row(base, pending["turn_id"], {"completed"}))
-            assert len(calls()) == before_calls + 1 and "cancel_reason" not in completed, completed
+            stronger = {**measured_smell, "components": [{**measured_smell["components"][0], "effective_strength": 8}]}
+            send(sid, smell_observation=stronger)
+            cancelled = wait_for(lambda: row(base, pending["turn_id"], {"cancelled"}))
+            assert "started_at" not in cancelled, cancelled
+            control["delay"] = 0
+            send(sid, smell_observation=stronger)
+            wait_for(lambda: next((r for r in reactions(sid) if r["turn_id"] != pending["turn_id"]
+                                   and r["playback_status"] == "completed"), None))
+            assert len(calls()) == before_calls + 2, calls()[before_calls:]
+            assert reaction_context(calls()[-1]["body"])["observations"]["smell"]["components"][0]["effective_strength"] == 8
             close(sid)
             control["delay"] = 0
-            passed.append("approaching_smell_strength_does_not_cancel_current_bearing")
+            passed.append("changed_smell_strength_cancels_unplayed_words_and_retries_once")
 
             for retry_decision in ("speak", "silent"):
                 sid = register(base, preview=False)
                 before_calls = len(calls())
                 control["delay"] = .6
-                send(sid, smell_observation=spatial_smell)
-                send(sid, smell_observation=spatial_smell)
+                send(sid, smell_observation=measured_smell)
+                send(sid, smell_observation=measured_smell)
                 wait_for(lambda: len(calls()) > before_calls)
                 pending = reactions(sid)[-1]
-                update = {**spatial_smell, "direction_estimate": {"cardinal": "west"}}
+                update = {**measured_smell, "components": [{**measured_smell["components"][0], "effective_strength": 3}]}
                 send(sid, smell_observation=update)
                 cancelled = wait_for(lambda: row(base, pending["turn_id"], {"cancelled"}))
                 assert "started_at" not in cancelled and not cancelled["text"], cancelled
@@ -292,14 +321,14 @@ def main():
                                        and r["playback_status"] == expected), None))
                 assert len(calls()) == before_calls + 2, calls()[before_calls:]
                 latest_context = reaction_context(calls()[-1]["body"])["observations"]["smell"]
-                assert latest_context["direction_estimate"]["cardinal"] == "west", latest_context
+                assert latest_context["components"][0]["effective_strength"] == 3, latest_context
                 for _ in range(3):
-                    send(sid, smell_observation=spatial_smell)
+                    send(sid, smell_observation=measured_smell)
                 time.sleep(.12)
                 assert len(calls()) == before_calls + 2, calls()[before_calls:]
                 close(sid)
                 control["environment_action"] = "speak"
-                passed.append(f"changed_smell_bearing_retries_once_and_consumes_{retry_decision}")
+                passed.append(f"changed_smell_strength_retries_once_and_consumes_{retry_decision}")
 
             for payload in ({"action": "silent", "speech": "勝手に話すで。"}, {"action": "move", "speech": "移動したで。"}):
                 control["environment_payload"] = payload

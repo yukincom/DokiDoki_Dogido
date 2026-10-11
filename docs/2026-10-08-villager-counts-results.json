@@ -1,0 +1,660 @@
+{
+  "date": "2026-10-08",
+  "scope": "synthetic observation through Fabric aggregation, Rust projection and prompt, then live local model; simulated audio",
+  "model": "isetnefret/Huihui-gemma-4-26B-A4B-it-qat-q4_0-unquantized-abliterated-mlx-4Bit",
+  "model_evidence": "listener PID 60414 argv; request alias default_model",
+  "max_tokens": 72,
+  "temperature": 0.65,
+  "enable_thinking": false,
+  "fresh_session_each_trial": true,
+  "conversation_history": [],
+  "input_cases": [
+    {
+      "id": "one_many",
+      "actual": {
+        "librarian": 7
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "librarian",
+                "quantity": "many"
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    },
+    {
+      "id": "two_one_many",
+      "actual": {
+        "librarian": 7,
+        "farmer": 3
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "farmer",
+                "quantity": 3
+              },
+              {
+                "id": "librarian",
+                "quantity": "many"
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    },
+    {
+      "id": "two_two_many",
+      "actual": {
+        "librarian": 7,
+        "farmer": 6
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "farmer",
+                "quantity": "many"
+              },
+              {
+                "id": "librarian",
+                "quantity": "many"
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    },
+    {
+      "id": "two_no_many",
+      "actual": {
+        "librarian": 3,
+        "farmer": 3
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "farmer",
+                "quantity": 3
+              },
+              {
+                "id": "librarian",
+                "quantity": 3
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    },
+    {
+      "id": "three_one_many",
+      "actual": {
+        "librarian": 7,
+        "farmer": 3,
+        "cleric": 2
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "cleric",
+                "quantity": 2
+              },
+              {
+                "id": "farmer",
+                "quantity": 3
+              },
+              {
+                "id": "librarian",
+                "quantity": "many"
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    },
+    {
+      "id": "three_two_many",
+      "actual": {
+        "librarian": 7,
+        "farmer": 6,
+        "cleric": 2
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "cleric",
+                "quantity": 2
+              },
+              {
+                "id": "farmer",
+                "quantity": "many"
+              },
+              {
+                "id": "librarian",
+                "quantity": "many"
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    },
+    {
+      "id": "three_no_many",
+      "actual": {
+        "librarian": 2,
+        "farmer": 2,
+        "cleric": 2
+      },
+      "composition": {
+        "mobs": [
+          {
+            "id": "villager",
+            "quantity": "many",
+            "professions": [
+              {
+                "id": "cleric",
+                "quantity": 2
+              },
+              {
+                "id": "farmer",
+                "quantity": 2
+              },
+              {
+                "id": "librarian",
+                "quantity": 2
+              }
+            ]
+          }
+        ],
+        "mobs_truncated": false,
+        "blocks": [],
+        "blocks_truncated": false
+      }
+    }
+  ],
+  "trials": [
+    {
+      "case": "one_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 7
+      },
+      "text": "お、村人がいっぱいおるやん！司書さんもいっぱいおるで。",
+      "outcome": "speak",
+      "seconds": 1.703,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1574,
+        "completion_tokens": 27,
+        "total_tokens": 1601,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      }
+    },
+    {
+      "case": "two_one_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 3
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかやなぁ。",
+      "outcome": "speak",
+      "seconds": 1.175,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 24,
+        "total_tokens": 1748,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_two_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 6
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.249,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 28,
+        "total_tokens": 1752,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_no_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 3,
+        "farmer": 3
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかやなぁ。",
+      "outcome": "speak",
+      "seconds": 1.189,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1723,
+        "completion_tokens": 24,
+        "total_tokens": 1747,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_one_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 3,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.329,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1872,
+        "completion_tokens": 28,
+        "total_tokens": 1900,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_two_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 6,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.342,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1872,
+        "completion_tokens": 28,
+        "total_tokens": 1900,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_no_many",
+      "run": 1,
+      "actual_counts": {
+        "librarian": 2,
+        "farmer": 2,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな。",
+      "outcome": "speak",
+      "seconds": 1.336,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1871,
+        "completion_tokens": 28,
+        "total_tokens": 1899,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "one_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 7
+      },
+      "text": "お、村人がいっぱいおるやん！司書さんもいっぱいおるで。",
+      "outcome": "speak",
+      "seconds": 1.124,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1574,
+        "completion_tokens": 27,
+        "total_tokens": 1601,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_one_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 3
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな。",
+      "outcome": "speak",
+      "seconds": 1.233,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 28,
+        "total_tokens": 1752,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_two_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 6
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.231,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 28,
+        "total_tokens": 1752,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_no_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 3,
+        "farmer": 3
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかやなぁ。",
+      "outcome": "speak",
+      "seconds": 1.173,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1723,
+        "completion_tokens": 24,
+        "total_tokens": 1747,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_one_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 3,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.33,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1872,
+        "completion_tokens": 28,
+        "total_tokens": 1900,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_two_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 6,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.327,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1872,
+        "completion_tokens": 28,
+        "total_tokens": 1900,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_no_many",
+      "run": 2,
+      "actual_counts": {
+        "librarian": 2,
+        "farmer": 2,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.324,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1871,
+        "completion_tokens": 28,
+        "total_tokens": 1899,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "one_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 7
+      },
+      "text": "お、村人がいっぱいおるやん！司書さんもいっぱいおるで。",
+      "outcome": "speak",
+      "seconds": 1.154,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1574,
+        "completion_tokens": 27,
+        "total_tokens": 1601,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_one_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 3
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかやなぁ。",
+      "outcome": "speak",
+      "seconds": 1.174,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 24,
+        "total_tokens": 1748,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_two_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 6
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.208,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1724,
+        "completion_tokens": 28,
+        "total_tokens": 1752,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "two_no_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 3,
+        "farmer": 3
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかやな！",
+      "outcome": "speak",
+      "seconds": 1.172,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1723,
+        "completion_tokens": 24,
+        "total_tokens": 1747,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_one_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 3,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.302,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1872,
+        "completion_tokens": 28,
+        "total_tokens": 1900,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_two_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 7,
+        "farmer": 6,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.309,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1872,
+        "completion_tokens": 28,
+        "total_tokens": 1900,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    },
+    {
+      "case": "three_no_many",
+      "run": 3,
+      "actual_counts": {
+        "librarian": 2,
+        "farmer": 2,
+        "cleric": 2
+      },
+      "text": "お、村人がいっぱいおるやん！賑やかでええ感じやな！",
+      "outcome": "speak",
+      "seconds": 1.314,
+      "finish_reason": "stop",
+      "usage": {
+        "prompt_tokens": 1871,
+        "completion_tokens": 28,
+        "total_tokens": 1899,
+        "prompt_tokens_details": {
+          "cached_tokens": 670
+        }
+      }
+    }
+  ],
+  "transport_failures_before_run": 21,
+  "additional_checks": {
+    "rust_notice_tests": "8 passed",
+    "fabric_nearby_composition_tests": "7 passed",
+    "rust_debug_build": "passed",
+    "environment_reaction_http_suite": "failed at check_environment_reactions.py:247: unexpected second model call in TTS-wait scenario; cause unresolved"
+  },
+  "limitations": [
+    "No real Minecraft, microphone or speaker verification",
+    "No prior conversation history in these 21 live model trials",
+    "Output quality is evaluated without changing the production prompt",
+    "Release binary and distributable Mod jar not rebuilt after quantities were added"
+  ]
+}

@@ -38,6 +38,7 @@ def fixture(*, combat_settings=None, extra_args=(), **settings):
                 checks["drafts"] += 1
                 drafting.set()
                 gate.wait(timeout=15)
+                assert not incoming.get("tools") and "tool_choice" not in incoming
                 return {"lines": LINES}
             if incoming["max_tokens"] == 512:
                 if checks["fail"]:

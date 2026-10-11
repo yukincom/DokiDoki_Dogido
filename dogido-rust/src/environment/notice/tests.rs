@@ -8,8 +8,8 @@ fn frame(mobs: &[&str], blocks: &[&str], biome: &str) -> Context {
         "observed_at":"2026-10-08T00:00:00Z","event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
         "player":{"dimension":"minecraft:overworld","position":{"x":0,"y":64,"z":0}},
         "world":{"biome":biome,"sky_visible":true,"time_phase":"day","weather":"clear"},
-        "nearby_composition":{"mobs":mobs,"blocks":blocks,"mobs_truncated":false,"blocks_truncated":false},
-        "smell_observation":{"status":"none"}})).unwrap();
+        "nearby_composition":{"mobs":mobs.iter().copied().collect::<std::collections::BTreeSet<_>>().into_iter().map(|id|json!({"id":id,"quantity":1})).collect::<Vec<_>>(),"blocks":blocks,"mobs_truncated":false,"blocks_truncated":false},
+        "smell_observation":{"status":"none","components":[],"basis":"smell_policy_v2"}})).unwrap();
     conversation_observation::project(&e, None, 32.0, 7.0, 5000).unwrap()
 }
 #[test]
@@ -66,14 +66,13 @@ fn periodic_samples_compare_once_and_do_not_carry_failed_or_skipped_changes() {
     assert!(state.noticing_context().is_none());
 }
 #[test]
-fn same_smell_direction_is_not_a_new_arrival() {
+fn same_smell_strength_change_is_not_a_new_arrival() {
     let mut before = frame(&[], &[], "plains");
-    before.observations["smell"] = json!({"status":"present","smell_id":"zombie","direction_estimate":{"cardinal":"east"},"description":"東"});
+    before.observations["smell"] = json!({"status":"present","components":[{"smell_id":"zombie","effective_strength":5}],"basis":"smell_policy_v2"});
     let mut after = before.clone();
-    after.observations["smell"]["direction_estimate"]["cardinal"] = json!("west");
-    after.observations["smell"]["description"] = json!("西");
+    after.observations["smell"]["components"][0]["effective_strength"] = json!(8);
     assert!(changes(&snapshot(&before), &after).is_empty());
-    after.observations["smell"] = json!({"status":"suppressed","suppression_reason":"rain"});
+    after.observations["smell"] = json!({"status":"suppressed","suppression_reason":"rain","components":[],"basis":"smell_policy_v2"});
     assert!(
         changes(&snapshot(&before), &after)
             .iter()
@@ -141,5 +140,125 @@ fn partial_notifications_never_start_or_advance_periodic_sampling() {
             .changes
             .iter()
             .any(|c| c.kind == "nearby_mob_types")
+    );
+}
+
+fn counted_event(mobs: Value) -> Result<GameEvent, String> {
+    GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"fixture",
+        "observed_at":"2026-10-08T00:00:00Z","event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+        "nearby_composition":{"mobs":mobs,"blocks":[],"mobs_truncated":false,"blocks_truncated":false}}))
+}
+fn counted_frame(mobs: Value) -> Context {
+    conversation_observation::project(&counted_event(mobs).unwrap(), None, 32.0, 7.0, 5000).unwrap()
+}
+#[test]
+fn quantities_and_villager_subsets_are_model_material_without_triggering_another_notice() {
+    let before = counted_frame(
+        json!([{"id":"cow","quantity":4},{"id":"villager","quantity":4,
+        "professions":[{"id":"farmer","quantity":3},{"id":"librarian","quantity":1}]}]),
+    );
+    let after = counted_frame(json!([{"id":"villager","quantity":"many",
+        "professions":[{"id":"librarian","quantity":"many"},{"id":"farmer","quantity":3}]},
+        {"id":"cow","quantity":"many"}]));
+    assert_eq!(before.observations["nearby_mob_types"][0]["quantity"], 4);
+    assert_eq!(
+        after.observations["nearby_mob_types"][0]["quantity"],
+        "いっぱい"
+    );
+    let villager = &after.observations["nearby_mob_types"][1];
+    assert_eq!(villager["quantity"], "いっぱい");
+    assert_eq!(
+        villager["profession_breakdown"]["relation"],
+        "村人合計の内訳"
+    );
+    assert_eq!(
+        villager["profession_breakdown"]["groups"][0]["label"],
+        "農民"
+    );
+    assert_eq!(villager["profession_breakdown"]["groups"][0]["quantity"], 3);
+    assert_eq!(
+        villager["profession_breakdown"]["groups"][1]["label"],
+        "司書"
+    );
+    assert_eq!(
+        villager["profession_breakdown"]["groups"][1]["quantity"],
+        "いっぱい"
+    );
+    assert!(
+        after
+            .catalog_knowledge
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|k| k.label == "司書")
+    );
+    assert!(changes(&snapshot(&before), &after).is_empty());
+    let mut state = State::default();
+    state.observe(before);
+    state.sample_notice(0, 180000, true);
+    state.observe(after.clone());
+    state.sample_notice(180000, 180000, true);
+    assert!(state.noticing_context().is_none());
+    assert!(state.context().unwrap().changes.is_empty());
+    assert_eq!(state.context().unwrap().observations, after.observations);
+    let mut next = after;
+    next.observations["nearby_block_types"] = json!([{"id":"stone","label":"石"}]);
+    state.observe(next);
+    state.sample_notice(360000, 180000, true);
+    let context = state.noticing_context().unwrap();
+    assert_eq!(context.changes.len(), 1);
+    assert_eq!(context.changes[0].kind, "nearby_block_types");
+    assert_eq!(
+        context.observations["nearby_mob_types"][1]["profession_breakdown"]["groups"][1]["quantity"],
+        "いっぱい"
+    );
+}
+#[test]
+fn quantity_contract_rejects_invalid_numbers_and_double_counted_breakdowns() {
+    for quantity in [
+        json!(0),
+        json!(5),
+        json!(-1),
+        json!(1.5),
+        json!("5"),
+        json!("unknown"),
+    ] {
+        assert!(counted_event(json!([{"id":"cow","quantity":quantity}])).is_err());
+    }
+    for mobs in [
+        json!([{"id":"cow","quantity":1},{"id":"cow","quantity":2}]),
+        json!([{"id":"villager","quantity":1}]),
+        json!([{"id":"cow","quantity":1,"professions":[{"id":"farmer","quantity":1}]}]),
+        json!([{"id":"villager","quantity":3,"professions":[{"id":"farmer","quantity":3},{"id":"librarian","quantity":2}]}]),
+        json!([{"id":"villager","quantity":3,"professions":[{"id":"farmer","quantity":"many"}]}]),
+        json!([{"id":"villager","quantity":"many","professions":[{"id":"farmer","quantity":4}]}]),
+    ] {
+        assert!(counted_event(mobs).is_err());
+    }
+    let context = counted_frame(json!([{"id":"villager","quantity":4,"professions":[
+        {"id":"baby","quantity":1},{"id":"none","quantity":1},{"id":"nitwit","quantity":1},{"id":"unknown","quantity":1}]}]));
+    assert_eq!(
+        context.observations["nearby_mob_types"][0]["profession_breakdown"]["groups"][0]["label"],
+        "子供"
+    );
+}
+
+#[test]
+fn smell_strength_source_and_component_order_do_not_make_new_arrivals() {
+    let mut before = frame(&[], &[], "plains");
+    let bread = json!({"smell_id":"bread","effective_strength":1,"source_kind":"hotbar"});
+    let flower =
+        json!({"smell_id":"lily_of_the_valley","effective_strength":1,"source_kind":"block"});
+    before.observations["smell"] =
+        json!({"status":"present","components":[bread.clone(),flower.clone()]});
+    let mut after = before.clone();
+    after.observations["smell"]["components"] = json!([flower, bread]);
+    after.observations["smell"]["components"][1]["effective_strength"] = json!(3);
+    after.observations["smell"]["components"][1]["source_kind"] = json!("dropped_item");
+    assert!(changes(&snapshot(&before), &after).is_empty());
+    assert_eq!(
+        after.observations["smell"]["components"][1]["effective_strength"],
+        3
     );
 }

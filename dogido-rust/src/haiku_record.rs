@@ -14,8 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const DEFAULT_OPEN_TIMEOUT: Duration = Duration::from_secs(240);
-pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(120);
+pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 pub mod verse;
 pub use verse::{LinePosition, ResolvedLines};
 pub(crate) static SAVE_LOCK: Mutex<()> = Mutex::new(());
@@ -262,7 +261,6 @@ pub struct Workshop {
     completed: Instant,
     last_activity: Instant,
     paused_at: Option<Instant>,
-    paused_total: Duration,
 }
 impl Workshop {
     pub fn is_open(&self) -> bool {
@@ -316,7 +314,6 @@ impl Workshop {
             completed,
             last_activity: completed,
             paused_at: None,
-            paused_total: Duration::ZERO,
         }
     }
     pub fn completed_at(&self) -> Instant {
@@ -349,10 +346,9 @@ impl Workshop {
         if !self.open {
             return false;
         }
-        let Some(started) = self.paused_at.take() else {
+        let Some(_) = self.paused_at.take() else {
             return false;
         };
-        self.paused_total += now.saturating_duration_since(started);
         self.record_activity(now);
         true
     }
@@ -360,18 +356,11 @@ impl Workshop {
         self.last_activity = now.max(self.completed).max(self.last_activity);
     }
     /// Called by the worker/monitor only. Projection never expires a workshop.
-    pub fn expire(&mut self, now: Instant, t_open: Duration, t_idle: Duration) -> bool {
+    pub fn expire(&mut self, now: Instant, t_idle: Duration) -> bool {
         if !self.open || self.combat_paused() {
             return false;
         }
-        if now
-            .saturating_duration_since(self.completed)
-            .saturating_sub(self.paused_total)
-            >= t_open
-        {
-            self.close("timeout_open");
-            true
-        } else if now.saturating_duration_since(self.last_activity) >= t_idle {
+        if now.saturating_duration_since(self.last_activity) >= t_idle {
             self.close("timeout_idle");
             true
         } else {
@@ -578,16 +567,8 @@ mod tests {
             before,
             project_workshop(Some(&w), "s", Some(5), "normal", true)
         );
-        assert!(!w.expire(
-            start + Duration::from_secs(119),
-            DEFAULT_OPEN_TIMEOUT,
-            DEFAULT_IDLE_TIMEOUT
-        ));
-        assert!(w.expire(
-            start + Duration::from_secs(120),
-            DEFAULT_OPEN_TIMEOUT,
-            DEFAULT_IDLE_TIMEOUT
-        ));
+        assert!(!w.expire(start + Duration::from_secs(299), DEFAULT_IDLE_TIMEOUT));
+        assert!(w.expire(start + Duration::from_secs(300), DEFAULT_IDLE_TIMEOUT));
         assert_eq!(w.close_reason.as_deref(), Some("timeout_idle"));
         assert_eq!(
             project_workshop(Some(&w), "s", None, "normal", true)["state"],
@@ -632,16 +613,12 @@ mod tests {
     }
 
     #[test]
-    fn pause_freezes_timeout_and_resume_excludes_combat_duration() {
+    fn pause_freezes_idle_timeout_and_resumed_dialogue_has_no_total_age_cap() {
         let start = Instant::now();
         let mut w = Workshop::open(emission(), None, start);
         assert!(w.pause(start + Duration::from_secs(30)));
         assert!(!w.pause(start + Duration::from_secs(40)));
-        assert!(!w.expire(
-            start + Duration::from_secs(1000),
-            DEFAULT_OPEN_TIMEOUT,
-            DEFAULT_IDLE_TIMEOUT
-        ));
+        assert!(!w.expire(start + Duration::from_secs(1000), DEFAULT_IDLE_TIMEOUT));
         assert_eq!(
             project_workshop(Some(&w), "s", None, "normal", false)["state"],
             "danger"
@@ -649,17 +626,9 @@ mod tests {
         assert!(w.resume(start + Duration::from_secs(1000)));
         assert!(!w.resume(start + Duration::from_secs(1001)));
         w.record_activity(start + Duration::from_secs(1100));
-        assert!(!w.expire(
-            start + Duration::from_secs(1209),
-            DEFAULT_OPEN_TIMEOUT,
-            DEFAULT_IDLE_TIMEOUT
-        ));
-        assert!(w.expire(
-            start + Duration::from_secs(1210),
-            DEFAULT_OPEN_TIMEOUT,
-            DEFAULT_IDLE_TIMEOUT
-        ));
-        assert_eq!(w.close_reason.as_deref(), Some("timeout_open"));
+        assert!(!w.expire(start + Duration::from_secs(1399), DEFAULT_IDLE_TIMEOUT));
+        assert!(w.expire(start + Duration::from_secs(1400), DEFAULT_IDLE_TIMEOUT));
+        assert_eq!(w.close_reason.as_deref(), Some("timeout_idle"));
         assert_eq!(
             w.emission.created_at_json(),
             "2026-09-26T12:34:56.123456+00:00"

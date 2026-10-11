@@ -208,6 +208,16 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
             };
             leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
         }
+        if action.rain_after_window.is_some() {
+            // この一件の匂いだけ雨上がりへ集中する。通常の会話snapshotは触らないので、
+            // 出力が終われば次の観測を待たず花・食品等の現在の匂いを使える。
+            let mut smell = leaf.details[key]["observations"]["smell"].clone();
+            smell["status"] = "present".into();
+            leaf.details[key]["world_context"]["observations"]["smell"] = smell;
+            if let Some(changes) = leaf.details[key]["world_context"]["changes"].as_array_mut() {
+                changes.retain(|change| change["kind"] != "smell");
+            }
+        }
         leaf.details[key]["recent"] = json!({"conversation":s.history.rows()});
     }
     true
@@ -522,24 +532,30 @@ impl Dialogue {
 fn priority(actions: &[Speech]) -> u8 {
     actions
         .iter()
-        .map(|a| match a.kind {
-            "emergency_shelter_morning" | "emergency_shelter_relief" => 3,
-            "submerged_darkness" => 5,
-            "occluded_entry_with_light" | "occluded_entry_no_light" => 6,
-            "dark_push_no_light" => 7,
-            "dark_push_stop" | "dark_push_after_breath" | "dark_push_breath" => 8,
-            "night_warning_surface" | "night_warning_cave" => 9,
-            "thunder_reaction" => 10,
-            "smell" => 11,
-            "ender_eye_throw" => 12,
-            "portal_appearance" => 13,
-            "magma_block" => 15,
-            "damaging_light" => 16,
-            "emergency_shelter_presence" | "emergency_shelter_advice" => 17,
-            "end_portal_frame" => 20,
-            "surroundings_notice" => 22,
-            "darkness_escape" | "darkness_advice" => 23,
-            _ => 24,
+        .map(|a| {
+            // 雨上がりは一瞬の非敵対な気づき。通常のsmell（ゾンビ臭）の優先順位を借りない。
+            if a.rain_after_window.is_some() {
+                return 22;
+            }
+            match a.kind {
+                "emergency_shelter_morning" | "emergency_shelter_relief" => 3,
+                "submerged_darkness" => 5,
+                "occluded_entry_with_light" | "occluded_entry_no_light" => 6,
+                "dark_push_no_light" => 7,
+                "dark_push_stop" | "dark_push_after_breath" | "dark_push_breath" => 8,
+                "night_warning_surface" | "night_warning_cave" => 9,
+                "thunder_reaction" => 10,
+                "smell" => 11,
+                "ender_eye_throw" => 12,
+                "portal_appearance" => 13,
+                "magma_block" => 15,
+                "damaging_light" => 16,
+                "emergency_shelter_presence" | "emergency_shelter_advice" => 17,
+                "end_portal_frame" => 20,
+                "surroundings_notice" => 22,
+                "darkness_escape" | "darkness_advice" => 23,
+                _ => 24,
+            }
         })
         .min()
         .unwrap_or(u8::MAX)
@@ -550,6 +566,70 @@ mod tests {
     use super::*;
     use crate::dialogue::{DialogueConfig, empty_event};
     use std::time::Instant;
+
+    #[test]
+    fn rain_after_uses_ordinary_notice_priority_and_keeps_the_shared_normal_smell() {
+        let dialogue = Dialogue::new(DialogueConfig::default()).unwrap();
+        dialogue.register("rain", "試験", false);
+        let mut value = empty_event("試験");
+        value["smell_observation"] = json!({"status":"present","basis":"smell_policy_v2",
+            "rain_after_active":true,"components":[{"smell_id":"bread","category":"food",
+                "valence":"pleasant","source_kind":"hotbar","effective_strength":3}],
+            "rain_after_notice":{"window_id":1,"component":{"smell_id":"rain_after",
+                "category":"rain_after","valence":"pleasant","source_kind":"block","effective_strength":1}}});
+        let event = GameEvent::parse(value).unwrap();
+        let mut data = dialogue.data.lock().unwrap();
+        let session = data.sessions.get_mut("rain").unwrap();
+        session
+            .ambient
+            .update(&event, 0, true, &dialogue.config.combat);
+        session.conversation_observation.observe(crate::conversation_observation::Context {
+            observations:json!({"smell":{"status":"present","components":[{"smell_id":"bread"}]}}),
+            ..Default::default()
+        });
+        let mut action = session
+            .ambient
+            .actions(
+                &event,
+                1,
+                crate::combat::model::Mode::Normal,
+                false,
+                &AmbientFocus::default(),
+                &dialogue.config.combat,
+            )
+            .remove(0);
+        action.delivery = Delivery::Ambient;
+        crate::environment::reaction::attach(
+            &mut action,
+            &event,
+            &json!({}),
+            &dialogue.config.combat,
+        );
+        assert_eq!(
+            priority(&[action.clone()]),
+            priority(&[crate::environment::notice::action()])
+        );
+        assert!(
+            priority(&[Speech::new("dark_push_no_light", "暗い")]) < priority(&[action.clone()])
+        );
+        let mut actions = [action];
+        assert!(refresh_dialogue_context(session, &mut actions));
+        let context = &actions[0].leaf.as_ref().unwrap().details["reaction_context"];
+        assert_eq!(
+            context["world_context"]["observations"]["smell"]["components"][0]["smell_id"],
+            "rain_after"
+        );
+        assert_eq!(
+            session
+                .conversation_observation
+                .context()
+                .unwrap()
+                .observations["smell"]["components"][0]["smell_id"],
+            "bread"
+        );
+        assert!(!context.to_string().contains("window_id"));
+        assert!(!context.to_string().contains("rain_after_window"));
+    }
 
     #[test]
     fn villager_routine_reaches_chat_and_both_reaction_routes_then_disappears() {
