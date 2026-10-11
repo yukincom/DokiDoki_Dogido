@@ -52,4 +52,6 @@
 
 最終コードでRust全656テスト（33 target）と `clippy --all-targets --locked -- -D warnings` が通過。模擬HTTPは7項目が通過し、期限内に実行・期限後に受信した成功を失敗へ変えないことも確認した。Fabricは `./gradlew test build --offline --no-daemon` で133テストとjarのビルドが通過した。これらは実Minecraftでの移動・描画・音声を検証するものではない。
 
+書類側mainへの統合後もFabricの133テストとビルド、Rustの `build --release --locked`、`launch_dialogue.py --settings-dir . --check` が通過。起動用バイナリとMOD jarを元のプロジェクトに用意した。Minecraftへのjar配備と実機確認は未実施。
+
 比較結果と採用方式は [API / JSONの適性](2026-10-11-api-json-suitability.md) を参照。実モデル比較は選択結果までを検証し、Minecraftの馬は動かさない。
