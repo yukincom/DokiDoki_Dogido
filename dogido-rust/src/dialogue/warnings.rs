@@ -698,11 +698,13 @@ impl Dialogue {
             self.share_story(
                 sid,
                 s,
-                &format!("resume:{turn}"),
-                Some(&id),
-                "workshop_return",
-                "句の話に戻る。",
-                json!({}),
+                super::story::StoryEvent {
+                    id: &format!("resume:{turn}"),
+                    workshop: Some(&id),
+                    kind: "workshop_return",
+                    text: "句の話に戻る。",
+                    details: json!({}),
+                },
             );
             notice_delivered = true;
         }

@@ -313,10 +313,9 @@ impl Dialogue {
             return false;
         };
         let response = self.acknowledge_display(sid, std::slice::from_ref(&display_id));
-        let accepted = response["displayed"]
+        response["displayed"]
             .as_array()
-            .is_some_and(|ids| ids.iter().any(|id| id == &display_id));
-        accepted
+            .is_some_and(|ids| ids.iter().any(|id| id == &display_id))
     }
 }
 

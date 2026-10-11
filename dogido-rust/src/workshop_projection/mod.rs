@@ -159,11 +159,11 @@ fn dialogue_from_view(pairs: &[Value]) -> Result<String> {
             ),
             180,
         );
-        if pair["reply_delivery"] == "unspoken_combat" {
-            if let Some(story) = pair["narrative"].as_str() {
-                utterances.push_back(("そのときの出来事（返答は未発話）", id, story.into()));
-                continue;
-            }
+        if pair["reply_delivery"] == "unspoken_combat"
+            && let Some(story) = pair["narrative"].as_str()
+        {
+            utterances.push_back(("そのときの出来事（返答は未発話）", id, story.into()));
+            continue;
         }
         for (role, key) in [("プレイヤー", "player_text"), ("ドギド", "dogido_text")] {
             let value = clean(pair[key].as_str().context("workshop dialogue text")?);

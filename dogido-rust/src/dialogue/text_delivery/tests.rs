@@ -3,9 +3,11 @@ use crate::playback::Status;
 use std::sync::Arc;
 
 fn dialogue() -> Arc<Dialogue> {
-    let mut config = DialogueConfig::default();
-    config.audio_enabled = false;
-    config.llm_enabled = false;
+    let mut config = DialogueConfig {
+        audio_enabled: false,
+        llm_enabled: false,
+        ..Default::default()
+    };
     config.haiku.enabled = false;
     config.haiku.memory_enabled = false;
     config.web.enabled = false;
@@ -54,7 +56,7 @@ async fn visible_reply_is_history_once_and_never_fake_audio_completion() {
             .is_empty()
     );
     assert_eq!(
-        dialogue.acknowledge_display("s", &[id.clone()])["displayed"],
+        dialogue.acknowledge_display("s", std::slice::from_ref(&id))["displayed"],
         json!([id])
     );
     assert_eq!(
@@ -70,10 +72,11 @@ async fn visible_reply_is_history_once_and_never_fake_audio_completion() {
     );
     dialogue.acknowledge_display("s", &[id]);
     dialogue.update("s", "reply", 0, Status::Completed, Some(&result));
-    let d = dialogue.data.lock().unwrap();
-    assert_eq!(d.sessions["s"].history.completed_pairs().len(), 1);
-    assert_eq!(d.sessions["s"].haiku.material_turns.len(), 1);
-    drop(d);
+    {
+        let d = dialogue.data.lock().unwrap();
+        assert_eq!(d.sessions["s"].history.completed_pairs().len(), 1);
+        assert_eq!(d.sessions["s"].haiku.material_turns.len(), 1);
+    }
     dialogue.shutdown().await;
 }
 
@@ -82,7 +85,7 @@ async fn another_session_cancelled_reply_and_stale_epoch_cannot_confirm_display(
     let dialogue = dialogue();
     let (id, _) = reply(&dialogue, "reply");
     assert_eq!(
-        dialogue.acknowledge_display("other", &[id.clone()])["rejected"],
+        dialogue.acknowledge_display("other", std::slice::from_ref(&id))["rejected"],
         json!([id])
     );
     {
@@ -90,7 +93,7 @@ async fn another_session_cancelled_reply_and_stale_epoch_cannot_confirm_display(
         d.rows[0]["playback_status"] = "cancelled".into();
     }
     assert_eq!(
-        dialogue.acknowledge_display("s", &[id.clone()])["rejected"],
+        dialogue.acknowledge_display("s", std::slice::from_ref(&id))["rejected"],
         json!([id])
     );
     {
@@ -99,7 +102,7 @@ async fn another_session_cancelled_reply_and_stale_epoch_cannot_confirm_display(
         d.sessions.get_mut("s").unwrap().epoch += 1;
     }
     assert_eq!(
-        dialogue.acknowledge_display("s", &[id.clone()])["rejected"],
+        dialogue.acknowledge_display("s", std::slice::from_ref(&id))["rejected"],
         json!([id])
     );
     assert!(
@@ -139,7 +142,7 @@ async fn voice_switch_cancels_active_work_and_rejects_previous_capture_generatio
         "voice_disabled"
     );
     assert_eq!(
-        dialogue.acknowledge_display("s", &[id.clone()])["rejected"],
+        dialogue.acknowledge_display("s", std::slice::from_ref(&id))["rejected"],
         json!([id])
     );
     dialogue.set_voice_enabled("s", true);
@@ -172,12 +175,13 @@ async fn recognition_log_is_bounded_separate_from_history_and_suppressed_while_o
     for n in 0..205 {
         dialogue.record_voice_input(Some("s"), &format!("入力{n}"), "voice");
     }
-    let d = dialogue.data.lock().unwrap();
-    let s = &d.sessions["s"];
-    assert_eq!(s.delivery.voice_inputs.len(), 200);
-    assert_eq!(s.delivery.voice_inputs[0]["text"], "入力5");
-    assert!(s.history.rows().is_empty());
-    drop(d);
+    {
+        let d = dialogue.data.lock().unwrap();
+        let s = &d.sessions["s"];
+        assert_eq!(s.delivery.voice_inputs.len(), 200);
+        assert_eq!(s.delivery.voice_inputs[0]["text"], "入力5");
+        assert!(s.history.rows().is_empty());
+    }
     dialogue.shutdown().await;
 }
 
@@ -196,7 +200,7 @@ async fn warning_display_confirms_only_authoritative_text_once() {
         (turn, cancel, id)
     };
     assert_eq!(
-        dialogue.acknowledge_display("s", &[id.clone()])["displayed"],
+        dialogue.acknowledge_display("s", std::slice::from_ref(&id))["displayed"],
         json!([id])
     );
     let before = dialogue.snapshot(None)["sessions"][0]["history"].clone();

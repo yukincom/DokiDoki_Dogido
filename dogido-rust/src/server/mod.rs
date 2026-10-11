@@ -238,7 +238,10 @@ async fn display_page(State(state): State<AppState>) -> Response {
     let (before, after) = include_str!("dogido.html")
         .split_once("<!--runtime-status-->")
         .expect("display page requires a runtime status slot");
-    let html = format!("{before}{banner}{after}");
+    let html = format!("{before}{banner}{after}").replace(
+        "<!--display-view-script-->",
+        include_str!("utterance-view.js"),
+    );
     let mut response = Html(html).into_response();
     response.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(
         "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"));

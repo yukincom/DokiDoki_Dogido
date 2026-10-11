@@ -468,11 +468,13 @@ impl Dialogue {
             self.share_story(
                 sid,
                 s,
-                turn,
-                None,
-                "haiku_delivered",
-                &format!("ドギドが川柳を{verb}。「{body}」"),
-                json!({"text":body,"delivery":if text {"text"} else {"audio"}}),
+                super::story::StoryEvent {
+                    id: turn,
+                    workshop: None,
+                    kind: "haiku_delivered",
+                    text: &format!("ドギドが川柳を{verb}。「{body}」"),
+                    details: json!({"text":body,"delivery":if text {"text"} else {"audio"}}),
+                },
             );
         }
         if let Some(row) = d.rows.iter_mut().find(|r| r["turn_id"] == turn) {

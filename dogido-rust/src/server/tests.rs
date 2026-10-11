@@ -20,9 +20,11 @@ fn registration() -> Value {
 
 #[tokio::test]
 async fn text_capability_voice_modes_and_display_ack_use_the_authenticated_actor() {
-    let mut config = crate::dialogue::DialogueConfig::default();
-    config.audio_enabled = false;
-    config.llm_enabled = false;
+    let mut config = crate::dialogue::DialogueConfig {
+        audio_enabled: false,
+        llm_enabled: false,
+        ..Default::default()
+    };
     config.haiku.enabled = false;
     config.haiku.memory_enabled = false;
     config.web.enabled = false;
@@ -756,6 +758,8 @@ async fn existing_display_is_embedded_with_rust_status_and_no_external_assets() 
         1
     );
     assert!(!html.contains("<!--runtime-status-->"));
+    assert!(!html.contains("<!--display-view-script-->"));
+    assert!(html.contains(include_str!("utterance-view.js")));
     assert!(html.contains("item.playback_status"));
     assert!(html.contains("const data = await response.json();\n          renderRuntime(data);"));
     assert!(html.contains("/api/v1/display/snapshot"));
