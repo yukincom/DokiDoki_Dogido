@@ -30,6 +30,8 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    // Minecraftのaccess widening/mixinを有効にして実ブロック形状を試験する。
+    testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
     testImplementation platform("org.junit:junit-bom:5.11.4")
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
@@ -37,6 +39,9 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // Loaderが生成するログもbuild配下へ閉じ、制作ファイルの場所へ混ぜない。
+    workingDir = layout.buildDirectory.dir('test-run').get().asFile
+    doFirst { workingDir.mkdirs() }
 }
 
 processResources {

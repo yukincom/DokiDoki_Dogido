@@ -18,7 +18,7 @@
 
 ## 3. 設計原則
 
-- 観測対象はメインプレイヤー本人
+- 通常の観測対象はメインプレイヤー本人。任意の`body_observation`は身体自身の姿勢・owner視認として分離する
 - 1 メッセージは 1 つの主要イベントを持つ
 - 主要イベントに加え、判定に必要な周辺コンテキストを同梱する
 - 音由来情報は方向中心にし、未視認敵の断定を避ける
@@ -55,6 +55,8 @@
   "command_results": []
 }
 ```
+
+任意の`body_observation`は[HTTP観測v2](adapter-api.md#body-observation-v2)に従う。`pose_basis=server_pose`の自他姿勢と、同じtickの`sample.vision`（`basis=body_eye_raycast_fov`）を含む。`player`・`world`・`visual_threats`へ混ぜず、身体の視認をプレイヤーの危険判定へ変換しない。全体未取得と視覚だけの未取得を区別する。具体例は[Java/Rust共通fixture](../dogido-rust/fixtures/body-observation-v2.json)。
 
 ## 5. トップレベル項目
 

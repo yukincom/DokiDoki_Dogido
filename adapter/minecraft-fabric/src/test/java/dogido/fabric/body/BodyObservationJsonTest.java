@@ -17,14 +17,19 @@ class BodyObservationJsonTest {
     static final UUID OWNER = UUID.fromString("11111111-1111-4111-8111-111111111111");
     static final String WORLD = "minecraft:overworld";
     static Snapshot snapshot(Presence presence, Position position, float yaw) {
+        return snapshot(presence,position,yaw,
+            new PoseObservation(new Position(10,65,20),new Position(10,64,23),360,0,450,15),
+            new VisionObservation(100,16,120,90,Visibility.VISIBLE,"in_view"));
+    }
+    static Snapshot snapshot(Presence presence, Position position, float yaw, PoseObservation pose, VisionObservation vision) {
         return new Snapshot(BodyProtocol.VERSION,presence,new Context(OWNER,
             UUID.fromString("22222222-2222-4222-8222-222222222222"),UUID.fromString("33333333-3333-4333-8333-333333333333"),WORLD),
-            WORLD,100,200,position,yaw,Activity.HOLDING,"test",0,null,null,Sensors.NOT_IMPLEMENTED,null,null,
-            new PoseObservation(new Position(10,65,20),new Position(10,64,23)));
+            WORLD,100,200,position,yaw,Activity.HOLDING,"test",0,null,null,Sensors.OWNER_VISION_ONLY,null,null,
+            pose,vision);
     }
     @Test void wireMatchesRustFixtureAndDoesNotAlterRawPosition() throws Exception {
         var actual = BodyObservationJson.observed(snapshot(Presence.PRESENT,new Position(10,64,20),360),25,OWNER,WORLD);
-        var expected = JsonParser.parseString(Files.readString(Path.of("../../dogido-rust/fixtures/body-observation-v1.json")));
+        var expected = JsonParser.parseString(Files.readString(Path.of("../../dogido-rust/fixtures/body-observation-v2.json")));
         assertEquals(expected,actual);
         assertFalse(actual.toString().contains("distance"));
     }
@@ -33,10 +38,16 @@ class BodyObservationJsonTest {
         var event = new EventJsonBuilder("status_snapshot","system","background","high","2026-10-11T00:00:00Z",new dogido.fabric.observation.smell.SmellObserver().current())
             .bodyObservation(observation).finish();
         observation.getAsJsonObject("sample").addProperty("server_tick",999);
+        observation.getAsJsonObject("sample").getAsJsonObject("vision").addProperty("reason","occluded");
+        assertEquals("in_view",event.getAsJsonObject("body_observation").getAsJsonObject("sample").getAsJsonObject("vision").get("reason").getAsString());
         assertEquals(100,event.getAsJsonObject("body_observation").getAsJsonObject("sample").get("server_tick").getAsLong());
     }
     @Test void missingStaleWrongOwnerAndWrongWorldHaveNoCoordinates() {
         var s = snapshot(Presence.PRESENT,new Position(10,64,20),0);
+        var legacy = new com.google.gson.Gson().toJsonTree(s).getAsJsonObject();
+        legacy.addProperty("version",3);
+        assertEquals("version_mismatch",BodyObservationJson.observed(
+            new com.google.gson.Gson().fromJson(legacy,Snapshot.class),0,OWNER,WORLD).get("reason").getAsString());
         for (var actual : java.util.List.of(
                 BodyObservationJson.observed(s,3000,OWNER,WORLD),
                 BodyObservationJson.observed(s,0,UUID.randomUUID(),WORLD),
@@ -45,6 +56,34 @@ class BodyObservationJsonTest {
                 BodyObservationJson.observed(snapshot(Presence.PRESENT,new Position(Double.NaN,0,0),0),0,OWNER,WORLD))) {
             assertEquals("unavailable",actual.get("status").getAsString());
             assertFalse(actual.has("sample"));
+        }
+    }
+    @Test void unknownVisionKeepsPoseAndInvalidVisionOrPoseIsRejected() {
+        var s = snapshot(Presence.PRESENT,new Position(10,64,20),-540);
+        var unknown = new VisionObservation(100,16,120,90,Visibility.UNAVAILABLE,"area_unloaded");
+        var valid = BodyObservationJson.observed(snapshot(s.presence(),s.position(),s.yaw(),s.pose(),unknown),0,OWNER,WORLD);
+        assertEquals("observed",valid.get("status").getAsString());
+        assertEquals(-180,valid.getAsJsonObject("sample").getAsJsonObject("self_pose").get("yaw").getAsDouble());
+        assertEquals("unavailable",valid.getAsJsonObject("sample").getAsJsonObject("vision").get("player_visibility").getAsString());
+        assertTrue(valid.getAsJsonObject("sample").has("player_pose"));
+        for (var bad : java.util.List.of(
+                new VisionObservation(99,16,120,90,Visibility.VISIBLE,"in_view"),
+                new VisionObservation(100,16,120,90,Visibility.VISIBLE,"occluded"),
+                new VisionObservation(100,16,120,90,Visibility.UNAVAILABLE,"occluded"),
+                new VisionObservation(100,Double.NaN,120,90,Visibility.VISIBLE,"in_view"),
+                new VisionObservation(100,0,120,90,Visibility.VISIBLE,"in_view"),
+                new VisionObservation(100,16,361,90,Visibility.VISIBLE,"in_view"),
+                new VisionObservation(100,16,120,181,Visibility.VISIBLE,"in_view"))) {
+            assertEquals("invalid_snapshot",BodyObservationJson.observed(
+                snapshot(s.presence(),s.position(),0,s.pose(),bad),0,OWNER,WORLD).get("reason").getAsString());
+        }
+        for (var pose : java.util.List.of(
+                new PoseObservation(s.pose().eyePosition(),s.pose().ownerPosition(),Float.NaN,0,0,0),
+                new PoseObservation(s.pose().eyePosition(),s.pose().ownerPosition(),0,91,0,0),
+                new PoseObservation(s.pose().eyePosition(),s.pose().ownerPosition(),0,0,Float.POSITIVE_INFINITY,0),
+                new PoseObservation(s.pose().eyePosition(),s.pose().ownerPosition(),0,0,0,-91))) {
+            assertEquals("invalid_snapshot",BodyObservationJson.observed(
+                snapshot(s.presence(),s.position(),0,pose,s.vision()),0,OWNER,WORLD).get("reason").getAsString());
         }
     }
     @Test void optionalBoundaryLoadsWhenBodyApiClassesAreAbsent() throws Exception {

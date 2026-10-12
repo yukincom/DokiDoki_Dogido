@@ -194,7 +194,7 @@ public final class DogidoEventClient {
         if (this.preferredVoiceEnabled != null) payload.addProperty("voice_enabled", this.preferredVoiceEnabled);
         JsonArray capabilities = new JsonArray();
         capabilities.add("player_state");
-        if (this.bodySupported) capabilities.add("body_observation.v1");
+        if (this.bodySupported) capabilities.add("body_observation.v2");
         capabilities.add("inventory");
         capabilities.add("hotbar_slots");
         capabilities.add("visual_threats");

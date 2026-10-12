@@ -23,7 +23,7 @@ fn server() -> Arc<Dialogue> {
 }
 fn event(sequence: i64, tick: u64, z: f64) -> GameEvent {
     let mut body: Value =
-        serde_json::from_str(include_str!("../../../fixtures/body-observation-v1.json")).unwrap();
+        serde_json::from_str(include_str!("../../../fixtures/body-observation-v2.json")).unwrap();
     body["sample"]["server_tick"] = json!(tick);
     body["sample"]["snapshot_revision"] = json!(tick * 2);
     body["sample"]["player_pose"]["position"]["z"] = json!(z);
@@ -68,7 +68,15 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
         .clone();
     assert_eq!(first_diagnostic["current"]["player"]["position"]["z"], 23.0);
     d.observe("other", a.clone(), Some("a"));
-    let b = event(2, 110, 28.0);
+    let b = edit(event(2, 110, 28.0), |v| {
+        let sample = &mut v["body_observation"]["sample"];
+        sample["self_pose"]["yaw"] = json!(90.0);
+        sample["self_pose"]["view_yaw"] = json!(90.0);
+        sample["player_pose"]["yaw"] = json!(-45.0);
+        sample["player_pose"]["pitch"] = json!(-20.0);
+        sample["vision"]["player_visibility"] = json!("not_visible");
+        sample["vision"]["reason"] = json!("occluded");
+    });
     d.observe("s", b.clone(), Some("b"));
     let second = capture(&d, &b);
     let second_diagnostic = d.snapshot(Some("s"))["sessions"]
@@ -83,10 +91,28 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
         28.0
     );
     assert_eq!(first_diagnostic["current"]["player"]["position"]["z"], 23.0);
+    assert_eq!(
+        first_diagnostic["current"]["vision"]["player_visibility"],
+        "visible"
+    );
+    assert_eq!(second_diagnostic["current"], body(&second)["current"]);
+    assert_eq!(second_diagnostic["previous"], body(&second)["previous"]);
+    assert_eq!(
+        body(&second)["current"]["vision"]["player_visibility"],
+        "not_visible"
+    );
+    assert_eq!(
+        body(&second)["previous"]["vision"]["player_visibility"],
+        "visible"
+    );
     assert_eq!(body(&second)["current"]["player"]["position"]["z"], 28.0);
     assert_eq!(body(&second)["previous"]["player"]["position"]["z"], 23.0);
     assert_eq!(body(&first)["current"]["player"]["position"]["z"], 23.0);
-    assert_eq!(body(&second)["current"]["self"]["yaw"], 0.0); // player yawは混ぜない。
+    assert_eq!(body(&second)["current"]["self"]["yaw"], 90.0); // player yawは混ぜない。
+    assert_eq!(body(&second)["current"]["self"]["view_yaw"], 90.0);
+    assert_eq!(body(&second)["current"]["self"]["view_pitch"], 0.0);
+    assert_eq!(body(&second)["current"]["player"]["yaw"], -45.0);
+    assert_eq!(body(&second)["current"]["player"]["pitch"], -20.0);
     let dup = event(2, 120, 99.0);
     d.observe("s", dup.clone(), Some("dup"));
     assert_eq!(
@@ -142,10 +168,15 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
             .contains("body_observation の self はオレ")
     );
     assert!(wire.contains("server_pose"));
+    assert!(wire.contains("pose_basis"));
+    assert!(wire.contains("body_eye_raycast_fov"));
+    assert!(wire.contains("occluded"));
+    assert!(wire.contains("view_pitch"));
     assert!(wire.contains("previous"));
     assert!(!wire.contains(OWNER));
     let mut result = json!({"text":"fixture"});
     attach_input(&mut result, &reply.details);
+    assert_eq!(result["body_observation_input"], body(&second).clone());
     let later = event(4, 130, 42.0);
     d.observe("s", later.clone(), Some("later"));
     assert_eq!(
@@ -160,9 +191,90 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
         result["body_observation_input"]["previous"]["player"]["position"]["z"],
         23.0
     );
+    assert_eq!(
+        result["body_observation_input"]["current"]["vision"]["reason"],
+        "occluded"
+    );
+    assert_eq!(
+        body(&capture(&d, &later))["current"]["vision"]["reason"],
+        "in_view"
+    );
     assert!(!result.to_string().contains(OWNER));
     drop(permit);
     d.shutdown().await;
+}
+#[tokio::test]
+async fn body_unavailable_vision_is_kept_in_normal_chat_and_diagnostic_without_losing_pose() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let e = edit(event(1, 100, 23.0), |v| {
+        v["body_observation"]["sample"]["vision"]["player_visibility"] = json!("unavailable");
+        v["body_observation"]["sample"]["vision"]["reason"] = json!("area_unloaded");
+    });
+    d.observe("s", e.clone(), Some("unavailable-vision"));
+    let captured = capture(&d, &e);
+    let projected = body(&captured);
+    assert_eq!(projected["status"], "observed");
+    assert_eq!(projected["current"]["self"]["position"]["z"], 20.0);
+    assert_eq!(projected["current"]["player"]["position"]["z"], 23.0);
+    assert_eq!(
+        projected["current"]["vision"]["player_visibility"],
+        "unavailable"
+    );
+    let snapshot = d.snapshot(Some("s"));
+    let diagnostic = snapshot["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["session_id"] == "s")
+        .unwrap();
+    assert_eq!(
+        diagnostic["body_observation"]["current"],
+        projected["current"]
+    );
+    let input = crate::chat_materials::PlayerInput {
+        raw_text: "今オレが見える？".into(),
+        semantic_text: "今オレが見える？".into(),
+        ..Default::default()
+    };
+    let crate::chat_materials::Prepared::Reply(reply) = crate::chat_materials::prepare(
+        &e,
+        &captured.settings,
+        &input,
+        &captured.context,
+        &captured.snapshot,
+        &chat_context::CatalogLabels,
+    )
+    .unwrap() else {
+        panic!("normal reply route");
+    };
+    let request = reply.request("fixture-model", 256).unwrap();
+    assert!(request.messages[1].content.contains("area_unloaded"));
+    assert!(request.messages[1].content.contains("pose_basis"));
+    let mut result = json!({"text":"fixture"});
+    attach_input(&mut result, &reply.details);
+    assert_eq!(result["body_observation_input"], projected.clone());
+    assert!(result["body_observation_input"]["current"]["self"]["position"].is_object());
+    drop(permit);
+    d.shutdown().await;
+}
+#[test]
+fn body_game_event_boundary_rejects_old_version_or_invalid_vision() {
+    for (path, value) in [
+        ("/body_observation/version", json!(1)),
+        ("/body_observation/sample/self_pose/view_yaw", json!(180)),
+        ("/body_observation/sample/player_pose/pitch", json!(91)),
+        (
+            "/body_observation/sample/vision/player_visibility",
+            json!("unavailable"),
+        ),
+        ("/body_observation/sample/vision/reason", json!("occluded")),
+        ("/body_observation/sample/vision/range_blocks", json!(0)),
+    ] {
+        let mut v = serde_json::to_value(event(1, 100, 23.0)).unwrap();
+        *v.pointer_mut(path).unwrap() = value;
+        assert!(GameEvent::parse(v).is_err(), "{path}");
+    }
 }
 #[tokio::test]
 async fn body_expired_transport_and_explicit_absence_cannot_be_revived_by_partial_events() {
@@ -188,7 +300,7 @@ async fn body_expired_transport_and_explicit_absence_cannot_be_revived_by_partia
             event(5, 140, 99.0),
             |v| {
                 v["body_observation"] =
-                    json!({"version":1,"status":"unavailable","reason":"unloaded"})
+                    json!({"version":2,"status":"unavailable","reason":"unloaded"})
             },
         );
     d.observe("s", absent.clone(), Some("absent"));

@@ -5,8 +5,8 @@ import java.util.List;
 
 /** 身体の実測と操作を不変データで渡す。HP/食料は身体の情報で、player観測や嗅覚へ混入させない。 */
 public final class BodyProtocol {
-    public static final int VERSION = 3;
-    public static final String ENTRYPOINT = "dogido:body_bridge_v3";
+    public static final int VERSION = 4;
+    public static final String ENTRYPOINT = "dogido:body_bridge_v4";
     private BodyProtocol() {}
 
     public enum Mode { DIRECT, FOLLOW, EXPLORE, HOLD }
@@ -15,7 +15,8 @@ public final class BodyProtocol {
     public enum Action { CALL, MOVE_TO, REST, WAIT, EAT }
     public enum Outcome { ACCEPTED, SUCCEEDED, REJECTED, INTERRUPTED, EXPIRED }
     public enum Submission { QUEUED, UNAVAILABLE, WRONG_THREAD, STALE_CONTEXT }
-    public enum Sensors { NOT_IMPLEMENTED }
+    public enum Sensors { OWNER_VISION_ONLY }
+    public enum Visibility { VISIBLE, NOT_VISIBLE, UNAVAILABLE }
     public enum Life { ACTIVE, DOWNED }
     public enum ObservationStatus { OBSERVED, UNAVAILABLE }
     public enum FoodKind { DROPPED_ITEM, PLANT }
@@ -46,12 +47,16 @@ public final class BodyProtocol {
         public FoodObservation { targets = List.copyOf(targets); }
     }
 
-    /** 同一server tickで採った足元・眼・相手位置。単位はblock。未取得はnullで、視認の証明ではない。 */
-    public record PoseObservation(Position eyePosition, Position ownerPosition) {}
+    /** 同一tickの眼・owner足元と向き。座標はblock、角度は度でpitchの正は下。未取得はnull。 */
+    public record PoseObservation(Position eyePosition, Position ownerPosition,
+            float viewYaw, float viewPitch, float ownerYaw, float ownerPitch) {}
+    /** owner一人の幾何視認。tickはSnapshotと一致、FOVは全角。未取得はUNAVAILABLEと理由で示す。 */
+    public record VisionObservation(long serverTick, double rangeBlocks,
+            double horizontalFovDegrees, double verticalFovDegrees, Visibility playerVisibility, String reason) {}
 
     /** position is null when the body is not loaded, never a synthetic origin position. */
     public record Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
             long snapshotRevision, Position position, float yaw, Activity activity, String reason,
             long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
-            Vitals vitals, FoodObservation food, PoseObservation pose) {}
+            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision) {}
 }

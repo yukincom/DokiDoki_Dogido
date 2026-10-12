@@ -9,7 +9,7 @@
     "main": [
       "dogido.lab.DogidoLab"
     ],
-    "dogido:body_bridge_v3": [
+    "dogido:body_bridge_v4": [
       "dogido.lab.client.BodyClientBridge"
     ],
     "client": [

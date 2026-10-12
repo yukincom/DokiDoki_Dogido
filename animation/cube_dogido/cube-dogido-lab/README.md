@@ -2,13 +2,14 @@
 
 Minecraft Java 1.21.11 / Fabricで動く3Dドギドの身体です。浮遊する既存モデルに、移動・HP・休息・食事・復活を持たせます。
 
-0.4.0では、自分とプレイヤーの位置を同じサーバー時刻で測り、既存adapter・Rustの会話入力へ渡す読取り接続を追加しました。現在／前回の位置理解を確かめる第一段階です。DIRECT操作は0.3.0で追加済み。モデルによる行動選択は後続です。
+0.5.0では、自分とプレイヤーの姿勢、身体の眼によるプレイヤーの視認を同じサーバー時刻で測り、既存adapter・Rustの会話と診断へ渡します。壁すり抜け中はスペクテイター相当の壁内視点を使います。DIRECT操作は0.3.0で追加済み。モデルによる行動選択は後続です。
 
 ## 導入
 
 1. Minecraftを終了する。
-2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.4.0.jar`へ置き換える。同じModの新旧を同時に入れない。
-3. Minecraft **1.21.11**、Fabric Loader **0.18.4以上**、Fabric APIで起動する。
+2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.5.0.jar`へ置き換える。同じModの新旧を同時に入れない。
+3. 会話へ接続する場合は、対応するadapter（build `2026-10-13-body-vision-p1`）とRustのHTTP観測v2も揃える。
+4. Minecraft **1.21.11**、Fabric Loader **0.18.4以上**、Fabric APIで起動する。
 
 2D表示用Modと併用できます。2D表示は既存Modの`/dogidohud hide`・`/dogidohud show`で切り替えます。身体単体の試験にHTTPサーバーやLAN公開は不要です。
 
@@ -87,18 +88,18 @@ Java 21以上でビルドします。
 
 既存キャッシュがない環境では、通常の`./gradlew test build`で依存関係を取得します。
 
-- `build/libs/cube-dogido-lab-0.4.0.jar`：Minecraftへ入れるMod
-- `build/libs/cube-dogido-lab-0.4.0-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
-- `build/libs/cube-dogido-lab-0.4.0-sources.jar`：ソース
+- `build/libs/cube-dogido-lab-0.5.0.jar`：Minecraftへ入れるMod
+- `build/libs/cube-dogido-lab-0.5.0-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
+- `build/libs/cube-dogido-lab-0.5.0-sources.jar`：ソース
 
-[API v3と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
+[API v4と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
 
 ## 確認状態
 
 2026-10-12に本線mainへの統合・対応Modの配置・普段のサーバーappとMinecraftの接続を確認しました。[導入記録と次の実機操作](../../../docs/2026-10-12-body-p1-install.md)を参照してください。
 
-移動・時間ルール・要求検証は自動テスト、Minecraft APIへの配線はコンパイルで検査しています。0.4.0のゲーム内描画、被弾、食事、保存再開、復活、次元転送、C2S/S2C実通信は実機確認待ちです。Rust／既存adapterへの位置観測接続はコードと自動テストまで。実モデルの位置理解・行動選択は未確認です。[P1の検証範囲と実機手順](../../../docs/2026-10-11-body-integration-plan.md#p1-静止した身体から自分とプレイヤーの位置関係を把握する)を参照してください。
+移動・時間ルール・要求検証、姿勢と視認の契約、Minecraftのブロック形状、既存会話・診断までを自動検査しています。0.5.0の実機配置・壁内を含む見え方・実モデルの理解は未確認です。[今回の仕様と検証記録](../../../docs/2026-10-13-body-vision-phase1.md)を参照してください。
 
-食料の見通し観測と身体のHP等は実装済みです。身体位置からの一般的なモブ視認・スメル・構造物センサーは`NOT_IMPLEMENTED`として区別します。花・雷雨・就寝の専用行動は未実装です。
+食料とowner視認は実装済みです。`OWNER_VISION_ONLY`は、一般モブ・嗅覚・構造物センサーが未実装であることを区別します。花・雷雨・就寝の専用行動は未実装です。
 
 元モデルは`source-assets/`にあります。既存のモデル・テクスチャ・手のアニメーションを使い、身体は幅・高さ0.625ブロックです。

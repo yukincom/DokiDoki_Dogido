@@ -13,6 +13,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.CropBlock;
 import net.minecraft.block.SweetBerryBushBlock;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.FoodComponent;
 import net.minecraft.entity.ItemEntity;
@@ -22,11 +23,9 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.state.property.Properties;
-import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
 
 /**
  * 身体から見通せる食料だけを観測し、指定された一件を到達・現物再照合後に消費する。
@@ -48,9 +47,8 @@ final class BodyFood {
     private boolean visible(Vec3d target, BlockPos foodBlock) {
         Vec3d eye = body.getEyePos();
         BodySpace space = new BodySpace(world(),body);
-        if (!space.loaded(new Box(eye,target).expand(.01))) return false;
-        var hit = world().raycast(new RaycastContext(eye,target,RaycastContext.ShapeType.OUTLINE,RaycastContext.FluidHandling.NONE,body));
-        return hit.getType() == HitResult.Type.MISS || foodBlock != null && hit.getBlockPos().equals(foodBlock);
+        return BodyVisibility.trace(world(),space::loaded,eye,target,ShapeContext.of(body),BodyVisibility.Purpose.FOOD,foodBlock)
+            == BodyVisibility.Trace.CLEAR;
     }
     private static int nutrition(ItemStack stack) {
         FoodComponent food = stack.get(DataComponentTypes.FOOD);

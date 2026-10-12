@@ -247,10 +247,15 @@ public final class DogidoEntity extends PathAwareEntity {
         requireServerThread(); prepareLifecycle();
         Vec3d p = getEntityPos();
         ServerPlayerEntity player = registeredOwner();
-        return new Snapshot(BodyProtocol.VERSION,owner() == null ? Presence.OWNER_UNAVAILABLE : Presence.PRESENT,control.context(),player == null ? null : player.getEntityWorld().getRegistryKey().getValue().toString(),serverTick(),snapshotRevision,
-            new Position(p.x,p.y,p.z),getYaw(),activity,reason,control.revision(),control.stateResult(),control.actionResult(),Sensors.NOT_IMPLEMENTED,
+        ServerPlayerEntity presentOwner = owner();
+        long tick = serverTick();
+        PoseObservation pose = BodyPoseObservation.capture(this,presentOwner);
+        // 姿勢と視覚を同じserver呼出しで採り、旧視界へ新しいsnapshot時刻を付けない。
+        return new Snapshot(BodyProtocol.VERSION,presentOwner == null ? Presence.OWNER_UNAVAILABLE : Presence.PRESENT,control.context(),player == null ? null : player.getEntityWorld().getRegistryKey().getValue().toString(),tick,snapshotRevision,
+            new Position(p.x,p.y,p.z),getBodyYaw(),activity,reason,control.revision(),control.stateResult(),control.actionResult(),Sensors.OWNER_VISION_ONLY,
             vitals.snapshot(getHealth(),getMaxHealth(),damageEnabled(),player == null ? null : player.interactionManager.getGameMode().getId()),
-            owner() == null || vitals.downed() ? new FoodObservation(ObservationStatus.UNAVAILABLE,serverTick(),List.of(),false) : food.observe(), BodyPoseObservation.capture(this,owner()));
+            presentOwner == null || vitals.downed() ? new FoodObservation(ObservationStatus.UNAVAILABLE,tick,List.of(),false) : food.observe(),
+            pose,BodyVision.capture(this,presentOwner,pose,tick));
     }
 
     private void prepareLifecycle() {

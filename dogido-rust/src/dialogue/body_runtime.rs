@@ -1,4 +1,4 @@
-//! HTTP登録のownerと生eventを身体状態へ配線し、既存world_contextに読取専用コピーを添える。
+//! HTTP登録のownerと生eventを身体状態へ配線し、既存world_contextに姿勢・視認の読取専用コピーを添える。
 //! 接続のロック所有者はDialogue。状態・会話の生成やモデル呼出しを増やさない。
 use super::{Dialogue, Session};
 use crate::{

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 const OWNER: &str = "11111111-1111-4111-8111-111111111111";
 const WORLD: &str = "minecraft:overworld";
 pub(crate) fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../fixtures/body-observation-v1.json")).unwrap()
+    serde_json::from_str(include_str!("../../fixtures/body-observation-v2.json")).unwrap()
 }
 fn observation(tick: u64, z: f64) -> Observation {
     let mut v = fixture();
@@ -22,7 +22,8 @@ fn body_wire_rejects_missing_wrong_version_unknown_field_and_invalid_pose() {
     let o: Observation = serde_json::from_value(fixture()).unwrap();
     o.validate().unwrap();
     for (pointer, value) in [
-        ("/version", json!(2)),
+        ("/version", json!(1)),
+        ("/version", json!(3)),
         ("/sample/self_pose/yaw", json!(180)),
         ("/sample/context/owner_id", json!("wrong")),
         ("/sample/self_pose/position/x", json!(30_000_001)),
@@ -36,7 +37,7 @@ fn body_wire_rejects_missing_wrong_version_unknown_field_and_invalid_pose() {
                 .is_err()
         );
     }
-    for pointer in ["sample", "basis", "age_ms"] {
+    for pointer in ["sample", "pose_basis", "age_ms"] {
         let mut v = fixture();
         v.as_object_mut().unwrap().remove(pointer);
         assert!(serde_json::from_value::<Observation>(v).is_err());
@@ -47,6 +48,142 @@ fn body_wire_rejects_missing_wrong_version_unknown_field_and_invalid_pose() {
     let mut v = fixture();
     v["sample"]["player_pose"]["position"]["x"] = json!("NaN");
     assert!(serde_json::from_value::<Observation>(v).is_err());
+}
+#[test]
+fn body_v2_requires_extended_pose_and_separate_vision_basis() {
+    for (parent, key) in [
+        ("/sample/self_pose", "view_yaw"),
+        ("/sample/self_pose", "view_pitch"),
+        ("/sample/player_pose", "yaw"),
+        ("/sample/player_pose", "pitch"),
+        ("/sample", "vision"),
+        ("/sample/vision", "basis"),
+        ("/sample/vision", "range_blocks"),
+        ("/sample/vision", "horizontal_fov_degrees"),
+        ("/sample/vision", "vertical_fov_degrees"),
+        ("/sample/vision", "player_visibility"),
+        ("/sample/vision", "reason"),
+    ] {
+        let mut v = fixture();
+        v.pointer_mut(parent)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove(key);
+        assert!(
+            serde_json::from_value::<Observation>(v).is_err(),
+            "{parent}/{key}"
+        );
+    }
+    for (pointer, value) in [
+        ("/pose_basis", "body_eye_raycast_fov"),
+        ("/sample/vision/basis", "server_pose"),
+        ("/sample/vision/player_visibility", "unknown"),
+        ("/sample/vision/reason", "unknown"),
+    ] {
+        let mut v = fixture();
+        *v.pointer_mut(pointer).unwrap() = json!(value);
+        assert!(
+            serde_json::from_value::<Observation>(v).is_err(),
+            "{pointer}"
+        );
+    }
+    let mut v = fixture();
+    v["basis"] = v.as_object_mut().unwrap().remove("pose_basis").unwrap();
+    assert!(serde_json::from_value::<Observation>(v).is_err());
+    let mut v = fixture();
+    v["sample"]["vision"]["server_tick"] = json!(101);
+    assert!(serde_json::from_value::<Observation>(v).is_err());
+}
+#[test]
+fn body_v2_angle_and_vision_ranges_reject_nonfinite_and_out_of_bounds_values() {
+    // JSONで表せないNaN/無限大も型からのvalidateで拒否する。端の許容値は各規約に合わせる。
+    for (field, minimum, maximum, inclusive) in [
+        ("yaw", -180.0, 180.0, false),
+        ("view_yaw", -180.0, 180.0, false),
+        ("view_pitch", -90.0, 90.0, true),
+        ("player_yaw", -180.0, 180.0, false),
+        ("player_pitch", -90.0, 90.0, true),
+        ("range", 0.0, 64.0, true),
+        ("horizontal_fov", 0.0, 360.0, true),
+        ("vertical_fov", 0.0, 180.0, true),
+    ] {
+        for (value, valid) in [
+            (minimum, minimum < 0.0),
+            (minimum + 0.01, true),
+            (maximum - 0.01, true),
+            (maximum, inclusive),
+            (minimum - 0.01, false),
+            (maximum + 0.01, false),
+            (f64::NAN, false),
+            (f64::INFINITY, false),
+            (f64::NEG_INFINITY, false),
+        ] {
+            let mut o = observation(100, 23.0);
+            let Observation::Observed { sample, .. } = &mut o else {
+                panic!()
+            };
+            *match field {
+                "yaw" => &mut sample.self_pose.yaw,
+                "view_yaw" => &mut sample.self_pose.view_yaw,
+                "view_pitch" => &mut sample.self_pose.view_pitch,
+                "player_yaw" => &mut sample.player_pose.yaw,
+                "player_pitch" => &mut sample.player_pose.pitch,
+                "range" => &mut sample.vision.range_blocks,
+                "horizontal_fov" => &mut sample.vision.horizontal_fov_degrees,
+                "vertical_fov" => &mut sample.vision.vertical_fov_degrees,
+                _ => unreachable!(),
+            } = value;
+            assert_eq!(o.validate().is_ok(), valid, "{field}={value}");
+        }
+    }
+}
+#[test]
+fn body_v2_visibility_reasons_are_closed_and_unavailable_keeps_pose() {
+    let reasons = [
+        ("visible", "in_view"),
+        ("not_visible", "out_of_range"),
+        ("not_visible", "outside_fov"),
+        ("not_visible", "occluded"),
+        ("unavailable", "area_unloaded"),
+        ("unavailable", "body_downed"),
+        ("unavailable", "owner_unavailable"),
+        ("unavailable", "invalid_pose"),
+    ];
+    for status in ["visible", "not_visible", "unavailable"] {
+        for (expected_status, reason) in reasons {
+            let mut v = fixture();
+            v["sample"]["vision"]["player_visibility"] = json!(status);
+            v["sample"]["vision"]["reason"] = json!(reason);
+            let o: Observation = serde_json::from_value(v).unwrap();
+            assert_eq!(
+                o.validate().is_ok(),
+                status == expected_status,
+                "{status}/{reason}"
+            );
+            if status != expected_status {
+                continue;
+            }
+            let now = Instant::now();
+            let mut s = State::default();
+            accept(&mut s, &o, now);
+            let projected = s.project(now).unwrap();
+            assert_eq!(projected["status"], "observed");
+            assert_eq!(projected["pose_basis"], "server_pose");
+            assert!(projected.get("basis").is_none());
+            assert_eq!(projected["current"]["vision"]["player_visibility"], status);
+            assert_eq!(projected["current"]["vision"]["reason"], reason);
+            assert_eq!(projected["current"]["self"]["position"]["z"], 20.0);
+            assert_eq!(projected["current"]["player"]["position"]["z"], 23.0);
+        }
+    }
+    for version in [1, 2, 3] {
+        let o: Observation = serde_json::from_value(
+            json!({"version":version,"status":"unavailable","reason":"unloaded"}),
+        )
+        .unwrap();
+        assert_eq!(o.validate().is_ok(), version == 2);
+    }
 }
 #[test]
 fn body_retains_raw_previous_without_prelabeling_departure() {
@@ -60,6 +197,14 @@ fn body_retains_raw_previous_without_prelabeling_departure() {
         now + Duration::from_millis(500),
     );
     let v = s.project(now + Duration::from_millis(500)).unwrap();
+    assert_eq!(v["coordinate_system"]["pitch_unit"], "degree");
+    assert_eq!(v["coordinate_system"]["pitch_positive"], "down");
+    assert_eq!(v["current"]["self"]["view_yaw"], 0.0);
+    assert_eq!(v["current"]["self"]["view_pitch"], 0.0);
+    assert_eq!(v["current"]["player"]["yaw"], 90.0);
+    assert_eq!(v["current"]["player"]["pitch"], 15.0);
+    assert_eq!(v["current"]["vision"], fixture()["sample"]["vision"]);
+    assert_eq!(v["previous"]["vision"], fixture()["sample"]["vision"]);
     assert_eq!(v["current"]["player"]["position"]["z"], 28.0);
     assert_eq!(v["previous"]["player"]["position"]["z"], 23.0);
     assert_eq!(v["sample_interval_ticks"], 10);
@@ -81,6 +226,27 @@ fn body_replay_partial_and_late_packet_do_not_refresh_age() {
     let o = observation(100, 23.0);
     accept(&mut s, &o, now);
     accept(&mut s, &o, now + Duration::from_secs(2));
+    // tickまたはrevisionが古い別内容の視認でも、現在の姿勢・視界と鮮度は更新しない。
+    for (tick, revision) in [(99, 202), (101, 199)] {
+        let mut late = fixture();
+        late["sample"]["server_tick"] = json!(tick);
+        late["sample"]["snapshot_revision"] = json!(revision);
+        late["sample"]["vision"]["player_visibility"] = json!("not_visible");
+        late["sample"]["vision"]["reason"] = json!("occluded");
+        accept(
+            &mut s,
+            &serde_json::from_value(late).unwrap(),
+            now + Duration::from_secs(2),
+        );
+    }
+    assert_eq!(
+        s.project(now + Duration::from_secs(2)).unwrap()["current"]["vision"]["player_visibility"],
+        "visible"
+    );
+    assert_eq!(
+        s.project(now + Duration::from_secs(2)).unwrap()["age_ms"],
+        2025
+    );
     s.observe(
         None,
         Some(OWNER),
@@ -89,7 +255,11 @@ fn body_replay_partial_and_late_packet_do_not_refresh_age() {
         Some(0),
     );
     assert_eq!(
-        s.project(now + Duration::from_secs(3)).unwrap()["status"],
+        s.project(now + Duration::from_millis(2974)).unwrap()["status"],
+        "observed"
+    );
+    assert_eq!(
+        s.project(now + Duration::from_millis(2975)).unwrap()["status"],
         "unavailable"
     );
     accept(
@@ -120,7 +290,7 @@ fn body_wrong_owner_world_and_unavailable_clear_comparison() {
     assert_eq!(s.project(now).unwrap()["reason"], "dimension_mismatch");
     accept(&mut s, &observation(110, 25.0), now);
     let unavailable = Observation::Unavailable {
-        version: 1,
+        version: 2,
         reason: "unloaded".into(),
     };
     accept(&mut s, &unavailable, now);
@@ -138,6 +308,8 @@ fn body_epoch_reset_retired_epoch_and_transport_delay() {
     v["sample"]["context"]["epoch"] = json!("44444444-4444-4444-8444-444444444444");
     v["sample"]["server_tick"] = json!(1);
     v["sample"]["snapshot_revision"] = json!(1);
+    v["sample"]["vision"]["player_visibility"] = json!("not_visible");
+    v["sample"]["vision"]["reason"] = json!("outside_fov");
     let new = serde_json::from_value(v).unwrap();
     accept(&mut s, &new, now);
     assert!(s.project(now).unwrap()["previous"].is_null());
@@ -145,6 +317,10 @@ fn body_epoch_reset_retired_epoch_and_transport_delay() {
     assert_eq!(
         s.project(now).unwrap()["current"]["player"]["position"]["z"],
         23.0
+    );
+    assert_eq!(
+        s.project(now).unwrap()["current"]["vision"]["reason"],
+        "outside_fov"
     );
     let mut fresh = State::default();
     fresh.observe(Some(&new), Some(OWNER), Some(WORLD), now, Some(2990));

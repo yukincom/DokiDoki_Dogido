@@ -1,8 +1,17 @@
-# Body API v3
+# Body API v4
 
-身体Mod **0.4.0 / protocol 3** の実装契約です。既存adapterは自他位置の読取りを接続済み。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
+身体Mod **0.5.0 / protocol 4** の実装契約です。既存adapterは自他姿勢・owner視認の読取りを接続済み（新しい版の実機配置は未実施）。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
 
-## v2からの変更
+## v3からの変更
+
+- entrypoint：`dogido:body_bridge_v4`、payload：`dogido_experiment:body_request_v4`／`body_snapshot_v4`
+- `pose`に`viewYaw/viewPitch/ownerYaw/ownerPitch`を追加。`Snapshot.yaw`は描画上の身体向き。現モデルの視線は身体の顔向きでpitch=0。
+- `vision(serverTick,rangeBlocks,horizontalFovDegrees,verticalFovDegrees,playerVisibility,reason)`を追加。同一tickの眼から距離16・水平120度・垂直90度・ownerの3点への見通しを判定する。
+- `VISIBLE/in_view`、`NOT_VISIBLE/out_of_range|outside_fov|occluded`、`UNAVAILABLE/area_unloaded|body_downed|owner_unavailable|invalid_pose`。視覚だけ未取得でも正常な姿勢を保持する。
+- `sensors=OWNER_VISION_ONLY`。一般モブ・嗅覚・構造物の走査は未実装。眼が壁内ならスペクテイター相当の壁内視点を使い、移動・ダメージ・食料の見通し条件には適用しない。
+- HTTPは`body_observation` v2、姿勢の根拠は`pose_basis=server_pose`、視覚の根拠は`vision.basis=body_eye_raycast_fov`。幾何と材質の詳細は[視認仕様](../../../../docs/2026-10-13-body-vision-phase1.md)。
+
+## v2からv3への変更（履歴）
 
 - entrypoint：`dogido:body_bridge_v3`
 - payload：`dogido_experiment:body_request_v3`／`body_snapshot_v3`
@@ -19,7 +28,7 @@
 - 初回bind／再読み込み／失効／復活後はDIRECTで待機
 - v1の固定追従・探索・退避はローカル試験コマンドに限定
 
-v1／v2のクラスやJARをv3として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
+v1／v2／v3のクラスやJARをv4として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
 
 ## 公開APIとスレッド
 
@@ -36,13 +45,13 @@ public interface BodyBridge {
 }
 ```
 
-adapterは`cube-dogido-lab-0.4.0-body-api.jar`を**compileOnly**で参照します。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
+adapterは`cube-dogido-lab-0.5.0-body-api.jar`を**compileOnly**で参照します。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
 
 `available()`と送信はMinecraftのclient thread上で行います。`snapshot()`は不変データを読むだけで、HTTP workerから参照できます。受信後3秒を過ぎたsnapshotは空です。HTTP転送時はclient threadでsnapshotと経過msを続けて読み、3秒未満だけを現在値として送ります。受信登録と10client tickごとのポーリングは身体Modが所有します。
 
 ## 最小例
 
-次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv3 entrypointの存在を確認します。
+次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv4 entrypointの存在を確認します。
 
 ```java
 BodyBridge bridge = FabricLoader.getInstance()
@@ -130,7 +139,9 @@ HTTP session、adapterのworldEpoch、身体のContextは別々に照合しま�
 | `appliedStateRevision`・`stateResult`・`actionResult` | 適用した状態と、直近操作の実行結果 |
 | `vitals` | `life(ACTIVE/DOWNED)`、HP／上限、damage有効、ownerGameMode、壁内tick、休息tick、復活残tick、復活回数、直近被弾 |
 | `food` | 食料専用の`status`・観測tick・候補・`truncated` |
-| `sensors` | 一般的なモブ視認・スメル・構造物センサーは`NOT_IMPLEMENTED` |
+| `pose` | 同時刻の眼・owner位置・身体の視線・owner yaw/pitch |
+| `vision` | owner視認の三値・理由・範囲・FOV。採取tickはsnapshotのtickと一致 |
+| `sensors` | `OWNER_VISION_ONLY`。一般的なモブ視認・スメル・構造物センサーは未実装 |
 
 未登録／未ロード時のposition・vitalsはnullです。架空のゼロ座標・HP0へ置き換えません。`OWNER_UNAVAILABLE`と身体の`DOWNED`は別の状態です。
 
@@ -142,8 +153,8 @@ food候補は身体から8ブロック以内、読み込み済みで見通せる
 
 ## 接続できている範囲
 
-実装済み：server身体制御、HP／時間ルール、食料観測と消費、任意Java entrypoint、C2S/S2Cの型と配線。
+実装済み：server身体制御、HP／時間ルール、食料観測と消費、任意Java entrypoint、C2S/S2C、自他姿勢・owner視認の既存adapter／Rust会話・診断への配送。
 
-未接続：既存adapter→Rustへの専用型・実行capability・モデルの行動選択・結果の受領／利用。身体ModはHTTPサーバー、モデル、TTS、会話セッションを起動しません。
+未接続：身体操作の専用型・実行capability・モデルの行動選択・結果の受領／利用。身体ModはHTTPサーバー、モデル、TTS、会話セッションを起動しません。
 
 実機確認待ち：ゲーム内通信、描画・補間、食事／被弾、保存再開、復活・次元移動、専用サーバー。自動検査はこの実機確認を代替しません。

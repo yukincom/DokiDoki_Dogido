@@ -51,7 +51,8 @@ final class BodyManager {
         return new Snapshot(dogido.lab.api.BodyProtocol.VERSION,id == null ? Presence.NOT_BOUND : Presence.UNLOADED,
             id == null ? null : new Context(player.getUuid(),id,null,null),player.getEntityWorld().getRegistryKey().getValue().toString(),server.getTicks(),0,null,0,
             id == null ? Activity.UNBOUND : Activity.HOLDING,id == null ? "bind_existing_body" : "body_chunk_not_loaded",
-            -1,null,null,Sensors.NOT_IMPLEMENTED,null,
-            new FoodObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false),null);
+            -1,null,null,Sensors.OWNER_VISION_ONLY,null,
+            new FoodObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false),null,
+            BodyVision.unavailable(server.getTicks(),id == null ? "invalid_pose" : "area_unloaded"));
     }
 }

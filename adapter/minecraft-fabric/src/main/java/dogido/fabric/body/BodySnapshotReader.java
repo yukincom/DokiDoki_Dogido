@@ -4,7 +4,7 @@ import dogido.lab.api.BodyBridge;
 import dogido.lab.api.BodyProtocol;
 import net.fabricmc.loader.api.FabricLoader;
 
-/** API v3導入時だけロードする接続実体。client threadでsnapshotと受信経過msを続けて読む。操作APIは呼ばない。 */
+/** API v4導入時だけロードする接続実体。client threadでsnapshotと受信経過msを続けて読む。操作APIは呼ばない。 */
 final class BodySnapshotReader {
     private BodySnapshotReader() {}
     static BodyConnection.Source open() {

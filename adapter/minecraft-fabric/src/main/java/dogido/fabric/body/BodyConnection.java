@@ -18,13 +18,13 @@ public final class BodyConnection {
         FabricLoader loader = FabricLoader.getInstance();
         if (!loader.isModLoaded("dogido_experiment")) return;
         reason = "version_mismatch";
-        if (loader.getEntrypointContainers("dogido:body_bridge_v3",Object.class).isEmpty()) return;
+        if (loader.getEntrypointContainers("dogido:body_bridge_v4",Object.class).isEmpty()) return;
         try { source = BodySnapshotReader.open(); }
         catch (RuntimeException | LinkageError error) { source = null; }
     }
     static JsonObject unavailable(String reason) {
         JsonObject json = new JsonObject();
-        json.addProperty("version",1);
+        json.addProperty("version",2);
         json.addProperty("status","unavailable");
         json.addProperty("reason",reason);
         return json;

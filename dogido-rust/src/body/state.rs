@@ -59,6 +59,7 @@ impl State {
             }
             return;
         };
+        let sample = sample.as_ref();
         if owner != Some(sample.context.owner_id.as_str()) {
             self.clear("owner_mismatch");
             return;
@@ -118,15 +119,18 @@ impl State {
         }
         let s = &reading.sample;
         Some(
-            json!({"status":"observed","basis":"server_pose","dimension":s.context.dimension,
+            json!({"status":"observed","pose_basis":"server_pose","dimension":s.context.dimension,
             "coordinate_system":{"position_unit":"block","x_positive":"east","y_positive":"up","z_positive":"south",
-                "yaw_unit":"degree","yaw_zero":"south","yaw_positive_90":"west"},
+                "yaw_unit":"degree","yaw_zero":"south","yaw_positive_90":"west",
+                "pitch_unit":"degree","pitch_positive":"down"},
             "age_ms":reading.age(now),"current":raw(s),"previous":self.previous.as_ref().map(raw),
             "sample_interval_ticks":self.previous.as_ref().map(|p| s.server_tick-p.server_tick)}),
         )
     }
 }
 fn raw(s: &Sample) -> Value {
-    json!({"self":{"subject":"ドギド","position":s.self_pose.position,"eye_position":s.self_pose.eye_position,"yaw":s.self_pose.yaw},
-        "player":{"subject":"プレイヤー","position":s.player_pose.position}})
+    json!({"self":{"subject":"ドギド","position":s.self_pose.position,"eye_position":s.self_pose.eye_position,
+            "yaw":s.self_pose.yaw,"view_yaw":s.self_pose.view_yaw,"view_pitch":s.self_pose.view_pitch},
+        "player":{"subject":"プレイヤー","position":s.player_pose.position,"yaw":s.player_pose.yaw,"pitch":s.player_pose.pitch},
+        "vision":s.vision})
 }
