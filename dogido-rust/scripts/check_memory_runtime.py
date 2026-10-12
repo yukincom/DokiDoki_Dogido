@@ -32,6 +32,10 @@ def main():
                 result = step(text, "close_workshop")
                 result["feedback"] = {"kind": "praise", "evidence": "余韻が心に残る"}
                 return result
+            if text == "今日の句を思い出して":
+                return step(text, "respond", "いま開いてる句の話を続けよか。")
+            if text == "今日はこの句の相談をここでおしまいにしよう":
+                return step(text, "close_workshop")
             assert text == "この句はどういう意味？", text
             return step(text)
         calls = install(control, choose)
@@ -78,9 +82,15 @@ def main():
         assert not set(constraints.get("forbidden_terms", [])) & {lessons[0]["note"]}
         before = hud(next_sid)
         r = finish(base, send, next_sid, "今日の句を思い出して")
-        assert r.get("memory_action") == "haiku_recall" and not r["llm_reports"], r
+        assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 1, r
+        assert not r.get("memory_action") and not r.get("memory_outcome"), r
+        assert len(calls) == 4 and stored(next_sid) == [entry]
         assert hud(next_sid)["canonical_lines"] == before["canonical_lines"] and hud(next_sid)["state"] == "open"
-        passed.append("reconnect_loads_soft_lesson_and_recall_does_not_replace_open_poem")
+        passed.append("reconnect_loads_soft_lesson_and_open_workshop_does_not_recall")
+        r = finish(base, send, next_sid, "今日はこの句の相談をここでおしまいにしよう")
+        assert r["workshop_action"] == "close_workshop" and hud(next_sid)["state"] == "closed", r
+        assert len(calls) == 5 and not r.get("memory_action") and stored(next_sid) == [entry]
+        passed.append("today_and_poem_in_close_request_reach_workshop_model")
         r = finish(base, send, next_sid, "前の注意はもういらん")
         assert r.get("memory_outcome") == "saved" and not r["llm_reports"], r
         cleared = read_jsonl(folder / "memory/long_term/haiku_lessons.jsonl")
@@ -108,6 +118,8 @@ def main():
                 return adoption(text)
             if text == "終了":
                 return step(text, "close_workshop")
+            if text == "保存した句を思い出して":
+                return step(text, "respond", "いまの句と案の話を続けよか。")
             assert text == "どういう意味？", text
             return step(text)
         review_calls = install(control, review_pending)
@@ -121,9 +133,10 @@ def main():
         assert pending_critiques[-1]["kind"] == "ask_meaning"
         assert pending_critiques[-1]["entry_id"] == original[0]["id"]
         r = finish(base, send, sid, "保存した句を思い出して")
-        assert r.get("memory_action") == "haiku_recall" and not r["llm_reports"], r
-        assert "さくらいろ" not in r["text"] and hud(sid)["pending_lines"] == pending and not revisions(folder, sid)
-        assert hud(sid)["canonical_lines"] == LINES and stored(sid) == original and len(review_calls) == 1
+        assert r["workshop_action"] == "respond" and len(r["llm_reports"]) == 1, r
+        assert not r.get("memory_action") and not r.get("memory_outcome"), r
+        assert hud(sid)["pending_lines"] == pending and not revisions(folder, sid)
+        assert hud(sid)["canonical_lines"] == LINES and stored(sid) == original and len(review_calls) == 2
         r = finish(base, send, sid, "採用して")
         saved = revisions(folder, sid)
         assert r.get("workshop_outcome") == "pending_saved" and len(saved) == 1, r
@@ -132,7 +145,7 @@ def main():
         assert hud(sid)["canonical_lines"] == pending and not hud(sid)["pending_lines"]
         r = finish(base, send, sid, "終了")
         assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
-        assert len(review_calls) == 3 and len(editor_calls) == 1 and len(proposal_steps) == 2
+        assert len(review_calls) == 4 and len(editor_calls) == 1 and len(proposal_steps) == 2
         r = finish(base, send, sid, "覚えてる句を教えて")
         assert r.get("memory_action") == "haiku_recall" and not r["llm_reports"], r
         assert "元「" in r["text"] and "直し「さくらいろ" in r["text"], r
@@ -143,12 +156,28 @@ def main():
         path.write_text(json.dumps({"id":"older","text":"保存済みの雪原の句","created_at":datetime.now(timezone.utc).isoformat(),"world":{"biome":"snowy_plains"}},ensure_ascii=False)+"\n")
         r = finish(base, send, sid, "雪原の句を思い出して")
         assert "保存済みの雪原の句" in r["text"] and "さくらいろ" not in r["text"], r
-        passed.append("pending_feedback_targets_pending_but_recall_uses_only_saved_entries_and_revisions_across_sessions")
+        passed.append("pending_is_preserved_without_recall_and_closed_workshop_recalls_saved_entries_and_revisions")
+
+    # Even when the workshop model hands the input to casual chat, its open
+    # poem reference must keep the normal recall router disabled for this turn.
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        sid = ready(base, send, rows)
+        original = stored(sid)
+        calls = install(control, lambda text, prompt, n: step(text, "unrelated"))
+        r = finish(base, send, sid, "今日の句を思い出して")
+        assert r["workshop_action"] == "unrelated" and r["text"] == control["leaf"], r
+        assert len(calls) == 1 and not r.get("memory_action") and not r.get("memory_outcome"), r
+        assert hud(sid)["state"] == "open" and hud(sid)["canonical_lines"] == LINES
+        assert stored(sid) == original and not revisions(folder, sid)
+        passed.append("casual_handoff_from_open_workshop_does_not_recall")
 
     with fixture(memory_enabled=False) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         sid = ready(base, send, rows)
         install(control, lambda text, prompt, n: step(text))
         finish(base, send, sid, "どういう意味？")
+        install(control, lambda text, prompt, n: step(text, "close_workshop"))
+        closed = finish(base, send, sid, "終了")
+        assert closed["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", closed
         for text in ["気にせんで", "覚えてる句を教えて"]:
             r = finish(base, send, sid, text)
             assert r.get("memory_outcome") == "memory_disabled" and not r["llm_reports"], r
@@ -167,6 +196,9 @@ def main():
         path.rmdir()
         entry_path = folder / "memory/long_term/haiku_entries.jsonl"
         entry_path.mkdir()
+        install(control, lambda text, prompt, n: step(text, "close_workshop"))
+        closed = finish(base, send, sid, "終了")
+        assert closed["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", closed
         r = finish(base, send, sid, "覚えてる句を教えて")
         assert r.get("memory_outcome") == "read_failed" and "読み出せん" in r["text"], r
         passed.append("io_failure_is_honest_and_auxiliary_feedback_failure_does_not_break_reply")

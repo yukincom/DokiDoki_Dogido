@@ -338,6 +338,48 @@ mod tests {
         })).unwrap().complete(chrono::Utc::now()).unwrap()
     }
 
+    #[test]
+    fn save_confirmation_excludes_isolated_text_ids_and_includes_saved_revisions() {
+        let dialogue = Dialogue::new(DialogueConfig {
+            audio_enabled: false,
+            llm_enabled: false,
+            haiku: HaikuSettings {
+                enabled: false,
+                memory_enabled: false,
+                ..Default::default()
+            },
+            web: WebSettings {
+                enabled: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        }).unwrap();
+        dialogue.register("text", "プレイヤー", true);
+        dialogue.open_text_workshop("text", emission(), "fake_entry".into()).unwrap();
+        let mut data = dialogue.data.lock().unwrap();
+        let s = data.sessions.get_mut("text").unwrap();
+        let saved = |s: &mut Session| Dialogue::workshop_view(s, "そのまま残そう").unwrap()["current_verse_saved"].clone();
+        assert_eq!(saved(s), false);
+        s.haiku.workshop.as_mut().unwrap().revision_id = Some("text_fake_revision".into());
+        assert_eq!(saved(s), false);
+        s.text_poem = Some(crate::poem_book::SavedPoem {
+            key: "saved_poem".into(), root: Default::default(), original: emission(),
+            lines: s.haiku.workshop.as_ref().unwrap().current_lines.clone(),
+            revision_id: None, revisions: Vec::new(),
+        });
+        assert_eq!(saved(s), true);
+        s.text_workshop = false;
+        s.text_poem = None;
+        s.haiku.workshop.as_mut().unwrap().entry_id = None;
+        s.haiku.workshop.as_mut().unwrap().revision_id = None;
+        assert_eq!(saved(s), false);
+        s.haiku.workshop.as_mut().unwrap().entry_id = Some("hk_saved".into());
+        assert_eq!(saved(s), true);
+        s.haiku.workshop.as_mut().unwrap().entry_id = None;
+        s.haiku.workshop.as_mut().unwrap().revision_id = Some("revision_saved".into());
+        assert_eq!(saved(s), true);
+    }
+
     #[tokio::test]
     async fn displayed_text_is_explicit_current_and_once_without_audio_completion() {
         let dialogue = Dialogue::new(DialogueConfig {

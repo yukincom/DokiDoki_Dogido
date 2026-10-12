@@ -470,3 +470,18 @@ fn short_edit_selects_only_the_exact_current_candidate_with_current_evidence() {
         );
     }
 }
+
+#[test]
+fn reported_natural_close_needs_the_missing_authority_fields() {
+    let input = "<では終了で！>";
+    let (mut frame, details) = conversation(input, "また話そな。", "close_workshop");
+    frame["payload"].as_object_mut().unwrap().remove("confidence");
+    frame["payload"].as_object_mut().unwrap().remove("evidence");
+    let rejected = validate(&frame, &details).unwrap();
+    assert!(rejected["step"].is_null());
+    assert_eq!(rejected["contract_errors"], json!(["confidence:missing", "evidence:missing"]));
+    frame["payload"]["confidence"] = 0.95.into();
+    frame["payload"]["evidence"] = "では終了で！".into();
+    let accepted = validate(&frame, &details).unwrap();
+    assert_eq!(accepted["step"]["action"], "close_workshop", "{accepted}");
+}

@@ -57,3 +57,21 @@ fn shared_context_joins_workshop_projection_without_repeating_the_existing_dialo
     assert_eq!(text.matches("プレイヤー: 何の対比？").count(), 1);
     assert_eq!(text.matches("ドギド: 葉と斧。").count(), 1);
 }
+
+#[test]
+fn current_verse_save_confirmation_comes_only_from_the_runtime_flag() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures.json")).unwrap();
+    let case = fixture["projection"].as_array().unwrap().iter()
+        .find(|row| row["op"] == "details").unwrap();
+    let mut input = case["input"].clone();
+    input["workshop"]["entry_id"] = "hk_saved".into();
+    assert!(details_for(&input).unwrap()["workshop_context"]
+        .get("current_verse_saved").is_none());
+    for saved in [false, true] {
+        input["workshop"]["current_verse_saved"] = saved.into();
+        let before = input.clone();
+        let details = details_for(&input).unwrap();
+        assert_eq!(details["workshop_context"]["current_verse_saved"], saved);
+        assert_eq!(input, before);
+    }
+}
