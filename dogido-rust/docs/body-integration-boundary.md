@@ -1,6 +1,6 @@
 # 3D身体とRust本線の連携境界
 
-状態: **2026-10-12、身体Mod 0.4.0 / Body API v3と、自他位置を既存adapter・Rust通常会話へ渡すP1を本線mainへ導入済み。Minecraft接続と本体起動を確認。位置の実測・実モデルの理解は未確認。**
+状態: **2026-10-12、身体Mod 0.4.0 / Body API v3と、自他位置を既存adapter・Rust通常会話へ渡すP1を本線mainへ導入済み。Minecraft接続と本体起動を確認。実機で身体・playerの位置更新と会話材料への配送を確認。前後2地点の返答は不合格で、モデル側の読み取りは改善待ち。**
 
 身体の正本は`animation/cube_dogido/cube-dogido-lab`。通常の起動場所は書類側の`DokiDoki-Dogido`のmainで、普段のサーバーappを使う。
 

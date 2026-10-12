@@ -59,10 +59,30 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
     let a = event(1, 100, 23.0);
     d.observe("s", a.clone(), Some("a"));
     let first = capture(&d, &a);
+    let first_diagnostic = d.snapshot(Some("s"))["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["session_id"] == "s")
+        .unwrap()["body_observation"]
+        .clone();
+    assert_eq!(first_diagnostic["current"]["player"]["position"]["z"], 23.0);
     d.observe("other", a.clone(), Some("a"));
     let b = event(2, 110, 28.0);
     d.observe("s", b.clone(), Some("b"));
     let second = capture(&d, &b);
+    let second_diagnostic = d.snapshot(Some("s"))["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["session_id"] == "s")
+        .unwrap()["body_observation"]
+        .clone();
+    assert_eq!(
+        second_diagnostic["current"]["player"]["position"]["z"],
+        28.0
+    );
+    assert_eq!(first_diagnostic["current"]["player"]["position"]["z"], 23.0);
     assert_eq!(body(&second)["current"]["player"]["position"]["z"], 28.0);
     assert_eq!(body(&second)["previous"]["player"]["position"]["z"], 23.0);
     assert_eq!(body(&first)["current"]["player"]["position"]["z"], 23.0);
@@ -113,6 +133,23 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
     assert!(wire.contains("server_pose"));
     assert!(wire.contains("previous"));
     assert!(!wire.contains(OWNER));
+    let mut result = json!({"text":"fixture"});
+    attach_input(&mut result, &reply.details);
+    let later = event(4, 130, 42.0);
+    d.observe("s", later.clone(), Some("later"));
+    assert_eq!(
+        body(&capture(&d, &later))["current"]["player"]["position"]["z"],
+        42.0
+    );
+    assert_eq!(
+        result["body_observation_input"]["current"]["player"]["position"]["z"],
+        28.0
+    );
+    assert_eq!(
+        result["body_observation_input"]["previous"]["player"]["position"]["z"],
+        23.0
+    );
+    assert!(!result.to_string().contains(OWNER));
     drop(permit);
     d.shutdown().await;
 }

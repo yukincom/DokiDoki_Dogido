@@ -201,6 +201,7 @@ async fn body(
                     cancel,
                 )
                 .await?;
+                super::body_runtime::attach_input(&mut result, &reply.details);
                 result["observation_revision"] = reply.details["world_context"]["revision"].clone();
                 return Ok(result);
             }
@@ -213,10 +214,12 @@ async fn body(
                 live(cancel)?;
                 crate::chat_validation::finish(None)
             };
-            json!({"op":"result","text":output.text,
+            let mut result = json!({"op":"result","text":output.text,
                 "dialogue_action":output.action,"dialogue_outcome":output.status,
                 "dialogue_reason":output.reason,
-                "observation_revision":reply.details["world_context"]["revision"]})
+                "observation_revision":reply.details["world_context"]["revision"]});
+            super::body_runtime::attach_input(&mut result, &reply.details);
+            result
         }
     };
     result["llm_reports"] = json!(reports);

@@ -48,5 +48,12 @@ pub(super) fn context(s: &Session) -> Option<Context> {
     context
 }
 
+/// 生成へ渡した身体観測を発話の診断行へ固定する。現在値を後から読み直さず、本文や履歴へは加えない。
+pub(super) fn attach_input(result: &mut serde_json::Value, details: &serde_json::Value) {
+    if let Some(body) = details.pointer("/world_context/observations/body_observation") {
+        result["body_observation_input"] = body.clone();
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -133,6 +133,7 @@ impl Dialogue {
                     "dialogue_outcome",
                     "dialogue_reason",
                     "observation_revision",
+                    "body_observation_input",
                     "horse_recall_status",
                     "horse_recall_reason",
                     "horse_command",
