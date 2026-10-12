@@ -8,6 +8,36 @@ from check_workshop_edits import edit, finish, revisions, adoption
 
 def main():
     passed = []
+    # 実報告と同じ省略を再生し、診断と会話・終了状態を分離する。
+    from check_haiku_runtime import wait_for
+    with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
+        incomplete = "<では終了で！>"
+        def save_and_close(text, prompt, n):
+            assert '"current_verse_saved"' in prompt
+            assert "confidence:missing" not in prompt and "evidence:missing" not in prompt
+            if text == incomplete:
+                return {"action":"close_workshop", "purpose":"finish_workshop", "speech":"また話そな。"}
+            if text == "今回はここまでにしよう":
+                p = step(text, "close_workshop")
+                p["speech"] = "うん、また話そな。"
+                return p
+            return step(text, "respond", "この句は今の形で保存されとるで。")
+        calls = install(control, save_and_close)
+        sid = ready(base, send, rows)
+        before = wait_for(lambda: stored(sid))
+        r = finish(base, send, sid, "<これはこのまま保存しよう！>")
+        assert r["workshop_action"] == "respond" and hud(sid)["state"] == "open", r
+        assert stored(sid) == before and not revisions(folder, sid)
+        r = finish(base, send, sid, incomplete)
+        assert r["workshop_reason"] == "close_skipped" and hud(sid)["state"] == "open", r
+        assert len(calls) == 2, "不成立の単独終了は再試行しない"
+        assert "workshop_close_rejected" in log.read_text()
+        assert "confidence:missing" in log.read_text() and "evidence:missing" in log.read_text()
+        r = finish(base, send, sid, "今回はここまでにしよう")
+        assert r["workshop_action"] == "close_workshop" and hud(sid)["state"] == "closed", r
+        assert len(calls) == 3 and stored(sid) == before and not revisions(folder, sid)
+        passed.append("saved_current_verse_and_explicit_close_keep_storage_and_diagnostics_separate")
+
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         def model(text, prompt, n):
             if text in {"いい句だね", "終了でいいよ"}:

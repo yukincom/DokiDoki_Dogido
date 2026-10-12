@@ -86,7 +86,6 @@ impl Dialogue {
         helper: &mut Helper,
         reply: &super::workshop_story::Reply,
     ) -> Result<Value> {
-        let corrections = self.reading_overlay().await?;
         let mut editing = crate::workshop_editing::Engine::default();
         let text = input["text"].as_str().context("workshop input text")?;
         // 正本DBで答える一般知識を、句の相談・確認状態の消費より先に分ける。
@@ -125,9 +124,6 @@ impl Dialogue {
         }
         // 一般知識の寄り道は確認・採否・時計を動かさない。本来の句入力だけ消費する。
         self.consume_workshop_input(input)?;
-        if let Some(recall) = crate::recall_query::parse(text, &corrections, chrono::Utc::now()) {
-            return Ok(json!({"memory_query":recall,"llm_reports":[]}));
-        }
         let mut snapshot = input["workshop"].clone();
         let view = &input["workshop"];
         let current: Vec<HaikuLine> = serde_json::from_value(view["current_lines"].clone())?;
@@ -383,6 +379,10 @@ impl Dialogue {
                     // 時間経過で閉じるので対話を壊すような開発は不要。
                     // 終了できない一手は本文だけを会話として使い、モデルへ差し戻さない。
                     if payload["action"] == "close_workshop" && validation["step"].is_null() {
+                        // 不成立理由は診断ログだけへ残す。agent_stepsへ入れると
+                        // 後の相談文脈へ戻るため、再試行や会話材料には使わない。
+                        tracing::warn!(event="workshop_close_rejected",phase,attempt,
+                            reason=%reason,errors=%validation["contract_errors"]);
                         action = Some("respond".into());
                         speech = crate::reaction_leaf::sanitize::strip(
                             payload["speech"].as_str().unwrap_or(""),
@@ -823,6 +823,13 @@ impl Dialogue {
             .workshop
             .as_mut()
             .filter(|w| w.is_open() && !w.combat_paused())?;
+        // 通常は保存成功後のentry/revision ID、テキスト相談室は
+        // 保存句への接続を根拠にする。単独試験用の仮IDは保存の証拠にしない。
+        let current_verse_saved = if s.text_workshop {
+            s.text_poem.is_some()
+        } else {
+            w.entry_id.is_some() || w.revision_id.is_some()
+        };
         let candidate_is_current = w
             .conversation_candidate
             .as_ref()
@@ -838,7 +845,7 @@ impl Dialogue {
         crate::workshop_target::Target::observe(&mut w.discussion_target, text, lines);
         Some(
             json!({"workshop_id":w.hud_id,"emission":w.emission,"materials":w.materials,
-            "entry_id":w.entry_id,
+            "entry_id":w.entry_id,"current_verse_saved":current_verse_saved,
             "current_lines":w.current_lines,"pending":w.pending,"version":w.version,
             "conversation_candidate":candidate,
             "discussion_target":w.discussion_target,

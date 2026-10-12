@@ -84,7 +84,11 @@ async fn body(
         .filter(|v| !v.is_empty())
         .unwrap_or(raw)
         .into();
+    // 一句の相談中は過去句を検索しない。戦闘pauseと通常会話への寄り道も、
+    // 受付時にコードが確定したworkshopのopen状態を引き継ぐ。
     if context.asks_haiku_recall
+        && input["poem_reference"]["open"] != true
+        && input["workshop_fallback"] != true
         && !(context.asks_save_last_haiku
             || context.revised_haiku_text.is_some()
             || context.player_haiku_text.is_some())

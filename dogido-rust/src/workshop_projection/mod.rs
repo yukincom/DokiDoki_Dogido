@@ -332,6 +332,10 @@ pub fn details_for(frame: &Value) -> Result<Value> {
             .filter(|a| RULES["followups"].as_array().unwrap().contains(a))
             .cloned(),
     );
+    // 保存状態は本体が確定する。移植時のfixture等で未指定なら推定しない。
+    if let Some(saved) = view["current_verse_saved"].as_bool() {
+        details["workshop_context"]["current_verse_saved"] = saved.into();
+    }
     let candidate = &view["conversation_candidate"];
     if frame_actions
         .iter()
