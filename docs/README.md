@@ -82,8 +82,9 @@ issueの開閉状態はリンク先で確認する。本文を更新するとき
 | 6 | [shared-llm-profile.md](shared-llm-profile.md) | 別に起動した共有 MLX endpoint と従来 standalone の明示切替 |
 | 7 | [voice-echo-cancellation.md](voice-echo-cancellation.md) | macOSの任意AEC、独立導入、権限と実機試験 |
 | 8 | [debug-checklist.md](debug-checklist.md) | 旧Python版のデバッグ履歴。現在の実機結果とは区別 |
-| 9 | [3D身体とRust本線の連携境界](../dogido-rust/docs/body-integration-boundary.md) | 身体API v2、モデルによる行動選択の分担、未接続箇所と統合手順 |
-| 10 | [身体統合の作業計画](2026-10-11-body-integration-plan.md) | 専用worktree、Git基準、観測地点の移行、ファイル分割と起動方針 |
+| 9 | [3D身体とRust本線の連携境界](../dogido-rust/docs/body-integration-boundary.md) | Body API v3、自他位置のP1接続、身体と本線の分担・残る接続 |
+| 10 | [身体統合の作業計画](2026-10-11-body-integration-plan.md) | 開発・統合履歴、観測地点の移行、P1受け入れ条件 |
+| 11 | [3D身体P1の本線導入記録](2026-10-12-body-p1-install.md) | 導入版・検査結果・起動確認・次の実機操作・復旧点 |
 
 Minecraft クライアント側の手順は [adapter/minecraft-fabric/README.md](../adapter/minecraft-fabric/README.md) を参照してください。
 
