@@ -53,7 +53,8 @@ class MockPlan:
             prompt = json.dumps(incoming["messages"], ensure_ascii=False)
             if self.capability:
                 names = [t["function"]["name"] for t in incoming.get("tools", [])]
-                assert names == (["select_horse"] if stage == "selection" else ["list_horses"]), names
+                expected = {"selection": ["select_horse"], "ordinary": ["list_horses"], "fallback_chat": []}
+                assert names == expected[stage], names
             else:
                 assert not incoming.get("tools"), "missing capability exposed tools"
             assert WORLD_ID not in prompt and PLAYER_ID not in prompt and HORSE_ID not in prompt, "UUID leaked to model"
@@ -66,11 +67,11 @@ class MockPlan:
                     raise AssertionError("mock selection gate was not released")
             else:
                 assert HORSE_NAME not in prompt and RENAMED not in prompt, "candidate names reached ordinary chat"
-                if self.capability:
+                if self.capability and stage != "fallback_chat":
                     assert "list_horses" in prompt, "ordinary chat lacks list_horses contract"
                 else:
-                    assert "list_horses" not in prompt and "select_horse" not in prompt, "unsupported capability exposed horse action"
-            if self.capability:
+                    assert "list_horses" not in prompt and "select_horse" not in prompt, "ordinary fallback or unsupported capability exposed horse action"
+            if self.capability and stage != "fallback_chat":
                 if response["action"] in ("list_horses", "select_horse"):
                     arguments = {k: v for k, v in response.items() if k != "action"}
                     return {"role": "assistant", "content": None, "tool_calls": [{
@@ -155,6 +156,10 @@ def fixture(helper, binary, plan, *, capability=True, fail_selection=False):
                             {"type": "zombie", "entity_id": f"z{i}", "distance": 3,
                              "direction": {"horizontal": "front"}} for i in range(2)]
                         event["combat"].update(combat_active_hint=True, hostiles_within_10=2)
+                    if state.get("alert"):
+                        event["visual_threats"] = [{"type": "creeper", "entity_id": "alert-creeper", "distance": 9,
+                                                    "direction": {"horizontal": "back"}}]
+                        event["combat"].update(combat_active_hint=True, hostiles_within_10=1)
                     if damage:
                         event["combat"]["recent_damage_ms"] = 0
                     response = helper.request(base, "/api/v1/game-events", event, sid=session)
@@ -397,6 +402,42 @@ def check_selection_failure(helper, binary, passed):
     passed.append("selection_transport_failure_keeps_authorized_request_out_of_ordinary_chat")
 
 
+def check_alert_input_routing(helper, binary, passed, *, recall=False):
+    unspoken = "馬判定だけの本文は配送せえへん。"
+    plan = selection_plan() if recall else MockPlan([
+        ("ordinary", {"action": "speak", "speech": unspoken}),
+        ("fallback_chat", {"action": "speak", "speech": SPEECH}),
+    ])
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        state["alert"] = True
+        send()
+        # panicではないクリーパー一頭。警告配送の終了後にも戦闘の所有権は続いている。
+        warning = helper.wait_for(lambda: next((r for r in rows() if r.get("display_id") and r.get("combat_actions")), None))
+        helper.acknowledge(base, sid, warning)
+        helper.wait_for(lambda: helper.row(base, warning["turn_id"], {"audio_disabled"}))
+        send()
+        observed = next(s for s in helper.snapshot(base)["sessions"] if s["session_id"] == sid)
+        assert observed["state"] == "alert" and observed["chat_allowed"], observed
+        assert observed["foreground"]["combat_active"], observed
+        helper.submit_text(base, sid, RECALL if recall else CHAT)
+        if recall:
+            command = get_command(helper, send)
+            send(results=[result(command)])
+            helper.wait_for(lambda: stories(SUCCESS_STORY))
+        else:
+            helper.wait_for(lambda: any(r.get("horse_recall_status") == "not_requested" for r in rows()))
+            # Alertでは既存のchat_allowedを維持。馬判定の本文ではなく、通常会話を配送する。
+            reply = helper.wait_for(lambda: next((r for r in rows()
+                if r.get("display_id") and r.get("text") == SPEECH), None))
+            helper.acknowledge(base, sid, reply)
+            helper.wait_for(lambda: any(r.get("text") == SPEECH for r in history()))
+            quiet_commands(send)
+            assert not any(r.get("text") == unspoken for r in history()), history()
+            assert not any(r.get("horse_command_id") for r in rows()), rows()
+        plan.verify()
+    passed.append("alert_creeper_accepts_horse_request" if recall else "alert_creeper_preserves_existing_ordinary_chat_permission")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True, help="DokiDoki-Dogido checkout containing scripts/check_dialogue.py")
@@ -423,6 +464,8 @@ def main():
     check_combat_recall(helper, binary, passed)
     check_combat_recall(helper, binary, passed, cancel=True)
     check_selection_failure(helper, binary, passed)
+    check_alert_input_routing(helper, binary, passed)
+    check_alert_input_routing(helper, binary, passed, recall=True)
     print(json.dumps({"passed": passed, "count": len(passed), "scope": "mock HTTP; no real model or Minecraft"}, ensure_ascii=False, indent=2))
 
 
