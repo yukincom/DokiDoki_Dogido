@@ -85,13 +85,13 @@ impl Blocked {
     fn speech(self) -> &'static str {
         match self {
             Self::Paused => {
-                "ゲームが止まってるから、馬はまだ呼んでへんで。再開してから、もう一度頼んでな。"
+                "ゲームが止まってるから、まだ呼んでへんで。再開してから、もう一度頼んでな。"
             }
             Self::Missing | Self::Stale => {
-                "今の馬の一覧を確認できへんから、まだ呼んでへんで。少し待ってから、もう一度頼んでな。"
+                "今の乗れる動物の一覧を確認できへんから、まだ呼んでへんで。少し待ってから、もう一度頼んでな。"
             }
             Self::Unavailable => {
-                "今のワールドでは呼び戻せる馬の一覧を取得できへんから、まだ呼んでへんで。"
+                "今のワールドでは呼び戻せる動物の一覧を取得できへんから、まだ呼んでへんで。"
             }
         }
     }
@@ -234,13 +234,20 @@ pub(super) async fn render(
 }
 fn selection_failure(reports: Vec<Value>) -> Value {
     // 依頼を検証した後の通信失敗を通常雑談へ戻すと、未実施の操作を約束できてしまう。
-    json!({"op":"result","text":"馬の選択を確認できへんかったから、まだ呼んでへんで。",
+    json!({"op":"result","text":"呼ぶ相手を確認できへんかったから、まだ呼んでへんで。",
         "horse_recall_requested":true,"horse_recall_status":"rejected",
         "horse_recall_reason":"horse_selection_unavailable","llm_reports":reports})
 }
 fn rejected(error: anyhow::Error) -> Value {
-    json!({"op":"result","text":"馬の指定を確かめられへんかったわ。どの馬を呼ぼか？",
-        "horse_recall_status":"rejected","horse_recall_reason":error.to_string()})
+    let code = error.to_string();
+    let text = match code.as_str() {
+        "horse_no_longer_loaded"
+        | "horse_target_changed"
+        | "horse_not_eligible"
+        | "horse_snapshot_changed" => crate::assist::horse_recall::feedback::failure(&code).1,
+        _ => "呼ぶ相手を確かめられへんかったわ。どの子を呼ぼか？",
+    };
+    json!({"op":"result","text":text,"horse_recall_status":"rejected","horse_recall_reason":code})
 }
 
 impl Dialogue {
@@ -311,13 +318,23 @@ fn enqueue(
         .snapshot
         .as_ref()
         .context("horse_snapshot_missing")?;
-    let command = s
+    let command = match s
         .assist
-        .enqueue_horse(prepared, choice, latest, chrono::Utc::now())?;
+        .enqueue_horse(prepared, choice, latest, chrono::Utc::now())
+    {
+        Ok(command) => command,
+        Err(error) => {
+            s.history.story(
+                &format!("{turn}:horse_rejected"),
+                &crate::assist::horse_recall::feedback::failure_story(&error.to_string()),
+            );
+            return Err(error);
+        }
+    };
     s.history.push(turn, "user", &prepared.original);
     s.history.story(
         &format!("{turn}:horse_request"),
-        "プレイヤーの依頼で馬の呼び戻しを要求した。移動結果はまだ確認していない。",
+        "プレイヤーの依頼で乗れる動物の呼び戻しを要求した。移動結果はまだ確認していない。",
     );
     Ok(command)
 }
@@ -331,14 +348,13 @@ pub(super) fn observe_results(s: &mut Session, results: &crate::assist::Results)
     }) {
         let r = &observed.result;
         let succeeded = r.status == AdapterCommandResultStatus::Succeeded;
-        s.history.story(
-            &format!("horse_result:{}", r.command_id),
-            if succeeded {
-                "Minecraftで、依頼された馬の呼び戻しが成功した。"
-            } else {
-                "依頼された馬の呼び戻しは成功を確認できなかった。"
-            },
-        );
+        let story = if succeeded {
+            "Minecraftで、依頼された乗れる動物の呼び戻しが成功した。".to_owned()
+        } else {
+            crate::assist::horse_recall::feedback::failure_story(&r.detail_code)
+        };
+        s.history
+            .story(&format!("horse_result:{}", r.command_id), &story);
         arrived |= succeeded
             && s.horse_recall.snapshot.as_ref().is_some_and(|snapshot| {
                 r.extra.get("world_id").and_then(Value::as_str) == Some(snapshot.world_id.as_str())
@@ -349,7 +365,7 @@ pub(super) fn observe_results(s: &mut Session, results: &crate::assist::Results)
         && s.cancel.is_none()
         && s.warning.is_none()
         && s.pending_warning.is_none())
-    .then(|| "馬、こっちへ来たで。".to_owned())
+    .then(|| "こっちへ来たで。".to_owned())
 }
 
 #[cfg(test)]
@@ -370,7 +386,7 @@ mod tests {
         let mut value = super::super::empty_event("試験");
         value["player"]["dimension"] = json!("minecraft:overworld");
         if horses {
-            value["owned_horses"] = json!({"schema_version":1,"status":"available",
+            value["owned_horses"] = json!({"schema_version":2,"status":"available",
                 "world_id":"10000000-0000-0000-0000-000000000001","revision":1,
                 "observed_at":at,"player_uuid":"20000000-0000-0000-0000-000000000001",
                 "dimension":"minecraft:overworld","candidates":[]});

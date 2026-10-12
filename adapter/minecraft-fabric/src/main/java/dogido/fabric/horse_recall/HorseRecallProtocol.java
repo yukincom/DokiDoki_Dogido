@@ -13,7 +13,7 @@ import java.util.UUID;
 
 /** 馬呼戻しの閉じたwire契約。JSONを検査して不変値へ変え、ゲーム状態には触らない。 */
 public final class HorseRecallProtocol {
-    public static final String CAPABILITY = "integrated_server.horse.recall.v1";
+    public static final String CAPABILITY = "integrated_server.horse.recall.v2";
     public static final int MAX_CANDIDATES = 32;
     public static final Duration MAX_COMMAND_AGE = Duration.ofSeconds(5);
 
@@ -30,17 +30,21 @@ public final class HorseRecallProtocol {
         }
     }
 
-    public record Candidate(UUID entityId, String customName, boolean tamed, boolean ownedByPlayer,
-            boolean alive, String dimension, boolean hasPassengers, boolean leashed) {
+    public record Candidate(UUID entityId, String entityType, String customName, boolean tamed, UUID ownerUuid,
+            boolean adult, boolean equipped, boolean alive, String dimension, boolean hasPassengers, boolean hasVehicle, boolean leashed) {
         JsonObject toJson() {
             JsonObject row = new JsonObject();
             row.addProperty("entity_id", entityId.toString());
             row.add("custom_name", customName == null ? JsonNull.INSTANCE : new com.google.gson.JsonPrimitive(customName));
             row.addProperty("tamed", tamed);
-            row.addProperty("owned_by_player", ownedByPlayer);
+            row.add("owner_uuid", ownerUuid == null ? JsonNull.INSTANCE : new com.google.gson.JsonPrimitive(ownerUuid.toString()));
+            row.addProperty("entity_type", entityType);
+            row.addProperty("adult", adult);
+            row.addProperty("equipped", equipped);
             row.addProperty("alive", alive);
             row.addProperty("dimension", dimension);
             row.addProperty("has_passengers", hasPassengers);
+            row.addProperty("has_vehicle", hasVehicle);
             row.addProperty("leashed", leashed);
             return row;
         }
@@ -60,7 +64,7 @@ public final class HorseRecallProtocol {
 
         public JsonObject toJson() {
             JsonObject root = new JsonObject();
-            root.addProperty("schema_version", 1);
+            root.addProperty("schema_version", 2);
             root.addProperty("status", available ? "available" : "unavailable");
             root.addProperty("world_id", worldId.toString());
             root.addProperty("revision", revision);

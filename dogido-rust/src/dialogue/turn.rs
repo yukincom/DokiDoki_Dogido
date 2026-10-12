@@ -230,7 +230,10 @@ impl Dialogue {
                     &mut result,
                     *cancel.borrow(),
                 ) {
-                    result["text"] = "馬の状態が変わったから、呼び戻しは見送ったで。".into();
+                    result["text"] =
+                        crate::assist::horse_recall::feedback::failure(&error.to_string())
+                            .1
+                            .into();
                     result["spoken_text"] = result["text"].clone();
                     result["horse_recall_status"] = "rejected".into();
                     result["horse_recall_reason"] = error.to_string().into();

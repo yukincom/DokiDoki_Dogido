@@ -4,11 +4,11 @@ use crate::assist::horse_recall::intent;
 use serde_json::json;
 
 pub fn snapshot() -> Snapshot {
-    serde_json::from_value(json!({"schema_version":1,"status":"available",
+    serde_json::from_value(json!({"schema_version":2,"status":"available",
         "world_id":"10000000-0000-0000-0000-000000000001","revision":1,"observed_at":Utc::now(),
         "player_uuid":"20000000-0000-0000-0000-000000000001","dimension":"minecraft:overworld",
         "candidates":[{"entity_id":"30000000-0000-0000-0000-000000000001","custom_name":"buchi",
-        "tamed":true,"owned_by_player":true,"alive":true,"dimension":"minecraft:overworld","has_passengers":false,"leashed":false}]})).unwrap()
+        "tamed":true,"entity_type":"horse","owner_uuid":"20000000-0000-0000-0000-000000000001","adult":true,"equipped":true,"has_vehicle":false,"alive":true,"dimension":"minecraft:overworld","has_passengers":false,"leashed":false}]})).unwrap()
 }
 fn choice(text: &str) -> Choice {
     Choice {
@@ -55,7 +55,7 @@ fn stale_other_world_unsafe_and_unknown_candidates_fail_closed() {
         |s: &mut Snapshot| s.observed_at += chrono::Duration::seconds(2),
         |s: &mut Snapshot| s.world_id = "10000000-0000-0000-0000-000000000002".into(),
         |s: &mut Snapshot| s.player_uuid = "20000000-0000-0000-0000-000000000002".into(),
-        |s: &mut Snapshot| s.candidates[0].owned_by_player = false,
+        |s: &mut Snapshot| s.candidates[0].owner_uuid = None,
         |s: &mut Snapshot| s.candidates[0].alive = false,
         |s: &mut Snapshot| s.candidates[0].tamed = false,
         |s: &mut Snapshot| s.candidates[0].has_passengers = true,
@@ -149,5 +149,141 @@ fn first_stage_preserves_personality_without_candidates_then_selection_exposes_t
                 "select_horse"
             }
         );
+    }
+}
+
+#[test]
+fn mount_species_and_ownerless_equipment_are_checked_before_selection() {
+    for (kind, ownerless) in [
+        (MountKind::Horse, false),
+        (MountKind::Donkey, false),
+        (MountKind::Mule, false),
+        (MountKind::SkeletonHorse, true),
+        (MountKind::ZombieHorse, false),
+        (MountKind::Camel, true),
+        (MountKind::CamelHusk, true),
+        (MountKind::Pig, true),
+        (MountKind::Strider, true),
+        (MountKind::HappyGhast, true),
+        (MountKind::Nautilus, false),
+        (MountKind::ZombieNautilus, false),
+        (MountKind::Llama, false),
+        (MountKind::TraderLlama, false),
+    ] {
+        let mut s = snapshot();
+        s.candidates[0].entity_type = kind;
+        s.candidates[0].owner_uuid = None;
+        s.candidates[0].tamed = kind.requires_taming();
+        assert_eq!(s.eligible(&s.candidates[0]), ownerless, "{kind:?}");
+        if ownerless {
+            let p = Prepared::new(s.clone(), "ポチをここに呼んで").unwrap();
+            assert!(p.resolve(&choice(&p.original)).is_ok());
+            for mutate in [
+                |s: &mut Snapshot| s.candidates[0].custom_name = None,
+                |s: &mut Snapshot| s.candidates[0].equipped = false,
+                |s: &mut Snapshot| s.candidates[0].adult = false,
+                |s: &mut Snapshot| s.candidates[0].has_vehicle = true,
+                |s: &mut Snapshot| s.candidates[0].leashed = true,
+                |s: &mut Snapshot| {
+                    s.candidates[0].owner_uuid = Some("20000000-0000-0000-0000-000000000099".into())
+                },
+            ] {
+                let mut latest = s.clone();
+                mutate(&mut latest);
+                assert!(
+                    p.revalidate(&choice(&p.original), &latest, Utc::now())
+                        .is_err(),
+                    "{kind:?}"
+                );
+            }
+        }
+    }
+    let mut invalid = serde_json::to_value(snapshot()).unwrap();
+    for kind in ["husk", "ghast", "wolf", "unknown"] {
+        invalid["candidates"][0]["entity_type"] = json!(kind);
+        assert!(serde_json::from_value::<Snapshot>(invalid.clone()).is_err());
+    }
+    let mut old = snapshot();
+    old.schema_version = 1;
+    assert!(
+        old.validate().is_err(),
+        "old adapters cannot silently use the expanded contract"
+    );
+}
+
+#[test]
+fn species_changes_invalidate_prepared_identity_even_if_the_name_is_the_same() {
+    let s = snapshot();
+    let p = Prepared::new(s.clone(), "ぶちを呼んで").unwrap();
+    let mut latest = s;
+    latest.candidates[0].entity_type = MountKind::Donkey;
+    assert!(latest.eligible(&latest.candidates[0]));
+    assert!(
+        p.revalidate(&choice(&p.original), &latest, Utc::now())
+            .is_err()
+    );
+}
+
+#[test]
+fn unavailable_reason_keeps_the_observed_rider_direction_and_missing_equipment() {
+    let mut s = snapshot();
+    s.candidates[0].has_passengers = true;
+    assert_eq!(
+        s.unavailable_reason(&s.candidates[0]),
+        Some("その個体に乗員がいる")
+    );
+    s.candidates[0].has_passengers = false;
+    s.candidates[0].has_vehicle = true;
+    assert_eq!(
+        s.unavailable_reason(&s.candidates[0]),
+        Some("その個体が別の乗り物に乗っている")
+    );
+    s.candidates[0].has_vehicle = false;
+    s.candidates[0].entity_type = MountKind::Pig;
+    s.candidates[0].owner_uuid = None;
+    s.candidates[0].tamed = false;
+    s.candidates[0].equipped = false;
+    assert_eq!(
+        s.unavailable_reason(&s.candidates[0]),
+        Some("鞍を装備していない")
+    );
+    s.candidates[0].entity_type = MountKind::HappyGhast;
+    assert_eq!(
+        s.unavailable_reason(&s.candidates[0]),
+        Some("ハーネスを装備していない")
+    );
+}
+
+#[test]
+fn no_eligible_candidate_keeps_reasons_visible_without_advertising_selection() {
+    let mut s = snapshot();
+    s.candidates[0].has_passengers = true;
+    for empty in [false, true] {
+        if empty {
+            s.candidates.clear();
+        }
+        let p = Prepared::new(s.clone(), "ぶちを呼んで").unwrap();
+        for stage in [intent::Stage::Intent, intent::Stage::Selection] {
+            let base = crate::chat_prompt::Input {
+                schema_version: 1,
+                kind: "player_chat".into(),
+                model: "fixture".into(),
+                details: json!({"dialogue_choice":true,"user_text":p.original}),
+                temperature: 0.65,
+                max_tokens: 192,
+                enable_thinking: false,
+            }
+            .into_request()
+            .unwrap();
+            let (request, tools) = intent::request(base, &p.original, Some(&p), stage).unwrap();
+            assert_eq!(tools.len(), usize::from(stage == intent::Stage::Intent));
+            if stage == intent::Stage::Selection && !empty {
+                assert!(
+                    serde_json::to_string(&request.messages)
+                        .unwrap()
+                        .contains("その個体に乗員がいる")
+                );
+            }
+        }
     }
 }

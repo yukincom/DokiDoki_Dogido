@@ -45,7 +45,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 | `dogido-rust/src/episode_log.rs` · `dialogue/episode_runtime.rs` | 評価用の決定記録。会話・川柳記憶へ読み戻さない |
 | `dogido-rust/src/knowledge/` · `language/` | 正本DB検索と限定国語対話。`source_cards.json` は現役資料として保持 |
 | `dogido-rust/src/dialogue/web_runtime.rs` | Web同意、実再生完了、専用Chrome起動、読書・復帰の状態 |
-| `dogido-rust/src/assist/` | 明示依頼と現在hotbarを検証する限定操作。`horse_recall/` は所有馬の候補要求・選択と実行前検証 |
+| `dogido-rust/src/assist/` | 明示依頼と現在hotbarを検証する限定操作。`horse_recall/` は乗れる動物14種の候補要求・選択と実行前検証 |
 | `dogido-rust/src/player_text.rs` · `contextual_asr.rs` · `input_policy.rs` | 原文を残す正規化、現在候補だけのSTT補正、入力優先 |
 | `dogido-rust/src/voice/` · `dialogue/audio.rs` · `tts_reading.rs` | 録音・STTの制御、配送・取消・実再生結果、読みの判定 |
 | `dogido-rust/scripts/` · `dogido_server/` | 起動設定、UniDic token、Whisper設定、AEC、端末AI、Chrome/MCPのPython接続補助 |
@@ -90,7 +90,7 @@ adapter/minecraft-fabric  →  dogido-rust (状態機械 + LLM leaf)  →  TTS /
 - 嗅覚はFabricの閉じたスメル規則で解決する。`smell_policy_v2` の `none / present / suppressed` と `components` を必須にし、旧flat形や旧basisの互換は残さない。同種非加算、ゾンビ系は1差・その他は4差から弱い異種を隠し、残った各種類の強度をモデルにも渡す（1は仄か、8は強烈）。コンポスターの基礎値は3。雨上がりは一度の気づき候補を通常成分と分け、既存匂い反応の出力完了／沈黙確定後は即座に通常へ戻す。180秒は候補期限だけで、通常臭を消さない。ゾンビ系は敵対状態・視認・聴取と独立して収集する。匂いの方位計算・保持・送受信は撤去済み。方向・位置・距離・個数・entity IDは渡さない。匂い単独で戦闘mode／workshop pauseを立てない。現在の匂いへの問いは各成分の強さを反映したコード固定文。Rust通常雑談にも解決済みの各匂いを共通観測として渡し、通常対話の嗅覚断言を生成後に棄却しない。正本は `docs/smell-policy.md`
 - 照明器具のinventory増加はクラフト／設置とは断定しない。半スタック以上＋暗所警告外、5分以内の重複、継続中の危険な暗さはコードで無言にし、それ以外だけ有界 `light_source_comment_plan` に発話要否を選ばせる。暗所状態の停止は現在観測でコード確定し、発話leafへ正確な本数を渡さない
 - 雑談中の自動川柳は通常10分周期を維持し、現在のplayer replyの後ろまたは次の安全なqueue境界で始める。再生完了済みの直近3 turnだけを、最大80字・最大3 motif・source turn IDつきの `player_reported_context` soft材料として使う。学習・Web中は発句時計そのものを凍結する
-- 世界操作を汎用のtools一覧としてLLMへ渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。所有馬の呼び戻しは、本人の依頼を受けてからMinecraftの候補一覧を渡し、native APIの `list_horses / select_horse` で一頭を選ばせる二段階だけ。名前の完全一致で入口を絞らず、原文・所有者・最新個体・会話世代・期限・重複をRustが検証し、実移動と足場は統合サーバーで再検査する。逃走用途の明示依頼は戦闘・警告中も既存assistの入力世代で受け付け、足場・空間等の実状態検査は維持する。実行結果と出現演出の完了は分ける（[仕様](docs/2026-10-11-horse-recall.md)）。その他の実行capability・現在snapshot・slot・期限・期待item・重複もコード検証する
+- 世界操作を汎用のtools一覧としてLLMへ渡さない。代表命令はコード、自然形は閉じたintent/evidence/confidence抽出まで。乗れる動物の呼び戻しは馬系・ラクダ系・ブタ・ストライダー・ハッピーガスト・オウムガイ系・ラマ系の14種に限り、本人の依頼を受けてからMinecraftの候補一覧を渡し、native APIの `list_horses / select_horse` で一頭を選ばせる二段階だけ。名前の完全一致で入口を絞らず、原文・種類・所有者・最新個体・会話世代・期限・重複をRustが検証し、実移動と着地点は統合サーバーで再検査する。Ownerありは本人だけ、Ownerがない許可済み種類は名札と鞍／ハーネスを条件にする。オウムガイ2種は横3×3の水域、ハッピーガストは身体全体の空間を必須にする。失敗理由は既存結果から短期の出来事へ返し、一覧にない理由を距離と断定しない。相手を確認できない場合の案内は「声が届かへんかったみたいや」。呼べる候補が0頭なら選択toolを公開せず、同じ二回目の会話へ候補と具体的な理由を渡す。逃走用途の明示依頼は戦闘・警告中も既存assistの入力世代で受け付け、足場・空間等の実状態検査は維持する。実行結果と出現演出の完了は分ける（[仕様](docs/2026-10-11-horse-recall.md)）。その他の実行capability・現在snapshot・slot・期限・期待item・重複もコード検証する
 - `select_sword` は明示依頼だけ。非戦闘中の明示依頼は可だが自動持ち替えは禁止。会話用LLMの限定抽出を使い、OS AIの用途を広げない
 
 ### 3.2 川柳 lesson は soft

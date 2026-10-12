@@ -50,6 +50,8 @@ pub fn request(
     prepared: Option<&Prepared>,
     stage: Stage,
 ) -> Result<(GenerationRequest, Vec<Value>)> {
+    let selection_available =
+        prepared.is_some_and(|p| p.candidates.iter().any(|horse| p.snapshot.eligible(horse)));
     let old = crate::companion_prompt::choice_contract();
     let system = base
         .messages
@@ -62,6 +64,8 @@ pub fn request(
     );
     let key = if stage == Stage::Intent {
         "native_intent"
+    } else if !selection_available {
+        "native_unavailable"
     } else {
         "native_selection"
     };
@@ -87,16 +91,27 @@ pub fn request(
     if stage == Stage::Selection {
         let prepared = prepared.context("horse_selection_snapshot_required")?;
         let candidates: Vec<Value> = prepared.candidates.iter().enumerate().map(|(i, horse)| json!({
-            "candidate_id":format!("h{}",i+1), "name":horse.custom_name,
+            "candidate_id":format!("h{}",i+1), "name":horse.custom_name, "entity_type":horse.entity_type,
             "eligible":prepared.snapshot.eligible(horse),
+            "unavailable_reason":prepared.snapshot.unavailable_reason(horse),
             "recently_ridden":prepared.snapshot.recent_mount_id.as_ref()==Some(&horse.entity_id)
         })).collect();
-        user.content.push_str(&format!("【依頼後に取得したMinecraftの所有馬候補・データ】\n{}\n一頭に決まらなければ、どの馬か聞いてな。まだ実行してへんで。",
-            json!({"status":prepared.snapshot.status,"candidates":candidates})));
+        user.content.push_str(&format!("【依頼後に取得したMinecraftの乗れる動物候補・データ】\n{}\n{}",
+            json!({"status":prepared.snapshot.status,"candidates":candidates,
+                "observation_scope":"同じ次元で現在読み込まれている個体のみ。遠方のチャンクは読み込まない。",
+                "absent_candidate_reason":"一覧にいない原因は未観測。遠距離・別次元・消失・資格不足のどれかは、この一覧だけでは特定できない。"}),
+            TEXT[if selection_available { "selection_followup" } else { "selection_unavailable" }].as_str().unwrap()));
     } else {
         user.content.push_str("今回の本人が今ここへ呼び寄せるよう依頼したかだけ判断してな。能力や場所の質問・他人の発言の報告・名前だけの呼びかけは依頼に補わず、会話で返してな。");
     }
-    Ok((base, vec![definition(stage)]))
+    // 呼べる個体が0頭なら操作用の道具を公開しない。同じ会話呼出しへ候補と理由は渡し、
+    // 不在の案内・乗員や装備の説明を返させる。名前の対応をコードで決める条件ではない。
+    let tools = if stage == Stage::Selection && !selection_available {
+        Vec::new()
+    } else {
+        vec![definition(stage)]
+    };
+    Ok((base, tools))
 }
 pub fn definition(stage: Stage) -> Value {
     let mut properties = json!({
@@ -109,7 +124,7 @@ pub fn definition(stage: Stage) -> Value {
         required.push("candidate_id");
     }
     json!({"type":"function","function":{"name":action(stage),
-        "description":if stage==Stage::Intent {"本人から今ここへ馬を呼ぶ依頼があった場合だけ、所有馬の候補一覧を要求する。まだ移動しない。"}
+        "description":if stage==Stage::Intent {"本人から今ここへ乗れる動物を呼ぶ依頼があった場合だけ、乗れる動物の候補一覧を要求する。まだ移動しない。"}
             else {"本人の呼び寄せ依頼に合う、呼び寄せ可能な一頭を一覧から選ぶ。曖昧なら使わず質問する。"},
         "parameters":{"type":"object","properties":properties,"required":required,"additionalProperties":false}}})
 }

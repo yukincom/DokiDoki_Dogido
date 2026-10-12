@@ -1,4 +1,4 @@
-//! 所有馬snapshotとモデルの選択を照合する純粋な契約。
+//! 乗れる動物のsnapshotとモデルの選択を照合する純粋な契約。
 //! 名前の登録・表記ゆれの照合・操作実行は行わず、UUIDはコードの候補表から取り出す。
 use anyhow::{Result, ensure};
 use chrono::{DateTime, Utc};
@@ -9,13 +9,55 @@ use std::collections::BTreeSet;
 #[serde(deny_unknown_fields)]
 pub struct Candidate {
     pub entity_id: String,
+    pub entity_type: MountKind,
     pub custom_name: Option<String>,
     pub tamed: bool,
-    pub owned_by_player: bool,
+    pub owner_uuid: Option<String>,
+    pub adult: bool,
+    pub equipped: bool,
     pub alive: bool,
     pub dimension: String,
     pub has_passengers: bool,
+    pub has_vehicle: bool,
     pub leashed: bool,
+}
+
+/// Minecraft 1.21.11の乗れる動物だけ。通常のハスクや敵ガストを含めない。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MountKind {
+    Horse,
+    Donkey,
+    Mule,
+    SkeletonHorse,
+    ZombieHorse,
+    Camel,
+    CamelHusk,
+    Pig,
+    Strider,
+    HappyGhast,
+    Nautilus,
+    ZombieNautilus,
+    Llama,
+    TraderLlama,
+}
+impl MountKind {
+    /// バニラで所有者が付かない種類に限り、名札と乗用装備を呼び戻し資格にする。
+    /// 所有者が実際に記録されている個体では、この条件で他人の所有を迂回しない。
+    fn permits_named_equipment(self) -> bool {
+        matches!(
+            self,
+            Self::SkeletonHorse
+                | Self::Camel
+                | Self::CamelHusk
+                | Self::Pig
+                | Self::Strider
+                | Self::HappyGhast
+        )
+    }
+    fn requires_taming(self) -> bool {
+        !matches!(self, Self::Pig | Self::Strider | Self::HappyGhast)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +84,7 @@ pub struct Snapshot {
 }
 impl Snapshot {
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.schema_version == 1, "horse_schema_version");
+        ensure!(self.schema_version == 2, "horse_schema_version");
         ensure!(self.revision > 0, "horse_revision");
         ensure!(
             uuid::Uuid::parse_str(&self.world_id).is_ok(),
@@ -63,6 +105,13 @@ impl Snapshot {
         );
         let mut ids = BTreeSet::new();
         for horse in &self.candidates {
+            ensure!(
+                horse
+                    .owner_uuid
+                    .as_ref()
+                    .is_none_or(|id| uuid::Uuid::parse_str(id).is_ok()),
+                "horse_owner_uuid"
+            );
             ensure!(
                 uuid::Uuid::parse_str(&horse.entity_id).is_ok() && ids.insert(&horse.entity_id),
                 "horse_candidate_id"
@@ -93,13 +142,62 @@ impl Snapshot {
         (-1_000..=3_000).contains(&age)
     }
     pub fn eligible(&self, horse: &Candidate) -> bool {
-        self.status == Availability::Available
-            && horse.tamed
-            && horse.owned_by_player
-            && horse.alive
-            && horse.dimension == self.dimension
-            && !horse.has_passengers
-            && !horse.leashed
+        self.unavailable_reason(horse).is_none()
+    }
+    /// 候補が呼べない根拠も同じ検査から返し、モデルが乗員や死亡などを補作しないようにする。
+    pub fn unavailable_reason(&self, horse: &Candidate) -> Option<&'static str> {
+        let authorized = match &horse.owner_uuid {
+            Some(owner) => {
+                horse.entity_type.requires_taming() && owner == &self.player_uuid && horse.tamed
+            }
+            None => {
+                horse.entity_type.permits_named_equipment()
+                    && horse.custom_name.is_some()
+                    && horse.equipped
+                    && (!horse.entity_type.requires_taming() || horse.tamed)
+            }
+        };
+        if self.status != Availability::Available {
+            Some("一覧を利用できない")
+        } else if !authorized {
+            // 不成立をまとめて渡すとモデルが原因を選んでしまうため、観測した条件を一件返す。
+            Some(
+                if horse
+                    .owner_uuid
+                    .as_ref()
+                    .is_some_and(|owner| owner != &self.player_uuid)
+                {
+                    "所有者が本人ではない"
+                } else if horse.entity_type.requires_taming() && !horse.tamed {
+                    "飼い慣らされていない"
+                } else if horse.owner_uuid.is_none() && horse.entity_type.permits_named_equipment()
+                {
+                    if horse.custom_name.is_none() {
+                        "名札が付いていない"
+                    } else if horse.entity_type == MountKind::HappyGhast {
+                        "ハーネスを装備していない"
+                    } else {
+                        "鞍を装備していない"
+                    }
+                } else {
+                    "本人の所有個体と確認できない"
+                },
+            )
+        } else if !horse.alive {
+            Some("生存を確認できない")
+        } else if !horse.adult {
+            Some("まだ成体ではない")
+        } else if horse.dimension != self.dimension {
+            Some("同じ次元にいない")
+        } else if horse.has_passengers {
+            Some("その個体に乗員がいる")
+        } else if horse.has_vehicle {
+            Some("その個体が別の乗り物に乗っている")
+        } else if horse.leashed {
+            Some("リードでつながれているか、他個体を牽引している")
+        } else {
+            None
+        }
     }
 }
 

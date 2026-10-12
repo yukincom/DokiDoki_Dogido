@@ -5,14 +5,13 @@ import java.util.List;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.HorseEntity;
+import net.minecraft.entity.passive.AbstractHorseEntity;
 import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
 import org.slf4j.Logger;
 
 /**
  * client threadだけで進む予兆・到着演出。world移動や成功ACKを発生させない。
- * 到着後のUUIDと位置、立ち上がり姿勢を見てから同じtickで音と散開を一度だけ開始する。
+ * 到着後のUUIDと位置（馬系では立ち上がり姿勢も）を見てから同じtickで音と散開を一度だけ開始する。
  */
 final class HorseRecallEffect {
     final HorseRecallLifecycle lifecycle;
@@ -22,13 +21,17 @@ final class HorseRecallEffect {
     private final List<Particle> particles = new ArrayList<>();
     private int arrivalWaitTicks;
     private int burstTicks;
+    private final double widthScale;
+    private final double heightScale;
 
     HorseRecallEffect(HorseRecallProtocol.Command command, HorseRecallLanding.Point point,
-            HorseRecallLifecycle lifecycle, Logger logger) {
+            HorseRecallLifecycle lifecycle, Logger logger, float width, float height) {
         this.command = command;
         this.point = point;
         this.lifecycle = lifecycle;
         this.logger = logger;
+        widthScale = Math.max(1, width / 1.3965);
+        heightScale = Math.max(1, height / 1.6);
     }
 
     /** trueで描画担当を解放できる。完了は描画を要求し終えた意味で、実画面/実スピーカーACKではない。 */
@@ -40,13 +43,14 @@ final class HorseRecallEffect {
             case PREVIEW -> preview(client);
             case MOVED -> {
                 Entity entity = client.world.getEntity(command.entityId());
-                if (entity instanceof HorseEntity horse && horse.isAlive()
-                        && horse.squaredDistanceTo(point.x(), point.y(), point.z()) < 1.0
-                        && horse.getAngryAnimationProgress(1.0F) >= 0.8F) {
+                var kind = HorseRecallMounts.kind(entity);
+                if (kind != null && entity.isAlive()
+                        && entity.squaredDistanceTo(point.x(), point.y(), point.z()) < 1.0
+                        && (!kind.rears() || entity instanceof AbstractHorseEntity horse && horse.getAngryAnimationProgress(1.0F) >= 0.8F)) {
                     if (lifecycle.startBurst()) {
                         cancel();
-                        if (!horse.isSilent()) client.world.playSoundClient(point.x(), point.y(), point.z(),
-                            SoundEvents.ENTITY_HORSE_AMBIENT, SoundCategory.NEUTRAL, 0.8F, 1.0F, false);
+                        if (!entity.isSilent()) client.world.playSoundClient(point.x(), point.y(), point.z(),
+                            HorseRecallMounts.sound(kind), SoundCategory.NEUTRAL, 0.8F, 1.0F, false);
                         burst(client);
                         logger.info("Dogido horse presentation: command_id={} stage=burst_started particles={}",
                             command.commandId(), particles.size());
@@ -82,8 +86,8 @@ final class HorseRecallEffect {
         for (int i = 0; i < 10; i++) {
             boolean yellow = i >= 3;
             double angle = random.nextDouble() * Math.PI * 2;
-            double radius = yellow ? 0.6 + random.nextDouble() * 0.35 : random.nextDouble() * 0.22;
-            spawn(client, point.x() + Math.cos(angle) * radius, point.y() + 0.3 + random.nextDouble() * 1.8,
+            double radius = (yellow ? 0.6 + random.nextDouble() * 0.35 : random.nextDouble() * 0.22) * widthScale;
+            spawn(client, point.x() + Math.cos(angle) * radius, point.y() + (0.3 + random.nextDouble() * 1.8) * heightScale,
                 point.z() + Math.sin(angle) * radius, 0, 0.005, 0, yellow, false, 10, yellow ? 0.20F : 0.32F);
         }
     }
@@ -94,8 +98,8 @@ final class HorseRecallEffect {
             double angle = random.nextDouble() * Math.PI * 2;
             double speed = 0.05 + random.nextDouble() * 0.13;
             boolean yellow = i % 3 != 0;
-            double radius = yellow ? 0.65 : 0.18;
-            spawn(client, point.x() + Math.cos(angle) * radius, point.y() + 0.4 + random.nextDouble() * 1.8,
+            double radius = (yellow ? 0.65 : 0.18) * widthScale;
+            spawn(client, point.x() + Math.cos(angle) * radius, point.y() + (0.4 + random.nextDouble() * 1.8) * heightScale,
                 point.z() + Math.sin(angle) * radius, Math.cos(angle) * speed,
                 0.01 + random.nextDouble() * 0.06, Math.sin(angle) * speed, yellow, true,
                 18 + random.nextInt(13), 0.12F + random.nextFloat() * 0.09F);
