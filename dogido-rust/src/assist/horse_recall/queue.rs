@@ -142,11 +142,11 @@ mod tests {
     }
     fn prepared() -> Prepared {
         let snapshot: Snapshot = serde_json::from_value(json!({
-            "schema_version":1,"status":"available",
+            "schema_version":2,"status":"available",
             "world_id":"10000000-0000-0000-0000-000000000001","revision":1,"observed_at":now(),
             "player_uuid":"20000000-0000-0000-0000-000000000001","dimension":"minecraft:overworld",
             "candidates":[{"entity_id":"30000000-0000-0000-0000-000000000001","custom_name":"buchi",
-                "tamed":true,"owned_by_player":true,"alive":true,"dimension":"minecraft:overworld",
+                "tamed":true,"entity_type":"horse","owner_uuid":"20000000-0000-0000-0000-000000000001","adult":true,"equipped":true,"has_vehicle":false,"alive":true,"dimension":"minecraft:overworld",
                 "has_passengers":false,"leashed":false}]
         }))
         .unwrap();
@@ -220,7 +220,7 @@ mod tests {
             |s: &mut Snapshot| s.world_id = "10000000-0000-0000-0000-000000000002".into(),
             |s: &mut Snapshot| s.player_uuid = "20000000-0000-0000-0000-000000000002".into(),
             |s: &mut Snapshot| s.candidates[0].custom_name = Some("別の名前".into()),
-            |s: &mut Snapshot| s.candidates[0].owned_by_player = false,
+            |s: &mut Snapshot| s.candidates[0].owner_uuid = None,
             |s: &mut Snapshot| s.candidates[0].has_passengers = true,
             |s: &mut Snapshot| s.candidates.clear(),
         ] {
@@ -369,7 +369,11 @@ mod tests {
             assert_eq!(out.observed[0].result.detail_code, detail);
             assert_eq!(
                 out.feedback.as_deref(),
-                Some("馬の呼び戻しを確認できへんかったわ。馬の状態を見てな。")
+                Some(if detail == "result_outside_validity_window" {
+                    "呼び戻しの結果を時間内に確認できへんかったわ。その子の様子を見てな。"
+                } else {
+                    "呼び戻しを確認できへんかったわ。呼んだ子の状態を見てな。"
+                })
             );
             assert!(state.commands(now()).is_empty());
         }
@@ -488,7 +492,7 @@ mod tests {
         let mut failure = result(&horse);
         failure.status = AdapterCommandResultStatus::Rejected;
         let out = state.observe_results(&[failure], now() + Duration::seconds(1), false);
-        assert!(out.feedback.unwrap().starts_with("馬の"));
+        assert!(out.feedback.unwrap().starts_with("呼び戻し"));
         assert_eq!(
             sword(&mut state, now() + Duration::seconds(1)).detail_code,
             "command_cooldown"
@@ -526,7 +530,7 @@ mod tests {
                 .is_some()
         );
         for (field, value) in [
-            ("schema_version", json!(2)),
+            ("schema_version", json!(1)),
             ("world_id", json!("not-a-uuid")),
             ("revision", json!(0)),
         ] {

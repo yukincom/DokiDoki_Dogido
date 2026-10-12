@@ -9,24 +9,70 @@ class HorseRecallSafetyTest {
     private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String DIM = "minecraft:overworld";
 
-    @Test void executionRequiresActualOwnerTamingAndAnUnoccupiedLiveNormalHorse() {
-        assertNull(check(true, true, true, OWNER, DIM, false, false, false));
+    @Test void executionRequiresActualOwnerAndAnUnoccupiedLiveAdultMount() {
+        assertNull(check(HorseRecallChecks.Kind.HORSE, true, true, OWNER, true, DIM, false, false, false));
         assertEquals("horse_not_loaded", HorseRecallChecks.targetError(null, OWNER, DIM));
-        assertEquals("horse_not_loaded", check(false, true, true, OWNER, DIM, false, false, false));
-        assertEquals("horse_not_alive", check(true, false, true, OWNER, DIM, false, false, false));
-        assertEquals("horse_not_owned", check(true, true, false, OWNER, DIM, false, false, false));
-        assertEquals("horse_not_owned", check(true, true, true, null, DIM, false, false, false));
-        assertEquals("horse_not_owned", check(true, true, true, new UUID(1, 1), DIM, false, false, false));
-        assertEquals("dimension_changed", check(true, true, true, OWNER, "minecraft:the_nether", false, false, false));
-        assertEquals("horse_occupied", check(true, true, true, OWNER, DIM, true, false, false));
-        assertEquals("horse_occupied", check(true, true, true, OWNER, DIM, false, true, false));
-        assertEquals("horse_leashed", check(true, true, true, OWNER, DIM, false, false, true));
+        assertEquals("horse_not_loaded", check(null, true, true, OWNER, true, DIM, false, false, false));
+        assertEquals("horse_not_alive", check(HorseRecallChecks.Kind.HORSE, false, true, OWNER, true, DIM, false, false, false));
+        assertEquals("horse_not_owned", check(HorseRecallChecks.Kind.HORSE, true, false, OWNER, true, DIM, false, false, false));
+        assertEquals("horse_not_owned", check(HorseRecallChecks.Kind.HORSE, true, true, null, true, DIM, false, false, false));
+        assertEquals("horse_not_owned", check(HorseRecallChecks.Kind.HORSE, true, true, new UUID(1, 1), true, DIM, false, false, false));
+        assertEquals("mount_not_adult", check(HorseRecallChecks.Kind.HORSE, true, true, OWNER, false, DIM, false, false, false));
+        assertEquals("dimension_changed", check(HorseRecallChecks.Kind.HORSE, true, true, OWNER, true, "minecraft:the_nether", false, false, false));
+        assertEquals("horse_occupied", check(HorseRecallChecks.Kind.HORSE, true, true, OWNER, true, DIM, true, false, false));
+        assertEquals("horse_occupied", check(HorseRecallChecks.Kind.HORSE, true, true, OWNER, true, DIM, false, true, false));
+        assertEquals("horse_leashed", check(HorseRecallChecks.Kind.HORSE, true, true, OWNER, true, DIM, false, false, true));
     }
 
-    private static String check(boolean normal, boolean alive, boolean tamed, UUID owner, String dim,
-            boolean passengers, boolean vehicle, boolean leashed) {
-        return HorseRecallChecks.targetError(new HorseRecallChecks.Target(normal, alive, tamed, owner, dim,
-            passengers, vehicle, leashed), OWNER, DIM);
+    private static String check(HorseRecallChecks.Kind kind, boolean alive, boolean tamed, UUID owner, boolean adult,
+            String dim, boolean passengers, boolean vehicle, boolean leashed) {
+        return HorseRecallChecks.targetError(new HorseRecallChecks.Target(kind, alive, tamed, owner, "ポチ",
+            adult, true, dim, passengers, vehicle, leashed), OWNER, DIM);
+    }
+
+    @Test void everySpeciesUsesItsOwnerOrTheApprovedNamedEquipmentRule() {
+        for (var kind : HorseRecallChecks.Kind.values()) {
+            var owned = new HorseRecallChecks.Target(kind, true, true, OWNER, null, true, false, DIM, false, false, false);
+            assertEquals(kind.requiresTaming(), HorseRecallChecks.authorized(owned, OWNER), kind.name());
+            var named = new HorseRecallChecks.Target(kind, true, true, null, "ポチ", true, true, DIM, false, false, false);
+            assertEquals(kind.permitsNamedEquipment(), HorseRecallChecks.authorized(named, OWNER), kind.name());
+            for (var invalid : java.util.List.of(
+                    new HorseRecallChecks.Target(kind, true, true, new UUID(1, 1), "ポチ", true, true, DIM, false, false, false),
+                    new HorseRecallChecks.Target(kind, true, true, null, null, true, true, DIM, false, false, false),
+                    new HorseRecallChecks.Target(kind, true, true, null, "ポチ", true, false, DIM, false, false, false))) {
+                assertFalse(HorseRecallChecks.authorized(invalid, OWNER), kind.name());
+            }
+            assertEquals(kind, HorseRecallChecks.Kind.fromEntityId("minecraft:" + kind.wireName()));
+        }
+        for (String rejected : java.util.List.of("minecraft:husk", "minecraft:ghast", "minecraft:wolf", "other:pig", "pig"))
+            assertNull(HorseRecallChecks.Kind.fromEntityId(rejected));
+        assertEquals(14, HorseRecallChecks.Kind.values().length);
+    }
+
+    @Test void nautilusNeedsNineWaterCellsAndHappyGhastNeedsItsWholeBodySpace() {
+        var point = new HorseRecallLanding.Point(0, 64, 0);
+        for (var kind : java.util.List.of(HorseRecallChecks.Kind.NAUTILUS, HorseRecallChecks.Kind.ZOMBIE_NAUTILUS)) {
+            var water = HorseRecallLanding.volume(point, kind, 0.875, 0.95);
+            var cells = new java.util.HashSet<HorseRecallLanding.Cell>();
+            assertTrue(water.all(cell -> { cells.add(cell); return true; }));
+            assertEquals(9, cells.size(), "3x3, not a nine-cell line or 9x9");
+            assertEquals(3, cells.stream().map(HorseRecallLanding.Cell::x).distinct().count());
+            assertEquals(3, cells.stream().map(HorseRecallLanding.Cell::z).distinct().count());
+            for (var missing : cells) assertFalse(water.all(cell -> !cell.equals(missing)), "one missing water cell rejects landing");
+            assertFalse(water.all(cell -> cell.z() == 0), "a long narrow stream does not satisfy 3x3");
+        }
+        var air = HorseRecallLanding.volume(point, HorseRecallChecks.Kind.HAPPY_GHAST, 4, 4);
+        assertEquals(4, air.maxX() - air.minX() + 1);
+        assertEquals(4, air.maxY() - air.minY() + 1);
+        assertEquals(4, air.maxZ() - air.minZ() + 1);
+        var large = HorseRecallLanding.volume(point, HorseRecallChecks.Kind.HAPPY_GHAST, 5, 5);
+        assertTrue(large.minX() <= -2.5 && large.maxX() + 1 >= 2.5);
+        assertEquals(5, large.maxY() - large.minY() + 1);
+        var camel = HorseRecallLanding.volume(point, HorseRecallChecks.Kind.CAMEL, 1.7, 2.375);
+        assertEquals(3, camel.maxY() - camel.minY() + 1);
+        assertTrue(HorseRecallChecks.Kind.HORSE.rears());
+        assertFalse(HorseRecallChecks.Kind.CAMEL.rears());
+        assertFalse(HorseRecallChecks.Kind.LLAMA.rears());
     }
 
     @Test void destinationMustBeSafeAndTwoToFiveBlocksAwayWithLimitedHeight() {

@@ -292,6 +292,10 @@ impl Dialogue {
         {
             return result;
         }
+        if let Some(result) = self.horse_assist_input(&mut d, &mut jobs, &session_id, text, source)
+        {
+            return result;
+        }
         let s = d.sessions.get_mut(&session_id).unwrap();
         if s.warning
             .as_ref()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""所有馬の二段native API操作を実HTTP・模擬LLM/TTSで確認する。Minecraftや実モデルは使わない。"""
+"""乗れる動物の二段native API操作を実HTTP・模擬LLM/TTSで確認する。Minecraftや実モデルは使わない。"""
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import argparse
@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 
-CAPABILITY = "integrated_server.horse.recall.v1"
+CAPABILITY = "integrated_server.horse.recall.v2"
 HORSE_NAME = "HORSE_CANDIDATE_SENTINEL_b774c"
 RENAMED = "HORSE_RENAMED_SENTINEL_b774c"
 WORLD_ID = "10000000-0000-0000-0000-000000000001"
@@ -21,8 +21,8 @@ HORSE_ID = "30000000-0000-0000-0000-000000000001"
 RECALL = "さっき乗った馬をここに呼んで"
 CHAT = "今日は空がきれいやね"
 SPEECH = "せやな、空を見とると落ち着くわ。"
-SUCCESS_STORY = "Minecraftで、依頼された馬の呼び戻しが成功した。"
-FAILURE_STORY = "依頼された馬の呼び戻しは成功を確認できなかった。"
+SUCCESS_STORY = "Minecraftで、依頼された乗れる動物の呼び戻しが成功した。"
+FAILURE_STORY = "依頼された乗れる動物の呼び戻しは成功を確認できなかった。理由: 個体または命令の結果が一致せず、移動成功を確認できなかった。"
 
 
 def utc_now():
@@ -53,24 +53,27 @@ class MockPlan:
             prompt = json.dumps(incoming["messages"], ensure_ascii=False)
             if self.capability:
                 names = [t["function"]["name"] for t in incoming.get("tools", [])]
-                assert names == (["select_horse"] if stage == "selection" else ["list_horses"]), names
+                expected = {"selection": ["select_horse"], "selection_unavailable": [],
+                            "ordinary": ["list_horses"], "fallback_chat": []}
+                assert names == expected[stage], names
             else:
                 assert not incoming.get("tools"), "missing capability exposed tools"
             assert WORLD_ID not in prompt and PLAYER_ID not in prompt and HORSE_ID not in prompt, "UUID leaked to model"
-            if stage == "selection":
+            if stage in ("selection", "selection_unavailable"):
                 assert HORSE_NAME in prompt, "second call did not receive observed candidate name"
                 assert "candidate_id" in prompt and "h1" in prompt, "second call has no bounded candidate ID"
-                assert "select_horse" in prompt, "second call does not declare select_horse"
+                if stage == "selection":
+                    assert "select_horse" in prompt, "second call does not declare select_horse"
                 self.entered.set()
                 if not self.release.wait(timeout=8):
                     raise AssertionError("mock selection gate was not released")
             else:
                 assert HORSE_NAME not in prompt and RENAMED not in prompt, "candidate names reached ordinary chat"
-                if self.capability:
+                if self.capability and stage != "fallback_chat":
                     assert "list_horses" in prompt, "ordinary chat lacks list_horses contract"
                 else:
-                    assert "list_horses" not in prompt and "select_horse" not in prompt, "unsupported capability exposed horse action"
-            if self.capability:
+                    assert "list_horses" not in prompt and "select_horse" not in prompt, "ordinary fallback or unsupported capability exposed horse action"
+            if self.capability and stage != "fallback_chat":
                 if response["action"] in ("list_horses", "select_horse"):
                     arguments = {k: v for k, v in response.items() if k != "action"}
                     return {"role": "assistant", "content": None, "tool_calls": [{
@@ -88,27 +91,32 @@ class MockPlan:
         assert len(self.calls) == len(self.responses), (len(self.calls), len(self.responses))
 
 
-def list_response():
-    return {"action": "list_horses", "evidence": RECALL, "confidence": .99}
+def list_response(text=RECALL):
+    return {"action": "list_horses", "evidence": text, "confidence": .99}
 
 
-def select_response():
-    return {"action": "select_horse", "candidate_id": "h1", "evidence": RECALL, "confidence": .99}
+def select_response(text=RECALL):
+    return {"action": "select_horse", "candidate_id": "h1", "evidence": text, "confidence": .99}
 
 
-def selection_plan(*, block=False, after_chat=False):
-    responses = [("ordinary", list_response()), ("selection", select_response())]
+def selection_plan(*, block=False, after_chat=False, text=RECALL):
+    responses = [("ordinary", list_response(text)), ("selection", select_response(text))]
     if after_chat:
         responses.append(("ordinary", {"action": "speak", "speech": SPEECH}))
     return MockPlan(responses, block_selection=block)
 
 
 @contextmanager
-def fixture(helper, binary, plan, *, capability=True):
+def fixture(helper, binary, plan, *, capability=True, fail_selection=False):
     """新規server、session、記憶先、localhost依存だけを所有して終了時に回収する。"""
     with tempfile.TemporaryDirectory(prefix="dogido-horse-http-") as temp, helper.dependencies() as (dep, control, seen):
         directory = Path(temp)
-        control["structured_handler"] = plan
+        def respond(incoming):
+            response = plan(incoming)
+            if fail_selection and any(t["function"]["name"] == "select_horse" for t in incoming.get("tools", [])):
+                raise ConnectionError("intentional mock selection transport failure")
+            return response
+        control["structured_handler"] = respond
         try:
             with helper.running(
                 binary, directory, dep, live=False,
@@ -123,26 +131,40 @@ def fixture(helper, binary, plan, *, capability=True):
                     "capabilities": capabilities, "voice_enabled": False,
                     "execution_capabilities": [CAPABILITY] if capability else [],
                 })["session_id"]
-                state = {"sequence": 0, "name": HORSE_NAME}
-                def send(*, results=()):
+                state = {"sequence": 0, "name": HORSE_NAME, "combat": False}
+                def send(*, results=(), event_name="status_snapshot", horses=True, paused=False, damage=False):
                     state["sequence"] += 1
                     observed = utc_now()
                     event = {
                         "schema_version": "2026-05-24", "game": "minecraft-java", "adapter": "fixture",
                         "sequence": state["sequence"], "observed_at": observed,
-                        "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
+                        "event": {"name": event_name, "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                         "player": {"name": "試験", "dimension": "minecraft:overworld", "position": {"x": 0, "y": 64, "z": 0}},
                         "world": {"biome": "minecraft:plains", "time_phase": "day", "weather": "clear", "local_light": 15,
-                                  "danger_darkness_score": 0, "sky_visible": True, "ceiling_height": 20, "game_paused": False},
+                                  "danger_darkness_score": 0, "sky_visible": True, "ceiling_height": 20, "game_paused": paused},
                         "combat": {"combat_active_hint": False},
-                        "owned_horses": {"schema_version": 1, "status": "available", "world_id": WORLD_ID,
+                        "owned_horses": {"schema_version": 2, "status": "available", "world_id": WORLD_ID,
                                          "revision": state["sequence"], "observed_at": observed, "player_uuid": PLAYER_ID,
                                          "dimension": "minecraft:overworld", "recent_mount_id": HORSE_ID,
-                                         "candidates": [{"entity_id": HORSE_ID, "custom_name": state["name"], "tamed": True,
-                                                         "owned_by_player": True, "alive": True, "dimension": "minecraft:overworld",
-                                                         "has_passengers": False, "leashed": False}]},
+                                         "candidates": [{"entity_id": HORSE_ID, "custom_name": state["name"], "tamed": state.get("tamed", True),
+                                                         "entity_type": state.get("kind", "horse"), "owner_uuid": state.get("owner", PLAYER_ID),
+                                                         "adult": True, "equipped": state.get("equipped", True), "has_vehicle": False, "alive": True, "dimension": "minecraft:overworld",
+                                                         "has_passengers": state.get("passengers", False), "leashed": False}]},
                         "command_results": list(results),
                     }
+                    if not horses:
+                        del event["owned_horses"]
+                    if state["combat"]:
+                        event["visual_threats"] = [
+                            {"type": "zombie", "entity_id": f"z{i}", "distance": 3,
+                             "direction": {"horizontal": "front"}} for i in range(2)]
+                        event["combat"].update(combat_active_hint=True, hostiles_within_10=2)
+                    if state.get("alert"):
+                        event["visual_threats"] = [{"type": "creeper", "entity_id": "alert-creeper", "distance": 9,
+                                                    "direction": {"horizontal": "back"}}]
+                        event["combat"].update(combat_active_hint=True, hostiles_within_10=1)
+                    if damage:
+                        event["combat"]["recent_damage_ms"] = 0
                     response = helper.request(base, "/api/v1/game-events", event, sid=session)
                     assert response["accepted"], response
                     return response
@@ -199,7 +221,7 @@ def check_success(helper, binary, passed):
         turn = helper.submit_text(base, sid, RECALL)
         command = get_command(helper, send)
         assert not stories(SUCCESS_STORY), history()
-        assert not [r for r in rows() if r.get("text") == "馬、こっちへ来たで。"], rows()
+        assert not [r for r in rows() if r.get("text") == "こっちへ来たで。"], rows()
         assert send()["commands"] == [command], "retransmission changed command identity"
         unknown = result(command)
         unknown["command_id"] = str(uuid.uuid4())
@@ -305,6 +327,199 @@ def check_change_during_selection(helper, binary, passed, *, cancel):
     passed.append("cancelled_selection_never_issues_after_newer_input" if cancel else "renamed_latest_candidate_rejects_stale_selection_before_command")
 
 
+def check_blocked_request(helper, binary, passed, *, missing):
+    plan = MockPlan([("ordinary", list_response())])
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        send(horses=not missing, paused=not missing)
+        turn = helper.submit_text(base, sid, RECALL)
+        reply = helper.wait_for(lambda: helper.display_row(base, turn))
+        assert "まだ呼んでへん" in reply["text"], reply
+        row = helper.wait_for(lambda: next((r for r in rows() if r.get("turn_id") == turn and r.get("horse_recall_status")), None))
+        assert row["horse_recall_status"] == "blocked", row
+        assert row["horse_recall_reason"] == ("horse_snapshot_missing" if missing else "horse_game_paused"), row
+        helper.acknowledge(base, sid, reply)
+        quiet_commands(send)
+        assert not any(r.get("horse_command_id") for r in rows()), rows()
+        plan.verify()
+    passed.append("missing_snapshot_returns_unexecuted_reason_without_selection" if missing else "paused_game_recognizes_request_and_returns_unexecuted_reason")
+
+
+def check_partial_observation(helper, binary, passed):
+    plan = selection_plan()
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        send(event_name="threat_approaching", horses=False)
+        helper.submit_text(base, sid, RECALL)
+        command = get_command(helper, lambda: send(event_name="threat_approaching", horses=False))
+        response = send(event_name="threat_approaching", horses=False, results=[result(command)])
+        assert not response["commands"], response
+        helper.wait_for(lambda: stories(SUCCESS_STORY))
+        assert len(stories(SUCCESS_STORY)) == 1, history()
+        plan.verify()
+    passed.append("fresh_horse_snapshot_survives_combat_event_for_selection_revalidation_and_receipt")
+
+
+def check_combat_recall(helper, binary, passed, *, cancel=False):
+    plan = selection_plan(block=True, after_chat=cancel)
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        try:
+            state["combat"] = True
+            send()
+            helper.submit_text(base, sid, RECALL)
+            helper.wait_for(plan.entered.is_set, timeout=5)
+            # 警告・被弾の新しい観測でも入力世代はそのまま。通常会話用epochだけが変わる。
+            send(damage=True)
+            if cancel:
+                helper.submit_text(base, sid, CHAT)
+                plan.release.set()
+                helper.wait_for(lambda: any(r.get("horse_recall_status") == "not_requested" for r in rows()))
+                quiet_commands(send)
+                assert not any(r.get("horse_command_id") for r in rows()), rows()
+                assert not any(entry.get("text") == SPEECH for entry in history()), history()
+            else:
+                plan.release.set()
+                command = get_command(helper, send)
+                send(results=[result(command)])
+                helper.wait_for(lambda: stories(SUCCESS_STORY))
+                assert len(stories(SUCCESS_STORY)) == 1, history()
+                assert any(r.get("combat_actions") for r in rows()), "warnings did not run alongside recall"
+                assert sum(r.get("horse_command_id") == command["command_id"] for r in rows()) == 1, rows()
+            plan.verify()
+        finally:
+            plan.release.set()
+    passed.append("combat_new_input_cancels_selection_and_keeps_nonhorse_speech_suppressed" if cancel else
+                  "combat_recall_survives_warning_and_damage_without_waiting_for_speech")
+
+
+def check_selection_failure(helper, binary, passed):
+    plan = selection_plan()
+    with fixture(helper, binary, plan, fail_selection=True) as (base, sid, send, rows, history, stories, state, seen):
+        state["combat"] = True
+        send()
+        helper.submit_text(base, sid, RECALL)
+        row = helper.wait_for(lambda: next((r for r in rows()
+            if r.get("horse_recall_reason") == "horse_selection_unavailable"), None))
+        assert row["assist_status"] == "handled" and row["horse_recall_status"] == "rejected", row
+        quiet_commands(send)
+        assert not any(r.get("horse_command_id") for r in rows()), rows()
+        plan.verify()
+    passed.append("selection_transport_failure_keeps_authorized_request_out_of_ordinary_chat")
+
+
+def check_alert_input_routing(helper, binary, passed, *, recall=False):
+    unspoken = "馬判定だけの本文は配送せえへん。"
+    plan = selection_plan() if recall else MockPlan([
+        ("ordinary", {"action": "speak", "speech": unspoken}),
+        ("fallback_chat", {"action": "speak", "speech": SPEECH}),
+    ])
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        state["alert"] = True
+        send()
+        # panicではないクリーパー一頭。警告配送の終了後にも戦闘の所有権は続いている。
+        warning = helper.wait_for(lambda: next((r for r in rows() if r.get("display_id") and r.get("combat_actions")), None))
+        helper.acknowledge(base, sid, warning)
+        helper.wait_for(lambda: helper.row(base, warning["turn_id"], {"audio_disabled"}))
+        send()
+        observed = next(s for s in helper.snapshot(base)["sessions"] if s["session_id"] == sid)
+        assert observed["state"] == "alert" and observed["chat_allowed"], observed
+        assert observed["foreground"]["combat_active"], observed
+        helper.submit_text(base, sid, RECALL if recall else CHAT)
+        if recall:
+            command = get_command(helper, send)
+            send(results=[result(command)])
+            helper.wait_for(lambda: stories(SUCCESS_STORY))
+        else:
+            helper.wait_for(lambda: any(r.get("horse_recall_status") == "not_requested" for r in rows()))
+            # Alertでは既存のchat_allowedを維持。馬判定の本文ではなく、通常会話を配送する。
+            reply = helper.wait_for(lambda: next((r for r in rows()
+                if r.get("display_id") and r.get("text") == SPEECH), None))
+            helper.acknowledge(base, sid, reply)
+            helper.wait_for(lambda: any(r.get("text") == SPEECH for r in history()))
+            quiet_commands(send)
+            assert not any(r.get("text") == unspoken for r in history()), history()
+            assert not any(r.get("horse_command_id") for r in rows()), rows()
+        plan.verify()
+    passed.append("alert_creeper_accepts_horse_request" if recall else "alert_creeper_preserves_existing_ordinary_chat_permission")
+
+
+def check_expanded_mounts(helper, binary, passed):
+    for kind, text in [("pig", "さっきのブタを呼んで"), ("happy_ghast", "ハッピーガストをここに呼んで"),
+                       ("nautilus", "オウムガイを呼んで"), ("camel_husk", "ラクダハスクを呼んで")]:
+        plan = selection_plan(text=text)
+        with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+            state.update(kind=kind, owner=PLAYER_ID if kind == "nautilus" else None,
+                         tamed=kind not in ("pig", "happy_ghast"))
+            send()
+            helper.submit_text(base, sid, text)
+            command = get_command(helper, send)
+            user_materials = "\n".join(m["content"] for m in plan.calls[1]["messages"] if m["role"] == "user")
+            assert f'"entity_type":"{kind}"' in user_materials, user_materials
+            send(results=[result(command)])
+            helper.wait_for(lambda: stories(SUCCESS_STORY))
+            plan.verify()
+    passed.append("ownerless_equipped_and_owned_aquatic_candidates_reach_selection_and_ack_with_species")
+
+
+def check_unequipped_during_selection(helper, binary, passed):
+    text = "さっきのブタを呼んで"
+    plan = selection_plan(block=True, text=text)
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        state.update(kind="pig", owner=None, tamed=False)
+        send()
+        turn = helper.submit_text(base, sid, text)
+        helper.wait_for(plan.entered.is_set, timeout=5)
+        state["equipped"] = False
+        send()
+        plan.release.set()
+        reply = helper.wait_for(lambda: helper.display_row(base, turn))
+        assert reply.get("horse_recall_status") == "rejected" or "状態が変わった" in reply.get("text", ""), reply
+        quiet_commands(send)
+        assert not any(r.get("horse_command_id") for r in rows()), rows()
+        plan.verify()
+    passed.append("removing_saddle_from_ownerless_mount_during_selection_prevents_command")
+
+
+def check_no_eligible_candidate(helper, binary, passed):
+    speech = "その子は今、誰かが乗っとるから呼べへんで。"
+    plan = MockPlan([("ordinary", list_response()),
+                     ("selection_unavailable", {"action": "speak", "speech": speech})])
+    with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+        state["passengers"] = True
+        send()
+        turn = helper.submit_text(base, sid, RECALL)
+        reply = helper.wait_for(lambda: helper.display_row(base, turn))
+        assert reply["text"] == speech, reply
+        assert "その個体に乗員がいる" in json.dumps(plan.calls[1]["messages"], ensure_ascii=False)
+        quiet_commands(send)
+        plan.verify()
+    passed.append("no_eligible_candidate_keeps_observed_reason_and_reply_without_selection_tool")
+
+
+def check_failure_reason_reaches_followup_context(helper, binary, passed):
+    for code, fact, speech in [
+        ("horse_not_loaded", "遠距離・別次元・消失のどれが原因かは未確認", "声が届かへんかったみたいや。"),
+        ("no_water_landing", "横3×3以上の水域と身体の空間", "近くに、横3×3の水域で安全に出られる場所が見つからへんかったわ。まだ呼んでへんで。"),
+    ]:
+        plan = selection_plan(after_chat=True)
+        with fixture(helper, binary, plan) as (base, sid, send, rows, history, stories, state, seen):
+            helper.submit_text(base, sid, RECALL)
+            command = get_command(helper, send)
+            receipt = result(command)
+            receipt.update(status="rejected", detail_code=code)
+            response = send(results=[receipt])
+            assert not response["commands"] and response["acknowledged_command_ids"] == [command["command_id"]], response
+            helper.wait_for(lambda: any(fact in entry.get("text", "") for entry in history()))
+            reply = helper.wait_for(lambda: next((r for r in rows() if r.get("display_id") and r.get("text") == speech), None))
+            helper.acknowledge(base, sid, reply)
+            helper.wait_for(lambda: helper.row(base, reply["turn_id"], {"audio_disabled"}))
+            turn = helper.submit_text(base, sid, CHAT)
+            helper.wait_for(lambda: helper.display_row(base, turn))
+            assert fact in json.dumps(plan.calls[-1]["messages"], ensure_ascii=False), "reason was lost before next model call"
+            send(results=[receipt])
+            assert sum(fact in entry.get("text", "") and entry.get("reaction") == "story" for entry in history()) == 1
+            plan.verify()
+    passed.append("minecraft_failure_reason_reaches_next_chat_once_with_character_friendly_absence_reply")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True, help="DokiDoki-Dogido checkout containing scripts/check_dialogue.py")
@@ -325,6 +540,18 @@ def main():
     check_chat(helper, binary, passed, capability=False)
     check_change_during_selection(helper, binary, passed, cancel=False)
     check_change_during_selection(helper, binary, passed, cancel=True)
+    check_blocked_request(helper, binary, passed, missing=True)
+    check_blocked_request(helper, binary, passed, missing=False)
+    check_partial_observation(helper, binary, passed)
+    check_combat_recall(helper, binary, passed)
+    check_combat_recall(helper, binary, passed, cancel=True)
+    check_selection_failure(helper, binary, passed)
+    check_alert_input_routing(helper, binary, passed)
+    check_alert_input_routing(helper, binary, passed, recall=True)
+    check_expanded_mounts(helper, binary, passed)
+    check_unequipped_during_selection(helper, binary, passed)
+    check_no_eligible_candidate(helper, binary, passed)
+    check_failure_reason_reaches_followup_context(helper, binary, passed)
     print(json.dumps({"passed": passed, "count": len(passed), "scope": "mock HTTP; no real model or Minecraft"}, ensure_ascii=False, indent=2))
 
 

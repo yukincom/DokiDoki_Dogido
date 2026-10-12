@@ -55,6 +55,7 @@ impl Dialogue {
             let complete = complete_observation(&event);
             let s = d.sessions.get_mut(session_id).unwrap();
             super::body_runtime::observe(s, &event);
+            s.horse_recall.observe(&event, recent);
             if complete {
                 s.latest = Some(event.clone());
                 s.received = recent.then(Instant::now);

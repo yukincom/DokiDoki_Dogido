@@ -51,12 +51,18 @@ class HorseRecallProtocolTest {
     }
 
     @Test void unnamedAndDuplicateNamedOwnedHorsesRetainTheirIndividualUuids() {
-        var one = new HorseRecallProtocol.Candidate(HORSE, null, true, true, true, "minecraft:overworld", false, false);
-        var two = new HorseRecallProtocol.Candidate(WORLD, "ぶち", true, true, true, "minecraft:overworld", false, false);
-        var three = new HorseRecallProtocol.Candidate(PLAYER, "ぶち", true, true, true, "minecraft:overworld", false, false);
+        var one = new HorseRecallProtocol.Candidate(HORSE, "horse", null, true, PLAYER, true, true, true, "minecraft:overworld", false, false, false);
+        var two = new HorseRecallProtocol.Candidate(WORLD, "pig", "ぶち", false, null, true, true, true, "minecraft:overworld", false, false, false);
+        var three = new HorseRecallProtocol.Candidate(PLAYER, "horse", "ぶち", true, PLAYER, true, true, true, "minecraft:overworld", false, false, false);
         JsonObject json = new HorseRecallProtocol.Snapshot(true, WORLD, 1, NOW, PLAYER, "minecraft:overworld", HORSE,
             List.of(one, two, three)).toJson();
         assertEquals("available", json.get("status").getAsString());
+        assertEquals(2, json.get("schema_version").getAsInt());
+        var pig = json.getAsJsonArray("candidates").get(1).getAsJsonObject();
+        assertEquals("pig", pig.get("entity_type").getAsString());
+        assertTrue(pig.get("owner_uuid").isJsonNull());
+        assertFalse(pig.get("tamed").getAsBoolean());
+        assertTrue(pig.get("equipped").getAsBoolean());
         assertTrue(json.getAsJsonArray("candidates").get(0).getAsJsonObject().get("custom_name").isJsonNull());
         assertEquals(3, json.getAsJsonArray("candidates").size());
         assertEquals(HORSE.toString(), json.get("recent_mount_id").getAsString());
@@ -64,7 +70,7 @@ class HorseRecallProtocolTest {
 
     @Test void oversizedOrUnavailableSnapshotNeverPublishesAPartialList() {
         var rows = IntStream.range(0, 33).mapToObj(i -> new HorseRecallProtocol.Candidate(new UUID(0, i),
-            "馬" + i, true, true, true, "minecraft:overworld", false, false)).toList();
+            "horse", "馬" + i, true, PLAYER, true, true, true, "minecraft:overworld", false, false, false)).toList();
         for (var snapshot : List.of(new HorseRecallProtocol.Snapshot(true, WORLD, 2, NOW, PLAYER, "minecraft:overworld", null, rows),
                 new HorseRecallProtocol.Snapshot(false, WORLD, 2, NOW, PLAYER, "minecraft:overworld", null, rows.subList(0, 1)))) {
             assertEquals("unavailable", snapshot.toJson().get("status").getAsString());

@@ -16,7 +16,10 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.HorseEntity;
+import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.AbstractHorseEntity;
+import net.minecraft.entity.passive.CamelEntity;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -24,7 +27,7 @@ import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 
 /**
- * 統合サーバーの所有馬観測と一度限りの呼戻しを、既存sessionとcommand結果へ接続する。
+ * 統合サーバーの乗れる動物の観測と一度限りの呼戻しを、既存sessionとcommand結果へ接続する。
  * clientは接続世代と演出、serverは所有照合・足場・移動を所有し、相互には不変値を渡す。
  */
 public final class HorseRecallRuntime {
@@ -180,7 +183,7 @@ public final class HorseRecallRuntime {
                 if (scope == current) snapshot = unavailable(current);
                 return;
             }
-            if (player.getVehicle() instanceof HorseEntity horse && HorseRecallWorld.owned(horse, current.playerId))
+            if (player.getVehicle() instanceof MobEntity horse && HorseRecallWorld.authorized(horse, current.playerId))
                 current.recentMount = horse.getUuid();
             List<HorseRecallProtocol.Candidate> candidates = HorseRecallWorld.observe(player.getEntityWorld(), current.playerId);
             var captured = new HorseRecallProtocol.Snapshot(true, current.worldId, current.revision.incrementAndGet(),
@@ -207,7 +210,8 @@ public final class HorseRecallRuntime {
         String timeError = operation.command.timeError(Instant.now());
         if (timeError != null) return timeError;
         ServerPlayerEntity player = operation.scope.server.getPlayerManager().getPlayer(operation.scope.playerId);
-        String playerError = HorseRecallWorld.playerError(player, operation.command.dimension());
+        String playerError = HorseRecallWorld.playerError(player, operation.command.dimension(),
+            player == null ? null : player.getEntityWorld().getEntity(operation.command.entityId()));
         if (playerError != null) return playerError;
         return HorseRecallWorld.horseError(player.getEntityWorld().getEntity(operation.command.entityId()), player);
     }
@@ -218,16 +222,22 @@ public final class HorseRecallRuntime {
             if (error != null) { reject(operation, status(error), error); return; }
             ServerPlayerEntity player = operation.scope.server.getPlayerManager().getPlayer(operation.scope.playerId);
             ServerWorld world = player.getEntityWorld();
-            HorseEntity horse = (HorseEntity)world.getEntity(operation.command.entityId());
+            MobEntity horse = (MobEntity)world.getEntity(operation.command.entityId());
             operation.landing = HorseRecallLanding.find(player.getX(), player.getY(), player.getZ(),
                 point -> HorseRecallWorld.safe(world, horse, point));
-            if (operation.landing == null) { reject(operation, "rejected", "no_safe_landing"); return; }
+            if (operation.landing == null) {
+                reject(operation, "rejected", HorseRecallMounts.kind(horse).aquatic() ? "no_water_landing" : "no_safe_landing");
+                return;
+            }
+            // server個体をclient threadから読まず、演出寸法の不変値だけを渡す。
+            var dimensions = horse.getDimensions(EntityPose.STANDING);
             MinecraftClient.getInstance().execute(() -> {
                 if (!validScope(operation) || active.get() != operation) { reject(operation, "rejected", "stale_world"); return; }
                 if (operation.lifecycle.startPreview()) {
                     // 前操作の取消と次操作の準備が同じclient tickに届いても、残った粒子を引き継がない。
                     if (effect != null) effect.cancel();
-                    effect = new HorseRecallEffect(operation.command, operation.landing, operation.lifecycle, logger);
+                    effect = new HorseRecallEffect(operation.command, operation.landing, operation.lifecycle, logger,
+                        dimensions.width(), dimensions.height());
                     logger.info("Dogido horse presentation: command_id={} stage=preview_started", operation.command.commandId());
                 }
             });
@@ -247,7 +257,7 @@ public final class HorseRecallRuntime {
                 if (error != null) { reject(operation, status(error), error); return; }
                 ServerPlayerEntity player = server.getPlayerManager().getPlayer(operation.scope.playerId);
                 ServerWorld world = player.getEntityWorld();
-                HorseEntity horse = (HorseEntity)world.getEntity(operation.command.entityId());
+                MobEntity horse = (MobEntity)world.getEntity(operation.command.entityId());
                 var point = operation.landing;
                 if (!point.near(player.getX(), player.getY(), player.getZ()) || !HorseRecallWorld.safe(world, horse, point)) {
                     reject(operation, "rejected", "landing_changed");
@@ -268,8 +278,10 @@ public final class HorseRecallRuntime {
                 horse.getNavigation().stop();
                 horse.setVelocity(Vec3d.ZERO);
                 horse.onLanding();
-                horse.setOnGround(true);
-                horse.setAngry(20);
+                var kind = HorseRecallMounts.kind(horse);
+                horse.setOnGround(!kind.aquatic() && !kind.flying());
+                if (kind.rears() && horse instanceof AbstractHorseEntity equine) equine.setAngry(20);
+                if (horse instanceof CamelEntity camel && camel.isSitting()) camel.setStanding();
             }
         } catch (RuntimeException error) {
             logger.warn("Dogido horse recall failed: {}", error.getMessage());

@@ -153,6 +153,8 @@ struct Session {
     text_last_request: Option<Value>,
     /// observeが全視認を含むイベントだけから更新する、通常会話と戦況の観測正本。
     latest: Option<GameEvent>,
+    /// status_snapshotで届く馬一覧。部分イベントでは元の観測時刻のまま保持する。
+    horse_recall: horse_recall_runtime::State,
     /// latestの受信時刻。受信時点で古い／時差不明ならNone。以後の鮮度はobservation_freshで測る。
     received: Option<Instant>,
     /// 完全観測または新しい聴覚通知。warnings等が最新の音による中断根拠を読む。
@@ -378,6 +380,7 @@ impl Dialogue {
                 text_poem: None,
                 text_last_request: None,
                 latest: None,
+                horse_recall: horse_recall_runtime::State::default(),
                 received: None,
                 audio_latest: None,
                 audio_received: None,
@@ -555,7 +558,7 @@ impl Dialogue {
             .filter(|r| selected.is_none_or(|id| r["session_id"] == id))
             .collect::<Vec<_>>();
         json!({"revision":d.revision,"phase":"dialogue","audio_enabled":self.config.audio_enabled,"llm_enabled":self.config.llm_enabled,
-            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s)})).collect::<Vec<_>>(),
+            "sessions":d.sessions.iter().map(|(id,s)|json!({"session_id":id,"session_instance":s.instance_id,"voice_enabled":s.delivery.voice_enabled,"voice_generation":s.delivery.generation,"voice_inputs":s.delivery.voice_inputs,"text_enabled":s.delivery.enabled,"name":s.name,"status":s.status,"observation_mode":if s.preview{"none"}else{"minecraft"},"history":s.history.rows(),"history_retention":s.history.retention_status(),"foreground":s.foreground.snapshot(self.clock.elapsed().as_millis() as u64),"web":s.web.state.snapshot(),"workshop_history":s.haiku.workshop.as_ref().map(|w| &w.dialogue),"workshop_followup":s.haiku.workshop.as_ref().map(|w| w.followup),"workshop_discussion_target":s.haiku.workshop.as_ref().and_then(|w| w.discussion_target.as_ref()),"state":s.mode,"chat_allowed":fresh(s),"horse_recall":horse_recall_runtime::snapshot(s)})).collect::<Vec<_>>(),
             "utterances":rows,"references":knowledge_display::collect(&rows)})
     }
     pub fn cancel_all(&self) {

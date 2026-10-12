@@ -27,7 +27,7 @@ fn run(row: Value) -> anyhow::Result<Value> {
             enable_thinking: false,
         }
         .into_request()?;
-        let (request, tools) = intent::request(base, &prepared, stage)?;
+        let (request, tools) = intent::request(base, &prepared.original, Some(&prepared), stage)?;
         let mut wire = json!({"model":request.model,"messages":request.messages,"temperature":request.temperature,
             "max_tokens":request.max_tokens,"stream":false,
             "chat_template_kwargs":{"enable_thinking":false,"preserve_thinking":false}});
