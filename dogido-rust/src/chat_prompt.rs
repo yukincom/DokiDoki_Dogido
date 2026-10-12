@@ -589,7 +589,7 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
             text(d, "user_text", "")
         ));
     }
-    let system = if flag(d, "dialogue_choice") {
+    let mut system = if flag(d, "dialogue_choice") {
         crate::companion_prompt::dialogue(
             character,
             crate::companion_prompt::DialoguePurpose::Reply,
@@ -598,6 +598,15 @@ pub fn messages(d: &Value) -> Result<Vec<ChatMessage>> {
     } else {
         crate::companion_prompt::speech(character)
     };
+    // 同じworld_contextに身体観測がある場合だけ、レビュー済みの読み方と既存の呼び名を添える。
+    if d["world_context"]["observations"]["body_observation"].is_object() {
+        system.push('\n');
+        system.push_str(&crate::companion_prompt::body_observation(text(
+            d,
+            "player_name",
+            "プレイヤー",
+        )));
+    }
     let out = vec![
         ChatMessage {
             role: Role::System,
@@ -686,6 +695,40 @@ mod tests {
             );
             let speech = messages(&json!({"character_mode":mode})).unwrap();
             assert_eq!(speech[0].content, crate::companion_prompt::speech(mode));
+        }
+    }
+    #[test]
+    fn body_guidance_uses_existing_player_name_only_when_body_is_present() {
+        for (name, expected) in [
+            ("はる", "はる（プレイヤー）"),
+            ("", "プレイヤー"),
+            ("プレイヤー", "プレイヤー"),
+        ] {
+            let mut d = json!({"player_name":name,"user_text":"どちら側？","dialogue_choice":true});
+            assert!(
+                !messages(&d).unwrap()[0]
+                    .content
+                    .contains("body_observation")
+            );
+            for status in ["observed", "unavailable"] {
+                d["world_context"] = json!({"observations":{"body_observation":{"status":status}}});
+                let out = messages(&d).unwrap();
+                assert!(
+                    out[0]
+                        .content
+                        .contains(&format!("player は{expected}やで。"))
+                );
+                assert_eq!(
+                    out[0].content.matches("body_observation の self").count(),
+                    1
+                );
+                assert!(
+                    out[0]
+                        .content
+                        .contains("今の位置は分からへんものとして扱ってな。")
+                );
+                assert_eq!(out[1].content.matches("\"body_observation\"").count(), 1);
+            }
         }
     }
     #[test]

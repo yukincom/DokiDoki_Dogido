@@ -21,6 +21,20 @@ pub fn mode(mode: &str) -> &'static str {
 pub fn grounding() -> &'static str {
     TEXT["grounding"].as_str().unwrap()
 }
+/// 身体観測がある通常会話へ読み方を添える。呼び名は既存会話材料のplayer_nameを使い、欠損時は役割名に戻す。
+pub fn body_observation(player_name: &str) -> String {
+    let name = player_name.trim();
+    let player = if name.is_empty() || name == "プレイヤー" {
+        "プレイヤー".to_owned()
+    } else {
+        format!("{name}（プレイヤー）")
+    };
+    TEXT["body_observation"]
+        .as_str()
+        .unwrap()
+        .replace("{player}", &player)
+}
+
 /// 出力契約を機能専用のものへ差し替える際も、共有人格・観測方針は同じ正本を使う。
 pub fn choice_contract() -> &'static str {
     TEXT["choice_contract"].as_str().unwrap()

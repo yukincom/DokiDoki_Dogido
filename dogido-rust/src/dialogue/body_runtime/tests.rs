@@ -128,8 +128,19 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
         panic!("normal reply route");
     };
     let request = reply.request("fixture-model", 256).unwrap();
-    let wire = serde_json::to_value(request).unwrap().to_string();
-    assert_eq!(wire.matches("body_observation").count(), 1);
+    let wire = serde_json::to_value(&request).unwrap().to_string();
+    assert_eq!(
+        request.messages[1]
+            .content
+            .matches("\"body_observation\"")
+            .count(),
+        1
+    );
+    assert!(
+        request.messages[0]
+            .content
+            .contains("body_observation の self はオレ")
+    );
     assert!(wire.contains("server_pose"));
     assert!(wire.contains("previous"));
     assert!(!wire.contains(OWNER));
