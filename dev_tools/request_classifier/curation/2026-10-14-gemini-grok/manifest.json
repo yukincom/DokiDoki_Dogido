@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-14",
+  "dataset_version": "1.4",
+  "base_commit": "1becac40f8abb96a7896cbec4ca1065778690d2d",
+  "sources": {
+    "gemini": {
+      "file": "gemini-original.jsonl",
+      "sha256": "e0767da05887da24f8174ea5bcd09076ff2da8e05a7119aae5af6a386a09a64b",
+      "rows": 60,
+      "provenance": "ユーザーが当該モデルの出力として提供。モデルの版・生成設定・実行ログは未提供。"
+    },
+    "grok": {
+      "file": "grok-original.jsonl",
+      "sha256": "f78f81729a97c1e614c4a3f4a3932ebf51eee019b9dd296cd6e86be7b1e5894f",
+      "rows": 60,
+      "provenance": "ユーザーが当該モデルの出力として提供。モデルの版・生成設定・実行ログは未提供。"
+    }
+  },
+  "counts": {
+    "gemini": {
+      "submitted": 60,
+      "accepted": 36,
+      "excluded": 24
+    },
+    "grok": {
+      "submitted": 60,
+      "accepted": 50,
+      "excluded": 10
+    }
+  },
+  "added_labels": {
+    "equip_sword": 7,
+    "recall_mount": 16,
+    "not_request": 17,
+    "other_request": 30,
+    "enemy_information": 16
+  },
+  "added_train_id_range": [
+    "train-289",
+    "train-374"
+  ],
+  "train_before": 288,
+  "train_after": 374,
+  "total_after": 564,
+  "rationale_only_edits": [
+    "gemini_context_029",
+    "gemini_context_057"
+  ],
+  "source": "synthetic",
+  "original_data_sha256": {
+    "train": "98b4e8f83a600dcec771b40841356e074538b55ce504d370083b1ac3659c8585",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "current_data_sha256": {
+    "train": "94f2b04bf1ad90c4cd027c55f3be5ced5507099b9d85a2c29aa1483145bb0aa3",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "review": "親Codexが全120件を確認。別担当CodexがGemini全60件とGrok全60件を分担して独立に読み直し、親が統合。生成モデルによる自動採点ではない。",
+  "training": "追加後の再学習・モデルによる再評価は未実施。本体未接続。"
+}

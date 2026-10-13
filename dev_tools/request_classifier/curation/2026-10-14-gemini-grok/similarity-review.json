@@ -1,0 +1,115 @@
+{
+  "method": "NFKC・小文字化・カナ統一・空白句読点除去後、履歴のroleと本文および現在発話を連結した入力のSequenceMatcher ratioを比較。人工的な共通入力見出しは含めない。",
+  "existing_threshold": 0.68,
+  "existing_matches": [
+    {
+      "id": "gemini_context_001",
+      "existing_split": "train",
+      "existing_id": "train-207",
+      "ratio": 0.6944,
+      "text": "それ、お願いしてもいいのかな……",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "ゾンビがいるから、手持ちを剣に変えとく？"
+        }
+      ],
+      "existing_text": "それお願い。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "保持。同じ剣提案への承諾でも言い方が異なり、002の呼出承諾と現在発話を共有する対照例となる。既存train内の類似で、評価への混入ではない。"
+    },
+    {
+      "id": "gemini_context_013",
+      "existing_split": "train",
+      "existing_id": "train-233",
+      "ratio": 0.7097,
+      "text": "早く出して！",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "スケルトンが弓構えて狙ってる！"
+        }
+      ],
+      "existing_text": "まだいる？",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "入口にスケルトンが見えてる。"
+        }
+      ],
+      "review": "意味上の対象未確定のため除外。文字列類似による除外ではない。"
+    },
+    {
+      "id": "grok_edge_021",
+      "existing_split": "train",
+      "existing_id": "train-256",
+      "ratio": 0.6897,
+      "text": "剣にしろ……やっぱりやめ",
+      "context": [],
+      "existing_text": "とりあえず剣・・・・やっぱやめ",
+      "existing_context": [],
+      "review": "保持。既存trainの取消と同じ意味領域だが、命令を出して撤回する別の本文で、022の依頼変更との対になる。"
+    },
+    {
+      "id": "grok_edge_026",
+      "existing_split": "train",
+      "existing_id": "train-081",
+      "ratio": 0.7097,
+      "text": "クソ、剣に持ち替えろって、今すぐやれ",
+      "context": [],
+      "existing_text": "剣に持ち替えて。",
+      "existing_context": [],
+      "review": "保持。既存trainの丁寧な依頼に対して荒い口調と発話引用形があり、025の引用報告との対になる。"
+    },
+    {
+      "id": "grok_edge_043",
+      "existing_split": "train",
+      "existing_id": "train-071",
+      "ratio": 0.7273,
+      "text": "敵はクソ、見えてない",
+      "context": [],
+      "existing_text": "敵はいない？",
+      "existing_context": [],
+      "review": "保持。既存trainの敵の不在確認質問と、本人の可視性報告で意味が異なる。"
+    },
+    {
+      "id": "grok_edge_049",
+      "existing_split": "train",
+      "existing_id": "train-081",
+      "ratio": 0.6875,
+      "text": "クソ、剣に持ち替えて敵を千人ぶっ潰せ",
+      "context": [],
+      "existing_text": "剣に持ち替えて。",
+      "existing_context": [],
+      "review": "複数の有効な依頼を一つに潰しているため除外。文字列類似による除外ではない。"
+    }
+  ],
+  "within_submission_threshold": 0.85,
+  "within_submission_matches": [
+    {
+      "id": "grok_edge_028",
+      "other_id": "grok_edge_003",
+      "ratio": 0.9286,
+      "text": "馬呼べよクソが、今だ",
+      "other_text": "馬呼べよ、クソが、今すぐだ"
+    }
+  ],
+  "exact_full_input_duplicates": 0,
+  "normalized_utterance_matches": [
+    {
+      "candidate_ids": [
+        "gemini_context_055",
+        "gemini_context_056",
+        "gemini_context_057"
+      ],
+      "existing_id": "train-233",
+      "review": "同じ短い発話でも対象と履歴が異なる対照例。同じtrain内に保持する。"
+    }
+  ],
+  "limits": "閾値は人手確認候補の抽出用であり、意味的な独立性を保証しない。5分類の同じ意図を別の表現で学ぶ類似は許容する。"
+}
