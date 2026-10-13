@@ -1,0 +1,5504 @@
+{
+  "train": {
+    "n": 566,
+    "replicate_order": [
+      "seed-42",
+      "seed-43",
+      "seed-44"
+    ],
+    "baseline": {
+      "correct": 565,
+      "accuracy": 0.9982332155477032,
+      "macro_f1": 0.9983630536609418,
+      "binary_request_accuracy": 1.0,
+      "non_action_to_action": 0.0,
+      "sword_mount_confusion": 0.0,
+      "incorrect_action_predictions": 0.0,
+      "action_to_non_action": 0.004672897196261682,
+      "subset.negation": 1.0,
+      "subset.quotation": 1.0,
+      "subset.ellipsis": 0.9876543209876543,
+      "subset.self_location": 1.0,
+      "subset.iruka_collision": null,
+      "subset.unsupported_request": 1.0,
+      "subset.ordinary_scope": 0.9981132075471698,
+      "subset.needs_clarification": 1.0,
+      "subset.with_context": 0.994475138121547,
+      "subset.user_example": 1.0,
+      "not_request.precision": 1.0,
+      "not_request.recall": 1.0,
+      "not_request.f1": 1.0,
+      "enemy_information.precision": 1.0,
+      "enemy_information.recall": 1.0,
+      "enemy_information.f1": 1.0,
+      "equip_sword.precision": 1.0,
+      "equip_sword.recall": 1.0,
+      "equip_sword.f1": 1.0,
+      "recall_mount.precision": 1.0,
+      "recall_mount.recall": 0.9907407407407407,
+      "recall_mount.f1": 0.9953488372093023,
+      "other_request.precision": 0.9929577464788732,
+      "other_request.recall": 1.0,
+      "other_request.f1": 0.9964664310954063
+    },
+    "aggregate": {
+      "correct": {
+        "values": [
+          566,
+          566,
+          562
+        ],
+        "mean": 564.6666666666666,
+        "sample_stddev": 2.309401076758503,
+        "min": 562,
+        "max": 566
+      },
+      "accuracy": {
+        "values": [
+          1.0,
+          1.0,
+          0.9929328621908127
+        ],
+        "mean": 0.9976442873969376,
+        "sample_stddev": 0.004080213916534486,
+        "min": 0.9929328621908127,
+        "max": 1.0
+      },
+      "macro_f1": {
+        "values": [
+          1.0,
+          1.0,
+          0.9931458434065238
+        ],
+        "mean": 0.9977152811355079,
+        "sample_stddev": 0.00395724915431134,
+        "min": 0.9931458434065238,
+        "max": 1.0
+      },
+      "binary_request_accuracy": {
+        "values": [
+          1.0,
+          1.0,
+          0.9982332155477032
+        ],
+        "mean": 0.9994110718492344,
+        "sample_stddev": 0.0010200534791336216,
+        "min": 0.9982332155477032,
+        "max": 1.0
+      },
+      "non_action_to_action": {
+        "values": [
+          0.0,
+          0.0,
+          0.008522727272727272
+        ],
+        "mean": 0.0028409090909090906,
+        "sample_stddev": 0.004920598885138855,
+        "min": 0.0,
+        "max": 0.008522727272727272
+      },
+      "sword_mount_confusion": {
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sample_stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "incorrect_action_predictions": {
+        "values": [
+          0.0,
+          0.0,
+          0.013824884792626729
+        ],
+        "mean": 0.004608294930875576,
+        "sample_stddev": 0.007981800956538606,
+        "min": 0.0,
+        "max": 0.013824884792626729
+      },
+      "action_to_non_action": {
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sample_stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "subset.negation": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "subset.quotation": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "subset.ellipsis": {
+        "values": [
+          1.0,
+          1.0,
+          0.9753086419753086
+        ],
+        "mean": 0.9917695473251029,
+        "sample_stddev": 0.014255562202212982,
+        "min": 0.9753086419753086,
+        "max": 1.0
+      },
+      "subset.self_location": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "subset.unsupported_request": {
+        "values": [
+          1.0,
+          1.0,
+          0.9722222222222222
+        ],
+        "mean": 0.9907407407407407,
+        "sample_stddev": 0.016037507477489613,
+        "min": 0.9722222222222222,
+        "max": 1.0
+      },
+      "subset.ordinary_scope": {
+        "values": [
+          1.0,
+          1.0,
+          0.9943396226415094
+        ],
+        "mean": 0.9981132075471698,
+        "sample_stddev": 0.0032680203916393906,
+        "min": 0.9943396226415094,
+        "max": 1.0
+      },
+      "subset.needs_clarification": {
+        "values": [
+          1.0,
+          1.0,
+          0.8181818181818182
+        ],
+        "mean": 0.9393939393939394,
+        "sample_stddev": 0.10497277621629557,
+        "min": 0.8181818181818182,
+        "max": 1.0
+      },
+      "subset.with_context": {
+        "values": [
+          1.0,
+          1.0,
+          0.9834254143646409
+        ],
+        "mean": 0.994475138121547,
+        "sample_stddev": 0.009569341478281066,
+        "min": 0.9834254143646409,
+        "max": 1.0
+      },
+      "subset.user_example": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "not_request.precision": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "not_request.recall": {
+        "values": [
+          1.0,
+          1.0,
+          0.9913793103448276
+        ],
+        "mean": 0.9971264367816092,
+        "sample_stddev": 0.004977157493013993,
+        "min": 0.9913793103448276,
+        "max": 1.0
+      },
+      "not_request.f1": {
+        "values": [
+          1.0,
+          1.0,
+          0.9956709956709957
+        ],
+        "mean": 0.9985569985569985,
+        "sample_stddev": 0.002499351814673684,
+        "min": 0.9956709956709957,
+        "max": 1.0
+      },
+      "enemy_information.precision": {
+        "values": [
+          1.0,
+          1.0,
+          0.9895833333333334
+        ],
+        "mean": 0.9965277777777778,
+        "sample_stddev": 0.00601406530405858,
+        "min": 0.9895833333333334,
+        "max": 1.0
+      },
+      "enemy_information.recall": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "enemy_information.f1": {
+        "values": [
+          1.0,
+          1.0,
+          0.9947643979057591
+        ],
+        "mean": 0.9982547993019197,
+        "sample_stddev": 0.0030227762784797514,
+        "min": 0.9947643979057591,
+        "max": 1.0
+      },
+      "equip_sword.precision": {
+        "values": [
+          1.0,
+          1.0,
+          0.9724770642201835
+        ],
+        "mean": 0.9908256880733946,
+        "sample_stddev": 0.015890374381365816,
+        "min": 0.9724770642201835,
+        "max": 1.0
+      },
+      "equip_sword.recall": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "equip_sword.f1": {
+        "values": [
+          1.0,
+          1.0,
+          0.986046511627907
+        ],
+        "mean": 0.9953488372093023,
+        "sample_stddev": 0.008056050267762196,
+        "min": 0.986046511627907,
+        "max": 1.0
+      },
+      "recall_mount.precision": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "recall_mount.recall": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "recall_mount.f1": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "other_request.precision": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "other_request.recall": {
+        "values": [
+          1.0,
+          1.0,
+          0.9787234042553191
+        ],
+        "mean": 0.9929078014184397,
+        "sample_stddev": 0.012284048280630353,
+        "min": 0.9787234042553191,
+        "max": 1.0
+      },
+      "other_request.f1": {
+        "values": [
+          1.0,
+          1.0,
+          0.989247311827957
+        ],
+        "mean": 0.996415770609319,
+        "sample_stddev": 0.006208067410641132,
+        "min": 0.989247311827957,
+        "max": 1.0
+      }
+    },
+    "transitions": {
+      "seed-42": {
+        "fixed": {
+          "count": 1,
+          "ids": [
+            "train-292"
+          ]
+        },
+        "new_errors": {
+          "count": 0,
+          "ids": []
+        },
+        "still_wrong": {
+          "count": 0,
+          "ids": []
+        },
+        "still_correct": {
+          "count": 565,
+          "ids": [
+            "train-001",
+            "train-002",
+            "train-003",
+            "train-004",
+            "train-005",
+            "train-006",
+            "train-007",
+            "train-008",
+            "train-009",
+            "train-010",
+            "train-011",
+            "train-012",
+            "train-013",
+            "train-014",
+            "train-015",
+            "train-016",
+            "train-017",
+            "train-018",
+            "train-019",
+            "train-020",
+            "train-021",
+            "train-022",
+            "train-023",
+            "train-024",
+            "train-025",
+            "train-026",
+            "train-027",
+            "train-028",
+            "train-029",
+            "train-030",
+            "train-031",
+            "train-032",
+            "train-033",
+            "train-034",
+            "train-035",
+            "train-036",
+            "train-037",
+            "train-038",
+            "train-039",
+            "train-040",
+            "train-041",
+            "train-042",
+            "train-043",
+            "train-044",
+            "train-045",
+            "train-046",
+            "train-047",
+            "train-048",
+            "train-049",
+            "train-050",
+            "train-051",
+            "train-052",
+            "train-053",
+            "train-054",
+            "train-055",
+            "train-056",
+            "train-057",
+            "train-058",
+            "train-059",
+            "train-060",
+            "train-061",
+            "train-062",
+            "train-063",
+            "train-064",
+            "train-065",
+            "train-066",
+            "train-067",
+            "train-068",
+            "train-069",
+            "train-070",
+            "train-071",
+            "train-072",
+            "train-073",
+            "train-074",
+            "train-075",
+            "train-076",
+            "train-077",
+            "train-078",
+            "train-079",
+            "train-080",
+            "train-081",
+            "train-082",
+            "train-083",
+            "train-084",
+            "train-085",
+            "train-086",
+            "train-087",
+            "train-088",
+            "train-089",
+            "train-090",
+            "train-091",
+            "train-092",
+            "train-093",
+            "train-094",
+            "train-095",
+            "train-096",
+            "train-097",
+            "train-098",
+            "train-099",
+            "train-100",
+            "train-101",
+            "train-102",
+            "train-103",
+            "train-104",
+            "train-105",
+            "train-106",
+            "train-107",
+            "train-108",
+            "train-109",
+            "train-110",
+            "train-111",
+            "train-112",
+            "train-113",
+            "train-114",
+            "train-115",
+            "train-116",
+            "train-117",
+            "train-118",
+            "train-119",
+            "train-120",
+            "train-121",
+            "train-122",
+            "train-123",
+            "train-124",
+            "train-125",
+            "train-126",
+            "train-127",
+            "train-128",
+            "train-129",
+            "train-130",
+            "train-131",
+            "train-132",
+            "train-133",
+            "train-134",
+            "train-135",
+            "train-136",
+            "train-137",
+            "train-138",
+            "train-139",
+            "train-140",
+            "train-141",
+            "train-142",
+            "train-143",
+            "train-144",
+            "train-145",
+            "train-146",
+            "train-147",
+            "train-148",
+            "train-149",
+            "train-150",
+            "train-151",
+            "train-152",
+            "train-153",
+            "train-154",
+            "train-155",
+            "train-156",
+            "train-157",
+            "train-158",
+            "train-159",
+            "train-160",
+            "train-161",
+            "train-162",
+            "train-163",
+            "train-164",
+            "train-165",
+            "train-166",
+            "train-167",
+            "train-168",
+            "train-169",
+            "train-170",
+            "train-171",
+            "train-172",
+            "train-173",
+            "train-174",
+            "train-175",
+            "train-176",
+            "train-177",
+            "train-178",
+            "train-179",
+            "train-180",
+            "train-181",
+            "train-182",
+            "train-183",
+            "train-184",
+            "train-185",
+            "train-186",
+            "train-187",
+            "train-188",
+            "train-189",
+            "train-190",
+            "train-191",
+            "train-192",
+            "train-193",
+            "train-194",
+            "train-195",
+            "train-196",
+            "train-197",
+            "train-198",
+            "train-199",
+            "train-200",
+            "train-201",
+            "train-202",
+            "train-203",
+            "train-204",
+            "train-205",
+            "train-206",
+            "train-207",
+            "train-208",
+            "train-209",
+            "train-210",
+            "train-211",
+            "train-212",
+            "train-213",
+            "train-214",
+            "train-215",
+            "train-216",
+            "train-217",
+            "train-218",
+            "train-219",
+            "train-220",
+            "train-221",
+            "train-222",
+            "train-223",
+            "train-224",
+            "train-225",
+            "train-226",
+            "train-227",
+            "train-228",
+            "train-231",
+            "train-232",
+            "train-233",
+            "train-234",
+            "train-235",
+            "train-236",
+            "train-237",
+            "train-238",
+            "train-239",
+            "train-240",
+            "train-241",
+            "train-242",
+            "train-243",
+            "train-244",
+            "train-245",
+            "train-246",
+            "train-247",
+            "train-248",
+            "train-249",
+            "train-250",
+            "train-251",
+            "train-252",
+            "train-253",
+            "train-254",
+            "train-255",
+            "train-256",
+            "train-257",
+            "train-258",
+            "train-259",
+            "train-260",
+            "train-261",
+            "train-262",
+            "train-263",
+            "train-264",
+            "train-265",
+            "train-266",
+            "train-267",
+            "train-268",
+            "train-269",
+            "train-270",
+            "train-271",
+            "train-272",
+            "train-273",
+            "train-274",
+            "train-275",
+            "train-276",
+            "train-277",
+            "train-278",
+            "train-279",
+            "train-280",
+            "train-281",
+            "train-282",
+            "train-283",
+            "train-284",
+            "train-285",
+            "train-286",
+            "train-287",
+            "train-288",
+            "train-289",
+            "train-290",
+            "train-291",
+            "train-293",
+            "train-294",
+            "train-295",
+            "train-296",
+            "train-297",
+            "train-298",
+            "train-299",
+            "train-300",
+            "train-301",
+            "train-302",
+            "train-303",
+            "train-304",
+            "train-305",
+            "train-306",
+            "train-307",
+            "train-308",
+            "train-309",
+            "train-310",
+            "train-311",
+            "train-312",
+            "train-313",
+            "train-314",
+            "train-315",
+            "train-316",
+            "train-317",
+            "train-318",
+            "train-319",
+            "train-320",
+            "train-321",
+            "train-322",
+            "train-323",
+            "train-324",
+            "train-325",
+            "train-326",
+            "train-327",
+            "train-328",
+            "train-329",
+            "train-330",
+            "train-331",
+            "train-332",
+            "train-333",
+            "train-334",
+            "train-335",
+            "train-336",
+            "train-337",
+            "train-338",
+            "train-339",
+            "train-340",
+            "train-341",
+            "train-342",
+            "train-343",
+            "train-344",
+            "train-345",
+            "train-346",
+            "train-347",
+            "train-348",
+            "train-349",
+            "train-350",
+            "train-351",
+            "train-352",
+            "train-353",
+            "train-354",
+            "train-355",
+            "train-356",
+            "train-357",
+            "train-358",
+            "train-359",
+            "train-360",
+            "train-361",
+            "train-362",
+            "train-363",
+            "train-364",
+            "train-365",
+            "train-366",
+            "train-367",
+            "train-368",
+            "train-369",
+            "train-370",
+            "train-371",
+            "train-372",
+            "train-373",
+            "train-374",
+            "train-375",
+            "train-376",
+            "train-377",
+            "train-378",
+            "train-379",
+            "train-380",
+            "train-381",
+            "train-382",
+            "train-383",
+            "train-384",
+            "train-385",
+            "train-386",
+            "train-387",
+            "train-388",
+            "train-389",
+            "train-390",
+            "train-391",
+            "train-392",
+            "train-393",
+            "train-394",
+            "train-395",
+            "train-396",
+            "train-397",
+            "train-398",
+            "train-399",
+            "train-400",
+            "train-401",
+            "train-402",
+            "train-403",
+            "train-404",
+            "train-405",
+            "train-406",
+            "train-407",
+            "train-408",
+            "train-409",
+            "train-410",
+            "train-411",
+            "train-412",
+            "train-413",
+            "train-414",
+            "train-415",
+            "train-416",
+            "train-417",
+            "train-418",
+            "train-419",
+            "train-420",
+            "train-421",
+            "train-422",
+            "train-423",
+            "train-424",
+            "train-425",
+            "train-426",
+            "train-427",
+            "train-428",
+            "train-429",
+            "train-430",
+            "train-431",
+            "train-432",
+            "train-433",
+            "train-434",
+            "train-435",
+            "train-436",
+            "train-437",
+            "train-438",
+            "train-439",
+            "train-440",
+            "train-441",
+            "train-442",
+            "train-443",
+            "train-444",
+            "train-445",
+            "train-446",
+            "train-447",
+            "train-448",
+            "train-449",
+            "train-450",
+            "train-451",
+            "train-452",
+            "train-453",
+            "train-454",
+            "train-455",
+            "train-456",
+            "train-457",
+            "train-458",
+            "train-459",
+            "train-460",
+            "train-461",
+            "train-462",
+            "train-463",
+            "train-464",
+            "train-465",
+            "train-466",
+            "train-467",
+            "train-468",
+            "train-469",
+            "train-470",
+            "train-471",
+            "train-472",
+            "train-473",
+            "train-474",
+            "train-475",
+            "train-476",
+            "train-477",
+            "train-478",
+            "train-479",
+            "train-480",
+            "train-481",
+            "train-482",
+            "train-483",
+            "train-484",
+            "train-485",
+            "train-486",
+            "train-487",
+            "train-488",
+            "train-489",
+            "train-490",
+            "train-491",
+            "train-492",
+            "train-493",
+            "train-494",
+            "train-495",
+            "train-496",
+            "train-497",
+            "train-498",
+            "train-499",
+            "train-500",
+            "train-501",
+            "train-502",
+            "train-503",
+            "train-504",
+            "train-505",
+            "train-506",
+            "train-507",
+            "train-508",
+            "train-509",
+            "train-510",
+            "train-511",
+            "train-512",
+            "train-513",
+            "train-514",
+            "train-515",
+            "train-516",
+            "train-517",
+            "train-518",
+            "train-519",
+            "train-520",
+            "train-521",
+            "train-522",
+            "train-523",
+            "train-524",
+            "train-525",
+            "train-526",
+            "train-527",
+            "train-528",
+            "train-529",
+            "train-530",
+            "train-531",
+            "train-532",
+            "train-533",
+            "train-534",
+            "train-535",
+            "train-536",
+            "train-537",
+            "train-538",
+            "train-539",
+            "train-540",
+            "train-541",
+            "train-542",
+            "train-543",
+            "train-544",
+            "train-545",
+            "train-546",
+            "train-547",
+            "train-548",
+            "train-549",
+            "train-550",
+            "train-551",
+            "train-552",
+            "train-553",
+            "train-554",
+            "train-557",
+            "train-558",
+            "train-559",
+            "train-560",
+            "train-561",
+            "train-562",
+            "train-563",
+            "train-564",
+            "train-565",
+            "train-566",
+            "train-567",
+            "train-568",
+            "train-569",
+            "train-570"
+          ]
+        }
+      },
+      "seed-43": {
+        "fixed": {
+          "count": 1,
+          "ids": [
+            "train-292"
+          ]
+        },
+        "new_errors": {
+          "count": 0,
+          "ids": []
+        },
+        "still_wrong": {
+          "count": 0,
+          "ids": []
+        },
+        "still_correct": {
+          "count": 565,
+          "ids": [
+            "train-001",
+            "train-002",
+            "train-003",
+            "train-004",
+            "train-005",
+            "train-006",
+            "train-007",
+            "train-008",
+            "train-009",
+            "train-010",
+            "train-011",
+            "train-012",
+            "train-013",
+            "train-014",
+            "train-015",
+            "train-016",
+            "train-017",
+            "train-018",
+            "train-019",
+            "train-020",
+            "train-021",
+            "train-022",
+            "train-023",
+            "train-024",
+            "train-025",
+            "train-026",
+            "train-027",
+            "train-028",
+            "train-029",
+            "train-030",
+            "train-031",
+            "train-032",
+            "train-033",
+            "train-034",
+            "train-035",
+            "train-036",
+            "train-037",
+            "train-038",
+            "train-039",
+            "train-040",
+            "train-041",
+            "train-042",
+            "train-043",
+            "train-044",
+            "train-045",
+            "train-046",
+            "train-047",
+            "train-048",
+            "train-049",
+            "train-050",
+            "train-051",
+            "train-052",
+            "train-053",
+            "train-054",
+            "train-055",
+            "train-056",
+            "train-057",
+            "train-058",
+            "train-059",
+            "train-060",
+            "train-061",
+            "train-062",
+            "train-063",
+            "train-064",
+            "train-065",
+            "train-066",
+            "train-067",
+            "train-068",
+            "train-069",
+            "train-070",
+            "train-071",
+            "train-072",
+            "train-073",
+            "train-074",
+            "train-075",
+            "train-076",
+            "train-077",
+            "train-078",
+            "train-079",
+            "train-080",
+            "train-081",
+            "train-082",
+            "train-083",
+            "train-084",
+            "train-085",
+            "train-086",
+            "train-087",
+            "train-088",
+            "train-089",
+            "train-090",
+            "train-091",
+            "train-092",
+            "train-093",
+            "train-094",
+            "train-095",
+            "train-096",
+            "train-097",
+            "train-098",
+            "train-099",
+            "train-100",
+            "train-101",
+            "train-102",
+            "train-103",
+            "train-104",
+            "train-105",
+            "train-106",
+            "train-107",
+            "train-108",
+            "train-109",
+            "train-110",
+            "train-111",
+            "train-112",
+            "train-113",
+            "train-114",
+            "train-115",
+            "train-116",
+            "train-117",
+            "train-118",
+            "train-119",
+            "train-120",
+            "train-121",
+            "train-122",
+            "train-123",
+            "train-124",
+            "train-125",
+            "train-126",
+            "train-127",
+            "train-128",
+            "train-129",
+            "train-130",
+            "train-131",
+            "train-132",
+            "train-133",
+            "train-134",
+            "train-135",
+            "train-136",
+            "train-137",
+            "train-138",
+            "train-139",
+            "train-140",
+            "train-141",
+            "train-142",
+            "train-143",
+            "train-144",
+            "train-145",
+            "train-146",
+            "train-147",
+            "train-148",
+            "train-149",
+            "train-150",
+            "train-151",
+            "train-152",
+            "train-153",
+            "train-154",
+            "train-155",
+            "train-156",
+            "train-157",
+            "train-158",
+            "train-159",
+            "train-160",
+            "train-161",
+            "train-162",
+            "train-163",
+            "train-164",
+            "train-165",
+            "train-166",
+            "train-167",
+            "train-168",
+            "train-169",
+            "train-170",
+            "train-171",
+            "train-172",
+            "train-173",
+            "train-174",
+            "train-175",
+            "train-176",
+            "train-177",
+            "train-178",
+            "train-179",
+            "train-180",
+            "train-181",
+            "train-182",
+            "train-183",
+            "train-184",
+            "train-185",
+            "train-186",
+            "train-187",
+            "train-188",
+            "train-189",
+            "train-190",
+            "train-191",
+            "train-192",
+            "train-193",
+            "train-194",
+            "train-195",
+            "train-196",
+            "train-197",
+            "train-198",
+            "train-199",
+            "train-200",
+            "train-201",
+            "train-202",
+            "train-203",
+            "train-204",
+            "train-205",
+            "train-206",
+            "train-207",
+            "train-208",
+            "train-209",
+            "train-210",
+            "train-211",
+            "train-212",
+            "train-213",
+            "train-214",
+            "train-215",
+            "train-216",
+            "train-217",
+            "train-218",
+            "train-219",
+            "train-220",
+            "train-221",
+            "train-222",
+            "train-223",
+            "train-224",
+            "train-225",
+            "train-226",
+            "train-227",
+            "train-228",
+            "train-231",
+            "train-232",
+            "train-233",
+            "train-234",
+            "train-235",
+            "train-236",
+            "train-237",
+            "train-238",
+            "train-239",
+            "train-240",
+            "train-241",
+            "train-242",
+            "train-243",
+            "train-244",
+            "train-245",
+            "train-246",
+            "train-247",
+            "train-248",
+            "train-249",
+            "train-250",
+            "train-251",
+            "train-252",
+            "train-253",
+            "train-254",
+            "train-255",
+            "train-256",
+            "train-257",
+            "train-258",
+            "train-259",
+            "train-260",
+            "train-261",
+            "train-262",
+            "train-263",
+            "train-264",
+            "train-265",
+            "train-266",
+            "train-267",
+            "train-268",
+            "train-269",
+            "train-270",
+            "train-271",
+            "train-272",
+            "train-273",
+            "train-274",
+            "train-275",
+            "train-276",
+            "train-277",
+            "train-278",
+            "train-279",
+            "train-280",
+            "train-281",
+            "train-282",
+            "train-283",
+            "train-284",
+            "train-285",
+            "train-286",
+            "train-287",
+            "train-288",
+            "train-289",
+            "train-290",
+            "train-291",
+            "train-293",
+            "train-294",
+            "train-295",
+            "train-296",
+            "train-297",
+            "train-298",
+            "train-299",
+            "train-300",
+            "train-301",
+            "train-302",
+            "train-303",
+            "train-304",
+            "train-305",
+            "train-306",
+            "train-307",
+            "train-308",
+            "train-309",
+            "train-310",
+            "train-311",
+            "train-312",
+            "train-313",
+            "train-314",
+            "train-315",
+            "train-316",
+            "train-317",
+            "train-318",
+            "train-319",
+            "train-320",
+            "train-321",
+            "train-322",
+            "train-323",
+            "train-324",
+            "train-325",
+            "train-326",
+            "train-327",
+            "train-328",
+            "train-329",
+            "train-330",
+            "train-331",
+            "train-332",
+            "train-333",
+            "train-334",
+            "train-335",
+            "train-336",
+            "train-337",
+            "train-338",
+            "train-339",
+            "train-340",
+            "train-341",
+            "train-342",
+            "train-343",
+            "train-344",
+            "train-345",
+            "train-346",
+            "train-347",
+            "train-348",
+            "train-349",
+            "train-350",
+            "train-351",
+            "train-352",
+            "train-353",
+            "train-354",
+            "train-355",
+            "train-356",
+            "train-357",
+            "train-358",
+            "train-359",
+            "train-360",
+            "train-361",
+            "train-362",
+            "train-363",
+            "train-364",
+            "train-365",
+            "train-366",
+            "train-367",
+            "train-368",
+            "train-369",
+            "train-370",
+            "train-371",
+            "train-372",
+            "train-373",
+            "train-374",
+            "train-375",
+            "train-376",
+            "train-377",
+            "train-378",
+            "train-379",
+            "train-380",
+            "train-381",
+            "train-382",
+            "train-383",
+            "train-384",
+            "train-385",
+            "train-386",
+            "train-387",
+            "train-388",
+            "train-389",
+            "train-390",
+            "train-391",
+            "train-392",
+            "train-393",
+            "train-394",
+            "train-395",
+            "train-396",
+            "train-397",
+            "train-398",
+            "train-399",
+            "train-400",
+            "train-401",
+            "train-402",
+            "train-403",
+            "train-404",
+            "train-405",
+            "train-406",
+            "train-407",
+            "train-408",
+            "train-409",
+            "train-410",
+            "train-411",
+            "train-412",
+            "train-413",
+            "train-414",
+            "train-415",
+            "train-416",
+            "train-417",
+            "train-418",
+            "train-419",
+            "train-420",
+            "train-421",
+            "train-422",
+            "train-423",
+            "train-424",
+            "train-425",
+            "train-426",
+            "train-427",
+            "train-428",
+            "train-429",
+            "train-430",
+            "train-431",
+            "train-432",
+            "train-433",
+            "train-434",
+            "train-435",
+            "train-436",
+            "train-437",
+            "train-438",
+            "train-439",
+            "train-440",
+            "train-441",
+            "train-442",
+            "train-443",
+            "train-444",
+            "train-445",
+            "train-446",
+            "train-447",
+            "train-448",
+            "train-449",
+            "train-450",
+            "train-451",
+            "train-452",
+            "train-453",
+            "train-454",
+            "train-455",
+            "train-456",
+            "train-457",
+            "train-458",
+            "train-459",
+            "train-460",
+            "train-461",
+            "train-462",
+            "train-463",
+            "train-464",
+            "train-465",
+            "train-466",
+            "train-467",
+            "train-468",
+            "train-469",
+            "train-470",
+            "train-471",
+            "train-472",
+            "train-473",
+            "train-474",
+            "train-475",
+            "train-476",
+            "train-477",
+            "train-478",
+            "train-479",
+            "train-480",
+            "train-481",
+            "train-482",
+            "train-483",
+            "train-484",
+            "train-485",
+            "train-486",
+            "train-487",
+            "train-488",
+            "train-489",
+            "train-490",
+            "train-491",
+            "train-492",
+            "train-493",
+            "train-494",
+            "train-495",
+            "train-496",
+            "train-497",
+            "train-498",
+            "train-499",
+            "train-500",
+            "train-501",
+            "train-502",
+            "train-503",
+            "train-504",
+            "train-505",
+            "train-506",
+            "train-507",
+            "train-508",
+            "train-509",
+            "train-510",
+            "train-511",
+            "train-512",
+            "train-513",
+            "train-514",
+            "train-515",
+            "train-516",
+            "train-517",
+            "train-518",
+            "train-519",
+            "train-520",
+            "train-521",
+            "train-522",
+            "train-523",
+            "train-524",
+            "train-525",
+            "train-526",
+            "train-527",
+            "train-528",
+            "train-529",
+            "train-530",
+            "train-531",
+            "train-532",
+            "train-533",
+            "train-534",
+            "train-535",
+            "train-536",
+            "train-537",
+            "train-538",
+            "train-539",
+            "train-540",
+            "train-541",
+            "train-542",
+            "train-543",
+            "train-544",
+            "train-545",
+            "train-546",
+            "train-547",
+            "train-548",
+            "train-549",
+            "train-550",
+            "train-551",
+            "train-552",
+            "train-553",
+            "train-554",
+            "train-557",
+            "train-558",
+            "train-559",
+            "train-560",
+            "train-561",
+            "train-562",
+            "train-563",
+            "train-564",
+            "train-565",
+            "train-566",
+            "train-567",
+            "train-568",
+            "train-569",
+            "train-570"
+          ]
+        }
+      },
+      "seed-44": {
+        "fixed": {
+          "count": 1,
+          "ids": [
+            "train-292"
+          ]
+        },
+        "new_errors": {
+          "count": 4,
+          "ids": [
+            "train-165",
+            "train-250",
+            "train-400",
+            "train-491"
+          ]
+        },
+        "still_wrong": {
+          "count": 0,
+          "ids": []
+        },
+        "still_correct": {
+          "count": 561,
+          "ids": [
+            "train-001",
+            "train-002",
+            "train-003",
+            "train-004",
+            "train-005",
+            "train-006",
+            "train-007",
+            "train-008",
+            "train-009",
+            "train-010",
+            "train-011",
+            "train-012",
+            "train-013",
+            "train-014",
+            "train-015",
+            "train-016",
+            "train-017",
+            "train-018",
+            "train-019",
+            "train-020",
+            "train-021",
+            "train-022",
+            "train-023",
+            "train-024",
+            "train-025",
+            "train-026",
+            "train-027",
+            "train-028",
+            "train-029",
+            "train-030",
+            "train-031",
+            "train-032",
+            "train-033",
+            "train-034",
+            "train-035",
+            "train-036",
+            "train-037",
+            "train-038",
+            "train-039",
+            "train-040",
+            "train-041",
+            "train-042",
+            "train-043",
+            "train-044",
+            "train-045",
+            "train-046",
+            "train-047",
+            "train-048",
+            "train-049",
+            "train-050",
+            "train-051",
+            "train-052",
+            "train-053",
+            "train-054",
+            "train-055",
+            "train-056",
+            "train-057",
+            "train-058",
+            "train-059",
+            "train-060",
+            "train-061",
+            "train-062",
+            "train-063",
+            "train-064",
+            "train-065",
+            "train-066",
+            "train-067",
+            "train-068",
+            "train-069",
+            "train-070",
+            "train-071",
+            "train-072",
+            "train-073",
+            "train-074",
+            "train-075",
+            "train-076",
+            "train-077",
+            "train-078",
+            "train-079",
+            "train-080",
+            "train-081",
+            "train-082",
+            "train-083",
+            "train-084",
+            "train-085",
+            "train-086",
+            "train-087",
+            "train-088",
+            "train-089",
+            "train-090",
+            "train-091",
+            "train-092",
+            "train-093",
+            "train-094",
+            "train-095",
+            "train-096",
+            "train-097",
+            "train-098",
+            "train-099",
+            "train-100",
+            "train-101",
+            "train-102",
+            "train-103",
+            "train-104",
+            "train-105",
+            "train-106",
+            "train-107",
+            "train-108",
+            "train-109",
+            "train-110",
+            "train-111",
+            "train-112",
+            "train-113",
+            "train-114",
+            "train-115",
+            "train-116",
+            "train-117",
+            "train-118",
+            "train-119",
+            "train-120",
+            "train-121",
+            "train-122",
+            "train-123",
+            "train-124",
+            "train-125",
+            "train-126",
+            "train-127",
+            "train-128",
+            "train-129",
+            "train-130",
+            "train-131",
+            "train-132",
+            "train-133",
+            "train-134",
+            "train-135",
+            "train-136",
+            "train-137",
+            "train-138",
+            "train-139",
+            "train-140",
+            "train-141",
+            "train-142",
+            "train-143",
+            "train-144",
+            "train-145",
+            "train-146",
+            "train-147",
+            "train-148",
+            "train-149",
+            "train-150",
+            "train-151",
+            "train-152",
+            "train-153",
+            "train-154",
+            "train-155",
+            "train-156",
+            "train-157",
+            "train-158",
+            "train-159",
+            "train-160",
+            "train-161",
+            "train-162",
+            "train-163",
+            "train-164",
+            "train-166",
+            "train-167",
+            "train-168",
+            "train-169",
+            "train-170",
+            "train-171",
+            "train-172",
+            "train-173",
+            "train-174",
+            "train-175",
+            "train-176",
+            "train-177",
+            "train-178",
+            "train-179",
+            "train-180",
+            "train-181",
+            "train-182",
+            "train-183",
+            "train-184",
+            "train-185",
+            "train-186",
+            "train-187",
+            "train-188",
+            "train-189",
+            "train-190",
+            "train-191",
+            "train-192",
+            "train-193",
+            "train-194",
+            "train-195",
+            "train-196",
+            "train-197",
+            "train-198",
+            "train-199",
+            "train-200",
+            "train-201",
+            "train-202",
+            "train-203",
+            "train-204",
+            "train-205",
+            "train-206",
+            "train-207",
+            "train-208",
+            "train-209",
+            "train-210",
+            "train-211",
+            "train-212",
+            "train-213",
+            "train-214",
+            "train-215",
+            "train-216",
+            "train-217",
+            "train-218",
+            "train-219",
+            "train-220",
+            "train-221",
+            "train-222",
+            "train-223",
+            "train-224",
+            "train-225",
+            "train-226",
+            "train-227",
+            "train-228",
+            "train-231",
+            "train-232",
+            "train-233",
+            "train-234",
+            "train-235",
+            "train-236",
+            "train-237",
+            "train-238",
+            "train-239",
+            "train-240",
+            "train-241",
+            "train-242",
+            "train-243",
+            "train-244",
+            "train-245",
+            "train-246",
+            "train-247",
+            "train-248",
+            "train-249",
+            "train-251",
+            "train-252",
+            "train-253",
+            "train-254",
+            "train-255",
+            "train-256",
+            "train-257",
+            "train-258",
+            "train-259",
+            "train-260",
+            "train-261",
+            "train-262",
+            "train-263",
+            "train-264",
+            "train-265",
+            "train-266",
+            "train-267",
+            "train-268",
+            "train-269",
+            "train-270",
+            "train-271",
+            "train-272",
+            "train-273",
+            "train-274",
+            "train-275",
+            "train-276",
+            "train-277",
+            "train-278",
+            "train-279",
+            "train-280",
+            "train-281",
+            "train-282",
+            "train-283",
+            "train-284",
+            "train-285",
+            "train-286",
+            "train-287",
+            "train-288",
+            "train-289",
+            "train-290",
+            "train-291",
+            "train-293",
+            "train-294",
+            "train-295",
+            "train-296",
+            "train-297",
+            "train-298",
+            "train-299",
+            "train-300",
+            "train-301",
+            "train-302",
+            "train-303",
+            "train-304",
+            "train-305",
+            "train-306",
+            "train-307",
+            "train-308",
+            "train-309",
+            "train-310",
+            "train-311",
+            "train-312",
+            "train-313",
+            "train-314",
+            "train-315",
+            "train-316",
+            "train-317",
+            "train-318",
+            "train-319",
+            "train-320",
+            "train-321",
+            "train-322",
+            "train-323",
+            "train-324",
+            "train-325",
+            "train-326",
+            "train-327",
+            "train-328",
+            "train-329",
+            "train-330",
+            "train-331",
+            "train-332",
+            "train-333",
+            "train-334",
+            "train-335",
+            "train-336",
+            "train-337",
+            "train-338",
+            "train-339",
+            "train-340",
+            "train-341",
+            "train-342",
+            "train-343",
+            "train-344",
+            "train-345",
+            "train-346",
+            "train-347",
+            "train-348",
+            "train-349",
+            "train-350",
+            "train-351",
+            "train-352",
+            "train-353",
+            "train-354",
+            "train-355",
+            "train-356",
+            "train-357",
+            "train-358",
+            "train-359",
+            "train-360",
+            "train-361",
+            "train-362",
+            "train-363",
+            "train-364",
+            "train-365",
+            "train-366",
+            "train-367",
+            "train-368",
+            "train-369",
+            "train-370",
+            "train-371",
+            "train-372",
+            "train-373",
+            "train-374",
+            "train-375",
+            "train-376",
+            "train-377",
+            "train-378",
+            "train-379",
+            "train-380",
+            "train-381",
+            "train-382",
+            "train-383",
+            "train-384",
+            "train-385",
+            "train-386",
+            "train-387",
+            "train-388",
+            "train-389",
+            "train-390",
+            "train-391",
+            "train-392",
+            "train-393",
+            "train-394",
+            "train-395",
+            "train-396",
+            "train-397",
+            "train-398",
+            "train-399",
+            "train-401",
+            "train-402",
+            "train-403",
+            "train-404",
+            "train-405",
+            "train-406",
+            "train-407",
+            "train-408",
+            "train-409",
+            "train-410",
+            "train-411",
+            "train-412",
+            "train-413",
+            "train-414",
+            "train-415",
+            "train-416",
+            "train-417",
+            "train-418",
+            "train-419",
+            "train-420",
+            "train-421",
+            "train-422",
+            "train-423",
+            "train-424",
+            "train-425",
+            "train-426",
+            "train-427",
+            "train-428",
+            "train-429",
+            "train-430",
+            "train-431",
+            "train-432",
+            "train-433",
+            "train-434",
+            "train-435",
+            "train-436",
+            "train-437",
+            "train-438",
+            "train-439",
+            "train-440",
+            "train-441",
+            "train-442",
+            "train-443",
+            "train-444",
+            "train-445",
+            "train-446",
+            "train-447",
+            "train-448",
+            "train-449",
+            "train-450",
+            "train-451",
+            "train-452",
+            "train-453",
+            "train-454",
+            "train-455",
+            "train-456",
+            "train-457",
+            "train-458",
+            "train-459",
+            "train-460",
+            "train-461",
+            "train-462",
+            "train-463",
+            "train-464",
+            "train-465",
+            "train-466",
+            "train-467",
+            "train-468",
+            "train-469",
+            "train-470",
+            "train-471",
+            "train-472",
+            "train-473",
+            "train-474",
+            "train-475",
+            "train-476",
+            "train-477",
+            "train-478",
+            "train-479",
+            "train-480",
+            "train-481",
+            "train-482",
+            "train-483",
+            "train-484",
+            "train-485",
+            "train-486",
+            "train-487",
+            "train-488",
+            "train-489",
+            "train-490",
+            "train-492",
+            "train-493",
+            "train-494",
+            "train-495",
+            "train-496",
+            "train-497",
+            "train-498",
+            "train-499",
+            "train-500",
+            "train-501",
+            "train-502",
+            "train-503",
+            "train-504",
+            "train-505",
+            "train-506",
+            "train-507",
+            "train-508",
+            "train-509",
+            "train-510",
+            "train-511",
+            "train-512",
+            "train-513",
+            "train-514",
+            "train-515",
+            "train-516",
+            "train-517",
+            "train-518",
+            "train-519",
+            "train-520",
+            "train-521",
+            "train-522",
+            "train-523",
+            "train-524",
+            "train-525",
+            "train-526",
+            "train-527",
+            "train-528",
+            "train-529",
+            "train-530",
+            "train-531",
+            "train-532",
+            "train-533",
+            "train-534",
+            "train-535",
+            "train-536",
+            "train-537",
+            "train-538",
+            "train-539",
+            "train-540",
+            "train-541",
+            "train-542",
+            "train-543",
+            "train-544",
+            "train-545",
+            "train-546",
+            "train-547",
+            "train-548",
+            "train-549",
+            "train-550",
+            "train-551",
+            "train-552",
+            "train-553",
+            "train-554",
+            "train-557",
+            "train-558",
+            "train-559",
+            "train-560",
+            "train-561",
+            "train-562",
+            "train-563",
+            "train-564",
+            "train-565",
+            "train-566",
+            "train-567",
+            "train-568",
+            "train-569",
+            "train-570"
+          ]
+        }
+      }
+    },
+    "consensus": {
+      "fixed_all": [
+        "train-292"
+      ],
+      "new_errors_all": [],
+      "still_wrong_all": [],
+      "variable": [
+        "train-165",
+        "train-250",
+        "train-400",
+        "train-491"
+      ]
+    },
+    "cases": [
+      {
+        "id": "train-165",
+        "text": "昨日ここでブレイズを見つけた？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "past",
+          "question",
+          "unsupported_request"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "enemy_scope_boundaries_train",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "train-250",
+        "text": "じゃあやって。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "馬を呼ぶ案と、剣に替える案があるで。"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "ellipsis",
+          "context",
+          "ambiguous"
+        ],
+        "needs_clarification": true,
+        "source": "synthetic",
+        "group_id": "unresolved_context_train",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "train-292",
+        "text": "できれば、持ってきてほしいかも……",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっきの丘の上に馬がおったで。"
+          }
+        ],
+        "gold": "recall_mount",
+        "tags": [
+          "context",
+          "ellipsis",
+          "politeness"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "gemini_context_03",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "recall_mount",
+          "seed-43": "recall_mount",
+          "seed-44": "recall_mount"
+        },
+        "correct_seeds": 3
+      },
+      {
+        "id": "train-400",
+        "text": "おお、我が愛剣よ！今こそ手に！",
+        "context": [
+          {
+            "role": "user",
+            "text": "剣の伝説を語ろう"
+          },
+          {
+            "role": "assistant",
+            "text": "聞かせて"
+          }
+        ],
+        "gold": "not_request",
+        "tags": [
+          "context",
+          "statement"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "grok_cross_context_13",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "not_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "train-491",
+        "text": "どっちも今やって。",
+        "context": [
+          {
+            "role": "user",
+            "text": "さっきのやつ、お願い。"
+          },
+          {
+            "role": "assistant",
+            "text": "剣への持ち替えとロバの呼び戻し、どちらのことや？"
+          },
+          {
+            "role": "user",
+            "text": "手に持つものを変えるほう。"
+          },
+          {
+            "role": "assistant",
+            "text": "剣に持ち替える話やな。"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "context",
+          "multiple_requests",
+          "ellipsis",
+          "reference"
+        ],
+        "needs_clarification": true,
+        "source": "synthetic",
+        "group_id": "codex_conversation_07",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      }
+    ]
+  },
+  "dev": {
+    "n": 73,
+    "replicate_order": [
+      "seed-42",
+      "seed-43",
+      "seed-44"
+    ],
+    "baseline": {
+      "correct": 62,
+      "accuracy": 0.8493150684931506,
+      "macro_f1": 0.8502451283318914,
+      "binary_request_accuracy": 0.9863013698630136,
+      "non_action_to_action": 0.023255813953488372,
+      "sword_mount_confusion": 0.0,
+      "incorrect_action_predictions": 0.038461538461538464,
+      "action_to_non_action": 0.16666666666666666,
+      "subset.negation": 0.9230769230769231,
+      "subset.quotation": 0.8571428571428571,
+      "subset.ellipsis": 0.75,
+      "subset.self_location": null,
+      "subset.iruka_collision": null,
+      "subset.unsupported_request": 0.6666666666666666,
+      "subset.ordinary_scope": 0.8571428571428571,
+      "subset.needs_clarification": 1.0,
+      "subset.with_context": 0.8,
+      "subset.user_example": null,
+      "not_request.precision": 0.9333333333333333,
+      "not_request.recall": 1.0,
+      "not_request.f1": 0.9655172413793104,
+      "enemy_information.precision": 0.8125,
+      "enemy_information.recall": 0.8666666666666667,
+      "enemy_information.f1": 0.8387096774193549,
+      "equip_sword.precision": 0.9166666666666666,
+      "equip_sword.recall": 0.7333333333333333,
+      "equip_sword.f1": 0.8148148148148148,
+      "recall_mount.precision": 1.0,
+      "recall_mount.recall": 0.9333333333333333,
+      "recall_mount.f1": 0.9655172413793104,
+      "other_request.precision": 0.625,
+      "other_request.recall": 0.7142857142857143,
+      "other_request.f1": 0.6666666666666666
+    },
+    "aggregate": {
+      "correct": {
+        "values": [
+          61,
+          62,
+          61
+        ],
+        "mean": 61.333333333333336,
+        "sample_stddev": 0.5773502691896257,
+        "min": 61,
+        "max": 62
+      },
+      "accuracy": {
+        "values": [
+          0.8356164383561644,
+          0.8493150684931506,
+          0.8356164383561644
+        ],
+        "mean": 0.8401826484018264,
+        "sample_stddev": 0.007908907797118128,
+        "min": 0.8356164383561644,
+        "max": 0.8493150684931506
+      },
+      "macro_f1": {
+        "values": [
+          0.8389036251105217,
+          0.8506590950556469,
+          0.8307815102881516
+        ],
+        "mean": 0.8401147434847734,
+        "sample_stddev": 0.00999398318162369,
+        "min": 0.8307815102881516,
+        "max": 0.8506590950556469
+      },
+      "binary_request_accuracy": {
+        "values": [
+          0.9863013698630136,
+          0.9863013698630136,
+          0.958904109589041
+        ],
+        "mean": 0.9771689497716894,
+        "sample_stddev": 0.015817815594236322,
+        "min": 0.958904109589041,
+        "max": 0.9863013698630136
+      },
+      "non_action_to_action": {
+        "values": [
+          0.023255813953488372,
+          0.023255813953488372,
+          0.06976744186046512
+        ],
+        "mean": 0.03875968992248062,
+        "sample_stddev": 0.02685350089254073,
+        "min": 0.023255813953488372,
+        "max": 0.06976744186046512
+      },
+      "sword_mount_confusion": {
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sample_stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "incorrect_action_predictions": {
+        "values": [
+          0.04,
+          0.03571428571428571,
+          0.10344827586206896
+        ],
+        "mean": 0.059720853858784895,
+        "sample_stddev": 0.03792963766007609,
+        "min": 0.03571428571428571,
+        "max": 0.10344827586206896
+      },
+      "action_to_non_action": {
+        "values": [
+          0.2,
+          0.1,
+          0.13333333333333333
+        ],
+        "mean": 0.14444444444444446,
+        "sample_stddev": 0.05091750772173156,
+        "min": 0.1,
+        "max": 0.2
+      },
+      "subset.negation": {
+        "values": [
+          0.9230769230769231,
+          0.9230769230769231,
+          0.9230769230769231
+        ],
+        "mean": 0.9230769230769231,
+        "sample_stddev": 0.0,
+        "min": 0.9230769230769231,
+        "max": 0.9230769230769231
+      },
+      "subset.quotation": {
+        "values": [
+          0.7142857142857143,
+          0.8571428571428571,
+          0.7142857142857143
+        ],
+        "mean": 0.7619047619047619,
+        "sample_stddev": 0.08247860988423221,
+        "min": 0.7142857142857143,
+        "max": 0.8571428571428571
+      },
+      "subset.ellipsis": {
+        "values": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "mean": 0.8,
+        "sample_stddev": 0.0,
+        "min": 0.8,
+        "max": 0.8
+      },
+      "subset.unsupported_request": {
+        "values": [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.3333333333333333
+        ],
+        "mean": 0.3333333333333333,
+        "sample_stddev": 0.0,
+        "min": 0.3333333333333333,
+        "max": 0.3333333333333333
+      },
+      "subset.ordinary_scope": {
+        "values": [
+          0.8571428571428571,
+          0.8714285714285714,
+          0.8571428571428571
+        ],
+        "mean": 0.8619047619047618,
+        "sample_stddev": 0.00824786098842326,
+        "min": 0.8571428571428571,
+        "max": 0.8714285714285714
+      },
+      "subset.needs_clarification": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "subset.with_context": {
+        "values": [
+          0.84,
+          0.84,
+          0.84
+        ],
+        "mean": 0.84,
+        "sample_stddev": 0.0,
+        "min": 0.84,
+        "max": 0.84
+      },
+      "not_request.precision": {
+        "values": [
+          0.9333333333333333,
+          1.0,
+          0.9230769230769231
+        ],
+        "mean": 0.9521367521367522,
+        "sample_stddev": 0.04176680930895935,
+        "min": 0.9230769230769231,
+        "max": 1.0
+      },
+      "not_request.recall": {
+        "values": [
+          1.0,
+          0.9285714285714286,
+          0.8571428571428571
+        ],
+        "mean": 0.9285714285714286,
+        "sample_stddev": 0.07142857142857145,
+        "min": 0.8571428571428571,
+        "max": 1.0
+      },
+      "not_request.f1": {
+        "values": [
+          0.9655172413793104,
+          0.962962962962963,
+          0.888888888888889
+        ],
+        "mean": 0.9391230310770541,
+        "sample_stddev": 0.04352278559091377,
+        "min": 0.888888888888889,
+        "max": 0.9655172413793104
+      },
+      "enemy_information.precision": {
+        "values": [
+          0.8571428571428571,
+          0.7647058823529411,
+          0.7894736842105263
+        ],
+        "mean": 0.8037741412354416,
+        "sample_stddev": 0.04784899038035154,
+        "min": 0.7647058823529411,
+        "max": 0.8571428571428571
+      },
+      "enemy_information.recall": {
+        "values": [
+          0.8,
+          0.8666666666666667,
+          1.0
+        ],
+        "mean": 0.888888888888889,
+        "sample_stddev": 0.10183501544346309,
+        "min": 0.8,
+        "max": 1.0
+      },
+      "enemy_information.f1": {
+        "values": [
+          0.8275862068965518,
+          0.8125,
+          0.8823529411764706
+        ],
+        "mean": 0.8408130493576741,
+        "sample_stddev": 0.03675690913106507,
+        "min": 0.8125,
+        "max": 0.8823529411764706
+      },
+      "equip_sword.precision": {
+        "values": [
+          0.9090909090909091,
+          0.9230769230769231,
+          0.8125
+        ],
+        "mean": 0.8815559440559441,
+        "sample_stddev": 0.06021166584556104,
+        "min": 0.8125,
+        "max": 0.9230769230769231
+      },
+      "equip_sword.recall": {
+        "values": [
+          0.6666666666666666,
+          0.8,
+          0.8666666666666667
+        ],
+        "mean": 0.7777777777777778,
+        "sample_stddev": 0.10183501544346316,
+        "min": 0.6666666666666666,
+        "max": 0.8666666666666667
+      },
+      "equip_sword.f1": {
+        "values": [
+          0.7692307692307692,
+          0.8571428571428571,
+          0.8387096774193549
+        ],
+        "mean": 0.8216944345976603,
+        "sample_stddev": 0.046360248774964405,
+        "min": 0.7692307692307692,
+        "max": 0.8571428571428571
+      },
+      "recall_mount.precision": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "recall_mount.recall": {
+        "values": [
+          0.9333333333333333,
+          1.0,
+          0.8666666666666667
+        ],
+        "mean": 0.9333333333333333,
+        "sample_stddev": 0.06666666666666665,
+        "min": 0.8666666666666667,
+        "max": 1.0
+      },
+      "recall_mount.f1": {
+        "values": [
+          0.9655172413793104,
+          1.0,
+          0.9285714285714286
+        ],
+        "mean": 0.964696223316913,
+        "sample_stddev": 0.03572136275501984,
+        "min": 0.9285714285714286,
+        "max": 1.0
+      },
+      "other_request.precision": {
+        "values": [
+          0.5789473684210527,
+          0.6,
+          0.6666666666666666
+        ],
+        "mean": 0.6152046783625731,
+        "sample_stddev": 0.04579361859754826,
+        "min": 0.5789473684210527,
+        "max": 0.6666666666666666
+      },
+      "other_request.recall": {
+        "values": [
+          0.7857142857142857,
+          0.6428571428571429,
+          0.5714285714285714
+        ],
+        "mean": 0.6666666666666666,
+        "sample_stddev": 0.1091089451179962,
+        "min": 0.5714285714285714,
+        "max": 0.7857142857142857
+      },
+      "other_request.f1": {
+        "values": [
+          0.6666666666666667,
+          0.6206896551724138,
+          0.6153846153846153
+        ],
+        "mean": 0.6342469790745653,
+        "sample_stddev": 0.028201293755156412,
+        "min": 0.6153846153846153,
+        "max": 0.6666666666666667
+      }
+    },
+    "transitions": {
+      "seed-42": {
+        "fixed": {
+          "count": 2,
+          "ids": [
+            "dev-048",
+            "dev-075"
+          ]
+        },
+        "new_errors": {
+          "count": 3,
+          "ids": [
+            "dev-011",
+            "dev-021",
+            "dev-042"
+          ]
+        },
+        "still_wrong": {
+          "count": 9,
+          "ids": [
+            "dev-012",
+            "dev-022",
+            "dev-023",
+            "dev-030",
+            "dev-043",
+            "dev-056",
+            "dev-061",
+            "dev-066",
+            "dev-072"
+          ]
+        },
+        "still_correct": {
+          "count": 59,
+          "ids": [
+            "dev-001",
+            "dev-002",
+            "dev-003",
+            "dev-004",
+            "dev-005",
+            "dev-006",
+            "dev-007",
+            "dev-008",
+            "dev-009",
+            "dev-010",
+            "dev-013",
+            "dev-014",
+            "dev-015",
+            "dev-016",
+            "dev-017",
+            "dev-018",
+            "dev-019",
+            "dev-020",
+            "dev-024",
+            "dev-025",
+            "dev-026",
+            "dev-027",
+            "dev-028",
+            "dev-029",
+            "dev-031",
+            "dev-032",
+            "dev-033",
+            "dev-034",
+            "dev-035",
+            "dev-036",
+            "dev-037",
+            "dev-038",
+            "dev-039",
+            "dev-040",
+            "dev-041",
+            "dev-044",
+            "dev-045",
+            "dev-046",
+            "dev-047",
+            "dev-049",
+            "dev-050",
+            "dev-051",
+            "dev-053",
+            "dev-054",
+            "dev-055",
+            "dev-057",
+            "dev-058",
+            "dev-059",
+            "dev-060",
+            "dev-062",
+            "dev-063",
+            "dev-064",
+            "dev-065",
+            "dev-067",
+            "dev-068",
+            "dev-069",
+            "dev-070",
+            "dev-073",
+            "dev-074"
+          ]
+        }
+      },
+      "seed-43": {
+        "fixed": {
+          "count": 4,
+          "ids": [
+            "dev-030",
+            "dev-061",
+            "dev-066",
+            "dev-075"
+          ]
+        },
+        "new_errors": {
+          "count": 4,
+          "ids": [
+            "dev-042",
+            "dev-045",
+            "dev-055",
+            "dev-064"
+          ]
+        },
+        "still_wrong": {
+          "count": 7,
+          "ids": [
+            "dev-012",
+            "dev-022",
+            "dev-023",
+            "dev-043",
+            "dev-048",
+            "dev-056",
+            "dev-072"
+          ]
+        },
+        "still_correct": {
+          "count": 58,
+          "ids": [
+            "dev-001",
+            "dev-002",
+            "dev-003",
+            "dev-004",
+            "dev-005",
+            "dev-006",
+            "dev-007",
+            "dev-008",
+            "dev-009",
+            "dev-010",
+            "dev-011",
+            "dev-013",
+            "dev-014",
+            "dev-015",
+            "dev-016",
+            "dev-017",
+            "dev-018",
+            "dev-019",
+            "dev-020",
+            "dev-021",
+            "dev-024",
+            "dev-025",
+            "dev-026",
+            "dev-027",
+            "dev-028",
+            "dev-029",
+            "dev-031",
+            "dev-032",
+            "dev-033",
+            "dev-034",
+            "dev-035",
+            "dev-036",
+            "dev-037",
+            "dev-038",
+            "dev-039",
+            "dev-040",
+            "dev-041",
+            "dev-044",
+            "dev-046",
+            "dev-047",
+            "dev-049",
+            "dev-050",
+            "dev-051",
+            "dev-053",
+            "dev-054",
+            "dev-057",
+            "dev-058",
+            "dev-059",
+            "dev-060",
+            "dev-062",
+            "dev-063",
+            "dev-065",
+            "dev-067",
+            "dev-068",
+            "dev-069",
+            "dev-070",
+            "dev-073",
+            "dev-074"
+          ]
+        }
+      },
+      "seed-44": {
+        "fixed": {
+          "count": 4,
+          "ids": [
+            "dev-012",
+            "dev-030",
+            "dev-056",
+            "dev-061"
+          ]
+        },
+        "new_errors": {
+          "count": 5,
+          "ids": [
+            "dev-010",
+            "dev-039",
+            "dev-042",
+            "dev-045",
+            "dev-055"
+          ]
+        },
+        "still_wrong": {
+          "count": 7,
+          "ids": [
+            "dev-022",
+            "dev-023",
+            "dev-043",
+            "dev-048",
+            "dev-066",
+            "dev-072",
+            "dev-075"
+          ]
+        },
+        "still_correct": {
+          "count": 57,
+          "ids": [
+            "dev-001",
+            "dev-002",
+            "dev-003",
+            "dev-004",
+            "dev-005",
+            "dev-006",
+            "dev-007",
+            "dev-008",
+            "dev-009",
+            "dev-011",
+            "dev-013",
+            "dev-014",
+            "dev-015",
+            "dev-016",
+            "dev-017",
+            "dev-018",
+            "dev-019",
+            "dev-020",
+            "dev-021",
+            "dev-024",
+            "dev-025",
+            "dev-026",
+            "dev-027",
+            "dev-028",
+            "dev-029",
+            "dev-031",
+            "dev-032",
+            "dev-033",
+            "dev-034",
+            "dev-035",
+            "dev-036",
+            "dev-037",
+            "dev-038",
+            "dev-040",
+            "dev-041",
+            "dev-044",
+            "dev-046",
+            "dev-047",
+            "dev-049",
+            "dev-050",
+            "dev-051",
+            "dev-053",
+            "dev-054",
+            "dev-057",
+            "dev-058",
+            "dev-059",
+            "dev-060",
+            "dev-062",
+            "dev-063",
+            "dev-064",
+            "dev-065",
+            "dev-067",
+            "dev-068",
+            "dev-069",
+            "dev-070",
+            "dev-073",
+            "dev-074"
+          ]
+        }
+      }
+    },
+    "consensus": {
+      "fixed_all": [],
+      "new_errors_all": [
+        "dev-042"
+      ],
+      "still_wrong_all": [
+        "dev-022",
+        "dev-023",
+        "dev-043",
+        "dev-072"
+      ],
+      "variable": [
+        "dev-010",
+        "dev-011",
+        "dev-012",
+        "dev-021",
+        "dev-030",
+        "dev-039",
+        "dev-045",
+        "dev-048",
+        "dev-055",
+        "dev-056",
+        "dev-061",
+        "dev-064",
+        "dev-066",
+        "dev-075"
+      ]
+    },
+    "cases": [
+      {
+        "id": "dev-010",
+        "text": "剣にしろという話ではなく、剣の色の話をしてるだけ。",
+        "context": [],
+        "gold": "not_request",
+        "tags": [
+          "quotation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_quote_and_denial_reports",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "not_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-011",
+        "text": "敵って私より高いところにいる？",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_spatial_comparison",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-012",
+        "text": "目の前のゾンビと私の間は何ブロックくらい？",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_spatial_comparison",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "dev-021",
+        "text": "今のお願いは「剣を装備して」です。実際に替えてください。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "quotation",
+          "direct"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_sword_clarified_execution",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-022",
+        "text": "「剣にして」を、今ここで実行して。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "quotation",
+          "direct"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_sword_clarified_execution",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "dev-023",
+        "text": "剣に替えるな、ではなく、替えてほしいと言ってるよ。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "negation",
+          "correction"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_sword_clarified_execution",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "other_request",
+          "seed-44": "not_request"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "dev-030",
+        "text": "木のつるぎを手に持つ操作を今やってほしい。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "direct"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_sword_prepare_now",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-039",
+        "text": "溶岩を渡る準備をするよ。ストライダーを呼び寄せておいて。",
+        "context": [],
+        "gold": "recall_mount",
+        "tags": [
+          "direct"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_mount_escape_requests",
+        "baseline": "recall_mount",
+        "predictions": {
+          "seed-42": "recall_mount",
+          "seed-43": "recall_mount",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-042",
+        "text": "敵が近づいた場合だけ剣に替えておいて。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "future",
+          "hypothetical",
+          "unsupported_request"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_future_and_capability",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "dev-043",
+        "text": "さっきの戦いでは敵が何体いたか覚えてる？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "past",
+          "count",
+          "unsupported_request"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "enemy_scope_boundaries_dev",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "enemy_information",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "dev-045",
+        "text": "スケルトンはどこに出現しやすいか説明して。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "general_knowledge"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "dev_future_and_capability",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "dev-048",
+        "text": "今見えてるモブって、全員合わせて何匹いるの？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "count"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "enemy_scope_boundaries_dev",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "dev-055",
+        "text": "そう、それ。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっき言ってた好きな動物は馬やったな。"
+          }
+        ],
+        "gold": "not_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "dev-056",
+        "text": "今ので大丈夫。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "敵の数は、今見えている範囲だけ数えて答えよか？"
+          }
+        ],
+        "gold": "enemy_information",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "dev-061",
+        "text": "今ので大丈夫。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっき提案した鉄の剣へ、今持ち替えてええ？"
+          }
+        ],
+        "gold": "equip_sword",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-064",
+        "text": "選ぶのは鉄の方。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "持ち替え先の剣は、鉄か金のどっちにする？"
+          }
+        ],
+        "gold": "equip_sword",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "other_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "dev-066",
+        "text": "今ので大丈夫。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "提案したロバを今ここへ呼んでええ？"
+          }
+        ],
+        "gold": "recall_mount",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "recall_mount",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "dev-072",
+        "text": "そいつ、まだ見えてる？",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっき茶色い牛が木の横におった。"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "enemy_information",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "dev-075",
+        "text": "選ぶのは鉄の方。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "君が額縁に飾る剣の相談やな。鉄と金、どちらの見た目について説明しよか？"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_dev",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      }
+    ]
+  },
+  "test": {
+    "n": 75,
+    "replicate_order": [
+      "seed-42",
+      "seed-43",
+      "seed-44"
+    ],
+    "baseline": {
+      "correct": 65,
+      "accuracy": 0.8666666666666667,
+      "macro_f1": 0.8721510673234812,
+      "binary_request_accuracy": 0.9866666666666667,
+      "non_action_to_action": 0.022222222222222223,
+      "sword_mount_confusion": 0.0,
+      "incorrect_action_predictions": 0.038461538461538464,
+      "action_to_non_action": 0.16666666666666666,
+      "subset.negation": 1.0,
+      "subset.quotation": 0.8571428571428571,
+      "subset.ellipsis": 0.8181818181818182,
+      "subset.self_location": null,
+      "subset.iruka_collision": null,
+      "subset.unsupported_request": 0.3333333333333333,
+      "subset.ordinary_scope": 0.8888888888888888,
+      "subset.needs_clarification": 1.0,
+      "subset.with_context": 0.8518518518518519,
+      "subset.user_example": null,
+      "not_request.precision": 1.0,
+      "not_request.recall": 0.9333333333333333,
+      "not_request.f1": 0.9655172413793104,
+      "enemy_information.precision": 0.8666666666666667,
+      "enemy_information.recall": 0.8666666666666667,
+      "enemy_information.f1": 0.8666666666666667,
+      "equip_sword.precision": 0.9230769230769231,
+      "equip_sword.recall": 0.8,
+      "equip_sword.f1": 0.8571428571428571,
+      "recall_mount.precision": 1.0,
+      "recall_mount.recall": 0.8666666666666667,
+      "recall_mount.f1": 0.9285714285714286,
+      "other_request.precision": 0.65,
+      "other_request.recall": 0.8666666666666667,
+      "other_request.f1": 0.7428571428571429
+    },
+    "aggregate": {
+      "correct": {
+        "values": [
+          64,
+          67,
+          65
+        ],
+        "mean": 65.33333333333333,
+        "sample_stddev": 1.5275252316519468,
+        "min": 64,
+        "max": 67
+      },
+      "accuracy": {
+        "values": [
+          0.8533333333333334,
+          0.8933333333333333,
+          0.8666666666666667
+        ],
+        "mean": 0.8711111111111112,
+        "sample_stddev": 0.020367003088692583,
+        "min": 0.8533333333333334,
+        "max": 0.8933333333333333
+      },
+      "macro_f1": {
+        "values": [
+          0.8604901141743246,
+          0.8934767025089606,
+          0.8669235458028561
+        ],
+        "mean": 0.8736301208287138,
+        "sample_stddev": 0.017486061990133132,
+        "min": 0.8604901141743246,
+        "max": 0.8934767025089606
+      },
+      "binary_request_accuracy": {
+        "values": [
+          0.9733333333333334,
+          0.9866666666666667,
+          0.96
+        ],
+        "mean": 0.9733333333333334,
+        "sample_stddev": 0.013333333333333364,
+        "min": 0.96,
+        "max": 0.9866666666666667
+      },
+      "non_action_to_action": {
+        "values": [
+          0.0,
+          0.022222222222222223,
+          0.08888888888888889
+        ],
+        "mean": 0.037037037037037035,
+        "sample_stddev": 0.046259244432580726,
+        "min": 0.0,
+        "max": 0.08888888888888889
+      },
+      "sword_mount_confusion": {
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sample_stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "incorrect_action_predictions": {
+        "values": [
+          0.0,
+          0.037037037037037035,
+          0.12903225806451613
+        ],
+        "mean": 0.05535643170051772,
+        "sample_stddev": 0.06643817480134628,
+        "min": 0.0,
+        "max": 0.12903225806451613
+      },
+      "action_to_non_action": {
+        "values": [
+          0.16666666666666666,
+          0.13333333333333333,
+          0.1
+        ],
+        "mean": 0.13333333333333333,
+        "sample_stddev": 0.033333333333333326,
+        "min": 0.1,
+        "max": 0.16666666666666666
+      },
+      "subset.negation": {
+        "values": [
+          1.0,
+          1.0,
+          0.7142857142857143
+        ],
+        "mean": 0.9047619047619048,
+        "sample_stddev": 0.1649572197684645,
+        "min": 0.7142857142857143,
+        "max": 1.0
+      },
+      "subset.quotation": {
+        "values": [
+          0.8571428571428571,
+          0.8571428571428571,
+          1.0
+        ],
+        "mean": 0.9047619047619048,
+        "sample_stddev": 0.08247860988423228,
+        "min": 0.8571428571428571,
+        "max": 1.0
+      },
+      "subset.ellipsis": {
+        "values": [
+          0.7272727272727273,
+          0.8636363636363636,
+          0.8181818181818182
+        ],
+        "mean": 0.8030303030303031,
+        "sample_stddev": 0.06943296507508849,
+        "min": 0.7272727272727273,
+        "max": 0.8636363636363636
+      },
+      "subset.unsupported_request": {
+        "values": [
+          0.6666666666666666,
+          0.6666666666666666,
+          0.6666666666666666
+        ],
+        "mean": 0.6666666666666666,
+        "sample_stddev": 0.0,
+        "min": 0.6666666666666666,
+        "max": 0.6666666666666666
+      },
+      "subset.ordinary_scope": {
+        "values": [
+          0.8611111111111112,
+          0.9027777777777778,
+          0.875
+        ],
+        "mean": 0.8796296296296297,
+        "sample_stddev": 0.021215628217388132,
+        "min": 0.8611111111111112,
+        "max": 0.9027777777777778
+      },
+      "subset.needs_clarification": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "subset.with_context": {
+        "values": [
+          0.7777777777777778,
+          0.8888888888888888,
+          0.8148148148148148
+        ],
+        "mean": 0.8271604938271605,
+        "sample_stddev": 0.0565750085797017,
+        "min": 0.7777777777777778,
+        "max": 0.8888888888888888
+      },
+      "not_request.precision": {
+        "values": [
+          0.9333333333333333,
+          0.9375,
+          1.0
+        ],
+        "mean": 0.9569444444444445,
+        "sample_stddev": 0.037345360165968754,
+        "min": 0.9333333333333333,
+        "max": 1.0
+      },
+      "not_request.recall": {
+        "values": [
+          0.9333333333333333,
+          1.0,
+          0.8
+        ],
+        "mean": 0.9111111111111111,
+        "sample_stddev": 0.10183501544346309,
+        "min": 0.8,
+        "max": 1.0
+      },
+      "not_request.f1": {
+        "values": [
+          0.9333333333333333,
+          0.967741935483871,
+          0.888888888888889
+        ],
+        "mean": 0.9299880525686978,
+        "sample_stddev": 0.039532820755332945,
+        "min": 0.888888888888889,
+        "max": 0.967741935483871
+      },
+      "enemy_information.precision": {
+        "values": [
+          0.9166666666666666,
+          0.875,
+          0.8333333333333334
+        ],
+        "mean": 0.875,
+        "sample_stddev": 0.04166666666666663,
+        "min": 0.8333333333333334,
+        "max": 0.9166666666666666
+      },
+      "enemy_information.recall": {
+        "values": [
+          0.7333333333333333,
+          0.9333333333333333,
+          1.0
+        ],
+        "mean": 0.8888888888888888,
+        "sample_stddev": 0.1387777332977422,
+        "min": 0.7333333333333333,
+        "max": 1.0
+      },
+      "enemy_information.f1": {
+        "values": [
+          0.8148148148148148,
+          0.9032258064516129,
+          0.9090909090909091
+        ],
+        "mean": 0.8757105101191123,
+        "sample_stddev": 0.05281869117261187,
+        "min": 0.8148148148148148,
+        "max": 0.9090909090909091
+      },
+      "equip_sword.precision": {
+        "values": [
+          1.0,
+          1.0,
+          0.7647058823529411
+        ],
+        "mean": 0.9215686274509803,
+        "sample_stddev": 0.1358471221622649,
+        "min": 0.7647058823529411,
+        "max": 1.0
+      },
+      "equip_sword.recall": {
+        "values": [
+          0.8666666666666667,
+          0.8,
+          0.8666666666666667
+        ],
+        "mean": 0.8444444444444444,
+        "sample_stddev": 0.03849001794597504,
+        "min": 0.8,
+        "max": 0.8666666666666667
+      },
+      "equip_sword.f1": {
+        "values": [
+          0.9285714285714286,
+          0.888888888888889,
+          0.8125
+        ],
+        "mean": 0.8766534391534392,
+        "sample_stddev": 0.05899511679219392,
+        "min": 0.8125,
+        "max": 0.9285714285714286
+      },
+      "recall_mount.precision": {
+        "values": [
+          1.0,
+          0.9333333333333333,
+          1.0
+        ],
+        "mean": 0.9777777777777777,
+        "sample_stddev": 0.03849001794597504,
+        "min": 0.9333333333333333,
+        "max": 1.0
+      },
+      "recall_mount.recall": {
+        "values": [
+          0.8,
+          0.9333333333333333,
+          0.9333333333333333
+        ],
+        "mean": 0.888888888888889,
+        "sample_stddev": 0.07698003589195009,
+        "min": 0.8,
+        "max": 0.9333333333333333
+      },
+      "recall_mount.f1": {
+        "values": [
+          0.888888888888889,
+          0.9333333333333333,
+          0.9655172413793104
+        ],
+        "mean": 0.9292464878671776,
+        "sample_stddev": 0.03847730279979676,
+        "min": 0.888888888888889,
+        "max": 0.9655172413793104
+      },
+      "other_request.precision": {
+        "values": [
+          0.6086956521739131,
+          0.75,
+          0.7857142857142857
+        ],
+        "mean": 0.7148033126293996,
+        "sample_stddev": 0.09361091953678811,
+        "min": 0.6086956521739131,
+        "max": 0.7857142857142857
+      },
+      "other_request.recall": {
+        "values": [
+          0.9333333333333333,
+          0.8,
+          0.7333333333333333
+        ],
+        "mean": 0.8222222222222222,
+        "sample_stddev": 0.10183501544346314,
+        "min": 0.7333333333333333,
+        "max": 0.9333333333333333
+      },
+      "other_request.f1": {
+        "values": [
+          0.7368421052631579,
+          0.7741935483870969,
+          0.7586206896551724
+        ],
+        "mean": 0.7565521144351424,
+        "sample_stddev": 0.018761445265248207,
+        "min": 0.7368421052631579,
+        "max": 0.7741935483870969
+      }
+    },
+    "transitions": {
+      "seed-42": {
+        "fixed": {
+          "count": 3,
+          "ids": [
+            "test-022",
+            "test-029",
+            "test-048"
+          ]
+        },
+        "new_errors": {
+          "count": 4,
+          "ids": [
+            "test-011",
+            "test-015",
+            "test-062",
+            "test-068"
+          ]
+        },
+        "still_wrong": {
+          "count": 7,
+          "ids": [
+            "test-017",
+            "test-038",
+            "test-047",
+            "test-051",
+            "test-058",
+            "test-063",
+            "test-070"
+          ]
+        },
+        "still_correct": {
+          "count": 61,
+          "ids": [
+            "test-001",
+            "test-002",
+            "test-003",
+            "test-004",
+            "test-005",
+            "test-006",
+            "test-007",
+            "test-008",
+            "test-009",
+            "test-010",
+            "test-012",
+            "test-013",
+            "test-014",
+            "test-016",
+            "test-018",
+            "test-019",
+            "test-020",
+            "test-021",
+            "test-023",
+            "test-024",
+            "test-025",
+            "test-026",
+            "test-027",
+            "test-028",
+            "test-030",
+            "test-031",
+            "test-032",
+            "test-033",
+            "test-034",
+            "test-035",
+            "test-036",
+            "test-037",
+            "test-039",
+            "test-040",
+            "test-041",
+            "test-042",
+            "test-043",
+            "test-044",
+            "test-045",
+            "test-046",
+            "test-049",
+            "test-050",
+            "test-052",
+            "test-053",
+            "test-054",
+            "test-055",
+            "test-056",
+            "test-057",
+            "test-059",
+            "test-060",
+            "test-061",
+            "test-064",
+            "test-065",
+            "test-066",
+            "test-067",
+            "test-069",
+            "test-071",
+            "test-072",
+            "test-073",
+            "test-074",
+            "test-075"
+          ]
+        }
+      },
+      "seed-43": {
+        "fixed": {
+          "count": 5,
+          "ids": [
+            "test-029",
+            "test-048",
+            "test-051",
+            "test-058",
+            "test-070"
+          ]
+        },
+        "new_errors": {
+          "count": 3,
+          "ids": [
+            "test-021",
+            "test-072",
+            "test-075"
+          ]
+        },
+        "still_wrong": {
+          "count": 5,
+          "ids": [
+            "test-017",
+            "test-022",
+            "test-038",
+            "test-047",
+            "test-063"
+          ]
+        },
+        "still_correct": {
+          "count": 62,
+          "ids": [
+            "test-001",
+            "test-002",
+            "test-003",
+            "test-004",
+            "test-005",
+            "test-006",
+            "test-007",
+            "test-008",
+            "test-009",
+            "test-010",
+            "test-011",
+            "test-012",
+            "test-013",
+            "test-014",
+            "test-015",
+            "test-016",
+            "test-018",
+            "test-019",
+            "test-020",
+            "test-023",
+            "test-024",
+            "test-025",
+            "test-026",
+            "test-027",
+            "test-028",
+            "test-030",
+            "test-031",
+            "test-032",
+            "test-033",
+            "test-034",
+            "test-035",
+            "test-036",
+            "test-037",
+            "test-039",
+            "test-040",
+            "test-041",
+            "test-042",
+            "test-043",
+            "test-044",
+            "test-045",
+            "test-046",
+            "test-049",
+            "test-050",
+            "test-052",
+            "test-053",
+            "test-054",
+            "test-055",
+            "test-056",
+            "test-057",
+            "test-059",
+            "test-060",
+            "test-061",
+            "test-062",
+            "test-064",
+            "test-065",
+            "test-066",
+            "test-067",
+            "test-068",
+            "test-069",
+            "test-071",
+            "test-073",
+            "test-074"
+          ]
+        }
+      },
+      "seed-44": {
+        "fixed": {
+          "count": 6,
+          "ids": [
+            "test-017",
+            "test-029",
+            "test-038",
+            "test-047",
+            "test-058",
+            "test-063"
+          ]
+        },
+        "new_errors": {
+          "count": 6,
+          "ids": [
+            "test-005",
+            "test-021",
+            "test-043",
+            "test-045",
+            "test-054",
+            "test-072"
+          ]
+        },
+        "still_wrong": {
+          "count": 4,
+          "ids": [
+            "test-022",
+            "test-048",
+            "test-051",
+            "test-070"
+          ]
+        },
+        "still_correct": {
+          "count": 59,
+          "ids": [
+            "test-001",
+            "test-002",
+            "test-003",
+            "test-004",
+            "test-006",
+            "test-007",
+            "test-008",
+            "test-009",
+            "test-010",
+            "test-011",
+            "test-012",
+            "test-013",
+            "test-014",
+            "test-015",
+            "test-016",
+            "test-018",
+            "test-019",
+            "test-020",
+            "test-023",
+            "test-024",
+            "test-025",
+            "test-026",
+            "test-027",
+            "test-028",
+            "test-030",
+            "test-031",
+            "test-032",
+            "test-033",
+            "test-034",
+            "test-035",
+            "test-036",
+            "test-037",
+            "test-039",
+            "test-040",
+            "test-041",
+            "test-042",
+            "test-044",
+            "test-046",
+            "test-049",
+            "test-050",
+            "test-052",
+            "test-053",
+            "test-055",
+            "test-056",
+            "test-057",
+            "test-059",
+            "test-060",
+            "test-061",
+            "test-062",
+            "test-064",
+            "test-065",
+            "test-066",
+            "test-067",
+            "test-068",
+            "test-069",
+            "test-071",
+            "test-073",
+            "test-074",
+            "test-075"
+          ]
+        }
+      }
+    },
+    "consensus": {
+      "fixed_all": [
+        "test-029"
+      ],
+      "new_errors_all": [],
+      "still_wrong_all": [],
+      "variable": [
+        "test-005",
+        "test-011",
+        "test-015",
+        "test-017",
+        "test-021",
+        "test-022",
+        "test-038",
+        "test-043",
+        "test-045",
+        "test-047",
+        "test-048",
+        "test-051",
+        "test-054",
+        "test-058",
+        "test-062",
+        "test-063",
+        "test-068",
+        "test-070",
+        "test-072",
+        "test-075"
+      ]
+    },
+    "cases": [
+      {
+        "id": "test-005",
+        "text": "モンスターの位置を本に書いておいた。",
+        "context": [],
+        "gold": "not_request",
+        "tags": [
+          "statement"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_nonrequest_intentions",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "not_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-011",
+        "text": "私を狙ってるスケルトン、右斜め前で合ってる？",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_threat_relational_questions",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-015",
+        "text": "ゾンビ、現在地から見て北と南のどちらに見える？",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_threat_relational_questions",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-017",
+        "text": "敵は全員いなくなったと考えていいの？",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "presence"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_threat_remaining_confirmation",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-021",
+        "text": "剣に替えて、いや待って……やっぱり今替えて。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "correction",
+          "cancellation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_sword_revoked_cancellation",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-022",
+        "text": "さっき「剣はいらない」と言ったのは取り消す。装備して。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "correction",
+          "cancellation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_sword_revoked_cancellation",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-029",
+        "text": "頼むわ、手元のやつをつるぎに替えといてや。",
+        "context": [],
+        "gold": "equip_sword",
+        "tags": [
+          "politeness",
+          "casual"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_sword_distinct_register",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 3
+      },
+      {
+        "id": "test-038",
+        "text": "今から言うことを実行して。「私のロバを呼び戻して」。",
+        "context": [],
+        "gold": "recall_mount",
+        "tags": [
+          "direct",
+          "quotation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_mount_present_resolution",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "not_request",
+          "seed-44": "recall_mount"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-043",
+        "text": "敵の場所を教えて、あ、もう分かったから答えなくていい。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "敵の場所は今見える一体について説明すればええ？"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "context",
+          "cancellation",
+          "negation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-045",
+        "text": "剣にしないでほしいんだけど、お願いできる？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "cancellation",
+          "negation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "test_final_cancellation",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-047",
+        "text": "前の冒険でウォーデンがいた方角を思い出せる？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "past",
+          "location",
+          "unsupported_request"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "other_scope_boundaries_test",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "enemy_information",
+          "seed-43": "enemy_information",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-048",
+        "text": "今追ってくるゾンビの残りHPを教えて。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "question",
+          "unsupported_request"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "other_scope_boundaries_test",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-051",
+        "text": "ああ、それでいいよ。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっき装備した剣の色、気に入った？"
+          }
+        ],
+        "gold": "not_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "not_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-054",
+        "text": "うん、そう見える。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "ダイヤの剣って、色が海みたいやな。"
+          }
+        ],
+        "gold": "not_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "not_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-058",
+        "text": "二体ともまだそこ？",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっきゾンビ二体が入口にいたで。"
+          }
+        ],
+        "gold": "enemy_information",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-062",
+        "text": "それに戻してくれるかな。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "さっき持ってたのはダイヤの剣やで。"
+          }
+        ],
+        "gold": "equip_sword",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-063",
+        "text": "うん、持つのはそっちで。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "手持ちを鉄の剣へ替えるんで合ってる？"
+          }
+        ],
+        "gold": "equip_sword",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-068",
+        "text": "その一頭をここまで頼む。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "赤いカーペットを着けたラマを呼ぶんやな？"
+          }
+        ],
+        "gold": "recall_mount",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "recall_mount",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "recall_mount",
+          "seed-44": "recall_mount"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "test-070",
+        "text": "最後に乗ったやつにして。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "ここへ呼ぶ馬はどれにする？"
+          }
+        ],
+        "gold": "recall_mount",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "recall_mount",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-072",
+        "text": "上にいる方は近い？",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "羊が丘の上と下にいるで。"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "test-075",
+        "text": "最後に乗ったやつにして。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "冒険の記録に書く紹介文やな。どの馬について文章を考えよか？"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_test",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "recall_mount",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 2
+      }
+    ]
+  },
+  "regression": {
+    "n": 40,
+    "replicate_order": [
+      "seed-42",
+      "seed-43",
+      "seed-44"
+    ],
+    "baseline": {
+      "correct": 31,
+      "accuracy": 0.775,
+      "macro_f1": 0.7735642135642136,
+      "binary_request_accuracy": 0.95,
+      "non_action_to_action": 0.06666666666666667,
+      "sword_mount_confusion": 0.0,
+      "incorrect_action_predictions": 0.2,
+      "action_to_non_action": 0.2,
+      "subset.negation": 0.875,
+      "subset.quotation": 0.8,
+      "subset.ellipsis": 1.0,
+      "subset.self_location": 1.0,
+      "subset.iruka_collision": 0.8235294117647058,
+      "subset.unsupported_request": 0.0,
+      "subset.ordinary_scope": 0.7948717948717948,
+      "subset.needs_clarification": 0.6666666666666666,
+      "subset.with_context": 1.0,
+      "subset.user_example": null,
+      "not_request.precision": 0.8,
+      "not_request.recall": 0.8,
+      "not_request.f1": 0.8000000000000002,
+      "enemy_information.precision": 0.7142857142857143,
+      "enemy_information.recall": 0.7142857142857143,
+      "enemy_information.f1": 0.7142857142857143,
+      "equip_sword.precision": 0.8333333333333334,
+      "equip_sword.recall": 1.0,
+      "equip_sword.f1": 0.9090909090909091,
+      "recall_mount.precision": 0.75,
+      "recall_mount.recall": 0.6,
+      "recall_mount.f1": 0.6666666666666665,
+      "other_request.precision": 0.7777777777777778,
+      "other_request.recall": 0.7777777777777778,
+      "other_request.f1": 0.7777777777777778
+    },
+    "aggregate": {
+      "correct": {
+        "values": [
+          32,
+          31,
+          32
+        ],
+        "mean": 31.666666666666668,
+        "sample_stddev": 0.5773502691896257,
+        "min": 31,
+        "max": 32
+      },
+      "accuracy": {
+        "values": [
+          0.8,
+          0.775,
+          0.8
+        ],
+        "mean": 0.7916666666666667,
+        "sample_stddev": 0.014433756729740658,
+        "min": 0.775,
+        "max": 0.8
+      },
+      "macro_f1": {
+        "values": [
+          0.8005128205128207,
+          0.7567804744275333,
+          0.804949494949495
+        ],
+        "mean": 0.7874142632966163,
+        "sample_stddev": 0.026622223524171058,
+        "min": 0.7567804744275333,
+        "max": 0.804949494949495
+      },
+      "binary_request_accuracy": {
+        "values": [
+          0.95,
+          0.875,
+          0.95
+        ],
+        "mean": 0.9249999999999999,
+        "sample_stddev": 0.043301270189221905,
+        "min": 0.875,
+        "max": 0.95
+      },
+      "non_action_to_action": {
+        "values": [
+          0.1,
+          0.06666666666666667,
+          0.03333333333333333
+        ],
+        "mean": 0.06666666666666667,
+        "sample_stddev": 0.03333333333333334,
+        "min": 0.03333333333333333,
+        "max": 0.1
+      },
+      "sword_mount_confusion": {
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "sample_stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "incorrect_action_predictions": {
+        "values": [
+          0.25,
+          0.2,
+          0.1111111111111111
+        ],
+        "mean": 0.18703703703703703,
+        "sample_stddev": 0.07034599967860215,
+        "min": 0.1111111111111111,
+        "max": 0.25
+      },
+      "action_to_non_action": {
+        "values": [
+          0.1,
+          0.2,
+          0.2
+        ],
+        "mean": 0.16666666666666669,
+        "sample_stddev": 0.05773502691896258,
+        "min": 0.1,
+        "max": 0.2
+      },
+      "subset.negation": {
+        "values": [
+          0.875,
+          1.0,
+          0.875
+        ],
+        "mean": 0.9166666666666666,
+        "sample_stddev": 0.07216878364870322,
+        "min": 0.875,
+        "max": 1.0
+      },
+      "subset.quotation": {
+        "values": [
+          0.8,
+          0.8,
+          0.9
+        ],
+        "mean": 0.8333333333333334,
+        "sample_stddev": 0.05773502691896256,
+        "min": 0.8,
+        "max": 0.9
+      },
+      "subset.ellipsis": {
+        "values": [
+          0.75,
+          0.5,
+          1.0
+        ],
+        "mean": 0.75,
+        "sample_stddev": 0.25,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "subset.self_location": {
+        "values": [
+          1.0,
+          1.0,
+          0.6
+        ],
+        "mean": 0.8666666666666667,
+        "sample_stddev": 0.23094010767585033,
+        "min": 0.6,
+        "max": 1.0
+      },
+      "subset.iruka_collision": {
+        "values": [
+          0.8823529411764706,
+          0.8823529411764706,
+          0.7058823529411765
+        ],
+        "mean": 0.8235294117647058,
+        "sample_stddev": 0.10188534162169863,
+        "min": 0.7058823529411765,
+        "max": 0.8823529411764706
+      },
+      "subset.unsupported_request": {
+        "values": [
+          0.0,
+          1.0,
+          1.0
+        ],
+        "mean": 0.6666666666666666,
+        "sample_stddev": 0.5773502691896257,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "subset.ordinary_scope": {
+        "values": [
+          0.8205128205128205,
+          0.7692307692307693,
+          0.7948717948717948
+        ],
+        "mean": 0.7948717948717948,
+        "sample_stddev": 0.025641025641025605,
+        "min": 0.7692307692307693,
+        "max": 0.8205128205128205
+      },
+      "subset.needs_clarification": {
+        "values": [
+          0.3333333333333333,
+          0.3333333333333333,
+          0.3333333333333333
+        ],
+        "mean": 0.3333333333333333,
+        "sample_stddev": 0.0,
+        "min": 0.3333333333333333,
+        "max": 0.3333333333333333
+      },
+      "subset.with_context": {
+        "values": [
+          0.75,
+          0.5,
+          1.0
+        ],
+        "mean": 0.75,
+        "sample_stddev": 0.25,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "not_request.precision": {
+        "values": [
+          0.8,
+          0.5,
+          0.8
+        ],
+        "mean": 0.7000000000000001,
+        "sample_stddev": 0.17320508075688776,
+        "min": 0.5,
+        "max": 0.8
+      },
+      "not_request.recall": {
+        "values": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "mean": 0.8,
+        "sample_stddev": 0.0,
+        "min": 0.8,
+        "max": 0.8
+      },
+      "not_request.f1": {
+        "values": [
+          0.8000000000000002,
+          0.6153846153846154,
+          0.8000000000000002
+        ],
+        "mean": 0.7384615384615386,
+        "sample_stddev": 0.10658774200423868,
+        "min": 0.6153846153846154,
+        "max": 0.8000000000000002
+      },
+      "enemy_information.precision": {
+        "values": [
+          0.8333333333333334,
+          0.8333333333333334,
+          0.6363636363636364
+        ],
+        "mean": 0.7676767676767677,
+        "sample_stddev": 0.11372050756765359,
+        "min": 0.6363636363636364,
+        "max": 0.8333333333333334
+      },
+      "enemy_information.recall": {
+        "values": [
+          0.7142857142857143,
+          0.7142857142857143,
+          1.0
+        ],
+        "mean": 0.8095238095238095,
+        "sample_stddev": 0.1649572197684645,
+        "min": 0.7142857142857143,
+        "max": 1.0
+      },
+      "enemy_information.f1": {
+        "values": [
+          0.7692307692307692,
+          0.7692307692307692,
+          0.7777777777777778
+        ],
+        "mean": 0.7720797720797721,
+        "sample_stddev": 0.004934617685381463,
+        "min": 0.7692307692307692,
+        "max": 0.7777777777777778
+      },
+      "equip_sword.precision": {
+        "values": [
+          0.7142857142857143,
+          0.8333333333333334,
+          0.8333333333333334
+        ],
+        "mean": 0.7936507936507937,
+        "sample_stddev": 0.06873217490352689,
+        "min": 0.7142857142857143,
+        "max": 0.8333333333333334
+      },
+      "equip_sword.recall": {
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "sample_stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "equip_sword.f1": {
+        "values": [
+          0.8333333333333333,
+          0.9090909090909091,
+          0.9090909090909091
+        ],
+        "mean": 0.8838383838383838,
+        "sample_stddev": 0.043738656756789854,
+        "min": 0.8333333333333333,
+        "max": 0.9090909090909091
+      },
+      "recall_mount.precision": {
+        "values": [
+          0.8,
+          0.75,
+          1.0
+        ],
+        "mean": 0.85,
+        "sample_stddev": 0.1322875655532295,
+        "min": 0.75,
+        "max": 1.0
+      },
+      "recall_mount.recall": {
+        "values": [
+          0.8,
+          0.6,
+          0.6
+        ],
+        "mean": 0.6666666666666666,
+        "sample_stddev": 0.11547005383792519,
+        "min": 0.6,
+        "max": 0.8
+      },
+      "recall_mount.f1": {
+        "values": [
+          0.8000000000000002,
+          0.6666666666666665,
+          0.7499999999999999
+        ],
+        "mean": 0.7388888888888888,
+        "sample_stddev": 0.06735753140545649,
+        "min": 0.6666666666666665,
+        "max": 0.8000000000000002
+      },
+      "other_request.precision": {
+        "values": [
+          0.8235294117647058,
+          0.875,
+          0.8666666666666667
+        ],
+        "mean": 0.8550653594771241,
+        "sample_stddev": 0.027626945355963595,
+        "min": 0.8235294117647058,
+        "max": 0.875
+      },
+      "other_request.recall": {
+        "values": [
+          0.7777777777777778,
+          0.7777777777777778,
+          0.7222222222222222
+        ],
+        "mean": 0.7592592592592593,
+        "sample_stddev": 0.03207501495497923,
+        "min": 0.7222222222222222,
+        "max": 0.7777777777777778
+      },
+      "other_request.f1": {
+        "values": [
+          0.7999999999999999,
+          0.823529411764706,
+          0.7878787878787877
+        ],
+        "mean": 0.8038027332144979,
+        "sample_stddev": 0.01812697798281018,
+        "min": 0.7878787878787877,
+        "max": 0.823529411764706
+      }
+    },
+    "transitions": {
+      "seed-42": {
+        "fixed": {
+          "count": 2,
+          "ids": [
+            "regression-009",
+            "regression-033"
+          ]
+        },
+        "new_errors": {
+          "count": 1,
+          "ids": [
+            "regression-040"
+          ]
+        },
+        "still_wrong": {
+          "count": 7,
+          "ids": [
+            "regression-010",
+            "regression-017",
+            "regression-025",
+            "regression-026",
+            "regression-028",
+            "regression-031",
+            "regression-034"
+          ]
+        },
+        "still_correct": {
+          "count": 30,
+          "ids": [
+            "regression-001",
+            "regression-002",
+            "regression-003",
+            "regression-004",
+            "regression-005",
+            "regression-006",
+            "regression-007",
+            "regression-008",
+            "regression-011",
+            "regression-012",
+            "regression-013",
+            "regression-014",
+            "regression-015",
+            "regression-016",
+            "regression-018",
+            "regression-019",
+            "regression-020",
+            "regression-021",
+            "regression-022",
+            "regression-023",
+            "regression-024",
+            "regression-027",
+            "regression-029",
+            "regression-030",
+            "regression-032",
+            "regression-035",
+            "regression-036",
+            "regression-037",
+            "regression-038",
+            "regression-039"
+          ]
+        }
+      },
+      "seed-43": {
+        "fixed": {
+          "count": 3,
+          "ids": [
+            "regression-009",
+            "regression-031",
+            "regression-034"
+          ]
+        },
+        "new_errors": {
+          "count": 3,
+          "ids": [
+            "regression-029",
+            "regression-037",
+            "regression-040"
+          ]
+        },
+        "still_wrong": {
+          "count": 6,
+          "ids": [
+            "regression-010",
+            "regression-017",
+            "regression-025",
+            "regression-026",
+            "regression-028",
+            "regression-033"
+          ]
+        },
+        "still_correct": {
+          "count": 28,
+          "ids": [
+            "regression-001",
+            "regression-002",
+            "regression-003",
+            "regression-004",
+            "regression-005",
+            "regression-006",
+            "regression-007",
+            "regression-008",
+            "regression-011",
+            "regression-012",
+            "regression-013",
+            "regression-014",
+            "regression-015",
+            "regression-016",
+            "regression-018",
+            "regression-019",
+            "regression-020",
+            "regression-021",
+            "regression-022",
+            "regression-023",
+            "regression-024",
+            "regression-027",
+            "regression-030",
+            "regression-032",
+            "regression-035",
+            "regression-036",
+            "regression-038",
+            "regression-039"
+          ]
+        }
+      },
+      "seed-44": {
+        "fixed": {
+          "count": 4,
+          "ids": [
+            "regression-009",
+            "regression-026",
+            "regression-031",
+            "regression-034"
+          ]
+        },
+        "new_errors": {
+          "count": 3,
+          "ids": [
+            "regression-001",
+            "regression-004",
+            "regression-013"
+          ]
+        },
+        "still_wrong": {
+          "count": 5,
+          "ids": [
+            "regression-010",
+            "regression-017",
+            "regression-025",
+            "regression-028",
+            "regression-033"
+          ]
+        },
+        "still_correct": {
+          "count": 28,
+          "ids": [
+            "regression-002",
+            "regression-003",
+            "regression-005",
+            "regression-006",
+            "regression-007",
+            "regression-008",
+            "regression-011",
+            "regression-012",
+            "regression-014",
+            "regression-015",
+            "regression-016",
+            "regression-018",
+            "regression-019",
+            "regression-020",
+            "regression-021",
+            "regression-022",
+            "regression-023",
+            "regression-024",
+            "regression-027",
+            "regression-029",
+            "regression-030",
+            "regression-032",
+            "regression-035",
+            "regression-036",
+            "regression-037",
+            "regression-038",
+            "regression-039",
+            "regression-040"
+          ]
+        }
+      }
+    },
+    "consensus": {
+      "fixed_all": [
+        "regression-009"
+      ],
+      "new_errors_all": [],
+      "still_wrong_all": [
+        "regression-010",
+        "regression-017",
+        "regression-025",
+        "regression-028"
+      ],
+      "variable": [
+        "regression-001",
+        "regression-004",
+        "regression-013",
+        "regression-026",
+        "regression-029",
+        "regression-031",
+        "regression-033",
+        "regression-034",
+        "regression-037",
+        "regression-040"
+      ]
+    },
+    "cases": [
+      {
+        "id": "regression-001",
+        "text": "さあて！今度はどこにいるかなーー？？どこかなー？？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "iruka_collision",
+          "ambiguous"
+        ],
+        "needs_clarification": true,
+        "source": "observed_text",
+        "group_id": "irukana_collision",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-004",
+        "text": "近づいたからね。私はどっちの方にいるかなー？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "iruka_collision",
+          "self_location"
+        ],
+        "needs_clarification": false,
+        "source": "observed_text",
+        "group_id": "irukana_collision",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-009",
+        "text": "イルカは今どこにいる？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "iruka_collision",
+          "location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "irukana_collision",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 3
+      },
+      {
+        "id": "regression-010",
+        "text": "いま見えるイルカは何匹？",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "iruka_collision",
+          "count"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "irukana_collision",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "enemy_information",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "regression-013",
+        "text": "今、敵ではなく私の場所を教えて。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "iruka_collision",
+          "negation",
+          "self_location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "irukana_collision",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-017",
+        "text": "独り言だけど、どこにいるかなあ。",
+        "context": [],
+        "gold": "not_request",
+        "tags": [
+          "iruka_collision",
+          "rhetorical"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "irukana_collision",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "regression-025",
+        "text": "「馬を呼んで」と私から今お願いしているんだよ。",
+        "context": [],
+        "gold": "recall_mount",
+        "tags": [
+          "quotation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "not_request",
+        "predictions": {
+          "seed-42": "not_request",
+          "seed-43": "not_request",
+          "seed-44": "not_request"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "regression-026",
+        "text": "「敵がどこにいるか教えて」という私の質問に答えて。",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "quotation",
+          "location"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "other_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "regression-028",
+        "text": "敵の場所を教えてから、剣に替えて。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "multiple_requests"
+        ],
+        "needs_clarification": true,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "equip_sword",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "equip_sword",
+          "seed-44": "equip_sword"
+        },
+        "correct_seeds": 0
+      },
+      {
+        "id": "regression-029",
+        "text": "剣に替えるか馬を呼ぶか、どちらがいいか相談したい。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "hypothetical"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "recall_mount",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-031",
+        "text": "馬じゃなくて犬を呼び戻して。",
+        "context": [],
+        "gold": "other_request",
+        "tags": [
+          "correction",
+          "unsupported_request"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "recall_mount",
+        "predictions": {
+          "seed-42": "recall_mount",
+          "seed-43": "other_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-033",
+        "text": "うまを　ここへ　よんでー！",
+        "context": [],
+        "gold": "recall_mount",
+        "tags": [
+          "orthography"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "recall_mount",
+          "seed-43": "not_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      },
+      {
+        "id": "regression-034",
+        "text": "てき、ちかくに、おらん？？",
+        "context": [],
+        "gold": "enemy_information",
+        "tags": [
+          "orthography",
+          "negation"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "scope_minimal_pairs",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "other_request",
+          "seed-43": "enemy_information",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-037",
+        "text": "うん、その方で頼んだ。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "今、敵の方向を知りたいんやな？"
+          }
+        ],
+        "gold": "enemy_information",
+        "tags": [
+          "ellipsis",
+          "context"
+        ],
+        "needs_clarification": false,
+        "source": "synthetic",
+        "group_id": "context_reference_regression",
+        "baseline": "enemy_information",
+        "predictions": {
+          "seed-42": "enemy_information",
+          "seed-43": "not_request",
+          "seed-44": "enemy_information"
+        },
+        "correct_seeds": 2
+      },
+      {
+        "id": "regression-040",
+        "text": "うん、その方で頼んだ。",
+        "context": [
+          {
+            "role": "assistant",
+            "text": "剣を持つ案と、馬で逃げる案があるな。"
+          }
+        ],
+        "gold": "other_request",
+        "tags": [
+          "ellipsis",
+          "context",
+          "ambiguous"
+        ],
+        "needs_clarification": true,
+        "source": "synthetic",
+        "group_id": "context_reference_regression",
+        "baseline": "other_request",
+        "predictions": {
+          "seed-42": "equip_sword",
+          "seed-43": "not_request",
+          "seed-44": "other_request"
+        },
+        "correct_seeds": 1
+      }
+    ]
+  }
+}

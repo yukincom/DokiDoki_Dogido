@@ -1,0 +1,770 @@
+{
+  "dev": {
+    "n": 73,
+    "correct": 61,
+    "accuracy": 0.8356164383561644,
+    "macro_f1": 0.8389036251105217,
+    "per_class": {
+      "not_request": {
+        "precision": 0.9333333333333333,
+        "recall": 1.0,
+        "f1": 0.9655172413793104,
+        "support": 14,
+        "predicted_count": 15
+      },
+      "enemy_information": {
+        "precision": 0.8571428571428571,
+        "recall": 0.8,
+        "f1": 0.8275862068965518,
+        "support": 15,
+        "predicted_count": 14
+      },
+      "equip_sword": {
+        "precision": 0.9090909090909091,
+        "recall": 0.6666666666666666,
+        "f1": 0.7692307692307692,
+        "support": 15,
+        "predicted_count": 11
+      },
+      "recall_mount": {
+        "precision": 1.0,
+        "recall": 0.9333333333333333,
+        "f1": 0.9655172413793104,
+        "support": 15,
+        "predicted_count": 14
+      },
+      "other_request": {
+        "precision": 0.5789473684210527,
+        "recall": 0.7857142857142857,
+        "f1": 0.6666666666666667,
+        "support": 14,
+        "predicted_count": 19
+      }
+    },
+    "label_order": [
+      "not_request",
+      "enemy_information",
+      "equip_sword",
+      "recall_mount",
+      "other_request"
+    ],
+    "confusion_matrix": [
+      [
+        14,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        12,
+        0,
+        0,
+        3
+      ],
+      [
+        1,
+        0,
+        10,
+        0,
+        4
+      ],
+      [
+        0,
+        0,
+        0,
+        14,
+        1
+      ],
+      [
+        0,
+        2,
+        1,
+        0,
+        11
+      ]
+    ],
+    "binary_request": {
+      "n": 73,
+      "correct": 72,
+      "accuracy": 0.9863013698630136,
+      "macro_f1": 0.978485116416151,
+      "per_class": {
+        "not_request": {
+          "precision": 0.9333333333333333,
+          "recall": 1.0,
+          "f1": 0.9655172413793104,
+          "support": 14,
+          "predicted_count": 15
+        },
+        "request": {
+          "precision": 1.0,
+          "recall": 0.9830508474576272,
+          "f1": 0.9914529914529915,
+          "support": 59,
+          "predicted_count": 58
+        }
+      },
+      "label_order": [
+        "not_request",
+        "request"
+      ],
+      "confusion_matrix": [
+        [
+          14,
+          0
+        ],
+        [
+          1,
+          58
+        ]
+      ]
+    },
+    "non_action_to_action": {
+      "count": 1,
+      "denominator": 43,
+      "rate": 0.023255813953488372
+    },
+    "sword_mount_confusion": {
+      "count": 0,
+      "denominator": 30,
+      "rate": 0.0
+    },
+    "incorrect_action_predictions": {
+      "count": 1,
+      "denominator": 25,
+      "rate": 0.04
+    },
+    "subsets": {
+      "negation": {
+        "count": 12,
+        "denominator": 13,
+        "rate": 0.9230769230769231
+      },
+      "quotation": {
+        "count": 5,
+        "denominator": 7,
+        "rate": 0.7142857142857143
+      },
+      "ellipsis": {
+        "count": 16,
+        "denominator": 20,
+        "rate": 0.8
+      },
+      "self_location": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      },
+      "iruka_collision": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      },
+      "unsupported_request": {
+        "count": 1,
+        "denominator": 3,
+        "rate": 0.3333333333333333
+      },
+      "ordinary_scope": {
+        "count": 60,
+        "denominator": 70,
+        "rate": 0.8571428571428571
+      },
+      "needs_clarification": {
+        "count": 1,
+        "denominator": 1,
+        "rate": 1.0
+      },
+      "with_context": {
+        "count": 21,
+        "denominator": 25,
+        "rate": 0.84
+      },
+      "user_example": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      }
+    },
+    "loss": 2.757042407989502,
+    "prediction_seconds": 0.0525
+  },
+  "test": {
+    "n": 75,
+    "correct": 64,
+    "accuracy": 0.8533333333333334,
+    "macro_f1": 0.8604901141743246,
+    "per_class": {
+      "not_request": {
+        "precision": 0.9333333333333333,
+        "recall": 0.9333333333333333,
+        "f1": 0.9333333333333333,
+        "support": 15,
+        "predicted_count": 15
+      },
+      "enemy_information": {
+        "precision": 0.9166666666666666,
+        "recall": 0.7333333333333333,
+        "f1": 0.8148148148148148,
+        "support": 15,
+        "predicted_count": 12
+      },
+      "equip_sword": {
+        "precision": 1.0,
+        "recall": 0.8666666666666667,
+        "f1": 0.9285714285714286,
+        "support": 15,
+        "predicted_count": 13
+      },
+      "recall_mount": {
+        "precision": 1.0,
+        "recall": 0.8,
+        "f1": 0.888888888888889,
+        "support": 15,
+        "predicted_count": 12
+      },
+      "other_request": {
+        "precision": 0.6086956521739131,
+        "recall": 0.9333333333333333,
+        "f1": 0.7368421052631579,
+        "support": 15,
+        "predicted_count": 23
+      }
+    },
+    "label_order": [
+      "not_request",
+      "enemy_information",
+      "equip_sword",
+      "recall_mount",
+      "other_request"
+    ],
+    "confusion_matrix": [
+      [
+        14,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        11,
+        0,
+        0,
+        4
+      ],
+      [
+        0,
+        0,
+        13,
+        0,
+        2
+      ],
+      [
+        1,
+        0,
+        0,
+        12,
+        2
+      ],
+      [
+        0,
+        1,
+        0,
+        0,
+        14
+      ]
+    ],
+    "binary_request": {
+      "n": 75,
+      "correct": 73,
+      "accuracy": 0.9733333333333334,
+      "macro_f1": 0.9583333333333333,
+      "per_class": {
+        "not_request": {
+          "precision": 0.9333333333333333,
+          "recall": 0.9333333333333333,
+          "f1": 0.9333333333333333,
+          "support": 15,
+          "predicted_count": 15
+        },
+        "request": {
+          "precision": 0.9833333333333333,
+          "recall": 0.9833333333333333,
+          "f1": 0.9833333333333333,
+          "support": 60,
+          "predicted_count": 60
+        }
+      },
+      "label_order": [
+        "not_request",
+        "request"
+      ],
+      "confusion_matrix": [
+        [
+          14,
+          1
+        ],
+        [
+          1,
+          59
+        ]
+      ]
+    },
+    "non_action_to_action": {
+      "count": 0,
+      "denominator": 45,
+      "rate": 0.0
+    },
+    "sword_mount_confusion": {
+      "count": 0,
+      "denominator": 30,
+      "rate": 0.0
+    },
+    "incorrect_action_predictions": {
+      "count": 0,
+      "denominator": 25,
+      "rate": 0.0
+    },
+    "subsets": {
+      "negation": {
+        "count": 7,
+        "denominator": 7,
+        "rate": 1.0
+      },
+      "quotation": {
+        "count": 6,
+        "denominator": 7,
+        "rate": 0.8571428571428571
+      },
+      "ellipsis": {
+        "count": 16,
+        "denominator": 22,
+        "rate": 0.7272727272727273
+      },
+      "self_location": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      },
+      "iruka_collision": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      },
+      "unsupported_request": {
+        "count": 2,
+        "denominator": 3,
+        "rate": 0.6666666666666666
+      },
+      "ordinary_scope": {
+        "count": 62,
+        "denominator": 72,
+        "rate": 0.8611111111111112
+      },
+      "needs_clarification": {
+        "count": 1,
+        "denominator": 1,
+        "rate": 1.0
+      },
+      "with_context": {
+        "count": 21,
+        "denominator": 27,
+        "rate": 0.7777777777777778
+      },
+      "user_example": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      }
+    },
+    "loss": 1.0513668060302734,
+    "prediction_seconds": 0.0421
+  },
+  "regression": {
+    "n": 40,
+    "correct": 32,
+    "accuracy": 0.8,
+    "macro_f1": 0.8005128205128207,
+    "per_class": {
+      "not_request": {
+        "precision": 0.8,
+        "recall": 0.8,
+        "f1": 0.8000000000000002,
+        "support": 5,
+        "predicted_count": 5
+      },
+      "enemy_information": {
+        "precision": 0.8333333333333334,
+        "recall": 0.7142857142857143,
+        "f1": 0.7692307692307692,
+        "support": 7,
+        "predicted_count": 6
+      },
+      "equip_sword": {
+        "precision": 0.7142857142857143,
+        "recall": 1.0,
+        "f1": 0.8333333333333333,
+        "support": 5,
+        "predicted_count": 7
+      },
+      "recall_mount": {
+        "precision": 0.8,
+        "recall": 0.8,
+        "f1": 0.8000000000000002,
+        "support": 5,
+        "predicted_count": 5
+      },
+      "other_request": {
+        "precision": 0.8235294117647058,
+        "recall": 0.7777777777777778,
+        "f1": 0.7999999999999999,
+        "support": 18,
+        "predicted_count": 17
+      }
+    },
+    "label_order": [
+      "not_request",
+      "enemy_information",
+      "equip_sword",
+      "recall_mount",
+      "other_request"
+    ],
+    "confusion_matrix": [
+      [
+        4,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        5,
+        0,
+        0,
+        2
+      ],
+      [
+        0,
+        0,
+        5,
+        0,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        4,
+        0
+      ],
+      [
+        0,
+        1,
+        2,
+        1,
+        14
+      ]
+    ],
+    "binary_request": {
+      "n": 40,
+      "correct": 38,
+      "accuracy": 0.95,
+      "macro_f1": 0.8857142857142858,
+      "per_class": {
+        "not_request": {
+          "precision": 0.8,
+          "recall": 0.8,
+          "f1": 0.8000000000000002,
+          "support": 5,
+          "predicted_count": 5
+        },
+        "request": {
+          "precision": 0.9714285714285714,
+          "recall": 0.9714285714285714,
+          "f1": 0.9714285714285714,
+          "support": 35,
+          "predicted_count": 35
+        }
+      },
+      "label_order": [
+        "not_request",
+        "request"
+      ],
+      "confusion_matrix": [
+        [
+          4,
+          1
+        ],
+        [
+          1,
+          34
+        ]
+      ]
+    },
+    "non_action_to_action": {
+      "count": 3,
+      "denominator": 30,
+      "rate": 0.1
+    },
+    "sword_mount_confusion": {
+      "count": 0,
+      "denominator": 10,
+      "rate": 0.0
+    },
+    "incorrect_action_predictions": {
+      "count": 3,
+      "denominator": 12,
+      "rate": 0.25
+    },
+    "subsets": {
+      "negation": {
+        "count": 7,
+        "denominator": 8,
+        "rate": 0.875
+      },
+      "quotation": {
+        "count": 8,
+        "denominator": 10,
+        "rate": 0.8
+      },
+      "ellipsis": {
+        "count": 3,
+        "denominator": 4,
+        "rate": 0.75
+      },
+      "self_location": {
+        "count": 5,
+        "denominator": 5,
+        "rate": 1.0
+      },
+      "iruka_collision": {
+        "count": 15,
+        "denominator": 17,
+        "rate": 0.8823529411764706
+      },
+      "unsupported_request": {
+        "count": 0,
+        "denominator": 1,
+        "rate": 0.0
+      },
+      "ordinary_scope": {
+        "count": 32,
+        "denominator": 39,
+        "rate": 0.8205128205128205
+      },
+      "needs_clarification": {
+        "count": 1,
+        "denominator": 3,
+        "rate": 0.3333333333333333
+      },
+      "with_context": {
+        "count": 3,
+        "denominator": 4,
+        "rate": 0.75
+      },
+      "user_example": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      }
+    },
+    "loss": 2.1766304969787598,
+    "prediction_seconds": 0.0315
+  },
+  "train": {
+    "n": 566,
+    "correct": 566,
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "per_class": {
+      "not_request": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 116,
+        "predicted_count": 116
+      },
+      "enemy_information": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 95,
+        "predicted_count": 95
+      },
+      "equip_sword": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 106,
+        "predicted_count": 106
+      },
+      "recall_mount": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 108,
+        "predicted_count": 108
+      },
+      "other_request": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 141,
+        "predicted_count": 141
+      }
+    },
+    "label_order": [
+      "not_request",
+      "enemy_information",
+      "equip_sword",
+      "recall_mount",
+      "other_request"
+    ],
+    "confusion_matrix": [
+      [
+        116,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        95,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        106,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        108,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        141
+      ]
+    ],
+    "binary_request": {
+      "n": 566,
+      "correct": 566,
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "per_class": {
+        "not_request": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 116,
+          "predicted_count": 116
+        },
+        "request": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 450,
+          "predicted_count": 450
+        }
+      },
+      "label_order": [
+        "not_request",
+        "request"
+      ],
+      "confusion_matrix": [
+        [
+          116,
+          0
+        ],
+        [
+          0,
+          450
+        ]
+      ]
+    },
+    "non_action_to_action": {
+      "count": 0,
+      "denominator": 352,
+      "rate": 0.0
+    },
+    "sword_mount_confusion": {
+      "count": 0,
+      "denominator": 214,
+      "rate": 0.0
+    },
+    "incorrect_action_predictions": {
+      "count": 0,
+      "denominator": 214,
+      "rate": 0.0
+    },
+    "subsets": {
+      "negation": {
+        "count": 88,
+        "denominator": 88,
+        "rate": 1.0
+      },
+      "quotation": {
+        "count": 35,
+        "denominator": 35,
+        "rate": 1.0
+      },
+      "ellipsis": {
+        "count": 81,
+        "denominator": 81,
+        "rate": 1.0
+      },
+      "self_location": {
+        "count": 4,
+        "denominator": 4,
+        "rate": 1.0
+      },
+      "iruka_collision": {
+        "count": 0,
+        "denominator": 0,
+        "rate": null
+      },
+      "unsupported_request": {
+        "count": 36,
+        "denominator": 36,
+        "rate": 1.0
+      },
+      "ordinary_scope": {
+        "count": 530,
+        "denominator": 530,
+        "rate": 1.0
+      },
+      "needs_clarification": {
+        "count": 11,
+        "denominator": 11,
+        "rate": 1.0
+      },
+      "with_context": {
+        "count": 181,
+        "denominator": 181,
+        "rate": 1.0
+      },
+      "user_example": {
+        "count": 32,
+        "denominator": 32,
+        "rate": 1.0
+      }
+    },
+    "loss": 0.0010108640417456627,
+    "prediction_seconds": 0.2686
+  }
+}

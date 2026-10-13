@@ -1,0 +1,100 @@
+{
+  "started_at_utc": "2026-10-13T19:34:06.848124+00:00",
+  "model_id": "sbintuitions/modernbert-ja-30m",
+  "model_revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+  "dataset_git_head": "5e512cdc33570ff2242c3f92f6c62a37637215b7",
+  "data_sha256": {
+    "train": "f67e4de44c09d1075be4f8ca6c6c5382456fb46f0543a697e619ce8aa9e51984",
+    "dev": "77f6bcd32ac34d66ac918b4be57ada6d667778af71ff28edced332718d944986",
+    "test": "823424261b42d9b90f9fe8adfe48d44756e5df965425b2e62ba953104348884e",
+    "regression": "4567b2bbb5d66335d84e86edae7a54cb2c7cfde4ffccd88f6c4ab584dd70147d"
+  },
+  "source_sha256": {
+    "train.py": "ae5ce3f25ca5af82cb1f35007580e8ab16431a1113bf02967f42b8b9edc473e9",
+    "evaluation.py": "e15f5945c162c00d03d73fb4024b2560639f3d25c527a095c122a1259494d35c",
+    "dataset.py": "128d845760683aebb57bbe6ea7318ca8019d29c0ed5fe2940cbab913c53d18dc",
+    "labels.json": "237c708a4c5401ec03371ee7bb15b744fd0d6af08cb1f7b53f8864e8988eba9c"
+  },
+  "packages": {
+    "torch": "2.14.1",
+    "transformers": "5.19.0",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "scikit-learn": "1.9.1",
+    "huggingface-hub": "2.2.0",
+    "tokenizers": "0.23.3"
+  },
+  "python": "3.11.14",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "device_requested": "mps",
+  "torch_threads": 4,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "learning_rates": [
+    2e-05,
+    5e-05
+  ],
+  "max_epochs": 10,
+  "batch_size": 16,
+  "max_length": 128,
+  "token_lengths": {
+    "train": {
+      "min": 17,
+      "max": 80,
+      "mean": 28.84982332155477,
+      "truncated": 0
+    },
+    "dev": {
+      "min": 20,
+      "max": 41,
+      "mean": 27.493150684931507,
+      "truncated": 0
+    },
+    "test": {
+      "min": 18,
+      "max": 42,
+      "mean": 28.746666666666666,
+      "truncated": 0
+    },
+    "regression": {
+      "min": 19,
+      "max": 35,
+      "mean": 24.9,
+      "truncated": 0
+    }
+  },
+  "selection": "per trial: dev macro_f1 descending; loss ascending; epoch ascending; trial index ascending. shared learning rate: mean best-dev macro_f1 descending; mean loss ascending; mean epoch ascending; learning-rate index ascending. Evaluate every seed.",
+  "dispersion": "sample standard deviation (ddof=1); not a confidence interval",
+  "optimizer": "adamw_torch",
+  "scheduler": "linear",
+  "warmup_steps": 0,
+  "weight_decay": 0.01,
+  "dtype": "float32",
+  "attention": "sdpa",
+  "classification": "single_label_argmax_no_threshold",
+  "full_finetuning": true,
+  "test_regression_used_for_selection": false,
+  "baseline_checkpoint": ".dogido_tools/request_classifier/2026-10-14-30m-v1.6/trial-1/best",
+  "baseline_model_sha256": "fcf41ad411f487519b685ac10f7eb7cadca0ce09c9a9d549c90020421ad546e5",
+  "parameters": 36772613,
+  "device_actual": "mps:0",
+  "selected_checkpoints": {
+    "seed-42": {
+      "path": "trial-2/best",
+      "sha256": "5f46965f7d92d900071dd72028b4f00e3e509340767d57df25f3f7a8d71cf2fa"
+    },
+    "seed-43": {
+      "path": "trial-4/best",
+      "sha256": "fdeadea37a745e7e58b4f7cf10bdf652eb2776700b46bdb2231d9fe2bdf71d0e"
+    },
+    "seed-44": {
+      "path": "trial-6/best",
+      "sha256": "750b05ef89e92cce348bfafed2d315578a0bff6fd5596b536892127c7586f895"
+    }
+  },
+  "elapsed_seconds": 250.4002617499791,
+  "finished_at_utc": "2026-10-13T19:38:16.905017+00:00"
+}

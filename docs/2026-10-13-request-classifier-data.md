@@ -2,7 +2,7 @@
 
 **作成:** 2026-10-13 / **更新:** 2026-10-14
 
-**状態:** v1.7は全762件を実装・受付範囲に照らしてレビューし、754件へ整理済み。本文・履歴38件と注釈のみ42件を修正、専用対話中の8件を除外した（[全件の採否・変更理由](2026-10-14-request-classifier-functional-scope-review.md)）。v1.7の再学習・実モデル評価は未実施。本体未接続。v1.6の30M学習と精度は[旧データによる履歴](2026-10-14-modernbert-ja-request-classifier-retraining.md)として保持し、改訂後の評価結果とは直接比較しない。
+**状態:** v1.7は全762件を実装・受付範囲に照らしてレビューし、754件へ整理済み。本文・履歴38件と注釈のみ42件を修正、専用対話中の8件を除外した（[全件の採否・変更理由](2026-10-14-request-classifier-functional-scope-review.md)）。v1.7で既存モデルの再評価と3 seed再学習を完了（[比較結果](2026-10-14-modernbert-ja-request-classifier-v17-multiseed.md)）。本体未接続。v1.6の30M学習と精度は[旧データによる履歴](2026-10-14-modernbert-ja-request-classifier-retraining.md)として保持し、改訂後の評価結果とは直接比較しない。
 
 **正本:** [dev_tools/request_classifier](../dev_tools/request_classifier/README.md)
 
