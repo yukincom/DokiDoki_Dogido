@@ -1,0 +1,202 @@
+{
+  "method": "変更した本文・履歴38件について、dataset.normalized(model_example)をdifflib.SequenceMatcherで他分割と比較。類似度は検査候補の目安であり意味の同一性の判定ではない。",
+  "changed_inputs": 38,
+  "normalized_duplicate_inputs": 0,
+  "normalized_utterance_split_overlap": 0,
+  "review_threshold": 0.8,
+  "at_or_above_threshold": [],
+  "maximum": 0.7273,
+  "nearest": [
+    {
+      "id": "train-005",
+      "nearest_cross_split_id": "dev-002",
+      "input_similarity": 0.72
+    },
+    {
+      "id": "train-226",
+      "nearest_cross_split_id": "test-054",
+      "input_similarity": 0.6301
+    },
+    {
+      "id": "train-227",
+      "nearest_cross_split_id": "dev-057",
+      "input_similarity": 0.6053
+    },
+    {
+      "id": "train-239",
+      "nearest_cross_split_id": "dev-062",
+      "input_similarity": 0.6988
+    },
+    {
+      "id": "train-240",
+      "nearest_cross_split_id": "dev-061",
+      "input_similarity": 0.5843
+    },
+    {
+      "id": "train-241",
+      "nearest_cross_split_id": "dev-055",
+      "input_similarity": 0.7246
+    },
+    {
+      "id": "train-243",
+      "nearest_cross_split_id": "test-062",
+      "input_similarity": 0.7013
+    },
+    {
+      "id": "train-246",
+      "nearest_cross_split_id": "dev-053",
+      "input_similarity": 0.4396
+    },
+    {
+      "id": "train-292",
+      "nearest_cross_split_id": "test-051",
+      "input_similarity": 0.5823
+    },
+    {
+      "id": "train-293",
+      "nearest_cross_split_id": "regression-037",
+      "input_similarity": 0.4632
+    },
+    {
+      "id": "train-297",
+      "nearest_cross_split_id": "dev-051",
+      "input_similarity": 0.5625
+    },
+    {
+      "id": "train-301",
+      "nearest_cross_split_id": "dev-051",
+      "input_similarity": 0.5634
+    },
+    {
+      "id": "train-308",
+      "nearest_cross_split_id": "test-072",
+      "input_similarity": 0.557
+    },
+    {
+      "id": "train-310",
+      "nearest_cross_split_id": "test-072",
+      "input_similarity": 0.5263
+    },
+    {
+      "id": "train-316",
+      "nearest_cross_split_id": "dev-066",
+      "input_similarity": 0.5867
+    },
+    {
+      "id": "train-318",
+      "nearest_cross_split_id": "test-054",
+      "input_similarity": 0.6197
+    },
+    {
+      "id": "train-320",
+      "nearest_cross_split_id": "dev-063",
+      "input_similarity": 0.6053
+    },
+    {
+      "id": "train-323",
+      "nearest_cross_split_id": "dev-057",
+      "input_similarity": 0.5526
+    },
+    {
+      "id": "train-384",
+      "nearest_cross_split_id": "dev-051",
+      "input_similarity": 0.6316
+    },
+    {
+      "id": "train-407",
+      "nearest_cross_split_id": "regression-038",
+      "input_similarity": 0.6269
+    },
+    {
+      "id": "train-408",
+      "nearest_cross_split_id": "test-031",
+      "input_similarity": 0.625
+    },
+    {
+      "id": "train-421",
+      "nearest_cross_split_id": "dev-031",
+      "input_similarity": 0.5333
+    },
+    {
+      "id": "train-439",
+      "nearest_cross_split_id": "regression-007",
+      "input_similarity": 0.5352
+    },
+    {
+      "id": "train-466",
+      "nearest_cross_split_id": "test-055",
+      "input_similarity": 0.3852
+    },
+    {
+      "id": "train-467",
+      "nearest_cross_split_id": "dev-046",
+      "input_similarity": 0.3649
+    },
+    {
+      "id": "train-468",
+      "nearest_cross_split_id": "test-055",
+      "input_similarity": 0.375
+    },
+    {
+      "id": "train-469",
+      "nearest_cross_split_id": "test-055",
+      "input_similarity": 0.383
+    },
+    {
+      "id": "dev-006",
+      "nearest_cross_split_id": "train-091",
+      "input_similarity": 0.6
+    },
+    {
+      "id": "dev-062",
+      "nearest_cross_split_id": "train-237",
+      "input_similarity": 0.7089
+    },
+    {
+      "id": "dev-073",
+      "nearest_cross_split_id": "train-241",
+      "input_similarity": 0.5867
+    },
+    {
+      "id": "dev-075",
+      "nearest_cross_split_id": "test-075",
+      "input_similarity": 0.4762
+    },
+    {
+      "id": "test-002",
+      "nearest_cross_split_id": "train-131",
+      "input_similarity": 0.6667
+    },
+    {
+      "id": "test-005",
+      "nearest_cross_split_id": "train-062",
+      "input_similarity": 0.7273
+    },
+    {
+      "id": "test-054",
+      "nearest_cross_split_id": "train-318",
+      "input_similarity": 0.6479
+    },
+    {
+      "id": "test-064",
+      "nearest_cross_split_id": "dev-062",
+      "input_similarity": 0.6237
+    },
+    {
+      "id": "test-068",
+      "nearest_cross_split_id": "train-245",
+      "input_similarity": 0.6914
+    },
+    {
+      "id": "test-071",
+      "nearest_cross_split_id": "train-207",
+      "input_similarity": 0.6957
+    },
+    {
+      "id": "test-075",
+      "nearest_cross_split_id": "train-203",
+      "input_similarity": 0.4884
+    }
+  ],
+  "review": "上位候補の本文と履歴を確認。dev-062/test-064が同じ修正テンプレートへ寄る点を修正し、最終版では0.8以上なし。意味や分類の近い別表現は分割間にも含む。"
+}

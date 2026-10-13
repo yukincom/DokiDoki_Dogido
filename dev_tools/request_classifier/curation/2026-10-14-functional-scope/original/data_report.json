@@ -1,0 +1,168 @@
+{
+  "train": {
+    "rows": 572,
+    "labels": {
+      "enemy_information": 95,
+      "equip_sword": 106,
+      "not_request": 119,
+      "other_request": 144,
+      "recall_mount": 108
+    },
+    "groups": 158,
+    "with_context": 185,
+    "needs_clarification": 11,
+    "sources": {
+      "synthetic": 540,
+      "user_example": 32
+    },
+    "tags": {
+      "ambiguous": 5,
+      "cancellation": 43,
+      "casual": 137,
+      "context": 187,
+      "correction": 62,
+      "count": 16,
+      "direct": 130,
+      "ellipsis": 84,
+      "future": 15,
+      "general_knowledge": 14,
+      "hypothetical": 6,
+      "location": 15,
+      "multiple_requests": 7,
+      "named_entity": 11,
+      "negation": 88,
+      "orthography": 12,
+      "past": 27,
+      "politeness": 38,
+      "presence": 23,
+      "question": 84,
+      "quotation": 37,
+      "reference": 57,
+      "reported_speech": 18,
+      "rhetorical": 15,
+      "self_location": 4,
+      "statement": 140
+    },
+    "max_input_characters": 120,
+    "sha256": "e0847bf5546b81f8e110f653299e983f8a52764ab4b1fc52c52871e403ea2847"
+  },
+  "dev": {
+    "rows": 75,
+    "labels": {
+      "enemy_information": 15,
+      "equip_sword": 15,
+      "not_request": 15,
+      "other_request": 15,
+      "recall_mount": 15
+    },
+    "groups": 12,
+    "with_context": 27,
+    "needs_clarification": 1,
+    "sources": {
+      "synthetic": 75
+    },
+    "tags": {
+      "ambiguous": 1,
+      "cancellation": 4,
+      "context": 27,
+      "correction": 5,
+      "count": 3,
+      "direct": 13,
+      "ellipsis": 22,
+      "future": 2,
+      "general_knowledge": 1,
+      "hypothetical": 2,
+      "location": 5,
+      "named_entity": 5,
+      "negation": 13,
+      "past": 1,
+      "politeness": 1,
+      "presence": 5,
+      "question": 1,
+      "quotation": 7,
+      "statement": 5
+    },
+    "max_input_characters": 69,
+    "sha256": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661"
+  },
+  "test": {
+    "rows": 75,
+    "labels": {
+      "enemy_information": 15,
+      "equip_sword": 15,
+      "not_request": 15,
+      "other_request": 15,
+      "recall_mount": 15
+    },
+    "groups": 12,
+    "with_context": 27,
+    "needs_clarification": 1,
+    "sources": {
+      "synthetic": 75
+    },
+    "tags": {
+      "ambiguous": 1,
+      "cancellation": 11,
+      "casual": 5,
+      "context": 28,
+      "correction": 13,
+      "count": 3,
+      "direct": 5,
+      "ellipsis": 22,
+      "future": 1,
+      "location": 7,
+      "named_entity": 5,
+      "negation": 7,
+      "past": 1,
+      "politeness": 5,
+      "presence": 3,
+      "question": 1,
+      "quotation": 6,
+      "reference": 5,
+      "reported_speech": 5,
+      "statement": 5
+    },
+    "max_input_characters": 71,
+    "sha256": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177"
+  },
+  "regression": {
+    "rows": 40,
+    "labels": {
+      "enemy_information": 7,
+      "equip_sword": 5,
+      "not_request": 5,
+      "other_request": 18,
+      "recall_mount": 5
+    },
+    "groups": 3,
+    "with_context": 4,
+    "needs_clarification": 3,
+    "sources": {
+      "observed_text": 5,
+      "synthetic": 35
+    },
+    "tags": {
+      "ambiguous": 2,
+      "cancellation": 2,
+      "casual": 1,
+      "context": 4,
+      "correction": 3,
+      "count": 3,
+      "ellipsis": 4,
+      "hypothetical": 1,
+      "iruka_collision": 17,
+      "location": 4,
+      "multiple_requests": 1,
+      "named_entity": 1,
+      "negation": 8,
+      "orthography": 3,
+      "politeness": 1,
+      "presence": 2,
+      "quotation": 10,
+      "rhetorical": 1,
+      "self_location": 5
+    },
+    "max_input_characters": 50,
+    "sha256": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  }
+}

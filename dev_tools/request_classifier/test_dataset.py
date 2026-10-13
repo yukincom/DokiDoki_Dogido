@@ -45,6 +45,13 @@ class DatasetIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unresolved request'):
             validate(data)
 
+    def test_unsupported_request_cannot_become_an_immediate_action(self):
+        data = deepcopy(self.data)
+        row = next(r for r in data['train'] if 'unsupported_request' in r['tags'])
+        row['label'] = 'equip_sword'
+        with self.assertRaisesRegex(ValueError, 'unsupported request must be other_request'):
+            validate(data)
+
     def test_user_example_is_accepted_without_becoming_an_observation(self):
         data = deepcopy(self.data)
         data['train'][0]['source'] = 'user_example'

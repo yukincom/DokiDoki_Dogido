@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "data_version": "v1.7",
+  "previous_version": "v1.6",
+  "date": "2026-10-14",
+  "source_commit": "97d751de847d7b416267d7cdb0e50114df098276",
+  "purpose": "実際の機能・通常受付範囲に合わせた全762件のレビュー。予測の正誤を採否基準にしない。",
+  "row_hash_format": "SHA-256 of UTF-8 JSON: ensure_ascii=False, sort_keys=True, separators=(comma,colon)",
+  "original_files": {
+    "original/data_report.json": "067886985e72a91e79dd60e2f43644eada87ac45fbe91dea74a47b7182819145",
+    "original/dev.jsonl": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "original/labels.json": "237c708a4c5401ec03371ee7bb15b744fd0d6af08cb1f7b53f8864e8988eba9c",
+    "original/regression.jsonl": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75",
+    "original/test.jsonl": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "original/train.jsonl": "e0847bf5546b81f8e110f653299e983f8a52764ab4b1fc52c52871e403ea2847"
+  },
+  "active_files": {
+    "data/train.jsonl": "f67e4de44c09d1075be4f8ca6c6c5382456fb46f0543a697e619ce8aa9e51984",
+    "data/dev.jsonl": "77f6bcd32ac34d66ac918b4be57ada6d667778af71ff28edced332718d944986",
+    "data/test.jsonl": "823424261b42d9b90f9fe8adfe48d44756e5df965425b2e62ba953104348884e",
+    "data/regression.jsonl": "4567b2bbb5d66335d84e86edae7a54cb2c7cfde4ffccd88f6c4ab584dd70147d"
+  },
+  "reviewed": 762,
+  "actions": {
+    "keep": 674,
+    "revise": 80,
+    "exclude": 8
+  },
+  "scopes": {
+    "ordinary": 711,
+    "unsupported_boundary": 43,
+    "dedicated_learning": 2,
+    "workshop": 6
+  },
+  "splits": {
+    "train": {
+      "before": 572,
+      "after": 566,
+      "actions": {
+        "keep": 509,
+        "revise": 57,
+        "exclude": 6
+      },
+      "unsupported_requests": 36
+    },
+    "dev": {
+      "before": 75,
+      "after": 73,
+      "actions": {
+        "keep": 64,
+        "revise": 9,
+        "exclude": 2
+      },
+      "unsupported_requests": 3
+    },
+    "test": {
+      "before": 75,
+      "after": 75,
+      "actions": {
+        "keep": 62,
+        "revise": 13
+      },
+      "unsupported_requests": 3
+    },
+    "regression": {
+      "before": 40,
+      "after": 40,
+      "actions": {
+        "keep": 39,
+        "revise": 1
+      },
+      "unsupported_requests": 1
+    }
+  },
+  "changed_fields": {
+    "text": 7,
+    "tags": 45,
+    "context": 32,
+    "rationale": 22
+  },
+  "protected_inputs": {
+    "user_example": 32,
+    "observed_text": 5,
+    "fields": [
+      "text",
+      "context",
+      "label",
+      "source"
+    ]
+  },
+  "invariants": [
+    "IDとgroupとsplitを維持し再採番しない",
+    "全件の正解ラベルを維持",
+    "旧原本と過去のモデル・評価結果を保持",
+    "ラベルや受付範囲の注釈をモデル入力へ含めない"
+  ],
+  "old_evaluation_status": "v1.6の評価結果は当時の固定データの結果。v1.7とは評価行・文脈が異なり直接比較しない。v1.7の学習・実モデル評価は未実施。",
+  "evidence_sha256": {
+    "dogido-rust/src/dialogue/haiku_runtime.rs": "9a6388303408cb17b51d7b3ca153b7f2e5b44d75f8377d02eff713b3d7b394d4",
+    "dogido-rust/src/dialogue/workshop_focus.rs": "fbca649dfcfe35d4a9b6a17060e7c5ef72fc26d1f7a54980552d30f79e0dd0a9",
+    "dogido-rust/src/dialogue/submit.rs": "80cd66db9201df0ddf9097400399110ae9a1d4093e85614ba95bc4f83200a108",
+    "dogido-rust/src/assist/intent.rs": "6bf01ddd5733a57ae2dafe3d1653c6bf3123be726ce4e092ae167f2fbd91e078",
+    "dogido-rust/src/assist/horse_recall/intent.rs": "72288d0f2a29590a5236fb90b600efb704cd00ca2a11730371e913fbe52f8785",
+    "dogido-rust/src/combat/queries.rs": "8482fde238660729cb9cad61b5cabd52fa07b2975b10676b16ff7999a3da143c",
+    "dogido-rust/src/events/models.rs": "6de302b4fca72c7021585a67cd92a43bd5522a9c3dcf3f46db9c4771ee7f4d73",
+    "adapter/minecraft-fabric/src/main/java/dogido/fabric/horse_recall/HorseRecallRuntime.java": "cb128d245953729537b1377b20293d1ebb9e6a76f90e176b92becd9f523a690e",
+    "adapter/minecraft-fabric/src/main/java/dogido/fabric/observation/mobs/MobClassifier.java": "600f16a586264eb2cb03439e511c8bb783856083ccfa80827a8613d291c48b2a"
+  },
+  "decisions_sha256": "322b51ecf09fc0017bbc66e092833e10bf21a1410204a52fab6cac96ccfb94e7",
+  "criteria_sha256": "90deda66b1558f8b0723c2dfd4e1f761f0c4a9d477ffdaa66f622a3b89d82f08",
+  "validation_files": {
+    "token-length-check.json": "ad685969b0ed84779b5b2405e339fdd4e2f9a96e8a49fccfb562bc8ffab31695",
+    "similarity-review.json": "295b934a5c0c06ecd6b08bb1856fc3e4a06c2bfb6f808434ca6370d8b7cc643f"
+  }
+}

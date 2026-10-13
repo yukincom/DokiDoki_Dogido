@@ -62,7 +62,8 @@ def summarize(rows: list[dict]) -> dict:
         sum(r['predicted'] in ACTIONS for r in rows))
     result['subsets'] = {}
     subsets = {tag: [r for r in rows if tag in r['tags']]
-               for tag in ['negation', 'quotation', 'ellipsis', 'self_location', 'iruka_collision']}
+               for tag in ['negation', 'quotation', 'ellipsis', 'self_location', 'iruka_collision', 'unsupported_request']}
+    subsets['ordinary_scope'] = [r for r in rows if 'unsupported_request' not in r['tags']]
     subsets['needs_clarification'] = [r for r in rows if r['needs_clarification']]
     subsets['with_context'] = [r for r in rows if r['context']]
     subsets['user_example'] = [r for r in rows if r['source'] == 'user_example']

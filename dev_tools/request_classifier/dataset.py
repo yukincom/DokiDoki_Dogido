@@ -23,7 +23,7 @@ TAGS = {
     'direct', 'ellipsis', 'future', 'general_knowledge', 'hypothetical',
     'iruka_collision', 'location', 'multiple_requests', 'named_entity',
     'negation', 'orthography', 'past', 'politeness', 'presence', 'quotation',
-    'question', 'reference', 'reported_speech', 'rhetorical', 'self_location', 'statement',
+    'question', 'reference', 'reported_speech', 'rhetorical', 'self_location', 'statement', 'unsupported_request',
 }
 
 
@@ -94,6 +94,8 @@ def validate(splits: dict[str, list[dict]]) -> None:
             require(type(row['needs_clarification']) is bool, f'{where}: clarification must be bool')
             require(isinstance(row['tags'], list) and bool(row['tags']) and all(isinstance(t, str) for t in row['tags']), f'{where}: invalid tags')
             require(len(set(row['tags'])) == len(row['tags']) and set(row['tags']) <= TAGS, f'{where}: duplicate/unknown tags')
+            require('unsupported_request' not in row['tags'] or row['label'] == 'other_request',
+                    f'{where}: unsupported request must be other_request')
             require(row['source'] in ('synthetic', 'observed_text', 'user_example'), f'{where}: unknown source')
             require(row['source'] != 'observed_text' or split == 'regression', f'{where}: observed text outside regression')
             ambiguous = bool({'ambiguous', 'multiple_requests'} & set(row['tags']))

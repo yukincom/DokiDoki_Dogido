@@ -1,0 +1,79 @@
+{
+  "method": "保存済み30M tokenizerのみ使用。モデル読込・推論・学習なし。truncation=False、special tokens込み。",
+  "model_revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+  "tokenizer_sha256": "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d",
+  "max_length_limit": 128,
+  "rows": 754,
+  "max_tokens": 80,
+  "over_limit": [],
+  "by_split": {
+    "train": {
+      "rows": 566,
+      "max_tokens": 80
+    },
+    "dev": {
+      "rows": 73,
+      "max_tokens": 41
+    },
+    "test": {
+      "rows": 75,
+      "max_tokens": 42
+    },
+    "regression": {
+      "rows": 40,
+      "max_tokens": 35
+    }
+  },
+  "longest": [
+    {
+      "id": "train-468",
+      "split": "train",
+      "tokens": 80
+    },
+    {
+      "id": "train-469",
+      "split": "train",
+      "tokens": 80
+    },
+    {
+      "id": "train-467",
+      "split": "train",
+      "tokens": 78
+    },
+    {
+      "id": "train-466",
+      "split": "train",
+      "tokens": 77
+    },
+    {
+      "id": "train-484",
+      "split": "train",
+      "tokens": 76
+    },
+    {
+      "id": "train-482",
+      "split": "train",
+      "tokens": 75
+    },
+    {
+      "id": "train-483",
+      "split": "train",
+      "tokens": 75
+    },
+    {
+      "id": "train-486",
+      "split": "train",
+      "tokens": 74
+    },
+    {
+      "id": "train-481",
+      "split": "train",
+      "tokens": 73
+    },
+    {
+      "id": "train-488",
+      "split": "train",
+      "tokens": 72
+    }
+  ]
+}

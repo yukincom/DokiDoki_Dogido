@@ -21,6 +21,25 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(result['subsets']['negation']['denominator'], 6)
         self.assertIsNone(result['subsets']['needs_clarification']['rate'])
 
+    def test_scope_subsets_keep_separate_denominators(self):
+        rows = [
+            dict(gold='other_request', predicted='equip_sword', tags=['unsupported_request'],
+                 needs_clarification=False, context=[], source='synthetic'),
+            dict(gold='equip_sword', predicted='equip_sword', tags=['direct'],
+                 needs_clarification=False, context=[], source='synthetic'),
+            dict(gold='other_request', predicted='other_request', tags=['question'],
+                 needs_clarification=False, context=[], source='synthetic'),
+        ]
+        result = summarize(rows)
+        self.assertEqual(result['subsets']['unsupported_request'],
+                         {'count': 0, 'denominator': 1, 'rate': 0.0})
+        self.assertEqual(result['subsets']['ordinary_scope'],
+                         {'count': 2, 'denominator': 2, 'rate': 1.0})
+        self.assertEqual(result['correct'], 2)
+        self.assertEqual(result['n'], 3)
+        empty = summarize(rows[1:])['subsets']['unsupported_request']
+        self.assertEqual(empty, {'count': 0, 'denominator': 0, 'rate': None})
+
     def test_macro_f1_and_confusion_orientation(self):
         result = classification_metrics(['a', 'a', 'b'], ['a', 'b', 'b'], ['a', 'b'])
         self.assertEqual(result['confusion_matrix'], [[1, 1], [0, 1]])

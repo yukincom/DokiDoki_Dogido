@@ -1,29 +1,29 @@
 {
   "train": {
-    "rows": 572,
+    "rows": 566,
     "labels": {
       "enemy_information": 95,
       "equip_sword": 106,
-      "not_request": 119,
-      "other_request": 144,
+      "not_request": 116,
+      "other_request": 141,
       "recall_mount": 108
     },
-    "groups": 158,
-    "with_context": 185,
+    "groups": 157,
+    "with_context": 181,
     "needs_clarification": 11,
     "sources": {
-      "synthetic": 540,
+      "synthetic": 534,
       "user_example": 32
     },
     "tags": {
       "ambiguous": 5,
-      "cancellation": 43,
+      "cancellation": 42,
       "casual": 137,
-      "context": 187,
+      "context": 183,
       "correction": 62,
       "count": 16,
-      "direct": 130,
-      "ellipsis": 84,
+      "direct": 129,
+      "ellipsis": 81,
       "future": 15,
       "general_knowledge": 14,
       "hypothetical": 6,
@@ -32,43 +32,44 @@
       "named_entity": 11,
       "negation": 88,
       "orthography": 12,
-      "past": 27,
+      "past": 26,
       "politeness": 38,
       "presence": 23,
       "question": 84,
-      "quotation": 37,
-      "reference": 57,
+      "quotation": 35,
+      "reference": 54,
       "reported_speech": 18,
       "rhetorical": 15,
       "self_location": 4,
-      "statement": 140
+      "statement": 139,
+      "unsupported_request": 36
     },
-    "max_input_characters": 120,
-    "sha256": "e0847bf5546b81f8e110f653299e983f8a52764ab4b1fc52c52871e403ea2847"
+    "max_input_characters": 127,
+    "sha256": "f67e4de44c09d1075be4f8ca6c6c5382456fb46f0543a697e619ce8aa9e51984"
   },
   "dev": {
-    "rows": 75,
+    "rows": 73,
     "labels": {
       "enemy_information": 15,
       "equip_sword": 15,
-      "not_request": 15,
-      "other_request": 15,
+      "not_request": 14,
+      "other_request": 14,
       "recall_mount": 15
     },
     "groups": 12,
-    "with_context": 27,
+    "with_context": 25,
     "needs_clarification": 1,
     "sources": {
-      "synthetic": 75
+      "synthetic": 73
     },
     "tags": {
       "ambiguous": 1,
       "cancellation": 4,
-      "context": 27,
+      "context": 25,
       "correction": 5,
       "count": 3,
       "direct": 13,
-      "ellipsis": 22,
+      "ellipsis": 20,
       "future": 2,
       "general_knowledge": 1,
       "hypothetical": 2,
@@ -80,10 +81,11 @@
       "presence": 5,
       "question": 1,
       "quotation": 7,
-      "statement": 5
+      "statement": 5,
+      "unsupported_request": 3
     },
     "max_input_characters": 69,
-    "sha256": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661"
+    "sha256": "77f6bcd32ac34d66ac918b4be57ada6d667778af71ff28edced332718d944986"
   },
   "test": {
     "rows": 75,
@@ -105,7 +107,7 @@
       "cancellation": 11,
       "casual": 5,
       "context": 28,
-      "correction": 13,
+      "correction": 11,
       "count": 3,
       "direct": 5,
       "ellipsis": 22,
@@ -117,13 +119,14 @@
       "politeness": 5,
       "presence": 3,
       "question": 1,
-      "quotation": 6,
-      "reference": 5,
+      "quotation": 7,
+      "reference": 6,
       "reported_speech": 5,
-      "statement": 5
+      "statement": 5,
+      "unsupported_request": 3
     },
     "max_input_characters": 71,
-    "sha256": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177"
+    "sha256": "823424261b42d9b90f9fe8adfe48d44756e5df965425b2e62ba953104348884e"
   },
   "regression": {
     "rows": 40,
@@ -160,9 +163,10 @@
       "presence": 2,
       "quotation": 10,
       "rhetorical": 1,
-      "self_location": 5
+      "self_location": 5,
+      "unsupported_request": 1
     },
     "max_input_characters": 50,
-    "sha256": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+    "sha256": "4567b2bbb5d66335d84e86edae7a54cb2c7cfde4ffccd88f6c4ab584dd70147d"
   }
 }

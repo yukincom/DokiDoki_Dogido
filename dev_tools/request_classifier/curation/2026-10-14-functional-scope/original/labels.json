@@ -1,0 +1,7 @@
+{
+  "not_request": 0,
+  "enemy_information": 1,
+  "equip_sword": 2,
+  "recall_mount": 3,
+  "other_request": 4
+}
