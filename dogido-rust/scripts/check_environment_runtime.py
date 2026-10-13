@@ -11,6 +11,8 @@ from check_dialogue import dependencies, running, request, snapshot, wait_for, r
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dogido_server.runtime_settings import COMBAT_DEFAULTS
 
+from body_senses_fixture import attach_body, OWNER_ID
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -31,19 +33,19 @@ def main():
             seq = 0
             def register(capable=True):
                 return request(base, "/api/v1/adapter-sessions", {"adapter_name": "fabric-test", "adapter_version": "fixture",
-                    "game": "minecraft-java", "schema_version": "2026-05-24", "player_name": "試験",
+                    "game": "minecraft-java", "schema_version": "2026-05-24", "player_name": "試験", "player_uuid": OWNER_ID,
                     "execution_capabilities": ["client.hotbar.select.v1"] if capable else []})["session_id"]
             def close(sid): request(base, "/api/v1/adapter-sessions/"+sid, method="DELETE")
             def event(*, hotbar=None, world=None, player_state=None, **extra):
                 nonlocal seq
                 seq += 1
-                return {"schema_version": "2026-05-24", "adapter": "fixture", "sequence": seq,
+                return attach_body({"schema_version": "2026-05-24", "adapter": "fixture", "sequence": seq,
                     "observed_at": datetime.now(timezone.utc).isoformat(),
                     "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
                     "player": {"name": "試験", "hotbar": hotbar, **(player_state or {})},
                     "world": {"sky_visible": True, "ceiling_height": 20, "local_light": 15, "time_phase": "day", **(world or {})},
                     "nearby_composition": {"mobs":[{"id":m["type"],"quantity":1} for m in extra.get("passive_mobs", [])],
-                        "blocks":[],"mobs_truncated":False,"blocks_truncated":False}, **extra}
+                        "blocks":[],"mobs_truncated":False,"blocks_truncated":False}, **extra})
             def send(sid, **fields): return request(base, "/api/v1/game-events", event(**fields), sid=sid)
             def say(sid, text, source="voice"):
                 got = request(base, "/api/v1/player-input", {"session_id": sid, "source": source, "text": text})

@@ -14,6 +14,7 @@ fn server(overrides: Value) -> Arc<Dialogue> {
     config.combat = crate::combat::model::Settings::merged(overrides.as_object().unwrap()).unwrap();
     let d = Dialogue::new(config).unwrap();
     d.register("s", "登録名", true);
+    d.bind_body_owner("s", Some("11111111-1111-4111-8111-111111111111"));
     d
 }
 fn event(at: chrono::DateTime<chrono::Utc>, seq: i64, name: &str, fields: Value) -> GameEvent {
@@ -29,7 +30,7 @@ fn event(at: chrono::DateTime<chrono::Utc>, seq: i64, name: &str, fields: Value)
             value[key] = field.clone();
         }
     }
-    GameEvent::parse(value).unwrap()
+    crate::body::tests::with_senses(value, seq as u64)
 }
 fn snapshot(d: &Dialogue, e: &GameEvent) -> Snapshot {
     d.data.lock().unwrap().sessions["s"]
@@ -105,7 +106,7 @@ async fn admission_partial_memory_and_haiku_state_have_separate_update_boundarie
         json!({"player_chat_visual_retention_ms":500,"player_chat_hearing_retention_ms":1000,"default_call_name":"設定名"}),
     );
     let permit = d.serial.acquire().await.unwrap(); // No helper/model/audio may start.
-    let at = chrono::Utc::now() - chrono::Duration::seconds(4);
+    let at = chrono::Utc::now();
     let full = event(
         at,
         1,
@@ -138,7 +139,7 @@ async fn admission_partial_memory_and_haiku_state_have_separate_update_boundarie
     assert!(got.current.visual_types.is_empty());
     assert_eq!(got.recent.visual_types, ["zombie"]);
     assert_eq!(got.recent.hearing_memos.len(), 1);
-    assert_eq!(got.recent.visual_memos[0].seen_at_us, at.timestamp_micros());
+    assert!((got.recent.visual_memos[0].seen_at_us - at.timestamp_micros()).abs() < 5_000);
     assert_eq!(
         json!(d.data.lock().unwrap().sessions["s"].haiku_context),
         json!(original)
@@ -185,7 +186,7 @@ async fn admission_partial_memory_and_haiku_state_have_separate_update_boundarie
 async fn engine_confirmed_outcome_is_consumed_once_without_replay_ttl_extension() {
     let d = server(json!({"player_chat_name_correction_retention_ms":500}));
     let permit = d.serial.acquire().await.unwrap();
-    let at = chrono::Utc::now() - chrono::Duration::seconds(4);
+    let at = chrono::Utc::now();
     let first = event(
         at,
         1,

@@ -34,13 +34,14 @@ def request(base, path, body=None, method=None, sid=None):
         return json.load(r)
 
 
-def register(base, preview=True, *, voice_enabled=None):
+def register(base, preview=True, *, voice_enabled=None, body=False):
     text_mode = ({} if voice_enabled is None else
                  {"capabilities": ["dialogue_text.v1"], "voice_enabled": voice_enabled})
     return request(base, "/api/v1/adapter-sessions", {
         "adapter_name": "rust-conversation-preview" if preview else "fabric-test",
         "adapter_version": "test", "game": "none" if preview else "minecraft-java",
-        "schema_version": "2026-05-24", "player_name": "試験", **text_mode})["session_id"]
+        "schema_version": "2026-05-24", "player_name": "試験", **text_mode,
+        **({"player_uuid": "11111111-1111-4111-8111-111111111111"} if body else {})})["session_id"]
 
 
 def wait_for(predicate, timeout=10):
@@ -317,9 +318,10 @@ def check_text_delivery(binary, passed):
             passed.append("tts_failure_preserves_confirmed_text_history")
 
             request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
-            sid = register(base, preview=False, voice_enabled=False)
+            sid = register(base, preview=False, voice_enabled=False, body=True)
             audio_before = len([r for r in seen if r["path"].startswith(("/audio_query", "/synthesis"))])
-            request(base, "/api/v1/game-events", {
+            from body_senses_fixture import attach_body
+            request(base, "/api/v1/game-events", attach_body({
                 "schema_version": "2026-05-24", "adapter": "fixture", "sequence": 1,
                 "observed_at": datetime.now(timezone.utc).isoformat(),
                 "event": {"name": "status_snapshot", "source_kind": "system", "priority_hint": "background", "certainty": "high"},
@@ -327,7 +329,7 @@ def check_text_delivery(binary, passed):
                 "world": {"weather": "clear", "biome": "plains", "sky_visible": True,
                           "ceiling_height": 20, "local_light": 15, "time_phase": "day",
                           "nearby_damaging_light_source_count": 1, "nearest_damaging_light_source_distance": 2},
-                "combat": {"combat_active_hint": False}}, sid=sid)
+                "combat": {"combat_active_hint": False}}), sid=sid)
             warning = wait_for(lambda: next((r for r in snapshot(base)["utterances"]
                                if r["session_id"] == sid and r.get("display_id")
                                and r.get("text") == "触るとあちちやで！"), None))

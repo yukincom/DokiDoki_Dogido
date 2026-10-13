@@ -94,7 +94,7 @@ public final class EventJsonBuilder {
 
     // v2の送信境界。内部recordを丸ごとJSON化せず、公開する項目だけを列挙する。
     // none/suppressedでもcomponents=[]とbasisを送り、「古い形式だが補完して受理」は行わない。
-    private static JsonObject buildSmellObservation(SmellObserver.Result result) {
+    public static JsonObject buildSmellObservation(SmellObserver.Result result) {
         SmellPolicy.Observation observation = result.observation();
         JsonObject json = new JsonObject();
         json.addProperty("status", observation.status());
@@ -135,7 +135,7 @@ public final class EventJsonBuilder {
         }
     }
 
-    private static JsonArray buildVisualThreats(List<ThreatObservation> threats) {
+    public static JsonArray buildVisualThreats(List<ThreatObservation> threats) {
         JsonArray array = new JsonArray();
         for (ThreatObservation threat : threats) {
             JsonObject entry = new JsonObject();
@@ -163,7 +163,7 @@ public final class EventJsonBuilder {
         return array;
     }
 
-    private static JsonArray buildAuditoryThreats(List<AudioThreatObservation> audioThreats) {
+    public static JsonArray buildAuditoryThreats(List<AudioThreatObservation> audioThreats) {
         JsonArray array = new JsonArray();
         for (AudioThreatObservation threat : audioThreats) {
             JsonObject entry = new JsonObject();
@@ -185,7 +185,7 @@ public final class EventJsonBuilder {
         return array;
     }
 
-    private static JsonArray buildAmbientSounds(List<AudioThreatObservation> ambientSounds) {
+    public static JsonArray buildAmbientSounds(List<AudioThreatObservation> ambientSounds) {
         JsonArray array = new JsonArray();
         int limit = Math.min(ambientSounds.size(), 12);
         for (int index = 0; index < limit; index += 1) {
@@ -209,7 +209,7 @@ public final class EventJsonBuilder {
         return array;
     }
 
-    private static JsonArray buildPassiveMobs(List<AmbientMobObservation> ambientMobs) {
+    public static JsonArray buildPassiveMobs(List<AmbientMobObservation> ambientMobs) {
         JsonArray array = new JsonArray();
         for (AmbientMobObservation mob : ambientMobs) {
             JsonObject entry = new JsonObject();

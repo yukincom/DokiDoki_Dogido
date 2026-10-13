@@ -6,7 +6,7 @@
 
 ## できること
 
-- 任意の身体Mod 0.5.0／Body API v4から、自他姿勢とプレイヤー視認を`body_observation`で送信。取得不能時は理由を送り、player観測へ代入しない（[視認v2仕様](../../docs/2026-10-13-body-vision-phase1.md)）。
+- 任意の身体Mod 0.6.0／Body API v5から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
 - `player.hotbar`（0〜8、選択中slot、item ID、耐久、main-hand攻撃属性、武器候補種別）
 - 乗車中だけ `player.vehicle`（乗り物ID・操縦者か・漕ぐ／走る／移動中）
@@ -77,6 +77,8 @@ F1、メニュー、インベントリ、チャット入力中は両方隠れる
 通常時の配置案は [`dev_tools/character-placement/index.html`](../../dev_tools/character-placement/index.html)。
 
 ## 音まわり（現状）
+
+身体の聴覚は発音時に身体へ届いたserver実音と位置付きclient実音を使う。同じ音の二重配送とsnapshot再送で元の年齢を更新せず、未取得・未ロード・予算超過を区別する。音の記録がないことを無音の証拠にしない。詳細と実機確認状況は[観測基準の移行記録](../../docs/2026-10-13-body-observation-origin.md)を参照。
 
 - Minecraft の sound packet から `auditory_threats` / `ambient_sounds` を載せる
 - 敵対中のモブ音は `auditory_threats`、友好モブ音とまだ敵対していない蜘蛛・エンダーマン等の音は `ambient_sounds` へ分ける

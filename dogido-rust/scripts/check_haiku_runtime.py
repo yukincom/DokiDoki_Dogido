@@ -15,6 +15,8 @@ import time
 
 from check_dialogue import dependencies, running, register, request, snapshot, wait_for
 
+from body_senses_fixture import attach_body
+
 ROOT = Path(__file__).resolve().parents[1]
 LINES = ["さくらのは", "くろいおのへと", "あさのいろ"]
 DESCRIPTION = "サクラの葉と黒い斧の対比。"
@@ -65,7 +67,7 @@ def fixture(*, combat_settings=None, extra_args=(), **settings):
                          "player": {"name": "試験", "dimension": "minecraft:overworld", "held_item": "minecraft:cherry_leaves"},
                          "world": {"biome": "minecraft:plains", "time_phase": "morning", "weather": "clear", "sky_visible": True, "ceiling_height": 20},
                          "inventory": {"minecraft:cherry_leaves": 1, "minecraft:netherite_axe": 1}, **extra}
-                    return request(base, "/api/v1/game-events", e, sid=sid)
+                    return request(base, "/api/v1/game-events", attach_body(e), sid=sid)
                 def hud(sid): return request(base, "/api/v1/haiku-workshop/snapshot?session_id=" + sid)
                 def rows(sid): return [r for r in snapshot(base)["utterances"] if r["session_id"] == sid]
                 def stored(sid):
@@ -79,7 +81,7 @@ def fixture(*, combat_settings=None, extra_args=(), **settings):
 def main():
     passed = []
     with fixture(interval_ms=1800) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        sid = register(base, preview=False); send(sid)
+        sid = register(base, preview=False, body=True); send(sid)
         time.sleep(.45)
         send(sid, world={"game_paused": True})
         def clock():
@@ -98,7 +100,7 @@ def main():
         passed.append("actual_pause_freezes_clock_across_snapshots_and_resumes_remaining_interval")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+        gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
         send(sid, world={"game_paused": True})
         wait_for(lambda: "python_worker_stopped" in log.read_text())
         gate.set()
@@ -112,7 +114,7 @@ def main():
 
     with fixture(workshop_idle_ms=1800) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         gate.clear()
-        sid = register(base, preview=False); send(sid)
+        sid = register(base, preview=False, body=True); send(sid)
         wait_for(drafting.is_set)
         inspiration = next(r for r in rows(sid) if r["turn_id"].endswith(":inspiration"))
         assert inspiration["playback_status"] == "completed", inspiration
@@ -142,7 +144,7 @@ def main():
         passed.extend(["generated_inspiration_played_before_draft", "completion_clock_and_read_only_hud", "autosave_once_and_no_fake_chat_history"])
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+        gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
         got = request(base, "/api/v1/player-input", {"session_id": sid, "source": "voice", "text": "こんにちは"})
         assert got["accepted"], got
         wait_for(lambda: any(r["turn_id"] == got["turn_id"] and r["playback_status"] == "completed" for r in rows(sid)))
@@ -153,7 +155,7 @@ def main():
         passed.append("new_input_cancels_generation_without_losing_reply")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+        gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
         send(sid, event={"name": "hostile_audio_detected", "source_kind": "auditory", "priority_hint": "background", "certainty": "high"},
              auditory_threats=[{"label": "zombie", "source_id": "sound-z", "spoken_name_allowed": True}])
         wait_for(lambda: any(r["playback_status"] == "completed" and r.get("combat_actions") for r in rows(sid)))
@@ -162,14 +164,14 @@ def main():
         passed.append("partial_hostile_audio_cancels_and_warning_precedes_late_model")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        checks["fail"] = True; sid = register(base, preview=False); send(sid)
+        checks["fail"] = True; sid = register(base, preview=False, body=True); send(sid)
         wait_for(lambda: any(r["turn_id"].endswith(":failure") and r["playback_status"] == "completed" for r in rows(sid)))
         assert not stored(sid) and hud(sid)["state"] == "closed" and checks["drafts"] == 1
         passed.append("unavailable_checker_never_saves_or_rewrites_poem")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
         control["fail_sentence"] = "ここで一句。"
-        sid = register(base, preview=False); send(sid)
+        sid = register(base, preview=False, body=True); send(sid)
         wait_for(lambda: any(r["turn_id"].endswith(":poem") and r["playback_status"] == "failed" for r in rows(sid)))
         assert len(wait_for(lambda: stored(sid))) == 1 and hud(sid)["state"] == "open"
         history = snapshot(base)["sessions"][0]["history"]
@@ -187,7 +189,7 @@ def main():
         passed.append("completed_poem_survives_tts_failure_and_explicit_close")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+        gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
         # 新しい全観測が来ないまま10秒を超えた生成は採用しない。
         wait_for(lambda: "python_worker_stopped" in log.read_text(), timeout=12)
         assert not stored(sid) and hud(sid)["state"] == "closed"
@@ -195,14 +197,14 @@ def main():
         passed.append("stale_observation_cancels_unfinished_poem")
 
     with fixture(job_timeout_ms=1400) as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+        gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
         wait_for(lambda: "python_worker_stopped" in log.read_text())
         assert not stored(sid) and hud(sid)["state"] == "closed"
         gate.set()
         passed.append("job_deadline_reaps_helper_without_inference_completion")
 
     with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-        sid = register(base, preview=False)
+        sid = register(base, preview=False, body=True)
         path = folder / "memory/sessions" / sid / "long_term/haiku_entries.jsonl"
         path.parent.mkdir(parents=True)
         with path.open("a") as held:
@@ -223,7 +225,7 @@ def main():
 
     for stop in (signal.SIGINT, signal.SIGTERM):
         with fixture() as (base, process, log, control, seen, gate, drafting, checks, send, hud, rows, stored, folder):
-            gate.clear(); sid = register(base, preview=False); send(sid); wait_for(drafting.is_set)
+            gate.clear(); sid = register(base, preview=False, body=True); send(sid); wait_for(drafting.is_set)
             process.send_signal(stop); process.wait(timeout=5); gate.set()
             assert process.returncode == 0 and not stored(sid)
             assert "python_worker_stopped" in log.read_text()

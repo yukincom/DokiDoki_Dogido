@@ -246,7 +246,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -486,7 +486,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -698,7 +698,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -896,7 +896,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -1136,7 +1136,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "death_cause": "fixture death",
@@ -1385,7 +1385,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -1633,7 +1633,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -1831,7 +1831,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -2102,7 +2102,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -2359,7 +2359,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -2588,7 +2588,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -2803,7 +2803,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -3060,7 +3060,7 @@
         "audio_count": 1
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "death_cause": "fixture death",
@@ -3326,7 +3326,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -3591,7 +3591,7 @@
         ]
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"
@@ -3806,7 +3806,7 @@
         "audio_count": 0
       },
       "meta": {
-        "adapter_build": "2026-10-13-body-vision-p1",
+        "adapter_build": "2026-10-13-body-senses-origin",
         "profile_name": "default",
         "debug": false,
         "user_text": "fixture input"

@@ -1,5 +1,7 @@
 package dogido.lab;
 
+import dogido.lab.api.perception.BodyVisibility;
+
 import dogido.lab.api.BodyProtocol.*;
 import dogido.lab.control.BodyVitals;
 import java.util.ArrayList;

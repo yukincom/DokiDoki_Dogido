@@ -215,7 +215,7 @@ pub fn resolve_precipitation_context(input: &Input) -> Result<PrecipitationConte
 /// カタログ検索・状態変更は行わない。積雪の実測根拠にはtypeがblockの近接資源だけを使う。
 pub fn from_event(event: &GameEvent, climate: &Climate) -> Result<PrecipitationContext> {
     resolve_precipitation_context(&Input {
-        current_y: event.player.position.y,
+        current_y: event.observer_y(),
         biome_temperature: climate.biome_temperature,
         snow_start_y: climate.snow_start_y,
         biome_group_id: climate.biome_group_id.clone(),

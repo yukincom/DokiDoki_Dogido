@@ -165,7 +165,7 @@ async fn body(
     }
     // Sessionがこのturn用に投影した観測・履歴をまとめて読む。
     // 判断途中で別時点の観測を拾うと照合対象が変わるため、snapshot欠落はエラーにする。
-    let (event, snapshot) = input
+    let (_event, snapshot) = input
         .snapshot
         .as_deref()
         .context("ordinary chat needs Session chat_native snapshot")?;
@@ -178,7 +178,10 @@ async fn body(
         select_route(Route::Casual)?;
     }
     let prepared = chat_materials::prepare(
-        event,
+        native
+            .sensory_event
+            .as_ref()
+            .context("accepted body sensory view")?,
         &native.settings,
         &chat_materials::PlayerInput::from(&context),
         &native.context,
@@ -435,10 +438,13 @@ mod tests {
         let mut frame = json!({"text":"こんにちは","reading_corrections":[]});
         frame["event"] = fixture["event"].clone();
         frame["language_requested"] = true.into();
+        let mut native: crate::dialogue::chat_context::Native = serde_json::from_value(json!({"snapshot":fixture["snapshot"],"context":fixture["context"],"settings":fixture["settings"]})).unwrap();
+        native.sensory_event =
+            Some(crate::events::GameEvent::parse(fixture["event"].clone()).unwrap());
         let mut job = bridge::Input::native(
             frame,
             crate::events::GameEvent::parse(fixture["event"].clone()).unwrap(),
-            serde_json::from_value(json!({"snapshot":fixture["snapshot"],"context":fixture["context"],"settings":fixture["settings"]})).unwrap(),
+            native,
         );
         job.context = Some(crate::input_context::Context::from_prepared(
             &crate::player_text::prepare("こんにちは"),

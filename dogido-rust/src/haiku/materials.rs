@@ -492,6 +492,7 @@ pub fn capture(
     let phase = phase(event);
     let weather = weather(event);
     Ok(Context {
+        body_observer: event.body_origin().is_some(),
         player_name: runtime.player_name.into(),
         biome_id: if id.is_empty() { "unknown".into() } else { id },
         biome_label,
@@ -534,7 +535,7 @@ pub fn capture(
     })
 }
 #[allow(clippy::too_many_arguments)]
-/// 見どころ候補を、ポータル→周辺→落下物→選択品と他の所持品→Mob→乗車・採掘→場所→空の順に作る。
+/// 見どころ候補を、ポータル→周辺→落下物→Mob→プレイヤーの所持品→乗車・採掘→場所→空の順に作る。
 /// 最後に先頭14件へ絞るため、この追加順が候補枠の優先順になる。個別の季語スコアは付けない。
 fn features(
     event: &GameEvent,
@@ -590,9 +591,23 @@ fn features(
     }
     if !poem.label.is_empty() {
         let (source, key) = if poem.source == "pocket" {
-            ("持ち物", "pocket_item")
+            (
+                if event.body_origin().is_some() {
+                    "プレイヤーの持ち物"
+                } else {
+                    "持ち物"
+                },
+                "pocket_item",
+            )
         } else {
-            ("手持ち", "held_item")
+            (
+                if event.body_origin().is_some() {
+                    "プレイヤーの手持ち"
+                } else {
+                    "手持ち"
+                },
+                "held_item",
+            )
         };
         add(source, key.into(), poem.label.clone(), vec![]);
     }
@@ -600,7 +615,11 @@ fn features(
     for (i, label) in inventory.iter().enumerate() {
         if !label.is_empty() && seen.insert(label.clone()) {
             add(
-                "持ち物",
+                if event.body_origin().is_some() {
+                    "プレイヤーの持ち物"
+                } else {
+                    "持ち物"
+                },
                 format!("inventory_{}", i + 1),
                 label.clone(),
                 vec![],
@@ -693,6 +712,22 @@ fn features(
             time_label(phase(event)).into(),
             vec![],
         );
+    }
+    if event.body_origin().is_some() {
+        // 身体の視認材料を先にし、同じ順位内は既存順序を保つ。
+        out.sort_by_key(|row| {
+            if row.key == "portal" {
+                0
+            } else if row.key.starts_with("nearby_") {
+                1
+            } else if row.key.starts_with("dropped_") {
+                2
+            } else if row.key.starts_with("mob_") {
+                3
+            } else {
+                4
+            }
+        });
     }
     out.truncate(14);
     out
@@ -868,7 +903,7 @@ fn tensions(
     {
         out.push(format!("{label}やのにシラカバの気配がある"));
     }
-    let deep = event.player.position.y.is_some_and(|y| y <= 16.0);
+    let deep = event.observer_y().is_some_and(|y| y <= 16.0);
     if deep {
         out.push("深い地下でダイヤを夢みとる".into());
         let held = if real_held.is_empty() {

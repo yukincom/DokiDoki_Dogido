@@ -245,10 +245,14 @@ impl Dialogue {
             return result;
         }
         let s = d.sessions.get_mut(&session_id).unwrap();
-        if let Some(event) = s.environment_latest.as_ref().or(s.latest.as_ref())
+        if let Some(event) = s
+            .environment_latest
+            .as_ref()
+            .or(s.latest.as_ref())
+            .map(|raw| super::body_runtime::event(s, raw))
             && s.chat_allowed
             && !workshop_focus::active(s)
-            && let Some(mut speech) = s.ambient.smell_query(event, text, now)
+            && let Some(mut speech) = s.ambient.smell_query(&event, text, now)
         {
             speech.delivery = crate::combat::model::Delivery::PlayerReply;
             s.pending_warning = Some(vec![speech]);

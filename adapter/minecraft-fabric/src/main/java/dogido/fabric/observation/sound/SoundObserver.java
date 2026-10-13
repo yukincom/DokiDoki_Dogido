@@ -1,6 +1,7 @@
 package dogido.fabric.observation.sound;
 
 import dogido.fabric.observation.MobIdentityObservation;
+import dogido.fabric.observation.ObservationOrigin;
 import dogido.fabric.observation.mobs.MobClassifier.MobDisposition;
 import dogido.fabric.observation.mobs.MobClassifier;
 import dogido.fabric.observation.sound.WorldSoundFacts;
@@ -99,6 +100,8 @@ public final class SoundObserver {
     private long lastThunderSoundObservedTick = -1000;
     private long lastEnderEyeLaunchObservedTick = -1000;
     private String lastOminousSoundKind = "";
+    private boolean bodyHearingTruncated;
+    private final BodySoundDeduplicator bodySoundDeduplicator = new BodySoundDeduplicator();
 
     private final double audioThreatDistance;
     private final MobClassifier mobClassifier;
@@ -130,7 +133,10 @@ public final class SoundObserver {
         this.lastOminousSoundKind = "";
     }
 
+    public boolean bodyHearingTruncated() { return bodyHearingTruncated; }
     public void resetRetainedSounds() {
+        this.bodyHearingTruncated = false;
+        this.bodySoundDeduplicator.reset();
         this.recentSoundObservations.clear();
         this.recentAmbientSoundObservations.clear();
     }
@@ -155,15 +161,17 @@ public final class SoundObserver {
     }
 
     private Vec3d retainedSoundSource(
-        ClientPlayerEntity player,
+        ObservationOrigin origin,
         SoundObservation sound,
         Map<UUID, SoundObservationPolicy.Point> currentSoundSources
     ) {
+        // 身体が聞いた音は発音時の座標を保持する。音の後のentity移動を新しい聴取位置にしない。
+        if (origin.body()) return new Vec3d(sound.sourceX(),sound.sourceY(),sound.sourceZ());
         SoundObservationPolicy.Point source = SoundObservationPolicy.retainedPosition(
             sound.entityUuid(),
             new SoundObservationPolicy.Point(sound.sourceX(), sound.sourceY(), sound.sourceZ()),
             currentSoundSources,
-            new SoundObservationPolicy.Point(player.getX(), player.getY(), player.getZ()),
+            new SoundObservationPolicy.Point(origin.position().x, origin.position().y, origin.position().z),
             this.audioThreatDistance
         );
         return source == null ? null : new Vec3d(source.x(), source.y(), source.z());
@@ -173,19 +181,26 @@ public final class SoundObserver {
         ClientPlayerEntity player,
         Map<UUID, SoundObservationPolicy.Point> currentSoundSources
     ) {
+        return scanAuditoryThreats(ObservationOrigin.player(player),currentSoundSources);
+    }
+    public List<AudioThreatObservation> scanAuditoryThreats(ObservationOrigin origin,
+            Map<UUID,SoundObservationPolicy.Point> currentSoundSources) {
         Map<String, AudioThreatObservation> deduped = new LinkedHashMap<>();
         var observations = this.recentSoundObservations.iterator();
         while (observations.hasNext()) {
             SoundObservation observation = observations.next();
-            Vec3d source = retainedSoundSource(player, observation, currentSoundSources);
+            if (origin.body() && SoundObservationPolicy.ageMillis(System.nanoTime(),observation.heardAtNanos()) > SOUND_OBSERVATION_TTL_TICKS*50L) {
+                observations.remove(); continue;
+            }
+            Vec3d source = retainedSoundSource(origin, observation, currentSoundSources);
             if (source == null) {
                 observations.remove();
                 continue;
             }
-            double distance = Math.sqrt(player.squaredDistanceTo(source));
+            double distance = origin.distanceTo(source);
 
-            String horizontal = classifyHorizontal(player, source);
-            String vertical = classifyVertical(player, source);
+            String horizontal = classifyHorizontal(origin, source);
+            String vertical = classifyVertical(origin, source);
             String distanceBand = bucketDistance(distance);
             String certainty = distance <= 4.0 ? "high" : distance <= 8.0 ? "medium" : "low";
 
@@ -237,18 +252,25 @@ public final class SoundObserver {
         ClientPlayerEntity player,
         Map<UUID, SoundObservationPolicy.Point> currentSoundSources
     ) {
+        return scanAmbientSounds(ObservationOrigin.player(player),currentSoundSources);
+    }
+    public List<AudioThreatObservation> scanAmbientSounds(ObservationOrigin origin,
+            Map<UUID,SoundObservationPolicy.Point> currentSoundSources) {
         Map<String, AudioThreatObservation> deduped = new LinkedHashMap<>();
         var observations = this.recentAmbientSoundObservations.iterator();
         while (observations.hasNext()) {
             SoundObservation observation = observations.next();
-            Vec3d source = retainedSoundSource(player, observation, currentSoundSources);
+            if (origin.body() && SoundObservationPolicy.ageMillis(System.nanoTime(),observation.heardAtNanos()) > SOUND_OBSERVATION_TTL_TICKS*50L) {
+                observations.remove(); continue;
+            }
+            Vec3d source = retainedSoundSource(origin, observation, currentSoundSources);
             if (source == null) {
                 observations.remove();
                 continue;
             }
-            double distance = Math.sqrt(player.squaredDistanceTo(source));
-            String horizontal = classifyHorizontal(player, source);
-            String vertical = classifyVertical(player, source);
+            double distance = origin.distanceTo(source);
+            String horizontal = classifyHorizontal(origin, source);
+            String vertical = classifyVertical(origin, source);
             String distanceBand = bucketDistance(distance);
             String certainty = distance <= 6.0 ? "medium" : "low";
             deduped.put(
@@ -386,6 +408,84 @@ public final class SoundObserver {
             resolution.spokenNameAllowed(),
             resolution.sourceId()
         );
+    }
+
+    /**
+     * 発音時に身体へ届いたserver音または位置付きclient実音を、既存の音分類へ渡す。
+     * ageは原発音からの経過ms。再配送のsequence判定は呼出元が所有し、ここで時刻を現在へ刷新しない。
+     */
+    public void observeBodySound(ObservationOrigin origin, ClientWorld world, String rawSoundId,
+            SoundCategory category, Vec3d source, UUID entityId, long ageMs, boolean server) {
+        if (!origin.body() || ageMs < 0 || ageMs > SOUND_OBSERVATION_TTL_TICKS*50L) return;
+        String soundId = rawSoundId.contains(":") ? rawSoundId.substring(rawSoundId.indexOf(':')+1) : rawSoundId;
+        LivingEntity entity = null;
+        if (entityId != null) for (Entity candidate : world.getEntities()) {
+            if (entityId.equals(candidate.getUuid()) && candidate instanceof LivingEntity living && living.isAlive()) {
+                entity = living; break;
+            }
+        }
+        String label = category == SoundCategory.HOSTILE ? hostileLabelFromSoundEvent(soundId) : null;
+        boolean threat = false;
+        if (label != null) {
+            threat = entity != null ? this.mobClassifier.classifyMobDisposition(origin.threatTargetId(),entity).threatNow()
+                : SoundObservationPolicy.unresolvedSoundIsThreat(label);
+        } else {
+            label = ambientLabelFromSoundEvent(soundId);
+            if (label == null) label = environmentTypeFromPlayedSound(soundId,category);
+            if (label == null && soundId.equals("entity.generic.explode")) label = "environment:explosion";
+        }
+        if (label == null) return;
+        String id = entityId == null ? unresolvedSoundSourceId(source,soundId) : entityId.toString();
+        long now = System.nanoTime();
+        long incomingHeardAt = now-ageMs*1_000_000L;
+        var stamp = this.bodySoundDeduplicator.reconcile(soundId,source,incomingHeardAt,id,server,now);
+        long latestPairTime = Math.max(incomingHeardAt,stamp.previousHeardAt());
+        // 一致候補の後に同じ地点で別の実音が鳴っていたら、その新しい観測を旧配送で削除しない。
+        if (java.util.stream.Stream.concat(this.recentSoundObservations.stream(),this.recentAmbientSoundObservations.stream())
+                .anyMatch(old -> (old.sourceId().equals(id) || old.sourceId().equals(stamp.previousSourceId()))
+                    && old.heardAtNanos() > latestPairTime+100_000_000L)) return;
+        long heardAt = stamp.heardAt();
+        long heardTick = this.tickSource.getAsLong()-(now-heardAt)/50_000_000L;
+        long replacedTick = Long.MIN_VALUE;
+        if (stamp.previousSourceId() != null) {
+            for (var old : this.recentSoundObservations) if (old.sourceId().equals(stamp.previousSourceId())) replacedTick = Math.max(replacedTick,old.observedTick());
+            for (var old : this.recentAmbientSoundObservations) if (old.sourceId().equals(stamp.previousSourceId())) replacedTick = Math.max(replacedTick,old.observedTick());
+            this.recentSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()));
+            this.recentAmbientSoundObservations.removeIf(old -> old.sourceId().equals(stamp.previousSourceId()));
+        }
+        var observation = new SoundObservation(heardTick,heardAt,entityId,id,label,soundId,
+            source.x,source.y,source.z,true,entity == null ? null : mobIdentity(entity));
+        Deque<SoundObservation> target = threat ? this.recentSoundObservations : this.recentAmbientSoundObservations;
+        // 遅れて届いた同じ音で、既に新しい実音の記録を巻き戻さない。
+        if (target.stream().anyMatch(old -> old.sourceId().equals(id) && old.heardAtNanos() > heardAt+100_000_000L)) return;
+        target.removeIf(old -> old.sourceId().equals(id));
+        target.addLast(observation);
+        while (target.size() > 64) { target.removeFirst(); bodyHearingTruncated = true; }
+        if (threat) this.lastAudioThreatObservedTick = Math.max(this.lastAudioThreatObservedTick,heardTick);
+        String weather = classifyWeatherSoundKind(soundId);
+        if ("rain".equals(weather)) this.lastRainSoundObservedTick = correctedBodySoundTick(this.lastRainSoundObservedTick,replacedTick,heardTick);
+        if ("thunder".equals(weather)) this.lastThunderSoundObservedTick = correctedBodySoundTick(this.lastThunderSoundObservedTick,replacedTick,heardTick);
+        String ominous = classifyOminousSoundKind(soundId);
+        if (ominous != null && ominous.equals(this.lastOminousSoundKind) && this.lastOminousSoundObservedTick == replacedTick)
+            this.lastOminousSoundObservedTick = heardTick;
+        if (ominous != null && heardTick >= this.lastOminousSoundObservedTick
+                && SoundObservationPolicy.replaceOminous(this.lastOminousSoundKind,
+                    heardTick-this.lastOminousSoundObservedTick,ominous,OMINOUS_SOUND_TTL_TICKS)) {
+            this.lastOminousSoundKind = ominous; this.lastOminousSoundObservedTick = heardTick;
+        }
+        if (soundId.contains("ender_eye.launch")) this.lastEnderEyeLaunchObservedTick = correctedBodySoundTick(this.lastEnderEyeLaunchObservedTick,replacedTick,heardTick);
+        expireSoundObservations();
+    }
+
+    private static long correctedBodySoundTick(long previous, long replaced, long incoming) {
+        return previous == replaced ? incoming : Math.max(previous,incoming);
+    }
+
+    /** clientだけで発生する音の候補条件。相対音・UI・音楽を身体位置へ置き換えない。 */
+    public static boolean positionedBodySoundCategory(SoundCategory category, boolean relative) {
+        return !relative && category != SoundCategory.HOSTILE && category != SoundCategory.NEUTRAL
+            && category != SoundCategory.PLAYERS && category != SoundCategory.VOICE
+            && category != SoundCategory.UI && category != SoundCategory.MUSIC;
     }
 
     private SoundSourceResolution resolveGlobalHostileSoundSource(

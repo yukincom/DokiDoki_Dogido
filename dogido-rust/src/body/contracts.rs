@@ -1,4 +1,4 @@
-//! HTTP身体観測v2の閉じた契約。座標はblock、yaw/pitchは度、ageは受信からのms。
+//! HTTP身体観測v3の閉じた契約。座標はblock、yaw/pitchは度、ageは受信からのms。
 //! GameEvent入口がvalidateを呼ぶ。欠損値は作らず、未取得はUnavailableで表す。
 //! 姿勢のserver実測と身体の眼による視認は別の根拠で保持し、視覚だけ未取得でも姿勢は受理する。
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,7 @@ pub struct Sample {
     pub self_pose: SelfPose,
     pub player_pose: PlayerPose,
     pub vision: Vision,
+    pub senses: super::senses::Senses,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(deny_unknown_fields)]
@@ -151,7 +152,7 @@ impl Observation {
     pub fn validate(&self) -> Result<(), String> {
         let valid = match self {
             Self::Unavailable { version, reason } => {
-                *version == 2
+                *version == 3
                     && !reason.is_empty()
                     && reason.len() <= 64
                     && reason.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
@@ -163,7 +164,7 @@ impl Observation {
                 ..
             } => {
                 let c = &s.context;
-                *version == 2
+                *version == 3
                     && *age_ms <= i64::MAX as u64
                     && s.server_tick <= i64::MAX as u64
                     && s.snapshot_revision <= i64::MAX as u64
@@ -185,6 +186,7 @@ impl Observation {
                     && valid_yaw(s.player_pose.yaw)
                     && valid_pitch(s.player_pose.pitch)
                     && s.vision.valid()
+                    && s.senses.validate(s.server_tick).is_ok()
             }
         };
         if valid {

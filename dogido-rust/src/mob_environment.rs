@@ -153,6 +153,7 @@ pub fn project(event: &GameEvent) -> Value {
         );
     }
     if let Some(target) = &event.look_target
+        && event.body_origin().is_none()
         && target.kind == "entity"
     {
         add(

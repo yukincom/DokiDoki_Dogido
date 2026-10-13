@@ -1,4 +1,4 @@
-package dogido.lab;
+package dogido.lab.api.perception;
 
 import java.util.ArrayList;
 import java.util.Comparator;

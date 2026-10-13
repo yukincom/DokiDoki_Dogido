@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from check_dialogue import dependencies, register, request, row, running, snapshot, submit, wait_for
 
+from body_senses_fixture import attach_body
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -78,7 +80,7 @@ def main():
                          "nearby_composition": {"mobs": [{"id":m["type"],"quantity":1} for m in extra.get("passive_mobs", [])],
                                                 "blocks": [], "mobs_truncated": False, "blocks_truncated": False},
                          "smell_observation": {"status":"none","components":[],"basis":"smell_policy_v2"}, **extra}
-                return request(base, "/api/v1/game-events", event, sid=sid)
+                return request(base, "/api/v1/game-events", attach_body(event), sid=sid)
 
             def close(sid):
                 request(base, "/api/v1/adapter-sessions/" + sid, method="DELETE")
@@ -125,7 +127,7 @@ def main():
             for decision in ("speak", "silent"):
                 control["environment_action"] = decision
                 for topic in ("surroundings", "thunder"):
-                    sid = register(base, preview=False)
+                    sid = register(base, preview=False, body=True)
                     before_calls, before_audio = len(calls()), len(audio())
                     trigger(sid, topic)
                     status = "not_selected" if decision == "silent" and topic != "thunder" else "completed"
@@ -152,7 +154,7 @@ def main():
                     passed.append(f"{topic}_{decision}_one_call_and_consideration_consumed")
 
             control["environment_action"] = "silent"
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             send(sid)
             before_calls = len(calls())
             time.sleep(.12)
@@ -176,7 +178,7 @@ def main():
             passed.append("only_fresh_periodic_snapshot_triggers_and_unchanged_table_stays_quiet")
 
             # 4個体上限と独立した集計を実生成payloadまで運び、数量だけでは再発話しない。
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             send(sid)
             time.sleep(.12)
             village = {"mobs":[{"id":"villager","quantity":"many","professions":[
@@ -200,7 +202,7 @@ def main():
             passed.append("mob_quantities_and_villager_subsets_reach_model_without_count_only_reaction")
 
             # 発話中で使えない周期の変化は、後から同じ表で繰り返さない。
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             before_calls = len(calls())
             control["delay"] = .5
             trigger(sid, "surroundings")
@@ -227,7 +229,7 @@ def main():
             passed.append("busy_period_is_consumed_without_replaying_its_change")
 
             # 当回の表を固定し、音声合成待ち中の普通の種類変化では取り消さない。
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             control["environment_action"] = "speak"
             control["environment_payload"] = {"action":"speak", "speech":"さっき見えた木、気になるな。"}
             gate = threading.Event()
@@ -250,7 +252,7 @@ def main():
 
             control["environment_action"] = "speak"
             measured_smell = {"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":5}],"basis":"smell_policy_v2"}
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             before_calls = len(calls())
             control["environment_payload"] = {"action": "speak", "speech": "ゾンビ系の匂いがはっきりするで。"}
             send(sid, smell_observation=measured_smell)
@@ -280,7 +282,7 @@ def main():
             passed.append("smell_strength_reaches_model_and_fixed_questions_cannot_locate_source")
 
             # Unplayed words are refreshed when the same smell changes strength.
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             before_calls = len(calls())
             control["delay"] = .6
             send(sid, smell_observation=measured_smell)
@@ -302,7 +304,7 @@ def main():
             passed.append("changed_smell_strength_cancels_unplayed_words_and_retries_once")
 
             for retry_decision in ("speak", "silent"):
-                sid = register(base, preview=False)
+                sid = register(base, preview=False, body=True)
                 before_calls = len(calls())
                 control["delay"] = .6
                 send(sid, smell_observation=measured_smell)
@@ -332,7 +334,7 @@ def main():
 
             for payload in ({"action": "silent", "speech": "勝手に話すで。"}, {"action": "move", "speech": "移動したで。"}):
                 control["environment_payload"] = payload
-                sid = register(base, preview=False)
+                sid = register(base, preview=False, body=True)
                 before_calls = len(calls())
                 trigger(sid, "place")
                 result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
@@ -345,7 +347,7 @@ def main():
 
             for speech, outcome in (("うん。", "speak"), ("そうやな。" * 5, "broken_output")):
                 control["environment_payload"] = {"action": "speak", "speech": speech}
-                sid = register(base, preview=False)
+                sid = register(base, preview=False, body=True)
                 trigger(sid, "place")
                 result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
                 assert result["environment_reaction_outcome"] == outcome, result
@@ -361,7 +363,7 @@ def main():
                         "choices": [{"index": 0, "message": {"role": "assistant", "content": '{"action":"silent","speech":""}'}, "finish_reason": "length"}]}
 
             control["completion_override"] = truncated
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             trigger(sid, "place")
             result = wait_for(lambda: next((r for r in reactions(sid) if r["playback_status"] == "completed"), None))
             assert result["environment_reaction_outcome"] == "truncated_output", result
@@ -370,7 +372,7 @@ def main():
             passed.append("truncated_valid_child_is_not_a_silent_decision")
 
             for change in ("dimension_changed", "session_closed", "new_player_input", "hostile_arrived"):
-                sid = register(base, preview=False)
+                sid = register(base, preview=False, body=True)
                 before_calls, before_audio = len(calls()), len(audio())
                 control["delay"] = .6
                 trigger(sid, "surroundings")
@@ -395,7 +397,7 @@ def main():
                     close(sid)
                 passed.append(f"pending_reaction_cancelled_on_{change}")
 
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             before = len(seen)
             control["delay"] = 1.5
             send(sid, world={"weather": "thunder", "thunder_sound_recent_ms": 0,
@@ -415,7 +417,7 @@ def main():
             control["delay"] = 0
             passed.append("thunder_cue_precedes_model_and_combat_never_waits_for_reaction")
 
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             before_calls = len(calls())
             for _ in range(2):
                 send(sid, visual_threats=[zombie], passive_mobs=[cow], smell_observation=bread,
@@ -425,7 +427,7 @@ def main():
             close(sid)
             passed.append("combat_does_not_start_environment_model_work")
 
-            sid = register(base, preview=False)
+            sid = register(base, preview=False, body=True)
             control["environment_action"] = "silent"
             trigger(sid, "mob")
             wait_for(lambda: any(r["playback_status"] == "not_selected" for r in reactions(sid)))

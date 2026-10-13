@@ -62,7 +62,7 @@ pub fn fixed_text(event: &GameEvent) -> String {
             }
         }
         for (key, actual) in [
-            ("player_y", event.player.position.y),
+            ("player_y", event.observer_y()),
             ("danger_darkness_score", event.world.danger_darkness_score),
         ] {
             for (suffix, min) in [("min", true), ("max", false)] {

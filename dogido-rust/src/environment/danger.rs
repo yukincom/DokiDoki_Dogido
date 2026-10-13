@@ -59,6 +59,7 @@ pub struct LightContext {
 
 #[derive(Clone, Default)]
 pub struct Danger {
+    body_context: Option<crate::body::contracts::Context>,
     dimension: Option<String>,
     complete: bool,
     dimension_changed: bool,
@@ -143,6 +144,23 @@ impl Danger {
     pub fn update(&mut self, e: &GameEvent, _now: u64, complete: bool, s: &Settings) {
         self.complete = complete;
         self.dimension_changed = false;
+        if let Some(origin) = e.body_origin() {
+            if !origin.available || origin.context != self.body_context {
+                self.reset_dark();
+                self.previous_zone = false;
+                self.previous_water = false;
+                self.previous_shelter = false;
+                self.entered_zone = false;
+                self.entered_water = false;
+                self.entered_shelter = false;
+                self.pending_portal = None;
+                self.pending_portal_encounter = None;
+                self.portal_initialized = false;
+                self.portal_seen.clear();
+                self.night_pending = false;
+            }
+            self.body_context = origin.context.clone();
+        }
         if !complete {
             return;
         }
@@ -415,7 +433,7 @@ impl Danger {
         if self.boss_presence {
             return vec![];
         }
-        if e.world.standing_on_magma_block == Some(true)
+        if e.player_safety_world().standing_on_magma_block == Some(true)
             && ready(now, self.last_magma, s, "magma_block_comment_cooldown_ms")
         {
             self.last_magma = Some(now);
@@ -469,7 +487,7 @@ impl Danger {
         vec![]
     }
     fn damaging_light(&mut self, e: &GameEvent, now: u64, s: &Settings) -> Option<Speech> {
-        if e.world.standing_on_magma_block == Some(true)
+        if e.player_safety_world().standing_on_magma_block == Some(true)
             || e.world.nearby_damaging_light_source_count.unwrap_or(0) <= 0
             || !e
                 .world
@@ -534,8 +552,8 @@ impl Danger {
             })
             .max(0.0)
         });
-        self.entry_x = e.player.position.x;
-        self.entry_z = e.player.position.z;
+        self.entry_x = e.observer_x();
+        self.entry_z = e.observer_z();
     }
     fn severe(&self, e: &GameEvent, s: &Settings) -> bool {
         e.world
@@ -550,12 +568,7 @@ impl Danger {
         if !zone(e, s) || self.active || self.stage < 1 || !snapshot(e) || self.entered_zone {
             return false;
         }
-        let moved = match (
-            self.entry_x,
-            self.entry_z,
-            e.player.position.x,
-            e.player.position.z,
-        ) {
+        let moved = match (self.entry_x, self.entry_z, e.observer_x(), e.observer_z()) {
             (Some(x), Some(z), Some(xx), Some(zz)) => {
                 (xx - x).powi(2) + (zz - z).powi(2) >= n(s, "dark_push_progress_distance").powi(2)
             }
@@ -651,8 +664,8 @@ impl Danger {
                     }
             })
             && biome(e) != "mushroom_fields"
-            && (e.world.respawn_point_set != Some(true)
-                || e.world
+            && (e.player_safety_world().respawn_point_set != Some(true)
+                || e.player_safety_world()
                     .respawn_distance
                     .is_none_or(|v| v >= n(s, "emergency_shelter_respawn_distance")))
     }
@@ -752,13 +765,13 @@ pub fn still_applicable(a: &Speech, e: &GameEvent, s: &Settings) -> bool {
                             .unwrap_or(json!("unknown"))
                 })
         }
-        "magma_block" => e.world.standing_on_magma_block == Some(true),
+        "magma_block" => e.player_safety_world().standing_on_magma_block == Some(true),
         "damaging_light" => {
             e.world.nearby_damaging_light_source_count.unwrap_or(0) > 0
                 && e.world
                     .nearest_damaging_light_source_distance
                     .is_some_and(|d| d <= n(s, "damaging_light_warning_max_distance"))
-                && e.world.standing_on_magma_block != Some(true)
+                && e.player_safety_world().standing_on_magma_block != Some(true)
         }
         "end_portal_frame" => e
             .world

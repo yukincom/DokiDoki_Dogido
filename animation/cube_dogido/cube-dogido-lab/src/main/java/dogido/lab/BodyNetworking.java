@@ -31,7 +31,7 @@ final class BodyNetworking {
                 }
             }
             if (ServerPlayNetworking.canSend(player,BodyPackets.Response.ID))
-                ServerPlayNetworking.send(player,new BodyPackets.Response(JSON.toJson(BodyManager.snapshot(player))));
+                ServerPlayNetworking.send(player,new BodyPackets.Response(BodySnapshotPayload.encode(BodyManager.snapshot(player))));
         } catch (JsonParseException | IllegalArgumentException ignored) {
             // A malformed client request cannot mutate another owner's body or stop the server tick.
         }

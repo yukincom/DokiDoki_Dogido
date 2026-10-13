@@ -45,6 +45,9 @@ pub(crate) fn attach(action: &mut Speech, event: &GameEvent, recent: &Value, set
     let mut observations = json!({});
     let mut properties = json!({});
     let mut guard = json!({"dimension":normalized(event.player.dimension.as_deref())});
+    if let Some(origin) = event.body_origin() {
+        guard["body_context"] = json!(origin.context);
+    }
     match topic {
         "thunder" => {
             let heard = event.world.thunder_sound_recent_ms.is_some_and(|age| {
@@ -146,6 +149,13 @@ pub(crate) fn still_applicable(action: &Speech, event: &GameEvent) -> bool {
         return false;
     }
     let g = &leaf.details["__reaction_guard"];
+    if let Some(origin) = event.body_origin()
+        && (!origin.available
+            || g.get("body_context")
+                .is_some_and(|value| *value != json!(origin.context)))
+    {
+        return false;
+    }
     if g["dimension"]
         .as_str()
         .is_some_and(|d| !d.is_empty() && d != normalized(event.player.dimension.as_deref()))

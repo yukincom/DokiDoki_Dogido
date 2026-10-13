@@ -174,6 +174,8 @@ impl Scene {
 /// Full serialization includes internal precipitation measurements.
 #[derive(Clone, Debug, Serialize)]
 pub struct Context {
+    #[serde(skip)]
+    pub(crate) body_observer: bool,
     pub player_name: String,
     pub biome_id: String,
     pub biome_label: String,
@@ -230,6 +232,24 @@ impl Context {
                     .unwrap()
                     .clone(),
             );
+        }
+        if self.body_observer {
+            // 身体で今見える材料を先頭にし、所持品・行動の所有者はプレイヤーと明示する。
+            let mut ordered = Map::new();
+            for key in [
+                "nearby_blocks",
+                "dropped_items",
+                "passive_mobs",
+                "feature_candidates",
+            ] {
+                if let Some(value) = details.remove(key) {
+                    ordered.insert(key.into(), value);
+                }
+            }
+            ordered.insert("observer".into(), json!("dogido"));
+            ordered.insert("inventory_owner".into(), json!("player"));
+            ordered.extend(details);
+            details = ordered;
         }
         details
     }

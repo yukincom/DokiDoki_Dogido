@@ -1,5 +1,7 @@
 package dogido.fabric.observation.smell;
 
+import dogido.fabric.observation.ObservationOrigin;
+
 import dogido.fabric.observation.smell.SmellPolicy;
 import dogido.fabric.observation.smell.ZombieScentPolicy;
 import java.util.ArrayList;
@@ -39,13 +41,13 @@ public final class SmellObserver {
     // scanThreatsを流用すると中立中のゾンビピグリンが抜け、視認後に匂いが消えてしまう。
     // この走査は候補収集だけで、戦闘追跡や敵対判定の一覧には何も追加しない。
     private void collectZombieSmellCandidates(
-        ClientPlayerEntity player, ClientWorld world, List<SmellPolicy.Candidate> candidates
+        ObservationOrigin receiver, ClientWorld world, List<SmellPolicy.Candidate> candidates
     ) {
-        for (Entity entity : world.getOtherEntities(player,
-                player.getBoundingBox().expand(ZombieScentPolicy.MAX_DISTANCE),
+        for (Entity entity : world.getOtherEntities(receiver.player(),
+                receiver.bounds().expand(ZombieScentPolicy.MAX_DISTANCE),
                 candidate -> candidate instanceof LivingEntity && candidate.isAlive())) {
             String type = Registries.ENTITY_TYPE.getId(entity.getType()).toString();
-            double distance = Math.sqrt(player.squaredDistanceTo(entity));
+            double distance = receiver.distanceTo(entity);
             SmellPolicy.Candidate candidate = SmellPolicy.zombieCandidate(type, entity.getUuid().toString(), distance);
             if (candidate == null) continue;
             candidates.add(candidate);
@@ -60,7 +62,13 @@ public final class SmellObserver {
         long tickCounter,
         int snapshotIntervalTicks
     ) {
-        BlockPos origin = player.getBlockPos();
+        observe(ObservationOrigin.player(player),player,world,tickCounter,snapshotIntervalTicks);
+    }
+
+    /** 嗅ぐ受け手と持ち物の所有者を分離する。ブロック・雨上がりのキャッシュは受け手ごとのインスタンスが所有する。 */
+    public void observe(ObservationOrigin receiver, ClientPlayerEntity owner, ClientWorld world,
+            long tickCounter, int snapshotIntervalTicks) {
+        BlockPos origin = receiver.blockPosition();
         String localWeather = localSmellWeather(world, origin);
         updateRainAfterSmellWindow(localWeather, tickCounter);
         boolean rainAfterActive = this.rainAfterSmellUntilTick >= tickCounter;
@@ -83,11 +91,12 @@ public final class SmellObserver {
         List<SmellPolicy.Candidate> candidates = new ArrayList<>();
         // 種類の再走査は間引いても、キャッシュした各ブロックまでの現在距離は更新する。
         for (SmellPolicy.LocatedCandidate located : this.currentBlockSmellCandidates) {
-            candidates.add(located.observedFrom(origin.getX(), origin.getY(), origin.getZ()));
+            candidates.add(located.observedFrom(receiver.body() ? receiver.position().x : origin.getX(),
+                receiver.body() ? receiver.position().y : origin.getY(), receiver.body() ? receiver.position().z : origin.getZ()));
         }
-        collectZombieSmellCandidates(player, world, candidates);
-        collectHotbarSmellCandidates(player, candidates);
-        collectDroppedItemSmellCandidates(player, world, candidates);
+        collectZombieSmellCandidates(receiver, world, candidates);
+        collectHotbarSmellCandidates(owner, receiver, candidates);
+        collectDroppedItemSmellCandidates(receiver, world, candidates);
         String biomeId = world.getBiome(origin).getKey()
             .map(key -> key.getValue().toString())
             .orElse("unknown");
@@ -100,7 +109,7 @@ public final class SmellObserver {
             candidates,
             temperatureModifier,
             rainAfterActive,
-            smellSuppressionReason(player, localWeather)
+            smellSuppressionReason(receiver, world, localWeather)
         );
     }
 
@@ -137,8 +146,8 @@ public final class SmellObserver {
         };
     }
 
-    private String smellSuppressionReason(ClientPlayerEntity player, String localWeather) {
-        if (player.isSubmergedInWater()) {
+    private String smellSuppressionReason(ObservationOrigin receiver, ClientWorld world, String localWeather) {
+        if (receiver.submerged(world)) {
             return "submerged";
         }
         if (localWeather.startsWith("thunder_")) {
@@ -155,6 +164,7 @@ public final class SmellObserver {
 
     private void collectHotbarSmellCandidates(
         ClientPlayerEntity player,
+        ObservationOrigin receiver,
         List<SmellPolicy.Candidate> candidates
     ) {
         for (int slot = 0; slot < net.minecraft.entity.player.PlayerInventory.getHotbarSize(); slot += 1) {
@@ -162,7 +172,7 @@ public final class SmellObserver {
             if (stack.isEmpty()) {
                 continue;
             }
-            SmellPolicy.Candidate candidate = SmellPolicy.hotbarCandidate(itemId(stack));
+            SmellPolicy.Candidate candidate = SmellPolicy.hotbarCandidate(itemId(stack),receiver.distanceTo(player));
             if (candidate != null) {
                 candidates.add(candidate);
             }
@@ -170,12 +180,12 @@ public final class SmellObserver {
     }
 
     private void collectDroppedItemSmellCandidates(
-        ClientPlayerEntity player,
+        ObservationOrigin receiver,
         ClientWorld world,
         List<SmellPolicy.Candidate> candidates
     ) {
         double radius = SmellPolicy.MAX_SCAN_DISTANCE;
-        for (Entity entity : world.getOtherEntities(player, player.getBoundingBox().expand(radius))) {
+        for (Entity entity : world.getOtherEntities(receiver.player(), receiver.bounds().expand(radius))) {
             if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) {
                 continue;
             }
@@ -186,7 +196,7 @@ public final class SmellObserver {
             SmellPolicy.Candidate candidate = SmellPolicy.droppedItemCandidate(
                 itemId(stack),
                 itemEntity.getUuid().toString(),
-                Math.sqrt(player.squaredDistanceTo(itemEntity))
+                receiver.distanceTo(itemEntity)
             );
             if (candidate != null) {
                 candidates.add(candidate);

@@ -99,6 +99,7 @@ pub struct AmbientFocus {
 }
 #[derive(Clone, Default)]
 pub struct Ambient {
+    body_context: Option<crate::body::contracts::Context>,
     smell: smell::Presence,
     rain_after: smell::RainAfter,
     places: places::Places,
@@ -121,6 +122,17 @@ impl Ambient {
     }
 
     pub fn update(&mut self, e: &GameEvent, now: u64, complete: bool, s: &Settings) {
+        // 観測者の切替えでは匂い・場所だけを破棄し、所持品・会話の優先状態は保持する。
+        if let Some(origin) = e.body_origin() {
+            if !origin.available || origin.context != self.body_context {
+                self.smell = smell::Presence::default();
+                self.rain_after = smell::RainAfter::default();
+                self.places.dimension_changed();
+                self.light_pending = None;
+                self.light_ready = None;
+            }
+            self.body_context = origin.context.clone();
+        }
         let dimension = e
             .player
             .dimension
@@ -190,6 +202,9 @@ impl Ambient {
         focus: &AmbientFocus,
         s: &Settings,
     ) -> Vec<Speech> {
+        if e.body_origin().is_some_and(|origin| !origin.available) {
+            return vec![];
+        }
         let input_at = focus.last_player_input_at.or(self.last_player_input);
         if busy
             || focus.player_priority

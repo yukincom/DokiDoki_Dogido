@@ -6,7 +6,7 @@ import dogido.lab.api.BodyProtocol.*;
 import java.util.Locale;
 import java.util.UUID;
 
-/** 不変Body APIからHTTP v2契約へ投影する。座標はblock、角度は度、ageはms。姿勢と視認の根拠を分ける。 */
+/** 不変Body APIからHTTP v3契約へ投影する。座標はblock、角度は度、ageはms。姿勢と視認の根拠を分ける。 */
 public final class BodyObservationJson {
     private BodyObservationJson() {}
 
@@ -66,13 +66,25 @@ public final class BodyObservationJson {
         sample.add("player_pose",player);
         // 同一tickの眼・視線と結び付ける。視覚だけUNAVAILABLEでも姿勢の実測は失わない。
         sample.add("vision",vision(s.vision()));
+        sample.add("senses",unavailableSenses(s.serverTick(),"not_sampled"));
 
         JsonObject json = new JsonObject();
-        json.addProperty("version",2);
+        json.addProperty("version",3);
         json.addProperty("status","observed");
         json.addProperty("pose_basis","server_pose");
         json.addProperty("age_ms",ageMs);
         json.add("sample",sample);
+        return json;
+    }
+
+    /** 未取得を空の感覚一覧へ補完しない。源snapshotのtickと理由を必ず残す。 */
+    public static JsonObject unavailableSenses(long serverTick, String reason) {
+        JsonObject json = new JsonObject();
+        json.addProperty("version",1);
+        json.addProperty("status","unavailable");
+        json.addProperty("basis","body_pose_client_world");
+        json.addProperty("source_server_tick",serverTick);
+        json.addProperty("reason",reason);
         return json;
     }
 

@@ -159,6 +159,8 @@ pub struct ChatObservationMemory {
     killed_names: Vec<(String, i64)>,
     home: Vec<DistanceSample>,
     named_mobs: Vec<crate::mob_identity::NamedMob>,
+    body_context: Option<crate::body::contracts::Context>,
+    body_revision: Option<u64>,
 }
 impl Default for ChatObservationMemory {
     fn default() -> Self {
@@ -178,6 +180,53 @@ impl ChatObservationMemory {
             killed_names: vec![],
             home: vec![],
             named_mobs: vec![],
+            body_context: None,
+            body_revision: None,
+        }
+    }
+    /// 身体の世代とrevisionを受理済viewから照合し、再送で感覚記憶を若返らせない。
+    pub(crate) fn observe_body(
+        &mut self,
+        senses: &GameEvent,
+        raw: &GameEvent,
+        outcomes: &NameOutcomeUpdate,
+        labels: &impl Labels,
+    ) -> Result<(), MixedTimeDomains> {
+        self.time(raw)?;
+        let origin = senses.body_origin().expect("accepted body sensory view");
+        if !origin.available || self.body_context != origin.context {
+            self.clear_senses();
+            self.body_context = origin.context.clone();
+            self.body_revision = None;
+        }
+        if origin.available && self.body_revision != origin.revision {
+            self.body_revision = origin.revision;
+            self.observe(senses, outcomes, labels)
+        } else {
+            // 戦闘の名前訂正と帰宅経路だけは、新しい生eventの所有情報で更新する。
+            let empty = senses.with_body_senses(None, origin.clone());
+            self.observe(&empty, outcomes, labels)
+        }
+    }
+    fn clear_senses(&mut self) {
+        self.visual.clear();
+        self.hearing.clear();
+        self.passive.clear();
+        self.named_mobs.clear();
+    }
+    /// 失効後の読み取りでも身体の過去記憶を使わない。読み取りは保存時刻を更新しない。
+    pub(crate) fn snapshot_body(
+        &self,
+        senses: &GameEvent,
+        labels: &impl Labels,
+    ) -> Result<Snapshot, MixedTimeDomains> {
+        let origin = senses.body_origin().expect("accepted body sensory view");
+        if !origin.available || self.body_context != origin.context {
+            let mut scoped = self.clone();
+            scoped.clear_senses();
+            scoped.snapshot(senses, labels)
+        } else {
+            self.snapshot(senses, labels)
         }
     }
     fn time(&self, event: &GameEvent) -> Result<(i64, bool), MixedTimeDomains> {
@@ -202,6 +251,19 @@ impl ChatObservationMemory {
     ) -> Result<(), MixedTimeDomains> {
         let (now, aware) = self.time(event)?;
         self.time_aware = Some(aware);
+        let player_now = event
+            .body_origin()
+            .map(|origin| match &origin.player_observed_at {
+                EventTime::Aware(at) => at.timestamp_micros(),
+                EventTime::Naive(at) => at.and_utc().timestamp_micros(),
+            })
+            .unwrap_or(now);
+        let seen_at = now.saturating_sub(
+            event
+                .body_origin()
+                .map(|o| o.age_ms.min(i64::MAX as u64 / 1000) as i64 * 1000)
+                .unwrap_or(0),
+        );
         let dimension = event
             .player
             .dimension
@@ -223,24 +285,24 @@ impl ChatObservationMemory {
         for mob in &event.passive_mobs {
             let id = strip(&mob.r#type).to_lowercase(); // intentionally retains namespace
             if !id.is_empty() {
-                put_time(&mut self.passive, id, now);
+                put_time(&mut self.passive, id, seen_at);
             }
         }
-        let (_, observed_names) = crate::mob_identity::observed(event, now);
+        let (_, observed_names) = crate::mob_identity::observed(event, seen_at);
         self.named_mobs = crate::mob_identity::merge_names(
             &self.named_mobs,
             observed_names,
             now,
             self.settings.player_chat_visual_retention_ms.max(60000),
         );
-        self.update_home(event, now);
+        self.update_home(event, player_now);
         self.killed_names.retain(|(_, at)| {
-            age(now, *at) <= self.settings.player_chat_name_correction_retention_ms
+            age(player_now, *at) <= self.settings.player_chat_name_correction_retention_ms
         });
         for raw in &outcomes.confirmed_types {
             let id = normalize(raw);
             if !id.is_empty() {
-                put_time(&mut self.killed_names, id, now);
+                put_time(&mut self.killed_names, id, player_now);
             }
         }
         self.hearing.retain(|memo| {
@@ -279,7 +341,11 @@ impl ChatObservationMemory {
                         label_ja: Some(label.into()),
                         direction: "周囲".into(),
                         distance_band: String::new(),
-                        heard_at_us: now,
+                        heard_at_us: if event.body_origin().is_some() {
+                            now.saturating_sub(heard.unwrap_or(0).saturating_mul(1000))
+                        } else {
+                            now
+                        },
                         dedupe_key: format!("environment:{raw}:周囲:"),
                         identity: None,
                         sound_event: None,
@@ -308,7 +374,7 @@ impl ChatObservationMemory {
                 mob_type,
                 direction,
                 distance: threat.distance,
-                seen_at_us: now,
+                seen_at_us: seen_at,
                 dedupe_key: key,
             };
             if let Some(index) = self
@@ -331,10 +397,7 @@ impl ChatObservationMemory {
             EventName::HostileDefeated | EventName::CreeperDetonated
         ) {
             let all = event.combat.hostile_outcomes.as_deref().unwrap_or_default();
-            let ids: Vec<_> = all
-                .iter()
-                .map(|o| strip(&o.entity_id))
-                .collect();
+            let ids: Vec<_> = all.iter().map(|o| strip(&o.entity_id)).collect();
             self.visual.retain(|v| {
                 !ids.contains(
                     &v.dedupe_key
@@ -353,8 +416,11 @@ impl ChatObservationMemory {
         Ok(())
     }
     fn update_home(&mut self, event: &GameEvent, now: i64) {
-        let Some(distance) = event.world.respawn_distance.filter(|_| {
-            event.world.respawn_point_set.unwrap_or(false)
+        let Some(distance) = event.player_safety_world().respawn_distance.filter(|_| {
+            event
+                .player_safety_world()
+                .respawn_point_set
+                .unwrap_or(false)
                 && overworld(event.player.dimension.as_deref())
         }) else {
             self.home.clear();
@@ -382,15 +448,16 @@ impl ChatObservationMemory {
         }
     }
     fn home_progress(&self, event: &GameEvent) -> HomeProgress {
-        let Some(distance) = event
-            .world
-            .respawn_distance
-            .filter(|_| event.world.respawn_point_set.unwrap_or(false))
-        else {
+        let Some(distance) = event.player_safety_world().respawn_distance.filter(|_| {
+            event
+                .player_safety_world()
+                .respawn_point_set
+                .unwrap_or(false)
+        }) else {
             return HomeProgress::Unknown;
         };
         if distance <= self.settings.home_bed_prompt_distance
-            && event.world.nearby_bed_count.unwrap_or(0) > 0
+            && event.player_safety_world().nearby_bed_count.unwrap_or(0) > 0
         {
             return HomeProgress::AtHome;
         }

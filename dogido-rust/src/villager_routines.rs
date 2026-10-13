@@ -112,9 +112,10 @@ pub fn project(event: &GameEvent) -> Option<Context> {
     }
     if rows.is_empty() {
         let observed = event.world.visible_villager_count.is_some_and(|n| n > 0)
-            || event.look_target.as_ref().is_some_and(|target| {
-                target.kind == "entity" && normalized(&target.name) == "villager"
-            });
+            || event.body_origin().is_none()
+                && event.look_target.as_ref().is_some_and(|target| {
+                    target.kind == "entity" && normalized(&target.name) == "villager"
+                });
         if !observed {
             return None;
         }

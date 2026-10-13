@@ -23,8 +23,9 @@ fn server() -> Arc<Dialogue> {
 }
 fn event(sequence: i64, tick: u64, z: f64) -> GameEvent {
     let mut body: Value =
-        serde_json::from_str(include_str!("../../../fixtures/body-observation-v2.json")).unwrap();
+        serde_json::from_str(include_str!("../../../fixtures/body-observation-v3.json")).unwrap();
     body["sample"]["server_tick"] = json!(tick);
+    body["sample"]["senses"]["source_server_tick"] = json!(tick);
     body["sample"]["snapshot_revision"] = json!(tick * 2);
     body["sample"]["player_pose"]["position"]["z"] = json!(z);
     GameEvent::parse(json!({"schema_version":"2026-05-24","adapter":"body-test","observed_at":chrono::Utc::now(),"sequence":sequence,
@@ -135,7 +136,7 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
     );
     assert_eq!(
         second.context.world_context.as_ref().unwrap().observations["observer"],
-        "player"
+        "dogido"
     );
     let input = crate::chat_materials::PlayerInput {
         raw_text: "オレはさっきより離れた？".into(),
@@ -300,11 +301,197 @@ async fn body_expired_transport_and_explicit_absence_cannot_be_revived_by_partia
             event(5, 140, 99.0),
             |v| {
                 v["body_observation"] =
-                    json!({"version":2,"status":"unavailable","reason":"unloaded"})
+                    json!({"version":3,"status":"unavailable","reason":"unloaded"})
             },
         );
     d.observe("s", absent.clone(), Some("absent"));
     assert!(body(&capture(&d, &absent)).get("current").is_none());
+    drop(permit);
+    d.shutdown().await;
+}
+
+#[tokio::test]
+async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallback() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let raw = edit(event(1, 100, 23.0), |v| {
+        v["player"]["position"] = json!({"x":80,"y":120,"z":80});
+        v["player"]["held_item"] = json!("torch");
+        v["inventory"] = json!({"torch":3});
+        v["world"]["biome"] = json!("desert");
+        v["passive_mobs"] = json!([{"type":"pig"}]);
+        v["nearby_resources"] = json!([{"type":"block","name":"sand","distance":1}]);
+        v["look_target"] = json!({"kind":"entity","name":"sheep"});
+        v["smell_observation"] = json!({"status":"present","components":[{"smell_id":"bread","category":"food","valence":"pleasant","source_kind":"hotbar","effective_strength":3}],"basis":"smell_policy_v2"});
+        let senses = &mut v["body_observation"]["sample"]["senses"];
+        senses["world"]["biome"] = json!("snowy_taiga");
+        senses["passive_mobs"] = json!([{"type":"cow"}]);
+        senses["nearby_resources"] = json!([{"type":"block","name":"snow_block","distance":2}]);
+        senses["smell_observation"] = json!({"status":"present","components":[{"smell_id":"zombie","category":"decay","valence":"unpleasant","source_kind":"entity","effective_strength":3}],"basis":"smell_policy_v2"});
+        senses["auditory_threats"] = json!([{"label":"skeleton","source_id":"one-emission","spoken_name_allowed":true,"heard_ago_ms":100,"direction":{"horizontal":"right"},"distance_band":"close"}]);
+    });
+    d.observe("s", raw.clone(), None);
+    let captured = capture(&d, &raw);
+    let sensory = captured.sensory_event.as_ref().unwrap();
+    assert_eq!(sensory.observer_y(), Some(64.0));
+    assert_eq!(sensory.player.position.y, Some(120.0));
+    assert_eq!(sensory.nearby_resources[0].name, "snow_block");
+    assert_eq!(captured.snapshot.current.passive_types, ["cow"]);
+    assert_eq!(captured.snapshot.current.hearing_types, ["skeleton"]);
+    assert!(
+        !captured
+            .snapshot
+            .current
+            .passive_types
+            .contains(&"sheep".into())
+    );
+    let world = &captured
+        .context
+        .world_context
+        .as_ref()
+        .unwrap()
+        .observations;
+    assert_eq!(
+        world.as_object().unwrap().keys().next().unwrap(),
+        "body_observation"
+    );
+    assert_eq!(world["observer"], "dogido");
+    assert_eq!(world["smell"]["components"][0]["smell_id"], "zombie");
+    assert!(world.get("vision").is_none());
+    assert!(
+        world["body_observation"]["current"]["senses"]
+            .get("passive_mobs")
+            .is_none()
+    );
+    let first_seen = captured.snapshot.recent.hearing_memos[0].heard_at_us;
+    let first_age = sensory.auditory_threats[0].heard_ago_ms.unwrap();
+    assert!(first_age >= 125);
+    {
+        let data = d.data.lock().unwrap();
+        let s = &data.sessions["s"];
+        assert_eq!(s.latest.as_ref().unwrap().passive_mobs[0].r#type, "pig");
+        assert_eq!(
+            s.latest.as_ref().unwrap().world.biome.as_deref(),
+            Some("desert")
+        );
+        let reply = super::super::warnings::answer_fixed_query(
+            s,
+            "この匂い何？",
+            "smell",
+            0,
+            &d.config.combat,
+        );
+        assert!(reply.text.contains("ゾンビ") && !reply.text.contains("パン"));
+        let mut reaction = crate::combat::model::Speech::new("smell", "");
+        reaction.delivery = crate::combat::model::Delivery::Ambient;
+        crate::environment::reaction::attach(&mut reaction, sensory, &json!({}), &d.config.combat);
+        let mut reactions = [reaction.clone()];
+        assert!(super::super::environment_runtime::refresh_dialogue_context(
+            s,
+            &mut reactions
+        ));
+        assert_eq!(
+            reactions[0].leaf.as_ref().unwrap().details["reaction_context"]["world_context"]["observations"]
+                ["smell"]["components"][0]["smell_id"],
+            "zombie"
+        );
+        assert!(crate::environment::reaction::still_applicable(
+            &reaction, sensory
+        ));
+        let world_catalog = crate::world_catalog::catalog();
+        let materials = crate::haiku::materials::capture(
+            sensory,
+            crate::haiku::materials::RuntimeRead {
+                current_structure: None,
+                player_name: "試験",
+                inventory_order: sensory.inventory_order(),
+            },
+            world_catalog,
+            crate::chat_catalog::catalog(),
+            world_catalog,
+            &Default::default(),
+        )
+        .unwrap();
+        assert_eq!(materials.biome_id, "snowy_taiga");
+        assert!(
+            materials
+                .nearby_blocks
+                .iter()
+                .any(|label| label.contains("雪"))
+        );
+        assert!(
+            materials
+                .passive_mobs
+                .iter()
+                .any(|label| label.contains("ウシ"))
+        );
+        let mob = materials
+            .feature_candidates
+            .iter()
+            .position(|row| row.key == "mob_1")
+            .unwrap();
+        let inventory = materials
+            .feature_candidates
+            .iter()
+            .position(|row| row.key == "held_item")
+            .unwrap();
+        assert!(mob < inventory);
+    }
+    // 身体の同じrevisionを含む別eventは、現在材料を読めても記憶の時刻を更新しない。
+    let repeat = edit(raw.clone(), |v| {
+        v["sequence"] = json!(2);
+        v["observed_at"] = json!(chrono::Utc::now());
+    });
+    d.observe("s", repeat.clone(), None);
+    let repeated = capture(&d, &repeat);
+    assert_eq!(
+        repeated.snapshot.recent.hearing_memos[0].heard_at_us,
+        first_seen
+    );
+    assert!(
+        repeated.sensory_event.as_ref().unwrap().auditory_threats[0]
+            .heard_ago_ms
+            .unwrap()
+            >= first_age
+    );
+    // 位置・所有者が一致していても、新しい身体世代へ前の感覚記憶を持ち込まない。
+    let epoch = edit(event(3, 110, 23.0), |v| {
+        v["body_observation"]["sample"]["context"]["epoch"] =
+            json!("44444444-4444-4444-8444-444444444444");
+    });
+    d.observe("s", epoch.clone(), None);
+    let changed = capture(&d, &epoch);
+    assert!(changed.snapshot.recent.hearing_memos.is_empty());
+    assert!(changed.snapshot.recent.passive_sightings.is_empty());
+    // 身体が未取得の間もプレイヤーの持ち物と指差しは保持し、自己感覚へ転用しない。
+    let unavailable = edit(raw.clone(), |v| {
+        v["sequence"] = json!(4);
+        v["observed_at"] = json!(chrono::Utc::now());
+        v["body_observation"] = json!({"version":3,"status":"unavailable","reason":"unloaded"});
+    });
+    d.observe("s", unavailable.clone(), None);
+    let empty = capture(&d, &unavailable);
+    let empty_event = empty.sensory_event.as_ref().unwrap();
+    assert!(empty_event.passive_mobs.is_empty() && empty_event.nearby_resources.is_empty());
+    assert!(empty_event.world.biome.is_none() && empty_event.smell_observation.is_none());
+    assert!(empty.snapshot.recent.hearing_memos.is_empty());
+    assert_eq!(empty_event.inventory.get("torch"), Some(&3));
+    assert_eq!(empty_event.look_target.as_ref().unwrap().name, "sheep");
+    assert_eq!(
+        empty.context.world_context.as_ref().unwrap().observations["sensory_status"],
+        "unavailable"
+    );
+    {
+        let data = d.data.lock().unwrap();
+        let reply = super::super::warnings::answer_fixed_query(
+            &data.sessions["s"],
+            "この匂い何？",
+            "smell",
+            0,
+            &d.config.combat,
+        );
+        assert_eq!(reply.cue_id, Some("smell_unsupported"));
+    }
     drop(permit);
     d.shutdown().await;
 }

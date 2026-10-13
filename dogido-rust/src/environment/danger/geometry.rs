@@ -44,9 +44,10 @@ pub(super) fn lit(e: &GameEvent, s: &Settings) -> bool {
 }
 pub(super) fn shelter(e: &GameEvent, s: &Settings) -> bool {
     let w = &e.world;
-    let home = w.nearby_bed_count.unwrap_or(0) > 0
-        && w.respawn_point_set == Some(true)
-        && w.respawn_distance
+    let home = e.player_safety_world().nearby_bed_count.unwrap_or(0) > 0
+        && e.player_safety_world().respawn_point_set == Some(true)
+        && e.player_safety_world()
+            .respawn_distance
             .is_some_and(|v| v <= n(s, "home_bed_prompt_distance"));
     !submerged(e)
         && !safe(e)
@@ -100,7 +101,7 @@ pub(super) fn canopy(e: &GameEvent) -> bool {
 }
 pub(super) fn foliage(e: &GameEvent) -> bool {
     canopy(e)
-        && e.player.position.y.is_none_or(|y| y > 50.0)
+        && e.observer_y().is_none_or(|y| y > 50.0)
         && matches!(
             biome(e),
             "forest"

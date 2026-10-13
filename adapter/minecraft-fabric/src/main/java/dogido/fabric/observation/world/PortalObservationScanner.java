@@ -1,5 +1,7 @@
 package dogido.fabric.observation.world;
 
+import dogido.fabric.observation.ObservationOrigin;
+
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -24,6 +26,10 @@ final class PortalObservationScanner {
 
     static PortalObservation scanNearbyPortals(ClientPlayerEntity player, ClientWorld world, BlockPos origin,
         PortalObservationTracker tracker, long tickCounter, int snapshotIntervalTicks) {
+        return scanNearbyPortals(ObservationOrigin.player(player),world,origin,tracker,tickCounter,snapshotIntervalTicks);
+    }
+    static PortalObservation scanNearbyPortals(ObservationOrigin receiver, ClientWorld world, BlockPos origin,
+        PortalObservationTracker tracker, long tickCounter, int snapshotIntervalTicks) {
         String bestType = null;
         BlockPos bestPosition = null;
         double bestDistance = Double.MAX_VALUE;
@@ -45,6 +51,7 @@ final class PortalObservationScanner {
                     // Include portals outside their reaction radius to distinguish later approach.
                     loadedBlocks.put(sample.asLong(), portalType);
                     if (portalType.isEmpty()) continue;
+                    if (receiver.body() && !receiver.visible(world,Vec3d.ofCenter(sample),sample,GATEWAY_SCAN_RADIUS)) continue;
                     double maxRange = "end_gateway".equals(portalType) ? GATEWAY_SCAN_RADIUS : PORTAL_SCAN_RADIUS;
                     double distance = Math.sqrt(sample.getSquaredDistance(origin));
                     if (distance <= maxRange) nearbyPortals.put(sample.asLong(), portalType);
@@ -59,8 +66,9 @@ final class PortalObservationScanner {
         boolean inFrontAndVisible = false;
         if (bestPosition != null) {
             Vec3d target = Vec3d.ofCenter(bestPosition);
-            inFrontAndVisible = player.getRotationVec(1.0F).dotProduct(target.subtract(player.getEyePos())) > 0
-                && hasDirectLineOfSight(player, world, target);
+            inFrontAndVisible = receiver.body() ? receiver.visible(world,target,bestPosition,GATEWAY_SCAN_RADIUS)
+                : receiver.player().getRotationVec(1.0F).dotProduct(target.subtract(receiver.eyePosition())) > 0
+                    && hasDirectLineOfSight(receiver.player(),world,target);
         }
         String encounter = tracker.observe(
             loadedBlocks, nearbyPortals, bestPosition == null ? null : bestPosition.asLong(),

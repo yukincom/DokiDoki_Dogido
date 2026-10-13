@@ -3,6 +3,7 @@ package dogido.fabric.observation.world;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dogido.fabric.observation.NearbyComposition;
+import dogido.fabric.observation.ObservationOrigin;
 import dogido.fabric.observation.player.PlayerObserver;
 import dogido.fabric.observation.sound.WorldSoundFacts;
 import dogido.fabric.observation.world.PortalObservationScanner.PortalObservation;
@@ -85,7 +86,10 @@ public final class WorldObserver {
     private double lastNearbyLightningDistance = 99.0;
     // プレイヤー座標を含む構造物 id（統合サーバーのスレッドで照会した結果のキャッシュ）
     private volatile String structureAtPlayer = null;
+    private volatile StructureAtOrigin structureAtBody;
+    private record StructureAtOrigin(BlockPos position, RegistryKey<World> dimension, String name) {}
     private long lastStructureProbeTick = -1000;
+    private volatile long structureGeneration;
     private final PortalObservationTracker portalObservationTracker = new PortalObservationTracker();
     private final NearbyComposition.RangeTracker nearbyBlockKinds =
         new NearbyComposition.RangeTracker(0.0, NearbyComposition.BLOCK_MARGIN);
@@ -102,11 +106,15 @@ public final class WorldObserver {
     }
 
     public JsonObject buildWorld(ClientPlayerEntity player, ClientWorld world, long tickCounter) {
-        BlockPos pos = player.getBlockPos();
+        return buildWorld(ObservationOrigin.player(player),world,tickCounter);
+    }
+    /** 環境の受け手だけを切り替える共通収集。酸素・リスポーン等のplayer所有情報は身体へ投影しない。 */
+    public JsonObject buildWorld(ObservationOrigin receiver, ClientWorld world, long tickCounter) {
+        BlockPos pos = receiver.blockPosition();
         LocalSpaceObservation space = observeLocalSpace(world, pos);
         JsonObject json = new JsonObject();
         long timeOfDay = world.getTimeOfDay() % 24000L;
-        boolean submerged = isWaterContext(player);
+        boolean submerged = receiver.touchingWater(world) || receiver.submerged(world);
 
         if (usesDayNightCycle(world)) {
             json.addProperty("time_of_day", (int) timeOfDay);
@@ -115,6 +123,11 @@ public final class WorldObserver {
         json.addProperty("weather", classifyWeather(world));
         json.addProperty("biome", resolveBiomeName(world, pos));
         String structureName = this.structureAtPlayer;
+        if (receiver.body()) {
+            StructureAtOrigin observed = this.structureAtBody;
+            structureName = observed != null && observed.position().equals(pos)
+                && observed.dimension().equals(world.getRegistryKey()) ? observed.name() : null;
+        }
         if (structureName != null && !structureName.isBlank()) {
             json.addProperty("structure", structureName);
         }
@@ -133,7 +146,7 @@ public final class WorldObserver {
         int openDoorCount = countOpenDoors(world, pos);
         boolean nearbyWindowPresent = hasNearbyWindow(world, pos);
         int nearbyBedCount = countNearbyBeds(world, pos);
-        int nearbySleepingPeopleCount = countNearbySleepingPeople(world, player);
+        int nearbySleepingPeopleCount = countNearbySleepingPeople(world, receiver);
         int draftyOpeningCount = countDraftyOpenings(world, pos);
         int submergedDepthBlocks = estimateSubmergedDepthBlocks(world, pos, submerged);
         int nearbyFireflyBushCount = countNearbyFireflyBushes(world, pos);
@@ -143,20 +156,20 @@ public final class WorldObserver {
         double nearestLightSourceDistance = estimateNearestLightSourceDistance(world, pos);
         int nearbyDamagingLightSourceCount = countNearbyDamagingLightSources(world, pos);
         double nearestDamagingLightSourceDistance = estimateNearestDamagingLightSourceDistance(world, pos);
-        boolean standingOnMagmaBlock = isStandingOnMagmaBlock(world, player);
-        String bossOmenKind = detectBossOmenKind(player, world, pos);
+        boolean standingOnMagmaBlock = isStandingOnMagmaBlock(world, pos);
+        String bossOmenKind = detectBossOmenKind(receiver.player(), world, pos);
         WorldSoundFacts sound = this.soundFacts.get();
         long ominousSoundRecentMs = ticksSince(tickCounter, sound.ominousTick());
         long rainSoundRecentMs = ticksSince(tickCounter, sound.rainTick());
         long thunderSoundRecentMs = ticksSince(tickCounter, sound.thunderTick());
         long nearbyLightningRecentMs = ticksSince(tickCounter, this.lastNearbyLightningObservedTick);
-        Double respawnDistance = this.playerObserver.estimateRespawnDistance(world, pos);
+        Double respawnDistance = receiver.body() ? null : this.playerObserver.estimateRespawnDistance(world, pos);
         json.addProperty("ceiling_height", round(ceilingHeight));
         json.addProperty("ceiling_observed", space.overhead().ceilingObserved());
         json.addProperty("overhead_cover_type", overheadCoverType);
         json.addProperty("is_submerged", submerged);
         json.addProperty("submerged_depth_blocks", submergedDepthBlocks);
-        json.addProperty("air_supply", player.getAir());
+        if (!receiver.body()) json.addProperty("air_supply", receiver.player().getAir());
         json.addProperty("nearby_door_count", nearbyDoorCount);
         json.addProperty("open_door_count", openDoorCount);
         json.addProperty("nearby_window_present", nearbyWindowPresent);
@@ -164,7 +177,7 @@ public final class WorldObserver {
         json.addProperty("nearby_sleeping_people_count", nearbySleepingPeopleCount);
         json.addProperty("drafty_opening_count", draftyOpeningCount);
         json.addProperty("nearby_firefly_bush_count", nearbyFireflyBushCount);
-        json.addProperty("respawn_point_set", this.playerObserver.respawnPointObserved());
+        if (!receiver.body()) json.addProperty("respawn_point_set", this.playerObserver.respawnPointObserved());
         json.addProperty("cardinal_wall_count", cardinalWallCount);
         json.addProperty("double_height_open_side_count", doubleHeightOpenSideCount);
         json.addProperty("standing_on_magma_block", standingOnMagmaBlock);
@@ -218,7 +231,7 @@ public final class WorldObserver {
         json.addProperty("nearest_damaging_light_source_distance", round(nearestDamagingLightSourceDistance));
         json.addProperty("danger_darkness_score", round(darknessScore));
 
-        PortalObservation portalInfo = scanNearbyPortals(player, world, pos, this.portalObservationTracker, tickCounter, this.snapshotIntervalTicks);
+        PortalObservation portalInfo = scanNearbyPortals(receiver, world, pos, this.portalObservationTracker, tickCounter, this.snapshotIntervalTicks);
         if (portalInfo != null) {
             json.addProperty("nearby_portal_type", portalInfo.type());
             json.addProperty("nearby_portal_distance", round(portalInfo.distance()));
@@ -234,7 +247,11 @@ public final class WorldObserver {
     }
 
     public JsonObject buildNearbyBlocks(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
-        BlockPos origin = player.getBlockPos();
+        return buildNearbyBlocks(ObservationOrigin.player(player),world,captureNearbyKinds);
+    }
+    /** 種類・資源の分類は共有し、身体の資源は範囲・FOV・見通しを満たす対象だけにする。 */
+    public JsonObject buildNearbyBlocks(ObservationOrigin receiver, ClientWorld world, boolean captureNearbyKinds) {
+        BlockPos origin = receiver.blockPosition();
         Map<String, Double> nearestDistances = new LinkedHashMap<>();
         Map<String, String> resourceTypes = new LinkedHashMap<>();
         java.util.Set<String> observedTypes = new java.util.TreeSet<>();
@@ -251,16 +268,19 @@ public final class WorldObserver {
                     boolean candidate = captureNearbyKinds && !observedTypes.contains(blockId)
                         && this.nearbyBlockKinds.allows(blockId, padding);
                     if ((padding > 0 && !candidate) || !isAirExposedNearbyResource(world, sample)) continue;
-                    if (candidate) {
-                        // 隣に空気があるだけでは壁越しの観測にしない。対象自身への命中は視認可。
-                        BlockHitResult hit = world.raycast(new RaycastContext(player.getEyePos(),
-                            Vec3d.ofCenter(sample), RaycastContext.ShapeType.OUTLINE,
-                            RaycastContext.FluidHandling.ANY, player));
-                        if (hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample)) {
-                            observedTypes.add(blockId);
-                        }
-                    }
                     String resourceName = nearbyResourceNameForBlock(state);
+                    boolean visible = !receiver.body();
+                    if (receiver.body() && (candidate || padding == 0 && resourceName != null)) {
+                        visible = receiver.visible(world,Vec3d.ofCenter(sample),sample,21.0);
+                    } else if (candidate) {
+                        // player経路のOUTLINE/流体条件は従来通り。身体は共有Body APIの視認判定を使う。
+                        BlockHitResult hit = world.raycast(new RaycastContext(receiver.eyePosition(),
+                            Vec3d.ofCenter(sample), RaycastContext.ShapeType.OUTLINE,
+                            RaycastContext.FluidHandling.ANY, receiver.player()));
+                        visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(sample);
+                    }
+                    if (candidate && visible) observedTypes.add(blockId);
+                    if (receiver.body() && !visible) continue;
                     if (padding == 0 && resourceName != null) {
                         double distance = Math.sqrt(sample.getSquaredDistance(origin));
                         mergeNearbyResource(resourceTypes, nearestDistances, "block", resourceName, distance);
@@ -269,15 +289,16 @@ public final class WorldObserver {
             }
         }
 
-        for (Entity entity : world.getOtherEntities(player, new net.minecraft.util.math.Box(
+        for (Entity entity : world.getOtherEntities(receiver.player(), new net.minecraft.util.math.Box(
             origin.getX() - 8.0, origin.getY() - 3.0, origin.getZ() - 8.0,
             origin.getX() + 9.0, origin.getY() + 5.0, origin.getZ() + 9.0
         ))) {
             if (!(entity instanceof SheepEntity sheep) || !sheep.isAlive()) {
                 continue;
             }
+            if (receiver.body() && !receiver.visible(world,sheep,16.0)) continue;
             String resourceName = sheep.getColor().asString() + "_wool";
-            double distance = Math.sqrt(player.squaredDistanceTo(sheep));
+            double distance = receiver.distanceTo(sheep);
             mergeNearbyResource(resourceTypes, nearestDistances, "mob", resourceName, distance);
         }
 
@@ -299,10 +320,14 @@ public final class WorldObserver {
     }
 
     public JsonArray buildDroppedItems(ClientPlayerEntity player, ClientWorld world) {
-        BlockPos origin = player.getBlockPos();
+        return buildDroppedItems(ObservationOrigin.player(player),world);
+    }
+    /** 同じ品目集約を使い、身体経路では視認できた落下物だけを材料にする。 */
+    public JsonArray buildDroppedItems(ObservationOrigin receiver, ClientWorld world) {
+        BlockPos origin = receiver.blockPosition();
         double radius = DROPPED_ITEM_SCAN_RADIUS;
         Map<String, DroppedItemObservation> byItemId = new LinkedHashMap<>();
-        for (Entity entity : world.getOtherEntities(player, new net.minecraft.util.math.Box(
+        for (Entity entity : world.getOtherEntities(receiver.player(), new net.minecraft.util.math.Box(
             origin.getX() - radius,
             origin.getY() - radius,
             origin.getZ() - radius,
@@ -313,12 +338,13 @@ public final class WorldObserver {
             if (!(entity instanceof ItemEntity itemEntity) || !itemEntity.isAlive()) {
                 continue;
             }
+            if (receiver.body() && !receiver.visible(world,itemEntity,DROPPED_ITEM_SCAN_RADIUS)) continue;
             ItemStack stack = itemEntity.getStack();
             if (stack.isEmpty()) {
                 continue;
             }
             String itemId = Registries.ITEM.getId(stack.getItem()).getPath();
-            double distance = Math.sqrt(player.squaredDistanceTo(itemEntity));
+            double distance = receiver.distanceTo(itemEntity);
             int ageTicks = Math.max(0, itemEntity.getItemAge());
             boolean blockItem = stack.getItem() instanceof BlockItem;
             boolean miningRelated = isMiningRelatedDroppedItem(stack, itemId);
@@ -428,6 +454,10 @@ public final class WorldObserver {
     }
 
     public void probeStructureAtPlayer(MinecraftClient client, ClientPlayerEntity player, ClientWorld world, long tickCounter) {
+        probeStructureAtOrigin(client,ObservationOrigin.player(player),world,tickCounter);
+    }
+    /** 受け手の地点をserverへ問い合わせる。独立collectorの世代を照合し、別世界の応答を採用しない。 */
+    public void probeStructureAtOrigin(MinecraftClient client, ObservationOrigin receiver, ClientWorld world, long tickCounter) {
         if (tickCounter - this.lastStructureProbeTick < this.snapshotIntervalTicks) {
             return;
         }
@@ -436,40 +466,52 @@ public final class WorldObserver {
         if (server == null) {
             // リモートサーバー接続時はクライアントから構造物情報を取得できない
             this.structureAtPlayer = null;
+            this.structureAtBody = null;
             return;
         }
-        BlockPos pos = player.getBlockPos();
+        BlockPos pos = receiver.blockPosition();
+        long generation = ++this.structureGeneration;
         RegistryKey<World> worldKey = world.getRegistryKey();
         // 構造物参照はサーバー側データなので、統合サーバーのスレッドで照会して結果だけ受け取る
         server.execute(() -> {
             ServerWorld serverWorld = server.getWorld(worldKey);
+            if (generation != this.structureGeneration) return;
             if (serverWorld == null) {
                 this.structureAtPlayer = null;
+                this.structureAtBody = null;
                 return;
             }
             // ピース単位の内包判定（バニラの実績判定と同じ基準）
             StructureStart start = serverWorld.getStructureAccessor().getStructureContaining(pos, entry -> true);
             if (start == null || !start.hasChildren()) {
                 this.structureAtPlayer = null;
+                this.structureAtBody = null;
                 return;
             }
             Identifier structureId = serverWorld.getRegistryManager()
                 .getOrThrow(RegistryKeys.STRUCTURE)
                 .getId(start.getStructure());
-            this.structureAtPlayer = structureId == null ? null : structureId.getPath();
+            if (generation != this.structureGeneration) return;
+            String name = structureId == null ? null : structureId.getPath();
+            if (receiver.body()) this.structureAtBody = new StructureAtOrigin(pos,worldKey,name);
+            else this.structureAtPlayer = name;
         });
     }
 
     public void observeNearbyLightning(ClientPlayerEntity player, ClientWorld world, long tickCounter) {
+        observeNearbyLightning(ObservationOrigin.player(player),world,tickCounter);
+    }
+    public void observeNearbyLightning(ObservationOrigin receiver, ClientWorld world, long tickCounter) {
         double nearestDistance = Double.POSITIVE_INFINITY;
         for (Entity entity : world.getOtherEntities(
             null,
-            player.getBoundingBox().expand(30.0, 16.0, 30.0)
+            receiver.bounds().expand(30.0, 16.0, 30.0)
         )) {
             if (!"lightning_bolt".equals(entityTypeName(entity))) {
                 continue;
             }
-            double distance = player.distanceTo(entity);
+            if (receiver.body() && !receiver.visible(world,entity,30.0)) continue;
+            double distance = receiver.distanceTo(entity);
             if (distance < nearestDistance) {
                 nearestDistance = distance;
             }
@@ -554,6 +596,8 @@ public final class WorldObserver {
         this.lastNearbyLightningObservedTick = -1000;
         this.lastNearbyLightningDistance = 99.0;
         this.structureAtPlayer = null;
+        this.structureAtBody = null;
+        this.structureGeneration++;
         this.lastStructureProbeTick = -1000;
     }
 

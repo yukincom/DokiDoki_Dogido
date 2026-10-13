@@ -18,7 +18,7 @@
 
 ## 3. 設計原則
 
-- 通常の観測対象はメインプレイヤー本人。任意の`body_observation`は身体自身の姿勢・owner視認として分離する
+- top-levelはメインプレイヤー本人の観測・所有状態。`body_observation`はドギドの姿勢・視認・周辺感覚として分離し、通常会話等の自分の感覚は後者から作る
 - 1 メッセージは 1 つの主要イベントを持つ
 - 主要イベントに加え、判定に必要な周辺コンテキストを同梱する
 - 音由来情報は方向中心にし、未視認敵の断定を避ける
@@ -56,7 +56,7 @@
 }
 ```
 
-任意の`body_observation`は[HTTP観測v2](adapter-api.md#body-observation-v2)に従う。`pose_basis=server_pose`の自他姿勢と、同じtickの`sample.vision`（`basis=body_eye_raycast_fov`）を含む。`player`・`world`・`visual_threats`へ混ぜず、身体の視認をプレイヤーの危険判定へ変換しない。全体未取得と視覚だけの未取得を区別する。具体例は[Java/Rust共通fixture](../dogido-rust/fixtures/body-observation-v2.json)。
+任意の`body_observation`は[HTTP観測v3](adapter-api.md#body-observation-v3)に従う。server実測の自他姿勢・owner可視性に加え、`sample.senses`へ身体の地点・目・向きによる周辺視認、環境、匂い、音を載せる。感覚の`basis=body_pose_client_world`はserver姿勢そのものと区別する。top-levelのplayer・戦闘観測へ代入せず、会話・環境反応・川柳用の身体観測として消費する。未取得・失効時にplayer由来の感覚で補完しない。具体例は[Java/Rust共通fixture](../dogido-rust/fixtures/body-observation-v3.json)。
 
 ## 5. トップレベル項目
 

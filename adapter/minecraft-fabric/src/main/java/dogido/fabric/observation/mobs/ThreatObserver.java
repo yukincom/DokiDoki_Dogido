@@ -1,5 +1,7 @@
 package dogido.fabric.observation.mobs;
 
+import dogido.fabric.observation.ObservationOrigin;
+
 import dogido.fabric.observation.MobEnvironmentObservation;
 import dogido.fabric.observation.mobs.MobClassifier.MobDisposition;
 import dogido.fabric.observation.mobs.MobClassifier;
@@ -132,16 +134,20 @@ public final class ThreatObserver {
     }
 
     public List<ThreatObservation> scanThreats(ClientPlayerEntity player, ClientWorld world) {
+        return scanThreats(ObservationOrigin.player(player),world);
+    }
+    /** 身体の観測は別インスタンスで採り、現在の視線だけを返す。player戦闘の確認・保持条件は変えない。 */
+    public List<ThreatObservation> scanThreats(ObservationOrigin origin, ClientWorld world) {
         double scanDistance = scanDistance();
         List<Entity> entities = world.getOtherEntities(
-            player,
-            player.getBoundingBox().expand(scanDistance),
+            origin.player(),
+            origin.bounds().expand(scanDistance),
             this::isThreatScanCandidateEntity
         );
 
         List<ThreatObservation> threats = new ArrayList<>();
         for (Entity entity : entities) {
-            if (!(entity instanceof LivingEntity living)) {
+            if (origin.isSelf(entity) || !(entity instanceof LivingEntity living)) {
                 continue;
             }
             UUID entityUuid = entity.getUuid();
@@ -162,23 +168,24 @@ public final class ThreatObserver {
             if (!isThreatCandidateEntity(entity)) {
                 continue;
             }
-            MobDisposition disposition = this.mobClassifier.classifyMobDisposition(player, living);
+            MobDisposition disposition = this.mobClassifier.classifyMobDisposition(origin.threatTargetId(), living);
             if (!disposition.threatNow()) {
                 continue;
             }
-            double distance = Math.sqrt(player.squaredDistanceTo(entity));
+            double distance = origin.distanceTo(entity);
             if (!withinVisualRange(entityUuid, distance)) {
                 continue;
             }
 
             Vec3d entityPosition = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
-            String horizontal = classifyHorizontal(player, entityPosition);
-            String cardinal = classifyCardinal(player, entityPosition);
-            String vertical = classifyVertical(player, entityPosition);
+            String horizontal = classifyHorizontal(origin, entityPosition);
+            String cardinal = classifyCardinal(origin, entityPosition);
+            String vertical = classifyVertical(origin, entityPosition);
             boolean approaching = isApproaching(entity.getUuid(), distance);
             boolean rearThreat = distance <= Math.min(this.settings.rearWarningDistance(), 3.0)
                 && ("back".equals(horizontal) || "back_left".equals(horizontal) || "back_right".equals(horizontal));
-            boolean lineOfSight = hasLineOfSight(player, world, entity);
+            boolean lineOfSight = origin.visible(world,entity,acquisitionDistance());
+            if (origin.body() && !lineOfSight) continue;
             float currentHealth = living.getHealth();
             Float previousHealth = this.lastThreatHealths.get(entity.getUuid());
             boolean recentlyHurt = previousHealth != null && currentHealth + 0.25f < previousHealth;

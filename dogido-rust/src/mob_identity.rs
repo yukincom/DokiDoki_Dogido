@@ -56,6 +56,7 @@ pub fn observed(event: &GameEvent, now: i64) -> (HashSet<String>, Vec<NamedMob>)
         });
     };
     if let Some(look) = &event.look_target
+        && event.body_origin().is_none()
         && look.kind == "entity"
         && let Some(identity) = &look.identity
     {

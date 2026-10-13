@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "status": "observed",
   "age_ms": 25,
   "sample": {
@@ -42,6 +42,38 @@
       "vertical_fov_degrees": 90.0,
       "player_visibility": "visible",
       "reason": "in_view"
+    },
+    "senses": {
+      "version": 1,
+      "status": "observed",
+      "basis": "body_pose_client_world",
+      "source_server_tick": 100,
+      "world": {
+        "biome": "plains",
+        "time_phase": "day",
+        "sky_visible": true,
+        "local_light": 15,
+        "danger_darkness_score": 0
+      },
+      "passive_mobs": [],
+      "visual_threats": [],
+      "nearby_resources": [],
+      "dropped_items": [],
+      "nearby_composition": {
+        "mobs": [],
+        "blocks": [],
+        "mobs_truncated": false,
+        "blocks_truncated": false
+      },
+      "smell_observation": {
+        "status": "none",
+        "components": [],
+        "basis": "smell_policy_v2"
+      },
+      "auditory_threats": [],
+      "ambient_sounds": [],
+      "hearing_basis": "body_server_and_positioned_client_sounds",
+      "hearing_truncated": false
     }
   },
   "pose_basis": "server_pose"

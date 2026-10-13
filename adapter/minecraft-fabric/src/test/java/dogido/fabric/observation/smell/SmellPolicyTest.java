@@ -8,6 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class SmellPolicyTest {
+    @Test void ownerHotbarSmellReachesOnlyTheBodyWithinItsRange() {
+        var close = SmellPolicy.resolve(List.of(SmellPolicy.hotbarCandidate("bread",1)),0,false,null);
+        var far = SmellPolicy.resolve(List.of(SmellPolicy.hotbarCandidate("bread",30)),0,false,null);
+        assertEquals("present",close.status());
+        assertEquals("none",far.status());
+        assertNull(SmellPolicy.hotbarCandidate("bread",Double.NaN));
+        assertEquals(SmellPolicy.hotbarCandidate("bread"),SmellPolicy.hotbarCandidate("bread",0));
+    }
     @Test
     void cachedBlockRemeasuresDistanceWithoutProducingDirection() {
         var cached = new SmellPolicy.LocatedCandidate(

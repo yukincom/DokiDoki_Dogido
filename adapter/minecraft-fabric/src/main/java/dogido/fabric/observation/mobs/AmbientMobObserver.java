@@ -3,6 +3,7 @@ package dogido.fabric.observation.mobs;
 import com.google.gson.JsonObject;
 import dogido.fabric.observation.MobEnvironmentObservation;
 import dogido.fabric.observation.NearbyComposition;
+import dogido.fabric.observation.ObservationOrigin;
 import dogido.fabric.observation.mobs.MobClassifier.MobDisposition;
 import dogido.fabric.observation.mobs.MobClassifier;
 import java.util.ArrayList;
@@ -41,32 +42,36 @@ public final class AmbientMobObserver {
         this.logger = logger;
     }
 
-    public void resetRangeTracking() { this.nearbyMobKinds.reset(); }
+    public void resetRangeTracking() { this.nearbyMobKinds.reset(); this.nearbyMobComposition = NearbyComposition.mobs(List.of()); }
     public JsonObject copyNearbyComposition() { return this.nearbyMobComposition.deepCopy(); }
 
     public List<AmbientMobObservation> scanAmbientMobs(ClientPlayerEntity player, ClientWorld world, boolean captureNearbyKinds) {
+        return scanAmbientMobs(ObservationOrigin.player(player),world,captureNearbyKinds);
+    }
+    /** 受け手の範囲・視線から実視認だけを集める。種類保持はこのcollectorの所有者ごとに独立する。 */
+    public List<AmbientMobObservation> scanAmbientMobs(ObservationOrigin origin, ClientWorld world, boolean captureNearbyKinds) {
         List<Entity> entities = world.getOtherEntities(
-            player,
-            player.getBoundingBox().expand(captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE),
+            origin.player(),
+            origin.bounds().expand(captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE),
             MobClassifier::isAmbientMobCandidate
         );
 
         List<AmbientMobObservation> mobs = new ArrayList<>();
         for (Entity entity : entities) {
-            if (!(entity instanceof LivingEntity living)) {
+            if (origin.isSelf(entity) || !(entity instanceof LivingEntity living)) {
                 continue;
             }
-            MobDisposition disposition = this.mobClassifier.classifyMobDisposition(player, living);
+            MobDisposition disposition = this.mobClassifier.classifyMobDisposition(origin.threatTargetId(), living);
             if (!disposition.ambientEligible()) {
                 continue;
             }
-            double distance = Math.sqrt(player.squaredDistanceTo(entity));
+            double distance = origin.distanceTo(entity);
             if (distance > (captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE)) {
                 continue;
             }
             // 外周の新規種類は今回の表に入らないので、追加の視線検査をしない。
             if (distance > AMBIENT_MOB_DISTANCE && !this.nearbyMobKinds.allows(disposition.type(), distance)) continue;
-            if (!hasLineOfSight(player, world, entity)) {
+            if (!origin.visible(world,entity,captureNearbyKinds ? NearbyComposition.MOB_EXIT : AMBIENT_MOB_DISTANCE)) {
                 continue;
             }
 
@@ -84,8 +89,8 @@ public final class AmbientMobObserver {
                     entity.getUuid(),
                     disposition.type(),
                     distance,
-                    classifyHorizontal(player, entityPosition),
-                    classifyVertical(player, entityPosition),
+                    classifyHorizontal(origin, entityPosition),
+                    classifyVertical(origin, entityPosition),
                     disposition.temperament(),
                     disposition.cautionReason(),
                     isBaby,

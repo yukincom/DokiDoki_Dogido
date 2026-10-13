@@ -130,19 +130,23 @@ adapter の起動時に session を作る。
 - `capabilities` は観測できる情報、`execution_capabilities` は実行できる操作。混ぜない
 - sessionなしの暗黙sessionは実行capabilityを持たず、世界操作を返さない
 
-<a id="body-observation-v2"></a>
+<a id="body-observation-v3"></a>
 
-### 身体の姿勢・視認観測（v2、2026-10-13）
+### 身体の姿勢・感覚観測（v3、2026-10-13）
 
-登録にoptionalの`player_uuid`（小文字・ハイフン付きUUID）を追加した。表示名・call_nameとは分け、身体owner UUIDとの照合に使う。旧adapterの省略は許可し、その接続では身体観測だけ利用不可。Body API v4を読み取れるadapterは`body_observation.v2`をcapabilitiesへ加える。これは観測の契約で、実行権限ではない。
+登録のoptionalな`player_uuid`（小文字・ハイフン付きUUID）を身体ownerとの照合に使う。表示名・call_nameとは分ける。省略した接続は身体観測を利用できない。Body API v5対応adapterは`body_observation.v3`をcapabilitiesへ加える。観測の契約であり、実行権限ではない。
 
-既存ゲームイベントにoptionalの`body_observation`を添える。外形は`version:2, status:"observed", pose_basis:"server_pose", age_ms, sample`。sampleは`context(owner_id,body_id,epoch,dimension)`、`server_tick`、`snapshot_revision`、`self_pose(position,eye_position,yaw,view_yaw,view_pitch)`、`player_pose(position,yaw,pitch)`、`vision`を持つ。[共有JSON例](../dogido-rust/fixtures/body-observation-v2.json)をJava送信・Rust受信双方で検査する。未取得は`version:2,status:"unavailable",reason`だけを送り、座標を0にしない。
+既存ゲームイベントのoptionalな`body_observation`は`version:3, status:"observed", pose_basis:"server_pose", age_ms, sample`。sampleは`context(owner_id,body_id,epoch,dimension)`、`server_tick`、`snapshot_revision`、`self_pose(position,eye_position,yaw,view_yaw,view_pitch)`、`player_pose(position,yaw,pitch)`、`vision`、`senses`を持つ。[共有JSON例](../dogido-rust/fixtures/body-observation-v3.json)をJava送信・Rust受信双方で検査する。全体未取得は`version:3,status:"unavailable",reason`を送り、ゼロ座標へ置換しない。
 
-座標はblock、yawは度（-180以上180未満）、pitchは-90〜90度で正が下。Minecraftの+xは東、+yは上、+zは南、yaw=0は南、+90は西。`pose_basis`はサーバー実測、`vision.basis`は`body_eye_raycast_fov`で根拠を分ける。visionは同一tickの身体の目による距離・視野・遮蔽判定と、`visible/not_visible/unavailable`および理由を持つ。視覚だけ未取得でも正常な姿勢は保持する。範囲・材質・すり抜け中の壁内視点は[視認仕様](2026-10-13-body-vision-phase1.md#所有者の視認)を参照。身体Modは10 client tickごとに採取要求を送り、HTTPは既存のイベント周期（既定20tick）を使う。client受信経過ms＋HTTPイベント経過＋Rust受信後経過が3秒未満の値だけを現在値にする。HTTP周期を3秒以上に延ばすと観測が一時的に未取得になる。
+座標はblock、yawは度（-180以上180未満）、pitchは-90〜90度で正が下。Minecraftの+xは東、+yは上、+zは南、yaw=0は南、+90は西。`pose_basis=server_pose`の自他姿勢と、`vision.basis=body_eye_raycast_fov`のowner可視性は同一server tickで採る。視覚は`visible/not_visible/unavailable`と理由を持つ。範囲・材質・壁内視点は[視認仕様](2026-10-13-body-vision-phase1.md#所有者の視認)を参照する。
 
-Rustは同じowner・次元で受理した新しい身体tick/revisionから現在・前回を持つ。身体epochの切替・未取得・鮮度切れは前回比較を消す。再送・逆順・部分イベントへの旧値合成で鮮度を更新しない。異なる世代は接続中256個まで退役記録に保持し、上限時は`context_limit`として再接続まで未取得にする。モデルには現在／前回の座標・向き・視認と座標規約を渡し、配送UUIDや検査用の距離・方向正解を渡さない。従来の周囲材料はplayer由来と明示する。
+`senses`は`version:1,status,basis:"body_pose_client_world",source_server_tick`を必須とし、tickは姿勢の値と一致する。観測済みなら身体地点の`world`、`passive_mobs`、`visual_threats`、`nearby_resources`、`dropped_items`、`nearby_composition`、`smell_observation`、`auditory_threats`、`ambient_sounds`、`hearing_basis:"body_server_and_positioned_client_sounds"`、`hearing_truncated`を持つ。各内容は既存型を使う。`world`にplayer専用の酸素・リスポーンや未知fieldを混ぜない。未取得はデータ配列を空で偽装せず、`reason=area_unloaded|body_downed|invalid_pose|not_sampled|budget_exhausted`を送る。
 
-HTTP観測v1はv2へ補完せず拒否する。身体Mod・adapter・Rustは対応する版を同時に導入する。Mod不在では既存会話を維持し、身体観測だけを理由付き未取得にする。
+身体Modは10client tickごとに採取要求を送り、HTTPは既存周期（既定20tick）を使う。adapterは検証済み姿勢からclient worldの感覚を一度採り、同じcontext/tick/revisionの姿勢・視認・感覚をまとめて保持する。感覚だけ新しい姿勢へ付け替えない。`age_ms`は同じ観測の再送でも増え続ける。内側の音の経過msは採取tick基準で固定し、Rustが判断時の身体観測年齢を一度だけ加える。
+
+client受信経過＋HTTPイベント経過＋Rust受信後経過が3秒未満の値だけを現在値にする。Rustはowner・次元・epoch・tick/revisionの順序を検証する。再送・逆順で鮮度を更新せず、異なる世代は接続中256個まで退役記録に保持する。上限時は`context_limit`として再接続まで未取得。現在の視認を構造化観測の先頭に置き、感覚の実データは一度だけ投影し、前回の姿勢・視認は過去として残す。
+
+通常会話・匂い質問・環境反応・川柳の自分の感覚には、受理した身体観測だけを使う。元のtop-level player・戦闘・所持品・指差しは各所有者の情報として維持する。身体不在や失効時にplayerの視界・匂いで補完しない。HTTP v1/v2をv3へ補完せず拒否するため、身体Mod・adapter・Rustを対応版へ同時に更新する。[移行と実機確認](2026-10-13-body-observation-origin.md)。
 
 ## 8. `POST /api/v1/game-events`
 

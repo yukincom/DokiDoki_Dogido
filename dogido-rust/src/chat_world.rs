@@ -110,7 +110,7 @@ fn foliage(event: &GameEvent) -> bool {
     {
         return false;
     }
-    if event.player.position.y.is_some_and(|y| y <= 50.0) {
+    if event.observer_y().is_some_and(|y| y <= 50.0) {
         return false;
     }
     let biome = strip(w.biome.as_deref().unwrap_or("")).to_lowercase();
@@ -176,7 +176,7 @@ pub(crate) fn build_place_context(
     shared: bool,
 ) -> Result<Place> {
     let w = &event.world;
-    let y = event.player.position.y;
+    let y = event.observer_y();
     let sky = w.sky_visible;
     let ceiling = w.ceiling_height;
     let cover = w

@@ -1,5 +1,7 @@
 package dogido.fabric.observation.world;
 
+import dogido.fabric.observation.ObservationOrigin;
+
 import java.util.List;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.enums.DoubleBlockHalf;
@@ -175,9 +177,12 @@ public final class ShelterObservation {
     }
 
     static int countNearbySleepingPeople(ClientWorld world, ClientPlayerEntity player) {
+        return countNearbySleepingPeople(world,ObservationOrigin.player(player));
+    }
+    static int countNearbySleepingPeople(ClientWorld world, ObservationOrigin origin) {
         List<Entity> entities = world.getOtherEntities(
-            player,
-            player.getBoundingBox().expand(5.0, 3.0, 5.0),
+            origin.player(),
+            origin.bounds().expand(5.0, 3.0, 5.0),
             entity -> entity.isAlive()
                 && entity instanceof LivingEntity living
                 && living.isSleeping()
@@ -186,7 +191,7 @@ public final class ShelterObservation {
 
         int count = 0;
         for (Entity entity : entities) {
-            if (player.squaredDistanceTo(entity) <= 25.0) {
+            if (!origin.isSelf(entity) && origin.distanceTo(entity) <= 5.0) {
                 count += 1;
             }
         }

@@ -1,8 +1,17 @@
-# Body API v4
+# Body API v5
 
-身体Mod **0.5.0 / protocol 4** の実装契約です。既存adapterは自他姿勢・owner視認の読取りを接続済み（新しい版の実機配置は未実施）。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
+身体Mod **0.6.0 / protocol 5** の実装契約です。既存adapterは自他姿勢・owner視認の読取りを接続済み（新しい版の実機配置は未実施）。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
 
-## v3からの変更
+## v4からの変更
+
+- entrypointは`dogido:body_bridge_v5`、payloadは`body_request_v5`／`body_snapshot_v5`。旧版を補完しない。
+- `hearing(status,serverTick,sounds,truncated)`を追加。serverの実発音時に身体位置への到達を検査し、最大8件・300tickの有界記録として保持する。
+- 各音は`sequence/serverTick/position/soundId/category/volume/pitch/sourceEntityId`を持つ。`pitch`がclientで決まる爆発音はnull。sourceEntityIdも実取得できる場合だけ保持する。再取得で発音tickと通番は更新しない。
+- snapshotのJSONは8192文字・UTF-8 bytes以内。超過時は感覚候補を明示的に切り詰める。
+- `sensors=BODY_VISION_AND_HEARING`。APIの公開`perception` packageへ視野・見通しを共通化し、adapterの身体観測にも同じ規則を使う。食料の見通し条件は維持する。
+- HTTPは`body_observation` v3。一般モブ・環境・匂い・client実音の採取はadapterが身体姿勢を基準に行う。[観測移行仕様](../../../../docs/2026-10-13-body-observation-origin.md)。
+
+## v3からv4への変更（履歴）
 
 - entrypoint：`dogido:body_bridge_v4`、payload：`dogido_experiment:body_request_v4`／`body_snapshot_v4`
 - `pose`に`viewYaw/viewPitch/ownerYaw/ownerPitch`を追加。`Snapshot.yaw`は描画上の身体向き。現モデルの視線は身体の顔向きでpitch=0。
@@ -28,11 +37,11 @@
 - 初回bind／再読み込み／失効／復活後はDIRECTで待機
 - v1の固定追従・探索・退避はローカル試験コマンドに限定
 
-v1／v2／v3のクラスやJARをv4として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
+v1〜v4のクラスやJARをv5として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
 
 ## 公開APIとスレッド
 
-パッケージは`dogido.lab.api`。`BodyBridge`と`BodyProtocol`のrecord／enumが公開契約です。APIにはEntity／Worldが含まれません。
+パッケージは`dogido.lab.api`。`BodyBridge`と`BodyProtocol`のrecord／enumが公開契約です。recordの通信契約にはEntity／Worldが含まれません。共有の視認utilityはMinecraftのworldを入力に受けます。
 
 ```java
 public interface BodyBridge {
@@ -45,13 +54,13 @@ public interface BodyBridge {
 }
 ```
 
-adapterは`cube-dogido-lab-0.5.0-body-api.jar`を**compileOnly**で参照します。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
+adapterは`cube-dogido-lab-0.6.0-body-api.jar`を**compileOnly**で参照します。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
 
 `available()`と送信はMinecraftのclient thread上で行います。`snapshot()`は不変データを読むだけで、HTTP workerから参照できます。受信後3秒を過ぎたsnapshotは空です。HTTP転送時はclient threadでsnapshotと経過msを続けて読み、3秒未満だけを現在値として送ります。受信登録と10client tickごとのポーリングは身体Modが所有します。
 
 ## 最小例
 
-次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv4 entrypointの存在を確認します。
+次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv5 entrypointの存在を確認します。
 
 ```java
 BodyBridge bridge = FabricLoader.getInstance()
@@ -141,7 +150,8 @@ HTTP session、adapterのworldEpoch、身体のContextは別々に照合しま�
 | `food` | 食料専用の`status`・観測tick・候補・`truncated` |
 | `pose` | 同時刻の眼・owner位置・身体の視線・owner yaw/pitch |
 | `vision` | owner視認の三値・理由・範囲・FOV。採取tickはsnapshotのtickと一致 |
-| `sensors` | `OWNER_VISION_ONLY`。一般的なモブ視認・スメル・構造物センサーは未実装 |
+| `hearing` | server実音の発音tick・通番・位置・種類・到達済記録・切り詰め |
+| `sensors` | `BODY_VISION_AND_HEARING`。周辺感覚のHTTP採取はadapterが担当 |
 
 未登録／未ロード時のposition・vitalsはnullです。架空のゼロ座標・HP0へ置き換えません。`OWNER_UNAVAILABLE`と身体の`DOWNED`は別の状態です。
 
@@ -153,7 +163,7 @@ food候補は身体から8ブロック以内、読み込み済みで見通せる
 
 ## 接続できている範囲
 
-実装済み：server身体制御、HP／時間ルール、食料観測と消費、任意Java entrypoint、C2S/S2C、自他姿勢・owner視認の既存adapter／Rust会話・診断への配送。
+実装済み：server身体制御、HP／時間ルール、食料観測と消費、任意Java entrypoint、C2S/S2C、自他姿勢・owner視認・身体の周辺感覚の既存adapter／Rust会話・診断への配送。
 
 未接続：身体操作の専用型・実行capability・モデルの行動選択・結果の受領／利用。身体ModはHTTPサーバー、モデル、TTS、会話セッションを起動しません。
 

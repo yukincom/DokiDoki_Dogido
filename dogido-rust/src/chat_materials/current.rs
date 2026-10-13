@@ -65,6 +65,7 @@ pub(super) fn observed(
 ) -> Vec<handoff::Observation> {
     let mut candidates = ids.to_vec();
     if let Some(vehicle) = &event.player.vehicle
+        && event.body_origin().is_none()
         && !vehicle.vehicle_id.is_empty()
     {
         candidates.push(vehicle.vehicle_id.clone());
@@ -73,6 +74,7 @@ pub(super) fn observed(
         candidates.push(id.into())
     }
     if let Some(look) = &event.look_target
+        && event.body_origin().is_none()
         && look.kind == "entity"
         && !look.name.is_empty()
     {
@@ -173,7 +175,7 @@ pub(super) fn threat(
         parts.push(format!("音メモ: {hearing}"))
     }
     if event.combat.combat_active_hint == Some(true) && !parts.is_empty() {
-        parts.push("交戦中っぽい".into())
+        parts.push("プレイヤーは交戦中っぽい".into())
     }
     parts.join("、")
 }
@@ -187,14 +189,6 @@ pub(super) fn observation(
 ) -> String {
     let catalog = chat_catalog::catalog();
     let mut lines = vec![];
-    let look = chat_catalog::strip(look);
-    if !look.is_empty() {
-        lines.push(format!("視線先: {look}"))
-    }
-    let vehicle = crate::environment::ambient::player_vehicle_fact(event.player.vehicle.as_ref());
-    if !vehicle.is_empty() {
-        lines.push(vehicle)
-    }
     let threat = chat_catalog::strip(threat);
     if !threat.is_empty() && threat != "とくになし" {
         lines.push(format!("脅威: {threat}"))
@@ -233,6 +227,14 @@ pub(super) fn observation(
     let hearing = chat_catalog::strip(hearing);
     if !hearing.is_empty() {
         lines.push(format!("音: {hearing}"))
+    }
+    let look = chat_catalog::strip(look);
+    if !look.is_empty() {
+        lines.push(format!("プレイヤーの視線先（指差し）: {look}"))
+    }
+    let vehicle = crate::environment::ambient::player_vehicle_fact(event.player.vehicle.as_ref());
+    if !vehicle.is_empty() {
+        lines.push(vehicle)
     }
     lines
         .into_iter()

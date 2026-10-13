@@ -330,10 +330,12 @@ impl Dialogue {
             .or(s.latest.as_ref())
             .unwrap()
             .clone();
-        let observation = Observation {
-            event,
-            runtime: s.haiku_context.clone(),
-        };
+        let event = super::body_runtime::event(s, &event);
+        let mut runtime = s.haiku_context.clone();
+        if event.body_origin().is_some_and(|o| !o.available) {
+            runtime.current_structure = None;
+        }
+        let observation = Observation { event, runtime };
         let completed = if casual {
             s.haiku.material_turns.iter().cloned().collect()
         } else {

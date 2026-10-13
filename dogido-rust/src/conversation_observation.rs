@@ -44,6 +44,12 @@ pub fn project(
     darkness_light: f64,
     thunder_age_ms: u64,
 ) -> anyhow::Result<Context> {
+    if event.body_origin().is_some_and(|o| !o.available) {
+        return Ok(Context {
+            observations: json!({"observer":"dogido","sensory_status":"unavailable"}),
+            ..Context::default()
+        });
+    }
     let catalog = world_catalog::catalog();
     let projection = environment::projection::project_environment(event);
     let place = chat_world::shared_place_context(
@@ -143,6 +149,7 @@ fn quantity(value: &crate::events::NearbyQuantity) -> Value {
 /// Session-owned changes since the last completed decision, not a second memory store.
 #[derive(Default)]
 pub struct State {
+    body_context: Option<crate::body::contracts::Context>,
     current: Option<Context>,
     considered: u64,
     notice_previous: Option<Snapshot>,
@@ -150,6 +157,16 @@ pub struct State {
     notice_last_sample: Option<u64>,
 }
 impl State {
+    /// 身体の世代変更・失効では感覚の比較だけを消し、Sessionの会話履歴に触れない。
+    pub(crate) fn observe_origin(&mut self, event: &GameEvent) {
+        let Some(origin) = event.body_origin() else {
+            return;
+        };
+        if !origin.available || origin.context != self.body_context {
+            *self = Self::default();
+            self.body_context = origin.context.clone();
+        }
+    }
     /// 周期に来た新しい全snapshotだけを比較する。初回は基準の作成だけ。
     /// 今回の機会を使えなくても差分は次回へ持ち越さず、発話結果にも依存しない。
     pub fn sample_notice(&mut self, now: u64, interval_ms: u64, full_snapshot: bool) {

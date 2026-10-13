@@ -5,11 +5,12 @@ use std::time::{Duration, Instant};
 const OWNER: &str = "11111111-1111-4111-8111-111111111111";
 const WORLD: &str = "minecraft:overworld";
 pub(crate) fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../fixtures/body-observation-v2.json")).unwrap()
+    serde_json::from_str(include_str!("../../fixtures/body-observation-v3.json")).unwrap()
 }
 fn observation(tick: u64, z: f64) -> Observation {
     let mut v = fixture();
     v["sample"]["server_tick"] = json!(tick);
+    v["sample"]["senses"]["source_server_tick"] = json!(tick);
     v["sample"]["snapshot_revision"] = json!(tick * 2);
     v["sample"]["player_pose"]["position"]["z"] = json!(z);
     serde_json::from_value(v).unwrap()
@@ -23,7 +24,7 @@ fn body_wire_rejects_missing_wrong_version_unknown_field_and_invalid_pose() {
     o.validate().unwrap();
     for (pointer, value) in [
         ("/version", json!(1)),
-        ("/version", json!(3)),
+        ("/version", json!(2)),
         ("/sample/self_pose/yaw", json!(180)),
         ("/sample/context/owner_id", json!("wrong")),
         ("/sample/self_pose/position/x", json!(30_000_001)),
@@ -182,7 +183,7 @@ fn body_v2_visibility_reasons_are_closed_and_unavailable_keeps_pose() {
             json!({"version":version,"status":"unavailable","reason":"unloaded"}),
         )
         .unwrap();
-        assert_eq!(o.validate().is_ok(), version == 2);
+        assert_eq!(o.validate().is_ok(), version == 3);
     }
 }
 #[test]
@@ -290,7 +291,7 @@ fn body_wrong_owner_world_and_unavailable_clear_comparison() {
     assert_eq!(s.project(now).unwrap()["reason"], "dimension_mismatch");
     accept(&mut s, &observation(110, 25.0), now);
     let unavailable = Observation::Unavailable {
-        version: 2,
+        version: 3,
         reason: "unloaded".into(),
     };
     accept(&mut s, &unavailable, now);
@@ -360,4 +361,140 @@ fn body_generation_limit_does_not_reopen_retired_or_last_context() {
     v["sample"]["snapshot_revision"] = json!(400);
     accept(&mut s, &serde_json::from_value(v).unwrap(), now);
     assert_eq!(s.project(now).unwrap()["reason"], "context_limit");
+}
+
+/// 既存ポリシー検査の明示的な身体fixture。製品の入力にはplayerからの補完経路を設けない。
+pub(crate) fn with_senses(mut event: Value, tick: u64) -> crate::events::GameEvent {
+    let mut body = fixture();
+    body["age_ms"] = json!(0);
+    let sample = &mut body["sample"];
+    let dimension = event["player"]["dimension"]
+        .as_str()
+        .unwrap_or(WORLD)
+        .to_owned();
+    event["player"]["dimension"] = json!(dimension);
+    sample["context"]["dimension"] = json!(dimension);
+    sample["server_tick"] = json!(tick);
+    sample["snapshot_revision"] = json!(tick);
+    let senses = &mut sample["senses"];
+    senses["source_server_tick"] = json!(tick);
+    if event["world"].is_object() {
+        senses["world"] = event["world"].clone();
+        for key in ["air_supply", "respawn_point_set", "respawn_distance"] {
+            senses["world"].as_object_mut().unwrap().remove(key);
+        }
+    }
+    for key in [
+        "passive_mobs",
+        "visual_threats",
+        "nearby_resources",
+        "dropped_items",
+        "ambient_sounds",
+        "auditory_threats",
+        "nearby_composition",
+        "smell_observation",
+    ] {
+        if !event[key].is_null() {
+            senses[key] = event[key].clone();
+        }
+    }
+    for key in ["ambient_sounds", "auditory_threats"] {
+        for sound in senses[key].as_array_mut().unwrap() {
+            if sound["heard_ago_ms"].is_null() {
+                sound["heard_ago_ms"] = json!(0);
+            }
+        }
+    }
+    event["body_observation"] = body;
+    crate::events::GameEvent::parse(event).unwrap()
+}
+
+#[test]
+fn senses_contract_requires_closed_version_tick_age_and_limits_without_player_fields() {
+    let mut value = fixture();
+    value["sample"].as_object_mut().unwrap().remove("senses");
+    assert!(serde_json::from_value::<Observation>(value).is_err());
+    let mut value = fixture();
+    value["sample"]["senses"]
+        .as_object_mut()
+        .unwrap()
+        .remove("hearing_truncated");
+    assert!(serde_json::from_value::<Observation>(value).is_err());
+    for (key, bad) in [
+        ("source_server_tick", json!(101)),
+        ("version", json!(2)),
+        ("world", json!({"air_supply":100})),
+        ("world", json!({"respawn_distance":10})),
+        ("world", json!({"untrusted":true})),
+        ("passive_mobs", json!(vec![json!({"type":"cow"}); 65])),
+        ("ambient_sounds", json!([{"type":"cow"}])),
+    ] {
+        let mut value = fixture();
+        value["sample"]["senses"][key] = bad;
+        let parsed: Observation = serde_json::from_value(value).unwrap();
+        assert!(parsed.validate().is_err(), "{key}");
+    }
+    for reason in [
+        "area_unloaded",
+        "body_downed",
+        "invalid_pose",
+        "not_sampled",
+        "budget_exhausted",
+    ] {
+        let mut value = fixture();
+        value["sample"]["senses"] = json!({"version":1,"status":"unavailable","basis":"body_pose_client_world","source_server_tick":100,"reason":reason});
+        serde_json::from_value::<Observation>(value)
+            .unwrap()
+            .validate()
+            .unwrap();
+    }
+}
+
+#[test]
+fn sensory_view_uses_accepted_body_pose_and_preserves_raw_player_ownership() {
+    let at = Instant::now();
+    let raw = with_senses(
+        json!({"schema_version":"2026-05-24","adapter":"test","observed_at":chrono::Utc::now(),
+        "event":{"name":"status_snapshot","source_kind":"system","priority_hint":"background","certainty":"high"},
+        "player":{"dimension":WORLD,"position":{"x":90,"y":120,"z":90},"health":17,"held_item":"torch"},
+        "inventory":{"torch":3},"combat":{"combat_active_hint":true},"look_target":{"kind":"entity","name":"pig"},
+        "world":{"biome":"plains","air_supply":100,"standing_on_magma_block":true,"respawn_point_set":true,"respawn_distance":8},
+        "passive_mobs":[{"type":"pig"}]}),
+        100,
+    );
+    let original = json!(raw);
+    let mut value = original.clone();
+    value["body_observation"]["sample"]["senses"]["world"] =
+        json!({"biome":"snowy_taiga","sky_visible":true});
+    value["body_observation"]["sample"]["senses"]["passive_mobs"] = json!([{"type":"cow"}]);
+    let changed = crate::events::GameEvent::parse(value).unwrap();
+    let mut state = State::default();
+    accept(&mut state, changed.body_observation.as_ref().unwrap(), at);
+    let sensory = state.sensory_event(&raw, at);
+    assert_eq!(sensory.world.biome.as_deref(), Some("snowy_taiga"));
+    assert_eq!(sensory.passive_mobs[0].r#type, "cow");
+    assert_eq!(sensory.observer_y(), Some(64.0));
+    assert_eq!(json!(sensory.player), original["player"]);
+    assert_eq!(json!(sensory.combat), original["combat"]);
+    assert_eq!(json!(sensory.look_target), original["look_target"]);
+    assert_eq!(json!(sensory.inventory), original["inventory"]);
+    assert_eq!(sensory.player_safety_world().air_supply, Some(100));
+    assert_eq!(
+        sensory.player_safety_world().standing_on_magma_block,
+        Some(true)
+    );
+    assert!(sensory.world.air_supply.is_none());
+    assert_eq!(json!(raw), original);
+    let stale = state.sensory_event(&raw, at + Duration::from_secs(3));
+    assert!(!stale.body_origin().unwrap().available);
+    assert!(stale.world.biome.is_none() && stale.passive_mobs.is_empty());
+    assert_eq!(stale.player.health, Some(17.0));
+    assert_eq!(stale.player.position.y, Some(120.0));
+    let model = state.project(at).unwrap();
+    assert_eq!(model.as_object().unwrap().keys().next().unwrap(), "current");
+    assert_eq!(
+        model["current"].as_object().unwrap().keys().next().unwrap(),
+        "vision"
+    );
+    assert!(model["current"]["senses"].get("world").is_none());
 }

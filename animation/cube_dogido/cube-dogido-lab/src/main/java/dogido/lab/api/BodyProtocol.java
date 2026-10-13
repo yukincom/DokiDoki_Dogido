@@ -5,8 +5,8 @@ import java.util.List;
 
 /** 身体の実測と操作を不変データで渡す。HP/食料は身体の情報で、player観測や嗅覚へ混入させない。 */
 public final class BodyProtocol {
-    public static final int VERSION = 4;
-    public static final String ENTRYPOINT = "dogido:body_bridge_v4";
+    public static final int VERSION = 5;
+    public static final String ENTRYPOINT = "dogido:body_bridge_v5";
     private BodyProtocol() {}
 
     public enum Mode { DIRECT, FOLLOW, EXPLORE, HOLD }
@@ -15,7 +15,7 @@ public final class BodyProtocol {
     public enum Action { CALL, MOVE_TO, REST, WAIT, EAT }
     public enum Outcome { ACCEPTED, SUCCEEDED, REJECTED, INTERRUPTED, EXPIRED }
     public enum Submission { QUEUED, UNAVAILABLE, WRONG_THREAD, STALE_CONTEXT }
-    public enum Sensors { OWNER_VISION_ONLY }
+    public enum Sensors { BODY_VISION_AND_HEARING }
     public enum Visibility { VISIBLE, NOT_VISIBLE, UNAVAILABLE }
     public enum Life { ACTIVE, DOWNED }
     public enum ObservationStatus { OBSERVED, UNAVAILABLE }
@@ -54,9 +54,17 @@ public final class BodyProtocol {
     public record VisionObservation(long serverTick, double rangeBlocks,
             double horizontalFovDegrees, double verticalFovDegrees, Visibility playerVisibility, String reason) {}
 
+    /** 発音時の身体位置へ届いた実音。tick/sequenceは再配送で更新しない。pitch=nullはserver未取得（爆発）。 */
+    public record HeardSound(long sequence, long serverTick, Position position, String soundId, String category,
+            float volume, Float pitch, UUID sourceEntityId) {}
+    /** serverの実音発生経路を採取した結果。空配列は世界の無音を保証せず、client固有音も別途補完される。 */
+    public record HearingObservation(ObservationStatus status, long serverTick, List<HeardSound> sounds, boolean truncated) {
+        public HearingObservation { sounds = List.copyOf(sounds); }
+    }
+
     /** position is null when the body is not loaded, never a synthetic origin position. */
     public record Snapshot(int version, Presence presence, Context context, String ownerDimension, long serverTick,
             long snapshotRevision, Position position, float yaw, Activity activity, String reason,
             long appliedStateRevision, StateResult stateResult, ActionResult actionResult, Sensors sensors,
-            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision) {}
+            Vitals vitals, FoodObservation food, PoseObservation pose, VisionObservation vision, HearingObservation hearing) {}
 }

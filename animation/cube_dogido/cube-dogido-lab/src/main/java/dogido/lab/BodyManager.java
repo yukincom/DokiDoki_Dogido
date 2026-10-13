@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 
 /** 読み込み済み身体をserver単位で登録し、毎tickの生命処理と不変snapshot取得を仲介する。所有台帳にある未ロード個体は欠損として返し、別個体を自動生成しない。 */
 final class BodyManager {
@@ -25,6 +26,7 @@ final class BodyManager {
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity,world) -> {
             if (entity instanceof DogidoEntity body) {
+                body.clearHearing();
                 Map<UUID,DogidoEntity> bodies = LOADED.get(world.getServer());
                 if (bodies != null) bodies.remove(body.getUuid(),body);
                 Entity.RemovalReason reason = body.getRemovalReason();
@@ -43,6 +45,16 @@ final class BodyManager {
         UUID id = BodyOwners.get(player.getEntityWorld().getServer()).body(player.getUuid());
         return id == null ? null : LOADED.getOrDefault(player.getEntityWorld().getServer(),Map.of()).get(id);
     }
+    /** server発音の実座標を同じ世界で読込み済みの身体へ渡す。各身体が所有関係・到達距離を検証する。 */
+    static void recordSound(ServerWorld world, Position source, String soundId, String category,
+            float volume, Float pitch, double range, UUID sourceEntityId) {
+        Map<UUID,DogidoEntity> bodies = LOADED.get(world.getServer());
+        if (bodies == null) return;
+        long tick = world.getServer().getTicks();
+        for (DogidoEntity body : bodies.values())
+            if (!body.isRemoved() && body.getEntityWorld() == world)
+                body.hearSound(tick,source,soundId,category,volume,pitch,range,sourceEntityId);
+    }
     static Snapshot snapshot(ServerPlayerEntity player) {
         MinecraftServer server = player.getEntityWorld().getServer();
         DogidoEntity body = body(player);
@@ -51,8 +63,9 @@ final class BodyManager {
         return new Snapshot(dogido.lab.api.BodyProtocol.VERSION,id == null ? Presence.NOT_BOUND : Presence.UNLOADED,
             id == null ? null : new Context(player.getUuid(),id,null,null),player.getEntityWorld().getRegistryKey().getValue().toString(),server.getTicks(),0,null,0,
             id == null ? Activity.UNBOUND : Activity.HOLDING,id == null ? "bind_existing_body" : "body_chunk_not_loaded",
-            -1,null,null,Sensors.OWNER_VISION_ONLY,null,
+            -1,null,null,Sensors.BODY_VISION_AND_HEARING,null,
             new FoodObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false),null,
-            BodyVision.unavailable(server.getTicks(),id == null ? "invalid_pose" : "area_unloaded"));
+            BodyVision.unavailable(server.getTicks(),id == null ? "invalid_pose" : "area_unloaded"),
+            new HearingObservation(ObservationStatus.UNAVAILABLE,server.getTicks(),java.util.List.of(),false));
     }
 }

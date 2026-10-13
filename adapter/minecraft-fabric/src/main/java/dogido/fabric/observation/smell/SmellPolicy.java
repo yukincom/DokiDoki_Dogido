@@ -39,11 +39,16 @@ public final class SmellPolicy {
     // 手元の匂いは距離0。選択スロットやスタック数で強さを増やさない。
     // 同じ匂いの品を複数持っていても、resolveの同種集約で一種類へ戻る。
     static Candidate hotbarCandidate(String rawItemId) {
+        return hotbarCandidate(rawItemId,0.0);
+    }
+    /** 持ち物はownerの位置にある匂い源。身体観測では受け手までの実距離を渡す。 */
+    static Candidate hotbarCandidate(String rawItemId, double receiverDistance) {
+        if (!Double.isFinite(receiverDistance) || receiverDistance < 0) return null;
         Spec spec = itemSpec(rawItemId);
         if (spec == null || !spec.hotbarEligible()) {
             return null;
         }
-        return spec.toCandidate("hotbar", null, 0.0, false);
+        return spec.toCandidate("hotbar", null, receiverDistance, false);
     }
 
     static Candidate droppedItemCandidate(String rawItemId, String sourceId, double distance) {

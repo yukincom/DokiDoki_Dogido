@@ -1,5 +1,7 @@
 package dogido.lab;
 
+import dogido.lab.api.perception.BodyVisibility;
+
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.Bootstrap;
@@ -64,6 +66,18 @@ class BodyVisibilityTest {
         assertEquals(BodyVisibility.Trace.BLOCKED,trace(scene,BodyVisibility.Purpose.FOOD,new BlockPos(0,0,4)));
         scene.blocks.put(new BlockPos(0,0,2),Blocks.WATER.getDefaultState());
         assertEquals(BodyVisibility.Trace.CLEAR,trace(scene,BodyVisibility.Purpose.FOOD,null));
+    }
+    @Test void visualBlocksAllowOnlyTheTargetHitWithoutChangingGlassOrWallRules() {
+        Scene scene = new Scene();
+        BlockPos target = new BlockPos(0,0,4);
+        scene.blocks.put(target,Blocks.STONE.getDefaultState());
+        assertEquals(BodyVisibility.Trace.BLOCKED,trace(scene,BodyVisibility.Purpose.VISION,null));
+        assertEquals(BodyVisibility.Trace.CLEAR,trace(scene,BodyVisibility.Purpose.VISION,target));
+        scene.blocks.put(new BlockPos(0,0,2),Blocks.GLASS.getDefaultState());
+        assertEquals(BodyVisibility.Trace.CLEAR,trace(scene,BodyVisibility.Purpose.VISION,target));
+        assertEquals(BodyVisibility.Trace.BLOCKED,trace(scene,BodyVisibility.Purpose.FOOD,target));
+        scene.blocks.put(new BlockPos(0,0,3),Blocks.STONE.getDefaultState());
+        assertEquals(BodyVisibility.Trace.BLOCKED,trace(scene,BodyVisibility.Purpose.VISION,target));
     }
     @Test void anEyeInsideAWallSeesOutWithSpectatorViewButASeparateWallStillOccludes() {
         Scene scene = new Scene();

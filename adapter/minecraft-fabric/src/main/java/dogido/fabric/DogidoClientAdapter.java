@@ -67,6 +67,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     // client tickで一度採る身体実測。各イベントは同じ不変コピーを送信する。
     private final dogido.fabric.body.BodyConnection bodyConnection = new dogido.fabric.body.BodyConnection();
     private com.google.gson.JsonObject bodyObservation;
+    private dogido.fabric.body.BodySensesCollector bodySenses;
     private final SmellObserver smellObserver = new SmellObserver();
 
     private long tickCounter = 0;
@@ -108,6 +109,10 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.characterHud = DogidoCharacterHud.register();
         this.config = DogidoConfig.load();
         this.playerObserver = new PlayerObserver(this.config.playerNameOverride);
+        this.bodySenses = new dogido.fabric.body.BodySensesCollector(LOGGER,() -> this.tickCounter,
+            this.config.snapshotIntervalTicks,this.config.audioThreatDistance,new ThreatObserver.Settings(
+                this.config.maxThreatDistance,this.config.visibleThreatDistance,this.config.rearWarningDistance,
+                this.config.panicDistance,this.config.visualConfirmTicks,this.config.visualHoldTicks,this.config.combatEndedQuietTicks));
         this.soundObserver = new SoundObserver(this.config.audioThreatDistance, this.mobClassifier,
             LOGGER, () -> this.tickCounter);
         this.threatObserver = new ThreatObserver(new ThreatObserver.Settings(
@@ -184,6 +189,11 @@ public final class DogidoClientAdapter implements ClientModInitializer {
             return;
         }
         instance.soundObserver.onPlayedSound(sound);
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (instance.bodySenses != null && client.player != null && client.world != null) {
+            var frame = instance.bodyConnection.captureFrame(client.player.getUuid(),client.world.getRegistryKey().getValue().toString());
+            instance.bodySenses.onPlayedSound(sound,frame,client);
+        }
     }
 
     /**
@@ -249,7 +259,7 @@ public final class DogidoClientAdapter implements ClientModInitializer {
         this.lastPlayerZ = player.getZ();
 
         this.tickCounter += 1;
-        this.bodyObservation = this.bodyConnection.capture(player.getUuid(),currentDimensionId);
+        this.bodyObservation = this.bodySenses.capture(this.bodyConnection.captureFrame(player.getUuid(),currentDimensionId),client);
         this.eventClient.ensureSession(this.playerObserver.resolvePlayerName(player),player.getUuid(),this.bodyConnection.supported());
         this.soundObserver.expireSoundObservations();
         this.worldObserver.expireBlockBreakObservations(this.tickCounter);
@@ -380,6 +390,8 @@ public final class DogidoClientAdapter implements ClientModInitializer {
     }
 
     private void resetTransientState() {
+        if (this.bodySenses != null) this.bodySenses.reset();
+        this.bodyObservation = null;
         this.ambientMobObserver.resetRangeTracking();
         this.worldObserver.resetRangeTracking();
         this.worldObserver.resetPortalTracking();

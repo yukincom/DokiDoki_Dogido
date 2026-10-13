@@ -27,6 +27,35 @@ pub struct State {
     context_limit_reached: bool,
 }
 impl State {
+    /// 会話・環境・川柳が使う感覚用コピー。検証済みの現世代と鮮度を満たした感覚だけを渡す。
+    /// 元eventのplayer/combat/指差しは変えず、未取得時もプレイヤーの感覚へ戻さない。
+    pub(crate) fn sensory_event(
+        &self,
+        event: &crate::events::GameEvent,
+        now: Instant,
+    ) -> crate::events::GameEvent {
+        let reading = self.current.as_ref().filter(|r| r.age(now) < FRESH_MS);
+        let sample = reading.map(|r| &r.sample);
+        let senses = sample.and_then(|s| match &s.senses {
+            super::senses::Senses::Observed(s) => Some(s.as_ref()),
+            super::senses::Senses::Unavailable { .. } => None,
+        });
+        event.with_body_senses(
+            senses,
+            super::senses::Origin {
+                player_safety: event.world.clone(),
+                player_observed_at: event.observed_at.clone(),
+                context: sample.map(|s| s.context.clone()),
+                revision: sample.map(|s| s.snapshot_revision),
+                position: sample.map(|s| s.self_pose.position),
+                available: senses.is_some(),
+                age_ms: reading.map(|r| r.age(now)).unwrap_or(0),
+                body: self
+                    .project(now)
+                    .unwrap_or_else(|| json!({"status":"unavailable","reason":"not_sampled"})),
+            },
+        )
+    }
     fn clear(&mut self, reason: &str) {
         self.current = None;
         self.previous = None;
@@ -119,18 +148,17 @@ impl State {
         }
         let s = &reading.sample;
         Some(
-            json!({"status":"observed","pose_basis":"server_pose","dimension":s.context.dimension,
+            json!({"current":raw(s),"status":"observed","pose_basis":"server_pose","dimension":s.context.dimension,
             "coordinate_system":{"position_unit":"block","x_positive":"east","y_positive":"up","z_positive":"south",
                 "yaw_unit":"degree","yaw_zero":"south","yaw_positive_90":"west",
                 "pitch_unit":"degree","pitch_positive":"down"},
-            "age_ms":reading.age(now),"current":raw(s),"previous":self.previous.as_ref().map(raw),
+            "age_ms":reading.age(now),"previous":self.previous.as_ref().map(raw),
             "sample_interval_ticks":self.previous.as_ref().map(|p| s.server_tick-p.server_tick)}),
         )
     }
 }
 fn raw(s: &Sample) -> Value {
-    json!({"self":{"subject":"ドギド","position":s.self_pose.position,"eye_position":s.self_pose.eye_position,
+    json!({"vision":s.vision,"senses":s.senses.summary(),"self":{"subject":"ドギド","position":s.self_pose.position,"eye_position":s.self_pose.eye_position,
             "yaw":s.self_pose.yaw,"view_yaw":s.self_pose.view_yaw,"view_pitch":s.self_pose.view_pitch},
-        "player":{"subject":"プレイヤー","position":s.player_pose.position,"yaw":s.player_pose.yaw,"pitch":s.player_pose.pitch},
-        "vision":s.vision})
+        "player":{"subject":"プレイヤー","position":s.player_pose.position,"yaw":s.player_pose.yaw,"pitch":s.player_pose.pitch}})
 }

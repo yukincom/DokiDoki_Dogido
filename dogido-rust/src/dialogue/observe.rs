@@ -85,17 +85,22 @@ impl Dialogue {
                 s.environment_latest = Some(environment_runtime::context(s, &event, complete));
                 let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
                 s.danger.set_presence(boss, ominous);
-                s.danger.update(&event, now, complete, &self.config.combat);
-                s.ambient.update(&event, now, complete, &self.config.combat);
+                let senses = super::body_runtime::event(s, &event);
+                s.danger.update(&senses, now, complete, &self.config.combat);
+                s.ambient
+                    .update(&senses, now, complete, &self.config.combat);
+                s.conversation_observation.observe_origin(&senses);
                 if let Some(current) = &s.environment_latest {
+                    let current = super::body_runtime::event(s, current);
                     match crate::conversation_observation::project(
-                        current,
+                        &current,
                         s.ambient.current_structure(),
                         self.config.combat.number("home_bed_prompt_distance"),
                         self.config.combat.number("darkness_advice_light_threshold"),
                         self.config.combat.ms("weather_sound_recent_ms"),
                     ) {
                         Ok(context) => {
+                            let context = super::body_runtime::with_context(context, &current);
                             s.conversation_observation.observe(context);
                             s.conversation_observation.sample_notice(
                                 now,
@@ -161,10 +166,13 @@ impl Dialogue {
                     &self.config.warnings,
                 );
                 let names = s.combat.take_name_updates();
-                if let Err(error) =
-                    s.chat_observation
-                        .observe(&event, &names, &chat_context::CatalogLabels)
-                {
+                let senses = super::body_runtime::event(s, &event);
+                if let Err(error) = s.chat_observation.observe_body(
+                    &senses,
+                    &event,
+                    &names,
+                    &chat_context::CatalogLabels,
+                ) {
                     tracing::warn!(event="chat_observation_rejected", session_id, %error);
                 }
                 let conversation_threat = warnings::interruption_reason(&event).is_some()
@@ -241,7 +249,9 @@ impl Dialogue {
                 s.danger.finish_frame(s.mode);
             } else {
                 let s = d.sessions.get_mut(session_id).unwrap();
-                if let Err(error) = s.chat_observation.observe(
+                let senses = super::body_runtime::event(s, &event);
+                if let Err(error) = s.chat_observation.observe_body(
+                    &senses,
                     &event,
                     &Default::default(),
                     &chat_context::CatalogLabels,

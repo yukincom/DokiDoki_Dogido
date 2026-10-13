@@ -147,7 +147,8 @@ pub(super) fn focus(
         .as_ref()
         .or(s.latest.as_ref())
         .expect("environment observation");
-    let light = s.danger.light_context(e, settings);
+    let e = super::body_runtime::event(s, e);
+    let light = s.danger.light_context(&e, settings);
     let casual = s.foreground.route == crate::foreground::Route::Casual
         && !crate::combat::model::elapsed(
             now,
@@ -163,7 +164,7 @@ pub(super) fn focus(
         ominous_presence: ominous,
         notice_ready: s.conversation_observation.noticing_context().is_some(),
         submerged: e.world.is_submerged == Some(true),
-        safe_zone_with_door: danger::safe_zone_with_door(e),
+        safe_zone_with_door: danger::safe_zone_with_door(&e),
         light: LightContext {
             surroundings_reasonably_lit: light.reasonably_lit,
             severe_darkness: light.severe_darkness,
@@ -204,7 +205,7 @@ pub(super) fn refresh_dialogue_context(s: &Session, actions: &mut [Speech]) -> b
                 };
                 context
             } else {
-                s.conversation_observation.context().unwrap_or_default()
+                super::body_runtime::context(s).unwrap_or_default()
             };
             leaf.details[key]["world_context"] = json!(context.for_reaction(kind, &leaf.details));
         }
@@ -307,8 +308,13 @@ impl Dialogue {
         let s = &d.sessions[sid];
         let recent = json!({"conversation":s.history.rows()});
         if let Some(event) = s.environment_latest.as_ref() {
+            let event = super::body_runtime::event(s, event);
             for action in &mut actions {
-                crate::environment::reaction::attach(action, event, &recent, &self.config.combat);
+                crate::environment::reaction::attach(action, &event, &recent, &self.config.combat);
+                if let Some(leaf) = action.leaf.as_mut() {
+                    leaf.details["__body_context"] =
+                        json!(event.body_origin().and_then(|o| o.context.as_ref()));
+                }
             }
         }
         if !refresh_dialogue_context(s, &mut actions) {
@@ -369,6 +375,7 @@ impl Dialogue {
         let Some(event) = s.environment_latest.clone() else {
             return;
         };
+        let event = super::body_runtime::event(s, &event);
         let (boss, ominous) = s.combat.environmental_presence(now, &self.config.combat);
         s.danger.set_presence(boss, ominous);
         let focus = focus(s, now, &self.config.combat);
@@ -504,6 +511,7 @@ impl Dialogue {
         else {
             return;
         };
+        let event = super::body_runtime::event(s, &event);
         let focus = focus(s, now, &self.config.combat);
         if s.haiku.foreground()
             || s.cancel.is_some()
@@ -644,6 +652,7 @@ mod tests {
         for (time, expected) in [(11000, "play"), (12000, "sleep")] {
             value["world"]["time_of_day"] = time.into();
             let event = GameEvent::parse(value.clone()).unwrap();
+            let event = super::super::body_runtime::install_test_senses(s, &event, time as u64);
             s.conversation_observation.observe(
                 crate::conversation_observation::project(&event, None, 32.0, 7.0, 5000).unwrap(),
             );
@@ -736,6 +745,7 @@ mod tests {
             crate::conversation_observation::project(&event, None, 32.0, 7.0, 5000).unwrap();
         let mut data = d.data.lock().unwrap();
         let s = data.sessions.get_mut("catalogue").unwrap();
+        let event = super::super::body_runtime::install_test_senses(s, &event, 1);
         s.conversation_observation.observe(context);
         s.conversation_observation.sample_notice(0, 1, true);
         let mut changed = s.conversation_observation.context().unwrap();

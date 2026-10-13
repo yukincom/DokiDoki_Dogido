@@ -161,15 +161,32 @@ pub(super) fn applicable(
         else {
             return false;
         };
+        let event = super::body_runtime::event(session, event);
+        if event.body_origin().is_some_and(|o| !o.available)
+            && action.kind != "magma_block"
+            && !(action.kind == "smell" && action.delivery == Delivery::PlayerReply)
+        {
+            return false;
+        }
+        if action
+            .leaf
+            .as_ref()
+            .and_then(|leaf| leaf.details.get("__body_context"))
+            .is_some_and(|context| {
+                *context != json!(event.body_origin().and_then(|o| o.context.as_ref()))
+            })
+        {
+            return false;
+        }
         if !session
             .danger
-            .still_applicable(action, event, environment_settings)
-            || !crate::environment::ambient::still_applicable(action, event)
+            .still_applicable(action, &event, environment_settings)
+            || !crate::environment::ambient::still_applicable(action, &event)
         {
             return false;
         }
         if action.kind == "light_source_gain" {
-            let light = session.danger.light_context(event, environment_settings);
+            let light = session.danger.light_context(&event, environment_settings);
             if light.severe_darkness {
                 return false;
             }
@@ -421,11 +438,12 @@ impl Dialogue {
                 })
                 && let Some(event) = s.environment_latest.as_ref().or(s.latest.as_ref())
                 && interruption_reason(event).is_none()
+                && let event = super::body_runtime::event(s, event)
                 && w.actions
                     .iter()
-                    .any(|a| crate::environment::reaction::only_smell_estimate_changed(a, event))
+                    .any(|a| crate::environment::reaction::only_smell_estimate_changed(a, &event))
             {
-                s.ambient.reconsider_smell_estimate(event);
+                s.ambient.reconsider_smell_estimate(&event);
             }
             for a in &w.actions {
                 if let Some(window) = a.rain_after_window {
@@ -939,14 +957,13 @@ pub(super) fn answer_fixed_query(
     settings: &crate::combat::model::Settings,
 ) -> Speech {
     if kind == "smell" {
-        let mut reply = session.ambient.smell_query_reply(
-            session
-                .environment_latest
-                .as_ref()
-                .or(session.latest.as_ref())
-                .expect("fresh query"),
-            text,
-        );
+        let raw = session
+            .environment_latest
+            .as_ref()
+            .or(session.latest.as_ref())
+            .expect("fresh query");
+        let event = super::body_runtime::event(session, raw);
+        let mut reply = session.ambient.smell_query_reply(&event, text);
         reply.delivery = Delivery::PlayerReply;
         return reply;
     }
@@ -1064,6 +1081,7 @@ mod tests {
             let settings = &dialogue.config.combat;
             let mut data = dialogue.data.lock().unwrap();
             let session = data.sessions.get_mut("s").unwrap();
+            let old = super::super::body_runtime::install_test_senses(session, &old, 1);
             session.ambient.update(&old, 1000, true, settings);
             session.ambient.update(&old, 1100, true, settings);
             let mut action = session
@@ -1072,8 +1090,7 @@ mod tests {
                 .unwrap();
             action.delivery = Delivery::Ambient;
             crate::environment::reaction::attach(&mut action, &old, &json!({}), settings);
-            session.latest = Some(current.clone());
-            session.environment_latest = Some(current.clone());
+            let current = super::super::body_runtime::install_test_senses(session, &current, 2);
             session.received = Some(Instant::now());
             session.ambient.update(&current, 1200, true, settings);
             let (turn, _rx) = Dialogue::queue_actions(&mut data, "s", &[action], None);

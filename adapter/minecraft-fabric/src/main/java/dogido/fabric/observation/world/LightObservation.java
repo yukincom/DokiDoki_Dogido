@@ -239,7 +239,10 @@ final class LightObservation {
     }
 
     static boolean isStandingOnMagmaBlock(ClientWorld world, ClientPlayerEntity player) {
-        BlockPos blockBelow = player.getBlockPos().down();
+        return isStandingOnMagmaBlock(world,player.getBlockPos());
+    }
+    static boolean isStandingOnMagmaBlock(ClientWorld world, BlockPos origin) {
+        BlockPos blockBelow = origin.down();
         String blockId = Registries.BLOCK.getId(world.getBlockState(blockBelow).getBlock()).getPath();
         return "magma_block".equals(blockId);
     }

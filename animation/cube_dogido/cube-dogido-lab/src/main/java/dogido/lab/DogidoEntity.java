@@ -46,6 +46,7 @@ public final class DogidoEntity extends PathAwareEntity {
     private final BodyVitals vitals = new BodyVitals();
     private final DirectedMotion directed = new DirectedMotion();
     private final BodyFood food = new BodyFood(this);
+    private final BodyHearing hearing = new BodyHearing();
     private ServerPlayerEntity lastOwner;
     private String lastOwnerDimension;
     private boolean lastOwnerAvailable;
@@ -91,7 +92,7 @@ public final class DogidoEntity extends PathAwareEntity {
             administrativeRemoval = true; super.onDeath(source); return;
         }
         // 通常の撃破で個体・所有関係を削除しない。HP0のまま復活待ちへ移し、loot/XPを発生させない。
-        vitals.collapse(tuning); directed.clear(); controller.reset();
+        vitals.collapse(tuning); directed.clear(); controller.reset(); hearing.clear();
         control.completeAction(Outcome.INTERRUPTED,"body_downed"); control.pause();
         activity = Activity.DOWNED; reason = "respawn_wait"; motion = Vec3d.ZERO; setVelocity(Vec3d.ZERO);
         setPose(EntityPose.DYING); snapshotRevision++;
@@ -147,7 +148,7 @@ public final class DogidoEntity extends PathAwareEntity {
             getEntityWorld().getRegistryKey().getValue().toString()));
         // Only explicit local test controls survive. Remote commands need a fresh context.
         if (localControl) control.local(mode,retreat);
-        controller.reset(); directed.clear(); food.clear(); motion = Vec3d.ZERO;
+        controller.reset(); directed.clear(); food.clear(); hearing.clear(); motion = Vec3d.ZERO;
         snapshotRevision++;
     }
     public String bind(ServerPlayerEntity player) {
@@ -243,6 +244,19 @@ public final class DogidoEntity extends PathAwareEntity {
         return requestAction(player,new ActionRequest(control.context(),sequence,UUID.randomUUID(),serverTick(),100,action,destination,foodId));
     }
     FoodObservation foodObservation() { requireServerThread(); return food.observe(); }
+    /** 実音が発生した瞬間の身体足元で到達を判定する。観測取得時の移動先へ過去音を付け替えない。 */
+    void hearSound(long tick, Position source, String soundId, String category,
+            float volume, Float pitch, double range, UUID sourceEntityId) {
+        requireServerThread(); prepareLifecycle();
+        ServerPlayerEntity player = owner();
+        if (player == null || player.getEntityWorld() != getEntityWorld() || vitals.downed() || isRemoved()) {
+            hearing.clear(); return;
+        }
+        if (hearing.hear(control.context(),tick,new Position(getX(),getY(),getZ()),source,soundId,category,
+                volume,pitch,range,sourceEntityId)) snapshotRevision++;
+    }
+    /** ENTITY_UNLOAD時に未配送の音も破棄し、同じ個体の再読込みへ保持を残さない。 */
+    void clearHearing() { hearing.clear(); }
     public Snapshot snapshot() {
         requireServerThread(); prepareLifecycle();
         Vec3d p = getEntityPos();
@@ -252,10 +266,12 @@ public final class DogidoEntity extends PathAwareEntity {
         PoseObservation pose = BodyPoseObservation.capture(this,presentOwner);
         // 姿勢と視覚を同じserver呼出しで採り、旧視界へ新しいsnapshot時刻を付けない。
         return new Snapshot(BodyProtocol.VERSION,presentOwner == null ? Presence.OWNER_UNAVAILABLE : Presence.PRESENT,control.context(),player == null ? null : player.getEntityWorld().getRegistryKey().getValue().toString(),tick,snapshotRevision,
-            new Position(p.x,p.y,p.z),getBodyYaw(),activity,reason,control.revision(),control.stateResult(),control.actionResult(),Sensors.OWNER_VISION_ONLY,
+            new Position(p.x,p.y,p.z),getBodyYaw(),activity,reason,control.revision(),control.stateResult(),control.actionResult(),Sensors.BODY_VISION_AND_HEARING,
             vitals.snapshot(getHealth(),getMaxHealth(),damageEnabled(),player == null ? null : player.interactionManager.getGameMode().getId()),
             presentOwner == null || vitals.downed() ? new FoodObservation(ObservationStatus.UNAVAILABLE,tick,List.of(),false) : food.observe(),
-            pose,BodyVision.capture(this,presentOwner,pose,tick));
+            pose,BodyVision.capture(this,presentOwner,pose,tick),
+            hearing.observe(control.context(),tick,new Position(p.x,p.y,p.z),
+                presentOwner != null && presentOwner.getEntityWorld() == getEntityWorld() && !vitals.downed()));
     }
 
     private void prepareLifecycle() {

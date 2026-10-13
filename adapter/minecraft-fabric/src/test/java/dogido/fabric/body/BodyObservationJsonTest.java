@@ -24,12 +24,14 @@ class BodyObservationJsonTest {
     static Snapshot snapshot(Presence presence, Position position, float yaw, PoseObservation pose, VisionObservation vision) {
         return new Snapshot(BodyProtocol.VERSION,presence,new Context(OWNER,
             UUID.fromString("22222222-2222-4222-8222-222222222222"),UUID.fromString("33333333-3333-4333-8333-333333333333"),WORLD),
-            WORLD,100,200,position,yaw,Activity.HOLDING,"test",0,null,null,Sensors.OWNER_VISION_ONLY,null,null,
-            pose,vision);
+            WORLD,100,200,position,yaw,Activity.HOLDING,"test",0,null,null,Sensors.BODY_VISION_AND_HEARING,null,null,
+            pose,vision,new HearingObservation(ObservationStatus.OBSERVED,100,java.util.List.of(),false));
     }
-    @Test void wireMatchesRustFixtureAndDoesNotAlterRawPosition() throws Exception {
+    @Test void poseWireMatchesRustFixtureAndLeavesUncollectedSensesUnavailable() throws Exception {
         var actual = BodyObservationJson.observed(snapshot(Presence.PRESENT,new Position(10,64,20),360),25,OWNER,WORLD);
-        var expected = JsonParser.parseString(Files.readString(Path.of("../../dogido-rust/fixtures/body-observation-v2.json")));
+        var expected = JsonParser.parseString(Files.readString(Path.of("../../dogido-rust/fixtures/body-observation-v3.json"))).getAsJsonObject();
+        assertEquals("not_sampled",actual.getAsJsonObject("sample").getAsJsonObject("senses").get("reason").getAsString());
+        expected.getAsJsonObject("sample").add("senses",BodyObservationJson.unavailableSenses(100,"not_sampled"));
         assertEquals(expected,actual);
         assertFalse(actual.toString().contains("distance"));
     }
@@ -45,7 +47,7 @@ class BodyObservationJsonTest {
     @Test void missingStaleWrongOwnerAndWrongWorldHaveNoCoordinates() {
         var s = snapshot(Presence.PRESENT,new Position(10,64,20),0);
         var legacy = new com.google.gson.Gson().toJsonTree(s).getAsJsonObject();
-        legacy.addProperty("version",3);
+        legacy.addProperty("version",4);
         assertEquals("version_mismatch",BodyObservationJson.observed(
             new com.google.gson.Gson().fromJson(legacy,Snapshot.class),0,OWNER,WORLD).get("reason").getAsString());
         for (var actual : java.util.List.of(
@@ -91,7 +93,7 @@ class BodyObservationJsonTest {
         try (var loader = new URLClassLoader(new URL[]{code},getClass().getClassLoader()) {
             @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
                 if (name.startsWith("dogido.lab.")) throw new ClassNotFoundException(name);
-                if (name.startsWith("dogido.fabric.body.")) {
+                if (name.startsWith("dogido.fabric.body.") || name.equals("dogido.fabric.DogidoClientAdapter")) {
                     Class<?> c = findLoadedClass(name);
                     if (c == null) c = findClass(name);
                     if (resolve) resolveClass(c);
@@ -108,6 +110,13 @@ class BodyObservationJsonTest {
             method.setAccessible(true);
             assertTrue(method.invoke(null,"not_installed").toString().contains("not_installed"));
             assertThrows(ClassNotFoundException.class,() -> loader.loadClass("dogido.lab.api.BodyBridge"));
+            var settings = new dogido.fabric.observation.mobs.ThreatObserver.Settings(16,16,8,4,2,40,200);
+            var collectorType = loader.loadClass("dogido.fabric.body.BodySensesCollector");
+            var collector = collectorType.getConstructor(org.slf4j.Logger.class,java.util.function.LongSupplier.class,
+                int.class,double.class,settings.getClass()).newInstance(org.slf4j.LoggerFactory.getLogger("absence-test"),
+                    (java.util.function.LongSupplier)() -> 0L,10,16.0,settings);
+            collectorType.getMethod("reset").invoke(collector);
+            assertNotNull(loader.loadClass("dogido.fabric.DogidoClientAdapter").getConstructor().newInstance());
         }
     }
 }

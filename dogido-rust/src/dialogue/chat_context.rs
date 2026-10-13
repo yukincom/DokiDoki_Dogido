@@ -92,6 +92,8 @@ pub(super) fn update_haiku(
 #[serde(deny_unknown_fields)]
 pub(super) struct Native {
     pub snapshot: Snapshot,
+    #[serde(skip)]
+    pub sensory_event: Option<GameEvent>,
     pub context: Context,
     pub settings: Settings,
 }
@@ -103,19 +105,25 @@ pub(super) fn capture(
     history: CompletedHistory,
     workshop: Option<&Value>,
 ) -> anyhow::Result<Native> {
+    let senses = super::body_runtime::event(s, event);
     Ok(Native {
-        snapshot: s.chat_observation.snapshot(event, &CatalogLabels)?,
+        snapshot: s.chat_observation.snapshot_body(&senses, &CatalogLabels)?,
+        sensory_event: Some(senses.clone()),
         context: Context {
             mode: serde_json::to_value(s.mode)
                 .expect("mode enum")
                 .as_str()
                 .unwrap()
                 .into(),
-            current_structure: s.ambient.current_structure().map(str::to_owned),
+            current_structure: senses
+                .body_origin()
+                .filter(|o| o.available)
+                .and_then(|_| s.ambient.current_structure())
+                .map(str::to_owned),
             history,
             workshop_open: workshop.is_some(),
             workshop_details: workshop.map(workshop_details).transpose()?,
-            world_context: super::body_runtime::context(s),
+            world_context: Some(super::body_runtime::context_for(s, &senses)),
         },
         settings: Settings {
             darkness_alert_threshold: settings.number("darkness_alert_threshold"),

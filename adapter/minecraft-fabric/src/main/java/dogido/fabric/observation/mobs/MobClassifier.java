@@ -34,6 +34,10 @@ public final class MobClassifier {
     private final Set<UUID> awakenedShulkerIds = new java.util.HashSet<>();
 
     public MobDisposition classifyMobDisposition(ClientPlayerEntity player, LivingEntity entity) {
+        return classifyMobDisposition(player.getUuid(),entity);
+    }
+    /** 敵対判断の対象UUIDを明示する。身体視認でもownerへの敵対規則を維持し、履歴はplayer戦闘と共有しない。 */
+    public MobDisposition classifyMobDisposition(UUID receiverId, LivingEntity entity) {
         String type = entityTypeName(entity);
         if (entity instanceof CreeperEntity creeper && creeper.isCharged()) {
             type = "charged_creeper";
@@ -47,7 +51,7 @@ public final class MobClassifier {
             if (!NEUTRAL_MONSTER_TYPES.contains(type)) {
                 return new MobDisposition(type, false, true, null, "hostile");
             }
-            boolean hostileNow = isNeutralMobHostileToPlayer(player, entity);
+            boolean hostileNow = isNeutralMobHostileToReceiver(receiverId, entity);
             return new MobDisposition(type, !hostileNow, hostileNow, "neutral", neutralCautionReason(entity));
         }
 
@@ -64,7 +68,7 @@ public final class MobClassifier {
             || entity instanceof PandaEntity
             || entity instanceof PolarBearEntity
             || entity instanceof WolfEntity) {
-            boolean hostileNow = isNeutralMobHostileToPlayer(player, entity);
+            boolean hostileNow = isNeutralMobHostileToReceiver(receiverId, entity);
             return new MobDisposition(
                 type,
                 !hostileNow,
@@ -82,17 +86,17 @@ public final class MobClassifier {
         return observeShulkerAwakening(shulker.getUuid(), shulker.getOpenProgress(0.0f));
     }
 
-    private boolean isNeutralMobHostileToPlayer(ClientPlayerEntity player, LivingEntity entity) {
+    private boolean isNeutralMobHostileToReceiver(UUID receiverId, LivingEntity entity) {
         if (entity instanceof MobEntity mob) {
             LivingEntity target = mob.getTarget();
-            if (target != null && target.getUuid().equals(player.getUuid())) {
+            if (target != null && target.getUuid().equals(receiverId)) {
                 return true;
             }
         }
         if (entity instanceof ZombifiedPiglinEntity || entity instanceof PiglinEntity) {
             return entity instanceof MobEntity mob
                 && mob.getTarget() != null
-                && mob.getTarget().getUuid().equals(player.getUuid());
+                && mob.getTarget().getUuid().equals(receiverId);
         }
         return false;
     }
