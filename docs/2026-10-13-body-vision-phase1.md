@@ -1,6 +1,6 @@
 # 身体の姿勢・プレイヤー視認を既存会話へ通す計画
 
-状態: **2026-10-13、第一段階を実装し、自動検査済み。本線mainへ反映。実機には未反映。**
+状態: **2026-10-13、第一段階を実装し、自動検査済み。本線mainと実機へ反映。拡張姿勢・視認値の会話入力への配送を確認。実モデルは最初の質問でタイムアウトし、見える／見えないの会話確認は未完了。再試験はSugarScape終了後へ延期。**
 
 ## 目的と範囲
 
@@ -116,7 +116,7 @@ Body APIのvisionには採取tickを持たせ、adapterでsnapshotのtickと一�
 - 身体: `BodyPoseObservation`で視線とownerの向きを採り、`BodyVision`で最大3点の距離・FOV・遮蔽を測る。`BodyVisibility`へ既存の食料raycastを共通化し、用途ごとの規則を保持する。`BodyVisionOrigin`は同じMinecraft raycastの形状から眼を含む連続区間だけを除く。別のworld走査は増やさない。
 - 境界: Java API／entrypoint／payloadはv4。adapterの`BodyObservationJson`が同時刻・形式・値を照合し、HTTP観測v2へ写す。共有fixtureは`dogido-rust/fixtures/body-observation-v2.json`。
 - Rust: `body/contracts.rs`で拡張姿勢・三値・理由・範囲を検証し、`body/state.rs`で現在／前回へ投影。既存`dialogue/body_runtime.rs`から通常会話、session診断、`body_observation_input`へ同じ不変コピーを渡す。
-- 指示文: 本書末尾のユーザー承認済み文面だけを共有`companion_prompts.json`へ反映。別の生成呼出しや移動判断は追加していない。
+- 指示文: 「承認済み文面」節の文面だけを共有`companion_prompts.json`へ反映。別の生成呼出しや移動判断は追加していない。
 
 ### 自動検査
 
@@ -134,15 +134,15 @@ Minecraftの形状テストには、[Fabric公式のFabric Loader JUnit](https:/
 
 ### 成果物と反映の境界
 
-- 本線: `/Users/yukin_co/Documents/DokiDoki-Dogido`のmain。計画・ソース・テスト・文書をここへ反映する。作業前からあった15件の追跡ファイル変更と17件の未追跡ファイルは今回のコミットへ含めない。
+- 本線: 書類フォルダ内の`DokiDoki-Dogido`のmain。計画・ソース・テスト・文書をここへ反映する。作業前からあった15件の追跡ファイル変更と17件の未追跡ファイルは今回のコミットへ含めない。
 - 身体: `animation/cube_dogido/cube-dogido-lab/build/libs/cube-dogido-lab-0.5.0.jar`。API jarはコンパイル用で、ゲームへ入れない。
 - adapter: `adapter/minecraft-fabric/build/libs/dogido-fabric-client-0.1.0.jar`、build識別子`2026-10-13-body-vision-p1`。
-- 復旧用差分・検査ログ・生成したRust releaseは`.dogido_tools/checkpoints/2026-10-13-body-vision-phase1/`へ保管する。現在使われているRust実行ファイルとゲームのMod配置は変更していない。
+- 実装時の復旧用差分・検査ログ・生成したRust releaseは`.dogido_tools/checkpoints/2026-10-13-body-vision-phase1/`へ保管。後述の実機導入前ファイル・ワールド・実行証拠は別の`2026-10-13-body-vision-install/`へ保管する。
 - 新版はMod・adapter・Rustを同時に導入する。HTTP観測v1はv2に補完しないので、片方だけ差し替えて運用しない。
 
 ### 未確認と次の実機確認
 
-1. 稼働中のMinecraftとサーバーappの版・PID・設定場所を確認し、停止してから対応する3成果物を配置する。
+1. 対応する3成果物の配置・起動・観測配送は確認済み。次回は同じモデルを使うSugarScapeの実行終了後にMinecraftを再開する。
 2. 同じワールドで、開けた正面／背面・playerだけ回転・bodyだけ回転、壁／slab／ガラス、壁内から外／別の壁を挟んだ配置を確認する。session診断の現在値と、質問に使った`body_observation_input`を並べて読む。
 3. サバイバル／アドベンチャーの壁内損耗と、クリエイティブ／スペクテイターのダメージ無効が従来どおりか確認する。
 4. 未ロード・DOWNED・owner切断・次元変更の観測が理由付き未取得へ遷移することを確認する。
@@ -157,3 +157,29 @@ body_observation 自体が unavailable のときは、今の位置は分から�
 今{player}が見えるかは current.vision.player_visibility を見てな。visible は見える、not_visible は見えへん、unavailable は分からへん、やで。
 座標が分かることと、目で見えてることは別やで。
 ```
+
+## 10月13日朝の実機導入と最初の質問
+
+実装コミットは`a5d8c98`。MinecraftとRust本体が停止していること、ワールド保存完了を確認してから、旧Mod・旧Rust実行ファイルと依存情報・`test world`全体を退避した。身体Mod 0.4.0をmodsの外へ移し、以下の対応版を配置した。API専用JARは配置していない。
+
+| 成果物 | SHA-256 |
+|---|---|
+| 身体Mod `cube-dogido-lab-0.5.0.jar` | `51ff6bf75f2577c09c06f30183eb254574039a54bc2fc52d1ca0ad1d10b9a77a` |
+| adapter `dogido-fabric-client-0.1.0.jar` | `ecfb433979e12f7ce9f3d5c1f23154f46c3194e4f93087cdd65608ad64c7f9d8` |
+| mainからreleaseビルドしたRust本体 | `44d6ceefbe341da16a1c530b11531390fde95334ce039984a71e041ae6e26a8c` |
+
+- Rustは既存`cargo.sh build --release --locked --offline`で更新し、普段の管理appから起動。09:31:54 JSTの`server_ready`、稼働PID 46316の実行元・作業場所がmain、healthの`ok/dialogue_ready/llm_enabled=true`を確認した。
+- ユーザーがMinecraftを起動。ゲームログの身体Mod `0.5.0`、adapter版`0.1.0+20261013bodyvision1`／build`2026-10-13-body-vision-p1`、09:32:05のsession接続を確認した。
+- 8080番のモデルは既存PID 42436。開かれているGGUFでQwen3.8-Flash-Next-GSQ-RCO-IQ3_XXSとMTP Q8_0を確認した。モデルの再起動・切替はしていない。
+
+### 観測の配送と、返答がなかったことを分ける
+
+09:33:45 JSTの質問は「今、プレイヤーはあなたのどちら側にいるかな？」。発話診断の`body_observation_input`は`observed / server_pose`、age 571ms。身体は約`(742.43,115.00,692.45)`、yaw/view_yawは90度（西向き）、view_pitchは0度。playerは約`(747.27,115.00,693.10)`で、身体のほぼ背後にいる。視認値は`not_visible / outside_fov`だった。
+
+これは身体・adapter・Rustを通って**会話生成へ渡された観測値**の確認であり、モデルが「見えない」と回答した結果ではない。質問への本文は空で、`generation_error`、`LLM request timed out; no retry was sent`。09:34:05に20,017msで終了した。ユーザーも返答がなかったことを確認した。実モデルの位置回答・可視性回答は、この試行では評価できない。
+
+モデルログには5,018入力tokenの処理約18.9秒、約20.2秒時点の取消が残る。また、同じ8080番へのLLM SugarScape（PID 43329）の通信を確認した。同時利用が遅延へ影響した可能性はあるが、その影響だけが原因とは確定していない。タイムアウト設定や共有モデルは変更していない。
+
+ユーザーはSugarScapeの実行が終わってから再試験する方針を選び、Minecraftを停止した。次回は正面と背後／壁越しで同じ「今、私が見える？」を尋ね、各返答・生成時の視認値・ゲームへの配送を対応付ける。`visible`の実機例、壁・ガラス・壁内視点、壁内ダメージの回帰は未確認。
+
+導入一覧は`.dogido_tools/checkpoints/2026-10-13-body-vision-install/installed.json`。`before/`に旧成果物・ワールド、`evidence/`に最初の質問のsnapshotとログを保存。復旧時はMinecraftとRust本体を停止し、対応するMod・Rustを一組で戻す。ワールド全体の復元は、その後のプレイ内容を失うため自動では行わない。
