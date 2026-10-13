@@ -1,12 +1,12 @@
-# 依頼5分類データ v1.4
+# 依頼5分類データ v1.5
 
 ModernBERT-Jaの日本語依頼5分類を独立して試すデータと学習・評価補助です。本体には未接続です。
 
-v1.3（train 288件）の30M初回評価はtest **66/75（88.0%）**、回帰 **30/40（75.0%）**。[結果と誤分類](../../docs/2026-10-13-modernbert-ja-request-classifier-evaluation.md)を参照してください。v1.4の追加86件は未学習です。
+v1.3（train 288件）の30M初回評価はtest **66/75（88.0%）**、回帰 **30/40（75.0%）**。[結果と誤分類](../../docs/2026-10-13-modernbert-ja-request-classifier-evaluation.md)を参照してください。v1.4・v1.5の追加計177件は未学習です。
 
 | 分割 | 件数 | 用途 |
 |---|---:|---|
-| `data/train.jsonl` | 374 | 学習（初版250件＋ユーザー例等38件＋今回86件） |
+| `data/train.jsonl` | 465 | 学習（初版250件＋ユーザー例等38件＋生成例177件） |
 | `data/dev.jsonl` | 75 | 設定・閾値選択（各分類15件） |
 | `data/test.jsonl` | 75 | 設定固定後の評価（各分類15件） |
 | `data/regression.jsonl` | 40 | 「いるかな」など既知の誤判定と境界の確認 |
@@ -21,7 +21,7 @@ python3 -m unittest discover -s dev_tools/request_classifier -p 'test_*.py' -v
 
 標準ライブラリだけで検査できます。学習入力は `dataset.model_example(row)` の `text`、教師値は `labels` を使います。注釈・分類理由を入力へ混ぜないでください。
 
-ユーザーの正解指定9件を反映し、提示された33例から32件を採用しました。対照例6件も追加しています。[採否と理由](../../docs/2026-10-13-request-classifier-curation.md) に記録しています。Gemini・Grokの候補120件から86件を追加し、34件を除外しました。[全件の採否と理由](../../docs/2026-10-14-request-classifier-gemini-grok-curation.md)。dev/test/regressionは初版から変更していません。
+ユーザーの正解指定9件を反映し、提示された33例から32件を採用しました。対照例6件も追加しています。[採否と理由](../../docs/2026-10-13-request-classifier-curation.md) に記録しています。Gemini・Grokの候補120件から86件を追加し、34件を除外しました。[全件の採否と理由](../../docs/2026-10-14-request-classifier-gemini-grok-curation.md)。続くプロンプト交換の候補120件から91件を追加し、29件を除外しました。[交換分の採否](../../docs/2026-10-14-request-classifier-cross-prompts-curation.md)。dev/test/regressionは初版から変更していません。
 
 ## 学習・評価の再実行
 

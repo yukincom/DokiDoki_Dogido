@@ -1,0 +1,529 @@
+{
+  "method": "NFKC・小文字化・カナ統一・空白句読点除去後、履歴のroleと本文および現在発話を連結した入力のSequenceMatcher(autojunk=False) ratioを比較。人工的な共通入力見出しは含めない。",
+  "existing_threshold": 0.68,
+  "existing_matches": [
+    {
+      "id": "gemini_context_010",
+      "existing_split": "train",
+      "existing_id": "train-207",
+      "ratio": 0.6897,
+      "text": "うん、それでいいです……",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に持ち替えるね"
+        }
+      ],
+      "existing_text": "それお願い。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "意味不整合で除外。「持ち替えるね」を完了済みと扱えない。類似率による除外ではない。"
+    },
+    {
+      "id": "gemini_context_010",
+      "existing_split": "train",
+      "existing_id": "train-317",
+      "ratio": 0.7692,
+      "text": "うん、それでいいです……",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に持ち替えるね"
+        }
+      ],
+      "existing_text": "うん、それちょうだい",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "ゾンビ来てる！剣に持ち替える？"
+        }
+      ],
+      "review": "意味不整合で除外。「持ち替えるね」を完了済みと扱えない。類似率による除外ではない。"
+    },
+    {
+      "id": "gemini_context_010",
+      "existing_split": "test",
+      "existing_id": "test-071",
+      "ratio": 0.7097,
+      "text": "うん、それでいいです……",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に持ち替えるね"
+        }
+      ],
+      "existing_text": "ああ、それでいいよ。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "持ち替え先は弓でええか？"
+        }
+      ],
+      "review": "意味不整合で除外。「持ち替えるね」を完了済みと扱えない。類似率による除外ではない。"
+    },
+    {
+      "id": "gemini_context_011",
+      "existing_split": "train",
+      "existing_id": "train-207",
+      "ratio": 0.6909,
+      "text": "うん、それでいいです……",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変える？"
+        }
+      ],
+      "existing_text": "それお願い。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "保持。train内の剣提案への承諾と同じ意図だが言い方が異なる。評価側との近重複はない。"
+    },
+    {
+      "id": "gemini_context_011",
+      "existing_split": "train",
+      "existing_id": "train-317",
+      "ratio": 0.7097,
+      "text": "うん、それでいいです……",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変える？"
+        }
+      ],
+      "existing_text": "うん、それちょうだい",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "ゾンビ来てる！剣に持ち替える？"
+        }
+      ],
+      "review": "保持。train内の剣提案への承諾と同じ意図だが言い方が異なる。評価側との近重複はない。"
+    },
+    {
+      "id": "gemini_context_017",
+      "existing_split": "train",
+      "existing_id": "train-241",
+      "ratio": 0.7213,
+      "text": "馬呼んで",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "さっき呼んだよ。乗った？"
+        }
+      ],
+      "existing_text": "その子を呼んで。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "さっき乗ってたのは白い馬やな。"
+        }
+      ],
+      "review": "現在の明示依頼を非依頼にする意味不整合で除外。"
+    },
+    {
+      "id": "gemini_context_019",
+      "existing_split": "dev",
+      "existing_id": "dev-058",
+      "ratio": 0.766,
+      "text": "どこ",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "敵見えた？"
+        }
+      ],
+      "existing_text": "近い方はどこ？",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "二体の敵が見えるで。"
+        }
+      ],
+      "review": "保持。敵の位置を一般的に尋ねる例と、二体から近い方を指定するdev-058は対象の解決が異なる。"
+    },
+    {
+      "id": "gemini_context_021",
+      "existing_split": "train",
+      "existing_id": "train-231",
+      "ratio": 0.7347,
+      "text": "どこ",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "馬は近くにいるよ"
+        }
+      ],
+      "existing_text": "どっち？",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "近くにゾンビがおるで。"
+        }
+      ],
+      "review": "保持。今回の対象は馬、既存trainの対象はゾンビ。省略質問の対象と分類が異なる。"
+    },
+    {
+      "id": "gemini_context_022",
+      "existing_split": "train",
+      "existing_id": "train-206",
+      "ratio": 0.7917,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変えたよ"
+        }
+      ],
+      "existing_text": "うん、頼む。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "除外。trainの提案承諾とは異なるが、dev-051の完了承諾と会話全体が近い言い換え。"
+    },
+    {
+      "id": "gemini_context_022",
+      "existing_split": "train",
+      "existing_id": "train-207",
+      "ratio": 0.6939,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変えたよ"
+        }
+      ],
+      "existing_text": "それお願い。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "除外。trainの提案承諾とは異なるが、dev-051の完了承諾と会話全体が近い言い換え。"
+    },
+    {
+      "id": "gemini_context_022",
+      "existing_split": "train",
+      "existing_id": "train-208",
+      "ratio": 0.68,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変えたよ"
+        }
+      ],
+      "existing_text": "じゃあやって。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "除外。trainの提案承諾とは異なるが、dev-051の完了承諾と会話全体が近い言い換え。"
+    },
+    {
+      "id": "gemini_context_022",
+      "existing_split": "train",
+      "existing_id": "train-209",
+      "ratio": 0.68,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変えたよ"
+        }
+      ],
+      "existing_text": "お願いします。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "除外。trainの提案承諾とは異なるが、dev-051の完了承諾と会話全体が近い言い換え。"
+    },
+    {
+      "id": "gemini_context_022",
+      "existing_split": "dev",
+      "existing_id": "dev-051",
+      "ratio": 0.68,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変えたよ"
+        }
+      ],
+      "existing_text": "了解したよ。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "剣に持ち替え終わったで。"
+        }
+      ],
+      "review": "除外。trainの提案承諾とは異なるが、dev-051の完了承諾と会話全体が近い言い換え。"
+    },
+    {
+      "id": "gemini_context_023",
+      "existing_split": "train",
+      "existing_id": "train-206",
+      "ratio": 0.7391,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣にする？"
+        }
+      ],
+      "existing_text": "うん、頼む。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "手持ちを剣に替えよか？"
+        }
+      ],
+      "review": "保持。trainの剣提案承諾は同じ意図の表現違い。train-234の位置質問、test-054の模様の感想とは意味が異なる。"
+    },
+    {
+      "id": "gemini_context_023",
+      "existing_split": "train",
+      "existing_id": "train-234",
+      "ratio": 0.6957,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣にする？"
+        }
+      ],
+      "existing_text": "どのへん？",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "右の方に敵の姿がある。"
+        }
+      ],
+      "review": "保持。trainの剣提案承諾は同じ意図の表現違い。train-234の位置質問、test-054の模様の感想とは意味が異なる。"
+    },
+    {
+      "id": "gemini_context_023",
+      "existing_split": "test",
+      "existing_id": "test-054",
+      "ratio": 0.7059,
+      "text": "うん",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣にする？"
+        }
+      ],
+      "existing_text": "うん、そう見える。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "剣の模様、葉っぱに似てるな。"
+        }
+      ],
+      "review": "保持。trainの剣提案承諾は同じ意図の表現違い。train-234の位置質問、test-054の模様の感想とは意味が異なる。"
+    },
+    {
+      "id": "gemini_context_046",
+      "existing_split": "dev",
+      "existing_id": "dev-051",
+      "ratio": 0.7451,
+      "text": "承知した",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "剣に変えた"
+        }
+      ],
+      "existing_text": "了解したよ。",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "剣に持ち替え終わったで。"
+        }
+      ],
+      "review": "除外。dev-051の完了承諾と会話全体が近い言い換え。"
+    },
+    {
+      "id": "grok_edge_019",
+      "existing_split": "train",
+      "existing_id": "train-339",
+      "ratio": 0.7,
+      "text": "おい馬呼べ！……いや戦うわ、剣に持ち替えろ！",
+      "context": [],
+      "existing_text": "馬呼べ……待って、剣に持ち替えろクソ",
+      "existing_context": [],
+      "review": "保持。train内の馬から剣への訂正と同じ意図だが、「戦うわ」が依頼変更の理由を明示する。評価側への追加ではない。"
+    }
+  ],
+  "within_submission_threshold": 0.85,
+  "within_submission_matches": [
+    {
+      "id": "gemini_context_028",
+      "other_id": "gemini_context_016",
+      "ratio": 0.8511,
+      "text": "馬呼ぼうか。で、敵は？",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "移動するよ"
+        }
+      ],
+      "other_text": "馬呼んで",
+      "other_context": [
+        {
+          "role": "assistant",
+          "text": "移動する？"
+        }
+      ],
+      "review": "保持。016は馬の呼出のみ、028は馬の呼出と敵情報の複数依頼で分類・確認注釈が異なる。"
+    },
+    {
+      "id": "gemini_context_049",
+      "other_id": "gemini_context_023",
+      "ratio": 0.85,
+      "text": "うん、剣で",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "準備する？"
+        }
+      ],
+      "other_text": "うん",
+      "other_context": [
+        {
+          "role": "assistant",
+          "text": "剣にする？"
+        }
+      ],
+      "review": "保持。023は履歴にある剣の提案への承諾、049は現在発話で剣を選ぶ。対象指定が現れる箇所が異なる。"
+    },
+    {
+      "id": "gemini_context_052",
+      "other_id": "gemini_context_016",
+      "ratio": 0.85,
+      "text": "馬、呼んで",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "行く？"
+        }
+      ],
+      "other_text": "馬呼んで",
+      "other_context": [
+        {
+          "role": "assistant",
+          "text": "移動する？"
+        }
+      ],
+      "review": "除外。016と同じ現在発話で、履歴も移動提案の近い言い換え。016を保持する。"
+    },
+    {
+      "id": "gemini_context_053",
+      "other_id": "gemini_context_017",
+      "ratio": 0.875,
+      "text": "馬、呼んで",
+      "context": [
+        {
+          "role": "assistant",
+          "text": "呼んだよ"
+        }
+      ],
+      "other_text": "馬呼んで",
+      "other_context": [
+        {
+          "role": "assistant",
+          "text": "さっき呼んだよ。乗った？"
+        }
+      ],
+      "review": "両方とも意味不整合で除外。完了履歴だけで現在の呼出依頼を非依頼にできない。"
+    }
+  ],
+  "exact_full_input_duplicates_existing": 0,
+  "exact_full_input_duplicates_within": 0,
+  "normalized_utterance_matches": [
+    {
+      "batch_role": "grok_context",
+      "id": "gemini_context_019",
+      "same_utterance": [
+        [
+          "train",
+          "train-298",
+          "どこ！？"
+        ],
+        [
+          "train",
+          "train-299",
+          "どこ！？"
+        ],
+        [
+          "train",
+          "train-300",
+          "どこ！？"
+        ]
+      ],
+      "same_input": []
+    },
+    {
+      "batch_role": "grok_context",
+      "id": "gemini_context_020",
+      "same_utterance": [
+        [
+          "train",
+          "train-298",
+          "どこ！？"
+        ],
+        [
+          "train",
+          "train-299",
+          "どこ！？"
+        ],
+        [
+          "train",
+          "train-300",
+          "どこ！？"
+        ]
+      ],
+      "same_input": []
+    },
+    {
+      "batch_role": "grok_context",
+      "id": "gemini_context_021",
+      "same_utterance": [
+        [
+          "train",
+          "train-298",
+          "どこ！？"
+        ],
+        [
+          "train",
+          "train-299",
+          "どこ！？"
+        ],
+        [
+          "train",
+          "train-300",
+          "どこ！？"
+        ]
+      ],
+      "same_input": []
+    }
+  ],
+  "normalized_utterance_review": "019〜021の「どこ」は既存train-298〜300の「どこ！？」と一致するが履歴・対象が異なる。同じtrain内で保持。評価3分割との現在発話の正規化一致は0件。",
+  "limits": "閾値は目視確認候補の抽出用であり、意味的な独立性を保証しない。同じ意図を異なる表現で学ぶ類似は許容する。"
+}

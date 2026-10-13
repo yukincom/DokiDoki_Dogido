@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-14",
+  "dataset_version": "1.5",
+  "base_commit": "810f120b8902c46a98959b154f978a23e2267937",
+  "sources": [
+    {
+      "producer": "grok",
+      "prompt_role": "gemini_context_persona",
+      "original_file": "grok-context-original.jsonl",
+      "original_id_prefix": "gemini_context",
+      "submitted": 60,
+      "sha256": "4f89c23aa9f41619a54c97a22a6290dffaa32e044d4973b0fe32bdefed3d00ad",
+      "producer_basis": "ユーザーによるプロンプト交換と生成元の説明。IDの接頭辞は生成元を表さない。"
+    },
+    {
+      "producer": "gemini",
+      "prompt_role": "grok_edge_cases",
+      "original_file": "gemini-edge-original.jsonl",
+      "original_id_prefix": "grok_edge",
+      "submitted": 60,
+      "sha256": "a17aed046d7d7add50280982b8a715e08c1e6972bec2e2d9b6df9b83e0dcb590",
+      "producer_basis": "ユーザーによるプロンプト交換と生成元の説明。IDの接頭辞は生成元を表さない。"
+    }
+  ],
+  "counts": {
+    "grok": {
+      "submitted": 60,
+      "accepted": 38,
+      "excluded": 22
+    },
+    "gemini": {
+      "submitted": 60,
+      "accepted": 53,
+      "excluded": 7
+    }
+  },
+  "added_labels": {
+    "equip_sword": 22,
+    "recall_mount": 23,
+    "enemy_information": 14,
+    "other_request": 14,
+    "not_request": 18
+  },
+  "added_train_id_range": [
+    "train-375",
+    "train-465"
+  ],
+  "train_before": 374,
+  "train_after": 465,
+  "total_after": 655,
+  "rationale_only_edits": [
+    "gemini_context_018",
+    "gemini_context_042",
+    "grok_edge_059"
+  ],
+  "source": "synthetic",
+  "original_data_sha256": {
+    "train": "94f2b04bf1ad90c4cd027c55f3be5ced5507099b9d85a2c29aa1483145bb0aa3",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "current_data_sha256": {
+    "train": "3aa7b722900ee41ebb4c65409009c639f52e61920be94010db04b37bd830938c",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "group_id_policy": "前回候補と原ID・group_idが再利用されているため、Grok生成はgrok_cross_context、Gemini生成はgemini_cross_edgeの別名空間へ移す。元の組のまとまりは保持し全てtrainへ置く。",
+  "review": "親Codexが全120件を確認し、別担当Codexが各60件を独立に読み直した。採否・曖昧例の判断・重複除外は親が統合。ユーザーによる全件正解指定や注釈一致率測定ではない。",
+  "training": "v1.4・v1.5の累計177件は未学習。追加後の再評価は未実施。本体未接続。"
+}
