@@ -1,41 +1,41 @@
 {
   "train": {
-    "rows": 279,
+    "rows": 283,
     "labels": {
-      "enemy_information": 50,
-      "equip_sword": 60,
+      "enemy_information": 51,
+      "equip_sword": 62,
       "not_request": 57,
       "other_request": 61,
-      "recall_mount": 51
+      "recall_mount": 52
     },
     "groups": 27,
     "with_context": 48,
     "needs_clarification": 5,
     "sources": {
       "synthetic": 256,
-      "user_example": 23
+      "user_example": 27
     },
     "tags": {
       "ambiguous": 3,
       "cancellation": 14,
-      "casual": 27,
+      "casual": 30,
       "context": 50,
       "correction": 25,
       "count": 12,
       "direct": 33,
-      "ellipsis": 49,
+      "ellipsis": 50,
       "future": 11,
       "general_knowledge": 10,
       "hypothetical": 6,
       "location": 10,
       "multiple_requests": 2,
       "named_entity": 10,
-      "negation": 54,
+      "negation": 55,
       "orthography": 9,
       "past": 8,
-      "politeness": 22,
-      "presence": 20,
-      "question": 10,
+      "politeness": 23,
+      "presence": 21,
+      "question": 13,
       "quotation": 16,
       "reference": 11,
       "reported_speech": 10,
@@ -44,7 +44,7 @@
       "statement": 36
     },
     "max_input_characters": 69,
-    "sha256": "5b35e98e9e159aedefdbbcf3bd4a5706e3d9fc4eedc8c80f75aa9e0b5e56cbd4"
+    "sha256": "7399c05440d5cff91f264aa56ef90643ca7aee411704e08fb0543555eb0fe7ef"
   },
   "dev": {
     "rows": 75,
