@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-14",
+  "dataset_version": "1.6",
+  "base_commit": "0c33623951e23666d4aa907adad098a97174a0a9",
+  "producer": "codex",
+  "source": "synthetic",
+  "candidate_file": "codex-original.jsonl",
+  "candidate_sha256": "8c16717dfb137a85c5439c0d61da7ca591a29147929f0fb12f0dcdf8921761c1",
+  "counts": {
+    "submitted": 108,
+    "accepted": 107,
+    "excluded": 1
+  },
+  "focus_counts": {
+    "multi_turn": {
+      "submitted": 40,
+      "accepted": 39,
+      "excluded": 1
+    },
+    "completion_failure_retry": {
+      "submitted": 24,
+      "accepted": 24,
+      "excluded": 0
+    },
+    "mixed_topics_and_actor": {
+      "submitted": 20,
+      "accepted": 20,
+      "excluded": 0
+    },
+    "spoken_forms": {
+      "submitted": 12,
+      "accepted": 12,
+      "excluded": 0
+    },
+    "everyday_conversation": {
+      "submitted": 12,
+      "accepted": 12,
+      "excluded": 0
+    }
+  },
+  "added_labels": {
+    "recall_mount": 15,
+    "other_request": 38,
+    "not_request": 25,
+    "equip_sword": 15,
+    "enemy_information": 14
+  },
+  "added_train_id_range": [
+    "train-466",
+    "train-572"
+  ],
+  "train_before": 465,
+  "train_after": 572,
+  "total_after": 762,
+  "added_context_turn_counts": {
+    "0": 44,
+    "2": 20,
+    "4": 43
+  },
+  "train_context_turn_counts": {
+    "0": 387,
+    "1": 121,
+    "2": 21,
+    "4": 43
+  },
+  "new_groups": 32,
+  "annotation_edits": [],
+  "original_data_sha256": {
+    "train": "3aa7b722900ee41ebb4c65409009c639f52e61920be94010db04b37bd830938c",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "current_data_sha256": {
+    "train": "e0847bf5546b81f8e110f653299e983f8a52764ab4b1fc52c52871e403ea2847",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "review": "親Codexが108候補を作成し全件確認。別担当Codexが001〜056と057〜100を分担して独立レビューし、補足101〜108も前半の担当が確認した。008の曖昧な承諾を親の同意で除外した。ユーザーによる全件の正解指定や注釈一致率の測定ではない。",
+  "spoken_forms": "音声認識らしい省略・言いよどみは作例。県＝剣のみ既存のユーザー報告・合意を使用した。新たな実音声・認識結果は収録していない。",
+  "training": "v1.4〜v1.6の追加計284件は未学習。保存済みtokenizerで入力長だけを検査し、モデルの取得・学習・推論はしていない。本体未接続。"
+}

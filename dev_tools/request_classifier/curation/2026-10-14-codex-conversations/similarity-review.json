@@ -1,0 +1,62 @@
+{
+  "method": "NFKC・小文字化・カナ統一・空白句読点除去後、履歴のroleと本文および現在発話を連結した入力のSequenceMatcher(autojunk=False) ratioを比較。人工的な共通入力見出しは含めない。",
+  "existing_rows": 655,
+  "candidate_rows": 108,
+  "existing_threshold": 0.68,
+  "existing_matches": [
+    {
+      "id": "codex_conversation_033",
+      "existing_split": "train",
+      "existing_id": "train-223",
+      "ratio": 0.7436,
+      "text": "助かった、これで安心だ。",
+      "context": [
+        {
+          "role": "user",
+          "text": "剣にして。"
+        },
+        {
+          "role": "assistant",
+          "text": "剣への持ち替えは終わったで。"
+        }
+      ],
+      "existing_text": "よかった！",
+      "existing_context": [
+        {
+          "role": "assistant",
+          "text": "さっきの剣への持ち替えは終わったで。"
+        }
+      ],
+      "review": "保持。完了承諾の意図は既存train-223と同じだが、今回はユーザーの元の明示依頼も履歴に残す。過去のユーザー依頼を最新発話に持ち越さない学習例として、034〜036の再依頼・別依頼と同じ組へ置く。"
+    },
+    {
+      "id": "codex_conversation_077",
+      "existing_split": "train",
+      "existing_id": "train-082",
+      "ratio": 0.7097,
+      "text": "いま手持ちを剣に替えてもらえる？",
+      "context": [],
+      "existing_text": "手持ちを剣にして。",
+      "existing_context": [],
+      "review": "保持。既存train-082より婉曲な現在の依頼で、078の言いよどみ・県表記を含む対照の標準表現として同じgroupへ置く。"
+    },
+    {
+      "id": "codex_conversation_081",
+      "existing_split": "train",
+      "existing_id": "train-123",
+      "ratio": 0.7368,
+      "text": "さっき乗っていたロバをここに呼んで。",
+      "context": [],
+      "existing_text": "さっき乗ったラクダを呼んで。",
+      "existing_context": [],
+      "review": "保持。既存train-123とは動物と言い方が異なる。082の口語・省略を含む対照の標準表現として同じgroupへ置く。"
+    }
+  ],
+  "within_submission_threshold": 0.85,
+  "within_submission_matches": [],
+  "exact_full_input_duplicates_existing": 0,
+  "exact_full_input_duplicates_within": 0,
+  "normalized_utterance_matches_existing": [],
+  "review": "既存655件との近重複候補3組はすべてtrain。評価側の該当0組。今回候補同士の別groupの近重複候補0組。",
+  "limits": "閾値は確認候補の抽出用で、意味的な独立性の保証ではない。同じ意図を別の言い方・異なる履歴で学ぶ類似は許容する。"
+}

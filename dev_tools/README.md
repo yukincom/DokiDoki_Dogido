@@ -10,7 +10,7 @@
 | `catalog_tools/` | 資料整備用の検索・カタログCLI/API | [国語・詩形](../reference/language_education_and_poetry/README.md)・[Minecraft資料](../reference/minecraft_technical/README.md)を参照 |
 | [prompt_lab](prompt_lab/README.md) | Rust本番経路の反応確認と、比較用のプロンプト候補 | 本体の正本へ自動反映しない。試験条件は各READMEを参照 |
 | [composite_structure_recognition](composite_structure_recognition/README.md) | 橋・飛び石・海中トンネルなどの独立認識試作 | `python -m pytest dev_tools/composite_structure_recognition/test_recognizer.py -q` |
-| [request_classifier](request_classifier/README.md) | ModernBERT-Jaの依頼5分類データ・独立学習・評価 | v1.3初回評価済み。v1.4・v1.5追加177件は未学習。本体未接続 |
+| [request_classifier](request_classifier/README.md) | ModernBERT-Jaの依頼5分類データ・独立学習・評価 | v1.3初回評価済み。追加284件は未学習。本体未接続 |
 
 ## 音声診断
 
