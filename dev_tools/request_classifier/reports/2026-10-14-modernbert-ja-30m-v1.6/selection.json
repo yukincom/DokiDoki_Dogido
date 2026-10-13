@@ -1,0 +1,40 @@
+{
+  "trials": [
+    {
+      "selection_split": "dev",
+      "trial_index": 0,
+      "learning_rate": 2e-05,
+      "epoch": 9.0,
+      "step": 324,
+      "macro_f1": 0.843808346722696,
+      "accuracy": 0.84,
+      "loss": 2.0499038696289062,
+      "trial": "trial-1",
+      "train_seconds": 34.483380541205406
+    },
+    {
+      "selection_split": "dev",
+      "trial_index": 1,
+      "learning_rate": 5e-05,
+      "epoch": 8.0,
+      "step": 288,
+      "macro_f1": 0.7911091059478156,
+      "accuracy": 0.7866666666666666,
+      "loss": 2.8705945014953613,
+      "trial": "trial-2",
+      "train_seconds": 30.48665704065934
+    }
+  ],
+  "selected": {
+    "selection_split": "dev",
+    "trial_index": 0,
+    "learning_rate": 2e-05,
+    "epoch": 9.0,
+    "step": 324,
+    "macro_f1": 0.843808346722696,
+    "accuracy": 0.84,
+    "loss": 2.0499038696289062,
+    "trial": "trial-1",
+    "train_seconds": 34.483380541205406
+  }
+}

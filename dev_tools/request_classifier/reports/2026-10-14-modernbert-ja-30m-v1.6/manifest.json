@@ -1,0 +1,81 @@
+{
+  "started_at_utc": "2026-10-13T18:13:53.924121+00:00",
+  "model_id": "sbintuitions/modernbert-ja-30m",
+  "model_revision": "8cb03f54cb9e30e72459e5f1cedc6d89c7d8dcb5",
+  "dataset_git_head": "242e8f8c8d25ccc8c2fbb7c115ccba09555e8a9e",
+  "data_sha256": {
+    "train": "e0847bf5546b81f8e110f653299e983f8a52764ab4b1fc52c52871e403ea2847",
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "source_sha256": {
+    "train.py": "813826e949a0a46de7b19595ed0751391d1793e5ea4d3660705dc060d5f65325",
+    "evaluation.py": "54d167fb3f3a3f497782b2cc352a295f24b055d432dd7aaf79a8d5f6dbe2c90c",
+    "dataset.py": "b0886a64500cd85978e25da6ceaeb1e1a5ea5cbb7b4212824ff2af7f94ba9f6c",
+    "labels.json": "237c708a4c5401ec03371ee7bb15b744fd0d6af08cb1f7b53f8864e8988eba9c"
+  },
+  "packages": {
+    "torch": "2.14.1",
+    "transformers": "5.19.0",
+    "accelerate": "1.15.0",
+    "numpy": "2.4.6",
+    "scikit-learn": "1.9.1",
+    "huggingface-hub": "2.2.0",
+    "tokenizers": "0.23.3"
+  },
+  "python": "3.11.14",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "device_requested": "mps",
+  "torch_threads": 4,
+  "seed": 42,
+  "learning_rates": [
+    2e-05,
+    5e-05
+  ],
+  "max_epochs": 10,
+  "batch_size": 16,
+  "max_length": 128,
+  "token_lengths": {
+    "train": {
+      "min": 17,
+      "max": 76,
+      "mean": 28.872377622377623,
+      "truncated": 0
+    },
+    "dev": {
+      "min": 20,
+      "max": 40,
+      "mean": 27.36,
+      "truncated": 0
+    },
+    "test": {
+      "min": 18,
+      "max": 42,
+      "mean": 28.48,
+      "truncated": 0
+    },
+    "regression": {
+      "min": 19,
+      "max": 35,
+      "mean": 24.9,
+      "truncated": 0
+    }
+  },
+  "selection": "dev macro_f1 descending; dev loss ascending; epoch ascending; trial index ascending",
+  "optimizer": "adamw_torch",
+  "scheduler": "linear",
+  "warmup_steps": 0,
+  "weight_decay": 0.01,
+  "dtype": "float32",
+  "attention": "sdpa",
+  "classification": "single_label_argmax_no_threshold",
+  "full_finetuning": true,
+  "test_regression_used_for_selection": false,
+  "parameters": 36772613,
+  "device_actual": "mps:0",
+  "selected_checkpoint": "trial-1/best",
+  "selected_model_sha256": "fcf41ad411f487519b685ac10f7eb7cadca0ce09c9a9d549c90020421ad546e5",
+  "elapsed_seconds": 66.53784266673028,
+  "finished_at_utc": "2026-10-13T18:15:00.274052+00:00"
+}

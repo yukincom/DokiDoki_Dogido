@@ -1,0 +1,803 @@
+{
+  "baseline_report": "dev_tools/request_classifier/reports/2026-10-13-modernbert-ja-30m",
+  "new_report": "dev_tools/request_classifier/reports/2026-10-14-modernbert-ja-30m-v1.6",
+  "training_rows": {
+    "old": 288,
+    "new": 572,
+    "added": 284
+  },
+  "identical_settings": [
+    "model_id",
+    "model_revision",
+    "source_sha256",
+    "packages",
+    "python",
+    "device_requested",
+    "device_actual",
+    "torch_threads",
+    "seed",
+    "learning_rates",
+    "max_epochs",
+    "batch_size",
+    "max_length",
+    "selection",
+    "optimizer",
+    "scheduler",
+    "warmup_steps",
+    "weight_decay",
+    "dtype",
+    "attention",
+    "classification",
+    "full_finetuning",
+    "test_regression_used_for_selection"
+  ],
+  "identical_evaluation_sha256": {
+    "dev": "a218538edcf81495153b54fba0a4f7c5e201a7bcc6d39571f9b7c56323d2c661",
+    "test": "6acde990776a0a1b90537beb95bdf32a114102e71e4abbbb930f3cb36aea0177",
+    "regression": "042b62c61bb7e20a61634b6c56552df806f835710b89c79a1985319def2d6a75"
+  },
+  "independently_verified_metrics": "scikit-learn accuracy, macro F1, per-class precision/recall/F1/support and confusion matrices for all eight old/new split reports",
+  "splits": {
+    "dev": {
+      "n": 75,
+      "old_correct": 60,
+      "new_correct": 63,
+      "old_accuracy": 0.8,
+      "new_accuracy": 0.84,
+      "accuracy_delta_percentage_points": 3.9999999999999925,
+      "old_macro_f1": 0.8016726403823178,
+      "new_macro_f1": 0.843808346722696,
+      "macro_f1_delta": 0.04213570634037822,
+      "transition_counts": {
+        "fixed": 5,
+        "new_error": 2,
+        "still_wrong": 10,
+        "still_correct": 58
+      },
+      "transitions": {
+        "fixed": [
+          {
+            "id": "dev-003",
+            "text": "装備の剣がぴかぴかだ。",
+            "context": [],
+            "gold": "not_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "not_request",
+            "old_confidence": 0.9989027976989746,
+            "new_confidence": 0.9985563158988953
+          },
+          {
+            "id": "dev-007",
+            "text": "この物語の題名は『馬を呼んで』です。",
+            "context": [],
+            "gold": "not_request",
+            "old_predicted": "other_request",
+            "new_predicted": "not_request",
+            "old_confidence": 0.980803906917572,
+            "new_confidence": 0.9999998807907104
+          },
+          {
+            "id": "dev-009",
+            "text": "「ロバを連れてきて」なんて一度も言ってないよ。",
+            "context": [],
+            "gold": "not_request",
+            "old_predicted": "other_request",
+            "new_predicted": "not_request",
+            "old_confidence": 0.9996753931045532,
+            "new_confidence": 0.9999998807907104
+          },
+          {
+            "id": "dev-042",
+            "text": "敵が近づいた場合だけ剣に替えておいて。",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 1.0,
+            "new_confidence": 0.9010517597198486
+          },
+          {
+            "id": "dev-047",
+            "text": "今は剣を抜かず、松明のままにしておいて。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "さっき提案した鉄の剣へ、今持ち替えてええ？"
+              }
+            ],
+            "gold": "other_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999922513961792,
+            "new_confidence": 0.9999576807022095
+          }
+        ],
+        "new_error": [
+          {
+            "id": "dev-061",
+            "text": "今ので大丈夫。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "さっき提案した鉄の剣へ、今持ち替えてええ？"
+              }
+            ],
+            "gold": "equip_sword",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 1.0,
+            "new_confidence": 0.9999781847000122
+          },
+          {
+            "id": "dev-066",
+            "text": "今ので大丈夫。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "提案したロバを今ここへ呼んでええ？"
+              }
+            ],
+            "gold": "recall_mount",
+            "old_predicted": "recall_mount",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9983887672424316,
+            "new_confidence": 1.0
+          }
+        ],
+        "still_wrong": [
+          {
+            "id": "dev-012",
+            "text": "目の前のゾンビと私の間は何ブロックくらい？",
+            "context": [],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.6921216249465942,
+            "new_confidence": 0.9922555685043335
+          },
+          {
+            "id": "dev-022",
+            "text": "「剣にして」を、今ここで実行して。",
+            "context": [],
+            "gold": "equip_sword",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 1.0,
+            "new_confidence": 1.0
+          },
+          {
+            "id": "dev-023",
+            "text": "剣に替えるな、ではなく、替えてほしいと言ってるよ。",
+            "context": [],
+            "gold": "equip_sword",
+            "old_predicted": "not_request",
+            "new_predicted": "not_request",
+            "old_confidence": 0.9989414811134338,
+            "new_confidence": 0.9999998807907104
+          },
+          {
+            "id": "dev-030",
+            "text": "木のつるぎを手に持つ操作を今やってほしい。",
+            "context": [],
+            "gold": "equip_sword",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999512434005737,
+            "new_confidence": 0.9979686141014099
+          },
+          {
+            "id": "dev-043",
+            "text": "さっきの戦いでは敵が何体いたか覚えてる？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "enemy_information",
+            "old_confidence": 1.0,
+            "new_confidence": 0.9999997615814209
+          },
+          {
+            "id": "dev-048",
+            "text": "今見えてるモブって、全員合わせて何匹いるの？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.9999991655349731,
+            "new_confidence": 0.9967631101608276
+          },
+          {
+            "id": "dev-052",
+            "text": "今ので大丈夫。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "今の夕焼けを一句にしたで。"
+              }
+            ],
+            "gold": "not_request",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999829530715942,
+            "new_confidence": 1.0
+          },
+          {
+            "id": "dev-056",
+            "text": "今ので大丈夫。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "敵の数は、今見えている範囲だけ数えて答えよか？"
+              }
+            ],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9990478157997131,
+            "new_confidence": 0.9999732971191406
+          },
+          {
+            "id": "dev-072",
+            "text": "そいつ、まだ見えてる？",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "さっき茶色い牛が木の横におった。"
+              }
+            ],
+            "gold": "other_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.9999997615814209,
+            "new_confidence": 0.7463825345039368
+          },
+          {
+            "id": "dev-075",
+            "text": "選ぶのは鉄の方。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "額縁に飾る剣を入れ替えるで。鉄と金、どっちを飾ろか？"
+              }
+            ],
+            "gold": "other_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "equip_sword",
+            "old_confidence": 0.9999704360961914,
+            "new_confidence": 0.8581024408340454
+          }
+        ],
+        "still_correct_ids": [
+          "dev-001",
+          "dev-002",
+          "dev-004",
+          "dev-005",
+          "dev-006",
+          "dev-008",
+          "dev-010",
+          "dev-011",
+          "dev-013",
+          "dev-014",
+          "dev-015",
+          "dev-016",
+          "dev-017",
+          "dev-018",
+          "dev-019",
+          "dev-020",
+          "dev-021",
+          "dev-024",
+          "dev-025",
+          "dev-026",
+          "dev-027",
+          "dev-028",
+          "dev-029",
+          "dev-031",
+          "dev-032",
+          "dev-033",
+          "dev-034",
+          "dev-035",
+          "dev-036",
+          "dev-037",
+          "dev-038",
+          "dev-039",
+          "dev-040",
+          "dev-041",
+          "dev-044",
+          "dev-045",
+          "dev-046",
+          "dev-049",
+          "dev-050",
+          "dev-051",
+          "dev-053",
+          "dev-054",
+          "dev-055",
+          "dev-057",
+          "dev-058",
+          "dev-059",
+          "dev-060",
+          "dev-062",
+          "dev-063",
+          "dev-064",
+          "dev-065",
+          "dev-067",
+          "dev-068",
+          "dev-069",
+          "dev-070",
+          "dev-071",
+          "dev-073",
+          "dev-074"
+        ]
+      }
+    },
+    "test": {
+      "n": 75,
+      "old_correct": 66,
+      "new_correct": 64,
+      "old_accuracy": 0.88,
+      "new_accuracy": 0.8533333333333334,
+      "accuracy_delta_percentage_points": -2.6666666666666616,
+      "old_macro_f1": 0.8766833077316948,
+      "new_macro_f1": 0.8591705069124425,
+      "macro_f1_delta": -0.017512800819252328,
+      "transition_counts": {
+        "fixed": 5,
+        "new_error": 7,
+        "still_wrong": 4,
+        "still_correct": 59
+      },
+      "transitions": {
+        "fixed": [
+          {
+            "id": "test-045",
+            "text": "剣にしないでほしいんだけど、お願いできる？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999697208404541,
+            "new_confidence": 0.9844350218772888
+          },
+          {
+            "id": "test-056",
+            "text": "ああ、それでいいよ。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "敵の場所は今見える一体について説明すればええ？"
+              }
+            ],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "enemy_information",
+            "old_confidence": 1.0,
+            "new_confidence": 0.9999610185623169
+          },
+          {
+            "id": "test-072",
+            "text": "上にいる方は近い？",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "羊が丘の上と下にいるで。"
+              }
+            ],
+            "gold": "other_request",
+            "old_predicted": "not_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.5125053524971008,
+            "new_confidence": 0.996635377407074
+          },
+          {
+            "id": "test-073",
+            "text": "二体ともまだそこ？",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "村人二人がさっき畑にいたよ。"
+              }
+            ],
+            "gold": "other_request",
+            "old_predicted": "not_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.936284601688385,
+            "new_confidence": 0.9999984502792358
+          },
+          {
+            "id": "test-075",
+            "text": "最後に乗ったやつにして。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "本の表紙にはどの馬を描く？"
+              }
+            ],
+            "gold": "other_request",
+            "old_predicted": "recall_mount",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9037695527076721,
+            "new_confidence": 1.0
+          }
+        ],
+        "new_error": [
+          {
+            "id": "test-005",
+            "text": "モンスターの位置を地図に書いておいた。",
+            "context": [],
+            "gold": "not_request",
+            "old_predicted": "not_request",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.99866783618927,
+            "new_confidence": 0.940420925617218
+          },
+          {
+            "id": "test-022",
+            "text": "さっき「剣はいらない」と言ったのは取り消す。装備して。",
+            "context": [],
+            "gold": "equip_sword",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999760389328003,
+            "new_confidence": 0.9897153973579407
+          },
+          {
+            "id": "test-029",
+            "text": "頼むわ、手元のやつをつるぎに替えといてや。",
+            "context": [],
+            "gold": "equip_sword",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 1.0,
+            "new_confidence": 0.7635787129402161
+          },
+          {
+            "id": "test-038",
+            "text": "今から言うことを実行して。「私のロバを呼び戻して」。",
+            "context": [],
+            "gold": "recall_mount",
+            "old_predicted": "recall_mount",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9828256964683533,
+            "new_confidence": 0.5304084420204163
+          },
+          {
+            "id": "test-048",
+            "text": "今追ってくるゾンビの残りHPを教えて。",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "other_request",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.9997400641441345,
+            "new_confidence": 0.999471127986908
+          },
+          {
+            "id": "test-063",
+            "text": "うん、持つのはそっちで。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "手持ちを鉄の剣へ替えるんで合ってる？"
+              }
+            ],
+            "gold": "equip_sword",
+            "old_predicted": "equip_sword",
+            "new_predicted": "other_request",
+            "old_confidence": 0.6361284255981445,
+            "new_confidence": 0.9532195925712585
+          },
+          {
+            "id": "test-070",
+            "text": "最後に乗ったやつにして。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "ここへ呼ぶ馬はどれにする？"
+              }
+            ],
+            "gold": "recall_mount",
+            "old_predicted": "recall_mount",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9978864789009094,
+            "new_confidence": 0.9999997615814209
+          }
+        ],
+        "still_wrong": [
+          {
+            "id": "test-017",
+            "text": "敵は全員いなくなったと考えていいの？",
+            "context": [],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.7414410710334778,
+            "new_confidence": 0.9998502731323242
+          },
+          {
+            "id": "test-047",
+            "text": "前の冒険でウォーデンがいた方角を思い出せる？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "not_request",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.9668816328048706,
+            "new_confidence": 0.8636292815208435
+          },
+          {
+            "id": "test-051",
+            "text": "ああ、それでいいよ。",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "さっき装備した剣の色、気に入った？"
+              }
+            ],
+            "gold": "not_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "equip_sword",
+            "old_confidence": 0.9999905824661255,
+            "new_confidence": 0.9835996627807617
+          },
+          {
+            "id": "test-058",
+            "text": "二体ともまだそこ？",
+            "context": [
+              {
+                "role": "assistant",
+                "text": "さっきゾンビ二体が入口にいたで。"
+              }
+            ],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9988343119621277,
+            "new_confidence": 0.7522189617156982
+          }
+        ],
+        "still_correct_ids": [
+          "test-001",
+          "test-002",
+          "test-003",
+          "test-004",
+          "test-006",
+          "test-007",
+          "test-008",
+          "test-009",
+          "test-010",
+          "test-011",
+          "test-012",
+          "test-013",
+          "test-014",
+          "test-015",
+          "test-016",
+          "test-018",
+          "test-019",
+          "test-020",
+          "test-021",
+          "test-023",
+          "test-024",
+          "test-025",
+          "test-026",
+          "test-027",
+          "test-028",
+          "test-030",
+          "test-031",
+          "test-032",
+          "test-033",
+          "test-034",
+          "test-035",
+          "test-036",
+          "test-037",
+          "test-039",
+          "test-040",
+          "test-041",
+          "test-042",
+          "test-043",
+          "test-044",
+          "test-046",
+          "test-049",
+          "test-050",
+          "test-052",
+          "test-053",
+          "test-054",
+          "test-055",
+          "test-057",
+          "test-059",
+          "test-060",
+          "test-061",
+          "test-062",
+          "test-064",
+          "test-065",
+          "test-066",
+          "test-067",
+          "test-068",
+          "test-069",
+          "test-071",
+          "test-074"
+        ]
+      }
+    },
+    "regression": {
+      "n": 40,
+      "old_correct": 30,
+      "new_correct": 31,
+      "old_accuracy": 0.75,
+      "new_accuracy": 0.775,
+      "accuracy_delta_percentage_points": 2.500000000000002,
+      "old_macro_f1": 0.7530926916221035,
+      "new_macro_f1": 0.7735642135642136,
+      "macro_f1_delta": 0.020471521942110105,
+      "transition_counts": {
+        "fixed": 3,
+        "new_error": 2,
+        "still_wrong": 7,
+        "still_correct": 28
+      },
+      "transitions": {
+        "fixed": [
+          {
+            "id": "regression-016",
+            "text": "村人は近くにいるかな？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999973773956299,
+            "new_confidence": 0.6953206658363342
+          },
+          {
+            "id": "regression-020",
+            "text": "馬を呼べとは言ってないよ。昔の話をしてただけ。",
+            "context": [],
+            "gold": "not_request",
+            "old_predicted": "other_request",
+            "new_predicted": "not_request",
+            "old_confidence": 0.9377977848052979,
+            "new_confidence": 0.9999983310699463
+          },
+          {
+            "id": "regression-027",
+            "text": "敵の方角は教えなくていいけど、今いる数は教えて。",
+            "context": [],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.969729483127594,
+            "new_confidence": 0.9999984502792358
+          }
+        ],
+        "new_error": [
+          {
+            "id": "regression-033",
+            "text": "うまを　ここへ　よんでー！",
+            "context": [],
+            "gold": "recall_mount",
+            "old_predicted": "recall_mount",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9372512698173523,
+            "new_confidence": 0.9995355606079102
+          },
+          {
+            "id": "regression-034",
+            "text": "てき、ちかくに、おらん？？",
+            "context": [],
+            "gold": "enemy_information",
+            "old_predicted": "enemy_information",
+            "new_predicted": "other_request",
+            "old_confidence": 0.994758665561676,
+            "new_confidence": 0.9144402146339417
+          }
+        ],
+        "still_wrong": [
+          {
+            "id": "regression-009",
+            "text": "イルカは今どこにいる？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.9945833086967468,
+            "new_confidence": 0.9859946966171265
+          },
+          {
+            "id": "regression-010",
+            "text": "いま見えるイルカは何匹？",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "enemy_information",
+            "old_confidence": 0.999880313873291,
+            "new_confidence": 0.9973771572113037
+          },
+          {
+            "id": "regression-017",
+            "text": "独り言だけど、どこにいるかなあ。",
+            "context": [],
+            "gold": "not_request",
+            "old_predicted": "enemy_information",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9301284551620483,
+            "new_confidence": 0.907198429107666
+          },
+          {
+            "id": "regression-025",
+            "text": "「馬を呼んで」と私から今お願いしているんだよ。",
+            "context": [],
+            "gold": "recall_mount",
+            "old_predicted": "not_request",
+            "new_predicted": "not_request",
+            "old_confidence": 0.6854413747787476,
+            "new_confidence": 0.9999340772628784
+          },
+          {
+            "id": "regression-026",
+            "text": "「敵がどこにいるか教えて」という私の質問に答えて。",
+            "context": [],
+            "gold": "enemy_information",
+            "old_predicted": "other_request",
+            "new_predicted": "other_request",
+            "old_confidence": 0.9999997615814209,
+            "new_confidence": 1.0
+          },
+          {
+            "id": "regression-028",
+            "text": "敵の場所を教えてから、剣に替えて。",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "equip_sword",
+            "new_predicted": "equip_sword",
+            "old_confidence": 1.0,
+            "new_confidence": 0.9706379175186157
+          },
+          {
+            "id": "regression-031",
+            "text": "馬じゃなくて犬を呼び戻して。",
+            "context": [],
+            "gold": "other_request",
+            "old_predicted": "recall_mount",
+            "new_predicted": "recall_mount",
+            "old_confidence": 0.8266833424568176,
+            "new_confidence": 0.9999508857727051
+          }
+        ],
+        "still_correct_ids": [
+          "regression-001",
+          "regression-002",
+          "regression-003",
+          "regression-004",
+          "regression-005",
+          "regression-006",
+          "regression-007",
+          "regression-008",
+          "regression-011",
+          "regression-012",
+          "regression-013",
+          "regression-014",
+          "regression-015",
+          "regression-018",
+          "regression-019",
+          "regression-021",
+          "regression-022",
+          "regression-023",
+          "regression-024",
+          "regression-029",
+          "regression-030",
+          "regression-032",
+          "regression-035",
+          "regression-036",
+          "regression-037",
+          "regression-038",
+          "regression-039",
+          "regression-040"
+        ]
+      }
+    }
+  },
+  "training_fit": {
+    "original_288": {
+      "n": 288,
+      "correct": 288
+    },
+    "added_284": {
+      "n": 284,
+      "correct": 284
+    }
+  }
+}

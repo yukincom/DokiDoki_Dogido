@@ -2,7 +2,7 @@
 
 **作成:** 2026-10-13 / **更新:** 2026-10-14
 
-**状態:** v1.6は合意した5つの不足領域についてCodexが108候補を作成し、107件を採用、曖昧な1件を除外して検査済み（[作成・採否記録](2026-10-14-request-classifier-codex-conversations.md)）。v1.4〜v1.6の追加計284件は未学習。30Mの初回評価はv1.3・train 288件での結果（[結果と誤分類](2026-10-13-modernbert-ja-request-classifier-evaluation.md)）。本体未接続。以下の初版・ユーザー例の作成記録は2026-10-13時点を指す。
+**状態:** v1.6は合意した5つの不足領域についてCodexが108候補を作成し、107件を採用、曖昧な1件を除外して検査済み（[作成・採否記録](2026-10-14-request-classifier-codex-conversations.md)）。v1.6・train 572件で30Mを再学習済み。同じtestは66/75→64/75、回帰は30/40→31/40（[初回との比較・誤分類](2026-10-14-modernbert-ja-request-classifier-retraining.md)）。本体未接続。以下の初版・ユーザー例の作成記録は2026-10-13時点を指す。
 
 **正本:** [dev_tools/request_classifier](../dev_tools/request_classifier/README.md)
 
