@@ -45,6 +45,20 @@ class DatasetIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unresolved request'):
             validate(data)
 
+    def test_user_example_is_accepted_without_becoming_an_observation(self):
+        data = deepcopy(self.data)
+        data['train'][0]['source'] = 'user_example'
+        validate(data)
+        data['train'][0]['source'] = 'observed_text'
+        with self.assertRaisesRegex(ValueError, 'observed text outside regression'):
+            validate(data)
+
+    def test_unknown_provenance_is_rejected(self):
+        data = deepcopy(self.data)
+        data['train'][0]['source'] = 'unverified_source'
+        with self.assertRaisesRegex(ValueError, 'unknown source'):
+            validate(data)
+
     def test_annotation_metadata_never_enters_model_text(self):
         row = deepcopy(next(r for r in self.data['train'] if r['context']))
         before = model_example(row)

@@ -94,7 +94,7 @@ def validate(splits: dict[str, list[dict]]) -> None:
             require(type(row['needs_clarification']) is bool, f'{where}: clarification must be bool')
             require(isinstance(row['tags'], list) and bool(row['tags']) and all(isinstance(t, str) for t in row['tags']), f'{where}: invalid tags')
             require(len(set(row['tags'])) == len(row['tags']) and set(row['tags']) <= TAGS, f'{where}: duplicate/unknown tags')
-            require(row['source'] in ('synthetic', 'observed_text'), f'{where}: unknown source')
+            require(row['source'] in ('synthetic', 'observed_text', 'user_example'), f'{where}: unknown source')
             require(row['source'] != 'observed_text' or split == 'regression', f'{where}: observed text outside regression')
             ambiguous = bool({'ambiguous', 'multiple_requests'} & set(row['tags']))
             require(row['needs_clarification'] == ambiguous, f'{where}: clarification annotation differs')
