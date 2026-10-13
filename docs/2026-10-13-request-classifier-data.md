@@ -2,7 +2,7 @@
 
 **日付:** 2026-10-13
 
-**状態:** 初版データに選別した例を追加し、オフライン検査を実施。モデルの学習・精度測定・本体接続は未実施。
+**状態:** v1.3データの整備・検査が完了。その後、30Mモデルの初回学習・評価も完了（[結果と誤分類](2026-10-13-modernbert-ja-request-classifier-evaluation.md)）。本体未接続。以下の作成記録にある「今回は」はデータ整備時点を指す。
 
 **正本:** [dev_tools/request_classifier](../dev_tools/request_classifier/README.md)
 
