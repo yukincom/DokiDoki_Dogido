@@ -94,7 +94,10 @@ final class BodySpace {
         return result;
     }
     boolean target(Vec3d position, boolean allowWall, ServerPlayerEntity owner, boolean retreat) {
-        Box box = BodyMotion.box(position);
+        return target(BodyMotion.box(position),allowWall,owner,retreat);
+    }
+    /** 待機復帰はhoverの上下余白を含む範囲を渡し、通常目標と同じ衝突・ロード判定を使う。 */
+    boolean target(Box box, boolean allowWall, ServerPlayerEntity owner, boolean retreat) {
         // Target and movement must use exactly the same exclusion geometry.
         if (!loaded(box) || motionObstacles(box,owner,retreat).stream().anyMatch(box::intersects)) return false;
         if (!allowWall) {

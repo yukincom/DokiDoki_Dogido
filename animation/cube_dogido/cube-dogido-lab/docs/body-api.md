@@ -1,6 +1,6 @@
 # Body API v5
 
-身体Mod **0.6.0 / protocol 5** の実装契約です。既存adapterは自他姿勢・owner視認の読取りを接続済み（新しい版の実機配置は未実施）。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
+身体Mod **0.6.1 / protocol 5** の実装契約です。0.6.0から公開APIは不変です。既存adapterは自他姿勢・owner視認・身体地点の感覚観測を接続済み。導入・実機確認の範囲は[観測移行記録](../../../../docs/2026-10-13-body-observation-origin.md)を参照してください。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
 
 ## v4からの変更
 
@@ -54,7 +54,7 @@ public interface BodyBridge {
 }
 ```
 
-adapterは`cube-dogido-lab-0.6.0-body-api.jar`を**compileOnly**で参照します。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
+adapterは`cube-dogido-lab-0.6.0-body-api.jar`を**compileOnly**で参照します。0.6.1のAPI JARも同一内容です。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
 
 `available()`と送信はMinecraftのclient thread上で行います。`snapshot()`は不変データを読むだけで、HTTP workerから参照できます。受信後3秒を過ぎたsnapshotは空です。HTTP転送時はclient threadでsnapshotと経過msを続けて読み、3秒未満だけを現在値として送ります。受信登録と10client tickごとのポーリングは身体Modが所有します。
 
@@ -103,6 +103,7 @@ bridge.requestAction(request);
 - `mode=DIRECT`、`retreat=false`を使います。逃げる方向も`MOVE_TO`等で選びます。
 - `enabled=false`、lease失効、世代変更で移動／休息指示を止めます。HP・環境接触・復活の物理ルールは継続します。
 - ローカル試験コマンドはlease更新なしで試せます。次の外部状態が受理されると外部制御へ切り替わります。
+- 0.6.1ではDIRECTの待機・休息中にブロックへ埋まると、同一次元のownerがいる場合に半径3block以内の空間へ通常移動で復帰します。未指示の再ロード直後も対象ですが、外部制御を有効にはしません。明示無効化・lease失効・MOVE_TO・CALL・DOWNED中は対象外です。snapshotのactivityはHOLDING/RESTINGを維持し、復帰移動中はreason=`idle_block_recovery`になります。
 
 `ActionRequest(context, sequence, actionId, observedServerTick, validForTicks, action, destination, foodId)`
 

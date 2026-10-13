@@ -8,6 +8,7 @@ import dogido.lab.control.BodyTuning;
 import dogido.lab.control.ControlLease;
 import dogido.lab.control.BodyVitals;
 import dogido.lab.control.DirectedMotion;
+import dogido.lab.control.IdleRecovery;
 import dogido.lab.control.BodyRequests;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +46,7 @@ public final class DogidoEntity extends PathAwareEntity {
     private final BodyTuning tuning = new BodyTuning();
     private final BodyVitals vitals = new BodyVitals();
     private final DirectedMotion directed = new DirectedMotion();
+    private final IdleRecovery idleRecovery = new IdleRecovery();
     private final BodyFood food = new BodyFood(this);
     private final BodyHearing hearing = new BodyHearing();
     private ServerPlayerEntity lastOwner;
@@ -92,7 +94,7 @@ public final class DogidoEntity extends PathAwareEntity {
             administrativeRemoval = true; super.onDeath(source); return;
         }
         // 通常の撃破で個体・所有関係を削除しない。HP0のまま復活待ちへ移し、loot/XPを発生させない。
-        vitals.collapse(tuning); directed.clear(); controller.reset(); hearing.clear();
+        vitals.collapse(tuning); directed.clear(); idleRecovery.clear(); controller.reset(); hearing.clear();
         control.completeAction(Outcome.INTERRUPTED,"body_downed"); control.pause();
         activity = Activity.DOWNED; reason = "respawn_wait"; motion = Vec3d.ZERO; setVelocity(Vec3d.ZERO);
         setPose(EntityPose.DYING); snapshotRevision++;
@@ -148,7 +150,7 @@ public final class DogidoEntity extends PathAwareEntity {
             getEntityWorld().getRegistryKey().getValue().toString()));
         // Only explicit local test controls survive. Remote commands need a fresh context.
         if (localControl) control.local(mode,retreat);
-        controller.reset(); directed.clear(); food.clear(); hearing.clear(); motion = Vec3d.ZERO;
+        controller.reset(); directed.clear(); idleRecovery.clear(); food.clear(); hearing.clear(); motion = Vec3d.ZERO;
         snapshotRevision++;
     }
     public String bind(ServerPlayerEntity player) {
@@ -177,10 +179,10 @@ public final class DogidoEntity extends PathAwareEntity {
         if (result.outcome() == Outcome.ACCEPTED) {
             localControl = false;
             if (before != control.mode()) {
-                directed.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"control_mode_changed");
+                directed.clear(); idleRecovery.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"control_mode_changed");
             }
             if (!control.enabled() || control.retreat()) {
-                directed.clear();
+                directed.clear(); idleRecovery.clear();
                 controller.cancelCall(control.retreat() ? "retreat_has_priority" : "control_inactive");
                 control.completeAction(Outcome.INTERRUPTED,control.retreat() ? "retreat_has_priority" : "control_inactive");
             }
@@ -192,6 +194,7 @@ public final class DogidoEntity extends PathAwareEntity {
         var admission = control.submit(request,serverTick(),actionAdmission(request));
         ActionResult result = admission.result();
         if (admission.execute()) {
+            idleRecovery.clear();
             if (request.action() == Action.CALL) {
                 directed.clear(); controller.call(result.actionId(),pose(player),serverTick());
             } else {
@@ -221,7 +224,7 @@ public final class DogidoEntity extends PathAwareEntity {
     }
     void localMode(Mode mode, boolean retreat) {
         requireServerThread(); localControl = true; control.local(mode,retreat);
-        directed.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"local_control_changed");
+        directed.clear(); idleRecovery.clear(); controller.reset(); control.completeAction(Outcome.INTERRUPTED,"local_control_changed");
         if (retreat || mode == Mode.HOLD) {
             controller.cancelCall(retreat ? "retreat_has_priority" : "local_hold");
             control.completeAction(Outcome.INTERRUPTED,retreat ? "retreat_has_priority" : "local_hold");
@@ -287,7 +290,10 @@ public final class DogidoEntity extends PathAwareEntity {
         if (lifecycleTick == serverTick()) return;
         lifecycleTick = serverTick();
         control.expire(serverTick());
-        if (!control.enabled()) directed.clear();
+        if (!control.enabled()) {
+            directed.clear();
+            if (!IdleRecovery.controlAllowsRecovery(control,localControl)) idleRecovery.clear();
+        }
     }
 
     /** loaded registryから毎server tickに一度だけ実行する。モデル通信が止まっても身体の時間は進む。 */
@@ -300,7 +306,8 @@ public final class DogidoEntity extends PathAwareEntity {
         snapshotRevision++;
         ServerPlayerEntity player = owner();
         BodySpace space = new BodySpace((ServerWorld)getEntityWorld(),this);
-        var step = vitals.step(player != null,damageEnabled(),space.insideSolid(getBoundingBox()),
+        boolean insideSolid = space.insideSolid(getBoundingBox());
+        var step = vitals.step(player != null,damageEnabled(),insideSolid,
             control.enabled() && control.mode() == Mode.DIRECT && directed.resting() && motion.length() < .03,
             getHealth(),getMaxHealth(),tuning);
         if (step.respawnReady()) { respawnAtOwner(player); return; }
@@ -318,7 +325,15 @@ public final class DogidoEntity extends PathAwareEntity {
             }
         }
         if (!damageEnabled()) extinguish();
+        // HP判定の壁内実測を共有し、平常の待機では追加のワールド走査を行わない。
+        idleRecovery.update(getEntityPos(),idleRecoveryAllowed(player),insideSolid,serverTick(),
+            box -> space.target(box,false,player,false));
         if (!vitals.downed()) followOwnerWorld();
+    }
+    private boolean idleRecoveryAllowed(ServerPlayerEntity player) {
+        return IdleRecovery.eligible(control,localControl,activity)
+            && player != null && player.getEntityWorld() == getEntityWorld()
+            && !vitals.downed() && !directed.moving() && !controller.calling();
     }
     private void respawnAtOwner(ServerPlayerEntity player) {
         if (player == null) { reason = "respawn_owner_unavailable"; return; }
@@ -389,7 +404,10 @@ public final class DogidoEntity extends PathAwareEntity {
         if (callEnd != null) control.completeAction(callEnd.equals("call_timeout") ? Outcome.EXPIRED : Outcome.INTERRUPTED,callEnd);
         double speed = tuning.speedFor(activity,position.distanceTo(plan.target()),player == null ? 0 : position.distanceTo(player.getEntityPos()));
         boolean active = activity == Activity.FOLLOWING || activity == Activity.EXPLORING || activity == Activity.CALLING || activity == Activity.RETREATING || activity == Activity.MOVING;
-        Vec3d target = active && !plan.reason().equals("no_safe_target")
+        if (!idleRecoveryAllowed(player)) idleRecovery.clear();
+        Vec3d recoveryTarget = idleRecovery.target(position);
+        if (recoveryTarget != null) reason = "idle_block_recovery";
+        Vec3d target = recoveryTarget != null ? recoveryTarget : active && !plan.reason().equals("no_safe_target")
             ? plan.target().add(0,.06*Math.sin(age*Math.PI*2/80),0) : position.add(0,IdleMotion.hoverStep(age),0);
         Box path = getBoundingBox().expand(speed+.1);
         List<Box> obstacles = direct ? space.physicalObstacles(path) : space.motionObstacles(path,currentOwner,control.retreat());
