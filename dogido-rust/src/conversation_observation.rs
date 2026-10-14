@@ -5,6 +5,8 @@ use environment::notice::{self, Snapshot};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+mod body_changes;
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Context {
@@ -163,8 +165,16 @@ impl State {
             return;
         };
         if !origin.available || origin.context != self.body_context {
-            *self = Self::default();
-            self.body_context = origin.context.clone();
+            // 古い判断の完了通知で、新世代の差分を考慮済みにしない。
+            let revision = self
+                .current
+                .as_ref()
+                .map_or(self.considered, |c| c.revision);
+            *self = Self {
+                body_context: origin.context.clone(),
+                considered: revision,
+                ..Self::default()
+            };
         }
     }
     /// 周期に来た新しい全snapshotだけを比較する。初回は基準の作成だけ。
@@ -197,6 +207,7 @@ impl State {
         self.notice_pending = None;
     }
     pub fn observe(&mut self, mut next: Context) {
+        next.revision = self.considered;
         if let Some(previous) = &self.current {
             if previous.observations["dimension"] != next.observations["dimension"] {
                 next.revision = previous.revision.saturating_add(1);
@@ -211,6 +222,7 @@ impl State {
                 .filter(|c| c.revision > self.considered)
                 .cloned()
                 .collect();
+            body_changes::append(&previous.observations, &mut next);
             // A timetable exists only while villagers are currently observed.
             // Remove unconsumed old changes as soon as they leave the current frame.
             if next.villager_routines.is_none() {

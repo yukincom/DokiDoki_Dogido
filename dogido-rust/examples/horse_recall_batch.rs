@@ -9,6 +9,19 @@ use dogido_rust::{
 use serde_json::{Value, json};
 use std::io::{self, BufRead};
 fn run(row: Value) -> anyhow::Result<Value> {
+    // 保存済みの共通観測を本体と同じ差分台帳へ流す、実測比較用の読み取り操作。
+    if row["op"] == "observation_changes" {
+        let mut state = dogido_rust::conversation_observation::State::default();
+        let mut contexts = Vec::new();
+        for frame in row["contexts"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("contexts required"))?
+        {
+            state.observe(serde_json::from_value(frame.clone())?);
+            contexts.push(state.context().unwrap());
+        }
+        return Ok(json!(contexts));
+    }
     let snapshot: Snapshot = serde_json::from_value(row["snapshot"].clone())?;
     let original = row["text"].as_str().unwrap_or("");
     let prepared = Prepared::new(snapshot, original)?;

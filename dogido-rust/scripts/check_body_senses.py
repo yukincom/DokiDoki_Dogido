@@ -104,7 +104,11 @@ def main():
             body = context["observations"]["body_observation"]
             assert body["current"]["vision"]["player_visibility"] == "not_visible", body
             assert body["previous"]["vision"]["player_visibility"] == "visible", body
-            passed.append("current_visibility_switch_preserves_previous_and_history")
+            changes = {c["kind"]: c for c in context["changes"]}
+            assert changes["body_player_visibility"]["before"]["player_visibility"] == "visible", changes
+            assert changes["body_player_visibility"]["now"]["player_visibility"] == "not_visible", changes
+            assert changes["body_self_orientation"]["now"]["yaw"] == -180, changes
+            passed.append("current_visibility_switch_and_orientation_changes_reach_normal_reply")
 
             for label in ("unavailable", "owner_mismatch", "stale", "senses_unavailable"):
                 value = event()
@@ -122,6 +126,7 @@ def main():
                 context, _ = ask("今の様子を教えて")
                 obs = context["observations"]
                 assert obs["sensory_status"] == "unavailable", (label, obs)
+                assert context.get("changes", []) == [], (label, context)
                 assert "location_biome" not in obs and "smell" not in obs and "nearby_mob_types" not in obs, (label, obs)
                 assert "cactus" not in json.dumps(obs) and "pig" not in json.dumps(obs), (label, obs)
                 passed.append(label + "_never_falls_back_to_player_senses")

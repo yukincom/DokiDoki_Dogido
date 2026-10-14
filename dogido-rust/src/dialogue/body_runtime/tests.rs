@@ -80,6 +80,20 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
     });
     d.observe("s", b.clone(), Some("b"));
     let second = capture(&d, &b);
+    let changes = &second.context.world_context.as_ref().unwrap().changes;
+    assert_eq!(
+        changes.iter().map(|c| c.kind.as_str()).collect::<Vec<_>>(),
+        [
+            "body_player_position",
+            "body_self_orientation",
+            "body_player_orientation",
+            "body_player_visibility"
+        ]
+    );
+    assert_eq!(changes[0].before["z"], 23.0);
+    assert_eq!(changes[0].now["z"], 28.0);
+    assert_eq!(changes[3].before["player_visibility"], "visible");
+    assert_eq!(changes[3].now["player_visibility"], "not_visible");
     let second_diagnostic = d.snapshot(Some("s"))["sessions"]
         .as_array()
         .unwrap()
@@ -168,6 +182,14 @@ async fn body_original_event_updates_once_and_capture_is_immutable() {
             .content
             .contains("body_observation の self はオレ")
     );
+    for kind in [
+        "body_player_position",
+        "body_self_orientation",
+        "body_player_orientation",
+        "body_player_visibility",
+    ] {
+        assert!(request.messages[1].content.contains(kind));
+    }
     assert!(wire.contains("server_pose"));
     assert!(wire.contains("pose_basis"));
     assert!(wire.contains("body_eye_raycast_fov"));
@@ -492,6 +514,51 @@ async fn body_senses_feed_chat_smell_environment_and_haiku_without_player_fallba
         );
         assert_eq!(reply.cue_id, Some("smell_unsupported"));
     }
+    drop(permit);
+    d.shutdown().await;
+}
+
+#[tokio::test]
+async fn old_reply_ack_cannot_consume_new_body_generation_changes() {
+    let d = server();
+    let permit = d.serial.acquire().await.unwrap();
+    let a = event(1, 100, 23.0);
+    d.observe("s", a.clone(), None);
+    let b = event(2, 110, 24.0);
+    d.observe("s", b.clone(), None);
+    let offered = capture(&d, &b).context.world_context.unwrap();
+    assert_eq!(offered.changes.len(), 1);
+    let generation = |e: GameEvent| {
+        edit(e, |v| {
+            v["body_observation"]["sample"]["context"]["epoch"] =
+                json!("44444444-4444-4444-8444-444444444444");
+        })
+    };
+    let c = generation(event(3, 120, 99.0));
+    d.observe("s", c.clone(), None);
+    assert!(
+        capture(&d, &c)
+            .context
+            .world_context
+            .unwrap()
+            .changes
+            .is_empty()
+    );
+    let e = generation(event(4, 130, 98.0));
+    d.observe("s", e.clone(), None);
+    d.data
+        .lock()
+        .unwrap()
+        .sessions
+        .get_mut("s")
+        .unwrap()
+        .conversation_observation
+        .considered(offered.revision);
+    let current = capture(&d, &e).context.world_context.unwrap();
+    assert!(current.revision > offered.revision);
+    assert_eq!(current.changes.len(), 1);
+    assert_eq!(current.changes[0].before["z"], 99.0);
+    assert_eq!(current.changes[0].now["z"], 98.0);
     drop(permit);
     d.shutdown().await;
 }
