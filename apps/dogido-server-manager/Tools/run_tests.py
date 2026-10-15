@@ -9,8 +9,8 @@ with tempfile.TemporaryDirectory(prefix="dogido-manager-tests-") as temporary:
     runner = work / "manager-tests"
     mock = work / "mock-server"
     subprocess.run([
-        "xcrun", "swiftc", "-O", "-module-cache-path", str(work / "swift-cache"),
-        str(source / "Sources/ServiceController.swift"), str(source / "Tests/main.swift"),
+        "xcrun", "swiftc", "-O", "-framework", "AppKit", "-module-cache-path", str(work / "swift-cache"),
+        str(source / "Sources/ServiceController.swift"), str(source / "Sources/DialogueLog.swift"), str(source / "Tests/main.swift"),
         "-o", str(runner),
     ], check=True)
     subprocess.run([

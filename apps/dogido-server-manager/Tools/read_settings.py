@@ -1,4 +1,4 @@
-"""Read only the endpoint using the same settings loader as the Rust launcher."""
+"""Read the endpoint and API credential through a private pipe using the existing settings loader."""
 import ipaddress
 import json
 import os
@@ -15,4 +15,4 @@ host = "127.0.0.1" if settings.bind_host == "localhost" else settings.bind_host
 if not ipaddress.ip_address(host).is_loopback:
     raise SystemExit("loopback endpoint required")
 host = f"[{host}]" if ":" in host else host
-print(json.dumps({"base_url": f"http://{host}:{settings.bind_port}"}))
+print(json.dumps({"base_url": f"http://{host}:{settings.bind_port}", "auth_token": settings.auth_token}))

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Darwin
 
 var count = 0
@@ -59,6 +60,53 @@ check(!controller.snapshot(.server, records: [record(), record(pid: 4243)], list
 check(controller.snapshot(.server, records: [], listeners: []).stopped, "no process means stopped")
 let launcher = record(binary: "/bin/zsh", arguments: ["/bin/zsh", config.root.appendingPathComponent("dogido-rust/start_dialogue.command").path], cwd: "/tmp/elsewhere")
 check(ServiceController.isLauncher(launcher, kind: .server, configuration: config), "absolute launcher from another cwd prevents duplicate build")
+
+let sampleRows: [[String: Any]] = [
+    ["utterance_id": "route-1", "turn_id": "route-1", "category": "routing", "created_at": "2026-10-15T15:00:00Z", "player_input_text": "ありがとう🐶\nもう来たね", "text": "", "source": "voice", "playback_status": "not_selected", "request_classification": ["prediction": ["label": "not_request", "probabilities": [0.91, 0.01, 0.02, 0.03, 0.03], "inference_ms": 4.5]], "forwarded_input": ["turn_id": "reply-1"]],
+    ["utterance_id": "reply-1", "turn_id": "reply-1", "player_input_text": "ありがとう🐶\nもう来たね", "text": "来たで！", "playback_status": "completed"],
+    ["utterance_id": "route-2", "turn_id": "route-2", "category": "routing", "player_input_text": "ありがとう🐶\nもう来たね", "text": "", "playback_status": "routing"],
+    ["utterance_id": "warning-1", "turn_id": "warning-1", "text": "剣やな、持ち替えるで！", "playback_status": "audio_disabled"],
+    ["utterance_id": "failed-1", "turn_id": "failed-1", "player_input_text": "何してる？", "playback_status": "failed", "error": "分類失敗"],
+    ["utterance_id": "empty", "text": ""],
+]
+let log = try DialogueLog.decode(JSONSerialization.data(withJSONObject: ["utterances": sampleRows]))
+check(log.entries.count == 5, "show inputs, replies, warnings, failures; skip empty rows")
+check(log.entries.filter { $0.input == "ありがとう🐶\nもう来たね" }.count == 2, "keep identical successive inputs; suppress only explicitly forwarded duplicate")
+check(log.entries.first?.classification == "not_request" && log.entries.first?.probability == 0.91, "read classifier label and its own probability")
+check(log.entries[1].output == "来たで！" && log.entries[1].input.isEmpty, "forwarded reply remains visible")
+check(log.entries[2].status == "routing" && log.entries[4].error == "分類失敗", "pending and failed input remain visible")
+let rendered = DialogueLogStyle.render(log, notice: "fixture")
+check(rendered.string.contains("あなた · 音声") && rendered.string.contains("ドギド · 配送完了"), "label input and actual output separately")
+check(rendered.string.contains("91.00%") && rendered.string.contains("4.5 ms"), "classifier diagnostic values visible")
+check(rendered.string.contains("ありがとう🐶\nもう来たね") && rendered.string.contains("エラー: 分類失敗"), "preserve unicode and multiline input and errors")
+let badgeRange = (rendered.string as NSString).range(of: "依頼なし · not_request")
+check(rendered.attribute(.backgroundColor, at: badgeRange.location, effectiveRange: nil) != nil, "classification has colored background")
+let bodyRange = (rendered.string as NSString).range(of: "ありがとう")
+check(rendered.attribute(.backgroundColor, at: bodyRange.location, effectiveRange: nil) == nil, "ordinary text is not classified by substring")
+for status in ["generating", "quiet", "cancelled"] {
+    var rows = sampleRows
+    rows[1]["text"] = ""; rows[1]["playback_status"] = status
+    let pending = try DialogueLog.decode(JSONSerialization.data(withJSONObject: ["utterances": rows]))
+    check(pending.entries.count == 5 && pending.entries[1].input.isEmpty, "keep empty forwarded response: \(status)")
+    check(DialogueLogStyle.render(pending, notice: "").string.contains("ドギド · " + DialogueLogStyle.status(status)), "show response progress: \(status)")
+}
+let names = ["not_request", "enemy_information", "equip_sword", "recall_mount", "other_request"]
+check(Set(names.map { DialogueLogStyle.badge($0).color.description }).count == 5, "five distinct classification colors")
+for (index, name) in names.enumerated() {
+    var scores = [0.01, 0.01, 0.01, 0.01, 0.01]; scores[index] = 0.96
+    let value = try DialogueLog.decode(JSONSerialization.data(withJSONObject: ["utterances": [["utterance_id": name, "request_classification": ["prediction": ["label": name, "probabilities": scores]]]]]))
+    check(value.entries.first?.probability == 0.96 && DialogueLogStyle.render(value, notice: "").string.contains(name), "each label and probability mapping: \(name)")
+}
+let unknown = try DialogueLog.decode(Data(#"{"utterances":[{"utterance_id":"future","request_classification":{"prediction":{"label":"future_label","probabilities":[]}}}]}"#.utf8))
+check(unknown.entries.first?.probability == nil && DialogueLogStyle.render(unknown, notice: "").string.contains("future_label"), "unknown label is explicit and neutral")
+let empty = try DialogueLog.decode(Data(#"{"utterances":[]}"#.utf8))
+check(empty.entries.isEmpty && DialogueLogStyle.render(empty, notice: "").string.contains("まだありません"), "empty snapshot message")
+rejects("bad JSON rejected") { _ = try DialogueLog.decode(Data("invalid".utf8)) }
+rejects("missing utterances rejected") { _ = try DialogueLog.decode(Data(#"{"ok":true}"#.utf8)) }
+let many = (0..<240).map { ["utterance_id": "u\($0)", "text": "reply \($0)"] }
+let bounded = try DialogueLog.decode(JSONSerialization.data(withJSONObject: ["utterances": many]))
+check(bounded.entries.count == 200, "bounded dialogue rows")
+
 print("\(count) unit checks passed"); fflush(stdout)
 
 if CommandLine.arguments.contains("--integration") {
@@ -110,6 +158,16 @@ if CommandLine.arguments.contains("--integration") {
     print("external fixture detected"); fflush(stdout)
     check(found.process?.pid == external.processIdentifier, "discover external server")
     check(manager.terminalOutput(found).contains("mock started"), "read externally captured stdout")
+    let authenticated = ServiceController(configuration: ManagerConfiguration(root: temporary, baseURL: configuration.baseURL, authToken: "fixture-ok"))
+    let remoteLog = try authenticated.dialogueLog()
+    check(remoteLog.entries.first?.input == "ありがとう" && remoteLog.entries.first?.classification == "not_request", "fetch snapshot over existing authenticated API")
+    check(remoteLog.entries.last?.output == "どういたしまして！", "fetch assistant output")
+    rejects("missing API token rejected") { _ = try manager.dialogueLog() }
+    let invalid = ServiceController(configuration: ManagerConfiguration(root: temporary, baseURL: configuration.baseURL, authToken: "fixture-invalid"))
+    rejects("invalid snapshot response rejected") { _ = try invalid.dialogueLog() }
+    let redirected = ServiceController(configuration: ManagerConfiguration(root: temporary, baseURL: configuration.baseURL, authToken: "fixture-redirect"))
+    rejects("do not follow authenticated redirect") { _ = try redirected.dialogueLog() }
+
     rejects("duplicate external server") { try manager.start(.server) }
     let other = ManagerConfiguration(root: temporary.appendingPathComponent("wrong"), baseURL: configuration.baseURL)
     let foreign = ServiceController(configuration: other).snapshots().first { $0.kind == .server }!

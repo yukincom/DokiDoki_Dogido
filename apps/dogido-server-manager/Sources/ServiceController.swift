@@ -1,3 +1,4 @@
+// 既存の起動設定・プロセス状態・ログを読み、明示操作時だけ本体とマイクを起動停止する。
 import Foundation
 import Darwin
 
@@ -9,9 +10,11 @@ struct ManagerError: LocalizedError {
 struct ManagerConfiguration {
     let root: URL
     let baseURL: URL
-    init(root: URL, baseURL: URL) {
+    let authToken: String?
+    init(root: URL, baseURL: URL, authToken: String? = nil) {
         self.root = root.standardizedFileURL.resolvingSymlinksInPath()
         self.baseURL = baseURL
+        self.authToken = authToken
     }
     var binary: URL { root.appendingPathComponent("dogido-rust/target/release/dogido-rust") }
     var python: URL { root.appendingPathComponent("dogido-llm/bin/python") }
@@ -29,7 +32,8 @@ struct ManagerConfiguration {
               let port = url.port, (1...65535).contains(port) else {
             throw ManagerError(message: "本体の接続設定を読み取れませんでした。")
         }
-        return ManagerConfiguration(root: root.standardizedFileURL.resolvingSymlinksInPath(), baseURL: url)
+        return ManagerConfiguration(root: root.standardizedFileURL.resolvingSymlinksInPath(), baseURL: url,
+                                    authToken: object["auth_token"] as? String)
     }
 }
 
@@ -241,6 +245,36 @@ final class ServiceController {
         return value["ok"] as? Bool == true && value["runtime"] as? String == "rust" && value["dialogue_ready"] as? Bool == true
     }
 
+    /// バックグラウンド更新から既存表示APIを読む。認証値は引数・ログ・永続キャッシュへ渡さない。
+    func dialogueLog() throws -> DialogueLog {
+        var request = URLRequest(url: configuration.baseURL.appendingPathComponent("api/v1/display/snapshot"))
+        request.timeoutInterval = 2
+        if let token = configuration.authToken, !token.isEmpty {
+            request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        }
+        let settings = URLSessionConfiguration.ephemeral
+        settings.connectionProxyDictionary = [:]
+        settings.timeoutIntervalForResource = 3
+        let response = SnapshotResponse()
+        let session = URLSession(configuration: settings, delegate: response, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        let done = DispatchSemaphore(value: 0)
+        session.dataTask(with: request) { data, reply, error in
+            response.data = data; response.reply = reply as? HTTPURLResponse; response.error = error
+            done.signal()
+        }.resume()
+        guard done.wait(timeout: .now() + 3) == .success else {
+            throw ManagerError(message: "対話の更新がタイムアウトしました。")
+        }
+        guard response.error == nil, let reply = response.reply else {
+            throw ManagerError(message: "対話の更新に接続できませんでした。")
+        }
+        guard reply.statusCode == 200 else {
+            throw ManagerError(message: reply.statusCode == 401 ? "対話の読み取り認証に失敗しました。設定を確認してください。" : "対話の読み取りに失敗しました（HTTP \(reply.statusCode)）。")
+        }
+        return try DialogueLog.decode(response.data ?? Data())
+    }
+
     func snapshot(_ kind: ServiceKind, records: [ProcessRecord], listeners: Set<Int32>) -> ServiceSnapshot {
         let candidates = records.filter { Self.matches($0, kind: kind, configuration: configuration) }
         let foreign = kind == .server && !listeners.subtracting(candidates.map(\.pid)).isEmpty
@@ -336,5 +370,16 @@ final class ServiceController {
             do { return "出力元: \(url.path)\n\n" + (try Self.readTail(url)) }
             catch { return "出力を読み取れませんでした。\(error.localizedDescription)" }
         }.joined(separator: "\n\n")
+    }
+}
+
+// 一回の読み取り結果をsemaphoreの完了後に参照する。転送応答には認証値を引き継がない。
+private final class SnapshotResponse: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    var data: Data?
+    var reply: HTTPURLResponse?
+    var error: Error?
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }

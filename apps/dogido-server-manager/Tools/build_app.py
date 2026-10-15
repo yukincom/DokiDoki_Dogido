@@ -56,7 +56,7 @@ def build(project, destination, identity=LOCAL_SIGNING_IDENTITY, ad_hoc=False):
         subprocess.run([
             "xcrun", "swiftc", "-O", "-module-cache-path", str(work / "swift-cache"),
             "-target", f"{platform.machine()}-apple-macos13.0", "-framework", "AppKit", "-framework", "WebKit",
-            str(SOURCE / "Sources/ServiceController.swift"), str(SOURCE / "Sources/main.swift"), "-o", str(executable),
+            str(SOURCE / "Sources/ServiceController.swift"), str(SOURCE / "Sources/DialogueLog.swift"), str(SOURCE / "Sources/main.swift"), "-o", str(executable),
         ], check=True)
         shutil.copyfile(project / "dogido-rust/src/server/utterance-view.js", resources / "utterance-view.js")
         iconset = work / "DogidoServer.iconset"
@@ -73,7 +73,7 @@ def build(project, destination, identity=LOCAL_SIGNING_IDENTITY, ad_hoc=False):
         info = {
             "CFBundleName": "ドギド サーバー", "CFBundleDisplayName": "ドギド サーバー",
             "CFBundleIdentifier": "local.dogido.server-manager", "CFBundleExecutable": "DogidoServerManager",
-            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.1", "CFBundleVersion": "2",
+            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.2", "CFBundleVersion": "3",
             "CFBundleIconFile": "DogidoServer-v2.icns",
             "LSMinimumSystemVersion": "13.0", "NSHighResolutionCapable": True,
             "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},

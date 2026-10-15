@@ -1,3 +1,4 @@
+// 管理画面の状態カード・対話ログ・生の出力を表示する。更新処理は専用queueで行う。
 import AppKit
 import WebKit
 
@@ -44,7 +45,7 @@ final class ServiceCard: NSView {
             column.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
             column.topAnchor.constraint(equalTo: topAnchor, constant: 16),
             column.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -14),
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 190),
+            heightAnchor.constraint(equalToConstant: 190),
         ])
         start.isEnabled = false
         stop.isEnabled = false
@@ -69,6 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var controller: ServiceController?
     private var snapshots: [ServiceKind: ServiceSnapshot] = [:]
     private var outputs: [ServiceKind: String] = [:]
+    private var dialogueLog: DialogueLog?
+    private var dialogueNotice = "対話を確認しています…"
     private var busy = false, polling = false
     private var timer: Timer?
     private let worker = DispatchQueue(label: "local.dogido.server-manager")
@@ -77,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private let history = NSButton(title: "発言履歴を開く ↗", target: nil, action: nil)
     private let terminal = NSTextView()
     private let follow = NSButton(checkboxWithTitle: "末尾を追う", target: nil, action: nil)
-    private let tabs = NSSegmentedControl(labels: ["本体の出力", "マイクの出力"], trackingMode: .selectOne, target: nil, action: nil)
+    private let tabs = NSSegmentedControl(labels: ["対話・分類", "本体の出力", "マイクの出力"], trackingMode: .selectOne, target: nil, action: nil)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -111,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let actions = NSStackView(views: [history, refresh]); actions.spacing = 14
         tabs.selectedSegment = 0; tabs.target = self; tabs.action = #selector(logTabChanged)
         follow.state = .on
-        let logActions = NSStackView(views: [label("ターミナル出力", size: 16, bold: true), tabs, follow]); logActions.spacing = 18
+        let logActions = NSStackView(views: [label("ログ", size: 16, bold: true), tabs, follow]); logActions.spacing = 18
         terminal.isEditable = false; terminal.isSelectable = true
         terminal.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         terminal.textColor = ink(0xe1eee6); terminal.backgroundColor = ink(0x142722)
@@ -132,7 +135,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             scroll.widthAnchor.constraint(equalTo: column.widthAnchor),
             scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 200),
         ])
-        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        // 上部は内容の高さを保ち、縦に増えた分をログ欄へ割り当てる。
+        for view in [title, notice, row, actions, logActions, location] as [NSView] {
+            view.setContentHuggingPriority(.required, for: .vertical)
+        }
+        scroll.setContentHuggingPriority(NSLayoutConstraint.Priority(rawValue: 1), for: .vertical)
         window.center(); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
         loadConfiguration()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
@@ -172,7 +179,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         worker.async {
             let states = controller.snapshots()
             let logs = Dictionary(uniqueKeysWithValues: states.map { ($0.kind, controller.terminalOutput($0)) })
+            let server = states.first { $0.kind == .server }
+            let canRead = server?.trusted == true && server?.process != nil
+            let dialogue: Result<DialogueLog, Error>? = canRead ? Result { try controller.dialogueLog() } : nil
             DispatchQueue.main.async {
+                if let dialogue {
+                    switch dialogue {
+                    case .success(let log):
+                        self.dialogueLog = log
+                        self.dialogueNotice = "本体が保持する直近の対話 · 3秒ごとに更新"
+                    case .failure(let error):
+                        self.dialogueNotice = error.localizedDescription + (self.dialogueLog == nil ? "" : " 前回取得した対話を表示しています。")
+                    }
+                } else {
+                    self.dialogueNotice = "本体: " + (server?.state ?? "確認できません") + (self.dialogueLog == nil ? "" : " · 前回取得した対話を表示しています。")
+                }
                 self.snapshots = Dictionary(uniqueKeysWithValues: states.map { ($0.kind, $0) })
                 self.outputs = logs; self.polling = false; self.render()
             }
@@ -186,24 +207,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     private func renderLog() {
-        let kind: ServiceKind = tabs.selectedSegment == 1 ? .voice : .server
-        let value = outputs[kind] ?? "出力を確認しています…"
-        guard terminal.string != value else { return }
+        let value: NSAttributedString
+        if tabs.selectedSegment == 0 {
+            value = DialogueLogStyle.render(dialogueLog, notice: dialogueNotice)
+        } else {
+            let kind: ServiceKind = tabs.selectedSegment == 2 ? .voice : .server
+            value = NSAttributedString(string: outputs[kind] ?? "出力を確認しています…", attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+                .foregroundColor: DialogueLogStyle.foreground,
+            ])
+        }
+        guard terminal.textStorage?.isEqual(to: value) != true else { return }
         let offset = terminal.enclosingScrollView?.contentView.bounds.origin
-        terminal.string = value
+        terminal.textStorage?.setAttributedString(value)
         if follow.state == .on { terminal.scrollToEndOfDocument(nil) }
         else if let offset { terminal.enclosingScrollView?.contentView.scroll(to: offset) }
     }
 
     private func perform(_ kind: ServiceKind, stopping: Bool) {
         guard !busy, let controller, let expected = snapshots[kind] else { return }
-        busy = true; render(); tabs.selectedSegment = kind == .server ? 0 : 1
+        busy = true; render()
         notice.stringValue = stopping ? "\(kind.title)へ停止を依頼しています…" : "\(kind.title)を起動しています…"
         worker.async {
             let message: String
             do {
                 if stopping { try controller.stop(expected) } else { try controller.start(kind) }
-                message = stopping ? "停止要求を送りました。状態が「停止中」になるまでお待ちください。" : "起動を開始しました。ターミナル出力を確認できます。"
+                message = stopping ? "停止要求を送りました。状態が「停止中」になるまでお待ちください。" : "起動を開始しました。対話・分類と、本体・マイクの出力を確認できます。"
             } catch { message = error.localizedDescription }
             DispatchQueue.main.async { self.busy = false; self.notice.stringValue = message; self.refresh() }
         }

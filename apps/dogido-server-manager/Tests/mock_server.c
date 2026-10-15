@@ -37,9 +37,24 @@ int main(int argc, char **argv) {
         if (select(fd + 1, &reads, NULL, NULL, &timeout) <= 0) continue;
         int client = accept(fd, NULL, NULL);
         if (client < 0) continue;
-        char request[1024]; read(client, request, sizeof(request));
+        char request[8192] = {0};
+        ssize_t received = read(client, request, sizeof(request) - 1);
+        if (received <= 0) { close(client); continue; }
+        request[received] = '\0';
         const char *body = "{\"ok\":true,\"runtime\":\"rust\",\"dialogue_ready\":true}";
-        dprintf(client, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s", strlen(body), body);
+        const char *status = "200 OK", *extra = "";
+        if (strstr(request, "GET /api/v1/display/snapshot ")) {
+            if (strstr(request, "Bearer fixture-ok")) {
+                body = "{\"utterances\":[{\"utterance_id\":\"input-1\",\"category\":\"routing\",\"player_input_text\":\"ありがとう\",\"request_classification\":{\"prediction\":{\"label\":\"not_request\",\"probabilities\":[1,0,0,0,0]}}},{\"utterance_id\":\"reply-1\",\"text\":\"どういたしまして！\"}]}";
+            } else if (strstr(request, "Bearer fixture-invalid")) {
+                body = "{\"bad\":true}";
+            } else if (strstr(request, "Bearer fixture-redirect")) {
+                status = "302 Found"; extra = "Location: /healthz\r\n";
+            } else {
+                status = "401 Unauthorized"; body = "{\"error\":\"unauthorized\"}";
+            }
+        }
+        dprintf(client, "HTTP/1.1 %s\r\n%sContent-Type: application/json\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s", status, extra, strlen(body), body);
         close(client);
     }
     close(fd); puts("mock stopped"); return 0;
