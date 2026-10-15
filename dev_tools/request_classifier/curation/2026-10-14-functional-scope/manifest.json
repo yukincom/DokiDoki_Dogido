@@ -18,12 +18,12 @@
     "data/train.jsonl": "f67e4de44c09d1075be4f8ca6c6c5382456fb46f0543a697e619ce8aa9e51984",
     "data/dev.jsonl": "77f6bcd32ac34d66ac918b4be57ada6d667778af71ff28edced332718d944986",
     "data/test.jsonl": "823424261b42d9b90f9fe8adfe48d44756e5df965425b2e62ba953104348884e",
-    "data/regression.jsonl": "4567b2bbb5d66335d84e86edae7a54cb2c7cfde4ffccd88f6c4ab584dd70147d"
+    "data/regression.jsonl": "d54af6a2a173ff8f82694255f06102b4eada22234027f52b2343a95b39583fd5"
   },
   "reviewed": 762,
   "actions": {
-    "keep": 674,
-    "revise": 80,
+    "keep": 673,
+    "revise": 81,
     "exclude": 8
   },
   "scopes": {
@@ -66,14 +66,14 @@
       "before": 40,
       "after": 40,
       "actions": {
-        "keep": 39,
-        "revise": 1
+        "keep": 38,
+        "revise": 2
       },
       "unsupported_requests": 1
     }
   },
   "changed_fields": {
-    "text": 7,
+    "text": 8,
     "tags": 45,
     "context": 32,
     "rationale": 22
@@ -106,10 +106,21 @@
     "adapter/minecraft-fabric/src/main/java/dogido/fabric/horse_recall/HorseRecallRuntime.java": "cb128d245953729537b1377b20293d1ebb9e6a76f90e176b92becd9f523a690e",
     "adapter/minecraft-fabric/src/main/java/dogido/fabric/observation/mobs/MobClassifier.java": "600f16a586264eb2cb03439e511c8bb783856083ccfa80827a8613d291c48b2a"
   },
-  "decisions_sha256": "322b51ecf09fc0017bbc66e092833e10bf21a1410204a52fab6cac96ccfb94e7",
+  "decisions_sha256": "8524cc38b9a6dfc2e02ca7c333f7a1e513f53f2003106208d225a720db20f1ce",
   "criteria_sha256": "90deda66b1558f8b0723c2dfd4e1f761f0c4a9d477ffdaa66f622a3b89d82f08",
   "validation_files": {
     "token-length-check.json": "ad685969b0ed84779b5b2405e339fdd4e2f9a96e8a49fccfb562bc8ffab31695",
     "similarity-review.json": "295b934a5c0c06ecd6b08bb1856fc3e4a06c2bfb6f808434ca6370d8b7cc643f"
-  }
+  },
+  "user_corrections": [
+    {
+      "date": "2026-10-15",
+      "id": "regression-025",
+      "before": "「馬を呼んで」と私から今お願いしているんだよ。",
+      "after": "「馬を呼んで」と私は今、お願いしているんだよ。",
+      "label_changed": false,
+      "frozen_releases_and_comparisons_changed": false,
+      "note": "validation_filesは2026-10-14時点の検査記録を保持。修正文は採用v1.9 seed43で別途確認。"
+    }
+  ]
 }
