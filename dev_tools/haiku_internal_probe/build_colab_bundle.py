@@ -93,10 +93,41 @@ def prepare(destination, model, site_packages):
     return root
 
 
-def package(destination):
+def prepare_optimization(destination, baseline_bundle):
+    """既存比較元と保存済みtest文章から、同じ入力を再測定する束を作る。"""
+    root = destination / 'qat-colab'
+    root.mkdir(parents=True, exist_ok=False)
+    for name in ['colab_probe.py', 'qat_jacobian.py']:
+        if sha(HERE / name) != sha(baseline_bundle / name):
+            raise ValueError('original baseline probe changed')
+    shutil.copyfile(baseline_bundle / 'spec.json', root / 'spec.json')
+    spec = json.loads((root / 'spec.json').read_text())
+    test = json.loads((EXPERIMENT / 'data/test.json').read_text())[0]
+    expected_text = '2c27eca43dcb8c265876f8aa8816bb3c322da775f65a2c0939283383c18ec8ef'
+    if hashlib.sha256(test['text'].encode()).hexdigest() != expected_text:
+        raise ValueError('held-out WikiText case changed')
+    cases = {
+        'scope': 'two fixed 128-token prefixes; dispersed coordinates; no generation or fitting',
+        'coordinates': [round(i * 2815 / 31) for i in range(32)],
+        'cases': [
+            {'id': 'existing_production_prefix', 'token_ids': spec['jacobian_token_ids']},
+            {'id': 'held_out_wikitext_prefix', 'source_row': test['source_row'],
+             'text': test['text'], 'text_sha256': expected_text},
+        ],
+    }
+    (root / 'optimization-cases.json').write_text(json.dumps(cases, ensure_ascii=False, indent=2))
+    for name in ['colab_probe.py', 'qat_jacobian.py', 'qat_vectorized.py',
+                 'optimization_probe.py', 'test_qat_vectorized.py']:
+        shutil.copyfile(HERE / name, root / name)
+    return root
+
+
+def package(destination, optimization=False):
     root = destination / 'qat-colab'
     report = json.loads((root / 'baseline/report.json').read_text())
-    if report['status'] != 'measurement_complete_review_required' or report['backend'] != 'metal':
+    expected_status = ('optimization_measurement_complete_review_required' if optimization
+                       else 'measurement_complete_review_required')
+    if report['status'] != expected_status or report['backend'] != 'metal':
         raise ValueError('a completed native Mac baseline is required')
     if report['spec_sha256'] != sha(root / 'spec.json'):
         raise ValueError('baseline spec changed')
@@ -105,9 +136,25 @@ def package(destination):
             raise ValueError('rebuild baseline after changing probe code')
     included = ['spec.json', 'colab_probe.py', 'qat_jacobian.py', 'baseline/report.json',
                 'baseline/forward.npz', 'baseline/jacobian_rows.npy']
+    if optimization:
+        if report['cases_sha256'] != sha(root / 'optimization-cases.json'):
+            raise ValueError('optimization cases changed')
+        for name, expected in report['source_sha256'].items():
+            if sha(HERE / name) != expected or sha(root / name) != expected:
+                raise ValueError('optimization source changed after measurement: ' + name)
+        included = ['spec.json', 'colab_probe.py', 'qat_jacobian.py', 'qat_vectorized.py',
+                    'optimization_probe.py', 'test_qat_vectorized.py',
+                    'optimization-cases.json', 'baseline/report.json']
+        for i in range(2):
+            included.append(f'baseline/case-{i}-forward.npz')
+            included.extend(f'baseline/case-{i}-{label}.npy'
+                            for label in ['native_1', 'vector_1', 'vector_2', 'native_2'])
     hashes = {name: sha(root / name) for name in included}
     (root / 'files.sha256.json').write_text(json.dumps(hashes, indent=2))
-    zip_path = destination / 'qat_colab_support.zip'
+    support_name = 'qat_colab_optimization_support.zip' if optimization else 'qat_colab_support.zip'
+    result_name = 'qat_colab_optimization_result' if optimization else 'qat_colab_result'
+    notebook_name = 'qat_colab_optimization.ipynb' if optimization else 'qat_colab_check.ipynb'
+    zip_path = destination / support_name
     with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for name in included + ['files.sha256.json']:
             archive.write(root / name, 'qat-colab/' + name)
@@ -134,15 +181,26 @@ def package(destination):
     比較対象は短い既存入力の数値計算で、感情の判定やレンズの精度評価ではありません。
     CUDAで計算できてもMacとの数値一致は別途確認が必要です。途中で失敗した場合も最後のセルで結果を保存できます。
     ''')
+    if optimization:
+        cells[-1]['source'] = textwrap.dedent('''
+        # 同じQAT重みでJacobianの方向をまとめる改善を測定する
+
+        **速度と数値差だけを測ります。本学習は開始しません。**
+
+        GPUランタイムで上から実行し、最初のセルでは `qat_colab_optimization_support.zip` を選びます。
+        固定revisionの重み約15.6 GBを取得します。重み更新・Macの常駐サービスへの接続はありません。
+        既存の文章と独立したWikiText文章で、従来方式と改善版をそれぞれ二回測ります。
+        Macでの改善がCUDAでも成立するかは未確認です。結果を取得して比較するところで止まります。
+        ''').strip() + '\n'
     add('code', f'''
     from pathlib import Path
     import hashlib, json, os, platform, shutil, subprocess, sys, time, zipfile
     from google.colab import files
-    WORK = Path('/content/qat-colab-check')
+    WORK = Path('/content/qat-colab-{'optimization' if optimization else 'check'}')
     WORK.mkdir(exist_ok=True)
     uploaded = files.upload()
     if len(uploaded) != 1:
-        raise ValueError('qat_colab_support.zip だけを選んでください')
+        raise ValueError('{support_name} だけを選んでください')
     payload = next(iter(uploaded.values()))
     expected = '{zip_hash}'
     if hashlib.sha256(payload).hexdigest() != expected:
@@ -238,6 +296,15 @@ def package(destination):
     速度から表示する100文章の時間は単一入力からの外挿で、所要時間の保証ではありません。
     数値差を記録し、人が確認するところで止まります。
     ''')
+    if optimization:
+        cells[-1]['source'] = textwrap.dedent('''
+        ## 二入力・32座標の比較
+
+        それぞれ128tokenで全30層の残差とexpert選択・重みが変わらないことを確認します。
+        続いて全29source層・分散した32座標を、従来方式と16方向をまとめる方式で二回ずつ測定します。
+        warmupと定常時間、同じ方式の繰返し差、方式間の数値差を保存します。
+        小さな演算の検査が失敗した場合はモデル全体の測定へ進みません。本学習は開始しません。
+        ''').strip() + '\n'
     add('code', SOURCE_ALIGNMENT + textwrap.dedent('''
     run_logged('probe', [sys.executable, str(BUNDLE / 'colab_probe.py'),
                         '--bundle', str(BUNDLE), '--model', str(WORK / 'model'),
@@ -245,25 +312,38 @@ def package(destination):
                         '--reference', str(BUNDLE / 'baseline'), '--require-cuda'])
     print('検査終了。本学習は開始していません。次のセルで結果を保存してください。')
     '''))
-    add('markdown', '''
+    if optimization:
+        cells[-1]['source'] = SOURCE_ALIGNMENT + textwrap.dedent('''
+        run_logged('unit_checks', [sys.executable, '-m', 'unittest', 'discover',
+                                   '-s', str(BUNDLE), '-p', 'test_qat_vectorized.py', '-v'])
+        run_logged('optimization_probe', [sys.executable, str(BUNDLE / 'optimization_probe.py'),
+                                          '--bundle', str(BUNDLE), '--model', str(WORK / 'model'),
+                                          '--output', str(RESULT / 'measurement'), '--require-cuda'])
+        print('測定終了。本学習は開始していません。次のセルで結果を保存してください。')
+        ''')
+    add('markdown', f'''
     ## 結果をダウンロード（途中で失敗した場合も実行）
 
-    `qat_colab_result.zip` をダウンロードし、このチャットへ添付してください。
+    `{result_name}.zip` をダウンロードし、このチャットへ添付してください。
     成否のログ、Macとの比較値、再比較用の数値を含みます。モデル重みは含めません。
     ''')
-    add('code', '''
+    if optimization:
+        cells[-1]['source'] = cells[-1]['source'].replace('Macとの比較値', '同じGPU内の方式間比較値')
+    add('code', f'''
     shutil.copyfile(BUNDLE / 'spec.json', RESULT / 'spec.json')
-    archive = shutil.make_archive(str(WORK / 'qat_colab_result'), 'zip', RESULT)
+    archive = shutil.make_archive(str(WORK / '{result_name}'), 'zip', RESULT)
     files.download(archive)
     ''')
+    if optimization:
+        cells[-1]['source'] = "shutil.copyfile(BUNDLE / 'optimization-cases.json', RESULT / 'optimization-cases.json')\n" + cells[-1]['source']
     notebook = {'nbformat': 4, 'nbformat_minor': 5, 'metadata': {
         'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
         'language_info': {'name': 'python'},
-        'colab': {'name': 'qat_colab_check.ipynb', 'provenance': []},
+        'colab': {'name': notebook_name, 'provenance': []},
         'accelerator': 'GPU'}, 'cells': cells}
     for i, cell in enumerate(cells):
         cell['id'] = f'qat-check-{i:02d}'
-    path = destination / 'qat_colab_check.ipynb'
+    path = destination / notebook_name
     path.write_text(json.dumps(notebook, ensure_ascii=False, indent=2))
     print(json.dumps({'notebook': str(path), 'support_zip': str(zip_path),
                       'zip_sha256': zip_hash, 'zip_bytes': zip_path.stat().st_size}, ensure_ascii=False, indent=2))
@@ -271,14 +351,19 @@ def package(destination):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('stage', choices=['prepare', 'package'])
+    parser.add_argument('stage', choices=['prepare', 'package', 'prepare-optimization', 'package-optimization'])
     parser.add_argument('--destination', type=Path, required=True)
     parser.add_argument('--model', type=Path)
     parser.add_argument('--site-packages', type=Path)
+    parser.add_argument('--baseline-bundle', type=Path)
     args = parser.parse_args()
     if args.stage == 'prepare':
         if not args.model or not args.site_packages:
             parser.error('prepare requires --model and --site-packages')
         print(prepare(args.destination, args.model, args.site_packages))
+    elif args.stage == 'prepare-optimization':
+        if not args.baseline_bundle:
+            parser.error('prepare-optimization requires --baseline-bundle')
+        print(prepare_optimization(args.destination, args.baseline_bundle))
     else:
-        package(args.destination)
+        package(args.destination, optimization=args.stage == 'package-optimization')

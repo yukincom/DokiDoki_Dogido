@@ -30,3 +30,5 @@
 MacとColab A100での実行、notebookの構文・ZIP整合性を確認済み。CUDAヘッダーを固定し、Mac側にある既存の共有KV読み込み補正を修正前後のhash検査付きで再現する。32座標の測定はMac 8.89秒、A100 11.76秒で、環境間の勾配差も残った。詳細は実測記録9節。本学習は未実施。
 
 最後のセルで `qat_colab_result.zip` を取得し、数値差・VRAM使用量・速度を確認してから学習方法を決める。単一入力の速度外挿を本学習の所要時間保証とせず、互換性の検査をレンズの独立精度評価と混同しない。
+
+`qat_vectorized.py` と `optimization_probe.py` は、モデルのbatchを1に保って微分方向を16個まとめる改善の比較用。二入力のMac実測で高速化とforwardの一致を確認し、既存入力では8.89秒から4.10秒へ短縮した。`prepare-optimization` → 比較元の採取 → `package-optimization` で別のColab配布物を作る。CUDA再測定と本学習は未実施。[実測・再現方法・GGUF移行時の境界](../../docs/2026-10-17-qat-jacobian-optimization.md)
