@@ -27,4 +27,6 @@
 
 `build_colab_bundle.py` の `prepare` → Mac比較元の採取 → `package` で、`qat_colab_check.ipynb` と `qat_colab_support.zip` を作る。配布先は `.dogido_tools/experiments/2026-10-17-qat-jspace/colab/`。Colabではnotebookを開き、最初のセルでsupport ZIPをアップロードする。重みは固定revisionを取得し、全ファイルのhashを検査する。
 
-Mac側の実行とnotebookの構文・ZIP整合性を確認済み。CUDA上の実行は未確認。最後のセルで `qat_colab_result.zip` を取得し、数値差・VRAM使用量・速度を確認してから学習方法を決める。単一入力の速度外挿を本学習の所要時間保証とせず、互換性の検査をレンズの独立精度評価と混同しない。
+MacとColab A100での実行、notebookの構文・ZIP整合性を確認済み。CUDAヘッダーを固定し、Mac側にある既存の共有KV読み込み補正を修正前後のhash検査付きで再現する。32座標の測定はMac 8.89秒、A100 11.76秒で、環境間の勾配差も残った。詳細は実測記録9節。本学習は未実施。
+
+最後のセルで `qat_colab_result.zip` を取得し、数値差・VRAM使用量・速度を確認してから学習方法を決める。単一入力の速度外挿を本学習の所要時間保証とせず、互換性の検査をレンズの独立精度評価と混同しない。

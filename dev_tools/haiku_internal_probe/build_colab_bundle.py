@@ -18,6 +18,38 @@ ROOT = HERE.parents[1]
 OLD = ROOT / '.dogido_tools/experiments/2026-10-16-haiku-jspace'
 EXPERIMENT = ROOT / '.dogido_tools/experiments/2026-10-17-qat-jspace'
 
+# Macの既存補正をColabの専用依存へ再現する。修正前後の両hashで対象を閉じる。
+SOURCE_ALIGNMENT = r'''
+module_path = DEPS / 'mlx_lm/models/gemma4_text.py'
+source = module_path.read_text()
+expected = SPEC['implementation_sha256']['models/gemma4_text.py']
+actual = hashlib.sha256(source.encode()).hexdigest()
+if actual != expected:
+    if actual != '77f46bc3f162a0b9513157dade4be2c381d4df3295262c69034a53d46111370f':
+        raise RuntimeError('Unexpected Gemma4 source; refusing automatic patch')
+    source = source.replace('        sanitized = {}\n', '        sanitized = {}\n        first_kv_shared = self.args.num_hidden_layers - self.args.num_kv_shared_layers\n', 1)
+    anchor = '            if k.endswith(".experts.gate_up_proj"):\n'
+    extra = [
+        '            # KV-shared layers reuse K/V from earlier layers — drop their projections',
+        '            if any(',
+        '                s in k',
+        '                for s in (".self_attn.k_proj", ".self_attn.v_proj", ".self_attn.k_norm")',
+        '            ):',
+        '                try:',
+        '                    layer_idx = int(k.split("layers.")[1].split(".")[0])',
+        '                    if layer_idx >= first_kv_shared:',
+        '                        continue',
+        '                except (IndexError, ValueError):',
+        '                    pass',
+        '',
+    ]
+    source = source.replace(anchor, '\n'.join(extra) + '\n' + anchor, 1)
+    if hashlib.sha256(source.encode()).hexdigest() != expected:
+        raise RuntimeError('Patch result does not match the Mac source')
+    module_path.write_text(source)
+print('Gemma4 implementation SHA-256 matches the Mac baseline.')
+'''
+
 
 def sha(path):
     h = hashlib.sha256()
@@ -100,7 +132,7 @@ def package(destination):
     同じrevisionのQAT重み（約15.6 GB）はHugging Faceから取得します。手動アップロードは不要です。
     現在のMacの常駐サービスへは接続しません。モデルの重みは更新しません。
     比較対象は短い既存入力の数値計算で、感情の判定やレンズの精度評価ではありません。
-    CUDA上の実行は未検証です。途中で失敗した場合も最後のセルで結果を保存できます。
+    CUDAで計算できてもMacとの数値一致は別途確認が必要です。途中で失敗した場合も最後のセルで結果を保存できます。
     ''')
     add('code', f'''
     from pathlib import Path
@@ -149,13 +181,22 @@ def package(destination):
     ## 固定バージョンのMLX CUDAを準備
 
     専用フォルダへ依存を入れ、検査は別プロセスで実行します。Notebookの既存Python環境は置き換えません。
-    CUDA 12版を使います。高速化用TF32は比較のため無効にします。
+    CUDA 12版と対応する12.9のruntimeヘッダーを同じ場所へ入れます。
+    Colab標準の別バージョンのヘッダーを拾わないよう参照先を固定し、高速化用TF32は比較のため無効にします。
     ''')
     add('code', '''
-    requirements = ['mlx[cuda12]==0.32.0'] + [f'{name}=={version}' for name, version in SPEC['versions'].items() if name != 'mlx']
+    requirements = ['mlx[cuda12]==0.32.0', 'nvidia-cuda-runtime-cu12==12.9.79', 'nvidia-cuda-nvrtc-cu12==12.9.86'] + [f'{name}=={version}' for name, version in SPEC['versions'].items() if name != 'mlx']
     run_logged('install', [sys.executable, '-m', 'pip', 'install', '--target', str(DEPS), '--upgrade', *requirements])
+    CUDA_ROOT = DEPS / 'nvidia' / 'cuda_runtime'
+    if not (CUDA_ROOT / 'include' / 'cuda_fp8.hpp').is_file():
+        raise RuntimeError('CUDA 12.9 runtime headers are missing')
+    ENV['CUDA_HOME'] = str(CUDA_ROOT)
+    ENV['CUDA_PATH'] = str(CUDA_ROOT)
+    ENV['MLX_PTX_CACHE_DIR'] = str(WORK / 'mlx-ptx-cuda12-9')
     run_logged('small_cuda_operator', [sys.executable, '-c', """
+    import os
     import mlx.core as mx
+    print('CUDA_HOME:', os.environ['CUDA_HOME'])
     if not mx.cuda.is_available():
         raise RuntimeError('CUDA版MLXを利用できません')
     mx.set_default_device(mx.gpu)
@@ -165,9 +206,9 @@ def package(destination):
     ids = mx.array([0, 1], dtype=mx.uint32)
     def f(value):
         return mx.gather_qmm(value, q, s, b, rhs_indices=ids, transpose=True, group_size=64, bits=4)
-    y, gradients = mx.vjp(f, [x], [mx.ones_like(x)])
-    mx.eval(y, gradients)
-    assert bool(mx.all(mx.isfinite(y)).item()) and bool(mx.all(mx.isfinite(gradients[0])).item())
+    outputs, gradients = mx.vjp(f, [x], [mx.ones_like(x)])
+    mx.eval(outputs, gradients)
+    assert all(bool(mx.all(mx.isfinite(value)).item()) for value in outputs + gradients)
     print('CUDA量子化MoE演算と入力VJP: 計算完了（モデル全体は次のセルで確認）')
     """])
     ''')
@@ -193,16 +234,17 @@ def package(destination):
 
     32tokenで全30層の内部状態・末尾の語彙スコア・expert選択を比較します。
     続いて128tokenでJacobianの32座標だけを計算します。全2816座標の学習は実行しません。
+    Macにある共有KV層の読み込み補正も再現し、実装ファイルを完全一致させます。今回の共有KV層0のモデルでは作用しない補正です。
     速度から表示する100文章の時間は単一入力からの外挿で、所要時間の保証ではありません。
     数値差を記録し、人が確認するところで止まります。
     ''')
-    add('code', '''
+    add('code', SOURCE_ALIGNMENT + textwrap.dedent('''
     run_logged('probe', [sys.executable, str(BUNDLE / 'colab_probe.py'),
                         '--bundle', str(BUNDLE), '--model', str(WORK / 'model'),
                         '--output', str(RESULT / 'measurement'),
                         '--reference', str(BUNDLE / 'baseline'), '--require-cuda'])
     print('検査終了。本学習は開始していません。次のセルで結果を保存してください。')
-    ''')
+    '''))
     add('markdown', '''
     ## 結果をダウンロード（途中で失敗した場合も実行）
 

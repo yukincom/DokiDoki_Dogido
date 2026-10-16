@@ -158,3 +158,27 @@ J-lensは中間活性を語彙に対応する方向から読む方法で、最�
 本体へ感情経路を追加する根拠はまだない。既存のdescription/focusから川柳へ渡る経路との比較を続け、まずこのQAT checkpointに対するレンズの適合性を確かめる。今回の川柳は初回draftで、音数・出典・自然さの採否検証、記憶保存、TTS、Minecraft表示は行っていない。
 
 確認済みは独立GPU実行2件、native採取照合、同じcache手順での12位置照合、VJPの実行と恒等対照、binding一致と8種類の変更拒否、Rust計測入口のbuild、Python構文確認。通常本体の挙動変更はなく、本体全体の回帰テストや実プレイ試験はこの測定の証拠に含めない。8080番の常駐PID 9601は測定後も同じままLISTENしている。
+
+## 9. Colab事前検証の環境修正（2026-10-17）
+
+ColabのA100-SXM4-40GBで同じQAT重みの検証を開始した。初回はMLX CUDA 12のNVRTC 12.9がシステム側ヘッダーを参照し、`cuda_fp8.hpp`の`__NV_SILENCE_DEPRECATION_BEGIN`でコンパイルに失敗した。対応する`nvidia-cuda-runtime-cu12==12.9.79`を依存一式と同じ専用フォルダへ入れ、`CUDA_HOME`と`CUDA_PATH`をそのruntimeへ固定した。NVRTCも12.9.86へ固定する。この組合せは[NVIDIAの12.9 Update 1構成](https://docs.nvidia.com/cuda/archive/12.9.1/cuda-toolkit-release-notes/index.html)に対応し、参照先は[MLX 0.32.0の探索実装](https://raw.githubusercontent.com/ml-explore/mlx/v0.32.0/mlx/backend/cuda/jit_module.cpp)に従う。
+
+小演算のチェックには、`mx.vjp`の返す出力リストを単一arrayとして検査していた不備もあった。各出力・各勾配を検査する形へ修正し、量子化MoE演算と入力VJPの実行・有限値をA100上で確認した。
+
+続いて実装hash検査がMacとColabの`gemma4_text.py`の差を検出した。Mac現物にある共有KV層の読み込み補正13行だけが公式0.31.3配布物との差分で、forward・Router・DecoderLayerに差はなかった。今回の共有KV層は0、関連する276個の重みキーは層0〜29で、補正条件の層30以降には該当しない。それでも基準実装を厳密に揃えるため、Colabの専用依存だけへ同じ補正を再現する。修正前hashを既知の配布物へ限定し、修正後hashをMac基準と照合する。既存の実装検査は維持する。
+
+測定用プログラム・Mac比較元・モデル重みは変更していない。環境修正は本体への接続やレンズ本学習の開始ではない。
+
+修正後のA100実行は`measurement_complete_review_required`で完了した。受領した`qat_colab_result_after_fix.zip`をCRC確認して展開し、specと修正後の全7実装ファイルのhashを照合した。固定重みの全ファイル照合も成功。hook有無とzero-tapのnative forward差は各0で、全30層の採取・128token入力に対する29層分のJacobian先頭32座標を保存した。
+
+| 項目 | Mac基準 | Colab A100 |
+|---|---:|---:|
+| warm後の32座標の計算 | 8.886秒 | 11.761秒 |
+| 100文章・全2816座標への単純外挿 | 21.72時間 | 28.75時間 |
+| MLXの最大使用メモリ | 14.437 GiB | 14.393 GiB |
+
+この1入力ではA100が約32.4%遅かった。実行セル全体は初回コンパイル等も含み約7分。上表はその初回コストを含まない継続計算の測定で、100文章の実行結果ではない。
+
+Mac/CUDA間は完全一致ではなかった。32token入力の末尾logitsは最上位tokenと上位20候補の集合が一致したが、相対L2差は7.67%。各層の8 expert集合が完全一致したtokenの割合は71.875〜100%だった。128token・32座標のJacobianでは、層1〜10の相対L2差が49.3〜76.2%、層13〜29は5.43〜9.52%で、層により差が大きく異なった。異なる入力長のforward診断とJacobian診断を混同せず、勾配差の全てをexpert選択差だけに帰属させない。
+
+したがって「同じQAT重みをCUDAで実行できる」は確認できたが、Macの内部表現を測るレンズの学習先として、そのまま採用できるとは判断しない。今回の実装での速度利点も確認できていない。レンズ本学習、独立データでの精度評価、疎なJ-space分解、入力状態から発句までの再比較は未実施のまま。
