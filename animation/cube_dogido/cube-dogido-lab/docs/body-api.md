@@ -1,8 +1,17 @@
-# Body API v5
+# Body API v6
 
-身体Mod **0.6.1 / protocol 5** の実装契約です。0.6.0から公開APIは不変です。既存adapterは自他姿勢・owner視認・身体地点の感覚観測を接続済み。導入・実機確認の範囲は[観測移行記録](../../../../docs/2026-10-13-body-observation-origin.md)を参照してください。モデルによる移動・食事等の選択は未接続です。[現行の統合計画](../../../../docs/2026-10-11-body-integration-plan.md)と合わせて使います。
+身体Mod **0.7.0 / protocol 6** の実装契約です。自他姿勢・owner視認・身体地点の感覚に加え、FOLLOWの制御状態を公開し、検証済み対象への観察移動を接続します。[移動の仕様・確認状態](../../../../docs/2026-10-16-body-motion-start.md)を参照してください。
 
-## v4からの変更
+## v5からの変更
+
+- entrypointは`dogido:body_bridge_v6`、payloadは`body_request_v6`／`body_snapshot_v6`。旧版とは接続しません。
+- snapshotへ`control(enabled,mode,followDistance,warpDistance)`を追加し、現在の実制御状態を公開します。
+- 外部`applyState`は引き続きDIRECTだけです。ローカル操作で有効にしたFOLLOWでは、受理条件を満たした`MOVE_TO`を観察移動として受け付けます。
+- FOLLOWのMOVE_TOは、持ち主と目的地が追従範囲内であること、身体から32ブロック以内・ロード済み・安全な位置であること、優先動作や実行中操作がないことを再確認します。
+- 観察移動は最大600tick。到着0.4ブロック以内で`SUCCEEDED/arrived`となり、危険回避・距離追従・呼び寄せ・モード変更・owner消失が優先されると中断します。同じIDの再送で実行期限を延ばしません。
+- HTTPの姿勢・感覚はv3を維持し、制御状態・候補・操作結果には別の`body_autonomy` v1を使います。[HTTP契約](../../../../docs/adapter-api.md#body-autonomy-v1)。
+
+## v4からv5への変更（履歴）
 
 - entrypointは`dogido:body_bridge_v5`、payloadは`body_request_v5`／`body_snapshot_v5`。旧版を補完しない。
 - `hearing(status,serverTick,sounds,truncated)`を追加。serverの実発音時に身体位置への到達を検査し、最大8件・300tickの有界記録として保持する。
@@ -37,7 +46,7 @@
 - 初回bind／再読み込み／失効／復活後はDIRECTで待機
 - v1の固定追従・探索・退避はローカル試験コマンドに限定
 
-v1〜v4のクラスやJARをv5として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
+v1〜v5のクラスやJARをv6として扱いません。entrypointとprotocolの両方を照合します。旧entrypoint／payloadの受信口はありません。
 
 ## 公開APIとスレッド
 
@@ -54,13 +63,13 @@ public interface BodyBridge {
 }
 ```
 
-adapterは`cube-dogido-lab-0.6.0-body-api.jar`を**compileOnly**で参照します。0.6.1のAPI JARも同一内容です。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
+adapterは`cube-dogido-lab-0.7.0-body-api.jar`を**compileOnly**で参照します。APIクラスをadapterへ重複同梱しません。身体Mod不在でもadapterを読み込めるよう、任意連携クラスを分けます。
 
 `available()`と送信はMinecraftのclient thread上で行います。`snapshot()`は不変データを読むだけで、HTTP workerから参照できます。受信後3秒を過ぎたsnapshotは空です。HTTP転送時はclient threadでsnapshotと経過msを続けて読み、3秒未満だけを現在値として送ります。受信登録と10client tickごとのポーリングは身体Modが所有します。
 
 ## 最小例
 
-次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv5 entrypointの存在を確認します。
+次のクラスをロードする前に、呼び出し側で`FabricLoader.getInstance().isModLoaded("dogido_experiment")`とv6 entrypointの存在を確認します。
 
 ```java
 BodyBridge bridge = FabricLoader.getInstance()
@@ -117,7 +126,7 @@ bridge.requestAction(request);
 
 DIRECTの移動は火・溶岩・敵の周辺・壁内を理由に別の行動へ変えません。生物との衝突・未ロード領域・ワールド境界はゲーム側で処理します。届かない食料へ自動移動せず、`food_out_of_reach`を返します。
 
-`QUEUED`はclient通信への投入、`ACCEPTED`はserver受付です。`SUCCEEDED`は表に示した実行結果です。`INTERRUPTED`・`EXPIRED`・`REJECTED`と区別します。新しい一回操作は実行中の操作を中断して置き換えます。REST／WAITは完了後も、新しい行動・停止・失効まで指定した姿勢を続けます。
+`QUEUED`はclient通信への投入、`ACCEPTED`はserver受付です。`SUCCEEDED`は表に示した実行結果です。`INTERRUPTED`・`EXPIRED`・`REJECTED`と区別します。DIRECTでは新しい一回操作は実行中の操作を中断して置き換えます。FOLLOWの観察移動は実行中操作がある場合に拒否します。REST／WAITは完了後も、新しい行動・停止・失効まで指定した姿勢を続けます。
 
 再送は**同じaction ID・sequence・全payload**を使います。直近32件の要求と結果を保持し、キャッシュ済みACCEPTEDも再実行しません。同じIDで内容を変えた場合は`action_id_conflict`。食べ物が消費済みでも、同じ要求の再送には保存した結果を返します。
 
@@ -152,6 +161,7 @@ HTTP session、adapterのworldEpoch、身体のContextは別々に照合しま�
 | `pose` | 同時刻の眼・owner位置・身体の視線・owner yaw/pitch |
 | `vision` | owner視認の三値・理由・範囲・FOV。採取tickはsnapshotのtickと一致 |
 | `hearing` | server実音の発音tick・通番・位置・種類・到達済記録・切り詰め |
+| `control` | 現在のenabled・mode・追従距離・ワープ距離。外部状態変更の許可を追加するものではない |
 | `sensors` | `BODY_VISION_AND_HEARING`。周辺感覚のHTTP採取はadapterが担当 |
 
 未登録／未ロード時のposition・vitalsはnullです。架空のゼロ座標・HP0へ置き換えません。`OWNER_UNAVAILABLE`と身体の`DOWNED`は別の状態です。
@@ -166,6 +176,6 @@ food候補は身体から8ブロック以内、読み込み済みで見通せる
 
 実装済み：server身体制御、HP／時間ルール、食料観測と消費、任意Java entrypoint、C2S/S2C、自他姿勢・owner視認・身体の周辺感覚の既存adapter／Rust会話・診断への配送。
 
-未接続：身体操作の専用型・実行capability・モデルの行動選択・結果の受領／利用。身体ModはHTTPサーバー、モデル、TTS、会話セッションを起動しません。
+接続済み：FOLLOW待機中の興味選択、`body.inspect_target.v1`の実行capability、既存ゲームイベント経由の一件の接近指示、到着／中断結果とACK。選択はRust側の会話モデル、再照合と着地点はadapter、実移動と安全制御は身体Modが担当します。食事・休息のモデル選択と、敵発見を契機に持ち主へ高速帰還する経路は未接続です。身体ModはHTTPサーバー、モデル、TTS、会話セッションを起動しません。
 
 実機確認待ち：ゲーム内通信、描画・補間、食事／被弾、保存再開、復活・次元移動、専用サーバー。自動検査はこの実機確認を代替しません。

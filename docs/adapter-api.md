@@ -134,7 +134,7 @@ adapter の起動時に session を作る。
 
 ### 身体の姿勢・感覚観測（v3、2026-10-13）
 
-登録のoptionalな`player_uuid`（小文字・ハイフン付きUUID）を身体ownerとの照合に使う。表示名・call_nameとは分ける。省略した接続は身体観測を利用できない。Body API v5対応adapterは`body_observation.v3`をcapabilitiesへ加える。観測の契約であり、実行権限ではない。
+登録のoptionalな`player_uuid`（小文字・ハイフン付きUUID）を身体ownerとの照合に使う。表示名・call_nameとは分ける。省略した接続は身体観測を利用できない。Body API v6対応adapterは`body_observation.v3`をcapabilitiesへ加える。観測の契約であり、実行権限ではない。
 
 既存ゲームイベントのoptionalな`body_observation`は`version:3, status:"observed", pose_basis:"server_pose", age_ms, sample`。sampleは`context(owner_id,body_id,epoch,dimension)`、`server_tick`、`snapshot_revision`、`self_pose(position,eye_position,yaw,view_yaw,view_pitch)`、`player_pose(position,yaw,pitch)`、`vision`、`senses`を持つ。[共有JSON例](../dogido-rust/fixtures/body-observation-v3.json)をJava送信・Rust受信双方で検査する。全体未取得は`version:3,status:"unavailable",reason`を送り、ゼロ座標へ置換しない。
 
@@ -147,6 +147,20 @@ adapter の起動時に session を作る。
 client受信経過＋HTTPイベント経過＋Rust受信後経過が3秒未満の値だけを現在値にする。Rustはowner・次元・epoch・tick/revisionの順序を検証する。再送・逆順で鮮度を更新せず、異なる世代は接続中256個まで退役記録に保持する。上限時は`context_limit`として再接続まで未取得。現在の視認を構造化観測の先頭に置き、感覚の実データは一度だけ投影し、前回の姿勢・視認は過去として残す。
 
 通常会話・匂い質問・環境反応・川柳の自分の感覚には、受理した身体観測だけを使う。元のtop-level player・戦闘・所持品・指差しは各所有者の情報として維持する。身体不在や失効時にplayerの視界・匂いで補完しない。HTTP v1/v2をv3へ補完せず拒否するため、身体Mod・adapter・Rustを対応版へ同時に更新する。[移行と実機確認](2026-10-13-body-observation-origin.md)。
+
+<a id="body-autonomy-v1"></a>
+
+### 身体の観察移動（v1、2026-10-16）
+
+Body API v6対応時、観測capabilityに`body_autonomy.v1`、実行capabilityに`body.inspect_target.v1`を追加する。既存`game-events`へ任意の`body_autonomy`を添付し、同じ応答の`commands`を使う。
+
+- observed: `version:1,status:"observed",context,server_tick,snapshot_revision,age_ms,enabled,mode,follow_distance,warp_distance,activity,reason,candidates`。任意の`action_result`は`action_id,sequence,outcome,reason`。`body_observation`の受理済みcontext・tick・revisionと一致し、合計年齢3秒未満の値だけを使う。
+- unavailable: `version:1,status:"unavailable",reason`。前回候補を現在値へ補完しない。
+- candidates: 最大24件。各候補は`id,kind,type_id,label,position`と、entityのみ`entity_id`を持つ。entity IDは`e:UUID`、block IDは`b:x,y,z:type_id`、block位置はセル中心。現在のownerから16ブロック以内にある、身体から実際に見えている対象を収集する。
+- command: `type:"inspect_body_target",command_id,issued_at,expires_at,context,target`。`target`は選択した候補を保持し、開始期限は5秒以内。同一ID・同一内容で再送し、結果待ちは発行から最大35秒。
+- result: `command_type:"inspect_body_target",command_id,status,executed_at,detail_code,body_id,epoch`。既存の`command_results`とACKを使う。受付と到着を分け、終端`arrived`だけを到着成功として扱う。
+
+adapterはclient threadで身体世代・FOLLOW・観測の鮮度・選択対象の現物と移動量（1.5ブロック以内）を再照合する。対象と重ならない着地点を選び、送信直前にもHTTP sessionと期限を照合して既存BodyBridgeのMOVE_TOへ渡す。外部からFOLLOWを有効にしない。詳細は[身体移動の仕様と検証](2026-10-16-body-motion-start.md)。
 
 ## 8. `POST /api/v1/game-events`
 

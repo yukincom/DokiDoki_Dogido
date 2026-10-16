@@ -2,13 +2,13 @@
 
 Minecraft Java 1.21.11 / Fabricで動く3Dドギドの身体です。浮遊する既存モデルに、移動・HP・休息・食事・復活を持たせます。
 
-0.6.1では、DIRECTの待機・休息中にブロックへ埋まったときだけ、近くの空間へ通常移動で復帰します。身体の姿勢・owner視認・聴覚を渡すBody API v5と、身体地点での周辺観測は0.6.0から継続しています。モデルによる行動選択は後続です。
+0.7.0では、FOLLOWの距離追従・危険回避と、見えている対象を会話モデルが選んで近づく動作を接続します。Body API v6と対応adapterが必要です。DIRECTでの待機復帰と身体基準の観測は継続しています。[仕様・検証・実機手順](../../../docs/2026-10-16-body-motion-start.md)を参照してください。
 
 ## 導入
 
 1. Minecraftを終了する。
-2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.6.1.jar`へ置き換える。同じModの新旧を同時に入れない。
-3. 会話へ接続する場合は、対応するadapter（build `2026-10-13-body-senses-origin`）とRustのHTTP観測v3も揃える。
+2. 使用する起動構成の`mods`で旧`cube-dogido-lab`を退避し、`build/libs/cube-dogido-lab-0.7.0.jar`へ置き換える。同じModの新旧を同時に入れない。
+3. 会話へ接続する場合は、対応するadapter（build `2026-10-14-body-autonomy`）とRustのHTTP観測v3も揃える。
 4. Minecraft **1.21.11**、Fabric Loader **0.18.4以上**、Fabric APIで起動する。
 
 2D表示用Modと併用できます。2D表示は既存Modの`/dogidohud hide`・`/dogidohud show`で切り替えます。身体単体の試験にHTTPサーバーやLAN公開は不要です。
@@ -61,7 +61,18 @@ DIRECTの指示移動では火・溶岩や敵からの距離を理由に移動�
 
 `food`の候補は100tick以内に再照合します。遠い食べ物には、まず移動が必要です。
 
-従来の`follow`・`explore`・`retreat`・`safe`・`hold`は、**決め打ちの動きを比較する試験コマンド**として残しています。これらには0.2.0の目標選択・危険回避が含まれます。`direct`へ戻すと指定行動を実行し、待機中の埋まりだけ局所的に復帰します。本線の外部状態指定はDIRECTに限定します。
+`follow`で距離追従と危険回避を開始します。既定では持ち主から16ブロックを超えると追従し、14ブロック以内で止まります。対応する会話サーバーとの接続中は、安全な待機時に初めて扱う種類が見えると、モデルが一つを見に行くか、その場に留まるかを選びます。`direct`でこの自律動作を終了し、行動指定待ちへ戻ります。
+
+`explore`・`retreat`・`safe`・`hold`は従来のローカル試験コマンドです。外部の状態変更はDIRECTに限定し、外部からFOLLOWを有効化しません。ローカル操作で有効にしたFOLLOWに対して、検証済みの`MOVE_TO`だけを観察移動として受け付けます。
+
+### 最初の移動確認
+
+```mcfunction
+/dogidobody follow
+/dogidobody status
+```
+
+持ち主が離れたときの追従を先に確かめます。モデルによる接近は毎回発生するものではなく、同じ種類だけでは再選択しません。止めるときは`/dogidobody direct`です。
 
 ### 調整
 
@@ -88,17 +99,17 @@ Java 21以上でビルドします。
 
 既存キャッシュがない環境では、通常の`./gradlew test build`で依存関係を取得します。
 
-- `build/libs/cube-dogido-lab-0.6.1.jar`：Minecraftへ入れるMod
-- `build/libs/cube-dogido-lab-0.6.1-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
-- `build/libs/cube-dogido-lab-0.6.1-sources.jar`：ソース
+- `build/libs/cube-dogido-lab-0.7.0.jar`：Minecraftへ入れるMod
+- `build/libs/cube-dogido-lab-0.7.0-body-api.jar`：adapterのコンパイル用。`mods`へ入れない
+- `build/libs/cube-dogido-lab-0.7.0-sources.jar`：ソース
 
-[API v5と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
+[API v6と最小例](docs/body-api.md) · [本線へ合体するときの対応表・検証手順](docs/mainline-integration.md)
 
 ## 確認状態
 
 2026-10-12に本線mainへの統合・対応Modの配置・普段のサーバーappとMinecraftの接続を確認しました。[導入記録と次の実機操作](../../../docs/2026-10-12-body-p1-install.md)を参照してください。
 
-身体基準への観測移行と検証・導入状況は[今回の仕様と検証記録](../../../docs/2026-10-13-body-observation-origin.md)を参照してください。0.6.1の待機復帰は自動テストとビルドで検証し、ブタに押された場面を含む実機動作は未確認です。
+身体基準への観測移行と検証・導入状況は[今回の仕様と検証記録](../../../docs/2026-10-13-body-observation-origin.md)を参照してください。0.7.0の移動接続は[今回の検証記録](../../../docs/2026-10-16-body-motion-start.md)へ分けて記録しています。自動検査の成功をゲーム内の動作確認とは扱いません。
 
 食料とowner視認は身体Modが取得します。`BODY_VISION_AND_HEARING`はownerの視認と身体の聴覚を示し、周辺モブ・匂い・環境は対応adapterが取得します。花・雷雨・就寝の専用行動は未実装です。
 

@@ -58,6 +58,8 @@
 
 任意の`body_observation`は[HTTP観測v3](adapter-api.md#body-observation-v3)に従う。server実測の自他姿勢・owner可視性に加え、`sample.senses`へ身体の地点・目・向きによる周辺視認、環境、匂い、音を載せる。感覚の`basis=body_pose_client_world`はserver姿勢そのものと区別する。top-levelのplayer・戦闘観測へ代入せず、会話・環境反応・川柳用の身体観測として消費する。未取得・失効時にplayer由来の感覚で補完しない。具体例は[Java/Rust共通fixture](../dogido-rust/fixtures/body-observation-v3.json)。
 
+任意の`body_autonomy`は[HTTP観察移動v1](adapter-api.md#body-autonomy-v1)に従う。同じ身体観測のcontext・tick・revisionに属する制御状態と最大24件の対象候補を運び、観測capabilityと実行capabilityを区別する。`inspect_body_target`の結果は既存`command_results`で返す。
+
 ## 5. トップレベル項目
 
 ### 必須

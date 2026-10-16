@@ -6,7 +6,7 @@
 
 ## できること
 
-- 任意の身体Mod 0.6.0／Body API v5から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。
+- 任意の身体Mod 0.7.0／Body API v6から、自他姿勢・owner視認と身体基準の周辺感覚を`body_observation` v3で送信。取得不能時は理由を送り、playerの感覚で補完しない（[観測移行仕様](../../docs/2026-10-13-body-observation-origin.md)）。FOLLOWの制御状態・候補は`body_autonomy` v1、観察移動は`body.inspect_target.v1`を使う（[移動接続](../../docs/2026-10-16-body-motion-start.md)）。
 - プレイヤー本人の `position / yaw / pitch / health / hunger / held_item / inventory`
 - `player.hotbar`（0〜8、選択中slot、item ID、耐久、main-hand攻撃属性、武器候補種別）
 - 乗車中だけ `player.vehicle`（乗り物ID・操縦者か・漕ぐ／走る／移動中）
